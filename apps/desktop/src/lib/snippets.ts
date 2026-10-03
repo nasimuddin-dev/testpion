@@ -15,7 +15,7 @@ export const SNIPPETS: Snippet[] = [
   { kind: 'test', label: 'Response headers: Content-Type header check', code: `tp.test("Content-Type is present", function () {\n  tp.response.to.have.header("Content-Type");\n});` },
   { kind: 'test', label: 'Response body: Array has items', code: `tp.test("Returns items", function () {\n  const data = tp.response.json();\n  tp.expect(data.items).to.be.an("array").that.is.not.empty;\n});` },
   { kind: 'test', label: 'Response body: Property types', code: `tp.test("Has the expected shape", function () {\n  const data = tp.response.json();\n  tp.expect(data).to.have.property("id");\n  tp.expect(data.id).to.be.a("string");\n});` },
-  { kind: 'test', label: 'Save a value from the response', code: `const data = tp.response.json();\npm.environment.set("token", data.access_token);` },
+  { kind: 'test', label: 'Save a value from the response', code: `const data = tp.response.json();\ntp.environment.set("token", data.access_token);` },
   { kind: 'both', label: 'Set an environment variable', code: `tp.environment.set("variable_key", "variable_value");` },
   { kind: 'both', label: 'Get an environment variable', code: `tp.environment.get("variable_key");` },
   { kind: 'both', label: 'Set a collection variable', code: `tp.collectionVariables.set("variable_key", "variable_value");` },
@@ -29,9 +29,9 @@ export const SNIPPETS: Snippet[] = [
   { kind: 'both', label: 'Send a request (tp.sendRequest)', code: `tp.sendRequest({\n  url: tp.variables.replaceIn("{{baseUrl}}/auth/token"),\n  method: "POST",\n  header: { "Content-Type": "application/json" },\n  body: { mode: "raw", raw: JSON.stringify({ client_id: tp.environment.get("clientId") }) }\n}, (err, res) => {\n  if (err) return console.error(err.message);\n  tp.environment.set("accessToken", res.json().access_token);\n});` },
   { kind: 'pre', label: 'Add a request header', code: `tp.request.headers.upsert({ key: "X-Request-Id", value: tp.uuid() });` },
   { kind: 'pre', label: 'Timestamp variable', code: `tp.variables.set("timestamp", new Date().toISOString());` },
-  { kind: 'pre', label: 'HMAC signature header', code: `const body = tp.request.body.toString();\nconst signature = CryptoJS.HmacSHA256(body, tp.environment.get("secret")).toString(CryptoJS.enc.Base64);\npm.request.headers.upsert({ key: "X-Signature", value: signature });` },
+  { kind: 'pre', label: 'HMAC signature header', code: `const body = tp.request.body.toString();\nconst signature = CryptoJS.HmacSHA256(body, tp.environment.get("secret")).toString(CryptoJS.enc.Base64);\ntp.request.headers.upsert({ key: "X-Signature", value: signature });` },
   { kind: 'both', label: 'Log to the console', code: `console.log(tp.variables.toObject());` },
-  { kind: 'test', label: 'Collection runner: go to a request next', code: `postman.setNextRequest("Request name");` },
+  { kind: 'test', label: 'Collection runner: go to a request next', code: `tp.execution.setNextRequest("Request name");` },
   { kind: 'test', label: 'Visualize the response as a table', code: `const template = \`
 <table>
   <tr><th>Name</th><th>Email</th></tr>
@@ -160,6 +160,25 @@ declare function btoa(s: string): string;
 declare function atob(s: string): string;
 /** TestPion's name for the script API: the same object as pm. */
 declare const tp: typeof pm;
+/** An older alias of tp. */
+declare const aps: typeof pm;
+/** Lines go to the Console panel (and to the test's logs in reports); every level writes the same way. */
+declare const console: { log(...args: any[]): void; info(...args: any[]): void; warn(...args: any[]): void; error(...args: any[]): void; debug(...args: any[]): void };
+/** Timers run after the script's own code, before the sandbox returns (there is no real clock to wait on). */
+declare function setTimeout(fn: () => void, ms?: number): number;
+declare function setInterval(fn: () => void, ms?: number): number;
+declare function setImmediate(fn: () => void): number;
+declare function clearTimeout(id: number): void;
+declare function clearInterval(id: number): void;
+/** Old Postman globals, still filled in for scripts that use them. */
+declare const responseCode: { code: number; name: string; detail: string };
+declare const responseBody: string;
+declare const responseTime: number;
+declare const responseHeaders: Record<string, string>;
+declare const environment: Record<string, any>;
+declare const globals: Record<string, any>;
+/** The current data-file row (collection runner with a dataset). */
+declare const data: Record<string, any>;
 /** In a script package: what it offers to pm.require. */
 declare const module: { exports: any };
 `;

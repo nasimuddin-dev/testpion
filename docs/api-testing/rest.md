@@ -182,21 +182,21 @@ Pre-request and post-response scripts use the Postman script API under two names
 Pre-request:
 
 ```js
-pm.variables.set('nonce', pm.uuid());
-const sig = CryptoJS.HmacSHA256(pm.request.body.toString(), pm.environment.get('secret')).toString(CryptoJS.enc.Base64);
-pm.request.headers.upsert({ key: 'X-Signature', value: sig });
+tp.variables.set('nonce', tp.uuid());
+const sig = CryptoJS.HmacSHA256(tp.request.body.toString(), tp.environment.get('secret')).toString(CryptoJS.enc.Base64);
+tp.request.headers.upsert({ key: 'X-Signature', value: sig });
 ```
 
 Post-response:
 
 ```js
-pm.test('Status code is 200', () => pm.response.to.have.status(200));
-pm.test('Returns patients', () => {
-  const body = pm.response.json();
-  pm.expect(body.items).to.be.an('array').that.is.not.empty;
-  pm.expect(body.items[0]).to.have.property('species');
+tp.test('Status code is 200', () => tp.response.to.have.status(200));
+tp.test('Returns patients', () => {
+  const body = tp.response.json();
+  tp.expect(body.items).to.be.an('array').that.is.not.empty;
+  tp.expect(body.items[0]).to.have.property('species');
 });
-pm.environment.set('patientId', pm.response.json().items[0].id);
+tp.environment.set('patientId', tp.response.json().items[0].id);
 ```
 
 ### Supported API
@@ -221,8 +221,8 @@ module.exports = {
 };
 
 // in a pre-request script
-const auth = pm.require('@clinic/auth');
-pm.request.headers.upsert({ key: 'Authorization', value: auth.bearer(pm.environment.get('token')) });
+const auth = tp.require('@clinic/auth');
+tp.request.headers.upsert({ key: 'Authorization', value: auth.bearer(tp.environment.get('token')) });
 ```
 
 A package can `pm.require` other packages and `require()` the built-in modules; each is loaded once per script run. Postman collections that use packages work once the packages are added with the same names.
@@ -230,15 +230,15 @@ A package can `pm.require` other packages and `require()` the built-in modules; 
 **`pm.sendRequest`** sends another HTTP request from a pre-request or test script, for example to fetch a token first:
 
 ```js
-pm.sendRequest({
-  url: pm.variables.replaceIn("{{baseUrl}}/auth/token"),
+tp.sendRequest({
+  url: tp.variables.replaceIn("{{baseUrl}}/auth/token"),
   method: "POST",
   header: { "Content-Type": "application/json" },
-  body: { mode: "raw", raw: JSON.stringify({ client_id: pm.environment.get("clientId") }) }
+  body: { mode: "raw", raw: JSON.stringify({ client_id: tp.environment.get("clientId") }) }
 }, (err, res) => {
   if (err) return console.error(err.message);
-  pm.environment.set("accessToken", res.json().access_token);
-  pm.request.headers.upsert({ key: "Authorization", value: "Bearer " + res.json().access_token });
+  tp.environment.set("accessToken", res.json().access_token);
+  tp.request.headers.upsert({ key: "Authorization", value: "Bearer " + res.json().access_token });
 });
 ```
 
@@ -247,8 +247,8 @@ pm.sendRequest({
 - Without a callback, `pm.sendRequest` returns a promise, and scripts may use `await` at the top level, as in newer Postman scripts:
 
   ```js
-  const res = await pm.sendRequest(pm.variables.replaceIn("{{baseUrl}}/auth/token"));
-  pm.environment.set("accessToken", res.json().access_token);
+  const res = await tp.sendRequest(tp.variables.replaceIn("{{baseUrl}}/auth/token"));
+  tp.environment.set("accessToken", res.json().access_token);
   ```
 
   A failed request rejects the promise (use `try` / `catch`).
@@ -270,7 +270,7 @@ const template = `
     <tr><td>{{name}}</td><td>{{species}}</td></tr>
   {{/each}}
 </table>`;
-pm.visualizer.set(template, pm.response.json());
+tp.visualizer.set(template, tp.response.json());
 ```
 
 After you send, the response body opens on **Visualize** (next to Pretty and Raw). The example workspace's **List patients** request has one; the **Snippets** list has *Visualize the response as a table*.
@@ -284,7 +284,7 @@ After you send, the response body opens on **Visualize** (next to Pretty and Raw
     <canvas id="c" height="120"></canvas>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
-      pm.getData((err, data) => {
+      tp.getData((err, data) => {
         new Chart(document.getElementById('c'), {
           type: 'bar',
           data: { labels: data.items.map((p) => p.name), datasets: [{ label: 'Age', data: data.items.map((p) => p.age) }] },

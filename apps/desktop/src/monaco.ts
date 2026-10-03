@@ -17,6 +17,8 @@ self.MonacoEnvironment = {
   },
 };
 loader.config({ monaco });
+// the editors, for the UI regression suite (e2e) and for debugging from the devtools console
+(window as unknown as { __monaco: typeof monaco }).__monaco = monaco;
 
 // Script editor IntelliSense for the Postman-compatible pm API. Scripts run as the body of an async
 // function, so a top-level `return` (TS 1108) and `await` (TS 1308, 1375, 1378) are allowed.

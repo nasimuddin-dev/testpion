@@ -46,7 +46,7 @@ const GROUPS: Array<{ title: string; items: Array<{ keys: string[][]; text: stri
     title: 'Code editors',
     items: [
       { keys: [['{{']], text: 'Suggest variables' },
-      { keys: [[modKey, 'Space']], text: 'Suggestions (variables, pm.* snippets, JSON Schema fields)' },
+      { keys: [[modKey, 'Space']], text: 'Suggestions (variables, tp.* snippets, JSON Schema fields)' },
       { keys: [[modKey, 'F']], text: 'Find' },
       { keys: [[modKey, 'H']], text: 'Replace' },
       { keys: [[modKey, '/']], text: 'Comment or uncomment lines' },

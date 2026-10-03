@@ -28,7 +28,7 @@ All checks share `type`, an optional `name`, and usually `path` (JSONPath such a
 | `grpc-status` | `expected`: a gRPC status name (`OK`, `NOT_FOUND` …), a code, or a list. Default `OK`. |
 | AI, RAG, agent and safety checks | see [evaluations](../ai-testing/evaluations.md) |
 
-Check options can use variables, e.g. `expected: "{{expected}}"`. Script tests (`pm.test`) also appear as checks.
+Check options can use variables, e.g. `expected: "{{expected}}"`. Script tests (`tp.test`) also appear as checks.
 
 ## Snapshots
 

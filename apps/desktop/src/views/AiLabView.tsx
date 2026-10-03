@@ -75,12 +75,19 @@ const drafts = persisted<Draft>('ai', {
 
 export function AiLabView() {
   // kept while the app runs, so switching tabs or views doesn't lose results
-  const [tab, setTab] = useSticky<'playground' | 'compare' | 'providers' | 'usage'>('ai:tab', 'playground');
-  const [providers, setProviders] = useState<ProviderConfig[]>([]);
+  const [tab, setTab] = useSticky<'playground' | 'compare' | 'providers' | 'usage'>('ai:tab', 'providers');
+  const [providers, setProviders] = useState<ProviderConfig[]>();
   const load = useCallback(() => call<ProviderConfig[]>('ai.providers').then(setProviders), []);
   useEffect(() => {
     void load();
   }, [load]);
+  // nothing else here works without a provider: a workspace without one opens on Providers
+  const landed = useRef(false);
+  useEffect(() => {
+    if (!providers || landed.current) return;
+    landed.current = true;
+    if (!providers.length) setTab('providers');
+  }, [providers, setTab]);
   useIntent('ai', (p) => {
     if (p?.savedId) setTab('playground');
     if (p?.tab) setTab(p.tab);
@@ -93,16 +100,17 @@ export function AiLabView() {
         value={tab}
         onChange={setTab}
         tabs={[
+          // providers first: the rest needs one
+          { id: 'providers', label: 'Providers', badge: providers?.length || undefined, title: 'The AI providers prompts are sent to (set up first)' },
           { id: 'playground', label: 'Playground' },
           { id: 'compare', label: 'Model comparison' },
-          { id: 'providers', label: 'Providers', badge: providers.length },
           { id: 'usage', label: 'Usage' },
         ]}
       />
       <div className="flex-1 min-h-0">
-        {tab === 'playground' && <Playground providers={providers} />}
-        {tab === 'compare' && <Compare providers={providers} />}
-        {tab === 'providers' && <Providers providers={providers} onSaved={load} />}
+        {tab === 'playground' && <Playground providers={providers ?? []} onSetUp={() => setTab('providers')} />}
+        {tab === 'compare' && <Compare providers={providers ?? []} onSetUp={() => setTab('providers')} />}
+        {tab === 'providers' && <Providers providers={providers ?? []} onSaved={load} />}
         {tab === 'usage' && <AiUsage />}
       </div>
     </div>
@@ -253,7 +261,7 @@ function PromptEditor({ d, set }: { d: Draft; set(p: Partial<Draft>): void }) {
   );
 }
 
-function Playground({ providers }: { providers: ProviderConfig[] }) {
+function Playground({ providers, onSetUp }: { providers: ProviderConfig[]; onSetUp(): void }) {
   const [d, set] = useDraft();
   const [running, setRunning] = useState<string>();
   const [stream, setStream] = useState('');
@@ -349,7 +357,7 @@ function Playground({ providers }: { providers: ProviderConfig[] }) {
     await call('tests.write', { path, content: stringifyYaml(test) });
     useApp.getState().toast(`Saved tests/${path}`, 'success');
   };
-  if (!providers.length) return <NoProviders />;
+  if (!providers.length) return <NoProviders onSetUp={onSetUp} />;
   const r = result && !('error' in result) ? result : undefined;
   return (
     <Split id="ai-saved" sidebar initial={18} min={12}>
@@ -464,7 +472,7 @@ function Playground({ providers }: { providers: ProviderConfig[] }) {
   );
 }
 
-function Compare({ providers }: { providers: ProviderConfig[] }) {
+function Compare({ providers, onSetUp }: { providers: ProviderConfig[]; onSetUp(): void }) {
   const [d, set] = useDraft();
   const [running, setRunning] = useState(false);
   const [results, setResults] = useSticky<Array<ChatResult & { error?: NormalizedError }>>('ai:compare:results', []);
@@ -494,7 +502,7 @@ function Compare({ providers }: { providers: ProviderConfig[] }) {
       setRunning(false);
     }
   };
-  if (!providers.length) return <NoProviders />;
+  if (!providers.length) return <NoProviders onSetUp={onSetUp} />;
   return (
     <Split id="ai-compare" initial={38}>
       <div className="h-full flex flex-col">
@@ -601,10 +609,18 @@ function Compare({ providers }: { providers: ProviderConfig[] }) {
   );
 }
 
-function NoProviders() {
+function NoProviders({ onSetUp }: { onSetUp(): void }) {
   return (
-    <Empty icon={<WifiOff size={26} />} title="No AI providers configured">
-      Add an OpenAI-compatible, Azure OpenAI, Anthropic, Gemini, Amazon Bedrock or Ollama provider in the Providers tab. The built-in "mock" provider works fully offline.
+    <Empty
+      icon={<WifiOff size={26} />}
+      title="Set up an AI provider first"
+      action={
+        <Button variant="primary" onClick={onSetUp}>
+          Open Providers
+        </Button>
+      }
+    >
+      Prompts are sent to a provider you choose: OpenAI-compatible, Azure OpenAI, Anthropic, Gemini, Amazon Bedrock or Ollama. The built-in "mock" provider works fully offline, for trying things out.
     </Empty>
   );
 }

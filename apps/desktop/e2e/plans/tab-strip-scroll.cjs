@@ -47,9 +47,21 @@ const steps = [
      first.click(); await __t.sleep(1000);
      return view();`,
   ),
+  // the leftmost tab on screen is never cut (it looked hidden behind the sidebar), and the strip says there is more
+  step(
+    'no-half-tab-at-the-left',
+    `const s = strip(); const w = tabs()[1].getBoundingClientRect().width; s.scrollLeft = Math.round(w * 1.6); await __t.sleep(400); // between two tabs, as a wheel leaves it
+     const r = s.getBoundingClientRect();
+     const firstShown = tabs().find((t) => t.getBoundingClientRect().right - r.left > 8);
+     const cut = Math.max(0, Math.round(r.left - firstShown.getBoundingClientRect().left));
+     const earlier = document.querySelector('[aria-label="Earlier tabs"]'); const later = document.querySelector('[aria-label="Later tabs"]');
+     const before = s.scrollLeft; earlier?.click(); await __t.sleep(300);
+     return 'leftmost cut by: ' + cut + 'px | buttons: ' + (!!earlier) + '/' + (!!later) + ' | earlier scrolls back: ' + (s.scrollLeft < before) + ' | at start hides earlier: ' + (s.scrollLeft > 1 || !document.querySelector('[aria-label="Earlier tabs"]'));`,
+  ),
 ];
 
 module.exports = withExpect(steps, {
+  'no-half-tab-at-the-left': /^leftmost cut by: 0px \| buttons: true\/true \| earlier scrolls back: true \| at start hides earlier: true$/,
   'many-tabs': /^tabs: (1[0-9]|[2-9]\d) \| overflows: true \| .*: fully shown$/,
   'open-in-tab-from-menu': /^GETCustom headers: fully shown$/,
   'pick-first-tab': /: fully shown$/,

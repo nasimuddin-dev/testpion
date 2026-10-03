@@ -248,8 +248,8 @@ export function VarPopover({ name, info, environment, collectionId, x, y, onClos
       ref={ref}
       role="dialog"
       aria-label={`Variable ${name}`}
-      className="fixed z-[80] w-80 max-w-[calc(100vw-2rem)] rounded-xl border border-line bg-popover shadow-lg p-3 flex flex-col gap-2 text-sm font-sans animate-in fade-in-0 zoom-in-95 duration-150"
-      style={{ left: Math.max(8, Math.min(x, window.innerWidth - 336)), top: Math.min(y + 6, window.innerHeight - 240) }}
+      className="fixed z-[80] w-[22rem] max-w-[calc(100vw-2rem)] rounded-xl border border-line bg-popover shadow-lg p-3 flex flex-col gap-2 text-sm font-sans animate-in fade-in-0 zoom-in-95 duration-150"
+      style={{ left: Math.max(8, Math.min(x, window.innerWidth - 368)), top: Math.min(y + 6, window.innerHeight - 260) }}
       onMouseDown={(e) => e.stopPropagation()}
     >
       <div className="flex items-center gap-2 min-w-0">
@@ -280,7 +280,8 @@ export function VarPopover({ name, info, environment, collectionId, x, y, onClos
           <p className="text-xs text-muted">Set in the {info?.scope} variables{info?.scope === 'collection' ? ' (collection settings)' : ''}; it takes precedence over the environment.</p>
         </>
       )}
-      <div className="flex items-center gap-2 pt-1">
+      {/* the buttons wrap when they do not fit; Save keeps the right end of its row */}
+      <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 pt-1">
         {!dynamic && defined && !info?.secret && (
           <Button size="sm" icon={<Copy size={12} />} onClick={() => void navigator.clipboard.writeText(info?.value ?? '').then(() => useApp.getState().toast('Copied'))}>
             Copy

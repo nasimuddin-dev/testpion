@@ -56,7 +56,7 @@ export function ResponseViewer({
   onSaveVariable?(v: TreeVariable): void;
   /** Save this response as an example of the request. */
   onSaveExample?(): void;
-  /** Ask the AI assistant for pm tests for this response. */
+  /** Ask the AI assistant for tp.test checks for this response. */
   onGenerateTests?(): void;
   /** Ask the AI assistant to explain this (error) response. */
   onExplain?(): void;
@@ -86,7 +86,7 @@ export function ResponseViewer({
   const actions: Array<MenuItem & { title?: string }> = [
     ...(onExplain && response.status >= 400 ? [{ label: 'Explain', icon: <Sparkles size={12} />, onSelect: onExplain, title: 'Ask the AI assistant what this error means and how to fix it' }] : []),
     ...(onGenerateTests
-      ? [{ label: 'Generate tests', icon: <Sparkles size={12} />, onSelect: onGenerateTests, title: 'Write pm tests for this response with the AI assistant (added to the Post-response script)' }]
+      ? [{ label: 'Generate tests', icon: <Sparkles size={12} />, onSelect: onGenerateTests, title: 'Write tp.test checks for this response with the AI assistant (added to the Post-response script)' }]
       : []),
     ...(onAddAssertion && isJson
       ? [

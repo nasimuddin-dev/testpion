@@ -100,3 +100,14 @@ describe('architecture', () => {
     expect(large).toEqual([]);
   });
 });
+
+describe('the app speaks TestPion', () => {
+  it('script snippets insert tp.*, never pm.* or postman.* (both still run)', () => {
+    const text = readFileSync(join(root, 'apps/desktop/src/lib/snippets.ts'), 'utf8');
+    const start = text.indexOf('export const SNIPPETS');
+    const end = text.indexOf('];', start);
+    const code = [...text.slice(start, end).matchAll(/code: `([^`]*)`/g)].map((m) => m[1]!);
+    expect(code.length).toBeGreaterThan(10);
+    expect(code.filter((c) => /\b(pm|postman)\./.test(c))).toEqual([]);
+  });
+});

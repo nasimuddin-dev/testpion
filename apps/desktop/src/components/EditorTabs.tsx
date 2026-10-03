@@ -1,5 +1,5 @@
-import { ArrowRightToLine, ChevronDown, Copy, FileCheck2, ListX, Pencil, Pin, PinOff, Plug, Plus, Radio, Send, Sparkles, SquareX, Waypoints, X } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { ArrowRightToLine, ChevronDown, ChevronLeft, ChevronRight, Copy, FileCheck2, ListX, Pencil, Pin, PinOff, Plug, Plus, Radio, Send, Sparkles, SquareX, Waypoints, X } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { create } from 'zustand';
 import { useApp, type ViewId } from '../store';
 import { docKey, isDocView, useDoc, useDocs } from '../lib/docs';
@@ -364,6 +364,75 @@ export function EditorTabStrip() {
     } else t.onRename?.();
   };
   const stripRef = useRef<HTMLDivElement>(null);
+  // the strip scrolls without a scrollbar: when it overflows, ‹ › buttons show that there is more, and the leftmost
+  // tab is always whole (a tab cut at the left edge looked hidden behind the sidebar)
+  const [overflow, setOverflow] = useState<{ left: boolean; right: boolean }>({ left: false, right: false });
+  const measure = useCallback(() => {
+    const strip = stripRef.current;
+    if (!strip) return;
+    const left = strip.scrollLeft > 1;
+    const right = strip.scrollLeft + strip.clientWidth < strip.scrollWidth - 1;
+    setOverflow((o) => (o.left === left && o.right === right ? o : { left, right }));
+  }, []);
+  /**
+   * Scroll so that a tab starts exactly at the left edge: the one nearest to it (a tab more than half hidden gives way
+   * to the next). The active tab stays whole: when aligning would push it off the right edge, it becomes the leftmost.
+   */
+  const snap = useCallback(() => {
+    const strip = stripRef.current;
+    if (!strip || strip.scrollLeft <= 0) return;
+    const s = strip.getBoundingClientRect();
+    const tabs = [...strip.querySelectorAll<HTMLElement>('[role=tab]')];
+    let first = tabs.find((t) => {
+      const r = t.getBoundingClientRect();
+      return r.right - s.left > r.width / 2;
+    });
+    if (!first) return;
+    const active = tabs.find((t) => t.getAttribute('aria-selected') === 'true');
+    if (active) {
+      const a = active.getBoundingClientRect();
+      const shift = first.getBoundingClientRect().left - s.left; // how far the content moves left (negative: right)
+      if (a.right - shift > s.right + 1 && tabs.indexOf(active) >= tabs.indexOf(first)) first = active;
+    }
+    const delta = first.getBoundingClientRect().left - s.left;
+    if (Math.abs(delta) > 1) strip.scrollLeft = Math.max(0, strip.scrollLeft + delta);
+  }, []);
+  const scrollByTabs = (dir: -1 | 1) => {
+    const strip = stripRef.current;
+    if (!strip) return;
+    strip.scrollLeft += dir * Math.max(TAB_W, strip.clientWidth - TAB_W);
+    snap();
+    measure();
+  };
+  useEffect(() => {
+    const strip = stripRef.current;
+    if (!strip) return;
+    measure();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const onScroll = () => {
+      measure();
+      // after the wheel stops: no half tab at the left edge
+      clearTimeout(timer);
+      timer = setTimeout(snap, 120);
+    };
+    const onWheel = (e: WheelEvent) => {
+      // a mouse wheel scrolls the strip sideways (it has no vertical direction to go)
+      if (Math.abs(e.deltaY) > Math.abs(e.deltaX) && strip.scrollWidth > strip.clientWidth) {
+        e.preventDefault();
+        strip.scrollLeft += e.deltaY;
+      }
+    };
+    strip.addEventListener('scroll', onScroll, { passive: true });
+    strip.addEventListener('wheel', onWheel, { passive: false });
+    const ro = new ResizeObserver(measure);
+    ro.observe(strip);
+    return () => {
+      clearTimeout(timer);
+      strip.removeEventListener('scroll', onScroll);
+      strip.removeEventListener('wheel', onWheel);
+      ro.disconnect();
+    };
+  }, [measure, snap, view]);
   // keep the active tab in view (scrolling only the strip: scrollIntoView could shift the whole window)
   useEffect(() => {
     const reveal = () => {
@@ -376,19 +445,26 @@ export function EditorTabStrip() {
       const r = el.getBoundingClientRect();
       if (r.left < s.left) strip.scrollLeft -= s.left - r.left;
       else if (r.right > s.right) strip.scrollLeft += Math.min(r.right - s.right, r.left - s.left);
+      snap();
+      measure();
     };
     reveal();
     // a tab just opened is drawn a moment later (its editor publishes it): look again then
     const id = requestAnimationFrame(reveal);
     const t = setTimeout(reveal, 150);
     return () => (cancelAnimationFrame(id), clearTimeout(t));
-  }, [activeKey, view, tabs.length]);
+  }, [activeKey, view, tabs.length, snap, measure]);
   const select = (t: EditorTab) => {
     if (useApp.getState().view !== t.view) useApp.getState().setView(t.view);
     t.onSelect?.();
   };
   return (
     <div className="flex items-end h-9 border-b border-line bg-panel/40 shrink-0 min-w-0">
+      {overflow.left && (
+        <button aria-label="Earlier tabs" title="Earlier tabs" className="shrink-0 h-9 w-6 grid place-items-center text-muted hover:text-fg hover:bg-hover border-r border-line" onClick={() => scrollByTabs(-1)}>
+          <ChevronLeft size={14} />
+        </button>
+      )}
       <div ref={stripRef} role="tablist" aria-label="Open requests" className="flex items-end min-w-0 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {tabs.map((t) => {
           const active = t.view === view && t.key === activeKey;
@@ -447,6 +523,11 @@ export function EditorTabStrip() {
           );
         })}
       </div>
+      {overflow.right && (
+        <button aria-label="Later tabs" title="Later tabs" className="shrink-0 h-9 w-6 grid place-items-center text-muted hover:text-fg hover:bg-hover border-l border-line" onClick={() => scrollByTabs(1)}>
+          <ChevronRight size={14} />
+        </button>
+      )}
       <Menu
         width={240}
         align="start"

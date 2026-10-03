@@ -59,27 +59,27 @@ function varAt(line: string, column: number): { name: string; start: number; end
 
 const LANGUAGES = ['json', 'javascript', 'typescript', 'plaintext', 'yaml', 'xml', 'html', 'graphql', 'markdown', 'proto', 'shell'];
 
-/* ------------------------------------------------------------------ pm / tp snippets */
+/* ------------------------------------------------------------------ tp.* snippets (pm.* is the same API) */
 
 const SNIPPETS: Array<{ label: string; detail: string; body: string }> = [
-  { label: 'pm.test', detail: 'Test with an assertion', body: "pm.test('${1:status is 200}', () => {\n\tpm.response.to.have.status(${2:200});\n});" },
-  { label: 'pm.test status code', detail: 'Status code is …', body: "pm.test('Status code is ${1:200}', () => {\n\tpm.response.to.have.status(${1:200});\n});" },
-  { label: 'pm.test response time', detail: 'Response time below …', body: "pm.test('Response time is below ${1:500} ms', () => {\n\tpm.expect(pm.response.responseTime).to.be.below(${1:500});\n});" },
-  { label: 'pm.test json field', detail: 'JSON field equals …', body: "pm.test('${1:field} is ${2:value}', () => {\n\tconst json = pm.response.json();\n\tpm.expect(json.${1:field}).to.eql(${3:'${2:value}'});\n});" },
-  { label: 'pm.test json type', detail: 'JSON field has type …', body: "pm.test('${1:id} is a ${2:number}', () => {\n\tpm.expect(pm.response.json().${1:id}).to.be.a('${2:number}');\n});" },
-  { label: 'pm.test header', detail: 'Header is present', body: "pm.test('Has ${1:Content-Type}', () => {\n\tpm.response.to.have.header('${1:Content-Type}');\n});" },
-  { label: 'pm.test body contains', detail: 'Body contains text', body: "pm.test('Body contains ${1:text}', () => {\n\tpm.expect(pm.response.text()).to.include('${1:text}');\n});" },
-  { label: 'pm.test json schema', detail: 'Response matches a JSON Schema', body: "const schema = {\n\ttype: 'object',\n\trequired: [${1:'id'}],\n};\npm.test('Matches the schema', () => {\n\tpm.response.to.have.jsonSchema(schema);\n});" },
-  { label: 'pm.environment.set', detail: 'Save a value for the next requests', body: "pm.environment.set('${1:token}', pm.response.json().${2:access_token});" },
-  { label: 'pm.collectionVariables.set', detail: 'Save a collection variable', body: "pm.collectionVariables.set('${1:name}', ${2:value});" },
-  { label: 'pm.environment.get', detail: 'Read an environment variable', body: "const ${1:value} = pm.environment.get('${2:name}');" },
-  { label: 'pm.sendRequest', detail: 'Send another request from a script', body: "pm.sendRequest('${1:https://example.com}', (err, res) => {\n\tif (err) return console.log(err);\n\t${2:console.log(res.json());}\n});" },
-  { label: 'pm.execution.setNextRequest', detail: 'Choose the next request of a run', body: "pm.execution.setNextRequest('${1:Request name}');" },
-  { label: 'pm.visualizer.set', detail: 'Show the response as HTML', body: "pm.visualizer.set(`\n\t<table>{{#each items}}<tr><td>{{name}}</td></tr>{{/each}}</table>\n`, { items: pm.response.json()${1:} });" },
-  { label: 'pm.variables.set date (moment)', detail: 'A date for the request, e.g. a week from now', body: "pm.variables.set('${1:dueDate}', moment().add(${2:7}, '${3:days}').format('${4:YYYY-MM-DD}'));" },
-  { label: 'pm.variables.set fake value', detail: 'A made-up value (dynamic variable)', body: "pm.variables.set('${1:name}', pm.variables.replaceIn('{{\\$${2:randomFullName}}}'));" },
-  { label: 'pm.test lodash', detail: 'Check a list with lodash', body: "pm.test('${1:Every item has an id}', () => {\n\tconst items = pm.response.json()${2:.items};\n\tpm.expect(_.every(items, '${3:id}')).to.be.true;\n});" },
-  { label: 'pm.request.headers.upsert', detail: 'Set a request header (pre-request)', body: "pm.request.headers.upsert({ key: '${1:X-Request-Id}', value: ${2:pm.variables.replaceIn('{{\\$uuid}}')} });" },
+  { label: 'tp.test', detail: 'Test with an assertion', body: "tp.test('${1:status is 200}', () => {\n\ttp.response.to.have.status(${2:200});\n});" },
+  { label: 'tp.test status code', detail: 'Status code is …', body: "tp.test('Status code is ${1:200}', () => {\n\ttp.response.to.have.status(${1:200});\n});" },
+  { label: 'tp.test response time', detail: 'Response time below …', body: "tp.test('Response time is below ${1:500} ms', () => {\n\ttp.expect(tp.response.responseTime).to.be.below(${1:500});\n});" },
+  { label: 'tp.test json field', detail: 'JSON field equals …', body: "tp.test('${1:field} is ${2:value}', () => {\n\tconst json = tp.response.json();\n\ttp.expect(json.${1:field}).to.eql(${3:'${2:value}'});\n});" },
+  { label: 'tp.test json type', detail: 'JSON field has type …', body: "tp.test('${1:id} is a ${2:number}', () => {\n\ttp.expect(tp.response.json().${1:id}).to.be.a('${2:number}');\n});" },
+  { label: 'tp.test header', detail: 'Header is present', body: "tp.test('Has ${1:Content-Type}', () => {\n\ttp.response.to.have.header('${1:Content-Type}');\n});" },
+  { label: 'tp.test body contains', detail: 'Body contains text', body: "tp.test('Body contains ${1:text}', () => {\n\ttp.expect(tp.response.text()).to.include('${1:text}');\n});" },
+  { label: 'tp.test json schema', detail: 'Response matches a JSON Schema', body: "const schema = {\n\ttype: 'object',\n\trequired: [${1:'id'}],\n};\ntp.test('Matches the schema', () => {\n\ttp.response.to.have.jsonSchema(schema);\n});" },
+  { label: 'tp.environment.set', detail: 'Save a value for the next requests', body: "tp.environment.set('${1:token}', tp.response.json().${2:access_token});" },
+  { label: 'tp.collectionVariables.set', detail: 'Save a collection variable', body: "tp.collectionVariables.set('${1:name}', ${2:value});" },
+  { label: 'tp.environment.get', detail: 'Read an environment variable', body: "const ${1:value} = tp.environment.get('${2:name}');" },
+  { label: 'tp.sendRequest', detail: 'Send another request from a script', body: "tp.sendRequest('${1:https://example.com}', (err, res) => {\n\tif (err) return console.log(err);\n\t${2:console.log(res.json());}\n});" },
+  { label: 'tp.execution.setNextRequest', detail: 'Choose the next request of a run', body: "tp.execution.setNextRequest('${1:Request name}');" },
+  { label: 'tp.visualizer.set', detail: 'Show the response as HTML', body: "tp.visualizer.set(`\n\t<table>{{#each items}}<tr><td>{{name}}</td></tr>{{/each}}</table>\n`, { items: tp.response.json()${1:} });" },
+  { label: 'tp.variables.set date (moment)', detail: 'A date for the request, e.g. a week from now', body: "tp.variables.set('${1:dueDate}', moment().add(${2:7}, '${3:days}').format('${4:YYYY-MM-DD}'));" },
+  { label: 'tp.variables.set fake value', detail: 'A made-up value (dynamic variable)', body: "tp.variables.set('${1:name}', tp.variables.replaceIn('{{\\$${2:randomFullName}}}'));" },
+  { label: 'tp.test lodash', detail: 'Check a list with lodash', body: "tp.test('${1:Every item has an id}', () => {\n\tconst items = tp.response.json()${2:.items};\n\ttp.expect(_.every(items, '${3:id}')).to.be.true;\n});" },
+  { label: 'tp.request.headers.upsert', detail: 'Set a request header (pre-request)', body: "tp.request.headers.upsert({ key: '${1:X-Request-Id}', value: ${2:tp.variables.replaceIn('{{\\$uuid}}')} });" },
 ];
 
 /* ------------------------------------------------------------------ JSON schemas per editor model */
@@ -183,11 +183,16 @@ export function installEditorIntel(monaco: typeof Monaco): void {
         return;
       }
       const known = new Set([...localVariablesOf(model), ...(await editorVariables())].map((v) => v.name));
+      // a script is not a template: {{x}} in it is resolved only where the script asks (tp.variables.replaceIn), and a
+      // visualizer's Handlebars template uses the same braces for its own fields, so an unknown name is not an error there
+      const script = model.getLanguageId() === 'javascript';
       const decos: Monaco.editor.IModelDeltaDecoration[] = [];
       for (const m of text.matchAll(/\{\{\s*([\w.$-]+)\s*\}\}/g)) {
+        const ok = isKnownVariable(m[1]!, known);
+        if (!ok && script) continue;
         const s = model.getPositionAt(m.index!);
         const e = model.getPositionAt(m.index! + m[0].length);
-        decos.push({ range: new monaco.Range(s.lineNumber, s.column, e.lineNumber, e.column), options: { inlineClassName: isKnownVariable(m[1]!, known) ? 'editor-var' : 'editor-var-missing', hoverMessage: isKnownVariable(m[1]!, known) ? undefined : { value: `**{{${m[1]}}}** is not defined` } } });
+        decos.push({ range: new monaco.Range(s.lineNumber, s.column, e.lineNumber, e.column), options: { inlineClassName: ok ? 'editor-var' : 'editor-var-missing', hoverMessage: ok ? undefined : { value: `**{{${m[1]}}}** is not defined` } } });
         if (decos.length > 2000) break;
       }
       ids = editor.deltaDecorations(ids, decos);
@@ -238,7 +243,8 @@ export function installEditorIntel(monaco: typeof Monaco): void {
       const startColumn = expr ? position.column - expr[1]!.length : word.startColumn;
       const range = new monaco.Range(position.lineNumber, startColumn, position.lineNumber, position.column);
       return {
-        suggestions: SNIPPETS.flatMap((s) => [s, { ...s, label: s.label.replace(/^pm\./, 'tp.'), body: s.body.replace(/\bpm\./g, 'tp.') }]).map((s) => ({
+        // tp.* is the app's name for the API; someone typing pm. (Postman habits) gets the same snippets under pm.
+        suggestions: (expr?.[1]?.startsWith('pm') ? SNIPPETS.map((s) => ({ ...s, label: s.label.replace(/^tp\./, 'pm.'), body: s.body.replace(/\btp\./g, 'pm.') })) : SNIPPETS).map((s) => ({
           label: s.label,
           kind: monaco.languages.CompletionItemKind.Snippet,
           detail: s.detail,
