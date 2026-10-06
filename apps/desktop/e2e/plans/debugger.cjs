@@ -178,9 +178,47 @@ const steps = [
       return 'decrypt on: ' + st.decrypt + ' | label: ' + label + ' | fingerprint: ' + !!fp + ' | base64: ' + b64;
     })()`,
   ],
+  [
+    'grpc-call-and-connections',
+    `(async () => {
+      // a gRPC call through the proxy (h2c inside a CONNECT, as grpc-js does): listed as gRPC over HTTP/2, its messages
+      // decoded field by field (this workspace has no .proto for the demo PetService), the status from the trailers
+      [...document.querySelectorAll('main [role=tab]')].find((t) => t.offsetParent && t.textContent.trim().startsWith('Traffic'))?.click();
+      await window.aps.invoke('debug.selfTest', { url: 'grpc://127.0.0.1:4014/vet.v1.PetService/GetPet?id=1' });
+      await window.aps.invoke('debug.selfTest', { url: 'grpc://127.0.0.1:4014/vet.v1.PetService/GetPet?id=99' });
+      const row = await __t.waitFor(() => [...document.querySelectorAll('main [role=row]')].find((r) => r.textContent.includes('/vet.v1.PetService/GetPet') && /gRPC/.test(r.textContent)), 6000);
+      if (!row) return 'NO GRPC ROW';
+      const h2 = /h2/.test(row.textContent);
+      row.click(); await __t.sleep(700);
+      const tab = (name) => [...document.querySelectorAll('main [role=tab]')].find((t) => t.offsetParent && t.textContent.trim().startsWith(name));
+      tab('gRPC')?.click(); await __t.sleep(400);
+      const raw = !!document.querySelector('main [data-grpc-decoded=raw]');
+      const sent = [...document.querySelectorAll('main [data-grpc-message=Sent]')].some((p) => /"1": 1\\b/.test(p.textContent));
+      const received = document.querySelectorAll('main [data-grpc-message=Received]').length;
+      const failed = await __t.waitFor(() => [...document.querySelectorAll('main [role=row]')].find((r) => r.textContent.includes('GetPet') && r.querySelector('[title="gRPC NOT_FOUND"]')), 4000);
+      tab('Connections')?.click(); await __t.sleep(500);
+      const h2conn = document.querySelectorAll('main [data-connection=h2]').length;
+      tab('Traffic')?.click(); await __t.sleep(300);
+      return 'h2: ' + h2 + ' | raw: ' + raw + ' | sent: ' + sent + ' | received: ' + received + ' | not found: ' + !!failed + ' | h2 connections: ' + (h2conn > 0);
+    })()`,
+  ],
+  [
+    'phone-dialog',
+    `(async () => {
+      ${button('Capture')}?.click(); await __t.sleep(500);
+      [...document.querySelectorAll('[role=menuitem]')].find((m) => /^A phone or another computer/.test(m.textContent.trim()))?.click();
+      const dialog = await __t.waitFor(() => [...document.querySelectorAll('[role=dialog]')].find((d) => /phone or another computer/.test(d.textContent)), 4000);
+      if (!dialog) return 'NO DIALOG';
+      const offers = /Listen on the network/.test(dialog.textContent);
+      dialog.querySelector('button[aria-label=Close]')?.click(); await __t.sleep(300);
+      return 'dialog: true | offers to listen on the network: ' + offers;
+    })()`,
+  ],
 ];
 
 module.exports = withExpect(steps, {
+  'grpc-call-and-connections': /^h2: true \| raw: true \| sent: true \| received: 1 \| not found: true \| h2 connections: true$/,
+  'phone-dialog': /^dialog: true \| offers to listen on the network: true$/,
   'home-tile-opens-the-debugger': /^tile: true \| icon: true \| opens: true$/,
   start: /^listening \| port: \d+$/,
   'exchange-listed-and-opens': /^row: GET true 200 true \| detail tabs: true \| body shown: true \| opened as request: true$/,

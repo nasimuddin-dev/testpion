@@ -5,7 +5,7 @@ import { Command } from 'commander';
 import {
   ChainSecretStore,
   createEngineContext,
-  debuggerCertDir, ensureRootCertificate, exchangesToHar, leafSigner, startDebuggerProxy, type DebuggerRule, type DebuggerRulesFile,
+  debuggerCertDir, ensureRootCertificate, exchangesToHar, grpcDecoder, grpcMethodIndex, leafSigner, startDebuggerProxy, workspaceProtoRoots, type DebuggerRule, type DebuggerRulesFile,
   EnvSecretStore,
   McpSession,
   recordingToCollection,
@@ -353,8 +353,9 @@ ${cyan(r.url)}`);
     .option('-o, --out <file.har>', 'save the session as HAR when stopped (Ctrl+C)')
     .option('--rules <file.json>', "rules to apply (the app's debugger/rules.json: ignore, highlight, modify, reply, redirect); the file is re-read when it changes")
     .option('--decrypt', 'decrypt HTTPS with the TestPion root certificate (~/.testpion/debugger; the program must trust it)')
+    .option('-w, --workspace <nameOrPath>', "decode gRPC messages with the .proto files of this workspace's gRPC calls (default: the nearest workspace.json, if any)")
     .option('--json', 'print each exchange as one JSON line (for scripts and AI agents)')
-    .action(async (o: { port: string; lan?: boolean; out?: string; rules?: string; decrypt?: boolean; json?: boolean }) => {
+    .action(async (o: { port: string; lan?: boolean; out?: string; rules?: string; decrypt?: boolean; workspace?: string; json?: boolean }) => {
       const redactor = new Redactor();
       // the rules file as the app writes it (profiles) or a plain list; re-read when it changes so edits apply at once
       let rulesCache: { mtime: number; rules: DebuggerRule[] } | undefined;
@@ -375,7 +376,16 @@ ${cyan(r.url)}`);
       const root = o.decrypt ? ensureRootCertificate(debuggerCertDir()) : undefined;
       if (root) console.error(dim(`HTTPS decrypted for programs that trust ${root.path} (Node: NODE_EXTRA_CA_CERTS, Python: REQUESTS_CA_BUNDLE, curl: --cacert)`));
       const leaf = root ? leafSigner(root) : undefined;
+      // gRPC: decoded with the workspace's protos when there is a workspace, else field by field
+      let protoRoots: ReturnType<typeof workspaceProtoRoots> = [];
+      try {
+        protoRoots = workspaceProtoRoots(openWorkspace(o.workspace, undefined, new WorkspaceManager()).store);
+      } catch {
+        /* no workspace here: field by field */
+      }
       const proxy = await startDebuggerProxy({
+        grpcDecode: grpcDecoder(grpcMethodIndex(protoRoots)),
+        rootCertificatePem: () => root?.certPem,
         port: Number(o.port) || undefined,
         lan: !!o.lan,
         rules,
@@ -383,7 +393,10 @@ ${cyan(r.url)}`);
         onExchange: (e, phase) => {
           if (phase !== 'response') return;
           if (o.json) console.log(JSON.stringify({ ...e, url: redactor.redactUrl(e.url), requestBody: undefined, responseBody: undefined }));
-          else console.log(`${e.error ? red('ERR') : (e.status ?? 0) >= 400 ? red(String(e.status)) : green(String(e.status ?? '-'))}  ${bold(e.method.padEnd(7))} ${redactor.redactUrl(e.url)}  ${dim(`${e.application ?? ''} ${e.responseBodyBytes} B ${e.durationMs ?? 0} ms`)}`);
+          else {
+            const code = e.grpc?.statusName && e.grpc.status !== 0 ? red(`gRPC ${e.grpc.statusName}`) : e.error ? red('ERR') : (e.status ?? 0) >= 400 ? red(String(e.status)) : green(String(e.status ?? '-'));
+            console.log(`${code}  ${bold(e.method.padEnd(7))} ${redactor.redactUrl(e.url)}${e.httpVersion === '2' ? dim(' h2') : ''}  ${dim(`${e.application ?? ''} ${e.responseBodyBytes} B ${e.durationMs ?? 0} ms`)}`);
+          }
         },
       });
       console.error(`${green('HTTP Debugger')} listening on ${proxy.url}  ${dim(`(HTTP_PROXY=${proxy.url}; Ctrl+C to stop${o.out ? `, saves ${o.out}` : ''})`)}`);

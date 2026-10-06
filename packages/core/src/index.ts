@@ -64,6 +64,7 @@ export * from './debugger/rules.js';
 export * from './debugger/certificate.js';
 export * from './debugger/frames.js';
 export * from './debugger/saz.js';
+export * from './debugger/grpc.js';
 export * from './runner/datasets.js';
 export * from './runner/collection-run.js';
 export * from './runner/breakdown.js';

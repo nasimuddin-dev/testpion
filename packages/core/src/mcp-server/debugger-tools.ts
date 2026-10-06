@@ -4,6 +4,9 @@ import { describeRule, rulePresets, type DebuggerRule } from '../debugger/rules.
 import { shortId } from '../util/ids.js';
 import { debuggerCertDir, ensureRootCertificate, leafSigner } from '../debugger/certificate.js';
 import { exchangesFromSaz } from '../debugger/saz.js';
+import { grpcDecoder, grpcMethodIndex, workspaceProtoRoots } from '../debugger/grpc.js';
+import type { WorkspaceStore } from '../storage/workspace.js';
+
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { Redactor } from '../util/redact.js';
@@ -14,7 +17,7 @@ import { str, type Tool } from './tool.js';
  * The HTTP Debugger for agents: start the proxy, point a program at it, read what it sent and got. The capture lives
  * in this server process; secrets in URLs, headers and bodies pass the redactor before an agent sees them.
  */
-export function debuggerTools(d: { redactor: Redactor }): Tool[] {
+export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore }): Tool[] {
   let proxy: DebuggerProxy | undefined;
   const session: DebuggerExchange[] = [];
   /** The rules of this server process (an agent adds them; the proxy reads them on every request). */
@@ -22,13 +25,29 @@ export function debuggerTools(d: { redactor: Redactor }): Tool[] {
   const red = d.redactor;
   const safe = (e: DebuggerExchange, bodies: boolean) => {
     const headers = (h?: Record<string, string>) => (h ? Object.fromEntries(Object.entries(h).map(([k, v]) => [k, red.isSensitiveKey(k) ? '***' : v])) : h);
-    const { requestBody, responseBody, ...rest } = e;
+    // bodies, frames, events and gRPC messages only for one exchange, and redacted like everything else
+    const { requestBody, responseBody, frames, events, grpc, trailers, ...rest } = e;
     return {
       ...rest,
       url: red.redactUrl(e.url),
       requestHeaders: headers(e.requestHeaders),
       responseHeaders: headers(e.responseHeaders),
-      ...(bodies ? { requestBody: requestBody && red.redactString(requestBody), responseBody: responseBody && red.redactString(responseBody) } : {}),
+      ...(grpc
+        ? {
+            grpc: bodies
+              ? { ...grpc, requests: red.redact(grpc.requests), responses: red.redact(grpc.responses) }
+              : { service: grpc.service, method: grpc.method, status: grpc.status, statusName: grpc.statusName },
+          }
+        : {}),
+      ...(bodies
+        ? {
+            requestBody: requestBody && red.redactString(requestBody),
+            responseBody: responseBody && red.redactString(responseBody),
+            trailers: headers(trailers),
+            frames: frames?.map((f) => (f.text ? { ...f, text: red.redactString(f.text) } : f)),
+            events: events?.map((ev) => ({ ...ev, data: red.redactString(ev.data) })),
+          }
+        : { ...(frames ? { frameCount: frames.length } : {}), ...(events ? { eventCount: events.length } : {}) }),
     };
   };
   return [
@@ -55,6 +74,7 @@ export function debuggerTools(d: { redactor: Redactor }): Tool[] {
           proxy = await startDebuggerProxy({
             port: a.port ? Number(a.port) : undefined,
             rules: () => rules,
+            grpcDecode: grpcDecoder(grpcMethodIndex(workspaceProtoRoots(d.store))),
             ...(leaf ? { decrypt: { leafFor: leaf, enabled: () => true } } : {}),
             onExchange: (e, phase) => {
               if (phase === 'request') {

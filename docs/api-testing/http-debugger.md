@@ -31,6 +31,16 @@ Plain HTTP is captured whole. HTTPS shows as a **tunnel** by host, with bytes in
 
 **HTTPS ▸ Decrypt HTTPS** makes the proxy answer each program with a certificate for the host it asked for, signed by **TestPion HTTP Debugger Root**, a root certificate created on this computer (it never leaves it). Programs that trust that root are captured like plain HTTP, with a lock on the row; a program that does not trust it is listed as a tunnel that failed, with the reason. **HTTPS ▸ Root certificate…** shows its fingerprint, trusts it for the current user in one click (Windows, macOS, Chrome on Linux; Firefox imports it in its own settings), removes it, exports it for a phone or another computer, or makes a new one. Node reads `NODE_EXTRA_CA_CERTS`, Python `REQUESTS_CA_BUNDLE`, curl `--cacert`. **Keep hosts encrypted…** lists the hosts that stay opaque (programs that pin their certificates, banking). Remove the root from the trust store when you are done.
 
+### HTTP/2 and gRPC
+
+Programs that speak HTTP/2 inside a decrypted tunnel are read as HTTP/2: each request is a stream, marked **h2** on its row. **gRPC** calls are captured whole even without TLS (grpc-js and most gRPC clients send plaintext gRPC through a proxy as HTTP/2 inside a CONNECT, and the Debugger reads it): the row says **gRPC**, a failed call shows its gRPC status (NOT_FOUND, UNAVAILABLE …), and the **gRPC** tab lists the messages sent and received as JSON, with the status and message from the trailers. Messages are decoded with the `.proto` files (or reflection) of the workspace's gRPC requests when one describes the method, else field by field. The **Connections** tab groups requests by the connection they came on: an HTTP/2 connection with its streams, an HTTP/1.1 connection with its requests.
+
+A tunnel that carries plain HTTP/1.1 is read too. A program whose server speaks first (SMTP, a database) gets an opaque tunnel.
+
+### A phone or another computer
+
+**Capture ▸ A phone or another computer…** shows this computer's addresses on the local networks, each with a QR code. The proxy has to listen on the network for this; the dialog offers to restart it that way. Scanning the code opens a page the proxy serves itself, with the server and port to type into the device's Wi-Fi proxy settings. When HTTPS is decrypted, the page also offers the root certificate to install, with the steps for Android and iOS.
+
 ### WebSocket and Server-Sent Events
 
 A WebSocket through the proxy is one row (status 101, *live* while open) with a **Frames** tab: every message sent and received, with the time and size; control frames (ping, pong, close) on request. A `text/event-stream` response gets an **Events** tab with each event's name, id and data as it arrives.
@@ -79,12 +89,13 @@ testpion debug                       # the proxy on 8899; every exchange printed
 testpion debug -p 9000 -o session.har --json
 testpion debug --rules debugger/rules.json   # the workspace's rules (re-read when the file changes)
 testpion debug --decrypt                     # HTTPS too, for programs that trust ~/.testpion/debugger/testpion-root.pem
+testpion debug -w .                          # gRPC decoded with this workspace's .proto files
 ```
 
 AI agents have the same through the workspace's MCP server: `debugger_capture` (start / stop / status / clear; `decrypt` for HTTPS), `debugger_exchanges` (the list, with filters; `deep` searches bodies), `debugger_exchange` (one, with bodies), `debugger_session` (save the session as HAR, or open a HAR file), `debugger_rules` (list, presets, add, enable, remove: an agent can take an API offline, slow it down or redirect it while it tests), `debugger_stats`. An agent can start the proxy, run a program against it and read what it did.
 
 ## Coming next
 
-gRPC messages decoded with the workspace's .proto files and the HTTP/2 connection tree (the proxy speaks HTTP/1.1 to programs today), a QR code for a phone on the LAN. The plan is `planning/http-debugger.md` in the repository.
+Every feature of HTTP Debugger and Fiddler Everywhere listed in `planning/http-debugger.md` is in; what comes next is in that file. The plan is `planning/http-debugger.md` in the repository.
 
 :::

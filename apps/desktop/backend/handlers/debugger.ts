@@ -27,13 +27,19 @@ import {
   type LeafCertificate,
   type RootCertificate,
   type SystemProxySnapshot,
+  grpcDecoder,
+  grpcMethodIndex,
+  workspaceProtoRoots,
 } from '@testpion/core';
+import QRCode from 'qrcode';
+import { networkInterfaces } from 'node:os';
 import { activeRules, holdBreakpoint, type PendingBreakpoint } from './debugger-rules.js';
 import type { Backend, Handlers } from '../backend.js';
 import { request as httpRequest } from 'node:http';
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { request as httpsRequest } from 'node:https';
+import { connect as h2connect } from 'node:http2';
 
 export interface DebuggerState {
   proxy?: DebuggerProxy;
@@ -53,6 +59,8 @@ export interface DebuggerState {
   noDecrypt?: string[];
   root?: RootCertificate;
   leafFor?(host: string): LeafCertificate;
+  /** Listening on the local network (a phone, another computer), not only on this computer. */
+  lan?: boolean;
   /** Put everything back (the system proxy) and stop the timers; the backend calls it when it is disposed. */
   release?(): Promise<void>;
 }
@@ -93,7 +101,45 @@ function redacted(be: Backend, e: DebuggerExchange): DebuggerExchange {
     responseHeaders: headers(e.responseHeaders),
     requestBody: e.requestBody && red.redactString(e.requestBody),
     responseBody: e.responseBody && red.redactString(e.responseBody),
+    trailers: headers(e.trailers),
+    frames: e.frames?.map((f) => (f.text ? { ...f, text: red.redactString(f.text) } : f)),
+    events: e.events?.map((ev) => ({ ...ev, data: red.redactString(ev.data) })),
+    grpc: e.grpc && { ...e.grpc, requests: red.redact(e.grpc.requests), responses: red.redact(e.grpc.responses), message: e.grpc.message && red.redactString(e.grpc.message) },
   };
+}
+
+/**
+ * gRPC messages are decoded with the .proto files (or reflection descriptor sets) the workspace's gRPC calls carry,
+ * in collections and the library. Rebuilt when capture starts, and when a method nobody described shows up (at most
+ * every ten seconds).
+ */
+function protoDecoder(be: Backend) {
+  let built = 0;
+  let index = grpcMethodIndex([]);
+  let decode = grpcDecoder(index);
+  const build = () => {
+    built = Date.now();
+    const roots = workspaceProtoRoots(be.ws);
+    index = grpcMethodIndex(roots);
+    decode = grpcDecoder(index);
+  };
+  build();
+  return {
+    rebuild: build,
+    methods: () => index.size,
+    decode: (path: string, direction: 'request' | 'response', bytes: Buffer) => {
+      if (!index.has(path) && Date.now() - built > 10_000) build();
+      return decode(path, direction, bytes);
+    },
+  };
+}
+
+/** This computer's addresses on the local networks, for a phone or another computer to use the proxy. */
+function lanAddresses(): string[] {
+  return Object.values(networkInterfaces())
+    .flat()
+    .filter((a): a is NonNullable<typeof a> => !!a && a.family === 'IPv4' && !a.internal)
+    .map((a) => a.address);
 }
 
 /** The Auth inspector: what the request authenticates with, decoded, without the secret (Basic: the user; Bearer: the JWT's claims and expiry; else the scheme). */
@@ -132,6 +178,7 @@ const statusClass = (e: DebuggerExchange) => (e.error ? 'error' : !e.status ? 'p
 export function debuggerHandlers(be: Backend): Handlers {
   const state: DebuggerState = (be.debugger ??= { exchanges: [] });
   const status = () => ({
+    lan: !!state.lan,
     running: !!state.proxy,
     url: state.proxy?.url,
     port: state.proxy?.port,
@@ -211,6 +258,27 @@ export function debuggerHandlers(be: Backend): Handlers {
       new Promise<{ status: number }>((resolve, reject) => {
         if (!state.proxy) return reject(new ApsError('ConfigurationError', 'The debugger is not capturing'));
         const target = new URL(url);
+        if (target.protocol === 'grpc:') {
+          // a gRPC call the way grpc-js makes one through a proxy: CONNECT, then HTTP/2 without TLS (h2c) inside the
+          // tunnel; the message is a number in field 1 (`?id=`, under 128), which is what GetPet-style requests carry
+          const id = Math.min(127, Math.max(0, Number(target.searchParams.get('id') ?? 1) || 0));
+          const msg = Buffer.from([0x08, id]);
+          const framed = Buffer.concat([Buffer.from([0, 0, 0, 0, msg.length]), msg]);
+          const connectReq = httpRequest({ host: '127.0.0.1', port: state.proxy.port, method: 'CONNECT', path: target.host });
+          connectReq.on('connect', (_r, socket) => {
+            const session = h2connect(`http://${target.host}`, { createConnection: () => socket as never });
+            session.on('error', reject);
+            const stream = session.request({ ':method': 'POST', ':path': target.pathname, 'content-type': 'application/grpc', te: 'trailers' });
+            stream.on('response', () => undefined);
+            stream.resume();
+            stream.on('end', () => (session.close(), resolve({ status: 200 })));
+            stream.on('error', reject);
+            stream.end(framed);
+          });
+          connectReq.on('error', reject);
+          connectReq.end();
+          return;
+        }
         if (target.protocol === 'ws:') {
           // the upgrade through the proxy, one masked text frame, the first frame back, then close
           const req = httpRequest({
@@ -275,9 +343,13 @@ export function debuggerHandlers(be: Backend): Handlers {
     /** Start the proxy; programs point at its URL (HTTP_PROXY=…, a browser's proxy setting, --proxy-server=…). */
     'debug.start': async ({ port, lan }: { port?: number; lan?: boolean } = {}) => {
       await state.proxy?.close();
+      const protos = protoDecoder(be);
+      state.lan = !!lan;
       state.proxy = await startDebuggerProxy({
         port,
         lan,
+        grpcDecode: protos.decode,
+        rootCertificatePem: () => (state.decrypt ? certificateOf(be, state).certPem : undefined),
         rules: () => activeRules(be, state),
         onBreakpoint: (e, phase) => holdBreakpoint(be, state, e, phase),
         decrypt: {
@@ -301,6 +373,20 @@ export function debuggerHandlers(be: Backend): Handlers {
 
     /* ---- capture helpers: the ways a program ends up sending through the proxy */
 
+    /**
+     * A phone or another computer: the addresses of this computer on the local networks, each with the proxy URL and
+     * a QR code of the page the proxy serves (proxy settings, and the root certificate when HTTPS is decrypted).
+     */
+    'debug.lan': async () => {
+      const port = state.proxy?.port;
+      const addresses = await Promise.all(
+        lanAddresses().map(async (ip) => {
+          const page = port ? `http://${ip}:${port}/` : undefined;
+          return { ip, proxy: port ? `${ip}:${port}` : undefined, page, qrSvg: page ? await QRCode.toString(page, { type: 'svg', margin: 1, errorCorrectionLevel: 'M' }) : undefined };
+        }),
+      );
+      return { running: !!state.proxy, lan: !!state.lan, port, decrypt: !!state.decrypt, addresses };
+    },
     /** The browsers found on this computer, the shell lines to paste, and whether the system proxy is ours. */
     'debug.captureOptions': () => ({
       browsers: installedBrowsers().map(({ name, label }) => ({ name, label })),
@@ -411,8 +497,14 @@ export function debuggerHandlers(be: Backend): Handlers {
         return true;
       });
       return out.slice(-limit).map((e) => {
-        const { requestBody: _rb, responseBody: _sb, ...rest } = redacted(be, e);
-        return rest;
+        // the grid needs a row, not its contents: frames, events and gRPC messages come with the one exchange
+        const { requestBody: _rb, responseBody: _sb, frames, events, grpc, ...rest } = redacted(be, e);
+        return {
+          ...rest,
+          ...(frames ? { frameCount: frames.length } : {}),
+          ...(events ? { eventCount: events.length } : {}),
+          ...(grpc ? { grpc: { ...grpc, requests: [], responses: [] } } : {}),
+        };
       });
     },
     /** One exchange whole (bodies included, redacted), with the Auth inspector's reading of its credentials (never the secret itself). */

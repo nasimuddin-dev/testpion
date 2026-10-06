@@ -1,4 +1,27 @@
-import { Bot, Bug, ChevronDown, Copy, Download, ExternalLink, FolderOpen, Globe, Lock, LockOpen, Pause, Play, Binary, Save, Scale, Square, Star, Terminal, Trash2, Upload, X } from 'lucide-react';
+import {
+  Bot,
+  Bug,
+  ChevronDown,
+  Copy,
+  Download,
+  ExternalLink,
+  FolderOpen,
+  Globe,
+  Lock,
+  LockOpen,
+  Smartphone,
+  Pause,
+  Play,
+  Binary,
+  Save,
+  Scale,
+  Square,
+  Star,
+  Terminal,
+  Trash2,
+  Upload,
+  X,
+} from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { asError, call, on } from '../api';
 import { confirmAction, promptText, useApp } from '../store';
@@ -8,7 +31,19 @@ import { finishSave, downloadContent, pickTextFile, type SaveResult } from '../l
 import { JsonTree } from '../components/JsonView';
 import { JwtView } from '../components/JwtView';
 import type { HttpRequestSpec } from '../types';
-import { CertificateDialog, DecodeDialog, EventsView, FramesView, pickBinaryFile, type Frame, type StreamEvent } from '../components/DebuggerTools';
+import {
+  CertificateDialog,
+  ConnectionsView,
+  DecodeDialog,
+  EventsView,
+  FramesView,
+  GrpcView,
+  LanDialog,
+  pickBinaryFile,
+  type Frame,
+  type GrpcCall,
+  type StreamEvent,
+} from '../components/DebuggerTools';
 import { BreakpointDialog, CompareExchangesDialog, HIGHLIGHT_CLASS, loadRules, RulesPanel, type HeldBreakpoint, type RulesState } from '../components/DebuggerRules';
 
 interface Exchange {
@@ -34,6 +69,14 @@ interface Exchange {
   tls?: boolean;
   open?: boolean;
   frames?: Frame[];
+  /** DBG-5: HTTP/2, the connection and stream, a gRPC call, trailers; in the list only counts of frames and events. */
+  httpVersion?: '1.1' | '2';
+  connectionId?: string;
+  streamId?: number;
+  grpc?: GrpcCall;
+  trailers?: Record<string, string>;
+  frameCount?: number;
+  eventCount?: number;
   events?: StreamEvent[];
   contentType?: string;
   waitMs?: number;
@@ -159,7 +202,7 @@ export function DebuggerView() {
   const [selected, setSelected] = useState<string>();
   const [detail, setDetail] = useState<Exchange>();
   const [filter, setFilter] = useState({ text: '', deep: false, host: '', method: '', status: '' as '' | 'ok' | 'redirect' | 'client-error' | 'server-error' | 'error', bookmarked: false });
-  const [tab, setTab] = useState<'traffic' | 'stats' | 'rules'>('traffic');
+  const [tab, setTab] = useState<'traffic' | 'stats' | 'rules' | 'connections'>('traffic');
   const [port, setPort] = useState('8899');
   const [stats, setStats] = useState<Stats>();
   const [capture, setCapture] = useState<CaptureOptions>();
@@ -170,7 +213,7 @@ export function DebuggerView() {
   /** Compare: the first exchange picked; the next row clicked is the other one. */
   const [compareA, setCompareA] = useState<Exchange>();
   const [comparePair, setComparePair] = useState<{ a: string; b: string }>();
-  const [dialog, setDialog] = useState<'certificate' | 'decode'>();
+  const [dialog, setDialog] = useState<'certificate' | 'decode' | 'lan'>();
   const filterBox = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
@@ -359,6 +402,7 @@ export function DebuggerView() {
       icon: <Globe size={14} />,
       onSelect: () => void call<{ browser: string }>('debug.openBrowser', { browser: b.name }).then((r) => toast(`${r.browser} started with a profile of its own`), fail),
     })),
+    { label: 'A phone or another computer…', icon: <Smartphone size={14} />, onSelect: () => setDialog('lan') },
     {
       label: 'Open a terminal through the proxy',
       icon: <Terminal size={14} />,
@@ -467,11 +511,14 @@ export function DebuggerView() {
         tabs={[
           { id: 'traffic', label: 'Traffic', badge: status?.exchanges || undefined },
           { id: 'stats', label: 'Statistics' },
+          { id: 'connections', label: 'Connections' },
           { id: 'rules', label: 'Rules', badge: rules?.activeCount || undefined },
         ]}
       />
       {tab === 'stats' ? (
         <StatsPanel stats={stats} onPick={(id) => (setTab('traffic'), setSelected(id))} />
+      ) : tab === 'connections' ? (
+        <ConnectionsView rows={rows} onPick={(id) => (setTab('traffic'), setSelected(id))} />
       ) : tab === 'rules' ? (
         <RulesPanel state={rules} onChange={setRules} host={sel?.host} />
       ) : (
@@ -612,7 +659,13 @@ export function DebuggerView() {
                     <span className="w-4 shrink-0 text-warn">{r.bookmarked && <Star size={11} className="fill-current" />}</span>
                     <span className={cx('mono w-14 shrink-0 font-bold', `method-${r.method}`)}>{r.method}</span>
                     <span className="w-10 shrink-0">
-                      <Badge tone={r.error ? 'bad' : statusTone(r.status)}>{r.error ? 'ERR' : (r.status ?? '…')}</Badge>
+                      {r.grpc?.statusName && r.grpc.status !== 0 ? (
+                        <Badge tone="bad" title={`gRPC ${r.grpc.statusName}`}>
+                          {r.grpc.status}
+                        </Badge>
+                      ) : (
+                        <Badge tone={r.error ? 'bad' : statusTone(r.status)}>{r.error ? 'ERR' : (r.status ?? '…')}</Badge>
+                      )}
                     </span>
                     <span className="w-28 shrink-0 truncate text-muted" title={r.application ?? 'unknown program'}>
                       {r.application ?? `:${r.clientPort}`}
@@ -620,6 +673,8 @@ export function DebuggerView() {
                     <span className="flex-1 min-w-0 truncate">
                       {r.tls && <Lock size={10} className="inline mr-1 text-ok" aria-label="decrypted HTTPS" />}
                       {r.kind === 'tunnel' ? `${r.host}  (HTTPS tunnel)` : r.url}
+                      {r.grpc && <span className="ml-1 text-[10px] font-bold text-[#e535ab]">gRPC</span>}
+                      {r.httpVersion === '2' && <span className="ml-1 text-[10px] text-muted">h2</span>}
                       {r.open && <span className="ml-1 text-accent">● live</span>}
                     </span>
                     <span className="w-28 shrink-0 truncate text-muted">{r.contentType?.split(';')[0]}</span>
@@ -673,6 +728,18 @@ export function DebuggerView() {
       {openBreakpoint && <BreakpointDialog bp={openBreakpoint} onDone={() => setOpenBreakpoint(undefined)} />}
       {dialog === 'certificate' && <CertificateDialog onClose={() => setDialog(undefined)} />}
       {dialog === 'decode' && <DecodeDialog onClose={() => setDialog(undefined)} />}
+      {dialog === 'lan' && (
+        <LanDialog
+          onClose={() => setDialog(undefined)}
+          onRestartOnLan={async () => {
+            try {
+              setStatus(await call<Status>('debug.start', { port: status?.port, lan: true }));
+            } catch (e) {
+              fail(e);
+            }
+          }}
+        />
+      )}
       {comparePair && <CompareExchangesDialog a={comparePair.a} b={comparePair.b} onClose={() => setComparePair(undefined)} />}
     </div>
   );
@@ -789,7 +856,9 @@ function ExchangeDetail({
   onCompare(): void;
   onRule(preset: string): void;
 }) {
-  const [tab, setTab] = useState<'response' | 'request' | 'headers' | 'raw' | 'hex' | 'auth' | 'timing' | 'frames' | 'events'>(e.frames ? 'frames' : e.events?.length ? 'events' : 'response');
+  const [tab, setTab] = useState<'response' | 'request' | 'headers' | 'raw' | 'hex' | 'auth' | 'timing' | 'frames' | 'events' | 'grpc'>(
+    e.grpc ? 'grpc' : e.frames ? 'frames' : e.events?.length ? 'events' : 'response',
+  );
   const json = (text?: string) => {
     if (!text) return undefined;
     try {
@@ -895,6 +964,7 @@ function ExchangeDetail({
           { id: 'hex', label: 'Hex' },
           { id: 'auth', label: 'Auth', badge: e.auth && e.auth.scheme !== 'none' ? e.auth.scheme.split(' ')[0] : undefined },
           { id: 'timing', label: 'Timing' },
+          ...(e.grpc ? [{ id: 'grpc' as const, label: 'gRPC', badge: e.grpc.requests.length + e.grpc.responses.length }] : []),
           ...(e.frames ? [{ id: 'frames' as const, label: 'Frames', badge: e.frames.length }] : []),
           ...(e.events ? [{ id: 'events' as const, label: 'Events', badge: e.events.length }] : []),
         ]}
@@ -929,6 +999,12 @@ function ExchangeDetail({
               <div className="text-xs font-semibold text-muted uppercase tracking-wide mb-1">Response</div>
               {headers(e.responseHeaders)}
             </div>
+            {e.trailers && Object.keys(e.trailers).length > 0 && (
+              <div>
+                <div className="text-xs font-semibold text-muted uppercase tracking-wide mb-1">Trailers</div>
+                {headers(e.trailers)}
+              </div>
+            )}
           </div>
         )}
         {tab === 'raw' && (
@@ -1010,6 +1086,7 @@ function ExchangeDetail({
               <p className="text-xs text-muted">Values are never shown here: a captured token must not leave the session by a screenshot.</p>
             </div>
           ))}
+        {tab === 'grpc' && e.grpc && <GrpcView call={e.grpc} open={e.open} />}
         {tab === 'frames' && e.frames && <FramesView frames={e.frames} open={e.open} />}
         {tab === 'events' && e.events && <EventsView events={e.events} open={e.open} />}
         {tab === 'timing' && (

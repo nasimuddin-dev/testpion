@@ -1369,7 +1369,7 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
       },
     },
     ...gitTools({ store, findCollection }),
-    ...debuggerTools({ redactor }),
+    ...debuggerTools({ redactor, store }),
     ...workspaceEditTools({
       store,
       redactor,
