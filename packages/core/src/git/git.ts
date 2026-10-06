@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { existsSync, writeFileSync } from 'node:fs';
-import { mergeCollectionTexts } from './merge.js';
+import { mergeCollectionTexts, requestParts, type MergeConflict, type MergeResolutions } from './merge.js';
 import { relative, resolve, sep } from 'node:path';
 import { ApsError } from '../errors.js';
 
@@ -356,19 +356,63 @@ export async function gitDefaultBranch(ws: string): Promise<string> {
  * taking `side` only for the requests changed on both sides (every other change of both sides stays); any other file
  * is taken whole from that side.
  */
-export async function gitResolve(ws: string, path: string, side: 'ours' | 'theirs'): Promise<void> {
-  const repo = await repoRoot(ws);
-  const inRepo = repo ? relative(repo, resolve(ws, path)).split(sep).join('/') : path;
-  const stage = (n: 1 | 2 | 3) => runGit(ws, ['show', `:${n}:${inRepo}`]).catch(() => '');
+export async function gitResolve(ws: string, path: string, side: 'ours' | 'theirs', resolutions?: MergeResolutions): Promise<void> {
+  const [base, ours, theirs] = await conflictStages(ws, path);
   const merged = /^collections\/[^/]+\.json$/.test(path)
-    ? await Promise.all([stage(1), stage(2), stage(3)]).then(([base, ours, theirs]) =>
-        // the side kept on a conflict is the merge's "ours": swap the sides to prefer theirs
-        side === 'ours' ? mergeCollectionTexts(base, ours, theirs) : mergeCollectionTexts(base, theirs, ours),
-      )
+    ? resolutions
+      ? mergeCollectionTexts(base, ours, theirs, resolutions)
+      : // the side kept on a conflict is the merge's "ours": swap the sides to prefer theirs
+        side === 'ours'
+        ? mergeCollectionTexts(base, ours, theirs)
+        : mergeCollectionTexts(base, theirs, ours)
     : undefined;
   if (merged) writeFileSync(resolve(ws, path), merged.text);
   else await runGit(ws, ['checkout', `--${side}`, '--', path]);
   await runGit(ws, ['add', '--', path]);
+}
+
+/** The three versions of a conflicted file: the common ancestor, ours, theirs (empty when a side has none). */
+async function conflictStages(ws: string, path: string): Promise<[string, string, string]> {
+  const repo = await repoRoot(ws);
+  const inRepo = repo ? relative(repo, resolve(ws, path)).split(sep).join('/') : path;
+  const stage = (n: 1 | 2 | 3) => runGit(ws, ['show', `:${n}:${inRepo}`]).catch(() => '');
+  return Promise.all([stage(1), stage(2), stage(3)]);
+}
+
+export interface ConflictDetail {
+  path: string;
+  /** A collection file: its conflicts one by one; any other file is resolved whole (mine or theirs). */
+  collection: boolean;
+  items: Array<Omit<MergeConflict, 'base' | 'ours' | 'theirs'> & { parts: Array<{ part: string; base?: string; ours?: string; theirs?: string; differs: boolean }> }>;
+}
+
+/** What conflicts in one file (GIT-302), part by part, for the side-by-side view. */
+export async function gitConflictDetail(ws: string, path: string): Promise<ConflictDetail> {
+  const [base, ours, theirs] = await conflictStages(ws, path);
+  const merged = /^collections\/[^/]+\.json$/.test(path) ? mergeCollectionTexts(base, ours, theirs) : undefined;
+  if (!merged) return { path, collection: false, items: [] };
+  return {
+    path,
+    collection: true,
+    items: merged.items.map(({ base: b, ours: o, theirs: th, ...rest }) => {
+      const text = (v: unknown) => (v === undefined ? undefined : typeof v === 'string' ? v : JSON.stringify(v, null, 2));
+      const isItem = rest.kind !== 'setting';
+      const pb = isItem ? requestParts(b) : { Value: text(b) ?? '' };
+      const po = isItem ? requestParts(o) : { Value: text(o) ?? '' };
+      const pt = isItem ? requestParts(th) : { Value: text(th) ?? '' };
+      const names = [...new Set([...Object.keys(pb), ...Object.keys(po), ...Object.keys(pt)])];
+      return {
+        ...rest,
+        parts: names.map((part) => ({
+          part,
+          base: b === undefined ? undefined : (pb[part] ?? ''),
+          ours: o === undefined ? undefined : (po[part] ?? ''),
+          theirs: th === undefined ? undefined : (pt[part] ?? ''),
+          differs: (o === undefined ? undefined : (po[part] ?? '')) !== (th === undefined ? undefined : (pt[part] ?? '')),
+        })),
+      };
+    }),
+  };
 }
 
 /** Stop a merge (or rebase) that ended in conflicts: everything goes back to before the pull. */

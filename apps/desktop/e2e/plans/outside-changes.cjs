@@ -69,6 +69,45 @@ const steps = [
       return 'new messages after own save: ' + (${toasts}.length - before);
     })()`,
   ],
+  // GIT-302: a request open with unsaved edits changes on disk (a pull): the app asks; taking the new version shows it
+  [
+    'edit-an-open-request',
+    `(async () => {
+      await __t.esc(); await __t.requests(); await __t.expand('HTTP basics (httpbin)'); await __t.expand('Requests & responses');
+      await __t.open('GET with query parameters'); await __t.sleep(800);
+      const url = [...document.querySelectorAll('main input[aria-label="Request URL"]')].find((x) => x.offsetParent);
+      if (!url) return 'NO URL';
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+      setter.call(url, '{{httpbin}}/get?edited=mine'); url.dispatchEvent(new Event('input', { bubbles: true }));
+      await __t.sleep(500);
+      return 'edited: ' + /edited=mine/.test(url.value);
+    })()`,
+  ],
+  [
+    'same-request-changes-on-disk',
+    `main:
+      const { readFileSync, writeFileSync } = require('node:fs');
+      const { join } = require('node:path');
+      const p = join(home, 'ws', 'collections', 'httpbin.json');
+      const c = JSON.parse(readFileSync(p, 'utf8'));
+      const walk = (items) => items.forEach((i) => (i.id === 'hb-get' ? (i.request.url = '{{httpbin}}/get?from=git') : i.items && walk(i.items)));
+      walk(c.items);
+      writeFileSync(p, JSON.stringify(c, null, 2));
+      return 'written';`,
+    false,
+  ],
+  [
+    'asked-and-takes-the-new-version',
+    `(async () => {
+      const dialog = await __t.waitFor(() => [...document.querySelectorAll('[role=dialog]')].find((d) => /changed on disk/.test(d.textContent)), 6000);
+      if (!dialog) return 'NO PROMPT';
+      const named = /GET with query parameters/.test(dialog.textContent);
+      [...dialog.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Take the new version')?.click();
+      await __t.sleep(800);
+      const url = [...document.querySelectorAll('main input[aria-label="Request URL"]')].find((x) => x.offsetParent);
+      return 'prompt names the request: ' + named + ' | url: ' + (url?.value ?? 'NONE');
+    })()`,
+  ],
 ];
 
 module.exports = withExpect(steps, {
@@ -76,4 +115,7 @@ module.exports = withExpect(steps, {
   'change-files-outside': /^written$/,
   'app-shows-it': /^tree updated: true \| test file listed: true \| message: .*1 collection, 1 test file changed outside TestPion/,
   'own-save-is-quiet': /^new messages after own save: 0$/,
+  'edit-an-open-request': /^edited: true$/,
+  'same-request-changes-on-disk': /^written$/,
+  'asked-and-takes-the-new-version': /^prompt names the request: true \| url: \{\{httpbin\}\}\/get\?from=git$/,
 }, { prepare: ageAccessTimes });

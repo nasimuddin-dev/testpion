@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { WorkspaceStore, assertGitRef, assertGitRev, assertRemoteUrl, describeRevChanges, changesMarkdown, gitCommit, gitItemHistory, gitInit, gitResolve, gitSetupMergeDriver, gitStatus, gitVersion, mergeCollectionTexts, pullRequestUrl, runGit, type Collection } from '@testpion/core';
+import { WorkspaceStore, assertGitRef, assertGitRev, assertRemoteUrl, describeRevChanges, changesMarkdown, gitCommit, gitConflictDetail, gitItemHistory, gitInit, gitResolve, gitSetupMergeDriver, gitStatus, gitVersion, mergeCollectionTexts, pullRequestUrl, runGit, type Collection } from '@testpion/core';
 
 // GIT-301 (merge by id), GIT-304 (pull request links), GIT-401 (semantic diff between commits).
 const root = mkdtempSync(join(tmpdir(), 'tp-merge-'));
@@ -43,6 +43,28 @@ describe('merging collections by id', () => {
     const r = mergeCollectionTexts(base, col([]), col([req('a', 'A', 'https://x/changed')]))!;
     expect(r.conflicts[0]).toMatch(/deleted here, changed on the other side/);
     expect((JSON.parse(r.text) as Collection).items).toHaveLength(1);
+  });
+
+  it('reports each conflict with its three versions and settles them one by one (GIT-302)', () => {
+    const base = col([req('a', 'A', 'https://x/a'), req('b', 'B', 'https://x/b'), req('c', 'C', 'https://x/c')], { auth: { type: 'none' } });
+    const ours = col([req('a', 'A', 'https://x/a-mine'), req('b', 'B', 'https://x/b-mine'), req('c', 'C', 'https://x/c-mine')], { auth: { type: 'bearer' } });
+    const theirs = col([req('a', 'A', 'https://x/a-theirs'), req('b', 'B', 'https://x/b-theirs')], { auth: { type: 'basic' } });
+    const r = mergeCollectionTexts(base, ours, theirs)!;
+    expect(r.items.map((i) => [i.key, i.kind])).toEqual([
+      ['setting:collection:auth', 'setting'],
+      ['item:a', 'changed-both'],
+      ['item:b', 'changed-both'],
+      ['item:c', 'deleted-theirs'],
+    ]);
+    expect(r.items[1]).toMatchObject({ where: 'API ▸ A', base: { request: { url: 'https://x/a' } }, ours: { request: { url: 'https://x/a-mine' } }, theirs: { request: { url: 'https://x/a-theirs' } } });
+    // the choices: theirs for A and the auth, ours for B (the default), theirs for C (it goes, as they deleted it)
+    const settled = mergeCollectionTexts(base, ours, theirs, { 'item:a': 'theirs', 'setting:collection:auth': 'theirs', 'item:c': 'theirs' })!;
+    const c = JSON.parse(settled.text) as { auth: { type: string }; items: Array<{ id: string; request: { url: string } }> };
+    expect(c.auth.type).toBe('basic');
+    expect(c.items.map((i) => `${i.id} ${i.request.url}`)).toEqual(['a https://x/a-theirs', 'b https://x/b-mine']);
+    // a request we deleted and they changed: back unless the choice is ours
+    const del = mergeCollectionTexts(col([req('a', 'A', 'https://x/a')]), col([]), col([req('a', 'A', 'https://x/a2')]), { 'item:a': 'ours' })!;
+    expect((JSON.parse(del.text) as Collection).items).toHaveLength(0);
   });
 
   it('leaves files that are not collections to git', () => {
@@ -121,7 +143,12 @@ describe('git with the merge driver', () => {
     await gitCommit(ws, 'ours 2', { paths: ['collections'] });
     await runGit(ws, ['merge', '--no-edit', 'other2']).catch(() => undefined);
     expect((await gitStatus(ws)).conflicted).toBe(true);
-    await gitResolve(ws, 'collections/api.json', 'theirs');
+    // the side-by-side view: A, part by part; only the request line differs
+    const detail = await gitConflictDetail(ws, 'collections/api.json');
+    expect(detail.collection).toBe(true);
+    expect(detail.items.map((i) => [i.key, i.kind, i.where])).toEqual([['item:a', 'changed-both', 'API ▸ A']]);
+    expect(detail.items[0]!.parts.filter((p) => p.differs)).toEqual([{ part: 'Request', base: 'GET https://x/a-ours', ours: 'GET https://x/a-2-ours', theirs: 'GET https://x/a-2-theirs', differs: true }]);
+    await gitResolve(ws, 'collections/api.json', 'ours', { 'item:a': 'theirs' });
     const settled = JSON.parse(readFileSync(join(ws, 'collections', 'api.json'), 'utf8')) as { items: Array<{ request: { url: string } }> };
     expect(settled.items.map((i) => i.request.url)).toEqual(['https://x/a-2-theirs', 'https://x/b-theirs', 'https://x/c-ours']);
     expect((await gitStatus(ws)).files.find((f) => f.path === 'collections/api.json')).toMatchObject({ staged: true });

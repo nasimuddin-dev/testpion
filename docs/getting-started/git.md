@@ -80,11 +80,14 @@ Two people who change **different requests** of the same collection never get a 
 
 This is a git **merge driver**. `.gitattributes` has `collections/*.json merge=testpion`, and **Initialize repository**, opening a workspace that is in git, or `testpion git setup` registers it in the repository's git config (`git config merge.testpion.driver`). It works for `git merge` and `git pull` in a terminal too.
 
-A **real conflict** is the same request (or the same collection setting) changed differently on both sides. The file then keeps your version with every other change merged in, and the Git view lists the file under **Conflicts**:
+A **real conflict** is the same request (or the same collection setting) changed differently on both sides, or a request changed on one side and deleted on the other. The file then keeps your version with every other change merged in, and the Git view lists the file under **Conflicts**:
 
+- **Compare…** (collection files) shows each conflict side by side: the request (or setting) as it was before, your version and theirs, part by part (request line, params, headers, auth, body, scripts, checks), with the parts that differ marked. Choose **Mine** or **Theirs** per conflict (or Keep all mine / Take all theirs), then **Resolve with these choices**: every change that did not conflict, from both sides, stays.
 - **Keep mine** / **Take theirs** settles the file. In a collection file only the requests changed on both sides take the side you choose; every other change from both sides stays. Other files are taken whole from that side. In a terminal: `testpion git resolve collections/payments.json --theirs` (or `--ours`).
 - **Cancel the pull** goes back to before the pull.
 - When every file is settled, **Commit** finishes the merge.
+
+**Requests open while files change.** When a pull, a branch switch or another editor changes a request you have open, the tab shows the new version by itself. If you have unsaved edits in that tab, TestPion asks first: **Keep mine** (saving then replaces the new version with yours) or **Take the new version**.
 
 ## History of a request
 

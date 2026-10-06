@@ -1,7 +1,7 @@
 import { ArrowDown, ArrowUp, BarChart3, Copy, DatabaseZap, Table2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { plural } from '../lib/format';
-import { Button, cx, Input, Select } from './ui';
+import { Button, cx, Input, Segmented, Select } from './ui';
 import { ChartCard } from './charts';
 import { promptText, useApp } from '../store';
 import { asError, call } from '../api';
@@ -83,14 +83,18 @@ export function JsonTable({ rows, path }: { rows: Row[]; path: string }) {
           {shown.length !== rows.length ? ` of ${rows.length}` : ''} · {plural(columns.length, 'column')} · <span className="mono">{path}</span>
         </span>
         {numeric.length > 0 && (
-          <div className="flex rounded-md border border-line overflow-hidden text-xs ml-2" role="radiogroup" aria-label="Show as">
-            {(['table', 'chart'] as const).map((v) => (
-              <button key={v} role="radio" aria-checked={view === v} className={cx('px-2 h-6 inline-flex items-center gap-1 capitalize', view === v ? 'bg-accent text-white' : 'hover:bg-hover')} onClick={() => setView(v)}>
-                {v === 'table' ? <Table2 size={12} /> : <BarChart3 size={12} />}
-                {v}
-              </button>
-            ))}
-          </div>
+          <span className="ml-2">
+            <Segmented
+              label="Show as"
+              size="xs"
+              value={view}
+              onChange={setView}
+              options={[
+                { value: 'table', label: 'Table', icon: <Table2 size={12} /> },
+                { value: 'chart', label: 'Chart', icon: <BarChart3 size={12} /> },
+              ]}
+            />
+          </span>
         )}
         <Button
           size="sm"

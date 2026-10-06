@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { asError, call, on } from '../api';
 import { confirmAction, promptText, useApp } from '../store';
 import { Badge, Button, cx, Empty, Menu, MoreMenu, PageHeader, SectionTitle, Spinner } from '../components/ui';
+import { GitConflictDialog } from '../components/GitConflictDialog';
 import { ChangeMark } from '../components/ChangeMark';
 
 export interface GitFile {
@@ -509,6 +510,7 @@ function SecretsPanel({ findings, onChange, onCommitAnyway }: { findings: Secret
 /** Files changed on both sides after a pull (GIT-302): keep yours, take theirs, or open the file to merge by hand. */
 function ConflictPanel({ files, onDone }: { files: GitFile[]; onDone(): void }) {
   const [busy, setBusy] = useState<string>();
+  const [comparing, setComparing] = useState<string>();
   const pick = async (path: string, side: 'ours' | 'theirs') => {
     setBusy(path);
     try {
@@ -529,6 +531,11 @@ function ConflictPanel({ files, onDone }: { files: GitFile[]; onDone(): void }) 
             <ChangeMark change="conflicted" />
             <span className="font-mono text-xs truncate">{f.path}</span>
             <span className="ml-auto flex gap-1">
+              {/^collections\/[^/]+\.json$/.test(f.path) && (
+                <Button size="sm" variant="primary" onClick={() => setComparing(f.path)} title="See each conflicting request side by side and choose per request">
+                  Compare…
+                </Button>
+              )}
               <Button size="sm" loading={busy === f.path} onClick={() => void pick(f.path, 'ours')}>
                 Keep mine
               </Button>
@@ -545,6 +552,7 @@ function ConflictPanel({ files, onDone }: { files: GitFile[]; onDone(): void }) 
         </Button>
         <span className="text-xs text-muted">In a collection, only the requests changed on both sides take the side you choose; every other change of both sides stays. When every file is resolved, commit to finish the pull.</span>
       </div>
+      {comparing && <GitConflictDialog path={comparing} onClose={() => setComparing(undefined)} onResolved={() => (setComparing(undefined), onDone())} />}
     </section>
   );
 }

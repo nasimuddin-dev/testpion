@@ -17,6 +17,7 @@ import {
   gitDefaultBranch,
   gitDeleteBranch,
   gitAbortMerge,
+  gitConflictDetail,
   gitResolve,
   gitSetupMergeDriver,
   gitDiff,
@@ -189,7 +190,11 @@ export function gitHandlers(be: Backend): Handlers {
       return changed({ ...ready, inRepository: true });
     },
     /** Settle a conflicted file with one side (GIT-302). */
-    'git.resolve': ({ path, side }: { path: string; side: 'ours' | 'theirs' }) => rewritten(() => gitResolve(ws(), path, side)),
+    /** What conflicts in one file, request by request and part by part (GIT-302's side-by-side view). */
+    'git.conflictDetail': ({ path }: { path: string }) => gitConflictDetail(ws(), path),
+    /** Settle a conflicted file: one side for every conflict, or a choice per conflict (`resolutions`, keys from git.conflictDetail). */
+    'git.resolve': ({ path, side, resolutions }: { path: string; side?: 'ours' | 'theirs'; resolutions?: Record<string, 'ours' | 'theirs'> }) =>
+      rewritten(() => gitResolve(ws(), path, side ?? 'ours', resolutions)),
     /** Give up a pull that stopped on conflicts. */
     'git.abortMerge': () => rewritten(() => gitAbortMerge(ws())),
     /**

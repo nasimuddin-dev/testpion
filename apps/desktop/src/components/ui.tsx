@@ -627,6 +627,43 @@ export function VirtualList<T>({
   );
 }
 
+/**
+ * A choice among a few options shown side by side (7 / 14 / 30 days, Table / Chart, Mine / Theirs): one control, the
+ * same look everywhere. Each option may carry an icon.
+ */
+export function Segmented<T extends string | number>({
+  value,
+  options,
+  onChange,
+  label,
+  size = 'sm',
+}: {
+  value: T | undefined;
+  options: Array<{ value: NoInfer<T>; label: ReactNode; icon?: ReactNode; title?: string }>;
+  onChange(v: NoInfer<T>): void;
+  label: string;
+  size?: 'xs' | 'sm';
+}) {
+  return (
+    <div role="radiogroup" aria-label={label} className={cx('inline-flex rounded-lg border border-line p-0.5 font-normal shrink-0', size === 'xs' ? 'text-[11px]' : 'text-xs')}>
+      {options.map((o) => (
+        <button
+          key={String(o.value)}
+          type="button"
+          role="radio"
+          aria-checked={value === o.value}
+          title={o.title}
+          className={cx('inline-flex items-center gap-1 rounded-md', size === 'xs' ? 'px-2 py-0.5' : 'px-2.5 py-1', value === o.value ? 'bg-accent/15 text-accent font-medium' : 'text-muted hover:text-fg')}
+          onClick={() => onChange(o.value)}
+        >
+          {o.icon}
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function Kbd({ children }: { children: ReactNode }) {
   return <kbd className="text-[0.7rem] leading-none px-1.5 py-1 rounded-md border border-line border-b-2 bg-panel text-muted font-sans font-medium">{children}</kbd>;
 }

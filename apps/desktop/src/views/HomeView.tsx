@@ -6,7 +6,7 @@ import { promptText, useApp } from '../store';
 import { runMenuCommand } from '../menu-commands';
 import type { Collection, CollectionNode, HttpRequestSpec } from '../types';
 import { timeAgo, uid, plural } from '../lib/format';
-import { LinkButton, Badge, cx, Empty, Kbd, statusTone } from '../components/ui';
+import { LinkButton, Badge, cx, Empty, Kbd, Segmented, statusTone } from '../components/ui';
 import { ActivityCharts, type Activity } from '../components/ActivityCharts';
 import { AttentionCard } from '../components/AttentionCard';
 import { RecentRuns } from '../components/charts';
@@ -214,13 +214,7 @@ export function HomeView() {
                 <FileDown size={13} />
                 Share report
               </button>
-              <div role="radiogroup" aria-label="Period" className="flex rounded-lg border border-line p-0.5 text-xs font-normal">
-                {[7, 14, 30].map((n) => (
-                  <button key={n} role="radio" aria-checked={days === n} className={cx('px-2.5 py-1 rounded-md', days === n ? 'bg-accent/15 text-accent font-medium' : 'text-muted hover:text-fg')} onClick={() => pickDays(n)}>
-                    {n} days
-                  </button>
-                ))}
-              </div>
+              <Segmented label="Period" value={days} onChange={pickDays} options={[7, 14, 30].map((n) => ({ value: n, label: `${n} days` }))} />
             </header>
             <ActivityCharts activity={activity} />
           </section>

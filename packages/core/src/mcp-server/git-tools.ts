@@ -3,15 +3,53 @@ import { join } from 'node:path';
 import { ApsError } from '../errors.js';
 import type { Collection } from '../model/types.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
-import { gitLog, gitStage, gitStatus } from '../git/git.js';
+import { gitConflictDetail, gitLog, gitResolve, gitStage, gitStatus } from '../git/git.js';
+import type { Redactor } from '../util/redact.js';
 import { changesMarkdown, describeGitChanges, describeRevChanges } from '../git/semantic.js';
 import { findCommittableSecrets } from '../storage/git-guard.js';
 import { str, type Tool } from './tool.js';
 
 /** MCP tools for the workspace's git repository (GIT-402): status, the changes by meaning, history, a proposed commit. */
-export function gitTools(d: { store: WorkspaceStore; findCollection(ref: unknown): Collection }): Tool[] {
+export function gitTools(d: { store: WorkspaceStore; findCollection(ref: unknown): Collection; redactor?: Redactor }): Tool[] {
   const { store, findCollection } = d;
+  const red = (v?: string) => (v === undefined || !d.redactor ? v : d.redactor.redactString(v));
   return [
+    {
+      name: 'git_conflicts',
+      description:
+        'After a pull that stopped on conflicts: each conflicted file, and in a collection file each conflict (a request changed on both sides, changed on one side and deleted on the other, or a setting changed differently) with its parts side by side (base, ours = this workspace, theirs = the remote), values redacted. Settle them with git_resolve.',
+      inputSchema: { type: 'object', properties: { path: str('Only this file (workspace-relative); default: every conflicted file') } },
+      run: async (a) => {
+        const st = await gitStatus(store.root);
+        const files = st.files.filter((f) => f.state === 'conflicted' && (!a.path || f.path === a.path));
+        const details = await Promise.all(files.map((f) => gitConflictDetail(store.root, f.path)));
+        return {
+          conflicted: st.conflicted,
+          files: details.map((x) => ({ ...x, items: x.items.map((i) => ({ ...i, parts: i.parts.map((p) => ({ ...p, base: red(p.base), ours: red(p.ours), theirs: red(p.theirs) })) })) })),
+        };
+      },
+    },
+    {
+      name: 'git_resolve',
+      write: true,
+      description:
+        'Settle one conflicted file and mark it resolved: `side` for every conflict in it (ours = keep this workspace\'s version, theirs = take the remote\'s), or `resolutions` as { "<key from git_conflicts>": "ours" | "theirs" } per conflict. In a collection only the conflicting requests take a side; every other change of both sides stays. When nothing is conflicted any more, commit to finish the pull.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          path: str('The conflicted file (workspace-relative)'),
+          side: { type: 'string', enum: ['ours', 'theirs'] },
+          resolutions: { type: 'object', description: 'A choice per conflict key', additionalProperties: { type: 'string', enum: ['ours', 'theirs'] } },
+        },
+        required: ['path'],
+      },
+      run: async (a) => {
+        if (!a.side && !a.resolutions) throw new ApsError('ValidationError', 'Give side (ours or theirs) or resolutions per conflict key');
+        await gitResolve(store.root, String(a.path), (a.side as 'ours' | 'theirs') ?? 'ours', a.resolutions as Record<string, 'ours' | 'theirs'> | undefined);
+        const st = await gitStatus(store.root);
+        return { resolved: String(a.path), stillConflicted: st.files.filter((f) => f.state === 'conflicted').map((f) => f.path), next: st.conflicted ? 'Resolve the other files' : 'Commit to finish the pull (git_propose_commit, then commit)' };
+      },
+    },
     {
       name: 'git_status',
       description:

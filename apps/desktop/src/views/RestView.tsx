@@ -45,7 +45,7 @@ import { ErrorPanel } from '../components/Results';
 import { VarInput } from '../components/VarInput';
 import { Button, cx, Empty, IconButton, Input, Menu, Split } from '../components/ui';
 import { ResponseSplit } from '../components/ResponseSplit';
-import { METHODS, RestTab, SendResult, blankRequest, drafts } from './rest/types';
+import { METHODS, RestTab, SendResult, blankRequest, drafts, savedSnapshot } from './rest/types';
 import { RequestEditor } from './rest/RequestEditor';
 import { SaveModal, ImportModal } from './rest/dialogs';
 import { saveAsTestFile } from '../lib/save-test';
@@ -77,6 +77,23 @@ async function confirmProductionSend(method: string, environment: string | undef
   });
   if (choice === 'always') productionSendAllowed.add(envObj.name);
   return choice === 'send' || choice === 'always';
+}
+
+/** A tab's contents from a saved request (opening it, or taking the version on disk). */
+function tabFromSaved(n: SavedHttpRequest): RestTab {
+  return {
+    id: uid('tab-'),
+    name: n.name,
+    request: fromEngineRequest(structuredClone(n.request)),
+    preRequestScript: n.preRequestScript,
+    testScript: n.testScript,
+    assertions: n.assertions ?? [],
+    requestId: n.id,
+    examples: n.examples,
+    description: n.description,
+    dirty: false,
+    base: savedSnapshot(n),
+  };
 }
 
 export function RestView() {
@@ -148,6 +165,45 @@ export function RestView() {
   );
 
   const update = (patch: Partial<RestTab>) => setTabs((ts) => ts.map((t) => (t.id === tab.id ? { ...t, ...patch, dirty: true } : t)));
+
+  // files changed outside the app (GIT-103 / GIT-302): open requests follow their saved version; a tab with unsaved
+  // edits asks first, and only when that very request changed on disk
+  const tabsRef = useRef(tabs);
+  tabsRef.current = tabs;
+  useEffect(
+    () =>
+      on<{ kinds: string[] }>('workspace.changedOnDisk', (p) => {
+        if (!p.kinds.includes('collections')) return;
+        void call<Collection[]>('col.list').then(async (cols) => {
+          for (const t of tabsRef.current) {
+            if (!t.collectionId || !t.requestId || t.base === undefined) continue;
+            const n = findNode(cols.find((c) => c.id === t.collectionId)?.items ?? [], t.requestId);
+            if (!n || n.kind !== 'http') continue;
+            const now = savedSnapshot(n);
+            if (now === t.base) continue;
+            const take = () => setTabs((ts) => ts.map((x) => (x.id === t.id ? { ...x, ...tabFromSaved(n), id: x.id, collectionId: x.collectionId, pinned: x.pinned } : x)));
+            if (!t.dirty) {
+              take();
+              continue;
+            }
+            const choice = await ask({
+              title: `"${t.name}" changed on disk`,
+              message: 'A pull, a branch switch or another editor changed this request while you were editing it.',
+              detail: 'Keep mine: your edits stay, and saving replaces the new version with them. Take the new version: your unsaved edits are dropped.',
+              tone: 'warning',
+              buttons: [
+                { id: 'mine', label: 'Keep mine' },
+                { id: 'theirs', label: 'Take the new version', variant: 'primary' },
+              ],
+              cancelId: 'mine',
+            });
+            if (choice === 'theirs') take();
+            else setTabs((ts) => ts.map((x) => (x.id === t.id ? { ...x, base: now } : x)));
+          }
+        });
+      }),
+    [],
+  );
   const setReq = (patch: Partial<HttpRequestSpec>) => update({ request: { ...tab.request, ...patch } });
   const setExamples = (examples: SavedExample[]) => setTabs((ts) => ts.map((t) => (t.requestId && t.requestId === tab.requestId ? { ...t, examples } : t)));
   /** URL bar edits update the Params table and path variables (Postman behaviour). */
@@ -197,7 +253,7 @@ export function RestView() {
     useApp.getState().markPlace('rest', { collectionId: c.id, requestId: n.id });
     const existing = tabs.find((t) => t.requestId === n.id);
     if (existing) return setActive(existing.id);
-    const t: RestTab = { id: uid('tab-'), name: n.name, request: fromEngineRequest(structuredClone(n.request)), preRequestScript: n.preRequestScript, testScript: n.testScript, assertions: n.assertions ?? [], collectionId: c.id, requestId: n.id, examples: n.examples, description: n.description };
+    const t: RestTab = { ...tabFromSaved(n), id: uid('tab-'), collectionId: c.id };
     setTabs((ts) => [...ts, t]);
     setActive(t.id);
   };
@@ -297,7 +353,10 @@ export function RestView() {
     };
     const items = exists ? mapNodes(c.items, (n) => (n.id === node.id ? node : n)) : addToFolder(c.items, folderId, node);
     await saveCollection({ ...c, items });
-    setTabs((ts) => ts.map((t) => (t.id === tab.id ? { ...t, name, collectionId, requestId: node.id, dirty: false } : t)));
+    // the snapshot of the request as the file holds it (the writer normalises), so a later disk change is compared fairly
+    const stored = await call<Collection[]>('col.list').then((all) => findNode(all.find((x) => x.id === collectionId)?.items ?? [], node.id), () => undefined);
+    const base = savedSnapshot(stored?.kind === 'http' ? stored : node);
+    setTabs((ts) => ts.map((t) => (t.id === tab.id ? { ...t, name, collectionId, requestId: node.id, dirty: false, base } : t)));
     useApp.getState().toast('Saved', 'success');
   };
 

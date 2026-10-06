@@ -54,7 +54,8 @@ describe('load-testing a collection', () => {
     expect(target.requests[1]!.request.auth).toEqual({ type: 'bearer', token: 'tok-9' });
     expect(target.requests[2]!.request).toMatchObject({ method: 'POST', url: `${base}/graphql` });
 
-    const snap = await runLoadTest({ target, virtualUsers: 2, durationSec: 1.2 }, {});
+    // long enough for several iterations even when the test machine is busy (1.2 s was flaky under a full parallel run)
+    const snap = await runLoadTest({ target, virtualUsers: 2, durationSec: 2.5 }, {});
     expect(snap.iterations).toBeGreaterThan(1);
     expect(snap.errors).toBe(0);
     expect(snap.perRequest!.map((p) => p.name)).toEqual(['Login', 'Catalog / Items', 'Stock']);

@@ -1368,7 +1368,7 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
         }
       },
     },
-    ...gitTools({ store, findCollection }),
+    ...gitTools({ store, findCollection, redactor }),
     ...debuggerTools({ redactor, store }),
     ...workspaceEditTools({
       store,
