@@ -241,9 +241,11 @@ function start(): void {
       const r = await updater.check();
       be.appLog('info', `Update check (${reason}): running ${r.current}, ${r.version ? `${r.version} available` : 'up to date'}`);
       if (!r.version) return;
-      const choice = await dialog.showMessageBox({
+      const icon = windowIcon();
+      const choice = await dialog.showMessageBox(win!, {
         type: 'info',
-        title: 'Update available',
+        title: 'TestPion',
+        ...(icon ? { icon } : {}),
         message: `TestPion ${r.version} is available`,
         detail: `You have ${r.current}. ${r.installable ? 'Update now downloads it and restarts TestPion.' : 'Update now opens the download page.'}${r.notes ? `\n\n${r.notes.slice(0, 600)}` : ''}`,
         buttons: ['Update now', 'Later'],

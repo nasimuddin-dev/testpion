@@ -34,6 +34,18 @@ import {
   Menu as MenuIcon,
   MessageSquare,
   FolderGit2,
+  Trash2,
+  Plus,
+  Save,
+  Pencil,
+  ExternalLink,
+  Play,
+  Upload,
+  Download,
+  Copy,
+  ArrowRightLeft,
+  RefreshCw,
+  Check,
 } from 'lucide-react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { call, modKey, on } from '../api';
@@ -43,8 +55,8 @@ import markUrl from '../../build/icons/64x64.png';
 import { ConsolePanel } from './ConsolePanel';
 import { WorkspaceMenu } from './WorkspaceMenu';
 import { EnvQuickLook } from './EnvQuickLook';
-import { isRequestView, useApp, type ViewId, type DialogRequest, type DialogTone, type NavLocation } from '../store';
-import { Badge, Button, cx, IconButton, Input, Kbd, Menu, Modal, Spinner, Tooltip } from './ui';
+import { isRequestView, useApp, type ViewId, type DialogButton, type DialogRequest, type DialogTone, type NavLocation } from '../store';
+import { Badge, Button, cx, IconButton, Input, Kbd, Menu, Modal, Spinner, Tooltip, type MenuItem } from './ui';
 import { Toaster as SonnerToaster } from 'sonner';
 
 /**
@@ -142,33 +154,38 @@ export function Sidebar() {
   );
 }
 
-/** Postman-style environment switcher with a coloured dot (red for production). */
+/** The environment switcher: a colour dot on the left of every environment (red for production), the app's own menu. */
 export function EnvironmentPicker() {
   const ws = useApp((s) => s.workspace);
   const env = useApp((s) => s.environment);
   const envObj = ws?.environments.find((e) => e.name === env);
-  const dot = envObj ? (envObj.color ?? (envObj.isProduction ? 'var(--bad)' : 'var(--ok)')) : 'var(--line-strong)';
+  const colorOf = (e?: { color?: string; isProduction?: boolean }) => (e ? (e.color ?? (e.isProduction ? 'var(--bad)' : 'var(--ok)')) : 'var(--line-strong)');
+  const Dot = ({ color, ring }: { color: string; ring?: boolean }) => <span className={cx('inline-block w-2.5 h-2.5 rounded-full shrink-0', ring && 'ring-2 ring-bad/40')} style={{ background: color }} aria-hidden />;
+  const items: MenuItem[] = [
+    { label: 'No environment', icon: <Dot color="var(--line-strong)" />, onSelect: () => useApp.getState().setEnvironment(undefined) },
+    ...(ws?.environments ?? []).map((e) => ({
+      label: e.isProduction ? `${e.name}  (production)` : e.name,
+      icon: <Dot color={colorOf(e)} ring={e.isProduction} />,
+      onSelect: () => useApp.getState().setEnvironment(e.name),
+    })),
+    { label: 'Manage environments…', icon: <KeyRound size={14} />, separator: true, onSelect: () => useApp.getState().openIntent('environments', {}) },
+  ];
   return (
-    <Tooltip content="Active environment">
-      <label className={cx('relative flex items-center h-8 rounded-full border bg-field shadow-sm transition-colors', envObj?.isProduction ? 'border-bad/50' : 'border-line-strong hover:border-muted/50')}>
-        <span className="absolute left-2.5 w-2 h-2 rounded-full pointer-events-none" style={{ background: dot }} />
-        <select
+    <Menu
+      items={items}
+      width={240}
+      trigger={
+        <button
           aria-label="Environment"
-          className="appearance-none bg-transparent outline-none h-full pl-6 pr-7 text-sm cursor-pointer max-w-52 truncate"
-          style={{ backgroundImage: 'var(--select-chevron)', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 8px center' }}
-          value={env ?? ''}
-          onChange={(e) => useApp.getState().setEnvironment(e.target.value || undefined)}
+          title={envObj ? `Active environment: ${envObj.name}${envObj.isProduction ? ' (production)' : ''}` : 'No environment: choose one'}
+          className={cx('flex items-center gap-2 h-8 pl-2.5 pr-2 rounded-full border bg-field shadow-sm text-sm max-w-56 transition-colors data-[state=open]:bg-hover', envObj?.isProduction ? 'border-bad/50' : 'border-line-strong hover:border-muted/50')}
         >
-          <option value="">No environment</option>
-          {ws?.environments.map((e) => (
-            <option key={e.id} value={e.name}>
-              {e.name}
-              {e.isProduction ? ' (production)' : ''}
-            </option>
-          ))}
-        </select>
-      </label>
-    </Tooltip>
+          <Dot color={colorOf(envObj)} />
+          <span className="truncate">{env ?? 'No environment'}</span>
+          <NavChevron size={13} className="text-muted shrink-0" />
+        </button>
+      }
+    />
   );
 }
 
@@ -608,6 +625,27 @@ const DIALOG_TONES: Record<DialogTone, { icon: ReactNode; className: string }> =
   success: { icon: <CheckCircle2 size={18} />, className: 'bg-ok/12 text-ok ring-ok/25' },
 };
 
+/** The icon a dialog button gets from its label, so every button in the app carries one: Create → +, Delete → bin, Cancel → ×. */
+export function iconForLabel(label: string, variant?: DialogButton['variant']): ReactNode {
+  const l = label.toLowerCase();
+  const size = 13;
+  if (/^(cancel|close|not now|later|no|keep)\b/.test(l)) return <X size={size} />;
+  if (/^(delete|remove|empty|discard|clear|forget)\b/.test(l)) return <Trash2 size={size} />;
+  if (/^(create|add|new)\b/.test(l)) return <Plus size={size} />;
+  if (/^(save|keep mine|apply)\b/.test(l)) return <Save size={size} />;
+  if (/^(rename)\b/.test(l)) return <Pencil size={size} />;
+  if (/^(open|show|go to|view)\b/.test(l)) return <ExternalLink size={size} />;
+  if (/^(run|send|start|restart|retry|try again|run once)\b/.test(l)) return <Play size={size} />;
+  if (/^(import|upload)\b/.test(l)) return <Upload size={size} />;
+  if (/^(export|download)\b/.test(l)) return <Download size={size} />;
+  if (/^(copy|duplicate)\b/.test(l)) return <Copy size={size} />;
+  if (/^(connect|always)\b/.test(l)) return <Plug size={size} />;
+  if (/^(move|replace|switch|take theirs|restore)\b/.test(l)) return <ArrowRightLeft size={size} />;
+  if (/^(update|install)\b/.test(l)) return <RefreshCw size={size} />;
+  if (variant === 'danger') return <AlertOctagon size={size} />;
+  return <Check size={size} />;
+}
+
 function DialogView({ d }: { d: DialogRequest }) {
   const [value, setValue] = useState(d.input?.value ?? '');
   const primary = d.buttons.find((b) => b.variant === 'primary' || b.variant === 'danger');
@@ -618,14 +656,14 @@ function DialogView({ d }: { d: DialogRequest }) {
       onClose={() => d.resolve(d.cancelId, value)}
       width={d.input ? 460 : 520}
       footer={d.buttons.map((b) => (
-        <Button key={b.id} variant={b.variant ?? 'default'} autoFocus={!d.input && b === primary} disabled={!!d.input && b === primary && !value.trim()} onClick={() => d.resolve(b.id, value)}>
+        <Button key={b.id} variant={b.variant ?? 'default'} icon={b.icon ?? iconForLabel(b.label, b.variant)} autoFocus={!d.input && b === primary} disabled={!!d.input && b === primary && !value.trim()} onClick={() => d.resolve(b.id, value)}>
           {b.label}
         </Button>
       ))}
     >
       <div className="flex gap-3.5">
         <span className={cx('grid place-items-center h-9 w-9 shrink-0 rounded-full ring-1', tone.className)} aria-hidden>
-          {tone.icon}
+          {d.icon ?? tone.icon}
         </span>
         <div className="min-w-0 flex-1 pt-1.5">
       {d.message && <p className="text-sm font-medium leading-relaxed">{d.message}</p>}

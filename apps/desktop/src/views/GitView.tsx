@@ -1,8 +1,8 @@
-import { ArrowDown, ArrowUp, Check, ExternalLink, FolderGit2, GitBranch, GitCommitHorizontal, GitPullRequest, Minus, Plus, RefreshCw, RotateCcw, ShieldAlert, Sparkles, Undo2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, Check, ExternalLink, FolderGit2, GitBranch, GitCommitHorizontal, GitPullRequest, KeyRound, Minus, Plus, RefreshCw, RotateCcw, ShieldAlert, Sparkles, Trash2, Undo2, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { asError, call, on } from '../api';
 import { confirmAction, promptText, useApp } from '../store';
-import { Badge, Button, cx, Empty, Menu, PageHeader, SectionTitle, Spinner } from '../components/ui';
+import { Badge, Button, cx, Empty, Menu, MoreMenu, PageHeader, SectionTitle, Spinner } from '../components/ui';
 import { ChangeMark } from '../components/ChangeMark';
 
 export interface GitFile {
@@ -41,6 +41,15 @@ interface SecretFinding {
   file: string;
   where: string;
   message: string;
+  kind: 'request' | 'collection-auth' | 'collection-variable' | 'environment-variable' | 'workspace-variable' | 'mcp-server' | 'provider';
+  collectionId?: string;
+  itemId?: string;
+  part?: 'auth' | 'headers' | 'params' | 'body';
+  field?: string;
+  environmentId?: string;
+  serverId?: string;
+  providerId?: string;
+  variable?: string;
 }
 
 const fail = (e: unknown) => useApp.getState().toast(asError(e).message, 'error');
@@ -323,29 +332,7 @@ export function GitView() {
               Write message
             </Button>
           </div>
-          {secrets && secrets.length > 0 && (
-            <div role="alert" className="rounded-md border border-bad/40 bg-bad/5 p-3 text-sm grid gap-2">
-              <div className="flex items-center gap-2 font-medium">
-                <ShieldAlert size={15} className="text-bad" /> Not committed: {secrets.length} secret{secrets.length === 1 ? ' is' : 's are'} typed into the workspace
-              </div>
-              <ul className="text-xs grid gap-0.5">
-                {secrets.slice(0, 12).map((s, i) => (
-                  <li key={i}>
-                    <span className="font-medium">{s.where}</span> <span className="text-muted">({s.file}) {s.message}</span>
-                  </li>
-                ))}
-              </ul>
-              <div className="text-xs text-muted">Make them secret variables (their values stay on this computer), or use {'{{variables}}'}, then commit again.</div>
-              <div className="flex gap-2">
-                <Button size="sm" onClick={() => setSecrets(undefined)}>
-                  Fix them first
-                </Button>
-                <Button size="sm" variant="danger" onClick={() => void commit(true)}>
-                  Commit anyway
-                </Button>
-              </div>
-            </div>
-          )}
+          {secrets && secrets.length > 0 && <SecretsPanel findings={secrets} onChange={setSecrets} onCommitAnyway={() => void commit(true)} />}
         </section>
 
         <section>
@@ -367,6 +354,153 @@ export function GitView() {
           )}
         </section>
         <div className="text-xs text-muted">git {status.version} · sign-in uses your git setup (SSH keys or the credential manager)</div>
+      </div>
+    </div>
+  );
+}
+
+/** Where a finding lives, as the explorer shows it: "Admin ▸ Printers ▸ Print jobs" → the folders and the request. */
+function splitWhere(where: string): { path: string; name: string } {
+  const parts = where.split(/\s[›▸]\s/);
+  return parts.length > 1 ? { path: parts.slice(0, -1).join(' › '), name: parts[parts.length - 1]! } : { path: '', name: where };
+}
+
+/** What a finding holds, in a few words: "header Authorization", "body field continuationToken", "bearer token". */
+function whatOf(f: SecretFinding): string {
+  if (f.kind === 'request' || f.kind === 'collection-auth') return f.part === 'headers' ? `header ${f.field}` : f.part === 'body' ? `body field "${f.field}"` : f.part === 'auth' ? `auth ${f.field}` : (f.field ?? 'a value');
+  if (f.kind === 'mcp-server') return `${f.field} of the server`;
+  if (f.kind === 'provider') return 'the API key';
+  return `variable ${f.field}`;
+}
+
+/** Open what a finding points at: the request in its editor, the environment, the collection's variables … */
+function openFinding(f: SecretFinding) {
+  const go = useApp.getState().openIntent;
+  if (f.kind === 'request' && f.collectionId && f.itemId) return go('rest', { collectionId: f.collectionId, requestId: f.itemId });
+  if (f.kind === 'collection-auth' && f.collectionId) return go('collections', { collectionId: f.collectionId, tab: 'auth' });
+  if (f.kind === 'collection-variable' && f.collectionId) return go('collections', { collectionId: f.collectionId, tab: 'variables' });
+  if (f.kind === 'environment-variable') return go('environments', { environmentId: f.environmentId });
+  if (f.kind === 'workspace-variable') return go('environments', { tab: 'workspace' });
+  if (f.kind === 'mcp-server') return go('mcp', { serverId: f.serverId });
+  if (f.kind === 'provider') return go('ai', { tab: 'providers', providerId: f.providerId });
+}
+
+/**
+ * The secrets a commit would publish, as a list a person can act on: each one opens where it is, is fixed in one
+ * click (the value becomes a secret variable of the active environment, the request a {{reference}}), or the request
+ * is removed. Grouped by where they are, with the long tail folded.
+ */
+function SecretsPanel({ findings, onChange, onCommitAnyway }: { findings: SecretFinding[]; onChange(next: SecretFinding[] | undefined): void; onCommitAnyway(): void }) {
+  const ws = useApp((s) => s.workspace);
+  const envName = useApp((s) => s.environment);
+  const env = ws?.environments.find((e) => e.name === envName);
+  const [showAll, setShowAll] = useState(false);
+  const [busy, setBusy] = useState<string>();
+  const fixable = findings.filter((f) => f.kind !== 'mcp-server' && f.kind !== 'provider');
+  const groups = useMemo(() => {
+    const m = new Map<string, SecretFinding[]>();
+    for (const f of findings) {
+      const key = f.kind === 'request' || f.kind === 'collection-auth' ? splitWhere(f.where).path || f.where : f.kind === 'environment-variable' ? f.where.replace(/, variable .*$/, '') : f.kind === 'mcp-server' ? 'MCP servers' : f.kind === 'provider' ? 'AI providers' : f.kind === 'workspace-variable' ? 'Workspace variables' : f.where.replace(/, variable .*$/, '');
+      m.set(key, [...(m.get(key) ?? []), f]);
+    }
+    return [...m.entries()];
+  }, [findings]);
+  const shownGroups = showAll ? groups : groups.slice(0, 4);
+  const hidden = findings.length - shownGroups.reduce((n, [, g]) => n + g.length, 0);
+
+  const fix = async (list: SecretFinding[]) => {
+    if (!env) return useApp.getState().toast('Choose the environment that should keep the secret values (top bar), then fix.', 'warning');
+    setBusy(list.length === 1 ? list[0]!.where + list[0]!.field : 'all');
+    try {
+      const r = await call<{ fixed: SecretFinding[]; skipped: Array<{ finding: SecretFinding; reason: string }>; variables: string[] }>('git.fixSecrets', { findings: list, environmentId: env.id });
+      const left = await call<SecretFinding[]>('git.check');
+      onChange(left.length ? left : undefined);
+      useApp.getState().toast(
+        r.fixed.length ? `${r.fixed.length} secret${r.fixed.length === 1 ? '' : 's'} moved to ${r.variables.length ? `secret variable${r.variables.length === 1 ? '' : 's'} ${r.variables.join(', ')} of ${env.name}` : 'the secret store'}${r.skipped.length ? `; ${r.skipped.length} left to do by hand` : ''}` : 'Nothing could be fixed by itself; open each one.',
+        r.fixed.length ? 'success' : 'warning',
+      );
+    } catch (e) {
+      fail(e);
+    } finally {
+      setBusy(undefined);
+    }
+  };
+  const remove = async (f: SecretFinding) => {
+    if (!f.collectionId || !f.itemId) return;
+    const { name } = splitWhere(f.where);
+    if (!(await confirmAction({ title: 'Remove request', message: `Remove "${name}" from the collection?`, detail: 'The request is deleted; its collection keeps everything else. Undo with git until you commit.', confirmLabel: 'Remove', danger: true }))) return;
+    try {
+      const c = (await call<Array<{ id: string; items: unknown[] }>>('col.list')).find((x) => x.id === f.collectionId);
+      if (!c) return;
+      const prune = (nodes: Array<{ id: string; kind: string; items?: unknown[] }>): unknown[] => nodes.filter((n) => n.id !== f.itemId).map((n) => (n.kind === 'folder' ? { ...n, items: prune(n.items as typeof nodes) } : n));
+      await call('col.save', { ...c, items: prune(c.items as Array<{ id: string; kind: string; items?: unknown[] }>) });
+      const left = await call<SecretFinding[]>('git.check');
+      onChange(left.length ? left : undefined);
+      useApp.getState().toast(`Removed "${name}"`, 'success');
+    } catch (e) {
+      fail(e);
+    }
+  };
+
+  return (
+    <div role="alert" className="rounded-md border border-bad/40 bg-bad/5 p-3 text-sm grid gap-2">
+      <div className="flex items-center gap-2 font-medium">
+        <ShieldAlert size={15} className="text-bad" /> Not committed: {findings.length} secret{findings.length === 1 ? ' is' : 's are'} typed into the workspace
+      </div>
+      <div className="text-xs text-muted">
+        A value typed into a request would go to everyone who pulls. <b>Fix</b> turns it into a {'{{variable}}'} whose value stays on this computer as a secret variable of {env ? <b>{env.name}</b> : 'the active environment (choose one in the top bar)'}; plain variables become secret the same way.
+      </div>
+      <div className="grid gap-2">
+        {shownGroups.map(([group, list]) => (
+          <div key={group} className="rounded-md border border-line bg-panel">
+            <div className="px-2 py-1 text-xs text-muted border-b border-line truncate" title={group}>
+              {group} · {list.length}
+            </div>
+            <ul>
+              {list.map((f, i) => {
+                const { name } = splitWhere(f.where);
+                const key = f.where + f.field + i;
+                return (
+                  <li key={key} className="flex items-center gap-2 px-2 py-1 text-xs border-b border-line last:border-b-0">
+                    <button className="font-medium truncate hover:underline text-left" title={`${f.message} (${f.file})`} onClick={() => openFinding(f)}>
+                      {f.kind === 'request' || f.kind === 'collection-auth' ? name : f.kind === 'environment-variable' || f.kind === 'collection-variable' || f.kind === 'workspace-variable' ? f.field : name}
+                    </button>
+                    <span className="text-muted truncate">{whatOf(f)}</span>
+                    <span className="ml-auto flex items-center gap-1 shrink-0">
+                      <Button size="sm" variant="ghost" icon={<ExternalLink size={12} />} onClick={() => openFinding(f)} title="Open it to change by hand">
+                        Open
+                      </Button>
+                      {f.kind !== 'mcp-server' && f.kind !== 'provider' && (
+                        <Button size="sm" variant="ghost" icon={<KeyRound size={12} />} loading={busy === f.where + f.field} onClick={() => void fix([f])} title={`Replace the value with {{${f.variable ?? 'variable'}}} and keep it as a secret variable`}>
+                          Fix
+                        </Button>
+                      )}
+                      {f.kind === 'request' && <MoreMenu label={`More for ${name}`} items={[{ label: 'Remove request…', icon: <Trash2 size={14} />, danger: true, onSelect: () => void remove(f) }]} />}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ))}
+        {hidden > 0 && (
+          <button className="text-xs text-accent text-left hover:underline" onClick={() => setShowAll(true)}>
+            Show all ({hidden} more)
+          </button>
+        )}
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {fixable.length > 0 && (
+          <Button size="sm" variant="primary" icon={<KeyRound size={13} />} loading={busy === 'all'} onClick={() => void fix(fixable)} title="Every one of them, in one go">
+            Fix all {fixable.length === findings.length ? '' : `(${fixable.length})`}
+          </Button>
+        )}
+        <Button size="sm" icon={<X size={13} />} onClick={() => onChange(undefined)}>
+          Later
+        </Button>
+        <Button size="sm" variant="danger" icon={<ShieldAlert size={13} />} onClick={onCommitAnyway} title="Commit with the secrets in the files (for demo values you mean to share)">
+          Commit anyway
+        </Button>
       </div>
     </div>
   );

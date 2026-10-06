@@ -13,7 +13,7 @@ export function EnvironmentsPane() {
   const [filter, setFilter] = useState('');
   const envs = (ws?.environments ?? []).filter((e) => !filter || e.name.toLowerCase().includes(filter.toLowerCase()));
   const create = async () => {
-    const name = (await promptText('New environment', { placeholder: 'Staging', okLabel: 'Create' }))?.trim();
+    const name = (await promptText('New environment', { message: 'Environment name', placeholder: 'Staging', okLabel: 'Create', icon: <KeyRound size={18} /> }))?.trim();
     if (!name) return;
     const id = uid('env-');
     await call('env.save', { env: { id, name, variables: [{ key: 'baseUrl', value: '' }] } });

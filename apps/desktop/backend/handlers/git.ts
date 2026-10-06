@@ -9,6 +9,8 @@ import {
   runGit,
   findCollectionItem,
   findCommittableSecrets,
+  fixCommittableSecrets,
+  type SecretFinding,
   gitBranches,
   gitClone,
   gitCommit,
@@ -114,6 +116,16 @@ export function gitHandlers(be: Backend): Handlers {
     'git.discard': ({ files }: { files: Array<Pick<GitFile, 'path' | 'state'>> }) => rewritten(() => gitDiscard(ws(), files)),
     /** Secrets typed into the workspace that a commit would publish (GIT-104). */
     'git.check': () => findCommittableSecrets(be.ws),
+    /**
+     * Fix findings in one click: typed values become {{variables}} whose values live as secret variables of the given
+     * environment (in the OS secret store); plain environment / workspace / collection variables become secret.
+     */
+    'git.fixSecrets': async ({ findings, environmentId }: { findings: SecretFinding[]; environmentId: string }) => {
+      be.lastOwnChange = Date.now();
+      const r = await fixCommittableSecrets(be.ws, be.secrets, findings, { environmentId });
+      be.host.emit('data.changed', { method: 'col.save' });
+      return changed(r);
+    },
     /**
      * Commit (GIT-206). The secret guard runs first: with findings nothing is committed and they are returned, unless
      * `force` (the user read them and chose to go on).

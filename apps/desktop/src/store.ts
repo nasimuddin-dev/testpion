@@ -1,4 +1,5 @@
 import { toast as sonner } from 'sonner';
+import type { ReactNode } from 'react';
 import { docKey, isDocView, routeDoc, useDocs } from './lib/docs';
 import { create } from 'zustand';
 import type { AppSettings, WorkspaceCurrent } from './types';
@@ -57,6 +58,8 @@ export interface DialogButton {
   id: string;
   label: string;
   variant?: 'primary' | 'default' | 'danger';
+  /** Its icon; without one, the label picks it (Create → +, Delete → bin, Cancel → ×, …). */
+  icon?: ReactNode;
 }
 
 /** What kind of message a dialog is; sets its icon and colour (see the Design docs page). */
@@ -67,6 +70,8 @@ export interface DialogRequest {
   message: string;
   /** Icon and colour; defaults to "question" when there are several buttons, else "info". */
   tone?: DialogTone;
+  /** What the dialog is about (a key for an environment, a folder …), in place of the tone's icon. */
+  icon?: ReactNode;
   detail?: string;
   buttons: DialogButton[];
   cancelId: string;
@@ -313,11 +318,12 @@ export function ask(req: Omit<DialogRequest, 'resolve'>): Promise<string> {
  * Standard confirmation (replaces window.confirm(), which shows an unstyled OS box). Resolves true
  * when the user confirms. `danger` makes it a destructive confirmation with a red button.
  */
-export function confirmAction(opts: { title: string; message: string; detail?: string; confirmLabel?: string; cancelLabel?: string; danger?: boolean; tone?: DialogTone }): Promise<boolean> {
+export function confirmAction(opts: { title: string; message: string; detail?: string; confirmLabel?: string; cancelLabel?: string; danger?: boolean; tone?: DialogTone; icon?: ReactNode }): Promise<boolean> {
   return ask({
     title: opts.title,
     message: opts.message,
     detail: opts.detail,
+    icon: opts.icon,
     tone: opts.tone ?? (opts.danger ? 'danger' : 'question'),
     buttons: [
       { id: 'cancel', label: opts.cancelLabel ?? 'Cancel' },
@@ -331,13 +337,14 @@ export function confirmAction(opts: { title: string; message: string; detail?: s
  * Ask for a line of text. Replaces window.prompt(), which Electron does not support (it returns null
  * without showing anything). Resolves with the trimmed text, or null when cancelled or left empty.
  */
-export function promptText(title: string, opts: { message?: string; value?: string; placeholder?: string; okLabel?: string; detail?: string } = {}): Promise<string | null> {
+export function promptText(title: string, opts: { message?: string; value?: string; placeholder?: string; okLabel?: string; detail?: string; icon?: ReactNode } = {}): Promise<string | null> {
   return new Promise((resolve) =>
     useApp.getState().set({
       dialog: {
         title,
         message: opts.message ?? '',
         detail: opts.detail,
+        icon: opts.icon,
         input: { value: opts.value ?? '', placeholder: opts.placeholder },
         buttons: [
           { id: 'cancel', label: 'Cancel' },

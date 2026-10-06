@@ -41,6 +41,9 @@ export interface SecurityFinding {
   requestId?: string;
   /** What kind of finding: a security weakness, or a variable nothing defines. */
   category?: 'security' | 'variables';
+  /** For a value typed in: which part of the request holds it, and which field (header name, body key, auth field). */
+  part?: 'auth' | 'headers' | 'params' | 'body';
+  field?: string;
 }
 
 const SET_RE = /(?:pm|tp|aps)\.(?:environment|globals|collectionVariables|variables)\.set\(\s*['"`]([\w.-]+)['"`]/g;
@@ -89,39 +92,44 @@ const hasVar = (s: string | undefined) => !!s && /\{\{[^}]+\}\}/.test(s);
 const localHost = (host: string) => /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|\[?::1\]?|0\.0\.0\.0)/i.test(host) || /\.(test|local|localhost)$/i.test(host);
 
 /** Secrets typed as plain values in auth settings (they belong in secret variables). */
-function literalSecrets(auth: AuthConfig | undefined): string[] {
+/** The auth fields that hold a secret typed in: a label for people and the field's name (see AUTH_SECRET_FIELDS). */
+export function literalAuthSecrets(auth: AuthConfig | undefined): Array<{ label: string; field: string }> {
   if (!auth) return [];
-  const out: string[] = [];
-  const check = (label: string, v: string | undefined) => {
-    if (v && !hasVar(v)) out.push(label);
+  const out: Array<{ label: string; field: string }> = [];
+  const check = (label: string, field: string, v: string | undefined) => {
+    if (v && !hasVar(v)) out.push({ label, field });
   };
   switch (auth.type) {
     case 'bearer':
-      check('bearer token', auth.token);
+      check('bearer token', 'token', auth.token);
       break;
     case 'basic':
     case 'digest':
-      check('password', auth.password);
+      check('password', 'password', auth.password);
       break;
     case 'apiKey':
-      check(`API key ${auth.key}`, auth.value);
+      check(`API key ${auth.key}`, 'value', auth.value);
       break;
     case 'jwt':
-      check('JWT secret', auth.secret);
+      check('JWT secret', 'secret', auth.secret);
       break;
     case 'oauth2':
-      check('client secret', auth.clientSecret);
-      check('password', auth.password);
+      check('client secret', 'clientSecret', auth.clientSecret);
+      check('password', 'password', auth.password);
       break;
     case 'oauth1':
-      check('consumer secret', auth.consumerSecret);
-      check('token secret', auth.tokenSecret);
+      check('consumer secret', 'consumerSecret', auth.consumerSecret);
+      check('token secret', 'tokenSecret', auth.tokenSecret);
       break;
     case 'awsv4':
-      check('secret key', auth.secretKey);
+      check('secret key', 'secretKey', auth.secretKey);
       break;
   }
   return out;
+}
+
+function literalSecrets(auth: AuthConfig | undefined): string[] {
+  return literalAuthSecrets(auth).map((x) => x.label);
 }
 
 /**
@@ -163,15 +171,15 @@ export function securityLint(collection: Collection, redactFields?: string[]): S
   const red = new Redactor(redactFields);
   const out: SecurityFinding[] = [];
   const add = (f: SecurityFinding) => out.push({ category: 'security', ...f });
-  for (const s of literalSecrets(collection.auth)) add({ severity: 'high', where: collection.name, message: `The collection's auth has a ${s} typed in: use a secret variable` });
+  for (const s of literalAuthSecrets(collection.auth)) add({ severity: 'high', where: collection.name, message: `The collection's auth has a ${s.label} typed in: use a secret variable`, part: 'auth', field: s.field });
   for (const ref of collectionRequests(collection)) {
     const where = [collection.name, ...ref.path, ref.name].join(' › ');
     if (ref.node.kind !== 'http') continue;
     const r = ref.node.request;
     const own = r.auth && r.auth.type !== 'inherit' ? r.auth : undefined;
-    for (const s of literalSecrets(own)) add({ severity: 'high', where, message: `A ${s} is typed into the request: use a secret variable`, requestId: ref.id });
+    for (const s of literalAuthSecrets(own)) add({ severity: 'high', where, message: `A ${s.label} is typed into the request: use a secret variable`, requestId: ref.id, part: 'auth', field: s.field });
     const kvSecret = (rows: KeyValue[] | undefined) => (rows ?? []).filter((h) => h.enabled !== false && h.key && h.value && red.isSensitiveKey(h.key) && !hasVar(h.value));
-    for (const h of kvSecret(r.headers)) add({ severity: 'high', where, message: `Header ${h.key} holds a value typed in: use a secret variable`, requestId: ref.id });
+    for (const h of kvSecret(r.headers)) add({ severity: 'high', where, message: `Header ${h.key} holds a value typed in: use a secret variable`, requestId: ref.id, part: 'headers', field: h.key });
     const querySecrets = [...kvSecret(r.params), ...(r.params ?? []).filter((p) => p.enabled !== false && red.isSensitiveKey(p.key) && isVar(p.value))];
     for (const p of querySecrets) add({ severity: 'medium', where, message: `The secret "${p.key}" is sent in the query string, where proxies and server logs keep it: send it in a header`, requestId: ref.id });
     let host = '';
@@ -189,7 +197,7 @@ export function securityLint(collection: Collection, redactFields?: string[]): S
     if (r.body && 'content' in r.body && r.body.type === 'json') {
       try {
         const walk = (v: unknown, key = ''): void => {
-          if (typeof v === 'string' && key && red.isSensitiveKey(key) && v && !hasVar(v)) add({ severity: 'high', where, message: `The body field "${key}" holds a value typed in: use a secret variable`, requestId: ref.id });
+          if (typeof v === 'string' && key && red.isSensitiveKey(key) && v && !hasVar(v)) add({ severity: 'high', where, message: `The body field "${key}" holds a value typed in: use a secret variable`, requestId: ref.id, part: 'body', field: key });
           else if (v && typeof v === 'object') for (const [k, x] of Object.entries(v)) walk(x, Array.isArray(v) ? key : k);
         };
         walk(JSON.parse(r.body.content));

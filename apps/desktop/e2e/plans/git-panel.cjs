@@ -18,8 +18,11 @@ const commit = (message) => `(async () => {
   if (!${typeMessage(message)}) return 'NO INPUT commit message';
   await __t.sleep(300);
   ${button('Commit')}?.click();
-  const guard = await __t.waitFor(() => [...document.querySelectorAll('[role=alert]')].find((a) => /Not committed/.test(a.textContent)), 5000);
-  const blocked = guard ? guard.textContent.match(/Not committed: \\d+ secrets?/)?.[0] : 'not blocked';
+  // either the guard stops it (then Commit anyway), or it is committed at once: whichever shows first
+  const committed = () => [...document.querySelectorAll('[data-sonner-toast]')].map((t) => t.textContent.trim()).find((t) => /^Committed/.test(t));
+  const first = await __t.waitFor(() => [...document.querySelectorAll('[role=alert]')].find((a) => /Not committed/.test(a.textContent)) || committed(), 8000);
+  if (typeof first === 'string') return 'not blocked | ' + first;
+  const blocked = first ? first.textContent.match(/Not committed: \\d+ secrets?/)?.[0] : 'not blocked';
   ${button('Commit anyway')}?.click();
   const done = await ${toast('/^Committed/')};
   return blocked + ' | ' + (done ?? 'NO TOAST');
@@ -43,6 +46,31 @@ const steps = [
       ${button('Initialize repository')}?.click();
       const ready = await __t.waitFor(() => document.querySelector('[aria-label="Changes"]'), 8000);
       return 'offered: ' + !!empty + ' | changes listed: ' + !!ready;
+    })()`,
+  ],
+  // the secret guard's list is something to act on: each finding opens where it is, and Fix all moves every typed value
+  // to a secret variable of the active environment and leaves {{references}} in the files
+  [
+    'secrets-fix-all',
+    `(async () => {
+      if (!${typeMessage('Start the API tests')}) return 'NO INPUT commit message';
+      await __t.sleep(300);
+      ${button('Commit')}?.click();
+      const guard = await __t.waitFor(() => [...document.querySelectorAll('[role=alert]')].find((a) => /Not committed/.test(a.textContent)), 5000);
+      if (!guard) return 'NO ALERT';
+      const before = Number((guard.textContent.match(/Not committed: (\\d+)/) || [])[1]);
+      const rows = guard.querySelectorAll('li').length;
+      const opens = guard.querySelectorAll('li button').length;
+      [...guard.querySelectorAll('button')].find((b) => /^Fix all/.test(b.textContent.trim()))?.click();
+      const done = await __t.waitFor(() => [...document.querySelectorAll('[data-sonner-toast]')].map((t) => t.textContent.trim()).find((t) => /moved to secret variable|left to do/.test(t)), 15000);
+      await __t.sleep(800);
+      const after = await window.aps.invoke('git.check');
+      if (after.length) return 'LEFT: ' + after.map((f) => f.kind + ':' + f.where + ':' + f.field).join(' ; ') + ' | toast: ' + done;
+      const env = (await window.aps.invoke('env.list')).find((e) => e.name === 'Public APIs');
+      const secretVars = env.variables.filter((v) => v.secret).map((v) => v.key);
+      const c = (await window.aps.invoke('col.list')).find((x) => x.id === 'httpbin');
+      const wrong = JSON.stringify(c.items).match(/"password":"[^{][^"]*"/);
+      return 'before: ' + before + ' | rows: ' + rows + ' | per-row buttons: ' + (opens >= rows) + ' | fixed: ' + /moved/.test(done ?? '') + ' | left: ' + after.length + ' | secret vars: ' + secretVars.length + ' | plain password left: ' + !!wrong;
     })()`,
   ],
   ['first-commit', commit('Start the API tests')],
@@ -136,10 +164,11 @@ module.exports = withExpect(
   {
     'bare-remote': /^remote ready$/,
     initialize: /^offered: true \| changes listed: true$/,
-    'first-commit': /^Not committed: \d+ secrets \| Committed [0-9a-f]{7}/,
+    'secrets-fix-all': /^before: [1-9]\d* \| rows: [1-9]\d* \| per-row buttons: true \| fixed: true \| left: 0 \| secret vars: [1-9]\d* \| plain password left: false$/,
+    'first-commit': /^not blocked \| Committed [0-9a-f]{7}/,
     'connect-and-push': /^Pushed \| upstream: origin\/main \| changes: 0$/,
     'change-by-meaning': /^git view: .*GET with query parameters.*URL.* \| status bar: main.*• 1 \| explorer mark: M$/,
-    'second-commit-and-push': /^Not committed: \d+ secrets \| Committed [0-9a-f]{7} \| Pushed/,
+    'second-commit-and-push': /^not blocked \| Committed [0-9a-f]{7} \| Pushed/,
     'teammate-pushes': /^pushed$/,
     pull: /^Up to date with the remote \| teammate change: true \| commits: Rename the JSON post \/ Call \/anything \/ Start the API tests$/,
     'request-history': /^versions: Call \/anything \/ Start the API tests$/,
