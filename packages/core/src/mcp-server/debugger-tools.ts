@@ -1,5 +1,7 @@
 import { startDebuggerProxy, type DebuggerExchange, type DebuggerProxy } from '../debugger/proxy.js';
 import { exchangesFromHar, exchangesToHar } from '../debugger/har.js';
+import { describeRule, rulePresets, type DebuggerRule } from '../debugger/rules.js';
+import { shortId } from '../util/ids.js';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { Redactor } from '../util/redact.js';
@@ -13,6 +15,8 @@ import { str, type Tool } from './tool.js';
 export function debuggerTools(d: { redactor: Redactor }): Tool[] {
   let proxy: DebuggerProxy | undefined;
   const session: DebuggerExchange[] = [];
+  /** The rules of this server process (an agent adds them; the proxy reads them on every request). */
+  const rules: DebuggerRule[] = [];
   const red = d.redactor;
   const safe = (e: DebuggerExchange, bodies: boolean) => {
     const headers = (h?: Record<string, string>) => (h ? Object.fromEntries(Object.entries(h).map(([k, v]) => [k, red.isSensitiveKey(k) ? '***' : v])) : h);
@@ -42,6 +46,7 @@ export function debuggerTools(d: { redactor: Redactor }): Tool[] {
           await proxy?.close();
           proxy = await startDebuggerProxy({
             port: a.port ? Number(a.port) : undefined,
+            rules: () => rules,
             onExchange: (e, phase) => {
               if (phase === 'request') {
                 session.push(e);
@@ -149,6 +154,54 @@ export function debuggerTools(d: { redactor: Redactor }): Tool[] {
         if (!a.append) session.length = 0;
         session.push(...loaded);
         return { loaded: loaded.length, exchanges: session.length };
+      },
+    },
+    {
+      name: 'debugger_rules',
+      write: true,
+      description:
+        "The HTTP Debugger's rules, what the proxy does to matching traffic: list them, add one (a preset by id, filled in for a host, or a rule object: kind ignore | highlight | modify | reply | redirect, match {host, url, method, application} as globs, and the kind's fields: color; requestHeaders / responseHeaders [{op: set|remove, name, value}], requestBody, responseBody, delayMs; reply {status, headers, body}; redirect {host, scheme}), enable / disable or remove one. Breakpoints need the app's window.",
+      inputSchema: {
+        type: 'object',
+        properties: {
+          action: { type: 'string', enum: ['list', 'presets', 'add', 'remove', 'enable', 'disable', 'clear'] },
+          preset: str('With add: a preset id from the presets action'),
+          host: str('With add + preset: the host the preset applies to'),
+          rule: { type: 'object', description: 'With add: the rule (see the description)' },
+          id: str('With remove / enable / disable: the rule id'),
+        },
+        required: ['action'],
+      },
+      run: (a) => {
+        const list = () => ({ rules: rules.map((r) => ({ ...r, summary: describeRule(r) })) });
+        if (a.action === 'presets') return { presets: rulePresets(typeof a.host === 'string' ? a.host : undefined).map((p) => ({ id: p.id, label: p.label })) };
+        if (a.action === 'add') {
+          const from = typeof a.preset === 'string' ? rulePresets(typeof a.host === 'string' ? a.host : undefined).find((p) => p.id === a.preset)?.rule : (a.rule as Partial<DebuggerRule> | undefined);
+          if (!from) throw new ApsError('ValidationError', 'add needs a preset id or a rule object');
+          if (!['ignore', 'highlight', 'modify', 'reply', 'redirect', 'breakpoint'].includes(String(from.kind))) throw new ApsError('ValidationError', `Unknown rule kind "${String(from.kind)}"`);
+          if (from.kind === 'breakpoint') throw new ApsError('ValidationError', 'Breakpoints need the app window to edit the held exchange; use modify or reply here');
+          const rule: DebuggerRule = {
+            ...(from as DebuggerRule),
+            id: shortId('rule-'),
+            name: from.name ?? describeRule({ ...(from as DebuggerRule), name: '' }),
+            enabled: from.enabled !== false,
+            match: from.match ?? {},
+          };
+          rules.push(rule);
+          return { added: { ...rule, summary: describeRule(rule) }, ...list() };
+        }
+        if (a.action === 'clear') {
+          rules.length = 0;
+          return list();
+        }
+        if (a.action === 'remove' || a.action === 'enable' || a.action === 'disable') {
+          const i = rules.findIndex((r) => r.id === a.id);
+          if (i < 0) throw new ApsError('ValidationError', `No rule ${String(a.id)}`);
+          if (a.action === 'remove') rules.splice(i, 1);
+          else rules[i]!.enabled = a.action === 'enable';
+          return list();
+        }
+        return list();
       },
     },
     {

@@ -15,8 +15,10 @@ import {
   type BrowserName,
   type DebuggerExchange,
   type DebuggerProxy,
+  type DebuggerRulesFile,
   type SystemProxySnapshot,
 } from '@testpion/core';
+import { activeRules, holdBreakpoint, type PendingBreakpoint } from './debugger-rules.js';
 import type { Backend, Handlers } from '../backend.js';
 import { request as httpRequest } from 'node:http';
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
@@ -31,6 +33,10 @@ export interface DebuggerState {
   /** AutoSave: the live session is written to debugger/autosave.har every minute while something changed. */
   autosave?: ReturnType<typeof setInterval>;
   dirty?: boolean;
+  /** The rules file (handlers/debugger-rules.ts), read once; the proxy asks for the active profile's rules on every request. */
+  rules?: DebuggerRulesFile;
+  /** Exchanges held at a breakpoint, waiting for the window. */
+  breakpoints?: Map<string, PendingBreakpoint>;
   /** Put everything back (the system proxy) and stop the timers; the backend calls it when it is disposed. */
   release?(): Promise<void>;
 }
@@ -100,6 +106,7 @@ export function debuggerHandlers(be: Backend): Handlers {
   const writeSession = (name: string) => {
     mkdirSync(sessionsDir(), { recursive: true });
     const file = sessionFile(name);
+    be.lastOwnChange = Date.now();
     writeFileSync(file, JSON.stringify(exchangesToHar(state.exchanges, be.logger.redactor, ENGINE_VERSION), null, 2));
     return { name: basename(file, '.har'), path: file, exchanges: state.exchanges.length };
   };
@@ -134,6 +141,7 @@ export function debuggerHandlers(be: Backend): Handlers {
     await restoreSystem();
   };
   const stop = async () => {
+    for (const bp of [...(state.breakpoints?.values() ?? [])]) bp.resolve(undefined);
     await state.proxy?.close();
     state.proxy = undefined;
     stopAutosave();
@@ -169,6 +177,8 @@ export function debuggerHandlers(be: Backend): Handlers {
       state.proxy = await startDebuggerProxy({
         port,
         lan,
+        rules: () => activeRules(be, state),
+        onBreakpoint: (e, phase) => holdBreakpoint(be, state, e, phase),
         onExchange: (e, phase) => {
           if (phase === 'request') {
             state.exchanges.push(e);

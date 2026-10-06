@@ -77,6 +77,50 @@ const steps = [
       return 'saved: ' + !!saved + ' | cleared: ' + empty + ' | opened: ' + !!back;
     })()`,
   ],
+  [
+    'rule-replies-without-the-server',
+    `(async () => {
+      // Rules ▸ Presets for the host ▸ Offline: reply 503; the next request is answered by TestPion
+      const row = await __t.waitFor(() => [...document.querySelectorAll('main [role=row]')].find((r) => r.textContent.includes('/health')), 4000);
+      row?.click(); await __t.sleep(500);
+      [...document.querySelectorAll('main [role=tab]')].find((t) => t.offsetParent && t.textContent.trim().startsWith('Rules'))?.click(); await __t.sleep(600);
+      const presets = [...document.querySelectorAll('main button')].find((b) => b.offsetParent && /^Presets for 127\\.0\\.0\\.1:4010/.test(b.textContent.trim()));
+      if (!presets) return 'NO PRESETS BUTTON';
+      presets.click(); await __t.sleep(500);
+      [...document.querySelectorAll('[role=menuitem]')].find((m) => /Offline: reply 503/.test(m.textContent))?.click(); await __t.sleep(800);
+      const listed = [...document.querySelectorAll('main [data-rule]')].some((r) => /Offline/.test(r.textContent));
+      const bar = await __t.waitFor(() => ([...document.querySelectorAll('main [role=tab]')].find((t) => t.offsetParent && t.textContent.trim().startsWith('Traffic'))?.click(), document.querySelector('main [data-rules-bar]')?.textContent), 3000);
+      const r = await window.aps.invoke('debug.selfTest', { url: 'http://127.0.0.1:4010/health?rule=1' });
+      await __t.sleep(600);
+      const ruleRow = [...document.querySelectorAll('main [role=row]')].find((x) => x.textContent.includes('rule=1'));
+      ruleRow?.click(); await __t.sleep(600);
+      const badge = [...document.querySelectorAll('main *')].some((x) => x.children.length === 0 && /answered by a rule/.test(x.textContent ?? ''));
+      // the rule is removed again so the other steps see the real server
+      const rules = await window.aps.invoke('debug.rules');
+      for (const rule of rules.rules.filter((x) => /Offline/.test(x.name))) await window.aps.invoke('debug.deleteRule', { id: rule.id });
+      return 'rule listed: ' + listed + ' | bar: ' + /rules? active/.test(bar ?? '') + ' | status: ' + r.status + ' | row 503: ' + /503/.test(ruleRow?.textContent ?? '') + ' | badge: ' + badge;
+    })()`,
+  ],
+  [
+    'breakpoint-holds-and-edits',
+    `(async () => {
+      // a breakpoint preset for the host; the next request waits in a dialog, where its URL is changed, then goes on
+      const st = await window.aps.invoke('debug.addPreset', { preset: 'break-request', host: '127.0.0.1:4010' });
+      const pending = window.aps.invoke('debug.selfTest', { url: 'http://127.0.0.1:4010/health?bp=1' });
+      const dialog = await __t.waitFor(() => [...document.querySelectorAll('[role=dialog]')].find((d) => /Breakpoint: the request/.test(d.textContent)), 6000);
+      if (!dialog) return 'NO DIALOG';
+      const url = [...dialog.querySelectorAll('input')].find((i) => /bp=1/.test(i.value));
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+      setter.call(url, 'http://127.0.0.1:4010/health?bp=edited'); url.dispatchEvent(new Event('input', { bubbles: true }));
+      [...dialog.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Continue with changes')?.click();
+      const r = await pending;
+      await __t.sleep(800);
+      const edited = [...document.querySelectorAll('main [role=row]')].some((x) => x.textContent.includes('bp=edited'));
+      const rules = await window.aps.invoke('debug.rules');
+      for (const rule of rules.rules.filter((x) => x.kind === 'breakpoint')) await window.aps.invoke('debug.deleteRule', { id: rule.id });
+      return 'added: ' + st.rules.some((x) => x.kind === 'breakpoint') + ' | status: ' + r.status + ' | edited url listed: ' + edited + ' | dialog gone: ' + !document.querySelector('[role=dialog]');
+    })()`,
+  ],
 ];
 
 module.exports = withExpect(steps, {
@@ -84,4 +128,6 @@ module.exports = withExpect(steps, {
   'exchange-listed-and-opens': /^row: GET true 200 true \| detail tabs: true \| body shown: true \| opened as request: true$/,
   'inspectors-and-keyboard': /^raw request line: true \| raw response line: true \| auth: true \| hex: true \| delete key: true$/,
   'session-saved-and-opened': /^saved: true \| cleared: true \| opened: true$/,
+  'rule-replies-without-the-server': /^rule listed: true \| bar: true \| status: 503 \| row 503: true \| badge: true$/,
+  'breakpoint-holds-and-edits': /^added: true \| status: 200 \| edited url listed: true \| dialog gone: true$/,
 });

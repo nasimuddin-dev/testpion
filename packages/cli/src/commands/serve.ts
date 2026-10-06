@@ -1,11 +1,11 @@
 /** Servers and inspectors: the workspace MCP server, mock servers (REST, MCP, GraphQL) and the MCP inspector. */
-import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Command } from 'commander';
 import {
   ChainSecretStore,
   createEngineContext,
-  exchangesToHar, startDebuggerProxy,
+  exchangesToHar, startDebuggerProxy, type DebuggerRule, type DebuggerRulesFile,
   EnvSecretStore,
   McpSession,
   recordingToCollection,
@@ -351,12 +351,30 @@ ${cyan(r.url)}`);
     .option('-p, --port <port>', 'port to listen on (default: 8899)', '8899')
     .option('--lan', 'listen on every interface (a phone, another computer), not only this one')
     .option('-o, --out <file.har>', 'save the session as HAR when stopped (Ctrl+C)')
+    .option('--rules <file.json>', "rules to apply (the app's debugger/rules.json: ignore, highlight, modify, reply, redirect); the file is re-read when it changes")
     .option('--json', 'print each exchange as one JSON line (for scripts and AI agents)')
-    .action(async (o: { port: string; lan?: boolean; out?: string; json?: boolean }) => {
+    .action(async (o: { port: string; lan?: boolean; out?: string; rules?: string; json?: boolean }) => {
       const redactor = new Redactor();
+      // the rules file as the app writes it (profiles) or a plain list; re-read when it changes so edits apply at once
+      let rulesCache: { mtime: number; rules: DebuggerRule[] } | undefined;
+      const rules = (): DebuggerRule[] => {
+        if (!o.rules) return [];
+        try {
+          const mtime = statSync(o.rules).mtimeMs;
+          if (rulesCache?.mtime === mtime) return rulesCache.rules;
+          const raw = JSON.parse(readFileSync(o.rules, 'utf8')) as DebuggerRulesFile | DebuggerRule[];
+          const list = Array.isArray(raw) ? raw : (raw.profiles?.[raw.active] ?? []);
+          rulesCache = { mtime, rules: list.filter((r) => r.kind !== 'breakpoint') };
+          return rulesCache.rules;
+        } catch (e) {
+          throw new CliError(`--rules: ${(e as Error).message}`, EXIT.CONFIG_ERROR);
+        }
+      };
+      if (o.rules) console.error(dim(`${rules().length} rules from ${o.rules} (breakpoints need the app)`));
       const proxy = await startDebuggerProxy({
         port: Number(o.port) || undefined,
         lan: !!o.lan,
+        rules,
         onExchange: (e, phase) => {
           if (phase !== 'response') return;
           if (o.json) console.log(JSON.stringify({ ...e, url: redactor.redactUrl(e.url), requestBody: undefined, responseBody: undefined }));

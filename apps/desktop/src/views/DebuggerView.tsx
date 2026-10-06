@@ -1,4 +1,4 @@
-import { Bot, Bug, ChevronDown, Copy, Download, ExternalLink, FolderOpen, Globe, Play, Save, Square, Star, Terminal, Trash2, Upload, X } from 'lucide-react';
+import { Bot, Bug, ChevronDown, Copy, Download, ExternalLink, FolderOpen, Globe, Pause, Play, Save, Scale, Square, Star, Terminal, Trash2, Upload, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { asError, call, on } from '../api';
 import { confirmAction, promptText, useApp } from '../store';
@@ -8,6 +8,7 @@ import { finishSave, downloadContent, pickTextFile, type SaveResult } from '../l
 import { JsonTree } from '../components/JsonView';
 import { JwtView } from '../components/JwtView';
 import type { HttpRequestSpec } from '../types';
+import { BreakpointDialog, CompareExchangesDialog, HIGHLIGHT_CLASS, loadRules, RulesPanel, type HeldBreakpoint, type RulesState } from '../components/DebuggerRules';
 
 interface Exchange {
   id: string;
@@ -33,6 +34,12 @@ interface Exchange {
   durationMs?: number;
   error?: string;
   bookmarked?: boolean;
+  /** Rules (DBG-3): the row's colour, the rules that acted, where a redirect sent it, a reply rule answered, a breakpoint edited it. */
+  highlight?: string;
+  rules?: string[];
+  redirectedTo?: string;
+  repliedByRule?: boolean;
+  edited?: boolean;
   /** The Auth inspector's reading (debug.exchange only). */
   auth?: { scheme: string; user?: string; jwt?: DecodedJwt; cookies: string[]; setCookies: string[]; note?: string };
 }
@@ -144,11 +151,17 @@ export function DebuggerView() {
   const [selected, setSelected] = useState<string>();
   const [detail, setDetail] = useState<Exchange>();
   const [filter, setFilter] = useState({ text: '', deep: false, host: '', method: '', status: '' as '' | 'ok' | 'redirect' | 'client-error' | 'server-error' | 'error', bookmarked: false });
-  const [tab, setTab] = useState<'traffic' | 'stats'>('traffic');
+  const [tab, setTab] = useState<'traffic' | 'stats' | 'rules'>('traffic');
   const [port, setPort] = useState('8899');
   const [stats, setStats] = useState<Stats>();
   const [capture, setCapture] = useState<CaptureOptions>();
   const [sessions, setSessions] = useState<Session[]>([]);
+  const [rules, setRules] = useState<RulesState>();
+  const [held, setHeld] = useState<HeldBreakpoint[]>([]);
+  const [openBreakpoint, setOpenBreakpoint] = useState<HeldBreakpoint>();
+  /** Compare: the first exchange picked; the next row clicked is the other one. */
+  const [compareA, setCompareA] = useState<Exchange>();
+  const [comparePair, setComparePair] = useState<{ a: string; b: string }>();
   const filterBox = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
@@ -182,6 +195,23 @@ export function DebuggerView() {
     });
     return () => (off(), clearTimeout(t));
   }, [load]);
+  // the rules (DBG-3): the active profile's count for the bar, and exchanges held at a breakpoint
+  useEffect(() => {
+    void loadRules().then((r) => r && setRules(r));
+    void call<HeldBreakpoint[]>('debug.breakpoints').then(setHeld, () => undefined);
+    const offRules = on('debug.rules', () => void loadRules().then((r) => r && setRules(r)));
+    const offBp = on<{ id: string; released?: boolean; phase?: 'request' | 'response'; exchange?: HeldBreakpoint['exchange'] }>('debug.breakpoint', (b) => {
+      if (b.released) {
+        setHeld((h) => h.filter((x) => x.id !== b.id));
+        setOpenBreakpoint((o) => (o?.id === b.id ? undefined : o));
+      } else if (b.exchange) {
+        const bp: HeldBreakpoint = { id: b.id, phase: b.phase ?? 'request', since: new Date().toISOString(), exchange: b.exchange };
+        setHeld((h) => [...h, bp]);
+        setOpenBreakpoint((o) => o ?? bp);
+      }
+    });
+    return () => (offRules(), offBp());
+  }, []);
   useEffect(() => {
     if (!selected) return setDetail(undefined);
     void call<Exchange>('debug.exchange', { id: selected }).then(setDetail, () => setDetail(undefined));
@@ -381,13 +411,48 @@ export function DebuggerView() {
         tabs={[
           { id: 'traffic', label: 'Traffic', badge: status?.exchanges || undefined },
           { id: 'stats', label: 'Statistics' },
+          { id: 'rules', label: 'Rules', badge: rules?.activeCount || undefined },
         ]}
       />
       {tab === 'stats' ? (
         <StatsPanel stats={stats} onPick={(id) => (setTab('traffic'), setSelected(id))} />
+      ) : tab === 'rules' ? (
+        <RulesPanel state={rules} onChange={setRules} host={sel?.host} />
       ) : (
         <Split id="debugger" initial={55}>
           <div className="h-full flex flex-col min-h-0 outline-none" tabIndex={0} onKeyDown={onKey} aria-label="Captured exchanges">
+            {(!!rules?.activeCount || held.length > 0 || compareA) && (
+              <div className="flex items-center gap-3 px-2 py-1 border-b border-line text-xs bg-panel/60" data-rules-bar>
+                {!!rules?.activeCount && (
+                  <button
+                    type="button"
+                    className="flex items-center gap-1 text-muted hover:text-fg"
+                    onClick={() => setTab('rules')}
+                    title="The rules of the active profile act on the traffic; click to see them"
+                  >
+                    <Scale size={12} /> {rules.activeCount} rule{rules.activeCount === 1 ? '' : 's'} active · {rules.active}
+                  </button>
+                )}
+                {held.length > 0 && (
+                  <button
+                    type="button"
+                    className="flex items-center gap-1 text-warn font-medium"
+                    onClick={() => setOpenBreakpoint(held[0])}
+                    title="An exchange is paused at a breakpoint, waiting for you"
+                  >
+                    <Pause size={12} /> {held.length} held at a breakpoint · open
+                  </button>
+                )}
+                {compareA && (
+                  <span className="flex items-center gap-1 text-accent">
+                    Comparing with {compareA.method} {compareA.host}: click the other exchange{' '}
+                    <button type="button" className="underline" onClick={() => setCompareA(undefined)}>
+                      cancel
+                    </button>
+                  </span>
+                )}
+              </div>
+            )}
             <div className="flex gap-2 p-2 border-b border-line items-center flex-wrap">
               <Input
                 ref={filterBox}
@@ -423,6 +488,34 @@ export function DebuggerView() {
               <label className="flex items-center gap-1 text-xs text-muted whitespace-nowrap">
                 <input type="checkbox" checked={filter.bookmarked} onChange={(e) => setFilter({ ...filter, bookmarked: e.target.checked })} /> Bookmarked
               </label>
+              <Menu
+                width={260}
+                items={[
+                  ...(rules?.filterPresets ?? []).map<MenuItem>((p) => ({ label: p.name, onSelect: () => setFilter({ ...filter, ...(p.filter as Partial<typeof filter>) }) })),
+                  {
+                    label: 'Save this filter…',
+                    icon: <Save size={14} />,
+                    onSelect: async () => {
+                      const name = await promptText('Save filter preset', {
+                        message: 'The current filter (text, host, method, status, bookmarked) under a name, for this workspace.',
+                        placeholder: 'Name',
+                      });
+                      if (name) void call<RulesState['filterPresets']>('debug.saveFilterPreset', { name, filter }).then((fp) => setRules((r) => r && { ...r, filterPresets: fp }), fail);
+                    },
+                  },
+                  ...(rules?.filterPresets ?? []).map<MenuItem>((p) => ({
+                    label: `Forget ${p.name}`,
+                    icon: <Trash2 size={14} />,
+                    danger: true,
+                    onSelect: () => void call<RulesState['filterPresets']>('debug.deleteFilterPreset', { name: p.name }).then((fp) => setRules((r) => r && { ...r, filterPresets: fp }), fail),
+                  })),
+                ]}
+                trigger={
+                  <Button size="sm" title="Saved filters">
+                    Presets <ChevronDown size={12} />
+                  </Button>
+                }
+              />
             </div>
             {!rows.length ? (
               <Empty icon={<Bug size={26} />} title={status?.running ? 'Waiting for traffic' : 'Not capturing'}>
@@ -448,9 +541,15 @@ export function DebuggerView() {
                     className={cx(
                       'flex items-center gap-2 h-[30px] px-2 text-xs cursor-pointer border-b border-line/60',
                       r.id === selected ? 'bg-accent-soft' : 'hover:bg-hover',
+                      r.highlight ? HIGHLIGHT_CLASS[r.highlight] : '',
                       r.error || (r.status ?? 0) >= 400 ? 'text-bad' : '',
                     )}
-                    onClick={() => setSelected(r.id)}
+                    onClick={() => {
+                      if (compareA && compareA.id !== r.id) {
+                        setComparePair({ a: compareA.id, b: r.id });
+                        setCompareA(undefined);
+                      } else setSelected(r.id);
+                    }}
                     onDoubleClick={() => openInTab(r)}
                     title={r.url}
                   >
@@ -488,11 +587,31 @@ export function DebuggerView() {
                 onAsk={() => ask(sel)}
                 onBookmark={async () => (await call('debug.bookmark', { id: sel.id, on: !sel.bookmarked }), void load(), setDetail({ ...sel, bookmarked: !sel.bookmarked }))}
                 onDelete={() => void remove([sel.id])}
+                onCompare={() => setCompareA(sel)}
+                onRule={(preset) => {
+                  if (preset === 'reply-with-this') {
+                    void call<RulesState>('debug.saveRule', {
+                      rule: {
+                        kind: 'reply',
+                        name: `Reply ${sel.status ?? 200} for ${sel.host}`,
+                        enabled: true,
+                        match: { host: sel.host, url: sel.url.split('?')[0] + '*' },
+                        reply: {
+                          status: sel.status ?? 200,
+                          headers: Object.fromEntries(Object.entries(sel.responseHeaders ?? {}).filter(([k]) => /^content-type$/i.test(k))),
+                          body: sel.responseBody ?? '',
+                        },
+                      },
+                    }).then((r) => (setRules(r), toast('Rule added: this response is served by TestPion from now on')), fail);
+                  } else void call<RulesState>('debug.addPreset', { preset, host: sel.host }).then((r) => (setRules(r), toast(`Rule added for ${sel.host}`)), fail);
+                }}
               />
             )}
           </div>
         </Split>
       )}
+      {openBreakpoint && <BreakpointDialog bp={openBreakpoint} onDone={() => setOpenBreakpoint(undefined)} />}
+      {comparePair && <CompareExchangesDialog a={comparePair.a} b={comparePair.b} onClose={() => setComparePair(undefined)} />}
     </div>
   );
 }
@@ -589,7 +708,25 @@ function StatsPanel({ stats, onPick }: { stats?: Stats; onPick(id: string): void
   );
 }
 
-function ExchangeDetail({ e, onOpen, onResend, onAsk, onBookmark, onDelete }: { e: Exchange; onOpen(): void; onResend(): void; onAsk(): void; onBookmark(): void; onDelete(): void }) {
+function ExchangeDetail({
+  e,
+  onOpen,
+  onResend,
+  onAsk,
+  onBookmark,
+  onDelete,
+  onCompare,
+  onRule,
+}: {
+  e: Exchange;
+  onOpen(): void;
+  onResend(): void;
+  onAsk(): void;
+  onBookmark(): void;
+  onDelete(): void;
+  onCompare(): void;
+  onRule(preset: string): void;
+}) {
   const [tab, setTab] = useState<'response' | 'request' | 'headers' | 'raw' | 'hex' | 'auth' | 'timing'>('response');
   const json = (text?: string) => {
     if (!text) return undefined;
@@ -635,6 +772,26 @@ function ExchangeDetail({ e, onOpen, onResend, onAsk, onBookmark, onDelete }: { 
           <Button size="sm" variant="ghost" icon={<Bot size={12} />} onClick={onAsk} title="Ask the AI assistant what this exchange does, why it failed, what to check (sent redacted)">
             Ask AI
           </Button>
+          <Button size="sm" variant="ghost" icon={<Scale size={12} />} onClick={onCompare} title="Compare with another exchange: click it next">
+            Compare
+          </Button>
+          <Menu
+            width={280}
+            items={[
+              { label: `Reply with this response from now on`, icon: <Play size={14} />, onSelect: () => onRule('reply-with-this') },
+              { label: `Ignore ${e.host}`, onSelect: () => onRule('ignore') },
+              { label: `Highlight ${e.host}`, onSelect: () => onRule('highlight') },
+              { label: `Offline: reply 503 for ${e.host}`, onSelect: () => onRule('offline') },
+              { label: `Slow down ${e.host} by 2 s`, onSelect: () => onRule('slow') },
+              { label: `Allow CORS for ${e.host}`, onSelect: () => onRule('cors') },
+              { label: `Pause every request to ${e.host}`, icon: <Pause size={14} />, onSelect: () => onRule('break-request') },
+            ]}
+            trigger={
+              <Button size="sm" variant="ghost" title="Add a rule for this exchange's host">
+                Rule <ChevronDown size={12} />
+              </Button>
+            }
+          />
           <Button
             size="sm"
             variant="ghost"
@@ -650,6 +807,21 @@ function ExchangeDetail({ e, onOpen, onResend, onAsk, onBookmark, onDelete }: { 
         </span>
       </div>
       {e.error && <div className="px-3 py-2 text-sm text-bad border-b border-line">{e.error}</div>}
+      {(e.rules?.length || e.redirectedTo || e.repliedByRule || e.edited) && (
+        <div className="px-3 py-1.5 text-xs border-b border-line flex gap-2 flex-wrap items-center text-muted">
+          <Scale size={12} />
+          {e.repliedByRule && <Badge tone="warn">answered by a rule</Badge>}
+          {e.redirectedTo && (
+            <Badge tone="warn" title={e.redirectedTo}>
+              redirected to {e.redirectedTo.replace(/^https?:\/\//, '').split('/')[0]}
+            </Badge>
+          )}
+          {e.edited && <Badge tone="warn">edited at a breakpoint</Badge>}
+          {e.rules?.map((r) => (
+            <Badge key={r}>{r}</Badge>
+          ))}
+        </div>
+      )}
       <Tabs
         value={tab}
         onChange={setTab}

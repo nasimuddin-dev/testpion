@@ -60,6 +60,7 @@ export * from './runner/test-schema.js';
 export * from './debugger/proxy.js';
 export * from './debugger/har.js';
 export * from './debugger/capture.js';
+export * from './debugger/rules.js';
 export * from './runner/datasets.js';
 export * from './runner/collection-run.js';
 export * from './runner/breakdown.js';

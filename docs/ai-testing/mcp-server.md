@@ -83,7 +83,7 @@ For Claude Code: `claude mcp add testpion -- testpion mcp-server -w /path/to/my-
 | `list_mcp_servers` | The workspace's MCP servers (id, name, transport, target; whether a stdio command was allowed). |
 | `mcp_server_tools` | Connect to one of them and list its tools (with schemas), resources and prompts. |
 | `mcp_call_tool` | Call a tool of one of the workspace's MCP servers and return the result: the way to test an MCP server. A stdio server runs only after the user allowed its command in the app (Connect ▸ Always for this workspace). |
-| `debugger_capture`, `debugger_exchanges`, `debugger_exchange`, `debugger_session`, `debugger_stats` | The HTTP Debugger: start a proxy, run a program with `HTTP_PROXY` set to it, read what it sent and got (redacted, `deep` searches bodies), save the session as HAR or open one, the session in numbers. |
+| `debugger_capture`, `debugger_exchanges`, `debugger_exchange`, `debugger_session`, `debugger_rules`, `debugger_stats` | The HTTP Debugger: start a proxy, run a program with `HTTP_PROXY` set to it, read what it sent and got (redacted, `deep` searches bodies), save the session as HAR or open one, rules that ignore, highlight, modify, answer or redirect matching traffic (presets: offline, slow, CORS…), the session in numbers. |
 | `git_status` | Git state of the workspace: branch, ahead / behind the remote, changed files. |
 | `git_diff` | The workspace's changes by meaning (requests, folders, environment variables, test files); with `from` / `to`, between two commits; `markdown: true` for a pull-request comment. |
 | `git_log` | Commits of the workspace, of a file or of a collection. |

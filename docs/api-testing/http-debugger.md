@@ -47,17 +47,33 @@ The **Session** menu keeps captures: **Save session…** writes the session as a
 
 Secrets (Authorization headers, API keys, passwords in bodies) are masked wherever the session is shown or saved; the proxy listens on this computer only unless you ask for the LAN.
 
+## Rules
+
+The **Rules** tab is what the proxy does to matching traffic, in the order listed:
+
+- **ignore** hides it from the list (it still goes through);
+- **highlight** colours the row: by host, URL, program, or by the response (a status class or code, slower than *n* ms, larger than *n* bytes). A fresh profile highlights errors, server and client errors, slow and large responses;
+- **modify** sets or removes request and response headers, replaces a body, adds a delay;
+- **reply** answers without the server: a status, headers and a body (offline, a canned error, a mock);
+- **redirect** sends the request to another host (and scheme): a staging API to a local one, a CDN to a mock;
+- **breakpoint** pauses the request (before the server) or the response (before the program) in a dialog where you change the method, URL, status, headers or body, then **Continue**, or **Abort**. A held exchange goes on by itself after two minutes.
+
+Hosts and URLs match by glob (`*.example.com`, `*/orders/*`) or by a /regular expression/; methods and the program's name narrow it. The first matching reply, redirect or breakpoint wins; header edits add up. **Presets** add the usual ones in one click (a header, CORS, no caching, a slow network, offline, a canned 200, a redirect to localhost, a breakpoint), filled in for the selected exchange's host; a row's **Rule** menu does the same from the traffic, including **Reply with this response from now on**. **What would happen to a URL** tells which rules act on it. The bar above the traffic says how many rules are active and when an exchange is held at a breakpoint.
+
+Rules live in **profiles** (Offline, Slow network, Mock payments…) switched as one; the profiles are saved in the workspace's `debugger/rules.json`, committed with it, so a team shares them. The **Presets** menu next to the filters saves and recalls filter presets. **Compare** on an exchange, then a click on another, shows the two side by side: status, headers, body.
+
 ## From the terminal and for agents
 
 ```bash
 testpion debug                       # the proxy on 8899; every exchange printed as it happens
 testpion debug -p 9000 -o session.har --json
+testpion debug --rules debugger/rules.json   # the workspace's rules (re-read when the file changes)
 ```
 
-AI agents have the same through the workspace's MCP server: `debugger_capture` (start / stop / status / clear), `debugger_exchanges` (the list, with filters; `deep` searches bodies), `debugger_exchange` (one, with bodies), `debugger_session` (save the session as HAR, or open a HAR file), `debugger_stats`. An agent can start the proxy, run a program against it and read what it did.
+AI agents have the same through the workspace's MCP server: `debugger_capture` (start / stop / status / clear), `debugger_exchanges` (the list, with filters; `deep` searches bodies), `debugger_exchange` (one, with bodies), `debugger_session` (save the session as HAR, or open a HAR file), `debugger_rules` (list, presets, add, enable, remove: an agent can take an API offline, slow it down or redirect it while it tests), `debugger_stats`. An agent can start the proxy, run a program against it and read what it did.
 
 ## Coming next
 
-Rules that change traffic (modify headers, auto-reply with a canned response, redirect a host to a mock, breakpoints that pause a request for editing), highlight rules and filter presets, comparing two exchanges, WebSocket / SSE / gRPC frames, HTTPS decryption with a root certificate, Fiddler session import. The plan is `planning/http-debugger.md` in the repository.
+WebSocket / SSE / gRPC frames, HTTPS decryption with a root certificate (then rules reach HTTPS bodies too), Fiddler session import, a decode panel, the HTTP/2 connection tree. The plan is `planning/http-debugger.md` in the repository.
 
 :::
