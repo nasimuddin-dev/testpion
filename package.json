@@ -23,6 +23,7 @@
     "dev": "npm run dev -w @testpion/desktop",
     "dev:web": "npm run dev:web -w @testpion/desktop",
     "bench": "node scripts/bench.mjs",
+    "pack:cli": "node scripts/pack-cli.mjs --tarball",
     "docs:dev": "npm run dev -w docs",
     "docs:build": "npm run build -w docs"
   },

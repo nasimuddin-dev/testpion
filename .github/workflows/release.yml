@@ -130,3 +130,44 @@ jobs:
           else
             gh release create "$TAG" out/* --title "TestPion ${TAG#v}" --notes-file notes.md
           fi
+
+  npm:
+    name: Publish the CLI to npm
+    # the `testpion` package (scripts/pack-cli.mjs); skipped until the repository has an NPM_TOKEN secret
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # npm provenance: the package links back to this workflow run
+    env:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        if: env.NPM_TOKEN != ''
+        with:
+          ref: ${{ env.TAG }}
+      - uses: actions/setup-node@v4
+        if: env.NPM_TOKEN != ''
+        with:
+          node-version: 24
+          cache: npm
+          registry-url: https://registry.npmjs.org
+      - if: env.NPM_TOKEN != ''
+        run: npm ci
+      - name: Pack
+        if: env.NPM_TOKEN != ''
+        run: node scripts/pack-cli.mjs --tarball
+      - name: Publish (a version already on npm is left as it is)
+        if: env.NPM_TOKEN != ''
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          version="${TAG#v}"
+          if npm view "testpion@$version" version >/dev/null 2>&1; then
+            echo "testpion@$version is already on npm"
+          else
+            npm publish "dist/npm/testpion-$version.tgz" --access public --provenance
+          fi
+      - name: No NPM_TOKEN secret
+        if: env.NPM_TOKEN == ''
+        run: echo "::notice::The CLI was not published to npm; add an NPM_TOKEN repository secret to publish it with each release."

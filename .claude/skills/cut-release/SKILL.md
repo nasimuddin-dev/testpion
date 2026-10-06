@@ -38,5 +38,8 @@ update feeds and `SHA256SUMS.txt`; 11 assets). Commits go straight to `main` as 
    ```
 6. **Watch the build:** `gh run list --workflow release.yml -L 1`, then `gh run watch <id>` (or check every few minutes);
    when it succeeds, `gh release view vX.Y.Z --json assets --jq '.assets|length'` must be 11.
+   The *Publish the CLI to npm* job publishes `testpion@X.Y.Z` when the repository has an `NPM_TOKEN` secret (it
+   prints a notice and skips otherwise). Check with `npm view testpion version`. Before tagging, `npm run pack:cli`
+   must succeed locally (the npm-package integration test covers it).
 7. **Verify, install and run the UI regression against the installed app:** the install-and-verify skill.
 8. Tell the owner the version, the highlights, and anything they must do (relaunch, …).

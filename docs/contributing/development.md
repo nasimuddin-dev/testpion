@@ -23,6 +23,12 @@ Every feature ships with an implementation, unit tests, integration tests, docum
 
 `electron-builder.yml` sets Electron fuses in the installed binary: it can't be started as a plain Node.js runtime (`ELECTRON_RUN_AS_NODE`), doesn't read `NODE_OPTIONS`, ignores `--inspect` and only loads the app from its archive. Check a packaged build with `npm run package:dir -w @testpion/desktop`, then start `release/win-unpacked/TestPion.exe`.
 
+## The npm package
+
+`npm run pack:cli` (`scripts/pack-cli.mjs`) builds the `testpion` npm package: the CLI with `packages/core` and `packages/shared` bundled by esbuild into one file, and the third-party modules the bundle imports as ordinary dependencies, with the version ranges the workspace packages ask for. It writes `dist/npm/testpion/` and `dist/npm/testpion-<version>.tgz`; `--json` prints a summary.
+
+The release workflow's *Publish the CLI to npm* job publishes the tarball with provenance when the repository has an `NPM_TOKEN` secret (an npm automation or granular token allowed to publish `testpion`). Without the secret it skips with a notice; a version already on npm is left as it is.
+
 ## Code signing (not set up yet)
 
 The installers are unsigned: Windows SmartScreen and macOS Gatekeeper warn on first launch, and updates are checked by their hash only. Signing needs certificates the project doesn't have yet. When it does:

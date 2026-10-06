@@ -1,6 +1,6 @@
 ---
 title: Roadmap
-description: What's planned for TestPion — signed installers, an npm CLI package, more protocols and providers, and optional team features.
+description: What's planned for TestPion — signed installers, more protocols and providers, and optional team features.
 ---
 
 # Roadmap
@@ -10,7 +10,6 @@ Plans change with feedback. Vote or comment on [GitHub issues](https://github.co
 ## Next
 
 - **Signed installers:** Windows Authenticode, and macOS Developer ID with notarization (macOS in-place updates need it).
-- **Published CLI package** on npm, so `npx testpion` works without cloning the repository.
 
 ## Shipped
 
@@ -22,6 +21,7 @@ Everything below is in the app today; the [changelog](/changelog) has the detail
 - **Running:** a Collection Runner and Newman-compatible `testpion run-collection`, suites, monitors (scheduled runs with webhooks), load tests of one endpoint or a whole collection, CI pipeline generation, and watch mode.
 - **AI:** an AI Lab with model comparison, evaluations for LLMs, RAG and agents, an assistant in the request builder, and `testpion mcp-server` for AI agents.
 - **OpenTelemetry export** of traces (OTLP/HTTP) from the app, the CLI and MCP.
+- **The CLI on npm:** `npx testpion` or `npm install -g testpion`, no clone needed.
 - **Updates** inside the app (Windows installer and Linux AppImage; other builds are pointed to the download page).
 
 ## Optional cloud features (not in the local-first core)

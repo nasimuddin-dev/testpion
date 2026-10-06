@@ -67,7 +67,16 @@ A failing test fails the build. The file never contains secret values. Instead, 
 
 ## By hand
 
-The CLI isn't published to npm yet, so a pipeline installs it from the repository (this is what the generated files do):
+From version 0.44.0 the CLI is on npm, so a pipeline can run it with `npx`; pin the version:
+
+```yaml
+# GitHub Actions
+- uses: actions/setup-node@v4
+  with: { node-version: 24 }
+- run: npx testpion@0.44.0 run -w . --suite regression -e Staging -r console junit html -o test-results
+```
+
+The generated files still install the CLI from the repository, which works for any version:
 
 ```yaml
 # GitHub Actions
