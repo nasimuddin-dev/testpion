@@ -2,7 +2,7 @@ import { AlertTriangle, ChevronRight, Copy, Sparkles } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { asError, call, on } from '../api';
 import { useApp } from '../store';
-import { cx } from './ui';
+import { LinkButton, cx } from './ui';
 
 /** From `stats.attention` (workspaceAttention in core). */
 interface Item {
@@ -97,17 +97,17 @@ export function AttentionCard() {
                 {clickable && <ChevronRight size={14} className="text-muted shrink-0" />}
               </button>
               {i.kind === 'monitor' && i.ref.monitorId && (
-                <button className="text-xs text-accent hover:underline shrink-0 pr-2" title="Run this monitor now" onClick={() => runMonitor(i.ref.monitorId!)}>
+                <LinkButton className="text-xs shrink-0 pr-2" title="Run this monitor now" onClick={() => runMonitor(i.ref.monitorId!)}>
                   Run now
-                </button>
+                </LinkButton>
               )}
             </div>
           );
         })}
         {items.length > 5 && (
-          <button className="px-2 pt-1 text-xs text-accent hover:underline" onClick={() => setAll(!all)}>
+          <LinkButton className="px-2 pt-1 text-xs" onClick={() => setAll(!all)}>
             {all ? 'Show fewer' : `Show all ${items.length}`}
-          </button>
+          </LinkButton>
         )}
       </div>
     </section>

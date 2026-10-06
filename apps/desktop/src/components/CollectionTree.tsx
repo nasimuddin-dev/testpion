@@ -164,6 +164,21 @@ function useCollectionsHealth(): Record<string, { sent: number; failing: number 
   return health;
 }
 
+const SHORT_METHOD: Record<string, string> = { DELETE: 'DEL', OPTIONS: 'OPT' };
+
+/**
+ * The type label in front of every row of the explorer (GET, POST, MCP, gRPC, WS …): one pill of one width, so names
+ * line up and the space between the label and the name is the same on every row.
+ */
+function TreeBadge({ label, className }: { label: string; className?: string }) {
+  const text = SHORT_METHOD[label.toUpperCase()] ?? label.slice(0, 5);
+  return (
+    <span className={cx('mono method-badge text-[0.64rem] font-bold w-[2.375rem] shrink-0', className)} title={label}>
+      {text}
+    </span>
+  );
+}
+
 export function CollectionTree({
   collections,
   activeRequestId,
@@ -658,7 +673,7 @@ export function CollectionTree({
       >
         <button className="flex items-center gap-1.5 flex-1 min-w-0 text-left" onClick={() => toggle(key, isOpen)} aria-expanded={isOpen} data-tree-row>
           {isOpen ? <ChevronDown size={13} className="text-muted shrink-0" /> : <ChevronRight size={13} className="text-muted shrink-0" />}
-          <span className={cx('mono text-[0.6rem] font-bold w-8 shrink-0', CATEGORY_META[cat].cls)}>{CATEGORY_META[cat].badge}</span>
+          <TreeBadge label={CATEGORY_META[cat].badge} className={CATEGORY_META[cat].cls} />
           <span className="truncate font-medium">{CATEGORY_META[cat].label}</span>
           <span className="text-[0.7rem] px-1.5 rounded-full bg-panel2 text-muted tabular-nums">{count}</span>
         </button>
@@ -718,13 +733,13 @@ export function CollectionTree({
                   }}
                 >
                   {rn?.editing ? (
-                    <div className="flex items-center gap-2 flex-1 min-w-0 pl-4">
-                      <span className={cx('mono text-[0.64rem] font-bold w-10 shrink-0', CATEGORY_META[g.cat].cls)}>{i.badge ?? CATEGORY_META[g.cat].badge}</span>
+                    <div className="flex items-center gap-1.5 flex-1 min-w-0 pl-4">
+                      <TreeBadge label={i.badge ?? CATEGORY_META[g.cat].badge} className={CATEGORY_META[g.cat].cls} />
                       <InlineRename value={i.name} onCommit={(name) => rn.done(name)} onCancel={() => rn.done()} />
                     </div>
                   ) : (
                     <button
-                      className="flex items-center gap-2 flex-1 min-w-0 text-left pl-4"
+                      className="flex items-center gap-1.5 flex-1 min-w-0 text-left pl-4"
                       onClick={() => g.onOpen(i.id)}
                       onKeyDown={(e) => {
                         if (e.key === 'F2' && rn) {
@@ -737,7 +752,7 @@ export function CollectionTree({
                       data-tree-row
                       data-rename-id={i.id}
                     >
-                      <span className={cx('mono text-[0.64rem] font-bold w-10 shrink-0', CATEGORY_META[g.cat].cls)}>{i.badge ?? CATEGORY_META[g.cat].badge}</span>
+                      <TreeBadge label={i.badge ?? CATEGORY_META[g.cat].badge} className={CATEGORY_META[g.cat].cls} />
                       <span className="truncate">{i.name}</span>
                     </button>
                   )}
@@ -1025,20 +1040,20 @@ const RequestRow = memo(function RequestRow({
           </button>
         )}
         {renaming ? (
-          <div className="flex items-center gap-2 flex-1 min-w-0 pl-4">
-            <span className={cx('mono method-badge text-[0.64rem] font-bold w-10 shrink-0', n.kind === 'http' ? `method-${method}` : 'text-[#e535ab]')}>{method.slice(0, 5)}</span>
+          <div className="flex items-center gap-1.5 flex-1 min-w-0 pl-4">
+            <TreeBadge label={method} className={n.kind === 'http' ? `method-${method}` : 'text-[#e535ab]'} />
             <InlineRename value={n.name} label="Request name" onCommit={(name) => x().finishRename(c, n.id, name)} onCancel={() => x().finishRename(c, n.id)} />
           </div>
         ) : (
           <button
-            className="flex items-center gap-2 flex-1 min-w-0 text-left pl-4"
+            className="flex items-center gap-1.5 flex-1 min-w-0 text-left pl-4"
             onClick={() => x().onOpen(c, n)}
             onKeyDown={(e) => x().rowKeys(c, n)(e)}
             data-tree-row
             data-rename-id={n.id}
             title="Enter opens · F2 renames · Delete deletes"
           >
-            <span className={cx('mono method-badge text-[0.64rem] font-bold w-10 shrink-0', n.kind === 'http' ? `method-${method}` : 'text-[#e535ab]')}>{method.slice(0, 5)}</span>
+            <TreeBadge label={method} className={n.kind === 'http' ? `method-${method}` : 'text-[#e535ab]'} />
             <span className="truncate">{n.name}</span>
             {n.favorite && <Star size={11} className="shrink-0 text-warn fill-current" aria-label="Favorite" data-favorite />}
             {gitMark && <ChangeMark change={gitMark} className="ml-auto" />}

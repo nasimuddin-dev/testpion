@@ -4,7 +4,7 @@ import { asError, call } from '../api';
 import { formatBytes, formatMs, timeAgo } from '../lib/format';
 import { JsonTree, RawView } from './JsonView';
 import { LatencyTrend } from './LatencyTrend';
-import { Badge, Button, cx, Empty, IconButton, Spinner, statusTone } from './ui';
+import { LinkButton, Badge, Button, cx, Empty, IconButton, Spinner, statusTone } from './ui';
 
 interface Entry {
   id: string;
@@ -245,9 +245,9 @@ export function CompareView({ c, labels }: { c: Compared; labels?: [string, stri
           <div className="text-sm font-semibold mb-2 flex items-center gap-2">
             Headers
             {hiddenVolatile > 0 && (
-              <button className="text-xs font-normal text-accent hover:underline" onClick={() => setShowVolatile(!showVolatile)}>
+              <LinkButton className="text-xs font-normal" onClick={() => setShowVolatile(!showVolatile)}>
                 {showVolatile ? 'Hide' : 'Show'} {hiddenVolatile} that change every time (date, request ids …)
-              </button>
+              </LinkButton>
             )}
           </div>
           {headers.length ? (

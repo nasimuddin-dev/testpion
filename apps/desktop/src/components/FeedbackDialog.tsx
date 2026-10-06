@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { asError, call } from '../api';
 import { finishSave, type SaveResult } from '../lib/files';
 import { useApp } from '../store';
-import { Button, cx, Field, Input, Modal, Toggle } from './ui';
+import { LinkButton, Button, cx, Field, Input, Modal, Toggle } from './ui';
 
 export type FeedbackKind = 'bug' | 'idea' | 'ui' | 'question';
 
@@ -181,9 +181,9 @@ export function FeedbackDialog({ request, onClose }: { request: FeedbackRequest;
           <span className="text-xs text-muted">Never included: your requests, responses, collections, environments or workspace names. Home folders and secret-looking values are masked.</span>
         </div>
         <div>
-          <button className="text-sm text-accent hover:underline" onClick={() => setPreview(!preview)} aria-expanded={preview}>
+          <LinkButton className="text-sm" onClick={() => setPreview(!preview)} aria-expanded={preview}>
             {preview ? 'Hide' : 'Show'} the report that will be sent
-          </button>
+          </LinkButton>
           {preview && report && <pre className="mt-2 mono text-xs bg-bg border border-line rounded-lg p-3 max-h-64 overflow-auto whitespace-pre-wrap">{`# ${report.title}\n\n${report.body}`}</pre>}
         </div>
       </div>

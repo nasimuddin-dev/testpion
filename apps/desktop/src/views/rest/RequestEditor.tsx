@@ -11,7 +11,7 @@ import { AuthEditor } from '../../components/AuthEditor';
 import { CodeEditor } from '../../components/CodeEditor';
 import { call } from '../../api';
 import { COMMON_HEADERS, HEADER_VALUES, KeyValueEditor } from '../../components/KeyValueEditor';
-import { Field, Input, Select, Tabs, Toggle } from '../../components/ui';
+import { LinkButton, Field, Input, Select, Tabs, Toggle } from '../../components/ui';
 import { RestTab } from './types';
 import { switchBodyType, type BodyStash } from '../../lib/body';
 
@@ -174,9 +174,9 @@ export function BodyEditor({ body, onChange, stashKey = 'default', method, url }
     <div className="h-full flex flex-col min-h-0">
       <div className="flex gap-3 px-3 py-1.5 text-sm flex-wrap items-center border-b border-line">
         {(body.type === 'json' || body.type === 'xml') && (
-          <button className="order-last ml-auto text-xs text-accent hover:underline" onClick={() => onChange({ ...body, content: beautify(body.content, body.type) })}>
+          <LinkButton className="order-last ml-auto text-xs" onClick={() => onChange({ ...body, content: beautify(body.content, body.type) })}>
             Beautify
-          </button>
+          </LinkButton>
         )}
         {types.map(([t, label]) => (
           <label key={t} className="flex items-center gap-1 cursor-pointer">
@@ -190,9 +190,9 @@ export function BodyEditor({ body, onChange, stashKey = 'default', method, url }
         {looksLike && (
           <div className="px-3 py-1 text-xs text-muted border-b border-line flex items-center gap-2">
             This looks like {looksLike.toUpperCase()}.
-            <button className="text-accent hover:underline" onClick={() => setType(looksLike)}>
+            <LinkButton  onClick={() => setType(looksLike)}>
               Edit it as {looksLike.toUpperCase()}
-            </button>
+            </LinkButton>
           </div>
         )}
         {'content' in body && (

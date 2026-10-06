@@ -1,3 +1,4 @@
+import { ArrowRight } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { call } from '../api';
 import type { Collection, CollectionNode } from '../types';
@@ -5,7 +6,7 @@ import { formatMs, plural, timeAgo } from '../lib/format';
 import { BarRow, ChartCard, RecentRuns, StatTile } from './charts';
 import { TimeByPhase } from './RunCharts';
 import { useApp } from '../store';
-import { Badge, cx, statusTone } from './ui';
+import { LinkButton, Badge, cx, statusTone } from './ui';
 
 /** From `stats.requests` (summarizeRequestStats in core). */
 interface RequestStat {
@@ -99,9 +100,9 @@ function RecentCollectionRuns({ name }: { name: string }) {
           {last.passed}/{last.total} passed
         </span>
         <span className="text-muted">· {timeAgo(last.startedAt)}{last.name !== name ? ` · ${last.name.slice(name.length + 3) || last.name}` : ''}</span>
-        <button className="ml-auto text-accent hover:underline" onClick={() => useApp.getState().openIntent('tests', { runId: last.id })}>
+        <LinkButton className="ml-auto" icon={<ArrowRight size={12} />} onClick={() => useApp.getState().openIntent('tests', { runId: last.id })}>
           Open run
-        </button>
+        </LinkButton>
       </div>
     </ChartCard>
   );

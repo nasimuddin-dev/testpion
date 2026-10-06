@@ -115,7 +115,7 @@ async function demoServers() {
 }
 
 const plans = readdirSync(join(here, 'plans'))
-  .filter((f) => f.endsWith('.cjs') && !f.startsWith('_') && (!only || only.includes(basename(f, '.cjs'))))
+  .filter((f) => f.endsWith('.cjs') && (only ? only.includes(basename(f, '.cjs')) : !f.startsWith('_')))
   .sort()
   .map((f) => join(here, 'plans', f));
 if (!plans.length) {

@@ -7,7 +7,7 @@ import { timeAgo, plural } from '../lib/format';
 import { RunPanel } from './RunPanel';
 import { RunsOverview, type RunRow } from './RunsOverview';
 import { hasNativeDialogs, pickTextFile } from '../lib/files';
-import { Badge, Button, cx, Empty, Field, Input, Modal, Select, Split, Toggle } from './ui';
+import { LinkButton, Badge, Button, cx, Empty, Field, Input, Modal, Select, Split, Toggle } from './ui';
 
 interface RunnableRequest {
   id: string;
@@ -301,12 +301,12 @@ export function CollectionRunner({ collection, folderId, onFolderChange }: { col
               <Badge>
                 {selected.length}/{requests.length}
               </Badge>
-              <button className="ml-auto text-accent hover:underline font-normal" onClick={() => setUnchecked(new Set())}>
+              <LinkButton className="ml-auto font-normal" onClick={() => setUnchecked(new Set())}>
                 Select all
-              </button>
-              <button className="text-accent hover:underline font-normal" onClick={() => setUnchecked(new Set(requests.map((r) => r.id)))}>
+              </LinkButton>
+              <LinkButton className="font-normal" onClick={() => setUnchecked(new Set(requests.map((r) => r.id)))}>
                 Deselect all
-              </button>
+              </LinkButton>
             </div>
             <div className="rounded-md border border-line divide-y divide-line/60">
               {requests.map((r) => (

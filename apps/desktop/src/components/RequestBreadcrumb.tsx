@@ -1,3 +1,4 @@
+import { LinkButton } from './ui';
 import { ChevronRight } from 'lucide-react';
 import { useCollections } from '../lib/collections-store';
 import { useApp } from '../store';
@@ -29,9 +30,9 @@ export function RequestBreadcrumb({ collectionId, requestId, folder, name, dirty
       <div className="flex items-center gap-1.5 px-3 pt-1.5 text-xs text-muted min-w-0">
         <span className="truncate">{collectionId && !collections.length ? '' : 'Not saved in a collection'}</span>
         {onSave && (!collectionId || collections.length > 0) && (
-          <button className="text-accent hover:underline shrink-0" onClick={onSave}>
+          <LinkButton className="shrink-0" onClick={onSave}>
             Save (Ctrl+S)
-          </button>
+          </LinkButton>
         )}
       </div>
     );

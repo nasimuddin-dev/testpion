@@ -1,4 +1,4 @@
-import { Activity as ActivityIcon, AlarmClock, BookOpen, FileDown, Bot, LockKeyhole, ShieldCheck, FolderPlus, FolderTree, GitBranch, History, KeyRound, Network, Play, Plug, Sparkles, Upload } from 'lucide-react';
+import { Activity as ActivityIcon, AlarmClock, BookOpen, Bug, Gauge, FileDown, Bot, LockKeyhole, ShieldCheck, FolderPlus, FolderTree, GitBranch, History, KeyRound, Network, Play, Plug, Sparkles, Upload, ArrowRight } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { asError, call, modKey } from '../api';
 import { finishSave, type SaveResult } from '../lib/files';
@@ -6,7 +6,7 @@ import { promptText, useApp } from '../store';
 import { runMenuCommand } from '../menu-commands';
 import type { Collection, CollectionNode, HttpRequestSpec } from '../types';
 import { timeAgo, uid, plural } from '../lib/format';
-import { Badge, cx, Empty, Kbd, statusTone } from '../components/ui';
+import { LinkButton, Badge, cx, Empty, Kbd, statusTone } from '../components/ui';
 import { ActivityCharts, type Activity } from '../components/ActivityCharts';
 import { AttentionCard } from '../components/AttentionCard';
 import { RecentRuns } from '../components/charts';
@@ -25,7 +25,7 @@ interface HistoryItem {
 const DOCS = 'https://nasimuddin-dev.github.io/testpion/';
 
 /** Hue per quick action so the grid is easy to scan. */
-const HUES = { blue: 'oklch(0.62 0.19 255)', violet: 'oklch(0.6 0.22 295)', teal: 'oklch(0.66 0.13 190)', green: 'oklch(0.64 0.16 150)', orange: 'oklch(0.7 0.16 55)', pink: 'oklch(0.64 0.21 350)', indigo: 'oklch(0.58 0.2 270)', slate: 'oklch(0.6 0.03 260)' };
+const HUES = { blue: 'oklch(0.62 0.19 255)', violet: 'oklch(0.6 0.22 295)', teal: 'oklch(0.66 0.13 190)', green: 'oklch(0.64 0.16 150)', orange: 'oklch(0.7 0.16 55)', pink: 'oklch(0.64 0.21 350)', indigo: 'oklch(0.58 0.2 270)', slate: 'oklch(0.6 0.03 260)', red: 'oklch(0.62 0.2 25)', amber: 'oklch(0.74 0.15 75)' };
 
 function Action({ icon, title, text, onClick, hue }: { icon: ReactNode; title: string; text: string; onClick(): void; hue: keyof typeof HUES }) {
   const c = HUES[hue];
@@ -161,15 +161,15 @@ export function HomeView() {
           {ws?.id === EXAMPLES_ID ? (
             <p className="relative text-sm mt-3 max-w-3xl">
               These examples use free public APIs. Open a collection and press <b>Send</b>, run a whole collection, or run the <b>All examples</b> and <b>Offline</b> suites in{' '}
-              <button className="text-accent hover:underline" onClick={() => setView('tests')}>
+              <LinkButton  icon={<ArrowRight size={12} />} onClick={() => setView('tests')}>
                 Tests
-              </button>
+              </LinkButton>
               . New to API testing? Start with <b>Public REST APIs (playground)</b>: logins, tokens and whole create, read, update and delete flows. GraphQL, SOAP, gRPC, WebSocket, MQTT, SSE and MCP servers each have public services to try, and AI Lab has prompts that run on an offline demo model.
             </p>
           ) : (
-            <button className="relative block mt-3 text-sm text-accent hover:underline" onClick={() => void runMenuCommand('open-examples')}>
+            <LinkButton className="relative block mt-3 text-sm" onClick={() => void runMenuCommand('open-examples')}>
               Explore the examples workspace: REST, GraphQL, gRPC, WebSocket, MCP and AI against public APIs →
-            </button>
+            </LinkButton>
           )}
           {env && (
             <p className="relative mt-4 inline-flex items-center gap-2 rounded-full border border-line bg-bg/70 px-3 py-1 text-xs text-muted">
@@ -179,11 +179,13 @@ export function HomeView() {
           )}
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3.5">
           <Action icon={<Network size={16} />} hue="blue" title="New HTTP request" text="Send a request, paste cURL or fetch from the browser, write tp.* scripts (Postman's pm.* works too)." onClick={() => open('rest', { newTab: true })} />
           <Action icon={<GitBranch size={16} />} hue="pink" title="New GraphQL query" text="Explore a schema with autocomplete and run queries." onClick={() => open('graphql', { reset: true })} />
           <Action icon={<Upload size={16} />} hue="teal" title="Import" text="Postman, Insomnia, Bruno or Hoppscotch collections, OpenAPI, HAR or cURL." onClick={() => open('collections', { import: true })} />
           <Action icon={<FolderPlus size={16} />} hue="orange" title="New collection" text="Group requests, share auth and scripts, run and mock them." onClick={() => void newCollection()} />
+          <Action icon={<Bug size={16} />} hue="red" title="Debug HTTP traffic" text="See what a browser or an app sends: capture through a proxy, inspect, change with rules, replay." onClick={() => setView('debugger')} />
+          <Action icon={<Gauge size={16} />} hue="amber" title="Load test an API" text="Virtual users, ramp-up, latency percentiles and errors, live." onClick={() => setView('load')} />
           <Action icon={<Plug size={16} />} hue="green" title="Test an MCP server" text="Connect over stdio or HTTP and call tools with generated forms." onClick={() => setView('mcp')} />
           <Action icon={<Sparkles size={16} />} hue="violet" title="Try an AI prompt" text="Compare models, check structured output, track tokens and cost." onClick={() => open('ai', { reset: true })} />
           <Action icon={<Bot size={16} />} hue="indigo" title="Ask the assistant" text="Explain an error, draft tests or ask how to do something." onClick={() => useApp.getState().set({ assistant: { task: 'free', title: 'Ask the assistant', context: {} } })} />
@@ -225,7 +227,7 @@ export function HomeView() {
         )}
 
         <div className="grid lg:grid-cols-3 gap-4">
-          <Card title="Recent requests" icon={<History size={15} />} action={<button className="text-xs text-accent hover:underline" onClick={() => setView('history')}>All history</button>}>
+          <Card title="Recent requests" icon={<History size={15} />} action={<LinkButton className="text-xs" onClick={() => setView('history')}>All history</LinkButton>}>
             {recent.length ? (
               recent.map((h) => (
                 <button
@@ -243,12 +245,13 @@ export function HomeView() {
               <Empty title="Nothing sent yet">Requests you send appear here.</Empty>
             )}
           </Card>
-          <Card title="Collections" icon={<FolderTree size={15} />} action={<button className="text-xs text-accent hover:underline" onClick={() => void newCollection()}>New</button>}>
+          <Card title="Collections" icon={<FolderTree size={15} />} action={<LinkButton className="text-xs" onClick={() => void newCollection()}>New</LinkButton>}>
             {cols.length ? (
               cols.map((c) => (
                 <div key={c.id} className="flex items-center gap-2 px-2 py-1.5 rounded-md text-sm hover:bg-hover group">
-                  <button className="flex-1 text-left truncate" onClick={() => open('collections', { collectionId: c.id })}>
-                    {c.name}
+                  <button className="flex-1 flex items-center gap-2 text-left min-w-0" onClick={() => open('collections', { collectionId: c.id })}>
+                    <FolderTree size={13} className="text-muted shrink-0" />
+                    <span className="truncate">{c.name}</span>
                     <span className="text-xs text-muted ml-2">{plural(count(c.items) + (saved[c.id] ?? 0), 'request')}</span>
                   </button>
                   {health[c.id]?.failing ? (
@@ -267,7 +270,7 @@ export function HomeView() {
               <Empty title="No collections yet">Create one, or import from Postman or OpenAPI.</Empty>
             )}
           </Card>
-          <Card title="Environments" icon={<KeyRound size={15} />} action={<button className="text-xs text-accent hover:underline" onClick={() => setView('environments')}>Manage</button>}>
+          <Card title="Environments" icon={<KeyRound size={15} />} action={<LinkButton className="text-xs" icon={<ArrowRight size={12} />} onClick={() => setView('environments')}>Manage</LinkButton>}>
             {ws?.environments.length ? (
               ws.environments.map((e) => (
                 <button key={e.id} className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-left hover:bg-hover" onClick={() => useApp.getState().setEnvironment(e.name)} title="Make this the active environment">
@@ -286,7 +289,7 @@ export function HomeView() {
         {(monitors.length > 0 || runs.length > 0) && (
           <div className="grid lg:grid-cols-2 gap-4">
             {monitors.length > 0 && (
-              <Card title="Monitors" icon={<AlarmClock size={15} />} action={<button className="text-xs text-accent hover:underline" onClick={() => setView('monitors')}>All monitors</button>}>
+              <Card title="Monitors" icon={<AlarmClock size={15} />} action={<LinkButton className="text-xs" icon={<ArrowRight size={12} />} onClick={() => setView('monitors')}>All monitors</LinkButton>}>
                 {monitors.slice(0, 6).map((m) => {
                   const r = m.lastResult;
                   return (
@@ -302,7 +305,7 @@ export function HomeView() {
               </Card>
             )}
             {runs.length > 0 && (
-              <Card title="Recent test runs" icon={<ShieldCheck size={15} />} action={<button className="text-xs text-accent hover:underline" onClick={() => setView('tests')}>Tests</button>}>
+              <Card title="Recent test runs" icon={<ShieldCheck size={15} />} action={<LinkButton className="text-xs" icon={<ArrowRight size={12} />} onClick={() => setView('tests')}>Tests</LinkButton>}>
                 {runs.map((r) => {
                   const bad = r.failed + r.errors;
                   return (

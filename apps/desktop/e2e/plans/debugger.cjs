@@ -6,6 +6,18 @@ const { withExpect } = require('../lib.cjs');
 const button = (label) => `[...document.querySelectorAll('main button')].find((b) => b.offsetParent && b.textContent.trim() === ${JSON.stringify(label)})`;
 const steps = [
   [
+    'home-tile-opens-the-debugger',
+    `(async () => {
+      await __t.view('Home');
+      const tile = await __t.waitFor(() => [...document.querySelectorAll('main button')].find((b) => b.offsetParent && b.textContent.includes('Debug HTTP traffic')), 8000);
+      if (!tile) return 'NO TILE';
+      const icon = !!tile.querySelector('svg');
+      tile.click(); await __t.sleep(800);
+      const opened = !![...document.querySelectorAll('main h1, main h2, main *')].find((x) => x.children.length === 0 && x.textContent.trim() === 'HTTP Debugger');
+      return 'tile: true | icon: ' + icon + ' | opens: ' + opened;
+    })()`,
+  ],
+  [
     'start',
     `(async () => {
       await __t.view('Debugger');
@@ -169,6 +181,7 @@ const steps = [
 ];
 
 module.exports = withExpect(steps, {
+  'home-tile-opens-the-debugger': /^tile: true \| icon: true \| opens: true$/,
   start: /^listening \| port: \d+$/,
   'exchange-listed-and-opens': /^row: GET true 200 true \| detail tabs: true \| body shown: true \| opened as request: true$/,
   'inspectors-and-keyboard': /^raw request line: true \| raw response line: true \| auth: true \| hex: true \| delete key: true$/,

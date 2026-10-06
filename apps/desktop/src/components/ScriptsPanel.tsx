@@ -1,8 +1,8 @@
 import { lazy, Suspense, useState } from 'react';
-import { Package } from 'lucide-react';
+import { Package, Code2 } from 'lucide-react';
 import { SNIPPETS } from '../lib/snippets';
 import { CodeEditor } from './CodeEditor';
-import { cx } from './ui';
+import { LinkButton, cx } from './ui';
 
 const ScriptPackagesDialog = lazy(() => import('./ScriptPackagesDialog').then((m) => ({ default: m.ScriptPackagesDialog })));
 
@@ -58,9 +58,9 @@ export function ScriptsPanel({ pre, post, onPre, onPost }: { pre: string; post: 
         <div className="px-3 py-1.5 text-xs font-semibold text-muted border-b border-line">Snippets</div>
         <div className="flex-1 overflow-auto py-1">
           {snippets.map((s) => (
-            <button key={s.label} className="w-full text-left px-3 py-1 text-xs text-accent hover:underline" onClick={() => set((value.trim() ? value.replace(/\s*$/, '\n\n') : '') + s.code + '\n')}>
+            <LinkButton key={s.label} className="w-full text-left px-3 py-1 text-xs" icon={<Code2 size={12} className="shrink-0" />} onClick={() => set((value.trim() ? value.replace(/\s*$/, '\n\n') : '') + s.code + '\n')}>
               {s.label}
-            </button>
+            </LinkButton>
           ))}
         </div>
       </div>

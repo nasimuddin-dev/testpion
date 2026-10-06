@@ -34,18 +34,6 @@ import {
   Menu as MenuIcon,
   MessageSquare,
   FolderGit2,
-  Trash2,
-  Plus,
-  Save,
-  Pencil,
-  ExternalLink,
-  Play,
-  Upload,
-  Download,
-  Copy,
-  ArrowRightLeft,
-  RefreshCw,
-  Check,
   Bug,
 } from 'lucide-react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -56,7 +44,7 @@ import markUrl from '../../build/icons/64x64.png';
 import { ConsolePanel } from './ConsolePanel';
 import { WorkspaceMenu } from './WorkspaceMenu';
 import { EnvQuickLook } from './EnvQuickLook';
-import { isRequestView, useApp, type ViewId, type DialogButton, type DialogRequest, type DialogTone, type NavLocation } from '../store';
+import { isRequestView, useApp, type ViewId, type DialogRequest, type DialogTone, type NavLocation } from '../store';
 import { Badge, Button, cx, IconButton, Input, Kbd, Menu, Modal, Spinner, Tooltip, type MenuItem } from './ui';
 import { Toaster as SonnerToaster } from 'sonner';
 
@@ -628,25 +616,8 @@ const DIALOG_TONES: Record<DialogTone, { icon: ReactNode; className: string }> =
 };
 
 /** The icon a dialog button gets from its label, so every button in the app carries one: Create → +, Delete → bin, Cancel → ×. */
-export function iconForLabel(label: string, variant?: DialogButton['variant']): ReactNode {
-  const l = label.toLowerCase();
-  const size = 13;
-  if (/^(cancel|close|not now|later|no|keep)\b/.test(l)) return <X size={size} />;
-  if (/^(delete|remove|empty|discard|clear|forget)\b/.test(l)) return <Trash2 size={size} />;
-  if (/^(create|add|new)\b/.test(l)) return <Plus size={size} />;
-  if (/^(save|keep mine|apply)\b/.test(l)) return <Save size={size} />;
-  if (/^(rename)\b/.test(l)) return <Pencil size={size} />;
-  if (/^(open|show|go to|view)\b/.test(l)) return <ExternalLink size={size} />;
-  if (/^(run|send|start|restart|retry|try again|run once)\b/.test(l)) return <Play size={size} />;
-  if (/^(import|upload)\b/.test(l)) return <Upload size={size} />;
-  if (/^(export|download)\b/.test(l)) return <Download size={size} />;
-  if (/^(copy|duplicate)\b/.test(l)) return <Copy size={size} />;
-  if (/^(connect|always)\b/.test(l)) return <Plug size={size} />;
-  if (/^(move|replace|switch|take theirs|restore)\b/.test(l)) return <ArrowRightLeft size={size} />;
-  if (/^(update|install)\b/.test(l)) return <RefreshCw size={size} />;
-  if (variant === 'danger') return <AlertOctagon size={size} />;
-  return <Check size={size} />;
-}
+import { iconForLabel } from './action-icons';
+export { iconForLabel };
 
 function DialogView({ d }: { d: DialogRequest }) {
   const [value, setValue] = useState(d.input?.value ?? '');

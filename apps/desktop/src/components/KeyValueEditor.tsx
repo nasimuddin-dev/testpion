@@ -1,7 +1,7 @@
 import { Eye, EyeOff, Lock, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import type { KeyValue } from '../types';
-import { cx } from './ui';
+import { LinkButton, cx } from './ui';
 import { VarInput } from './VarInput';
 
 /**
@@ -144,9 +144,9 @@ export function KeyValueEditor({
         </tbody>
       </table>
       {bulkEdit && (
-        <button className="mt-1 ml-1 text-xs text-accent hover:underline" onClick={() => setBulk(true)}>
+        <LinkButton className="mt-1 ml-1 text-xs" onClick={() => setBulk(true)}>
           Bulk edit
-        </button>
+        </LinkButton>
       )}
     </div>
   );
@@ -182,9 +182,9 @@ function BulkEditor({ rows, onChange, onDone }: { rows: KeyValue[]; onChange(row
         onChange={(e) => apply(e.target.value)}
       />
       <div className="flex items-center gap-3 text-xs">
-        <button className="text-accent hover:underline" onClick={onDone}>
+        <LinkButton  onClick={onDone}>
           Key-value edit
-        </button>
+        </LinkButton>
         <span className="text-muted">One key:value per line · prefix with // to disable</span>
       </div>
     </div>

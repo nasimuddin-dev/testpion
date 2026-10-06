@@ -4,6 +4,7 @@ import * as MenuPrimitive from '@radix-ui/react-dropdown-menu';
 import * as SwitchPrimitive from '@radix-ui/react-switch';
 import * as TooltipPrimitive from '@radix-ui/react-tooltip';
 import { ChevronRight, ChevronsRight, Loader2, MoreHorizontal, X } from 'lucide-react';
+import { iconForLabel, textOf } from './action-icons';
 
 export function cx(...c: Array<string | false | null | undefined>): string {
   return c.filter(Boolean).join(' ');
@@ -11,8 +12,14 @@ export function cx(...c: Array<string | false | null | undefined>): string {
 
 type Variant = 'primary' | 'default' | 'ghost' | 'danger' | 'soft';
 
+/**
+ * A button. Without an `icon` it shows the one its label names (Save, Delete, Run, Import …, see action-icons.tsx), so
+ * the same action has the same picture everywhere; `icon={null}` keeps a button text-only.
+ */
 export const Button = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant; size?: 'sm' | 'md' | 'lg'; loading?: boolean; icon?: ReactNode }>(
-  ({ variant = 'default', size = 'md', loading, icon, className, children, disabled, ...p }, ref) => (
+  ({ variant = 'default', size = 'md', loading, icon, className, children, disabled, ...p }, ref) => {
+    const shown = icon !== undefined ? icon : iconForLabel(textOf(children), variant, { size: size === 'sm' ? 12 : 13, fallback: false });
+    return (
     <button
       ref={ref}
       disabled={disabled || loading}
@@ -32,12 +39,27 @@ export const Button = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLBut
       )}
       {...p}
     >
-      {loading ? <Loader2 size={14} className="spin" /> : icon}
+      {loading ? <Loader2 size={14} className="spin" /> : shown}
       {children}
     </button>
-  ),
+    );
+  },
 );
 Button.displayName = 'Button';
+
+/**
+ * A text link that acts (All history, New, Bulk edit, Beautify …): the accent colour, underlined on hover, and the
+ * icon its label names like every Button. `icon={null}` keeps it text-only.
+ */
+export function LinkButton({ icon, className, children, ...p }: ButtonHTMLAttributes<HTMLButtonElement> & { icon?: ReactNode }) {
+  const shown = icon !== undefined ? icon : iconForLabel(textOf(children), undefined, { size: 12, fallback: false });
+  return (
+    <button type="button" className={cx('inline-flex items-center gap-1 text-accent hover:underline', className)} {...p}>
+      {shown}
+      {children}
+    </button>
+  );
+}
 
 /* ------------------------------------------------------------------ tooltip */
 export const TooltipProvider = TooltipPrimitive.Provider;
@@ -433,7 +455,9 @@ export function Menu({
 const MENU_ROW = cx('flex items-center gap-2.5 rounded-md px-2 h-8 text-sm cursor-default select-none outline-none transition-colors', 'data-[highlighted]:bg-hover data-[state=open]:bg-hover data-[disabled]:opacity-50 data-[disabled]:pointer-events-none');
 
 /** A menu's rows (and submenus, opened on hover or →). */
-function MenuItems({ items }: { items: MenuItem[] }) {
+function MenuItems({ items: given }: { items: MenuItem[] }) {
+  // a row without an icon of its own gets the one its label names, like buttons do
+  const items = given.map((it) => (it.icon === undefined ? { ...it, icon: iconForLabel(it.label, it.danger ? 'danger' : undefined, { size: 14, fallback: false }) } : it));
   const icons = items.some((x) => x.icon);
   return (
     <>
