@@ -173,7 +173,7 @@ The Collection Runner works like Postman's. It runs a whole collection or one fo
 | Environment | Variables used for the run |
 | Iterations | How many times to run the requests (defaults to the number of data rows, or 1) |
 | Delay | Pause between requests, in milliseconds |
-| Data | A CSV or JSON file, or a SQLite database with a query; files in the workspace's `datasets/` folder are listed next to *Select file* (its tables are listed; click one to use it). Each row becomes one iteration. Use `{{column}}` in requests, or `pm.iterationData.get('column')` in scripts. Click the file name to preview its rows |
+| Data | A CSV or JSON file, a SQLite database with a query, or a PostgreSQL / MySQL database (**Database…**: its URL, `{{variables}}` allowed, and a query); files in the workspace's `datasets/` folder are listed next to *Select file* (its tables are listed; click one to use it). Each row becomes one iteration. Use `{{column}}` in requests, or `pm.iterationData.get('column')` in scripts. Click the file name to preview its rows |
 | Keep variable values | Values set with `pm.environment.set()` and similar are saved as [current values](./rest.md#scripts) after the run. Turn this off to throw them away |
 | Stop on first failure | End the run when a request fails or errors |
 

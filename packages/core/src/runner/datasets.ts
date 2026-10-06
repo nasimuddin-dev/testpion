@@ -6,14 +6,19 @@ import { createInterface } from 'node:readline';
 import { extname, join, relative, sep } from 'node:path';
 import { ApsError } from '../errors.js';
 import { queryAll } from '../util/jsonpath.js';
+import { dbKindOf, dbRecords } from './db-datasets.js';
 
 export type DatasetRecord = Record<string, unknown>;
 
 export interface DatasetSource {
   /** Local file (.jsonl, .ndjson, .json, .csv, .md), or a SQLite database (.db, .sqlite, .sqlite3) with `query`. */
   path?: string;
-  /** SQL for a SQLite database: one record per row, columns as fields. Read-only (SELECT / WITH / VALUES). */
+  /** SQL for a SQLite, PostgreSQL or MySQL database: one record per row, columns as fields. Read-only (SELECT / WITH / VALUES). */
   query?: string;
+  /** A PostgreSQL or MySQL database: postgres://user:password@host:5432/db or mysql://… (a `path` with such a URL works too). */
+  connection?: string;
+  /** The name of an OS environment variable holding the connection URL (keeps the password out of files; CI friendly). */
+  connectionEnv?: string;
   /** Values for `?` (array) or `:name` / `$name` / `@name` (object) placeholders in `query`. */
   params?: unknown[] | Record<string, unknown>;
   /** Remote JSON / JSONL (API response dataset). */
@@ -58,6 +63,16 @@ function formatOf(src: DatasetSource): NonNullable<DatasetSource['format']> {
 async function* rawRecords(src: DatasetSource): AsyncGenerator<DatasetRecord> {
   if (src.records) {
     yield* src.records;
+    return;
+  }
+  // a database: a connection URL, given directly, in an OS environment variable, or as the path
+  // `env:NAME` as the path (CLI, agents, the app's data box) names the variable too
+  const envName = src.connectionEnv ?? (src.path && /^env:[A-Za-z_][A-Za-z0-9_]*$/.test(src.path) ? src.path.slice(4) : undefined);
+  const conn = src.connection ?? (envName ? process.env[envName] : undefined) ?? (dbKindOf(src.path) ? src.path : undefined);
+  if (envName && !conn)
+    throw new ApsError('ConfigurationError', `The environment variable ${envName} is not set: it should hold the database URL`, { suggestions: [`Set ${envName}=postgres://user:password@host:5432/db (or mysql://…) before running.`] });
+  if (conn) {
+    yield* dbRecords(conn, src.query, src.params);
     return;
   }
   const fmt = formatOf(src);

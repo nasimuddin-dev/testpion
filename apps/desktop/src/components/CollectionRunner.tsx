@@ -1,7 +1,7 @@
-import { FileSpreadsheet, History, ListChecks, Play, X } from 'lucide-react';
+import { Database, FileSpreadsheet, History, ListChecks, Play, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { asError, call, on } from '../api';
-import { useApp } from '../store';
+import { promptText, useApp } from '../store';
 import type { Collection, CollectionNode, Library } from '../types';
 import { timeAgo, plural } from '../lib/format';
 import { RunPanel } from './RunPanel';
@@ -147,7 +147,7 @@ export function CollectionRunner({ collection, folderId, onFolderChange }: { col
   const applyQuery = async (q = query) => {
     if (!data) return;
     try {
-      setData(await call<DataFile>('col.previewDataFile', { path: data.path, query: q }));
+      setData(await call<DataFile>('col.previewDataFile', { path: data.path, query: q, environment: environment || undefined }));
     } catch (e) {
       useApp.getState().toast(asError(e).message, 'error');
     }
@@ -213,7 +213,7 @@ export function CollectionRunner({ collection, folderId, onFolderChange }: { col
             </Field>
           </div>
 
-          <Field label="Data" hint="CSV, JSON or a SQLite database (with a query). Each row becomes one iteration: use {{column}} in requests or pm.iterationData.get('column') in scripts.">
+          <Field label="Data" hint="CSV, JSON, a SQLite database or a PostgreSQL / MySQL database (with a query). Each row becomes one iteration: use {{column}} in requests or pm.iterationData.get('column') in scripts.">
             {data ? (
               <div className="flex items-center gap-2 rounded-md border border-line px-2 py-1.5 text-sm">
                 <FileSpreadsheet size={14} className="text-muted shrink-0" />
@@ -229,6 +229,26 @@ export function CollectionRunner({ collection, folderId, onFolderChange }: { col
               <div className="flex items-center gap-2 flex-wrap">
                 <Button icon={<FileSpreadsheet size={13} />} onClick={pickData}>
                   Select file
+                </Button>
+                <Button
+                  icon={<Database size={13} />}
+                  title="Rows of a PostgreSQL or MySQL query as the iterations"
+                  onClick={async () => {
+                    const url = await promptText('Database', {
+                      message: 'postgres://user:{{dbPassword}}@host:5432/db or mysql://…, with the password in a secret variable; or env:NAME for an environment variable that holds the URL.',
+                      placeholder: 'postgres://app:{{dbPassword}}@localhost:5432/shop',
+                      okLabel: 'Connect',
+                    });
+                    if (!url?.trim()) return;
+                    try {
+                      setData(await call<DataFile>('col.previewDataFile', { path: url.trim(), environment: environment || undefined }));
+                      setIterations('');
+                    } catch (e) {
+                      useApp.getState().toast(asError(e).message, 'error');
+                    }
+                  }}
+                >
+                  Database…
                 </Button>
                 {datasets.length > 0 && (
                   <Select
@@ -276,7 +296,7 @@ export function CollectionRunner({ collection, folderId, onFolderChange }: { col
                   <Button size="sm" onClick={() => void applyQuery()} disabled={query.trim() === (data.query ?? '').trim()}>
                     Apply query
                   </Button>
-                  <span className="text-muted ml-1">Tables:</span>
+                  {data.tables.length > 0 && <span className="text-muted ml-1">Tables:</span>}
                   {data.tables.map((t) => (
                     <button key={t} className="mono px-1.5 rounded bg-panel2 hover:text-accent" title={`SELECT * FROM ${t}`} onClick={() => void applyQuery(`SELECT * FROM "${t.replace(/"/g, '""')}"`)}>
                       {t}

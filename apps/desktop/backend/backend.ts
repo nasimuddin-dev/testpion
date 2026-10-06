@@ -68,7 +68,6 @@ import {
   runCollection,
   collectionRealtimeTests,
   collectionRequests,
-  readDataset,
   shortId,
   streamTests,
   prepareHttpRequest,
@@ -133,6 +132,7 @@ import { gitHandlers } from './handlers/git.js';
 import { debuggerHandlers, type DebuggerState } from './handlers/debugger.js';
 import { debuggerRulesHandlers } from './handlers/debugger-rules.js';
 import { assistantInstruction } from './assistant-tasks.js';
+import { readRunData } from './run-data.js';
 
 /** RPC methods that change what the workspace lists (collections, saved items, environments, monitors, MCP servers). */
 const DATA_CHANGING = /^(col\.(save|delete|import\w*|move\w*|duplicate\w*)|lib\.save|env\.(save|delete|reorder|import\w*)|vars\.setInEnvironment|monitor\.(save|delete)|mcp\.(saveServers|connect|disconnect)|trash\.restore|ws\.(open|import\w*|openExamples))$/;
@@ -1208,10 +1208,8 @@ export class Backend {
     return this.startRun(p.name ?? (p.paths.join(', ') || 'All tests'), tests, p);
   }
 
-  async readRunData(path: string, query?: string): Promise<DatasetRecord[]> {
-    const rows: DatasetRecord[] = [];
-    for await (const r of readDataset({ path, query, limit: 100_000 })) rows.push(r);
-    return rows;
+  readRunData(path: string, query?: string, environment?: string): Promise<DatasetRecord[]> {
+    return readRunData(this, path, query, environment);
   }
 
   startCollectionRun(p: CollectionRunParams) {
@@ -1228,7 +1226,7 @@ export class Backend {
         collection,
         selection: p.selection,
         iterations: p.iterations,
-        data: p.dataPath ? await this.readRunData(p.dataPath, p.dataQuery) : undefined,
+        data: p.dataPath ? await this.readRunData(p.dataPath, p.dataQuery, p.environment) : undefined,
         delayMs: p.delayMs,
         realtime,
       }),

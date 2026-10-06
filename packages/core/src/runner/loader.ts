@@ -5,6 +5,7 @@ import type { AuthConfig, BodyConfig, HttpRequestSpec, KeyValue, McpTest, ModelR
 import { ApsError } from '../errors.js';
 import { slugify } from '../util/ids.js';
 import { readDataset, type DatasetSource } from './datasets.js';
+import { dbKindOf } from './db-datasets.js';
 
 const TEST_EXT = new Set(['.yaml', '.yml', '.json']);
 
@@ -303,7 +304,8 @@ export async function* loadTestsFromFile(path: string): AsyncGenerator<TestCase>
  */
 export async function* expandDataset(template: Record<string, unknown>, file: string): AsyncGenerator<TestCase> {
   const ds = template.dataset as DatasetSource & { expectedField?: string; inputField?: string; idField?: string };
-  const src: DatasetSource = { ...ds, path: ds.path ? resolve(dirname(file), ds.path) : undefined };
+  // a file is relative to the test file; a database URL (postgres://, mysql://) stays as it is
+  const src: DatasetSource = { ...ds, path: ds.path ? (dbKindOf(ds.path) ? ds.path : resolve(dirname(file), ds.path)) : undefined };
   const expectedField = ds.expectedField ?? 'expected';
   const { dataset: _ignored, ...tpl } = template;
   let i = 0;

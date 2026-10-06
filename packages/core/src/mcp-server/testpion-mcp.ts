@@ -55,6 +55,7 @@ import { commandLine, isCommandTrusted } from '../storage/trust.js';
 import { McpSession } from '../protocols/mcp/client.js';
 import { runCollection } from '../runner/collection-run.js';
 import { listWorkspaceDatasets, readDataset, type DatasetRecord } from '../runner/datasets.js';
+import { dbKindOf } from '../runner/db-datasets.js';
 import { collectionVariableFlow, referencedVariableNames } from '../runner/variable-flow.js';
 import { collectionRealtimeTests, collectionSavedItems } from '../runner/collection-realtime.js';
 import { collectionMarkdown } from '../report/collection-docs.js';
@@ -1006,8 +1007,9 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
         // data files are read only from inside the workspace
         let data: DatasetRecord[] | undefined;
         if (a.data) {
-          const file = store.safePath(String(a.data));
-          if (!existsSync(file)) throw new ApsError('ConfigurationError', `No data file ${String(a.data)} in the workspace`);
+          const database = !!dbKindOf(String(a.data)) || /^env:\w+$/.test(String(a.data));
+          const file = database ? String(a.data) : store.safePath(String(a.data));
+          if (!database && !existsSync(file)) throw new ApsError('ConfigurationError', `No data file ${String(a.data)} in the workspace`);
           data = [];
           for await (const r of readDataset({ path: file, query: a.query ? String(a.query) : undefined, limit: 10_000 })) data.push(r);
         }

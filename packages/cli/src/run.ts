@@ -26,6 +26,7 @@ import {
   runTests,
   runCollection,
   readDataset,
+  dbKindOf,
   shortId,
   streamTests,
   writeReports,
@@ -347,8 +348,10 @@ export async function executeCollectionRun(ref: string, o: CollectionCliOptions)
   if (rerun && !o.quiet) console.log(dim(`Re-running ${rerun.ids.length} failed request${rerun.ids.length === 1 ? '' : 's'} of ${rerun.runId}`));
   let data: DatasetRecord[] | undefined;
   if (o.iterationData) {
-    const file = resolve(o.iterationData);
-    if (!existsSync(file)) throw new CliError(`Data file ${file} does not exist`, EXIT.CONFIG_ERROR);
+    // a database (postgres://…, mysql://… or env:NAME holding the URL) is read as it is; a file is relative to here
+    const database = !!dbKindOf(o.iterationData) || /^env:\w+$/.test(o.iterationData);
+    const file = database ? o.iterationData : resolve(o.iterationData);
+    if (!database && !existsSync(file)) throw new CliError(`Data file ${file} does not exist`, EXIT.CONFIG_ERROR);
     data = [];
     for await (const r of readDataset({ path: file, query: o.iterationQuery, limit: 100_000 })) data.push(r);
   }

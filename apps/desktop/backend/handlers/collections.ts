@@ -1,7 +1,7 @@
 /** RPC handlers: Collections (requests, folders, examples, import/export) and their mock servers. */
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, relative, sep } from 'node:path';
-import { ApsError, isSqliteDataset, collectionVariableFlow, listWorkspaceDatasets, readDataset, sqliteTables, fetchImportText, bruFilesToBrunoExport, collectionToBru, importIntoWorkspace, diffOpenApi, workspaceApiCoverage, apiCoverageMarkdown, securityLint, certificateLint, listCertificates, variableFlow, startRecorder, recordingToCollection, type RecordedExchange, collectionToOpenApiText, exampleFromResponse, startMockServer, collectionMarkdown, collectionHtml, exportPostmanCollection, withRequestExamples, type SavedExample, convertCollectionScripts, importRequestSnippet, isRequestSnippet, type Collection, collectionSavedItems, duplicateCollection, shortId, requestBodySchema, loadOpenApi } from '@testpion/core';
+import { ApsError, dbKindOf, redactDbUrl, isSqliteDataset, collectionVariableFlow, listWorkspaceDatasets, readDataset, sqliteTables, fetchImportText, bruFilesToBrunoExport, collectionToBru, importIntoWorkspace, diffOpenApi, workspaceApiCoverage, apiCoverageMarkdown, securityLint, certificateLint, listCertificates, variableFlow, startRecorder, recordingToCollection, type RecordedExchange, collectionToOpenApiText, exampleFromResponse, startMockServer, collectionMarkdown, collectionHtml, exportPostmanCollection, withRequestExamples, type SavedExample, convertCollectionScripts, importRequestSnippet, isRequestSnippet, type Collection, collectionSavedItems, duplicateCollection, shortId, requestBodySchema, loadOpenApi } from '@testpion/core';
 import type { Backend, Handlers, CollectionRunParams } from '../backend.js';
 
 /** An API definition's workspace path: a JSON or YAML file directly in specs/. */
@@ -257,7 +257,24 @@ export function collectionsHandlers(be: Backend): Handlers {
       const f = await be.host.openDialog?.({ filters: [{ name: 'Data files', extensions: ['csv', 'json', 'jsonl', 'db', 'sqlite', 'sqlite3'] }] });
       return f ? be.handlers['col.previewDataFile']!({ path: f }) : null;
     },
-    'col.previewDataFile': async ({ path, query }: { path: string; query?: string }) => {
+    'col.previewDataFile': async ({ path, query, environment }: { path: string; query?: string; environment?: string }) => {
+      // a PostgreSQL / MySQL database (a URL, {{variables}} allowed, or env:NAME): its tables, and the rows of the query
+      if (dbKindOf(path) || /^env:\w+$/.test(path) || /^\{\{/.test(path.trim())) {
+        const name = redactDbUrl(path);
+        let tables: string[] = [];
+        try {
+          const kind = dbKindOf(path) ?? 'postgres';
+          const list = kind === 'postgres' ? "SELECT table_name AS t FROM information_schema.tables WHERE table_schema NOT IN ('pg_catalog', 'information_schema') ORDER BY 1" : 'SELECT table_name AS t FROM information_schema.tables WHERE table_schema = DATABASE() ORDER BY 1';
+          tables = (await be.readRunData(path, list, environment)).map((r) => String(r.t ?? r.T ?? r.TABLE_NAME ?? ''));
+        } catch (e) {
+          // a wrong URL or password is said once, here, rather than on every query
+          if ((e as ApsError).kind === 'NetworkError' || !query) throw e;
+        }
+        if (!query) return { path, name, count: 0, columns: [], preview: [], tables, query: '' };
+        const rows = await be.readRunData(path, query, environment);
+        const columns = [...new Set(rows.slice(0, 50).flatMap((r) => Object.keys(r)))];
+        return { path, name, count: rows.length, columns, preview: rows.slice(0, 20), tables, query };
+      }
       // a SQLite database needs a query: start with its first table
       let tables: string[] | undefined;
       if (isSqliteDataset(path)) {
@@ -276,7 +293,7 @@ export function collectionsHandlers(be: Backend): Handlers {
         }
         if (!query) return { path, name: basename(path), count: 0, columns: [], preview: [], tables, query: '' };
       }
-      const rows = await be.readRunData(path, query);
+      const rows = await be.readRunData(path, query, environment);
       const columns = [...new Set(rows.slice(0, 50).flatMap((r) => Object.keys(r)))];
       return { path, name: basename(path), count: rows.length, columns, preview: rows.slice(0, 20), ...(tables ? { tables, query } : {}) };
     },
