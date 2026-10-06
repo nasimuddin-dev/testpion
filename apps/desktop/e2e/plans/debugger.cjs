@@ -28,6 +28,13 @@ const steps = [
     })()`,
   ],
   [
+    'status-bar-shows-it',
+    `(async () => {
+      const seg = await __t.waitFor(() => [...document.querySelectorAll('footer button')].map((b) => b.textContent.trim()).find((t) => /^Debugger :\d+/.test(t)), 4000);
+      return 'status bar: ' + (seg ?? 'NONE');
+    })()`,
+  ],
+  [
     'exchange-listed-and-opens',
     `(async () => {
       const st = await window.aps.invoke('debug.status');
@@ -217,6 +224,7 @@ const steps = [
 ];
 
 module.exports = withExpect(steps, {
+  'status-bar-shows-it': /^status bar: Debugger :\d+$/,
   'grpc-call-and-connections': /^h2: true \| raw: true \| sent: true \| received: 1 \| not found: true \| h2 connections: true$/,
   'phone-dialog': /^dialog: true \| offers to listen on the network: true$/,
   'home-tile-opens-the-debugger': /^tile: true \| icon: true \| opens: true$/,

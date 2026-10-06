@@ -60,7 +60,7 @@ Owner (2026-10-06): "also add all features from the Fiddler". What HTTP Debugger
 - The proxy listens on 127.0.0.1 only; a setting allows the LAN (for a phone or another computer) with a warning.
 - The root certificate is created on this computer, never leaves it, and the Settings page shows how to remove it.
 - Bodies pass the Redactor before anything is saved or shown to an agent; captures are not committed (`debugger/` in .gitignore).
-- Rules that change traffic are listed in the view at all times (a bar: "2 rules active"), and off when the view is closed unless pinned.
+- Rules that change traffic are never invisible: the rules bar in the view, and in the status bar wherever you are while the proxy runs ("Debugger :8899 · 2 rules active · system proxy", in warning colour). They stay on when you leave the view, since capture goes on in the background; switching them off on leaving would surprise someone mid-capture (decided 2026-10-06).
 
 ## Phases
 

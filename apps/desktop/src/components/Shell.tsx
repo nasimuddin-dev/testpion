@@ -283,6 +283,34 @@ export function TopBar() {
   );
 }
 
+/**
+ * The HTTP Debugger in the status bar, wherever you are: shown while its proxy runs, in warning colour when rules
+ * change what programs send or get, and when the system proxy points at it (so a forgotten capture is never invisible).
+ */
+function DebuggerSegment() {
+  const [st, setSt] = useState<{ running: boolean; port?: number; changingRules: number; systemProxy: boolean }>();
+  useEffect(() => {
+    const load = () => void call<typeof st>('debug.status').then(setSt, () => undefined);
+    load();
+    const offState = on<typeof st>('debug.state', (s) => setSt(s));
+    const offRules = on('debug.rules', load);
+    return () => (offState(), offRules());
+  }, []);
+  if (!st?.running) return null;
+  const warn = st.changingRules > 0 || st.systemProxy;
+  return (
+    <button
+      className={cx('flex items-center gap-1 hover:text-fg', warn && 'text-warn')}
+      title={`HTTP Debugger capturing on port ${st.port}${st.changingRules ? `; ${st.changingRules} rule${st.changingRules === 1 ? '' : 's'} change traffic` : ''}${st.systemProxy ? '; the system proxy points here' : ''}. Click to open it.`}
+      onClick={() => useApp.getState().setView('debugger')}
+    >
+      <Bug size={12} /> Debugger :{st.port}
+      {st.changingRules > 0 && ` · ${st.changingRules} rule${st.changingRules === 1 ? '' : 's'} active`}
+      {st.systemProxy && ' · system proxy'}
+    </button>
+  );
+}
+
 export function StatusBar() {
   const ws = useApp((s) => s.workspace);
   const env = useApp((s) => s.environment);
@@ -304,6 +332,7 @@ export function StatusBar() {
         <Plug size={12} /> {mcp} MCP connected
       </span>
       <GitSegment />
+      <DebuggerSegment />
       <span className="flex items-center gap-1.5">
         {acts.length ? (
           <>

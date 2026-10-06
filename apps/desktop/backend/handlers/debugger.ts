@@ -179,6 +179,8 @@ export function debuggerHandlers(be: Backend): Handlers {
   const state: DebuggerState = (be.debugger ??= { exchanges: [] });
   const status = () => ({
     lan: !!state.lan,
+    // rules that change what programs send or get (not ignore / highlight): the status bar shows them wherever you are
+    changingRules: state.proxy ? activeRules(be, state).filter((r) => r.enabled && (r.kind === 'modify' || r.kind === 'reply' || r.kind === 'redirect' || r.kind === 'breakpoint')).length : 0,
     running: !!state.proxy,
     url: state.proxy?.url,
     port: state.proxy?.port,
@@ -251,7 +253,7 @@ export function debuggerHandlers(be: Backend): Handlers {
     return status();
   };
 
-  return {
+  const handlers: Handlers = {
     'debug.status': () => status(),
     /** Send one request through the proxy from this process (the e2e suite's "program"; also a quick check that the proxy works). */
     'debug.selfTest': ({ url }: { url: string }) =>
@@ -642,4 +644,15 @@ export function debuggerHandlers(be: Backend): Handlers {
       return true;
     },
   };
+  // the status bar shows the Debugger wherever you are (running, rules that change traffic, the system proxy):
+  // whatever changes that state says so
+  for (const name of ['debug.start', 'debug.stop', 'debug.systemProxy', 'debug.decrypt', 'debug.clear']) {
+    const h = handlers[name]!;
+    handlers[name] = async (p: unknown) => {
+      const r = await h(p);
+      be.host.emit('debug.state', status());
+      return r;
+    };
+  }
+  return handlers;
 }
