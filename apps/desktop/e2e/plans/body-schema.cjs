@@ -11,10 +11,10 @@ const steps = [
       const row = await __t.waitFor(() => [...document.querySelectorAll('aside [data-tree-row]')].find((b) => b.offsetParent && b.textContent.trim().endsWith('Add a pet')), 4000);
       if (!row) return 'NO ROW';
       row.click(); await __t.sleep(1200);
-      [...document.querySelectorAll('main [role=tab]')].find((t) => t.offsetParent && t.textContent.trim() === 'Body')?.click();
+      [...document.querySelectorAll('main [role=tab]')].find((t) => t.offsetParent && t.textContent.trim().startsWith('Body'))?.click();
       const note = await __t.waitFor(() => [...document.querySelectorAll('main div')].map((d) => d.textContent.trim()).find((t) => /^Schema from specs\\//.test(t)), 6000);
-      const schemas = (window.__monaco?.languages.json.jsonDefaults.diagnosticsOptions.schemas ?? []).map((s) => s.uri);
-      const forBody = schemas.some((u) => /body\\//.test(u));
+      const schemas = (window.__monaco?.json.jsonDefaults.diagnosticsOptions.schemas ?? []).map((s) => s.uri);
+      const forBody = schemas.some((u) => /body\\//.test(decodeURIComponent(u)));
       return 'note: ' + (note ?? 'NONE').slice(0, 60) + ' | body schema set: ' + forBody;
     })()`,
   ],

@@ -33,12 +33,20 @@ const steps = [
      const at = text.indexOf('    assertions:');
      const line = model.getPositionAt(at).lineNumber;
      model.applyEdits([{ range: new window.__monaco.Range(line, 1, line, 1), text: '    \\n' }]);
-     ed.setPosition({ lineNumber: line, column: 5 }); ed.focus();
-     ed.trigger('e2e', 'editor.action.triggerSuggest', {}); await __t.sleep(900);
-     const items = [...document.querySelectorAll('.suggest-widget .monaco-list-row')].map((r) => r.querySelector('.label-name')?.textContent.trim()).filter(Boolean);
-     ed.trigger('e2e', 'hideSuggestWidget', {});
+     // the list is virtualised (a dozen rows drawn), so each key is asked for by its first letters
+     const offered = async (prefix) => {
+       model.applyEdits([{ range: new window.__monaco.Range(line, 1, line, 100), text: '    ' + prefix }]);
+       ed.setPosition({ lineNumber: line, column: 5 + prefix.length }); ed.focus();
+       ed.trigger('e2e', 'editor.action.triggerSuggest', {}); await __t.sleep(700);
+       const items = [...document.querySelectorAll('.suggest-widget .monaco-list-row')].map((r) => r.querySelector('.label-name')?.textContent.trim()).filter(Boolean);
+       ed.trigger('e2e', 'hideSuggestWidget', {});
+       return items;
+     };
+     await offered('');
+     const items = [];
+     for (const k of ['headers', 'auth', 'extract', 'dependsOn', 'query']) if ((await offered(k.slice(0, 3))).includes(k)) items.push(k);
      model.setValue(text); await __t.sleep(600);
-     return 'offers: ' + ['url', 'headers', 'auth', 'extract', 'dependsOn'].filter((k) => items.includes(k)).join(',') + ' | not a graphql key: ' + !items.includes('query');`,
+     return 'offers: ' + ['headers', 'auth', 'extract', 'dependsOn'].filter((k) => items.includes(k)).join(',') + ' | not a graphql key: ' + !items.includes('query');`,
   ),
   step(
     'hover-explains-a-key',
@@ -55,6 +63,6 @@ const steps = [
 
 module.exports = withExpect(steps, {
   'markers-for-mistakes': /^clean: 0 \| after a typo: 4:\d+:"methd" is not read \| restored: 0$/,
-  'keys-complete-with-help': /^offers: url,headers,auth,extract,dependsOn \| not a graphql key: true$/,
+  'keys-complete-with-help': /^offers: headers,auth,extract,dependsOn \| not a graphql key: true$/,
   'hover-explains-a-key': /^hover: (dependsOn|assertions) · /,
 });

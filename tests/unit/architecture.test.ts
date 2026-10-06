@@ -52,7 +52,12 @@ describe('architecture', () => {
   });
 
   it('shared is for every host: no Node, no Electron, no React, no DOM library', () => {
-    expect(offenders('packages/shared/src', (i) => /^node:/.test(i.spec) || /^(electron|react|react-dom|fs|path|crypto|os|child_process|net|http|https|stream|buffer)(\/|$)/.test(i.spec) || i.spec.includes('@testpion/core'))).toEqual([]);
+    expect(
+      offenders(
+        'packages/shared/src',
+        (i) => /^node:/.test(i.spec) || /^(electron|react|react-dom|fs|path|crypto|os|child_process|net|http|https|stream|buffer)(\/|$)/.test(i.spec) || i.spec.includes('@testpion/core'),
+      ),
+    ).toEqual([]);
     expect(readFileSync(join(root, 'packages/shared/tsconfig.json'), 'utf8')).not.toMatch(/"DOM"/);
   });
 

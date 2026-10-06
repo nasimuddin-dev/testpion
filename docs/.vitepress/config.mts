@@ -84,6 +84,7 @@ const docsSidebar = [
       { text: 'gRPC', link: '/api-testing/grpc' },
       { text: 'Mock Servers', link: '/api-testing/mock-servers' },
       { text: 'Record Traffic', link: '/api-testing/recording' },
+      { text: 'HTTP Debugger', link: '/api-testing/http-debugger' },
       { text: 'Collections & Import', link: '/api-testing/collections' },
     ],
   },

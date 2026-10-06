@@ -129,6 +129,7 @@ import { grpcHandlers } from './handlers/grpc.js';
 import { agentHandlers } from './handlers/agents.js';
 import { feedbackHandlers } from './handlers/feedback.js';
 import { gitHandlers } from './handlers/git.js';
+import { debuggerHandlers, type DebuggerState } from './handlers/debugger.js';
 import { assistantInstruction } from './assistant-tasks.js';
 
 /** RPC methods that change what the workspace lists (collections, saved items, environments, monitors, MCP servers). */
@@ -218,6 +219,8 @@ export class Backend {
   gqlSubs = new Map<string, GraphQLSubscription>();
   /** The traffic recorder (reverse proxy), when one is running. */
   recorder?: Recorder;
+  /** The HTTP Debugger's proxy and session (handlers/debugger.ts). */
+  debugger?: DebuggerState;
   /** Monitors running right now (by id), from the schedule or "Run now". */
   runningMonitors = new Set<string>();
   /** Runs monitors of the open workspace when they are due, while this backend runs. */
@@ -633,7 +636,7 @@ export class Backend {
    */
   private buildHandlers(): Handlers {
     const all: Handlers = {};
-    for (const group of [appHandlers, workspaceHandlers, collectionsHandlers, requestsHandlers, grpcHandlers, mcpHandlers, aiHandlers, testingHandlers, monitorHandlers, agentHandlers, feedbackHandlers, gitHandlers]) {
+    for (const group of [appHandlers, workspaceHandlers, collectionsHandlers, requestsHandlers, grpcHandlers, mcpHandlers, aiHandlers, testingHandlers, monitorHandlers, agentHandlers, feedbackHandlers, gitHandlers, debuggerHandlers]) {
       for (const [name, fn] of Object.entries(group(this))) {
         if (name in all) throw new Error(`RPC method ${name} is defined twice`);
         all[name] = fn;

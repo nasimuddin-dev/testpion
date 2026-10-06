@@ -46,6 +46,7 @@ import {
   ArrowRightLeft,
   RefreshCw,
   Check,
+  Bug,
 } from 'lucide-react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { call, modKey, on } from '../api';
@@ -70,6 +71,7 @@ export const NAV: Array<{ id: ViewId; label: string; icon: ReactNode; group: str
   { id: 'grpc', label: 'gRPC', icon: <Waypoints size={18} />, group: 'Requests' },
   { id: 'websocket', label: 'WebSocket', icon: <Radio size={18} />, group: 'Requests', hint: 'WebSocket, Socket.IO and MQTT' },
   { id: 'mcp', label: 'MCP', icon: <Plug size={18} />, group: 'Requests', hint: 'MCP servers (inspector)' },
+  { id: 'debugger', label: 'Debugger', icon: <Bug size={18} />, group: 'Testing', hint: 'HTTP Debugger: the traffic of other programs through a local proxy' },
   { id: 'tests', label: 'Tests', icon: <ShieldCheck size={18} />, group: 'Testing', hint: 'Test files and runs' },
   { id: 'monitors', label: 'Monitors', icon: <AlarmClock size={18} />, group: 'Testing', hint: 'Scheduled runs' },
   { id: 'load', label: 'Load', icon: <Gauge size={18} />, group: 'Testing', hint: 'Load tests' },

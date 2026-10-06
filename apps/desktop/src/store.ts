@@ -25,6 +25,7 @@ export type ViewId =
   | 'history'
   | 'environments'
   | 'git'
+  | 'debugger'
   | 'settings';
 
 export interface Toast {

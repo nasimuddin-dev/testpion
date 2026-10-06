@@ -50,6 +50,7 @@ const VIEWS: Record<ViewId, LazyExoticComponent<ComponentType>> = {
   history: view(() => import('./views/HistoryView'), 'HistoryView'),
   environments: view(() => import('./views/EnvironmentsView'), 'EnvironmentsView'),
   git: view(() => import('./views/GitView'), 'GitView'),
+  debugger: view(() => import('./views/DebuggerView'), 'DebuggerView'),
   settings: view(() => import('./views/SettingsView'), 'SettingsView'),
 };
 

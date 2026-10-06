@@ -75,7 +75,7 @@ const drafts = persisted<Draft>('ai', {
 
 export function AiLabView() {
   // kept while the app runs, so switching tabs or views doesn't lose results
-  const [tab, setTab] = useSticky<'playground' | 'compare' | 'providers' | 'usage'>('ai:tab', 'providers');
+  const [tab, setTab] = useSticky<'playground' | 'compare' | 'providers' | 'usage'>('ai:tab', 'playground');
   const [providers, setProviders] = useState<ProviderConfig[]>();
   const load = useCallback(() => call<ProviderConfig[]>('ai.providers').then(setProviders), []);
   useEffect(() => {

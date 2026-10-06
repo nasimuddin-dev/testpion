@@ -22,7 +22,8 @@ module.exports = async function run(win) {
   win.webContents.on('console-message', (e, level, message) => {
     const lvl = typeof level === 'number' ? level : e?.level;
     const msg = typeof message === 'string' ? message : e?.message;
-    if (lvl === 3 || lvl === 'error') errors.push(String(msg).slice(0, 400));
+    // "ResizeObserver loop completed with undelivered notifications" is the browser saying a layout settled a frame late (Monaco in a resized pane); not an app error
+    if ((lvl === 3 || lvl === 'error') && !/ResizeObserver loop/.test(String(msg))) errors.push(String(msg).slice(0, 400));
   });
   // uncaught exceptions with their stack (the console message alone is often just "x is not a function")
   try {

@@ -18,6 +18,7 @@ testpion graphql-subscribe <endpoint> -q <doc>   Run a GraphQL subscription and 
 testpion graphql-op <Type.field> --endpoint <url> Build a ready-to-run operation for a root field (or --schema <file>)
 testpion lint <collection>    Security review of a collection's requests (--fail-on high for CI)
 testpion record <target>      Record traffic through a local reverse proxy; -w saves it as a collection (see Record traffic)
+testpion debug [-p port] [-o session.har] [--json]   The HTTP Debugger's proxy: other programs' traffic (HTTP_PROXY=…), printed as it happens
 testpion mock-mcp <file>      Serve an MCP mock (stdio, or --http) for AI agents and MCP clients
 testpion env set|unset|get <env> -w   Set or remove plain variables of an environment (secrets stay in the app)
 testpion vars usages|rename -w   Where a variable is used; rename it everywhere

@@ -156,13 +156,18 @@ function yamlContext(model: Monaco.editor.ITextModel, lineNumber: number): { pat
     const l = model.getLineContent(n);
     if (!l.trim() || /^\s*#/.test(l)) continue;
     const i = indentOf(l);
+    const item = /^\s*-\s/.test(l);
+    // "- id: x" is a list item: its key sits two columns in, level with the item's other keys
+    const ki = item ? i + 2 : i;
     const m = /^\s*(?:-\s+)?([\w-]+):\s*(.*)$/.exec(l);
-    if (i < want || (i === want - 2 && /^\s*-\s/.test(l) && m)) {
-      // a sibling list item's "type:" counts for the item the cursor is in
+    if (ki < want) {
       if (m) path.unshift(m[1]!);
-      want = i;
+      want = item ? i : ki;
       if (want === 0) break;
-    } else if (i === indent && m && m[1] === 'type' && !typeAt && path.length === 0) typeAt = m[2]!.trim().replace(/^['"]|['"]$/g, '');
+    } else if (item && ki === want) {
+      // the first key of the item the cursor is in: a sibling, not a parent; the list's key is further up
+      want = i;
+    } else if (ki === indent && m && m[1] === 'type' && !typeAt && path.length === 0) typeAt = m[2]!.trim().replace(/^['"]|['"]$/g, '');
   }
   if (!typeAt) {
     // the type written in this item (above or below the cursor), or in the file's defaults
