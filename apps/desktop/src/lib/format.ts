@@ -1,18 +1,4 @@
-export function formatBytes(n: number | undefined): string {
-  if (n === undefined) return '';
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 ** 2) return `${(n / 1024).toFixed(1)} KB`;
-  if (n < 1024 ** 3) return `${(n / 1024 ** 2).toFixed(1)} MB`;
-  return `${(n / 1024 ** 3).toFixed(2)} GB`;
-}
-
-export function formatMs(ms: number | undefined): string {
-  if (ms === undefined || ms === null || Number.isNaN(ms)) return '–';
-  if (ms < 1) return `${ms.toFixed(2)} ms`;
-  if (ms < 1000) return `${Math.round(ms)} ms`;
-  if (ms < 60_000) return `${(ms / 1000).toFixed(2)} s`;
-  return `${Math.floor(ms / 60_000)}m ${Math.round((ms % 60_000) / 1000)}s`;
-}
+export { formatBytes, formatMs } from '@testpion/shared';
 
 export function formatCost(c: number | undefined): string {
   if (c === undefined || c === null) return '–';
@@ -65,14 +51,7 @@ export function prettyJson(text: string): string {
   }
 }
 
-export function templateVars(s: string): string[] {
-  const out = new Set<string>();
-  for (const m of s.matchAll(/\{\{\s*([^{}]+?)\s*\}\}/g)) {
-    const n = m[1]!.trim();
-    if (!n.startsWith('$')) out.add(n.split('.')[0]!);
-  }
-  return [...out];
-}
+export { templateVariables as templateVars } from '@testpion/shared';
 
 export function download(name: string, content: string, type = 'application/json'): void {
   const url = URL.createObjectURL(new Blob([content], { type }));

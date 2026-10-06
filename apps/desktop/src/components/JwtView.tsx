@@ -1,5 +1,5 @@
 import { KeyRound } from 'lucide-react';
-import { describeExpiry, type DecodedJwt } from '../lib/jwt';
+import { describeExpiry, type DecodedJwt } from '@testpion/shared';
 import { JsonTree } from './JsonView';
 import { Badge } from './ui';
 

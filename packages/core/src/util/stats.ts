@@ -50,16 +50,4 @@ export function round(v: number, digits = 2): number {
   return Math.round(v * f) / f;
 }
 
-export function formatBytes(n: number): string {
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 ** 2) return `${(n / 1024).toFixed(1)} KB`;
-  if (n < 1024 ** 3) return `${(n / 1024 ** 2).toFixed(1)} MB`;
-  return `${(n / 1024 ** 3).toFixed(2)} GB`;
-}
-
-export function formatDuration(ms: number): string {
-  if (ms < 1000) return `${Math.round(ms)} ms`;
-  if (ms < 60_000) return `${(ms / 1000).toFixed(2)} s`;
-  const m = Math.floor(ms / 60_000);
-  return `${m}m ${((ms % 60_000) / 1000).toFixed(0)}s`;
-}
+export { formatBytes, formatDuration, formatMs } from '@testpion/shared';

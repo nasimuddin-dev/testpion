@@ -2,10 +2,11 @@
   "name": "testpion",
   "private": true,
   "version": "0.43.0",
-  "description": "TestPion — test, debug and evaluate REST, GraphQL, MCP and AI/LLM systems.",
+  "description": "TestPion \u2014 test, debug and evaluate REST, GraphQL, MCP and AI/LLM systems.",
   "license": "MIT",
   "type": "module",
   "workspaces": [
+    "packages/shared",
     "packages/core",
     "packages/cli",
     "apps/desktop",
@@ -15,7 +16,7 @@
     "node": ">=22.13"
   },
   "scripts": {
-    "build": "npm run build -w @testpion/core && npm run build -w @testpion/cli && npm run build -w @testpion/desktop",
+    "build": "npm run build -w @testpion/shared && npm run build -w @testpion/core && npm run build -w @testpion/cli && npm run build -w @testpion/desktop",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "vitest run",
     "test:watch": "vitest",

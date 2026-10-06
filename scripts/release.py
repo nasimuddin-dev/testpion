@@ -10,11 +10,12 @@ import sys
 
 old, new, entry_file = sys.argv[1], sys.argv[2], sys.argv[3]
 root = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + os.sep
-for f in ['apps/desktop/package.json', 'docs/package.json', 'package.json', 'packages/cli/package.json', 'packages/core/package.json']:
+for f in ['apps/desktop/package.json', 'docs/package.json', 'package.json', 'packages/cli/package.json', 'packages/core/package.json', 'packages/shared/package.json']:
     s = open(root + f, encoding='utf8', newline='').read()
     assert f'"version": "{old}"' in s, f'{f} is not at {old}'
     s = s.replace(f'"version": "{old}"', f'"version": "{new}"', 1)
     s = s.replace(f'"@testpion/core": "{old}"', f'"@testpion/core": "{new}"')
+    s = s.replace(f'"@testpion/shared": "{old}"', f'"@testpion/shared": "{new}"')
     open(root + f, 'w', encoding='utf8', newline='').write(s)
 f = 'packages/core/src/version.ts'
 s = open(root + f, encoding='utf8', newline='').read()

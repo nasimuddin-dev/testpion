@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@testpion/core": "0.43.0",
+    "@testpion/shared": "0.43.0",
     "commander": "^15.0.0"
   }
 }

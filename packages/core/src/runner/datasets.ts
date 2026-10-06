@@ -1,3 +1,4 @@
+import { csvRecords, parseCsvLine } from '@testpion/shared';
 import { assertUrlAllowed } from '../net/policy.js';
 import { createReadStream, existsSync, readdirSync, statSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
@@ -203,40 +204,7 @@ function toRecord(v: unknown): DatasetRecord {
 }
 
 /** CSV text as records of cells (RFC 4180: quoted fields may contain the delimiter, quotes and line breaks); blank lines are skipped. */
-export function csvRecords(text: string, delim = ','): string[][] {
-  const out: string[][] = [];
-  let pending = '';
-  for (const l of text.split(/\r?\n/)) {
-    pending = pending ? `${pending}\n${l}` : l;
-    if ((pending.match(/"/g)?.length ?? 0) % 2 === 1) continue;
-    if (pending.trim()) out.push(parseCsvLine(pending, delim));
-    pending = '';
-  }
-  if (pending.trim()) out.push(parseCsvLine(pending, delim));
-  return out;
-}
-
-export function parseCsvLine(line: string, delim = ','): string[] {
-  const out: string[] = [];
-  let cur = '';
-  let q = false;
-  for (let i = 0; i < line.length; i++) {
-    const c = line[i]!;
-    if (q) {
-      if (c === '"' && line[i + 1] === '"') {
-        cur += '"';
-        i++;
-      } else if (c === '"') q = false;
-      else cur += c;
-    } else if (c === '"') q = true;
-    else if (c === delim) {
-      out.push(cur);
-      cur = '';
-    } else cur += c;
-  }
-  out.push(cur);
-  return out;
-}
+export { csvRecords, parseCsvLine } from '@testpion/shared';
 
 function coerce(s: string): unknown {
   const t = s.trim();

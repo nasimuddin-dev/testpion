@@ -7,7 +7,7 @@ import { asError, call, on } from '../api';
 import { persisted, promptText, useApp } from '../store';
 import type { CheckConfig, ProviderConfig } from '../types';
 import { templateVars, timeAgo } from '../lib/format';
-import { csvRecords } from '../lib/csv';
+import { csvRecords } from '@testpion/shared';
 import { AssertionEditor } from '../components/AssertionEditor';
 import { CodeEditor } from '../components/CodeEditor';
 import { RunPanel } from '../components/RunPanel';

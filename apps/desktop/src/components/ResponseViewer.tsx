@@ -14,7 +14,7 @@ import { Badge, Button, cx, Empty, MoreMenu, statusTone, Tabs, type MenuItem } f
 import { useApp } from '../store';
 import { JsonTable, tableRowsOf } from './JsonTable';
 import { JwtView } from './JwtView';
-import { findJwts } from '../lib/jwt';
+import { findDecodedJwts } from '@testpion/shared';
 
 type Tab = 'body' | 'events' | 'headers' | 'cookies' | 'timeline' | 'tests' | 'trace' | 'code' | 'stream' | 'history' | 'jwt';
 
@@ -75,7 +75,7 @@ export function ResponseViewer({
   // an array of objects (or a body holding one) can also be read as a table
   const table = useMemo(() => (isJson ? tableRowsOf(response.json) : undefined), [isJson, response.json]);
   // JWTs in the body (e.g. an access_token) or the headers: decoded in their own tab
-  const jwts = useMemo(() => findJwts([response.bodyPreview.slice(0, 200_000), ...response.headers.map(([, v]) => v)]), [response]);
+  const jwts = useMemo(() => findDecodedJwts([response.bodyPreview.slice(0, 200_000), ...response.headers.map(([, v]) => v)]), [response]);
   const isHtml = /html/i.test(response.contentType);
   const prettyText = useMemo(() => (isJson ? JSON.stringify(response.json, null, 2) : response.bodyPreview), [response, isJson]);
   useEffect(() => {

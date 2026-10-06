@@ -86,10 +86,7 @@ function dispatcherFor(spec: HttpRequestSpec): Dispatcher | undefined {
 }
 
 /** Names of `:name` path segments in a URL, e.g. `/users/:id/posts/:postId` → ["id", "postId"]. */
-export function pathVariableNames(url: string): string[] {
-  const path = url.replace(/^[a-z][a-z0-9+.-]*:\/\/[^/]*/i, '').split(/[?#]/)[0] ?? '';
-  return [...path.matchAll(/\/:([A-Za-z_][\w-]*)/g)].map((m) => m[1]!);
-}
+export { pathVariableNames } from '@testpion/shared';
 
 /** Replace `/:name` path segments with their (URL-encoded) values. Unknown names are left as-is. */
 export function applyPathVariables(url: string, vars?: KeyValue[], encode = true): string {

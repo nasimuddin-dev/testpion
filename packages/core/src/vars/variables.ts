@@ -1,3 +1,4 @@
+import { templateRegex } from '@testpion/shared';
 import type { Redactor } from '../util/redact.js';
 import { dynamicValue } from './dynamic.js';
 
@@ -23,7 +24,7 @@ export interface ResolveOptions {
   envAccess?: 'all' | string[];
 }
 
-const TEMPLATE = /\{\{\s*([^{}]+?)\s*\}\}/g;
+const TEMPLATE = templateRegex();
 
 export class VariableScope {
   private scopes = new Map<ScopeName, Map<string, unknown>>();
@@ -196,11 +197,4 @@ export class VariableScope {
 }
 
 /** Extract `{{name}}` references from a template (for "missing variable" warnings and prompt variable forms). */
-export function templateVariables(input: string): string[] {
-  const out = new Set<string>();
-  for (const m of input.matchAll(TEMPLATE)) {
-    const name = m[1]!.trim();
-    if (!name.startsWith('$')) out.add(name.split('.')[0]!);
-  }
-  return [...out];
-}
+export { templateVariables } from '@testpion/shared';

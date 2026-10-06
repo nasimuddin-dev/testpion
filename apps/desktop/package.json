@@ -64,5 +64,8 @@
     "type": "git",
     "url": "https://github.com/nasimuddin-dev/testpion.git"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "@testpion/shared": "0.43.0"
+  }
 }

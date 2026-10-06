@@ -7,12 +7,8 @@
 
 export const SCHEMA_VERSION = '1.0';
 
-export interface KeyValue {
-  key: string;
-  value: string;
-  enabled?: boolean;
-  description?: string;
-}
+export type { KeyValue } from '@testpion/shared';
+import type { KeyValue } from '@testpion/shared';
 
 /* ------------------------------------------------------------------ auth */
 
@@ -616,6 +612,8 @@ export interface SavedHttpRequest {
   kind: 'http';
   id: string;
   name: string;
+  /** Marked as a favourite: the explorer lists it at the top (Favorites). */
+  favorite?: boolean;
   request: HttpRequestSpec;
   /** Markdown documentation for the request. */
   description?: string;
@@ -629,6 +627,8 @@ export interface SavedGraphQLRequest {
   kind: 'graphql';
   id: string;
   name: string;
+  /** Marked as a favourite: the explorer lists it at the top (Favorites). */
+  favorite?: boolean;
   request: GraphQLRequestSpec;
   assertions?: CheckConfig[];
   /** Run before the request (after the collection's and folders'); pm.request.url is the endpoint, headers can be changed. */

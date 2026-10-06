@@ -51,6 +51,11 @@ describe('architecture', () => {
     expect(offenders('packages/core/src', (i) => /^(electron|react|react-dom)(\/|$)/.test(i.spec) || i.spec.includes('apps/desktop'))).toEqual([]);
   });
 
+  it('shared is for every host: no Node, no Electron, no React, no DOM library', () => {
+    expect(offenders('packages/shared/src', (i) => /^node:/.test(i.spec) || /^(electron|react|react-dom|fs|path|crypto|os|child_process|net|http|https|stream|buffer)(\/|$)/.test(i.spec) || i.spec.includes('@testpion/core'))).toEqual([]);
+    expect(readFileSync(join(root, 'packages/shared/tsconfig.json'), 'utf8')).not.toMatch(/"DOM"/);
+  });
+
   it('the CLI is core plus commands', () => {
     expect(offenders('packages/cli/src', (i) => /^(electron|react|react-dom)(\/|$)/.test(i.spec) || i.spec.includes('apps/desktop'))).toEqual([]);
   });
@@ -68,7 +73,7 @@ describe('architecture', () => {
           /^(electron|fs|path|child_process|os|crypto|net|http|https|stream)(\/|$)/.test(i.spec) ||
           /(^|\/)backend(\/|$)/.test(i.spec) ||
           /(^|\/)electron(\/|$)/.test(i.spec) ||
-          (i.spec === '@testpion/core' && !i.typeOnly),
+          (i.spec === '@testpion/core' && !i.typeOnly), // @testpion/shared is fine: it is built for the browser
       ),
     ).toEqual([]);
   });
