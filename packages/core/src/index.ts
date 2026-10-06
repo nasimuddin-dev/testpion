@@ -56,6 +56,7 @@ export * from './scripts/aliases.js';
 export * from './runner/execute.js';
 export * from './runner/runner.js';
 export * from './runner/loader.js';
+export * from './runner/test-schema.js';
 export * from './runner/datasets.js';
 export * from './runner/collection-run.js';
 export * from './runner/breakdown.js';

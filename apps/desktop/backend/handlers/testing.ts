@@ -2,6 +2,8 @@
 import { copyFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
+  lintTestFile,
+  testEditorGuide,
   evaluationTests,
   workspaceReportHtml,
   loadHistory,
@@ -34,6 +36,10 @@ export function testingHandlers(be: Backend): Handlers {
     'tests.tree': () => be.ws.testTree(),
     'tests.read': ({ path }: { path: string }) => be.ws.readTestFile(path),
     'tests.write': ({ path, content }: { path: string; content: string }) => be.ws.writeTestFile(path, content),
+    /** What is wrong in a test file being edited (unknown keys, types, checks …), with positions, for the editor's markers. */
+    'tests.lint': ({ content, path }: { content: string; path?: string }) => lintTestFile(content, { file: path, suite: !!path && isSuiteFile(path) }),
+    /** The keys of test files, by context and type, with help: the editor's completion and hover. */
+    'tests.guide': () => testEditorGuide(),
     /** Save as test: a request from the REST, GraphQL, gRPC or WebSocket view as tests/<kind>/<name>.yaml (a free name). */
     'tests.saveFrom': ({ name, source, assertions }: { name: string; source: TestSource; assertions?: CheckConfig[] }) => {
       const t = testFromRequest(name, source, assertions);

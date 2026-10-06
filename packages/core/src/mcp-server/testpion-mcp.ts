@@ -5,7 +5,7 @@ import { flakyTests, summarizeTestHistory, testHistory } from '../runner/test-hi
 import { scoreTrend } from '../runner/score-trend.js';
 import { monitorRequestStats } from '../runner/monitor-requests.js';
 import { streamTests } from '../runner/loader.js';
-import { join, relative } from 'node:path';
+import { join, relative, sep } from 'node:path';
 import { testFromRequest } from '../runner/test-from.js';
 import { evaluateThresholds, parseThreshold } from '../load/thresholds.js';
 import { loadHistory, loadRunRecord, recordLoadRun } from '../load/history.js';
@@ -25,8 +25,9 @@ import type { AppSettings, CheckConfig, Collection, CollectionNode, HttpRequestS
 import { AGENT_PROMPTS, agentGuide, toolAnnotations } from './agent-kit.js';
 import { checkTypes } from '../eval/checks.js';
 import { isSuiteFile, loadSuite, loadTestsFromFile } from '../runner/loader.js';
+import { lintTestFile } from '../runner/test-schema.js';
 import { tmpdir } from 'node:os';
-import { rmSync } from 'node:fs';
+import { readdirSync, rmSync, statSync } from 'node:fs';
 import type { RunEvent } from '../runner/runner.js';
 import { ApsError, normalizeError } from '../errors.js';
 import { Redactor } from '../util/redact.js';
@@ -1013,6 +1014,26 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
         } finally {
           await ctx.dispose();
         }
+      },
+    },
+    {
+      name: 'lint_tests',
+      description:
+        'Check test files for mistakes before running them: unknown test or check types, keys the runner does not read (typos, with the likely key), dependsOn ids nobody defines, methods that are not HTTP methods, tests the loader refuses. Each problem has a severity, a message and a line. Give `paths` (files or folders under tests/) or `content` (the text of one file) to check.',
+      inputSchema: { type: 'object', properties: { paths: { type: 'array', items: { type: 'string' }, description: 'Test files or folders under tests/ (default: all)' }, content: str('The text of one test file to check instead of files') } },
+      run: (a) => {
+        if (typeof a.content === 'string') return { problems: lintTestFile(a.content) };
+        const tests = store.path('tests');
+        const files: string[] = [];
+        const walk = (p: string) => {
+          const abs = store.safePath(p, tests);
+          if (!existsSync(abs)) throw new ApsError('ValidationError', `No such test file or folder: ${p}`);
+          if (statSync(abs).isDirectory()) for (const e of readdirSync(abs).sort()) walk(join(p, e));
+          else if (/\.(ya?ml|json)$/.test(abs)) files.push(abs);
+        };
+        for (const p of ((a.paths as string[] | undefined) ?? ['.']).map(String)) walk(p);
+        const out = files.map((f) => ({ file: relative(tests, f).split(sep).join('/'), problems: lintTestFile(readFileSync(f, 'utf8'), { file: f, suite: isSuiteFile(f) }) })).filter((x) => x.problems.length);
+        return { files: files.length, problems: out.reduce((n, x) => n + x.problems.length, 0), results: out };
       },
     },
     {

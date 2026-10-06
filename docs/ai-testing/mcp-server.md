@@ -107,6 +107,7 @@ For Claude Code: `claude mcp add testpion -- testpion mcp-server -w /path/to/my-
 | `reorder_environments` | Set the order of environments in the environment picker (names or ids, first to last). |
 | `load_test` | Load-test a local URL, a collection or a gRPC method (`grpc: { target, method, message }`) (localhost and private networks only, at most 50 virtual users for 60 seconds; optional warm-up). Returns throughput, latency percentiles, error rate and per-request numbers; `thresholds` (e.g. `["p95<500", "errors<1%"]`) adds pass/fail per rule. |
 | `export_traces` | Send the newest traces (optionally of one kind) to an OpenTelemetry collector as OTLP, redacted; header values may be `{{variables}}`. |
+| `lint_tests` | What is wrong in test files before they run: unknown test or check types, keys the runner does not read (with the likely key), `dependsOn` ids nobody defines; each with a line. Files, or the text of one file. |
 | `list_tests` | The test files under `tests/` with their tests (id, name, type, tags). |
 | `run_tests` | Run test files (all, or files / folders, filtered by name or tags) like `testpion test`; `rerunFailed` runs only the failures of the last run (or a run id). The run is recorded in the workspace history. |
 | `save_test` | Save a collection's REST or GraphQL request as a YAML test file under `tests/`, with its checks. |

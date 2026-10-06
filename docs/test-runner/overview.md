@@ -19,6 +19,10 @@ retries: 1
 environment: Staging
 ```
 
+## Writing test files in the app
+
+The editor (Tests view) knows the format: keys complete with a line of help (the keys of the test's type, the checks' keys with every check type, `dependsOn` with the ids of the file), hovering a key explains it, and mistakes get a marker a moment after you type: an unknown `type`, an unknown check type, a key the runner does not read (with the key you probably meant), a `dependsOn` nobody defines. The same checks run from the terminal with `testpion lint-tests` (exit 1 on errors, `--json` for scripts) and for AI agents through the `lint_tests` tool, so a pull request can be checked before the tests run.
+
 ## Execution model
 
 - Tests stream from disk and are never loaded all at once. At most 2× the concurrency is pulled ahead of the workers (**backpressure**).

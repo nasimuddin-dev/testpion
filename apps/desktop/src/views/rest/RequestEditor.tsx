@@ -1,5 +1,5 @@
 /** The request editor: params, auth, headers, body, cookies, scripts, tests, examples, docs and settings. */
-import { useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useApp } from '../../store';
 import type { BodyConfig, HttpRequestSpec, KeyValue, SavedExample } from '../../types';
 import { ExamplesPanel } from '../../components/ExamplesPanel';
@@ -9,6 +9,7 @@ import { ScriptsPanel } from '../../components/ScriptsPanel';
 import { AssertionEditor } from '../../components/AssertionEditor';
 import { AuthEditor } from '../../components/AuthEditor';
 import { CodeEditor } from '../../components/CodeEditor';
+import { call } from '../../api';
 import { COMMON_HEADERS, HEADER_VALUES, KeyValueEditor } from '../../components/KeyValueEditor';
 import { Field, Input, Select, Tabs, Toggle } from '../../components/ui';
 import { RestTab } from './types';
@@ -70,7 +71,7 @@ export function RequestEditor({
             <KeyValueEditor rows={r.headers ?? []} onChange={(headers) => setReq({ headers })} keyPlaceholder="Header" suggestions={COMMON_HEADERS} valueSuggestions={HEADER_VALUES} />
           </div>
         )}
-        {sub === 'body' && <BodyEditor stashKey={tab.id} body={r.body ?? { type: 'none' }} onChange={(body) => setReq({ body })} />}
+        {sub === 'body' && <BodyEditor stashKey={tab.id} body={r.body ?? { type: 'none' }} onChange={(body) => setReq({ body })} method={r.method} url={r.url} />}
         {sub === 'cookies' && (
           <div className="p-2">
             <KeyValueEditor rows={r.cookies ?? []} onChange={(cookies) => setReq({ cookies })} keyPlaceholder="Cookie" />
@@ -121,7 +122,38 @@ export function beautify(text: string, type: string): string {
  * and back) restores it, as in Postman. Kept for the session; only the selected type is saved.
  */
 const bodyStash = new Map<string, BodyStash>();
-export function BodyEditor({ body, onChange, stashKey = 'default' }: { body: BodyConfig; onChange(b: BodyConfig): void; stashKey?: string }) {
+export function BodyEditor({ body, onChange, stashKey = 'default', method, url }: { body: BodyConfig; onChange(b: BodyConfig): void; stashKey?: string; method?: string; url?: string }) {
+  // the schema of the body from the API definition the request belongs to (specs/): completion and checks in the editor
+  const environment = useApp((s) => s.environment);
+  const [spec, setSpec] = useState<{ schema: unknown; spec: string; path: string; summary?: string } | null>(null);
+  useEffect(() => {
+    if (body.type !== 'json' || !url || !method) return setSpec(null);
+    let live = true;
+    const t = setTimeout(() => {
+      void call<{ schema: unknown; spec: string; path: string; summary?: string } | null>('openapi.bodySchema', { method, url, environment })
+        .then((r) => live && setSpec(r))
+        .catch(() => live && setSpec(null));
+    }, 400);
+    return () => {
+      live = false;
+      clearTimeout(t);
+    };
+  }, [body.type, method, url, environment]);
+  // a body typed as text that is really JSON or XML: offer the right editor (completion, checks, beautify)
+  const looksLike = useMemo((): 'json' | 'xml' | 'html' | undefined => {
+    if (body.type !== 'text' || !('content' in body) || !body.content.trim()) return undefined;
+    const t = body.content.trim();
+    if (/^[{[]/.test(t)) {
+      try {
+        JSON.parse(t);
+        return 'json';
+      } catch {
+        return undefined;
+      }
+    }
+    if (/^<\?xml|^<[a-zA-Z][\w:-]*[\s>]/.test(t)) return /<html|<!doctype html/i.test(t) ? 'html' : 'xml';
+    return undefined;
+  }, [body]);
   const types: Array<[BodyConfig['type'], string]> = [
     ['none', 'None'],
     ['json', 'JSON'],
@@ -155,7 +187,33 @@ export function BodyEditor({ body, onChange, stashKey = 'default' }: { body: Bod
       </div>
       <div className="flex-1 min-h-0">
         {body.type === 'none' && <div className="p-4 text-sm text-muted">This request has no body.</div>}
-        {'content' in body && <CodeEditor language={body.type === 'json' ? 'json' : body.type === 'xml' ? 'xml' : body.type === 'html' ? 'html' : 'plaintext'} value={body.content} onChange={(content) => onChange({ ...body, content })} />}
+        {looksLike && (
+          <div className="px-3 py-1 text-xs text-muted border-b border-line flex items-center gap-2">
+            This looks like {looksLike.toUpperCase()}.
+            <button className="text-accent hover:underline" onClick={() => setType(looksLike)}>
+              Edit it as {looksLike.toUpperCase()}
+            </button>
+          </div>
+        )}
+        {'content' in body && (
+          <div className="h-full flex flex-col min-h-0">
+            {spec && body.type === 'json' && (
+              <div className="px-3 py-1 text-xs text-muted border-b border-line truncate" title={`The editor completes and checks the body against this operation's schema (${spec.spec})`}>
+                Schema from <b>{spec.spec}</b> · {spec.path}
+                {spec.summary ? ` · ${spec.summary}` : ''}
+              </div>
+            )}
+            <div className="flex-1 min-h-0">
+              <CodeEditor
+                language={body.type === 'json' ? 'json' : body.type === 'xml' ? 'xml' : body.type === 'html' ? 'html' : 'plaintext'}
+                value={body.content}
+                onChange={(content) => onChange({ ...body, content })}
+                path={body.type === 'json' ? `body/${stashKey}.json` : undefined}
+                jsonSchema={body.type === 'json' && spec ? spec.schema : undefined}
+              />
+            </div>
+          </div>
+        )}
         {(body.type === 'form-urlencoded' || body.type === 'multipart') && (
           <div className="p-2 overflow-auto h-full">
             <KeyValueEditor rows={body.fields} onChange={(fields) => onChange({ ...body, fields })} keyPlaceholder="Field" allowFile={body.type === 'multipart'} />

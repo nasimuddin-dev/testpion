@@ -232,3 +232,32 @@ registerCheck('openapi', (cfg: CheckConfig, ctx: CheckContext): CheckResult => {
   const r = validateAgainstOpenApi(doc, ctx.request, { status: ctx.status ?? 0, contentType: ctx.headers?.find(([k]) => k.toLowerCase() === 'content-type')?.[1], body: ctx.body, text: ctx.text }, { operationId: typeof cfg.operationId === 'string' ? cfg.operationId : undefined });
   return res(r.passed, r.message, { metadata: { operation: r.operation, errors: r.errors.slice(0, 50) } });
 });
+
+/**
+ * The JSON Schema of the body a request should send, from the operation its method and URL map to: an OpenAPI 3
+ * `requestBody` (application/json, or the first JSON-like content type) or a Swagger 2 body parameter. `$ref`s stay
+ * as written, with the document's components / definitions beside the schema, so a JSON editor can follow them.
+ */
+export function requestBodySchema(doc: OpenApiDoc, method: string, url: string): { schema: Json; contentType: string; operationId?: string; path: string; summary?: string } | undefined {
+  const op = findOperation(doc, method, url);
+  if (!op) return undefined;
+  const o = op.operation;
+  let schema: Json | undefined;
+  let contentType = 'application/json';
+  const content = (o.requestBody as { content?: Record<string, { schema?: Json }> } | undefined)?.content;
+  if (content) {
+    const ct = Object.keys(content).find((k) => /json/i.test(k)) ?? Object.keys(content)[0];
+    if (ct) {
+      contentType = ct;
+      schema = content[ct]?.schema;
+    }
+  } else {
+    const body = ((o.parameters as Array<{ in?: string; schema?: Json }> | undefined) ?? []).find((p) => p.in === 'body');
+    schema = body?.schema;
+  }
+  if (!schema || typeof schema !== 'object') return undefined;
+  const extra: Json = {};
+  if (doc.components) extra.components = doc.components;
+  if (doc.definitions) extra.definitions = doc.definitions;
+  return { schema: { ...schema, ...extra }, contentType, operationId: op.operationId, path: `${op.method.toUpperCase()} ${op.path}`, summary: typeof o.summary === 'string' ? o.summary : undefined };
+}

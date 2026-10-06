@@ -7,6 +7,10 @@ description: "Build and test HTTP requests: methods, bodies, cookies, streaming,
 
 # REST and HTTP
 
+## Body: completion from the API definition
+
+When the workspace holds an API definition (**Import** an OpenAPI / Swagger document, or save one under `specs/`), a JSON body is completed and checked against the operation the request maps to (its method and URL, `{{variables}}` resolved from the active environment): the editor offers the fields, says which are required, and marks a wrong type or an unknown field. A line above the body says which definition and operation the schema comes from. The same schemas drive the gRPC message editor (from the service's .proto) and the MCP tool arguments (from the tool's input schema).
+
 ## Requests
 
 - Any method, including custom ones.

@@ -118,8 +118,193 @@ function localVariablesOf(model: Monaco.editor.ITextModel): VarInfo[] {
 
 /* ------------------------------------------------------------------ install */
 
+/* ------------------------------------------------------------------ test files (YAML) */
+
+interface TestKeyDoc {
+  key: string;
+  description: string;
+  values?: string[];
+  shape?: 'text' | 'list' | 'map' | 'boolean' | 'number';
+}
+interface TestGuide {
+  file: TestKeyDoc[];
+  suite: TestKeyDoc[];
+  common: TestKeyDoc[];
+  byType: Record<string, TestKeyDoc[]>;
+  assertion: TestKeyDoc[];
+  checkTypes: string[];
+  httpMethods: string[];
+}
+let guide: Promise<TestGuide> | undefined;
+const testGuide = () => (guide ??= call<TestGuide>('tests.guide'));
+
+const isTestModel = (model: Monaco.editor.ITextModel) => model.getLanguageId() === 'yaml' && /\/tests\//.test(model.uri.path);
+const isSuiteModel = (model: Monaco.editor.ITextModel) => /\.suite\.ya?ml$/.test(model.uri.path);
+
+/**
+ * Where the cursor is in a test file, from indentation alone (good enough for YAML written by hand): the parent keys
+ * above it, whether it is inside a list item, and the test's type when it is inside a test.
+ */
+function yamlContext(model: Monaco.editor.ITextModel, lineNumber: number): { path: string[]; type?: string; indent: number; inItem: boolean } {
+  const indentOf = (l: string) => l.match(/^\s*/)![0].length;
+  const current = model.getLineContent(lineNumber);
+  const indent = indentOf(current) + (/^\s*-\s/.test(current) ? 2 : 0);
+  const path: string[] = [];
+  let want = indent;
+  let typeAt: string | undefined;
+  for (let n = lineNumber - 1; n >= 1; n--) {
+    const l = model.getLineContent(n);
+    if (!l.trim() || /^\s*#/.test(l)) continue;
+    const i = indentOf(l);
+    const m = /^\s*(?:-\s+)?([\w-]+):\s*(.*)$/.exec(l);
+    if (i < want || (i === want - 2 && /^\s*-\s/.test(l) && m)) {
+      // a sibling list item's "type:" counts for the item the cursor is in
+      if (m) path.unshift(m[1]!);
+      want = i;
+      if (want === 0) break;
+    } else if (i === indent && m && m[1] === 'type' && !typeAt && path.length === 0) typeAt = m[2]!.trim().replace(/^['"]|['"]$/g, '');
+  }
+  if (!typeAt) {
+    // the type written in this item (above or below the cursor), or in the file's defaults
+    for (let n = lineNumber - 1; n >= 1; n--) {
+      const l = model.getLineContent(n);
+      const i = indentOf(l);
+      if (!l.trim()) continue;
+      if (i < indent - (/^\s*-\s/.test(l) ? 2 : 0)) break;
+      const m = /^\s*(?:-\s+)?type:\s*(.*)$/.exec(l);
+      if (m && i <= indent) {
+        typeAt = m[1]!.trim().replace(/^['"]|['"]$/g, '');
+        break;
+      }
+      if (/^\s*-\s/.test(l) && i < indent) break;
+    }
+  }
+  if (!typeAt) {
+    const all = model.getValue();
+    const d = /^defaults:\s*\n(?:[ \t]+.*\n)*?[ \t]+type:\s*(\S+)/m.exec(all);
+    if (d) typeAt = d[1]!.replace(/^['"]|['"]$/g, '');
+  }
+  return { path, type: typeAt, indent, inItem: /^\s*-\s/.test(current) };
+}
+
+function installTestFileIntel(monaco: typeof Monaco): void {
+  const kindOf = (shape?: TestKeyDoc['shape']) => (shape === 'list' ? monaco.languages.CompletionItemKind.Enum : shape === 'map' ? monaco.languages.CompletionItemKind.Struct : monaco.languages.CompletionItemKind.Property);
+  monaco.languages.registerCompletionItemProvider('yaml', {
+    triggerCharacters: [' ', ':', '-'],
+    provideCompletionItems: async (model, position) => {
+      if (!isTestModel(model)) return { suggestions: [] };
+      const g = await testGuide();
+      const line = model.getLineContent(position.lineNumber);
+      const before = line.slice(0, position.column - 1);
+      const ctx = yamlContext(model, position.lineNumber);
+      const word = model.getWordUntilPosition(position);
+      const range = new monaco.Range(position.lineNumber, word.startColumn, position.lineNumber, word.endColumn);
+      // a value after "key:"
+      const kv = /^\s*(?:-\s+)?([\w-]+):\s*(\S*)$/.exec(before);
+      if (kv) {
+        const key = kv[1]!;
+        let values: string[] | undefined;
+        const last = ctx.path[ctx.path.length - 1];
+        if (key === 'type' && last === 'assertions') values = g.checkTypes;
+        else if (key === 'type') values = g.common.find((k) => k.key === 'type')?.values;
+        else if (key === 'method' && (ctx.type === 'http' || !ctx.type)) values = g.httpMethods;
+        else if (key === 'mode') values = g.byType.websocket?.find((k) => k.key === 'mode')?.values;
+        else if (key === 'dependsOn') values = [...model.getValue().matchAll(/^\s*(?:-\s+)?id:\s*['"]?([\w.:-]+)['"]?\s*$/gm)].map((m) => m[1]!);
+        if (!values) return { suggestions: [] };
+        return { suggestions: values.map((v, i) => ({ label: v, kind: monaco.languages.CompletionItemKind.EnumMember, insertText: v, range, sortText: String(i).padStart(3, '0') })) };
+      }
+      // a key
+      if (!/^\s*(?:-\s+)?[\w-]*$/.test(before)) return { suggestions: [] };
+      const last = ctx.path[ctx.path.length - 1];
+      let keys: TestKeyDoc[];
+      if (isSuiteModel(model)) keys = g.suite;
+      else if (last === 'assertions' || last === 'evaluators') keys = g.assertion;
+      else if (last === 'tests' || last === 'defaults' || (ctx.path.length === 0 && !/^tests:/m.test(model.getValue()))) keys = [...g.common, ...(ctx.type && g.byType[ctx.type] ? g.byType[ctx.type]! : Object.values(g.byType).flat().filter((k, i, all) => all.findIndex((x) => x.key === k.key) === i))];
+      else if (ctx.path.length === 0) keys = g.file;
+      else return { suggestions: [] };
+      const used = new Set<string>();
+      for (let n = position.lineNumber - 1; n >= 1; n--) {
+        const l = model.getLineContent(n);
+        const i = l.match(/^\s*/)![0].length;
+        if (l.trim() && i < ctx.indent - (ctx.inItem ? 2 : 0)) break;
+        const m = /^\s*(?:-\s+)?([\w-]+):/.exec(l);
+        if (m && i === ctx.indent - (ctx.inItem ? 2 : 0)) used.add(m[1]!);
+      }
+      return {
+        suggestions: keys
+          .filter((k) => !used.has(k.key))
+          .map((k, i) => ({
+            label: k.key,
+            kind: kindOf(k.shape),
+            detail: k.values ? k.values.slice(0, 6).join(' | ') + (k.values.length > 6 ? ' …' : '') : k.shape,
+            documentation: { value: k.description },
+            insertText: k.shape === 'list' ? `${k.key}:\n${' '.repeat(ctx.indent)}  - ` : k.shape === 'map' ? `${k.key}:\n${' '.repeat(ctx.indent)}  ` : `${k.key}: `,
+            range,
+            sortText: String(i).padStart(3, '0'),
+          })),
+      };
+    },
+  });
+
+  // hover: what a key means
+  monaco.languages.registerHoverProvider('yaml', {
+    provideHover: async (model, position) => {
+      if (!isTestModel(model)) return null;
+      const g = await testGuide();
+      const line = model.getLineContent(position.lineNumber);
+      const m = /^(\s*(?:-\s+)?)([\w-]+):/.exec(line);
+      if (!m) return null;
+      const start = m[1]!.length + 1;
+      const end = start + m[2]!.length;
+      if (position.column < start || position.column > end) return null;
+      const ctx = yamlContext(model, position.lineNumber);
+      const last = ctx.path[ctx.path.length - 1];
+      const pool = isSuiteModel(model) ? g.suite : last === 'assertions' || last === 'evaluators' ? g.assertion : ctx.path.length === 0 && /^tests:/m.test(model.getValue()) ? g.file : [...g.common, ...Object.values(g.byType).flat()];
+      const doc = pool.find((k) => k.key === m[2]);
+      if (!doc) return null;
+      return { range: new monaco.Range(position.lineNumber, start, position.lineNumber, end), contents: [{ value: `**${doc.key}** · ${doc.description}${doc.values ? `\n\nOne of: ${doc.values.join(', ')}` : ''}` }] };
+    },
+  });
+
+  // problems, from the same lint the CLI and the agents use (tests.lint), a moment after typing stops
+  const timers = new Map<string, ReturnType<typeof setTimeout>>();
+  const lint = async (model: Monaco.editor.ITextModel) => {
+    if (model.isDisposed()) return;
+    try {
+      const problems = await call<Array<{ severity: 'error' | 'warning' | 'info'; message: string; line: number; column: number; endLine: number; endColumn: number }>>('tests.lint', { content: model.getValue(), path: model.uri.path.replace(/^.*\/tests\//, '') });
+      if (model.isDisposed()) return;
+      monaco.editor.setModelMarkers(
+        model,
+        'testpion',
+        problems.map((p) => ({
+          severity: p.severity === 'error' ? monaco.MarkerSeverity.Error : p.severity === 'warning' ? monaco.MarkerSeverity.Warning : monaco.MarkerSeverity.Info,
+          message: p.message,
+          startLineNumber: p.line,
+          startColumn: p.column,
+          endLineNumber: p.endLine,
+          endColumn: Math.max(p.endColumn, p.column + 1),
+        })),
+      );
+    } catch {
+      /* the backend is away: no markers */
+    }
+  };
+  const watch = (model: Monaco.editor.ITextModel) => {
+    if (!isTestModel(model)) return;
+    const schedule = () => {
+      clearTimeout(timers.get(model.id));
+      timers.set(model.id, setTimeout(() => void lint(model), 500));
+    };
+    model.onDidChangeContent(schedule);
+    void lint(model);
+  };
+  monaco.editor.getModels().forEach(watch);
+  monaco.editor.onDidCreateModel(watch);
+}
+
 export function installEditorIntel(monaco: typeof Monaco): void {
   monacoRef = monaco;
+  installTestFileIntel(monaco);
   setEditorJsonSchema('__none__', undefined);
 
   // {{variable}} completion in every language

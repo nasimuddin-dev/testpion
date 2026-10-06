@@ -1,8 +1,10 @@
 /** Commands that run things: test files, suites, collections and load tests; re-generating reports. */
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { dirname, join, relative, sep } from 'node:path';
 import { Command, Option } from 'commander';
 import {
+  isSuiteFile,
+  lintTestFile,
   ChainSecretStore,
   EnvSecretStore,
   WorkspaceManager,
@@ -28,6 +30,37 @@ export function registerRunCommands(program: Command): void {
   runOptions(program.command('test').description('run tests from files, directories, globs or a *.suite.yaml').argument('[paths...]', 'test files/dirs/globs')).action(async (paths: string[], o: RunCliOptions & { watch?: boolean }) => {
     process.exitCode = o.watch ? await runWatching(watchTargets(o.workspace, paths), () => executeRun(paths, o)) : await executeRun(paths, o);
   });
+  program
+    .command('lint-tests')
+    .description('check test files before running them: unknown test or check types, keys the runner does not read (typos), dependsOn ids nobody defines; exit 1 when there are errors')
+    .argument('[paths...]', 'test files or folders under tests/ (default: all)')
+    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest)')
+    .option('--json', 'print the problems as JSON (for scripts and AI agents)')
+    .action((paths: string[], o) => {
+      const { store } = openWorkspace(o.workspace, undefined, new WorkspaceManager());
+      try {
+        const tests = store.path('tests');
+        const files: string[] = [];
+        const walk = (p: string) => {
+          const abs = store.safePath(p, tests);
+          if (!existsSync(abs)) throw new CliError(`No such test file or folder: ${p}`, EXIT.CONFIG_ERROR);
+          if (statSync(abs).isDirectory()) for (const e of readdirSync(abs).sort()) walk(join(p, e));
+          else if (/\.(ya?ml|json)$/.test(abs)) files.push(abs);
+        };
+        for (const p of paths.length ? paths : ['.']) walk(p);
+        const results = files.map((f) => ({ file: relative(tests, f).split(sep).join('/'), problems: lintTestFile(readFileSync(f, 'utf8'), { file: f, suite: isSuiteFile(f) }) })).filter((x) => x.problems.length);
+        const errors = results.reduce((n, x) => n + x.problems.filter((p) => p.severity === 'error').length, 0);
+        const total = results.reduce((n, x) => n + x.problems.length, 0);
+        if (o.json) console.log(JSON.stringify({ files: files.length, problems: total, errors, results }, null, 2));
+        else {
+          for (const r of results) for (const p of r.problems) console.log(`${p.severity === 'error' ? red('error') : p.severity === 'warning' ? yellow('warning') : dim('info')}  ${r.file}:${p.line}:${p.column}  ${p.message}`);
+          console.log(total ? `${total} problem${total === 1 ? '' : 's'} in ${results.length} of ${files.length} files (${errors} error${errors === 1 ? '' : 's'})` : green(`${files.length} test files, nothing to fix.`));
+        }
+        if (errors) process.exitCode = EXIT.TEST_FAILURE;
+      } finally {
+        store.close();
+      }
+    });
   runOptions(program.command('run').description('run a named suite from a workspace').requiredOption('-s, --suite <name>', 'suite name (tests/<name>.suite.yaml)')).action(async (o: RunCliOptions & { watch?: boolean }) => {
     process.exitCode = o.watch ? await runWatching(watchTargets(o.workspace), () => executeRun([], o)) : await executeRun([], o);
   });

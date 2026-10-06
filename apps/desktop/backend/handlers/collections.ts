@@ -1,43 +1,7 @@
 /** RPC handlers: Collections (requests, folders, examples, import/export) and their mock servers. */
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, relative, sep } from 'node:path';
-import {
-  ApsError,
-  isSqliteDataset,
-  collectionVariableFlow,
-  listWorkspaceDatasets,
-  readDataset,
-  sqliteTables,
-  fetchImportText,
-  bruFilesToBrunoExport,
-  collectionToBru,
-  importIntoWorkspace,
-  diffOpenApi,
-  workspaceApiCoverage,
-  apiCoverageMarkdown,
-  securityLint,
-  certificateLint,
-  listCertificates,
-  variableFlow,
-  startRecorder,
-  recordingToCollection,
-  type RecordedExchange,
-  collectionToOpenApiText,
-  exampleFromResponse,
-  startMockServer,
-  collectionMarkdown,
-  collectionHtml,
-  exportPostmanCollection,
-  withRequestExamples,
-  type SavedExample,
-  convertCollectionScripts,
-  importRequestSnippet,
-  isRequestSnippet,
-  type Collection,
-  collectionSavedItems,
-  duplicateCollection,
-  shortId,
-} from '@testpion/core';
+import { ApsError, isSqliteDataset, collectionVariableFlow, listWorkspaceDatasets, readDataset, sqliteTables, fetchImportText, bruFilesToBrunoExport, collectionToBru, importIntoWorkspace, diffOpenApi, workspaceApiCoverage, apiCoverageMarkdown, securityLint, certificateLint, listCertificates, variableFlow, startRecorder, recordingToCollection, type RecordedExchange, collectionToOpenApiText, exampleFromResponse, startMockServer, collectionMarkdown, collectionHtml, exportPostmanCollection, withRequestExamples, type SavedExample, convertCollectionScripts, importRequestSnippet, isRequestSnippet, type Collection, collectionSavedItems, duplicateCollection, shortId, requestBodySchema, loadOpenApi } from '@testpion/core';
 import type { Backend, Handlers, CollectionRunParams } from '../backend.js';
 
 /** An API definition's workspace path: a JSON or YAML file directly in specs/. */
@@ -168,6 +132,29 @@ export function collectionsHandlers(be: Backend): Handlers {
     'openapi.specs': () => {
       const dir = be.ws.path('specs');
       return existsSync(dir) ? readdirSync(dir).filter((f) => /\.(json|ya?ml)$/i.test(f)).map((f) => `specs/${f}`) : [];
+    },
+    /**
+     * The JSON Schema a request's body should follow, from the operation it maps to in one of the workspace's API
+     * definitions (specs/): the body editor completes and checks against it. {{variables}} in the URL resolve first.
+     */
+    'openapi.bodySchema': ({ method, url, environment }: { method: string; url: string; environment?: string }) => {
+      const dir = be.ws.path('specs');
+      if (!existsSync(dir) || !url) return null;
+      const ctx = be.context({ environment });
+      try {
+        const resolved = ctx.vars.resolve(url);
+        for (const f of readdirSync(dir).filter((x) => /\.(json|ya?ml)$/i.test(x)).sort()) {
+          try {
+            const r = requestBodySchema(loadOpenApi(readFileSync(join(dir, f), 'utf8')), method, resolved);
+            if (r) return { ...r, spec: `specs/${f}` };
+          } catch {
+            /* not an OpenAPI document, or unreadable: the next one */
+          }
+        }
+        return null;
+      } finally {
+        void ctx.dispose();
+      }
     },
     /** The text of an OpenAPI document kept in the workspace (specs/), for its editor tab. */
     'openapi.spec.get': ({ path }: { path: string }) => {
