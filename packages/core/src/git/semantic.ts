@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
 import type { Collection, CollectionNode, Environment } from '../model/types.js';
 import { assertGitRev, gitLog, gitShow, runGit, type GitCommit, type GitFile } from './git.js';
+import { requestParts } from './merge.js';
 
 /**
  * Changes said by what they mean (GIT-205): "Payments ▸ Create invoice: URL and 2 headers changed" rather than
@@ -229,4 +230,67 @@ export async function gitItemHistory(ws: string, file: string, itemId: string, l
     if (versions.length >= limit) break;
   }
   return versions;
+}
+
+/** One part of an item in two versions (GIT-205's side-by-side view). */
+export interface PartChange {
+  part: string;
+  before?: string;
+  after?: string;
+  differs: boolean;
+}
+
+/**
+ * One changed item side by side (GIT-205): a request or folder of a collection file (`itemId`), the collection's own
+ * settings (no `itemId`), or an environment (its variables; secret values never appear, they live in the OS store).
+ * `rev` is the version to compare with (the last commit by default); the other side is the file in the working folder.
+ */
+export async function describeItemDiff(ws: string, file: string, itemId?: string, rev = 'HEAD'): Promise<{ title: string; parts: PartChange[] }> {
+  const before = await gitShow(ws, file, rev);
+  let after: string | undefined;
+  try {
+    after = readFileSync(join(ws, file), 'utf8');
+  } catch {
+    after = undefined;
+  }
+  const rows = (b: Record<string, string> | undefined, a: Record<string, string> | undefined): PartChange[] =>
+    [...new Set([...Object.keys(b ?? {}), ...Object.keys(a ?? {})])].map((part) => {
+      const x = b ? (b[part] ?? '') : undefined;
+      const y = a ? (a[part] ?? '') : undefined;
+      return { part, before: x, after: y, differs: x !== y };
+    });
+  if (/^collections\/[^/]+\.json$/.test(file)) {
+    const bc = parse<Collection>(before);
+    const ac = parse<Collection>(after);
+    if (itemId) {
+      const find = (items: Node[] | undefined): Node | undefined => {
+        for (const n of items ?? []) {
+          if (n.id === itemId) return n;
+          const inner = find(n.items as Node[] | undefined);
+          if (inner) return inner;
+        }
+        return undefined;
+      };
+      const bn = find(bc?.items as Node[] | undefined);
+      const an = find(ac?.items as Node[] | undefined);
+      const name = String((an ?? bn)?.name ?? itemId);
+      return { title: `${ac?.name ?? bc?.name ?? file} ▸ ${name}`, parts: rows(bn && requestParts(bn), an && requestParts(an)) };
+    }
+    const settings = (c: Collection | undefined) =>
+      c && { Name: c.name, Description: c.description ?? '', Auth: c.auth ? JSON.stringify(c.auth, null, 2) : '', Variables: (c.variables ?? []).map((v) => `${v.enabled === false ? '// ' : ''}${v.key}: ${v.value}`).join('\n'), 'Pre-request script': c.preRequestScript ?? '', 'Test script': c.testScript ?? '' };
+    return { title: `collection ${ac?.name ?? bc?.name ?? file}`, parts: rows(settings(bc), settings(ac)) };
+  }
+  if (/^environments\/[^/]+\.json$/.test(file)) {
+    const be = parse<Environment>(before);
+    const ae = parse<Environment>(after);
+    const vars = (e: Environment | undefined) =>
+      e && {
+        Name: e.name,
+        Production: e.isProduction ? 'yes' : 'no',
+        ...Object.fromEntries(e.variables.map((v) => [`{{${v.key}}}`, `${v.enabled === false ? '(off) ' : ''}${v.secret ? '•••• (secret, in the OS store)' : v.value}`])),
+      };
+    return { title: `environment ${ae?.name ?? be?.name ?? file}`, parts: rows(vars(be), vars(ae)) };
+  }
+  // any other file: the text as one part
+  return { title: file, parts: rows(before === undefined ? undefined : { Text: before }, after === undefined ? undefined : { Text: after }) };
 }

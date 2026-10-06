@@ -16,8 +16,7 @@ import {
   gitStatus,
   gitSwitch,
   runMergeDriver,
-  type WorkspaceStore,
-} from '@testpion/core';
+  type WorkspaceStore, gitConflictDetail, gitDeleteBranch, gitRenameBranch } from '@testpion/core';
 import { EXIT, green, dim, bold, red, yellow, CliError, openWorkspace } from '../shared.js';
 
 const MARK: Record<string, string> = { added: 'A', untracked: 'A', removed: 'D', deleted: 'D', changed: 'M', modified: 'M', renamed: 'R', conflicted: '!' };
@@ -105,8 +104,26 @@ export function registerGitCommands(git: Command, program: Command): void {
     }),
   );
 
-  wsOpt(git.command('branch').description('list branches')).action((o) =>
+  wsOpt(
+    git
+      .command('branch')
+      .description('list branches; -m renames the current branch, -d deletes a merged branch, -D deletes it anyway')
+      .option('-m, --rename <newName>', 'rename the current branch')
+      .option('-d, --delete <branch>', 'delete a local branch (refused when it has commits no other branch has)')
+      .option('-D, --force-delete <branch>', 'delete a local branch even if it is not merged'),
+  ).action((o) =>
     withStore(o.workspace, async (s) => {
+      if (o.rename) {
+        const current = (await gitBranches(s.root)).current;
+        if (!current) throw new CliError('No current branch to rename (detached HEAD)', EXIT.CONFIG_ERROR);
+        await gitRenameBranch(s.root, current, String(o.rename));
+        return out(o.json, { renamed: current, to: o.rename }, () => console.log(green(`Renamed ${current} to ${o.rename}`)));
+      }
+      if (o.delete || o.forceDelete) {
+        const name = String(o.delete ?? o.forceDelete);
+        await gitDeleteBranch(s.root, name, !!o.forceDelete);
+        return out(o.json, { deleted: name }, () => console.log(green(`Deleted ${name}`)));
+      }
       const b = await gitBranches(s.root);
       out(o.json, b, () => {
         for (const l of b.local) console.log(`${l === b.current ? green('* ') : '  '}${l}`);
@@ -142,12 +159,53 @@ export function registerGitCommands(git: Command, program: Command): void {
     .argument('<file>', 'path inside the workspace, e.g. collections/payments.json')
     .option('--ours', 'keep your version of what conflicts')
     .option('--theirs', 'take their version of what conflicts')
+    .option('--pick <key=side...>', 'a choice per conflict (keys from `testpion git conflicts`), e.g. item:r1=theirs item:r2=ours; the rest keep --ours/--theirs (default ours)')
     .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest)')
     .action((file: string, o) =>
       withStore(o.workspace, async (s) => {
-        if (!!o.ours === !!o.theirs) throw new CliError('Choose --ours or --theirs', EXIT.CONFIG_ERROR);
-        await gitResolve(s.root, file, o.ours ? 'ours' : 'theirs');
-        console.log(green(`Resolved ${file} (${o.ours ? 'yours' : 'theirs'} where both changed)`));
+        const picks = ((o.pick as string[] | undefined) ?? []).map((kv) => {
+          const i = kv.lastIndexOf('=');
+          const side = kv.slice(i + 1);
+          if (i <= 0 || (side !== 'ours' && side !== 'theirs')) throw new CliError(`--pick expects key=ours or key=theirs, got "${kv}"`, EXIT.CONFIG_ERROR);
+          return [kv.slice(0, i), side] as const;
+        });
+        if (!picks.length && !!o.ours === !!o.theirs) throw new CliError('Choose --ours or --theirs (or --pick per conflict)', EXIT.CONFIG_ERROR);
+        const side: 'ours' | 'theirs' = o.theirs ? 'theirs' : 'ours';
+        if (picks.length) {
+          // every conflict gets the default side unless picked
+          const detail = await gitConflictDetail(s.root, file);
+          const resolutions: Record<string, 'ours' | 'theirs'> = Object.fromEntries(detail.items.map((i) => [i.key, side]));
+          for (const [k, v] of picks) {
+            if (!(k in resolutions)) throw new CliError(`No conflict "${k}" in ${file}. Keys: ${Object.keys(resolutions).join(', ') || '(none)'}`, EXIT.CONFIG_ERROR);
+            resolutions[k] = v;
+          }
+          await gitResolve(s.root, file, side, resolutions);
+        } else await gitResolve(s.root, file, side);
+        console.log(green(`Resolved ${file}`));
+      }),
+    );
+
+  git
+    .command('conflicts')
+    .description('after a pull that stopped on conflicts: each conflict of a collection file, part by part (base, ours, theirs), with the key to --pick')
+    .argument('[file]', 'one conflicted file (default: all)')
+    .option('--json', 'machine-readable output (for scripts and AI agents)')
+    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest)')
+    .action((file: string | undefined, o) =>
+      withStore(o.workspace, async (s) => {
+        const st = await gitStatus(s.root);
+        const files = st.files.filter((f) => f.state === 'conflicted' && (!file || f.path === file));
+        const details = await Promise.all(files.map((f) => gitConflictDetail(s.root, f.path)));
+        out(o.json, details, () => {
+          if (!details.length) return console.log(green('No conflicts.'));
+          for (const d of details) {
+            console.log(bold(d.path) + (d.collection ? '' : dim('  (not a collection: --ours or --theirs takes the whole file)')));
+            for (const i of d.items) {
+              console.log(`  ${yellow(i.key)}  ${i.where} ${dim(`(${i.kind})`)}`);
+              for (const p of i.parts.filter((x) => x.differs)) console.log(dim(`    ${p.part}: mine ${JSON.stringify(p.ours ?? '(deleted)')} · theirs ${JSON.stringify(p.theirs ?? '(deleted)')}`));
+            }
+          }
+        });
       }),
     );
 

@@ -2,7 +2,8 @@ import { Check, GitMerge } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { asError, call } from '../api';
 import { useApp } from '../store';
-import { Badge, Button, cx, Empty, Modal, Segmented } from './ui';
+import { Badge, Button, Empty, Modal, Segmented } from './ui';
+import { PartsTable } from './PartsTable';
 
 /**
  * GIT-302's side-by-side view: every conflict of one collection file (a request changed on both sides, changed on one
@@ -66,15 +67,6 @@ export function GitConflictDialog({ path, onClose, onResolved }: { path: string;
     }
   };
   const all = (side: 'ours' | 'theirs') => setChoices(Object.fromEntries((detail?.items ?? []).map((i) => [i.key, side])));
-  const cell = (v: string | undefined, kind: ConflictItem['kind'], side: 'base' | 'ours' | 'theirs', differs: boolean, chosen: boolean) => (
-    <td className={cx('align-top p-1.5 border-l border-line/60 w-1/3', differs && side !== 'base' && 'bg-warn/10', chosen && 'ring-1 ring-inset ring-accent/60')}>
-      {v === undefined ? (
-        <span className="text-xs text-muted italic">{side === 'ours' && kind === 'deleted-ours' ? 'deleted here' : side === 'theirs' && kind === 'deleted-theirs' ? 'deleted by them' : '—'}</span>
-      ) : (
-        <pre className="text-xs mono whitespace-pre-wrap break-all max-h-40 overflow-auto">{v || <span className="text-muted">(empty)</span>}</pre>
-      )}
-    </td>
-  );
   return (
     <Modal
       title={
@@ -134,33 +126,15 @@ export function GitConflictDialog({ path, onClose, onResolved }: { path: string;
                     />
                   </span>
                 </header>
-                <table className="w-full table-fixed text-sm">
-                  <thead>
-                    <tr className="text-xs text-muted text-left">
-                      <th className="p-1.5 w-28 font-medium">Part</th>
-                      <th className="p-1.5 font-medium border-l border-line/60">Before (common)</th>
-                      <th className="p-1.5 font-medium border-l border-line/60">Mine</th>
-                      <th className="p-1.5 font-medium border-l border-line/60">Theirs</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {parts.map((p) => (
-                      <tr key={p.part} className="border-t border-line/60" data-part={p.part}>
-                        <td className="align-top p-1.5 text-xs font-medium">{p.part}</td>
-                        {cell(p.base, item.kind, 'base', p.differs, false)}
-                        {cell(p.ours, item.kind, 'ours', p.differs, choice === 'ours')}
-                        {cell(p.theirs, item.kind, 'theirs', p.differs, choice === 'theirs')}
-                      </tr>
-                    ))}
-                    {!parts.length && (
-                      <tr>
-                        <td colSpan={4} className="p-2 text-xs text-muted">
-                          No part differs between mine and theirs.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
+                <PartsTable
+                  rows={parts.map((p) => ({ part: p.part, differs: p.differs, values: { base: p.base, ours: p.ours, theirs: p.theirs } }))}
+                  emptyText="No part differs between mine and theirs."
+                  columns={[
+                    { key: 'base', label: 'Before (common)' },
+                    { key: 'ours', label: 'Mine', missing: item.kind === 'deleted-ours' ? 'deleted here' : '—', chosen: choice === 'ours', highlight: true },
+                    { key: 'theirs', label: 'Theirs', missing: item.kind === 'deleted-theirs' ? 'deleted by them' : '—', chosen: choice === 'theirs', highlight: true },
+                  ]}
+                />
               </section>
             );
           })}

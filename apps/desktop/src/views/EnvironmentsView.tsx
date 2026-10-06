@@ -1,4 +1,6 @@
-import { ArchiveRestore, ArrowLeftRight, Check, Copy, Grid3x3, Download, FileJson, FileText, KeyRound, Pencil, Save, ScanSearch, Trash2 } from 'lucide-react';
+import { ArchiveRestore, ArrowLeftRight, Check, Copy, Grid3x3, Download, FileJson, FileText, History, KeyRound, Pencil, Save, ScanSearch, Trash2 } from 'lucide-react';
+import { useGit } from '../lib/git';
+import { GitItemHistory } from '../components/GitItemHistory';
 import { useEffect, useRef, useState } from 'react';
 import { asError, call, on } from '../api';
 import { confirmAction, promptText, useApp } from '../store';
@@ -14,6 +16,8 @@ import { Badge, Button, cx, Empty, Field, Input, Menu, MoreMenu, Split, Tabs, To
 import { CountPill, focusRow, InlineRename, RowMenu, TreeHeader, treeKeys } from '../components/TreeParts';
 
 export function EnvironmentsView() {
+  const git = useGit();
+  const [historyOf, setHistoryOf] = useState<{ id: string; name: string }>();
   const ws = useApp((s) => s.workspace);
   const settings = useApp((s) => s.settings);
   const activeEnv = useApp((s) => s.environment);
@@ -266,6 +270,7 @@ export function EnvironmentsView() {
                       { label: 'Make active', icon: <Check size={14} />, disabled: activeEnv === e.name, onSelect: () => void useApp.getState().setEnvironment(e.name) },
                       { label: 'Rename', icon: <Pencil size={14} />, separator: true, onSelect: () => setRenamingEnv(e.id) },
                       { label: 'Duplicate', icon: <Copy size={14} />, onSelect: () => void duplicateEnv(e) },
+                      ...(git.status?.repository ? [{ label: 'History in git…', icon: <History size={14} />, onSelect: () => setHistoryOf({ id: e.id, name: e.name }) }] : []),
                       { label: 'Delete', icon: <Trash2 size={14} />, danger: true, separator: true, onSelect: () => void deleteEnv(e) },
                     ]}
                   />
@@ -316,6 +321,7 @@ export function EnvironmentsView() {
                       label="More environment actions"
                       items={[
                         { label: 'Duplicate', icon: <Copy size={14} />, onSelect: () => void duplicateEnv(draft) },
+                        ...(git.status?.repository ? [{ label: 'History in git…', icon: <History size={14} />, onSelect: () => setHistoryOf({ id: draft.id, name: draft.name }) }] : []),
                         { label: 'Delete environment', icon: <Trash2 size={14} />, danger: true, separator: true, onSelect: () => void deleteEnv(draft) },
                       ]}
                     />
@@ -395,6 +401,7 @@ export function EnvironmentsView() {
       {trashOpen && <TrashDialog kind="environment" onClose={() => setTrashOpen(false)} onRestored={(r) => void load().then(() => setSel(r.id))} />}
       {comparing && sel && <EnvCompare environments={envs} initialLeft={sel} onClose={() => setComparing(false)} />}
       {matrix && <EnvMatrix onClose={() => setMatrix(false)} />}
+      {historyOf && <GitItemHistory target={{ environmentId: historyOf.id }} name={historyOf.name} onClose={() => (setHistoryOf(undefined), void load())} />}
     </div>
   );
 }

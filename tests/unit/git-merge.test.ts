@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { WorkspaceStore, assertGitRef, assertGitRev, assertRemoteUrl, describeRevChanges, changesMarkdown, gitCommit, gitConflictDetail, gitItemHistory, gitInit, gitResolve, gitSetupMergeDriver, gitStatus, gitVersion, mergeCollectionTexts, pullRequestUrl, runGit, type Collection } from '@testpion/core';
+import { WorkspaceStore, assertGitRef, assertGitRev, assertRemoteUrl, describeRevChanges, changesMarkdown, gitCommit, gitConflictDetail, gitItemHistory, gitInit, gitResolve, gitSetupMergeDriver, gitStatus, gitVersion, mergeCollectionTexts, mergeWorkspaceTexts, pullRequestUrl, runGit, type Collection } from '@testpion/core';
 
 // GIT-301 (merge by id), GIT-304 (pull request links), GIT-401 (semantic diff between commits).
 const root = mkdtempSync(join(tmpdir(), 'tp-merge-'));
@@ -69,6 +69,41 @@ describe('merging collections by id', () => {
 
   it('leaves files that are not collections to git', () => {
     expect(mergeCollectionTexts('x', '{', '{}')).toBeUndefined();
+  });
+});
+
+describe('merging environments and library files (GIT-301)', () => {
+  const env = (vars: Array<[string, string]>, extra: Record<string, unknown> = {}) => JSON.stringify({ id: 'stg', name: 'Staging', variables: vars.map(([key, value]) => ({ key, value })), ...extra }, null, 2);
+
+  it('merges environments by variable: different variables combine, the same one changed twice is a conflict', () => {
+    const base = env([['baseUrl', 'https://a'], ['timeout', '30'], ['old', 'x']]);
+    const ours = env([['baseUrl', 'https://mine'], ['timeout', '30'], ['old', 'x'], ['mineOnly', '1']], { color: '#f00' });
+    const theirs = env([['baseUrl', 'https://theirs'], ['timeout', '60'], ['theirsOnly', '2']]);
+    const r = mergeWorkspaceTexts(base, ours, theirs)!;
+    expect(r.items.map((i) => [i.key, i.kind, i.where])).toEqual([['var:baseUrl', 'changed-both', 'environment Staging ▸ {{baseUrl}}']]);
+    const merged = JSON.parse(r.text) as { color: string; variables: Array<{ key: string; value: string }> };
+    expect(merged.color).toBe('#f00');
+    expect(Object.fromEntries(merged.variables.map((v) => [v.key, v.value]))).toEqual({ baseUrl: 'https://mine', timeout: '60', mineOnly: '1', theirsOnly: '2' });
+    const theirsWins = JSON.parse(mergeWorkspaceTexts(base, ours, theirs, { 'var:baseUrl': 'theirs' })!.text) as { variables: Array<{ key: string; value: string }> };
+    expect(theirsWins.variables.find((v) => v.key === 'baseUrl')!.value).toBe('https://theirs');
+  });
+
+  it('merges a library file by item id and keeps its folders', () => {
+    const lib = (items: unknown[], folders: string[]) => JSON.stringify({ schemaVersion: '1.0', folders, items }, null, 2);
+    const item = (id: string, data: unknown, folder?: string) => ({ id, name: id.toUpperCase(), ...(folder ? { folder } : {}), data });
+    const base = lib([item('a', { m: 1 }), item('b', { m: 1 }, 'Old')], ['Old']);
+    const ours = lib([item('a', { m: 2 }), item('b', { m: 1 }, 'Old'), item('c', { m: 1 }, 'Mine')], ['Mine', 'Old']);
+    const theirs = lib([item('a', { m: 1 }), item('d', { m: 1 })], []);
+    const r = mergeWorkspaceTexts(base, ours, theirs)!;
+    expect(r.conflicts).toEqual([]);
+    const merged = JSON.parse(r.text) as { folders: string[]; items: Array<{ id: string; data: { m: number } }> };
+    expect(merged.items.map((i) => `${i.id}:${i.data.m}`)).toEqual(['a:2', 'd:1', 'c:1']);
+    expect(merged.folders).toEqual(['Mine']);
+  });
+
+  it('still merges collections the same way', () => {
+    const r = mergeWorkspaceTexts(col([req('a', 'A', 'https://x/a')]), col([req('a', 'A', 'https://x/a2')]), col([req('a', 'A', 'https://x/a'), req('b', 'B', 'https://x/b')]))!;
+    expect((JSON.parse(r.text) as Collection).items.map((i) => i.id)).toEqual(['a', 'b']);
   });
 });
 

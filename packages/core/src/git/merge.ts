@@ -118,6 +118,72 @@ function mergeItems(base: Node[] = [], ours: Node[] = [], theirs: Node[] = [], p
   return out;
 }
 
+const parseObj = (s: string): Obj | undefined => {
+  if (!s.trim()) return {};
+  try {
+    const v = JSON.parse(s) as unknown;
+    return v && typeof v === 'object' && !Array.isArray(v) ? (v as Obj) : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+/**
+ * An environment merged by variable (GIT-301 for environments): a variable added, changed or removed on one side is
+ * taken; the same variable changed differently on both sides is a conflict (`var:<key>`); the environment's own
+ * fields (name, production, colour) merge one by one. Secret values are empty in the files, so they never conflict.
+ */
+export function mergeEnvironmentTexts(baseText: string, oursText: string, theirsText: string, resolutions: MergeResolutions = {}): MergeResult | undefined {
+  const [base, ours, theirs] = [parseObj(baseText), parseObj(oursText), parseObj(theirsText)];
+  if (!base || !ours || !theirs || !Array.isArray(ours.variables) || !Array.isArray(theirs.variables) || 'items' in ours) return undefined;
+  // the by-id merge keys a conflict item:<id>; a variable's id is var:<key>, and its conflict is reported as var:<key>
+  const byItemKey = Object.fromEntries(Object.entries(resolutions).map(([k, v]) => [k.startsWith('var:') ? `item:${k}` : k, v]));
+  const ctx: Ctx = { conflicts: [], items: [], resolutions: byItemKey };
+  const name = String(ours.name ?? theirs.name ?? 'environment');
+  // variables as items keyed by their name, so the by-id merge applies (and comes back to plain variables after)
+  const asNodes = (vars: unknown) => ((vars as Array<Obj & { key: string }> | undefined) ?? []).map((v) => ({ ...v, id: `var:${v.key}`, name: `{{${v.key}}}` }) as unknown as Node);
+  const variables = mergeItems(asNodes(base.variables), asNodes(ours.variables), asNodes(theirs.variables), `environment ${name}`, ctx).map((n) => {
+    const { id: _i, name: _n, ...v } = n as Obj;
+    void _i;
+    void _n;
+    return v;
+  });
+  for (const c of ctx.items) c.key = c.key.replace(/^item:/, '');
+  const fields = mergeFields(without(base, 'variables'), without(ours, 'variables'), without(theirs, 'variables'), `environment ${name}`, 'environment', ctx);
+  return { text: JSON.stringify({ ...fields, variables }, null, 2) + '\n', conflicts: ctx.conflicts, items: ctx.items };
+}
+
+/** An object without some keys (merged separately). */
+const without = (o: Obj, ...keys: string[]): Obj => Object.fromEntries(Object.entries(o).filter(([k]) => !keys.includes(k)));
+
+/**
+ * A library file (saved gRPC calls, WebSocket connections, AI prompts …) merged by item id; its folders are the
+ * union of both sides less the ones a side removed, plus every folder an item is in (as the store writes them).
+ */
+export function mergeLibraryTexts(baseText: string, oursText: string, theirsText: string, resolutions: MergeResolutions = {}): MergeResult | undefined {
+  const [base, ours, theirs] = [parseObj(baseText), parseObj(oursText), parseObj(theirsText)];
+  if (!base || !ours || !theirs || !Array.isArray(ours.items) || !Array.isArray(theirs.items) || !Array.isArray(ours.folders)) return undefined;
+  const ctx: Ctx = { conflicts: [], items: [], resolutions };
+  const items = mergeItems(base.items as Node[], ours.items as Node[], theirs.items as Node[], 'library', ctx);
+  const set = (x: unknown) => new Set(((x as string[] | undefined) ?? []).filter((f) => typeof f === 'string'));
+  const [bf, of, tf] = [set(base.folders), set(ours.folders), set(theirs.folders)];
+  // a folder stays unless one side removed it; every folder an item is in is there (as the store writes them)
+  const folders = new Set([...of, ...tf].filter((f) => !(bf.has(f) && (!of.has(f) || !tf.has(f)))));
+  for (const i of items) if (typeof (i as Obj).folder === 'string' && (i as Obj).folder) folders.add((i as Obj).folder as string);
+  const fields = mergeFields(without(base, 'folders'), without(ours, 'folders'), without(theirs, 'folders'), 'library', 'library', ctx);
+  return { text: JSON.stringify({ ...fields, folders: [...folders].sort((a, b) => a.localeCompare(b)), items }, null, 2) + '\n', conflicts: ctx.conflicts, items: ctx.items };
+}
+
+/** Any workspace file TestPion merges by meaning: a collection, an environment or a library file (undefined: git merges lines). */
+export function mergeWorkspaceTexts(baseText: string, oursText: string, theirsText: string, resolutions: MergeResolutions = {}): MergeResult | undefined {
+  const ours = parseObj(oursText);
+  if (!ours) return undefined;
+  if (Array.isArray(ours.variables) && !Array.isArray(ours.items)) return mergeEnvironmentTexts(baseText, oursText, theirsText, resolutions);
+  // a library file has a folders list (a collection's folders are items)
+  if (Array.isArray(ours.folders) && Array.isArray(ours.items)) return mergeLibraryTexts(baseText, oursText, theirsText, resolutions);
+  return mergeCollectionTexts(baseText, oursText, theirsText, resolutions);
+}
+
 /**
  * Merge three versions of a collection file; undefined when one of them is not a collection (git merges lines then).
  * `resolutions` settles conflicts one by one (from a previous run's `items`); without one, a conflict keeps ours.
@@ -147,7 +213,7 @@ export function mergeCollectionTexts(baseText: string, oursText: string, theirsT
  * (the file holds ours plus every change that did not conflict). Not a collection: git's own line merge.
  */
 export function runMergeDriver(baseFile: string, oursFile: string, theirsFile: string, log: (s: string) => void = () => undefined): number {
-  const r = mergeCollectionTexts(readFileSync(baseFile, 'utf8'), readFileSync(oursFile, 'utf8'), readFileSync(theirsFile, 'utf8'));
+  const r = mergeWorkspaceTexts(readFileSync(baseFile, 'utf8'), readFileSync(oursFile, 'utf8'), readFileSync(theirsFile, 'utf8'));
   if (!r) return lineMerge(baseFile, oursFile, theirsFile);
   writeFileSync(oursFile, r.text);
   for (const c of r.conflicts) log(`TestPion: ${c}`);
@@ -186,6 +252,10 @@ export function requestParts(node: unknown): Record<string, string> {
     Checks: json(n.assertions),
     Description: String(n.description ?? ''),
   };
+  // a library item (a saved gRPC call, a connection, a prompt …): its data as JSON
+  if ('data' in n) return Object.fromEntries(Object.entries({ Name: String(n.name ?? ''), Folder: String(n.folder ?? ''), Data: json(n.data) }).filter(([, v]) => v !== ''));
+  // an environment variable (merged as an item keyed by its name)
+  if (typeof n.key === 'string' && !('request' in n)) return { Value: n.secret ? '•••• (secret, in the OS store)' : String(n.value ?? ''), Enabled: n.enabled === false ? 'no' : 'yes', Secret: n.secret ? 'yes' : 'no' };
   if (n.kind === 'folder') return { Name: parts.Name!, Auth: json(n.auth), Variables: kv(n.variables), 'Pre-request script': parts['Pre-request script']!, 'Test script': parts['Test script']! };
   return Object.fromEntries(Object.entries(parts).filter(([, v]) => v !== ''));
 }

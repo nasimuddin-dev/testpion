@@ -1,6 +1,9 @@
 import { execFile } from 'node:child_process';
 import { existsSync, writeFileSync } from 'node:fs';
-import { mergeCollectionTexts, requestParts, type MergeConflict, type MergeResolutions } from './merge.js';
+import { mergeWorkspaceTexts, requestParts, type MergeConflict, type MergeResolutions } from './merge.js';
+
+/** The files TestPion merges by meaning (collections, environments, library), not by lines. */
+const MERGED_BY_MEANING = /^(collections|environments|library)\/[^/]+\.json$/;
 import { relative, resolve, sep } from 'node:path';
 import { ApsError } from '../errors.js';
 
@@ -269,6 +272,11 @@ export async function gitDeleteBranch(ws: string, branch: string, force = false)
   await runGit(ws, ['branch', force ? '-D' : '-d', assertGitRef(branch)]);
 }
 
+/** Rename a local branch (GIT-207); its upstream setting moves with it. */
+export async function gitRenameBranch(ws: string, from: string, to: string): Promise<void> {
+  await runGit(ws, ['branch', '-m', assertGitRef(from), assertGitRef(to)]);
+}
+
 export async function gitFetch(ws: string): Promise<void> {
   await runGit(ws, ['fetch', '--prune'], { timeoutMs: 300_000 });
 }
@@ -358,13 +366,13 @@ export async function gitDefaultBranch(ws: string): Promise<string> {
  */
 export async function gitResolve(ws: string, path: string, side: 'ours' | 'theirs', resolutions?: MergeResolutions): Promise<void> {
   const [base, ours, theirs] = await conflictStages(ws, path);
-  const merged = /^collections\/[^/]+\.json$/.test(path)
+  const merged = MERGED_BY_MEANING.test(path)
     ? resolutions
-      ? mergeCollectionTexts(base, ours, theirs, resolutions)
+      ? mergeWorkspaceTexts(base, ours, theirs, resolutions)
       : // the side kept on a conflict is the merge's "ours": swap the sides to prefer theirs
         side === 'ours'
-        ? mergeCollectionTexts(base, ours, theirs)
-        : mergeCollectionTexts(base, theirs, ours)
+        ? mergeWorkspaceTexts(base, ours, theirs)
+        : mergeWorkspaceTexts(base, theirs, ours)
     : undefined;
   if (merged) writeFileSync(resolve(ws, path), merged.text);
   else await runGit(ws, ['checkout', `--${side}`, '--', path]);
@@ -389,7 +397,7 @@ export interface ConflictDetail {
 /** What conflicts in one file (GIT-302), part by part, for the side-by-side view. */
 export async function gitConflictDetail(ws: string, path: string): Promise<ConflictDetail> {
   const [base, ours, theirs] = await conflictStages(ws, path);
-  const merged = /^collections\/[^/]+\.json$/.test(path) ? mergeCollectionTexts(base, ours, theirs) : undefined;
+  const merged = MERGED_BY_MEANING.test(path) ? mergeWorkspaceTexts(base, ours, theirs) : undefined;
   if (!merged) return { path, collection: false, items: [] };
   return {
     path,

@@ -290,6 +290,22 @@ export class WorkspaceStore {
   }
 
   /* environments */
+  /** The environment's file, relative to the workspace (forward slashes): what git knows it by. */
+  environmentFileOf(idOrName: string): string {
+    const dir = this.path('environments');
+    const slug = `${slugify(idOrName)}.json`;
+    if (existsSync(join(dir, slug))) return `environments/${slug}`;
+    for (const f of readdirSync(dir).filter((x) => x.endsWith('.json'))) {
+      try {
+        const e = readJson<Environment>(join(dir, f));
+        if (e.id === idOrName || e.name === idOrName) return `environments/${f}`;
+      } catch {
+        /* not an environment */
+      }
+    }
+    throw new ApsError('ValidationError', `No environment "${idOrName}"`);
+  }
+
   listEnvironments(): Environment[] {
     const dir = this.path('environments');
     const envs = readdirSync(dir)

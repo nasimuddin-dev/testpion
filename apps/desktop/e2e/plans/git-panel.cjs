@@ -157,6 +157,96 @@ const steps = [
       return 'versions: ' + versions.join(' / ');
     })()`,
   ],
+  [
+    'compare-a-change',
+    `(async () => {
+      // a request changed (as another editor would): the Git view's Compare shows it part by part
+      const c = (await window.aps.invoke('col.list')).find((x) => x.id === 'httpbin');
+      const walk = (nodes) => nodes.map((n) => (n.id === 'hb-get' ? { ...n, request: { ...n.request, url: '{{httpbin}}/get?compare=1' } } : n.kind === 'folder' ? { ...n, items: walk(n.items) } : n));
+      await window.aps.invoke('col.save', { ...c, items: walk(c.items) });
+      await __t.view('Git'); await __t.sleep(1500);
+      const link = await __t.waitFor(() => [...document.querySelectorAll('main ul[aria-label=Changes] button')].find((b) => b.offsetParent && b.textContent.trim() === 'Compare'), 6000);
+      if (!link) return 'NO COMPARE';
+      link.click();
+      const table = await __t.waitFor(() => document.querySelector('[role=dialog] [data-item-diff] [data-part=Request]'), 6000);
+      const text = table?.textContent ?? '';
+      await __t.esc(); await __t.sleep(300);
+      await window.aps.invoke('git.discard', { files: [{ path: 'collections/httpbin.json', state: 'modified', staged: false }] }); await __t.sleep(800);
+      return 'request part: ' + /get\?compare=1/.test(text);
+    })()`,
+  ],
+  [
+    'collection-history',
+    `(async () => {
+      await __t.requests(); await __t.sleep(500);
+      await __t.menu('HTTP basics (httpbin)');
+      const item = [...document.querySelectorAll('[role=menuitem]')].find((m) => m.textContent.trim() === 'History in git…');
+      if (!item) return 'NO MENU';
+      item.click();
+      const list = await __t.waitFor(() => document.querySelector('[aria-label="Versions"]'), 6000);
+      const n = list ? list.querySelectorAll('li').length : 0;
+      const diff = await __t.waitFor(() => document.querySelector('[role=dialog] [data-history-diff] table'), 6000);
+      await __t.esc();
+      return 'versions: ' + (n >= 2) + ' | compared with now: ' + !!diff;
+    })()`,
+  ],
+  [
+    'conflicting-changes',
+    `main:
+      const { execFileSync } = require('node:child_process');
+      const { readFileSync, writeFileSync } = require('node:fs');
+      const { join } = require('node:path');
+      const setUrl = (file, url) => {
+        const c = JSON.parse(readFileSync(file, 'utf8'));
+        const walk = (nodes) => nodes.map((n) => (n.id === 'hb-get' ? { ...n, request: { ...n.request, url } } : n.kind === 'folder' ? { ...n, items: walk(n.items) } : n));
+        writeFileSync(file, JSON.stringify({ ...c, items: walk(c.items) }, null, 2) + '\\n');
+      };
+      const clone = join(home, 'teammate');
+      const tm = (...a) => execFileSync('git', ['-c', 'user.name=Teammate', '-c', 'user.email=teammate@example.com', ...a], { cwd: clone });
+      tm('pull');
+      setUrl(join(clone, 'collections', 'httpbin.json'), '{{httpbin}}/get?side=theirs');
+      tm('commit', '-am', 'Teammate changes the GET');
+      tm('push');
+      const ws = join(home, 'ws');
+      setUrl(join(ws, 'collections', 'httpbin.json'), '{{httpbin}}/get?side=mine');
+      execFileSync('git', ['-c', 'user.name=E2E', '-c', 'user.email=e2e@example.com', 'commit', '-am', 'I change the GET'], { cwd: ws });
+      return 'ready';`,
+    false,
+  ],
+  [
+    'conflict-compared-and-resolved',
+    `(async () => {
+      await __t.view('Git'); await __t.sleep(1000);
+      ${button('Pull')}?.click();
+      const compare = await __t.waitFor(() => [...document.querySelectorAll('main section[role=alert] button')].find((b) => b.textContent.trim() === 'Compare…'), 10000);
+      if (!compare) return 'NO CONFLICT';
+      compare.click();
+      const item = await __t.waitFor(() => document.querySelector('[role=dialog] [data-conflict="item:hb-get"]'), 8000);
+      if (!item) return 'NO CONFLICT ITEM';
+      const parts = [...item.querySelectorAll('[data-part]')].map((r) => r.getAttribute('data-part'));
+      [...item.querySelectorAll('[role=radio]')].find((r) => r.textContent.trim() === 'Theirs')?.click(); await __t.sleep(200);
+      [...document.querySelectorAll('[role=dialog] button')].find((b) => b.textContent.trim() === 'Resolve with these choices')?.click();
+      await __t.waitFor(() => !document.querySelector('main section[role=alert]'), 8000);
+      const c = (await window.aps.invoke('col.list')).find((x) => x.id === 'httpbin');
+      return 'differing parts: ' + parts.join(',') + ' | url: ' + (JSON.stringify(c.items).match(/get\?side=\w+/)?.[0] ?? 'NONE');
+    })()`,
+  ],
+  [
+    'branch-renamed',
+    `(async () => {
+      await __t.view('Git'); await __t.sleep(800);
+      ${button('main')}?.click(); await __t.sleep(500);
+      [...document.querySelectorAll('[role=menuitem]')].find((m) => /^Rename main/.test(m.textContent.trim()))?.click();
+      const field = await __t.waitFor(() => [...document.querySelectorAll('[role=dialog] input')].find((i) => i.value === 'main'), 4000);
+      if (!field) return 'NO PROMPT';
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+      setter.call(field, 'trunk'); field.dispatchEvent(new Event('input', { bubbles: true }));
+      [...document.querySelectorAll('[role=dialog] button')].find((b) => b.textContent.trim() === 'Rename')?.click();
+      await __t.sleep(1500);
+      const b = await window.aps.invoke('git.branches');
+      return 'current: ' + b.current;
+    })()`,
+  ],
 ];
 
 module.exports = withExpect(
@@ -172,6 +262,11 @@ module.exports = withExpect(
     'teammate-pushes': /^pushed$/,
     pull: /^Up to date with the remote \| teammate change: true \| commits: Rename the JSON post \/ Call \/anything \/ Start the API tests$/,
     'request-history': /^versions: Call \/anything \/ Start the API tests$/,
+    'compare-a-change': /^request part: true$/,
+    'collection-history': /^versions: true \| compared with now: true$/,
+    'conflicting-changes': /^ready$/,
+    'conflict-compared-and-resolved': /^differing parts: Request \| url: get\?side=theirs$/,
+    'branch-renamed': /^current: trunk$/,
   },
   { env: { GIT_AUTHOR_NAME: 'E2E', GIT_AUTHOR_EMAIL: 'e2e@example.com', GIT_COMMITTER_NAME: 'E2E', GIT_COMMITTER_EMAIL: 'e2e@example.com' } },
 );

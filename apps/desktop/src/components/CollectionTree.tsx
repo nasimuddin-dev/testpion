@@ -237,7 +237,7 @@ export function CollectionTree({
   };
   const health = useCollectionsHealth();
   const [moving, setMoving] = useState<{ c: Collection; n: CollectionNode }>();
-  const [historyFor, setHistoryFor] = useState<{ c: Collection; n: CollectionNode }>();
+  const [historyFor, setHistoryFor] = useState<{ c: Collection; n?: CollectionNode }>();
   const git = useGit();
   /** Delete a request or folder, with Undo in the toast (puts the collection back as it was). */
   /** A copy of the collection with everything it holds (its gRPC calls and connections too). */
@@ -829,7 +829,7 @@ export function CollectionTree({
           onSave={(folder) => onChange({ ...editing.c, items: mapNodes(editing.c.items, (x) => (x.id === folder.id && x.kind === 'folder' ? { ...folder, items: x.items } : x)) })}
         />
       )}
-      {historyFor && <GitItemHistory collectionId={historyFor.c.id} itemId={historyFor.n.id} name={historyFor.n.name} onClose={() => setHistoryFor(undefined)} />}
+      {historyFor && <GitItemHistory target={{ collectionId: historyFor.c.id, itemId: historyFor.n?.id }} name={historyFor.n?.name ?? historyFor.c.name} onClose={() => setHistoryFor(undefined)} />}
       {moving && <MoveDialog node={moving.n} from={moving.c} collections={collections} onClose={() => setMoving(undefined)} onMove={(to, folderId) => move(moving.c, moving.n, to, folderId)} />}
       {collections.map((c) => {
         // grouped by category, collections start folded: the workspace lists them, expanding shows the categories
@@ -897,6 +897,7 @@ export function CollectionTree({
                   onCollapseAll={() => setSubtree(c, undefined, false)}
                   onDuplicate={() => void duplicateCollection(c)}
                   onDelete={() => void deleteCollection(c)}
+                  onHistory={git.status?.repository ? () => setHistoryFor({ c }) : undefined}
                   otherNew={
                     onNewOfCategory
                       ? (['graphql', 'soap', 'grpc', 'websocket'] as const).map((cat) => ({ label: newRequestOf(cat), icon: <FilePlus2 size={14} />, onSelect: () => onNewOfCategory(c, cat) }))
@@ -968,7 +969,7 @@ interface RowContext {
   copyMenu(c: Collection, n: SavedHttpRequest): MenuItem[];
   setMenuFor(id: string | undefined): void;
   setMoving(m: { c: Collection; n: CollectionNode } | undefined): void;
-  setHistoryFor(h: { c: Collection; n: CollectionNode } | undefined): void;
+  setHistoryFor(h: { c: Collection; n?: CollectionNode } | undefined): void;
 }
 
 /**

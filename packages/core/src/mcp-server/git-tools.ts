@@ -5,13 +5,13 @@ import type { Collection } from '../model/types.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { gitConflictDetail, gitLog, gitResolve, gitStage, gitStatus } from '../git/git.js';
 import type { Redactor } from '../util/redact.js';
-import { changesMarkdown, describeGitChanges, describeRevChanges } from '../git/semantic.js';
+import { changesMarkdown, describeGitChanges, describeItemDiff, describeRevChanges } from '../git/semantic.js';
 import { findCommittableSecrets } from '../storage/git-guard.js';
 import { str, type Tool } from './tool.js';
 
 /** MCP tools for the workspace's git repository (GIT-402): status, the changes by meaning, history, a proposed commit. */
 export function gitTools(d: { store: WorkspaceStore; findCollection(ref: unknown): Collection; redactor?: Redactor }): Tool[] {
-  const { store, findCollection } = d;
+  const { store, findCollection, redactor } = d;
   const red = (v?: string) => (v === undefined || !d.redactor ? v : d.redactor.redactString(v));
   return [
     {
@@ -67,9 +67,16 @@ export function gitTools(d: { store: WorkspaceStore; findCollection(ref: unknown
           from: str('Commit, branch or tag to compare from (default: the uncommitted changes)'),
           to: str('Compare to this commit (default: the working folder)'),
           markdown: { type: 'boolean', description: 'Also return the changes as Markdown' },
+          file: str('With itemId (or alone for collection settings / an environment): one item side by side, part by part (before = `from` or the last commit, after = the working folder)'),
+          itemId: str('A request or folder id in `file`'),
         },
       },
       run: async (a) => {
+        if (a.file) {
+          const d = await describeItemDiff(store.root, String(a.file), a.itemId ? String(a.itemId) : undefined, a.from ? String(a.from) : undefined);
+          const red = (v?: string) => (v === undefined || !redactor ? v : redactor.redactString(v));
+          return { ...d, parts: d.parts.map((p) => ({ ...p, before: red(p.before), after: red(p.after) })) };
+        }
         const changes = a.from ? await describeRevChanges(store.root, String(a.from), a.to ? String(a.to) : undefined) : await describeGitChanges(store.root, (await gitStatus(store.root)).files);
         return a.markdown ? { changes, markdown: changesMarkdown(changes) } : changes;
       },

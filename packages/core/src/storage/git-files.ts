@@ -28,6 +28,8 @@ export const GITATTRIBUTES_LINES = [
   '*.sqlite binary',
   // merged request by request when the TestPion merge driver is set up (testpion git setup); else git's line merge
   'collections/*.json merge=testpion',
+  'environments/*.json merge=testpion',
+  'library/*.json merge=testpion',
 ];
 
 export interface GitReadyResult {

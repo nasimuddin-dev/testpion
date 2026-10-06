@@ -46,7 +46,7 @@ When git can't sign in, TestPion says so in plain words ("Git could not sign in 
 
 The **Git** view shows the branch and remote at the top, then:
 
-- **Changes, by meaning.** Each changed file, and under it what changed in words: *HTTP basics ▸ Requests & responses ▸ GET with query parameters: URL, headers (0 → 1)*, *environment Staging: added baseUrl*, a test file added. Click a request to open it; click a file name for its line diff. **Stage** / **Unstage** per file, **Discard** (back to the last commit; new files are deleted, after a confirmation) per file or all.
+- **Changes, by meaning.** Each changed file, and under it what changed in words: *HTTP basics ▸ Requests & responses ▸ GET with query parameters: URL, headers (0 → 1)*, *environment Staging: added baseUrl*, a test file added. Click a request to open it; **Compare** shows a changed request, the collection's settings or an environment side by side, part by part: the last commit and now. Click a file name for its line diff. **Stage** / **Unstage** per file, **Discard** (back to the last commit; new files are deleted, after a confirmation) per file or all.
 - **Commit.** Write a message, or click **Write message** and the AI assistant writes one from the changes (it sees the changes' meaning, never secret values). With nothing staged, **Commit** commits every change of the workspace.
 - **History.** The latest commits of the workspace.
 
@@ -68,7 +68,7 @@ The same check runs in the terminal: `testpion git check` (exit code 1 when some
 
 ## Step 4: Branches, pull and push
 
-- **Branch button** (top of the Git view): switch to another branch (a remote branch becomes a local one that tracks it), or **New branch…** (your uncommitted changes come along).
+- **Branch button** (top of the Git view): switch to another branch (a remote branch becomes a local one that tracks it), **New branch…** (your uncommitted changes come along), **Rename** the current branch, or **Delete a branch** (a branch with commits no other branch has asks once more).
 - **Fetch** sees what the remote has; **Pull** brings in your team's commits; **Push** sends yours (the first push of a branch sets where it goes).
 - **Pull request:** on a branch other than the default, the Git view shows **Pull request**. It opens GitHub, GitLab, Bitbucket or Azure DevOps with the branch selected and, on GitHub and GitLab, the description filled with the branch's changes by meaning.
 
@@ -76,7 +76,7 @@ After a pull or a branch switch the app reloads the changed collections, environ
 
 ## Merging collections request by request
 
-Two people who change **different requests** of the same collection never get a conflict: TestPion merges collection files by the id of each request and folder, not by lines of JSON. A request added on one side and another added on the other side both end up in the file; a request moved, renamed or edited on one side keeps that change.
+Two people who change **different requests** of the same collection never get a conflict: TestPion merges collection files by the id of each request and folder, not by lines of JSON. Environments merge the same way, variable by variable, and library files (saved gRPC calls, connections, prompts) item by item. A request added on one side and another added on the other side both end up in the file; a request moved, renamed or edited on one side keeps that change.
 
 This is a git **merge driver**. `.gitattributes` has `collections/*.json merge=testpion`, and **Initialize repository**, opening a workspace that is in git, or `testpion git setup` registers it in the repository's git config (`git config merge.testpion.driver`). It works for `git merge` and `git pull` in a terminal too.
 
@@ -89,9 +89,9 @@ A **real conflict** is the same request (or the same collection setting) changed
 
 **Requests open while files change.** When a pull, a branch switch or another editor changes a request you have open, the tab shows the new version by itself. If you have unsaved edits in that tab, TestPion asks first: **Keep mine** (saving then replaces the new version with yours) or **Take the new version**.
 
-## History of a request
+## History of a request, a collection or an environment
 
-Right-click a request in the explorer (or **⋯**) ▸ **History in git…**: the commits that changed this request (commits that changed only other requests are left out), with the request as each one left it. Select one and **Restore this version**: only this request changes, as a new change for you to commit; nothing in git history is rewritten.
+Right-click a request in the explorer (or **⋯**) ▸ **History in git…**: the commits that changed this request (commits that changed only other requests are left out), each compared with the request as it is now, part by part. Select one and **Restore this version**: only this request changes, as a new change for you to commit; nothing in git history is rewritten. A collection's menu and an environment's menu have **History in git…** too: there the whole collection or environment goes back.
 
 ## From the command line
 
@@ -105,10 +105,12 @@ testpion git diff collections/payments.json
 testpion git check              # secrets typed in? exit 1 if any
 testpion git commit -m "Add payment tests"      # refuses when a secret is typed in
 testpion git log --file collections/payments.json
-testpion git branch
+testpion git branch                         # -m new-name renames this branch; -d / -D deletes one
 testpion git switch -c feature/payments
 testpion git pull               # exit 1 when it stopped on conflicts
+testpion git conflicts                      # each conflict, part by part, with its key
 testpion git resolve collections/payments.json --theirs   # settle a conflict (or --ours)
+testpion git resolve collections/payments.json --pick item:req-12=theirs   # a choice per conflict
 testpion git push
 testpion diff origin/main HEAD --markdown       # the changes between two commits, as Markdown
 ```

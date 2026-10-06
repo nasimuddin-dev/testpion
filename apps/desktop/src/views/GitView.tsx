@@ -1,8 +1,9 @@
-import { ArrowDown, ArrowUp, Check, ExternalLink, FolderGit2, GitBranch, GitCommitHorizontal, GitPullRequest, KeyRound, Minus, Plus, RefreshCw, RotateCcw, ShieldAlert, Sparkles, Trash2, Undo2, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, Check, Columns2, ExternalLink, FolderGit2, GitBranch, GitCommitHorizontal, GitPullRequest, KeyRound, Pencil, Minus, Plus, RefreshCw, RotateCcw, ShieldAlert, Sparkles, Trash2, Undo2, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { asError, call, on } from '../api';
 import { confirmAction, promptText, useApp } from '../store';
-import { Badge, Button, cx, Empty, Menu, MoreMenu, PageHeader, SectionTitle, Spinner } from '../components/ui';
+import { Badge, Button, cx, Empty, LinkButton, Menu, MoreMenu, PageHeader, SectionTitle, Spinner } from '../components/ui';
+import { GitItemDiffDialog } from '../components/GitItemDiffDialog';
 import { GitConflictDialog } from '../components/GitConflictDialog';
 import { ChangeMark } from '../components/ChangeMark';
 
@@ -69,6 +70,7 @@ function openItem(c: SemanticChange) {
 export function GitView() {
   const [status, setStatus] = useState<GitStatusInfo>();
   const [changes, setChanges] = useState<SemanticChange[]>([]);
+  const [itemDiff, setItemDiff] = useState<{ file: string; itemId?: string }>();
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState<string>();
   const [secrets, setSecrets] = useState<SecretFinding[]>();
@@ -191,6 +193,48 @@ export function GitView() {
         if (name) await run('switch', () => call('git.switch', { branch: name.trim(), create: true }), `On the new branch ${name.trim()}`);
       },
     },
+    ...(branches?.current
+      ? [
+          {
+            label: `Rename ${branches.current}…`,
+            icon: <Pencil size={14} />,
+            separator: true,
+            onSelect: async () => {
+              const to = await promptText('Rename branch', { message: 'Pushed already? The remote keeps the old name until you push the new one.', value: branches.current, okLabel: 'Rename' });
+              if (to && to.trim() !== branches.current) await run('rename', () => call('git.renameBranch', { from: branches.current, to: to.trim() }), `Renamed to ${to.trim()}`);
+            },
+          },
+        ]
+      : []),
+    ...((branches?.local ?? []).filter((b) => b !== branches?.current).length
+      ? [
+          {
+            label: 'Delete a branch',
+            icon: <Trash2 size={14} />,
+            danger: true,
+            onSelect: () => undefined,
+            items: (branches?.local ?? [])
+              .filter((b) => b !== branches?.current)
+              .map((b) => ({
+                label: b,
+                icon: <GitBranch size={14} />,
+                danger: true,
+                onSelect: async () => {
+                  if (!(await confirmAction({ title: `Delete ${b}`, message: `Delete the local branch ${b}?`, detail: 'Commits that are not merged anywhere else are lost; git refuses then, and TestPion asks again.', confirmLabel: 'Delete', danger: true }))) return;
+                  try {
+                    await call('git.deleteBranch', { branch: b });
+                    useApp.getState().toast(`Deleted ${b}`, 'success');
+                    void load();
+                  } catch (e) {
+                    if (!/not fully merged/i.test(asError(e).message)) return fail(e);
+                    if (await confirmAction({ title: `${b} is not merged`, message: `${b} has commits no other branch has. Delete it anyway?`, confirmLabel: 'Delete anyway', danger: true }))
+                      await run('delete', () => call('git.deleteBranch', { branch: b, force: true }), `Deleted ${b}`);
+                  }
+                },
+              })),
+          },
+        ]
+      : []),
   ];
 
   return (
@@ -305,6 +349,11 @@ export function GitView() {
                             {c.title}
                           </button>
                           {c.details.length > 0 && <span className="text-muted truncate">{c.details.join(', ')}</span>}
+                          {(c.kind === 'collection' || c.kind === 'environment') && c.change !== 'conflicted' && (
+                            <LinkButton className="ml-auto shrink-0" icon={<Columns2 size={12} />} title="Side by side: the last commit and now, part by part" onClick={() => setItemDiff({ file: c.file, itemId: c.itemId })}>
+                              Compare
+                            </LinkButton>
+                          )}
                         </li>
                       ))}
                     </ul>
@@ -356,6 +405,7 @@ export function GitView() {
         </section>
         <div className="text-xs text-muted">git {status.version} · sign-in uses your git setup (SSH keys or the credential manager)</div>
       </div>
+      {itemDiff && <GitItemDiffDialog file={itemDiff.file} itemId={itemDiff.itemId} onClose={() => setItemDiff(undefined)} />}
     </div>
   );
 }
@@ -531,7 +581,7 @@ function ConflictPanel({ files, onDone }: { files: GitFile[]; onDone(): void }) 
             <ChangeMark change="conflicted" />
             <span className="font-mono text-xs truncate">{f.path}</span>
             <span className="ml-auto flex gap-1">
-              {/^collections\/[^/]+\.json$/.test(f.path) && (
+              {/^(collections|environments|library)\/[^/]+\.json$/.test(f.path) && (
                 <Button size="sm" variant="primary" onClick={() => setComparing(f.path)} title="See each conflicting request side by side and choose per request">
                   Compare…
                 </Button>

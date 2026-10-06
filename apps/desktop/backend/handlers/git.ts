@@ -1,5 +1,5 @@
 /** RPC handlers: git for the open workspace (GIT-201 … GIT-304, planning/git-integration.md). Uses the system git. */
-import { existsSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import {
   ApsError,
@@ -16,7 +16,9 @@ import {
   gitCommit,
   gitDefaultBranch,
   gitDeleteBranch,
+  gitRenameBranch,
   gitAbortMerge,
+  describeItemDiff,
   gitConflictDetail,
   gitResolve,
   gitSetupMergeDriver,
@@ -163,6 +165,27 @@ export function gitHandlers(be: Backend): Handlers {
      * that touched the collection but not this request are left out.
      */
     'git.itemHistory': ({ collectionId, itemId, limit }: { collectionId: string; itemId: string; limit?: number }) => gitItemHistory(ws(), be.ws.collectionFileOf(collectionId), itemId, limit),
+    /**
+     * The versions of a request, a whole collection or an environment in git (GIT-209): the commits that changed it,
+     * newest first, and the file they are in (git.itemDiff compares a version with now).
+     */
+    'git.history': async ({ collectionId, environmentId, itemId, limit = 30 }: { collectionId?: string; environmentId?: string; itemId?: string; limit?: number }) => {
+      const file = collectionId ? be.ws.collectionFileOf(collectionId) : environmentId ? be.ws.environmentFileOf(environmentId) : undefined;
+      if (!file) throw new ApsError('ValidationError', 'A collection or an environment');
+      const commits = itemId && collectionId ? (await gitItemHistory(ws(), file, itemId, limit)).map((v) => v.commit) : await gitLog(ws(), { path: file, limit });
+      return { file, itemId, versions: commits };
+    },
+    /** Put a whole collection or environment back as it was in a commit (a change to commit; history keeps the current one). */
+    'git.restoreFile': async ({ collectionId, environmentId, rev }: { collectionId?: string; environmentId?: string; rev: string }) => {
+      const file = collectionId ? be.ws.collectionFileOf(collectionId) : environmentId ? be.ws.environmentFileOf(environmentId) : undefined;
+      if (!file) throw new ApsError('ValidationError', 'A collection or an environment');
+      const text = await gitShow(ws(), file, rev);
+      if (text === undefined) throw new ApsError('ValidationError', `${file} is not in commit ${rev.slice(0, 7)}`);
+      be.lastOwnChange = Date.now();
+      writeFileSync(be.ws.safePath(file), text);
+      be.host.emit('data.changed', { method: collectionId ? 'col.save' : 'env.save' });
+      return { file, rev };
+    },
     /** Put one request back as it was in a commit (the rest of the collection is unchanged). */
     'git.restoreItem': async ({ collectionId, itemId, rev }: { collectionId: string; itemId: string; rev: string }) => {
       const text = await gitShow(ws(), be.ws.collectionFileOf(collectionId), rev);
@@ -178,6 +201,7 @@ export function gitHandlers(be: Backend): Handlers {
     'git.branches': () => gitBranches(ws()),
     'git.switch': ({ branch, create, from }: { branch: string; create?: boolean; from?: string }) => rewritten(() => gitSwitch(ws(), branch, { create, from })),
     'git.deleteBranch': async ({ branch, force }: { branch: string; force?: boolean }) => changed(await gitDeleteBranch(ws(), branch, force)),
+    'git.renameBranch': async ({ from, to }: { from: string; to: string }) => changed(await gitRenameBranch(ws(), from, to)),
     'git.fetch': async () => changed(await gitFetch(ws())),
     /** Pull (GIT-208): `conflicted` when it stopped on conflicts (then the conflict screen). */
     'git.pull': ({ rebase }: { rebase?: boolean }) => rewritten(() => gitPull(ws(), { rebase })),
@@ -190,6 +214,8 @@ export function gitHandlers(be: Backend): Handlers {
       return changed({ ...ready, inRepository: true });
     },
     /** Settle a conflicted file with one side (GIT-302). */
+    /** One changed item side by side (GIT-205): a request, folder, collection settings or environment, last commit vs now. */
+    'git.itemDiff': ({ file, itemId, rev }: { file: string; itemId?: string; rev?: string }) => describeItemDiff(ws(), file, itemId, rev),
     /** What conflicts in one file, request by request and part by part (GIT-302's side-by-side view). */
     'git.conflictDetail': ({ path }: { path: string }) => gitConflictDetail(ws(), path),
     /** Settle a conflicted file: one side for every conflict, or a choice per conflict (`resolutions`, keys from git.conflictDetail). */
