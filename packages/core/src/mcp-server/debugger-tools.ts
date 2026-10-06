@@ -2,6 +2,8 @@ import { startDebuggerProxy, type DebuggerExchange, type DebuggerProxy } from '.
 import { exchangesFromHar, exchangesToHar } from '../debugger/har.js';
 import { describeRule, rulePresets, type DebuggerRule } from '../debugger/rules.js';
 import { shortId } from '../util/ids.js';
+import { debuggerCertDir, ensureRootCertificate, leafSigner } from '../debugger/certificate.js';
+import { exchangesFromSaz } from '../debugger/saz.js';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { Redactor } from '../util/redact.js';
@@ -37,16 +39,23 @@ export function debuggerTools(d: { redactor: Redactor }): Tool[] {
         "Start or stop TestPion's HTTP Debugger proxy (a forward proxy on 127.0.0.1). Start it, then run the program to watch with HTTP_PROXY set to the returned url (or a browser with --proxy-server=url); its requests and responses are captured for debugger_exchanges. Plain HTTP is captured whole; HTTPS is listed as a tunnel by host.",
       inputSchema: {
         type: 'object',
-        properties: { action: { type: 'string', enum: ['start', 'stop', 'status', 'clear'] }, port: { type: 'number', description: 'With start: the port (default: any free one)' } },
+        properties: {
+          action: { type: 'string', enum: ['start', 'stop', 'status', 'clear'] },
+          port: { type: 'number', description: 'With start: the port (default: any free one)' },
+          decrypt: { type: 'boolean', description: 'With start: decrypt HTTPS with the TestPion root certificate (the program must trust it: the result says where the file is)' },
+        },
         required: ['action'],
       },
       run: async (a) => {
         const status = () => ({ running: !!proxy, url: proxy?.url, port: proxy?.port, exchanges: session.length });
         if (a.action === 'start') {
           await proxy?.close();
+          const root = a.decrypt ? ensureRootCertificate(debuggerCertDir()) : undefined;
+          const leaf = root ? leafSigner(root) : undefined;
           proxy = await startDebuggerProxy({
             port: a.port ? Number(a.port) : undefined,
             rules: () => rules,
+            ...(leaf ? { decrypt: { leafFor: leaf, enabled: () => true } } : {}),
             onExchange: (e, phase) => {
               if (phase === 'request') {
                 session.push(e);
@@ -54,7 +63,11 @@ export function debuggerTools(d: { redactor: Redactor }): Tool[] {
               }
             },
           });
-          return { ...status(), next: `Run the program with HTTP_PROXY=${proxy.url} (and HTTPS_PROXY for HTTPS tunnels), then call debugger_exchanges.` };
+          return {
+            ...status(),
+            ...(root ? { rootCertificate: root.path, fingerprint: root.fingerprint } : {}),
+            next: `Run the program with HTTP_PROXY=${proxy.url} and HTTPS_PROXY=${proxy.url}${root ? ` and trust ${root.path} (Node: NODE_EXTRA_CA_CERTS, Python: REQUESTS_CA_BUNDLE, curl: --cacert)` : ''}, then call debugger_exchanges.`,
+          };
         }
         if (a.action === 'stop') {
           await proxy?.close();
@@ -133,7 +146,7 @@ export function debuggerTools(d: { redactor: Redactor }): Tool[] {
         type: 'object',
         properties: {
           action: { type: 'string', enum: ['save', 'open'] },
-          path: str('The .har file'),
+          path: str('The .har file (open also reads Fiddler .saz)'),
           append: { type: 'boolean', description: 'With open: add to the session instead of replacing it' },
         },
         required: ['action', 'path'],
@@ -144,13 +157,18 @@ export function debuggerTools(d: { redactor: Redactor }): Tool[] {
           writeFileSync(file, JSON.stringify(exchangesToHar(session, red), null, 2));
           return { saved: file, exchanges: session.length };
         }
-        let har: unknown;
-        try {
-          har = JSON.parse(readFileSync(file, 'utf8'));
-        } catch (e) {
-          throw new ApsError('ValidationError', `Not a HAR file: ${(e as Error).message}`);
+        const bytes = readFileSync(file);
+        let loaded: DebuggerExchange[];
+        if (bytes.subarray(0, 2).toString('latin1') === 'PK') loaded = exchangesFromSaz(bytes);
+        else {
+          let har: unknown;
+          try {
+            har = JSON.parse(bytes.toString('utf8'));
+          } catch (e) {
+            throw new ApsError('ValidationError', `Not a HAR or SAZ file: ${(e as Error).message}`);
+          }
+          loaded = exchangesFromHar(har);
         }
-        const loaded = exchangesFromHar(har);
         if (!a.append) session.length = 0;
         session.push(...loaded);
         return { loaded: loaded.length, exchanges: session.length };

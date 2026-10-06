@@ -1,6 +1,7 @@
 import type { Redactor } from '../util/redact.js';
 import { shortId } from '../util/ids.js';
 import type { DebuggerExchange } from './proxy.js';
+import type { DebuggerSseEvent, WebSocketFrame } from './frames.js';
 
 /**
  * The HTTP Debugger's sessions on disk are HAR 1.2 (every HTTP tool opens it) with TestPion's extras in `_testpion`
@@ -38,7 +39,20 @@ export interface HarEntry {
   cache: Record<string, never>;
   timings: { send: number; wait: number; receive: number };
   comment?: string;
-  _testpion?: { id: string; kind: 'http' | 'tunnel'; application?: string; clientPort?: number; bookmarked?: boolean; error?: string; truncated?: boolean };
+  _testpion?: {
+    id: string;
+    kind: DebuggerExchange['kind'];
+    application?: string;
+    clientPort?: number;
+    bookmarked?: boolean;
+    error?: string;
+    truncated?: boolean;
+    tls?: boolean;
+    frames?: WebSocketFrame[];
+    events?: DebuggerSseEvent[];
+    highlight?: string;
+    rules?: string[];
+  };
 }
 
 export function exchangesToHar(exchanges: DebuggerExchange[], redactor: Redactor, version = '1'): HarLog {
@@ -75,7 +89,20 @@ export function exchangesToHar(exchanges: DebuggerExchange[], redactor: Redactor
         cache: {},
         timings: { send: 0, wait: e.waitMs ?? 0, receive: Math.max(0, (e.durationMs ?? 0) - (e.waitMs ?? 0)) },
         ...(e.application ? { comment: `application: ${e.application}` } : {}),
-        _testpion: { id: e.id, kind: e.kind, application: e.application, clientPort: e.clientPort, bookmarked: e.bookmarked, error: e.error, truncated: e.responseBodyTruncated },
+        _testpion: {
+          id: e.id,
+          kind: e.kind,
+          application: e.application,
+          clientPort: e.clientPort,
+          bookmarked: e.bookmarked,
+          error: e.error,
+          truncated: e.responseBodyTruncated,
+          tls: e.tls,
+          frames: e.frames?.map((f) => ({ ...f, text: f.text && redactor.redactString(f.text) })),
+          events: e.events?.map((ev) => ({ ...ev, data: redactor.redactString(ev.data) })),
+          highlight: e.highlight,
+          rules: e.rules,
+        },
       })),
     },
   };
@@ -122,6 +149,11 @@ export function exchangesFromHar(har: unknown): DebuggerExchange[] {
         durationMs: Math.max(0, total),
         error: t?.error,
         bookmarked: t?.bookmarked,
+        tls: t?.tls,
+        frames: t?.frames,
+        events: t?.events,
+        highlight: t?.highlight,
+        rules: t?.rules,
       };
     });
 }

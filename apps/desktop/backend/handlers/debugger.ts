@@ -2,20 +2,30 @@
 import {
   ApsError,
   ENGINE_VERSION,
+  ensureRootCertificate,
   exchangesFromHar,
+  exchangesFromSaz,
   exchangesToHar,
-  tryDecodeJwt,
   installedBrowsers,
+  installRootCertificate,
+  leafSigner,
   openBrowserWithProxy,
   openTerminalWithProxy,
   proxyShellLines,
+  regenerateRootCertificate,
+  removeRootCertificate,
   restoreSystemProxy,
+  rootCertificateTrusted,
   setSystemProxy,
   startDebuggerProxy,
+  trustInstructions,
+  tryDecodeJwt,
   type BrowserName,
   type DebuggerExchange,
   type DebuggerProxy,
   type DebuggerRulesFile,
+  type LeafCertificate,
+  type RootCertificate,
   type SystemProxySnapshot,
 } from '@testpion/core';
 import { activeRules, holdBreakpoint, type PendingBreakpoint } from './debugger-rules.js';
@@ -23,6 +33,7 @@ import type { Backend, Handlers } from '../backend.js';
 import { request as httpRequest } from 'node:http';
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
+import { request as httpsRequest } from 'node:https';
 
 export interface DebuggerState {
   proxy?: DebuggerProxy;
@@ -37,12 +48,39 @@ export interface DebuggerState {
   rules?: DebuggerRulesFile;
   /** Exchanges held at a breakpoint, waiting for the window. */
   breakpoints?: Map<string, PendingBreakpoint>;
+  /** HTTPS decryption (DBG-4): on or off for the session; hosts kept opaque; the root and the per-host signer. */
+  decrypt?: boolean;
+  noDecrypt?: string[];
+  root?: RootCertificate;
+  leafFor?(host: string): LeafCertificate;
   /** Put everything back (the system proxy) and stop the timers; the backend calls it when it is disposed. */
   release?(): Promise<void>;
 }
 
 const SESSIONS_DIR = 'debugger';
 const AUTOSAVE = 'autosave';
+
+/** The root certificate of this computer (in the data folder, never in a workspace) and the signer of host certificates. */
+function certificateOf(be: Backend, state: DebuggerState): RootCertificate {
+  if (!state.root) {
+    state.root = ensureRootCertificate(join(be.host.appDir, 'debugger'));
+    state.leafFor = leafSigner(state.root);
+  }
+  return state.root;
+}
+
+const hostMatches = (patterns: string[] | undefined, host: string) =>
+  (patterns ?? []).some((p) =>
+    new RegExp(
+      '^' +
+        p
+          .trim()
+          .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+          .replace(/\*/g, '.*') +
+        '$',
+      'i',
+    ).test(host),
+  );
 
 /** An exchange for the window: bodies and header values pass the redactor (a captured token must not reach the screen or a report as is). */
 function redacted(be: Backend, e: DebuggerExchange): DebuggerExchange {
@@ -93,7 +131,16 @@ const statusClass = (e: DebuggerExchange) => (e.error ? 'error' : !e.status ? 'p
 
 export function debuggerHandlers(be: Backend): Handlers {
   const state: DebuggerState = (be.debugger ??= { exchanges: [] });
-  const status = () => ({ running: !!state.proxy, url: state.proxy?.url, port: state.proxy?.port, exchanges: state.exchanges.length, systemProxy: !!state.systemProxy, autosave: !!state.autosave });
+  const status = () => ({
+    running: !!state.proxy,
+    url: state.proxy?.url,
+    port: state.proxy?.port,
+    exchanges: state.exchanges.length,
+    systemProxy: !!state.systemProxy,
+    autosave: !!state.autosave,
+    decrypt: !!state.decrypt,
+    noDecrypt: state.noDecrypt ?? [],
+  });
   const sessionsDir = () => be.ws.path(SESSIONS_DIR);
   const sessionFile = (name: string) => {
     const clean = name
@@ -164,6 +211,60 @@ export function debuggerHandlers(be: Backend): Handlers {
       new Promise<{ status: number }>((resolve, reject) => {
         if (!state.proxy) return reject(new ApsError('ConfigurationError', 'The debugger is not capturing'));
         const target = new URL(url);
+        if (target.protocol === 'ws:') {
+          // the upgrade through the proxy, one masked text frame, the first frame back, then close
+          const req = httpRequest({
+            host: '127.0.0.1',
+            port: state.proxy.port,
+            method: 'GET',
+            path: `http://${target.host}${target.pathname}${target.search}`,
+            headers: { host: target.host, connection: 'Upgrade', upgrade: 'websocket', 'sec-websocket-version': '13', 'sec-websocket-key': Buffer.from('testpion-selftst').toString('base64') },
+          });
+          req.on('upgrade', (res, socket) => {
+            const payload = Buffer.from('hello from TestPion');
+            const mask = Buffer.from([1, 2, 3, 4]);
+            socket.write(Buffer.concat([Buffer.from([0x81, 0x80 | payload.length]), mask, Buffer.from(payload.map((b, i) => b ^ mask[i & 3]!))]));
+            let seen = 0;
+            socket.on('data', () => {
+              if (++seen >= 2) {
+                socket.write(Buffer.from([0x88, 0x80, 0, 0, 0, 0]));
+                socket.end();
+                resolve({ status: res.statusCode ?? 101 });
+              }
+            });
+            setTimeout(() => (socket.end(), resolve({ status: res.statusCode ?? 101 })), 3000);
+          });
+          req.on('error', reject);
+          req.end();
+          return;
+        }
+        if (target.protocol === 'https:') {
+          // CONNECT, then TLS inside the tunnel trusting this computer's root: what a program with the root installed does
+          const root = certificateOf(be, state);
+          const connectReq = httpRequest({ host: '127.0.0.1', port: state.proxy.port, method: 'CONNECT', path: `${target.hostname}:${target.port || 443}` });
+          connectReq.on('connect', (_r, socket) => {
+            const inner = httpsRequest(
+              {
+                createConnection: () => socket as never,
+                host: target.hostname,
+                port: Number(target.port) || 443,
+                path: `${target.pathname}${target.search}`,
+                servername: target.hostname,
+                ca: root.certPem,
+                headers: { 'user-agent': 'TestPion self-test' },
+              },
+              (res) => {
+                res.resume();
+                res.on('end', () => resolve({ status: res.statusCode ?? 0 }));
+              },
+            );
+            inner.on('error', reject);
+            inner.end();
+          });
+          connectReq.on('error', reject);
+          connectReq.end();
+          return;
+        }
         const req = httpRequest({ host: '127.0.0.1', port: state.proxy.port, method: 'GET', path: target.href, headers: { host: target.host, 'user-agent': 'TestPion self-test' } }, (res) => {
           res.resume();
           res.on('end', () => resolve({ status: res.statusCode ?? 0 }));
@@ -179,6 +280,10 @@ export function debuggerHandlers(be: Backend): Handlers {
         lan,
         rules: () => activeRules(be, state),
         onBreakpoint: (e, phase) => holdBreakpoint(be, state, e, phase),
+        decrypt: {
+          leafFor: (host) => (certificateOf(be, state), state.leafFor!(host)),
+          enabled: (host) => !!state.decrypt && !hostMatches(state.noDecrypt, host),
+        },
         onExchange: (e, phase) => {
           if (phase === 'request') {
             state.exchanges.push(e);
@@ -214,6 +319,41 @@ export function debuggerHandlers(be: Backend): Handlers {
     'debug.openTerminal': () => {
       if (!state.proxy) throw new ApsError('ConfigurationError', 'Start capturing first');
       return openTerminalWithProxy(state.proxy.url);
+    },
+    /** HTTPS decryption on or off (the program must trust the root certificate), and the hosts kept opaque (globs). */
+    'debug.decrypt': ({ on, noDecrypt }: { on?: boolean; noDecrypt?: string[] }) => {
+      if (on !== undefined) {
+        if (on) certificateOf(be, state);
+        state.decrypt = on;
+      }
+      if (noDecrypt) state.noDecrypt = noDecrypt.map((h) => h.trim()).filter(Boolean);
+      return status();
+    },
+    /** The root certificate: what it is, whether this computer trusts it, install / remove / export / regenerate. */
+    'debug.certificate': async ({ action }: { action?: 'info' | 'install' | 'remove' | 'regenerate' | 'export' } = {}) => {
+      let root = certificateOf(be, state);
+      if (action === 'regenerate') {
+        state.root = regenerateRootCertificate(join(be.host.appDir, 'debugger'));
+        state.leafFor = leafSigner(state.root);
+        root = state.root;
+      }
+      let note: string | undefined;
+      if (action === 'install') note = `Installed into ${(await installRootCertificate(root)).where}`;
+      if (action === 'remove') {
+        await removeRootCertificate(root);
+        note = 'Removed from the trust store';
+      }
+      if (action === 'export') {
+        const r = await be.saveOrDownload(
+          'testpion-root.pem',
+          [{ name: 'Certificate', extensions: ['pem', 'crt'] }],
+          (dest) => writeFileSync(dest, root.certPem),
+          () => Buffer.from(root.certPem),
+        );
+        return { ...r, fingerprint: root.fingerprint };
+      }
+      const trusted = await rootCertificateTrusted(root);
+      return { path: root.path, fingerprint: root.fingerprint, notAfter: root.notAfter, trusted, instructions: trustInstructions(root.path), note, platform: process.platform };
     },
     /** Switch the system proxy to ours (every program that honours it) and back. */
     'debug.systemProxy': async ({ on }: { on: boolean }) => {
@@ -379,16 +519,25 @@ export function debuggerHandlers(be: Backend): Handlers {
       return r;
     },
     /** Open a saved session (or any HAR file by path): its exchanges replace the session, or join it with `append`. */
-    'debug.openSession': ({ name, path, text, append }: { name?: string; path?: string; text?: string; append?: boolean }) => {
-      const raw = text ?? readFileSync(path ? be.ws.safePath(path) : sessionFile(name ?? ''), 'utf8');
-      let har: unknown;
-      try {
-        har = JSON.parse(raw);
-      } catch {
-        throw new ApsError('ValidationError', 'Not a HAR file (JSON with log.entries)');
+    'debug.openSession': ({ name, path, text, base64, append }: { name?: string; path?: string; text?: string; /** A SAZ (zip) file's bytes. */ base64?: string; append?: boolean }) => {
+      const bytes = base64 ? Buffer.from(base64, 'base64') : text !== undefined ? Buffer.from(text, 'utf8') : readFileSync(path ? be.ws.safePath(path) : sessionFile(name ?? ''));
+      let loaded: DebuggerExchange[];
+      if (bytes.subarray(0, 2).toString('latin1') === 'PK') {
+        try {
+          loaded = exchangesFromSaz(bytes);
+        } catch (e) {
+          throw new ApsError('ValidationError', `Not a Fiddler SAZ file: ${(e as Error).message}`);
+        }
+      } else {
+        let har: unknown;
+        try {
+          har = JSON.parse(bytes.toString('utf8'));
+        } catch {
+          throw new ApsError('ValidationError', 'Not a HAR file (JSON with log.entries) or a SAZ file');
+        }
+        loaded = exchangesFromHar(har);
       }
-      const loaded = exchangesFromHar(har);
-      if (!loaded.length) throw new ApsError('ValidationError', 'No entries in that HAR file');
+      if (!loaded.length) throw new ApsError('ValidationError', 'No entries in that file');
       state.exchanges = append ? [...state.exchanges, ...loaded] : loaded;
       if (be.debugger) be.debugger.exchanges = state.exchanges;
       state.dirty = false;

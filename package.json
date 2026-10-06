@@ -2,7 +2,7 @@
   "name": "testpion",
   "private": true,
   "version": "0.43.0",
-  "description": "TestPion \u2014 test, debug and evaluate REST, GraphQL, MCP and AI/LLM systems.",
+  "description": "TestPion — test, debug and evaluate REST, GraphQL, MCP and AI/LLM systems.",
   "license": "MIT",
   "type": "module",
   "workspaces": [
@@ -29,6 +29,7 @@
   "devDependencies": {
     "@grpc/reflection": "^1.0.4",
     "@types/node": "^24.0.0",
+    "@types/node-forge": "^1.3.14",
     "@types/ws": "^8.18.1",
     "aedes": "^1.2.0",
     "socket.io": "^4.8.4",

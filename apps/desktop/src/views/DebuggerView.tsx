@@ -1,4 +1,4 @@
-import { Bot, Bug, ChevronDown, Copy, Download, ExternalLink, FolderOpen, Globe, Pause, Play, Save, Scale, Square, Star, Terminal, Trash2, Upload, X } from 'lucide-react';
+import { Bot, Bug, ChevronDown, Copy, Download, ExternalLink, FolderOpen, Globe, Lock, LockOpen, Pause, Play, Binary, Save, Scale, Square, Star, Terminal, Trash2, Upload, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { asError, call, on } from '../api';
 import { confirmAction, promptText, useApp } from '../store';
@@ -8,12 +8,13 @@ import { finishSave, downloadContent, pickTextFile, type SaveResult } from '../l
 import { JsonTree } from '../components/JsonView';
 import { JwtView } from '../components/JwtView';
 import type { HttpRequestSpec } from '../types';
+import { CertificateDialog, DecodeDialog, EventsView, FramesView, pickBinaryFile, type Frame, type StreamEvent } from '../components/DebuggerTools';
 import { BreakpointDialog, CompareExchangesDialog, HIGHLIGHT_CLASS, loadRules, RulesPanel, type HeldBreakpoint, type RulesState } from '../components/DebuggerRules';
 
 interface Exchange {
   id: string;
   startedAt: string;
-  kind: 'http' | 'tunnel';
+  kind: 'http' | 'tunnel' | 'websocket';
   method: string;
   url: string;
   host: string;
@@ -29,6 +30,11 @@ interface Exchange {
   responseBody?: string;
   responseBodyBytes: number;
   responseBodyTruncated?: boolean;
+  /** DBG-4: captured inside a decrypted tunnel; still streaming; WebSocket frames; Server-Sent Events. */
+  tls?: boolean;
+  open?: boolean;
+  frames?: Frame[];
+  events?: StreamEvent[];
   contentType?: string;
   waitMs?: number;
   durationMs?: number;
@@ -51,6 +57,8 @@ interface Status {
   exchanges: number;
   systemProxy: boolean;
   autosave: boolean;
+  decrypt: boolean;
+  noDecrypt: string[];
 }
 
 interface CaptureOptions {
@@ -162,6 +170,7 @@ export function DebuggerView() {
   /** Compare: the first exchange picked; the next row clicked is the other one. */
   const [compareA, setCompareA] = useState<Exchange>();
   const [comparePair, setComparePair] = useState<{ a: string; b: string }>();
+  const [dialog, setDialog] = useState<'certificate' | 'decode'>();
   const filterBox = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
@@ -307,6 +316,18 @@ export function DebuggerView() {
       fail(e);
     }
   };
+  const importSaz = async () => {
+    const f = await pickBinaryFile('.saz');
+    if (!f) return;
+    try {
+      const r = await call<Status & { loaded: number }>('debug.openSession', { base64: f.base64, append: rows.length > 0 });
+      setStatus(r);
+      toast(`Imported ${r.loaded} exchanges from ${f.name}`);
+      void load();
+    } catch (e) {
+      fail(e);
+    }
+  };
   const systemProxy = async (onOff: boolean) => {
     try {
       setStatus(await call<Status>('debug.systemProxy', { on: onOff }));
@@ -356,6 +377,7 @@ export function DebuggerView() {
       onSelect: () => void openSession(s),
     })),
     { label: 'Import a HAR file…', icon: <Upload size={14} />, onSelect: () => void importHar() },
+    { label: 'Import a Fiddler session (.saz)…', icon: <Upload size={14} />, onSelect: () => void importSaz() },
     { label: 'Export as HAR…', icon: <Download size={14} />, disabled: !rows.length, onSelect: () => void exportHar() },
     { label: 'Clear the session', icon: <Trash2 size={14} />, danger: true, disabled: !status?.exchanges, shortcut: 'Ctrl+E', onSelect: () => void clear() },
   ];
@@ -392,6 +414,40 @@ export function DebuggerView() {
                 </Button>
               }
             />
+            <Menu
+              width={330}
+              items={[
+                {
+                  label: status?.decrypt ? 'Stop decrypting HTTPS' : 'Decrypt HTTPS',
+                  icon: status?.decrypt ? <LockOpen size={14} /> : <Lock size={14} />,
+                  onSelect: () =>
+                    void call<Status>('debug.decrypt', { on: !status?.decrypt }).then(
+                      (st) => (setStatus(st), toast(st.decrypt ? 'HTTPS is decrypted for programs that trust the TestPion root' : 'HTTPS is a tunnel again')),
+                      fail,
+                    ),
+                },
+                { label: 'Root certificate…', icon: <Lock size={14} />, onSelect: () => setDialog('certificate') },
+                {
+                  label: `Keep hosts encrypted…${status?.noDecrypt.length ? ` (${status.noDecrypt.length})` : ''}`,
+                  onSelect: async () => {
+                    const v = await promptText('Hosts kept encrypted', {
+                      message: 'Globs, separated by commas: these hosts stay opaque tunnels (programs that pin their certificates, banking, …).',
+                      value: (status?.noDecrypt ?? []).join(', '),
+                      placeholder: '*.bank.example, login.example.com',
+                    });
+                    if (v !== null) void call<Status>('debug.decrypt', { noDecrypt: v.split(',') }).then(setStatus, fail);
+                  },
+                },
+              ]}
+              trigger={
+                <Button icon={status?.decrypt ? <Lock size={13} /> : <LockOpen size={13} />} title="HTTPS decryption with the TestPion root certificate">
+                  HTTPS {status?.decrypt ? 'decrypted' : 'tunnel'} <ChevronDown size={12} />
+                </Button>
+              }
+            />
+            <Button icon={<Binary size={13} />} onClick={() => setDialog('decode')} title="Decode URL, Base64, hex, JWT, timestamps">
+              Decode
+            </Button>
             <Menu
               width={320}
               items={sessionItems}
@@ -561,7 +617,11 @@ export function DebuggerView() {
                     <span className="w-28 shrink-0 truncate text-muted" title={r.application ?? 'unknown program'}>
                       {r.application ?? `:${r.clientPort}`}
                     </span>
-                    <span className="flex-1 min-w-0 truncate">{r.kind === 'tunnel' ? `${r.host}  (HTTPS tunnel)` : r.url}</span>
+                    <span className="flex-1 min-w-0 truncate">
+                      {r.tls && <Lock size={10} className="inline mr-1 text-ok" aria-label="decrypted HTTPS" />}
+                      {r.kind === 'tunnel' ? `${r.host}  (HTTPS tunnel)` : r.url}
+                      {r.open && <span className="ml-1 text-accent">● live</span>}
+                    </span>
                     <span className="w-28 shrink-0 truncate text-muted">{r.contentType?.split(';')[0]}</span>
                     <span className="w-16 shrink-0 text-right tabular-nums text-muted">{formatBytes(r.responseBodyBytes)}</span>
                     <span className="w-16 shrink-0 text-right tabular-nums text-muted">{r.durationMs !== undefined ? formatMs(r.durationMs) : '…'}</span>
@@ -611,6 +671,8 @@ export function DebuggerView() {
         </Split>
       )}
       {openBreakpoint && <BreakpointDialog bp={openBreakpoint} onDone={() => setOpenBreakpoint(undefined)} />}
+      {dialog === 'certificate' && <CertificateDialog onClose={() => setDialog(undefined)} />}
+      {dialog === 'decode' && <DecodeDialog onClose={() => setDialog(undefined)} />}
       {comparePair && <CompareExchangesDialog a={comparePair.a} b={comparePair.b} onClose={() => setComparePair(undefined)} />}
     </div>
   );
@@ -727,7 +789,7 @@ function ExchangeDetail({
   onCompare(): void;
   onRule(preset: string): void;
 }) {
-  const [tab, setTab] = useState<'response' | 'request' | 'headers' | 'raw' | 'hex' | 'auth' | 'timing'>('response');
+  const [tab, setTab] = useState<'response' | 'request' | 'headers' | 'raw' | 'hex' | 'auth' | 'timing' | 'frames' | 'events'>(e.frames ? 'frames' : e.events?.length ? 'events' : 'response');
   const json = (text?: string) => {
     if (!text) return undefined;
     try {
@@ -833,13 +895,16 @@ function ExchangeDetail({
           { id: 'hex', label: 'Hex' },
           { id: 'auth', label: 'Auth', badge: e.auth && e.auth.scheme !== 'none' ? e.auth.scheme.split(' ')[0] : undefined },
           { id: 'timing', label: 'Timing' },
+          ...(e.frames ? [{ id: 'frames' as const, label: 'Frames', badge: e.frames.length }] : []),
+          ...(e.events ? [{ id: 'events' as const, label: 'Events', badge: e.events.length }] : []),
         ]}
       />
       <div className="flex-1 min-h-0 overflow-auto">
         {tab === 'response' &&
           (e.kind === 'tunnel' ? (
             <div className="p-3 text-sm text-muted">
-              An HTTPS tunnel: {formatBytes(e.requestBodyBytes)} sent, {formatBytes(e.responseBodyBytes)} received, encrypted end to end. Decrypting with a TestPion root certificate is on the way.
+              An HTTPS tunnel: {formatBytes(e.requestBodyBytes)} sent, {formatBytes(e.responseBodyBytes)} received, encrypted end to end. Turn on <b>HTTPS ▸ Decrypt HTTPS</b> and trust the TestPion
+              root certificate to see the requests inside.
             </div>
           ) : resJson !== undefined ? (
             <JsonTree data={resJson} />
@@ -945,6 +1010,8 @@ function ExchangeDetail({
               <p className="text-xs text-muted">Values are never shown here: a captured token must not leave the session by a screenshot.</p>
             </div>
           ))}
+        {tab === 'frames' && e.frames && <FramesView frames={e.frames} open={e.open} />}
+        {tab === 'events' && e.events && <EventsView events={e.events} open={e.open} />}
         {tab === 'timing' && (
           <div className="p-3 text-sm grid gap-1">
             <div>

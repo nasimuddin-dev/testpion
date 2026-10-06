@@ -35,6 +35,7 @@
     "lodash": "^4.17.21",
     "marked": "^14.0.0",
     "mqtt": "^5.16.0",
+    "node-forge": "^1.4.0",
     "node-html-parser": "^9.0.4",
     "protobufjs": "^7.6.6",
     "quickjs-emscripten-core": "^0.32.0",

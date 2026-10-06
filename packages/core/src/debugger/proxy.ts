@@ -1,24 +1,32 @@
 import { createServer, request as httpRequest, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { request as httpsRequest } from 'node:https';
 import { connect as tcpConnect, type Socket } from 'node:net';
+import { createSecureContext, TLSSocket } from 'node:tls';
+import { duplexPair } from 'node:stream';
 import { execFile } from 'node:child_process';
+import type { Duplex } from 'node:stream';
 import { ApsError } from '../errors.js';
 import { shortId } from '../util/ids.js';
+import { trustedCa } from '../net/proxy.js';
 import { applyHeaderEdits, decideRequest, highlightForResponse, type DebuggerRule } from './rules.js';
+import { sseParser, webSocketFrameParser, type DebuggerSseEvent, type WebSocketFrame } from './frames.js';
+import type { LeafCertificate } from './certificate.js';
 
 /**
- * The HTTP Debugger's proxy (planning/http-debugger.md, DBG-1): a forward proxy other programs point at
- * (HTTP_PROXY, a browser's proxy setting, --proxy-server). Plain HTTP requests are captured whole; HTTPS goes through
- * as an opaque CONNECT tunnel, listed by host, until the root certificate of DBG-4 decrypts it. Every exchange
- * carries timings, sizes and, best effort, the program that sent it. Rules (DBG-3) act on the way: ignore, highlight,
- * modify, reply, redirect, breakpoints.
+ * The HTTP Debugger's proxy (planning/http-debugger.md): a forward proxy other programs point at (HTTP_PROXY, a
+ * browser's proxy setting, --proxy-server). Plain HTTP requests are captured whole. HTTPS goes through as an opaque
+ * CONNECT tunnel, listed by host, unless decryption is on: then the proxy answers the program with a certificate for
+ * the host signed by the TestPion root (DBG-4) and the requests inside are captured like plain ones. WebSocket
+ * upgrades are followed frame by frame; Server-Sent Events event by event. Every exchange carries timings, sizes
+ * and, best effort, the program that sent it. Rules (DBG-3) act on the way: ignore, highlight, modify, reply,
+ * redirect, breakpoints.
  */
 export interface DebuggerExchange {
   id: string;
   /** When the request arrived (ISO). */
   startedAt: string;
-  /** 'http' for a captured request, 'tunnel' for an HTTPS CONNECT (host only). */
-  kind: 'http' | 'tunnel';
+  /** 'http' for a captured request, 'tunnel' for an HTTPS CONNECT (host only), 'websocket' for an upgraded connection. */
+  kind: 'http' | 'tunnel' | 'websocket';
   method: string;
   url: string;
   host: string;
@@ -51,6 +59,14 @@ export interface DebuggerExchange {
   repliedByRule?: boolean;
   /** A breakpoint held it, and the user changed it. */
   edited?: boolean;
+  /** Captured inside a decrypted HTTPS tunnel. */
+  tls?: boolean;
+  /** Still streaming (a WebSocket, Server-Sent Events). */
+  open?: boolean;
+  /** WebSocket frames, both directions (up to a limit). */
+  frames?: WebSocketFrame[];
+  /** Server-Sent Events (up to a limit). */
+  events?: DebuggerSseEvent[];
 }
 
 /** What a breakpoint hands back: edits to apply, or nothing to let it go on as it was. */
@@ -75,6 +91,8 @@ export interface DebuggerProxyOptions {
   rules?(): DebuggerRule[];
   /** A breakpoint rule matched: show the exchange, resolve with edits (or nothing) to let it go on. */
   onBreakpoint?(e: DebuggerExchange, phase: 'request' | 'response'): Promise<BreakpointEdits | undefined>;
+  /** HTTPS decryption: a certificate for each host, signed by the root the program trusts; `enabled` is asked per tunnel. */
+  decrypt?: { leafFor(host: string): LeafCertificate; enabled(host: string): boolean; insecureUpstream?: boolean };
 }
 
 export interface DebuggerProxy {
@@ -86,6 +104,7 @@ export interface DebuggerProxy {
   clear(): void;
 }
 
+const MAX_FRAMES = 500;
 const flat = (h: IncomingMessage['headers']): Record<string, string> =>
   Object.fromEntries(
     Object.entries(h)
@@ -145,6 +164,8 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
   const exchanges: DebuggerExchange[] = [];
   const appOf = opts.applicationOf ?? applicationOfPort;
   const appCache = new Map<number, Promise<string | undefined>>();
+  /** Decrypted tunnels: which host a TLS socket (and the requests on it) belongs to. */
+  const tlsOrigins = new WeakMap<object, { host: string; port: number; clientPort: number; requests: number }>();
   const application = (port: number) => {
     let p = appCache.get(port);
     if (!p) {
@@ -161,18 +182,39 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
     }
     opts.onExchange?.(e, phase);
   };
+  /** Streams (frames, events) report at most a few times a second. */
+  const throttled = (e: DebuggerExchange) => {
+    let t: ReturnType<typeof setTimeout> | undefined;
+    return () => {
+      if (t) return;
+      t = setTimeout(() => {
+        t = undefined;
+        opts.onExchange?.(e, 'response');
+      }, 250);
+    };
+  };
   const rulesNow = () => opts.rules?.() ?? [];
+  const upstreamTls = () => ({ ca: trustedCa(), rejectUnauthorized: !opts.decrypt?.insecureUpstream });
+  /** Where a request on this socket goes: the absolute URL of a proxy request, or the decrypted tunnel's origin plus the path. */
+  const targetOf = (req: IncomingMessage): URL => {
+    const origin = tlsOrigins.get(req.socket);
+    if (origin) return new URL(req.url ?? '/', `https://${origin.host}:${origin.port}`);
+    return new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
+  };
 
+  /** Every connection to the proxy, so close() ends them all (tunnels, upgrades and injected TLS sockets included). */
+  const sockets = new Set<Duplex>();
   const server: Server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
     const t0 = Date.now();
     let target: URL;
     try {
-      // a proxy request carries the absolute URL; a direct request to the proxy carries a path only
-      target = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
+      target = targetOf(req);
     } catch {
       res.writeHead(400).end('Bad request');
       return;
     }
+    const origin = tlsOrigins.get(req.socket);
+    if (origin) origin.requests++;
     const e: DebuggerExchange = {
       id: shortId('dbg-'),
       startedAt: new Date(t0).toISOString(),
@@ -180,10 +222,11 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
       method: req.method ?? 'GET',
       url: target.href,
       host: target.host,
-      clientPort: req.socket.remotePort ?? 0,
+      clientPort: origin?.clientPort ?? req.socket.remotePort ?? 0,
       requestHeaders: flat(req.headers),
       requestBodyBytes: 0,
       responseBodyBytes: 0,
+      ...(origin ? { tls: true } : {}),
     };
     const appPromise = application(e.clientPort).then((a) => {
       if (a) e.application = a;
@@ -295,7 +338,8 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
     delete h['proxy-authorization'];
     if (e.redirectedTo) h.host = target.host;
     const hold = !!(decision?.responseHeaders || decision?.responseBody !== undefined || breakpoint);
-    const up = (target.protocol === 'https:' ? httpsRequest : httpRequest)(target, { method, headers: h, timeout: 60_000 }, async (ures) => {
+    const secure = target.protocol === 'https:';
+    const up = (secure ? httpsRequest : httpRequest)(target, { method, headers: h, timeout: 60_000, ...(secure ? upstreamTls() : {}) }, async (ures) => {
       e.waitMs = Date.now() - t0;
       e.status = ures.statusCode;
       e.statusText = ures.statusMessage;
@@ -306,22 +350,40 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
         res.writeHead(ures.statusCode ?? 502, ures.headers);
         const chunks: Buffer[] = [];
         let kept = 0;
+        // Server-Sent Events: the stream stays open; every event is listed as it comes
+        const sse = /text\/event-stream/i.test(e.contentType ?? '');
+        const report = throttled(e);
+        const events = sse
+          ? sseParser((ev) => {
+              (e.events ??= []).push(ev);
+              if (e.events.length > MAX_FRAMES) e.events.shift();
+              report();
+            })
+          : undefined;
+        if (sse) {
+          e.open = true;
+          if (listed) record(e, 'response');
+        }
         ures.on('data', (c: Buffer) => {
           e.responseBodyBytes += c.length;
           if (keep && kept < maxBody) {
             chunks.push(c.subarray(0, maxBody - kept));
             kept += Math.min(c.length, maxBody - kept);
           }
+          events?.push(c);
           res.write(c);
         });
         ures.on('end', () => {
           res.end();
+          events?.end();
           if (keep) e.responseBody = Buffer.concat(chunks).toString('utf8');
           e.responseBodyTruncated = e.responseBodyBytes > maxBody;
+          e.open = undefined;
           done();
         });
         ures.on('error', (err) => {
           e.error = err.message;
+          e.open = undefined;
           res.end();
           done();
         });
@@ -381,7 +443,122 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
     up.end(body);
   }
 
-  // HTTPS: an opaque tunnel, listed by host (decrypting it is DBG-4); ignore and highlight rules apply by host
+  // WebSocket: the upgrade goes to the server; both directions are read frame by frame on the way
+  server.on('upgrade', (req: IncomingMessage, socket: Duplex, head: Buffer) => {
+    const t0 = Date.now();
+    let target: URL;
+    try {
+      target = targetOf(req);
+    } catch {
+      socket.destroy();
+      return;
+    }
+    const origin = tlsOrigins.get(req.socket);
+    const e: DebuggerExchange = {
+      id: shortId('dbg-'),
+      startedAt: new Date(t0).toISOString(),
+      kind: 'websocket',
+      method: req.method ?? 'GET',
+      url: target.href.replace(/^http/, 'ws'),
+      host: target.host,
+      clientPort: origin?.clientPort ?? req.socket.remotePort ?? 0,
+      requestHeaders: flat(req.headers),
+      requestBodyBytes: 0,
+      responseBodyBytes: 0,
+      frames: [],
+      ...(origin ? { tls: true } : {}),
+    };
+    void application(e.clientPort).then((a) => {
+      if (a) e.application = a;
+    });
+    const rules = rulesNow();
+    const decision = rules.length ? decideRequest(rules, e) : undefined;
+    const listed = !decision?.ignore;
+    if (decision?.highlight) e.highlight = decision.highlight;
+    if (decision?.applied.length) e.rules = decision.applied;
+    if (decision?.redirect) {
+      const to = new URL(target.href);
+      to.host = decision.redirect.host;
+      if (decision.redirect.scheme) to.protocol = `${decision.redirect.scheme}:`;
+      e.redirectedTo = to.href.replace(/^http/, 'ws');
+      target = to;
+    }
+    if (listed) record(e, 'request');
+    const h = { ...req.headers };
+    delete h['proxy-connection'];
+    if (e.redirectedTo) h.host = target.host;
+    const secure = target.protocol === 'https:';
+    const up = (secure ? httpsRequest : httpRequest)(target, { method: req.method, headers: h, ...(secure ? upstreamTls() : {}) });
+    const report = throttled(e);
+    const frame = (f: WebSocketFrame) => {
+      e.frames!.push(f);
+      if (e.frames!.length > MAX_FRAMES) e.frames!.shift();
+      if (f.direction === 'sent') e.requestBodyBytes += f.bytes;
+      else e.responseBodyBytes += f.bytes;
+      if (listed) report();
+    };
+    const finish = (err?: string) => {
+      if (e.durationMs !== undefined) return;
+      e.durationMs = Date.now() - t0;
+      e.open = undefined;
+      if (err) e.error = err;
+      if (listed) record(e, 'response');
+    };
+    up.on('upgrade', (ures: IncomingMessage, upSocket: Duplex, upHead: Buffer) => {
+      e.waitMs = Date.now() - t0;
+      e.status = ures.statusCode;
+      e.statusText = ures.statusMessage;
+      e.responseHeaders = flat(ures.headers);
+      e.open = true;
+      const lines = [
+        `HTTP/1.1 ${ures.statusCode} ${ures.statusMessage}`,
+        ...Object.entries(ures.headers).flatMap(([k, v]) => (Array.isArray(v) ? v.map((x) => `${k}: ${x}`) : v !== undefined ? [`${k}: ${v}`] : [])),
+      ];
+      socket.write(lines.join('\r\n') + '\r\n\r\n');
+      const sent = webSocketFrameParser('sent', frame);
+      const received = webSocketFrameParser('received', frame);
+      if (head.length) {
+        sent.push(head);
+        upSocket.write(head);
+      }
+      if (upHead.length) {
+        received.push(upHead);
+        socket.write(upHead);
+      }
+      socket.on('data', (c: Buffer) => (sent.push(c), upSocket.write(c)));
+      upSocket.on('data', (c: Buffer) => (received.push(c), socket.write(c)));
+      // half-open sockets: one side ending is the connection closing
+      socket.on('end', () => (finish(), upSocket.end()));
+      upSocket.on('end', () => (finish(), socket.end()));
+      socket.on('close', () => (finish(), upSocket.destroy()));
+      upSocket.on('close', () => (finish(), socket.destroy()));
+      socket.on('error', () => undefined);
+      upSocket.on('error', (err) => finish(err.message));
+      if (listed) record(e, 'response');
+    });
+    up.on('response', (ures: IncomingMessage) => {
+      // the server refused the upgrade: its answer goes back as is
+      e.waitMs = Date.now() - t0;
+      e.status = ures.statusCode;
+      e.statusText = ures.statusMessage;
+      e.responseHeaders = flat(ures.headers);
+      const lines = [
+        `HTTP/1.1 ${ures.statusCode} ${ures.statusMessage}`,
+        ...Object.entries(ures.headers).flatMap(([k, v]) => (Array.isArray(v) ? v.map((x) => `${k}: ${x}`) : v !== undefined ? [`${k}: ${v}`] : [])),
+      ];
+      socket.write(lines.join('\r\n') + '\r\n\r\n');
+      ures.on('data', (c: Buffer) => socket.write(c));
+      ures.on('end', () => (socket.end(), finish()));
+    });
+    up.on('error', (err: NodeJS.ErrnoException) => {
+      finish(err.code === 'ENOTFOUND' ? `Unknown host ${target.hostname}` : err.message);
+      socket.end('HTTP/1.1 502 Bad Gateway\r\n\r\n');
+    });
+    up.end();
+  });
+
+  // HTTPS: an opaque tunnel, listed by host; or, with decryption on, TLS to the program with a certificate for the
+  // host signed by the TestPion root, and its requests captured like plain ones
   server.on('connect', (req: IncomingMessage, socket: Socket, head: Buffer) => {
     const t0 = Date.now();
     const [host, portText] = (req.url ?? '').split(':');
@@ -406,10 +583,71 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
     const listed = !decision?.ignore;
     if (decision?.highlight) e.highlight = decision.highlight;
     if (decision?.applied.length) e.rules = decision.applied;
+    const decrypt = opts.decrypt && host && opts.decrypt.enabled(host);
+    if (decrypt) {
+      // the tunnel itself is not listed: its requests are, with tls: true
+      socket.write('HTTP/1.1 200 Connection Established\r\n\r\n');
+      if (head.length) socket.unshift(head);
+      // the TLS server reads the tunnel itself (a hand-made TLSSocket is not read before the handshake, so a client
+      // that rejects our certificate and hangs up would go unnoticed); the decrypted socket then goes to the HTTP server
+      const origin = { host: host!, port, clientPort: e.clientPort, requests: 0 };
+      let reported = false;
+      // the program did not accept our certificate (an alert, or it hung up without a request): a tunnel that failed, with what to do
+      const failed = (why?: string) => {
+        if (origin.requests > 0 || reported) return;
+        reported = true;
+        e.error =
+          !why || /alert|handshake|certificate|unknown ca|ECONNRESET|EPIPE|closed|socket disconnected/i.test(why)
+            ? 'The program did not trust the TestPion root certificate (install it, or turn HTTPS decryption off for this host)'
+            : why;
+        e.durationMs = Date.now() - t0;
+        if (listed) {
+          record(e, 'request');
+          record(e, 'response');
+        }
+        socket.destroy();
+      };
+      // TLS runs on one end of a pass-through pair; the raw socket stays ours, so its close is always seen (a TLS
+      // socket on a handle taken over from the HTTP server reports nothing when the program hangs up)
+      const [inner, outer] = duplexPair();
+      socket.pipe(outer);
+      outer.pipe(socket);
+      const leaf = opts.decrypt!.leafFor(host!);
+      const tlsSocket = new TLSSocket(inner, {
+        isServer: true,
+        secureContext: createSecureContext({ cert: leaf.cert, key: leaf.key }),
+        SNICallback: (name, cb) => {
+          try {
+            const l = opts.decrypt!.leafFor(name);
+            cb(null, createSecureContext({ cert: l.cert, key: l.key }));
+          } catch (err) {
+            cb(err as Error);
+          }
+        },
+      });
+      tlsOrigins.set(tlsSocket, origin);
+      tlsSocket.once('secure', () => {
+        sockets.add(tlsSocket);
+        tlsSocket.on('close', () => sockets.delete(tlsSocket));
+        server.emit('connection', tlsSocket);
+      });
+      tlsSocket.on('error', (err: Error) => failed(err.message));
+      socket.on('error', (err: Error) => failed(err.message));
+      // the HTTP server's sockets allow half-open connections: the program hanging up is an 'end', not a 'close'
+      const hangUp = () => {
+        failed();
+        tlsSocket.destroy();
+        outer.destroy();
+        socket.destroy();
+      };
+      socket.on('end', hangUp);
+      socket.on('close', hangUp);
+      return;
+    }
     const to = decision?.redirect ? { host: decision.redirect.host.split(':')[0]!, port: Number(decision.redirect.host.split(':')[1]) || port } : { host, port };
     if (decision?.redirect) e.redirectedTo = `https://${to.host}:${to.port}`;
     if (listed) record(e, 'request');
-    const upstream = tcpConnect(to.port, to.host, () => {
+    const upstream = tcpConnect(to.port, to.host!, () => {
       socket.write('HTTP/1.1 200 Connection Established\r\n\r\n');
       if (head.length) upstream.write(head);
       upstream.pipe(socket);
@@ -433,6 +671,10 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
     socket.on('close', () => finish());
   });
 
+  server.on('connection', (socket: Duplex) => {
+    sockets.add(socket);
+    socket.on('close', () => sockets.delete(socket));
+  });
   await new Promise<void>((resolve, reject) => {
     server.once('error', (err: NodeJS.ErrnoException) =>
       reject(new ApsError('ConfigurationError', err.code === 'EADDRINUSE' ? `Port ${opts.port} is in use` : err.message, { suggestions: ['Choose another port in the Debugger view.'] })),
@@ -447,6 +689,8 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
     clear: () => exchanges.splice(0),
     close: () =>
       new Promise<void>((resolve) => {
+        for (const s of sockets) s.destroy();
+        sockets.clear();
         server.closeAllConnections?.();
         server.close(() => resolve());
       }),

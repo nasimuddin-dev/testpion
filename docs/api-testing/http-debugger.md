@@ -25,7 +25,15 @@ The **Capture** menu does the pointing for you:
 - **Set the system proxy to TestPion**: every program that honours the operating system's proxy sends through (Windows: Internet Settings; macOS: `networksetup`; GNOME: `gsettings`). It is put back as it was when you **Restore** it, when you stop capturing and when TestPion quits.
 - **Copy for bash / PowerShell / cmd / curl / Chrome**: the lines for a shell that is already open.
 
-Plain HTTP is captured whole. HTTPS shows as a **tunnel** by host, with bytes in and out: decrypting it needs a TestPion root certificate, which is coming (see the plan).
+Plain HTTP is captured whole. HTTPS shows as a **tunnel** by host, with bytes in and out, until you decrypt it.
+
+### HTTPS
+
+**HTTPS ▸ Decrypt HTTPS** makes the proxy answer each program with a certificate for the host it asked for, signed by **TestPion HTTP Debugger Root**, a root certificate created on this computer (it never leaves it). Programs that trust that root are captured like plain HTTP, with a lock on the row; a program that does not trust it is listed as a tunnel that failed, with the reason. **HTTPS ▸ Root certificate…** shows its fingerprint, trusts it for the current user in one click (Windows, macOS, Chrome on Linux; Firefox imports it in its own settings), removes it, exports it for a phone or another computer, or makes a new one. Node reads `NODE_EXTRA_CA_CERTS`, Python `REQUESTS_CA_BUNDLE`, curl `--cacert`. **Keep hosts encrypted…** lists the hosts that stay opaque (programs that pin their certificates, banking). Remove the root from the trust store when you are done.
+
+### WebSocket and Server-Sent Events
+
+A WebSocket through the proxy is one row (status 101, *live* while open) with a **Frames** tab: every message sent and received, with the time and size; control frames (ping, pong, close) on request. A `text/event-stream` response gets an **Events** tab with each event's name, id and data as it arrives.
 
 ## What you can do with a row
 
@@ -39,11 +47,13 @@ The row's tabs are the inspectors: **Response** and **Request** (JSON as a tree)
 
 **Statistics** show the session: requests over time, the status mix, by host, content type and program, the largest and the slowest exchanges.
 
+**Decode** reads a value as URL-encoded, Base64, hex, a Unix timestamp, a JWT or JSON, and encodes it back.
+
 Keyboard: **↑ ↓** select, **Enter** opens the exchange as a request, **Delete** removes it, **Ctrl+F** goes to the filter box, **Ctrl+E** clears the session.
 
 ### Sessions
 
-The **Session** menu keeps captures: **Save session…** writes the session as a HAR file in the workspace's `debugger/` folder (which `.gitignore` keeps out of git); a saved session opens from the same menu, replacing the current one or adding to it. **Import a HAR file…** opens a file from any tool (a browser's DevTools, Fiddler, Charles); **Export as HAR…** saves one anywhere. While capturing, **AutoSave** writes the live session to `debugger/autosave.har` every minute, so a crash loses at most a minute. **Clear** forgets the session.
+The **Session** menu keeps captures: **Save session…** writes the session as a HAR file in the workspace's `debugger/` folder (which `.gitignore` keeps out of git); a saved session opens from the same menu, replacing the current one or adding to it. **Import a HAR file…** opens a file from any tool (a browser's DevTools, Fiddler, Charles), and **Import a Fiddler session (.saz)…** opens Fiddler's own archives; **Export as HAR…** saves one anywhere. While capturing, **AutoSave** writes the live session to `debugger/autosave.har` every minute, so a crash loses at most a minute. **Clear** forgets the session.
 
 Secrets (Authorization headers, API keys, passwords in bodies) are masked wherever the session is shown or saved; the proxy listens on this computer only unless you ask for the LAN.
 
@@ -68,12 +78,13 @@ Rules live in **profiles** (Offline, Slow network, Mock payments…) switched as
 testpion debug                       # the proxy on 8899; every exchange printed as it happens
 testpion debug -p 9000 -o session.har --json
 testpion debug --rules debugger/rules.json   # the workspace's rules (re-read when the file changes)
+testpion debug --decrypt                     # HTTPS too, for programs that trust ~/.testpion/debugger/testpion-root.pem
 ```
 
-AI agents have the same through the workspace's MCP server: `debugger_capture` (start / stop / status / clear), `debugger_exchanges` (the list, with filters; `deep` searches bodies), `debugger_exchange` (one, with bodies), `debugger_session` (save the session as HAR, or open a HAR file), `debugger_rules` (list, presets, add, enable, remove: an agent can take an API offline, slow it down or redirect it while it tests), `debugger_stats`. An agent can start the proxy, run a program against it and read what it did.
+AI agents have the same through the workspace's MCP server: `debugger_capture` (start / stop / status / clear; `decrypt` for HTTPS), `debugger_exchanges` (the list, with filters; `deep` searches bodies), `debugger_exchange` (one, with bodies), `debugger_session` (save the session as HAR, or open a HAR file), `debugger_rules` (list, presets, add, enable, remove: an agent can take an API offline, slow it down or redirect it while it tests), `debugger_stats`. An agent can start the proxy, run a program against it and read what it did.
 
 ## Coming next
 
-WebSocket / SSE / gRPC frames, HTTPS decryption with a root certificate (then rules reach HTTPS bodies too), Fiddler session import, a decode panel, the HTTP/2 connection tree. The plan is `planning/http-debugger.md` in the repository.
+gRPC messages decoded with the workspace's .proto files and the HTTP/2 connection tree (the proxy speaks HTTP/1.1 to programs today), a QR code for a phone on the LAN. The plan is `planning/http-debugger.md` in the repository.
 
 :::

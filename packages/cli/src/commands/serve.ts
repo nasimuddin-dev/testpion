@@ -5,7 +5,7 @@ import { Command } from 'commander';
 import {
   ChainSecretStore,
   createEngineContext,
-  exchangesToHar, startDebuggerProxy, type DebuggerRule, type DebuggerRulesFile,
+  debuggerCertDir, ensureRootCertificate, exchangesToHar, leafSigner, startDebuggerProxy, type DebuggerRule, type DebuggerRulesFile,
   EnvSecretStore,
   McpSession,
   recordingToCollection,
@@ -352,8 +352,9 @@ ${cyan(r.url)}`);
     .option('--lan', 'listen on every interface (a phone, another computer), not only this one')
     .option('-o, --out <file.har>', 'save the session as HAR when stopped (Ctrl+C)')
     .option('--rules <file.json>', "rules to apply (the app's debugger/rules.json: ignore, highlight, modify, reply, redirect); the file is re-read when it changes")
+    .option('--decrypt', 'decrypt HTTPS with the TestPion root certificate (~/.testpion/debugger; the program must trust it)')
     .option('--json', 'print each exchange as one JSON line (for scripts and AI agents)')
-    .action(async (o: { port: string; lan?: boolean; out?: string; rules?: string; json?: boolean }) => {
+    .action(async (o: { port: string; lan?: boolean; out?: string; rules?: string; decrypt?: boolean; json?: boolean }) => {
       const redactor = new Redactor();
       // the rules file as the app writes it (profiles) or a plain list; re-read when it changes so edits apply at once
       let rulesCache: { mtime: number; rules: DebuggerRule[] } | undefined;
@@ -371,10 +372,14 @@ ${cyan(r.url)}`);
         }
       };
       if (o.rules) console.error(dim(`${rules().length} rules from ${o.rules} (breakpoints need the app)`));
+      const root = o.decrypt ? ensureRootCertificate(debuggerCertDir()) : undefined;
+      if (root) console.error(dim(`HTTPS decrypted for programs that trust ${root.path} (Node: NODE_EXTRA_CA_CERTS, Python: REQUESTS_CA_BUNDLE, curl: --cacert)`));
+      const leaf = root ? leafSigner(root) : undefined;
       const proxy = await startDebuggerProxy({
         port: Number(o.port) || undefined,
         lan: !!o.lan,
         rules,
+        ...(leaf ? { decrypt: { leafFor: leaf, enabled: () => true } } : {}),
         onExchange: (e, phase) => {
           if (phase !== 'response') return;
           if (o.json) console.log(JSON.stringify({ ...e, url: redactor.redactUrl(e.url), requestBody: undefined, responseBody: undefined }));
