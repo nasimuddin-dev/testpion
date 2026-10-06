@@ -327,7 +327,7 @@ export function Explorer() {
       quiet(call<Library<unknown>>('lib.get', { kind: 'spec-folders' }), empty),
     ]);
     setGrpc(g.items.map(({ data: _, ...i }) => i));
-    const wsBadge = (d: unknown) => ((d as { mode?: string })?.mode === 'mqtt' ? 'MQTT' : (d as { mode?: string })?.mode === 'socketio' ? 'SIO' : 'WS');
+    const wsBadge = (d: unknown) => ((d as { mode?: string })?.mode === 'kafka' ? 'KAFKA' : (d as { mode?: string })?.mode === 'mqtt' ? 'MQTT' : (d as { mode?: string })?.mode === 'socketio' ? 'SIO' : 'WS');
     setSockets(w.items.map(({ data, ...i }) => ({ ...i, badge: wsBadge(data) })));
     setServers(s);
     setSpecs(sp);

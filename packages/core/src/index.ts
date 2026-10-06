@@ -31,6 +31,7 @@ export * from './protocols/grpc/grpc.js';
 export * from './protocols/grpc/reflection.js';
 export * from './protocols/socketio/socketio.js';
 export * from './protocols/mqtt/mqtt.js';
+export * from './protocols/kafka/kafka.js';
 export * from './import/bru.js';
 export * from './import/bru-export.js';
 export * from './import/wsdl.js';

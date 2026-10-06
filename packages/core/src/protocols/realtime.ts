@@ -3,21 +3,25 @@ import type { KeyValue } from '../model/types.js';
 import type { CookieJar } from '../cookies/cookie-jar.js';
 import type { Redactor } from '../util/redact.js';
 import { MqttSession, type MqttQos } from './mqtt/mqtt.js';
+import { KafkaSession } from './kafka/kafka.js';
 import { SocketIoSession } from './socketio/socketio.js';
 import { WebSocketSession } from './websocket/websocket.js';
 
 /**
  * One scripted exchange with a real-time server, for the CLI and AI agents: connect (WebSocket,
- * Socket.IO or MQTT), send messages / emit events / publish in order, collect everything received for
- * a while, close.
+ * Socket.IO, MQTT or Kafka), send messages / emit events / publish / produce in order, collect everything received
+ * for a while, close.
  */
 export interface RealtimeExchange {
   url: string;
   mode?: RealtimeMode;
-  /** WebSocket: text frames. Socket.IO: `{ event, args?, ack? }`. MQTT: `{ topic, payload?, qos?, retain? }`. */
-  send?: Array<string | { event: string; args?: unknown[]; ack?: boolean } | MqttPublish>;
-  /** MQTT: topic filters to subscribe to before publishing (`+` and `#` wildcards). */
-  subscribe?: Array<string | { topic: string; qos?: MqttQos }>;
+  /** WebSocket: text frames. Socket.IO: `{ event, args?, ack? }`. MQTT: `{ topic, payload?, qos?, retain? }`. Kafka: `{ topic, payload?, key?, headers?, partition? }`. */
+  send?: Array<string | { event: string; args?: unknown[]; ack?: boolean } | MqttPublish | KafkaProduce>;
+  /** MQTT: topic filters to subscribe to before publishing (`+` and `#` wildcards). Kafka: topics to read (`fromBeginning` to read what is there already). */
+  subscribe?: Array<string | { topic: string; qos?: MqttQos; fromBeginning?: boolean }>;
+  /** Kafka: the consumer group (default: one of its own) and the SASL mechanism for username / password. */
+  groupId?: string;
+  mechanism?: 'plain' | 'scram-sha-256' | 'scram-sha-512';
   /** MQTT: client ID, username and password, protocol version (4 = 3.1.1, 5). */
   clientId?: string;
   username?: string;
@@ -32,7 +36,14 @@ export interface RealtimeExchange {
   path?: string;
 }
 
-export type RealtimeMode = 'websocket' | 'socketio' | 'mqtt';
+export type RealtimeMode = 'websocket' | 'socketio' | 'mqtt' | 'kafka';
+export interface KafkaProduce {
+  topic: string;
+  payload?: unknown;
+  key?: string;
+  headers?: Record<string, string>;
+  partition?: number;
+}
 export interface MqttPublish {
   topic: string;
   payload?: unknown;
@@ -43,13 +54,13 @@ export interface MqttPublish {
 export interface RealtimeResult {
   mode: RealtimeMode;
   connected: boolean;
-  messages: Array<{ atMs: number; direction: 'sent' | 'received' | 'system'; event?: string; topic?: string; ack?: boolean; data: string }>;
+  messages: Array<{ atMs: number; direction: 'sent' | 'received' | 'system'; event?: string; topic?: string; ack?: boolean; data: string; key?: string; partition?: number; offset?: string; headers?: Record<string, string> }>;
   durationMs: number;
 }
 
-/** The mode a URL implies: mqtt(s):// → MQTT, http(s):// → Socket.IO, otherwise WebSocket. */
+/** The mode a URL implies: kafka(s):// → Kafka, mqtt(s):// → MQTT, http(s):// → Socket.IO, otherwise WebSocket. */
 export function realtimeModeFor(url: string): RealtimeMode {
-  return /^(mqtts?|tcp|tls):/i.test(url) ? 'mqtt' : /^https?:/i.test(url) ? 'socketio' : 'websocket';
+  return /^kafkas?:/i.test(url) ? 'kafka' : /^(mqtts?|tcp|tls):/i.test(url) ? 'mqtt' : /^https?:/i.test(url) ? 'socketio' : 'websocket';
 }
 
 export async function runRealtimeExchange(x: RealtimeExchange, opts: { redactor?: Redactor; cookieJar?: CookieJar; signal?: AbortSignal } = {}): Promise<RealtimeResult> {
@@ -58,9 +69,49 @@ export async function runRealtimeExchange(x: RealtimeExchange, opts: { redactor?
   const wait = Math.min(Math.max(x.waitMs ?? 1500, 0), 60_000);
   const messages: RealtimeResult['messages'] = [];
   const redact = (s: string) => opts.redactor?.redactString(s) ?? s;
-  const record = (m: { direction: 'sent' | 'received' | 'system'; data: string; event?: string; topic?: string; ack?: boolean }) =>
+  const record = (m: { direction: 'sent' | 'received' | 'system'; data: string; event?: string; topic?: string; ack?: boolean; key?: string; partition?: number; offset?: string; headers?: Record<string, string> }) =>
     messages.length < 1000 &&
-    messages.push({ atMs: Date.now() - t0, direction: m.direction, ...(m.event ? { event: m.event } : {}), ...(m.topic ? { topic: m.topic } : {}), ...(m.ack ? { ack: true } : {}), data: redact(m.data).slice(0, 20_000) });
+    messages.push({
+      atMs: Date.now() - t0,
+      direction: m.direction,
+      ...(m.event ? { event: m.event } : {}),
+      ...(m.topic ? { topic: m.topic } : {}),
+      ...(m.ack ? { ack: true } : {}),
+      ...(m.key !== undefined ? { key: redact(m.key) } : {}),
+      ...(m.partition !== undefined ? { partition: m.partition } : {}),
+      ...(m.offset !== undefined ? { offset: m.offset } : {}),
+      ...(m.headers ? { headers: Object.fromEntries(Object.entries(m.headers).map(([k, v]) => [k, opts.redactor?.isSensitiveKey(k) ? '***' : redact(v)])) } : {}),
+      data: redact(m.data).slice(0, 20_000),
+    });
+
+  if (mode === 'kafka') {
+    const s = new KafkaSession(x.url, { clientId: x.clientId, groupId: x.groupId, username: x.username, password: x.password, mechanism: x.mechanism });
+    s.onMessage((m) => record({ direction: m.direction, data: m.data, topic: m.topic, key: m.key, partition: m.partition, offset: m.offset, headers: m.headers }));
+    try {
+      await s.connect();
+    } catch (e) {
+      const msg = (e as Error).message;
+      if (!messages.some((m) => msg.includes(m.data.replace(/^Error: /, '')))) record({ direction: 'system', data: msg });
+      return { mode, connected: false, messages, durationMs: Date.now() - t0 };
+    }
+    try {
+      for (const sub of x.subscribe ?? []) {
+        const o = typeof sub === 'string' ? { topic: sub } : sub;
+        await s.subscribe(o.topic, { fromBeginning: !!o.fromBeginning });
+      }
+      for (const item of x.send ?? []) {
+        if (opts.signal?.aborted) break;
+        if (typeof item === 'string' || !('topic' in item)) throw new ApsError('ValidationError', 'Kafka messages are { topic, payload?, key?, headers?, partition? } objects');
+        const k = item as KafkaProduce;
+        const value = k.payload === undefined ? '' : typeof k.payload === 'string' ? k.payload : JSON.stringify(k.payload);
+        await s.produce(k.topic, value, { key: k.key, headers: k.headers, partition: k.partition });
+      }
+      await sleep(wait, opts.signal);
+      return { mode, connected: true, messages, durationMs: Date.now() - t0 };
+    } finally {
+      await s.closeAndWait();
+    }
+  }
 
   if (mode === 'mqtt') {
     const s = new MqttSession(x.url, { clientId: x.clientId, username: x.username, password: x.password, protocolVersion: x.protocolVersion });
@@ -80,8 +131,9 @@ export async function runRealtimeExchange(x: RealtimeExchange, opts: { redactor?
       for (const item of x.send ?? []) {
         if (opts.signal?.aborted) break;
         if (typeof item === 'string' || !('topic' in item)) throw new ApsError('ValidationError', 'MQTT messages are { topic, payload?, qos?, retain? } objects');
-        const payload = item.payload === undefined ? '' : typeof item.payload === 'string' ? item.payload : JSON.stringify(item.payload);
-        await s.publish(item.topic, payload, { qos: item.qos, retain: item.retain });
+        const p = item as MqttPublish;
+        const payload = p.payload === undefined ? '' : typeof p.payload === 'string' ? p.payload : JSON.stringify(p.payload);
+        await s.publish(p.topic, payload, { qos: p.qos, retain: p.retain });
       }
       await sleep(wait, opts.signal);
       return { mode, connected: true, messages, durationMs: Date.now() - t0 };

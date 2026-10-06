@@ -21,6 +21,7 @@ import {
   SocketIoSession,
   reflectServer,
   parseGrpcTarget,
+  KafkaSession,
   MqttSession,
   WorkspaceManager,
   WorkspaceSearch,
@@ -210,6 +211,7 @@ export class Backend {
   /** Socket.IO sessions (the WebSocket view's Socket.IO mode). */
   sioSessions = new Map<string, SocketIoSession>();
   mqttSessions = new Map<string, MqttSession>();
+  kafkaSessions = new Map<string, KafkaSession>();
   /** Running mock servers by collection id. */
   mocks = new Map<string, MockServer>();
   /** Rendered pm.visualizer pages by id (served on an isolated origin: tpviz:// or /__aps/viz/). */
@@ -1345,6 +1347,7 @@ export class Backend {
     for (const s of this.wsSessions.values()) s.close();
     for (const s of this.sioSessions.values()) s.close();
     for (const s of this.mqttSessions.values()) s.close();
+    for (const s of this.kafkaSessions.values()) await s.closeAndWait();
     for (const m of this.mocks.values()) await m.close();
     await this.gqlMock?.close();
     await this.recorder?.close();

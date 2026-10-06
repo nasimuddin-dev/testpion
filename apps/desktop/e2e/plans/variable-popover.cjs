@@ -38,9 +38,34 @@ const steps = [
      for (const detail of [1, 2]) { span.dispatchEvent(new MouseEvent('mousedown', { ...o, detail })); span.dispatchEvent(new MouseEvent('mouseup', { ...o, detail })); await __t.sleep(60); }
      return await read();`,
   ),
+  // a variable defined nowhere: All opens the overview on it, says so, and offers to add it
+  step(
+    'all-for-an-undefined-variable',
+    `await __t.requests(); if (!(await openRow('Custom headers'))) return 'NO ROW';
+     const url = [...document.querySelectorAll('main input[aria-label="Request URL"]')].find((x) => x.offsetParent);
+     const before = url.value;
+     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(url, '{{nowhereDefined}}/x'); url.dispatchEvent(new Event('input', { bubbles: true })); await __t.sleep(400);
+     await clickVar(url, 'nowhereDefined');
+     const p = await __t.waitFor(pop, 2500); if (!p) return 'NO DIALOG';
+     [...p.querySelectorAll('button')].find((b) => b.textContent.trim() === 'All')?.click();
+     const banner = await __t.waitFor(() => document.querySelector('[data-not-defined="nowhereDefined"]'), 4000);
+     const filterValue = document.querySelector('input[aria-label="Filter variables"]')?.value;
+     const offersAdd = !!banner && [...banner.querySelectorAll('button')].some((b) => /^Add to /.test(b.textContent.trim()));
+     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); await __t.sleep(300);
+     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(url, before); url.dispatchEvent(new Event('input', { bubbles: true }));
+     return 'banner: ' + !!banner + ' | filter: ' + filterValue + ' | offers add: ' + offersAdd;`,
+  ),
+  step(
+    'new-websocket-tab-starts-empty',
+    `await __t.view('WebSocket'); await __t.sleep(800);
+     const url = [...document.querySelectorAll('main input[aria-label="WebSocket URL"]')].find((x) => x.offsetParent);
+     return 'url: "' + (url?.value ?? 'NONE') + '"';`,
+  ),
 ];
 
 module.exports = withExpect(steps, {
+  'all-for-an-undefined-variable': /^banner: true \| filter: nowhereDefined \| offers add: true$/,
+  'new-websocket-tab-starts-empty': /^url: ""$/,
   'url-bar-click': /^Variable httpbin \| environment \| value: https:\/\/httpbin\.org \| closed: true$/,
   'header-click': /^Variable appName \| workspace \| value: TestPion \| closed: true$/,
   'auth-field-double-click': /^Variable demoToken \| environment \| value: demo-token-123 \| closed: true$/,

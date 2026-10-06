@@ -1,4 +1,4 @@
-import { ArrowDownLeft, ArrowUpRight, BookmarkPlus, Info, Plug, Plus, Radio, Save, Send, Trash2, Unplug, X, FileCheck2, Bookmark, History, KeyRound } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, BookmarkPlus, Info, ListTree, Plug, Plus, Radio, Save, Send, Trash2, Unplug, X, FileCheck2, Bookmark, History, KeyRound } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { useAssistantContext } from '../lib/assistant-context';
 import { asError, call, on } from '../api';
@@ -35,6 +35,11 @@ interface WsMessage {
   topic?: string;
   qos?: number;
   retain?: boolean;
+  /** Kafka: the key, partition, offset and headers. */
+  key?: string;
+  partition?: number;
+  offset?: string;
+  headers?: Record<string, string>;
 }
 
 type Qos = 0 | 1 | 2;
@@ -44,8 +49,8 @@ type Draft = {
   protocols: string;
   headers: KeyValue[];
   message: string;
-  /** Plain WebSocket, a Socket.IO server (events with JSON arguments, acknowledgements), or an MQTT broker. */
-  mode?: 'websocket' | 'socketio' | 'mqtt';
+  /** Plain WebSocket, a Socket.IO server (events with JSON arguments, acknowledgements), an MQTT broker or a Kafka cluster. */
+  mode?: 'websocket' | 'socketio' | 'mqtt' | 'kafka';
   event?: string;
   ack?: boolean;
   /** Socket.IO endpoint path (default /socket.io) and handshake auth payload (JSON). */
@@ -63,17 +68,25 @@ type Draft = {
   /** Only a {{variable}} reference is kept; a typed password lives in memory until the app closes. */
   password?: string;
   mqttVersion?: 4 | 5;
+  /** Kafka: the key and headers of the message to produce, the topics read on connect (and from the beginning), the consumer group, SASL. */
+  key?: string;
+  kafkaHeaders?: KeyValue[];
+  reads?: Array<{ topic: string; fromBeginning?: boolean }>;
+  groupId?: string;
+  mechanism?: 'plain' | 'scram-sha-256' | 'scram-sha-512';
 };
-const hostOf = (url: string) => url.replace(/^(wss?|https?|mqtts?):\/\//, '').split(/[/?#]/)[0] || 'Connection';
+const hostOf = (url: string) => url.replace(/^(wss?|https?|mqtts?|kafkas?):\/\//, '').split(/[/?#,]/)[0] || 'Connection';
 /** What is written to drafts and saved connections: never a typed-in MQTT password. */
 const persistable = (d: Draft): Draft => (d.password && !/^\s*\{\{[^}]+\}\}\s*$/.test(d.password) ? { ...d, password: undefined } : d);
 const MODES = [
   { id: 'websocket', label: 'WebSocket' },
   { id: 'socketio', label: 'Socket.IO' },
   { id: 'mqtt', label: 'MQTT' },
+  { id: 'kafka', label: 'Kafka' },
 ] as const;
 
-const drafts = persisted<Draft>('websocket', { url: '{{wsUrl}}', protocols: '', headers: [] as KeyValue[], message: '{\n  "type": "ping"\n}' });
+// a new connection starts empty: a {{variable}} here would be "not defined" in most workspaces (the placeholder shows the format)
+const drafts = persisted<Draft>('websocket', { url: '', protocols: '', headers: [] as KeyValue[], message: '{\n  "type": "ping"\n}' });
 
 export function WebSocketView() {
   // this document's draft (each tab of this editor is its own document)
@@ -88,7 +101,10 @@ export function WebSocketView() {
   const [tab, setTab] = useState<'message' | 'headers' | 'auth' | 'subscriptions' | 'connection'>('message');
   const sio = d.mode === 'socketio';
   const mqtt = d.mode === 'mqtt';
+  const kafka = d.mode === 'kafka';
   const [newSub, setNewSub] = useState<{ topic: string; qos: Qos }>({ topic: '', qos: 0 });
+  const [newRead, setNewRead] = useState<{ topic: string; fromBeginning: boolean }>({ topic: '', fromBeginning: true });
+  const [clusterTopics, setClusterTopics] = useState<Array<{ name: string; partitions: number }>>();
   const env = useApp((s) => s.environment);
   // "Ask the assistant" includes the connection and its latest messages (secrets are hidden by the backend)
   useAssistantContext(
@@ -96,7 +112,7 @@ export function WebSocketView() {
     useCallback(() => {
       if (!d.url) return undefined;
       return {
-        label: `${d.mode === 'mqtt' ? 'MQTT' : d.mode === 'socketio' ? 'Socket.IO' : 'WebSocket'} ${d.url} · ${status}`,
+        label: `${d.mode === 'kafka' ? 'Kafka' : d.mode === 'mqtt' ? 'MQTT' : d.mode === 'socketio' ? 'Socket.IO' : 'WebSocket'} ${d.url} · ${status}`,
         context: {
           connection: { mode: d.mode, url: d.url, status, protocols: d.protocols },
           latestMessages: messages.slice(-20).map((m) => ({ direction: m.direction, event: m.event, data: m.data.slice(0, 600) })),
@@ -152,7 +168,9 @@ export function WebSocketView() {
   const connect = async () => {
     setStatus('connecting');
     try {
-      const r = mqtt
+      const r = kafka
+        ? await call<{ id: string }>('kafka.connect', { url: d.url, clientId: d.clientId || undefined, groupId: d.groupId || undefined, username: d.username || undefined, password: d.password || undefined, mechanism: d.mechanism, reads: d.reads ?? [], environment: env })
+        : mqtt
         ? await call<{ id: string }>('mqtt.connect', { url: d.url, clientId: d.clientId || undefined, username: d.username || undefined, password: d.password || undefined, protocolVersion: d.mqttVersion ?? 4, subscriptions: d.subscriptions ?? [], environment: env })
         : sio
           ? await call<{ id: string }>('sio.connect', { url: d.url, path: d.path || undefined, headers: d.headers, auth: d.auth, environment: env })
@@ -173,10 +191,10 @@ export function WebSocketView() {
   // saved messages: pick one into the editor, save the current one under a name, delete one
   const [pickedMessage, setPickedMessage] = useState('');
   const saveMessage = async () => {
-    const name = (await promptText('Save message', { message: 'Name', value: pickedMessage || (sio ? d.event : mqtt ? d.topic : '') || 'Message', okLabel: 'Save' }))?.trim();
+    const name = (await promptText('Save message', { message: 'Name', value: pickedMessage || (sio ? d.event : mqtt || kafka ? d.topic : '') || 'Message', okLabel: 'Save' }))?.trim();
     if (!name) return;
     const others = (d.savedMessages ?? []).filter((m) => m.name !== name);
-    setD({ ...d, savedMessages: [...others, { name, message: d.message, ...(sio ? { event: d.event } : {}), ...(mqtt ? { topic: d.topic } : {}) }] });
+    setD({ ...d, savedMessages: [...others, { name, message: d.message, ...(sio ? { event: d.event } : {}), ...(mqtt || kafka ? { topic: d.topic } : {}) }] });
     setPickedMessage(name);
     useApp.getState().toast(current ? `Saved message "${name}". Save the connection to keep it.` : `Saved message "${name}" (kept with this draft; save the connection to keep it with the connection)`, 'success');
   };
@@ -190,10 +208,12 @@ export function WebSocketView() {
     setD({ ...d, savedMessages: (d.savedMessages ?? []).filter((m) => m.name !== pickedMessage) });
     setPickedMessage('');
   };
-  const disconnect = () => session && call(mqtt ? 'mqtt.close' : sio ? 'sio.close' : 'wsock.close', { id: session }).then(() => setStatus('closed'));
+  const disconnect = () => session && call(kafka ? 'kafka.close' : mqtt ? 'mqtt.close' : sio ? 'sio.close' : 'wsock.close', { id: session }).then(() => setStatus('closed'));
   const send = () =>
     session &&
-    (mqtt
+    (kafka
+      ? call('kafka.produce', { id: session, topic: d.topic ?? '', value: d.message, key: d.key || undefined, headers: d.kafkaHeaders ?? [], environment: env })
+      : mqtt
       ? call('mqtt.publish', { id: session, topic: d.topic ?? '', payload: d.message, qos: d.qos ?? 0, retain: !!d.retain, environment: env })
       : sio
         ? call('sio.emit', { id: session, event: d.event ?? '', args: d.message, ack: !!d.ack, environment: env })
@@ -218,6 +238,27 @@ export function WebSocketView() {
     if (session && status === 'open') void call('mqtt.unsubscribe', { id: session, topic, environment: env }).catch((e) => useApp.getState().toast(asError(e).message, 'error'));
     setD({ ...d, subscriptions: (d.subscriptions ?? []).filter((s) => s.topic !== topic) });
   };
+  // Kafka topics: kept with the connection and read on connect; changes apply at once while connected
+  const addRead = async () => {
+    const topic = newRead.topic.trim();
+    if (!topic) return;
+    if (session && status === 'open') {
+      try {
+        await call('kafka.read', { id: session, topic, fromBeginning: newRead.fromBeginning, environment: env });
+      } catch (e) {
+        useApp.getState().toast(asError(e).message, 'error');
+        return;
+      }
+    }
+    setD({ ...d, reads: [...(d.reads ?? []).filter((r) => r.topic !== topic), { topic, fromBeginning: newRead.fromBeginning }] });
+    setNewRead({ topic: '', fromBeginning: newRead.fromBeginning });
+  };
+  const removeRead = (topic: string) => {
+    if (session && status === 'open') void call('kafka.stopReading', { id: session, topic, environment: env }).catch((e) => useApp.getState().toast(asError(e).message, 'error'));
+    setD({ ...d, reads: (d.reads ?? []).filter((r) => r.topic !== topic) });
+  };
+  const listClusterTopics = () =>
+    session && void call<Array<{ name: string; partitions: number }>>('kafka.topics', { id: session }).then(setClusterTopics, (e) => useApp.getState().toast(asError(e).message, 'error'));
   const [direction, setDirection] = useState<'all' | 'sent' | 'received'>('all');
   const shown = messages.filter((m) => (direction === 'all' || m.direction === direction) && (!filter || `${m.topic ?? ''} ${m.event ?? ''} ${m.data}`.toLowerCase().includes(filter.toLowerCase())));
   let parsed: unknown;
@@ -235,15 +276,29 @@ export function WebSocketView() {
         return d.message;
       }
     })();
-    const send = mqtt ? (d.topic ? [{ topic: d.topic, payload: d.message, qos: d.qos ?? 0 }] : []) : sio ? (d.event ? [{ event: d.event, args: Array.isArray(parsed) ? parsed : [parsed], ack: !!d.ack }] : []) : d.message.trim() ? [d.message] : [];
-    void saveAsTestFile(`${hostOf(d.url)} replies`, { kind: 'websocket', mode: d.mode ?? 'websocket', url: d.url, send, subscribe: mqtt ? (d.subscriptions ?? []).map((s) => s.topic) : undefined, headers: mqtt ? undefined : d.headers, username: mqtt ? d.username : undefined, password: mqtt ? d.password : undefined });
+    const kafkaHeaders = Object.fromEntries((d.kafkaHeaders ?? []).filter((h) => h.enabled !== false && h.key).map((h) => [h.key, h.value]));
+    const send = kafka
+      ? d.topic
+        ? [{ topic: d.topic, payload: d.message, ...(d.key ? { key: d.key } : {}), ...(Object.keys(kafkaHeaders).length ? { headers: kafkaHeaders } : {}) }]
+        : []
+      : mqtt ? (d.topic ? [{ topic: d.topic, payload: d.message, qos: d.qos ?? 0 }] : []) : sio ? (d.event ? [{ event: d.event, args: Array.isArray(parsed) ? parsed : [parsed], ack: !!d.ack }] : []) : d.message.trim() ? [d.message] : [];
+    void saveAsTestFile(`${hostOf(d.url)} replies`, {
+      kind: 'websocket',
+      mode: d.mode ?? 'websocket',
+      url: d.url,
+      send,
+      subscribe: mqtt ? (d.subscriptions ?? []).map((s) => s.topic) : kafka ? (d.reads ?? []).map((r) => ({ topic: r.topic, fromBeginning: !!r.fromBeginning })) : undefined,
+      headers: mqtt || kafka ? undefined : d.headers,
+      username: mqtt || kafka ? d.username : undefined,
+      password: mqtt || kafka ? d.password : undefined,
+    });
   };
   const [tabTitle, setTabTitle] = useSticky<string | undefined>(`ws:title:${docId ?? 'main'}`, undefined, { persist: true });
   // a new tab is "New WebSocket / Socket.IO / MQTT request", not its URL (often a {{variable}})
-  const title = current?.name ?? tabTitle ?? NEW_TAB_TITLE[d.mode === 'mqtt' ? 'mqtt' : d.mode === 'socketio' ? 'socketio' : 'websocket'];
+  const title = current?.name ?? tabTitle ?? NEW_TAB_TITLE[d.mode === 'kafka' ? 'kafka' : d.mode === 'mqtt' ? 'mqtt' : d.mode === 'socketio' ? 'socketio' : 'websocket'];
   // a saved connection is renamed in the workspace; a new tab just gets the title
   const renameTabTo = async (name: string) => (current ? saved.put({ ...current, name }) : setTabTitle(name));
-  useSingleEditorTab('websocket', { title, badge: d.mode === 'mqtt' ? 'MQTT' : d.mode === 'socketio' ? 'SIO' : 'WS', badgeClass: 'text-[#d97706]', item: savedId, onRenameTo: renameTabTo, onSaveAsTest: saveTest });
+  useSingleEditorTab('websocket', { title, badge: d.mode === 'kafka' ? 'KAFKA' : d.mode === 'mqtt' ? 'MQTT' : d.mode === 'socketio' ? 'SIO' : 'WS', badgeClass: 'text-[#d97706]', item: savedId, onRenameTo: renameTabTo, onSaveAsTest: saveTest });
   return (
     <Split id="ws-saved" sidebar collapsed initial={18} min={12}>
     <SidebarShell
@@ -297,8 +352,14 @@ export function WebSocketView() {
             </button>
           ))}
         </div>
-        <VarInput ariaLabel={mqtt ? 'Broker URL' : 'WebSocket URL'} className="flex-1 h-8" value={d.url} onChange={(url) => setD({ ...d, url })} placeholder={mqtt ? 'mqtt://localhost:1883 (mqtts://, ws:// and wss:// work too)' : sio ? 'http://localhost:3000/namespace' : 'wss://example.com/socket'} />
-        {mqtt ? (
+        <VarInput
+          ariaLabel={kafka ? 'Kafka brokers' : mqtt ? 'Broker URL' : 'WebSocket URL'}
+          className="flex-1 h-8"
+          value={d.url}
+          onChange={(url) => setD({ ...d, url })}
+          placeholder={kafka ? 'kafka://localhost:9092 (several brokers: comma separated; kafkas:// for TLS)' : mqtt ? 'mqtt://localhost:1883 (mqtts://, ws:// and wss:// work too)' : sio ? 'http://localhost:3000/namespace' : 'wss://example.com/socket'}
+        />
+        {mqtt || kafka ? (
           <Input className="w-44" placeholder="Client ID (random)" title="MQTT client ID (a random one when empty); may use {{variables}}" value={d.clientId ?? ''} onChange={(e) => setD({ ...d, clientId: e.target.value })} />
         ) : sio ? (
           <Input className="w-40" placeholder="/socket.io" title="Socket.IO path on the server (default /socket.io)" value={d.path ?? ''} onChange={(e) => setD({ ...d, path: e.target.value })} />
@@ -332,8 +393,14 @@ export function WebSocketView() {
               value={tab}
               onChange={setTab}
               tabs={[
-                { id: 'message', label: mqtt ? 'Publish' : sio ? 'Emit' : 'Message' },
-                ...(mqtt
+                { id: 'message', label: kafka ? 'Produce' : mqtt ? 'Publish' : sio ? 'Emit' : 'Message' },
+                ...(kafka
+                  ? [
+                      { id: 'headers' as const, label: 'Message headers', badge: d.kafkaHeaders?.length },
+                      { id: 'subscriptions' as const, label: 'Topics', badge: d.reads?.length },
+                      { id: 'connection' as const, label: 'Connection' },
+                    ]
+                  : mqtt
                   ? [
                       { id: 'subscriptions' as const, label: 'Subscriptions', badge: d.subscriptions?.length },
                       { id: 'connection' as const, label: 'Connection' },
@@ -344,6 +411,12 @@ export function WebSocketView() {
             />
             {tab === 'message' ? (
               <>
+                {kafka && (
+                  <div className="flex items-center gap-2 px-2 py-1.5 border-b border-line">
+                    <Input className="h-7 min-h-7 mono flex-1" placeholder="Topic, e.g. orders" aria-label="Topic" value={d.topic ?? ''} onChange={(e) => setD({ ...d, topic: e.target.value })} />
+                    <Input className="h-7 min-h-7 mono w-48 shrink-0" placeholder="Key (optional)" aria-label="Key" title="The message key: the same key always goes to the same partition" value={d.key ?? ''} onChange={(e) => setD({ ...d, key: e.target.value })} />
+                  </div>
+                )}
                 {mqtt && (
                   <div className="flex items-center gap-2 px-2 py-1.5 border-b border-line">
                     <Input className="h-7 min-h-7 mono flex-1" placeholder="Topic, e.g. clinic/7/vitals" aria-label="Topic" value={d.topic ?? ''} onChange={(e) => setD({ ...d, topic: e.target.value })} />
@@ -386,11 +459,60 @@ export function WebSocketView() {
                   <CodeEditor language="json" value={d.message} onChange={(message) => setD({ ...d, message })} />
                 </div>
                 <div className="p-2 border-t border-line flex justify-end">
-                  <Button variant="primary" icon={<Send size={13} />} disabled={status !== 'open' || (sio && !d.event?.trim()) || (mqtt && !d.topic?.trim())} onClick={send}>
-                    {mqtt ? 'Publish' : sio ? 'Emit' : 'Send'}
+                  <Button variant="primary" icon={<Send size={13} />} disabled={status !== 'open' || (sio && !d.event?.trim()) || ((mqtt || kafka) && !d.topic?.trim())} onClick={send}>
+                    {kafka ? 'Produce' : mqtt ? 'Publish' : sio ? 'Emit' : 'Send'}
                   </Button>
                 </div>
               </>
+            ) : tab === 'subscriptions' && kafka ? (
+              <div className="h-full flex flex-col">
+                <p className="px-2 py-1.5 text-xs text-muted border-b border-line">
+                  Topics to read, in a consumer group of this connection (it never takes messages from your real consumers). From the beginning: what is in the topic already, then new messages. While connected, changes apply at once.
+                </p>
+                <div className="flex items-center gap-2 px-2 py-1.5 border-b border-line">
+                  <Input
+                    className="h-7 min-h-7 mono flex-1"
+                    placeholder="Topic, e.g. orders"
+                    aria-label="Topic to read"
+                    list="kafka-topics"
+                    value={newRead.topic}
+                    onChange={(e) => setNewRead({ ...newRead, topic: e.target.value })}
+                    onKeyDown={(e) => e.key === 'Enter' && void addRead()}
+                  />
+                  <datalist id="kafka-topics">
+                    {(clusterTopics ?? []).map((t) => (
+                      <option key={t.name} value={t.name} />
+                    ))}
+                  </datalist>
+                  <label className="text-xs text-muted flex items-center gap-1.5 shrink-0" title="Read what the topic holds already, then new messages">
+                    <input type="checkbox" checked={newRead.fromBeginning} onChange={(e) => setNewRead({ ...newRead, fromBeginning: e.target.checked })} /> From the beginning
+                  </label>
+                  <Button size="sm" icon={<Plus size={12} />} disabled={!newRead.topic.trim()} onClick={() => void addRead()}>
+                    {status === 'open' ? 'Read' : 'Add'}
+                  </Button>
+                  <Button size="sm" variant="ghost" icon={<ListTree size={12} />} disabled={status !== 'open'} title="The topics of the cluster, to pick from" onClick={listClusterTopics}>
+                    Topics
+                  </Button>
+                </div>
+                <div className="flex-1 min-h-0 overflow-auto">
+                  {d.reads?.length ? (
+                    d.reads.map((r) => (
+                      <div key={r.topic} className="flex items-center gap-2 px-2 h-8 border-b border-line/50 text-sm" data-kafka-read={r.topic}>
+                        <span className="mono text-xs truncate flex-1">{r.topic}</span>
+                        <Badge>{r.fromBeginning ? 'from the beginning' : 'new messages'}</Badge>
+                        <Button size="sm" variant="ghost" icon={<X size={12} />} aria-label={`Stop reading ${r.topic}`} title={status === 'open' ? 'Stop reading and remove' : 'Remove'} onClick={() => removeRead(r.topic)} />
+                      </div>
+                    ))
+                  ) : (
+                    <Empty title="No topics read">Add a topic to see its messages; you can produce without reading.</Empty>
+                  )}
+                  {clusterTopics && (
+                    <div className="px-2 py-2 text-xs text-muted border-t border-line" data-cluster-topics>
+                      {clusterTopics.length ? `In the cluster: ${clusterTopics.map((t) => `${t.name} (${t.partitions})`).join(', ')}` : 'The cluster has no topics yet.'}
+                    </div>
+                  )}
+                </div>
+              </div>
             ) : tab === 'subscriptions' ? (
               <div className="h-full flex flex-col">
                 <p className="px-2 py-1.5 text-xs text-muted border-b border-line">Topic filters to receive, subscribed when you connect. <span className="mono">+</span> matches one level, <span className="mono">#</span> the rest. While connected, changes apply at once.</p>
@@ -435,7 +557,7 @@ export function WebSocketView() {
                 <label className="block text-xs text-muted">
                   Password
                   {!d.password || d.password.trimStart().startsWith('{') ? (
-                    <VarInput ariaLabel="Password" className="mt-1 h-8" value={d.password ?? ''} onChange={(password) => setD({ ...d, password })} placeholder="{{mqttPassword}}" />
+                    <VarInput ariaLabel="Password" className="mt-1 h-8" value={d.password ?? ''} onChange={(password) => setD({ ...d, password })} placeholder={kafka ? '{{kafkaPassword}}' : '{{mqttPassword}}'} />
                   ) : (
                     // a typed password is masked (a {{variable}} reference is shown as it is)
                     <Input type="password" autoFocus aria-label="Password" className="mt-1 h-8 w-full" value={d.password} onChange={(e) => setD({ ...d, password: e.target.value })} />
@@ -444,13 +566,31 @@ export function WebSocketView() {
                     Use a secret variable such as {'{{mqttPassword}}'}: only a variable reference is saved. A typed password is used until you close the app.
                   </span>
                 </label>
-                <label className="block text-xs text-muted">
-                  Protocol version
-                  <Select className="mt-1 h-8 w-48" aria-label="MQTT version" value={String(d.mqttVersion ?? 4)} onChange={(e) => setD({ ...d, mqttVersion: Number(e.target.value) as 4 | 5 })}>
-                    <option value="4">MQTT 3.1.1</option>
-                    <option value="5">MQTT 5</option>
-                  </Select>
-                </label>
+                {kafka ? (
+                  <>
+                    <label className="block text-xs text-muted">
+                      SASL mechanism (with a username)
+                      <Select className="mt-1 h-8 w-48" aria-label="SASL mechanism" value={d.mechanism ?? 'plain'} onChange={(e) => setD({ ...d, mechanism: e.target.value as Draft['mechanism'] })}>
+                        <option value="plain">PLAIN</option>
+                        <option value="scram-sha-256">SCRAM-SHA-256</option>
+                        <option value="scram-sha-512">SCRAM-SHA-512</option>
+                      </Select>
+                    </label>
+                    <label className="block text-xs text-muted">
+                      Consumer group
+                      <VarInput ariaLabel="Consumer group" className="mt-1 h-8" value={d.groupId ?? ''} onChange={(groupId) => setD({ ...d, groupId })} placeholder="one of its own (testpion-…)" />
+                      <span className="block mt-1">Leave it empty unless you mean to: a real group's consumers would lose the messages this connection reads.</span>
+                    </label>
+                  </>
+                ) : (
+                  <label className="block text-xs text-muted">
+                    Protocol version
+                    <Select className="mt-1 h-8 w-48" aria-label="MQTT version" value={String(d.mqttVersion ?? 4)} onChange={(e) => setD({ ...d, mqttVersion: Number(e.target.value) as 4 | 5 })}>
+                      <option value="4">MQTT 3.1.1</option>
+                      <option value="5">MQTT 5</option>
+                    </Select>
+                  </label>
+                )}
               </div>
             ) : tab === 'auth' ? (
               <div className="h-full flex flex-col">
@@ -461,7 +601,11 @@ export function WebSocketView() {
               </div>
             ) : (
               <div className="p-2">
-                <KeyValueEditor rows={d.headers} onChange={(headers) => setD({ ...d, headers })} keyPlaceholder="Header" />
+                {kafka ? (
+                  <KeyValueEditor rows={d.kafkaHeaders ?? []} onChange={(kafkaHeaders) => setD({ ...d, kafkaHeaders })} keyPlaceholder="Header" />
+                ) : (
+                  <KeyValueEditor rows={d.headers} onChange={(headers) => setD({ ...d, headers })} keyPlaceholder="Header" />
+                )}
               </div>
             )}
           </div>
@@ -490,7 +634,8 @@ export function WebSocketView() {
                       {m.direction === 'sent' ? <ArrowUpRight size={13} className="text-accent shrink-0" /> : m.direction === 'received' ? <ArrowDownLeft size={13} className="text-ok shrink-0" /> : <Info size={13} className="text-muted shrink-0" />}
                       <span className="text-xs text-muted tabular-nums shrink-0">{new Date(m.time).toLocaleTimeString()}</span>
                       {m.event && <Badge tone={m.ack ? 'ok' : 'accent'}>{m.ack ? `ack ${m.event}` : m.event}</Badge>}
-                      {m.topic && <Badge tone="accent">{m.retain ? `${m.topic} · retained` : m.topic}</Badge>}
+                      {m.topic && <Badge tone="accent">{m.retain ? `${m.topic} · retained` : m.partition !== undefined ? `${m.topic} · p${m.partition}@${m.offset}` : m.topic}</Badge>}
+                      {m.key && <span className="text-xs text-muted mono shrink-0">key {m.key}</span>}
                       <span className={cx('truncate mono text-xs', m.direction === 'system' && 'text-muted')}>{m.data}</span>
                     </button>
                   )}
@@ -499,7 +644,18 @@ export function WebSocketView() {
                 <Empty title="No messages yet" />
               )}
             </div>
-            <div className="h-full overflow-auto">{selected ? parsed !== undefined ? <JsonTree data={parsed} /> : <pre className="p-3 mono text-xs whitespace-pre-wrap">{selected.data}</pre> : <Empty title="Select a message" />}</div>
+            <div className="h-full overflow-auto">
+              {selected?.headers && Object.keys(selected.headers).length > 0 && (
+                <div className="px-3 pt-2 text-xs" data-message-headers>
+                  {Object.entries(selected.headers).map(([k, v]) => (
+                    <div key={k} className="mono truncate">
+                      <span className="text-muted">{k}:</span> {v}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {selected ? parsed !== undefined ? <JsonTree data={parsed} /> : <pre className="p-3 mono text-xs whitespace-pre-wrap">{selected.data}</pre> : <Empty title="Select a message" />}
+            </div>
           </Split>
         </Split>
       </div>

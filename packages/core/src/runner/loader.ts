@@ -129,21 +129,24 @@ export function normalizeTest(raw: Record<string, unknown>, file?: string, index
     case 'websocket':
     case 'ws':
     case 'socketio':
-    case 'mqtt': {
-      const send = raw.send ?? raw.messages ?? raw.message ?? raw.publish;
+    case 'mqtt':
+    case 'kafka': {
+      const send = raw.send ?? raw.messages ?? raw.message ?? raw.publish ?? raw.produce;
       const subscribe = raw.subscribe;
       return {
         ...base,
         type: 'websocket',
         url: String(raw.url ?? ''),
-        ...(raw.mode || type === 'socketio' || type === 'mqtt' ? { mode: (raw.mode ?? type) as 'websocket' | 'socketio' | 'mqtt' } : {}),
+        ...(raw.mode || type === 'socketio' || type === 'mqtt' || type === 'kafka' ? { mode: (raw.mode ?? type) as 'websocket' | 'socketio' | 'mqtt' | 'kafka' } : {}),
         send: (Array.isArray(send) ? send : send !== undefined ? [send] : []) as Array<string | Record<string, unknown>>,
         ...(raw.waitMs ?? raw.wait ? { waitMs: Number(raw.waitMs ?? raw.wait) } : {}),
         headers: kvList(raw.headers),
         ...(raw.protocols ? { protocols: (Array.isArray(raw.protocols) ? raw.protocols : String(raw.protocols).split(',')).map((p) => String(p).trim()).filter(Boolean) } : {}),
         ...(raw.auth ? { auth: raw.auth as Record<string, unknown> } : {}),
         ...(raw.path ? { path: String(raw.path) } : {}),
-        ...(subscribe !== undefined ? { subscribe: (Array.isArray(subscribe) ? subscribe : [subscribe]) as Array<string | { topic: string; qos?: 0 | 1 | 2 }> } : {}),
+        ...(subscribe !== undefined ? { subscribe: (Array.isArray(subscribe) ? subscribe : [subscribe]) as Array<string | { topic: string; qos?: 0 | 1 | 2; fromBeginning?: boolean }> } : {}),
+        ...(raw.groupId ? { groupId: String(raw.groupId) } : {}),
+        ...(raw.mechanism ? { mechanism: String(raw.mechanism) as 'plain' | 'scram-sha-256' | 'scram-sha-512' } : {}),
         ...(raw.clientId ? { clientId: String(raw.clientId) } : {}),
         ...(raw.username ? { username: String(raw.username) } : {}),
         ...(raw.password ? { password: String(raw.password) } : {}),

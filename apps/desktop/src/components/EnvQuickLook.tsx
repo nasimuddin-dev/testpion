@@ -1,6 +1,6 @@
 import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { Eye, Lock, Search } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { call } from '../api';
 import { activeCollectionId } from '../lib/var-popover';
 import { useApp } from '../store';
@@ -52,6 +52,13 @@ function Table({ rows, empty, overridden }: { rows: Row[]; empty: string; overri
   );
 }
 
+const QUICK_LOOK = 'testpion:quick-look';
+
+/** Open the overview on one variable (from a {{variable}}'s popover ▸ All). */
+export function openQuickLook(variable?: string): void {
+  window.dispatchEvent(new CustomEvent(QUICK_LOOK, { detail: { variable } }));
+}
+
 /**
  * Every variable the request on screen can use, at a glance (like Postman's quick look, next to the environment
  * picker): its collection's, the active environment's, the workspace's and the globals, in the order they win, with
@@ -62,6 +69,19 @@ export function EnvQuickLook() {
   const [data, setData] = useState<QuickLook>();
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState('');
+  /** Opened from a {{variable}}: its name, to say where it is set, or that it is set nowhere. */
+  const [focus, setFocus] = useState<string>();
+  useEffect(() => {
+    const h = (e: Event) => {
+      const v = (e as CustomEvent<{ variable?: string }>).detail?.variable;
+      setFocus(v);
+      setFilter(v ?? '');
+      setOpen(true);
+      load();
+    };
+    window.addEventListener(QUICK_LOOK, h);
+    return () => window.removeEventListener(QUICK_LOOK, h);
+  });
   const load = () => void call<QuickLook>('env.quickLook', { environment: env, collectionId: activeCollectionId() }).then(setData);
   const go = (view: 'environments' | 'collections', payload: Record<string, unknown>) => {
     setOpen(false);
@@ -99,6 +119,7 @@ export function EnvQuickLook() {
       onOpenChange={(o) => {
         setOpen(o);
         if (o) load();
+        else setFocus(undefined);
       }}
     >
       <Tooltip content="All variables (quick look)">
@@ -121,6 +142,18 @@ export function EnvQuickLook() {
               <Input autoFocus className="h-8 pl-7 text-sm" placeholder={`Filter ${count} variables by name or value`} aria-label="Filter variables" value={filter} onChange={(e) => setFilter(e.target.value)} />
             </div>
           </div>
+          {focus && data && ![data.collection?.variables, data.environment?.variables, data.workspace, data.globals].some((rows) => rows?.some((r) => r.key === focus)) && (
+            <div role="status" className="rounded-md border border-warn/50 bg-warn/5 p-2 text-sm flex items-center gap-2 flex-wrap" data-not-defined={focus}>
+              <span>
+                <span className="mono">{`{{${focus}}}`}</span> is not defined anywhere: not in the collection, the environment{data.environment ? ` (${data.environment.name})` : ''}, the workspace or the globals.
+              </span>
+              {data.environment && (
+                <Button size="sm" variant="soft" className="ml-auto" onClick={() => go('environments', { environmentId: data.environment!.id, addVariable: focus })}>
+                  Add to {data.environment.name}
+                </Button>
+              )}
+            </div>
+          )}
           {section(
             data?.collection ? `Collection: ${data.collection.name}` : 'Collection',
             data?.collection?.variables,

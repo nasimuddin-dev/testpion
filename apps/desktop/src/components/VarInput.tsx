@@ -1,3 +1,4 @@
+import { openQuickLook } from './EnvQuickLook';
 import { Copy, Eye, KeyRound, Save, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -311,7 +312,8 @@ export function VarPopover({ name, info, environment, collectionId, x, y, onClos
           title="Every variable this request can use"
           onClick={() => {
             onClose();
-            document.querySelector<HTMLButtonElement>('[aria-label="Variables quick look"]')?.click();
+            // the overview opens on this variable: where it is set, or that it is set nowhere
+            openQuickLook(name);
           }}
         >
           All

@@ -337,13 +337,16 @@ export interface GrpcTest extends TestBase {
  */
 export interface WebSocketTest extends TestBase {
   type: 'websocket';
-  /** ws:// or wss:// (WebSocket), http(s)://host/namespace (Socket.IO), mqtt(s):// (MQTT). */
+  /** ws:// or wss:// (WebSocket), http(s)://host/namespace (Socket.IO), mqtt(s):// (MQTT), kafka(s)://broker:9092 (Kafka). */
   url: string;
-  mode?: 'websocket' | 'socketio' | 'mqtt';
-  /** WebSocket: text frames (objects are sent as JSON). Socket.IO: `{ event, args?, ack? }`. MQTT: `{ topic, payload?, qos?, retain? }`. */
+  mode?: 'websocket' | 'socketio' | 'mqtt' | 'kafka';
+  /** WebSocket: text frames (objects are sent as JSON). Socket.IO: `{ event, args?, ack? }`. MQTT: `{ topic, payload?, qos?, retain? }`. Kafka: `{ topic, payload?, key?, headers?, partition? }`. */
   send?: Array<string | Record<string, unknown>>;
-  /** MQTT: topic filters to subscribe to first. */
-  subscribe?: Array<string | { topic: string; qos?: 0 | 1 | 2 }>;
+  /** MQTT: topic filters to subscribe to first. Kafka: topics to read (`fromBeginning` to read what is already there). */
+  subscribe?: Array<string | { topic: string; qos?: 0 | 1 | 2; fromBeginning?: boolean }>;
+  /** Kafka: the consumer group (default: one of its own) and the SASL mechanism for username / password. */
+  groupId?: string;
+  mechanism?: 'plain' | 'scram-sha-256' | 'scram-sha-512';
   /** MQTT: client ID, username and password (use {{variables}} for secrets). */
   clientId?: string;
   username?: string;

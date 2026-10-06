@@ -1,0 +1,30 @@
+# Kafka: the demo broker (node examples/servers/demo-servers.mjs, kafka://127.0.0.1:4017) holds three clinic events.
+# Read them from the beginning, produce one more, and check what came back.
+defaults:
+  type: kafka
+  url: "{{kafkaBrokers}}"
+  waitMs: 2000
+tests:
+  - id: clinic-events-history
+    name: The clinic's events are there, in order
+    subscribe:
+      - { topic: clinic.events, fromBeginning: true }
+    assertions:
+      - { type: length, path: $.received, min: 3 }
+      - { type: equals, path: "$.received[0].key", expected: pet-1 }
+      - { type: equals, path: "$.received[0].data.type", expected: checked-in }
+      - { type: equals, path: "$.received[1].headers.source", expected: clinic }
+
+  - id: appointment-booked
+    name: A booked appointment can be read back with its key and headers
+    subscribe:
+      - appointments                # new messages only: what this test produces
+    send:
+      - topic: appointments
+        key: pet-3
+        headers: { source: testpion }
+        value: { type: booked, petId: "3", at: "2026-10-07T09:30:00Z" }
+    assertions:
+      - { type: equals, path: "$.received[0].key", expected: pet-3 }
+      - { type: equals, path: "$.received[0].data.type", expected: booked }
+      - { type: equals, path: "$.received[0].headers.source", expected: testpion }

@@ -57,7 +57,7 @@ assertions:
     expected: OK
 `,
   websocket: `name: Echo server replies
-type: websocket                  # socketio for Socket.IO, mqtt for MQTT
+type: websocket                  # socketio for Socket.IO, mqtt for MQTT, kafka for Kafka
 url: "{{wsUrl}}"
 send:
   - hello
@@ -79,6 +79,19 @@ assertions:
   - type: equals
     path: $.received[0].topic
     expected: clinic/7/acks
+`,
+  kafka: `name: An order is confirmed
+type: kafka
+url: "{{kafkaBrokers}}"          # kafka://host:9092 (several: comma separated; kafkas:// for TLS)
+subscribe:
+  - { topic: order-confirmations, fromBeginning: false }
+send:
+  - { topic: orders, key: order-42, value: { id: 42, total: 19.9 }, headers: { source: testpion } }
+waitMs: 3000
+assertions:
+  - type: equals
+    path: $.received[0].key
+    expected: order-42
 `,
   mcp: `name: Search customer tool
 type: mcp
@@ -242,7 +255,7 @@ export function TestsView() {
     }
   };
   const newFile = async (kind: string) => {
-    const name = await promptText('New test file', { message: 'File path inside tests/ (e.g. rest/health.yaml)', okLabel: 'Create', value: kind === 'suite' ? 'regression.suite.yaml' : `${kind === 'http' ? 'rest' : kind === 'llm' ? 'ai' : kind === 'mqtt' ? 'websocket' : kind}/new-test.yaml` });
+    const name = await promptText('New test file', { message: 'File path inside tests/ (e.g. rest/health.yaml)', okLabel: 'Create', value: kind === 'suite' ? 'regression.suite.yaml' : `${kind === 'http' ? 'rest' : kind === 'llm' ? 'ai' : kind === 'mqtt' || kind === 'kafka' ? 'websocket' : kind}/new-test.yaml` });
     if (!name) return;
     await call('tests.write', { path: name, content: TEMPLATES[kind] });
     await loadTree();
@@ -356,6 +369,7 @@ export function TestsView() {
                       ['grpc', 'New gRPC test'],
                       ['websocket', 'New WebSocket test'],
                       ['mqtt', 'New MQTT test'],
+                      ['kafka', 'New Kafka test'],
                       ['mcp', 'New MCP test'],
                       ['llm', 'New AI test'],
                       ['suite', 'New suite'],
@@ -592,6 +606,7 @@ const TEST_KINDS: Record<string, [string, string]> = {
   grpc: ['gRPC', 'text-[#2ea99e]'],
   websocket: ['WS', 'text-[#d97706]'],
   mqtt: ['MQTT', 'text-[#d97706]'],
+  kafka: ['KFK', 'text-[#d97706]'],
   mcp: ['MCP', 'text-accent'],
   ai: ['AI', 'text-judge'],
   llm: ['AI', 'text-judge'],

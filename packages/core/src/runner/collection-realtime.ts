@@ -18,10 +18,10 @@ export interface SavedGrpcCall {
   descriptorSet?: string;
 }
 
-/** A saved WebSocket / Socket.IO / MQTT connection, as the WebSocket editor stores it. */
+/** A saved WebSocket / Socket.IO / MQTT / Kafka connection, as the WebSocket editor stores it. */
 export interface SavedConnection {
   url: string;
-  mode?: 'websocket' | 'socketio' | 'mqtt';
+  mode?: 'websocket' | 'socketio' | 'mqtt' | 'kafka';
   message?: string;
   protocols?: string;
   headers?: KeyValue[];
@@ -35,6 +35,12 @@ export interface SavedConnection {
   username?: string;
   password?: string;
   clientId?: string;
+  /** Kafka: the key and headers of the message to produce, the consumer group, the topics read (and from the beginning), SASL. */
+  key?: string;
+  kafkaHeaders?: KeyValue[];
+  groupId?: string;
+  reads?: Array<{ topic: string; fromBeginning?: boolean }>;
+  mechanism?: 'plain' | 'scram-sha-256' | 'scram-sha-512';
 }
 
 const parseJson = (text: string | undefined): unknown => {
@@ -75,7 +81,11 @@ export function savedConnectionToTest(item: LibraryItem<SavedConnection>, collec
   const message = d.message ?? '';
   const parsed = parseJson(message);
   const send: WebSocketTest['send'] =
-    mode === 'mqtt'
+    mode === 'kafka'
+      ? d.topic
+        ? [{ topic: d.topic, payload: message, ...(d.key ? { key: d.key } : {}), ...(d.kafkaHeaders?.length ? { headers: Object.fromEntries(d.kafkaHeaders.filter((h) => h.enabled !== false && h.key).map((h) => [h.key, h.value])) } : {}) }]
+        : []
+      : mode === 'mqtt'
       ? d.topic
         ? [{ topic: d.topic, payload: message, qos: d.qos ?? 0 }]
         : []
@@ -94,12 +104,14 @@ export function savedConnectionToTest(item: LibraryItem<SavedConnection>, collec
     url: d.url,
     mode,
     send,
-    subscribe: mode === 'mqtt' ? (d.subscriptions ?? []).map((s) => ({ topic: s.topic, qos: s.qos })) : undefined,
-    headers: mode === 'mqtt' ? undefined : d.headers,
+    subscribe: mode === 'mqtt' ? (d.subscriptions ?? []).map((s) => ({ topic: s.topic, qos: s.qos })) : mode === 'kafka' ? (d.reads ?? []).map((r) => ({ topic: r.topic, fromBeginning: !!r.fromBeginning })) : undefined,
+    headers: mode === 'mqtt' || mode === 'kafka' ? undefined : d.headers,
     protocols: d.protocols?.trim() ? d.protocols.split(',').map((p) => p.trim()).filter(Boolean) : undefined,
-    username: mode === 'mqtt' ? d.username : undefined,
-    password: mode === 'mqtt' ? d.password : undefined,
-    clientId: mode === 'mqtt' ? d.clientId : undefined,
+    username: mode === 'mqtt' || mode === 'kafka' ? d.username : undefined,
+    password: mode === 'mqtt' || mode === 'kafka' ? d.password : undefined,
+    clientId: mode === 'mqtt' || mode === 'kafka' ? d.clientId : undefined,
+    ...(mode === 'kafka' && d.groupId ? { groupId: d.groupId } : {}),
+    ...(mode === 'kafka' && d.mechanism ? { mechanism: d.mechanism } : {}),
     // a connection that isn't accepted fails the test; nothing else is checked
     assertions: [],
   };

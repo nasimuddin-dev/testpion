@@ -507,6 +507,64 @@ ${cyan(r.url)}`);
     });
 
   program
+    .command('kafka')
+    .description('talk to a Kafka cluster: read topics (new messages, or from the beginning), produce messages, print what arrives, disconnect')
+    .argument('<brokers>', 'kafka://host:9092 (several brokers: comma separated; kafkas:// for TLS)')
+    .option('-r, --read <topic...>', 'topics to read (new messages)')
+    .option('-b, --from-beginning', 'read the topics from the beginning (what they hold already, then new messages)')
+    .option('-p, --produce <topic=value...>', "messages to produce, in order, e.g. orders='{\"id\":42}'")
+    .option('-k, --key <key>', 'the key of the produced messages')
+    .option('-H, --header <name:value...>', 'headers of the produced messages')
+    .option('-g, --group <id>', 'consumer group (default: one of its own, so it never takes messages from a real consumer)')
+    .option('-u, --username <name>', 'SASL username')
+    .option('--mechanism <name>', 'SASL mechanism: plain, scram-sha-256 or scram-sha-512', 'plain')
+    .option('--password-env <name>', 'environment variable holding the password (never type it on the command line)', 'KAFKA_PASSWORD')
+    .option('-w, --wait <ms>', 'how long to listen after producing', '3000')
+    .option('--json', 'print the result as JSON (for scripts and AI agents)')
+    .action(async (brokers: string, o) => {
+      const headers = Object.fromEntries(
+        ((o.header as string[] | undefined) ?? []).map((h) => {
+          const i = h.indexOf(':');
+          if (i <= 0) throw new CliError(`--header expects name:value, got "${h}"`, EXIT.CONFIG_ERROR);
+          return [h.slice(0, i).trim(), h.slice(i + 1).trim()];
+        }),
+      );
+      const produce = ((o.produce as string[] | undefined) ?? []).map((p) => {
+        const i = p.indexOf('=');
+        if (i <= 0) throw new CliError(`--produce expects topic=value, got "${p}"`, EXIT.CONFIG_ERROR);
+        return { topic: p.slice(0, i), payload: p.slice(i + 1), ...(o.key ? { key: String(o.key) } : {}), ...(Object.keys(headers).length ? { headers } : {}) };
+      });
+      if (!['plain', 'scram-sha-256', 'scram-sha-512'].includes(String(o.mechanism))) throw new CliError('--mechanism must be plain, scram-sha-256 or scram-sha-512', EXIT.CONFIG_ERROR);
+      const password = o.username ? process.env[String(o.passwordEnv)] : undefined;
+      const redactor = new Redactor();
+      if (password) redactor.addSecret(password);
+      const url = /^kafkas?:\/\//i.test(brokers) ? brokers : `kafka://${brokers}`;
+      const r = await runRealtimeExchange(
+        {
+          url,
+          mode: 'kafka',
+          subscribe: ((o.read as string[] | undefined) ?? []).map((topic) => ({ topic, fromBeginning: !!o.fromBeginning })),
+          send: produce,
+          waitMs: Number(o.wait),
+          groupId: o.group,
+          username: o.username,
+          password,
+          mechanism: o.mechanism,
+        },
+        { redactor },
+      );
+      if (o.json) console.log(JSON.stringify(r, null, 2));
+      else {
+        console.log(`${r.connected ? green('connected') : red('not connected')} ${dim(`kafka · ${url} · ${r.durationMs} ms`)}`);
+        for (const m of r.messages)
+          console.log(
+            `${dim(`${(m.atMs / 1000).toFixed(2)}s`)} ${m.direction === 'sent' ? cyan('→') : m.direction === 'received' ? green('←') : dim('·')} ${m.topic ? bold(`${m.topic}${m.partition !== undefined ? `[${m.partition}]@${m.offset}` : ''} `) : ''}${m.key ? dim(`key=${m.key} `) : ''}${m.data}`,
+          );
+      }
+      process.exitCode = r.connected ? EXIT.SUCCESS : EXIT.EXECUTION_ERROR;
+    });
+
+  program
     .command('grpc')
     .description('call a gRPC method (or list the methods in the .proto files when no method is given)')
     .argument('<target>', 'server address: host:port, or grpcs://host:port for TLS')

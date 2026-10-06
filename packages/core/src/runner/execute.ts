@@ -389,12 +389,22 @@ async function runGrpc(test: GrpcTest, scope: VariableScope, svc: ExecServices, 
 }
 
 async function runWebSocket(test: WebSocketTest, scope: VariableScope, svc: ExecServices, span: SpanHandle, signal: AbortSignal): Runner {
-  const r = scope.resolveDeep({ url: test.url, send: test.send ?? [], headers: test.headers, auth: test.auth, path: test.path, subscribe: test.subscribe, clientId: test.clientId, username: test.username, password: test.password });
+  const r = scope.resolveDeep({ url: test.url, send: test.send ?? [], headers: test.headers, auth: test.auth, path: test.path, subscribe: test.subscribe, clientId: test.clientId, username: test.username, password: test.password, groupId: test.groupId });
   const mode = test.mode ?? realtimeModeFor(r.url);
   // WebSocket frames are text: objects are sent as JSON. Socket.IO items are { event, args, ack } (or an event name).
-  // MQTT items are { topic, payload, qos, retain }.
+  // MQTT items are { topic, payload, qos, retain }; Kafka items { topic, payload, key, headers, partition }.
   const send = r.send.map((m) =>
-    mode === 'websocket'
+    mode === 'kafka'
+      ? typeof m === 'string'
+        ? { topic: m }
+        : {
+            topic: String(m.topic ?? ''),
+            payload: m.payload ?? m.value ?? m.data ?? m.message,
+            ...(m.key !== undefined ? { key: String(m.key) } : {}),
+            ...(m.headers ? { headers: Object.fromEntries(Object.entries(m.headers as Record<string, unknown>).map(([k, v]) => [k, String(v)])) } : {}),
+            ...(m.partition !== undefined ? { partition: Number(m.partition) } : {}),
+          }
+      : mode === 'websocket'
       ? typeof m === 'string'
         ? m
         : JSON.stringify(m)
@@ -408,7 +418,7 @@ async function runWebSocket(test: WebSocketTest, scope: VariableScope, svc: Exec
   );
   const s = span.child(`${mode} ${svc.redactor.redactUrl(r.url)}`, 'internal', { input: { send, ...(r.subscribe ? { subscribe: r.subscribe } : {}) } });
   const out = await runRealtimeExchange(
-    { url: r.url, mode, send, waitMs: test.waitMs, headers: r.headers, protocols: test.protocols, auth: r.auth, path: r.path, subscribe: r.subscribe, clientId: r.clientId, username: r.username, password: r.password },
+    { url: r.url, mode, send, waitMs: test.waitMs, headers: r.headers, protocols: test.protocols, auth: r.auth, path: r.path, subscribe: r.subscribe, clientId: r.clientId, username: r.username, password: r.password, groupId: r.groupId, mechanism: test.mechanism },
     { redactor: svc.redactor, cookieJar: svc.cookieJar, signal },
   );
   if (!out.connected) {
@@ -423,7 +433,17 @@ async function runWebSocket(test: WebSocketTest, scope: VariableScope, svc: Exec
       return t;
     }
   };
-  const received = out.messages.filter((m) => m.direction === 'received').map((m) => (mode === 'socketio' ? { event: m.event, data: parse(m.data) } : mode === 'mqtt' ? { topic: m.topic, data: parse(m.data) } : parse(m.data)));
+  const received = out.messages
+    .filter((m) => m.direction === 'received')
+    .map((m) =>
+      mode === 'socketio'
+        ? { event: m.event, data: parse(m.data) }
+        : mode === 'mqtt'
+          ? { topic: m.topic, data: parse(m.data) }
+          : mode === 'kafka'
+            ? { topic: m.topic, key: m.key, partition: m.partition, offset: m.offset, ...(m.headers ? { headers: m.headers } : {}), data: parse(m.data) }
+            : parse(m.data),
+    );
   const body = { connected: true, received, messages: out.messages };
   s.setAttributes({ mode, received: received.length });
   s.end({ status: 'ok', output: summarize(received, 16_000) });

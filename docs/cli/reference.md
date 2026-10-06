@@ -45,6 +45,7 @@ testpion diff <from> [to] -w  What changed between two commits, by meaning (--ma
 testpion mcp [--url|--sse|--server <name> -w] [--call <tool> --args <json>] [--json]   Inspect an MCP server (a saved one with --server), or call one of its tools
 testpion ws <url> [-m msg] [-e event=json]    Talk to a WebSocket or Socket.IO server and print the replies
 testpion mqtt <url> [-s topic] [-p topic=msg] Subscribe and publish on an MQTT broker and print what arrives
+testpion kafka <brokers> [-r topic] [-p topic=value] Read and produce Kafka topics and print what arrives
 testpion grpc <target> [method] [-p protos]   Call a gRPC method, or list the methods (.proto files or server reflection)
 testpion report <results.jsonl>              Re-generate reports
 ```
@@ -272,6 +273,27 @@ MQTT_PASSWORD=… testpion mqtt mqtts://broker.example.com -u vet -s 'clinic/7/a
 | `--mqtt5` | Use MQTT 5 (default 3.1.1). |
 | `-w, --wait <ms>` | How long to listen after publishing (default 1500). |
 | `--json` | Print the result as JSON, for scripts and AI agents. |
+
+## `kafka`
+
+Connects to a [Kafka cluster](/api-testing/websocket#kafka), reads topics (new messages, or with `-b` from the beginning) in a consumer group of its own, produces messages in order, prints everything that arrives while it listens, then disconnects. The exit code is 3 when it can't connect.
+
+```bash
+testpion kafka kafka://127.0.0.1:4017 -r clinic.events -b
+KAFKA_PASSWORD=… testpion kafka kafkas://broker.example.com:9094 -u app --mechanism scram-sha-512 -r confirmations -p 'orders={"id":42}' -k order-42 -H source:testpion --json
+```
+
+| Option | |
+|---|---|
+| `-r, --read <topic...>` | Topics to read (new messages). |
+| `-b, --from-beginning` | Read the topics from the beginning. |
+| `-p, --produce <topic=value...>` | Messages to produce, in order. |
+| `-k, --key <key>` | The key of the produced messages. |
+| `-H, --header <name:value...>` | Headers of the produced messages. |
+| `-g, --group <id>` | Consumer group (default: one of its own). |
+| `-u, --username`, `--mechanism`, `--password-env` | SASL login; the password comes from an environment variable (default `KAFKA_PASSWORD`). |
+| `-w, --wait <ms>` | How long to listen after producing (default 3000). |
+| `--json` | The result as JSON. |
 
 ## `grpc`
 

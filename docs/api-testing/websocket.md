@@ -1,6 +1,6 @@
 ---
 title: "WebSocket"
-description: "Connect to WebSocket, Socket.IO and MQTT servers, send messages and events (with acknowledgements), subscribe and publish, save connections in folders, and read clear connection errors."
+description: "Connect to WebSocket, Socket.IO, MQTT and Kafka, send messages and events (with acknowledgements), subscribe and publish, read and produce Kafka topics, save connections in folders, and read clear connection errors."
 ---
 
 ::: v-pre
@@ -37,6 +37,35 @@ Switch the protocol to **MQTT** to talk to an MQTT broker (MQTT 3.1.1 or 5), e.g
 - Every message shows its topic (and *retained* for a retained message); the filter matches topics too.
 
 The demo servers include a broker: `mqtt://127.0.0.1:4016`. Subscribe to `clinic/+/vitals` to see two monitors report every 2 seconds, and publish `{ "action": "recheck" }` to `clinic/7/commands` to get an answer on `clinic/7/acks`.
+
+## Kafka
+
+Switch the protocol to **Kafka** to read and produce the topics of a Kafka cluster:
+
+- The URL is the cluster's bootstrap brokers: `kafka://host:9092`, several separated by commas (`kafka://a:9092,b:9092`), `kafkas://` for TLS listeners.
+- **Topics** lists the topics to read, each **from the beginning** (what the topic holds already, then new messages) or only new messages. They are read when you connect; while connected, adding or removing one applies at once. **Topics** on the right lists the cluster's topics to pick from. Reading uses a consumer group of its own (`testpion-…`), so it never takes messages away from your real consumers; set **Consumer group** under **Connection** only when you mean to.
+- On **Produce**, give the topic, an optional **key** (the same key always goes to the same partition) and the value; **Message headers** adds headers. `{{variables}}` resolve in all of them.
+- **Connection** has the SASL mechanism (PLAIN, SCRAM-SHA-256, SCRAM-SHA-512), username and password (`{{kafkaPassword}}`: only a variable reference is saved), and the consumer group.
+- Every received message shows its topic, partition and offset, and its key; selecting one shows its headers above the value.
+
+The demo servers include a broker: `kafka://127.0.0.1:4017`. Read `clinic.events` from the beginning to see three events; any other topic is created when you use it.
+
+Kafka tests look like MQTT tests:
+
+```yaml
+- name: An order is confirmed
+  type: kafka
+  url: "{{kafkaBrokers}}"
+  subscribe:
+    - { topic: order-confirmations }          # new messages; fromBeginning: true reads what is there
+  send:
+    - { topic: orders, key: order-42, value: { id: 42 }, headers: { source: testpion } }
+  waitMs: 3000
+  assertions:
+    - { type: equals, path: "$.received[0].key", expected: order-42 }
+```
+
+Each received message is `{ topic, key, partition, offset, headers, data }`, with `data` parsed as JSON when it is JSON.
 
 ## Saved connections
 

@@ -22,6 +22,7 @@ import {
   historyResponse,
   historyToHar,
   SocketIoSession,
+  KafkaSession,
   MqttSession,
   diffResponses,
   type HttpResponseData,
@@ -360,6 +361,70 @@ export function requestsHandlers(be: Backend): Handlers {
     'mqtt.close': ({ id }: { id: string }) => {
       be.mqttSessions.get(id)?.close();
       be.mqttSessions.delete(id);
+    },
+
+    /* Kafka: messages and status arrive on the WebSocket channels too (with the topic, key, partition and offset) */
+    'kafka.connect': async (p: {
+      url: string;
+      clientId?: string;
+      groupId?: string;
+      username?: string;
+      password?: string;
+      mechanism?: 'plain' | 'scram-sha-256' | 'scram-sha-512';
+      reads?: Array<{ topic: string; fromBeginning?: boolean }>;
+      environment?: string;
+    }) => {
+      const ctx = be.context({ environment: p.environment });
+      const s = new KafkaSession(ctx.vars.resolve(p.url), {
+        clientId: p.clientId ? ctx.vars.resolve(p.clientId) : undefined,
+        groupId: p.groupId ? ctx.vars.resolve(p.groupId) : undefined,
+        username: p.username ? ctx.vars.resolve(p.username) : undefined,
+        password: p.password ? ctx.vars.resolve(p.password) : undefined,
+        mechanism: p.mechanism,
+      });
+      if (p.password) ctx.redactor.addSecret(ctx.vars.resolve(p.password));
+      const b = be.batched<unknown>('wsock.messages');
+      s.onMessage((m) => b.push({ id: s.id, message: m }));
+      s.onStatus((st) => be.host.emit('wsock.status', { id: s.id, status: st }));
+      be.kafkaSessions.set(s.id, s);
+      try {
+        await s.connect();
+        for (const r of p.reads ?? []) if (r.topic.trim()) await s.subscribe(ctx.vars.resolve(r.topic), { fromBeginning: !!r.fromBeginning });
+      } catch (e) {
+        await s.closeAndWait();
+        be.kafkaSessions.delete(s.id);
+        throw e;
+      } finally {
+        await ctx.dispose();
+      }
+      return { id: s.id };
+    },
+    'kafka.read': async ({ id, topic, fromBeginning, environment }: { id: string; topic: string; fromBeginning?: boolean; environment?: string }) => {
+      const s = be.kafkaSessions.get(id);
+      if (!s) throw new ApsError('ProtocolError', 'Kafka is not connected');
+      await s.subscribe(await be.resolveText(topic, environment), { fromBeginning });
+    },
+    'kafka.stopReading': async ({ id, topic, environment }: { id: string; topic: string; environment?: string }) => {
+      const s = be.kafkaSessions.get(id);
+      if (!s) throw new ApsError('ProtocolError', 'Kafka is not connected');
+      await s.unsubscribe(await be.resolveText(topic, environment));
+    },
+    'kafka.produce': async ({ id, topic, value, key, headers, partition, environment }: { id: string; topic: string; value?: string; key?: string; headers?: Array<{ key: string; value: string; enabled?: boolean }>; partition?: number; environment?: string }) => {
+      const s = be.kafkaSessions.get(id);
+      if (!s) throw new ApsError('ProtocolError', 'Kafka is not connected');
+      // {{variables}} in the topic, key, value and headers resolve like in requests
+      const h: Record<string, string> = {};
+      for (const x of headers ?? []) if (x.enabled !== false && x.key.trim()) h[await be.resolveText(x.key, environment)] = await be.resolveText(x.value, environment);
+      return s.produce(await be.resolveText(topic, environment), await be.resolveText(value ?? '', environment), { key: key ? await be.resolveText(key, environment) : undefined, headers: h, partition });
+    },
+    'kafka.topics': async ({ id }: { id: string }) => {
+      const s = be.kafkaSessions.get(id);
+      if (!s) throw new ApsError('ProtocolError', 'Kafka is not connected');
+      return s.listTopics();
+    },
+    'kafka.close': async ({ id }: { id: string }) => {
+      await be.kafkaSessions.get(id)?.closeAndWait();
+      be.kafkaSessions.delete(id);
     },
   };
 }

@@ -13,6 +13,7 @@
  *   Socket.IO       http://127.0.0.1:4015/chat (events: say → said, with acknowledgement; welcome on connect)
  *   MQTT broker     mqtt://127.0.0.1:4016  (clinic/<id>/vitals every 2 s; clinic/<id>/commands → clinic/<id>/acks)
  *   gRPC            127.0.0.1:4014        (vet.v1.PetService, examples/veterinary-workspace/protos/vet/v1/pets.proto)
+ *   Kafka           kafka://127.0.0.1:4017 (in-process broker; topic clinic.events holds 3 events, any topic is created on use)
  */
 import { createServer } from 'node:http';
 import { readFileSync } from 'node:fs';
@@ -24,6 +25,8 @@ import * as grpc from '@grpc/grpc-js';
 import * as protoLoader from '@grpc/proto-loader';
 import { ReflectionService } from '@grpc/reflection';
 import { Server as SocketIoServer } from 'socket.io';
+import { Kafka, logLevel } from 'kafkajs';
+import { startKafkaBroker } from './kafka-broker.mjs';
 import { createServer as createTcpServer } from 'node:net';
 import { Aedes } from 'aedes';
 
@@ -458,6 +461,7 @@ export async function startAll(base = 4010) {
   const grpcServer = await startGrpcServer(base + 4);
   const socketIo = await startSocketIo(base + 5);
   const mqtt = await startMqtt(base + 6);
+  const kafka = await startKafkaDemo(base + 7);
   return {
     rest,
     gql,
@@ -468,6 +472,7 @@ export async function startAll(base = 4010) {
       grpcServer.forceShutdown();
       socketIo.sio.close();
       await mqtt.close();
+      await kafka.close();
       for (const s of [rest, gql, llm]) {
         s.closeAllConnections?.();
         await new Promise((r) => s.close(r));
@@ -475,6 +480,24 @@ export async function startAll(base = 4010) {
       await new Promise((r) => ws.close(r));
     },
   };
+}
+
+/** Kafka: the in-process broker (kafka-broker.mjs) with a topic that holds a few events already. */
+async function startKafkaDemo(port) {
+  const broker = await startKafkaBroker({ port, topics: { 'clinic.events': 1 } });
+  const kafka = new Kafka({ clientId: 'demo-seed', brokers: [broker.url], logLevel: logLevel.NOTHING });
+  const producer = kafka.producer();
+  await producer.connect();
+  await producer.send({
+    topic: 'clinic.events',
+    messages: [
+      { key: 'pet-1', value: JSON.stringify({ type: 'checked-in', petId: '1', name: 'Byron' }), headers: { source: 'front-desk' } },
+      { key: 'pet-2', value: JSON.stringify({ type: 'vaccinated', petId: '2', name: 'Biscuit', vaccine: 'rabies' }), headers: { source: 'clinic' } },
+      { key: 'pet-1', value: JSON.stringify({ type: 'checked-out', petId: '1', name: 'Byron' }), headers: { source: 'front-desk' } },
+    ],
+  });
+  await producer.disconnect();
+  return broker;
 }
 
 export { listen };
@@ -489,5 +512,6 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   console.log(`Socket.IO  http://127.0.0.1:${base + 5}/chat   (say → said, acknowledged)`);
   console.log(`gRPC       127.0.0.1:${base + 4}   (vet.v1.PetService; proto: examples/veterinary-workspace/protos/vet/v1/pets.proto)`);
   console.log(`MQTT       mqtt://127.0.0.1:${base + 6}   (clinic/+/vitals every 2 s; publish to clinic/7/commands, read clinic/7/acks)`);
+  console.log(`Kafka      kafka://127.0.0.1:${base + 7}   (clinic.events holds 3 events; any topic is created on use)`);
   console.log('MCP        node examples/servers/mcp-server.mjs   (stdio)');
 }

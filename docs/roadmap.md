@@ -14,7 +14,6 @@ Plans change with feedback. Vote or comment on [GitHub issues](https://github.co
 
 ## Later
 
-- Kafka as a protocol, next to HTTP, GraphQL, gRPC, WebSocket, Socket.IO, MQTT and MCP.
 - Database-query datasets for PostgreSQL and MySQL (SQLite databases already work as datasets).
 
 ## Shipped

@@ -72,7 +72,7 @@ export function CollectionRunner({ collection, folderId, onFolderChange }: { col
           lib.items
             .filter((it) => it.collectionId === collection.id)
             .sort((a, b) => (a.folder ?? '').localeCompare(b.folder ?? '') || a.name.localeCompare(b.name))
-            .map((it) => ({ id: it.id, name: it.name, path: it.folder ? [it.folder] : [], kind: kinds[i]![0], method: kinds[i]![0] === 'websocket' && it.data?.mode === 'mqtt' ? 'MQTT' : kinds[i]![0] === 'websocket' && it.data?.mode === 'socketio' ? 'SIO' : kinds[i]![1] })),
+            .map((it) => ({ id: it.id, name: it.name, path: it.folder ? [it.folder] : [], kind: kinds[i]![0], method: kinds[i]![0] === 'websocket' && it.data?.mode === 'kafka' ? 'KAFKA' : kinds[i]![0] === 'websocket' && it.data?.mode === 'mqtt' ? 'MQTT' : kinds[i]![0] === 'websocket' && it.data?.mode === 'socketio' ? 'SIO' : kinds[i]![1] })),
         ),
       );
     });

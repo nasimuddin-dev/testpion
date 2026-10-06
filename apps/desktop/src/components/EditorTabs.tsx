@@ -277,6 +277,7 @@ export const NEW_TAB_TITLE = {
   websocket: 'New WebSocket request',
   socketio: 'New Socket.IO request',
   mqtt: 'New MQTT request',
+  kafka: 'New Kafka connection',
   mcp: 'New MCP server',
 } as const;
 /** Names earlier versions gave new tabs: shown as today's name. */
@@ -290,7 +291,7 @@ export function newRequestItems(): MenuItem[] {
     { label: 'HTTP request', icon: <Plus size={14} />, shortcut: 'Ctrl+T', onSelect: () => s.openIntent('rest', { newTab: true }) },
     { label: 'GraphQL request', icon: <Plus size={14} />, onSelect: () => s.openIntent('graphql', { newDoc: true, reset: true }) },
     { label: 'gRPC request', icon: <Waypoints size={14} />, onSelect: () => s.openIntent('grpc', { newDoc: true }) },
-    { label: 'WebSocket, Socket.IO or MQTT', icon: <Radio size={14} />, onSelect: () => s.openIntent('websocket', { newDoc: true }) },
+    { label: 'WebSocket, Socket.IO, MQTT or Kafka', icon: <Radio size={14} />, onSelect: () => s.openIntent('websocket', { newDoc: true }) },
     { label: 'MCP server', icon: <Plug size={14} />, onSelect: () => s.openIntent('mcp', { addServer: true }) },
   ];
 }

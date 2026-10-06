@@ -58,6 +58,20 @@ afterAll(async () => {
 });
 
 describe('example workspace (end-to-end)', () => {
+  it('runs the Kafka example against the demo broker', async () => {
+    const ctx = createEngineContext({ store: ws, secrets: new MemorySecretStore(), environment: 'Development' });
+    const results: TestResult[] = [];
+    try {
+      await runTests({ name: 'kafka', tests: streamTests(['kafka'], ws.path('tests')), concurrency: 1, services: ctx.services, onEvent: (e: RunEvent) => e.type === 'test-end' && results.push(e.result) });
+    } finally {
+      await ctx.dispose();
+    }
+    expect(results.map((r) => `${r.name}: ${r.status}${r.status === 'passed' ? '' : ` ${r.error?.message ?? r.checks.filter((c) => !c.passed).map((c) => c.message).join('; ')}`}`)).toEqual([
+      "The clinic's events are there, in order: passed",
+      'A booked appointment can be read back with its key and headers: passed',
+    ]);
+  });
+
   it('passes the full regression suite across REST, GraphQL, MCP, LLM, RAG, agent and safety tests', async () => {
     const suite = await loadSuite(ws.path('tests', 'regression.suite.yaml'));
     const ctx = createEngineContext({ store: ws, secrets: new MemorySecretStore(), environment: suite.environment });

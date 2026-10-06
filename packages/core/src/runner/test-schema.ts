@@ -75,18 +75,20 @@ const BY_TYPE: Record<string, TestKeyDoc[]> = {
     { key: 'tls', description: 'true for a TLS connection.', shape: 'boolean' },
   ],
   websocket: [
-    { key: 'url', description: 'ws://, wss:// (WebSocket), http(s):// (Socket.IO) or mqtt:// (MQTT).', shape: 'text' },
-    { key: 'mode', description: 'websocket (default), socketio or mqtt.', values: ['websocket', 'socketio', 'mqtt'], shape: 'text' },
-    { key: 'send', description: 'What to send, in order: texts, or { event, data } (Socket.IO), or { topic, message } (MQTT) (messages, message, publish work too).', shape: 'list' },
-    { key: 'subscribe', description: 'MQTT: topics to subscribe to (a text, or { topic, qos }).', shape: 'list' },
+    { key: 'url', description: 'ws://, wss:// (WebSocket), http(s):// (Socket.IO), mqtt:// (MQTT) or kafka://broker:9092 (Kafka; several brokers separated by commas).', shape: 'text' },
+    { key: 'mode', description: 'websocket (default), socketio, mqtt or kafka.', values: ['websocket', 'socketio', 'mqtt', 'kafka'], shape: 'text' },
+    { key: 'send', description: 'What to send, in order: texts, or { event, data } (Socket.IO), or { topic, message } (MQTT), or { topic, value, key, headers } (Kafka) (messages, message, publish, produce work too).', shape: 'list' },
+    { key: 'subscribe', description: 'MQTT: topics to subscribe to (a text, or { topic, qos }). Kafka: topics to read (a text, or { topic, fromBeginning: true }).', shape: 'list' },
+    { key: 'groupId', description: 'Kafka: the consumer group (default: one of its own, so it never takes messages from a real consumer).', shape: 'text' },
+    { key: 'mechanism', description: 'Kafka SASL: plain (default), scram-sha-256 or scram-sha-512, with username and password.', values: ['plain', 'scram-sha-256', 'scram-sha-512'], shape: 'text' },
     { key: 'wait', description: 'Milliseconds to listen after sending (waitMs works too).', shape: 'number' },
     { key: 'headers', description: 'Handshake headers.', shape: 'map' },
     { key: 'protocols', description: 'WebSocket sub-protocols.', shape: 'list' },
     { key: 'auth', description: 'Socket.IO handshake auth payload.', shape: 'map' },
     { key: 'path', description: 'Socket.IO path (default /socket.io).', shape: 'text' },
-    { key: 'clientId', description: 'MQTT client id.', shape: 'text' },
-    { key: 'username', description: 'MQTT username.', shape: 'text' },
-    { key: 'password', description: 'MQTT password: use a {{secret variable}}.', shape: 'text' },
+    { key: 'clientId', description: 'MQTT client id; Kafka client id.', shape: 'text' },
+    { key: 'username', description: 'MQTT or Kafka (SASL) username.', shape: 'text' },
+    { key: 'password', description: 'MQTT or Kafka (SASL) password: use a {{secret variable}}.', shape: 'text' },
   ],
   mcp: [
     { key: 'server', description: 'The MCP server, by name or id from the workspace (mcp-servers.json).', shape: 'text' },
@@ -137,7 +139,7 @@ const ALIASES: Record<string, string[]> = {
   http: ['query'],
   graphql: ['url', 'graphqlVariables'],
   grpc: ['address', 'url', 'request', 'proto'],
-  websocket: ['messages', 'message', 'publish', 'waitMs'],
+  websocket: ['messages', 'message', 'publish', 'produce', 'waitMs'],
   mcp: ['args'],
   llm: ['response_format', 'question', 'messages', 'answer'],
   rag: ['query', 'documents', 'retrieved'],
@@ -321,7 +323,7 @@ export function lintTestFile(text: string, opts: { file?: string; suite?: boolea
   for (const it of items) if (typeof it.raw.id === 'string') ids.add(it.raw.id);
   const typeOf = (raw: Record<string, unknown>): string | undefined => {
     const t = raw.type ?? defaults.type;
-    if (typeof t === 'string') return t === 'rest' ? 'http' : t === 'prompt' ? 'llm' : ['ws', 'socketio', 'mqtt'].includes(t) ? 'websocket' : t;
+    if (typeof t === 'string') return t === 'rest' ? 'http' : t === 'prompt' ? 'llm' : ['ws', 'socketio', 'mqtt', 'kafka'].includes(t) ? 'websocket' : t;
     return raw.request || raw.url ? 'http' : raw.query ? 'graphql' : raw.protos || raw.proto ? 'grpc' : raw.tool ? 'mcp' : raw.prompt ? 'llm' : undefined;
   };
   const types = new Set(COMMON.find((k) => k.key === 'type')!.values!);

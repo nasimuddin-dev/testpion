@@ -56,12 +56,13 @@ Introspect a schema to get autocomplete, validation and hover docs in the editor
 
 See [gRPC](./api-testing/grpc.md).
 
-## WebSocket, Socket.IO and MQTT
+## WebSocket, Socket.IO, MQTT and Kafka
 
 - WebSocket with subprotocols and handshake headers; Socket.IO events with acknowledgements.
 - MQTT 3.1.1 and 5 brokers (mqtt://, mqtts://, ws://, wss://): subscriptions with wildcards and QoS, publish with QoS and retain.
+- Kafka clusters (kafka://, kafkas://, SASL PLAIN / SCRAM): read topics from the beginning or new messages in a consumer group of its own, produce with key and headers, list topics.
 - A live message log with a filter and JSON tree, saved connections in folders, and saved messages to send again.
-- `type: websocket`, `socketio` and `mqtt` tests, `testpion ws` and `testpion mqtt`, and the `realtime_exchange` MCP tool.
+- `type: websocket`, `socketio`, `mqtt` and `kafka` tests, `testpion ws`, `testpion mqtt` and `testpion kafka`, and the `realtime_exchange` MCP tool.
 
 See [WebSocket](./api-testing/websocket.md).
 

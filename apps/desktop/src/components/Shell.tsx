@@ -57,7 +57,7 @@ export const NAV: Array<{ id: ViewId; label: string; icon: ReactNode; group: str
   { id: 'rest', label: 'REST', icon: <Network size={18} />, group: 'Requests', hint: 'REST / HTTP requests' },
   { id: 'graphql', label: 'GraphQL', icon: <GitBranch size={18} />, group: 'Requests' },
   { id: 'grpc', label: 'gRPC', icon: <Waypoints size={18} />, group: 'Requests' },
-  { id: 'websocket', label: 'WebSocket', icon: <Radio size={18} />, group: 'Requests', hint: 'WebSocket, Socket.IO and MQTT' },
+  { id: 'websocket', label: 'WebSocket', icon: <Radio size={18} />, group: 'Requests', hint: 'WebSocket, Socket.IO, MQTT and Kafka' },
   { id: 'mcp', label: 'MCP', icon: <Plug size={18} />, group: 'Requests', hint: 'MCP servers (inspector)' },
   { id: 'debugger', label: 'Debugger', icon: <Bug size={18} />, group: 'Testing', hint: 'HTTP Debugger: the traffic of other programs through a local proxy' },
   { id: 'tests', label: 'Tests', icon: <ShieldCheck size={18} />, group: 'Testing', hint: 'Test files and runs' },

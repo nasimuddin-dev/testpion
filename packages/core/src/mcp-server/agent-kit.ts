@@ -87,7 +87,7 @@ export function toolAnnotations(name: string, write: boolean): ToolAnnotations {
 export function agentGuide(o: { workspace: string; checkTypes: string[]; readOnly?: boolean }): string {
   return `# TestPion for AI agents
 
-Workspace: **${o.workspace}**. TestPion is an API client and test runner (REST, GraphQL, gRPC, WebSocket / Socket.IO / MQTT, MCP, LLMs). Secret values never leave the machine: tools return variable *names*, and saved requests keep secrets as \`{{variables}}\`.${o.readOnly ? '\n\nThis server is **read-only**: tools that send requests or change files are not available.' : ''}
+Workspace: **${o.workspace}**. TestPion is an API client and test runner (REST, GraphQL, gRPC, WebSocket / Socket.IO / MQTT / Kafka, MCP, LLMs). Secret values never leave the machine: tools return variable *names*, and saved requests keep secrets as \`{{variables}}\`.${o.readOnly ? '\n\nThis server is **read-only**: tools that send requests or change files are not available.' : ''}
 
 ## Where to start
 

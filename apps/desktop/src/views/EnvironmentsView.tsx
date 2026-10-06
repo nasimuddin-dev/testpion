@@ -130,12 +130,25 @@ export function EnvironmentsView() {
       if (e) setDraft((d) => (d?.id === e.id ? { ...d, order: e.order, name: e.name } : e));
       return;
     }
-    setDraft(e);
+    const add = pendingAdd.current;
+    if (e && add && add.envId === e.id && !e.variables.some((v) => v.key === add.key)) {
+      pendingAdd.current = undefined;
+      // unsaved until Save, like any edit
+      setDraft({ ...e, variables: [...e.variables, { key: add.key, value: '', enabled: true }] });
+    } else setDraft(e);
     refreshUnused(e?.name);
     setSecretValues({});
     if (e) void call('env.secretStatus', { envId: e.id, keys: e.variables.filter((v) => v.secret).map((v) => v.key) }).then(setSecretStatus);
   }, [sel, envs]);
+  // a variable to add (from the variables overview: "{{name}} is not defined anywhere ▸ Add"): a row ready for its value
+  const pendingAdd = useRef<{ envId: string; key: string } | undefined>(undefined);
   useIntent('environments', (p) => {
+    if (p?.environmentId && p.addVariable) {
+      const key = String(p.addVariable);
+      // already open: the row goes into the draft now (selecting it again changes nothing)
+      if (sel === p.environmentId) setDraft((d) => (d && !d.variables.some((v) => v.key === key) ? { ...d, variables: [...d.variables, { key, value: '', enabled: true }] } : d));
+      else pendingAdd.current = { envId: String(p.environmentId), key };
+    }
     if (p?.environmentId) (setScope('environment'), setSel(p.environmentId));
     else if (p?.tab === 'globals') setScope('global');
     else if (p?.tab === 'workspace') setScope('workspace');

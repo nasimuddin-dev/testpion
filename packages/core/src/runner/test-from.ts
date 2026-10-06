@@ -10,7 +10,7 @@ export type TestSource =
   | { kind: 'http'; request: { method: string; url: string; params?: KeyValue[]; headers?: KeyValue[]; body?: BodyConfig; auth?: AuthConfig }; preRequestScript?: string; testScript?: string; status?: number }
   | { kind: 'graphql'; endpoint: string; query: string; variables?: Record<string, unknown>; operationName?: string; headers?: KeyValue[]; auth?: AuthConfig }
   | { kind: 'grpc'; target: string; method: string; message?: unknown; metadata?: KeyValue[]; tls?: boolean }
-  | { kind: 'websocket'; mode?: 'websocket' | 'socketio' | 'mqtt'; url: string; send?: unknown[]; subscribe?: string[]; headers?: KeyValue[]; waitMs?: number; username?: string; password?: string };
+  | { kind: 'websocket'; mode?: 'websocket' | 'socketio' | 'mqtt' | 'kafka'; url: string; send?: unknown[]; subscribe?: Array<string | { topic: string; fromBeginning?: boolean }>; headers?: KeyValue[]; waitMs?: number; username?: string; password?: string };
 
 const kv = (list?: KeyValue[]) => {
   const on = (list ?? []).filter((h) => h.key && h.enabled !== false);
@@ -76,7 +76,7 @@ export function testFromRequest(name: string, src: TestSource, assertions?: Chec
     default:
       test = clean({
         name,
-        type: src.mode === 'mqtt' ? 'mqtt' : 'websocket',
+        type: src.mode === 'mqtt' ? 'mqtt' : src.mode === 'kafka' ? 'kafka' : 'websocket',
         ...(src.mode === 'socketio' ? { mode: 'socketio' } : {}),
         url: src.url,
         subscribe: src.subscribe,
