@@ -28,6 +28,7 @@ const OPEN_WORLD = new Set([
 /** Tools that change or remove what is already there (variable values everywhere, files), or send requests that may change the API's data. */
 const DESTRUCTIVE = new Set([
   'debugger_capture',
+  'debugger_session',
   'delete_request',
   'update_request',
   'move_request',

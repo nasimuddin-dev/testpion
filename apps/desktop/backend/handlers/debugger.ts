@@ -1,13 +1,42 @@
 /** RPC handlers: the HTTP Debugger (planning/http-debugger.md): a local proxy other programs send through, and what it saw. */
-import { ApsError, startDebuggerProxy, type DebuggerExchange, type DebuggerProxy } from '@testpion/core';
+import {
+  ApsError,
+  ENGINE_VERSION,
+  exchangesFromHar,
+  exchangesToHar,
+  tryDecodeJwt,
+  installedBrowsers,
+  openBrowserWithProxy,
+  openTerminalWithProxy,
+  proxyShellLines,
+  restoreSystemProxy,
+  setSystemProxy,
+  startDebuggerProxy,
+  type BrowserName,
+  type DebuggerExchange,
+  type DebuggerProxy,
+  type SystemProxySnapshot,
+} from '@testpion/core';
 import type { Backend, Handlers } from '../backend.js';
 import { request as httpRequest } from 'node:http';
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { basename, join } from 'node:path';
 
 export interface DebuggerState {
   proxy?: DebuggerProxy;
   /** Kept across stop / start, until cleared: the session. */
   exchanges: DebuggerExchange[];
+  /** The system proxy as it was before TestPion switched it to ours (restored on stop, on clear and when the app quits). */
+  systemProxy?: SystemProxySnapshot;
+  /** AutoSave: the live session is written to debugger/autosave.har every minute while something changed. */
+  autosave?: ReturnType<typeof setInterval>;
+  dirty?: boolean;
+  /** Put everything back (the system proxy) and stop the timers; the backend calls it when it is disposed. */
+  release?(): Promise<void>;
 }
+
+const SESSIONS_DIR = 'debugger';
+const AUTOSAVE = 'autosave';
 
 /** An exchange for the window: bodies and header values pass the redactor (a captured token must not reach the screen or a report as is). */
 function redacted(be: Backend, e: DebuggerExchange): DebuggerExchange {
@@ -23,9 +52,103 @@ function redacted(be: Backend, e: DebuggerExchange): DebuggerExchange {
   };
 }
 
+/** The Auth inspector: what the request authenticates with, decoded, without the secret (Basic: the user; Bearer: the JWT's claims and expiry; else the scheme). */
+function authOf(be: Backend, e: DebuggerExchange): { scheme: string; user?: string; jwt?: ReturnType<typeof tryDecodeJwt>; cookies: string[]; setCookies: string[]; note?: string } | undefined {
+  const h = e.requestHeaders.authorization ?? e.requestHeaders['proxy-authorization'];
+  const cookies = (e.requestHeaders.cookie ?? '')
+    .split(';')
+    .map((c) => c.trim().split('=')[0] ?? '')
+    .filter(Boolean);
+  const setCookies = (e.responseHeaders?.['set-cookie'] ?? '')
+    .split(/,(?=\s*\w+=)/)
+    .map((c) => c.trim().split('=')[0] ?? '')
+    .filter(Boolean);
+  if (!h) return cookies.length || setCookies.length ? { scheme: 'none', cookies, setCookies } : undefined;
+  const [scheme = '', ...rest] = h.split(' ');
+  const value = rest.join(' ').trim();
+  if (/^basic$/i.test(scheme)) {
+    let user: string | undefined;
+    try {
+      user = Buffer.from(value, 'base64').toString('utf8').split(':')[0];
+    } catch {
+      /* not base64 */
+    }
+    return { scheme: 'Basic', user, cookies, setCookies, note: 'The password travels base64-encoded, not encrypted: plain HTTP shows it to anyone on the path.' };
+  }
+  if (/^bearer$/i.test(scheme)) {
+    const jwt = tryDecodeJwt(value);
+    if (jwt) return { scheme: 'Bearer (JWT)', jwt: { ...jwt, token: '***', payload: be.logger.redactor.redact(jwt.payload) as Record<string, unknown> }, cookies, setCookies };
+    return { scheme: 'Bearer (opaque token)', cookies, setCookies };
+  }
+  return { scheme: scheme || 'unknown', cookies, setCookies };
+}
+
+const statusClass = (e: DebuggerExchange) => (e.error ? 'error' : !e.status ? 'pending' : e.status < 300 ? '2xx' : e.status < 400 ? '3xx' : e.status < 500 ? '4xx' : '5xx');
+
 export function debuggerHandlers(be: Backend): Handlers {
   const state: DebuggerState = (be.debugger ??= { exchanges: [] });
-  const status = () => ({ running: !!state.proxy, url: state.proxy?.url, port: state.proxy?.port, exchanges: state.exchanges.length });
+  const status = () => ({ running: !!state.proxy, url: state.proxy?.url, port: state.proxy?.port, exchanges: state.exchanges.length, systemProxy: !!state.systemProxy, autosave: !!state.autosave });
+  const sessionsDir = () => be.ws.path(SESSIONS_DIR);
+  const sessionFile = (name: string) => {
+    const clean = name
+      .replace(/\.har$/i, '')
+      .replace(/[^\w.\- ]+/g, '_')
+      .trim();
+    if (!clean) throw new ApsError('ValidationError', 'A session needs a name');
+    return be.ws.safePath(`${clean}.har`, sessionsDir());
+  };
+  const writeSession = (name: string) => {
+    mkdirSync(sessionsDir(), { recursive: true });
+    const file = sessionFile(name);
+    writeFileSync(file, JSON.stringify(exchangesToHar(state.exchanges, be.logger.redactor, ENGINE_VERSION), null, 2));
+    return { name: basename(file, '.har'), path: file, exchanges: state.exchanges.length };
+  };
+  const touch = () => {
+    state.dirty = true;
+  };
+  const stopAutosave = () => {
+    clearInterval(state.autosave);
+    state.autosave = undefined;
+  };
+  const startAutosave = () => {
+    stopAutosave();
+    state.autosave = setInterval(() => {
+      if (!state.dirty || !state.exchanges.length) return;
+      try {
+        writeSession(AUTOSAVE);
+        state.dirty = false;
+      } catch (e) {
+        be.logger.warn(`Debugger autosave failed: ${(e as Error).message}`);
+      }
+    }, 60_000);
+  };
+  const restoreSystem = async () => {
+    const s = state.systemProxy;
+    if (!s) return;
+    state.systemProxy = undefined;
+    await restoreSystemProxy(s).catch((e) => be.logger.warn(`Could not restore the system proxy: ${(e as Error).message}`));
+    be.logger.info('System proxy restored');
+  };
+  state.release = async () => {
+    stopAutosave();
+    await restoreSystem();
+  };
+  const stop = async () => {
+    await state.proxy?.close();
+    state.proxy = undefined;
+    stopAutosave();
+    await restoreSystem();
+    if (state.dirty && state.exchanges.length) {
+      try {
+        writeSession(AUTOSAVE);
+        state.dirty = false;
+      } catch {
+        /* the next save */
+      }
+    }
+    return status();
+  };
+
   return {
     'debug.status': () => status(),
     /** Send one request through the proxy from this process (the e2e suite's "program"; also a quick check that the proxy works). */
@@ -51,23 +174,58 @@ export function debuggerHandlers(be: Backend): Handlers {
             state.exchanges.push(e);
             if (state.exchanges.length > 5000) state.exchanges.shift();
           }
+          touch();
           be.host.emit('debug.exchange', { exchange: redacted(be, e), phase });
         },
       });
+      startAutosave();
       be.logger.info(`HTTP Debugger listening on ${state.proxy.url}`);
       return status();
     },
-    'debug.stop': async () => {
-      await state.proxy?.close();
-      state.proxy = undefined;
+    'debug.stop': stop,
+
+    /* ---- capture helpers: the ways a program ends up sending through the proxy */
+
+    /** The browsers found on this computer, the shell lines to paste, and whether the system proxy is ours. */
+    'debug.captureOptions': () => ({
+      browsers: installedBrowsers().map(({ name, label }) => ({ name, label })),
+      shells: state.proxy ? proxyShellLines(state.proxy.url) : [],
+      systemProxy: !!state.systemProxy,
+      platform: process.platform,
+    }),
+    /** A browser with a throw-away profile that sends through the proxy. */
+    'debug.openBrowser': ({ browser, url }: { browser?: BrowserName; url?: string }) => {
+      if (!state.proxy) throw new ApsError('ConfigurationError', 'Start capturing first');
+      const r = openBrowserWithProxy(state.proxy.url, browser, url);
+      be.logger.info(`Debugger: opened ${r.browser} through ${state.proxy.url}`);
+      return r;
+    },
+    /** A terminal whose shell sends through the proxy. */
+    'debug.openTerminal': () => {
+      if (!state.proxy) throw new ApsError('ConfigurationError', 'Start capturing first');
+      return openTerminalWithProxy(state.proxy.url);
+    },
+    /** Switch the system proxy to ours (every program that honours it) and back. */
+    'debug.systemProxy': async ({ on }: { on: boolean }) => {
+      if (on) {
+        if (!state.proxy) throw new ApsError('ConfigurationError', 'Start capturing first');
+        if (!state.systemProxy) {
+          state.systemProxy = await setSystemProxy(state.proxy.url);
+          be.logger.info(`System proxy set to ${state.proxy.url}`);
+        }
+      } else await restoreSystem();
       return status();
     },
+
+    /* ---- the session */
+
     /** What was captured (newest last), with filters; bodies only with `withBodies`, for the grid's sake. */
     'debug.exchanges': ({
       host,
       method,
       status: st,
       text,
+      deep,
       kind,
       bookmarked,
       limit = 1000,
@@ -76,6 +234,8 @@ export function debuggerHandlers(be: Backend): Handlers {
       method?: string;
       status?: 'ok' | 'redirect' | 'client-error' | 'server-error' | 'error';
       text?: string;
+      /** Search headers and bodies too, not only the URL line. */
+      deep?: boolean;
       kind?: 'http' | 'tunnel';
       bookmarked?: boolean;
       limit?: number;
@@ -91,7 +251,13 @@ export function debuggerHandlers(be: Backend): Handlers {
           const ok = st === 'ok' ? s >= 200 && s < 300 : st === 'redirect' ? s >= 300 && s < 400 : st === 'client-error' ? s >= 400 && s < 500 : st === 'server-error' ? s >= 500 : !!e.error;
           if (!ok) return false;
         }
-        if (needle && !`${e.method} ${e.url} ${e.application ?? ''} ${e.contentType ?? ''} ${e.status ?? ''}`.toLowerCase().includes(needle)) return false;
+        if (needle) {
+          const line = `${e.method} ${e.url} ${e.application ?? ''} ${e.contentType ?? ''} ${e.status ?? ''}`.toLowerCase();
+          if (line.includes(needle)) return true;
+          if (!deep) return false;
+          const h = (x?: Record<string, string>) => Object.entries(x ?? {}).some(([k, v]) => k.toLowerCase().includes(needle) || v.toLowerCase().includes(needle));
+          return h(e.requestHeaders) || h(e.responseHeaders) || !!e.requestBody?.toLowerCase().includes(needle) || !!e.responseBody?.toLowerCase().includes(needle);
+        }
         return true;
       });
       return out.slice(-limit).map((e) => {
@@ -99,29 +265,34 @@ export function debuggerHandlers(be: Backend): Handlers {
         return rest;
       });
     },
-    /** One exchange whole (bodies included, redacted). */
+    /** One exchange whole (bodies included, redacted), with the Auth inspector's reading of its credentials (never the secret itself). */
     'debug.exchange': ({ id }: { id: string }) => {
       const e = state.exchanges.find((x) => x.id === id);
       if (!e) throw new ApsError('ValidationError', 'That exchange is no longer in the session');
-      return redacted(be, e);
+      return { ...redacted(be, e), auth: authOf(be, e) };
     },
     'debug.bookmark': ({ id, on }: { id: string; on: boolean }) => {
       const e = state.exchanges.find((x) => x.id === id);
       if (e) e.bookmarked = on;
+      touch();
       return true;
     },
     'debug.delete': ({ ids }: { ids: string[] }) => {
       const set = new Set(ids);
       state.exchanges = state.exchanges.filter((e) => !set.has(e.id));
       if (be.debugger) be.debugger.exchanges = state.exchanges;
+      touch();
       return status();
     },
     'debug.clear': () => {
       state.exchanges.length = 0;
       state.proxy?.clear();
+      state.dirty = false;
+      // the window refreshes whoever cleared (a menu, a shortcut, an agent)
+      be.host.emit('debug.exchange', { phase: 'cleared' });
       return status();
     },
-    /** Statistics of the session: by host, by content type, the largest and the slowest. */
+    /** Statistics of the session: by host, by content type, the largest and the slowest, the timeline. */
     'debug.stats': () => {
       const by = <K extends string>(key: (e: DebuggerExchange) => K | undefined) => {
         const m = new Map<K, { count: number; bytes: number; ms: number }>();
@@ -137,10 +308,31 @@ export function debuggerHandlers(be: Backend): Handlers {
         return [...m.entries()].map(([name, v]) => ({ name, ...v })).sort((a, b) => b.bytes - a.bytes);
       };
       const done = state.exchanges.filter((e) => e.durationMs !== undefined);
+      // the overview: requests per time slice (so a burst, a gap or a retry storm shows), and the status mix
+      const times = state.exchanges.map((e) => Date.parse(e.startedAt)).filter((t) => !Number.isNaN(t));
+      const first = times.length ? Math.min(...times) : 0;
+      const last = times.length ? Math.max(...times) : 0;
+      const span = Math.max(1000, last - first);
+      const buckets = Math.min(60, Math.max(10, Math.ceil(span / 1000)));
+      const slice = span / buckets;
+      const timeline = Array.from({ length: buckets }, (_, i) => ({ t: new Date(first + i * slice).toISOString(), count: 0, errors: 0 }));
+      for (const e of state.exchanges) {
+        const t = Date.parse(e.startedAt);
+        if (Number.isNaN(t)) continue;
+        const b = timeline[Math.min(buckets - 1, Math.floor((t - first) / slice))]!;
+        b.count++;
+        if (e.error || (e.status ?? 0) >= 400) b.errors++;
+      }
+      const statuses: Record<string, number> = {};
+      for (const e of state.exchanges) statuses[statusClass(e)] = (statuses[statusClass(e)] ?? 0) + 1;
       return {
         total: state.exchanges.length,
         bytes: state.exchanges.reduce((n, e) => n + e.responseBodyBytes, 0),
         errors: state.exchanges.filter((e) => e.error || (e.status ?? 0) >= 400).length,
+        firstAt: first ? new Date(first).toISOString() : undefined,
+        lastAt: last ? new Date(last).toISOString() : undefined,
+        timeline,
+        statuses,
         hosts: by((e) => e.host).slice(0, 20),
         contentTypes: by((e) => e.contentType?.split(';')[0]?.trim()).slice(0, 20),
         applications: by((e) => e.application).slice(0, 20),
@@ -155,45 +347,48 @@ export function debuggerHandlers(be: Backend): Handlers {
       };
     },
     /** The session as HAR (the same format the history exports), for saving and for other tools. */
-    'debug.har': () => ({
-      log: {
-        version: '1.2',
-        creator: { name: 'TestPion HTTP Debugger', version: '1' },
-        entries: state.exchanges
-          .filter((e) => e.kind === 'http')
-          .map((e) => {
-            const r = redacted(be, e);
-            return {
-              startedDateTime: e.startedAt,
-              time: e.durationMs ?? 0,
-              request: {
-                method: e.method,
-                url: r.url,
-                httpVersion: 'HTTP/1.1',
-                headers: Object.entries(r.requestHeaders).map(([name, value]) => ({ name, value })),
-                queryString: [],
-                cookies: [],
-                headersSize: -1,
-                bodySize: e.requestBodyBytes,
-                ...(r.requestBody ? { postData: { mimeType: e.requestHeaders['content-type'] ?? '', text: r.requestBody } } : {}),
-              },
-              response: {
-                status: e.status ?? 0,
-                statusText: e.statusText ?? '',
-                httpVersion: 'HTTP/1.1',
-                headers: Object.entries(r.responseHeaders ?? {}).map(([name, value]) => ({ name, value })),
-                cookies: [],
-                content: { size: e.responseBodyBytes, mimeType: e.contentType ?? '', text: r.responseBody ?? '' },
-                redirectURL: '',
-                headersSize: -1,
-                bodySize: e.responseBodyBytes,
-              },
-              cache: {},
-              timings: { send: 0, wait: e.waitMs ?? 0, receive: Math.max(0, (e.durationMs ?? 0) - (e.waitMs ?? 0)) },
-              ...(e.application ? { comment: `application: ${e.application}` } : {}),
-            };
-          }),
-      },
-    }),
+    'debug.har': () => exchangesToHar(state.exchanges, be.logger.redactor, ENGINE_VERSION),
+
+    /* ---- sessions: HAR files in the workspace's debugger/ folder (never committed) */
+
+    'debug.sessions': () => {
+      const dir = sessionsDir();
+      if (!existsSync(dir)) return [];
+      return readdirSync(dir)
+        .filter((f) => /\.har$/i.test(f))
+        .map((f) => {
+          const st = statSync(join(dir, f));
+          return { name: basename(f, '.har'), path: join(dir, f), bytes: st.size, savedAt: st.mtime.toISOString(), autosave: basename(f, '.har') === AUTOSAVE };
+        })
+        .sort((a, b) => b.savedAt.localeCompare(a.savedAt));
+    },
+    'debug.saveSession': ({ name }: { name: string }) => {
+      if (!state.exchanges.length) throw new ApsError('ValidationError', 'Nothing captured yet');
+      const r = writeSession(name);
+      state.dirty = false;
+      return r;
+    },
+    /** Open a saved session (or any HAR file by path): its exchanges replace the session, or join it with `append`. */
+    'debug.openSession': ({ name, path, text, append }: { name?: string; path?: string; text?: string; append?: boolean }) => {
+      const raw = text ?? readFileSync(path ? be.ws.safePath(path) : sessionFile(name ?? ''), 'utf8');
+      let har: unknown;
+      try {
+        har = JSON.parse(raw);
+      } catch {
+        throw new ApsError('ValidationError', 'Not a HAR file (JSON with log.entries)');
+      }
+      const loaded = exchangesFromHar(har);
+      if (!loaded.length) throw new ApsError('ValidationError', 'No entries in that HAR file');
+      state.exchanges = append ? [...state.exchanges, ...loaded] : loaded;
+      if (be.debugger) be.debugger.exchanges = state.exchanges;
+      state.dirty = false;
+      be.host.emit('debug.exchange', { phase: 'session' });
+      return { ...status(), loaded: loaded.length };
+    },
+    'debug.deleteSession': ({ name }: { name: string }) => {
+      const f = sessionFile(name);
+      if (existsSync(f)) unlinkSync(f);
+      return true;
+    },
   };
 }

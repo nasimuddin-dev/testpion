@@ -65,6 +65,6 @@ Owner (2026-10-06): "also add all features from the Fiddler". What HTTP Debugger
 ## Phases
 
 - **DBG-1 Proxy and grid** (L): forward proxy (HTTP; HTTPS as opaque CONNECT), the view with grid, filters, per-request viewer, open in a tab / resend, application column, `testpion debug`, MCP list tools, docs, e2e with a local client program.
-- **DBG-2 Capture helpers, sessions, inspectors** (L): system proxy switch, open a browser / terminal with the proxy, sessions with AutoSave, Raw / Hex / Auth inspectors, overview, find in bodies, keyboard shortcuts, Ask the assistant.
+- **DBG-2 Capture helpers, sessions, inspectors** (L, done 2026-10-06): system proxy switch, open a browser / terminal with the proxy, the lines for a shell, sessions in `debugger/` with AutoSave and HAR import / export (`debugger_session` for agents), Raw / Hex / Auth inspectors, the overview (requests over time, status mix), find in bodies, keyboard shortcuts, Ask the assistant (`explain-exchange`).
 - **DBG-3 Rules** (L): ignore, highlight, modify, reply, redirect, breakpoints; presets and profiles; filter presets; compare two exchanges; the rules bar; MCP rule tools.
 - **DBG-4 HTTPS, streams, imports** (XL): the root certificate and MITM, WebSocket / SSE / gRPC capture, SAZ import, the decode panel, HTTP/2 tree.

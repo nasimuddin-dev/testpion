@@ -5,7 +5,7 @@ import { Command } from 'commander';
 import {
   ChainSecretStore,
   createEngineContext,
-  startDebuggerProxy,
+  exchangesToHar, startDebuggerProxy,
   EnvSecretStore,
   McpSession,
   recordingToCollection,
@@ -367,7 +367,7 @@ ${cyan(r.url)}`);
       await new Promise<void>((resolve) => process.once('SIGINT', () => resolve()));
       if (o.out) {
         const entries = proxy.exchanges.filter((e) => e.kind === 'http');
-        writeFileSync(o.out, JSON.stringify({ log: { version: '1.2', creator: { name: 'TestPion HTTP Debugger', version: ENGINE_VERSION }, entries: entries.map((e) => ({ startedDateTime: e.startedAt, time: e.durationMs ?? 0, request: { method: e.method, url: redactor.redactUrl(e.url), httpVersion: 'HTTP/1.1', headers: Object.entries(e.requestHeaders).map(([name, value]) => ({ name, value: redactor.isSensitiveKey(name) ? '***' : value })), queryString: [], cookies: [], headersSize: -1, bodySize: e.requestBodyBytes, ...(e.requestBody ? { postData: { mimeType: e.requestHeaders['content-type'] ?? '', text: redactor.redactString(e.requestBody) } } : {}) }, response: { status: e.status ?? 0, statusText: e.statusText ?? '', httpVersion: 'HTTP/1.1', headers: Object.entries(e.responseHeaders ?? {}).map(([name, value]) => ({ name, value: redactor.isSensitiveKey(name) ? '***' : value })), cookies: [], content: { size: e.responseBodyBytes, mimeType: e.contentType ?? '', text: e.responseBody ? redactor.redactString(e.responseBody) : '' }, redirectURL: '', headersSize: -1, bodySize: e.responseBodyBytes }, cache: {}, timings: { send: 0, wait: e.waitMs ?? 0, receive: Math.max(0, (e.durationMs ?? 0) - (e.waitMs ?? 0)) } })) } }, null, 2));
+        writeFileSync(o.out, JSON.stringify(exchangesToHar(entries, redactor, ENGINE_VERSION), null, 2));
         console.error(`Saved ${entries.length} exchanges to ${o.out}`);
       }
       await proxy.close();

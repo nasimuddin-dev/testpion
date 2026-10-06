@@ -1,4 +1,7 @@
 import { startDebuggerProxy, type DebuggerExchange, type DebuggerProxy } from '../debugger/proxy.js';
+import { exchangesFromHar, exchangesToHar } from '../debugger/har.js';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { Redactor } from '../util/redact.js';
 import { ApsError } from '../errors.js';
 import { str, type Tool } from './tool.js';
@@ -72,6 +75,7 @@ export function debuggerTools(d: { redactor: Redactor }): Tool[] {
           method: str('Only this method'),
           status: { type: 'string', enum: ['ok', 'redirect', 'client-error', 'server-error', 'error'] },
           text: str('Only exchanges whose URL, program or type contains this'),
+          deep: { type: 'boolean', description: 'With text: search headers and bodies too' },
           limit: { type: 'number', description: 'How many (default 200, max 2000)' },
         },
       },
@@ -94,7 +98,12 @@ export function debuggerTools(d: { redactor: Redactor }): Tool[] {
                       : !!e.error;
             if (!ok) return false;
           }
-          if (needle && !`${e.method} ${e.url} ${e.application ?? ''} ${e.contentType ?? ''}`.toLowerCase().includes(needle)) return false;
+          if (needle) {
+            if (`${e.method} ${e.url} ${e.application ?? ''} ${e.contentType ?? ''}`.toLowerCase().includes(needle)) return true;
+            if (!a.deep) return false;
+            const h = (x?: Record<string, string>) => Object.entries(x ?? {}).some(([k, v]) => k.toLowerCase().includes(needle) || v.toLowerCase().includes(needle));
+            return h(e.requestHeaders) || h(e.responseHeaders) || !!e.requestBody?.toLowerCase().includes(needle) || !!e.responseBody?.toLowerCase().includes(needle);
+          }
           return true;
         });
         return { running: !!proxy, url: proxy?.url, total: session.length, exchanges: out.slice(-Math.min(Math.max(Number(a.limit) || 200, 1), 2000)).map((e) => safe(e, false)) };
@@ -108,6 +117,38 @@ export function debuggerTools(d: { redactor: Redactor }): Tool[] {
         const e = session.find((x) => x.id === a.id);
         if (!e) throw new ApsError('ValidationError', `No exchange ${String(a.id)} in the session`);
         return safe(e, true);
+      },
+    },
+    {
+      name: 'debugger_session',
+      write: true,
+      description:
+        "Save the captured session as a HAR file (redacted; every HTTP tool opens it), or open a HAR file (TestPion's or another tool's) into the session for debugger_exchanges. Paths are relative to the working directory.",
+      inputSchema: {
+        type: 'object',
+        properties: {
+          action: { type: 'string', enum: ['save', 'open'] },
+          path: str('The .har file'),
+          append: { type: 'boolean', description: 'With open: add to the session instead of replacing it' },
+        },
+        required: ['action', 'path'],
+      },
+      run: (a) => {
+        const file = resolve(String(a.path));
+        if (a.action === 'save') {
+          writeFileSync(file, JSON.stringify(exchangesToHar(session, red), null, 2));
+          return { saved: file, exchanges: session.length };
+        }
+        let har: unknown;
+        try {
+          har = JSON.parse(readFileSync(file, 'utf8'));
+        } catch (e) {
+          throw new ApsError('ValidationError', `Not a HAR file: ${(e as Error).message}`);
+        }
+        const loaded = exchangesFromHar(har);
+        if (!a.append) session.length = 0;
+        session.push(...loaded);
+        return { loaded: loaded.length, exchanges: session.length };
       },
     },
     {

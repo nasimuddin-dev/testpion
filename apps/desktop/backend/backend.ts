@@ -1347,6 +1347,8 @@ export class Backend {
     for (const m of this.mocks.values()) await m.close();
     await this.gqlMock?.close();
     await this.recorder?.close();
+    await this.debugger?.proxy?.close();
+    await this.debugger?.release?.();
     for (const s of this.gqlSubs.values()) s.stop();
     await this.cookieStore?.flush().catch(() => undefined);
     this.store?.close();

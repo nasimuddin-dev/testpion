@@ -14,6 +14,7 @@ export const GITIGNORE_LINES = [
   'baselines/',
   'trash/',
   '.local/',
+  'debugger/',
   'database.sqlite*',
   'metadata.jsonl',
   '.template-offered.json',
