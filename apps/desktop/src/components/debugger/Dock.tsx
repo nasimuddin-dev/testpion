@@ -1,6 +1,5 @@
 import { X } from 'lucide-react';
 import { useState } from 'react';
-import { Tabs } from '../ui';
 import { ConvertTool } from '../DebuggerTools';
 import type { Rule, RulesState } from '../DebuggerRules';
 import { AutoReplyPanel, FilterPanel, HighlightPanel, HighlightRuleEditor, ModifyPanel } from './DockRules';
@@ -74,7 +73,6 @@ export function Dock({
         {panel === 'performance' && <PerformancePanel rows={rows} onPick={onPick} />}
         {panel === 'convert' && <ConvertTool />}
       </div>
-      <Tabs value={panel} onChange={(p) => (p === 'highlight-rule' && setEditing(undefined), onPanel(p))} tabs={(Object.keys(TITLES) as DockPanel[]).map((id) => ({ id, label: TITLES[id] }))} />
     </aside>
   );
 }

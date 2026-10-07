@@ -120,7 +120,7 @@ const steps = [
 ];
 
 module.exports = withExpect(steps, {
-  'traffic-in-the-grid': /^columns: #,Offset,Duration,Method,Version,URL,Status,Type,Size,Speed,Application,Domain,IP Address,User \| rows: 4 \| totals: true$/,
+  'traffic-in-the-grid': /^columns: #,Offset \(s\),Duration \(s\),Method,Version,URL,Status,Type,Size \(KB\),Speed \(KB\/s\),Application,Domain,IP Address,User \| rows: 4 \| totals: true$/,
   'rail-opens-summary-and-timeline': /^summary: summary:Main,Connection,Request Details,Response Details,Timing \| phases: sending,waiting,receiving \| multi: Selected Items 2$/,
   'structure-by-domain': /^domain: 127\.0\.0\.1:4010 \| Total 4 /,
   'row-menu-filters-out': /^added: true \| dock: filter \| filtered: true \| others listed: true \| hits: [1-9]\d*$/,

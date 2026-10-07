@@ -138,7 +138,9 @@ function PropertyTable({ groups }: { groups: Array<{ title: string; rows: Array<
                 </td>
               </tr>
               {open &&
-                g.rows.map(([k, v]) => (
+                g.rows
+                  .filter(([, v]) => v !== undefined && v !== null && v !== '')
+                  .map(([k, v]) => (
                   <tr key={k} className="border-b border-line/60 hover:bg-hover" data-summary-row={k}>
                     <td className="pl-6 pr-2 py-1 w-2/5 text-muted whitespace-nowrap">{k}</td>
                     <td className="px-2 py-1 mono break-all">{v ?? ''}</td>

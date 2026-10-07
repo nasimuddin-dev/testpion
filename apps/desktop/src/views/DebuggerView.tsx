@@ -458,11 +458,11 @@ export function DebuggerView() {
           <div className="flex-1 min-w-0">
             <Split id="debugger-dock" initial={74} collapsedSecond={!dock}>
               <div className="h-full flex flex-col min-h-0 outline-none" tabIndex={0} onKeyDown={onKey} aria-label="Captured exchanges">
-                {status?.running && !status.decrypt && httpsBanner && (
+                {status?.running && !status.decrypt && httpsBanner && rows.some((r) => r.kind === 'tunnel') && (
                   <div className="flex items-center gap-2 px-3 py-1 border-b border-line text-xs bg-accent-soft" data-https-banner>
                     <Lock size={12} className="text-accent" />
                     <span>
-                      <b>HTTPS inspection is off</b> — HTTPS shows as a tunnel by host; decrypt it to see the requests inside (programs must trust the TestPion root certificate).
+                      <b>HTTPS shows as tunnels</b> — decrypt it to see the requests inside (the program must trust the TestPion root certificate).
                     </span>
                     <Button
                       size="sm"
@@ -512,6 +512,17 @@ export function DebuggerView() {
                   </div>
                 )}
                 <div className="flex gap-2 p-2 border-b border-line items-center flex-wrap" data-filter-bar>
+                  <Input
+                    ref={filterBox}
+                    className="w-60"
+                    placeholder={filter.deep ? 'Find in URLs, headers and bodies' : 'Filter requests'}
+                    aria-label="Filter exchanges"
+                    value={filter.text}
+                    onChange={(e) => setFilter({ ...filter, text: e.target.value })}
+                  />
+                  <label className="flex items-center gap-1 text-xs text-muted whitespace-nowrap" title="Search headers and bodies too">
+                    <input type="checkbox" checked={filter.deep} onChange={(e) => setFilter({ ...filter, deep: e.target.checked })} /> In bodies
+                  </label>
                   <Select aria-label="Application" value={filter.application} onChange={(e) => setFilter({ ...filter, application: e.target.value })}>
                     <option value="">All Applications</option>
                     {seen.apps.map((h) => (
@@ -584,17 +595,6 @@ export function DebuggerView() {
                   >
                     <Filter size={12} /> {(rules?.rules ?? []).filter((r) => r.enabled && (r.kind === 'ignore' || r.kind === 'only')).length}
                   </button>
-                  <Input
-                    ref={filterBox}
-                    className="w-56"
-                    placeholder={filter.deep ? 'Find in URLs, headers and bodies' : 'Filter requests'}
-                    aria-label="Filter exchanges"
-                    value={filter.text}
-                    onChange={(e) => setFilter({ ...filter, text: e.target.value })}
-                  />
-                  <label className="flex items-center gap-1 text-xs text-muted whitespace-nowrap" title="Search headers and bodies too">
-                    <input type="checkbox" checked={filter.deep} onChange={(e) => setFilter({ ...filter, deep: e.target.checked })} /> In bodies
-                  </label>
                 </div>
                 <div className="flex-1 min-h-0">
                   <Split id="debugger" direction="vertical" initial={58}>
@@ -605,9 +605,11 @@ export function DebuggerView() {
                         <Empty icon={<Bug size={26} />} title={status?.running ? 'Waiting for traffic' : 'Not capturing'}>
                           {status?.running ? (
                             <>
-                              Point a program at <span className="mono">{status.url}</span>: <b>Capture</b> opens a browser or a terminal through it, or sets the system proxy; for a shell{' '}
-                              <span className="mono">HTTP_PROXY={status.url}</span>, for Chrome <span className="mono">--proxy-server={status.url}</span>. HTTPS shows as a tunnel by host until you turn on
-                              <b> Decrypt HTTPS</b>.
+                              <b>Capture</b> opens a browser or a terminal through the proxy; or point a program at{' '}
+                              <button type="button" className="mono text-fg underline decoration-dotted" title="Copy the proxy address" onClick={() => copy(status.url ?? '', 'the proxy address')}>
+                                {status.url}
+                              </button>{' '}
+                              yourself (<span className="mono">HTTP_PROXY</span>, <span className="mono">--proxy-server</span>). Requests appear here as they happen.
                             </>
                           ) : (
                             <>
