@@ -50,7 +50,7 @@ import { RequestEditor } from './rest/RequestEditor';
 import { SaveModal, ImportModal } from './rest/dialogs';
 import { saveAsTestFile } from '../lib/save-test';
 import { RequestBreadcrumb } from '../components/RequestBreadcrumb';
-import { refreshCollections, useCollections } from '../lib/collections-store';
+import { currentCollections, refreshCollection, refreshCollections, useCollections } from '../lib/collections-store';
 
 
 /** Production environments where the user chose "don't ask again" (this session only). */
@@ -140,11 +140,8 @@ export function RestView() {
   const [liveEvents, setLiveEvents] = useState<Record<string, SseEvent[]>>({});
 
   useEffect(() => drafts.save({ tabs, active }), [tabs, active]);
-  // the shared list (lib/collections-store): fetched once for the sidebar, this view and the breadcrumbs
+  // the shared list (lib/collections-store): fetched once for the sidebar, this view and the breadcrumbs (useCollections)
   const loadCollections = refreshCollections;
-  useEffect(() => {
-    void loadCollections();
-  }, [loadCollections]);
   useEffect(
     () =>
       on<Array<{ id: string; chunk: string }>>('http.chunks', (items) => {
@@ -267,8 +264,10 @@ export function RestView() {
       setTabs((ts) => [...ts, t]);
       setActive(t.id);
     } else if (p?.collectionId) {
-      const cols = await refreshCollections();
-      const c = cols.find((x) => x.id === p.collectionId);
+      // the shared list is kept current by the saves' events: open from it (reading every collection again for one
+      // request re-rendered the whole explorer); a request saved a moment ago and not in it yet is read on its own
+      let c = currentCollections().find((x) => x.id === p.collectionId);
+      if (!c || !findNode(c.items, p.requestId)) c = await call<Collection>('col.get', { id: p.collectionId }).catch(() => undefined);
       const n = c && findNode(c.items, p.requestId);
       if (c && n) openRequest(c, n);
       // "More code snippets…" in the collection tree
@@ -330,12 +329,11 @@ export function RestView() {
 
   const saveCollection = async (c: Collection) => {
     await call('col.save', c);
-    await loadCollections();
+    await refreshCollection(c.id);
   };
 
   const saveTab = async (collectionId: string, name: string, folderId?: string) => {
-    const cols = await call<Collection[]>('col.list');
-    const c = cols.find((x) => x.id === collectionId);
+    const c = await call<Collection>('col.get', { id: collectionId }).catch(() => undefined);
     if (!c) return useApp.getState().toast('That collection no longer exists — pick another one', 'error');
     const exists = tab.requestId ? findNode(c.items, tab.requestId) : undefined;
     // examples are saved on their own, so keep what is on disk

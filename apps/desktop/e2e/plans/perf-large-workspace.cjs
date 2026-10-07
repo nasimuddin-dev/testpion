@@ -6,7 +6,9 @@ const { withExpect } = require('../lib.cjs');
 const { writeFileSync } = require('node:fs');
 const { join } = require('node:path');
 
-const FOLDERS = 25;
+// TESTPION_PERF_SCALE=6 makes it 3,000 requests (a big Postman import), for measuring by hand; the suite runs 500
+const SCALE = Math.max(1, Number(process.env.TESTPION_PERF_SCALE) || 1);
+const FOLDERS = 25 * SCALE;
 const PER_FOLDER = 20;
 
 /** A big collection in the fresh workspace before the app starts. */
@@ -126,9 +128,9 @@ const num = (s, key) => Number((new RegExp(key + ' ms: (\\d+)').exec(s) || [])[1
 module.exports = withExpect(
   steps,
   {
-    'open-and-expand': (r) => /^rows: 5\d\d \|/.test(r) && num(r, 'expand') < 1500 ? undefined : 'slow or wrong: ' + r,
+    'open-and-expand': (r) => (SCALE > 1 || /^rows: 5\d\d \|/.test(r)) && num(r, 'expand') < 1500 ? undefined : 'slow or wrong: ' + r,
     'filter-tree': (r) => num(r, 'max keystroke') < 200 ? undefined : 'slow: ' + r,
-    'open-tabs-and-type': (r) => /^tabs: 1[23] \|/.test(r) && num(r, 'open 12') < 1500 && num(r, 'max keystroke') < 150 && num(r, '10 switches') < 1200 ? undefined : 'slow or wrong: ' + r,
+    'open-tabs-and-type': (r) => (SCALE > 1 || /^tabs: 1[23] \|/.test(r)) && num(r, 'open 12') < 1500 && num(r, 'max keystroke') < 150 && num(r, '10 switches') < 1200 ? undefined : 'slow or wrong: ' + r,
     'save-and-refresh': (r) => num(r, 'save to tree') < 3000 ? undefined : 'slow: ' + r,
   },
   { prepare: bigCollection },

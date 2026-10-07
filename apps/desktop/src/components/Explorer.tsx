@@ -314,11 +314,12 @@ export function Explorer() {
   });
   const openRequestId = tabItem ?? navItem;
 
-  const load = useCallback(async () => {
+  /** The explorer's own lists; the collections too when asked (on a change the shared list refreshes them itself). */
+  const load = useCallback(async (withCollections = true) => {
     const quiet = <T,>(p: Promise<T>, fallback: T) => p.catch(() => fallback);
     const empty: Library<unknown> = { folders: [], items: [] };
     const [, g, w, s, sp, mf, sf] = await Promise.all([
-      refreshCollections(),
+      withCollections ? refreshCollections() : undefined,
       quiet(call<Library<unknown>>('lib.get', { kind: 'grpc' }), empty),
       quiet(call<Library<unknown>>('lib.get', { kind: 'websocket' }), empty),
       quiet(call<Array<McpServerConfig & { connected?: boolean }>>('mcp.servers'), []),
@@ -343,7 +344,7 @@ export function Explorer() {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const off = on('data.changed', () => {
       clearTimeout(timer);
-      timer = setTimeout(() => void load(), 120);
+      timer = setTimeout(() => void load(false), 120);
     });
     return () => {
       clearTimeout(timer);

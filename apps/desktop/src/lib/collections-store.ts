@@ -25,12 +25,15 @@ export function refreshCollections(): Promise<Collection[]> {
 }
 
 /** Read only the collections that were saved and put them in the list (a save of one does not reload them all). */
-async function refreshSome(ids: string[]): Promise<void> {
+export async function refreshSome(ids: string[]): Promise<void> {
   const fresh = await Promise.all(ids.map((id) => call<Collection>('col.get', { id }).catch(() => undefined)));
   if (fresh.some((c) => !c)) return void refreshCollections();
   const byId = new Map(fresh.map((c) => [c!.id, c!]));
   useStore.setState((st) => ({ list: st.list.map((c) => byId.get(c.id) ?? c) }));
 }
+
+/** After saving one collection: read it back (callers that go on with the fresh list await it). */
+export const refreshCollection = (id: string) => refreshSome([id]);
 
 let wired = false;
 function wire() {
