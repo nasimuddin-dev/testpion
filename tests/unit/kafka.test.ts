@@ -93,7 +93,7 @@ describe('Kafka', () => {
     await s.closeAndWait();
   });
 
-  it('a topic added again reads what was asked: its history from the beginning, and no replay for new messages', async () => {
+  it('a topic added again reads what was asked: its history from the beginning, or only what comes after (new messages)', async () => {
     const s = new KafkaSession(url);
     const seen: KafkaMessage[] = [];
     s.onMessage((m) => seen.push(m));
@@ -107,10 +107,12 @@ describe('Kafka', () => {
     await s.subscribe('again-topic', { fromBeginning: true });
     await waitFor(() => got('c1') === 2);
     await s.unsubscribe('again-topic');
-    // produced while not read, then added for new messages only: not replayed
+    // produced while not read, then added for new messages: not replayed; one produced right after is read
     await s.produce('again-topic', 'c2', { key: 'c2' });
     await s.subscribe('again-topic', { fromBeginning: false });
-    await new Promise((r) => setTimeout(r, 1500));
+    await s.produce('again-topic', 'c3', { key: 'c3' });
+    await waitFor(() => got('c3') === 1);
+    await new Promise((r) => setTimeout(r, 300));
     expect(got('c2')).toBe(0);
     expect(got('c1')).toBe(2);
     await s.closeAndWait();

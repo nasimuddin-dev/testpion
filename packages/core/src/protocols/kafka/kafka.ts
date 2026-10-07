@@ -188,6 +188,9 @@ export class KafkaSession {
     });
     await consumer.connect();
     await consumer.subscribe({ topic, fromBeginning });
+    // "new messages" means from now: the end of each partition when asked (a consumer works out "latest" itself only
+    // when it first fetches, and a message produced in between was skipped)
+    const ends = fromBeginning ? undefined : await this.admin?.fetchTopicOffsets(topic).catch(() => undefined);
     // resolves once the consumer fetches (its partitions assigned and its starting offsets known), so a message
     // produced right after is read, also when only new messages were asked for
     const joined = new Promise<void>((resolve) => {
@@ -208,6 +211,7 @@ export class KafkaSession {
         });
       },
     });
+    for (const p of ends ?? []) consumer.seek({ topic, partition: p.partition, offset: p.high });
     this.consumers.set(topic, consumer);
     await joined;
   }
