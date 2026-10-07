@@ -44,10 +44,13 @@ For Claude Code: `claude mcp add testpion -- testpion mcp-server -w /path/to/my-
 |---|---|
 | `-w, --workspace` | Workspace name or directory (default: the nearest `workspace.json` above the current directory). |
 | `--read-only` | Only the browsing tools. The agent can read collections and docs but not send requests. |
+| `--profile minimal` | List only the tools of the common jobs (find, send, run, check, import, generate, watch: about 25). For agents that load every listed tool into their context (Cursor, Copilot, Cline); Claude Code loads tools on demand and does well with the full list. `search_tools` finds the others and any tool it names can be called. |
 | `--allow-production` | Allow sending to environments marked as **production**. They are refused by default. |
 | `--block-private-networks` | Refuse requests to localhost, private networks and cloud metadata addresses (and local stdio MCP servers). Use it when agents you don't fully control get the server. `--allow-host` keeps chosen hosts reachable. |
 
 ## Tools
+
+Not sure which tool? **`search_tools`** takes what you want to do ("capture traffic", "compare two runs", "mock an endpoint") and answers with the matching tools, a line each and their required arguments.
 
 | Tool | What it does |
 |---|---|

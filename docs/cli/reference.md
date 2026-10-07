@@ -21,6 +21,7 @@ testpion fuzz <spec>           Fuzz an API from its OpenAPI document: server err
 testpion vars move <c> --to <envs> Move collection variables into environments (each can set its own value)
 testpion tidy <collection>     Duplicate requests, typed-in hosts, empty folders, unused variables (--remove-* fixes)
 testpion replace <c> <find> <with> Find and replace across a collection's requests (preview; --apply saves)
+testpion agent-info               What an AI agent needs to use TestPion here, as JSON (workspace, commands, exit codes, MCP setup)
 testpion tests-from-spec <spec> Write a first test suite from an API definition (examples and invalid requests)
 testpion integration-suite <spec|collection> Write an integration suite: a flow per resource (create, read, update, list, delete), the login first
 testpion generate-data <name>  Generate rows of test data into datasets/ from a JSON schema or an API operation

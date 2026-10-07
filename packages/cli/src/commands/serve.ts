@@ -45,10 +45,12 @@ export function registerServeCommands(program: Command): void {
     .description('serve a workspace to AI agents over MCP (stdio): list and read collections, send requests, run collections')
     .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
     .option('--read-only', 'only the browsing tools: no requests are sent')
+    .option('--profile <name>', "which tools are listed: full (every tool; the default) or minimal (the common jobs, for agents that load every listed tool; search_tools finds the rest)", 'full')
     .option('--allow-production', 'allow sending to environments marked as production')
     .option('--block-private-networks', 'refuse requests to localhost, private and cloud-metadata addresses (for shared or hosted use)')
     .option('--allow-host <host...>', 'with --block-private-networks: hosts that stay reachable')
-    .action(async (o: { workspace?: string; readOnly?: boolean; allowProduction?: boolean; blockPrivateNetworks?: boolean; allowHost?: string[] }) => {
+    .action(async (o: { workspace?: string; readOnly?: boolean; profile?: string; allowProduction?: boolean; blockPrivateNetworks?: boolean; allowHost?: string[] }) => {
+      if (o.profile && o.profile !== 'full' && o.profile !== 'minimal') throw new CliError(`--profile is full or minimal, not ${o.profile}`, EXIT.CONFIG_ERROR);
       if (o.blockPrivateNetworks) setNetworkPolicy({ blockPrivateNetworks: true, allowHosts: o.allowHost ?? [] });
       // stdout carries the MCP protocol: everything else goes to stderr
       const mgr = new WorkspaceManager();
@@ -60,7 +62,7 @@ export function registerServeCommands(program: Command): void {
       }
       console.error(dim(`TestPion MCP server for "${store.workspace.name}"${o.readOnly ? ' (read-only)' : ''} on stdio`));
       try {
-        await serveTestPionMcp({ store, secrets: new ChainSecretStore([new EnvSecretStore()]), settings: mgr.loadSettings(), readOnly: o.readOnly, allowProduction: o.allowProduction, version: ENGINE_VERSION });
+        await serveTestPionMcp({ store, secrets: new ChainSecretStore([new EnvSecretStore()]), settings: mgr.loadSettings(), readOnly: o.readOnly, profile: o.profile as 'full' | 'minimal' | undefined, allowProduction: o.allowProduction, version: ENGINE_VERSION });
       } finally {
         store.close();
       }

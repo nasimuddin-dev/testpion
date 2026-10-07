@@ -270,6 +270,27 @@ describe('example workspace (end-to-end)', () => {
     expect(JSON.parse(readFileSync(join(dir, 'pm-rt', 'summary.json'), 'utf8'))).toMatchObject({ total: 7, passed: 7 });
   });
 
+  it('CLI: `testpion mcp-server --profile minimal` lists the common tools; search_tools finds the rest, which still run', async () => {
+    const env = { TESTPION_HOME: join(dir, 'home') } as Record<string, string>;
+    const cli = resolve('packages/cli/bin/testpion.js');
+    const s = new McpSession({ id: 'min', name: 'testpion', transport: 'stdio', command: process.execPath, args: [cli, 'mcp-server', '-w', ws.root, '--profile', 'minimal'], env });
+    await s.connect(20_000);
+    try {
+      const names = (await s.listTools()).map((t) => t.name);
+      expect(names.length).toBeLessThan(35);
+      expect(names).toEqual(expect.arrayContaining(['search_tools', 'send_request', 'run_tests', 'generate_flows', 'what_needs_attention']));
+      expect(names).not.toContain('debugger_capture');
+      // a tool found by what the agent wants to do, with its required arguments
+      const found = JSON.parse(mcpResultBody(await s.callTool('search_tools', { query: 'capture HTTP traffic of a program' })).text) as { tools: Array<{ name: string; required: string[] }> };
+      expect(found.tools.map((t) => t.name)).toContain('debugger_capture');
+      // an unlisted tool can still be called
+      const r = await s.callTool('list_datasets', {});
+      expect(r.isError).toBeFalsy();
+    } finally {
+      await s.close();
+    }
+  });
+
   it('CLI: `testpion mcp-server` gives AI agents the workspace as MCP tools', async () => {
     const env = { TESTPION_HOME: join(dir, 'home') } as Record<string, string>;
     const cli = resolve('packages/cli/bin/testpion.js');
@@ -277,7 +298,7 @@ describe('example workspace (end-to-end)', () => {
     await s.connect(20_000);
     try {
       const names = (await s.listTools()).map((t) => t.name).sort();
-      expect(names).toEqual(['add_dataset_row', 'api_coverage', 'api_fuzz', 'check_certificate', 'ci_config', 'collection_docs', 'collection_health', 'collection_openapi', 'collection_tidy', 'collection_timing', 'compare_environments', 'compare_request_across_environments', 'compare_responses', 'compare_runs', 'create_collection', 'create_folder', 'debugger_capture', 'debugger_exchange', 'debugger_exchanges', 'debugger_rules', 'debugger_session', 'debugger_stats', 'decode_jwt', 'delete_request', 'environment_matrix', 'export_traces', 'flaky_tests', 'generate_dataset', 'generate_flows', 'generate_tests', 'get_request', 'git_conflicts', 'git_diff', 'git_log', 'git_propose_commit', 'git_resolve', 'git_status', 'graphql_operation', 'graphql_subscribe', 'grpc_call', 'import_definition', 'lint_tests', 'list_certificates', 'list_collections', 'list_datasets', 'list_environments', 'list_evaluations', 'list_mcp_servers', 'list_monitors', 'list_requests', 'list_tests', 'llm_usage', 'load_history', 'load_test', 'mcp_call_tool', 'mcp_server_tools', 'mcp_tool_usage', 'monitor_requests', 'monitor_results', 'monitor_uptime', 'move_request', 'move_variables_to_environments', 'openapi_diff', 'openapi_lint', 'openapi_outline', 'parse_request_snippet', 'realtime_exchange', 'recent_failures', 'rename_variable', 'reorder_environments', 'replace_in_collection', 'request_history', 'response_time_stats', 'review_result', 'run_breakdown', 'run_collection', 'run_evaluation', 'run_monitor', 'run_reviews', 'run_tests', 'save_request', 'save_test', 'score_trend', 'security_review', 'send_request', 'set_collection_variable', 'set_environment_variable', 'set_request_checks', 'test_history', 'testpion_guide', 'unused_variables', 'update_request', 'variable_flow', 'variable_usages', 'what_needs_attention', 'workspace_activity', 'write_test_file']);
+      expect(names).toEqual(['add_dataset_row', 'api_coverage', 'api_fuzz', 'check_certificate', 'ci_config', 'collection_docs', 'collection_health', 'collection_openapi', 'collection_tidy', 'collection_timing', 'compare_environments', 'compare_request_across_environments', 'compare_responses', 'compare_runs', 'create_collection', 'create_folder', 'debugger_capture', 'debugger_exchange', 'debugger_exchanges', 'debugger_rules', 'debugger_session', 'debugger_stats', 'decode_jwt', 'delete_request', 'environment_matrix', 'export_traces', 'flaky_tests', 'generate_dataset', 'generate_flows', 'generate_tests', 'get_request', 'git_conflicts', 'git_diff', 'git_log', 'git_propose_commit', 'git_resolve', 'git_status', 'graphql_operation', 'graphql_subscribe', 'grpc_call', 'import_definition', 'lint_tests', 'list_certificates', 'list_collections', 'list_datasets', 'list_environments', 'list_evaluations', 'list_mcp_servers', 'list_monitors', 'list_requests', 'list_tests', 'llm_usage', 'load_history', 'load_test', 'mcp_call_tool', 'mcp_server_tools', 'mcp_tool_usage', 'monitor_requests', 'monitor_results', 'monitor_uptime', 'move_request', 'move_variables_to_environments', 'openapi_diff', 'openapi_lint', 'openapi_outline', 'parse_request_snippet', 'realtime_exchange', 'recent_failures', 'rename_variable', 'reorder_environments', 'replace_in_collection', 'request_history', 'response_time_stats', 'review_result', 'run_breakdown', 'run_collection', 'run_evaluation', 'run_monitor', 'run_reviews', 'run_tests', 'save_request', 'save_test', 'score_trend', 'search_tools', 'security_review', 'send_request', 'set_collection_variable', 'set_environment_variable', 'set_request_checks', 'test_history', 'testpion_guide', 'unused_variables', 'update_request', 'variable_flow', 'variable_usages', 'what_needs_attention', 'workspace_activity', 'write_test_file']);
       const text = async (tool: string, args: Record<string, unknown> = {}) => {
         const r = await s.callTool(tool, args);
         return { isError: r.isError, text: mcpResultBody(r).text };

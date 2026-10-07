@@ -50,6 +50,7 @@ import { openApiTools } from './openapi-tools.js';
 import { debuggerTools } from './debugger-tools.js';
 import { historyTools } from './history-tools.js';
 import { str, withEnvironmentSecrets, type Tool } from './tool.js';
+import { MINIMAL_TOOLS, searchTool } from './search-tools.js';
 import { commandLine, isCommandTrusted } from '../storage/trust.js';
 import { McpSession } from '../protocols/mcp/client.js';
 import { runCollection } from '../runner/collection-run.js';
@@ -93,12 +94,18 @@ export interface TestPionMcpOptions {
   settings: AppSettings;
   /** Only the browsing tools (no requests are sent). */
   readOnly?: boolean;
+  /**
+   * Which tools are listed: `full` (every tool; the default) or `minimal` (the tools of the common jobs, for hosts
+   * that load every listed tool into the context; search_tools finds the rest, and any tool can be called).
+   */
+  profile?: 'minimal' | 'full';
   /** Allow sending to environments marked as production (off by default). */
   allowProduction?: boolean;
   version?: string;
 }
 
 const BODY_CHARS = 20_000;
+
 
 
 
@@ -1379,16 +1386,18 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
     }),
   ];
   const tools = withEnvironmentSecrets(store, all.filter((t) => !(opts.readOnly && t.write)));
+  tools.push(searchTool(tools, (name, write) => toolAnnotations(name, write).title));
+  const listed = opts.profile === 'minimal' ? tools.filter((t) => MINIMAL_TOOLS.has(t.name)) : tools;
 
   const server = new Server(
     { name: 'testpion', version: opts.version ?? ENGINE_VERSION },
     {
       capabilities: { tools: {}, resources: {}, prompts: {} },
-      instructions: `TestPion workspace "${store.workspace.name}". what_needs_attention lists what is failing or about to (monitors, certificates, runs, requests, flaky tests). Use list_collections and list_requests to find requests, get_request or collection_docs to understand them${opts.readOnly ? '' : ', send_request to call one and run_collection to run tests'}. list_monitors and monitor_results show scheduled checks${opts.readOnly ? '' : ' (run_monitor runs one now)'}. parse_request_snippet reads a cURL / fetch / PowerShell command${opts.readOnly ? '' : ' and save_request stores it in a collection (secrets become {{variables}})'}. Values of secrets are never returned. Read testpion_guide (or the testpion://guide resource) for the check types and the test file format before writing tests${opts.readOnly ? '' : ' (set_request_checks, write_test_file)'}; the prompts investigate_failures, write_tests, debug_request, api_health_report and import_and_test walk through the common jobs.`,
+      instructions: `TestPion workspace "${store.workspace.name}". what_needs_attention lists what is failing or about to (monitors, certificates, runs, requests, flaky tests). Use list_collections and list_requests to find requests, get_request or collection_docs to understand them${opts.readOnly ? '' : ', send_request to call one and run_collection to run tests'}. list_monitors and monitor_results show scheduled checks${opts.readOnly ? '' : ' (run_monitor runs one now)'}. parse_request_snippet reads a cURL / fetch / PowerShell command${opts.readOnly ? '' : ' and save_request stores it in a collection (secrets become {{variables}})'}. Values of secrets are never returned. Read testpion_guide (or the testpion://guide resource) for the check types and the test file format before writing tests${opts.readOnly ? '' : ' (set_request_checks, write_test_file)'}; the prompts investigate_failures, write_tests, debug_request, api_health_report and import_and_test walk through the common jobs. ${opts.profile === 'minimal' ? 'This is the minimal profile: the listed tools cover the common jobs; search_tools finds the others (mocks, the debugger, git, load tests, certificates …), and any tool it names can be called.' : 'search_tools finds a tool by what you want to do.'}`,
     },
   );
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: tools.map(({ name, description, inputSchema, write }) => {
+    tools: listed.map(({ name, description, inputSchema, write }) => {
       const annotations = toolAnnotations(name, !!write);
       return { name, title: annotations.title, description, inputSchema, annotations };
     }),

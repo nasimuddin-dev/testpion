@@ -59,6 +59,14 @@ export function CollectionsView() {
   const [tab, setTab] = useState<'overview' | 'requests' | 'variables' | 'auth' | 'scripts' | 'docs' | 'run' | 'mock'>('requests');
   const [runFolder, setRunFolder] = useState<string>();
   const [importing, setImporting] = useState(false);
+  const newCollection = async () => {
+    const name = await promptText('New collection', { message: 'Collection name', placeholder: 'My API', okLabel: 'Create' });
+    if (name) {
+      const id = uid('col-');
+      await save({ schemaVersion: '1.0', id, name, version: 0, variables: [], items: [], updatedAt: '' });
+      setSel(id);
+    }
+  };
   const load = useCallback(async () => {
     const c = await call<Collection[]>('col.list');
     setCols(c);
@@ -179,19 +187,7 @@ export function CollectionsView() {
                     ];
                   })()}
                 />
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  icon={<FolderPlus size={12} />}
-                  onClick={async () => {
-                    const name = await promptText('New collection', { message: 'Collection name', placeholder: 'My API', okLabel: 'Create' });
-                    if (name) {
-                      const id = uid('col-');
-                      await save({ schemaVersion: '1.0', id, name, version: 0, variables: [], items: [], updatedAt: '' });
-                      setSel(id);
-                    }
-                  }}
-                >
+                <Button size="sm" variant="ghost" icon={<FolderPlus size={12} />} onClick={() => void newCollection()}>
                   New
                 </Button>
                 <IconButton label="Record traffic into a collection (reverse proxy)" onClick={() => useApp.getState().set({ recordOpen: true })}>
@@ -213,8 +209,21 @@ export function CollectionsView() {
               </button>
             ))}
             {!cols.length && (
-              <Empty icon={<FolderTree size={24} />} title="No collections">
-                Create one or import OpenAPI, Postman, Insomnia, Bruno, Hoppscotch or HAR.
+              <Empty
+                icon={<FolderTree size={24} />}
+                title="No collections"
+                action={
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="primary" icon={<FolderPlus size={12} />} onClick={() => void newCollection()}>
+                      New collection
+                    </Button>
+                    <Button size="sm" icon={<Upload size={12} />} onClick={() => setImporting(true)}>
+                      Import…
+                    </Button>
+                  </div>
+                }
+              >
+                A collection groups requests that share a base URL, auth and scripts; run it, mock it, or watch it with a monitor. Import OpenAPI, Postman, Insomnia, Bruno, Hoppscotch or HAR.
               </Empty>
             )}
           </div>

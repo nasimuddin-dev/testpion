@@ -7,6 +7,7 @@ import { runMenuCommand } from '../menu-commands';
 import type { Collection, CollectionNode, HttpRequestSpec } from '../types';
 import { timeAgo, uid, plural } from '../lib/format';
 import { LinkButton, Badge, cx, Empty, Kbd, Segmented, statusTone } from '../components/ui';
+import { CheckCircle2, Circle } from 'lucide-react';
 import { ActivityCharts, type Activity } from '../components/ActivityCharts';
 import { AttentionCard } from '../components/AttentionCard';
 import { RecentRuns } from '../components/charts';
@@ -48,6 +49,48 @@ const greeting = () => {
   const h = new Date().getHours();
   return h < 5 ? 'Working late' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
 };
+
+/**
+ * The first steps in a new workspace, each a button, ticked from what the workspace holds (a request sent, a
+ * collection, an environment, a test run); gone once all are done, or hidden with "Hide".
+ */
+function GetStarted({ steps, onHide }: { steps: Array<{ id: string; label: string; text: string; done: boolean; onClick(): void }>; onHide(): void }) {
+  const done = steps.filter((s) => s.done).length;
+  return (
+    <section className="rounded-2xl border border-accent/40 bg-accent/5 px-5 py-4" aria-label="Get started">
+      <div className="flex items-center gap-3">
+        <h2 className="text-sm font-semibold">Get started</h2>
+        <span className="text-xs text-muted">
+          {done} of {steps.length} done
+        </span>
+        <span aria-hidden className="h-1.5 flex-1 max-w-40 rounded-full bg-hover overflow-hidden">
+          <span className="block h-full bg-accent rounded-full transition-all" style={{ width: `${(done / steps.length) * 100}%` }} />
+        </span>
+        <LinkButton className="ml-auto text-xs" onClick={onHide}>
+          Hide
+        </LinkButton>
+      </div>
+      <ol className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        {steps.map((s, i) => (
+          <li key={s.id}>
+            <button
+              onClick={s.onClick}
+              className={cx('w-full h-full text-left rounded-xl border px-3 py-2.5 flex items-start gap-2.5 transition-colors', s.done ? 'border-line bg-bg/60 text-muted' : 'border-line bg-bg hover:border-accent/60 hover:bg-hover')}
+            >
+              {s.done ? <CheckCircle2 size={16} className="text-ok shrink-0 mt-0.5" aria-label="done" /> : <Circle size={16} className="text-muted shrink-0 mt-0.5" aria-hidden />}
+              <span className="min-w-0">
+                <span className={cx('block text-sm font-medium', s.done && 'line-through decoration-muted/60')}>
+                  {i + 1}. {s.label}
+                </span>
+                <span className="block text-xs text-muted mt-0.5">{s.text}</span>
+              </span>
+            </button>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
 
 function Card({ title, icon, action, children }: { title: string; icon: ReactNode; action?: ReactNode; children: ReactNode }) {
   return (
@@ -119,6 +162,16 @@ export function HomeView() {
     }
   };
   const open = useApp((s) => s.openIntent);
+  // the first steps card: until every step is done (data says), or hidden by the person
+  const [getStartedHidden, setGetStartedHidden] = useState(() => {
+    try {
+      return localStorage.getItem('aps.home.getStarted') === 'hidden';
+    } catch {
+      return false;
+    }
+  });
+  const allDone = recent.length > 0 && cols.length > 0 && (ws?.environments.length ?? 0) > 0 && runs.length > 0;
+  const showGetStarted = !getStartedHidden && !allDone && ws?.id !== EXAMPLES_ID;
   const setView = useApp((s) => s.setView);
 
   const load = () => {
@@ -179,6 +232,24 @@ export function HomeView() {
           )}
         </div>
 
+        {showGetStarted && (
+          <GetStarted
+            onHide={() => {
+              setGetStartedHidden(true);
+              try {
+                localStorage.setItem('aps.home.getStarted', 'hidden');
+              } catch {
+                /* storage unavailable */
+              }
+            }}
+            steps={[
+              { id: 'send', label: 'Send a request', text: 'A URL, or paste a cURL command.', done: recent.length > 0, onClick: () => open('rest', { newTab: true }) },
+              { id: 'collection', label: 'Create or import a collection', text: 'OpenAPI, Postman, Insomnia, Bruno, Hoppscotch or HAR.', done: cols.length > 0, onClick: () => open('collections', { import: true }) },
+              { id: 'environment', label: 'Add an environment', text: 'baseUrl, tokens and secrets, switched in the top bar.', done: (ws?.environments.length ?? 0) > 0, onClick: () => setView('environments') },
+              { id: 'run', label: 'Run a test', text: 'A collection, a YAML file or a generated suite.', done: runs.length > 0, onClick: () => setView('tests') },
+            ]}
+          />
+        )}
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3.5">
           <Action icon={<Network size={16} />} hue="blue" title="New HTTP request" text="Send a request, paste cURL or fetch from the browser, write tp.* scripts (Postman's pm.* works too)." onClick={() => open('rest', { newTab: true })} />
           <Action icon={<GitBranch size={16} />} hue="pink" title="New GraphQL query" text="Explore a schema with autocomplete and run queries." onClick={() => open('graphql', { reset: true })} />
