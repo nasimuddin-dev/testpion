@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, Columns3, Copy, ExternalLink, Filter, Highlighter, Lock, Network, Play, Reply, Shuffle, Star, Trash2, Wrench } from 'lucide-react';
+import { ArrowDown, ArrowUp, Columns3, Copy, Download, ExternalLink, Filter, Highlighter, Lock, Network, Play, Reply, Shuffle, Star, Trash2, Wrench } from 'lucide-react';
 import { useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { formatBytes } from '@testpion/shared';
 import { call, on } from '../../api';
@@ -6,6 +6,7 @@ import { useApp } from '../../store';
 import { Badge, cx, Empty, Menu, Tabs, VirtualList, type MenuItem } from '../ui';
 import { HIGHLIGHT_CLASS, type Rule, type RuleKind } from '../DebuggerRules';
 import { curlOf, kb, speedOf, versionOf, type Exchange, type IncomingRequest } from './model';
+import { downloadContent } from '../../lib/files';
 
 const toast = (m: string) => useApp.getState().toast(m, 'success');
 const copy = (text: string, what: string) => void navigator.clipboard.writeText(text).then(() => toast(`Copied ${what}`));
@@ -16,6 +17,31 @@ const copyWhole = (e: Exchange, what: string, pick: (x: Exchange) => string) =>
     (x) => copy(pick(x), what),
     () => undefined,
   );
+/** A body to a file named after the request (bodies kept as text; a binary one is counted, not kept). */
+const EXT: Array<[RegExp, string]> = [
+  [/json/i, 'json'],
+  [/xml/i, 'xml'],
+  [/html/i, 'html'],
+  [/javascript/i, 'js'],
+  [/css/i, 'css'],
+  [/csv/i, 'csv'],
+  [/text/i, 'txt'],
+];
+async function saveBody(e: Exchange, side: 'request' | 'response') {
+  const x = await whole(e).catch(() => undefined);
+  const body = side === 'request' ? x?.requestBody : x?.responseBody;
+  if (body === undefined) return useApp.getState().toast(`The ${side} body was not kept (binary or larger than the capture keeps)`, 'error');
+  const type = (side === 'request' ? x?.requestHeaders['content-type'] : x?.contentType) ?? '';
+  const ext = EXT.find(([re]) => re.test(type))?.[1] ?? 'bin';
+  const base = (() => {
+    try {
+      return new URL(e.url).pathname.split('/').filter(Boolean).pop() || new URL(e.url).hostname;
+    } catch {
+      return 'body';
+    }
+  })().replace(/[^\w.-]+/g, '_');
+  downloadContent(`${base}-${side}.${ext}`, body, { type: type || 'application/octet-stream' });
+}
 const headerLines = (h?: Record<string, string>) =>
   Object.entries(h ?? {})
     .map(([k, v]) => `${k}: ${v}`)
@@ -243,6 +269,15 @@ export function DebuggerGrid({
           { label: 'As cURL', onSelect: () => copyWhole(e, 'as cURL', curlOf) },
           { label: 'Request headers', onSelect: () => copyWhole(e, 'the request headers', (x) => headerLines(x.requestHeaders)) },
           { label: 'Response headers', onSelect: () => copyWhole(e, 'the response headers', (x) => headerLines(x.responseHeaders)) },
+        ],
+      },
+      {
+        label: 'Save content',
+        icon: <Download size={14} />,
+        onSelect: () => undefined,
+        items: [
+          { label: 'Request body…', disabled: !e.requestBodyBytes, onSelect: () => void saveBody(e, 'request') },
+          { label: 'Response body…', disabled: !e.responseBodyBytes, onSelect: () => void saveBody(e, 'response') },
         ],
       },
       { label: e.bookmarked ? 'Remove the bookmark' : 'Bookmark', icon: <Star size={14} />, onSelect: () => actions.onBookmark(e) },
