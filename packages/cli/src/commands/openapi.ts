@@ -7,6 +7,7 @@ import {
   EnvSecretStore,
   fetchImportText,
   fuzzCases,
+  writeFlows,
   fuzzMarkdown,
   openApiOutline,
   runFuzz,
@@ -155,6 +156,35 @@ export function registerOpenApiCommands(program: Command): void {
         }
       },
     );
+  program
+    .command('integration-suite')
+    .description(
+      'write an integration suite from an API definition in the workspace or from a collection: one flow per resource (create it, read it back, update, see it listed, delete, see it gone; the id flows between steps) under tests/<api>/flows/, the login first, plus tests/<api>-integration.suite.yaml',
+    )
+    .argument('<source>', 'the API definition (specs/clinic.yaml) or a collection name or id')
+    .option('--overwrite', 'replace test files that exist')
+    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
+    .option('--json', 'print the result as JSON (for scripts and AI agents)')
+    .action((source: string, o: { overwrite?: boolean; workspace?: string; json?: boolean }) => {
+      const { store } = openWorkspace(o.workspace, undefined, new WorkspaceManager());
+      try {
+        const spec = source.replace(/\\/g, '/');
+        const col = /\.(ya?ml|json)$/i.test(spec) ? undefined : store.listCollections().find((c) => c.id === source || c.name.toLowerCase() === source.toLowerCase());
+        if (!col && !/\.(ya?ml|json)$/i.test(spec)) throw new CliError(`No collection "${source}" and not an API definition file`, EXIT.CONFIG_ERROR);
+        const r = writeFlows(store, col ? { collection: store.getCollection(col.id) } : { spec }, { overwrite: o.overwrite });
+        if (o.json) return console.log(JSON.stringify({ written: r.written.map((f) => ({ path: f.path, tests: f.tests })), skipped: r.skipped, resources: r.resources, variables: r.variables }, null, 2));
+        if (!r.written.length && !r.skipped.length) return console.log(yellow('No resource to make a flow of: the API needs a POST with a sibling GET/PUT/DELETE /{id} path.'));
+        for (const f of r.written) console.log(green(`  ${f.path}`) + dim(`  ${f.tests} steps`));
+        for (const s of r.skipped) console.log(yellow(`  ${s} exists: kept (--overwrite replaces it)`));
+        console.log(dim(`Resources: ${r.resources.join(', ') || 'none'}. The environment must set ${r.variables.map((v) => `{{${v}}}`).join(', ')}.`));
+        const suite = r.written.find((f) => f.path.endsWith('.suite.yaml'));
+        if (suite) console.log(dim(`Review the bodies, then: testpion run --suite ${suite.path.replace(/^tests\//, '').replace(/\.suite\.yaml$/, '')} -e <environment>`));
+      } catch (e) {
+        throw e instanceof CliError ? e : new CliError((e as Error).message, EXIT.CONFIG_ERROR);
+      } finally {
+        store.close();
+      }
+    });
   program
     .command('tests-from-spec')
     .description("write a first test suite from an API definition in the workspace: a test file per tag under tests/<api>/ with each operation's example (documented status, OpenAPI contract, latency) and one invalid request that must get a 4xx, plus tests/<api>.suite.yaml")

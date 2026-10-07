@@ -51,7 +51,7 @@ export interface ApiOutline {
 type Json = Record<string, any>;
 const METHODS = ['get', 'post', 'put', 'patch', 'delete', 'head', 'options', 'trace'];
 
-function deref(doc: Json, node: any, seen = 0): any {
+export function deref(doc: Json, node: any, seen = 0): any {
   if (!node || typeof node !== 'object' || typeof node.$ref !== 'string' || seen > 20) return node;
   if (!node.$ref.startsWith('#/')) return {};
   let cur: any = doc;

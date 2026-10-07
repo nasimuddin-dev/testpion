@@ -1,9 +1,10 @@
-import { ChevronDown, ChevronRight, ExternalLink, FlaskConical, Lock } from 'lucide-react';
+import { ChevronDown, ChevronRight, ExternalLink, FlaskConical, Lock, Workflow } from 'lucide-react';
 import { useState } from 'react';
 import { asError, call } from '../api';
 import { confirmAction, useApp } from '../store';
 import { TreeBadge } from './CollectionTree';
-import { Badge, Button, Empty } from './ui';
+import { Badge, Button, Empty, Menu } from './ui';
+import { generateFlows } from '../lib/files';
 
 interface OutlineOperation {
   method: string;
@@ -152,9 +153,18 @@ export function ApiPreviewPanel({ outline, error, spec }: { outline?: ApiOutline
           {outline.version && <Badge>v{outline.version}</Badge>}
           <span className="text-xs text-muted">{outline.operations} operations</span>
           {spec && (
-            <Button size="sm" className="ml-auto" icon={<FlaskConical size={12} />} onClick={() => void generateTests(spec)}>
-              Generate tests
-            </Button>
+            <Menu
+              trigger={
+                <Button size="sm" className="ml-auto" icon={<FlaskConical size={12} />}>
+                  Generate tests
+                </Button>
+              }
+              width={300}
+              items={[
+                { label: 'A test per operation (example + an invalid request)', icon: <FlaskConical size={14} />, onSelect: () => void generateTests(spec) },
+                { label: 'Integration flows (create, read, update, list, delete)', icon: <Workflow size={14} />, onSelect: () => void generateFlows({ path: spec }, confirmAction) },
+              ]}
+            />
           )}
         </div>
         {outline.servers.length > 0 && <div className="mono text-xs text-muted">{outline.servers.join(' · ')}</div>}

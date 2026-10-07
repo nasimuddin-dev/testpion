@@ -49,11 +49,27 @@ const steps = [
     'generate-tests-from-the-preview',
     `(async () => {
       await __t.tab('Preview'); await __t.sleep(500);
+      // the Generate tests menu: a test per operation
       [...document.querySelectorAll('main [data-api-preview] button')].find((b) => b.textContent.trim() === 'Generate tests')?.click();
+      const item = await __t.waitFor(() => [...document.querySelectorAll('[role=menuitem]')].find((b) => /A test per operation/.test(b.textContent)), 4000);
+      item?.click();
       const ok = await __t.waitFor(() => [...document.querySelectorAll('[role=dialog] button')].find((b) => b.textContent.trim() === 'Generate tests'), 4000);
       ok?.click();
       const toast = await __t.waitFor(() => [...document.querySelectorAll('[data-sonner-toast]')].map((t) => t.textContent).find((t) => /tests: review the example values|exists already/.test(t)), 6000);
       return 'toast: ' + !!toast;
+    })()`,
+  ],
+  [
+    'generate-flows-from-the-preview',
+    `(async () => {
+      // the same menu: integration flows (a flow per resource), which say the variables to set
+      [...document.querySelectorAll('main [data-api-preview] button')].find((b) => b.textContent.trim() === 'Generate tests')?.click();
+      const item = await __t.waitFor(() => [...document.querySelectorAll('[role=menuitem]')].find((b) => /Integration flows/.test(b.textContent)), 4000);
+      item?.click();
+      const ok = await __t.waitFor(() => [...document.querySelectorAll('[role=dialog] button')].find((b) => b.textContent.trim() === 'Generate flows'), 4000);
+      ok?.click();
+      const toast = await __t.waitFor(() => [...document.querySelectorAll('[data-sonner-toast]')].map((t) => t.textContent).find((t) => /flows, \\d+ steps.*must set \\{\\{baseUrl\\}\\}|exists already/.test(t)), 6000);
+      return 'toast: ' + (toast ?? 'NONE').replace(/\\s+/g, ' ').slice(0, 120);
     })()`,
   ],
   [
@@ -73,6 +89,7 @@ const steps = [
 
 module.exports = withExpect(steps, {
   'generate-tests-from-the-preview': /^toast: true$/,
+  'generate-flows-from-the-preview': /^toast: \d+ flows, \d+ steps/,
   'fuzz-runs-and-summarises': /^summary: \d+ requests to 16 operations:/,
   'preview-lists-the-operations': /^operations: 19 \| tags: pet,store,user$/,
   'an-operation-opens-as-a-request': /^params: true \| opened: true$/,

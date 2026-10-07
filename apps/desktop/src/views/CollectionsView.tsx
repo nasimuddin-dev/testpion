@@ -22,8 +22,9 @@ import {
   Trash2,
   Upload,
   FolderOpen,
+  Workflow,
 } from 'lucide-react';
-import { downloadContent } from '../lib/files';
+import { downloadContent, generateFlows } from '../lib/files';
 import { useCallback, useEffect, useState } from 'react';
 import { asError, call } from '../api';
 import { confirmAction, promptText, useApp } from '../store';
@@ -155,6 +156,12 @@ export function CollectionsView() {
                       { label: 'as Postman collection v2.1', icon: <Send size={14} />, onSelect: () => void exportAs(target.id, 'postman') },
                       { label: 'as OpenAPI 3.1 (.yaml)', icon: <FileCode size={14} />, onSelect: () => void exportAs(target.id, 'openapi') },
                       { label: 'as Bruno collection folder…', icon: <FolderOpen size={14} />, onSelect: () => void exportAs(target.id, 'bruno') },
+                      {
+                        label: 'Integration flows → tests/ (create, read, update, list, delete)',
+                        icon: <Workflow size={14} />,
+                        separator: true,
+                        onSelect: () => void generateFlows({ collectionId: target.id, name: target.name }, confirmAction),
+                      },
                       {
                         label: 'Whole workspace (.json)…',
                         icon: <Package size={14} />,

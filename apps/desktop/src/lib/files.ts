@@ -1,3 +1,4 @@
+import { asError, call } from '../api';
 import { useApp } from '../store';
 
 /**
@@ -44,6 +45,38 @@ export function viewContent(v: { content: string; encoding: 'base64' | 'utf8'; t
 }
 
 /** Let the user pick a text file in the browser; resolves with its name and content (null if cancelled). */
+/**
+ * Generate an integration suite (a flow per resource) from an API definition or a collection, after a confirmation that
+ * says what gets written; the toast names the variables to set. The Preview tab and the Collections view share it.
+ */
+export async function generateFlows(source: { path: string } | { collectionId: string; name: string }, confirmAction: (o: { title: string; message: string; confirmLabel: string }) => Promise<boolean>) {
+  const from = 'path' in source ? 'this definition' : `"${source.name}"`;
+  const ok = await confirmAction({
+    title: `Generate integration flows from ${from}?`,
+    message:
+      'One test file per resource under tests/<api>/flows/: create it, read it back, update it, see it listed, delete it and see it gone, each step depending on the one before, the created id flowing between them; the login operation first. Files that exist are kept.',
+    confirmLabel: 'Generate flows',
+  });
+  if (!ok) return;
+  try {
+    const r = await call<{ written: Array<{ path: string; tests: number }>; skipped: string[]; resources: string[]; variables: string[] }>('openapi.generateFlows', 'path' in source ? { path: source.path } : { collectionId: source.collectionId });
+    const n = r.written.reduce((k, f) => k + f.tests, 0);
+    useApp
+      .getState()
+      .toast(
+        r.written.length
+          ? `${r.resources.length} flows, ${n} steps${r.skipped.length ? ` (${r.skipped.length} files kept as they were)` : ''}. The environment must set ${r.variables.map((v) => `{{${v}}}`).join(', ')}; review the bodies, then run the suite`
+          : r.skipped.length
+            ? `Every file exists already: ${r.skipped.join(', ')}`
+            : 'No resource to make a flow of: the API needs a POST with a sibling GET / PUT / DELETE /{id} path',
+        r.written.length ? 'success' : 'warning',
+        r.written.length ? { label: 'Open Tests', onClick: () => useApp.getState().setView('tests') } : undefined,
+      );
+  } catch (e) {
+    useApp.getState().toast(asError(e).message, 'error');
+  }
+}
+
 export function pickTextFile(accept: string): Promise<{ name: string; text: string } | null> {
   return new Promise((resolve) => {
     const input = document.createElement('input');

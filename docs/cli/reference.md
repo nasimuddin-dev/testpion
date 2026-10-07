@@ -22,6 +22,7 @@ testpion vars move <c> --to <envs> Move collection variables into environments (
 testpion tidy <collection>     Duplicate requests, typed-in hosts, empty folders, unused variables (--remove-* fixes)
 testpion replace <c> <find> <with> Find and replace across a collection's requests (preview; --apply saves)
 testpion tests-from-spec <spec> Write a first test suite from an API definition (examples and invalid requests)
+testpion integration-suite <spec|collection> Write an integration suite: a flow per resource (create, read, update, list, delete), the login first
 testpion generate-data <name>  Generate rows of test data into datasets/ from a JSON schema or an API operation
 testpion export <c> -f http    Write a collection as an .http file (REST Client, JetBrains HTTP Client)
 testpion export <c> -f asyncapi Write a collection's connections as an AsyncAPI 3.0 document

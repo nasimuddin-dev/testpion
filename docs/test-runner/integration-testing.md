@@ -11,6 +11,10 @@ An integration test exercises a real, running system through its API: sign in, c
 
 The examples workspace has a complete one: `tests/rest/patient-lifecycle.yaml` in the *Veterinary API (example)* workspace, against the demo API (`node examples/servers/demo-servers.mjs`).
 
+## Generate a flow
+
+TestPion writes a first flow for every resource of an API: in a definition's **Preview**, **Generate tests ▸ Integration flows**; on a collection, **Export ▸ Integration flows**; from the terminal, `testpion integration-suite specs/clinic.yaml` (or a collection name); for agents, `generate_flows`. Each flow is the file described below (create, read back, update, listed, delete, gone), the login first. Review the generated bodies and set the variables it names, then run the suite. See [the test runner](/test-runner/overview#an-integration-suite-from-an-api-definition-or-a-collection).
+
 ## Write a flow
 
 A flow is a test file whose steps depend on each other. Three things make it work:

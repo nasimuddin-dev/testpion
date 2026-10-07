@@ -32,6 +32,12 @@ An API definition's **Preview ▸ Generate tests** writes a test file per tag un
 
 Requests use `{{baseUrl}}` and the auth variables an import uses (`{{accessToken}}`). The example values (ids, bodies) come from the document, so look at them before trusting the results. Files that exist are kept. From the terminal, `testpion tests-from-spec specs/clinic.yaml`; agents use `generate_tests`.
 
+### An integration suite from an API definition or a collection
+
+**Generate tests ▸ Integration flows** (in a definition's Preview, or **Export ▸ Integration flows** on a collection) writes one flow per resource the API creates, under `tests/<api>/flows/`: create it, read it back (`equals $.id`), update it, see it listed, delete it and see it gone (404), each step depending on the one before, the created id flowing between them through `extract` and `{{variables}}`. A login operation (`POST /auth/token`, `/login` …) becomes the first step and saves `{{accessToken}}`; names get a `{{$randomInt}}` so the flow runs again. `tests/<api>-integration.suite.yaml` runs them all. A collection goes through the OpenAPI document made from it, so its saved examples say what a created record looks like.
+
+The result names the environment variables the flows read (`baseUrl`, `clientId`, `clientSecret` or `username`, `password`; a parent id for nested paths). Set them, review the bodies, then `testpion run --suite <api>-integration -e <environment>`. Terminal: `testpion integration-suite specs/clinic.yaml` or `testpion integration-suite "Clinic API"`; agents: `generate_flows`. See [integration testing](/test-runner/integration-testing) for what a flow is made of.
+
 An AsyncAPI document (kept in `specs/asyncapi/` by its import) gets realtime tests instead: per channel, its example message sent through the broker or server and read back, checked against the document with the [`asyncapi` check](/api-testing/websocket#check-messages-against-an-asyncapi-document). The suite runs with the servers environment the import made (such as *Clinic events servers*). `testpion tests-from-spec specs/asyncapi/clinic-events.yaml`.
 
 ## Execution model

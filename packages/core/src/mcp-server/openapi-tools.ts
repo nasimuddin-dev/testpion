@@ -7,6 +7,7 @@ import type { HttpRequestSpec } from '../model/types.js';
 import { ApsError } from '../errors.js';
 import { generateWorkspaceDataset } from '../storage/dataset-files.js';
 import { writeFuzzFindingTests, writeTestsFromSpec } from '../openapi/tests-from-spec.js';
+import { writeFlows } from '../openapi/flows-from-spec.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { str, type Tool } from './tool.js';
 
@@ -31,6 +32,28 @@ export function openApiTools(d: { store: WorkspaceStore; readSpecRef(ref: string
       run: (a) => {
         const r = writeTestsFromSpec(d.store, String(a.spec ?? ''), { negative: a.negative !== false, includeDelete: a.includeDelete === true, overwrite: a.overwrite === true });
         return { written: r.written.map((f) => ({ path: f.path, tests: f.tests })), skipped: r.skipped };
+      },
+    },
+    {
+      name: 'generate_flows',
+      write: true,
+      description:
+        "Write an integration suite from an API definition in the workspace (`spec`) or from a collection (`collection`: name or id): one flow per resource under tests/<api>/flows/ — create it, read it back, update it, see it listed, delete it, see it gone — each step depending on the one before, the created id flowing between them, and the login operation first (saving {{accessToken}}); plus tests/<api>-integration.suite.yaml. Use generate_tests instead for one test per operation. The result names the environment variables the flows read (baseUrl, credentials): set them, review the example bodies, then run_tests with the suite.",
+      inputSchema: {
+        type: 'object',
+        properties: {
+          spec: str('The API definition in the workspace, e.g. specs/clinic.yaml'),
+          collection: str('A collection name or id (its requests and saved examples describe the API)'),
+          overwrite: { type: 'boolean', description: 'Replace test files that exist' },
+        },
+      },
+      run: (a) => {
+        const ref = a.collection !== undefined ? String(a.collection) : undefined;
+        const col = ref ? d.store.listCollections().find((c) => c.id === ref || c.name.toLowerCase() === ref.toLowerCase()) : undefined;
+        if (ref && !col) throw new ApsError('ValidationError', `No collection "${ref}"`, { suggestions: ['list_collections names them.'] });
+        if (!col && !a.spec) throw new ApsError('ValidationError', 'Give spec (an API definition in specs/) or collection (a name or id)');
+        const r = writeFlows(d.store, col ? { collection: d.store.getCollection(col.id) } : { spec: String(a.spec) }, { overwrite: a.overwrite === true });
+        return { written: r.written.map((f) => ({ path: f.path, tests: f.tests })), skipped: r.skipped, resources: r.resources, variables: r.variables };
       },
     },
     {

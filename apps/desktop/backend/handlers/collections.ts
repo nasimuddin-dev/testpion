@@ -1,7 +1,7 @@
 /** RPC handlers: Collections (requests, folders, examples, import/export) and their mock servers. */
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, relative, sep } from 'node:path';
-import { ApsError, dbKindOf, redactDbUrl, isSqliteDataset, collectionVariableFlow, listWorkspaceDatasets, appendDatasetRow, readDataset, sqliteTables, fetchImportText, bruFilesToBrunoExport, collectionToBru, importIntoWorkspace, diffOpenApi, lintOpenApi, openApiOutline, asyncApiOutline, workspaceApiCoverage, apiCoverageMarkdown, securityLint, certificateLint, listCertificates, variableFlow, startRecorder, recordingToCollection, type RecordedExchange, collectionToOpenApiText, collectionToHttpFile, collectionToAsyncApi, generateWorkspaceDataset, replaceInCollection, moveCollectionVariablesToEnvironments, tidyCollection, applyTidy, type ReplaceField, writeTestsFromSpec, exampleFromResponse, startMockServer, collectionMarkdown, collectionHtml, exportPostmanCollection, withRequestExamples, type SavedExample, convertCollectionScripts, importRequestSnippet, isRequestSnippet, type Collection, collectionSavedItems, duplicateCollection, shortId, requestBodySchema, loadOpenApi } from '@testpion/core';
+import { ApsError, dbKindOf, redactDbUrl, isSqliteDataset, collectionVariableFlow, listWorkspaceDatasets, appendDatasetRow, readDataset, sqliteTables, fetchImportText, bruFilesToBrunoExport, collectionToBru, importIntoWorkspace, diffOpenApi, lintOpenApi, openApiOutline, asyncApiOutline, workspaceApiCoverage, apiCoverageMarkdown, securityLint, certificateLint, listCertificates, variableFlow, startRecorder, recordingToCollection, type RecordedExchange, collectionToOpenApiText, collectionToHttpFile, collectionToAsyncApi, generateWorkspaceDataset, replaceInCollection, moveCollectionVariablesToEnvironments, tidyCollection, applyTidy, type ReplaceField, writeTestsFromSpec, writeFlows, exampleFromResponse, startMockServer, collectionMarkdown, collectionHtml, exportPostmanCollection, withRequestExamples, type SavedExample, convertCollectionScripts, importRequestSnippet, isRequestSnippet, type Collection, collectionSavedItems, duplicateCollection, shortId, requestBodySchema, loadOpenApi } from '@testpion/core';
 import type { Backend, Handlers, CollectionRunParams } from '../backend.js';
 import { recordIncoming } from './debugger.js';
 
@@ -209,6 +209,13 @@ export function collectionsHandlers(be: Backend): Handlers {
       const r = writeTestsFromSpec(be.ws, path, { negative, overwrite });
       if (r.written.length) be.host.emit('workspace.changedOnDisk', { message: `${r.written.length} test files written`, kinds: ['tests'], files: r.written.map((f) => f.path) });
       return { written: r.written.map((f) => ({ path: f.path, tests: f.tests })), skipped: r.skipped };
+    },
+    /** An integration suite (a flow per resource) from a definition in specs/ or from a collection: tests/<api>/flows/*.yaml and tests/<api>-integration.suite.yaml. */
+    'openapi.generateFlows': ({ path, collectionId, overwrite }: { path?: string; collectionId?: string; overwrite?: boolean }) => {
+      if (!collectionId && !SPEC_PATH.test(path ?? '')) throw new ApsError('ValidationError', `Not an API definition in specs/: ${path ?? ''}`);
+      const r = writeFlows(be.ws, collectionId ? { collection: be.ws.getCollection(collectionId) } : { spec: path! }, { overwrite });
+      if (r.written.length) be.host.emit('workspace.changedOnDisk', { message: `${r.written.length} test files written`, kinds: ['tests'], files: r.written.map((f) => f.path) });
+      return { written: r.written.map((f) => ({ path: f.path, tests: f.tests })), skipped: r.skipped, resources: r.resources, variables: r.variables };
     },
     /** Lint problems of an OpenAPI document (the text being edited, or a document in specs/), with their places. */
     'openapi.lint': ({ path, text, disable }: { path?: string; text?: string; disable?: string[] }) => {
