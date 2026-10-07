@@ -61,7 +61,7 @@ export function CollectionsView() {
     await load();
     useApp.getState().toast('Collection saved', 'success');
   };
-  const exportAs = async (id: string, format: 'testpion' | 'postman' | 'openapi' | 'bruno' | 'http') => {
+  const exportAs = async (id: string, format: 'testpion' | 'postman' | 'openapi' | 'bruno' | 'http' | 'asyncapi') => {
     try {
       const r = await call<{ path?: string; collection?: unknown; text?: string; name: string; notes: string[] }>('col.export', { id, format });
       if (r.collection) download(r.name, JSON.stringify(r.collection, null, 2));

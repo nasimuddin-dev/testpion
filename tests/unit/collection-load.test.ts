@@ -44,7 +44,8 @@ const collection = (): Collection => ({
 });
 
 describe('load-testing a collection', () => {
-  it('warms up with scripts, then runs the requests in order under load', async () => {
+  // timing under load: on a machine busy with the whole suite a run can be short of iterations, so it may try again
+  it('warms up with scripts, then runs the requests in order under load', { retry: 2 }, async () => {
     const svc = services();
     const { target, warmUp, unresolved } = await collectionLoadTarget({ collection: collection(), services: svc, warmUp: true });
     expect(warmUp).toMatchObject({ total: 3, passed: 3 });

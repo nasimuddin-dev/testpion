@@ -5,13 +5,14 @@ import { useApp } from '../store';
 import { download } from '../lib/format';
 import { Button, Field, Modal, Select } from './ui';
 
-type Format = 'testpion' | 'postman' | 'openapi' | 'bruno' | 'http';
+type Format = 'testpion' | 'postman' | 'openapi' | 'bruno' | 'http' | 'asyncapi';
 
 const FORMATS: Array<[Format, string, string]> = [
   ['testpion', 'TestPion collection (.json)', 'Everything: requests, scripts, examples, and its gRPC calls and connections. Imports back as it was.'],
   ['postman', 'Postman v2.1 collection (.json)', 'For Postman and tools that read its format. gRPC calls and connections are left out.'],
   ['openapi', 'OpenAPI 3.1 (.yaml)', "A description of the collection's HTTP requests, for documentation and code generators."],
   ['http', '.http file', 'One file of requests for VS Code REST Client and the JetBrains HTTP Client. HTTP requests only; scripts are left out.'],
+  ['asyncapi', 'AsyncAPI 3.0 (.yaml)', "The collection's Kafka, MQTT, WebSocket and Socket.IO connections as channels, with their saved messages as examples."],
   ['bruno', 'Bruno collection folder', 'A folder of .bru files, with the environments (secret values never). Desktop app only.'],
 ];
 
@@ -39,7 +40,7 @@ export function ExportDialog({ collections, initial, onClose }: { collections: A
       }
       const r = await call<{ path?: string; collection?: unknown; text?: string; name: string; notes: string[] }>('col.export', { id: what, format });
       if (r.collection) download(r.name, JSON.stringify(r.collection, null, 2));
-      else if (r.text !== undefined) download(r.name, r.text, format === 'openapi' ? 'application/yaml' : 'text/plain');
+      else if (r.text !== undefined) download(r.name, r.text, format === 'openapi' || format === 'asyncapi' ? 'application/yaml' : 'text/plain');
       else if (!r.path) return; // the save dialog was cancelled
       const extra = r.notes.length ? ` Not exported: ${r.notes.join('; ')}.` : '';
       toast(`${r.path ? `Exported to ${r.path}.` : 'Exported.'}${extra}`, r.notes.length ? 'info' : 'success');

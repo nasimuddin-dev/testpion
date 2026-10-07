@@ -100,6 +100,8 @@ An AsyncAPI document becomes a collection of [realtime connections](/api-testing
 
 Who sends what follows the document: in AsyncAPI 2, `publish` is what the application receives (TestPion sends it) and `subscribe` what it sends (TestPion reads it); in AsyncAPI 3, `action: send` and `receive` say the same. Channels on other protocols (AMQP, NATS …) are listed in the collection's description as not imported.
 
+**Export ▸ AsyncAPI 3.0** goes the other way: a collection's connections become an AsyncAPI document, with a server per broker or server URL (a URL kept in a `{{variable}}` becomes a server variable), a channel per topic, event or path, the saved messages as examples with a schema inferred from them, and what each connection sends or reads as operations. From the terminal: `testpion export "Clinic events" -f asyncapi -o events.asyncapi.yaml`.
+
 ### Bruno
 
 A Bruno collection comes over with its folders (in Bruno's order), requests, query and path parameters, bodies, auth, headers (disabled ones stay disabled; collection and folder headers are added to their requests), collection variables, docs and the environments in `environments/`. Secret variables arrive empty: set them again as secrets.

@@ -19,6 +19,7 @@ testpion graphql-op <Type.field> --endpoint <url> Build a ready-to-run operation
 testpion lint <collection>    Security review of a collection's requests (--fail-on high for CI)
 testpion fuzz <spec>           Fuzz an API from its OpenAPI document: server errors, invalid input accepted (local hosts only)
 testpion export <c> -f http    Write a collection as an .http file (REST Client, JetBrains HTTP Client)
+testpion export <c> -f asyncapi Write a collection's connections as an AsyncAPI 3.0 document
 testpion openapi-ops <spec>    List an OpenAPI document's operations by tag (--json: schemas and a request per operation)
 testpion secrets <environment> Check an environment's secret manager references (op://, vault://, aws-sm:// …)
 testpion record <target>      Record traffic through a local reverse proxy; -w saves it as a collection (see Record traffic)

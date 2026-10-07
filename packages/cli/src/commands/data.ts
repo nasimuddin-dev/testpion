@@ -1,4 +1,5 @@
 /** Moving data in and out: import, export, docs, script conversion, response history and environments. */
+import { exportTextFormat } from './export-formats.js';
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { Command, Option } from 'commander';
@@ -30,7 +31,6 @@ import {
   fetchImportText,
   readBrunoFolder,
   collectionToBru,
-  collectionToHttpFile,
   type Environment,
   bundleWsdl,
   isWsdl,
@@ -617,13 +617,13 @@ export function registerDataCommands(program: Command): void {
     });
   program
     .command('export')
-    .description('export a collection as a Postman v2.1 collection (default), TestPion JSON, an OpenAPI 3.1 document (--format openapi), a Bruno collection folder (--format bruno --out <folder>) or an .http file for REST Client / JetBrains (--format http)\n<collection> is a collection name or id in the workspace, or a collection file to convert')
+    .description('export a collection as a Postman v2.1 collection (default), TestPion JSON, an OpenAPI 3.1 document (--format openapi), a Bruno collection folder (--format bruno --out <folder>) an .http file (--format http) or its connections as AsyncAPI 3.0 (--format asyncapi)\n<collection> is a collection name or id in the workspace, or a collection file to convert')
     .argument('<collection>', 'collection name or id, a file, or an http(s) link')
     .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
-    .addOption(new Option('-f, --format <format>', 'output format').choices(['postman', 'testpion', 'openapi', 'bruno', 'http']).default('postman'))
+    .addOption(new Option('-f, --format <format>', 'output format').choices(['postman', 'testpion', 'openapi', 'bruno', 'http', 'asyncapi']).default('postman'))
     .option('--json', 'with --format openapi: JSON instead of YAML')
     .option('-o, --out <file>', 'write to this file instead of stdout')
-    .action(async (ref: string, o: { workspace?: string; format: 'postman' | 'testpion' | 'openapi' | 'bruno' | 'http'; json?: boolean; out?: string }) => {
+    .action(async (ref: string, o: { workspace?: string; format: 'postman' | 'testpion' | 'openapi' | 'bruno' | 'http' | 'asyncapi'; json?: boolean; out?: string }) => {
       const c = await loadCollectionRef(ref, o.workspace);
       if (o.format === 'bruno') {
         // a folder like the one Bruno keeps in git; the workspace's environments go to environments/ (secret values never)
@@ -645,13 +645,7 @@ export function registerDataCommands(program: Command): void {
         console.error(dim(`Bruno collection written to ${out} (${files.length} files${envs.length ? `, ${envs.length} environments without secret values` : ''})`));
         return;
       }
-      if (o.format === 'http') {
-        const { text, notes } = collectionToHttpFile(c);
-        for (const n of notes) console.error(yellow(`not exported: ${n}`));
-        if (o.out) writeFileSync(resolve(o.out), text);
-        else process.stdout.write(text);
-        return;
-      }
+      if (exportTextFormat(o.format, c, o)) return;
       if (o.format === 'openapi') {
         const text = collectionToOpenApiText(c, { format: o.json ? 'json' : 'yaml' });
         if (o.out) {
