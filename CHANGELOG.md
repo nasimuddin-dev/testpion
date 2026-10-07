@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.45.0 — 2026-10-07
+
+### AI testing, friendlier
+A provider whose API key has no value stops **before** anything is sent: *No API key for OpenAI*, why, and where to add it; **Add the key** opens the provider with its key field ready, and the providers list marks the ones that still need one. A provider's errors say what to do by status (a key not accepted, no access to the model, no credit left or rate-limited, an unknown model, a problem on their side). A price set for a model also prices its dated versions (`gpt-4o-mini` covers `gpt-4o-mini-2024-07-18`); **Set a price…** under an unpriced cost opens the price table with the row ready. The `first-token` (`ttft`) check limits the time to the first token.
+
+**RAG checks judged claim by claim.** With a `judge:`, `groundedness` (alias `faithfulness`), `context-precision` and `context-recall` no longer ask the model for one number: the judge splits the answer, the reference or the documents into items and gives each a verdict with its evidence; the score is computed from the verdicts, and the result lists what did not hold first (claims not supported, documents not useful, facts missing). New: `answer-correctness` (the answer's facts against the reference, F1) and `context-entity-recall` (the reference's names, numbers and dates found in the context; no model).
+
+### Results a person reviews
+The results of a run (tests and evaluations) open their first failure by themselves; filter chips count **Failed**, **Passed**, **Skipped** and **To review**; each row shows its lowest check score; ↑ ↓ (or J K) move through the results. **👍 / 👎 and a note** on any result record your verdict beside the run (`runs/<id>/reviews.json`): a 👎 on a passing result says the checks missed something, a 👍 on a failing one that a check is too strict. `testpion history review`, and the `run_reviews` / `review_result` tools for agents (an agent's review is marked as such). In the Playground, **Add to dataset** keeps the inputs and the answer (as `expected`) as an evaluation case in a JSONL dataset (`testpion datasets --add`, `add_dataset_row`). The model comparison marks the fastest and the cheapest, says under a picker when a provider still needs a key, and shows a failed model's error once with **Add the key**.
+
+### An integration suite from an API definition or a collection
+**Generate tests ▸ Integration flows** (a definition's Preview), **Export ▸ Integration flows** (a collection), `testpion integration-suite <spec | collection>` and the `generate_flows` tool write one flow per resource the API creates: create it, read it back, update it, see it listed, delete it and see it gone, each step depending on the one before, the created id flowing between them, names given a random part so the flow runs again; the login operation first, saving `{{accessToken}}`; plus `tests/<api>-integration.suite.yaml`. The result names the environment variables to set.
+
+### For AI agents
+`testpion mcp-server --profile minimal` lists only the tools of the common jobs (for agents that load every listed tool into their context); the new **`search_tools`** finds a tool by what you want to do, and any tool it names can be called. `testpion agent-info` prints, as one JSON object, what an agent needs here: the workspace, the commands and their exit codes, the environment variables, the MCP setup and the docs. `lint-tests` takes paths the way `testpion test` does.
+
+### First steps and empty views
+Home shows a **Get started** checklist (send a request, create or import a collection, add an environment, run a test), ticked from what the workspace holds and gone once done. Collections, Traces and History say what they are for and offer the first action when empty.
+
+### HTTP Debugger: choose what to capture
+The port box is gone from the header (**Capture ▸ Proxy port…** keeps it). **Capture** asks what to watch — **a browser** (Chrome, Edge, Firefox or Brave through the proxy; only that window), **a terminal** (only what runs in it), **a phone**, or **everything on this computer** (the system proxy, named as such, restored on stop) — and starts the proxy itself; **Start capturing** alone starts it for a program you point at it yourself. Nothing is captured until you choose, and the view says so. The workbench is calmer: the dock's bottom tab strip is gone (the rail switches panels, and can show each tool's name), the HTTPS notice appears only once tunnels show up and the **HTTPS** menu's lock says the state, the filters fit one row with the search box first, the number columns say their unit, the Summary leaves out what it does not know, and the request / response pane is a one-line hint until a row is picked.
+
+### Under the hood
+The RAG heuristics tokenize the context once per check (not once per sentence), compiled schemas are cached by object, the mock provider compiles each rule once, a dataset append never reads the file, and the Evaluations, AI Lab, assistant and results views stop re-rendering on every keystroke or streamed token. Dataset helpers, the code-block extractor and the "needs a key" rule live in one place each.
+
 ## 0.44.0 — 2026-10-07
 
 ### HTTP Debugger
