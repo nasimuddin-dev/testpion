@@ -1,5 +1,5 @@
 import { openQuickLook } from './EnvQuickLook';
-import { Copy, Eye, KeyRound, Save, X } from 'lucide-react';
+import { Copy, KeyRound, Layers, Save, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { asError, call } from '../api';
@@ -308,15 +308,15 @@ export function VarPopover({ name, info, environment, collectionId, x, y, onClos
         <Button
           size="sm"
           variant="ghost"
-          icon={<Eye size={12} />}
-          title="Every variable this request can use"
+          icon={<Layers size={12} />}
+          title="Every scope that sets this variable (collection, environment, workspace, globals) and which one this request uses"
           onClick={() => {
             onClose();
             // the overview opens on this variable: where it is set, or that it is set nowhere
             openQuickLook(name);
           }}
         >
-          All
+          Where it's set
         </Button>
         {editable && (
           <Button size="sm" variant="primary" className="ml-auto" icon={<Save size={12} />} loading={busy} disabled={!changed || !environment} title={environment ? undefined : 'Choose an environment in the top bar first'} onClick={() => void save()}>

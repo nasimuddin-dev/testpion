@@ -90,9 +90,17 @@ Wherever a `{{variable}}` appears (the URL bar, params, headers, auth fields, th
 
 ## Quick look: every variable at once
 
-Click the **eye** button next to the environment selector to see every variable the request on screen can use, in the order they win: its **collection's** variables, the active **environment's**, the **workspace's** and the **globals**. Each shows its initial value (what is saved) and its current value (what scripts set on this machine; *same* when no script changed it). A variable that a scope above also sets is shown faded as *(overridden)*. Type in the filter to find a variable by name or value in large collections; **Edit** opens that scope's variables. Secret and sensitive values are never shown.
+Click the **eye** button next to the environment selector to see every variable the request on screen can use, in the order they win: its **collection's** variables, the active **environment's**, the **workspace's** and the **globals**. Each shows its value (what is saved), and a **Current value** column appears when a script changed one on this machine. A variable that a scope above also sets is shown faded as *(overridden)*. Type in the filter to find a variable by name or value in large collections; **Edit** opens that scope's variables. Secret and sensitive values are never shown.
 
-From a variable's popover, the button next to **Copy** goes to where that variable is set (**Collection variables**, **Workspace variables**, **Globals** or **Environments**), and **All** opens the quick look.
+From a variable's popover, the button next to **Copy** goes to where that variable is set (**Collection variables**, **Workspace variables**, **Globals** or **Environments**).
+
+**Where it's set** answers "which value will this request send, and why?". It opens the quick look on that one variable:
+
+- **This request uses** shows the value and the scope it comes from (and when a script's current value is used instead).
+- Below it, every scope in the order they win: the collection, the environment, the workspace and the globals. Each is marked **used**, **overridden** (a scope above sets it too), **turned off** or **not set**, with **Edit** to change it there.
+- A variable set nowhere says so, with **Add to** the active environment.
+
+**Show all variables** goes back to the full list.
 
 ## Compare
 
