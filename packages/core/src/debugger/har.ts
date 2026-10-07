@@ -38,6 +38,8 @@ export interface HarEntry {
   };
   cache: Record<string, never>;
   timings: { send: number; wait: number; receive: number };
+  /** The server's IP address (HAR 1.2), without the port. */
+  serverIPAddress?: string;
   comment?: string;
   _testpion?: {
     id: string;
@@ -52,6 +54,10 @@ export interface HarEntry {
     events?: DebuggerSseEvent[];
     highlight?: string;
     rules?: string[];
+    /** The program's process id, the server's ip:port, a highlight rule's style. */
+    pid?: number;
+    serverAddress?: string;
+    highlightStyle?: DebuggerExchange['highlightStyle'];
   };
 }
 
@@ -67,7 +73,7 @@ export function exchangesToHar(exchanges: DebuggerExchange[], redactor: Redactor
         request: {
           method: e.method,
           url: redactor.redactUrl(e.url),
-          httpVersion: 'HTTP/1.1',
+          httpVersion: e.httpVersion === '2' ? 'HTTP/2' : 'HTTP/1.1',
           headers: headers(e.requestHeaders),
           queryString: [],
           cookies: [],
@@ -78,7 +84,7 @@ export function exchangesToHar(exchanges: DebuggerExchange[], redactor: Redactor
         response: {
           status: e.status ?? 0,
           statusText: e.statusText ?? '',
-          httpVersion: 'HTTP/1.1',
+          httpVersion: e.httpVersion === '2' ? 'HTTP/2' : 'HTTP/1.1',
           headers: headers(e.responseHeaders),
           cookies: [],
           content: { size: e.responseBodyBytes, mimeType: e.contentType ?? '', text: e.responseBody ? redactor.redactString(e.responseBody) : '' },
@@ -87,7 +93,13 @@ export function exchangesToHar(exchanges: DebuggerExchange[], redactor: Redactor
           bodySize: e.responseBodyBytes,
         },
         cache: {},
-        timings: { send: 0, wait: e.waitMs ?? 0, receive: Math.max(0, (e.durationMs ?? 0) - (e.waitMs ?? 0)) },
+        // HAR's three phases: sending the request, waiting for the first byte of the answer, receiving it
+        timings: {
+          send: Math.min(e.sendMs ?? 0, e.waitMs ?? 0),
+          wait: Math.max(0, (e.waitMs ?? 0) - Math.min(e.sendMs ?? 0, e.waitMs ?? 0)),
+          receive: Math.max(0, (e.durationMs ?? 0) - (e.waitMs ?? 0)),
+        },
+        ...(e.serverAddress ? { serverIPAddress: e.serverAddress.replace(/:\d+$/, '').replace(/^\[|\]$/g, '') } : {}),
         ...(e.application ? { comment: `application: ${e.application}` } : {}),
         _testpion: {
           id: e.id,
@@ -102,6 +114,9 @@ export function exchangesToHar(exchanges: DebuggerExchange[], redactor: Redactor
           events: e.events?.map((ev) => ({ ...ev, data: redactor.redactString(ev.data) })),
           highlight: e.highlight,
           rules: e.rules,
+          pid: e.pid,
+          serverAddress: e.serverAddress,
+          highlightStyle: e.highlightStyle,
         },
       })),
     },
@@ -123,8 +138,10 @@ export function exchangesFromHar(har: unknown): DebuggerExchange[] {
       } catch {
         host = x.request.url;
       }
-      const wait = x.timings?.wait ?? 0;
-      const total = typeof x.time === 'number' ? x.time : wait + (x.timings?.receive ?? 0);
+      // until the first byte of the answer: sending plus waiting (-1 is HAR's "not known")
+      const send = Math.max(0, x.timings?.send ?? 0);
+      const wait = send + Math.max(0, x.timings?.wait ?? 0);
+      const total = typeof x.time === 'number' ? x.time : wait + Math.max(0, x.timings?.receive ?? 0);
       const res = x.response ?? ({} as HarEntry['response']);
       return {
         id: t?.id ?? shortId('dbg-'),
@@ -145,8 +162,13 @@ export function exchangesFromHar(har: unknown): DebuggerExchange[] {
         responseBodyBytes: res.content?.size ?? res.bodySize ?? 0,
         responseBodyTruncated: t?.truncated,
         contentType: res.content?.mimeType || flat(res.headers)['content-type'],
+        sendMs: send,
         waitMs: Math.max(0, wait),
         durationMs: Math.max(0, total),
+        ...(x.request.httpVersion === 'HTTP/2' || x.request.httpVersion === 'h2' ? { httpVersion: '2' as const } : {}),
+        ...(t?.serverAddress || x.serverIPAddress ? { serverAddress: t?.serverAddress ?? x.serverIPAddress } : {}),
+        ...(t?.pid ? { pid: t.pid } : {}),
+        ...(t?.highlightStyle ? { highlightStyle: t.highlightStyle } : {}),
         error: t?.error,
         bookmarked: t?.bookmarked,
         tls: t?.tls,

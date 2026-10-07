@@ -1,6 +1,19 @@
 import { describe, it, expect, afterAll, beforeAll } from 'vitest';
 import { createServer, request, type Server } from 'node:http';
-import { conditionHolds, decideRequest, describeCondition, describeRule, ruleMatches, startDebuggerProxy, type DebuggerExchange, type DebuggerProxy, type DebuggerRule } from '@testpion/core';
+import {
+  conditionHolds,
+  exchangesFromHar,
+  exchangesToHar,
+  Redactor,
+  decideRequest,
+  describeCondition,
+  describeRule,
+  ruleMatches,
+  startDebuggerProxy,
+  type DebuggerExchange,
+  type DebuggerProxy,
+  type DebuggerRule,
+} from '@testpion/core';
 
 // The Debugger workbench: Capture only and Filter out rules the user makes, highlight conditions on a column (the
 // Highlight Rule editor), hits per rule, and per exchange the program's process id, the server's address and the
@@ -78,6 +91,37 @@ describe('capture only and filter out', () => {
     expect(d.ignore).toBe(true);
     expect(d.appliedIds).toEqual(['f1']);
     expect(describeRule(out)).toBe('Filter out from node');
+  });
+});
+
+describe('sessions keep the new columns', () => {
+  it('a HAR round trip keeps the process id, the server address, HTTP/2, the three times and the highlight style', () => {
+    const e = ex({ pid: 4116, serverAddress: '127.0.0.1:4010', httpVersion: '2', sendMs: 2, waitMs: 9, durationMs: 12, status: 404, highlightStyle: { dark: '#00ff00', bold: true } });
+    const har = exchangesToHar([e], new Redactor(), '1');
+    const entry = har.log.entries[0]!;
+    expect(entry.serverIPAddress).toBe('127.0.0.1');
+    expect(entry.timings).toEqual({ send: 2, wait: 7, receive: 3 });
+    expect(entry.request.httpVersion).toBe('HTTP/2');
+    const [back] = exchangesFromHar(JSON.parse(JSON.stringify(har)));
+    expect(back).toMatchObject({ pid: 4116, serverAddress: '127.0.0.1:4010', httpVersion: '2', sendMs: 2, waitMs: 9, durationMs: 12, highlightStyle: { dark: '#00ff00', bold: true } });
+  });
+
+  it("another tool's HAR: send and wait together are the time to the first byte", () => {
+    const [x] = exchangesFromHar({
+      log: {
+        entries: [
+          {
+            startedDateTime: '2026-10-01T00:00:00Z',
+            time: 30,
+            request: { method: 'GET', url: 'https://a.test/', httpVersion: 'HTTP/1.1', headers: [] },
+            response: { status: 200, headers: [], content: { size: 0 } },
+            timings: { send: 3, wait: 20, receive: 7 },
+            serverIPAddress: '10.0.0.5',
+          },
+        ],
+      },
+    });
+    expect(x).toMatchObject({ sendMs: 3, waitMs: 23, durationMs: 30, serverAddress: '10.0.0.5' });
   });
 });
 
