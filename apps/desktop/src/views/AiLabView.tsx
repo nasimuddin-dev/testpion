@@ -1,6 +1,7 @@
 import { CopyPlus, FlaskConical, KeyRound, Play, Plus, RefreshCw, Save, Settings2, Sparkles, Square, Trash2, WifiOff, Bookmark, History } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSticky } from '../lib/sticky';
+import { PROVIDER_KINDS, PROVIDER_PRESETS, providerNeedsKey } from '@testpion/shared';
 import { useLibrary } from '../lib/library';
 import { FolderList } from '../components/FolderList';
 import { SidebarShell } from '../components/SidebarShell';
@@ -524,11 +525,7 @@ function Playground({ providers, onSetUp }: { providers: ProviderConfig[]; onSet
               <Empty
                 icon={<Play size={26} />}
                 title="Run the prompt"
-                action={
-                  <Button size="sm" variant="primary" icon={<Play size={12} />} onClick={run} disabled={!!running}>
-                    Run (Ctrl+Enter)
-                  </Button>
-                }
+                actions={[{ label: 'Run (Ctrl+Enter)', icon: <Play size={12} />, onClick: run, disabled: !!running }]}
               >
                 Streams the answer and measures latency, time to first token, tokens and estimated cost; the evaluators below the prompt check it. Prompts and answers stay on this machine unless the provider is remote.
               </Empty>
@@ -691,11 +688,7 @@ function Compare({ providers, onSetUp }: { providers: ProviderConfig[]; onSetUp(
         ) : (
           <Empty
             title="Compare models side by side"
-            action={
-              <Button size="sm" variant="primary" icon={<Play size={12} />} loading={running} onClick={run}>
-                Run comparison
-              </Button>
-            }
+            actions={[{ label: 'Run comparison', icon: <Play size={12} />, onClick: run, loading: running }]}
           >
             Add the models on the left, then run: the same prompt goes to each, and the table compares latency, tokens, cost, structured-output validity and your evaluators; the fastest and the cheapest are marked.
           </Empty>
@@ -746,15 +739,8 @@ function NoProviders({ onSetUp }: { onSetUp(): void }) {
   );
 }
 
-const KINDS: Array<[ProviderConfig['kind'], string, string]> = [
-  ['openai-compatible', 'OpenAI-compatible', 'https://api.openai.com/v1'],
-  ['azure-openai', 'Azure OpenAI', 'https://RESOURCE.openai.azure.com/openai/deployments/DEPLOYMENT'],
-  ['anthropic', 'Anthropic', 'https://api.anthropic.com'],
-  ['gemini', 'Google Gemini', 'https://generativelanguage.googleapis.com'],
-  ['bedrock', 'Amazon Bedrock', 'https://bedrock-runtime.us-east-1.amazonaws.com'],
-  ['ollama', 'Ollama (local)', 'http://127.0.0.1:11434/v1'],
-  ['mock', 'Mock (offline, deterministic)', 'mock://local'],
-];
+/** kind, label, default base URL: the shared table, in the shape this view reads. */
+const KINDS: Array<[ProviderConfig['kind'], string, string]> = PROVIDER_KINDS.map((k) => [k.kind, k.label, k.baseUrl]);
 
 function Providers({ providers, onSaved, focus }: { providers: ProviderConfig[]; onSaved(): void; focus?: { id: string; at: number } }) {
   const [list, setList] = useState<ProviderConfig[]>(providers);
@@ -796,7 +782,7 @@ function Providers({ providers, onSaved, focus }: { providers: ProviderConfig[];
     const all = [...list, next];
     setList(all);
     setSel(next.id);
-    if (next.kind === 'mock') return save(all);
+    if (!providerNeedsKey(next)) return save(all);
     requestAnimationFrame(() => keyField.current?.focus());
   };
   const duplicateProvider = (x: ProviderConfig) => {
@@ -962,31 +948,34 @@ function Providers({ providers, onSaved, focus }: { providers: ProviderConfig[];
           <Empty
             icon={<Sparkles size={26} />}
             title={list.length ? 'Select a provider' : 'Connect a model to test with'}
+            actions={[
+              ...PROVIDER_PRESETS.map((x) => ({
+                label: providerNeedsKey(x) ? x.name : `${x.name} (no key)`,
+                icon: <Plus size={12} />,
+                primary: !providerNeedsKey(x),
+                onClick: () => void addPreset(x),
+                title: providerNeedsKey(x) ? `Adds ${x.name}; paste its API key, Save, then Test connection` : 'No key, no network: answers from rules, for trying things out',
+              })),
+              { label: 'Something else…', icon: <Plus size={12} />, primary: false, onClick: addProvider, title: 'Any OpenAI-compatible server (vLLM, LM Studio, OpenRouter), Azure OpenAI or Amazon Bedrock' },
+            ]}
+            steps={[
+              'Add a provider above (the offline demo works at once).',
+              <>
+                Paste its API key and <b>Save</b>: the key goes to the OS secret store, never into the workspace.
+              </>,
+              <>
+                <b>Test connection</b> lists the models the key can use.
+              </>,
+              <>
+                Try it in the <b>Playground</b>, compare models, or use it in tests as <span className="mono">model: {'{'} provider: &lt;id&gt; {'}'}</span>.
+              </>,
+            ]}
             action={
-              <div className="flex flex-col items-center gap-3 max-w-xl">
-                <div className="flex flex-wrap justify-center gap-2">
-                  {PROVIDER_PRESETS.map((x) => (
-                    <Button key={x.id} size="sm" variant={x.kind === 'mock' ? 'primary' : undefined} icon={<Plus size={12} />} onClick={() => void addPreset(x)} title={x.kind === 'mock' ? 'No key, no network: answers from rules, for trying things out' : `Adds ${x.name}; paste its API key, Save, then Test connection`}>
-                    {x.name}
-                    {x.kind === 'mock' ? ' (no key)' : ''}
-                  </Button>
-                  ))}
-                  <Button size="sm" icon={<Plus size={12} />} onClick={addProvider} title="Any OpenAI-compatible server (vLLM, LM Studio, OpenRouter), Azure OpenAI or Amazon Bedrock">
-                    Something else…
-                  </Button>
-                </div>
-                <ol className="text-xs text-muted text-left list-decimal pl-5 space-y-0.5">
-                  <li>Add a provider above (the offline demo works at once).</li>
-                  <li>Paste its API key and <b>Save</b>: the key goes to the OS secret store, never into the workspace.</li>
-                  <li><b>Test connection</b> lists the models the key can use.</li>
-                  <li>Try it in the <b>Playground</b>, compare models, or use it in tests as <span className="mono">model: {'{'} provider: &lt;id&gt; {'}'}</span>.</li>
-                </ol>
-                {!list.some((x) => (x as { builtIn?: boolean }).builtIn) && (
-                  <LinkButton className="text-xs" onClick={() => useApp.getState().setView('settings')}>
-                    Or save the assistant's Claude key in Settings: it then appears here in every workspace
-                  </LinkButton>
-                )}
-              </div>
+              !list.some((x) => (x as { builtIn?: boolean }).builtIn) && (
+                <LinkButton className="text-xs" onClick={() => useApp.getState().setView('settings')}>
+                  Or save the assistant's Claude key in Settings: it then appears here in every workspace
+                </LinkButton>
+              )
             }
           >
             {list.length
@@ -999,11 +988,3 @@ function Providers({ providers, onSaved, focus }: { providers: ProviderConfig[];
   );
 }
 
-/** The usual providers, as the examples workspace has them: a cloud one takes its key from the secret store. */
-const PROVIDER_PRESETS: ProviderConfig[] = [
-  { id: 'demo', name: 'Offline demo model', kind: 'mock', baseUrl: 'mock://local', defaultModel: 'demo' },
-  { id: 'openai', name: 'OpenAI', kind: 'openai-compatible', baseUrl: 'https://api.openai.com/v1', defaultModel: 'gpt-4o-mini', apiKey: '{{$secret.provider.openai.apiKey}}' },
-  { id: 'anthropic', name: 'Anthropic', kind: 'anthropic', baseUrl: 'https://api.anthropic.com', defaultModel: 'claude-haiku-4-5-20251001', apiKey: '{{$secret.provider.anthropic.apiKey}}' },
-  { id: 'gemini', name: 'Google Gemini', kind: 'gemini', baseUrl: 'https://generativelanguage.googleapis.com', defaultModel: 'gemini-2.5-flash', apiKey: '{{$secret.provider.gemini.apiKey}}' },
-  { id: 'ollama', name: 'Ollama (local)', kind: 'ollama', baseUrl: 'http://127.0.0.1:11434', defaultModel: 'llama3.2' },
-];

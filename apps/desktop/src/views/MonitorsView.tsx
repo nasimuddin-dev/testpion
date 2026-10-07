@@ -259,16 +259,10 @@ export function MonitorsView() {
                   <Empty
                     icon={<AlarmClock size={24} />}
                     title="No monitors yet"
-                    action={
-                      collections.length ? (
-                        <Button size="sm" variant="primary" icon={<Plus size={12} />} onClick={() => setEditing(newDraft())}>
-                          New monitor
-                        </Button>
-                      ) : (
-                        <Button size="sm" onClick={() => useApp.getState().setView('collections')}>
-                          Create a collection first
-                        </Button>
-                      )
+                    actions={
+                      collections.length
+                        ? [{ label: 'New monitor', icon: <Plus size={12} />, onClick: () => setEditing(newDraft()) }]
+                        : [{ label: 'Create a collection first', onClick: () => useApp.getState().setView('collections'), primary: false }]
                     }
                   >
                     A monitor runs a collection (or some of its folders) on a schedule, in an environment you choose, and tells you when it starts failing: here, in the status bar, and by webhook or e-mail.

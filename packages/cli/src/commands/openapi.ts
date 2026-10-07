@@ -17,7 +17,7 @@ import {
   type FuzzVerdict,
   type HttpRequestSpec,
 } from '@testpion/core';
-import { EXIT, bold, dim, green, red, yellow, CliError, openWorkspace } from '../shared.js';
+import { readDefinition, EXIT, bold, dim, green, red, yellow, CliError, openWorkspace } from '../shared.js';
 
 /** `testpion openapi-ops <spec>`: an OpenAPI document's operations, the way its docs read. */
 export function registerOpenApiCommands(program: Command): void {
@@ -29,10 +29,11 @@ export function registerOpenApiCommands(program: Command): void {
     .argument('<spec>', 'the document: a file or an http(s) link')
     .option('--tag <tag>', 'only this tag')
     .option('--json', 'print the outline as JSON (for scripts and AI agents)')
-    .action(async (ref: string, o: { tag?: string; json?: boolean }) => {
+    .option('-w, --workspace <path>', 'the workspace folder a relative spec path is under (default: the nearest workspace.json)')
+    .action(async (ref: string, o: { tag?: string; json?: boolean; workspace?: string }) => {
       let outline;
       try {
-        outline = openApiOutline(/^https?:\/\//i.test(ref) ? (await fetchImportText(ref)).text : readFileSync(ref, 'utf8'));
+        outline = openApiOutline(await readDefinition(ref, o.workspace));
       } catch (e) {
         throw new CliError((e as Error).message, EXIT.CONFIG_ERROR);
       }
@@ -91,7 +92,7 @@ export function registerOpenApiCommands(program: Command): void {
       ) => {
         let text: string;
         try {
-          text = /^https?:\/\//i.test(ref) ? (await fetchImportText(ref)).text : readFileSync(ref, 'utf8');
+          text = await readDefinition(ref, o.workspace);
         } catch (e) {
           throw new CliError(`Cannot read ${ref}: ${(e as Error).message}`, EXIT.CONFIG_ERROR);
         }

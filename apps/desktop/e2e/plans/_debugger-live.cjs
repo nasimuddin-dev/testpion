@@ -2,141 +2,58 @@
 // the Debugger with real programs — curl through the proxy (HTTP, an HTTPS tunnel, HTTPS decrypted with the root
 // certificate), the Windows system proxy set and restored (read from the registry), a browser and a terminal opened
 // through the proxy (their processes found and closed). "main:" steps run outside the app, like another program would.
-const { withExpect } = require('../lib.cjs');
+const { withExpect, step, EXCHANGES, waitRunning, curl, powershell, closeByCommandLine } = require('../lib.cjs');
 
 const PROXY = 'http://127.0.0.1:8899';
-const button = (label) => `[...document.querySelectorAll('main button')].find((b) => b.offsetParent && b.textContent.trim() === ${JSON.stringify(label)})`;
-// run outside the app's event loop: the proxy serves from the main process, so a synchronous child would deadlock it
-const run = (file, args) => `await new Promise((resolve) => require('child_process').execFile(${JSON.stringify(file)}, ${JSON.stringify(args)}, { encoding: 'utf8', timeout: 60000, windowsHide: true }, (err, stdout, stderr) => resolve(err && !stdout ? 'failed: ' + (stderr || err.message).trim() : String(stdout).trim())))`;
-const ps = (script) => run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script + '; exit 0']);
-const curl = (args) => run('curl.exe', args);
-const exchanges = `await window.aps.invoke('debug.exchanges', {})`;
-const registry = ps(`$p = Get-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings'; "enable=$([int]$p.ProxyEnable) server=$([string]$p.ProxyServer)"`);
+const registry = powershell(`$p = Get-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings'; "enable=$([int]$p.ProxyEnable) server=$([string]$p.ProxyServer)"`);
+const head = (args) => curl(['-s', '-o', 'NUL', '-w', '%{http_code}', '-x', PROXY, ...args]);
+/** A Debugger switch (`debug.decrypt`, `debug.systemProxy`) turned on or off, with the status field it sets. */
+const toggle = (name, channel, key, on) => step(name, `const st = await window.aps.invoke('${channel}', { on: ${on} }); return '${key}=' + !!st.${key};`);
+/** The first captured exchange matching, described. */
+const listed = (name, pred, describe) => step(name, `await __t.sleep(800); const e = (${EXCHANGES}).find((x) => ${pred}); return e ? ${describe} : 'NOT LISTED';`);
 
 const steps = [
-  [
+  step(
     'start-capturing',
-    `(async () => {
-      await __t.view('Debugger');
-      const st0 = await window.aps.invoke('debug.status');
-      if (!st0.running) { ${button('Start capturing')}?.click(); }
-      const st = await __t.waitFor(async () => { const s = await window.aps.invoke('debug.status'); return s.running ? s : null; }, 10000);
-      return 'running on port ' + st.port + ' decrypt=' + !!st.decrypt + ' systemProxy=' + !!st.systemProxy;
-    })()`,
-  ],
+    `await __t.view('Debugger');
+     if (!(await window.aps.invoke('debug.status')).running) button('Start capturing')?.click();
+     const st = ${waitRunning(true)};
+     return 'running on port ' + st.port + ' decrypt=' + !!st.decrypt + ' systemProxy=' + !!st.systemProxy;`,
+  ),
   ['curl-http-through-the-proxy', `main: return 'curl: ' + ${curl(['-s', '-x', PROXY, 'http://127.0.0.1:4010/health'])};`, false],
-  [
-    'curl-request-listed',
-    `(async () => {
-      await __t.sleep(800);
-      const list = (${exchanges}).items ?? ${exchanges};
-      const e = (Array.isArray(list) ? list : list.items).find((x) => /\\/health$/.test(x.url));
-      return e ? 'listed: ' + e.method + ' ' + e.status + ' app=' + (e.application || e.app || '?') + ' kind=' + e.kind : 'NOT LISTED';
-    })()`,
-  ],
-  ['curl-https-tunnel', `main: return 'https via tunnel: ' + ${curl(['-s', '-o', 'NUL', '-w', '%{http_code}', '-x', PROXY, 'https://example.com/'])};`, false],
-  [
-    'tunnel-listed',
-    `(async () => {
-      await __t.sleep(800);
-      const list = (${exchanges}).items ?? ${exchanges};
-      const e = (Array.isArray(list) ? list : list.items).find((x) => x.kind === 'tunnel' && /example\\.com/.test(x.url));
-      return e ? 'tunnel listed: ' + e.url : 'NO TUNNEL';
-    })()`,
-  ],
-  [
-    'decrypt-https',
-    `(async () => {
-      const st = await window.aps.invoke('debug.decrypt', { on: true });
-      return 'decrypt=' + !!st.decrypt;
-    })()`,
-  ],
-  [
-    'curl-https-decrypted',
-    `main: const path = require('path'); const fs = require('fs');
-      const pem = path.join(home, 'debugger', 'testpion-root.pem');
-      if (!fs.existsSync(pem)) return 'NO ROOT CERT at ' + pem; // the root exists for programs that trust it; curl here accepts the certificate with -k
-      return 'https decrypted: ' + (await new Promise((resolve) => require('child_process').execFile('curl.exe', ['-s', '-k', '-o', 'NUL', '-w', '%{http_code}', '-x', ${JSON.stringify(PROXY)}, 'https://example.com/'], { encoding: 'utf8', timeout: 60000, windowsHide: true }, (err, stdout, stderr) => resolve(err && !stdout ? 'failed: ' + (stderr || err.message).trim() : String(stdout).trim()))));`,
-    false,
-  ],
-  [
-    'decrypted-request-listed',
-    `(async () => {
-      await __t.sleep(800);
-      const list = (${exchanges}).items ?? ${exchanges};
-      const e = (Array.isArray(list) ? list : list.items).find((x) => x.kind === 'http' && /^https:\\/\\/example\\.com/.test(x.url));
-      return e ? 'decrypted listed: ' + e.method + ' ' + e.url + ' ' + e.status : 'NO DECRYPTED REQUEST';
-    })()`,
-  ],
+  listed('curl-request-listed', `/\\/health$/.test(x.url)`, `'listed: ' + e.method + ' ' + e.status + ' app=' + (e.application ?? '?') + ' kind=' + e.kind`),
+  ['curl-https-tunnel', `main: return 'https via tunnel: ' + ${head(['https://example.com/'])};`, false],
+  listed('tunnel-listed', `x.kind === 'tunnel' && /example\\.com/.test(x.url)`, `'tunnel listed: ' + e.url`),
+  toggle('decrypt-https', 'debug.decrypt', 'decrypt', true),
+  // Windows' curl is Schannel and ignores --cacert: -k accepts the proxy's certificate; decryption is what is tested
+  ['curl-https-decrypted', `main: return 'https decrypted: ' + ${head(['-k', 'https://example.com/'])};`, false],
+  listed('decrypted-request-listed', `x.kind === 'http' && /^https:\\/\\/example\\.com/.test(x.url)`, `'decrypted listed: ' + e.method + ' ' + e.url + ' ' + e.status`),
   ['registry-before', `main: return 'before: ' + ${registry};`, false],
-  [
-    'system-proxy-on',
-    `(async () => {
-      const st = await window.aps.invoke('debug.systemProxy', { on: true });
-      return 'systemProxy=' + !!st.systemProxy;
-    })()`,
-  ],
+  toggle('system-proxy-on', 'debug.systemProxy', 'systemProxy', true),
   ['registry-with-proxy', `main: return 'with proxy: ' + ${registry};`, false],
-  [
-    'system-proxy-off',
-    `(async () => {
-      const st = await window.aps.invoke('debug.systemProxy', { on: false });
-      return 'systemProxy=' + !!st.systemProxy;
-    })()`,
-  ],
+  toggle('system-proxy-off', 'debug.systemProxy', 'systemProxy', false),
   ['registry-restored', `main: return 'restored: ' + ${registry};`, false],
-  [
+  step(
     'open-a-browser',
-    `(async () => {
-      const opts = await window.aps.invoke('debug.captureOptions');
-      const b = (opts.browsers ?? [])[0];
-      if (!b) return 'NO BROWSER FOUND';
-      const r = await window.aps.invoke('debug.openBrowser', { browser: b.name });
-      await __t.sleep(7000);
-      return 'opened: ' + r.browser;
-    })()`,
-  ],
-  [
-    'browser-runs-through-the-proxy',
-    `main: return ${ps(`$ps = Get-CimInstance Win32_Process | Where-Object { $_.ProcessId -ne $PID -and $_.Name -ne 'powershell.exe' -and $_.CommandLine -like '*--proxy-server=${PROXY}*' }; $n = ($ps | Measure-Object).Count; $ps | ForEach-Object { try { Stop-Process -Id $_.ProcessId -Force -ErrorAction Stop } catch {} }; "browser processes with the proxy: $n (closed)"`)};`,
-    false,
-  ],
-  [
-    'browser-traffic-listed',
-    `(async () => {
-      const list = (${exchanges}).items ?? ${exchanges};
-      const all = Array.isArray(list) ? list : list.items;
-      const apps = [...new Set(all.map((x) => x.application || x.app).filter(Boolean))];
-      return 'exchanges: ' + all.length + ' | applications: ' + apps.join(', ');
-    })()`,
-  ],
-  [
-    'open-a-terminal',
-    `(async () => {
-      const r = await window.aps.invoke('debug.openTerminal');
-      await __t.sleep(3000);
-      return 'terminal: ' + r.terminal;
-    })()`,
-  ],
-  [
-    'terminal-has-the-proxy',
-    `main: return ${ps(`$ps = Get-CimInstance Win32_Process | Where-Object { $_.ProcessId -ne $PID -and $_.Name -ne 'powershell.exe' -and $_.Name -ne 'TestPion.exe' -and $_.CommandLine -like '*TestPion HTTP Debugger: this shell sends through*' }; $n = ($ps | Measure-Object).Count; $ps | ForEach-Object { try { Stop-Process -Id $_.ProcessId -Force -ErrorAction Stop } catch {} }; "terminal windows through the proxy: $n (closed)"`)};`,
-    false,
-  ],
-  [
-    'stop',
-    `(async () => {
-      ${button('Stop')}?.click();
-      const st = await __t.waitFor(async () => { const s = await window.aps.invoke('debug.status'); return s.running ? null : s; }, 10000);
-      return 'stopped; systemProxy=' + !!st.systemProxy;
-    })()`,
-  ],
+    `const b = ((await window.aps.invoke('debug.captureOptions')).browsers ?? [])[0];
+     if (!b) return 'NO BROWSER FOUND';
+     const r = await window.aps.invoke('debug.openBrowser', { browser: b.name });
+     await __t.sleep(7000);
+     return 'opened: ' + r.browser;`,
+  ),
+  ['browser-runs-through-the-proxy', `main: return ${closeByCommandLine(`*--proxy-server=${PROXY}*`, 'browser processes with the proxy')};`, false],
+  step('browser-traffic-listed', `const all = ${EXCHANGES}; return 'exchanges: ' + all.length + ' | applications: ' + [...new Set(all.map((x) => x.application).filter(Boolean))].join(', ');`),
+  step('open-a-terminal', `const r = await window.aps.invoke('debug.openTerminal'); await __t.sleep(3000); return 'terminal: ' + r.terminal;`),
+  // the terminal carries HTTP_PROXY in its environment, not on its command line: the banner identifies it
+  ['terminal-has-the-proxy', `main: return ${closeByCommandLine('*TestPion HTTP Debugger: this shell sends through*', 'terminal windows through the proxy', ['TestPion.exe'])};`, false],
+  step('stop', `button('Stop')?.click(); const st = ${waitRunning(false)}; return 'stopped; systemProxy=' + !!st.systemProxy;`),
   ['registry-after-stop', `main: return 'after stop: ' + ${registry};`, false],
 ];
 
 module.exports = withExpect(steps, {
   'start-capturing': /^running on port 8899 decrypt=false systemProxy=false$/,
   'curl-http-through-the-proxy': /^curl: \{"status":"ok"/,
+  // a program that exits within milliseconds (curl) may be gone before the owner lookup answers
   'curl-request-listed': /^listed: GET 200 app=(curl|\?) kind=http$/,
   'curl-https-tunnel': /^https via tunnel: 200$/,
   'tunnel-listed': /^tunnel listed: /,

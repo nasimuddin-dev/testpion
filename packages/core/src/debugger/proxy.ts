@@ -12,7 +12,9 @@ import {
   type IncomingHttpHeaders as H2Headers,
 } from 'node:http2';
 import { duplexPair } from 'node:stream';
-import { execFile } from 'node:child_process';
+import { applicationOfPort, ownerOfProcess, type ProgramInfo } from './programs.js';
+import { DebuggerSession } from './session.js';
+export { applicationOfPort, ownerOfProcess, type ProgramInfo };
 import type { Duplex } from 'node:stream';
 import { ApsError } from '../errors.js';
 import { shortId } from '../util/ids.js';
@@ -109,7 +111,9 @@ export interface BreakpointEdits {
 
 export interface DebuggerProxyOptions {
   port?: number;
-  /** How many bytes of bodies the session keeps in memory in all (default 200 MB); past that, the oldest exchanges lose their bodies. */
+  /** The session the captured exchanges go into (the app shares one across stop / start); a new one otherwise. */
+  session?: DebuggerSession;
+  /** Without a session given: how many bytes of bodies it keeps in memory in all (default 200 MB). */
   maxSessionBodyBytes?: number;
   /** Listen on every interface (a phone, another computer), not only this one. */
   lan?: boolean;
@@ -145,7 +149,9 @@ interface TunnelOrigin {
 export interface DebuggerProxy {
   url: string;
   port: number;
+  /** The captured exchanges (the session's array). */
   exchanges: DebuggerExchange[];
+  session: DebuggerSession;
   close(): Promise<void>;
   /** Forget captured exchanges (the server keeps running). */
   clear(): void;
@@ -201,90 +207,10 @@ const collectWhole = (stream: NodeJS.ReadableStream) =>
   });
 
 /** The program that owns a local TCP port, best effort, per platform; undefined when unknown. */
-/** A program found behind a client port. */
-export interface ProgramInfo {
-  name: string;
-  pid?: number;
-  /** The account the program runs as (DOMAIN\\user on Windows). */
-  user?: string;
-}
-
-/** Windows: the owning PID of every TCP connection by its local port, from one `netstat` (shared by the lookups of a burst). */
-let winOwnersPending: Promise<Map<number, number>> | undefined;
-function winOwners(): Promise<Map<number, number>> {
-  if (winOwnersPending) return winOwnersPending;
-  winOwnersPending = new Promise<Map<number, number>>((resolve) => {
-    execFile('netstat', ['-ano', '-p', 'tcp'], { timeout: 5000, windowsHide: true, maxBuffer: 16 * 1024 * 1024 }, (err, out) => {
-      const map = new Map<number, number>();
-      if (!err)
-        for (const m of String(out).matchAll(/^\s*TCP\s+\S+:(\d+)\s+\S+\s+(\S+)\s+(\d+)\s*$/gm)) {
-          const local = Number(m[1]);
-          const pid = Number(m[3]);
-          // an established connection wins over a closing one of the same port
-          if (pid > 0 && (m[2] === 'ESTABLISHED' || !map.has(local))) map.set(local, pid);
-        }
-      resolve(map);
-    });
-  });
-  // the next burst gets a fresh table
-  void winOwnersPending.finally(() => setTimeout(() => (winOwnersPending = undefined), 250));
-  return winOwnersPending;
-}
-
-const winNames = new Map<number, Promise<string | undefined>>();
-/** Windows: a process's name by PID (as Get-Process names it: "chrome", "node"), each PID looked up once. */
-function winProcessName(pid: number): Promise<string | undefined> {
-  let p = winNames.get(pid);
-  if (!p) {
-    p = new Promise<string | undefined>((resolve) => {
-      execFile('tasklist', ['/FI', `PID eq ${pid}`, '/FO', 'CSV', '/NH'], { timeout: 5000, windowsHide: true }, (err, out) => {
-        const m = /^"([^"]+)"/m.exec(err ? '' : String(out));
-        resolve(m ? m[1]!.replace(/\.exe$/i, '') : undefined);
-      });
-    });
-    winNames.set(pid, p);
-    if (winNames.size > 500) winNames.clear();
-  }
-  return p;
-}
-
-export function applicationOfPort(port: number): Promise<ProgramInfo | undefined> {
-  return new Promise((resolve) => {
-    const done = (pid: string | undefined, name: string | undefined, user?: string) =>
-      name?.trim() ? resolve({ name: name.trim(), pid: Number(pid) || undefined, ...(user?.trim() ? { user: user.trim() } : {}) }) : resolve(undefined);
-    const opts = { timeout: 3000, windowsHide: true };
-    if (process.platform === 'win32') {
-      // one netstat names the owners of every connection open right now (PowerShell takes a second per call, and a
-      // browser's or curl's connection is often gone by then); a closed connection (TIME_WAIT) belongs to PID 0, nobody
-      void winOwners().then(async (owners) => {
-        const pid = owners.get(port);
-        done(pid ? String(pid) : undefined, pid ? await winProcessName(pid) : undefined);
-      });
-    } else {
-      execFile('lsof', ['-nP', `-iTCP:${port}`, '-sTCP:ESTABLISHED', '-Fpc'], opts, (err, out) => {
-        if (err) return done(undefined, undefined);
-        done(/^p(\d+)$/m.exec(String(out))?.[1], /^c(.+)$/m.exec(String(out))?.[1]);
-      });
-    }
-  });
-}
-
-/** The account a process runs as (DOMAIN\\user on Windows, from CIM: Get-Process -IncludeUserName needs an elevated shell). */
-export function ownerOfProcess(pid: number): Promise<string | undefined> {
-  return new Promise((resolve) => {
-    const opts = { timeout: 8000, windowsHide: true };
-    if (process.platform === 'win32') {
-      const ps = `$o = Get-CimInstance Win32_Process -Filter "ProcessId=${Math.trunc(pid)}" -ErrorAction SilentlyContinue | Invoke-CimMethod -MethodName GetOwner -ErrorAction SilentlyContinue; if ($o.User) { if ($o.Domain) { "$($o.Domain)\\$($o.User)" } else { $o.User } }`;
-      execFile('powershell', ['-NoProfile', '-NonInteractive', '-Command', ps], opts, (err, out) => resolve(err ? undefined : String(out).trim() || undefined));
-    } else {
-      execFile('ps', ['-o', 'user=', '-p', String(Math.trunc(pid))], opts, (err, out) => resolve(err ? undefined : String(out).trim() || undefined));
-    }
-  });
-}
-
 export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promise<DebuggerProxy> {
   const maxBody = opts.maxBodyBytes ?? 512 * 1024;
-  const exchanges: DebuggerExchange[] = [];
+  const session = opts.session ?? new DebuggerSession({ maxBodyBytes: opts.maxSessionBodyBytes });
+  const exchanges = session.items;
   const appOf = opts.applicationOf ?? applicationOfPort;
   const appCache = new Map<number, Promise<string | ProgramInfo | undefined>>();
   /** Hits per rule, and the rules already counted for an exchange (a highlight is checked again on the response). */
@@ -338,7 +264,7 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
     if (!p) {
       p = (opts.ownerOf ?? ownerOfProcess)(pid).catch(() => undefined);
       owners.set(pid, p);
-      if (owners.size > 500) owners.clear();
+      if (owners.size > 500) owners.delete(owners.keys().next().value!);
     }
     return p;
   };
@@ -361,44 +287,22 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
   const application = (port: number) => {
     let p = appCache.get(port);
     if (!p) {
-      p = appOf(port).catch(() => undefined);
+      p = appOf(port)
+        .catch(() => undefined)
+        .then((a) => {
+          if (!a) appCache.delete(port);
+          return a;
+        });
       appCache.set(port, p);
-      if (appCache.size > 500) appCache.clear();
+      if (appCache.size > 500) appCache.delete(appCache.keys().next().value!);
     }
     return p;
-  };
-  // the session keeps at most 5,000 exchanges and a budget of body bytes: 5,000 bodies of half a megabyte would be
-  // gigabytes, so the oldest exchanges lose their bodies first (their headers, sizes and timing stay)
-  const bodyBudget = opts.maxSessionBodyBytes ?? 200 * 1024 * 1024;
-  const keptOf = new WeakMap<DebuggerExchange, number>();
-  let keptBytes = 0;
-  let evictAt = 0;
-  const account = (e: DebuggerExchange) => {
-    const n = (e.requestBody?.length ?? 0) + (e.responseBody?.length ?? 0);
-    keptBytes += n - (keptOf.get(e) ?? 0);
-    keptOf.set(e, n);
-    while (keptBytes > bodyBudget && evictAt < exchanges.length) {
-      const old = exchanges[evictAt++]!;
-      const b = keptOf.get(old) ?? 0;
-      if (!b || old === e) continue;
-      delete old.requestBody;
-      delete old.responseBody;
-      old.bodiesDropped = true;
-      keptOf.set(old, 0);
-      keptBytes -= b;
-    }
   };
   const record = (e: DebuggerExchange, phase: 'request' | 'response') => {
     if (phase === 'request') {
       recorded.add(e);
-      exchanges.push(e);
-      if (exchanges.length > 5000) {
-        const gone = exchanges.shift()!;
-        keptBytes -= keptOf.get(gone) ?? 0;
-        if (evictAt > 0) evictAt--;
-      }
-    }
-    account(e);
+      session.add(e);
+    } else session.account(e);
     opts.onExchange?.(e, phase);
   };
   /** Streams (frames, events) report at most a few times a second. */
@@ -1104,7 +1008,8 @@ ${pem ? `<p>To see HTTPS too, install and trust TestPion's root certificate on t
     url: `http://127.0.0.1:${port}`,
     port,
     exchanges,
-    clear: () => exchanges.splice(0),
+    session,
+    clear: () => session.clear(),
     ruleHits: () => Object.fromEntries(hits),
     resetRuleHits: () => hits.clear(),
     close: () =>

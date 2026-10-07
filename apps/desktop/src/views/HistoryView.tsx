@@ -244,11 +244,7 @@ export function HistoryView() {
           <Empty
             icon={<History size={24} />}
             title="No history yet"
-            action={
-              <Button size="sm" variant="primary" onClick={() => useApp.getState().openIntent('rest', { newTab: true })}>
-                Send a request
-              </Button>
-            }
+            actions={[{ label: 'Send a request', onClick: () => useApp.getState().openIntent('rest', { newTab: true }) }]}
           >
             Every request you send is kept here with its response: open it again, compare two, or save it to a collection.
           </Empty>

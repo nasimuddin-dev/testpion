@@ -29,6 +29,8 @@ export interface GitStatus {
   repository: boolean;
   /** Repository root (absolute). */
   root?: string;
+  /** The workspace's folder inside the repository, when the workspace is not the repository itself (the examples inside a checkout). */
+  folder?: string;
   branch?: string;
   upstream?: string;
   ahead: number;
@@ -165,6 +167,8 @@ export async function gitStatus(ws: string): Promise<GitStatus> {
   if (!repo) return { repository: false, ahead: 0, behind: 0, files: [], conflicted: false };
   const out = await runGit(ws, ['status', '--porcelain=v2', '--branch', '-z', '--untracked-files=all', '--', '.']);
   const st: GitStatus = { repository: true, root: repo, ahead: 0, behind: 0, files: [], conflicted: false };
+  const folder = toRepoPath(repo, ws, '.');
+  if (folder && folder !== '.') st.folder = folder;
   const parts = out.split('\0');
   for (let i = 0; i < parts.length; i++) {
     const line = parts[i]!;
@@ -244,6 +248,55 @@ export async function gitCommit(ws: string, message: string, opts: { paths?: str
 }
 
 /** Commits, newest first; with `path`, only those that changed that file (following renames). */
+/** A commit as the Git view shows it when picked: its message, and the files it changed in the workspace. */
+export interface GitCommitDetail extends GitCommit {
+  body: string;
+  files: Array<{ path: string; state: GitFileState; additions: number; deletions: number }>;
+}
+
+export async function gitCommitDetail(ws: string, hash: string): Promise<GitCommitDetail | undefined> {
+  const repo = await repoRoot(ws);
+  if (!repo || !/^[0-9a-f]{4,40}$/i.test(hash)) return undefined;
+  try {
+    const [head, stat, names] = await Promise.all([
+      runGit(ws, ['show', '-s', '--format=%H%x1f%h%x1f%an%x1f%ae%x1f%aI%x1f%s%x1f%b', hash]),
+      runGit(ws, ['show', '--format=', '--numstat', '-M', hash, '--', '.']),
+      runGit(ws, ['show', '--format=', '--name-status', '-M', hash, '--', '.']),
+    ]);
+    const [full, short, author, email, date, subject, body] = head.trim().split('\x1f');
+    const states = new Map<string, GitFileState>();
+    for (const line of names.split('\n')) {
+      const [code, ...rest] = line.split('\t');
+      if (!code || !rest.length) continue;
+      const path = rest[rest.length - 1]!;
+      states.set(path, code.startsWith('A') ? 'added' : code.startsWith('D') ? 'deleted' : code.startsWith('R') ? 'renamed' : 'modified');
+    }
+    const files: GitCommitDetail['files'] = [];
+    for (const line of stat.split('\n')) {
+      const [a, d, ...rest] = line.split('\t');
+      if (!rest.length) continue;
+      const path = rest[rest.length - 1]!.replace(/^.*\{.* => (.*)\}(.*)$/, '$1$2');
+      const wsPath = toWorkspacePath(repo, ws, path);
+      if (wsPath.startsWith('..')) continue;
+      files.push({ path: wsPath, state: states.get(path) ?? 'modified', additions: Number(a) || 0, deletions: Number(d) || 0 });
+    }
+    return { hash: full!, short: short!, author: author!, email: email!, date: date!, subject: subject ?? '', body: (body ?? '').trim(), files };
+  } catch {
+    return undefined;
+  }
+}
+
+/** The unified diff of one file in a commit. */
+export async function gitCommitDiff(ws: string, hash: string, path: string): Promise<string> {
+  const repo = await repoRoot(ws);
+  if (!repo || !/^[0-9a-f]{4,40}$/i.test(hash)) return '';
+  try {
+    return await runGit(ws, ['show', '--format=', hash, '--', toRepoPath(repo, ws, path)]);
+  } catch {
+    return '';
+  }
+}
+
 export async function gitLog(ws: string, opts: { path?: string; limit?: number } = {}): Promise<GitCommit[]> {
   try {
     // the workspace's own history: a workspace that is a folder of a bigger repository sees the commits that touched it

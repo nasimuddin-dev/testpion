@@ -256,13 +256,54 @@ export function statusTone(status?: number | string): 'ok' | 'bad' | 'warn' | 'd
   return 'bad';
 }
 
-export function Empty({ icon, title, children, action }: { icon?: ReactNode; title: string; children?: ReactNode; action?: ReactNode }) {
+/** A first step an empty view offers; the first one is the primary button unless `primary: false`. */
+export interface EmptyAction {
+  label: ReactNode;
+  icon?: ReactNode;
+  onClick(): void;
+  primary?: boolean;
+  disabled?: boolean;
+  loading?: boolean;
+  title?: string;
+}
+
+/**
+ * An empty view: what it is for, the first steps as buttons (`actions`, the first primary) or anything (`action`),
+ * and `steps` (a numbered how-to) under them. One layout for every view.
+ */
+export function Empty({ icon, title, children, action, actions, steps }: { icon?: ReactNode; title: string; children?: ReactNode; action?: ReactNode; actions?: EmptyAction[]; steps?: ReactNode[] }) {
   return (
     <div className="h-full w-full flex flex-col items-center justify-center text-center gap-2 p-8 text-muted fade-in">
       {icon && <div className="mb-2 grid place-items-center h-14 w-14 rounded-2xl bg-accent-soft text-accent ring-1 ring-accent/20 shadow-sm">{icon}</div>}
       <div className="text-fg font-semibold text-[1.05rem] tracking-tight">{title}</div>
       {children && <div className="text-sm max-w-md leading-relaxed text-pretty">{children}</div>}
+      {actions && actions.length > 0 && (
+        <div className="mt-2 flex flex-wrap justify-center gap-2">
+          {actions.map((a, i) => (
+            <Button key={i} size="sm" variant={(a.primary ?? i === 0) ? 'primary' : undefined} icon={a.icon} onClick={a.onClick} disabled={a.disabled} loading={a.loading} title={a.title}>
+              {a.label}
+            </Button>
+          ))}
+        </div>
+      )}
       {action && <div className="mt-2">{action}</div>}
+      {steps && steps.length > 0 && (
+        <ol className="mt-2 text-xs text-left list-decimal pl-5 space-y-0.5 max-w-md">
+          {steps.map((s, i) => (
+            <li key={i}>{s}</li>
+          ))}
+        </ol>
+      )}
+    </div>
+  );
+}
+
+/** A line that says the next step and offers it: the push after a commit, a key to add. One look everywhere. */
+export function Callout({ tone = 'accent', children, action, ...rest }: { tone?: 'accent' | 'warn'; children: ReactNode; action?: ReactNode } & Record<`data-${string}`, string | undefined>) {
+  return (
+    <div className={cx('rounded-lg border px-3 py-2 text-sm flex items-center gap-3 flex-wrap', tone === 'warn' ? 'border-warn/40 bg-warn/5' : 'border-accent/40 bg-accent/5')} {...rest}>
+      <span className="min-w-0">{children}</span>
+      {action && <span className="ml-auto shrink-0">{action}</span>}
     </div>
   );
 }

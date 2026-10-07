@@ -628,11 +628,7 @@ export function GraphQLView() {
                   <Empty
                     icon={<Play size={26} />}
                     title="Run the operation to see the response"
-                    action={
-                      <Button size="sm" variant="primary" icon={<Play size={12} />} onClick={() => void run()} disabled={!!running}>
-                        Run (Ctrl+Enter)
-                      </Button>
-                    }
+                    actions={[{ label: 'Run (Ctrl+Enter)', icon: <Play size={12} />, onClick: () => void run(), disabled: !!running }]}
                   >
                     Write a query or a mutation on the left; <b>Introspect</b> reads the endpoint's schema for autocomplete, validation and the schema explorer.
                   </Empty>

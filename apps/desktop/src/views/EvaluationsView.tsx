@@ -385,11 +385,7 @@ export function EvaluationsView() {
               <Empty
                 icon={<FlaskConical size={28} />}
                 title="Run an evaluation"
-                action={
-                  <Button size="sm" variant="primary" icon={<Play size={12} />} onClick={run} disabled={!count}>
-                    Run {count ? `${d.limit ? Math.min(d.limit, count) : count} cases` : ''}
-                  </Button>
-                }
+                actions={[{ label: `Run ${count ? `${d.limit ? Math.min(d.limit, count) : count} cases` : ''}`.trim(), icon: <Play size={12} />, onClick: run, disabled: !count }]}
               >
                 An evaluation runs every record of the dataset through the prompt and the model, and scores each answer with the evaluators. Records stream with bounded concurrency, retries and rate limiting; the results are kept on disk and can be compared with a baseline.
               </Empty>

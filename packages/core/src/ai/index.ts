@@ -1,4 +1,5 @@
 import { envNameForSecret } from '../storage/secrets.js';
+import { DEFAULT_BASE_URLS, isLocalProvider } from '@testpion/shared';
 import type { ModelRef, PriceEntry, ProviderConfig, TokenUsage } from '../model/types.js';
 import { ApsError } from '../errors.js';
 import type { ChatRequest, ChatResponse, LlmProvider } from './types.js';
@@ -13,15 +14,7 @@ import type { VariableScope } from '../vars/variables.js';
 
 export * from './types.js';
 
-export const DEFAULT_BASE_URLS: Record<string, string> = {
-  'openai-compatible': 'https://api.openai.com/v1',
-  'azure-openai': 'https://YOUR-RESOURCE.openai.azure.com/openai/deployments/YOUR-DEPLOYMENT',
-  anthropic: 'https://api.anthropic.com',
-  gemini: 'https://generativelanguage.googleapis.com',
-  bedrock: 'https://bedrock-runtime.us-east-1.amazonaws.com',
-  ollama: 'http://127.0.0.1:11434/v1',
-  mock: 'mock://local',
-};
+export { DEFAULT_BASE_URLS, isLocalProvider, providerNeedsKey, PROVIDER_KINDS, PROVIDER_PRESETS, providerKindLabel } from '@testpion/shared';
 
 /** Wraps a provider with rate limiting, bounded concurrency and retry with exponential backoff. */
 class ManagedProvider implements LlmProvider {
@@ -97,12 +90,6 @@ export function createProvider(config: ProviderConfig, apiKey: string | undefine
   }
   return new ManagedProvider(p);
 }
-
-/** A local OpenAI-compatible server (LM Studio, vLLM on this machine) that needs no key. */
-export const isLocalProvider = (cfg: ProviderConfig) => cfg.kind === 'openai-compatible' && /localhost|127\.0\.0\.1/.test(cfg.baseUrl ?? '');
-
-/** Whether a provider must have an API key to be used: the cloud ones; not the offline demo, Ollama or a local server. */
-export const providerNeedsKey = (cfg: ProviderConfig) => cfg.kind !== 'mock' && cfg.kind !== 'ollama' && !isLocalProvider(cfg);
 
 /** "No API key for OpenAI", with where to add it: the app's Providers, or the variable the CLI and CI read. */
 export function missingKeyError(cfg: ProviderConfig): ApsError {

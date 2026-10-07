@@ -148,11 +148,7 @@ export function TracesView() {
           <Empty
             icon={<Activity size={24} />}
             title="No traces yet"
-            action={
-              <Button size="sm" variant="primary" onClick={() => useApp.getState().openIntent('rest', { newTab: true })}>
-                Send a request
-              </Button>
-            }
+            actions={[{ label: 'Send a request', onClick: () => useApp.getState().openIntent('rest', { newTab: true }) }]}
           >
             Every request, MCP call, LLM call and test run produces an OpenTelemetry-shaped trace: where the time went, span by span.
           </Empty>

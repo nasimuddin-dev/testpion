@@ -382,7 +382,7 @@ export function TestsView() {
                     <Input className="w-full h-7 min-h-7 text-sm" placeholder="Filter test files" aria-label="Filter test files" value={treeFilter} onChange={(e) => setTreeFilter(e.target.value)} />
                   </div>
                 )}
-                <div className="flex-1 overflow-auto" onKeyDown={treeKeys}>{tree.length ? (tf && !filterTree(tree).length ? <p className="px-3 py-4 text-sm text-muted text-center">No test files match this filter.</p> : renderTree(filterTree(tree))) : <Empty title="No test files" action={<div className="flex flex-wrap justify-center gap-2"><Button size="sm" variant="primary" icon={<FilePlus2 size={12} />} onClick={() => void newFile('http')}>New test file</Button><Button size="sm" icon={<Workflow size={12} />} onClick={() => useApp.getState().openIntent('apidef', {})}>Generate from an API definition</Button></div>}>A test is a YAML file in tests/: a request (HTTP, GraphQL, gRPC, WebSocket, MCP or AI) and its checks, or a whole flow. Create one, generate a first suite from an API definition, or save one from a request tab, the MCP view or AI Lab.</Empty>}</div>
+                <div className="flex-1 overflow-auto" onKeyDown={treeKeys}>{tree.length ? (tf && !filterTree(tree).length ? <p className="px-3 py-4 text-sm text-muted text-center">No test files match this filter.</p> : renderTree(filterTree(tree))) : <NoTestFiles onNew={() => void newFile('http')} />}</div>
                 <div className="border-t border-line p-2 flex flex-col gap-2">
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     <label className="flex flex-col gap-0.5">
@@ -525,11 +525,7 @@ export function TestsView() {
               <Empty
                 icon={<FileCode2 size={28} />}
                 title="Select a test file"
-                action={
-                  <Button size="sm" icon={<FilePlus2 size={12} />} onClick={() => void newFile('http')}>
-                    New test file
-                  </Button>
-                }
+                actions={[{ label: 'New test file', icon: <FilePlus2 size={12} />, onClick: () => void newFile('http'), primary: false }]}
               >
                 Pick a file on the left to edit it and preview its tests; <b>Run all tests</b> below the list runs every file with the active environment.
               </Empty>
@@ -666,3 +662,19 @@ function TestTreeRow({ depth, label, icon, expanded, active, onClick, onRun, men
     </div>
   );
 }
+
+/** The Tests view before any test file: what a test is, and the ways to get one. */
+function NoTestFiles({ onNew }: { onNew(): void }) {
+  return (
+    <Empty
+      title="No test files"
+      actions={[
+        { label: 'New test file', icon: <FilePlus2 size={12} />, onClick: onNew },
+        { label: 'Generate from an API definition', icon: <Workflow size={12} />, onClick: () => useApp.getState().openIntent('apidef', {}) },
+      ]}
+    >
+      A test is a YAML file in tests/: a request (HTTP, GraphQL, gRPC, WebSocket, MCP or AI) and its checks, or a whole flow. Create one, generate a first suite from an API definition, or save one from a request tab, the MCP view or AI Lab.
+    </Empty>
+  );
+}
+

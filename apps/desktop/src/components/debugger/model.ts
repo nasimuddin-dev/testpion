@@ -207,3 +207,11 @@ export function incomingAsExchange(r: IncomingRequest): Exchange {
 
 /** The size of both header blocks, from a lean row's counts or the headers themselves. */
 export const headerSizes = (e: Exchange) => ({ request: e.requestHeaderBytes ?? headerBytes(e.requestHeaders), response: e.responseHeaderBytes ?? headerBytes(e.responseHeaders) });
+
+/** Why a side's body is not shown: nothing sent, binary, or let go for the session's memory budget. */
+export function bodyNote(e: Pick<Exchange, 'requestBodyBytes' | 'responseBodyBytes' | 'contentType' | 'bodiesDropped'>, side: 'request' | 'response', format: (n: number) => string): string {
+  const bytes = side === 'request' ? e.requestBodyBytes : e.responseBodyBytes;
+  if (!bytes) return side === 'request' ? '(no body)' : '(empty)';
+  const why = e.bodiesDropped ? 'let go to keep the session within its memory budget' : 'not kept';
+  return side === 'request' ? `(${format(bytes)}, ${why})` : `(${format(bytes)} of ${e.contentType ?? 'binary'}, ${why})`;
+}

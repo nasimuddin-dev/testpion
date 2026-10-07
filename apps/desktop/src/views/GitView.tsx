@@ -2,7 +2,9 @@ import { ArrowDown, ArrowUp, Check, Columns2, ExternalLink, FolderGit2, GitBranc
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { asError, call, on } from '../api';
 import { confirmAction, promptText, useApp } from '../store';
-import { Badge, Button, cx, Empty, LinkButton, Menu, MoreMenu, PageHeader, SectionTitle, Spinner } from '../components/ui';
+import { Badge, Button, Callout, cx, Empty, LinkButton, Menu, MoreMenu, PageHeader, SectionTitle, Spinner, Split } from '../components/ui';
+import { GitCommitPanel } from '../components/GitCommitPanel';
+import { plural } from '../lib/format';
 import { GitItemDiffDialog } from '../components/GitItemDiffDialog';
 import { GitConflictDialog } from '../components/GitConflictDialog';
 import { ChangeMark } from '../components/ChangeMark';
@@ -22,6 +24,8 @@ export interface GitStatusInfo {
   branch?: string;
   upstream?: string;
   remote?: string;
+  /** The workspace's folder inside the repository, when it is not the repository itself. */
+  folder?: string;
   ahead: number;
   behind: number;
   files: GitFile[];
@@ -76,6 +80,8 @@ export function GitView() {
   const [secrets, setSecrets] = useState<SecretFinding[]>();
   const [branches, setBranches] = useState<{ current?: string; local: string[]; remote: string[] }>();
   const [log, setLog] = useState<Array<{ hash: string; short: string; author: string; date: string; subject: string }>>([]);
+  // the commit picked in the history: what it changed shows on the right
+  const [selectedCommit, setSelectedCommit] = useState<string>();
   const [diff, setDiff] = useState<{ path: string; text: string }>();
   const [prUrl, setPrUrl] = useState<string>();
 
@@ -237,11 +243,6 @@ export function GitView() {
       : []),
   ];
 
-  // the repository's root against the workspace folder: the examples live inside a checkout of TestPion itself
-  const wsPath = (useApp.getState().workspace as { path?: string } | undefined)?.path;
-  const norm = (p: string) => p.replace(/\\/g, '/').replace(/\/$/, '').toLowerCase();
-  const nestedIn =
-    status.root && wsPath && norm(status.root) !== norm(wsPath) ? { root: status.root, folder: wsPath.replace(/\\/g, '/').slice(status.root.replace(/\\/g, '/').replace(/\/$/, '').length + 1) } : undefined;
   const connectRemote = async () => {
     const remote = await promptText(status.remote ? 'Change the remote' : 'Connect to a remote', {
       message: status.remote ? 'The repository URL' : 'The URL of an empty repository on GitHub, GitLab, Bitbucket or Azure DevOps (create it there first). Push then sends your commits to it.',
@@ -252,20 +253,26 @@ export function GitView() {
     if (remote) await run('remote', () => call('git.init', { remote }), status.ahead ? 'Connected: now Push sends your commits' : 'Connected: commit, then Push');
   };
   const push = () => void run('push', () => call('git.push'), 'Pushed');
+  const connectButton = (size?: 'sm') => (
+    <Button size={size} variant="primary" icon={<ExternalLink size={size ? 12 : 13} />} loading={busy === 'remote'} onClick={() => void connectRemote()} title="Commits stay on this computer until the workspace has a remote: a repository on GitHub, GitLab, Bitbucket or Azure DevOps">
+      Connect to a remote…
+    </Button>
+  );
   return (
     <div className="h-full flex flex-col min-h-0">
       <PageHeader
         icon={<FolderGit2 size={18} />}
         title="Git"
         subtitle={
-          // a workspace that is a folder of a bigger repository (the examples inside a checkout): say so, and whose remote this is
-          nestedIn ? (
-            <span>
-              {status.remote ?? 'No remote yet'} · this workspace is the folder <code className="font-mono text-fg">{nestedIn.folder}</code> of the repository at <code className="font-mono text-fg">{nestedIn.root}</code>; the changes and the history shown are this folder's
-            </span>
-          ) : (
-            (status.remote ?? 'No remote yet')
-          )
+          <span>
+            {status.remote ?? 'No remote yet'}
+            {/* a workspace that is a folder of a bigger repository (the examples inside a checkout): say so, and whose remote this is */}
+            {status.folder && (
+              <>
+                {' '}· this workspace is the folder <code className="font-mono text-fg">{status.folder}</code> of the repository at <code className="font-mono text-fg">{status.root}</code>; the changes and the history shown are this folder's
+              </>
+            )}
+          </span>
         }
         actions={
           <>
@@ -288,14 +295,12 @@ export function GitView() {
                 >
                   Pull{status.behind ? ` ${status.behind}` : ''}
                 </Button>
-                <Button icon={<ArrowUp size={13} />} variant={status.ahead ? 'primary' : undefined} loading={busy === 'push'} onClick={push} title={status.ahead ? `Push: send your ${status.ahead} commit${status.ahead === 1 ? '' : 's'} to ${status.remote}` : 'Push: send your commits'}>
+                <Button icon={<ArrowUp size={13} />} variant={status.ahead ? 'primary' : undefined} loading={busy === 'push'} onClick={push} title={status.ahead ? `Push: send your ${plural(status.ahead, 'commit')} to ${status.remote}` : 'Push: send your commits'}>
                   Push{status.ahead ? ` ${status.ahead}` : ''}
                 </Button>
               </>
             ) : (
-              <Button variant="primary" icon={<ExternalLink size={13} />} loading={busy === 'remote'} onClick={() => void connectRemote()} title="Commits stay on this computer until the workspace has a remote: a repository on GitHub, GitLab, Bitbucket or Azure DevOps">
-                Connect to a remote…
-              </Button>
+              connectButton()
             )}
             {prUrl && (
               <Button icon={<GitPullRequest size={13} />} onClick={() => void call('app.openExternal', { url: prUrl }).catch(() => window.open(prUrl))} title="Open a pull request for this branch on the remote's website">
@@ -313,7 +318,8 @@ export function GitView() {
           { label: 'Make ready for git', icon: <Check size={14} />, onSelect: () => void run('ready', () => call('ws.gitReady'), 'Git files are in place') },
         ]}
       />
-      <div className="flex-1 min-h-0 overflow-auto p-4 grid gap-5 content-start max-w-5xl w-full">
+      <Split id="git-main" initial={58} min={30} collapsedSecond={!selectedCommit}>
+      <div className="h-full min-h-0 overflow-auto p-4 grid gap-5 content-start max-w-5xl w-full">
         {status.conflicted && <ConflictPanel files={files.filter((f) => f.state === 'conflicted')} onDone={() => void load()} />}
 
         <section>
@@ -416,22 +422,22 @@ export function GitView() {
 
         {log.length > 0 && (!status.remote || status.ahead > 0) && (
           // a commit is on this computer only until it is pushed: the next step, where the commit was made
-          <div className="rounded-lg border border-accent/40 bg-accent/5 px-3 py-2 text-sm flex items-center gap-3 flex-wrap" data-push-next>
-            <span>
-              {status.remote
-                ? `${status.ahead} commit${status.ahead === 1 ? '' : 's'} not pushed yet: your team and CI do not have ${status.ahead === 1 ? 'it' : 'them'}.`
-                : 'Committed on this computer only. Connect a remote (GitHub, GitLab, Bitbucket, Azure DevOps) to share your commits and run them in CI.'}
-            </span>
-            {status.remote ? (
-              <Button size="sm" variant="primary" icon={<ArrowUp size={12} />} loading={busy === 'push'} onClick={push}>
-                Push {status.ahead}
-              </Button>
-            ) : (
-              <Button size="sm" variant="primary" icon={<ExternalLink size={12} />} loading={busy === 'remote'} onClick={() => void connectRemote()}>
-                Connect to a remote…
-              </Button>
-            )}
-          </div>
+          <Callout
+            data-push-next=""
+            action={
+              status.remote ? (
+                <Button size="sm" variant="primary" icon={<ArrowUp size={12} />} loading={busy === 'push'} onClick={push}>
+                  Push {status.ahead}
+                </Button>
+              ) : (
+                connectButton('sm')
+              )
+            }
+          >
+            {status.remote
+              ? `${plural(status.ahead, 'commit')} not pushed yet: your team and CI do not have ${status.ahead === 1 ? 'it' : 'them'}.`
+              : 'Committed on this computer only. Connect a remote (GitHub, GitLab, Bitbucket, Azure DevOps) to share your commits and run them in CI.'}
+          </Callout>
         )}
 
         <section>
@@ -441,12 +447,19 @@ export function GitView() {
           ) : (
             <ul className="grid gap-0.5 text-sm" aria-label="Commits">
               {log.map((c) => (
-                <li key={c.hash} className="flex items-center gap-2 py-0.5">
-                  <span className="font-mono text-xs text-muted">{c.short}</span>
-                  <span className="truncate">{c.subject}</span>
-                  <span className="ml-auto text-xs text-muted whitespace-nowrap">
-                    {c.author} · {new Date(c.date).toLocaleString()}
-                  </span>
+                <li key={c.hash}>
+                  <button
+                    className={cx('w-full flex items-center gap-2 py-0.5 px-1 rounded text-left hover:bg-hover', selectedCommit === c.hash && 'bg-accent/10')}
+                    aria-current={selectedCommit === c.hash || undefined}
+                    title="What this commit changed"
+                    onClick={() => setSelectedCommit(selectedCommit === c.hash ? undefined : c.hash)}
+                  >
+                    <span className="font-mono text-xs text-muted">{c.short}</span>
+                    <span className="truncate">{c.subject}</span>
+                    <span className="ml-auto text-xs text-muted whitespace-nowrap">
+                      {c.author} · {new Date(c.date).toLocaleString()}
+                    </span>
+                  </button>
                 </li>
               ))}
             </ul>
@@ -454,6 +467,8 @@ export function GitView() {
         </section>
         <div className="text-xs text-muted">git {status.version} · sign-in uses your git setup (SSH keys or the credential manager)</div>
       </div>
+      <div className="h-full min-h-0">{selectedCommit && <GitCommitPanel hash={selectedCommit} onClose={() => setSelectedCommit(undefined)} />}</div>
+      </Split>
       {itemDiff && <GitItemDiffDialog file={itemDiff.file} itemId={itemDiff.itemId} onClose={() => setItemDiff(undefined)} />}
     </div>
   );

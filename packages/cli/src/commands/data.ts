@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, wri
 import { dirname, join, resolve } from 'node:path';
 import { Command, Option } from 'commander';
 import { WorkspaceManager, formatDuration, importRequestSnippet, ciConfig, compareEnvironments, environmentMatrix, compareRequestAcrossEnvironments, collectionRequests, createEngineContext, ChainSecretStore, EnvSecretStore, type CiProvider, convertCollectionScripts, isRequestSnippet, Redactor, collectionMarkdown, collectionHtml, exportPostmanCollection, exportPostmanEnvironment, fetchImportText, readBrunoFolder, collectionToBru, type Environment, bundleWsdl, isWsdl, importIntoWorkspace, diffOpenApi, lintOpenApi, OPENAPI_LINT_RULES, type OpenApiLintSeverity, type OpenApiLintResult, workspaceApiCoverage, apiCoverageMarkdown, securityLint, findEnvironment, setEnvironmentVariables, unsetEnvironmentVariables, variableFlow, collectionToOpenApiText, variableUsages, renameVariable, collectionSavedItems, listWorkspaceDatasets, appendDatasetRow, workspaceReportHtml, collectionVariableFlow, referencedVariableNames, loadHistory, workspaceStorage, deleteRunsBefore, listCertificates, workspaceAttention, decodeJwt, describeExpiry, recordCertificate, checkCertificate, certificateLint } from '@testpion/core';
-import { EXIT, green, red, yellow, dim, bold, CliError, openWorkspace, loadCollectionRef, findWorkspaceUp } from '../shared.js';
+import { readDefinition, EXIT, green, red, yellow, dim, bold, CliError, openWorkspace, loadCollectionRef, findWorkspaceUp } from '../shared.js';
 
 export function registerDataCommands(program: Command): void {
   program
@@ -107,7 +107,7 @@ export function registerDataCommands(program: Command): void {
     .option('--breaking-only', 'leave out the non-breaking changes')
     .option('--json', 'print the result as JSON (for scripts and AI agents)')
     .action(async (oldRef: string, newRef: string, o: { failOnBreaking?: boolean; breakingOnly?: boolean; json?: boolean }) => {
-      const read = async (ref: string) => (/^https?:\/\//i.test(ref) ? (await fetchImportText(ref)).text : readFileSync(ref, 'utf8'));
+      const read = (ref: string) => readDefinition(ref);
       let d: ReturnType<typeof diffOpenApi>;
       try {
         d = diffOpenApi(await read(oldRef), await read(newRef));
@@ -172,7 +172,7 @@ export function registerDataCommands(program: Command): void {
       for (const ref of files) {
         let text: string;
         try {
-          text = /^https?:\/\//i.test(ref) ? (await fetchImportText(ref)).text : readFileSync(ref, 'utf8');
+          text = await readDefinition(ref, (o as { workspace?: string }).workspace);
         } catch (e) {
           throw new CliError(`Cannot read ${ref}: ${(e as Error).message}`, EXIT.CONFIG_ERROR);
         }
@@ -211,7 +211,7 @@ export function registerDataCommands(program: Command): void {
     .action(async (specRef: string, o: { workspace?: string; run?: string[]; history?: string | boolean; baseUrl?: string; excludeDeprecated?: boolean; min?: string; markdown?: string; json?: boolean }) => {
       let specText: string;
       try {
-        specText = /^https?:\/\//i.test(specRef) ? (await fetchImportText(specRef)).text : readFileSync(specRef, 'utf8');
+        specText = await readDefinition(specRef, o.workspace);
       } catch (e) {
         throw new CliError(`Could not read ${specRef}: ${(e as Error).message}`, EXIT.CONFIG_ERROR);
       }

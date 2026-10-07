@@ -367,11 +367,7 @@ export function EnvironmentsView() {
             ) : (
               <Empty
                 title={envs.length ? 'Select an environment' : 'No environments yet'}
-                action={
-                  <Button size="sm" variant="primary" onClick={() => void newEnvironment()}>
-                    New environment
-                  </Button>
-                }
+                actions={[{ label: 'New environment', onClick: () => void newEnvironment() }]}
               >
                 {envs.length
                   ? 'Pick one on the left to edit its variables; the top bar switches the active one.'

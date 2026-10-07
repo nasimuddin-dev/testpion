@@ -42,6 +42,8 @@ import {
   replaceCollectionItem,
   type Collection,
   type GitFile,
+  gitCommitDetail,
+  gitCommitDiff,
 } from '@testpion/core';
 import type { Backend, Handlers } from '../backend.js';
 
@@ -158,6 +160,9 @@ export function gitHandlers(be: Backend): Handlers {
       return { message: r.text.trim().replace(/^```\w*\n?|```$/g, '').trim(), model: `${r.provider}/${r.model}` };
     },
     /** Commits, newest first: of the workspace, of a file, or of one request (its collection's file). */
+    /** A picked commit: its message and the files it changed in the workspace; and one file's diff in it. */
+    'git.commitDetail': ({ hash }: { hash: string }) => gitCommitDetail(ws(), hash),
+    'git.commitDiff': ({ hash, path }: { hash: string; path: string }) => gitCommitDiff(ws(), hash, path),
     'git.log': ({ path, collectionId, limit }: { path?: string; collectionId?: string; limit?: number }) =>
       gitLog(ws(), { path: path ?? (collectionId ? be.ws.collectionFileOf(collectionId) : undefined), limit }),
     /**

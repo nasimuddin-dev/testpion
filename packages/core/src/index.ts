@@ -70,6 +70,7 @@ export * from './runner/runner.js';
 export * from './runner/loader.js';
 export * from './runner/test-schema.js';
 export * from './debugger/proxy.js';
+export * from './debugger/session.js';
 export * from './debugger/har.js';
 export * from './debugger/capture.js';
 export * from './debugger/rules.js';

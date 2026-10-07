@@ -212,16 +212,10 @@ export function CollectionsView() {
               <Empty
                 icon={<FolderTree size={24} />}
                 title="No collections"
-                action={
-                  <div className="flex gap-2">
-                    <Button size="sm" variant="primary" icon={<FolderPlus size={12} />} onClick={() => void newCollection()}>
-                      New collection
-                    </Button>
-                    <Button size="sm" icon={<Upload size={12} />} onClick={() => setImporting(true)}>
-                      Import…
-                    </Button>
-                  </div>
-                }
+                actions={[
+                  { label: 'New collection', icon: <FolderPlus size={12} />, onClick: () => void newCollection() },
+                  { label: 'Import…', icon: <Upload size={12} />, onClick: () => setImporting(true) },
+                ]}
               >
                 A collection groups requests that share a base URL, auth and scripts; run it, mock it, or watch it with a monitor. Import OpenAPI, Postman, Insomnia, Bruno, Hoppscotch or HAR.
               </Empty>

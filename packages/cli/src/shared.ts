@@ -147,3 +147,19 @@ export function printLoad(s: LoadSnapshot): void {
       console.log(`  ${p.name.slice(0, w).padEnd(w)}  ${String(p.requests).padStart(6)} req  ${String(p.errors).padStart(4)} err  p50 ${p.latency.p50}ms · p95 ${p.latency.p95}ms`);
   }
 }
+
+/**
+ * An API definition's text: an http(s) link, or a file as given, else relative to the workspace (`-w`, or the nearest
+ * one above the current folder), so `specs/clinic.yaml` works from anywhere like the other commands' paths.
+ */
+export async function readDefinition(ref: string, workspace?: string): Promise<string> {
+  if (/^https?:\/\//i.test(ref)) return (await fetchImportText(ref)).text;
+  const root = workspace && existsSync(workspace) && statSync(workspace).isDirectory() ? workspace : findWorkspaceUp(process.cwd());
+  const candidates = [resolve(ref), ...(root ? [resolve(root, ref)] : [])];
+  const file = candidates.find((c) => existsSync(c)) ?? candidates[0]!;
+  try {
+    return readFileSync(file, 'utf8');
+  } catch (e) {
+    throw new CliError(`Cannot read ${ref}: ${(e as Error).message}`, EXIT.CONFIG_ERROR);
+  }
+}

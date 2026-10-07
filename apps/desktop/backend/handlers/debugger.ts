@@ -31,6 +31,7 @@ import {
   grpcDecoder,
   grpcMethodIndex,
   workspaceProtoRoots,
+  DebuggerSession,
 } from '@testpion/core';
 import QRCode from 'qrcode';
 import { networkInterfaces } from 'node:os';
@@ -121,7 +122,7 @@ function leanRow(be: Backend, state: DebuggerState, e: DebuggerExchange) {
 
 /** Keep a request a mock server received for the Debugger's Incoming tab (and tell the window). */
 export function recordIncoming(be: Backend, r: Omit<IncomingRequest, 'id' | 'time'>): void {
-  const state: DebuggerState = (be.debugger ??= { exchanges: [] });
+  const state: DebuggerState = (be.debugger ??= newDebuggerState());
   const list = (state.incoming ??= []);
   // secrets masked, bodies capped: the list is kept in memory and shown in the window
   const red = be.logger.redactor;
@@ -148,9 +149,16 @@ export function recordIncoming(be: Backend, r: Omit<IncomingRequest, 'id' | 'tim
   be.host.emit('debug.incoming', item);
 }
 
+/** The state before anything was captured: an empty session. */
+export function newDebuggerState(): DebuggerState {
+  const session = new DebuggerSession();
+  return { session, exchanges: session.items };
+}
+
 export interface DebuggerState {
   proxy?: DebuggerProxy;
-  /** Kept across stop / start, until cleared: the session. */
+  /** Kept across stop / start, until cleared: the session, with its limits; `exchanges` is its array. */
+  session: DebuggerSession;
   exchanges: DebuggerExchange[];
   /** The system proxy as it was before TestPion switched it to ours (restored on stop, on clear and when the app quits). */
   systemProxy?: SystemProxySnapshot;
@@ -290,7 +298,7 @@ function authOf(be: Backend, e: DebuggerExchange): { scheme: string; user?: stri
 const statusClass = (e: DebuggerExchange) => (e.error ? 'error' : !e.status ? 'pending' : e.status < 300 ? '2xx' : e.status < 400 ? '3xx' : e.status < 500 ? '4xx' : '5xx');
 
 export function debuggerHandlers(be: Backend): Handlers {
-  const state: DebuggerState = (be.debugger ??= { exchanges: [] });
+  const state: DebuggerState = (be.debugger ??= newDebuggerState());
   const status = () => ({
     lan: !!state.lan,
     // rules that change what programs send or get (not ignore / highlight): the status bar shows them wherever you are
@@ -466,6 +474,7 @@ export function debuggerHandlers(be: Backend): Handlers {
       const protos = protoDecoder(be);
       state.lan = !!lan;
       state.proxy = await startDebuggerProxy({
+        session: state.session,
         port,
         lan,
         grpcDecode: protos.decode,
@@ -477,10 +486,6 @@ export function debuggerHandlers(be: Backend): Handlers {
           enabled: (host) => !!state.decrypt && !hostMatches(state.noDecrypt, host),
         },
         onExchange: (e, phase) => {
-          if (phase === 'request') {
-            state.exchanges.push(e);
-            if (state.exchanges.length > 5000) state.exchanges.shift();
-          }
           changed(state, e);
           touch();
           be.host.emit('debug.exchange', { id: e.id, phase });
@@ -665,16 +670,14 @@ export function debuggerHandlers(be: Backend): Handlers {
     },
     'debug.delete': ({ ids }: { ids: string[] }) => {
       const set = new Set(ids);
-      state.exchanges = state.exchanges.filter((e) => !set.has(e.id));
-      if (be.debugger) be.debugger.exchanges = state.exchanges;
+      state.session.remove(set);
       listOf(state).epoch++;
       listOf(state).rev++;
       touch();
       return status();
     },
     'debug.clear': () => {
-      state.exchanges.length = 0;
-      state.proxy?.clear();
+      state.session.clear();
       replaced(state);
       state.dirty = false;
       // the window refreshes whoever cleared (a menu, a shortcut, an agent)
@@ -777,8 +780,7 @@ export function debuggerHandlers(be: Backend): Handlers {
         loaded = exchangesFromHar(har);
       }
       if (!loaded.length) throw new ApsError('ValidationError', 'No entries in that file');
-      state.exchanges = append ? [...state.exchanges, ...loaded] : loaded;
-      if (be.debugger) be.debugger.exchanges = state.exchanges;
+      state.session.load(loaded, append);
       if (append) for (const e of loaded) changed(state, e);
       else replaced(state);
       state.dirty = false;

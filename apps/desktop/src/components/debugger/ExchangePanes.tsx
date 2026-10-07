@@ -6,7 +6,7 @@ import { Badge, Button, Empty, Input, Menu, Split, statusTone, Tabs } from '../u
 import { JsonTree } from '../JsonView';
 import { JwtView } from '../JwtView';
 import { EventsView, FramesView, GrpcView } from '../DebuggerTools';
-import { curlOf, hexDump, rawOf, versionOf, type Exchange } from './model';
+import { bodyNote, curlOf, hexDump, rawOf, versionOf, type Exchange } from './model';
 
 const toast = (m: string) => useApp.getState().toast(m, 'success');
 const copy = (text: string, what: string) => void navigator.clipboard.writeText(text).then(() => toast(`Copied ${what}`));
@@ -139,7 +139,7 @@ export function ExchangePanes({ e, ...a }: { e: Exchange } & ExchangeActions) {
             startLine={tunnel ? `CONNECT ${e.host}` : `${e.method} ${path} ${version}`}
             headers={e.requestHeaders}
             body={e.requestBody}
-            bodyNote={e.requestBodyBytes ? `(${formatBytes(e.requestBodyBytes)}, ${e.bodiesDropped ? 'let go to keep the session within its memory budget' : 'not kept'})` : '(no body)'}
+            bodyNote={bodyNote(e, 'request', formatBytes)}
             raw={raw.request}
             extra={[
               {
@@ -163,9 +163,7 @@ export function ExchangePanes({ e, ...a }: { e: Exchange } & ExchangeActions) {
             bodyNote={
               tunnel
                 ? `An HTTPS tunnel: ${formatBytes(e.requestBodyBytes)} sent, ${formatBytes(e.responseBodyBytes)} received, encrypted end to end. Turn on HTTPS tunnel ▸ Decrypt HTTPS and trust the TestPion root certificate to see the requests inside.`
-                : e.responseBodyBytes
-                  ? `(${formatBytes(e.responseBodyBytes)} of ${e.contentType ?? 'binary'}, not kept)`
-                  : '(empty)'
+                : bodyNote(e, 'response', formatBytes)
             }
             raw={raw.response}
             initial={e.grpc ? 'grpc' : e.frames ? 'frames' : e.events?.length ? 'events' : undefined}
