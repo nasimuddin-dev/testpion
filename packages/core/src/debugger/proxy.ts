@@ -109,7 +109,8 @@ export interface DebuggerProxyOptions {
   /** Listen on every interface (a phone, another computer), not only this one. */
   lan?: boolean;
   maxBodyBytes?: number;
-  onExchange?(e: DebuggerExchange, phase: 'request' | 'response'): void;
+  /** `update`: something learned later changed a listed exchange (its program, found after the response). */
+  onExchange?(e: DebuggerExchange, phase: 'request' | 'response' | 'update'): void;
   /** Which program owns a client port (see applicationOfPort); replaceable in tests. */
   applicationOf?(port: number): Promise<string | ProgramInfo | undefined>;
   /** The active rules, read for every request (so edits apply at once). */
@@ -257,7 +258,13 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
       e.application = a.name;
       if (a.pid) e.pid = a.pid;
     }
+    // the lookup often ends after the exchange was listed: say it changed
+    if (recorded.has(e)) opts.onExchange?.(e, 'update');
   };
+  const recorded = new WeakSet<DebuggerExchange>();
+  /** Rules that decide on the program need it before the request is decided: wait for the lookup (at most 1.5 s). */
+  const needsProgram = (rules: DebuggerRule[]) => rules.some((r) => r.enabled && (r.kind === 'only' || r.kind === 'ignore') && (r.match.application || r.match.where?.column === 'application'));
+  const programFirst = (p: Promise<unknown>, rules: DebuggerRule[]) => (needsProgram(rules) ? Promise.race([p, sleep(1500)]) : undefined);
   /** Tunnels whose requests are read (decrypted TLS, plaintext HTTP/1 or h2c inside a CONNECT): the origin they go to. */
   const tlsOrigins = new WeakMap<object, TunnelOrigin>();
   /** A connection id per client socket (the HTTP/2 tree groups streams by it). */
@@ -281,6 +288,7 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
   };
   const record = (e: DebuggerExchange, phase: 'request' | 'response') => {
     if (phase === 'request') {
+      recorded.add(e);
       exchanges.push(e);
       if (exchanges.length > 5000) exchanges.shift();
     }
@@ -363,6 +371,7 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
     let bodyToSend: Buffer | undefined = reqBody.length ? reqBody : undefined;
 
     const rules = rulesNow();
+    await programFirst(appPromise, rules);
     const decision = rules.length ? decideAndCount(rules, e) : undefined;
     if (decision?.ignore) {
       // not listed; forwarded as is

@@ -123,7 +123,26 @@ const statusOf = (e: Pick<DebuggerExchange, 'status' | 'error'>, want: RuleMatch
   return want === 'ok' ? s >= 200 && s < 300 : want === 'redirect' ? s >= 300 && s < 400 : want === 'client-error' ? s >= 400 && s < 500 : want === 'server-error' ? s >= 500 : !!e.error;
 };
 
-const RESPONSE_COLUMNS: RuleColumn[] = ['status', 'type', 'duration', 'size'];
+// the server's address is known once the request went out: like the response's columns, checked afterwards
+const RESPONSE_COLUMNS: RuleColumn[] = ['status', 'type', 'duration', 'size', 'ip'];
+
+/** Patterns compiled once (a rule is checked on every request), at most 200 kept; an invalid one is null. */
+const compiled = new Map<string, RegExp | null>();
+function regexOf(pattern: string): RegExp | null {
+  let re = compiled.get(pattern);
+  if (re === undefined) {
+    try {
+      re = pattern.length > 500 ? null : new RegExp(pattern, 'i');
+    } catch {
+      re = null;
+    }
+    if (compiled.size >= 200) compiled.clear();
+    compiled.set(pattern, re);
+  }
+  return re;
+}
+/** The text a condition tests, capped: a long URL or body can't make a pattern run for long. */
+const MAX_TESTED = 4096;
 
 /** The value of a column for an exchange, as the grid shows it. */
 export function columnValue(e: DebuggerExchange, column: RuleColumn): string | number | undefined {
@@ -155,17 +174,14 @@ export function columnValue(e: DebuggerExchange, column: RuleColumn): string | n
 export function conditionHolds(c: RuleCondition, e: DebuggerExchange): boolean {
   const v = columnValue(e, c.column);
   if (v === undefined || v === null) return c.op === 'not-equals';
-  const text = String(v);
+  const text = String(v).slice(0, MAX_TESTED);
   const n = Number(v);
   const a = Number(c.value);
   const b = Number(c.value2);
   if (c.regex || c.op === 'matches') {
-    try {
-      const re = new RegExp(c.value, 'i');
-      return c.op === 'not-equals' ? !re.test(text) : re.test(text);
-    } catch {
-      return false;
-    }
+    const re = regexOf(c.value);
+    if (!re) return false;
+    return c.op === 'not-equals' ? !re.test(text) : re.test(text);
   }
   const low = text.toLowerCase();
   const want = c.value.toLowerCase();

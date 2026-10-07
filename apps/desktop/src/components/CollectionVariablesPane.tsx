@@ -1,5 +1,5 @@
 import { Copy, ExternalLink, Save } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useCollections } from '../lib/collections-store';
 import { asError, call } from '../api';
 import { confirmAction, useApp } from '../store';
@@ -19,11 +19,21 @@ export function CollectionVariablesPane({ initial }: { initial?: string }) {
   const [sel, setSel] = useState<string | undefined>(initial);
   const [rows, setRows] = useState<KeyValue[]>([]);
   const [saved, setSaved] = useState<string>('[]');
+  const rowsRef = useRef(rows);
+  rowsRef.current = rows;
+  const savedRef = useRef(saved);
+  savedRef.current = saved;
   useEffect(() => setSel((s) => (s && cols.some((c) => c.id === s) ? s : (cols.find((c) => c.variables?.length)?.id ?? cols[0]?.id))), [cols]);
   useEffect(() => setSel((s) => initial ?? s), [initial]);
   const current = cols.find((c) => c.id === sel);
+  // the stored variables come in when another collection is picked, or when they change and nothing here is unsaved
+  // (a refresh or a save elsewhere must not drop what is being typed)
+  const shownId = useRef<string | undefined>(undefined);
   useEffect(() => {
     const v = (current?.variables ?? []) as KeyValue[];
+    const other = shownId.current !== current?.id;
+    if (!other && JSON.stringify(rowsRef.current) !== savedRef.current) return;
+    shownId.current = current?.id;
     setRows(v);
     setSaved(JSON.stringify(v));
   }, [current?.id, current?.variables]);

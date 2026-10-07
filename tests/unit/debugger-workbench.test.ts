@@ -38,6 +38,21 @@ describe('column conditions', () => {
     expect(describeCondition({ column: 'status', op: 'between', value: '400', value2: '499' })).toBe('Status is between 400 and 499');
   });
 
+  it('the server address is known only once connected: an IP condition is checked with the response', () => {
+    const r = rule({ match: { where: { column: 'ip', op: 'equals', value: '127.0.0.1:80' } } });
+    expect(ruleMatches(r, ex({ serverAddress: '127.0.0.1:80' }), 'request')).toBe(false);
+    expect(ruleMatches(r, ex({ serverAddress: '127.0.0.1:80', status: 200 }), 'response')).toBe(true);
+  });
+
+  it('a pattern is tested on a capped text, and an invalid or huge one matches nothing', () => {
+    // the end of a very long URL is past what is tested
+    const long = ex({ url: 'http://x/' + 'a'.repeat(50_000) + 'END' });
+    expect(conditionHolds({ column: 'url', op: 'matches', value: 'END$' }, long)).toBe(false);
+    expect(conditionHolds({ column: 'url', op: 'matches', value: '^http://x/a' }, long)).toBe(true);
+    expect(conditionHolds({ column: 'url', op: 'matches', value: 'x'.repeat(600) }, long)).toBe(false);
+    expect(conditionHolds({ column: 'url', op: 'matches', value: '[' }, long)).toBe(false);
+  });
+
   it('a condition on the response waits for it', () => {
     const r = rule({ match: { where: { column: 'status', op: 'between', value: '400', value2: '499' } }, style: { dark: '#00ff00', bold: true } });
     expect(ruleMatches(r, ex(), 'request')).toBe(false);
@@ -95,6 +110,30 @@ describe('through the proxy', () => {
       req.end('{"a":1}');
     });
   const settle = () => new Promise((r) => setTimeout(r, 80));
+
+  it('a program found after the exchange was listed is reported as an update', async () => {
+    let answer!: (v: { name: string; pid: number }) => void;
+    const updates: string[] = [];
+    const slow = await startDebuggerProxy({
+      applicationOf: () => new Promise((r) => (answer = r)),
+      onExchange: (e, phase) => phase === 'update' && updates.push(`${e.application}:${e.pid}`),
+    });
+    try {
+      const done = new Promise<void>((resolve, reject) => {
+        const url = `http://127.0.0.1:${apiPort}/late`;
+        const req = request({ host: '127.0.0.1', port: slow.port, method: 'GET', path: url, headers: { host: `127.0.0.1:${apiPort}` } }, (res) => (res.resume(), res.on('end', () => resolve())));
+        req.on('error', reject);
+        req.end();
+      });
+      await done;
+      expect(slow.exchanges.at(-1)!.application).toBeUndefined();
+      answer({ name: 'late-app', pid: 7 });
+      await settle();
+      expect(updates).toEqual(['late-app:7']);
+    } finally {
+      await slow.close();
+    }
+  });
 
   it('records the program and its process id, the server address and the three times', async () => {
     rules = [];

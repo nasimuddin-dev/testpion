@@ -107,6 +107,13 @@ describe('the Debugger list by changes', () => {
     expect(c).toMatchObject({ reset: true, rows: [], total: 0 });
   });
 
+  it('rules that cannot be decided before the request goes out are refused', async () => {
+    await expect(be.invoke('debug.saveRule', { rule: { kind: 'only', name: 'by ip', match: { where: { column: 'ip', op: 'equals', value: '1.2.3.4:80' } } } })).rejects.toThrow(/not known yet/);
+    await expect(be.invoke('debug.saveRule', { rule: { kind: 'highlight', name: 'bad', match: { where: { column: 'url', op: 'matches', value: '(' } } } })).rejects.toThrow(/regular expression/);
+    const ok = (await be.invoke('debug.saveRule', { rule: { kind: 'highlight', name: 'by ip', match: { where: { column: 'ip', op: 'equals', value: '1.2.3.4:80' } } } })) as { rule: { id: string } };
+    await be.invoke('debug.deleteRule', { id: ok.rule.id });
+  });
+
   it('a search in bodies returns ids; the list filters by program and type', async () => {
     await be.invoke('debug.openSession', { text: har(5) });
     expect(await be.invoke('debug.exchanges', { text: '"id":3', deep: true, idsOnly: true })).toHaveLength(1);

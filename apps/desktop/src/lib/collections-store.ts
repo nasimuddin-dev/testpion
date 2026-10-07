@@ -12,10 +12,20 @@ import type { Collection } from '../types';
 const useStore = create<{ list: Collection[]; loaded: boolean }>(() => ({ list: [], loaded: false }));
 
 let pending: Promise<Collection[]> | undefined;
+/**
+ * Fetches overlap (a full list asked for before a save can come back after the saved collection was read on its
+ * own): each fetch has a number, and a full list does not overwrite a collection read by a later fetch.
+ */
+let gen = 0;
+const readAt = new Map<string, number>();
+
 /** Fetch the collections now (callers that just saved one can await the fresh list). */
 export function refreshCollections(): Promise<Collection[]> {
+  const g = ++gen;
   pending ??= call<Collection[]>('col.list')
-    .then((list) => {
+    .then((fetched) => {
+      const now = new Map(useStore.getState().list.map((c) => [c.id, c]));
+      const list = fetched.map((c) => ((readAt.get(c.id) ?? 0) > g && now.has(c.id) ? now.get(c.id)! : c));
       useStore.setState({ list, loaded: true });
       return list;
     })
@@ -26,8 +36,10 @@ export function refreshCollections(): Promise<Collection[]> {
 
 /** Read only the collections that were saved and put them in the list (a save of one does not reload them all). */
 export async function refreshSome(ids: string[]): Promise<void> {
+  const g = ++gen;
   const fresh = await Promise.all(ids.map((id) => call<Collection>('col.get', { id }).catch(() => undefined)));
   if (fresh.some((c) => !c)) return void refreshCollections();
+  for (const c of fresh) if ((readAt.get(c!.id) ?? 0) < g) readAt.set(c!.id, g);
   const byId = new Map(fresh.map((c) => [c!.id, c!]));
   useStore.setState((st) => ({ list: st.list.map((c) => byId.get(c.id) ?? c) }));
 }

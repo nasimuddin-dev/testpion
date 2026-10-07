@@ -75,6 +75,9 @@ export function DebuggerView() {
   const [selected, setSelected] = useState<string>();
   const [detail, setDetail] = useState<Exchange>();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  /** The grid's rows in the order it shows them. */
+  const order = useRef<Exchange[]>([]);
+  const onOrder = useCallback((r: Exchange[]) => void (order.current = r), []);
   const [dock, setDock] = useState<DockPanel | undefined>(() => {
     try {
       return (localStorage.getItem('testpion.debugger.dock') as DockPanel | null) ?? 'summary';
@@ -175,11 +178,13 @@ export function DebuggerView() {
   const remove = async (ids: string[]) => {
     await call('debug.delete', { ids });
     if (selected && ids.includes(selected)) setSelected(undefined);
+    setSelectedIds((cur) => cur.filter((id) => !ids.includes(id)));
     void load();
   };
   const clear = async () => {
     if (await confirmAction({ title: 'Clear the session', message: 'Forget every captured exchange?', confirmLabel: 'Clear', danger: true })) {
       setSelected(undefined);
+      setSelectedIds([]);
       setStatus(await call<Status>('debug.clear'));
       void load();
     }
@@ -214,6 +219,7 @@ export function DebuggerView() {
       const r = await call<Status & { loaded: number }>('debug.openSession', { name: s.name, append: !replace });
       setStatus(r);
       setSelected(undefined);
+      setSelectedIds([]);
       toast(`Opened ${r.loaded} exchanges`);
       void load();
     } catch (e) {
@@ -262,12 +268,14 @@ export function DebuggerView() {
     if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'f') return (ev.preventDefault(), filterBox.current?.focus());
     if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'e') return (ev.preventDefault(), void clear());
     if (!rows.length || (ev.target as HTMLElement).tagName === 'INPUT') return;
-    const i = rows.findIndex((r) => r.id === selected);
+    // in the order the grid shows (it may be sorted by another column)
+    const shown = order.current.length === rows.length ? order.current : rows;
+    const i = shown.findIndex((r) => r.id === selected);
     const go = (id: string) => (setSelected(id), setSelectedIds([id]));
-    if (ev.key === 'ArrowDown') return (ev.preventDefault(), go(rows[Math.min(rows.length - 1, i + 1)]!.id));
-    if (ev.key === 'ArrowUp') return (ev.preventDefault(), go(rows[Math.max(0, i - 1)]!.id));
-    if (ev.key === 'Enter' && i >= 0) return (ev.preventDefault(), openInTab(rows[i]!));
-    if (ev.key === 'Delete' && i >= 0) return (ev.preventDefault(), void remove(selectedIds.length > 1 ? selectedIds : [rows[i]!.id]));
+    if (ev.key === 'ArrowDown') return (ev.preventDefault(), go(shown[Math.min(shown.length - 1, i + 1)]!.id));
+    if (ev.key === 'ArrowUp') return (ev.preventDefault(), go(shown[Math.max(0, i - 1)]!.id));
+    if (ev.key === 'Enter' && i >= 0) return (ev.preventDefault(), openInTab(shown[i]!));
+    if (ev.key === 'Delete' && i >= 0) return (ev.preventDefault(), void remove(selectedIds.length > 1 ? selectedIds : [shown[i]!.id]));
   };
 
   const openDock = (p: DockPanel | undefined) => {
@@ -592,6 +600,7 @@ export function DebuggerView() {
                           rows={rows}
                           selected={selected}
                           selectedIds={selectedIds}
+                          onOrder={onOrder}
                           onSelect={(id, ids) => {
                             if (compareA && compareA.id !== id) {
                               setComparePair({ a: compareA.id, b: id });

@@ -11,7 +11,11 @@ const toast = (m: string) => useApp.getState().toast(m, 'success');
 const copy = (text: string, what: string) => void navigator.clipboard.writeText(text).then(() => toast(`Copied ${what}`));
 /** The whole exchange: the grid's rows are lean (no headers, no bodies). */
 const whole = (e: Exchange) => call<Exchange>('debug.exchange', { id: e.id });
-const copyWhole = (e: Exchange, what: string, pick: (x: Exchange) => string) => void whole(e).then((x) => copy(pick(x), what), () => undefined);
+const copyWhole = (e: Exchange, what: string, pick: (x: Exchange) => string) =>
+  void whole(e).then(
+    (x) => copy(pick(x), what),
+    () => undefined,
+  );
 const headerLines = (h?: Record<string, string>) =>
   Object.entries(h ?? {})
     .map(([k, v]) => `${k}: ${v}`)
@@ -103,12 +107,15 @@ export function DebuggerGrid({
   selectedIds,
   onSelect,
   actions,
+  onOrder,
 }: {
   rows: Exchange[];
   selected?: string;
   selectedIds: string[];
   onSelect(id: string, ids: string[]): void;
   actions: GridActions;
+  /** The rows in the order shown (the arrow keys follow it). */
+  onOrder?(rows: Exchange[]): void;
 }) {
   const [sort, setSort] = useState<{ col: ColumnId; desc: boolean }>({ col: 'seq', desc: false });
   const [hidden, setHidden] = useState<ColumnId[]>(readHidden);
@@ -125,6 +132,7 @@ export function DebuggerGrid({
       return sort.desc ? -r : r;
     });
   }, [rows, sort]);
+  useEffect(() => onOrder?.(sorted), [sorted, onOrder]);
   const toggleColumn = (id: ColumnId) => {
     const next = hidden.includes(id) ? hidden.filter((x) => x !== id) : [...hidden, id];
     setHidden(next);
@@ -219,7 +227,10 @@ export function DebuggerGrid({
     const ids = selectedIds.includes(e.id) ? selectedIds : [e.id];
     const qm = quickMatches(e);
     const rulesOf = (kind: RuleKind, verb: string, extra?: Partial<Rule>): MenuItem[] => [
-      ...qm.map<MenuItem>((q) => ({ label: q.label, onSelect: () => actions.onQuickRule(kind, `${verb} ${q.label}`, q.match, extra) })),
+      // the server's address is known only after the request went out: not for Capture only / Filter out
+      ...qm
+        .filter((q) => !(q.match.where?.column === 'ip' && (kind === 'only' || kind === 'ignore')))
+        .map<MenuItem>((q) => ({ label: q.label, onSelect: () => actions.onQuickRule(kind, `${verb} ${q.label}`, q.match, extra) })),
       { label: `New ${verb.toLowerCase()} rule…`, separator: true, onSelect: () => actions.onNewRule({ kind, enabled: true, match: { host: e.host }, ...extra }) },
     ];
     return [
@@ -457,7 +468,7 @@ export function IncomingList({ list, onClear }: { list: IncomingRequest[]; onCle
             <span className="flex-1 px-2 truncate mono">{r.path}</span>
             <span className={cx('w-16 px-2 text-right font-semibold', r.status >= 400 ? 'text-bad' : 'text-ok')}>{r.status}</span>
             <span className="w-48 px-2 truncate text-muted">{r.server ?? r.collectionId}</span>
-            <span className="w-56 px-2 truncate text-muted">{r.forwarded ? 'forwarded to the real API' : r.example ? decodeURIComponent(r.example) : 'no matching example'}</span>
+            <span className="w-56 px-2 truncate text-muted">{r.forwarded ? 'forwarded to the real API' : r.example ? r.example : 'no matching example'}</span>
           </div>
         )}
       />

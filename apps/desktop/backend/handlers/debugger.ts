@@ -107,7 +107,7 @@ function leanRow(be: Backend, state: DebuggerState, e: DebuggerExchange) {
     requestContentType: requestHeaders['content-type'],
     ...(frames ? { frameCount: frames.length } : {}),
     ...(events ? { eventCount: events.length } : {}),
-    ...(grpc ? { grpc: { ...grpc, requests: [], responses: [] } } : {}),
+    ...(grpc ? { grpc: { ...grpc, requests: [], responses: [], message: grpc.message && be.logger.redactor.redactString(grpc.message) } } : {}),
   };
 }
 
@@ -619,7 +619,9 @@ export function debuggerHandlers(be: Backend): Handlers {
     'debug.exchange': ({ id }: { id: string }) => {
       const e = state.exchanges.find((x) => x.id === id);
       if (!e) throw new ApsError('ValidationError', 'That exchange is no longer in the session');
-      return { ...redacted(be, e), auth: authOf(be, e) };
+      const size = (h?: Record<string, string>) => Object.entries(h ?? {}).reduce((n, [k, v]) => n + k.length + 2 + v.length + 2, 0);
+      // the sizes as sent (the headers shown are masked)
+      return { ...redacted(be, e), auth: authOf(be, e), requestHeaderBytes: size(e.requestHeaders), responseHeaderBytes: e.responseHeaders ? size(e.responseHeaders) : undefined };
     },
     'debug.bookmark': ({ id, on }: { id: string; on: boolean }) => {
       const e = state.exchanges.find((x) => x.id === id);

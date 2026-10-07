@@ -99,6 +99,19 @@ function cleanRule(r: Partial<DebuggerRule>, id?: string): DebuggerRule {
     throw new ApsError('ValidationError', `Unknown rule kind "${String(r.kind)}"`, { suggestions: ['One of ignore (filter out), only (capture only), highlight, modify, reply, redirect, breakpoint.'] });
   const name = String(r.name ?? '').trim() || describeRule({ ...(r as DebuggerRule), name: '' });
   if (r.kind === 'redirect' && !r.redirect?.host?.trim()) throw new ApsError('ValidationError', 'A redirect rule needs a host (host:port)');
+  const where = r.match?.where;
+  if (where) {
+    if ((r.kind === 'only' || r.kind === 'ignore') && ['ip', 'status', 'type', 'duration', 'size'].includes(where.column))
+      throw new ApsError('ValidationError', `Capture only and Filter out decide before the request is sent: "${where.column}" is not known yet`, { suggestions: ['Use the domain, URL, method or application, or a highlight rule.'] });
+    if (where.regex || where.op === 'matches') {
+      if (String(where.value).length > 500) throw new ApsError('ValidationError', 'The regular expression is too long (500 characters at most)');
+      try {
+        new RegExp(String(where.value));
+      } catch (e) {
+        throw new ApsError('ValidationError', `Not a valid regular expression: ${(e as Error).message}`);
+      }
+    }
+  }
   if (r.kind === 'reply' && r.reply && (typeof r.reply.status !== 'number' || r.reply.status < 100 || r.reply.status > 599))
     throw new ApsError('ValidationError', 'A reply needs a status between 100 and 599');
   return {

@@ -2,7 +2,7 @@ import { ChevronDown, ChevronRight } from 'lucide-react';
 import { Fragment, useMemo, useState, type ReactNode } from 'react';
 import { formatBytes, formatMs } from '@testpion/shared';
 import { cx, Empty } from '../ui';
-import { headerBytes, headerSizes, kb, speedOf, versionOf, type Exchange } from './model';
+import { headerSizes, kb, speedOf, versionOf, type Exchange } from './model';
 
 const pathOf = (url: string) => {
   try {
@@ -155,8 +155,8 @@ function PropertyTable({ groups }: { groups: Array<{ title: string; rows: Array<
 /** Summary: the selected request at a glance: program, connection, request and response sizes and types, timing. */
 export function SummaryPanel({ e }: { e?: Exchange }) {
   if (!e) return <Empty title="Select a request">Its program, connection, sizes and types show here.</Empty>;
-  const reqHead = headerBytes(e.requestHeaders);
-  const resHead = headerBytes(e.responseHeaders);
+  // the sizes as sent (the detail's header values are masked)
+  const { request: reqHead, response: resHead } = headerSizes(e);
   const p = phasesOf(e);
   return (
     <div className="flex-1 min-h-0 overflow-auto" data-summary>
