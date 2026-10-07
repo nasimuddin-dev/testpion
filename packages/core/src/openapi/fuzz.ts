@@ -1,3 +1,4 @@
+import { stringify as stringifyYaml } from 'yaml';
 import { ApsError } from '../errors.js';
 import { importOpenApi, sampleFromSchema } from '../import/importers.js';
 import { isLocalHost } from '../load/load.js';
@@ -358,4 +359,48 @@ export function fuzzMarkdown(r: FuzzReport): string {
     lines.push('');
   }
   return lines.join('\n');
+}
+
+/**
+ * The findings of a run as regression tests: each server error or invalid input the API accepted becomes a test that
+ * expects a 4xx, so the fix can be checked and stays checked. The base URL is written as {{baseUrl}}.
+ */
+export function fuzzFindingsToTests(report: FuzzReport, opts: { baseUrl?: string; specPath?: string } = {}): { yaml: string; tests: number } {
+  const findings = report.results.filter((r) => r.verdict === 'server-error' || r.verdict === 'accepted-invalid');
+  const used = new Set<string>();
+  const tests = findings.map((r) => {
+    const req = r.case.request;
+    let id = `${r.case.operation} ${r.case.name}`
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 60);
+    for (let i = 2; used.has(id); i++) id = `${id.replace(/-\d+$/, '')}-${i}`;
+    used.add(id);
+    const url = opts.baseUrl && req.url.startsWith(opts.baseUrl) ? `{{baseUrl}}${req.url.slice(opts.baseUrl.length)}` : req.url;
+    const content = req.body && 'content' in req.body ? req.body.content : undefined;
+    let body: unknown;
+    if (content !== undefined)
+      try {
+        body = JSON.parse(content);
+      } catch {
+        body = { type: 'json', content };
+      }
+    const params = (req.params ?? []).filter((p) => p.enabled !== false);
+    const headers = (req.headers ?? []).filter((h) => h.key.toLowerCase() !== 'content-type' || typeof body !== 'object');
+    return {
+      id,
+      name: `${r.case.operation} rejects ${r.case.name}`,
+      description: `Found by fuzzing: ${r.message}`,
+      method: req.method,
+      url,
+      ...(params.length ? { params: Object.fromEntries(params.map((p) => [p.key, p.value])) } : {}),
+      ...(headers.length ? { headers: Object.fromEntries(headers.map((h) => [h.key, h.value])) } : {}),
+      ...(req.auth && req.auth.type !== 'inherit' && req.auth.type !== 'none' ? { auth: req.auth } : {}),
+      ...(body !== undefined ? { body } : {}),
+      assertions: [{ type: 'status', expected: '4xx' }],
+    };
+  });
+  const head = `# Regression tests from fuzzing${opts.specPath ? ` ${opts.specPath}` : ''}: each request once broke the API (a 5xx) or was accepted though the document forbids it. They pass once the API answers them with a 4xx.\n`;
+  return { yaml: head + stringifyYaml({ defaults: { type: 'http' }, tests }, { lineWidth: 0 }), tests: tests.length };
 }

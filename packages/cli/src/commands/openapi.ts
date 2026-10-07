@@ -1,4 +1,5 @@
 import { readFileSync, writeFileSync } from 'node:fs';
+import { basename, relative, resolve as resolvePath, sep } from 'node:path';
 import type { Command } from 'commander';
 import {
   ChainSecretStore,
@@ -10,6 +11,7 @@ import {
   openApiOutline,
   runFuzz,
   writeTestsFromSpec,
+  writeFuzzFindingTests,
   WorkspaceManager,
   type FuzzVerdict,
   type HttpRequestSpec,
@@ -65,6 +67,7 @@ export function registerOpenApiCommands(program: Command): void {
     .option('--allow-remote', 'allow a host that is not local or on a private network (only systems you are authorised to test)')
     .option('--fail-on <verdicts>', 'exit 1 on these findings, comma separated: server-error, accepted-invalid, undocumented-status', 'server-error')
     .option('--markdown <file>', 'also write the findings as Markdown')
+    .option('--save-tests', "write the server errors and accepted invalid inputs as regression tests in the workspace (tests/<api>/fuzz-findings.yaml; the spec must be in the workspace)")
     .option('--json', 'print the report as JSON (for scripts and AI agents)')
     .action(
       async (
@@ -81,6 +84,7 @@ export function registerOpenApiCommands(program: Command): void {
           allowRemote?: boolean;
           failOn: string;
           markdown?: string;
+          saveTests?: boolean;
           json?: boolean;
         },
       ) => {
@@ -115,6 +119,16 @@ export function registerOpenApiCommands(program: Command): void {
             throw new CliError(e.message, EXIT.CONFIG_ERROR);
           });
           if (o.markdown) writeFileSync(o.markdown, fuzzMarkdown(report));
+        if (o.saveTests) {
+          const { store } = openWorkspace(o.workspace, undefined, new WorkspaceManager());
+          try {
+            const rel = relative(store.root, resolvePath(ref)).split(sep).join('/');
+            const saved = writeFuzzFindingTests(store, rel.startsWith('..') ? `specs/${basename(ref)}` : rel, report, { baseUrl: cases[0] ? new URL(cases[0].request.url).origin : undefined });
+            if (!o.json) console.error(saved ? green(`${saved.path}: ${saved.tests} regression tests`) : dim('Nothing to save as tests.'));
+          } finally {
+            store.close();
+          }
+        }
           if (o.json) console.log(JSON.stringify(report, null, 2));
           else {
             const c = report.counts;

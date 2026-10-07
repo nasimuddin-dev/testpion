@@ -175,6 +175,8 @@ testpion fuzz specs/clinic.yaml --base-url http://localhost:3000 --var accessTok
 
 These are real requests, and some create or change data. So fuzzing runs only against local or private-network hosts unless `--allow-remote`, never with a production environment, and leaves DELETE out unless `--include-delete`. Run it against a local or test copy of the API, for example in an integration pipeline after `--start` and `--wait-for`. `--fail-on server-error,accepted-invalid` makes accepted invalid input fail the build too, `--operation "POST /patients"` narrows it, and `--json` prints the report.
 
+**Save the findings as tests** so a fix stays checked: `--save-tests` (or **Save as tests** in the app) writes each server error and accepted invalid input to `tests/<api>/fuzz-findings.yaml` as a test that expects a 4xx. They fail until the API is fixed, then guard against the bug coming back.
+
 In the app, an API definition's **Fuzz** tab does the same with the active environment, groups the findings, opens any request as a tab, and **Explain and fix (AI)** asks the assistant what is wrong and where to fix it. Agents use `api_fuzz` (local hosts only).
 
 :::

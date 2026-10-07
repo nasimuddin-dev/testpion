@@ -6,7 +6,7 @@ import type { EngineContext } from '../engine.js';
 import type { HttpRequestSpec } from '../model/types.js';
 import { ApsError } from '../errors.js';
 import { generateWorkspaceDataset } from '../storage/dataset-files.js';
-import { writeTestsFromSpec } from '../openapi/tests-from-spec.js';
+import { writeFuzzFindingTests, writeTestsFromSpec } from '../openapi/tests-from-spec.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { str, type Tool } from './tool.js';
 
@@ -76,6 +76,7 @@ export function openApiTools(d: { store: WorkspaceStore; readSpecRef(ref: string
           operations: { type: 'array', items: { type: 'string' }, description: 'Only these operations: "POST /patients" or operationIds' },
           includeDelete: { type: 'boolean', description: 'Also fuzz DELETE operations' },
           maxPerOperation: { type: 'number', description: 'At most this many requests per operation (default 25)' },
+          saveTests: { type: 'boolean', description: 'Also write the server errors and accepted invalid inputs as regression tests (tests/<api>/fuzz-findings.yaml); spec must be a workspace path' },
         },
         required: ['spec'],
       },
@@ -95,9 +96,12 @@ export function openApiTools(d: { store: WorkspaceStore; readSpecRef(ref: string
             maxPerOperation: Math.min(Number(a.maxPerOperation) || 25, 50),
           });
           const report = await runFuzz(text, cases, { resolve, concurrency: 4 });
+          const ref = String(a.spec);
+          const saved = a.saveTests === true && /\.(ya?ml|json)$/i.test(ref) && !/^https?:/i.test(ref) ? writeFuzzFindingTests(d.store, ref, report, { baseUrl }) : undefined;
           // the findings first; the requests that went as expected only counted
           return {
             ...report,
+            ...(saved ? { savedTests: saved } : {}),
             results: report.results
               .filter((r) => r.verdict !== 'ok' && r.verdict !== 'not-judged')
               .map((r) => ({

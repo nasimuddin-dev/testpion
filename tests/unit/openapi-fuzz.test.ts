@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { fuzzCases, fuzzMarkdown, runFuzz } from '../../packages/core/src/index.js';
+import { parse } from 'yaml';
+import { fuzzCases, fuzzFindingsToTests, fuzzMarkdown, lintTestFile, runFuzz } from '../../packages/core/src/index.js';
 
 const spec = `openapi: 3.0.3
 info: { title: Clinic, version: '1' }
@@ -125,6 +126,12 @@ describe('API fuzzing', () => {
     expect(r.serverErrors).toBe(2);
     expect(seen.find((s) => s.method === 'POST')!.auth).toBe('Bearer t0k');
     expect(fuzzMarkdown(r)).toMatch(/\*\*2 server errors\*\*/);
+    // the findings as regression tests that expect a 4xx, the base URL as {{baseUrl}}
+    const t = fuzzFindingsToTests(r, { baseUrl: base });
+    expect(t.tests).toBe(9);
+    expect(lintTestFile(t.yaml).filter((p) => p.severity === 'error')).toEqual([]);
+    const doc = parse(t.yaml) as { tests: Array<Record<string, any>> };
+    expect(doc.tests[0]).toMatchObject({ url: '{{baseUrl}}/patients?limit=not-a-number'.split('?')[0], assertions: [{ type: 'status', expected: '4xx' }] });
   });
 
   it('refuses remote hosts unless allowed, and URLs with unset variables', async () => {

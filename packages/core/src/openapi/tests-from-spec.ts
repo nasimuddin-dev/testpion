@@ -3,7 +3,7 @@ import { dirname } from 'node:path';
 import { stringify } from 'yaml';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { slugify } from '../util/ids.js';
-import { fuzzCases, type FuzzCase } from './fuzz.js';
+import { fuzzCases, fuzzFindingsToTests, type FuzzCase, type FuzzReport } from './fuzz.js';
 import { openApiOutline } from './outline.js';
 import { parse as parseYaml } from 'yaml';
 import { importAsyncApi } from '../import/asyncapi.js';
@@ -174,4 +174,17 @@ export function testsFromAsyncApi(text: string, specPath?: string): GeneratedTes
     { path: `tests/${api}/channels.yaml`, yaml: head + stringify({ tests }, { lineWidth: 0 }), tests: tests.length },
     { path: `tests/${api}.suite.yaml`, yaml: stringify({ name: imp.collection.name, description: `Generated from ${specPath ?? 'the AsyncAPI document'}: a message through each channel.`, tests: [api], environment: env }, { lineWidth: 0 }), tests: tests.length },
   ];
+}
+
+/** Write a fuzzing run's findings as regression tests: tests/<api>/fuzz-findings.yaml (-2, -3 … when it exists). */
+export function writeFuzzFindingTests(store: Pick<WorkspaceStore, 'safePath'>, spec: string, report: FuzzReport, opts: { baseUrl?: string } = {}): { path: string; tests: number } | undefined {
+  const { yaml, tests } = fuzzFindingsToTests(report, { baseUrl: opts.baseUrl, specPath: spec });
+  if (!tests) return undefined;
+  const api = slugify(spec.replace(/^specs\//, '').replace(/\.(openapi|swagger)?\.?(ya?ml|json)$/i, '')) || 'api';
+  let rel = `tests/${api}/fuzz-findings.yaml`;
+  for (let i = 2; existsSync(store.safePath(rel)); i++) rel = `tests/${api}/fuzz-findings-${i}.yaml`;
+  const file = store.safePath(rel);
+  mkdirSync(dirname(file), { recursive: true });
+  writeFileSync(file, yaml);
+  return { path: rel, tests };
 }

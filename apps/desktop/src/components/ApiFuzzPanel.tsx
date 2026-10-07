@@ -1,4 +1,4 @@
-import { Bug, ChevronDown, ChevronRight, ExternalLink, Play, Sparkles, Square, TriangleAlert } from 'lucide-react';
+import { Bug, ChevronDown, ChevronRight, ExternalLink, FlaskConical, Play, Sparkles, Square, TriangleAlert } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { asError, call, on } from '../api';
 import { useApp } from '../store';
@@ -22,6 +22,8 @@ interface FuzzReport {
   results: FuzzResult[];
   counts: Record<Verdict, number>;
   serverErrors: number;
+  /** The base URL the run used (the saved tests write it as {{baseUrl}}). */
+  baseUrl?: string;
 }
 
 const GROUPS: Array<{ verdict: Verdict; title: string; tone: 'bad' | 'warn' | 'default' }> = [
@@ -150,11 +152,28 @@ export function ApiFuzzPanel({ spec }: { spec: string }) {
               <Badge tone={report.counts['server-error'] ? 'bad' : 'ok'}>{report.counts['server-error']} server errors</Badge>
               <Badge tone={report.counts['accepted-invalid'] ? 'warn' : 'ok'}>{report.counts['accepted-invalid']} accepted</Badge>
               <Badge>{report.counts['undocumented-status']} undocumented</Badge>
-              {findings.length > 0 && (
+              {report.counts['server-error'] + report.counts['accepted-invalid'] > 0 && (
                 <Button
                   size="sm"
                   variant="ghost"
                   className="ml-auto"
+                  icon={<FlaskConical size={12} />}
+                  title="Each server error and accepted invalid input as a test that expects a 4xx: it passes once the API is fixed"
+                  onClick={() =>
+                    void call<{ path: string; tests: number }>('openapi.fuzzSaveTests', { path: spec, report, baseUrl: report.baseUrl }).then(
+                      (r) => useApp.getState().toast(`${r.path}: ${r.tests} regression tests`, 'success', { label: 'Open Tests', onClick: () => useApp.getState().setView('tests') }),
+                      (e) => useApp.getState().toast(asError(e).message, 'error'),
+                    )
+                  }
+                >
+                  Save as tests
+                </Button>
+              )}
+              {findings.length > 0 && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className={report.counts['server-error'] + report.counts['accepted-invalid'] > 0 ? undefined : 'ml-auto'}
                   icon={<Sparkles size={12} />}
                   onClick={() =>
                     useApp.getState().set({
@@ -163,17 +182,15 @@ export function ApiFuzzPanel({ spec }: { spec: string }) {
                         title: `Fuzzing · ${spec.replace(/^specs\//, '')}`,
                         context: {
                           document: spec,
-                          findings: findings
-                            .slice(0, 60)
-                            .map((r) => ({
-                              operation: r.case.operation,
-                              case: r.case.name,
-                              verdict: r.verdict,
-                              status: r.status,
-                              message: r.message,
-                              request: { url: r.case.request.url, body: r.case.request.body?.content?.slice(0, 500) },
-                              response: r.bodyPreview?.slice(0, 300),
-                            })),
+                          findings: findings.slice(0, 60).map((r) => ({
+                            operation: r.case.operation,
+                            case: r.case.name,
+                            verdict: r.verdict,
+                            status: r.status,
+                            message: r.message,
+                            request: { url: r.case.request.url, body: r.case.request.body?.content?.slice(0, 500) },
+                            response: r.bodyPreview?.slice(0, 300),
+                          })),
                         },
                       },
                     })

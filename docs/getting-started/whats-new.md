@@ -50,6 +50,7 @@ Terminal: `testpion openapi-lint` lints every document in `specs/` and exits 1 o
    - **Undocumented statuses**: answers the document doesn't list.
    - **Not authorized**: the token was missing or wrong, so that operation wasn't judged. Choose an environment that has the token.
 4. Click a finding to see the request and the response; **Open as request** reproduces it. **Explain and fix (AI)** says where to look.
+5. **Save as tests** writes the server errors and accepted invalid inputs as tests that expect a 4xx (`tests/<api>/fuzz-findings.yaml`): they pass once the API is fixed, and keep it fixed.
 
 Fuzzing sends real requests, some that create or change data. It only targets local or private-network hosts unless you switch on **Allow remote hosts**, never runs with a production environment, and leaves DELETE out unless you switch on **Include DELETE**.
 

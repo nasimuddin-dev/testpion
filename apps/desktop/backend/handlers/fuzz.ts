@@ -4,7 +4,7 @@
  * {{baseUrl}}) in the chosen environment; production environments are refused, remote hosts need the person's opt-in.
  */
 import { readFileSync } from 'node:fs';
-import { ApsError, fuzzCases, runFuzz, type FuzzReport } from '@testpion/core';
+import { ApsError, fuzzCases, runFuzz, writeFuzzFindingTests, type FuzzReport } from '@testpion/core';
 import type { Backend, Handlers } from '../backend.js';
 
 const SPEC_PATH = /^specs\/[^/\\]+\.(ya?ml|json)$/i;
@@ -42,11 +42,19 @@ export function fuzzHandlers(be: Backend): Handlers {
           onResult: (_r, done) => be.host.emit('fuzz.progress', { done, total: cases.length }),
         });
         // what the window shows and keeps: response bodies redacted like everything else
-        return { ...report, results: report.results.map((r) => ({ ...r, bodyPreview: r.bodyPreview ? ctx.redactor.redactString(r.bodyPreview) : undefined })) };
+        return { ...report, baseUrl, results: report.results.map((r) => ({ ...r, bodyPreview: r.bodyPreview ? ctx.redactor.redactString(r.bodyPreview) : undefined })) } as FuzzReport;
       } finally {
         if (running === ctrl) running = undefined;
         await ctx.dispose();
       }
+    },
+    /** A run's server errors and accepted invalid inputs as regression tests (tests/<api>/fuzz-findings.yaml). */
+    'openapi.fuzzSaveTests': ({ path, report, baseUrl }: { path: string; report: FuzzReport; baseUrl?: string }) => {
+      if (!SPEC_PATH.test(path ?? '')) throw new ApsError('ValidationError', `Not an API definition in specs/: ${path ?? ''}`);
+      const out = writeFuzzFindingTests(be.ws, path, report, { baseUrl });
+      if (!out) throw new ApsError('ValidationError', 'No server errors or accepted invalid inputs to save as tests');
+      be.host.emit('workspace.changedOnDisk', { message: `${out.path} written`, kinds: ['tests'], files: [out.path] });
+      return out;
     },
     'openapi.fuzzStop': () => {
       running?.abort();
