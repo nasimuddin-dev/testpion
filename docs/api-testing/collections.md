@@ -69,7 +69,7 @@ A WSDL 1.1 or 2.0 document becomes a collection of SOAP requests, one folder per
 - a sample envelope built from the XML Schema in the WSDL's `<types>`: every element of the input message with a placeholder value (`?` for text, `0` for numbers, `false`, the first value of an enumeration, dates), including the fields of base types (`extension`), with document/literal and RPC styles;
 - a status 200 check (a SOAP Fault comes back as 500 in SOAP 1.1).
 
-Replace the placeholders and send. The response is XML: `xml2Json(pm.response.text())` turns it into an object for tests. Schemas and WSDLs it imports (`xsd:import`, `xsd:include`, `wsdl:import`, like the `?xsd=xsd0` and `?wsdl=wsdl0` documents of JAX-WS and WCF services) are fetched from the same site for a link, or read from next to the file for a file. WSDL 2.0 is not supported.
+Replace the placeholders and send. The response is XML: `xml2Json(pm.response.text())` turns it into an object for tests. Schemas and WSDLs it imports (`xsd:import`, `xsd:include`, `wsdl:import`, like the `?xsd=xsd0` and `?wsdl=wsdl0` documents of JAX-WS and WCF services) are fetched from the same site for a link, or read from next to the file for a file.
 
 To try it, run the [demo servers](/getting-started/installation#try-it-with-the-demo-servers) and import the link `http://127.0.0.1:4010/soap/patients?wsdl` (`GetPatient` with id `1` or `2`, `RegisterPatient`).
 
