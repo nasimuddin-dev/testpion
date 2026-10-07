@@ -19,6 +19,7 @@ import { registerMonitorCommands } from './commands/monitor.js';
 import { registerDoctorCommand } from './commands/doctor.js';
 import { registerSecretsCommands } from './commands/secrets.js';
 import { registerOpenApiCommands } from './commands/openapi.js';
+import { registerGenerateCommands } from './commands/generate.js';
 
 /** The testpion command line: one module per area of commands (commands/*.ts). */
 export function buildProgram(): Command {
@@ -37,6 +38,7 @@ export function buildProgram(): Command {
   registerMonitorCommands(program);
   registerSecretsCommands(program);
   registerOpenApiCommands(program);
+  registerGenerateCommands(program);
 
   // an environment's secret manager references (op://, vault://, aws-sm:// …) are read before the command runs
   program.hook('preAction', async (_cmd, action) => {

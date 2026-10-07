@@ -5,12 +5,42 @@ import { fuzzCases, runFuzz } from '../openapi/fuzz.js';
 import type { EngineContext } from '../engine.js';
 import type { HttpRequestSpec } from '../model/types.js';
 import { ApsError } from '../errors.js';
+import { generateWorkspaceDataset } from '../storage/dataset-files.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { str, type Tool } from './tool.js';
 
 /** MCP tools for API definitions (OpenAPI / Swagger) beyond the diff and coverage: the linter. */
 export function openApiTools(d: { store: WorkspaceStore; readSpecRef(ref: string): Promise<string>; context?(environment?: string): EngineContext }): Tool[] {
   return [
+    {
+      name: 'generate_dataset',
+      write: true,
+      description:
+        "Generate test data into the workspace's datasets/ folder for data-driven runs (run_collection `data`, test files' `dataset`): `rows` rows from a JSON schema for one row (`schema`, an object or text), or from an API definition operation's request body (`spec` such as specs/clinic.yaml and `operation` such as \"POST /patients\" or an operationId). Each field is filled by its format, enum, range and name (emails, names, cities, prices, dates, UUIDs). Returns the path, the columns and the first rows.",
+      inputSchema: {
+        type: 'object',
+        properties: {
+          name: str('Dataset name: datasets/<name>.csv'),
+          rows: { type: 'number', description: 'How many rows (default 20, at most 10000)' },
+          schema: { description: 'A JSON schema for one row (object or JSON/YAML text)' },
+          spec: str('An API definition in the workspace (with operation)'),
+          operation: str('With spec: "POST /patients" or an operationId'),
+          format: { type: 'string', enum: ['csv', 'json'], description: 'Default csv' },
+          overwrite: { type: 'boolean', description: 'Replace a dataset of the same name' },
+        },
+        required: ['name'],
+      },
+      run: (a) =>
+        generateWorkspaceDataset(d.store, {
+          name: String(a.name ?? ''),
+          rows: Math.min(Number(a.rows) || 20, 10_000),
+          schema: a.schema,
+          spec: a.spec ? String(a.spec) : undefined,
+          operation: a.operation ? String(a.operation) : undefined,
+          format: a.format === 'json' ? 'json' : 'csv',
+          overwrite: a.overwrite === true,
+        }),
+    },
     {
       name: 'api_fuzz',
       write: true,

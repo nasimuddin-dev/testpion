@@ -28,9 +28,21 @@ const steps = [
      const toast = await __t.waitFor(() => vis('[data-sonner-toast]').map((t) => t.textContent).find((t) => /PostgreSQL dataset/.test(t)), 20000);
      return 'toast: ' + /could not connect/.test(toast ?? '') + ' | password shown: ' + /secret/.test(toast ?? '') + ' | dialog gone: ' + !vis('[role=dialog]').length;`,
   ),
+  step(
+    'generate-test-data',
+    `vis('main button').find((b) => b.textContent.trim() === 'Generate…')?.click();
+     const dlg = await __t.waitFor(() => vis('[role=dialog] [data-generate-data]')[0], 4000);
+     if (!dlg) return 'NO DIALOG';
+     vis('[role=dialog] button').find((b) => b.textContent.trim() === 'From a JSON schema')?.click(); await __t.sleep(200);
+     setInput(vis('[role=dialog] input[aria-label="Dataset name"]')[0], 'e2e-generated-' + Date.now()); await __t.sleep(100);
+     vis('[role=dialog] button').find((b) => b.textContent.trim() === 'Generate')?.click();
+     const shown = await __t.waitFor(() => vis('main *').find((x) => x.children.length === 0 && /e2e-generated-\\d+\\.csv/.test(x.textContent)), 8000);
+     return 'dialog closed: ' + !vis('[role=dialog]').length + ' | data: ' + !!shown;`,
+  ),
 ];
 
 module.exports = withExpect(steps, {
+  'generate-test-data': /^dialog closed: true \| data: true$/,
   'open-the-runner': /^database button: true \| icon: true$/,
   'a-closed-port-is-explained': /^toast: true \| password shown: false \| dialog gone: true$/,
 });

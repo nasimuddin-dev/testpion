@@ -21,6 +21,22 @@ dataset:
 - **RAG tests:** records provide `question`, `contexts`, `answer` and `expected`.
 - **Other types:** record fields become variables.
 
+## Generate test data
+
+When there is no data file yet, generate one. In the Collection Runner, **Generate…** makes rows from an API definition operation's request body (`POST /patients` in `specs/clinic.yaml`) or from a JSON schema you write, saves them in `datasets/` and uses them for the run. Each field gets a value that fits it:
+
+- its `enum` (one of the values), its `format` (email, UUID, date, date-time, URI, IP address), its range (`minimum` / `maximum`) and its length (`maxLength`);
+- otherwise its name: `email`, `firstName`, `lastName`, `phone`, `city`, `country`, `company`, `price`, `createdAt`, `description` … get an email, a first name, a phone number and so on (the values `{{$randomEmail}}` and the other dynamic variables give);
+- an integer `id` counts 1, 2, 3 … so rows don't collide.
+
+```bash
+testpion generate-data patients --spec specs/clinic.yaml --operation "POST /patients" --rows 50
+testpion generate-data owners --schema owner.schema.yaml --format json
+testpion run-collection "Clinic" -d datasets/patients.csv
+```
+
+Agents use the `generate_dataset` MCP tool. An existing dataset isn't replaced unless you ask (`--overwrite`).
+
 ## SQLite databases
 
 A SQLite database file (`.db`, `.sqlite`, `.sqlite3`) works as a dataset with a `query`: each row is a record and its columns are the fields.

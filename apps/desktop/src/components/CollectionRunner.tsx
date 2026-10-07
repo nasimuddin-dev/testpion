@@ -1,10 +1,11 @@
-import { Database, FileSpreadsheet, History, ListChecks, Play, X } from 'lucide-react';
+import { Database, FileSpreadsheet, History, ListChecks, Play, Wand2, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { asError, call, on } from '../api';
 import { promptText, useApp } from '../store';
 import type { Collection, CollectionNode, Library } from '../types';
 import { timeAgo, plural } from '../lib/format';
 import { RunPanel } from './RunPanel';
+import { GenerateDataDialog } from './GenerateDataDialog';
 import { RunsOverview, type RunRow } from './RunsOverview';
 import { hasNativeDialogs, pickTextFile } from '../lib/files';
 import { LinkButton, Badge, Button, cx, Empty, Field, Input, Modal, Select, Split, Toggle } from './ui';
@@ -86,6 +87,7 @@ export function CollectionRunner({ collection, folderId, onFolderChange }: { col
   const [delay, setDelay] = useState('0');
   const [data, setData] = useState<DataFile>();
   const [dataOpen, setDataOpen] = useState(false);
+  const [generating, setGenerating] = useState(false);
   const [keepValues, setKeepValues] = useState(true);
   const [bail, setBail] = useState(false);
   const [runId, setRunId] = useState<string>();
@@ -250,6 +252,23 @@ export function CollectionRunner({ collection, folderId, onFolderChange }: { col
                 >
                   Database…
                 </Button>
+                <Button icon={<Wand2 size={13} />} title="Generate rows of test data from an API operation or a JSON schema" onClick={() => setGenerating(true)}>
+                  Generate…
+                </Button>
+                {generating && (
+                  <GenerateDataDialog
+                    onClose={() => setGenerating(false)}
+                    onDone={async (g) => {
+                      setGenerating(false);
+                      try {
+                        setData(await call<DataFile>('col.previewDataFile', { path: g.file }));
+                        setIterations('');
+                      } catch (e) {
+                        useApp.getState().toast(asError(e).message, 'error');
+                      }
+                    }}
+                  />
+                )}
                 {datasets.length > 0 && (
                   <Select
                     className="h-8 min-h-8 py-0 text-sm max-w-56"

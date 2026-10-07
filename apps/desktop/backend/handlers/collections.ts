@@ -1,7 +1,7 @@
 /** RPC handlers: Collections (requests, folders, examples, import/export) and their mock servers. */
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, relative, sep } from 'node:path';
-import { ApsError, dbKindOf, redactDbUrl, isSqliteDataset, collectionVariableFlow, listWorkspaceDatasets, readDataset, sqliteTables, fetchImportText, bruFilesToBrunoExport, collectionToBru, importIntoWorkspace, diffOpenApi, lintOpenApi, openApiOutline, workspaceApiCoverage, apiCoverageMarkdown, securityLint, certificateLint, listCertificates, variableFlow, startRecorder, recordingToCollection, type RecordedExchange, collectionToOpenApiText, collectionToHttpFile, collectionToAsyncApi, exampleFromResponse, startMockServer, collectionMarkdown, collectionHtml, exportPostmanCollection, withRequestExamples, type SavedExample, convertCollectionScripts, importRequestSnippet, isRequestSnippet, type Collection, collectionSavedItems, duplicateCollection, shortId, requestBodySchema, loadOpenApi } from '@testpion/core';
+import { ApsError, dbKindOf, redactDbUrl, isSqliteDataset, collectionVariableFlow, listWorkspaceDatasets, readDataset, sqliteTables, fetchImportText, bruFilesToBrunoExport, collectionToBru, importIntoWorkspace, diffOpenApi, lintOpenApi, openApiOutline, workspaceApiCoverage, apiCoverageMarkdown, securityLint, certificateLint, listCertificates, variableFlow, startRecorder, recordingToCollection, type RecordedExchange, collectionToOpenApiText, collectionToHttpFile, collectionToAsyncApi, generateWorkspaceDataset, exampleFromResponse, startMockServer, collectionMarkdown, collectionHtml, exportPostmanCollection, withRequestExamples, type SavedExample, convertCollectionScripts, importRequestSnippet, isRequestSnippet, type Collection, collectionSavedItems, duplicateCollection, shortId, requestBodySchema, loadOpenApi } from '@testpion/core';
 import type { Backend, Handlers, CollectionRunParams } from '../backend.js';
 
 /** An API definition's workspace path: a JSON or YAML file directly in specs/. */
@@ -266,6 +266,12 @@ export function collectionsHandlers(be: Backend): Handlers {
     'col.pickDataFile': async () => {
       const f = await be.host.openDialog?.({ filters: [{ name: 'Data files', extensions: ['csv', 'json', 'jsonl', 'db', 'sqlite', 'sqlite3'] }] });
       return f ? be.handlers['col.previewDataFile']!({ path: f }) : null;
+    },
+    /** Generate test data into datasets/ from a JSON schema or an API definition operation's request body. */
+    'datasets.generate': (p: { name: string; rows: number; schema?: string; spec?: string; operation?: string; format?: 'csv' | 'json'; overwrite?: boolean }) => {
+      const out = generateWorkspaceDataset(be.ws, p);
+      be.host.emit('data.changed', { kind: 'datasets' });
+      return { ...out, file: be.ws.safePath(out.path) };
     },
     'col.previewDataFile': async ({ path, query, environment }: { path: string; query?: string; environment?: string }) => {
       // a PostgreSQL / MySQL database (a URL, {{variables}} allowed, or env:NAME): its tables, and the rows of the query

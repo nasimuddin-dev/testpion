@@ -31,6 +31,7 @@ const OPEN_WORLD = new Set([
 /** Tools that change or remove what is already there (variable values everywhere, files), or send requests that may change the API's data. */
 const DESTRUCTIVE = new Set([
   'api_fuzz',
+  'generate_dataset',
   'debugger_capture',
   'git_resolve',
   'debugger_rules',
