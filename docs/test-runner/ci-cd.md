@@ -157,4 +157,24 @@ specs/clinic.yaml: 12 operations, 2 errors, 1 warning, 3 notes
 
 `--disable` leaves rules out and `--fail-on warning` makes warnings fail the build too. In the app, an API definition's **Lint** tab lists the problems, marks them in the editor as you type, and a click shows the place; **How to fix (AI)** asks the assistant for the changes. Agents use the MCP tool `openapi_lint`.
 
+## Fuzz an API
+
+`testpion fuzz` sends each operation of an OpenAPI document its valid example, then requests that break one rule of the schema at a time: a required field left out, a wrong type, a value outside its enum, range, length or format, a body that isn't JSON, a path or query parameter of the wrong type. What comes back shows the bugs plain tests miss:
+
+| Finding | Meaning |
+|---|---|
+| Server error | The API answered 5xx to that input: an unhandled case. `testpion fuzz` exits `1` on these. |
+| Invalid input accepted | A 2xx for input the document forbids: validation is missing, or the document is wrong. |
+| Undocumented status | A status the operation's responses don't list. |
+| Not authorized | The valid example got 401 or 403, so the variants weren't judged: give the token. |
+
+```bash
+testpion fuzz specs/clinic.yaml --base-url http://localhost:3000 -e Development
+testpion fuzz specs/clinic.yaml --base-url http://localhost:3000 --var accessToken=$TOKEN --markdown fuzz.md
+```
+
+These are real requests, and some create or change data. So fuzzing runs only against local or private-network hosts unless `--allow-remote`, never with a production environment, and leaves DELETE out unless `--include-delete`. Run it against a local or test copy of the API, for example in an integration pipeline after `--start` and `--wait-for`. `--fail-on server-error,accepted-invalid` makes accepted invalid input fail the build too, `--operation "POST /patients"` narrows it, and `--json` prints the report.
+
+In the app, an API definition's **Fuzz** tab does the same with the active environment, groups the findings, opens any request as a tab, and **Explain and fix (AI)** asks the assistant what is wrong and where to fix it. Agents use `api_fuzz` (local hosts only).
+
 :::

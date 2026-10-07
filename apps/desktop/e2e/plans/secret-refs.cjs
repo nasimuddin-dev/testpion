@@ -11,7 +11,7 @@ const steps = [
       await __t.view('Environments'); await __t.sleep(800);
       [...document.querySelectorAll('main button, main [role=option], main li')].find((b) => b.textContent.trim().startsWith('E2E refs'))?.click();
       const line = await __t.waitFor(() => document.querySelector('main [data-secret-refs]'), 6000);
-      return (line?.textContent ?? 'NO LINE').replace(/\s+/g, ' ').trim();
+      return (line?.textContent ?? 'NO LINE').replace(/\\s+/g, ' ').trim();
     })()`,
   ],
   [
@@ -19,7 +19,7 @@ const steps = [
     `(async () => {
       [...document.querySelectorAll('main [data-secret-refs] button')].find((b) => b.textContent.trim() === 'Allow…')?.click();
       const dialog = await __t.waitFor(() => [...document.querySelectorAll('[role=dialog]')].find((d) => /Read secrets from 1Password/.test(d.textContent)), 4000);
-      const cmd = /op read --no-newline op:\/\/Clinic\/API\/credential/.test(dialog?.textContent ?? '');
+      const cmd = /op read --no-newline op:\\/\\/Clinic\\/API\\/credential/.test(dialog?.textContent ?? '');
       [...(dialog?.querySelectorAll('button') ?? [])].find((b) => b.textContent.trim() === 'Cancel')?.click(); await __t.sleep(300);
       await window.aps.invoke('env.delete', { id: 'e2e-refs' }).catch(() => undefined);
       return 'dialog: ' + !!dialog + ' | command shown: ' + cmd;

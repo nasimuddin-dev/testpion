@@ -1377,7 +1377,7 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
       },
     },
     ...gitTools({ store, findCollection, redactor }),
-    ...openApiTools({ store, readSpecRef }),
+    ...openApiTools({ store, readSpecRef, context: (environment) => createEngineContext({ store, secrets, settings, environment }) }),
     ...debuggerTools({ redactor, store }),
     ...workspaceEditTools({
       store,

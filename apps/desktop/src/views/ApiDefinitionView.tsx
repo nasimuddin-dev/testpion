@@ -11,10 +11,11 @@ import { ApiCoverageDialog } from '../components/ApiCoverageDialog';
 import { OpenApiDiffDialog } from '../components/OpenApiDiffDialog';
 import { ApiLintPanel, type ApiLintProblem, type ApiLintResult } from '../components/ApiLintPanel';
 import { ApiPreviewPanel, type ApiOutline } from '../components/ApiPreviewPanel';
+import { ApiFuzzPanel } from '../components/ApiFuzzPanel';
 import { useSingleEditorTab } from '../components/EditorTabs';
 import { Badge, Button, Empty, Tabs } from '../components/ui';
 
-type Tab = 'definition' | 'preview' | 'lint' | 'coverage' | 'compare';
+type Tab = 'definition' | 'preview' | 'lint' | 'fuzz' | 'coverage' | 'compare';
 
 /** Which document each API definition tab shows (each tab is its own document). */
 const tabSpec = persisted<{ spec?: string }>('apidef', {});
@@ -157,6 +158,7 @@ export function ApiDefinitionView() {
             badge: lint && (lint.counts.error || lint.counts.warning) ? <Badge tone={lint.counts.error ? 'bad' : 'warn'}>{lint.counts.error || lint.counts.warning}</Badge> : undefined,
             title: lint ? `${lint.counts.error} errors, ${lint.counts.warning} warnings, ${lint.counts.info} notes` : undefined,
           },
+          { id: 'fuzz', label: 'Fuzz' },
           { id: 'coverage', label: 'Coverage' },
           { id: 'compare', label: 'Compare versions' },
         ]}
@@ -181,6 +183,8 @@ export function ApiDefinitionView() {
           <ApiPreviewPanel outline={outline.outline} error={outline.error} />
         ) : tab === 'lint' ? (
           <ApiLintPanel spec={spec} text={text} result={lint} onOpen={openProblem} />
+        ) : tab === 'fuzz' ? (
+          <ApiFuzzPanel spec={spec} />
         ) : tab === 'coverage' ? (
           <ApiCoverageDialog inline spec={spec} onClose={() => undefined} />
         ) : (

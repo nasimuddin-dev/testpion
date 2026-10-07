@@ -45,9 +45,23 @@ const steps = [
       return 'params: ' + params + ' | opened: ' + !!url;
     })()`,
   ],
+  [
+    'fuzz-runs-and-summarises',
+    `(async () => {
+      await __t.esc(); await __t.open('petstore.json'); await __t.sleep(600);
+      await __t.tab('Fuzz');
+      const input = document.querySelector('main [data-api-fuzz] input[aria-label="Base URL"]');
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, 'http://127.0.0.1:4010/api/v3');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      [...document.querySelectorAll('main [data-api-fuzz] button')].find((b) => b.textContent.trim() === 'Fuzz')?.click();
+      const sum = await __t.waitFor(() => document.querySelector('main [data-fuzz-summary]'), 60000);
+      return 'summary: ' + (sum?.textContent ?? 'NONE').replace(/\\s+/g, ' ').trim().slice(0, 40);
+    })()`,
+  ],
 ];
 
 module.exports = withExpect(steps, {
+  'fuzz-runs-and-summarises': /^summary: \d+ requests to 16 operations:/,
   'preview-lists-the-operations': /^operations: 19 \| tags: pet,store,user$/,
   'an-operation-opens-as-a-request': /^params: true \| opened: true$/,
   'lint-tab-lists-the-notes': /^rules: component-unused,component-unused$/,

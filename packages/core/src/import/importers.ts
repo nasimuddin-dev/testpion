@@ -43,7 +43,7 @@ export function detectFormat(text: string): 'openapi' | 'swagger' | 'postman' | 
 
 /* ------------------------------------------------------------------ OpenAPI */
 
-function sampleFromSchema(schema: any, spec: any, depth = 0): unknown {
+export function sampleFromSchema(schema: any, spec: any, depth = 0): unknown {
   if (!schema || depth > 6) return null;
   if (schema.$ref) {
     const path = String(schema.$ref).replace(/^#\//, '').split('/');

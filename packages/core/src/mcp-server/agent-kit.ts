@@ -24,11 +24,13 @@ const OPEN_WORLD = new Set([
   'openapi_diff',
   'openapi_lint',
   'openapi_outline',
+  'api_fuzz',
   'api_coverage',
 ]);
 
 /** Tools that change or remove what is already there (variable values everywhere, files), or send requests that may change the API's data. */
 const DESTRUCTIVE = new Set([
+  'api_fuzz',
   'debugger_capture',
   'git_resolve',
   'debugger_rules',
@@ -102,7 +104,7 @@ Workspace: **${o.workspace}**. TestPion is an API client and test runner (REST, 
 | Write tests | \`set_request_checks\` (checks on a saved request), \`write_test_file\` (a YAML file under tests/), \`save_test\` (a saved request as a test) |
 | Save what the user pasted | \`parse_request_snippet\`, \`save_request\` (secrets become {{variables}}) |
 | Performance | \`response_time_stats\`, \`collection_timing\`, \`load_test\` (local APIs only), \`load_history\` |
-| Contracts | \`import_definition\`, \`api_coverage\`, \`openapi_diff\`, \`openapi_lint\`, \`openapi_outline\`, \`collection_openapi\` |
+| Contracts | \`import_definition\`, \`api_coverage\`, \`openapi_diff\`, \`openapi_lint\`, \`openapi_outline\`, \`api_fuzz\`, \`collection_openapi\` |
 | Git | \`git_status\`, \`git_diff\` (changes by meaning, or between two commits), \`git_log\`, \`git_propose_commit\` (stages and proposes; a person commits) |
 | Change the workspace | \`update_request\` (URL, headers, body, scripts of a saved request), \`move_request\`, \`delete_request\`, \`create_collection\`, \`create_folder\`, \`set_collection_variable\` |
 | Test an MCP server | \`list_mcp_servers\`, \`mcp_server_tools\` (what it offers), \`mcp_call_tool\` (call a tool and read the result) |
