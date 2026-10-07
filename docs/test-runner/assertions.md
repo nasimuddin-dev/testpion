@@ -21,6 +21,7 @@ All checks share `type`, an optional `name`, and usually `path` (JSONPath such a
 | `json-schema` | `path`, `schema` (inferred from `expected` if omitted) |
 | `snapshot` | `expected` (the stored JSON), `path` (optional), `mode`: `shape` (default: the same fields and types, values may change) or `values`, `ignore` (paths such as `$.id`, `$..updatedAt`, `$.items[*].price`), `strict` (also fail on new fields) |
 | `openapi` | `spec` (an OpenAPI 3 / Swagger 2 file in the workspace, or the document inline), `operationId` (optional). See [contract testing](#openapi-contract-testing). |
+| `asyncapi` | Realtime tests: `spec` (an AsyncAPI 2 / 3 file, or the document inline), `channel` (WebSocket), `allowUnknownChannels`. See [AsyncAPI checks](/api-testing/websocket#check-messages-against-an-asyncapi-document). |
 | `type`, `length`, `threshold`, `greater-than`, `less-than` | `path`, `expected` / `min` / `max` |
 | `latency`, `tokens`, `cost` | `max` (`tokens` also takes `field: input\|output\|total`) |
 | `header` | `header`, `expected` |

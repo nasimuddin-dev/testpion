@@ -175,6 +175,8 @@ const ASSERTION_KEYS: TestKeyDoc[] = [
   { key: 'min', description: 'For length / threshold checks: the least allowed.', shape: 'number' },
   { key: 'schema', description: 'For json-schema: the schema (or a path to it).', shape: 'map' },
   { key: 'threshold', description: 'For scored checks: the score to pass (0–1).', shape: 'number' },
+  { key: 'spec', description: 'For openapi / asyncapi: the document (a workspace file, or the document inline).', shape: 'text' },
+  { key: 'channel', description: 'For asyncapi on plain WebSocket: the channel the messages belong to.', shape: 'text' },
 ];
 
 export type TestKeyContext = 'file' | 'suite' | 'test' | 'assertion';

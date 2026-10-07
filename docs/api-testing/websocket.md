@@ -122,6 +122,18 @@ assertions:
 
 From the terminal, [`testpion mqtt`](../cli/reference.md#mqtt) subscribes, publishes and prints what arrives; AI agents use `realtime_exchange` with `mode: mqtt`.
 
+### Check messages against an AsyncAPI document
+
+The `asyncapi` check is contract testing for realtime APIs: every received message must be one of the messages its channel declares in an AsyncAPI 2 or 3 document. The channel is the message's topic (MQTT, Kafka) or event (Socket.IO), matched against the channels' addresses with their `{parameters}`. For plain WebSocket, name the channel in the check.
+
+```yaml
+assertions:
+  - { type: asyncapi, spec: specs/clinic-events.asyncapi.yaml }
+  - { type: asyncapi, spec: specs/prices.asyncapi.yaml, channel: /prices }    # WebSocket
+```
+
+A message that matches none of its channel's messages fails the check, with what is wrong (`message 2 on clinic.{clinicId}.appointments: /reason must be equal to one of the allowed values`). So does a message on a topic the document doesn't have, unless `allowUnknownChannels: true`. The document can be any file in the workspace, or the document itself inline under `spec`.
+
 ## When a connection fails
 
 The reason is shown in the message log, with what to try:
