@@ -1,11 +1,11 @@
-import { Brush, Copy, FolderX, Globe, Replace, Variable } from 'lucide-react';
+import { Brush, Copy, FolderX, Globe, KeyRound, Replace, Variable } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { asError, call } from '../api';
 import { useApp } from '../store';
 import type { Collection } from '../types';
 import { Badge, Button, Empty, Modal, Toggle } from './ui';
 
-type Kind = 'duplicate' | 'hard-coded-host' | 'empty-folder' | 'unused-variable';
+type Kind = 'duplicate' | 'hard-coded-host' | 'empty-folder' | 'unused-variable' | 'repeated-auth-header';
 interface Finding {
   kind: Kind;
   message: string;
@@ -17,6 +17,7 @@ interface Finding {
 
 const KINDS: Array<{ kind: Kind; title: string; icon: ReactNode; fix?: string }> = [
   { kind: 'duplicate', title: 'Duplicate requests', icon: <Copy size={13} />, fix: 'Remove the copies (the first of each stays)' },
+  { kind: 'repeated-auth-header', title: 'The same Authorization header on many requests', icon: <KeyRound size={13} />, fix: 'Set it as the collection auth (they inherit it)' },
   { kind: 'hard-coded-host', title: 'Hosts typed into URLs', icon: <Globe size={13} /> },
   { kind: 'empty-folder', title: 'Empty folders', icon: <FolderX size={13} />, fix: 'Remove the empty folders' },
   { kind: 'unused-variable', title: 'Unused variables', icon: <Variable size={13} />, fix: 'Remove the unused variables' },
@@ -41,6 +42,7 @@ export function TidyDialog({ collection, onClose, onDone, onReplace }: { collect
         removeDuplicates: !!fix.duplicate,
         removeEmptyFolders: !!fix['empty-folder'],
         removeUnusedVariables: !!fix['unused-variable'],
+        useCollectionAuth: !!fix['repeated-auth-header'],
       });
       onDone();
       onClose();

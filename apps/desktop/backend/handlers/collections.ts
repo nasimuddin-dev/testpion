@@ -79,7 +79,7 @@ export function collectionsHandlers(be: Backend): Handlers {
     /** What piles up in a collection: duplicate requests, typed-in hosts, empty folders, unused variables. */
     'col.tidy': ({ collectionId }: { collectionId: string }) => tidyCollection(be.ws.getCollection(collectionId)),
     /** Remove duplicate copies, empty folders and / or unused variables. */
-    'col.tidyApply': (p: { collectionId: string; removeDuplicates?: boolean; removeEmptyFolders?: boolean; removeUnusedVariables?: boolean }) => {
+    'col.tidyApply': (p: { collectionId: string; removeDuplicates?: boolean; removeEmptyFolders?: boolean; removeUnusedVariables?: boolean; useCollectionAuth?: boolean }) => {
       const r = applyTidy(be.ws.getCollection(p.collectionId), p);
       if (r.removed) be.ws.saveCollection(r.collection);
       return { removed: r.removed };

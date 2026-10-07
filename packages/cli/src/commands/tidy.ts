@@ -11,9 +11,10 @@ export function registerTidyCommand(program: Command): void {
     .option('--remove-duplicates', 'remove the copies of duplicate requests (the first of each stays)')
     .option('--remove-empty-folders', 'remove folders with no requests')
     .option('--remove-unused-variables', 'remove collection variables nothing uses')
+    .option('--use-collection-auth', "make a repeated Authorization header the collection's auth (those requests inherit it)")
     .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
     .option('--json', 'print the result as JSON (for scripts and AI agents)')
-    .action((ref: string, o: { removeDuplicates?: boolean; removeEmptyFolders?: boolean; removeUnusedVariables?: boolean; workspace?: string; json?: boolean }) => {
+    .action((ref: string, o: { removeDuplicates?: boolean; removeEmptyFolders?: boolean; removeUnusedVariables?: boolean; useCollectionAuth?: boolean; workspace?: string; json?: boolean }) => {
       const { store } = openWorkspace(o.workspace, undefined, new WorkspaceManager());
       try {
         const want = ref.toLowerCase();
@@ -22,14 +23,14 @@ export function registerTidyCommand(program: Command): void {
         const c = store.getCollection(s.id);
         const findings = tidyCollection(c);
         let removed = 0;
-        if (o.removeDuplicates || o.removeEmptyFolders || o.removeUnusedVariables) {
+        if (o.removeDuplicates || o.removeEmptyFolders || o.removeUnusedVariables || o.useCollectionAuth) {
           const r = applyTidy(c, o);
           removed = r.removed;
           if (removed) store.saveCollection(r.collection);
         }
         if (o.json) return console.log(JSON.stringify({ collection: c.name, findings, removed }, null, 2));
         if (!findings.length) return console.log(green(`${c.name} is tidy.`));
-        const titles = { duplicate: 'Duplicate requests', 'hard-coded-host': 'Hosts typed into URLs', 'empty-folder': 'Empty folders', 'unused-variable': 'Unused variables' } as const;
+        const titles = { duplicate: 'Duplicate requests', 'hard-coded-host': 'Hosts typed into URLs', 'empty-folder': 'Empty folders', 'unused-variable': 'Unused variables', 'repeated-auth-header': 'The same Authorization header on many requests' } as const;
         for (const kind of Object.keys(titles) as Array<keyof typeof titles>) {
           const list = findings.filter((f) => f.kind === kind);
           if (!list.length) continue;

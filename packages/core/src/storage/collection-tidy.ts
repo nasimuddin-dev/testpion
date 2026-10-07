@@ -6,7 +6,7 @@ import type { Collection, CollectionNode } from '../model/types.js';
  * empty folders, and collection variables nothing uses. Each finding says how to fix it; removeDuplicates and
  * removeEmptyFolders do the safe ones.
  */
-export type TidyKind = 'duplicate' | 'hard-coded-host' | 'empty-folder' | 'unused-variable';
+export type TidyKind = 'duplicate' | 'hard-coded-host' | 'empty-folder' | 'unused-variable' | 'repeated-auth-header';
 
 export interface TidyFinding {
   kind: TidyKind;
@@ -19,6 +19,8 @@ export interface TidyFinding {
   host?: string;
   /** For an unused variable: its name. */
   variable?: string;
+  /** For a repeated Authorization header: its value (the same on every one of `ids`). */
+  header?: string;
 }
 
 type Saved = Exclude<CollectionNode, { kind: 'folder' }>;
@@ -90,6 +92,27 @@ export function tidyCollection(c: Collection): TidyFinding[] {
   for (const f of empty)
     if (!empty.some((o) => o !== f && f.path.startsWith(`${o.path} / `))) findings.push({ kind: 'empty-folder', message: `${f.path} has no requests`, ids: [f.id], where: [f.path] });
 
+  // the same Authorization header typed into many requests: the collection's auth could carry it once
+  if (!c.auth || c.auth.type === 'none' || c.auth.type === 'inherit') {
+    const byValue = new Map<string, Array<{ node: Saved; path: string }>>();
+    for (const r of requests) {
+      if (r.node.kind !== 'http') continue;
+      const own = r.node.request.auth;
+      if (own && own.type !== 'inherit' && own.type !== 'none') continue;
+      const h = (r.node.request.headers ?? []).find((x) => x.enabled !== false && x.key.toLowerCase() === 'authorization');
+      if (h?.value.trim()) byValue.set(h.value.trim(), [...(byValue.get(h.value.trim()) ?? []), r]);
+    }
+    const top = [...byValue.entries()].sort((a, b) => b[1].length - a[1].length)[0];
+    if (top && top[1].length >= 3)
+      findings.push({
+        kind: 'repeated-auth-header',
+        message: `${top[1].length} requests send the same Authorization header (${/^bearer\s/i.test(top[0]) ? 'a bearer token' : /^basic\s/i.test(top[0]) ? 'basic' : 'a custom scheme'}): set it once as the collection's auth`,
+        ids: top[1].map((r) => r.node.id),
+        where: top[1].map((r) => r.path),
+        header: top[0],
+      });
+  }
+
   // collection variables nothing in the collection reads
   const text = JSON.stringify({ items: c.items, auth: c.auth, pre: c.preRequestScript, test: c.testScript, vars: (c.variables ?? []).map((v) => v.value) });
   for (const v of c.variables ?? []) {
@@ -101,12 +124,28 @@ export function tidyCollection(c: Collection): TidyFinding[] {
 }
 
 /** Remove the copies of duplicate requests (keeping the first of each) and empty folders. */
-export function applyTidy(c: Collection, o: { removeDuplicates?: boolean; removeEmptyFolders?: boolean; removeUnusedVariables?: boolean }): { collection: Collection; removed: number } {
+export function applyTidy(c: Collection, o: { removeDuplicates?: boolean; removeEmptyFolders?: boolean; removeUnusedVariables?: boolean; useCollectionAuth?: boolean }): { collection: Collection; removed: number } {
   const findings = tidyCollection(c);
   const drop = new Set<string>();
   if (o.removeDuplicates) for (const f of findings) if (f.kind === 'duplicate') for (const id of f.ids.slice(1)) drop.add(id);
   if (o.removeEmptyFolders) for (const f of findings) if (f.kind === 'empty-folder') drop.add(f.ids[0]!);
   const unused = new Set(o.removeUnusedVariables ? findings.filter((f) => f.kind === 'unused-variable').map((f) => f.variable!) : []);
-  const prune = (nodes: CollectionNode[]): CollectionNode[] => nodes.filter((n) => !drop.has(n.id)).map((n) => (n.kind === 'folder' ? { ...n, items: prune(n.items) } : n));
-  return { collection: { ...c, items: prune(c.items), variables: (c.variables ?? []).filter((v) => !unused.has(v.key)) }, removed: drop.size + unused.size };
+  // the repeated Authorization header becomes the collection's auth; those requests inherit it
+  const authFinding = o.useCollectionAuth ? findings.find((f) => f.kind === 'repeated-auth-header') : undefined;
+  const authIds = new Set(authFinding?.ids ?? []);
+  let auth = c.auth;
+  if (authFinding?.header) {
+    const v = authFinding.header;
+    const bearer = /^bearer\s+(.+)$/i.exec(v);
+    auth = bearer ? { type: 'bearer', token: bearer[1]!.trim() } : { type: 'apiKey', key: 'Authorization', value: v, in: 'header' };
+  }
+  const prune = (nodes: CollectionNode[]): CollectionNode[] =>
+    nodes
+      .filter((n) => !drop.has(n.id))
+      .map((n) => {
+        if (n.kind === 'folder') return { ...n, items: prune(n.items) };
+        if (n.kind === 'http' && authIds.has(n.id)) return { ...n, request: { ...n.request, auth: { type: 'inherit' }, headers: (n.request.headers ?? []).filter((h) => h.key.toLowerCase() !== 'authorization') } } as CollectionNode;
+        return n;
+      });
+  return { collection: { ...c, auth, items: prune(c.items), variables: (c.variables ?? []).filter((v) => !unused.has(v.key)) }, removed: drop.size + unused.size + authIds.size };
 }

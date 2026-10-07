@@ -167,15 +167,16 @@ export function workspaceEditTools(d: EditToolsDeps): Tool[] {
         removeDuplicates: { type: 'boolean' },
         removeEmptyFolders: { type: 'boolean' },
         removeUnusedVariables: { type: 'boolean' },
+        useCollectionAuth: { type: 'boolean', description: "Make a repeated Authorization header the collection's auth (those requests inherit it)" },
       },
       required: ['collection'],
     },
     run: (a) => {
       const c = findCollection(a.collection);
       const findings = tidyCollection(c);
-      const fix = { removeDuplicates: a.removeDuplicates === true, removeEmptyFolders: a.removeEmptyFolders === true, removeUnusedVariables: a.removeUnusedVariables === true };
+      const fix = { removeDuplicates: a.removeDuplicates === true, removeEmptyFolders: a.removeEmptyFolders === true, removeUnusedVariables: a.removeUnusedVariables === true, useCollectionAuth: a.useCollectionAuth === true };
       let removed = 0;
-      if (fix.removeDuplicates || fix.removeEmptyFolders || fix.removeUnusedVariables) {
+      if (fix.removeDuplicates || fix.removeEmptyFolders || fix.removeUnusedVariables || fix.useCollectionAuth) {
         const r = applyTidy(c, fix);
         removed = r.removed;
         if (removed) store.saveCollection(r.collection);

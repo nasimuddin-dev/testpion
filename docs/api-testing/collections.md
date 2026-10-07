@@ -48,8 +48,9 @@ Copied commands include the request's real header and token values, so they run 
 - **Duplicate requests**: the same method, URL and body (query parameter order and spacing don't matter).
 - **Hosts typed into URLs**: `http://localhost:5002/…` instead of `{{bannerManagementBaseUrl}}/…`. **Use a variable…** opens **Replace** with the host filled in.
 - **Empty folders**, and **unused variables** (collection variables no request or script reads).
+- **The same Authorization header on many requests** (common in Postman imports): **Set it as the collection auth** makes it the collection's auth once (a bearer token, or the header as it is) and those requests inherit it.
 
-Tick the fixes to make (remove the copies of duplicates, keeping the first; remove empty folders; remove unused variables) and **Remove what is ticked**; **Undo** in the message puts the collection back. From the terminal, `testpion tidy "Master Collections"` lists them and `--remove-duplicates`, `--remove-empty-folders` and `--remove-unused-variables` fix them; agents use `collection_tidy`.
+Tick the fixes to make (remove the copies of duplicates, keeping the first; remove empty folders; remove unused variables) and **Remove what is ticked**; **Undo** in the message puts the collection back. From the terminal, `testpion tidy "Master Collections"` lists them and `--remove-duplicates`, `--remove-empty-folders`, `--remove-unused-variables` and `--use-collection-auth` fix them; agents use `collection_tidy`.
 
 ## Find and replace
 

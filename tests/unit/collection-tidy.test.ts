@@ -54,4 +54,28 @@ describe('tidying a collection', () => {
     expect(collection.variables.map((v) => v.key)).toEqual(['bannerBaseUrl', 'readInScript']);
     expect(applyTidy(c, {}).removed).toBe(0);
   });
+
+  it('a repeated Authorization header becomes the collection auth, the requests inherit it', () => {
+    const h = (id: string) =>
+      req(id, id, 'GET', '{{base}}/' + id, {
+        headers: [
+          { key: 'Authorization', value: 'Bearer {{token}}' },
+          { key: 'Accept', value: 'application/json' },
+        ],
+      });
+    const d: Collection = {
+      ...c,
+      variables: [
+        { key: 'base', value: 'x' },
+        { key: 'token', value: 't' },
+      ],
+      items: [h('x1'), h('x2'), h('x3'), req('x4', 'other', 'GET', '{{base}}/o')],
+    };
+    const f = tidyCollection(d).find((x) => x.kind === 'repeated-auth-header')!;
+    expect(f).toMatchObject({ ids: ['x1', 'x2', 'x3'], header: 'Bearer {{token}}' });
+    const { collection } = applyTidy(d, { useCollectionAuth: true });
+    expect(collection.auth).toEqual({ type: 'bearer', token: '{{token}}' });
+    expect((collection.items[0] as any).request).toMatchObject({ auth: { type: 'inherit' }, headers: [{ key: 'Accept', value: 'application/json' }] });
+    expect(tidyCollection({ ...d, auth: { type: 'bearer', token: 'x' } }).some((x) => x.kind === 'repeated-auth-header')).toBe(false);
+  });
 });
