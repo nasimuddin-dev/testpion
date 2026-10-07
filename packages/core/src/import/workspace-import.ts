@@ -22,6 +22,8 @@ export interface WorkspaceImportResult {
   contractChecks?: number;
   /** Script APIs the sandbox doesn't provide (cheerio, pm.vault …): these requests need a change to run. */
   scriptWarnings?: ScriptWarning[];
+  /** What did not come over (an .http file's response handler in a file, a {{$dotenv}} reference …). */
+  notes?: string[];
   /** gRPC calls and connections restored from a TestPion collection file, by kind. */
   savedItems?: Record<string, number>;
 }
@@ -100,6 +102,7 @@ export function importIntoWorkspace(store: WorkspaceStore, text: string, opts: {
     if (saved) out.savedItems = restoreSavedItems(store, saved, out.collection.id);
     const warnings = scriptCompatibility(collection, (name) => store.readScriptPackage(name) !== undefined);
     if (warnings.length) out.scriptWarnings = warnings;
+    if (r.notes?.length) out.notes = r.notes;
   }
   // an import never replaces an environment the workspace already has: a clash gets a new id and name
   const envs = (r.environments ?? (r.environment ? [r.environment] : [])).map((e) => {

@@ -84,7 +84,7 @@ export function WorkspaceMenu() {
     // browser / cloud: pick the file in the page
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = '.json,.yaml,.yml,.har,.env,.wsdl,.xml';
+    input.accept = '.json,.yaml,.yml,.har,.env,.wsdl,.xml,.http,.rest,.bru';
     input.onchange = async () => {
       const f = input.files?.[0];
       if (!f) return;

@@ -30,6 +30,7 @@ import {
   fetchImportText,
   readBrunoFolder,
   collectionToBru,
+  collectionToHttpFile,
   type Environment,
   bundleWsdl,
   isWsdl,
@@ -616,13 +617,13 @@ export function registerDataCommands(program: Command): void {
     });
   program
     .command('export')
-    .description('export a collection as a Postman v2.1 collection (default), TestPion JSON, an OpenAPI 3.1 document (--format openapi) or a Bruno collection folder (--format bruno --out <folder>)\n<collection> is a collection name or id in the workspace, or a collection file to convert')
+    .description('export a collection as a Postman v2.1 collection (default), TestPion JSON, an OpenAPI 3.1 document (--format openapi), a Bruno collection folder (--format bruno --out <folder>) or an .http file for REST Client / JetBrains (--format http)\n<collection> is a collection name or id in the workspace, or a collection file to convert')
     .argument('<collection>', 'collection name or id, a file, or an http(s) link')
     .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
-    .addOption(new Option('-f, --format <format>', 'output format').choices(['postman', 'testpion', 'openapi', 'bruno']).default('postman'))
+    .addOption(new Option('-f, --format <format>', 'output format').choices(['postman', 'testpion', 'openapi', 'bruno', 'http']).default('postman'))
     .option('--json', 'with --format openapi: JSON instead of YAML')
     .option('-o, --out <file>', 'write to this file instead of stdout')
-    .action(async (ref: string, o: { workspace?: string; format: 'postman' | 'testpion' | 'openapi' | 'bruno'; json?: boolean; out?: string }) => {
+    .action(async (ref: string, o: { workspace?: string; format: 'postman' | 'testpion' | 'openapi' | 'bruno' | 'http'; json?: boolean; out?: string }) => {
       const c = await loadCollectionRef(ref, o.workspace);
       if (o.format === 'bruno') {
         // a folder like the one Bruno keeps in git; the workspace's environments go to environments/ (secret values never)
@@ -642,6 +643,13 @@ export function registerDataCommands(program: Command): void {
           writeFileSync(p, f.text);
         }
         console.error(dim(`Bruno collection written to ${out} (${files.length} files${envs.length ? `, ${envs.length} environments without secret values` : ''})`));
+        return;
+      }
+      if (o.format === 'http') {
+        const { text, notes } = collectionToHttpFile(c);
+        for (const n of notes) console.error(yellow(`not exported: ${n}`));
+        if (o.out) writeFileSync(resolve(o.out), text);
+        else process.stdout.write(text);
         return;
       }
       if (o.format === 'openapi') {
@@ -743,8 +751,8 @@ export function registerDataCommands(program: Command): void {
           }
           return;
         }
-        const r = importIntoWorkspace(store, text, { contractChecks: o.contractChecks !== false, name: dotenvName(source) });
-        if (o.json) console.log(JSON.stringify({ format: r.format, collection: r.collection?.name, collectionId: r.collection?.id, environment: r.environment?.name, environments: r.environments?.map((e) => e.name), secretsToSet: r.secretsToSet, specPath: r.specPath, contractChecks: r.contractChecks, scriptWarnings: r.scriptWarnings }, null, 2));
+        const r = importIntoWorkspace(store, text, { contractChecks: o.contractChecks !== false, name: dotenvName(source) ?? httpFileName(source) });
+        if (o.json) console.log(JSON.stringify({ format: r.format, collection: r.collection?.name, collectionId: r.collection?.id, environment: r.environment?.name, environments: r.environments?.map((e) => e.name), secretsToSet: r.secretsToSet, specPath: r.specPath, contractChecks: r.contractChecks, scriptWarnings: r.scriptWarnings, notes: r.notes }, null, 2));
         else {
           console.log(green(`Imported ${r.format}: ${r.collection ? `collection "${r.collection.name}"` : ''}${r.environments?.length ? ` ${r.environments.length > 1 ? 'environments' : 'environment'} ${r.environments.map((e) => `"${e.name}"`).join(', ')}` : ''}`));
           if (r.specPath) console.log(dim(`Kept the document as ${r.specPath}${r.contractChecks ? `; ${r.contractChecks} requests check the OpenAPI contract` : ''}`));
@@ -752,6 +760,7 @@ export function registerDataCommands(program: Command): void {
             console.log(yellow(`${r.scriptWarnings.length} script${r.scriptWarnings.length > 1 ? 's use' : ' uses'} something TestPion's sandbox doesn't have:`));
             for (const w of r.scriptWarnings) console.log(yellow(`  ${w.where} (${w.script} script): ${w.api}; ${w.hint}`));
           }
+          for (const n of r.notes ?? []) console.log(yellow(`  ${n}`));
           if (r.secretsToSet?.length) console.log(yellow(`Secret values were not saved (set them in the app, or as TESTPION_SECRET_* variables): ${r.secretsToSet.join(', ')}`));
         }
       } finally {
@@ -1274,6 +1283,12 @@ function savedRequestId(store: WorkspaceStore, request: string, collection?: str
 }
 
 /** The environment name for an imported .env file: ".env.staging" / "staging.env" → "staging" (else the default). */
+/** clinic.http / api.rest → the collection's name. */
+function httpFileName(file: string): string | undefined {
+  const base = file.split(/[\\/]/).pop() ?? '';
+  return /\.(http|rest)$/i.test(base) ? base.replace(/\.(http|rest)$/i, '') : undefined;
+}
+
 function dotenvName(file: string): string | undefined {
   const base = file.split(/[\\/]/).pop() ?? '';
   if (!/(^\.env|\.env$)/.test(base)) return undefined;

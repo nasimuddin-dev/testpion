@@ -52,6 +52,7 @@ Copied commands include the request's real header and token values, so they run 
 - Hoppscotch collections (JSON).
 - WSDL 1.1 and 2.0 documents of SOAP services (a file, or a `?wsdl` link). See [SOAP](#soap-wsdl) below.
 - AsyncAPI 2 and 3 documents of event-driven APIs (Kafka, MQTT, WebSocket, Socket.IO). See [AsyncAPI](#asyncapi) below.
+- `.http` / `.rest` files of VS Code's REST Client and the JetBrains HTTP Client. See [.http files](#http-files) below.
 - HAR files.
 
 From Insomnia, Bruno and Hoppscotch, TestPion takes folders, requests, bodies, headers, parameters, auth and variables. `{{ _.name }}` and `<<name>>` become `{{name}}`. Insomnia's pre-request and after-response scripts run: its `insomnia.*` script API follows Postman's, so `insomnia.test`, `insomnia.expect`, `insomnia.environment` and `insomnia.response` become their `pm.*` twins. Bruno scripts and tests run as they are (`bru`, `req`, `res`). Hoppscotch scripts use their own API (`pw.*`), so they come over as comments to rewrite with `pm.*` / `tp.*`. An imported environment never replaces one you already have: a name that's taken gets *(imported)* added.
@@ -73,6 +74,19 @@ A WSDL 1.1 or 2.0 document becomes a collection of SOAP requests, one folder per
 Replace the placeholders and send. The response is XML: `xml2Json(pm.response.text())` turns it into an object for tests. Schemas and WSDLs it imports (`xsd:import`, `xsd:include`, `wsdl:import`, like the `?xsd=xsd0` and `?wsdl=wsdl0` documents of JAX-WS and WCF services) are fetched from the same site for a link, or read from next to the file for a file.
 
 To try it, run the [demo servers](/getting-started/installation#try-it-with-the-demo-servers) and import the link `http://127.0.0.1:4010/soap/patients?wsdl` (`GetPatient` with id `1` or `2`, `RegisterPatient`).
+
+### .http files
+
+A `.http` or `.rest` file becomes a collection named after the file, one request per `###` block:
+
+- `@name = value` lines become collection variables, and `{{name}}` works as everywhere in TestPion.
+- `### Title` or `# @name login` names a request; query lines that continue the URL on the next lines are joined.
+- `Authorization: Basic user password` becomes basic auth and `Authorization: Bearer …` bearer auth; other headers stay as they are.
+- Form bodies become form fields, JSON and XML bodies stay as written, and `< ./file.json` is a body from a file (check the path after importing).
+- REST Client chaining works: a named request that another one reads (`{{login.response.body.$.access_token}}`, `{{login.response.headers.X-Token}}`) keeps its response for it, so the token flows to the next request when the collection runs.
+- JetBrains response handlers (`> {% … %}`) become the request's test script and pre-request scripts (`< {% … %}`) its pre-request script. They run as written: `client.test`, `client.assert`, `client.global.set`, `response.body`, `response.status` and `request.variables.set` map to `tp.*`. A handler kept in a separate `.js` file isn't imported, and the import says so.
+
+**Export ▸ .http file** writes a collection back as one file for those tools: folders become the request titles, collection variables `@name = value` lines, and bearer, basic and header API key auth (inherited from a folder or the collection too) an `Authorization` or key header. Scripts and non-HTTP requests are left out, and a message lists them.
 
 ### AsyncAPI
 
@@ -107,7 +121,7 @@ The CLI can import too, from a file or a link: `testpion import openapi.yaml -w 
 
 ## Export
 
-**Export** in a collection's toolbar offers three formats:
+**Export** in a collection's toolbar offers these formats (and **.http file**, described [above](#http-files)):
 
 - **TestPion collection (.json)**: the collection file as it is stored in the workspace.
 - **OpenAPI 3.1 (.yaml)**: a description of the collection's HTTP requests for API documentation tools, code generators or a spec review: paths and methods (`{{id}}` and `:id` segments become path parameters), query and header parameters, request bodies with an example and an inferred schema, saved examples as documented responses, folders as tags and the auth in use as security schemes. Parameter values that hold `{{variables}}` are left out. GraphQL requests are not included. From the terminal: `testpion export "My API" --format openapi -o openapi.yaml`.

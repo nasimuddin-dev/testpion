@@ -5,12 +5,13 @@ import { useApp } from '../store';
 import { download } from '../lib/format';
 import { Button, Field, Modal, Select } from './ui';
 
-type Format = 'testpion' | 'postman' | 'openapi' | 'bruno';
+type Format = 'testpion' | 'postman' | 'openapi' | 'bruno' | 'http';
 
 const FORMATS: Array<[Format, string, string]> = [
   ['testpion', 'TestPion collection (.json)', 'Everything: requests, scripts, examples, and its gRPC calls and connections. Imports back as it was.'],
   ['postman', 'Postman v2.1 collection (.json)', 'For Postman and tools that read its format. gRPC calls and connections are left out.'],
   ['openapi', 'OpenAPI 3.1 (.yaml)', "A description of the collection's HTTP requests, for documentation and code generators."],
+  ['http', '.http file', 'One file of requests for VS Code REST Client and the JetBrains HTTP Client. HTTP requests only; scripts are left out.'],
   ['bruno', 'Bruno collection folder', 'A folder of .bru files, with the environments (secret values never). Desktop app only.'],
 ];
 

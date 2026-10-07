@@ -156,7 +156,7 @@ export function workspaceHandlers(be: Backend): Handlers {
      */
     /** Import… with the native file dialog: a workspace export, or a collection / definition / .env added to this workspace. */
     'ws.importPick': async () => {
-      const f = await be.host.openDialog?.({ filters: [{ name: 'Workspace exports, collections, API definitions, .env', extensions: ['json', 'yaml', 'yml', 'har', 'env', 'wsdl', 'xml'] }, { name: 'All files', extensions: ['*'] }] });
+      const f = await be.host.openDialog?.({ filters: [{ name: 'Workspace exports, collections, API definitions, .env, .http', extensions: ['json', 'yaml', 'yml', 'har', 'env', 'wsdl', 'xml', 'http', 'rest', 'bru'] }, { name: 'All files', extensions: ['*'] }] });
       if (!f) return null;
       return be.handlers['ws.importFile']!({ text: readFileSync(f, 'utf8'), fileName: basename(f) });
     },

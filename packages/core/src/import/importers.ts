@@ -9,14 +9,17 @@ import { importWsdl, isWsdl } from './wsdl.js';
 import { detectOtherTool, importBruno, importHoppscotch, importInsomnia } from './other-tools.js';
 import { importDotenv, isDotenv } from './dotenv.js';
 import { importAsyncApi, isAsyncApi } from './asyncapi.js';
+import { importHttpFile, isHttpFile } from './http-file.js';
 
 function newCollection(name: string, items: CollectionNode[], extra: Partial<Collection> = {}): Collection {
   return { schemaVersion: SCHEMA_VERSION, id: slugify(name) + '-' + shortId().slice(-4), name, version: 0, variables: [], items, updatedAt: new Date().toISOString(), ...extra };
 }
 
-export function detectFormat(text: string): 'openapi' | 'swagger' | 'postman' | 'postman-env' | 'har' | 'aps-collection' | 'aps-workspace' | 'graphql-sdl' | 'insomnia' | 'bruno' | 'hoppscotch' | 'dotenv' | 'wsdl' | 'asyncapi' | 'unknown' {
+export function detectFormat(text: string): 'openapi' | 'swagger' | 'postman' | 'postman-env' | 'har' | 'aps-collection' | 'aps-workspace' | 'graphql-sdl' | 'insomnia' | 'bruno' | 'hoppscotch' | 'dotenv' | 'wsdl' | 'asyncapi' | 'http-file' | 'unknown' {
   const t = text.trim();
   if (isWsdl(t)) return 'wsdl';
+  // an .http / .rest file (VS Code REST Client, JetBrains HTTP Client)
+  if (isHttpFile(t)) return 'http-file';
   // a single Bruno .bru request file
   if (looksLikeBru(t)) return 'bruno';
   if (/^(type|schema|interface|enum|input|scalar|union|directive|extend)\s/m.test(t) && !t.startsWith('{')) return 'graphql-sdl';
@@ -417,7 +420,7 @@ export function importHar(text: string): { collection: Collection } {
 }
 
 /** Import any supported document into a collection (and optionally an environment). */
-export function importAny(text: string, opts: { name?: string } = {}): { format: string; collection?: Collection; environment?: Environment; environments?: Environment[]; secretValues?: Record<string, Record<string, string>>; savedItems?: unknown } {
+export function importAny(text: string, opts: { name?: string } = {}): { format: string; collection?: Collection; environment?: Environment; environments?: Environment[]; secretValues?: Record<string, Record<string, string>>; savedItems?: unknown; notes?: string[] } {
   const format = detectFormat(text);
   switch (format) {
     case 'openapi':
@@ -438,6 +441,10 @@ export function importAny(text: string, opts: { name?: string } = {}): { format:
       return { format, ...importHoppscotch(text) };
     case 'wsdl':
       return { format, ...importWsdl(text) };
+    case 'http-file': {
+      const r = importHttpFile(text, { name: opts.name?.replace(/\.(http|rest)$/i, '') || undefined });
+      return { format, collection: r.collection, notes: r.notes };
+    }
     case 'asyncapi': {
       const r = importAsyncApi(text);
       return { format, collection: r.collection, environment: r.environment, environments: r.environment ? [r.environment] : undefined, savedItems: r.savedItems };
@@ -467,7 +474,7 @@ export function importAny(text: string, opts: { name?: string } = {}): { format:
         }
       }
       throw new ApsError('ValidationError', `Unrecognised import format (${format})`, {
-        suggestions: ['Supported: OpenAPI 3 / Swagger 2 (JSON or YAML), Postman v2.1 collections & environments, Insomnia (v4 export, v5 YAML), Bruno collections (folder, .bru file or export), Hoppscotch collections, WSDL 1.1 and 2.0 (SOAP), AsyncAPI 2 and 3 (Kafka, MQTT, WebSocket), .env files, HAR, TestPion collections and workspace exports.'],
+        suggestions: ['Supported: OpenAPI 3 / Swagger 2 (JSON or YAML), Postman v2.1 collections & environments, Insomnia (v4 export, v5 YAML), Bruno collections (folder, .bru file or export), Hoppscotch collections, WSDL 1.1 and 2.0 (SOAP), AsyncAPI 2 and 3 (Kafka, MQTT, WebSocket), .http / .rest files (REST Client, JetBrains), .env files, HAR, TestPion collections and workspace exports.'],
       });
     }
   }

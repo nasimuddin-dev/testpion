@@ -1,7 +1,7 @@
 /** RPC handlers: Collections (requests, folders, examples, import/export) and their mock servers. */
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, relative, sep } from 'node:path';
-import { ApsError, dbKindOf, redactDbUrl, isSqliteDataset, collectionVariableFlow, listWorkspaceDatasets, readDataset, sqliteTables, fetchImportText, bruFilesToBrunoExport, collectionToBru, importIntoWorkspace, diffOpenApi, lintOpenApi, openApiOutline, workspaceApiCoverage, apiCoverageMarkdown, securityLint, certificateLint, listCertificates, variableFlow, startRecorder, recordingToCollection, type RecordedExchange, collectionToOpenApiText, exampleFromResponse, startMockServer, collectionMarkdown, collectionHtml, exportPostmanCollection, withRequestExamples, type SavedExample, convertCollectionScripts, importRequestSnippet, isRequestSnippet, type Collection, collectionSavedItems, duplicateCollection, shortId, requestBodySchema, loadOpenApi } from '@testpion/core';
+import { ApsError, dbKindOf, redactDbUrl, isSqliteDataset, collectionVariableFlow, listWorkspaceDatasets, readDataset, sqliteTables, fetchImportText, bruFilesToBrunoExport, collectionToBru, importIntoWorkspace, diffOpenApi, lintOpenApi, openApiOutline, workspaceApiCoverage, apiCoverageMarkdown, securityLint, certificateLint, listCertificates, variableFlow, startRecorder, recordingToCollection, type RecordedExchange, collectionToOpenApiText, collectionToHttpFile, exampleFromResponse, startMockServer, collectionMarkdown, collectionHtml, exportPostmanCollection, withRequestExamples, type SavedExample, convertCollectionScripts, importRequestSnippet, isRequestSnippet, type Collection, collectionSavedItems, duplicateCollection, shortId, requestBodySchema, loadOpenApi } from '@testpion/core';
 import type { Backend, Handlers, CollectionRunParams } from '../backend.js';
 
 /** An API definition's workspace path: a JSON or YAML file directly in specs/. */
@@ -94,7 +94,7 @@ export function collectionsHandlers(be: Backend): Handlers {
       // an OpenAPI document is kept in specs/ and its requests get an openapi contract check
       // .env imports: secret-looking values go to the OS secret store, never into workspace files
       const r = importIntoWorkspace(be.ws, text, { name: envName, secrets: be.secrets });
-      return { format: r.format, collection: r.collection?.name, environment: r.environments?.map((e) => e.name).join(', ') || r.environment?.name, specPath: r.specPath, contractChecks: r.contractChecks, scriptWarnings: r.scriptWarnings, savedItems: r.savedItems };
+      return { format: r.format, collection: r.collection?.name, environment: r.environments?.map((e) => e.name).join(', ') || r.environment?.name, specPath: r.specPath, contractChecks: r.contractChecks, scriptWarnings: r.scriptWarnings, savedItems: r.savedItems, notes: r.notes };
     },
     /** Record traffic: a reverse proxy on 127.0.0.1 in front of `target`; every exchange is sent as a `record.exchange` event. */
     'record.start': async ({ target, port }: { target: string; port?: number }) => {
@@ -208,7 +208,7 @@ export function collectionsHandlers(be: Backend): Handlers {
       return be.handlers['col.import']!({ text: JSON.stringify(exported), fileName: name });
     },
     'col.importFile': async () => {
-      const f = await be.host.openDialog?.({ filters: [{ name: 'API definitions, collections and .env files', extensions: ['json', 'yaml', 'yml', 'har', 'env', 'wsdl', 'xml', 'bru'] }, { name: 'All files', extensions: ['*'] }] });
+      const f = await be.host.openDialog?.({ filters: [{ name: 'API definitions, collections, .env and .http files', extensions: ['json', 'yaml', 'yml', 'har', 'env', 'wsdl', 'xml', 'bru', 'http', 'rest'] }, { name: 'All files', extensions: ['*'] }] });
       if (!f) return null;
       return be.handlers['col.import']!({ text: readFileSync(f, 'utf8'), fileName: basename(f) });
     },
@@ -308,7 +308,7 @@ export function collectionsHandlers(be: Backend): Handlers {
       return { path, name: basename(path), count: rows.length, columns, preview: rows.slice(0, 20), ...(tables ? { tables, query } : {}) };
     },
     /** Export a collection as TestPion JSON or a Postman v2.1 collection (`notes` lists what Postman can't hold). */
-    'col.export': async ({ id, format = 'testpion' }: { id: string; format?: 'testpion' | 'postman' | 'openapi' | 'bruno' }) => {
+    'col.export': async ({ id, format = 'testpion' }: { id: string; format?: 'testpion' | 'postman' | 'openapi' | 'bruno' | 'http' }) => {
       const c = be.ws.getCollection(id);
       if (format === 'bruno') {
         // a Bruno collection folder, with the workspace's environments (secret values never); written into a chosen folder
@@ -326,6 +326,14 @@ export function collectionsHandlers(be: Backend): Handlers {
           writeFileSync(p, f.text);
         }
         return { path: out, name: c.name, notes: [] as string[] };
+      }
+      if (format === 'http') {
+        // one .http file for VS Code REST Client and the JetBrains HTTP Client
+        const { text, notes } = collectionToHttpFile(c);
+        const name = `${c.name}.http`;
+        const dest = await be.host.saveDialog?.({ defaultPath: name, filters: [{ name: 'HTTP requests', extensions: ['http', 'rest'] }] });
+        if (dest) writeFileSync(dest, text);
+        return { path: dest, text: dest ? undefined : text, name, notes };
       }
       if (format === 'openapi') {
         // an OpenAPI 3.1 description of the collection's HTTP requests (YAML)
