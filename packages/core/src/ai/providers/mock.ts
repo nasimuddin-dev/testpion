@@ -22,6 +22,16 @@ export interface MockRule {
 export class MockProvider implements LlmProvider {
   private rules: MockRule[] = [];
   private latency = 0;
+  // a rule's pattern, compiled once (an evaluation calls chat() per record)
+  private patterns = new Map<string, RegExp>();
+  private pattern(match: string): RegExp {
+    let re = this.patterns.get(match);
+    if (!re) {
+      re = new RegExp(match, 'i');
+      this.patterns.set(match, re);
+    }
+    return re;
+  }
 
   constructor(readonly config: ProviderConfig) {
     const h = (name: string) => config.headers?.find((x) => x.key.toLowerCase() === name)?.value;
@@ -43,7 +53,7 @@ export class MockProvider implements LlmProvider {
     let toolCalls: ChatResponse['toolCalls'] = [];
     const rule = this.rules.find((r) => {
       try {
-        return new RegExp(r.match, 'i').test(lastUser);
+        return this.pattern(r.match).test(lastUser);
       } catch {
         return false;
       }

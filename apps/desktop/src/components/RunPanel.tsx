@@ -1,5 +1,5 @@
 import { Activity, Braces, Download, FileBarChart, FileCode2, FileText, GitCompare, Square, Target, RotateCcw, ScanSearch, Sparkles, ThumbsDown, ThumbsUp } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { asError, call, on } from '../api';
 import { useApp } from '../store';
 import type { RunSummary, TestResult, Trace } from '../types';
@@ -131,12 +131,16 @@ export function RunPanel({ runId, expectedTotal, onRerunFailed }: { runId: strin
   useEffect(() => {
     if (!done || !summary || autoPicked.current === runId) return;
     autoPicked.current = runId;
-    if (summary.failed + summary.errors > 0)
-      void call<{ items: TestResult[] }>('runs.results', { runId, offset: 0, limit: 1, status: 'failed' }).then((r) => r.items[0] && setSel((cur) => cur ?? r.items[0]), () => undefined);
-    else if (summary.total === 1) void call<{ items: TestResult[] }>('runs.results', { runId, offset: 0, limit: 1 }).then((r) => r.items[0] && setSel((cur) => cur ?? r.items[0]), () => undefined);
+    const failed = summary.failed + summary.errors > 0;
+    if (failed || summary.total === 1)
+      void call<{ items: TestResult[] }>('runs.results', { runId, offset: 0, limit: 1, ...(failed ? { status: 'failed' } : {}) }).then((r) => r.items[0] && setSel((cur) => cur ?? r.items[0]), () => undefined);
   }, [done, summary, runId]);
 
-  const list = done ? rows : live.filter((r) => (status === 'all' || (status === 'failed' ? r.status === 'failed' || r.status === 'error' : r.status === status)) && (!query || r.name.toLowerCase().includes(query.toLowerCase())));
+  const liveList = useMemo(() => {
+    const q = query.toLowerCase();
+    return live.filter((r) => (status === 'all' || (status === 'failed' ? r.status === 'failed' || r.status === 'error' : r.status === status)) && (!q || r.name.toLowerCase().includes(q)));
+  }, [live, status, query]);
+  const list = done ? rows : liveList;
   // ↑ ↓ (or J K) move through the results, so a run can be reviewed from the keyboard
   const onListKey = (e: React.KeyboardEvent) => {
     const step = e.key === 'ArrowDown' || e.key === 'j' ? 1 : e.key === 'ArrowUp' || e.key === 'k' ? -1 : 0;
@@ -264,7 +268,9 @@ export function RunPanel({ runId, expectedTotal, onRerunFailed }: { runId: strin
                   items={list}
                   rowHeight={30}
                   onEndReached={done && rows.length < total ? () => void loadPage(false) : undefined}
-                  render={(r) => (
+                  render={(r) => {
+                    const low = lowestScore(r);
+                    return (
                     <button
                       title={r.name}
                       data-result={`${r.id}:${r.attempts ?? ''}`}
@@ -275,15 +281,16 @@ export function RunPanel({ runId, expectedTotal, onRerunFailed }: { runId: strin
                       <span className="truncate flex-1 min-w-0">{r.name}</span>
                       {r.review?.rating === 'good' && <ThumbsUp size={12} className="text-ok shrink-0" aria-label="Rated good" />}
                       {r.review?.rating === 'bad' && <ThumbsDown size={12} className="text-bad shrink-0" aria-label="Rated bad" />}
-                      {lowestScore(r) !== undefined && (
-                        <span title="The lowest check score" className={cx('text-xs tabular-nums shrink-0', lowestScore(r)! >= 0.7 ? 'text-ok' : 'text-warn')}>
-                          {lowestScore(r)!.toFixed(2)}
+                      {low !== undefined && (
+                        <span title="The lowest check score" className={cx('text-xs tabular-nums shrink-0', low >= 0.7 ? 'text-ok' : 'text-warn')}>
+                          {low.toFixed(2)}
                         </span>
                       )}
                       <span className="text-[0.7rem] text-muted uppercase tracking-wide shrink-0">{r.type}</span>
                       <span className="text-xs text-muted tabular-nums w-14 text-right shrink-0">{formatMs(r.latencyMs ?? r.durationMs)}</span>
                     </button>
-                  )}
+                    );
+                  }}
                 />
                 </div>
               ) : (

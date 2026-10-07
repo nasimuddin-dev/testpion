@@ -17,9 +17,8 @@ import {
   summarizeTestHistory,
   flakyTests,
   scoreTrend,
-  pageRunResults,
-  reviewCounts,
   reviewResult,
+  runReviewReport,
 } from '@testpion/core';
 import { EXIT, green, red, yellow, dim, bold, CliError, openWorkspace } from '../shared.js';
 
@@ -138,12 +137,10 @@ export function registerHistoryCommands(program: Command): void {
           if (o.json) return console.log(JSON.stringify({ resultId, review: review ?? null }, null, 2));
           return console.log(review ? `${review.rating === 'bad' ? red('bad') : review.rating === 'good' ? green('good') : dim('no rating')}${review.note ? `  ${review.note}` : ''}` : dim('Review cleared.'));
         }
-        const all = await pageRunResults(store, { runId, limit: 100000 });
-        const reviewed = all.items.filter((r) => r.review);
-        const counts = reviewCounts(Object.fromEntries(reviewed.map((r) => [r.id, r.review!])), all.total);
-        if (o.json) return console.log(JSON.stringify({ ...counts, results: reviewed.map((r) => ({ id: r.id, name: r.name, status: r.status, ...r.review })) }, null, 2));
-        for (const r of reviewed) console.log(`${r.review!.rating === 'bad' ? red('bad ') : r.review!.rating === 'good' ? green('good') : dim('note')}  ${r.name} ${dim(`(${r.status}, ${r.id})`)}${r.review!.note ? `\n      ${r.review!.note}` : ''}`);
-        console.log(dim(`${counts.good} good, ${counts.bad} bad, ${counts.unreviewed} not rated of ${all.total}`));
+        const report = await runReviewReport(store, runId);
+        if (o.json) return console.log(JSON.stringify(report, null, 2));
+        for (const r of report.results) console.log(`${r.rating === 'bad' ? red('bad ') : r.rating === 'good' ? green('good') : dim('note')}  ${r.name} ${dim(`(${r.status}, ${r.id})`)}${r.note ? `\n      ${r.note}` : ''}`);
+        console.log(dim(`${report.good} good, ${report.bad} bad, ${report.unreviewed} not rated of ${report.good + report.bad + report.unreviewed}`));
       } finally {
         store.close();
       }

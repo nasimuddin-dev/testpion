@@ -7,7 +7,8 @@ export type Collection = CoreCollection & { problem?: string };
 /** A server as the MCP view lists it: whether this window has a session open to it. */
 export type McpServerConfig = CoreMcpServerConfig & { connected?: boolean };
 /** A provider as listed: whether a key is saved for it, and whether it is the app's built-in one (Settings ▸ AI assistant). */
-export type ProviderConfig = CoreProviderConfig & { hasKey?: boolean; builtIn?: boolean };
+/** A provider as the backend lists it: whether a key is saved for it, whether it needs one, and the app's own one. */
+export type ProviderConfig = CoreProviderConfig & { hasKey?: boolean; needsKey?: boolean; builtIn?: boolean };
 /** A library as the window builds it (an empty one has no schema version yet). */
 export type Library<T = unknown> = Omit<CoreLibrary<T>, 'schemaVersion'> & { schemaVersion?: string };
 import type { KeyValue as SharedKeyValue } from '@testpion/shared';

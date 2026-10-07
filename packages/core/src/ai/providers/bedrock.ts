@@ -1,6 +1,6 @@
 import type { ProviderConfig } from '../../model/types.js';
 import type { ChatMessage, ChatRequest, ChatResponse, LlmProvider, ToolCall } from '../types.js';
-import { doFetch } from '../http.js';
+import { configuredHeaders, doFetch } from '../http.js';
 import { signAwsV4 } from '../../protocols/http/signing.js';
 import { ApsError } from '../../errors.js';
 import type { Redactor } from '../../util/redact.js';
@@ -52,7 +52,7 @@ export class BedrockProvider implements LlmProvider {
   /** Signed (SigV4) or bearer headers for one request; extra headers from the provider settings first. */
   private headers(method: string, url: string, body: string | undefined): Record<string, string> {
     const h = new Headers();
-    for (const x of this.config.headers ?? []) if (x.enabled !== false && x.key) h.set(x.key, x.value);
+    for (const [k, v] of configuredHeaders(this.config)) h.set(k, v);
     if (body !== undefined) h.set('content-type', 'application/json');
     const cred = bedrockCredentials(this.apiKey);
     if (!cred) throw new ApsError('ConfigurationError', `${this.config.name} needs AWS credentials`, { suggestions: ['Enter accessKeyId:secretAccessKey (optionally :sessionToken) or a Bedrock API key as the provider key.'] });

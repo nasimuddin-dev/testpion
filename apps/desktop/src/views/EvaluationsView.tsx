@@ -7,7 +7,8 @@ import { asError, call, on } from '../api';
 import { persisted, promptText, useApp } from '../store';
 import type { CheckConfig, ProviderConfig } from '../types';
 import { templateVars, timeAgo } from '../lib/format';
-import { csvRecords } from '@testpion/shared';
+import { countDatasetRecords, datasetFormatOfName, previewDatasetRecords } from '@testpion/shared';
+import { pickTextFile } from '../lib/files';
 import { AssertionEditor } from '../components/AssertionEditor';
 import { CodeEditor } from '../components/CodeEditor';
 import { RunPanel } from '../components/RunPanel';
@@ -55,54 +56,6 @@ const drafts = persisted<Draft>('eval', {
   retries: 1,
 });
 
-/** "json" whose text is one object per line is really JSONL (as datasetFormatOf in core). */
-function formatOf(text: string, fmt: Draft['datasetFormat']): Draft['datasetFormat'] {
-  if (fmt !== 'json') return fmt;
-  try {
-    JSON.parse(text);
-    return 'json';
-  } catch {
-    const lines = text.split('\n').filter((l) => l.trim());
-    try {
-      return lines.length && lines.every((l) => typeof JSON.parse(l) === 'object') ? 'jsonl' : 'json';
-    } catch {
-      return 'json';
-    }
-  }
-}
-
-function countRecords(text: string, format: Draft['datasetFormat']): number {
-  const fmt = formatOf(text, format);
-  if (fmt === 'jsonl') return text.split('\n').filter((l) => l.trim()).length;
-  if (fmt === 'csv') return Math.max(0, csvRecords(text).length - 1);
-  if (fmt === 'md') return Math.max(0, text.split('\n').filter((l) => l.trim().startsWith('|')).length - 2);
-  try {
-    const d = JSON.parse(text);
-    return Array.isArray(d) ? d.length : 1;
-  } catch {
-    return 0;
-  }
-}
-
-function previewRecords(text: string, format: Draft['datasetFormat']): Array<Record<string, unknown>> {
-  const fmt = formatOf(text, format);
-  try {
-    if (fmt === 'jsonl') return text.split('\n').filter((l) => l.trim()).slice(0, 5).map((l) => JSON.parse(l));
-    if (fmt === 'json') {
-      const d = JSON.parse(text);
-      return (Array.isArray(d) ? d : [d]).slice(0, 5);
-    }
-    if (fmt === 'csv') {
-      const [h, ...rows] = csvRecords(text);
-      const keys = (h ?? []).map((s) => s.trim());
-      return rows.slice(0, 5).map((r) => Object.fromEntries(r.map((v, i) => [keys[i], v])));
-    }
-  } catch {
-    return [];
-  }
-  return [];
-}
-
 /** Evaluation Lab: dataset × prompt × model × evaluators, streamed through the test runner. */
 export function EvaluationsView() {
   const [d, setD] = useState<Draft>(drafts.load);
@@ -133,7 +86,7 @@ export function EvaluationsView() {
   const saved = useLibrary<Draft>('evaluations');
   const [savedId, setSavedId] = useSticky<string | undefined>('eval:saved', undefined);
   const current = saved.lib.items.find((i) => i.id === savedId);
-  const dirty = !!current && JSON.stringify(current.data) !== JSON.stringify(d);
+  const dirty = useMemo(() => !!current && JSON.stringify(current.data) !== JSON.stringify(d), [current, d]);
   const openSaved = async (id: string) => {
     const it = await saved.find(id);
     if (!it) return undefined;
@@ -154,10 +107,26 @@ export function EvaluationsView() {
   };
   // the Collections explorer / search open a saved evaluation
   useIntent('evaluations', (p) => p?.savedId && void openSaved(p.savedId));
-  const evalRuns = runs.filter((r) => saved.lib.items.some((i) => i.name === r.name) || r.name === d.name);
-  const count = useMemo(() => countRecords(d.dataset, d.datasetFormat), [d.dataset, d.datasetFormat]);
-  const preview = useMemo(() => previewRecords(d.dataset, d.datasetFormat), [d.dataset, d.datasetFormat]);
-  const vars = templateVars(d.prompt);
+  const evalRuns = useMemo(() => {
+    const names = new Set(saved.lib.items.map((i) => i.name));
+    return runs.filter((r) => names.has(r.name) || r.name === d.name);
+  }, [runs, saved.lib.items, d.name]);
+  const count = useMemo(() => countDatasetRecords(d.dataset, d.datasetFormat), [d.dataset, d.datasetFormat]);
+  const preview = useMemo(() => previewDatasetRecords(d.dataset, d.datasetFormat), [d.dataset, d.datasetFormat]);
+  const previewKeys = useMemo(() => (preview[0] ? Object.keys(preview[0]) : []), [preview]);
+  const vars = useMemo(() => templateVars(d.prompt), [d.prompt]);
+  // the saved list's rows (a dataset is counted when the library changes, not on every keystroke)
+  const savedItems = useMemo(
+    () =>
+      saved.lib.items.map((i) => ({
+        id: i.id,
+        name: i.name,
+        folder: i.folder,
+        subtitle: `${i.data.model || i.data.provider || 'model'} · ${countDatasetRecords(i.data.dataset ?? '', i.data.datasetFormat ?? 'jsonl')} cases`,
+        icon: <FlaskConical size={12} className="text-muted" />,
+      })),
+    [saved.lib.items],
+  );
 
   const run = () => runDraft(d);
   const runDraft = async (d: Draft) => {
@@ -201,13 +170,7 @@ export function EvaluationsView() {
                       }),
                   },
                 ]}
-                items={saved.lib.items.map((i) => ({
-                  id: i.id,
-                  name: i.name,
-                  folder: i.folder,
-                  subtitle: `${i.data.model || i.data.provider || 'model'} · ${countRecords(i.data.dataset ?? '', i.data.datasetFormat ?? 'jsonl')} cases`,
-                  icon: <FlaskConical size={12} className="text-muted" />,
-                }))}
+                items={savedItems}
                 empty={
                   <Empty title="No saved evaluations">
                     Save an evaluation (dataset, prompt, model and evaluators) to run it again whenever you need, and group evaluations in folders.
@@ -314,18 +277,9 @@ export function EvaluationsView() {
                 </label>
                 <Button
                   size="sm"
-                  onClick={() => {
-                    const input = document.createElement('input');
-                    input.type = 'file';
-                    input.accept = '.jsonl,.json,.csv,.md,.ndjson';
-                    input.onchange = async () => {
-                      const f = input.files?.[0];
-                      if (!f) return;
-                      const ext = f.name.split('.').pop()!.toLowerCase();
-                      set({ dataset: await f.text(), datasetFormat: ext === 'ndjson' ? 'jsonl' : (ext as Draft['datasetFormat']) });
-                    };
-                    input.click();
-                  }}
+                  onClick={() =>
+                    void pickTextFile('.jsonl,.json,.csv,.tsv,.md,.ndjson').then((f) => f && set({ dataset: f.text, datasetFormat: datasetFormatOfName(f.name) ?? 'jsonl' }))
+                  }
                 >
                   Load file…
                 </Button>
@@ -338,8 +292,7 @@ export function EvaluationsView() {
                       if (!e.target.value) return;
                       try {
                         const r = await call<{ name: string; text: string }>('datasets.read', { path: e.target.value });
-                        const ext = r.name.split('.').pop()!.toLowerCase();
-                        set({ dataset: r.text, datasetFormat: ext === 'ndjson' ? 'jsonl' : ext === 'tsv' ? 'csv' : (ext as Draft['datasetFormat']) });
+                        set({ dataset: r.text, datasetFormat: datasetFormatOfName(r.name) ?? 'jsonl' });
                       } catch (err) {
                         useApp.getState().toast(asError(err).message, 'error');
                       }
@@ -366,7 +319,7 @@ export function EvaluationsView() {
                       <table className="w-full">
                         <thead>
                           <tr>
-                            {Object.keys(preview[0]!).map((k) => (
+                            {previewKeys.map((k) => (
                               <th key={k} className={cx('text-left px-1 font-medium', vars.includes(k) || k === d.expectedField ? 'text-accent' : 'text-muted')}>
                                 {k}
                               </th>
@@ -376,7 +329,7 @@ export function EvaluationsView() {
                         <tbody>
                           {preview.map((r, i) => (
                             <tr key={i} className="border-t border-line">
-                              {Object.keys(preview[0]!).map((k) => (
+                              {previewKeys.map((k) => (
                                 <td key={k} className="px-1 py-0.5 mono truncate max-w-48">
                                   {typeof r[k] === 'object' ? JSON.stringify(r[k]) : String(r[k] ?? '')}
                                 </td>

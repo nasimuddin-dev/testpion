@@ -1,6 +1,6 @@
 import { readResultsFile, runTests } from '../runner/runner.js';
 import { compareToBaseline, createBaseline } from '../report/regression.js';
-import { breakdownOfRun, pageRunResults, reviewCounts, reviewResult, runResultsFile } from '../runner/run-results.js';
+import { breakdownOfRun, reviewResult, runResultsFile, runReviewReport } from '../runner/run-results.js';
 import { monitorRequestStats } from '../runner/monitor-requests.js';
 import { streamTests } from '../runner/loader.js';
 import { join, relative, sep } from 'node:path';
@@ -126,6 +126,36 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
     const f = all.find((x) => x.node.id.toLowerCase() === r) ?? all.find((x) => x.node.name.toLowerCase() === r);
     if (!f) throw new ApsError('ConfigurationError', `No request "${String(ref)}" in "${c.name}"`);
     return f;
+  };
+  /**
+   * A run recorded like the app's (runs/<id>/results.jsonl, summary.json, the history): the tests, run with the
+   * engine, their results written as they finish; the first 200 come back summarized. run_tests and run_evaluation.
+   */
+  const recordedRun = async (environment: string | undefined, o: { name: string; tests: Parameters<typeof runTests>[0]['tests']; concurrency: number; retries?: number }) => {
+    const ctx = createEngineContext({ store, secrets, settings, environment });
+    const runId = shortId('run-');
+    const outDir = store.runDir(runId);
+    mkdirSync(outDir, { recursive: true });
+    const results: TestResult[] = [];
+    try {
+      const summary = await runTests({
+        name: o.name,
+        runId,
+        tests: o.tests,
+        services: ctx.services,
+        concurrency: o.concurrency,
+        ...(o.retries !== undefined ? { retries: o.retries } : {}),
+        resultsFile: join(outDir, 'results.jsonl'),
+        traceMode: 'none',
+        environment,
+        onEvent: (e: RunEvent) => void (e.type === 'test-end' && results.push(e.result)),
+      });
+      writeFileSync(join(outDir, 'summary.json'), JSON.stringify(summary, null, 2));
+      store.meta.addRun(summary, outDir);
+      return { summary, runId, total: summary.total, passed: summary.passed, failed: summary.failed, errors: summary.errors, durationMs: summary.durationMs, results: results.slice(0, 200).map(summarizeResult) };
+    } finally {
+      await ctx.dispose();
+    }
   };
   const checkEnvironment = (name: unknown): string | undefined => {
     if (name === undefined || name === null || name === '') return undefined;
@@ -1008,30 +1038,13 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
         const environment = checkEnvironment(a.environment);
         const rerun = a.rerunFailed ? store.failedTestIds(typeof a.rerunFailed === 'string' ? a.rerunFailed : 'last') : undefined;
         if (rerun && !rerun.ids.length) return { total: 0, message: `Nothing failed in ${rerun.runId}` };
-        const ctx = createEngineContext({ store, secrets, settings, environment });
-        const runId = shortId('run-');
-        const outDir = store.runDir(runId);
-        mkdirSync(outDir, { recursive: true });
-        const results: TestResult[] = [];
-        try {
-          const paths = Array.isArray(a.paths) && a.paths.length ? (a.paths as unknown[]).map(String) : ['.'];
-          const summary = await runTests({
-            name: rerun ? `Failed tests of ${rerun.runId}` : paths.join(', '),
-            runId,
-            tests: streamTests(paths, store.path('tests'), { grep: a.grep ? String(a.grep) : undefined, tags: Array.isArray(a.tags) ? (a.tags as unknown[]).map(String) : undefined, ...(rerun ? { ids: rerun.ids } : {}) }),
-            services: ctx.services,
-            concurrency: 4,
-            resultsFile: join(outDir, 'results.jsonl'),
-            traceMode: 'none',
-            environment,
-            onEvent: (e: RunEvent) => void (e.type === 'test-end' && results.push(e.result)),
-          });
-          writeFileSync(join(outDir, 'summary.json'), JSON.stringify(summary, null, 2));
-          store.meta.addRun(summary, outDir);
-          return { runId, total: summary.total, passed: summary.passed, failed: summary.failed, errors: summary.errors, skipped: summary.skipped, durationMs: summary.durationMs, results: results.slice(0, 200).map(summarizeResult) };
-        } finally {
-          await ctx.dispose();
-        }
+        const paths = Array.isArray(a.paths) && a.paths.length ? (a.paths as unknown[]).map(String) : ['.'];
+        const { summary, ...run } = await recordedRun(environment, {
+          name: rerun ? `Failed tests of ${rerun.runId}` : paths.join(', '),
+          tests: streamTests(paths, store.path('tests'), { grep: a.grep ? String(a.grep) : undefined, tags: Array.isArray(a.tags) ? (a.tags as unknown[]).map(String) : undefined, ...(rerun ? { ids: rerun.ids } : {}) }),
+          concurrency: 4,
+        });
+        return { ...run, skipped: summary.skipped };
       },
     },
     {
@@ -1050,30 +1063,13 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
         const environment = checkEnvironment(a.environment);
         const saved = findSavedEvaluation(store, String(a.name ?? ''));
         const limit = Math.min(500, typeof a.limit === 'number' && a.limit > 0 ? a.limit : (saved.limit ?? 500));
-        const ctx = createEngineContext({ store, secrets, settings, environment });
-        const runId = shortId('run-');
-        const outDir = store.runDir(runId);
-        mkdirSync(outDir, { recursive: true });
-        const results: TestResult[] = [];
-        try {
-          const summary = await runTests({
-            name: saved.name,
-            runId,
-            tests: evaluationTests({ ...saved, limit }),
-            services: ctx.services,
-            concurrency: Math.min(8, saved.concurrency || 4),
-            retries: saved.retries ?? 0,
-            resultsFile: join(outDir, 'results.jsonl'),
-            traceMode: 'none',
-            environment,
-            onEvent: (e: RunEvent) => void (e.type === 'test-end' && results.push(e.result)),
-          });
-          writeFileSync(join(outDir, 'summary.json'), JSON.stringify(summary, null, 2));
-          store.meta.addRun(summary, outDir);
-          return { runId, total: summary.total, passed: summary.passed, failed: summary.failed, errors: summary.errors, scores: summary.scores, durationMs: summary.durationMs, results: results.slice(0, 200).map(summarizeResult) };
-        } finally {
-          await ctx.dispose();
-        }
+        const { summary, ...run } = await recordedRun(environment, {
+          name: saved.name,
+          tests: evaluationTests({ ...saved, limit }),
+          concurrency: Math.min(8, saved.concurrency || 4),
+          retries: saved.retries ?? 0,
+        });
+        return { ...run, scores: summary.scores };
       },
     },
     {
@@ -1091,17 +1087,7 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
       description:
         "A person's verdicts on a finished run's results (rated good or bad in the app, with a note): the counts, and each reviewed result with its status, checks' lowest score, rating and note. A bad rating on a passing result means the checks missed something; a good rating on a failing one means a check is too strict. Use it to improve tests and evaluators.",
       inputSchema: { type: 'object', properties: { runId: str('Run id') }, required: ['runId'] },
-      run: async (a) => {
-        const runId = String(a.runId);
-        if (!existsSync(runResultsFile(store, runId))) throw new ApsError('ValidationError', `No finished run ${runId}`);
-        const all = await pageRunResults(store, { runId, limit: 100000 });
-        const reviewed = all.items.filter((r) => r.review);
-        const scores = (r: (typeof all.items)[number]) => r.checks.map((c) => c.score).filter((x): x is number => typeof x === 'number');
-        return {
-          ...reviewCounts(Object.fromEntries(reviewed.map((r) => [r.id, r.review!])), all.total),
-          results: reviewed.map((r) => ({ id: r.id, name: r.name, status: r.status, lowestScore: scores(r).length ? Math.min(...scores(r)) : undefined, ...r.review })),
-        };
-      },
+      run: (a) => runReviewReport(store, String(a.runId)),
     },
     {
       name: 'review_result',

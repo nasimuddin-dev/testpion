@@ -493,7 +493,7 @@ export function registerDataCommands(program: Command): void {
     .option('--json', 'print as JSON')
     .option('--add <dataset>', 'add a record to this JSONL dataset (made when missing; ".jsonl" is added without an extension), e.g. an evaluation case')
     .option('--row <json>', 'the record for --add, as JSON: {"message": "Cancel my booking", "expected": "cancellation"}')
-    .action((o: { workspace?: string; json?: boolean; add?: string; row?: string }) => {
+    .action(async (o: { workspace?: string; json?: boolean; add?: string; row?: string }) => {
       const { store } = openWorkspace(o.workspace, undefined, new WorkspaceManager());
       try {
         if (o.add) {
@@ -503,7 +503,7 @@ export function registerDataCommands(program: Command): void {
           } catch {
             throw new CliError(`--row must be a JSON object: --row '{"message": "hi", "expected": "greeting"}'`, EXIT.CONFIG_ERROR);
           }
-          const out = appendDatasetRow(store, o.add, row);
+          const out = await appendDatasetRow(store, o.add, row);
           return console.log(o.json ? JSON.stringify(out, null, 2) : green(`${out.path}: ${out.rows} record${out.rows === 1 ? '' : 's'}`));
         }
         const rows = listWorkspaceDatasets(store);

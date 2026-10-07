@@ -1,7 +1,7 @@
 import type { ProviderConfig } from '../../model/types.js';
 import type { ChatMessage, ChatRequest, ChatResponse, LlmProvider, ToolCall } from '../types.js';
 import { estimateTokens } from '../types.js';
-import { doFetch, postJson, sseEvents, StreamTimer } from '../http.js';
+import { configuredHeaders, doFetch, parseToolCall, postJson, sseEvents, StreamTimer } from '../http.js';
 import type { Redactor } from '../../util/redact.js';
 
 /**
@@ -32,7 +32,7 @@ export class OpenAICompatibleProvider implements LlmProvider {
       if (this.isAzure) h['api-key'] = this.apiKey;
       else h.authorization = `Bearer ${this.apiKey}`;
     }
-    for (const x of this.config.headers ?? []) if (x.enabled !== false && x.key) h[x.key] = x.value;
+    for (const [k, v] of configuredHeaders(this.config)) h[k] = v;
     return h;
   }
 
@@ -159,12 +159,3 @@ export class OpenAICompatibleProvider implements LlmProvider {
   }
 }
 
-export function parseToolCall(id: string, name: string, raw: string): ToolCall {
-  let args: Record<string, unknown> = {};
-  try {
-    args = raw ? JSON.parse(raw) : {};
-  } catch {
-    args = { _unparsed: raw };
-  }
-  return { id, name, arguments: args, rawArguments: raw };
-}

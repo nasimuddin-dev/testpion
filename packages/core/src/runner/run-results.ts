@@ -64,6 +64,22 @@ export function reviewResult(
   return all[resultId];
 }
 
+/** A run's reviews as a report: the counts, and each reviewed result with its status and lowest check score. */
+export async function runReviewReport(store: Pick<WorkspaceStore, 'runDir'>, runId: string) {
+  if (!existsSync(runResultsFile(store, runId))) throw new ApsError('ValidationError', `No finished run ${runId}`);
+  const reviews = runReviews(store, runId);
+  const results: Array<Pick<TestResult, 'id' | 'name' | 'status'> & { lowestScore?: number } & ResultReview> = [];
+  let total = 0;
+  for await (const r of runResults(store, runId)) {
+    total++;
+    const review = reviews[r.id];
+    if (!review) continue;
+    const scores = r.checks.map((c) => c.score).filter((x): x is number => typeof x === 'number');
+    results.push({ id: r.id, name: r.name, status: r.status, ...(scores.length ? { lowestScore: Math.min(...scores) } : {}), ...review });
+  }
+  return { ...reviewCounts(reviews, total), results };
+}
+
 /** How many results were rated good, bad, or not yet. */
 export function reviewCounts(reviews: Record<string, ResultReview>, total: number): { good: number; bad: number; unreviewed: number } {
   const v = Object.values(reviews);

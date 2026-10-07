@@ -16,11 +16,9 @@ import { formatCost, formatMs, templateVars, uid, undatedModel } from '../lib/fo
 import { AssertionEditor } from '../components/AssertionEditor';
 import { CodeEditor } from '../components/CodeEditor';
 import { JsonTree } from '../components/JsonView';
-import { CheckList, ErrorPanel } from '../components/Results';
+import { AddKeyButton, CheckList, ErrorPanel, setupProviderOf } from '../components/Results';
 import { Badge, Button, cx, Empty, Field, IconButton, Input, LinkButton, Metric, PageHeader, Select, Split, Tabs, type MenuItem } from '../components/ui';
 
-/** A cloud provider asks for a key; the offline demo, Ollama and a local OpenAI-compatible server don't. */
-const needsKey = (p: ProviderConfig) => p.kind !== 'mock' && p.kind !== 'ollama' && !(p.kind === 'openai-compatible' && /localhost|127\.0\.0\.1/.test(p.baseUrl ?? ''));
 
 interface ChatResult {
   id: string;
@@ -128,7 +126,8 @@ export function AiLabView() {
 function useDraft() {
   const [d, setD] = useState<Draft>(drafts.load);
   useEffect(() => drafts.save(d), [d]);
-  return [d, (p: Partial<Draft>) => setD((x) => ({ ...x, ...p }))] as const;
+  const set = useCallback((p: Partial<Draft>) => setD((x) => ({ ...x, ...p })), []);
+  return [d, set] as const;
 }
 
 function ModelPicker({ providers, provider, model, onChange }: { providers: ProviderConfig[]; provider: string; model: string; onChange(p: string, m: string): void }) {
@@ -282,7 +281,9 @@ function Playground({ providers, onSetUp }: { providers: ProviderConfig[]; onSet
   const [savedId, setSavedId] = useSticky<string | undefined>('ai:saved', undefined);
   const current = saved.lib.items.find((i) => i.id === savedId);
   const snapshot = (): SavedPrompt => ({ provider: d.provider, model: d.model, system: d.system, prompt: d.prompt, input: d.input, temperature: d.temperature, topP: d.topP, maxTokens: d.maxTokens, seed: d.seed, format: d.format, schema: d.schema, expected: d.expected, evaluators: d.evaluators });
-  const dirty = !!current && JSON.stringify(current.data) !== JSON.stringify(snapshot());
+  // compared when the draft or the saved prompt changes, not on every streamed token
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const dirty = useMemo(() => !!current && JSON.stringify(current.data) !== JSON.stringify(snapshot()), [current, d]);
   const openSaved = async (id: string) => {
     const it = await saved.find(id);
     if (!it) return;
@@ -350,6 +351,8 @@ function Playground({ providers, onSetUp }: { providers: ProviderConfig[]; onSet
   const saveAsTest = async () => {
     const name = await promptText('Save as test', { message: 'Test name', value: 'Prompt test', okLabel: 'Save' });
     if (!name) return;
+    const format = responseFormat(d);
+    const expected = parseExpected(d.expected);
     const test: Record<string, unknown> = {
       name,
       type: 'llm',
@@ -357,8 +360,8 @@ function Playground({ providers, onSetUp }: { providers: ProviderConfig[]; onSet
       ...(d.system ? { system: d.system } : {}),
       prompt: d.prompt,
       input: d.input,
-      ...(responseFormat(d) ? { responseFormat: responseFormat(d) } : {}),
-      ...(parseExpected(d.expected) !== undefined ? { expected: parseExpected(d.expected) } : {}),
+      ...(format ? { responseFormat: format } : {}),
+      ...(expected !== undefined ? { expected } : {}),
       evaluators: d.evaluators,
     };
     const path = `ai/${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.yaml`;
@@ -539,6 +542,7 @@ function Compare({ providers, onSetUp }: { providers: ProviderConfig[]; onSetUp(
   const providerName = (id: string) => providers.find((p) => p.id === id || p.name === id)?.name ?? id;
   const run = async () => {
     setRunning(true);
+    const expected = parseExpected(d.expected);
     try {
       setResults(
         await call('ai.compare', {
@@ -553,8 +557,8 @@ function Compare({ providers, onSetUp }: { providers: ProviderConfig[]; onSetUp(
           seed: d.seed,
           responseFormat: responseFormat(d),
           environment: env,
-          evaluators: [...d.evaluators, ...(parseExpected(d.expected) !== undefined ? [{ type: 'similarity', name: 'similarity to expected' }] : [])],
-          expected: parseExpected(d.expected),
+          evaluators: [...d.evaluators, ...(expected !== undefined ? [{ type: 'similarity', name: 'similarity to expected' }] : [])],
+          expected,
         }),
       );
     } finally {
@@ -577,7 +581,7 @@ function Compare({ providers, onSetUp }: { providers: ProviderConfig[]; onSetUp(
                     <Trash2 size={13} />
                   </IconButton>
                 </div>
-                {p && !p.hasKey && needsKey(p) && <AddKeyHint provider={p} />}
+                {p && !p.hasKey && p.needsKey && <AddKeyHint provider={p} />}
               </div>
             );
           })}
@@ -689,17 +693,13 @@ const LOWER_IS_BETTER: Record<string, string> = { Latency: 'fastest', 'Time to f
 
 /** A model of the comparison that failed: what went wrong and, for a missing key, the way to add it. */
 function ModelError({ error }: { error: NormalizedError }) {
-  const setup = (error.details as { setup?: { provider?: string } } | undefined)?.setup;
+  const setup = setupProviderOf(error);
   return (
     <div className="text-xs flex flex-col gap-1.5 items-start">
       <Badge tone="bad">{error.kind}</Badge>
       <span className="font-medium text-sm">{error.what || error.message}</span>
       {error.why && error.why !== error.message && <span className="text-muted">{error.why}</span>}
-      {setup?.provider && (
-        <Button size="sm" variant="primary" icon={<KeyRound size={12} />} onClick={() => useApp.getState().openIntent('ai', { providerId: setup.provider, tab: 'providers' })}>
-          Add the key
-        </Button>
-      )}
+      {setup && <AddKeyButton provider={setup} />}
     </div>
   );
 }
@@ -708,8 +708,7 @@ function ModelError({ error }: { error: NormalizedError }) {
 function AddKeyHint({ provider }: { provider: ProviderConfig }) {
   return (
     <div className="text-xs text-warn mt-0.5 ml-1">
-      {provider.name} needs an API key ·{' '}
-      <LinkButton icon={<KeyRound size={11} />} onClick={() => useApp.getState().openIntent('ai', { providerId: provider.id, tab: 'providers' })}>Add the key</LinkButton>
+      {provider.name} needs an API key · <AddKeyButton provider={provider.id} link />
     </div>
   );
 }
@@ -829,7 +828,7 @@ function Providers({ providers, onSaved, focus }: { providers: ProviderConfig[];
                 </div>
                 <div className="text-xs text-muted truncate">
                   {KINDS.find((k) => k[0] === x.kind)?.[1]}
-                  {!x.hasKey && needsKey(x) && <span className="text-warn"> · needs an API key</span>}
+                  {!x.hasKey && x.needsKey && <span className="text-warn"> · needs an API key</span>}
                 </div>
               </button>
               <RowMenu label={x.name} items={providerMenu(x)} open={menuFor === x.id} onOpenChange={(o) => setMenuFor(o ? x.id : undefined)} />

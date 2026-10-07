@@ -3,12 +3,31 @@ import type { ReactNode } from 'react';
 import type { NormalizedError } from '../api';
 import type { CheckResult } from '../types';
 import { useApp } from '../store';
-import { Badge, Button, cx } from './ui';
+import { Badge, Button, cx, LinkButton } from './ui';
 
 /** Normalised error display: what happened, why, and how to fix it (spec §45). */
+/** The provider an error names as the one to set up (a missing API key), if any. */
+export function setupProviderOf(error: NormalizedError | undefined): string | undefined {
+  return (error?.details as { setup?: { provider?: string } } | undefined)?.setup?.provider;
+}
+
+/** Opens AI Lab ▸ Providers on the provider, its API key field focused: the one way to add a key from anywhere. */
+export function AddKeyButton({ provider, link, className }: { provider: string; link?: boolean; className?: string }) {
+  const go = () => useApp.getState().openIntent('ai', { providerId: provider, tab: 'providers' });
+  return link ? (
+    <LinkButton icon={<KeyRound size={11} />} className={className} onClick={go}>
+      Add the key
+    </LinkButton>
+  ) : (
+    <Button size="sm" variant="primary" className={className} icon={<KeyRound size={12} />} onClick={go}>
+      Add the key
+    </Button>
+  );
+}
+
 export function ErrorPanel({ error, context }: { error: NormalizedError; context?: unknown }) {
   // an AI provider without its key: the way to fix it is one click away (the assistant can't explain it without a key)
-  const setup = (error.details as { setup?: { provider?: string } } | undefined)?.setup;
+  const setup = setupProviderOf(error);
   const ask = () =>
     useApp.getState().set({ assistant: { task: 'explain-error', title: `Explain ${error.kind}`, context: { error, ...((context as object) ?? {}) } } });
   return (
@@ -40,15 +59,7 @@ export function ErrorPanel({ error, context }: { error: NormalizedError; context
           )}
           {error.details && !setup && <pre className="mt-3 mono text-xs bg-panel p-2 rounded overflow-auto max-h-40">{JSON.stringify(error.details, null, 2)}</pre>}
           {setup ? (
-            <Button
-              size="sm"
-              variant="primary"
-              className="mt-3"
-              icon={<KeyRound size={12} />}
-              onClick={() => useApp.getState().openIntent('ai', { providerId: setup.provider, tab: 'providers' })}
-            >
-              Add the key
-            </Button>
+            <AddKeyButton provider={setup} className="mt-3" />
           ) : (
             <Button size="sm" variant="ghost" className="mt-3 -ml-2" icon={<Sparkles size={12} />} onClick={ask}>
               Explain with AI assistant

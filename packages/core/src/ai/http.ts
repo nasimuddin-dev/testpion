@@ -1,6 +1,7 @@
 import { assertUrlAllowed } from '../net/policy.js';
 import { ApsError, errorKindForStatus } from '../errors.js';
 import type { Redactor } from '../util/redact.js';
+import type { ToolCall } from './types.js';
 
 /** POST JSON and return parsed JSON, mapping HTTP failures to normalised errors. */
 export async function postJson(
@@ -60,6 +61,22 @@ export async function doFetch(
     throw err;
   }
   return res;
+}
+
+/** The headers a provider's configuration adds to every request (the enabled ones with a name). */
+export function configuredHeaders(cfg: { headers?: Array<{ key: string; value: string; enabled?: boolean }> }): Array<[string, string]> {
+  return (cfg.headers ?? []).filter((x) => x.enabled !== false && x.key).map((x) => [x.key, x.value]);
+}
+
+/** A tool call from a model's raw JSON arguments (kept as `_unparsed` when they are not JSON). */
+export function parseToolCall(id: string, name: string, raw: string | undefined): ToolCall {
+  let args: Record<string, unknown> = {};
+  try {
+    args = raw ? JSON.parse(raw) : {};
+  } catch {
+    args = { _unparsed: raw };
+  }
+  return { id, name, arguments: args, rawArguments: raw };
 }
 
 /** What to do about an AI provider's error status: where the key is set, quota, the model list. */

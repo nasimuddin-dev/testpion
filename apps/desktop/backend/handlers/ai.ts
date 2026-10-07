@@ -15,13 +15,14 @@ import {
   appClaudeProvider,
   checkAnthropicKey,
   llmUsage,
+  providerNeedsKey,
 } from '@testpion/core';
 import type { Backend, Handlers, AiChatParams } from '../backend.js';
 
 export function aiHandlers(be: Backend): Handlers {
   return {
     'ai.providers': () => [
-      ...be.ws.getProviders().map((p) => ({ ...p, hasKey: !!be.secrets.get(secretKeys.provider(p.id)) || !!(p.apiKey && !p.apiKey.includes('$secret')) })),
+      ...be.ws.getProviders().map((p) => ({ ...p, hasKey: !!be.secrets.get(secretKeys.provider(p.id)) || !!(p.apiKey && !p.apiKey.includes('$secret')), needsKey: providerNeedsKey(p) })),
       // the app's own Claude provider (Settings ▸ AI assistant), in every workspace; not editable here
       ...(be.appClaudeKey() && !be.ws.getProviders().some((p) => p.id === APP_CLAUDE_ID) ? [{ ...appClaudeProvider(be.claudeModel()), hasKey: true, builtIn: true }] : []),
     ],

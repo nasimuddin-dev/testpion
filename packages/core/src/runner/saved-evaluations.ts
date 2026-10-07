@@ -5,7 +5,8 @@ import type { CheckConfig, TestCase } from '../model/types.js';
 import { ApsError } from '../errors.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { expandDataset } from './loader.js';
-import { csvRecords } from './datasets.js';
+import { datasetFormatOf, countDatasetRecords } from '@testpion/shared';
+export { datasetFormatOf, countDatasetRecords };
 
 /**
  * Saved evaluations (the app's Evaluations view, `library/evaluations.json`): a dataset × prompt × model ×
@@ -44,40 +45,6 @@ export function evaluationTemplate(d: SavedEvaluation): Record<string, unknown> 
     ...(d.format === 'json' ? { responseFormat: { type: 'json' } } : {}),
     evaluators: d.evaluators,
   };
-}
-
-/**
- * The format a dataset text really has: "json" whose text is one JSON object per line is JSONL
- * (a common slip when the format was switched after pasting records).
- */
-export function datasetFormatOf(text: string, fmt: SavedEvaluation['datasetFormat']): SavedEvaluation['datasetFormat'] {
-  if (fmt !== 'json') return fmt;
-  try {
-    JSON.parse(text);
-    return 'json';
-  } catch {
-    const lines = text.split('\n').filter((l) => l.trim());
-    try {
-      return lines.length && lines.every((l) => typeof JSON.parse(l) === 'object') ? 'jsonl' : 'json';
-    } catch {
-      return 'json';
-    }
-  }
-}
-
-/** Number of records in a dataset text (for listings). */
-export function countDatasetRecords(text: string, format: SavedEvaluation['datasetFormat']): number {
-  const fmt = datasetFormatOf(text, format);
-  const lines = text.split('\n').filter((l) => l.trim());
-  if (fmt === 'jsonl') return lines.length;
-  if (fmt === 'csv') return Math.max(0, csvRecords(text).length - 1);
-  if (fmt === 'md') return Math.max(0, lines.filter((l) => l.trim().startsWith('|')).length - 2);
-  try {
-    const d = JSON.parse(text);
-    return Array.isArray(d) ? d.length : 1;
-  } catch {
-    return 0;
-  }
 }
 
 export interface SavedEvaluationInfo {

@@ -1,6 +1,6 @@
 import type { ProviderConfig } from '../../model/types.js';
 import type { ChatMessage, ChatRequest, ChatResponse, LlmProvider, ToolCall } from '../types.js';
-import { doFetch, postJson, sseEvents, StreamTimer } from '../http.js';
+import { configuredHeaders, doFetch, postJson, sseEvents, StreamTimer } from '../http.js';
 import type { Redactor } from '../../util/redact.js';
 
 type GeminiPart = { text?: string; functionCall?: { name: string; args?: Record<string, unknown> }; functionResponse?: { name: string; response: unknown } };
@@ -21,7 +21,7 @@ export class GeminiProvider implements LlmProvider {
   private headers(): Record<string, string> {
     const h: Record<string, string> = {};
     if (this.apiKey) h['x-goog-api-key'] = this.apiKey;
-    for (const x of this.config.headers ?? []) if (x.enabled !== false && x.key) h[x.key] = x.value;
+    for (const [k, v] of configuredHeaders(this.config)) h[k] = v;
     return h;
   }
 

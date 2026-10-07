@@ -1,6 +1,6 @@
 import type { ProviderConfig } from '../../model/types.js';
 import type { ChatMessage, ChatRequest, ChatResponse, LlmProvider, ToolCall } from '../types.js';
-import { doFetch, postJson, sseEvents, StreamTimer } from '../http.js';
+import { configuredHeaders, doFetch, parseToolCall, postJson, sseEvents, StreamTimer } from '../http.js';
 import type { Redactor } from '../../util/redact.js';
 
 /** Anthropic Messages API (and compatible gateways). */
@@ -14,7 +14,7 @@ export class AnthropicProvider implements LlmProvider {
   private headers(): Record<string, string> {
     const h: Record<string, string> = { 'anthropic-version': this.config.apiVersion || '2023-06-01' };
     if (this.apiKey) h['x-api-key'] = this.apiKey;
-    for (const x of this.config.headers ?? []) if (x.enabled !== false && x.key) h[x.key] = x.value;
+    for (const [k, v] of configuredHeaders(this.config)) h[k] = v;
     return h;
   }
 
@@ -122,17 +122,7 @@ export class AnthropicProvider implements LlmProvider {
           throw new Error(d.error?.message ?? 'Anthropic stream error');
       }
     }
-    const toolCalls: ToolCall[] = [...blocks.values()]
-      .filter((b) => b.type === 'tool_use')
-      .map((b) => {
-        let args: Record<string, unknown> = {};
-        try {
-          args = b.json ? JSON.parse(b.json) : {};
-        } catch {
-          args = { _unparsed: b.json };
-        }
-        return { id: b.id!, name: b.name!, arguments: args, rawArguments: b.json };
-      });
+    const toolCalls: ToolCall[] = [...blocks.values()].filter((b) => b.type === 'tool_use').map((b) => parseToolCall(b.id!, b.name!, b.json));
     return { text, toolCalls, usage: { inputTokens: inT, outputTokens: outT, totalTokens: inT + outT }, finishReason: finish, model, timing: timer.result(startedAt) };
   }
 

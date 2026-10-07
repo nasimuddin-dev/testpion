@@ -1,5 +1,6 @@
 import { BookOpen, Bot, Check, Copy, Paperclip, RotateCcw, Square, X } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
+import { extractCodeBlock } from '@testpion/shared';
 import { asError, call, on } from '../api';
 import { currentViewContext, type ViewContext } from '../lib/assistant-context';
 import { useApp, type AssistantRequest } from '../store';
@@ -221,19 +222,13 @@ export function suggestedQuestions(view?: ViewContext): string[] {
   return c.graphql ? ['Explain this query', 'Which checks should I add?', 'Write a query for related data'] : [`What will this ${what} do?`, 'How do I add authentication?', 'Which checks should I add?'];
 }
 
-/** The first fenced code block of an answer, or the whole answer when it has none. */
-export function answerCode(text: string): string {
-  const m = /```[^\n`]*\n([\s\S]*?)```/.exec(text);
-  return (m ? m[1]! : text).trim();
-}
-
 /** One answer: Markdown, each code block with its own Copy button, the model that wrote it, and Apply when the task has one. */
-function Answer({ turn, live, apply }: { turn: Turn; live?: boolean; apply?: AssistantRequest['apply'] }) {
+const Answer = memo(function Answer({ turn, live, apply }: { turn: Turn; live?: boolean; apply?: AssistantRequest['apply'] }) {
   const use = async () => {
     if (!apply) return;
     const toast = useApp.getState().toast;
     try {
-      const r = await apply.run(answerCode(turn.content));
+      const r = await apply.run(extractCodeBlock(turn.content));
       if (typeof r === 'string') toast(`Couldn't use the answer: ${r}`, 'error');
       else if (r) toast(r.done, 'success', r.action);
       else toast(`${apply.label}: done`, 'success');
@@ -284,4 +279,4 @@ function Answer({ turn, live, apply }: { turn: Turn; live?: boolean; apply?: Ass
       )}
     </div>
   );
-}
+})

@@ -6,12 +6,8 @@ import type { BodyConfig, HttpRequestSpec, KeyValue } from '../model/types.js';
  * (and labelled as AI-generated) before anything runs.
  */
 
-/** The first fenced code block (optionally of one of `langs`), or the whole text without fences. */
-export function extractCodeBlock(text: string, langs: string[] = []): string {
-  const fences = [...text.matchAll(/```([\w+-]*)[^\n]*\n([\s\S]*?)```/g)];
-  const wanted = fences.find((m) => langs.includes((m[1] ?? '').toLowerCase())) ?? fences[0];
-  return (wanted ? wanted[2]! : text).trim();
-}
+import { extractCodeBlock } from '@testpion/shared';
+export { extractCodeBlock };
 
 const METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']);
 

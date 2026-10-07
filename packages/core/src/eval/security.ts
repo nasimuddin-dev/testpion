@@ -11,7 +11,6 @@ import { Redactor } from '../util/redact.js';
  * - `securityLint(collection)`: request definitions that leak or weaken: hard-coded secrets, secrets in
  *   query strings, plain http to non-local hosts, disabled TLS verification, Basic auth over http.
  */
-export const SECURITY_HEADER_ITEMS = ['hsts', 'nosniff', 'frame', 'cors', 'server-version'] as const;
 
 registerCheck('security-headers', (cfg: CheckConfig, ctx: CheckContext): CheckResult => {
   const skip = new Set((Array.isArray(cfg.values) ? cfg.values : []).map((v) => String(v).toLowerCase()));
@@ -128,9 +127,6 @@ export function literalAuthSecrets(auth: AuthConfig | undefined): Array<{ label:
   return out;
 }
 
-function literalSecrets(auth: AuthConfig | undefined): string[] {
-  return literalAuthSecrets(auth).map((x) => x.label);
-}
 
 /**
  * Certificates of the collection's HTTPS hosts (as recorded when responses came back) that expire within 30 days:

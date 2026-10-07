@@ -54,10 +54,17 @@ export function tokenF1(prediction: string, reference: string): number {
 
 /** Fraction of `needle`'s content words present in `haystack`. */
 export function coverage(needle: string, haystack: string): number {
+  return coverageIn(needle, wordSet(haystack));
+}
+
+/** The content words of a text as a set: build it once when many needles are checked against the same text. */
+export const wordSet = (text: string) => new Set(contentWords(text));
+
+/** `coverage` against a prepared word set. */
+export function coverageIn(needle: string, haystack: Set<string>): number {
   const n = contentWords(needle);
   if (!n.length) return 1;
-  const h = new Set(contentWords(haystack));
-  return n.filter((w) => h.has(w)).length / n.length;
+  return n.filter((w) => haystack.has(w)).length / n.length;
 }
 
 export function cosine(a: number[], b: number[]): number {

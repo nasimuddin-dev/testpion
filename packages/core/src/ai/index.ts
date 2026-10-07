@@ -98,6 +98,12 @@ export function createProvider(config: ProviderConfig, apiKey: string | undefine
   return new ManagedProvider(p);
 }
 
+/** A local OpenAI-compatible server (LM Studio, vLLM on this machine) that needs no key. */
+export const isLocalProvider = (cfg: ProviderConfig) => cfg.kind === 'openai-compatible' && /localhost|127\.0\.0\.1/.test(cfg.baseUrl ?? '');
+
+/** Whether a provider must have an API key to be used: the cloud ones; not the offline demo, Ollama or a local server. */
+export const providerNeedsKey = (cfg: ProviderConfig) => cfg.kind !== 'mock' && cfg.kind !== 'ollama' && !isLocalProvider(cfg);
+
 /** "No API key for OpenAI", with where to add it: the app's Providers, or the variable the CLI and CI read. */
 export function missingKeyError(cfg: ProviderConfig): ApsError {
   const secret = /\{\{\s*\$secret\.([^}\s]+)\s*\}\}/.exec(cfg.apiKey ?? '')?.[1];
@@ -109,7 +115,7 @@ export function missingKeyError(cfg: ProviderConfig): ApsError {
     suggestions: [
       `In the app: AI Lab ▸ Providers ▸ ${cfg.name} ▸ API key (it is kept in the operating system's secret store, never in the workspace).`,
       secret ? `In the CLI or CI: set the environment variable ${envNameForSecret(secret)}.` : env ? `Set the environment variable ${env}.` : 'In the CLI or CI: set the key as an environment variable the provider refers to.',
-      ...(cfg.kind === 'openai-compatible' && /localhost|127\.0\.0\.1/.test(cfg.baseUrl ?? '') ? ['A local server that needs no key: clear the provider\'s API key field.'] : []),
+      ...(isLocalProvider(cfg) ? ['A local server that needs no key: clear the provider\'s API key field.'] : []),
     ],
   });
 }
@@ -153,6 +159,7 @@ export class ProviderRegistry {
       // the provider names a key (a secret, an environment variable) that has no value here: say so before anything
       // is sent (the provider would answer 401 with a message about Authorization headers)
       if (cfg.apiKey && !key && cfg.kind !== 'mock' && cfg.kind !== 'ollama') throw missingKeyError(cfg);
+      // (a local server with a key reference set still gets the error: the reference says a key was meant)
       p = createProvider(resolved, key, this.redactor);
       this.cache.set(cfg.id, p);
     }

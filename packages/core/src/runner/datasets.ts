@@ -1,6 +1,6 @@
 import { csvRecords, parseCsvLine } from '@testpion/shared';
 import { assertUrlAllowed } from '../net/policy.js';
-import { appendFileSync, createReadStream, existsSync, mkdirSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { appendFileSync, closeSync, createReadStream, existsSync, mkdirSync, openSync, readSync, readdirSync, statSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { createInterface } from 'node:readline';
 import { dirname, extname, join, relative, sep } from 'node:path';
@@ -109,10 +109,12 @@ async function* rawRecords(src: DatasetSource): AsyncGenerator<DatasetRecord> {
     const delim = src.path.endsWith('.tsv') ? '\t' : ',';
     let header: string[] | undefined;
     let pending = '';
+    let openQuotes = 0;
     for await (const l of rl) {
       pending = pending ? `${pending}\n${l}` : l;
-      // a record continues while quotes are unbalanced
-      if ((pending.match(/"/g)?.length ?? 0) % 2 === 1) continue;
+      // a record continues while quotes are unbalanced (counted line by line, not over the record again)
+      openQuotes = (openQuotes + (l.match(/"/g)?.length ?? 0)) % 2;
+      if (openQuotes === 1) continue;
       const cells = parseCsvLine(pending, delim);
       pending = '';
       if (!header) {
@@ -279,11 +281,11 @@ export interface WorkspaceDataset {
  * worth keeping becomes an evaluation case (its inputs and the answer as `expected`). `name` is a file under
  * datasets/ (`.jsonl` is added when it has no extension). Returns the file and how many records it now has.
  */
-export function appendDatasetRow(
+export async function appendDatasetRow(
   store: { root: string; path(...p: string[]): string; safePath(rel: string, base?: string): string },
   name: string,
   row: Record<string, unknown>,
-): { path: string; rows: number } {
+): Promise<{ path: string; rows: number }> {
   const clean = name.trim().replace(/^datasets[\\/]/, '');
   if (!clean) throw new ApsError('ValidationError', 'A dataset name is needed');
   const rel = extname(clean) ? clean : `${clean}.jsonl`;
@@ -291,10 +293,30 @@ export function appendDatasetRow(
   if (!row || typeof row !== 'object' || Array.isArray(row)) throw new ApsError('ValidationError', 'A record is an object of fields');
   const file = store.safePath(rel, store.path('datasets'));
   mkdirSync(dirname(file), { recursive: true });
-  const before = existsSync(file) ? readFileSync(file, 'utf8') : '';
-  appendFileSync(file, (before && !before.endsWith('\n') ? '\n' : '') + JSON.stringify(row) + '\n');
-  const rows = (before + '\n' + JSON.stringify(row)).split('\n').filter((l) => l.trim()).length;
-  return { path: relative(store.root, file).split(sep).join('/'), rows };
+  // a file that does not end in a newline gets one first (the last byte says), then the record; the whole file is
+  // never read into memory: the count streams through it
+  const size = existsSync(file) ? statSync(file).size : 0;
+  let needsNewline = false;
+  if (size) {
+    const fd = openSync(file, 'r');
+    try {
+      const last = Buffer.alloc(1);
+      readSync(fd, last, 0, 1, size - 1);
+      needsNewline = last[0] !== 0x0a;
+    } finally {
+      closeSync(fd);
+    }
+  }
+  appendFileSync(file, (needsNewline ? '\n' : '') + JSON.stringify(row) + '\n');
+  return { path: relative(store.root, file).split(sep).join('/'), rows: await countLines(file) };
+}
+
+/** Non-blank lines of a file, streamed. */
+async function countLines(file: string): Promise<number> {
+  let n = 0;
+  const rl = createInterface({ input: createReadStream(file, 'utf8'), crlfDelay: Infinity });
+  for await (const l of rl) if (l.trim()) n++;
+  return n;
 }
 
 /** Data files in the workspace's datasets/ folder (up to three levels deep), newest first. */

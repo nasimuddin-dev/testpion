@@ -59,18 +59,18 @@ describe('reviewing results', () => {
 });
 
 describe('adding a case to a dataset', () => {
-  it('makes the JSONL file, appends records and counts them', () => {
-    expect(appendDatasetRow(store, 'intent-cases', { message: 'Cancel my booking', expected: 'cancellation' })).toEqual({ path: 'datasets/intent-cases.jsonl', rows: 1 });
-    expect(appendDatasetRow(store, 'datasets/intent-cases.jsonl', { message: 'Refill', expected: { category: 'refill' } }).rows).toBe(2);
+  it('makes the JSONL file, appends records and counts them', async () => {
+    await expect(appendDatasetRow(store, 'intent-cases', { message: 'Cancel my booking', expected: 'cancellation' })).resolves.toEqual({ path: 'datasets/intent-cases.jsonl', rows: 1 });
+    expect((await appendDatasetRow(store, 'datasets/intent-cases.jsonl', { message: 'Refill', expected: { category: 'refill' } })).rows).toBe(2);
     const lines = readFileSync(join(root, 'datasets', 'intent-cases.jsonl'), 'utf8')
       .trim()
       .split('\n');
     expect(JSON.parse(lines[1]!)).toEqual({ message: 'Refill', expected: { category: 'refill' } });
   });
 
-  it('only JSONL, only an object, only inside datasets/', () => {
-    expect(() => appendDatasetRow(store, 'cases.csv', { a: 1 })).toThrow(/JSONL datasets, not \.csv/);
-    expect(() => appendDatasetRow(store, 'x', [1] as unknown as Record<string, unknown>)).toThrow(/object of fields/);
-    expect(() => appendDatasetRow(store, '../../escape', { a: 1 })).toThrow();
+  it('only JSONL, only an object, only inside datasets/', async () => {
+    await expect(appendDatasetRow(store, 'cases.csv', { a: 1 })).rejects.toThrow(/JSONL datasets, not \.csv/);
+    await expect(appendDatasetRow(store, 'x', [1] as unknown as Record<string, unknown>)).rejects.toThrow(/object of fields/);
+    await expect(appendDatasetRow(store, '../../escape', { a: 1 })).rejects.toThrow();
   });
 });

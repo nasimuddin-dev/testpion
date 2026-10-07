@@ -275,8 +275,8 @@ export function collectionsHandlers(be: Backend): Handlers {
       return { name: relative(root, file).split(sep).join('/'), text: readFileSync(file, 'utf8') };
     },
     /** Add a record to a JSONL dataset (made when missing): a Playground answer as an evaluation case. */
-    'datasets.appendRow': ({ name, row }: { name: string; row: Record<string, unknown> }) => {
-      const out = appendDatasetRow(be.ws, name, row);
+    'datasets.appendRow': async ({ name, row }: { name: string; row: Record<string, unknown> }) => {
+      const out = await appendDatasetRow(be.ws, name, row);
       be.host.emit('data.changed', { kind: 'datasets' });
       return out;
     },
