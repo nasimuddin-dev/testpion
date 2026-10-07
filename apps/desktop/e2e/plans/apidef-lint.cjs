@@ -7,7 +7,7 @@ const steps = [
   [
     'lint-tab-lists-the-notes',
     `(async () => {
-      await __t.esc(); await __t.open('petstore.json'); await __t.sleep(800);
+      await __t.requests(); await __t.find('petstore.json'); await __t.sleep(800);
       await __t.tab('Lint');
       const rows = await __t.waitFor(() => { const r = [...document.querySelectorAll('main [data-api-lint] [data-lint-rule]')]; return r.length ? r : null; }, 6000);
       return 'rules: ' + (rows ?? []).map((r) => r.getAttribute('data-lint-rule')).join(',');
@@ -59,7 +59,7 @@ const steps = [
   [
     'fuzz-runs-and-summarises',
     `(async () => {
-      await __t.esc(); await __t.open('petstore.json'); await __t.sleep(600);
+      await __t.requests(); await __t.find('petstore.json'); await __t.sleep(600);
       await __t.tab('Fuzz');
       const input = document.querySelector('main [data-api-fuzz] input[aria-label="Base URL"]');
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, 'http://127.0.0.1:4010/api/v3');
@@ -77,5 +77,6 @@ module.exports = withExpect(steps, {
   'preview-lists-the-operations': /^operations: 19 \| tags: pet,store,user$/,
   'an-operation-opens-as-a-request': /^params: true \| opened: true$/,
   'lint-tab-lists-the-notes': /^rules: component-unused,component-unused$/,
-  'a-row-opens-its-place': /^tab: Definition \| line: [1-9]\d+$/,
+  // the selected tabs of the page (the editor tab, …) include Definition; the selection is on the problem's line
+  'a-row-opens-its-place': /^tab: .*\bDefinition\b.* \| line: [1-9]\d+$/,
 });

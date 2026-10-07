@@ -13,7 +13,7 @@ const step = (name, body) => [name, `(async () => { ${H} ${body} })()`];
 const steps = [
   step(
     'open-the-runner',
-    `await __t.esc(); await __t.requests(); await __t.open('GET with query parameters');
+    `await __t.esc(); await __t.requests(); await __t.find('GET with query parameters');
      vis('nav[aria-label="Where this request is saved"] button')[0]?.click(); await __t.sleep(1500);
      await __t.tab('Run'); await __t.sleep(600);
      const db = vis('main button').find((b) => b.textContent.trim() === 'Database…');

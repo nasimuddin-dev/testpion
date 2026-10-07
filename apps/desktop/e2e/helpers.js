@@ -28,6 +28,28 @@ window.__t = (() => {
     requests: async () => { await esc(); window.dispatchEvent(new KeyboardEvent('keydown', { key: '2', ctrlKey: true, altKey: true, bubbles: true })); await sleep(1200); return !!aside(); },
     expand: async (text) => { const r = row(text); if (!r) return `NO ROW ${text}`; if (r.getAttribute('aria-expanded') === 'false') r.click(); await sleep(500); return 'ok'; },
     open: async (text) => { const r = row(text); if (!r) return `NO ROW ${text}`; r.click(); await sleep(1800); return 'ok'; },
+    // a new tab of a kind (WebSocket, GraphQL, gRPC …) from the tab strip's + menu (a request opens first, so the strip is there)
+    newTab: async (label) => {
+      await esc();
+      if (!document.querySelector('[aria-label="New tab"]')) { await window.__t.requests(); await window.__t.find('Custom headers'); }
+      const plus = document.querySelector('[aria-label="New tab"]');
+      if (!plus) return 'NO NEW TAB BUTTON';
+      plus.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, pointerType: 'mouse' })); await sleep(500);
+      const item = [...document.querySelectorAll('[role=menuitem]')].find((x) => x.textContent.trim().startsWith(label));
+      item?.click(); await sleep(1500);
+      return item ? 'ok' : `NO MENU ITEM ${label}`;
+    },
+    // open an item anywhere in the explorer (collapsed collections, categories, API definitions): filter, click, clear
+    find: async (text) => {
+      const f = document.querySelector('aside input[placeholder^="Filter"]');
+      if (!f) return `NO FILTER`;
+      const set = (v) => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(f, v); f.dispatchEvent(new Event('input', { bubbles: true })); };
+      set(text); await sleep(900);
+      const r = [...document.querySelectorAll('aside [data-tree-row], aside button')].find((b) => b.offsetParent && b.getAttribute('aria-expanded') === null && b.textContent.trim().endsWith(text));
+      r?.click(); await sleep(1800);
+      set(''); await sleep(400);
+      return r ? 'ok' : `NO ROW ${text}`;
+    },
     menu: async (text) => {
       await esc();
       const r = row(text);

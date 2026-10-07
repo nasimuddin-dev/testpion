@@ -279,7 +279,8 @@ export function DebuggerView() {
 
   const start = async () => {
     try {
-      const p = Number(port) || undefined;
+      // an empty box is the usual port, not a random one: programs set up for 8899 keep working
+      const p = Number(port) || 8899;
       setStatus(await call<Status>('debug.start', { port: p }));
     } catch (e) {
       fail(e);
@@ -432,9 +433,17 @@ export function DebuggerView() {
         icon={<Bug size={18} />}
         title="HTTP Debugger"
         subtitle={
-          status?.running
-            ? `Listening on ${status.url}${status.systemProxy ? ' · the system proxy points here' : ''} · HTTP_PROXY=${status.url}, a browser's proxy setting, or --proxy-server=${status.url}`
-            : 'Start the proxy, then point a program at it: its traffic is listed here as it happens.'
+          status?.running ? (
+            <span className="inline-flex items-center gap-1.5">
+              Proxy address <code className="font-mono text-fg">{status.url}</code>
+              <button type="button" className="text-muted hover:text-fg" title="Copy the proxy address" aria-label="Copy the proxy address" onClick={() => copy(status.url ?? '', 'the proxy address')}>
+                <Copy size={12} />
+              </button>
+              {status.systemProxy ? ' · the system proxy points here' : ' · programs sent through it show below'}
+            </span>
+          ) : (
+            'Start the proxy, then point a program at it: its traffic is listed here as it happens.'
+          )
         }
         actions={
           <>

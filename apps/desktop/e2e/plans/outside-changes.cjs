@@ -117,5 +117,6 @@ module.exports = withExpect(steps, {
   'own-save-is-quiet': /^new messages after own save: 0$/,
   'edit-an-open-request': /^edited: true$/,
   'same-request-changes-on-disk': /^written$/,
-  'asked-and-takes-the-new-version': /^prompt names the request: true \| url: \{\{httpbin\}\}\/get\?from=git$/,
+  // the new URL from disk, followed by the request's query parameters (the URL bar shows both)
+  'asked-and-takes-the-new-version': /^prompt names the request: true \| url: \{\{httpbin\}\}\/get\?from=git(&|$)/,
 }, { prepare: ageAccessTimes });

@@ -172,7 +172,7 @@ const steps = [
       const text = table?.textContent ?? '';
       await __t.esc(); await __t.sleep(300);
       await window.aps.invoke('git.discard', { files: [{ path: 'collections/httpbin.json', state: 'modified', staged: false }] }); await __t.sleep(800);
-      return 'request part: ' + /get\?compare=1/.test(text);
+      return 'request part: ' + /get\\?compare=1/.test(text);
     })()`,
   ],
   [
@@ -228,7 +228,7 @@ const steps = [
       [...document.querySelectorAll('[role=dialog] button')].find((b) => b.textContent.trim() === 'Resolve with these choices')?.click();
       await __t.waitFor(() => !document.querySelector('main section[role=alert]'), 8000);
       const c = (await window.aps.invoke('col.list')).find((x) => x.id === 'httpbin');
-      return 'differing parts: ' + parts.join(',') + ' | url: ' + (JSON.stringify(c.items).match(/get\?side=\w+/)?.[0] ?? 'NONE');
+      return 'differing parts: ' + parts.join(',') + ' | url: ' + (JSON.stringify(c.items).match(/get\\?side=\\w+/)?.[0] ?? 'NONE');
     })()`,
   ],
   [

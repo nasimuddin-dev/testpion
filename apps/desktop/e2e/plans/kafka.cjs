@@ -14,7 +14,7 @@ const step = (name, body) => [name, `(async () => { ${H} ${body} })()`];
 const steps = [
   step(
     'switch-to-kafka',
-    `await __t.view('WebSocket'); await __t.sleep(800);
+    `await __t.newTab('WebSocket'); await __t.sleep(500);
      button('Kafka')?.click(); await __t.sleep(400);
      const url = vis('main input[aria-label="Kafka brokers"]')[0];
      if (!url) return 'NO BROKERS FIELD';

@@ -22,7 +22,7 @@ const steps = [
     `(async () => {
       await __t.view('Debugger');
       ${button('Start capturing')}?.click();
-      const sub = await __t.waitFor(() => [...document.querySelectorAll('main *')].map((x) => x.textContent?.trim() ?? '').find((t) => /^Listening on http:\\/\\/127\\.0\\.0\\.1:\\d+/.test(t)), 5000);
+      const sub = await __t.waitFor(() => [...document.querySelectorAll('main *')].map((x) => x.textContent?.trim() ?? '').find((t) => /^Proxy address http:\\/\\/127\\.0\\.0\\.1:\\d+/.test(t)), 5000);
       const st = await window.aps.invoke('debug.status');
       return (sub ? 'listening' : 'NO STATUS') + ' | port: ' + st.port;
     })()`,
@@ -30,7 +30,7 @@ const steps = [
   [
     'status-bar-shows-it',
     `(async () => {
-      const seg = await __t.waitFor(() => [...document.querySelectorAll('footer button')].map((b) => b.textContent.trim()).find((t) => /^Debugger :\d+/.test(t)), 4000);
+      const seg = await __t.waitFor(() => [...document.querySelectorAll('footer button')].map((b) => b.textContent.trim()).find((t) => /^Debugger :\\d+/.test(t)), 4000);
       return 'status bar: ' + (seg ?? 'NONE');
     })()`,
   ],
@@ -158,7 +158,7 @@ const steps = [
       sseRow?.click(); await __t.sleep(700);
       tab('Events')?.click(); await __t.sleep(400);
       const events = document.querySelectorAll('main [data-event]').length;
-      const closed = !!(await __t.waitFor(() => { const r = [...document.querySelectorAll('main [role=row]')].find((x) => x.textContent.includes('ws://127.0.0.1:4013')); return r && !/live/.test(r.textContent); }, 4000));
+      const closed = !!(await __t.waitFor(() => { const r = [...document.querySelectorAll('main [role=row]')].find((x) => x.textContent.includes('ws://127.0.0.1:4013')); return r && !/live/.test(r.textContent); }, 10000));
       return 'ws sent: ' + sent + ' | ws received: ' + received + ' | sse events: ' + events + ' | ws closed: ' + closed;
     })()`,
   ],
@@ -201,7 +201,7 @@ const steps = [
       tab('gRPC')?.click(); await __t.sleep(400);
       const raw = !!document.querySelector('main [data-grpc-decoded=raw]');
       const sent = [...document.querySelectorAll('main [data-grpc-message=Sent]')].some((p) => /"1": 1\\b/.test(p.textContent));
-      const received = document.querySelectorAll('main [data-grpc-message=Received]').length;
+      const received = (await __t.waitFor(() => document.querySelectorAll('main [data-grpc-message=Received]').length || null, 4000)) ?? 0;
       const failed = await __t.waitFor(() => [...document.querySelectorAll('main [role=row]')].find((r) => r.textContent.includes('GetPet') && r.querySelector('[title="gRPC NOT_FOUND"]')), 4000);
       tab('Connections')?.click(); await __t.sleep(500);
       const h2conn = document.querySelectorAll('main [data-connection=h2]').length;

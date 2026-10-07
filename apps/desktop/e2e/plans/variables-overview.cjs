@@ -45,14 +45,14 @@ const steps = [
     'popover-all-button',
     `await __t.sleep(300); const cell = [...document.querySelectorAll('main input')].find((x) => x.offsetParent && x.value.includes('{{userId}}')); if (!cell) return 'NO INPUT';
      clickVar(cell, 'userId'); const p = await __t.waitFor(pop, 2500); if (!p) return 'NO DIALOG';
-     [...p.querySelectorAll('button')].find((x) => x.textContent.trim() === 'All').click(); await __t.sleep(1200);
+     [...p.querySelectorAll('button')].find((x) => x.textContent.trim() === "Where it's set").click(); await __t.sleep(1200);
      const ok = !!quick(); document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); await __t.sleep(300);
      return 'quick look open: ' + ok + ' | popover closed: ' + !pop();`,
   ),
 ];
 
 module.exports = withExpect(steps, {
-  'collection-variable-popover': /^scope: collection \| buttons: .*Copy \/ Collection variables \/ All$/,
+  'collection-variable-popover': /^scope: collection \| buttons: .*Copy \/ Collection variables \/ Where it's set$/,
   'go-to-collection-variables': /^popover open: false \| tab: Variables.* \| userId row: true$/,
   // in the order they win, each with its variables
   'quick-look-all-scopes': /^Collection: Scripts & chaining \(JSONPlaceholder\) 1 \[userId\] \/ Environment: Public APIs \d+ \[.*httpbin.*\] \/ Workspace 1 \[appName\] \/ Globals 0 \[\]$/,

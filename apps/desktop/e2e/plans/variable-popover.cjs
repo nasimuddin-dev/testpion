@@ -72,7 +72,7 @@ const steps = [
   ),
   step(
     'new-websocket-tab-starts-empty',
-    `await __t.view('WebSocket'); await __t.sleep(800);
+    `await __t.newTab('WebSocket'); await __t.sleep(500);
      const url = [...document.querySelectorAll('main input[aria-label="WebSocket URL"]')].find((x) => x.offsetParent);
      return 'url: "' + (url?.value ?? 'NONE') + '"';`,
   ),

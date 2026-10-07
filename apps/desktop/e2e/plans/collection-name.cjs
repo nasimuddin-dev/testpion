@@ -7,13 +7,14 @@ const H = `
   const vis = (sel) => [...document.querySelectorAll(sel)].filter((x) => x.getClientRects().length);
   const setInput = (el, v) => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, v); el.dispatchEvent(new Event('input', { bubbles: true })); };
   const key = (el, k) => el.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true }));
+  const openTools = () => { vis('main button').find((x) => x.textContent.trim() === 'Tools')?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, pointerType: 'mouse' })); return __t.waitFor(() => (vis('[role=menuitem]').length ? true : null), 2000); };
 `;
 const step = (name, body) => [name, `(async () => { ${H} ${body} })()`];
 
 const steps = [
   step(
     'name-is-text-not-a-field',
-    `await __t.esc(); await __t.requests(); await __t.open('GET with query parameters');
+    `await __t.esc(); await __t.requests(); await __t.find('GET with query parameters');
      vis('nav[aria-label="Where this request is saved"] button')[0]?.click(); await __t.sleep(1500);
      const name = vis('main [data-collection-name]')[0];
      const field = vis('main input[aria-label="Collection name"]')[0];
@@ -40,7 +41,7 @@ const steps = [
   ),
   step(
     'replace-previews-every-change',
-    `vis('main button').find((b) => b.textContent.trim() === 'Tools')?.click(); await __t.sleep(300);
+    `await openTools(); await __t.sleep(200);
      vis('[role=menuitem]').find((m) => m.textContent.trim() === 'Find and replace…')?.click();
      const find = await __t.waitFor(() => vis('[role=dialog] input[aria-label="Find"]')[0], 3000);
      if (!find) return 'NO DIALOG';
@@ -52,7 +53,7 @@ const steps = [
   ),
   step(
     'tidy-up-lists-findings',
-    `vis('main button').find((b) => b.textContent.trim() === 'Tools')?.click(); await __t.sleep(300);
+    `await openTools(); await __t.sleep(200);
      vis('[role=menuitem]').find((m) => m.textContent.trim() === 'Tidy up…')?.click();
      const dlg = await __t.waitFor(() => vis('[role=dialog] [data-tidy-dialog]')[0], 3000);
      if (!dlg) return 'NO DIALOG';

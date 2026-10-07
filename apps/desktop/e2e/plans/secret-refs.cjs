@@ -28,6 +28,6 @@ const steps = [
 ];
 
 module.exports = withExpect(steps, {
-  'reference-shown-as-not-allowed': /^From 1Password: apiKey \(not allowed yet\) Allow… Read again$/,
+  'reference-shown-as-not-allowed': /^From 1Password: apiKey \(not allowed yet\) ?Allow… ?Read again$/,
   'allow-shows-the-command-first': /^dialog: true \| command shown: true$/,
 });

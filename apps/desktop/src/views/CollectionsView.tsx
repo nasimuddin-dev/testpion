@@ -205,33 +205,6 @@ export function CollectionsView() {
                 <div className="text-xs text-muted">{c.problem ? c.problem : `${plural(count(c.items), 'request')} · v${c.version} · ${c.updatedAt ? timeAgo(c.updatedAt) : ''}`}</div>
               </button>
             ))}
-            {moveVarsOpen && draft && (
-              <MoveVariablesDialog
-                collection={cols.find((x) => x.id === draft.id) ?? draft}
-                initial={moveVarsInitial}
-                onClose={() => (setMoveVarsOpen(false), setMoveVarsInitial(undefined))}
-                onDone={() => void load().then(() => useApp.getState().set({ envsVersion: (useApp.getState().envsVersion ?? 0) + 1 }))}
-              />
-            )}
-            {tidyOpen && draft && (
-              <TidyDialog
-                collection={cols.find((x) => x.id === draft.id) ?? draft}
-                onClose={() => setTidyOpen(false)}
-                onDone={() => void load().then(() => setSel(draft.id))}
-                onReplace={(host) => (setTidyOpen(false), setReplaceOpen({ find: host, replace: '{{baseUrl}}' }))}
-              />
-            )}
-            {replaceOpen && draft && (
-              <ReplaceDialog
-                initialFind={typeof replaceOpen === 'object' ? replaceOpen.find : undefined}
-                initialReplace={typeof replaceOpen === 'object' ? replaceOpen.replace : undefined}
-                collection={cols.find((x) => x.id === draft.id) ?? draft}
-                onClose={() => setReplaceOpen(false)}
-                onDone={() => void load().then(() => setSel(draft.id))}
-              />
-            )}
-            {securityOpen && draft && <SecurityReviewDialog collectionId={draft.id} name={draft.name} onClose={() => setSecurityOpen(false)} />}
-            {trashOpen && <TrashDialog kind="collection" onClose={() => setTrashOpen(false)} onRestored={(r) => void load().then(() => setSel(r.id))} />}
             {!cols.length && (
               <Empty icon={<FolderTree size={24} />} title="No collections">
                 Create one or import OpenAPI, Postman, Insomnia, Bruno, Hoppscotch or HAR.
@@ -415,6 +388,34 @@ export function CollectionsView() {
           )}
         </div>
       </Split>
+      {/* outside the Split: its first pane (the old collection list) is collapsed, which leaves it out of the page */}
+      {moveVarsOpen && draft && (
+        <MoveVariablesDialog
+          collection={cols.find((x) => x.id === draft.id) ?? draft}
+          initial={moveVarsInitial}
+          onClose={() => (setMoveVarsOpen(false), setMoveVarsInitial(undefined))}
+          onDone={() => void load().then(() => useApp.getState().set({ envsVersion: (useApp.getState().envsVersion ?? 0) + 1 }))}
+        />
+      )}
+      {tidyOpen && draft && (
+        <TidyDialog
+          collection={cols.find((x) => x.id === draft.id) ?? draft}
+          onClose={() => setTidyOpen(false)}
+          onDone={() => void load().then(() => setSel(draft.id))}
+          onReplace={(host) => (setTidyOpen(false), setReplaceOpen({ find: host, replace: '{{baseUrl}}' }))}
+        />
+      )}
+      {replaceOpen && draft && (
+        <ReplaceDialog
+          initialFind={typeof replaceOpen === 'object' ? replaceOpen.find : undefined}
+          initialReplace={typeof replaceOpen === 'object' ? replaceOpen.replace : undefined}
+          collection={cols.find((x) => x.id === draft.id) ?? draft}
+          onClose={() => setReplaceOpen(false)}
+          onDone={() => void load().then(() => setSel(draft.id))}
+        />
+      )}
+      {securityOpen && draft && <SecurityReviewDialog collectionId={draft.id} name={draft.name} onClose={() => setSecurityOpen(false)} />}
+      {trashOpen && <TrashDialog kind="collection" onClose={() => setTrashOpen(false)} onRestored={(r) => void load().then(() => setSel(r.id))} />}
       {importing && <ImportModal onClose={() => setImporting(false)} onDone={load} />}
     </>
   );
