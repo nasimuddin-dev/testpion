@@ -47,7 +47,7 @@ export function externalSecretsHandlers(be: Backend): Handlers {
               label: c.label,
               commandLine: commandLine(c.command, c.args),
               allowed: isCommandTrusted(be.ws, c.command, c.args),
-              read: externalSecrets.get(v.value) !== undefined,
+              read: externalSecrets.get(v.value, be.ws.root) !== undefined,
             };
           } catch (e) {
             return { key: v.key, ref: v.value.trim(), label: '', commandLine: '', allowed: false, read: false, error: (e as Error).message };

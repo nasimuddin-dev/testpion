@@ -80,12 +80,21 @@ export function generateValue(name: string, s0: unknown, doc?: Json, depth = 0, 
     return Array.from({ length: n }, () => generateValue(name.replace(/s$/, ''), s.items, doc, depth + 1, row));
   }
   if (t === 'integer' || t === 'number') {
-    const min = s.minimum ?? (s.exclusiveMinimum !== undefined ? s.exclusiveMinimum + 1 : /age/i.test(name) ? 1 : /id$/i.test(name) ? 1 : 0);
-    const max =
-      s.maximum ?? (s.exclusiveMaximum !== undefined ? s.exclusiveMaximum - 1 : /age/i.test(name) ? 20 : /^id$/i.test(name) ? 100_000 : /price|amount|cost|total|weight/i.test(name) ? 500 : 1000);
-    if (/^id$/i.test(name) && s.minimum === undefined) return row + 1;
-    if (t === 'integer') return randomInt(Math.ceil(min), Math.floor(max) + 1);
-    return Math.round((min + Math.random() * (max - min)) * 100) / 100;
+    const lowGiven = s.minimum ?? (typeof s.exclusiveMinimum === 'number' ? s.exclusiveMinimum + (t === 'integer' ? 1 : 0.01) : undefined);
+    const highGiven = s.maximum ?? (typeof s.exclusiveMaximum === 'number' ? s.exclusiveMaximum - (t === 'integer' ? 1 : 0.01) : undefined);
+    const span = /age/i.test(name) ? 20 : /^id$/i.test(name) ? 100_000 : /price|amount|cost|total|weight/i.test(name) ? 500 : 1000;
+    // one bound given: the other follows from it (minimum 1900 → 1900 … 2900), so the range is never empty
+    let min = lowGiven ?? (highGiven !== undefined ? highGiven - span : /age|id$/i.test(name) ? 1 : 0);
+    let max = highGiven ?? min + span;
+    if (max < min) [min, max] = [max, min];
+    if (/^id$/i.test(name) && lowGiven === undefined) return row + 1;
+    if (t === 'integer') {
+      const lo = Math.ceil(min);
+      const hi = Math.max(lo, Math.floor(max));
+      // randomInt takes ranges under 2^48
+      return hi - lo < 2 ** 47 ? randomInt(lo, hi + 1) : lo + Math.floor(Math.random() * (hi - lo));
+    }
+    return Math.min(max, Math.max(min, Math.round((min + Math.random() * (max - min)) * 100) / 100));
   }
   if (t === 'boolean') return randomInt(0, 2) === 1;
   // strings: the format first, then the name, then text within the length

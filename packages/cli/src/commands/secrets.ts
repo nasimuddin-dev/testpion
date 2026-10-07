@@ -15,6 +15,7 @@ export function registerSecretsCommands(program: Command): void {
     .action(async (environment: string, o: { workspace?: string; json?: boolean }) => {
       const { store } = openWorkspace(o.workspace, undefined, new WorkspaceManager());
       let env: Environment | undefined;
+      const root = store.root;
       let failed: Array<{ ref: string; error: string }> = [];
       try {
         env = store.getEnvironment(environment);
@@ -34,7 +35,7 @@ export function registerSecretsCommands(program: Command): void {
           } catch {
             /* reported as not read */
           }
-          return { key: v.key, ref: v.value.trim(), manager, read: externalSecrets.get(v.value) !== undefined, error: failed.find((f) => f.ref === v.value.trim())?.error };
+          return { key: v.key, ref: v.value.trim(), manager, read: externalSecrets.get(v.value, root) !== undefined, error: failed.find((f) => f.ref === v.value.trim())?.error };
         });
       if (o.json) console.log(JSON.stringify({ environment: env.name, references: rows }, null, 2));
       else if (!rows.length) console.log(dim(`${env.name} has no secret manager references.`));

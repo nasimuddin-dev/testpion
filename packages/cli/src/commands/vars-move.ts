@@ -16,7 +16,7 @@ export function registerVarsMoveCommand(program: Command): void {
     .option('--dry-run', 'only say what would happen')
     .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
     .option('--json', 'print the result as JSON (for scripts and AI agents)')
-    .action((ref: string, o: { to: string; keys?: string; dryRun?: boolean; workspace?: string; json?: boolean }) => {
+    .action(async (ref: string, o: { to: string; keys?: string; dryRun?: boolean; workspace?: string; json?: boolean }) => {
       const { store } = openWorkspace(o.workspace, undefined, new WorkspaceManager());
       try {
         const want = ref.toLowerCase();
@@ -24,7 +24,7 @@ export function registerVarsMoveCommand(program: Command): void {
         if (!c) throw new CliError(`No collection "${ref}"`, EXIT.CONFIG_ERROR);
         let r;
         try {
-          r = moveCollectionVariablesToEnvironments(store, {
+          r = await moveCollectionVariablesToEnvironments(store, {
             collectionId: c.id,
             keys: o.keys
               ?.split(',')
@@ -42,6 +42,7 @@ export function registerVarsMoveCommand(program: Command): void {
         if (o.json) return console.log(JSON.stringify({ ...r, dryRun: !!o.dryRun }, null, 2));
         console.log(bold(`${r.moved.length} variable${r.moved.length === 1 ? '' : 's'} of ${c.name}${o.dryRun ? ' would move' : ' moved'}`));
         for (const e of r.environments) console.log(`  ${e.name}: ${green(`${e.added.length} added`)}${e.kept.length ? dim(`, ${e.kept.length} kept (it has them: ${e.kept.join(', ')})`) : ''}`);
+        if (r.notMoved.length) console.log(yellow(`Not moved (secret: move them in the app, which keeps their values in the OS secret store): ${r.notMoved.join(', ')}`));
         if (o.dryRun) console.log(yellow('Nothing saved (--dry-run).'));
       } finally {
         store.close();

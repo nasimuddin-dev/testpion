@@ -112,7 +112,7 @@ export function registerOpenApiCommands(program: Command): void {
         }
         try {
           const baseUrl = o.baseUrl ?? (o.environment && resolve ? resolve({ method: 'GET', url: '{{baseUrl}}' }).url.replace(/\{\{baseUrl\}\}/, '') || undefined : undefined);
-          const { cases, operations } = fuzzCases(text, { baseUrl, operations: o.operation, includeDelete: o.includeDelete, maxPerOperation: Number(o.max) || 25 });
+          const { cases, operations, baseUrl: runBase } = fuzzCases(text, { baseUrl, operations: o.operation, includeDelete: o.includeDelete, maxPerOperation: Number(o.max) || 25 });
           if (!cases.length) throw new CliError('No operations to fuzz (DELETE is left out without --include-delete)', EXIT.CONFIG_ERROR);
           if (!o.json) console.error(dim(`${cases.length} requests to ${operations} operations…`));
           const report = await runFuzz(text, cases, { resolve, allowRemote: o.allowRemote, concurrency: Number(o.concurrency) || 4 }).catch((e: Error) => {
@@ -123,7 +123,7 @@ export function registerOpenApiCommands(program: Command): void {
           const { store } = openWorkspace(o.workspace, undefined, new WorkspaceManager());
           try {
             const rel = relative(store.root, resolvePath(ref)).split(sep).join('/');
-            const saved = writeFuzzFindingTests(store, rel.startsWith('..') ? `specs/${basename(ref)}` : rel, report, { baseUrl: cases[0] ? new URL(cases[0].request.url).origin : undefined });
+            const saved = writeFuzzFindingTests(store, rel.startsWith('..') ? `specs/${basename(ref)}` : rel, report, { baseUrl: runBase || undefined });
             if (!o.json) console.error(saved ? green(`${saved.path}: ${saved.tests} regression tests`) : dim('Nothing to save as tests.'));
           } finally {
             store.close();

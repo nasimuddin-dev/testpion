@@ -70,7 +70,7 @@ A collection variable wins over every environment. A base URL kept in the collec
 2. Tick the variables to move and the environments to move them to. The preview says, per environment, how many are added and which ones it already has (those keep their own value).
 3. **Move**. The environments get the collection's values, and the collection loses the variables. Now change the values in each environment.
 
-Secret values are not copied: the environments get the variable marked secret, without a value, to fill in. From the terminal, `testpion vars move "Master Collections" --to Development,Production --keys bannerManagementBaseUrl` (`--dry-run` to preview); agents use `move_variables_to_environments`.
+A secret variable stays secret: its value goes to each environment's secret in the OS secret store, never into a file. The CLI has no secret store to write to, so it leaves secret variables in the collection and says so; move those in the app. From the terminal, `testpion vars move "Master Collections" --to Development,Production --keys bannerManagementBaseUrl` (`--dry-run` to preview); agents use `move_variables_to_environments`.
 
 ## Secrets from a secret manager
 

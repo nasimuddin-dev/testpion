@@ -85,7 +85,7 @@ export function collectionsHandlers(be: Backend): Handlers {
       return { removed: r.removed };
     },
     /** Move collection variables into environments (each can then set its own value); `dryRun` only says what would happen. */
-    'vars.moveToEnvironments': (p: { collectionId: string; keys?: string[]; environments: string[]; dryRun?: boolean }) => moveCollectionVariablesToEnvironments(be.ws, p),
+    'vars.moveToEnvironments': (p: { collectionId: string; keys?: string[]; environments: string[]; dryRun?: boolean }) => moveCollectionVariablesToEnvironments(be.ws, { ...p, secrets: be.secrets }),
     /** Find and replace across a collection's requests: the changes (preview), or saved with `apply`. */
     'col.replace': (p: { collectionId: string; find: string; replace: string; regex?: boolean; caseSensitive?: boolean; fields?: ReplaceField[]; folderId?: string; apply?: boolean }) => {
       const c = be.ws.getCollection(p.collectionId);

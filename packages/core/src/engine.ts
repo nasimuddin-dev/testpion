@@ -52,11 +52,12 @@ export interface EngineContext {
 }
 
 /** Load secret values for an environment's secret variables into a plain list (never persisted). */
-export function environmentVariables(env: Environment | undefined, secrets: SecretStore): Array<{ key: string; value: string; enabled?: boolean; secret?: boolean }> {
+export function environmentVariables(env: Environment | undefined, secrets: SecretStore, scope = ''): Array<{ key: string; value: string; enabled?: boolean; secret?: boolean }> {
   if (!env) return [];
   return env.variables.map((v) => {
     // a secret manager reference (op://…, vault://…): the value read for it (prefetchEnvironmentSecrets), always a secret
-    if (isSecretRef(v.value)) return { ...v, value: externalSecrets.get(v.value) ?? '', secret: true };
+    // only a value read for this workspace (scope): another workspace's reads never apply here
+    if (isSecretRef(v.value)) return { ...v, value: externalSecrets.get(v.value, scope) ?? '', secret: true };
     return v.secret ? { ...v, value: secrets.get(secretKeys.envVar(env.id, v.key)) ?? '' } : v;
   });
 }
@@ -80,7 +81,7 @@ export function createEngineContext(opts: ContextOptions): EngineContext {
     ...store.workspace.variables.map((v) => ((v as { secret?: boolean }).secret ? { ...v, value: opts.secrets.get(secretKeys.workspaceVar(store.id, v.key)) ?? '', secret: true } : v)),
   ]);
   const environment = opts.environment ? store.getEnvironment(opts.environment) : undefined;
-  vars.setScope('environment', environmentVariables(environment, opts.secrets));
+  vars.setScope('environment', environmentVariables(environment, opts.secrets, store.root));
   let collection: Collection | undefined;
   if (opts.collectionId) {
     try {

@@ -77,7 +77,10 @@ export function importHttpFile(text: string, opts: { name?: string } = {}): Http
       if (/^(?:#|\/\/)\s*@/.test(l)) continue; // @no-redirect, @no-cookie-jar …
       if (l.startsWith('#') || l.startsWith('//')) continue;
       if (l.startsWith('< {%')) {
-        const end = ls.findIndex((x, j) => j >= i && x.includes('%}'));
+        // an unclosed script runs to the end of the block (never a negative index: that parsed the block forever)
+        const found = ls.findIndex((x, j) => j >= i && x.includes('%}'));
+        const end = found < 0 ? ls.length - 1 : found;
+        if (found < 0) notes.push('A pre-request script (< {%) is not closed with %}: it was read to the end of its block');
         pre = ls
           .slice(i, end + 1)
           .join('\n')
@@ -137,7 +140,7 @@ export function importHttpFile(text: string, opts: { name?: string } = {}): Http
             .split('&')
             .map((p) => {
               const [k, ...v] = p.split('=');
-              return { key: decodeURIComponent(k!.trim()), value: decodeURIComponent(v.join('=').trim()), enabled: true };
+              return { key: decodeForm(k!.trim()), value: decodeForm(v.join('=').trim()), enabled: true };
             }),
         };
       else body = { type: /json/.test(ct) || /^\s*[{[]/.test(bodyText) ? 'json' : /xml/.test(ct) ? 'xml' : 'text', content: bodyText.trim() };
@@ -189,6 +192,15 @@ export function importHttpFile(text: string, opts: { name?: string } = {}): Http
   if (/\{\{\s*\$dotenv\s/.test(text)) notes.push('{{$dotenv NAME}} reads a .env file in REST Client: import the .env file as an environment, then use {{NAME}}');
   return { collection, notes };
 }
+
+/** URL-decoding that keeps the text as it is when it isn't valid (a stray % such as discount=50%). */
+const decodeForm = (v: string) => {
+  try {
+    return decodeURIComponent(v.replace(/\+/g, ' '));
+  } catch {
+    return v;
+  }
+};
 
 const at = (name: string | undefined, named: Set<string>) => (name && named.has(name) ? name : undefined);
 

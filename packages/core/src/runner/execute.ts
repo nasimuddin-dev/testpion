@@ -346,6 +346,7 @@ async function runGraphQLSubscription(test: GraphQLTest, r: { endpoint: string; 
       cookieJar: svc.cookieJar,
       maxEvents: Math.max(1, test.events ?? 1),
       durationMs: wait,
+      signal,
     });
     const events = out.events as Array<{ data?: unknown; errors?: unknown[] }>;
     const first = events[0];

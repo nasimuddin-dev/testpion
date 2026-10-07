@@ -265,8 +265,8 @@ export async function runFuzz(
 ): Promise<FuzzReport> {
   const doc = loadOpenApi(text) as Json;
   const resolve = opts.resolve ?? ((r) => r);
-  for (const c of cases.slice(0, 1)) {
-    const url = resolve(c.request).url;
+  /** Every request's host is checked before it goes out: a path in the document could point a URL elsewhere. */
+  const guard = (url: string) => {
     if (/\{\{/.test(url))
       throw new ApsError('ConfigurationError', `The URL ${url} still has a {{variable}}: give the base URL`, {
         suggestions: ['--base-url http://localhost:3000, or choose an environment that sets it.'],
@@ -282,7 +282,9 @@ export async function runFuzz(
         why: 'Fuzzing sends many requests with invalid data, and some create or change data.',
         suggestions: ['Fuzz a local or test copy of the API.', 'Only fuzz systems you own or are authorised to test: then allow remote hosts (--allow-remote).'],
       });
-  }
+  };
+  // the first one up front, so a wrong base URL stops the run before anything is sent
+  if (cases[0]) guard(resolve(cases[0].request).url);
   const results: FuzzResult[] = new Array(cases.length);
   let next = 0;
   let done = 0;
@@ -293,6 +295,7 @@ export async function runFuzz(
       let r: FuzzResult;
       try {
         const req = resolve(c.request);
+        guard(req.url);
         const { response } = await executeHttp({ ...req, settings: { ...req.settings, timeoutMs: opts.timeoutMs ?? 15_000, followRedirects: false } }, { ...opts.http, signal: opts.signal });
         const status = response.status;
         const docs = documented(doc, c.operation);

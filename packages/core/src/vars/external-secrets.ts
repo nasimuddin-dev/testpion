@@ -146,6 +146,11 @@ export async function fetchSecretRef(ref: string, opts: { timeoutMs?: number } =
 
 const TTL_MS = 10 * 60_000;
 const cache = new Map<string, { value: string; at: number }>();
+/**
+ * Values are kept per workspace (its folder) and reference: a value read for one workspace is never handed to another
+ * that wasn't allowed to read it, even when both name the same reference.
+ */
+const key = (scope: string, ref: string) => `${scope}\u0000${ref.trim()}`;
 
 export interface PrefetchResult {
   fetched: string[];
@@ -155,12 +160,12 @@ export interface PrefetchResult {
 }
 
 export const externalSecrets = {
-  /** The value read for a reference in the last few minutes, if any. */
-  get(ref: string): string | undefined {
-    const hit = cache.get(ref.trim());
+  /** The value read for a reference in this workspace (`scope`) in the last few minutes, if any. */
+  get(ref: string, scope: string): string | undefined {
+    const hit = cache.get(key(scope, ref));
     if (!hit) return undefined;
     if (Date.now() - hit.at > TTL_MS) {
-      cache.delete(ref.trim());
+      cache.delete(key(scope, ref));
       return undefined;
     }
     return hit.value;
@@ -169,11 +174,11 @@ export const externalSecrets = {
     cache.clear();
   },
   /** Read the references that are not in memory yet, those `allow` lets run, in parallel. */
-  async prefetch(refs: string[], opts: { allow(ref: string, cmd: SecretRefCommand): boolean; timeoutMs?: number }): Promise<PrefetchResult> {
+  async prefetch(refs: string[], opts: { scope: string; allow(ref: string, cmd: SecretRefCommand): boolean; timeoutMs?: number }): Promise<PrefetchResult> {
     const out: PrefetchResult = { fetched: [], blocked: [], failed: [] };
     await Promise.all(
       [...new Set(refs.map((r) => r.trim()))].map(async (ref) => {
-        if (externalSecrets.get(ref) !== undefined) return;
+        if (externalSecrets.get(ref, opts.scope) !== undefined) return;
         let cmd: SecretRefCommand;
         try {
           cmd = secretRefCommand(ref);
@@ -186,7 +191,7 @@ export const externalSecrets = {
           return;
         }
         try {
-          cache.set(ref, { value: await fetchSecretRef(ref, { timeoutMs: opts.timeoutMs }), at: Date.now() });
+          cache.set(key(opts.scope, ref), { value: await fetchSecretRef(ref, { timeoutMs: opts.timeoutMs }), at: Date.now() });
           out.fetched.push(ref);
         } catch (e) {
           out.failed.push({ ref, error: (e as Error).message });
@@ -217,5 +222,5 @@ export async function prefetchEnvironmentSecrets(store: WorkspaceStore, environm
   }
   const refs = environmentSecretRefs(env);
   if (!refs.length) return empty;
-  return externalSecrets.prefetch(refs, { allow: (_ref, cmd) => !!opts.trustAll || isCommandTrusted(store, cmd.command, cmd.args) });
+  return externalSecrets.prefetch(refs, { scope: store.root, allow: (_ref, cmd) => !!opts.trustAll || isCommandTrusted(store, cmd.command, cmd.args) });
 }

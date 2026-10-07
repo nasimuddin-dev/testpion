@@ -28,7 +28,7 @@ export interface GraphQLSubscription {
  * Subscribe, collect up to `maxEvents` `next` payloads (or until `timeoutMs` / completion), then stop.
  * For the CLI and AI agents, which need a result rather than a stream.
  */
-export async function collectSubscriptionEvents(opts: Omit<Parameters<typeof startGraphQLSubscription>[0], 'onEvent'> & { maxEvents?: number; durationMs?: number }): Promise<{ protocol: string; events: unknown[]; errors: unknown[]; completed: boolean }> {
+export async function collectSubscriptionEvents(opts: Omit<Parameters<typeof startGraphQLSubscription>[0], 'onEvent'> & { maxEvents?: number; durationMs?: number; signal?: AbortSignal }): Promise<{ protocol: string; events: unknown[]; errors: unknown[]; completed: boolean }> {
   const events: unknown[] = [];
   const errors: unknown[] = [];
   let completed = false;
@@ -47,6 +47,9 @@ export async function collectSubscriptionEvents(opts: Omit<Parameters<typeof sta
     },
   });
   const timer = setTimeout(stop, opts.durationMs ?? 30_000);
+  // a stopped run ends the wait at once
+  if (opts.signal?.aborted) stop();
+  else opts.signal?.addEventListener('abort', () => stop(), { once: true });
   await Promise.race([enough, sub.done]);
   clearTimeout(timer);
   sub.stop();

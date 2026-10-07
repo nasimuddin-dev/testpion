@@ -36,7 +36,10 @@ describe('secret manager references', () => {
       args: ['secretsmanager', 'get-secret-value', '--secret-id', 'prod/clinic', '--query', 'SecretString', '--output', 'text', '--region', 'eu-west-1'],
       jsonKey: 'apiKey',
     });
-    expect(secretRefCommand('azure-kv://clinic-kv/api-key')).toMatchObject({ command: 'az', args: ['keyvault', 'secret', 'show', '--vault-name', 'clinic-kv', '--name', 'api-key', '--query', 'value', '-o', 'tsv'] });
+    expect(secretRefCommand('azure-kv://clinic-kv/api-key')).toMatchObject({
+      command: 'az',
+      args: ['keyvault', 'secret', 'show', '--vault-name', 'clinic-kv', '--name', 'api-key', '--query', 'value', '-o', 'tsv'],
+    });
     expect(secretRefCommand('gcp-sm://my-project/api-key#3')).toMatchObject({ command: 'gcloud', args: ['secrets', 'versions', 'access', '3', '--secret=api-key', '--project=my-project'] });
   });
 
@@ -66,13 +69,14 @@ describe('secret manager references', () => {
       return `${command}-value`;
     });
     try {
-      const r = await externalSecrets.prefetch(['op://Clinic/API/key', 'vault://secret/x#y', 'gcp-sm://p/s'], { allow: (_ref, cmd) => cmd.command !== 'vault' });
+      const r = await externalSecrets.prefetch(['op://Clinic/API/key', 'vault://secret/x#y', 'gcp-sm://p/s'], { scope: 'w', allow: (_ref, cmd) => cmd.command !== 'vault' });
       expect(r.fetched).toEqual(['op://Clinic/API/key']);
       expect(r.blocked).toEqual([{ ref: 'vault://secret/x#y', label: 'HashiCorp Vault', commandLine: 'vault kv get -field=y secret/x' }]);
       expect(r.failed[0]).toMatchObject({ ref: 'gcp-sm://p/s', error: 'not signed in' });
-      expect(externalSecrets.get('op://Clinic/API/key')).toBe('op-value');
+      expect(externalSecrets.get('op://Clinic/API/key', 'w')).toBe('op-value');
+      expect(externalSecrets.get('op://Clinic/API/key', 'another workspace')).toBeUndefined();
       // read once: the next prefetch doesn't run op again
-      await externalSecrets.prefetch(['op://Clinic/API/key'], { allow: () => true });
+      await externalSecrets.prefetch(['op://Clinic/API/key'], { scope: 'w', allow: () => true });
       expect(calls.filter((c) => c === 'op')).toHaveLength(1);
     } finally {
       restore();
@@ -84,11 +88,18 @@ describe('secret manager references', () => {
     const restore = setSecretRunner(async () => 's3cret-from-1password');
     try {
       const store = WorkspaceStore.create(dir, 'ext');
-      store.saveEnvironment({ id: 'dev', name: 'Development', variables: [{ key: 'apiKey', value: 'op://Clinic/API/key' }, { key: 'baseUrl', value: 'http://127.0.0.1' }] });
+      store.saveEnvironment({
+        id: 'dev',
+        name: 'Development',
+        variables: [
+          { key: 'apiKey', value: 'op://Clinic/API/key' },
+          { key: 'baseUrl', value: 'http://127.0.0.1' },
+        ],
+      });
       expect(environmentSecretRefs(store.getEnvironment('dev'))).toEqual(['op://Clinic/API/key']);
       const first = await prefetchEnvironmentSecrets(store, 'dev');
       expect(first.blocked.map((b) => b.commandLine)).toEqual(['op read --no-newline op://Clinic/API/key']);
-      expect(externalSecrets.get('op://Clinic/API/key')).toBeUndefined();
+      expect(externalSecrets.get('op://Clinic/API/key', store.root)).toBeUndefined();
       trustCommand(store, 'op', ['read', '--no-newline', 'op://Clinic/API/key']);
       expect((await prefetchEnvironmentSecrets(store, 'dev')).fetched).toEqual(['op://Clinic/API/key']);
       const ctx = createEngineContext({ store, secrets: new MemorySecretStore(), environment: 'dev' });

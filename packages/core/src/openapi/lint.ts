@@ -164,7 +164,11 @@ export function lintOpenApi(text: string, opts: { disable?: string[]; minSeverit
         if (resolve(o.$ref) === undefined) add('ref-unresolved', `${o.$ref} points at nothing in this document`, [...path, '$ref'], where(path));
       }
     }
-    for (const [k, v] of Object.entries(o)) if (k !== 'example' && k !== 'value') walk(v, [...path, k], depth + 1);
+    for (const [k, v] of Object.entries(o)) {
+      // example values are literal data, not the document (a property named "example" or "value" is a schema)
+      const literal = (k === 'example' && path.at(-1) !== 'properties') || (k === 'value' && path.at(-2) === 'examples');
+      if (!literal) walk(v, [...path, k], depth + 1);
+    }
   };
   const where = (path: Seg[]): string => {
     if (path[0] === 'paths' && typeof path[1] === 'string') return typeof path[2] === 'string' && METHODS.includes(path[2]) ? `${path[2].toUpperCase()} ${path[1]}` : path[1];

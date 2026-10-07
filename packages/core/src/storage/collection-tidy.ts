@@ -25,20 +25,41 @@ export interface TidyFinding {
 
 type Saved = Exclude<CollectionNode, { kind: 'folder' }>;
 
-function flat(nodes: CollectionNode[], path: string[] = [], out: Array<{ node: Saved; path: string }> = [], folders: Array<{ id: string; path: string; empty: boolean }> = []) {
+function flat(
+  nodes: CollectionNode[],
+  path: string[] = [],
+  out: Array<{ node: Saved; path: string; folderAuth?: boolean }> = [],
+  folders: Array<{ id: string; path: string; empty: boolean }> = [],
+  folderAuth = false,
+) {
   for (const n of nodes) {
     if (n.kind === 'folder') {
       folders.push({ id: n.id, path: [...path, n.name].join(' / '), empty: !hasRequests(n.items) });
-      flat(n.items, [...path, n.name], out, folders);
-    } else out.push({ node: n, path: [...path, n.name].join(' / ') });
+      // a folder with its own auth: what its requests inherit is that, not the collection's
+      flat(n.items, [...path, n.name], out, folders, folderAuth || (!!n.auth && n.auth.type !== 'inherit'));
+    } else out.push({ node: n, path: [...path, n.name].join(' / '), folderAuth });
   }
   return { requests: out, folders };
 }
 
 const hasRequests = (nodes: CollectionNode[]): boolean => nodes.some((n) => n.kind !== 'folder' || hasRequests(n.items));
 
-/** What makes two requests the same: method, URL (query order ignored) and body. */
+/**
+ * What makes two requests the same: method, URL (query order ignored), body, and also their headers, auth, path
+ * variables, scripts and checks, so two requests that differ in any of those (say, with and without a token) are not
+ * taken for copies.
+ */
 function signature(n: Saved): string | undefined {
+  const extra = (() => {
+    const r = n.request as { headers?: Array<{ key: string; value: string; enabled?: boolean }>; auth?: unknown; pathVariables?: Array<{ key: string; value: string }> };
+    const headers = (r.headers ?? []).filter((h) => h.enabled !== false).map((h) => `${h.key.toLowerCase()}:${h.value}`).sort();
+    return JSON.stringify([headers, r.auth ?? null, r.pathVariables ?? null, n.preRequestScript?.trim() ?? '', n.testScript?.trim() ?? '', n.assertions ?? []]);
+  })();
+  const sig = core(n);
+  return sig === undefined ? undefined : `${sig} ${extra}`;
+}
+
+function core(n: Saved): string | undefined {
   if (n.kind === 'http') {
     const r = n.request;
     const [base, query = ''] = r.url.trim().split('?', 2) as [string, string?];
@@ -99,6 +120,7 @@ export function tidyCollection(c: Collection): TidyFinding[] {
       if (r.node.kind !== 'http') continue;
       const own = r.node.request.auth;
       if (own && own.type !== 'inherit' && own.type !== 'none') continue;
+      if (r.folderAuth) continue; // inheriting would give it the folder's auth, not this header
       const h = (r.node.request.headers ?? []).find((x) => x.enabled !== false && x.key.toLowerCase() === 'authorization');
       if (h?.value.trim()) byValue.set(h.value.trim(), [...(byValue.get(h.value.trim()) ?? []), r]);
     }
@@ -114,10 +136,19 @@ export function tidyCollection(c: Collection): TidyFinding[] {
   }
 
   // collection variables nothing in the collection reads
-  const text = JSON.stringify({ items: c.items, auth: c.auth, pre: c.preRequestScript, test: c.testScript, vars: (c.variables ?? []).map((v) => v.value) });
+  // every string of the collection as written (JSON text would escape the quotes scripts use)
+  const strings: string[] = [];
+  const collect = (v: unknown, depth = 0): void => {
+    if (depth > 40) return;
+    if (typeof v === 'string') strings.push(v);
+    else if (Array.isArray(v)) v.forEach((x) => collect(x, depth + 1));
+    else if (v && typeof v === 'object') Object.values(v).forEach((x) => collect(x, depth + 1));
+  };
+  collect([c.items, c.auth, c.preRequestScript, c.testScript, (c.variables ?? []).map((v) => v.value)]);
   for (const v of c.variables ?? []) {
     const name = v.key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const used = new RegExp(`\\{\\{\\s*${name}[\\s}.]|(variables|collectionVariables|environment)\\.get\\(\\s*['"\`]${name}['"\`]`).test(text);
+    const re = new RegExp(`\\{\\{\\s*${name}[\\s}.]|(variables|collectionVariables|environment|globals)\\.(get|has)\\(\\s*['"\`]${name}['"\`]`);
+    const used = strings.some((x) => re.test(x));
     if (!used) findings.push({ kind: 'unused-variable', message: `{{${v.key}}} is not used by any request or script of the collection`, ids: [], where: [], variable: v.key });
   }
   return findings;
