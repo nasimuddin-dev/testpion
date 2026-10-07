@@ -74,6 +74,25 @@ describe('Kafka', () => {
     expect(seen.some((m) => m.direction === 'system' && /^Connected to 1 broker/.test(m.data))).toBe(true);
   });
 
+  it('adding a topic does not read the topics already read again', async () => {
+    const s = new KafkaSession(url);
+    const seen: KafkaMessage[] = [];
+    s.onMessage((m) => seen.push(m));
+    await s.connect();
+    await s.produce('first-topic', 'a1', { key: 'a1' });
+    await s.produce('first-topic', 'a2', { key: 'a2' });
+    await s.subscribe('first-topic', { fromBeginning: true });
+    await waitFor(() => seen.filter((m) => m.direction === 'received').length >= 2);
+    await s.produce('second-topic', 'b1', { key: 'b1' });
+    await s.subscribe('second-topic', { fromBeginning: true });
+    await waitFor(() => seen.some((m) => m.direction === 'received' && m.key === 'b1'));
+    await new Promise((r) => setTimeout(r, 500));
+    const keys = seen.filter((m) => m.direction === 'received').map((m) => m.key);
+    expect(keys.filter((k) => k === 'a1')).toHaveLength(1);
+    expect(keys.filter((k) => k === 'a2')).toHaveLength(1);
+    await s.closeAndWait();
+  });
+
   it('reports a cluster that cannot be reached as a failed connection with what to check', async () => {
     const s = new KafkaSession('kafka://127.0.0.1:1', { timeoutMs: 1500 });
     await expect(s.connect()).rejects.toThrow(/Kafka connection failed/);

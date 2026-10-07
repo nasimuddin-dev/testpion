@@ -60,6 +60,12 @@ export class KafkaSession {
   private admin?: Admin;
   private consumer?: Consumer;
   private topics = new Map<string, { fromBeginning: boolean }>();
+  /**
+   * One consumer group for the connection: the consumer restarts when a topic is added or removed, and a new group each
+   * time read every topic marked "from the beginning" again (the messages already shown came twice). With one group the
+   * topics already read go on from where they were; a topic it never read starts where it was asked to.
+   */
+  private groupId?: string;
   private messageListeners: Array<(m: KafkaMessage) => void> = [];
   private statusListeners: Array<(s: 'connecting' | 'open' | 'closed') => void> = [];
   status: 'connecting' | 'open' | 'closed' = 'closed';
@@ -176,7 +182,7 @@ export class KafkaSession {
     }
     if (!this.topics.size) return;
     const consumer = kafka.consumer({
-      groupId: this.opts.groupId || `testpion-${shortId('g-')}`,
+      groupId: (this.groupId ??= this.opts.groupId || `testpion-${shortId('g-')}`),
       sessionTimeout: 10_000,
       heartbeatInterval: 1_000,
       maxWaitTimeInMs: 300,
