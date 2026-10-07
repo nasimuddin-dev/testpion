@@ -260,7 +260,16 @@ export function CollectionsView() {
             />
             <div className={cx('flex-1 min-h-0', tab !== 'run' && tab !== 'docs' && 'overflow-auto')}>
               {tab === 'mock' && <MockPanel collectionId={draft.id} onOpenRequest={(requestId) => useApp.getState().openIntent('rest', { collectionId: draft.id, requestId })} />}
-              {tab === 'overview' && <CollectionOverview collection={draft} onOpen={(n) => open(draft, n)} />}
+              {tab === 'overview' && (
+                <CollectionOverview
+                  collection={draft}
+                  onOpen={(n) => open(draft, n)}
+                  onRun={() => {
+                    setRunFolder(undefined);
+                    setTab('run');
+                  }}
+                />
+              )}
               {tab === 'run' && <CollectionRunner collection={draft} folderId={runFolder} onFolderChange={setRunFolder} />}
               {tab === 'requests' && (
                 <div className="p-2">
