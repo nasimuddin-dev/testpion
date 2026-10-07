@@ -92,7 +92,7 @@ A `.http` or `.rest` file becomes a collection named after the file, one request
 
 An AsyncAPI document becomes a collection of [realtime connections](/api-testing/websocket), one per channel, in folders by the operations' first tag:
 
-- **Servers** become an environment, *<API> servers*, with a variable per server (`{{productionUrl}}` = `kafkas://broker.example.com:9093`). The connections use the channel's server, or the first one.
+- **Servers** become an environment named after the API, such as *Clinic events servers*, with a variable per server (`{{productionUrl}}` = `kafkas://broker.example.com:9093`). The connections use the channel's server, or the first one.
 - **Kafka:** the channel's address is the topic to produce to, with the first message's example payload, its key (from the Kafka binding) and its headers. When the application sends on the channel, the topic is also read on connect.
 - **MQTT:** the topic to publish to, with the channel's QoS; when the application sends on it, the topic filter is subscribed on connect (`{parameters}` become `+`).
 - **WebSocket:** the channel's address is a path on the server; **Socket.IO:** it is the event.

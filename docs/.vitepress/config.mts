@@ -57,6 +57,7 @@ const docsSidebar = [
     text: 'Getting Started',
     items: [
       { text: 'Installation', link: '/getting-started/installation' },
+      { text: "What's new: how to use it", link: '/getting-started/whats-new' },
       { text: 'Your first request', link: '/getting-started/first-request' },
       { text: 'Examples workspace', link: '/getting-started/examples' },
       { text: 'Workspaces', link: '/getting-started/workspaces' },
