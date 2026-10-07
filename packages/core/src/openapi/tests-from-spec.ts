@@ -5,6 +5,8 @@ import type { WorkspaceStore } from '../storage/workspace.js';
 import { slugify } from '../util/ids.js';
 import { fuzzCases, type FuzzCase } from './fuzz.js';
 import { openApiOutline } from './outline.js';
+import { parse as parseYaml } from 'yaml';
+import { importAsyncApi } from '../import/asyncapi.js';
 
 /**
  * A first test suite from an API definition (`testpion tests-from-spec`, the Preview tab's Generate tests,
@@ -52,6 +54,14 @@ function testOf(c: FuzzCase, o: { id: string; name: string; status?: string; spe
 
 /** The test files for a document: one per tag, and a suite that runs them. */
 export function testsFromSpec(text: string, opts: { specPath?: string; negative?: boolean; includeDelete?: boolean } = {}): GeneratedTestFile[] {
+  // an AsyncAPI document gets realtime tests: a round trip per channel, checked against the document
+  let parsed: unknown;
+  try {
+    parsed = text.trim().startsWith('{') ? JSON.parse(text) : parseYaml(text);
+  } catch {
+    parsed = undefined;
+  }
+  if (parsed && typeof parsed === 'object' && typeof (parsed as { asyncapi?: unknown }).asyncapi === 'string') return testsFromAsyncApi(text, opts.specPath);
   const outline = openApiOutline(text);
   const { cases } = fuzzCases(text, { baseUrl: '{{baseUrl}}', includeDelete: opts.includeDelete, maxPerOperation: 60 });
   const api = slugify(opts.specPath?.replace(/^specs\//, '').replace(/\.(openapi|swagger)?\.?(ya?ml|json)$/i, '') || outline.title) || 'api';
@@ -114,4 +124,54 @@ export function writeTestsFromSpec(
     written.push(f);
   }
   return { written, skipped };
+}
+
+const parseMsg = (m: unknown) => {
+  if (typeof m !== 'string' || !m.trim()) return m;
+  try {
+    return JSON.parse(m);
+  } catch {
+    return m;
+  }
+};
+
+/**
+ * Realtime tests from an AsyncAPI document: per channel, send its example message and read the channel, then check what
+ * came back against the document (the asyncapi check). Brokers come from the "<API> servers" environment its import
+ * makes ({{productionUrl}} …).
+ */
+export function testsFromAsyncApi(text: string, specPath?: string): GeneratedTestFile[] {
+  const imp = importAsyncApi(text);
+  const items = imp.savedItems?.websocket ?? [];
+  const api = slugify(specPath?.split('/').pop()?.replace(/\.(asyncapi\.)?(ya?ml|json)$/i, '') || imp.collection.name) || 'events';
+  const tests: Array<Record<string, unknown>> = [];
+  const used = new Set<string>();
+  for (const it of items) {
+    const d = it.data as { url: string; mode: string; topic?: string; event?: string; message?: string; key?: string; kafkaHeaders?: Array<{ key: string; value: string }>; qos?: number; reads?: unknown[]; subscriptions?: unknown[] };
+    let id = slugify(it.name) || 'channel';
+    for (let i = 2; used.has(id); i++) id = `${slugify(it.name)}-${i}`;
+    used.add(id);
+    const check = { type: 'asyncapi', ...(specPath ? { spec: specPath } : {}) };
+    const message = parseMsg(d.message);
+    const base = { id, name: `${it.name}: a message goes through and matches the document`, url: d.url, waitMs: 2000 };
+    if (d.mode === 'kafka' && d.topic) {
+      const headers = d.kafkaHeaders?.length ? Object.fromEntries(d.kafkaHeaders.map((h) => [h.key, h.value])) : undefined;
+      tests.push({ ...base, type: 'kafka', subscribe: [d.topic], send: [{ topic: d.topic, ...(d.key ? { key: d.key } : {}), ...(headers ? { headers } : {}), value: message }], assertions: [{ type: 'length', path: '$.received', min: 1 }, check] });
+    } else if (d.mode === 'mqtt' && d.topic) {
+      tests.push({ ...base, type: 'mqtt', subscribe: [d.topic], send: [{ topic: d.topic, payload: message, qos: d.qos ?? 0 }], assertions: [{ type: 'length', path: '$.received', min: 1 }, check] });
+    } else if (d.mode === 'socketio') {
+      tests.push({ ...base, type: 'socketio', send: [{ event: d.event ?? 'message', args: [message] }], assertions: [{ type: 'status', expected: 200 }] });
+    } else if (d.mode === 'websocket') {
+      const channel = d.url.replace(/^\{\{[^}]+\}\}/, '') || '/';
+      tests.push({ ...base, type: 'websocket', send: message === undefined ? [] : [message], assertions: [{ type: 'status', expected: 101 }, { ...check, channel }] });
+    }
+  }
+  if (!tests.length) return [];
+  const env = `${imp.collection.name} servers`;
+  const head = `# Generated from ${specPath ?? imp.collection.name} by TestPion. Run with the "${env}" environment (its import makes it); review the example messages first.
+`;
+  return [
+    { path: `tests/${api}/channels.yaml`, yaml: head + stringify({ tests }, { lineWidth: 0 }), tests: tests.length },
+    { path: `tests/${api}.suite.yaml`, yaml: stringify({ name: imp.collection.name, description: `Generated from ${specPath ?? 'the AsyncAPI document'}: a message through each channel.`, tests: [api], environment: env }, { lineWidth: 0 }), tests: tests.length },
+  ];
 }

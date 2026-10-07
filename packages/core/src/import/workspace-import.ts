@@ -92,6 +92,15 @@ export function importIntoWorkspace(store: WorkspaceStore, text: string, opts: {
       out.contractChecks = added;
     }
   }
+  // an AsyncAPI document is kept for the asyncapi check and tests-from-spec (in specs/asyncapi/, apart from the OpenAPI ones)
+  if (collection && r.format === 'asyncapi') {
+    const ext = text.trimStart().startsWith('{') ? 'json' : 'yaml';
+    const rel = `specs/asyncapi/${slugify(collection.name) || 'events'}.${ext}`;
+    const file = store.safePath(rel);
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, text);
+    out.specPath = rel;
+  }
   if (collection) {
     // an import never replaces a collection the workspace already has (a file exported from it, imported again)
     const ids = new Set(store.listCollections().map((c) => c.id));
