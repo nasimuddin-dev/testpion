@@ -43,7 +43,7 @@ Copied commands include the request's real header and token values, so they run 
 
 ## Tidy up
 
-**Tidy up** in a collection's header finds what piles up in big or imported collections:
+**Tools ▸ Tidy up…** in a collection's header finds what piles up in big or imported collections:
 
 - **Duplicate requests**: the same method, URL and body (query parameter order and spacing don't matter).
 - **Hosts typed into URLs**: `http://localhost:5002/…` instead of `{{bannerManagementBaseUrl}}/…`. **Use a variable…** opens **Replace** with the host filled in.
@@ -53,7 +53,7 @@ Tick the fixes to make (remove the copies of duplicates, keeping the first; remo
 
 ## Find and replace
 
-**Replace** in a collection's header changes text across its requests at once: a host that moved, a header that was renamed, a value that should become a `{{variable}}`.
+**Tools ▸ Find and replace…** in a collection's header changes text across its requests at once: a host that moved, a header that was renamed, a value that should become a `{{variable}}`.
 
 1. Type what to **Find** and what to **Replace with**. Every change appears below as you type: the request, where (the URL, a header, a parameter, the body, an auth field, a script or the name), and the text before and after.
 2. Narrow it with **Match case**, **Regular expression** (`$1` … for groups) and the **Look in** chips.

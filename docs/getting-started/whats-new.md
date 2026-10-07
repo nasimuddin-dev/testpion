@@ -105,7 +105,7 @@ In a long list, the filter above the requests narrows it by name, folder or meth
 
 ## Tidy up a collection
 
-1. Open a collection and click **Tidy up** in its header.
+1. Open a collection and choose **Tools ▸ Tidy up…** in its header.
 2. Read the findings: duplicate requests, hosts typed into URLs, empty folders, unused variables.
 3. Tick the fixes to make and **Remove what is ticked** (**Undo** puts it back). For a typed-in host, **Use a variable…** opens Replace with the host filled in.
 
@@ -113,7 +113,7 @@ In a long list, the filter above the requests narrows it by name, folder or meth
 
 ## Find and replace in a collection
 
-1. Open a collection and click **Replace** in its header.
+1. Open a collection and choose **Tools ▸ Find and replace…** in its header.
 2. Type what to find and what to put instead. Every change is listed (request, where, before and after) before anything is saved.
 3. Narrow it with **Match case**, **Regular expression** and the **Look in** chips (URLs, params, headers, bodies, auth, scripts, names), then **Replace**. **Undo** in the message puts the collection back.
 

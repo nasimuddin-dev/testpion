@@ -40,7 +40,8 @@ const steps = [
   ),
   step(
     'replace-previews-every-change',
-    `vis('main button').find((b) => b.textContent.trim() === 'Replace')?.click();
+    `vis('main button').find((b) => b.textContent.trim() === 'Tools')?.click(); await __t.sleep(300);
+     vis('[role=menuitem]').find((m) => m.textContent.trim() === 'Find and replace…')?.click();
      const find = await __t.waitFor(() => vis('[role=dialog] input[aria-label="Find"]')[0], 3000);
      if (!find) return 'NO DIALOG';
      setInput(find, 'httpbin'); setInput(vis('[role=dialog] input[aria-label="Replace with"]')[0], 'example');
@@ -51,7 +52,8 @@ const steps = [
   ),
   step(
     'tidy-up-lists-findings',
-    `vis('main button').find((b) => b.textContent.trim() === 'Tidy up')?.click();
+    `vis('main button').find((b) => b.textContent.trim() === 'Tools')?.click(); await __t.sleep(300);
+     vis('[role=menuitem]').find((m) => m.textContent.trim() === 'Tidy up…')?.click();
      const dlg = await __t.waitFor(() => vis('[role=dialog] [data-tidy-dialog]')[0], 3000);
      if (!dlg) return 'NO DIALOG';
      await __t.waitFor(() => !/Looking through/.test(dlg.textContent), 5000);

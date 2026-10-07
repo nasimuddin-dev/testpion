@@ -9,7 +9,7 @@ description: "Find secrets typed into requests, secrets in URLs and plain http, 
 
 ## Security review of a collection
 
-**Security** in a collection's toolbar lists what in its requests weakens security, most severe first. Click a finding to open the request.
+**Tools ▸ Security review…** in a collection's header lists what in its requests weakens security, most severe first. Click a finding to open the request.
 
 | Severity | Finding |
 |---|---|

@@ -5,6 +5,7 @@ import { TidyDialog } from '../components/TidyDialog';
 import {
   ArchiveRestore,
   ArrowRightLeft,
+  Wrench,
   Brush,
   Download,
   FileCode,
@@ -273,15 +274,20 @@ export function CollectionsView() {
                   >
                     Run
                   </Button>
-                  <Button size="sm" icon={<Replace size={12} />} title="Find and replace across the requests: URLs, headers, bodies, auth, scripts" onClick={() => setReplaceOpen(true)}>
-                    Replace
-                  </Button>
-                  <Button size="sm" icon={<Brush size={12} />} title="Duplicate requests, hosts typed into URLs, empty folders, unused variables" onClick={() => setTidyOpen(true)}>
-                    Tidy up
-                  </Button>
-                  <Button size="sm" icon={<ShieldCheck size={12} />} title="Secrets typed in, secrets in URLs, plain http, turned-off TLS checks" onClick={() => setSecurityOpen(true)}>
-                    Security
-                  </Button>
+                  <Menu
+                    trigger={
+                      <Button size="sm" icon={<Wrench size={12} />} title="Find and replace, tidy up, move variables, security review">
+                        Tools
+                      </Button>
+                    }
+                    width={300}
+                    items={[
+                      { label: 'Find and replace…', icon: <Replace size={14} />, onSelect: () => setReplaceOpen(true) },
+                      { label: 'Tidy up…', icon: <Brush size={14} />, onSelect: () => setTidyOpen(true) },
+                      { label: 'Move variables to environments…', icon: <ArrowRightLeft size={14} />, onSelect: () => setMoveVarsOpen(true) },
+                      { label: 'Security review…', icon: <ShieldCheck size={14} />, separator: true, onSelect: () => setSecurityOpen(true) },
+                    ]}
+                  />
                   <Menu
                     trigger={
                       <Button size="sm" icon={<Download size={12} />}>
@@ -294,6 +300,8 @@ export function CollectionsView() {
                       { label: 'Postman collection v2.1', icon: <Send size={14} />, onSelect: () => void exportAs(draft.id, 'postman') },
                       { label: 'OpenAPI 3.1 (.yaml)', icon: <FileCode size={14} />, onSelect: () => void exportAs(draft.id, 'openapi') },
                       { label: 'Bruno collection folder…', icon: <FolderOpen size={14} />, onSelect: () => void exportAs(draft.id, 'bruno') },
+                      { label: '.http file (REST Client, JetBrains)', icon: <FileCode size={14} />, onSelect: () => void exportAs(draft.id, 'http') },
+                      { label: 'AsyncAPI 3.0 (its connections)', icon: <Radio size={14} />, onSelect: () => void exportAs(draft.id, 'asyncapi') },
                     ]}
                   />
                   <Button size="sm" variant="primary" onClick={() => save(draft)}>

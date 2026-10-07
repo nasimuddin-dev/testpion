@@ -66,7 +66,7 @@ Mark a variable as **secret** (lock icon) and its value is encrypted in the OS c
 
 A collection variable wins over every environment. A base URL kept in the collection (common in imported Postman collections) is therefore the same in Development and Production, whatever the environments say. To set it per environment, move it:
 
-1. Open the collection's **Variables** tab and click **Move to environments…** (or, from a variable's **Where it's set**, click **Move to environments…** when the collection's value is the one used).
+1. Open the collection's **Variables** tab and click **Move to environments…** (also in **Tools**; or, from a variable's **Where it's set**, click **Move to environments…** when the collection's value is the one used).
 2. Tick the variables to move and the environments to move them to. The preview says, per environment, how many are added and which ones it already has (those keep their own value).
 3. **Move**. The environments get the collection's values, and the collection loses the variables. Now change the values in each environment.
 
