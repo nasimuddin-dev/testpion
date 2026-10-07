@@ -5,7 +5,8 @@ const { withExpect } = require('../lib.cjs');
 
 const H = `
   const vis = (sel) => [...document.querySelectorAll(sel)].filter((x) => x.getClientRects().length);
-  const button = (label) => vis('main button').find((b) => b.textContent.trim() === label);
+  // a button, not a tab with the same label (the Produce tab and the Produce button)
+  const button = (label) => vis('main button').find((b) => b.textContent.trim() === label && b.getAttribute('role') !== 'tab');
   const setInput = (el, v) => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, v); el.dispatchEvent(new Event('input', { bubbles: true })); };
   const rows = () => vis('main .monaco-list-row, main button').filter((b) => /clinic\\.events|appointments/.test(b.textContent) && /p0@/.test(b.textContent));
 `;
