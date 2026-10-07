@@ -382,15 +382,19 @@ export function debuggerHandlers(be: Backend): Handlers {
             const mask = Buffer.from([1, 2, 3, 4]);
             socket.write(Buffer.concat([Buffer.from([0x81, 0x80 | payload.length]), mask, Buffer.from(payload.map((b, i) => b ^ mask[i & 3]!))]));
             let seen = 0;
-            socket.on('data', () => {
-              if (++seen >= 2) {
-                socket.write(Buffer.from([0x88, 0x80, 0, 0, 0, 0]));
-                socket.end();
-                resolve({ status: res.statusCode ?? 101 });
-              }
-            });
-            setTimeout(() => (socket.end(), resolve({ status: res.statusCode ?? 101 })), 3000);
+            // close once: the server's close (or more frames) can still arrive after ours, and a write after end throws
+            // in a socket handler, where nothing catches it (Electron then stops the whole main process at an error box)
+            const close = () => {
+              if (!socket.writableEnded) socket.end(Buffer.from([0x88, 0x80, 0, 0, 0, 0]));
+              resolve({ status: res.statusCode ?? 101 });
+            };
+            socket.on('error', () => undefined);
+            socket.on('data', () => ++seen === 2 && close());
+            setTimeout(close, 3000);
           });
+          // no upgrade (the server is down, the proxy answered 502): the status, not a wait for ever
+          req.on('response', (res) => (res.resume(), resolve({ status: res.statusCode ?? 0 })));
+          req.setTimeout(10_000, () => req.destroy(new Error('No answer through the proxy in 10 s')));
           req.on('error', reject);
           req.end();
           return;

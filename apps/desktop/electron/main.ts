@@ -32,6 +32,25 @@ let rendererCheckedUpdates = false;
 let nativePromptShown = false;
 let backend: Backend | null = null;
 
+// An exception nobody catches in the main process (a socket callback in the proxy, a timer) is logged and the app goes
+// on. Electron's default is a native error box, and its modal loop stops the backend (every request, the proxy, the
+// window's calls) until someone closes it: the HTTP Debugger's self-test froze the app that way.
+process.on('uncaughtException', (e) => {
+  try {
+    backend?.appLog('error', `Uncaught in the main process: ${e?.stack ?? String(e)}`);
+  } catch {
+    /* the log itself failed */
+  }
+  console.error('[aps] uncaught exception', e);
+});
+process.on('unhandledRejection', (e) => {
+  try {
+    backend?.appLog('error', `Unhandled rejection in the main process: ${e instanceof Error ? (e.stack ?? e.message) : String(e)}`);
+  } catch {
+    /* the log itself failed */
+  }
+});
+
 // `TestPion --mcp-server`: serve a workspace to an AI agent over stdio, with no window (stdout is the protocol)
 const mcpMode = parseMcpMode(process.argv);
 if (mcpMode) {

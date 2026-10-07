@@ -8,6 +8,11 @@
  *   ... -- --only rename,layout                           some plans
  *   ... -- --out <dir>                                    where screenshots and reports go (default: a temp folder)
  *
+ * When a run hangs: each plan's folder has events.log (every step as it starts, its result, the window's crashes, and
+ * any exception the main process did not catch). E2E_HEARTBEAT=1 adds a line every 5 s from the main process (it
+ * stops when the main process is blocked); E2E_INSPECT=9339 and E2E_RDP=9223 open the main process and the page to a
+ * debugger.
+ *
  * A plan is a CommonJS module exporting an array of steps [name, code, shot?, expect?]: `code` is an expression run in
  * the window (it may use the helpers in e2e/helpers.js as __t); `expect` is a RegExp the result must match, or a
  * function (result) => true | 'reason'. Without one, the result must not show a failure marker (NO …, ERR, NOT …).
@@ -54,13 +59,16 @@ function freshHome(name, settings = {}) {
 
 function launch(planFile, home, planOut, env) {
   const electron = exe ? exe : join(repo, 'node_modules', 'electron', 'dist', process.platform === 'win32' ? 'electron.exe' : 'electron');
-  const appArgs = exe ? [] : [join(repo, 'apps', 'desktop')];
+  // E2E_INSPECT=9339: the app's main process listens for a debugger (a hung run can be paused and its stack read)
+  const appArgs = [...(process.env.E2E_INSPECT ? [`--inspect=${process.env.E2E_INSPECT}`] : []), ...(process.env.E2E_RDP ? [`--remote-debugging-port=${process.env.E2E_RDP}`] : []), ...(exe ? [] : [join(repo, 'apps', 'desktop')])];
   return new Promise((done) => {
     const child = spawn(electron, appArgs, {
       env: { ...process.env, TESTPION_HOME: home, TESTPION_CAPTURE_SCRIPT: join(here, 'harness.cjs'), E2E_PLAN: planFile, E2E_OUT: planOut, ...env },
       stdio: 'ignore',
     });
-    const timer = setTimeout(() => child.kill(), timeoutSec * 1000);
+    // a run that hangs is ended with its whole process tree (renderer, GPU, utility): left behind, they hold the
+    // ports the next plan needs (the proxy's 8899) and make it fail for reasons of their own
+    const timer = setTimeout(() => (process.platform === 'win32' ? spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore' }) : child.kill()), timeoutSec * 1000);
     child.on('exit', () => (clearTimeout(timer), done()));
   });
 }

@@ -25,6 +25,18 @@ module.exports = async function run(win) {
     // "ResizeObserver loop completed with undelivered notifications" is the browser saying a layout settled a frame late (Monaco in a resized pane); not an app error
     if ((lvl === 3 || lvl === 'error') && !/ResizeObserver loop/.test(String(msg))) errors.push(String(msg).slice(0, 400));
   });
+  // the window's life, written as it happens (report.json comes only at the end, and a hung run never gets there)
+  const life = (what) => require('node:fs').appendFileSync(join(OUT, 'events.log'), `${new Date().toISOString()} ${what}
+`);
+  win.webContents.on('render-process-gone', (_e, d) => life(`renderer gone: ${d.reason} (exit ${d.exitCode})`));
+  win.on('unresponsive', () => life('window unresponsive'));
+  win.on('responsive', () => life('window responsive again'));
+  win.webContents.on('did-start-loading', () => life('page loading'));
+  // an exception the app does not catch in its main process: logged with its stack and counted as a console error
+  // (without this handler Electron shows a native error box, whose modal loop stops the main process for good)
+  process.on('uncaughtException', (e) => (life(`MAIN UNCAUGHT ${e?.stack ?? e}`), errors.push(`main process: ${String(e?.stack ?? e).slice(0, 1200)}`)));
+  process.on('unhandledRejection', (e) => life(`MAIN UNHANDLED REJECTION ${e?.stack ?? e}`));
+  if (process.env.E2E_HEARTBEAT) setInterval(() => life('tick'), 5000).unref();
   // uncaught exceptions with their stack (the console message alone is often just "x is not a function")
   try {
     win.webContents.debugger.attach('1.3');
@@ -39,6 +51,23 @@ module.exports = async function run(win) {
   win.show();
   await sleep(6000);
   const js = (code) => win.webContents.executeJavaScript(code).catch((e) => `ERR ${e.message}`);
+  /** Resolves with `fallback` when `p` takes longer than `ms` (a hung call must not hang the whole run). */
+  const within = (p, ms, fallback) => Promise.race([p, sleep(ms).then(() => fallback)]);
+  /**
+   * A screenshot, taken by the page through the DevTools protocol: Electron's capturePage waits in the main process
+   * for a frame from the GPU, and now and then that wait blocked the main thread for good (the run hung, idle, at a
+   * step with a live list). capturePage stays the fallback when the debugger is not attached.
+   */
+  const shoot = async () => {
+    const TIMEOUT = Symbol('timeout');
+    const dbg = win.webContents.debugger;
+    if (dbg.isAttached()) {
+      const r = await within(dbg.sendCommand('Page.captureScreenshot', { format: 'png' }).catch(() => TIMEOUT), 15_000, TIMEOUT);
+      if (r !== TIMEOUT && r?.data) return Buffer.from(r.data, 'base64');
+    }
+    const img = await within(win.webContents.capturePage(), 10_000, TIMEOUT);
+    return img === TIMEOUT ? undefined : img.toPNG();
+  };
   // React / scheduler internals, which every profile is full of; what matters is which app function sits above them
   const REACT = /^(reconcile|commit|update|begin|complete|perform|render|flush|schedule|dispatch|mount|use[A-Z]|work|prepare|finish|markUpdate|get[A-Z]|is[A-Z]|create|push|pop|set|track|read|resolve|throw|handle|bailout|attempt|run|ensure|process|enqueue|clone|reuse|append|insert|remove|prop|diff|safely|recursively|cancel|request|detach|retry|jsx|Fragment|Component|Element|Portal|Provider|Consumer|Lazy|Memo|ForwardRef|Suspense|Offscreen|Profiler|Mode|Fiber|Root|Hook|Context|Ref|Effect|Transition|Priority|Lane|Sync|Idle|Passive|Layout|Host|Text|Native|Dom|Event|listen|batched|discrete|continuous|default|unstable|scheduler|invoke|call|apply|bind|map|forEach|filter|reduce|find|some|every|slice|concat|join|split|indexOf|includes|Object|Array|String|Number|Boolean|Symbol|Map|Set|WeakMap|Promise|JSON|Math|Date|RegExp|Error|Function|Reflect|Proxy|console|window|document|performance|requestAnimationFrame|setTimeout|clearTimeout|queueMicrotask|MessageChannel|anonymous)/;
   const profile = async (name, code) => {
@@ -77,6 +106,7 @@ module.exports = async function run(win) {
   let n = 0;
   for (const step of plan) {
     const [name, code, shot = true] = step;
+    life(`step ${name}`);
     const errorsBefore = errors.length;
     const started = Date.now();
     // "main:" steps run here, in the main process, outside the app's own code: like another editor or `git pull`
@@ -90,12 +120,17 @@ module.exports = async function run(win) {
         )
       : code.startsWith('profile:')
         ? await profile(name, code.slice(8))
-        : await js(`(async () => ${code})()`);
+        : await within(js(`(async () => ${code})()`), 180_000, 'ERR the step did not finish in 3 minutes');
+    life(`  -> ${String(typeof result === 'string' ? result : JSON.stringify(result)).slice(0, 160)}`);
     const entry = { name, result: typeof result === 'string' ? result : JSON.stringify(result), ms: Date.now() - started, errors: errors.slice(errorsBefore) };
     if (shot !== false) {
       await sleep(700);
-      entry.screenshot = `${String(++n).padStart(2, '0')}-${name}.png`;
-      writeFileSync(join(OUT, entry.screenshot), (await win.webContents.capturePage()).toPNG());
+      const png = await shoot();
+      const file = `${String(++n).padStart(2, '0')}-${name}.png`;
+      if (png) {
+        entry.screenshot = file;
+        writeFileSync(join(OUT, file), png);
+      } else entry.screenshotError = 'capturePage did not answer (twice in 10 s)';
     }
     steps.push(entry);
   }
