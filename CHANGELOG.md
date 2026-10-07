@@ -1,5 +1,113 @@
 # Changelog
 
+## 0.44.0 — 2026-10-07
+
+### HTTP Debugger
+A new view, **Debugger** (under Testing, and a tile on Home): the traffic of other programs through TestPion's own proxy. **Start capturing**, point a program at the address it shows (`HTTP_PROXY=…` in a terminal, `--proxy-server=…` for Chrome, or the system proxy setting), and every request is listed as it happens with the program that sent it, status, type, size and timing; HTTPS appears as a tunnel by host until you decrypt it (below). Filter by host, method, status class, text or bookmarked; click a row for the request and the response whole (headers, bodies, timing); **Open** it as a request tab, **Resend** it, copy it as cURL, bookmark or delete it; **Statistics** by host, type and program with the largest and slowest; export the session as HAR. Secrets in URLs, headers and bodies are redacted before they reach the screen, a file or an agent.
+
+The **Capture** menu points programs at the proxy for you: open Chrome, Edge, Firefox or Brave through it (a profile of their own), open a terminal with `HTTP_PROXY` set, switch the **system proxy** to TestPion and back (restored when you stop and when the app quits), or copy the lines for bash, PowerShell, cmd and curl. The inspectors: Response, Request, Headers, **Raw** (as it went over the wire), **Hex**, **Auth** (a Basic user, a Bearer JWT's claims and expiry, cookie names; never the secret) and Timing; **Ask AI** explains an exchange. **Sessions**: save and reopen captures as HAR files in the workspace's `debugger/` folder (never committed), AutoSave every minute while capturing, import any tool's HAR. Statistics open with requests over time and the status mix. The filter searches bodies with **In bodies**; ↑ ↓ Enter Delete Ctrl+F Ctrl+E work in the grid.
+
+**Rules** change the traffic on the way: **capture only** (only what they match is listed), **filter out** (hidden), **highlight** (a colour by host, URL, program, status, time or size; errors, slow and large stand out from the start), **modify** (headers set or removed, a body replaced, a delay), **reply** (a canned response, the server never sees it), **redirect** (another host or scheme) and **breakpoints** (the request or the response pauses in a dialog for editing, then goes on or is aborted). Globs or regular expressions match; presets add the usual ones (a header, CORS, no cache, slow network, offline, a canned 200, redirect to localhost, a breakpoint) for the selected host, and a row's **Rule** menu adds **Reply with this response from now on**. Rules live in profiles saved in the workspace (`debugger/rules.json`, committed, shared through git); a test box says what the rules would do to a URL; filter presets; **Compare** two exchanges side by side. For agents: `debugger_rules`; for the terminal: `testpion debug --rules debugger/rules.json`.
+
+**HTTPS decryption**: a root certificate made on this computer (fingerprint, trust in one click, remove, export, renew) lets the Debugger read the HTTPS of programs that trust it; hosts can stay encrypted; a program that does not trust it shows as a failed tunnel with the reason. **WebSocket** connections show every frame both ways, **Server-Sent Events** every event, live. **Fiddler .saz** sessions open. A **Convert** panel decodes and encodes URL-encoding, Base64, hex, HTML, timestamps, JWTs and JSON. `testpion debug --decrypt` and `debugger_capture { decrypt: true }` do the same from the terminal and for agents. Agents get `debugger_capture`, `debugger_exchanges`, `debugger_exchange`, `debugger_session`, `debugger_rules` and `debugger_stats`; the terminal gets `testpion debug [-p port] [--lan] [-o session.har] [--rules file] [--decrypt] [--json]`.
+
+**HTTP/2 and gRPC**: programs that speak HTTP/2 are read as HTTP/2 (streams on a **Connections** tab, grouped by connection); **gRPC** calls are captured even without TLS (gRPC clients tunnel plaintext HTTP/2 through a proxy), with their status from the trailers and every message both ways as JSON, decoded with the workspace's `.proto` files or field by field. **A phone or another computer**: the Capture menu shows this computer's addresses with QR codes; the page they open has the proxy settings and, when HTTPS is decrypted, the root certificate to install. `testpion debug -w .` decodes gRPC with the workspace's protos.
+
+**The workbench** (laid out like HTTP Debugger Pro): a **tool rail** (Submitter, Filter, Highlight, Auto-Reply, Modify, Timeline F5, Summary, Structure F6, Performance, Convert, Export/Import); a dense **grid** (#, Offset, Duration, Method, Version, URL, Status, Type, Size, Speed, Application, Domain, IP Address, User, PID on demand) sorted by any column, columns chosen, several rows selected with Ctrl/Shift; **Request Details** and **Response Details** side by side with Header / Content / Raw / JSON tabs; a **dock** of panels: **Filter** (Filter Out and **Capture Only** rules, each with its hits), **Highlight** and the **Highlight Rule** editor (a condition on a column, colours per theme, bold, whole row), **Auto-Reply**, **Modify**, **Timeline** (sending / waiting / receiving, several requests on one axis), **Summary**, **Structure** (domains and paths), **Performance** and **Convert**; a right-click menu that turns a row's program, URL, domain, method or IP into a rule; **Incoming requests** from TestPion's mock servers; All Applications / All Domains / All Types filters, an HTTPS-inspection banner and totals in the footer. Every exchange records the program's process id, the server's address and the send time. A long capture stays quick: the list holds the whole 5,000-exchange session and gets only what changed (a new request is one row, not the list again). A request in **Incoming** opens in the same panes with what the mock answered; saved sessions (HAR) keep the new columns; **Save content** writes a body to a file; the docs have a screenshot of it all.
+
+While the proxy runs, the **status bar** says so wherever you are: the port, how many rules change traffic, and whether the system proxy points at TestPion (in the warning colour when something changes traffic); a click opens the Debugger.
+
+### Kafka
+**Kafka** joins WebSocket, Socket.IO, MQTT and SSE in the realtime editor: brokers (`kafka://host:9092`, SASL and TLS), topics to read (new messages or from the beginning, with a consumer group), and **Produce** with a key, a partition and message headers. Each message shows its topic, partition@offset, key and headers. Saved Kafka connections run in collections and test files (`mode: kafka`), `testpion kafka <brokers>` reads and produces from the terminal, and agents use `realtime_exchange`. The example workspace has a Kafka demo (`clinic.events`) and `tests/kafka/clinic-events.yaml`.
+
+### AsyncAPI import
+An AsyncAPI 2 or 3 document imports as a collection of **connections**, one per channel: Kafka topics to produce to (with the example message, its key and headers) and to read, MQTT topics to publish to and subscribe to (with their QoS), WebSocket paths and Socket.IO events. Every message of a channel is kept to send again, built from its example or its schema; the servers become an environment.
+
+**Export ▸ AsyncAPI 3.0** (`testpion export -f asyncapi`) goes the other way: a collection's connections become a document, with their saved messages as examples.
+
+A realtime test can check what it received against the document: the `asyncapi` check fails a message that matches none of its channel's messages, and says what is wrong.
+
+### .http files
+`.http` / `.rest` files from VS Code's REST Client and the JetBrains HTTP Client import as collections: file variables, request names, chained tokens (`{{login.response.body.$.token}}`) and JetBrains response handlers, which run as written. **Export ▸ .http file** (`testpion export -f http`) writes a collection back for those tools.
+
+### Generate test data
+**Generate…** in the Collection Runner makes rows of realistic data from an API operation's request body or a JSON schema (emails, names, cities, prices, dates, enum values, numbers in range), saves them in `datasets/` and runs with them. `testpion generate-data` and `generate_dataset` do the same.
+
+### Data from PostgreSQL and MySQL
+A data-driven test file or a collection run can take its rows from **PostgreSQL** or **MySQL / MariaDB**: a `postgres://` or `mysql://` URL, or `env:NAME` for an OS variable that holds it, with a query. The query must be one SELECT and runs in a read-only transaction. In the Collection Runner, **Database…** takes the URL (`{{variables}}` resolve, so the password can stay a secret variable) and lists the tables. `testpion run-collection -d postgres://… --iteration-query "SELECT …"` and the `run_collection` tool take the same.
+
+### Git, continued
+- **Compare** a change in the Git view: a request, folder, collection settings or environment side by side with the last commit, part by part.
+- **Conflicts side by side:** Compare… on a conflicted file shows base, mine and theirs per part, with **Mine / Theirs** per conflict; every other change from both sides stays. Agents get `git_conflicts` and `git_resolve`; the terminal `testpion git conflicts` and `git resolve --pick`.
+- Environments merge variable by variable and library files item by item, like collections.
+- Rename the current branch, delete a branch, and **History in git…** for a whole collection or an environment, with **Restore this version**.
+- Open request tabs follow the disk after a pull or a branch switch; a tab with unsaved edits asks **Keep mine / Take the new version**.
+
+### API definitions: Preview and Lint
+An API definition's **Preview** reads like its docs: operations by tag with their parameters, request body and responses, schemas as short type outlines, and **Open as request**. `testpion openapi-ops` lists them in a terminal; agents use `openapi_outline`.
+
+An API definition has a **Lint** tab: broken `$ref`s, path parameters that are undeclared or not required, duplicate operationIds, undefined security schemes, operations without responses, examples that don't match their schema, missing operationIds or success responses and more, each marked in the editor as you type. A row shows the place; **How to fix (AI)** asks the assistant for the changes. `testpion openapi-lint` checks files, folders or the workspace's `specs/` for CI (exit 1 on errors, `--fail-on warning`), and agents use `openapi_lint`.
+
+AsyncAPI documents are listed under API definitions too, with a Preview of their channels and **Generate tests** (a realtime test per channel).
+
+**Generate tests** on the Preview writes a first suite: a test file per tag with each operation's example (its documented status, the OpenAPI contract, latency) and one invalid request that must get a 4xx. `testpion tests-from-spec` and `generate_tests` do the same.
+
+### Fuzz an API
+An API definition's **Fuzz** tab sends each operation its valid example, then requests that break one rule of the schema at a time: a required field left out, a wrong type, a value outside its enum, range, length or format, a body that isn't JSON. It finds **server errors** (a 5xx on bad input), **invalid input accepted** (validation the API is missing) and statuses the document doesn't list; **Explain and fix (AI)** says where to look. **Save as tests** keeps each finding as a regression test that expects a 4xx. `testpion fuzz` does it in CI (exit 1 on server errors, `--save-tests`) and agents use `api_fuzz`. Local and private-network hosts only unless you allow others; never with a production environment; DELETE only when you include it.
+
+### GraphQL subscriptions in tests
+A test file or a collection run with a `subscription` subscribes, waits for the first event (or `events:` of them, at most `wait:` ms) and checks it like a query's response: `$.data…` for the first event, `$.events` and `$.count` for all. A subscription that gets no event fails with the reason.
+
+### Secrets from 1Password, Vault, AWS, Azure and Google Cloud
+An environment variable can hold a reference instead of a secret: `op://Clinic/API/credential`, `vault://secret/clinic#apiKey`, `aws-sm://prod/clinic#apiKey`, `azure-kv://clinic-kv/api-key` or `gcp-sm://my-project/api-key`. TestPion reads it with the manager's own command-line tool, signed in as you, when a request needs it; the reference is safe to commit and the value is never written anywhere. The first time, the app shows the exact commands and asks before running them. `testpion secrets <environment>` checks the references in CI.
+
+### Docs
+A new page, **What's new: how to use it**, walks through each of these step by step.
+
+### The CLI on npm
+`npx testpion` and `npm install -g testpion`: one package with the engine bundled in, published with each release.
+
+### Big collections
+- **Find and replace** across a collection's requests (URLs, params, headers, bodies, auth, scripts, names): every change listed before it is saved, Undo after. `testpion replace`, `replace_in_collection`.
+- **Move collection variables to environments**: a collection variable wins over every environment, so base URLs kept in an imported collection can't differ per environment. Move them, then set each environment's value. Offered right where you see it, in a variable's **Where it's set**. `testpion vars move`.
+- **Tidy up**: duplicate requests, hosts typed into URLs, the same Authorization header on many requests (made the collection's auth), empty folders and unused variables, with the fixes to tick and Undo; a host goes straight to Replace. `testpion tidy`, `collection_tidy`.
+- **Only GET** in the Collection Runner for a smoke run that changes nothing, and a filter for long request lists; `run-collection --method GET`.
+- The collection header's occasional tools are one **Tools** menu (Find and replace, Tidy up, Move variables, Security review); Export lists `.http` and AsyncAPI.
+- The collection **Overview** lists the requests that were sent with their health; the rest are chips (*Not sent yet*, *Without checks*) instead of a label repeated on every row.
+
+### The editors know what they edit
+- **Test files (YAML):** keys complete with a line of help, for the test's type (an http test offers `url`, `headers`, `auth`; a GraphQL one `query`, `variables`), the checks' keys with every check type, and `dependsOn` with the ids in the file; hovering a key explains it; mistakes get a marker a moment after you type: an unknown `type`, an unknown check type, a key the runner does not read (with the key you probably meant), a `dependsOn` nobody defines. The same checks run as **`testpion lint-tests`** (exit 1 on errors, `--json`) and the **`lint_tests`** tool for agents.
+- **JSON bodies:** completed and checked against the API definition the request belongs to (`specs/`): the fields, which are required, wrong types, unknown fields; a line above the body says which operation the schema comes from.
+- **Scripts:** `console`, the timers and the old Postman globals are declared (no "unknown" squiggle); `{{braces}}` in a script are never flagged as missing variables (a visualizer template uses them); the Ctrl+Space snippets insert `tp.*`.
+- A body typed as Text that is really JSON or XML offers the right editor.
+
+### Secret guard you can act on
+Before a commit, the secrets a commit would publish are a list to act on, grouped by where they are: each one **opens** where it is, **Fix** moves the typed value to a secret variable of the active environment (its value in the OS secret store) and leaves a `{{reference}}` in the request, **Fix all** does every one, and a request can be removed from there.
+
+### Polish from your screenshots
+- Icons on every button, link and menu row an icon fits, the same picture for the same action in every view (Save, Delete, Run, Import, Edit, Commit, Compare …).
+- The collection explorer's type labels (GET, POST, MCP, gRPC …) are one pill of one width with the same small gap before the name; DELETE and OPTIONS read DEL and OPT.
+- Home has tiles for **Debug HTTP traffic** and **Load test an API**.
+- Every dialog button has an icon (Create +, Cancel ×, Delete, Save, Open, Run …) and a dialog shows what it is about (New environment: a key); the native update prompt is the app's own window.
+- The environment picker is the app's own menu with a colour dot on the left of every environment (red ring for production), *No environment* and *Manage environments…*.
+- With more tabs than fit, ‹ › buttons scroll the strip, and the leftmost tab is always whole (it looked hidden behind the sidebar); the wheel scrolls it sideways.
+- The variable popover's buttons wrap instead of pushing Save outside the panel.
+- Test files read `checks:` as well as `assertions:` (a file written with `checks:` used to run with no checks).
+- A variable's popover has **Where it's set** (it was *All*): the value the request uses and why, scope by scope.
+- A collection's name in its settings is text, renamed in place with a double-click, like a request's.
+- A `{{variable}}` defined nowhere says so: **All** opens the variables overview on it with **Add to <environment>**. New WebSocket tabs start with an empty URL instead of `{{wsUrl}}`.
+- AI Lab opens on **Providers** (nothing else works without one).
+- `tp.*` everywhere TestPion speaks for itself; `pm.*` stays for Postman compatibility.
+
+### Under the hood
+- Room under the code-size limits: the history MCP tools, the backend's call parameters, the `testpion history` commands, the tree's data operations and the MCP view's panels are modules of their own (behaviour unchanged). `npm run screenshots` works again.
+- **Kafka**: adding or removing a topic while connected no longer reads the other topics again (their messages came twice); a topic added again reads its history (from the beginning) or only what comes next; and **new messages** no longer skips one produced right after you subscribe.
+- **The app no longer freezes behind an error box**: an exception nobody caught in the main process (the HTTP Debugger's WebSocket self-test wrote after closing) showed a native error box that stopped the backend, the proxy and the window until it was closed. The self-test is fixed, and such an exception is now logged and the app goes on.
+- The Debugger's grid gets a program found after its request was listed; Capture only / Filter out on a program wait briefly for it; rule patterns are checked when saved and tested on a capped text; the arrow keys follow the grid's sort; a save is never undone by an older list; the collection variables pane keeps unsaved edits.
+- **Faster with big workspaces**: opening a request no longer re-renders the whole explorer (at 3,000 requests: 3,000 rows rendered per open → 2), a save reads back only the saved collection (`col.get`), and the views that counted or listed collections share one list instead of each reading every collection on every change (the collection variables pane no longer loses unsaved edits when something else is saved).
+- The Debugger's header shows the proxy address once with Copy; an empty Port box means 8899. The collection **Tools** menu's dialogs (Find and replace, Tidy up, Move variables, Security review) open again.
+- `@testpion/shared`: one copy of the code the window and the engine both need (JWT decoding, formatting, URL and query handling, CSV, templates); the window's hand-copied engine types are now the engine's own.
+
 ## 0.43.0 — 2026-10-02
 
 ### Faster with big workspaces

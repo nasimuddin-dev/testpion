@@ -1,7 +1,7 @@
 {
   "name": "testpion",
   "private": true,
-  "version": "0.43.0",
+  "version": "0.44.0",
   "description": "TestPion — test, debug and evaluate REST, GraphQL, MCP and AI/LLM systems.",
   "license": "MIT",
   "type": "module",

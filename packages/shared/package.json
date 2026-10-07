@@ -1,6 +1,6 @@
 {
   "name": "@testpion/shared",
-  "version": "0.43.0",
+  "version": "0.44.0",
   "description": "TestPion code that runs anywhere: the browser (the app's window), Node (the engine, the CLI) and a server. No Node modules, no DOM.",
   "license": "MIT",
   "type": "module",
