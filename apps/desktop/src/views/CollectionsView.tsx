@@ -400,7 +400,7 @@ export function CollectionsView() {
               </div>
             </>
           ) : (
-            <Empty title="Select a collection" />
+            <Empty title="Select a collection">Pick one on the left: its requests, variables, auth, documentation, runner and mock server are here.</Empty>
           )}
         </div>
       </Split>

@@ -40,6 +40,15 @@ export function EnvironmentsView() {
     }
   };
   const [sel, setSel] = useState<string>();
+  const newEnvironment = async () => {
+    const name = await promptText('New environment', { message: 'Environment name', value: 'Staging', okLabel: 'Create' });
+    if (!name) return;
+    const env: Environment = { id: uid('env-'), name, variables: [{ key: 'baseUrl', value: '', enabled: true }] };
+    await call('env.save', { env });
+    await load();
+    setSel(env.id);
+    await useApp.getState().refreshWorkspace();
+  };
   const [draft, setDraft] = useState<Environment>();
   /** A copy of an environment (secret values are not copied). */
   const duplicateEnv = async (from: Environment) => {
@@ -194,15 +203,7 @@ export function EnvironmentsView() {
                 title="Environments"
                 count={envs.length}
                 addLabel="New environment"
-                onAdd={async () => {
-                  const name = await promptText('New environment', { message: 'Environment name', value: 'Staging', okLabel: 'Create' });
-                  if (!name) return;
-                  const env: Environment = { id: uid('env-'), name, variables: [{ key: 'baseUrl', value: '', enabled: true }] };
-                  await call('env.save', { env });
-                  await load();
-                  setSel(env.id);
-                  await useApp.getState().refreshWorkspace();
-                }}
+                onAdd={() => void newEnvironment()}
                 menu={[{ label: 'Recently deleted…', icon: <ArchiveRestore size={14} />, onSelect: () => setTrashOpen(true) }]}
               />
               {envs.map((e, i) => (
@@ -364,7 +365,18 @@ export function EnvironmentsView() {
                 </div>
               </div>
             ) : (
-              <Empty title="Select an environment" />
+              <Empty
+                title={envs.length ? 'Select an environment' : 'No environments yet'}
+                action={
+                  <Button size="sm" variant="primary" onClick={() => void newEnvironment()}>
+                    New environment
+                  </Button>
+                }
+              >
+                {envs.length
+                  ? 'Pick one on the left to edit its variables; the top bar switches the active one.'
+                  : 'An environment holds the variables a request refers to as {{baseUrl}}, {{token}} …: one per stage (Development, Staging, Production), switched in the top bar. Secret values go to the OS secret store, never into the workspace files.'}
+              </Empty>
             )}
           </Split>
         )}

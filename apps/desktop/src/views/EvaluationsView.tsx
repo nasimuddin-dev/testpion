@@ -382,8 +382,16 @@ export function EvaluationsView() {
               // earlier runs of these evaluations: pass rate and duration, click one to open it
               <RunsOverview scores runs={evalRuns} onSelect={setRunId} />
             ) : (
-              <Empty icon={<FlaskConical size={28} />} title="Run an evaluation">
-                Datasets are streamed record-by-record with bounded concurrency, retries and rate limiting. Results are written to disk and can be compared against a baseline.
+              <Empty
+                icon={<FlaskConical size={28} />}
+                title="Run an evaluation"
+                action={
+                  <Button size="sm" variant="primary" icon={<Play size={12} />} onClick={run} disabled={!count}>
+                    Run {count ? `${d.limit ? Math.min(d.limit, count) : count} cases` : ''}
+                  </Button>
+                }
+              >
+                An evaluation runs every record of the dataset through the prompt and the model, and scores each answer with the evaluators. Records stream with bounded concurrency, retries and rate limiting; the results are kept on disk and can be compared with a baseline.
               </Empty>
             )}
           </div>

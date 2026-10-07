@@ -237,6 +237,16 @@ export function GitView() {
       : []),
   ];
 
+  const connectRemote = async () => {
+    const remote = await promptText(status.remote ? 'Change the remote' : 'Connect to a remote', {
+      message: status.remote ? 'The repository URL' : 'The URL of an empty repository on GitHub, GitLab, Bitbucket or Azure DevOps (create it there first). Push then sends your commits to it.',
+      value: status.remote,
+      placeholder: 'https://github.com/team/api-tests.git',
+      okLabel: status.remote ? 'Save' : 'Connect',
+    });
+    if (remote) await run('remote', () => call('git.init', { remote }), status.ahead ? 'Connected: now Push sends your commits' : 'Connected: commit, then Push');
+  };
+  const push = () => void run('push', () => call('git.push'), 'Pushed');
   return (
     <div className="h-full flex flex-col min-h-0">
       <PageHeader
@@ -246,25 +256,33 @@ export function GitView() {
         actions={
           <>
             <Menu trigger={<Button icon={<GitBranch size={13} />}>{status.branch ?? 'detached'}</Button>} items={branchItems} />
-            <Button icon={<RefreshCw size={13} />} loading={busy === 'fetch'} onClick={() => void run('fetch', () => call('git.fetch'))} title="Fetch: see what the remote has">
-              Fetch
-            </Button>
-            <Button
-              icon={<ArrowDown size={13} />}
-              loading={busy === 'pull'}
-              onClick={() =>
-                void run('pull', async () => {
-                  const r = await call<{ conflicted: boolean }>('git.pull', {});
-                  useApp.getState().toast(r.conflicted ? 'Pulled with conflicts: resolve them below' : 'Up to date with the remote', r.conflicted ? 'warning' : 'success');
-                })
-              }
-              title="Pull: bring in your team's commits"
-            >
-              Pull{status.behind ? ` ${status.behind}` : ''}
-            </Button>
-            <Button icon={<ArrowUp size={13} />} loading={busy === 'push'} disabled={!status.remote} onClick={() => void run('push', () => call('git.push'), 'Pushed')} title={status.remote ? 'Push: send your commits' : 'Connect a remote first'}>
-              Push{status.ahead ? ` ${status.ahead}` : ''}
-            </Button>
+            {status.remote ? (
+              <>
+                <Button icon={<RefreshCw size={13} />} loading={busy === 'fetch'} onClick={() => void run('fetch', () => call('git.fetch'))} title="Fetch: see what the remote has">
+                  Fetch
+                </Button>
+                <Button
+                  icon={<ArrowDown size={13} />}
+                  loading={busy === 'pull'}
+                  onClick={() =>
+                    void run('pull', async () => {
+                      const r = await call<{ conflicted: boolean }>('git.pull', {});
+                      useApp.getState().toast(r.conflicted ? 'Pulled with conflicts: resolve them below' : 'Up to date with the remote', r.conflicted ? 'warning' : 'success');
+                    })
+                  }
+                  title="Pull: bring in your team's commits"
+                >
+                  Pull{status.behind ? ` ${status.behind}` : ''}
+                </Button>
+                <Button icon={<ArrowUp size={13} />} variant={status.ahead ? 'primary' : undefined} loading={busy === 'push'} onClick={push} title={status.ahead ? `Push: send your ${status.ahead} commit${status.ahead === 1 ? '' : 's'} to ${status.remote}` : 'Push: send your commits'}>
+                  Push{status.ahead ? ` ${status.ahead}` : ''}
+                </Button>
+              </>
+            ) : (
+              <Button variant="primary" icon={<ExternalLink size={13} />} loading={busy === 'remote'} onClick={() => void connectRemote()} title="Commits stay on this computer until the workspace has a remote: a repository on GitHub, GitLab, Bitbucket or Azure DevOps">
+                Connect to a remote…
+              </Button>
+            )}
             {prUrl && (
               <Button icon={<GitPullRequest size={13} />} onClick={() => void call('app.openExternal', { url: prUrl }).catch(() => window.open(prUrl))} title="Open a pull request for this branch on the remote's website">
                 Pull request
@@ -276,10 +294,7 @@ export function GitView() {
           {
             label: status.remote ? 'Change remote…' : 'Connect to a remote…',
             icon: <ExternalLink size={14} />,
-            onSelect: async () => {
-              const remote = await promptText('Remote repository', { value: status.remote, placeholder: 'https://github.com/team/api-tests.git' });
-              if (remote) await run('remote', () => call('git.init', { remote }), 'Remote saved');
-            },
+            onSelect: () => void connectRemote(),
           },
           { label: 'Make ready for git', icon: <Check size={14} />, onSelect: () => void run('ready', () => call('ws.gitReady'), 'Git files are in place') },
         ]}
@@ -384,6 +399,26 @@ export function GitView() {
           </div>
           {secrets && secrets.length > 0 && <SecretsPanel findings={secrets} onChange={setSecrets} onCommitAnyway={() => void commit(true)} />}
         </section>
+
+        {log.length > 0 && (!status.remote || status.ahead > 0) && (
+          // a commit is on this computer only until it is pushed: the next step, where the commit was made
+          <div className="rounded-lg border border-accent/40 bg-accent/5 px-3 py-2 text-sm flex items-center gap-3 flex-wrap" data-push-next>
+            <span>
+              {status.remote
+                ? `${status.ahead} commit${status.ahead === 1 ? '' : 's'} not pushed yet: your team and CI do not have ${status.ahead === 1 ? 'it' : 'them'}.`
+                : 'Committed on this computer only. Connect a remote (GitHub, GitLab, Bitbucket, Azure DevOps) to share your commits and run them in CI.'}
+            </span>
+            {status.remote ? (
+              <Button size="sm" variant="primary" icon={<ArrowUp size={12} />} loading={busy === 'push'} onClick={push}>
+                Push {status.ahead}
+              </Button>
+            ) : (
+              <Button size="sm" variant="primary" icon={<ExternalLink size={12} />} loading={busy === 'remote'} onClick={() => void connectRemote()}>
+                Connect to a remote…
+              </Button>
+            )}
+          </div>
+        )}
 
         <section>
           <SectionTitle>History</SectionTitle>

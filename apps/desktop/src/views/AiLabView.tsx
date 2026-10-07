@@ -521,8 +521,16 @@ function Playground({ providers, onSetUp }: { providers: ProviderConfig[]; onSet
                 </div>
               </>
             ) : (
-              <Empty icon={<Play size={26} />} title="Run the prompt">
-                Streams the response and measures latency, time-to-first-token, tokens and estimated cost. Prompts and responses stay on this machine unless the selected provider is remote.
+              <Empty
+                icon={<Play size={26} />}
+                title="Run the prompt"
+                action={
+                  <Button size="sm" variant="primary" icon={<Play size={12} />} onClick={run} disabled={!!running}>
+                    Run (Ctrl+Enter)
+                  </Button>
+                }
+              >
+                Streams the answer and measures latency, time to first token, tokens and estimated cost; the evaluators below the prompt check it. Prompts and answers stay on this machine unless the provider is remote.
               </Empty>
             )}
           </div>
@@ -681,7 +689,16 @@ function Compare({ providers, onSetUp }: { providers: ProviderConfig[]; onSetUp(
             </table>
           </>
         ) : (
-          <Empty title="Compare models side by side">Runs the same prompt against every selected model and reports latency, tokens, cost, structured-output validity and your evaluators.</Empty>
+          <Empty
+            title="Compare models side by side"
+            action={
+              <Button size="sm" variant="primary" icon={<Play size={12} />} loading={running} onClick={run}>
+                Run comparison
+              </Button>
+            }
+          >
+            Add the models on the left, then run: the same prompt goes to each, and the table compares latency, tokens, cost, structured-output validity and your evaluators; the fastest and the cheapest are marked.
+          </Empty>
         )}
       </div>
     </Split>
@@ -768,6 +785,19 @@ function Providers({ providers, onSaved, focus }: { providers: ProviderConfig[];
     const id = uid('prov-');
     setList([...list, { id, name: 'New provider', kind: 'openai-compatible', baseUrl: KINDS[0]![2] }]);
     setSel(id);
+  };
+  /**
+   * A provider filled in from a preset (the usual ones, as the examples workspace has them): a cloud one is selected
+   * with its key field focused, ready for the key; the offline demo needs no key and is saved at once.
+   */
+  const addPreset = async (preset: ProviderConfig) => {
+    const taken = list.some((x) => x.id === preset.id);
+    const next = { ...preset, id: taken ? uid('prov-') : preset.id };
+    const all = [...list, next];
+    setList(all);
+    setSel(next.id);
+    if (next.kind === 'mock') return save(all);
+    requestAnimationFrame(() => keyField.current?.focus());
   };
   const duplicateProvider = (x: ProviderConfig) => {
     const id = uid('prov-');
@@ -928,9 +958,52 @@ function Providers({ providers, onSaved, focus }: { providers: ProviderConfig[];
             <p className="text-xs text-muted">Cloud providers need network access; prompts are only sent to the provider you select.</p>
           </div>
         ) : (
-          <Empty title="Select a provider" />
+          // nothing selected: in a workspace without providers, what a provider is and the usual ones one click away
+          <Empty
+            icon={<Sparkles size={26} />}
+            title={list.length ? 'Select a provider' : 'Connect a model to test with'}
+            action={
+              <div className="flex flex-col items-center gap-3 max-w-xl">
+                <div className="flex flex-wrap justify-center gap-2">
+                  {PROVIDER_PRESETS.map((x) => (
+                    <Button key={x.id} size="sm" variant={x.kind === 'mock' ? 'primary' : undefined} icon={<Plus size={12} />} onClick={() => void addPreset(x)} title={x.kind === 'mock' ? 'No key, no network: answers from rules, for trying things out' : `Adds ${x.name}; paste its API key, Save, then Test connection`}>
+                    {x.name}
+                    {x.kind === 'mock' ? ' (no key)' : ''}
+                  </Button>
+                  ))}
+                  <Button size="sm" icon={<Plus size={12} />} onClick={addProvider} title="Any OpenAI-compatible server (vLLM, LM Studio, OpenRouter), Azure OpenAI or Amazon Bedrock">
+                    Something else…
+                  </Button>
+                </div>
+                <ol className="text-xs text-muted text-left list-decimal pl-5 space-y-0.5">
+                  <li>Add a provider above (the offline demo works at once).</li>
+                  <li>Paste its API key and <b>Save</b>: the key goes to the OS secret store, never into the workspace.</li>
+                  <li><b>Test connection</b> lists the models the key can use.</li>
+                  <li>Try it in the <b>Playground</b>, compare models, or use it in tests as <span className="mono">model: {'{'} provider: &lt;id&gt; {'}'}</span>.</li>
+                </ol>
+                {!list.some((x) => (x as { builtIn?: boolean }).builtIn) && (
+                  <LinkButton className="text-xs" onClick={() => useApp.getState().setView('settings')}>
+                    Or save the assistant's Claude key in Settings: it then appears here in every workspace
+                  </LinkButton>
+                )}
+              </div>
+            }
+          >
+            {list.length
+              ? 'Pick one on the left to see its settings, or add one of the usual ones.'
+              : 'A provider is where the Playground, evaluations and AI tests send their prompts. Add the ones you use; the offline demo needs neither a key nor a network.'}
+          </Empty>
         )}
       </div>
     </Split>
   );
 }
+
+/** The usual providers, as the examples workspace has them: a cloud one takes its key from the secret store. */
+const PROVIDER_PRESETS: ProviderConfig[] = [
+  { id: 'demo', name: 'Offline demo model', kind: 'mock', baseUrl: 'mock://local', defaultModel: 'demo' },
+  { id: 'openai', name: 'OpenAI', kind: 'openai-compatible', baseUrl: 'https://api.openai.com/v1', defaultModel: 'gpt-4o-mini', apiKey: '{{$secret.provider.openai.apiKey}}' },
+  { id: 'anthropic', name: 'Anthropic', kind: 'anthropic', baseUrl: 'https://api.anthropic.com', defaultModel: 'claude-haiku-4-5-20251001', apiKey: '{{$secret.provider.anthropic.apiKey}}' },
+  { id: 'gemini', name: 'Google Gemini', kind: 'gemini', baseUrl: 'https://generativelanguage.googleapis.com', defaultModel: 'gemini-2.5-flash', apiKey: '{{$secret.provider.gemini.apiKey}}' },
+  { id: 'ollama', name: 'Ollama (local)', kind: 'ollama', baseUrl: 'http://127.0.0.1:11434', defaultModel: 'llama3.2' },
+];

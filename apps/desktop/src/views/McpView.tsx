@@ -311,8 +311,15 @@ It runs with your permissions. Allow it only if you know where this workspace co
                 }}
                 ops={serverOps}
                 empty={
-                  <Empty title="No MCP servers">
-                    Add a server using stdio (a local command), Streamable HTTP, legacy SSE or a mock definition.
+                  <Empty
+                    title="No MCP servers"
+                    action={
+                      <Button size="sm" variant="primary" icon={<Plus size={12} />} onClick={() => addServer()}>
+                        Add server
+                      </Button>
+                    }
+                  >
+                    An MCP server is what an AI agent calls. Add one (a local command over stdio, Streamable HTTP, legacy SSE, or a mock definition), connect, and call its tools with generated forms; a call becomes a test with Save as test.
                   </Empty>
                 }
               />
@@ -383,8 +390,16 @@ It runs with your permissions. Allow it only if you know where this workspace co
                 <McpTrace events={draft ? [] : events[current.id] ?? []} error={connError} />
               ) : !disc ? (
                 !connError && (
-                  <Empty icon={<Plug size={26} />} title="Not connected">
-                    Connect to discover tools, resources and prompts. Every JSON-RPC message is captured in the protocol trace.
+                  <Empty
+                    icon={<Plug size={26} />}
+                    title="Not connected"
+                    action={
+                      <Button size="sm" variant="primary" icon={<Plug size={12} />} onClick={() => void connect(current.id)}>
+                        Connect
+                      </Button>
+                    }
+                  >
+                    Connect to discover the server's tools, resources and prompts. Every JSON-RPC message is kept in the protocol trace.
                   </Empty>
                 )
               ) : tab === 'tools' ? (
