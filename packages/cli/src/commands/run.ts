@@ -78,6 +78,7 @@ export function registerRunCommands(program: Command): void {
     .option('-n, --iteration-count <n>', 'number of iterations (default: data rows, or 1)')
     .option('--delay-request <ms>', 'pause between requests')
     .option('--folder <nameOrId...>', 'only run these folders or requests (repeatable)')
+    .option('--method <methods...>', 'only requests with these methods, e.g. --method GET for a smoke run that changes nothing (GRAPHQL for GraphQL requests)')
     .option('--bail', 'stop after the first failure')
     .option('--timeout <ms>', 'per-request timeout in ms')
     .option('--cookie-jar <file>', 'start with the cookies in this JSON file (TestPion or Newman cookie jar)')

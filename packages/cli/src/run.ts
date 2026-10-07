@@ -5,6 +5,7 @@ import { dirname, join, resolve, relative, isAbsolute } from 'node:path';
 import { Command, Option } from 'commander';
 import {
   ApsError,
+  collectionRequests,
   ChainSecretStore,
   EnvSecretStore,
   Logger,
@@ -264,6 +265,8 @@ export interface CollectionCliOptions extends Pick<RunCliOptions, 'workspace' | 
   iterationCount?: string;
   delayRequest?: string;
   folder?: string[];
+  /** Only requests with these methods (GET for a smoke run that changes nothing). */
+  method?: string[];
   cookieJar?: string;
   exportCookieJar?: string;
   /** Newman-compatible options */
@@ -344,7 +347,15 @@ export async function executeCollectionRun(ref: string, o: CollectionCliOptions)
     console.log(green('Nothing failed in that run.'));
     return EXIT.SUCCESS;
   }
-  const selection = rerun ? rerun.ids : resolveSelection(collection, o.folder);
+  let selection = rerun ? rerun.ids : resolveSelection(collection, o.folder);
+  if (o.method?.length) {
+    // --method GET: only the requests that read, e.g. a smoke run against a fresh deployment
+    const wanted = new Set(o.method.flatMap((m) => m.split(',')).map((m) => m.trim().toUpperCase()));
+    selection = collectionRequests(collection, selection)
+      .filter((r) => wanted.has(r.node.kind === 'http' ? r.node.request.method.toUpperCase() : 'GRAPHQL'))
+      .map((r) => r.node.id);
+    if (!selection.length) throw new CliError(`No ${[...wanted].join(' / ')} requests to run in "${collection.name}"`, EXIT.CONFIG_ERROR);
+  }
   if (rerun && !o.quiet) console.log(dim(`Re-running ${rerun.ids.length} failed request${rerun.ids.length === 1 ? '' : 's'} of ${rerun.runId}`));
   let data: DatasetRecord[] | undefined;
   if (o.iterationData) {

@@ -95,6 +95,14 @@ The reference is safe to commit: it holds no secret, and each person reads the v
 
 [More](/api-testing/environments#see-or-change-one-variable)
 
+## A smoke run: only the GET requests
+
+1. Open a collection's **Run** tab.
+2. Click **Only GET**: only the requests that read (GET, HEAD) stay ticked, so the run changes nothing on the server.
+3. Choose the environment and **Run**. The results show which endpoints answer and which fail.
+
+In a long list, the filter above the requests narrows it by name, folder or method, and **Select all** / **Deselect all** act on what it shows. From the terminal: `testpion run-collection "Master Collections" -e Development --method GET`.
+
 ## Find and replace in a collection
 
 1. Open a collection and click **Replace** in its header.

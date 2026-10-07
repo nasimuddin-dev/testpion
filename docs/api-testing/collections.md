@@ -210,7 +210,7 @@ The Collection Runner works like Postman's. It runs a whole collection or one fo
 | Setting | What it does |
 |---|---|
 | Run | The whole collection or a single folder |
-| Requests | Tick the requests to include (all by default) |
+| Requests | Tick the requests to include (all by default). In a long list, the filter narrows it by name, folder or method, and **Select all** / **Deselect all** act on what it shows. **Only GET** ticks just the requests that read (GET, HEAD): a smoke run that changes nothing. From the terminal: `testpion run-collection "My API" --method GET` |
 | Environment | Variables used for the run |
 | Iterations | How many times to run the requests (defaults to the number of data rows, or 1) |
 | Delay | Pause between requests, in milliseconds |
