@@ -7,6 +7,8 @@ description: "All assertion and evaluator types with options."
 
 # Assertions
 
+In a test file the checks go in an `assertions:` list; `checks:` works too.
+
 All checks share `type`, an optional `name`, and usually `path` (JSONPath such as `$.data.items[0].id`) and `expected`.
 
 | Type | Options |

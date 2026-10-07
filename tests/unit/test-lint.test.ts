@@ -77,4 +77,15 @@ describe('test files: lint and keys', () => {
     expect(schema.oneOf).toHaveLength(2);
     expect(schema.definitions.assertion.properties.type.enum).toContain('status');
   });
+
+  it('reads checks: as assertions:, and checks its check types too', async () => {
+    const { normalizeTest } = await import('@testpion/core');
+    expect(normalizeTest({ name: 'x', type: 'http', url: 'http://a', checks: [{ type: 'status', expected: 200 }] }).assertions).toEqual([{ type: 'status', expected: 200 }]);
+    const ok = ['name: x', 'type: graphql', 'url: http://a/graphql', 'query: subscription { a }', 'waitMs: 500', 'checks:', '  - type: status', '    expected: 101'].join('\n');
+    expect(lintTestFile(ok)).toEqual([]);
+    const bad = ['name: x', 'type: http', 'url: http://a', 'checks:', '  - type: statuss', '    expected: 200'].join('\n');
+    expect(lintTestFile(bad).map((p) => p.message).join(' | ')).toMatch(/statuss/);
+    const both = ['name: x', 'type: http', 'url: http://a', 'assertions: []', 'checks: []'].join('\n');
+    expect(lintTestFile(both).map((p) => p.message).join(' | ')).toMatch(/only assertions: is read/);
+  });
 });

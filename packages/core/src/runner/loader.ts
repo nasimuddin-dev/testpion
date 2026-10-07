@@ -77,7 +77,8 @@ export function normalizeTest(raw: Record<string, unknown>, file?: string, index
     preRequestScript: (raw.preRequestScript ?? raw.pre_request_script) as string | undefined,
     testScript: (raw.testScript ?? raw.test_script ?? raw.script) as string | undefined,
     extract: raw.extract as Record<string, string> | undefined,
-    assertions: raw.assertions as TestCase['assertions'],
+    // the app calls them checks; both spellings are read
+    assertions: (raw.assertions ?? raw.checks) as TestCase['assertions'],
     evaluators: raw.evaluators as TestCase['evaluators'],
     file,
   };

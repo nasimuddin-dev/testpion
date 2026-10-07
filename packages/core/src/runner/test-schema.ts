@@ -33,7 +33,7 @@ const COMMON: TestKeyDoc[] = [
   { key: 'dependsOn', description: 'The id (or a list of ids) of tests that run first; this one is skipped when they fail. Values they extract are available here.', shape: 'list' },
   { key: 'vars', description: 'Variables for this test only: { key: value }.', shape: 'map' },
   { key: 'extract', description: 'Values taken from the response into variables for later tests: { token: "$.access_token" }.', shape: 'map' },
-  { key: 'assertions', description: 'The checks: a list of { type, … } (see the check types).', shape: 'list' },
+  { key: 'assertions', description: 'The checks: a list of { type, … } (see the check types; checks works too).', shape: 'list' },
   { key: 'evaluators', description: 'For AI tests: scorers such as similarity, groundedness, llm-judge: a list of { type, … }.', shape: 'list' },
   { key: 'preRequestScript', description: 'A tp.* script that runs before the request (pre_request_script works too).', shape: 'text' },
   { key: 'testScript', description: 'A tp.* script that runs after the response: tp.test(…), tp.expect(…) (script works too).', shape: 'text' },
@@ -137,9 +137,9 @@ const BY_TYPE: Record<string, TestKeyDoc[]> = {
 
 /** Keys the loader also accepts (older names and shorthands), per type, never offered but never flagged either. */
 const ALIASES: Record<string, string[]> = {
-  '*': ['timeoutMs', 'timeout_ms', 'pre_request_script', 'test_script', 'script', 'variables', 'metadata'],
+  '*': ['timeoutMs', 'timeout_ms', 'pre_request_script', 'test_script', 'script', 'variables', 'metadata', 'checks'],
   http: ['query'],
-  graphql: ['url', 'graphqlVariables'],
+  graphql: ['url', 'graphqlVariables', 'waitMs'],
   grpc: ['address', 'url', 'request', 'proto'],
   websocket: ['messages', 'message', 'publish', 'produce', 'waitMs'],
   mcp: ['args'],
@@ -357,9 +357,10 @@ export function lintTestFile(text: string, opts: { file?: string; suite?: boolea
       for (const d of list)
         if (isScalar(d) && d.value !== undefined && !ids.has(String(d.value))) add('info', `No test with id "${String(d.value)}" in this file (fine when it is in another file of the run)`, d as Node);
     }
-    const assertions = pairOf('assertions');
+    const assertions = pairOf('assertions') ?? pairOf('checks');
+    if (pairOf('assertions') && pairOf('checks')) add('warning', 'Both assertions: and checks: — only assertions: is read; put every check in one list', pairOf('checks'));
     if (assertions) {
-      if (!isSeq(assertions.value)) add('error', 'assertions: must be a list of { type, … }', assertions);
+      if (!isSeq(assertions.value)) add('error', `${keyOf(assertions)}: must be a list of { type, … }`, assertions);
       else
         for (const a of assertions.value.items) {
           if (!isMap(a)) {
