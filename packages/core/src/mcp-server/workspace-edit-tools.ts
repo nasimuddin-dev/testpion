@@ -1,3 +1,4 @@
+import { replaceInCollection, REPLACE_FIELDS, type ReplaceField } from '../storage/collection-replace.js';
 import type { Collection, CollectionFolder, CollectionNode, HttpRequestSpec, KeyValue, SavedHttpRequest } from '../model/types.js';
 import { ApsError } from '../errors.js';
 import { externalizeSecrets, type SecretPlaceholder } from '../import/save-request.js';
@@ -62,6 +63,47 @@ const headersOf = (v: unknown): KeyValue[] | undefined => {
 
 export function workspaceEditTools(d: EditToolsDeps): Tool[] {
   const { store, redactor, findCollection, findRequest } = d;
+  const replaceTool: Tool = {
+    name: 'replace_in_collection',
+    write: true,
+    description:
+      "Find and replace across a collection's requests: URLs, query parameters, headers, bodies, auth fields, scripts and names (`fields` narrows it; `folder` limits it to a folder). Case-insensitive unless caseSensitive; `regex` for a regular expression ($1 … for groups). It previews by default (`apply` false): every change with the request, where and before / after; call again with apply: true to save them.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        collection: { type: 'string', description: 'Collection name or id' },
+        find: { type: 'string', description: 'Text (or regular expression) to find' },
+        replace: { type: 'string', description: 'What to put instead' },
+        regex: { type: 'boolean' },
+        caseSensitive: { type: 'boolean' },
+        fields: { type: 'array', items: { type: 'string', enum: REPLACE_FIELDS }, description: 'Where to look (default: everywhere)' },
+        folder: { type: 'string', description: 'Only this folder (name or id)' },
+        apply: { type: 'boolean', description: 'Save the changes (default false: preview)' },
+      },
+      required: ['collection', 'find', 'replace'],
+    },
+    run: (a) => {
+      const c = findCollection(a.collection);
+      let folderId: string | undefined;
+      if (a.folder) {
+        const want = String(a.folder).toLowerCase();
+        const find = (nodes: CollectionNode[]): string | undefined => {
+          for (const n of nodes) if (n.kind === 'folder') {
+            if (n.id.toLowerCase() === want || n.name.toLowerCase() === want) return n.id;
+            const inner = find(n.items);
+            if (inner) return inner;
+          }
+          return undefined;
+        };
+        folderId = find(c.items);
+        if (!folderId) throw new ApsError('ConfigurationError', `No folder "${String(a.folder)}" in "${c.name}"`);
+      }
+      const r = replaceInCollection(c, { find: String(a.find ?? ''), replace: String(a.replace ?? ''), regex: a.regex === true, caseSensitive: a.caseSensitive === true, fields: Array.isArray(a.fields) ? (a.fields.map(String) as ReplaceField[]) : undefined, folderId });
+      if (a.apply === true && r.matches.length) store.saveCollection(r.collection);
+      const red = (v: string) => (redactor ? redactor.redactString(v) : v);
+      return { collection: c.name, changes: r.matches.length, applied: a.apply === true && r.matches.length > 0, matches: r.matches.slice(0, 200).map((m) => ({ ...m, before: red(m.before).slice(0, 300), after: red(m.after).slice(0, 300) })) };
+    },
+  };
   const summary = (c: Collection, n: SavedHttpRequest, folder: string, placeholders: SecretPlaceholder[] = []) => ({
     collection: c.name,
     collectionId: c.id,
@@ -89,6 +131,7 @@ export function workspaceEditTools(d: EditToolsDeps): Tool[] {
   };
 
   return [
+    replaceTool,
     {
       name: 'update_request',
       write: true,

@@ -95,6 +95,14 @@ The reference is safe to commit: it holds no secret, and each person reads the v
 
 [More](/api-testing/environments#see-or-change-one-variable)
 
+## Find and replace in a collection
+
+1. Open a collection and click **Replace** in its header.
+2. Type what to find and what to put instead. Every change is listed (request, where, before and after) before anything is saved.
+3. Narrow it with **Match case**, **Regular expression** and the **Look in** chips (URLs, params, headers, bodies, auth, scripts, names), then **Replace**. **Undo** in the message puts the collection back.
+
+[More](/api-testing/collections#find-and-replace)
+
 ## Collection name
 
 In a collection's settings the name is plain text. **Double-click** it (or press F2 or Enter on it) to rename it in place. **Enter** saves the new name and **Escape** keeps the old one, as when renaming a request.

@@ -1,5 +1,6 @@
 import { CollectionOverview } from '../components/CollectionOverview';
-import { ArchiveRestore, Download, FileCode, FileJson, FilePlus2, FolderPlus, FolderTree, Package, Play, Radio, Send, ShieldCheck, Trash2, Upload, FolderOpen } from 'lucide-react';
+import { ReplaceDialog } from '../components/ReplaceDialog';
+import { ArchiveRestore, Download, FileCode, FileJson, FilePlus2, FolderPlus, FolderTree, Package, Play, Radio, Replace, Send, ShieldCheck, Trash2, Upload, FolderOpen } from 'lucide-react';
 import { downloadContent } from '../lib/files';
 import { useCallback, useEffect, useState } from 'react';
 import { asError, call } from '../api';
@@ -25,6 +26,7 @@ import { SecurityReviewDialog } from '../components/SecurityReviewDialog';
 export function CollectionsView() {
   const [trashOpen, setTrashOpen] = useState(false);
   const [securityOpen, setSecurityOpen] = useState(false);
+  const [replaceOpen, setReplaceOpen] = useState(false);
   const [cols, setCols] = useState<Collection[]>([]);
   const [sel, setSel] = useState<string>();
   const [draft, setDraft] = useState<Collection>();
@@ -169,6 +171,7 @@ export function CollectionsView() {
               </div>
             </button>
           ))}
+          {replaceOpen && draft && <ReplaceDialog collection={cols.find((x) => x.id === draft.id) ?? draft} onClose={() => setReplaceOpen(false)} onDone={() => void load().then(() => setSel(draft.id))} />}
           {securityOpen && draft && <SecurityReviewDialog collectionId={draft.id} name={draft.name} onClose={() => setSecurityOpen(false)} />}
           {trashOpen && <TrashDialog kind="collection" onClose={() => setTrashOpen(false)} onRestored={(r) => void load().then(() => setSel(r.id))} />}
           {!cols.length && <Empty icon={<FolderTree size={24} />} title="No collections">Create one or import OpenAPI, Postman, Insomnia, Bruno, Hoppscotch or HAR.</Empty>}
@@ -208,6 +211,9 @@ export function CollectionsView() {
                   }}
                 >
                   Run
+                </Button>
+                <Button size="sm" icon={<Replace size={12} />} title="Find and replace across the requests: URLs, headers, bodies, auth, scripts" onClick={() => setReplaceOpen(true)}>
+                  Replace
                 </Button>
                 <Button size="sm" icon={<ShieldCheck size={12} />} title="Secrets typed in, secrets in URLs, plain http, turned-off TLS checks" onClick={() => setSecurityOpen(true)}>
                   Security

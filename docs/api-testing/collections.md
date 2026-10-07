@@ -41,6 +41,16 @@ Right-click a request in the tree, or click its **⋯** button:
 
 Copied commands include the request's real header and token values, so they run as they are, like Postman's *Copy as cURL*. When they do, the confirmation message says so. Folders have their own menu (Run, Monitor on a schedule, Edit folder, New HTTP request, New folder, Rename, Move to…, Delete).
 
+## Find and replace
+
+**Replace** in a collection's header changes text across its requests at once: a host that moved, a header that was renamed, a value that should become a `{{variable}}`.
+
+1. Type what to **Find** and what to **Replace with**. Every change appears below as you type: the request, where (the URL, a header, a parameter, the body, an auth field, a script or the name), and the text before and after.
+2. Narrow it with **Match case**, **Regular expression** (`$1` … for groups) and the **Look in** chips.
+3. **Replace** saves the changes; **Undo** in the message puts the collection back.
+
+From the terminal, `testpion replace "Master Collections" "http://localhost:5002" "{{bannerManagementBaseUrl}}" --in url` shows the changes and `--apply` saves them; agents use `replace_in_collection`.
+
 ## Import
 
 **Import** accepts:

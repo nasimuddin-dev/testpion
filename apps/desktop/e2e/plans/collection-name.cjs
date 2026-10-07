@@ -38,9 +38,21 @@ const steps = [
      await window.aps.invoke('col.save', { ...c, name: before }); await __t.sleep(500);
      return 'renamed: ' + (after === before + ' (renamed)') + ' | saved: ' + saved + ' | escape keeps: ' + (kept === before + ' (renamed)');`,
   ),
+  step(
+    'replace-previews-every-change',
+    `vis('main button').find((b) => b.textContent.trim() === 'Replace')?.click();
+     const find = await __t.waitFor(() => vis('[role=dialog] input[aria-label="Find"]')[0], 3000);
+     if (!find) return 'NO DIALOG';
+     setInput(find, 'httpbin'); setInput(vis('[role=dialog] input[aria-label="Replace with"]')[0], 'example');
+     const head = await __t.waitFor(() => vis('[role=dialog] [data-replace-preview] div').map((d) => d.textContent).find((t) => /changes in \\d+ request/.test(t)), 5000);
+     const button = vis('[role=dialog] button').find((b) => /^Replace \\d+$/.test(b.textContent.trim()));
+     vis('[role=dialog] button[aria-label=Close]')[0]?.click(); await __t.sleep(300);
+     return 'preview: ' + !!head + ' | replace button: ' + !!button;`,
+  ),
 ];
 
 module.exports = withExpect(steps, {
+  'replace-previews-every-change': /^preview: true \| replace button: true$/,
   'name-is-text-not-a-field': /^text: true \| field: false$/,
   'double-click-renames-and-saves': /^renamed: true \| saved: true \| escape keeps: true$/,
 });

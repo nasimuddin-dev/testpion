@@ -33,6 +33,7 @@ const DESTRUCTIVE = new Set([
   'api_fuzz',
   'generate_dataset',
   'generate_tests',
+  'replace_in_collection',
   'debugger_capture',
   'git_resolve',
   'debugger_rules',
