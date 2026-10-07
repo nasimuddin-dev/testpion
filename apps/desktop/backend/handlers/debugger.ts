@@ -126,7 +126,7 @@ export function recordIncoming(be: Backend, r: Omit<IncomingRequest, 'id' | 'tim
   // secrets masked, bodies capped: the list is kept in memory and shown in the window
   const red = be.logger.redactor;
   const headers = (h?: Record<string, string>) => (h ? Object.fromEntries(Object.entries(h).map(([k, v]) => [k, red.isSensitiveKey(k) ? '***' : v])) : undefined);
-  const text = (t?: string) => (t === undefined ? undefined : red.redactString(t.slice(0, 64 * 1024)));
+  const text = (t?: string) => (t === undefined ? undefined : red.redactString(t.slice(0, 16 * 1024)));
   const item: IncomingRequest = {
     id: shortId('in-'),
     time: new Date().toISOString(),
@@ -139,6 +139,12 @@ export function recordIncoming(be: Backend, r: Omit<IncomingRequest, 'id' | 'tim
   };
   list.push(item);
   if (list.length > 2000) list.splice(0, list.length - 2000);
+  // a load test against a mock fills the list fast: only the latest 200 keep their bodies (at most ~6 MB)
+  const old = list[list.length - 201];
+  if (old) {
+    old.body = old.body === undefined ? undefined : '(not kept: only the latest 200 requests keep their bodies)';
+    old.responseBody = old.responseBody === undefined ? undefined : '(not kept: only the latest 200 requests keep their bodies)';
+  }
   be.host.emit('debug.incoming', item);
 }
 

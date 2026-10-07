@@ -156,7 +156,7 @@ describe('through the proxy', () => {
     });
     await new Promise<void>((r) => api.listen(0, '127.0.0.1', () => r()));
     apiPort = (api.address() as { port: number }).port;
-    proxy = await startDebuggerProxy({ applicationOf: async () => ({ name: 'vitest', pid: 4242 }), rules: () => rules });
+    proxy = await startDebuggerProxy({ applicationOf: async () => ({ name: 'vitest', pid: 4242 }), ownerOf: async (pid) => (pid === 4242 ? 'CLINIC\\vet' : undefined), rules: () => rules });
   });
   afterAll(async () => {
     await proxy.close();
@@ -179,6 +179,7 @@ describe('through the proxy', () => {
     const updates: string[] = [];
     const slow = await startDebuggerProxy({
       applicationOf: () => new Promise((r) => (answer = r)),
+      ownerOf: async () => undefined,
       onExchange: (e, phase) => phase === 'update' && updates.push(`${e.application}:${e.pid}`),
     });
     try {
@@ -206,6 +207,7 @@ describe('through the proxy', () => {
     const e = proxy.exchanges.at(-1)!;
     expect(e.application).toBe('vitest');
     expect(e.pid).toBe(4242);
+    expect(e.user).toBe('CLINIC\\vet');
     expect(e.serverAddress).toBe(`127.0.0.1:${apiPort}`);
     expect(e.sendMs).toBeGreaterThanOrEqual(0);
     expect(e.waitMs).toBeGreaterThanOrEqual(e.sendMs!);

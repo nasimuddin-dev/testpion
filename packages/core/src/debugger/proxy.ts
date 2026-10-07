@@ -114,6 +114,8 @@ export interface DebuggerProxyOptions {
   onExchange?(e: DebuggerExchange, phase: 'request' | 'response' | 'update'): void;
   /** Which program owns a client port (see applicationOfPort); replaceable in tests. */
   applicationOf?(port: number): Promise<string | ProgramInfo | undefined>;
+  /** The account a process runs as (see ownerOfProcess); replaceable in tests. */
+  ownerOf?(pid: number): Promise<string | undefined>;
   /** The active rules, read for every request (so edits apply at once). */
   rules?(): DebuggerRule[];
   /** A breakpoint rule matched: show the exchange, resolve with edits (or nothing) to let it go on. */
@@ -209,18 +211,29 @@ export function applicationOfPort(port: number): Promise<ProgramInfo | undefined
       name?.trim() ? resolve({ name: name.trim(), pid: Number(pid) || undefined, ...(user?.trim() ? { user: user.trim() } : {}) }) : resolve(undefined);
     const opts = { timeout: 3000, windowsHide: true };
     if (process.platform === 'win32') {
-      // pid, owner and name, tab-separated (the owner from CIM: Get-Process -IncludeUserName needs an elevated shell)
-      const ps = `$c = Get-NetTCPConnection -LocalPort ${port} -ErrorAction SilentlyContinue | Select-Object -First 1; if ($c) { $o = Get-CimInstance Win32_Process -Filter "ProcessId=$($c.OwningProcess)" -ErrorAction SilentlyContinue | Invoke-CimMethod -MethodName GetOwner -ErrorAction SilentlyContinue; $u = if ($o.User) { if ($o.Domain) { "$($o.Domain)\\$($o.User)" } else { $o.User } } else { '' }; "$($c.OwningProcess)\`t$u\`t$((Get-Process -Id $c.OwningProcess -ErrorAction SilentlyContinue).ProcessName)" }`;
+      const ps = `$c = Get-NetTCPConnection -LocalPort ${port} -ErrorAction SilentlyContinue | Select-Object -First 1; if ($c) { "$($c.OwningProcess) $((Get-Process -Id $c.OwningProcess -ErrorAction SilentlyContinue).ProcessName)" }`;
       execFile('powershell', ['-NoProfile', '-NonInteractive', '-Command', ps], opts, (err, out) => {
-        const m = /^(\d+)\t([^\t]*)\t(.*)$/m.exec(err ? '' : String(out).trim());
-        done(m?.[1], m?.[3], m?.[2]);
+        const m = /^(\d+) (.*)$/m.exec(err ? '' : String(out).trim());
+        done(m?.[1], m?.[2]);
       });
     } else {
-      // p: process id, c: command, L: login name
-      execFile('lsof', ['-nP', `-iTCP:${port}`, '-sTCP:ESTABLISHED', '-FpcL'], opts, (err, out) => {
+      execFile('lsof', ['-nP', `-iTCP:${port}`, '-sTCP:ESTABLISHED', '-Fpc'], opts, (err, out) => {
         if (err) return done(undefined, undefined);
-        done(/^p(\d+)$/m.exec(String(out))?.[1], /^c(.+)$/m.exec(String(out))?.[1], /^L(.+)$/m.exec(String(out))?.[1]);
+        done(/^p(\d+)$/m.exec(String(out))?.[1], /^c(.+)$/m.exec(String(out))?.[1]);
       });
+    }
+  });
+}
+
+/** The account a process runs as (DOMAIN\\user on Windows, from CIM: Get-Process -IncludeUserName needs an elevated shell). */
+export function ownerOfProcess(pid: number): Promise<string | undefined> {
+  return new Promise((resolve) => {
+    const opts = { timeout: 8000, windowsHide: true };
+    if (process.platform === 'win32') {
+      const ps = `$o = Get-CimInstance Win32_Process -Filter "ProcessId=${Math.trunc(pid)}" -ErrorAction SilentlyContinue | Invoke-CimMethod -MethodName GetOwner -ErrorAction SilentlyContinue; if ($o.User) { if ($o.Domain) { "$($o.Domain)\\$($o.User)" } else { $o.User } }`;
+      execFile('powershell', ['-NoProfile', '-NonInteractive', '-Command', ps], opts, (err, out) => resolve(err ? undefined : String(out).trim() || undefined));
+    } else {
+      execFile('ps', ['-o', 'user=', '-p', String(Math.trunc(pid))], opts, (err, out) => resolve(err ? undefined : String(out).trim() || undefined));
     }
   });
 }
@@ -267,6 +280,23 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
     }
     // the lookup often ends after the exchange was listed: say it changed
     if (recorded.has(e)) opts.onExchange?.(e, 'update');
+    // the account, looked up once per process (and when it comes, the exchange changed again)
+    if (e.pid && !e.user)
+      void ownerFor(e.pid).then((u) => {
+        if (!u) return;
+        e.user = u;
+        if (recorded.has(e)) opts.onExchange?.(e, 'update');
+      });
+  };
+  const owners = new Map<number, Promise<string | undefined>>();
+  const ownerFor = (pid: number) => {
+    let p = owners.get(pid);
+    if (!p) {
+      p = (opts.ownerOf ?? ownerOfProcess)(pid).catch(() => undefined);
+      owners.set(pid, p);
+      if (owners.size > 500) owners.clear();
+    }
+    return p;
   };
   const recorded = new WeakSet<DebuggerExchange>();
   /** Rules that decide on the program need it before the request is decided: wait for the lookup (at most 1.5 s). */

@@ -58,14 +58,13 @@ export class KafkaSession {
   private kafka?: Kafka;
   private producer?: Producer;
   private admin?: Admin;
-  private consumer?: Consumer;
-  private topics = new Map<string, { fromBeginning: boolean }>();
   /**
-   * One consumer group for the connection: the consumer restarts when a topic is added or removed, and a new group each
-   * time read every topic marked "from the beginning" again (the messages already shown came twice). With one group the
-   * topics already read go on from where they were; a topic it never read starts where it was asked to.
+   * One consumer per topic read. Adding or removing a topic starts or stops only its own consumer: with one consumer for
+   * every topic, a restart read the other topics again (their messages came twice), and keeping its group instead made
+   * a topic added again resume from old offsets. Each topic's consumer has a group of its own (or the group asked for),
+   * so "from the beginning" and "new messages" mean what they say every time a topic is added.
    */
-  private groupId?: string;
+  private consumers = new Map<string, Consumer>();
   private messageListeners: Array<(m: KafkaMessage) => void> = [];
   private statusListeners: Array<(s: 'connecting' | 'open' | 'closed') => void> = [];
   status: 'connecting' | 'open' | 'closed' = 'closed';
@@ -156,52 +155,52 @@ export class KafkaSession {
     return meta.topics.map((t) => ({ name: t.name, partitions: t.partitions.length }));
   }
 
-  /**
-   * Read a topic: from the beginning, or only messages produced from now on. The consumer restarts with the new set of
-   * topics (Kafka consumers subscribe before they run).
-   */
+  /** Read a topic: from the beginning, or only messages produced from now on (its own consumer; the others go on). */
   async subscribe(topic: string, opts: { fromBeginning?: boolean } = {}): Promise<void> {
     this.requireOpen();
-    if (!topic.trim()) throw new ApsError('ValidationError', 'Give the topic to read');
-    this.topics.set(topic.trim(), { fromBeginning: !!opts.fromBeginning });
-    await this.restartConsumer();
-    this.emitMessage('system', `Reading "${topic.trim()}" ${opts.fromBeginning ? 'from the beginning' : '(new messages)'}`);
+    const name = topic.trim();
+    if (!name) throw new ApsError('ValidationError', 'Give the topic to read');
+    await this.stopConsumer(name);
+    await this.startConsumer(name, !!opts.fromBeginning);
+    this.emitMessage('system', `Reading "${name}" ${opts.fromBeginning ? 'from the beginning' : '(new messages)'}`);
   }
 
   async unsubscribe(topic: string): Promise<void> {
-    this.topics.delete(topic.trim());
-    await this.restartConsumer();
+    await this.stopConsumer(topic.trim());
     this.emitMessage('system', `Stopped reading "${topic.trim()}"`);
   }
 
-  private async restartConsumer(): Promise<void> {
+  private async stopConsumer(topic: string): Promise<void> {
+    const c = this.consumers.get(topic);
+    if (!c) return;
+    this.consumers.delete(topic);
+    await c.disconnect().catch(() => undefined);
+  }
+
+  private async startConsumer(topic: string, fromBeginning: boolean): Promise<void> {
     const kafka = this.requireOpen();
-    if (this.consumer) {
-      await this.consumer.disconnect().catch(() => undefined);
-      this.consumer = undefined;
-    }
-    if (!this.topics.size) return;
     const consumer = kafka.consumer({
-      groupId: (this.groupId ??= this.opts.groupId || `testpion-${shortId('g-')}`),
+      groupId: this.opts.groupId || `testpion-${shortId('g-')}`,
       sessionTimeout: 10_000,
       heartbeatInterval: 1_000,
       maxWaitTimeInMs: 300,
       allowAutoTopicCreation: true,
     });
     await consumer.connect();
-    for (const [topic, o] of this.topics) await consumer.subscribe({ topic, fromBeginning: o.fromBeginning });
-    // resolves once the group has assigned partitions, so messages produced right after are read
+    await consumer.subscribe({ topic, fromBeginning });
+    // resolves once the consumer fetches (its partitions assigned and its starting offsets known), so a message
+    // produced right after is read, also when only new messages were asked for
     const joined = new Promise<void>((resolve) => {
-      const off = consumer.on(consumer.events.GROUP_JOIN, () => (off(), resolve()));
+      const off = consumer.on(consumer.events.FETCH_START, () => (off(), resolve()));
       setTimeout(resolve, 8_000);
     });
     await consumer.run({
-      eachMessage: async ({ topic, partition, message }) => {
+      eachMessage: async ({ topic: t, partition, message }) => {
         const headers = message.headers
           ? Object.fromEntries(Object.entries(message.headers).map(([k, v]) => [k, Array.isArray(v) ? v.map((x) => x?.toString() ?? '').join(', ') : (v?.toString() ?? '')]))
           : undefined;
         this.emitMessage('received', message.value?.toString('utf8') ?? '', {
-          topic,
+          topic: t,
           partition,
           offset: message.offset,
           ...(message.key ? { key: message.key.toString('utf8') } : {}),
@@ -209,7 +208,7 @@ export class KafkaSession {
         });
       },
     });
-    this.consumer = consumer;
+    this.consumers.set(topic, consumer);
     await joined;
   }
 
@@ -223,8 +222,10 @@ export class KafkaSession {
   }
 
   private async disconnectAll(): Promise<void> {
-    await Promise.all([this.consumer?.disconnect(), this.producer?.disconnect(), this.admin?.disconnect()].map((p) => p?.catch(() => undefined)));
-    this.consumer = this.producer = this.admin = undefined;
+    const consumers = [...this.consumers.values()];
+    this.consumers.clear();
+    await Promise.all([...consumers.map((c) => c.disconnect()), this.producer?.disconnect(), this.admin?.disconnect()].map((p) => p?.catch(() => undefined)));
+    this.producer = this.admin = undefined;
   }
 
   close(): void {

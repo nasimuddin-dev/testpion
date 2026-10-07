@@ -93,6 +93,29 @@ describe('Kafka', () => {
     await s.closeAndWait();
   });
 
+  it('a topic added again reads what was asked: its history from the beginning, and no replay for new messages', async () => {
+    const s = new KafkaSession(url);
+    const seen: KafkaMessage[] = [];
+    s.onMessage((m) => seen.push(m));
+    const got = (key: string) => seen.filter((m) => m.direction === 'received' && m.key === key).length;
+    await s.connect();
+    await s.produce('again-topic', 'c1', { key: 'c1' });
+    await s.subscribe('again-topic', { fromBeginning: true });
+    await waitFor(() => got('c1') === 1);
+    await s.unsubscribe('again-topic');
+    // from the beginning again: the history comes again
+    await s.subscribe('again-topic', { fromBeginning: true });
+    await waitFor(() => got('c1') === 2);
+    await s.unsubscribe('again-topic');
+    // produced while not read, then added for new messages only: not replayed
+    await s.produce('again-topic', 'c2', { key: 'c2' });
+    await s.subscribe('again-topic', { fromBeginning: false });
+    await new Promise((r) => setTimeout(r, 1500));
+    expect(got('c2')).toBe(0);
+    expect(got('c1')).toBe(2);
+    await s.closeAndWait();
+  });
+
   it('reports a cluster that cannot be reached as a failed connection with what to check', async () => {
     const s = new KafkaSession('kafka://127.0.0.1:1', { timeoutMs: 1500 });
     await expect(s.connect()).rejects.toThrow(/Kafka connection failed/);
