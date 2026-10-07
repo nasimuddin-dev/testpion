@@ -62,6 +62,16 @@ The values are made up: emails use `example.test` / `example.com`, phone numbers
 
 Mark a variable as **secret** (lock icon) and its value is encrypted in the OS credential store: Windows DPAPI, macOS Keychain or Linux Secret Service. The workspace file only records that the variable exists. In CI, supply the value as the environment variable `TESTPION_SECRET_ENV_<ENVID>_<KEY>`, for example `TESTPION_SECRET_ENV_STAGING_ACCESSTOKEN`.
 
+## Move collection variables to environments
+
+A collection variable wins over every environment. A base URL kept in the collection (common in imported Postman collections) is therefore the same in Development and Production, whatever the environments say. To set it per environment, move it:
+
+1. Open the collection's **Variables** tab and click **Move to environments…** (or, from a variable's **Where it's set**, click **Move to environments…** when the collection's value is the one used).
+2. Tick the variables to move and the environments to move them to. The preview says, per environment, how many are added and which ones it already has (those keep their own value).
+3. **Move**. The environments get the collection's values, and the collection loses the variables. Now change the values in each environment.
+
+Secret values are not copied: the environments get the variable marked secret, without a value, to fill in. From the terminal, `testpion vars move "Master Collections" --to Development,Production --keys bannerManagementBaseUrl` (`--dry-run` to preview); agents use `move_variables_to_environments`.
+
 ## Secrets from a secret manager
 
 A variable can point at a secret kept in a secret manager instead of holding it. Set its value to a reference:

@@ -1,6 +1,7 @@
 import { CollectionOverview } from '../components/CollectionOverview';
 import { ReplaceDialog } from '../components/ReplaceDialog';
-import { ArchiveRestore, Download, FileCode, FileJson, FilePlus2, FolderPlus, FolderTree, Package, Play, Radio, Replace, Send, ShieldCheck, Trash2, Upload, FolderOpen } from 'lucide-react';
+import { MoveVariablesDialog } from '../components/MoveVariablesDialog';
+import { ArchiveRestore, ArrowRightLeft, Download, FileCode, FileJson, FilePlus2, FolderPlus, FolderTree, Package, Play, Radio, Replace, Send, ShieldCheck, Trash2, Upload, FolderOpen } from 'lucide-react';
 import { downloadContent } from '../lib/files';
 import { useCallback, useEffect, useState } from 'react';
 import { asError, call } from '../api';
@@ -27,6 +28,8 @@ export function CollectionsView() {
   const [trashOpen, setTrashOpen] = useState(false);
   const [securityOpen, setSecurityOpen] = useState(false);
   const [replaceOpen, setReplaceOpen] = useState(false);
+  const [moveVarsOpen, setMoveVarsOpen] = useState(false);
+  const [moveVarsInitial, setMoveVarsInitial] = useState<string[]>();
   const [cols, setCols] = useState<Collection[]>([]);
   const [sel, setSel] = useState<string>();
   const [draft, setDraft] = useState<Collection>();
@@ -51,6 +54,11 @@ export function CollectionsView() {
       setRunFolder(p.folderId);
     }
     if (p?.mock) setTab('mock');
+    // from a variable's Where it's set: move it (pre-selected) to the environments
+    if (Array.isArray(p?.moveVariables)) {
+      setMoveVarsInitial(p.moveVariables as string[]);
+      setMoveVarsOpen(true);
+    }
     if (p?.import) setImporting(true);
     // File ▸ Export ▸ Collection: the selected collection (or the first one)
     if (p?.export) {
@@ -171,6 +179,9 @@ export function CollectionsView() {
               </div>
             </button>
           ))}
+          {moveVarsOpen && draft && (
+            <MoveVariablesDialog collection={cols.find((x) => x.id === draft.id) ?? draft} initial={moveVarsInitial} onClose={() => (setMoveVarsOpen(false), setMoveVarsInitial(undefined))} onDone={() => void load().then(() => useApp.getState().set({ envsVersion: (useApp.getState().envsVersion ?? 0) + 1 }))} />
+          )}
           {replaceOpen && draft && <ReplaceDialog collection={cols.find((x) => x.id === draft.id) ?? draft} onClose={() => setReplaceOpen(false)} onDone={() => void load().then(() => setSel(draft.id))} />}
           {securityOpen && draft && <SecurityReviewDialog collectionId={draft.id} name={draft.name} onClose={() => setSecurityOpen(false)} />}
           {trashOpen && <TrashDialog kind="collection" onClose={() => setTrashOpen(false)} onRestored={(r) => void load().then(() => setSel(r.id))} />}
@@ -297,7 +308,14 @@ export function CollectionsView() {
               )}
               {tab === 'variables' && (
                 <div className="p-2">
-                  <p className="text-xs text-muted px-1 pb-2">Collection variables override environment variables and are overridden by request and runtime variables.</p>
+                  <div className="flex items-center gap-2 px-1 pb-2">
+                    <p className="text-xs text-muted">Collection variables override environment variables (so they are the same in every environment) and are overridden by request and runtime variables.</p>
+                    {draft.variables.length > 0 && (
+                      <Button size="sm" className="ml-auto shrink-0" icon={<ArrowRightLeft size={12} />} title="So each environment can set its own value" onClick={() => setMoveVarsOpen(true)}>
+                        Move to environments…
+                      </Button>
+                    )}
+                  </div>
                   <KeyValueEditor rows={draft.variables} onChange={(variables) => setDraft({ ...draft, variables })} keyPlaceholder="Variable" />
                 </div>
               )}

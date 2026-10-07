@@ -111,6 +111,10 @@ In a long list, the filter above the requests narrows it by name, folder or meth
 
 [More](/api-testing/collections#find-and-replace)
 
+## Base URLs per environment: move collection variables
+
+A collection variable wins over the environment, so the same value is used in every environment. When **Where it's set** shows the collection's value is used, click **Move to environments…** (also on the collection's **Variables** tab). Tick the variables and environments, check the preview, then **Move**, and set each environment's value. [More](/api-testing/environments#move-collection-variables-to-environments)
+
 ## Collection name
 
 In a collection's settings the name is plain text. **Double-click** it (or press F2 or Enter on it) to rename it in place. **Enter** saves the new name and **Escape** keeps the old one, as when renaming a request.

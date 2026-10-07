@@ -1,3 +1,4 @@
+import { moveCollectionVariablesToEnvironments } from '../storage/move-variables.js';
 import { replaceInCollection, REPLACE_FIELDS, type ReplaceField } from '../storage/collection-replace.js';
 import type { Collection, CollectionFolder, CollectionNode, HttpRequestSpec, KeyValue, SavedHttpRequest } from '../model/types.js';
 import { ApsError } from '../errors.js';
@@ -130,8 +131,32 @@ export function workspaceEditTools(d: EditToolsDeps): Tool[] {
     return walk(c.items, []) ?? '';
   };
 
+  const moveVarsTool: Tool = {
+    name: 'move_variables_to_environments',
+    write: true,
+    description:
+      "Move collection variables into environments. A collection variable wins over every environment, so a base URL kept in a collection (common in Postman imports) can't differ per environment; moved, each environment gets the collection's value (one that already has the variable keeps its own) and the collection loses it. `keys` default to all of the collection's variables; `dryRun` says what would happen without saving.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        collection: { type: 'string', description: 'Collection name or id' },
+        keys: { type: 'array', items: { type: 'string' }, description: 'Variables to move (default: all)' },
+        environments: { type: 'array', items: { type: 'string' }, description: 'Environment names or ids' },
+        dryRun: { type: 'boolean' },
+      },
+      required: ['collection', 'environments'],
+    },
+    run: (a) =>
+      moveCollectionVariablesToEnvironments(store, {
+        collectionId: findCollection(a.collection).id,
+        keys: Array.isArray(a.keys) ? a.keys.map(String) : undefined,
+        environments: Array.isArray(a.environments) ? a.environments.map(String) : [],
+        dryRun: a.dryRun === true,
+      }),
+  };
   return [
     replaceTool,
+    moveVarsTool,
     {
       name: 'update_request',
       write: true,

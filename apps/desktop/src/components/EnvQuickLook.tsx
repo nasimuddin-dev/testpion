@@ -217,6 +217,14 @@ export function EnvQuickLook() {
               </div>
             </div>
           )}
+          {trace?.winner?.id === 'collection' && data?.collection && data.environment && (
+            <div className="text-xs text-muted flex items-center gap-2 flex-wrap" data-collection-wins>
+              <span>A collection variable wins over every environment, so {data.environment.name} can&apos;t change it. Move it to the environments to set it per environment.</span>
+              <Button size="sm" variant="soft" className="ml-auto" onClick={() => go('collections', { collectionId: data.collection!.id, tab: 'variables', moveVariables: [focus] })}>
+                Move to environments…
+              </Button>
+            </div>
+          )}
           {trace && (trace.winner || (data && [data.collection?.variables, data.environment?.variables, data.workspace, data.globals].some((rows) => rows?.some((r) => r.key === focus)))) && (
             <ol className="grid gap-1" data-variable-trace>
               {trace.lines.map((l, i) => (

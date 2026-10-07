@@ -122,6 +122,7 @@ For Claude Code: `claude mcp add testpion -- testpion mcp-server -w /path/to/my-
 | `variable_usages` | Where a variable is used or defined: requests, scripts, environments, collection / folder / workspace variables, test files. |
 | `rename_variable` | Rename a variable everywhere in the workspace (secret values move with it). |
 | `openapi_diff` | Breaking and other changes between two OpenAPI versions (links, workspace paths such as `specs/…`, or text). |
+| `move_variables_to_environments` | Move collection variables into environments so each can set its own value (`dryRun` to preview). |
 | `replace_in_collection` | Find and replace across a collection's requests (URLs, params, headers, bodies, auth, scripts, names): a preview, then `apply: true`. |
 | `generate_tests` | A first test suite from an API definition in the workspace: each operation's example and one invalid request, per tag, with a suite. |
 | `generate_dataset` | Rows of test data into `datasets/` from a JSON schema or an API definition operation's request body. |

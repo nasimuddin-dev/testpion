@@ -18,6 +18,7 @@ testpion graphql-subscribe <endpoint> -q <doc>   Run a GraphQL subscription and 
 testpion graphql-op <Type.field> --endpoint <url> Build a ready-to-run operation for a root field (or --schema <file>)
 testpion lint <collection>    Security review of a collection's requests (--fail-on high for CI)
 testpion fuzz <spec>           Fuzz an API from its OpenAPI document: server errors, invalid input accepted (local hosts only)
+testpion vars move <c> --to <envs> Move collection variables into environments (each can set its own value)
 testpion replace <c> <find> <with> Find and replace across a collection's requests (preview; --apply saves)
 testpion tests-from-spec <spec> Write a first test suite from an API definition (examples and invalid requests)
 testpion generate-data <name>  Generate rows of test data into datasets/ from a JSON schema or an API operation
