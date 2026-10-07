@@ -15,7 +15,8 @@ import { CollectionDocs } from '../components/CollectionDocs';
 import { addToFolder, CollectionTree } from '../components/CollectionTree';
 import { TrashDialog } from '../components/TrashDialog';
 import { KeyValueEditor } from '../components/KeyValueEditor';
-import { Badge, Button, cx, Empty, IconButton, Input, Menu, SectionTitle, Split, Tabs } from '../components/ui';
+import { Badge, Button, cx, Empty, IconButton, Menu, SectionTitle, Split, Tabs } from '../components/ui';
+import { InlineRename } from '../components/TreeParts';
 import { closeTabsFor } from '../components/EditorTabs';
 import { subtreeIds } from '../components/MoveDialog';
 import { ImportModal } from './rest/dialogs';
@@ -56,6 +57,22 @@ export function CollectionsView() {
       else useApp.getState().toast('There is no collection to export yet.', 'error');
     }
   });
+  const [renamingName, setRenamingName] = useState(false);
+  // another collection: no rename left open
+  useEffect(() => setRenamingName(false), [draft?.id]);
+  /** Rename in place: only the name is saved (other unsaved edits of the collection stay unsaved), like a rename in the tree. */
+  const renameCollection = async (name: string) => {
+    setRenamingName(false);
+    if (!draft || name === draft.name) return;
+    try {
+      const stored = cols.find((x) => x.id === draft.id) ?? draft;
+      await call('col.save', { ...stored, name });
+      setDraft({ ...draft, name });
+      await load();
+    } catch (e) {
+      useApp.getState().toast(asError(e).message, 'error');
+    }
+  };
   const save = async (c: Collection) => {
     await call('col.save', c);
     await load();
@@ -161,7 +178,22 @@ export function CollectionsView() {
         {draft ? (
           <>
             <div className="flex items-center gap-2 px-3 h-11 border-b border-line">
-              <Input className="font-semibold w-72" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
+              {renamingName ? (
+                <InlineRename value={draft.name} label="Collection name" className="font-semibold w-72" onCommit={(name) => void renameCollection(name)} onCancel={() => setRenamingName(false)} />
+              ) : (
+                // the name like a request's: plain text, renamed in place on a double-click (or F2 / Enter)
+                <span
+                  role="button"
+                  tabIndex={0}
+                  className="font-semibold truncate max-w-[24rem] px-1 rounded hover:bg-hover cursor-text"
+                  title="Double-click to rename"
+                  onDoubleClick={() => setRenamingName(true)}
+                  onKeyDown={(e) => (e.key === 'F2' || e.key === 'Enter') && (e.preventDefault(), setRenamingName(true))}
+                  data-collection-name
+                >
+                  {draft.name}
+                </span>
+              )}
               <Badge>v{draft.version}</Badge>
               <div className="ml-auto flex gap-2">
                 <Button size="sm" icon={<FilePlus2 size={12} />} onClick={() => useApp.getState().openIntent('rest', { newTab: true })}>
