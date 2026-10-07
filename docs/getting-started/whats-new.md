@@ -1,6 +1,6 @@
 ---
 title: "What's new: how to use it"
-description: "Step by step: the API definition tabs (Preview, Lint, Fuzz, Generate tests), test data, database datasets, secrets from a secret manager, AsyncAPI, .http files, Kafka, GraphQL subscriptions in tests and the variable popover."
+description: "Step by step: the HTTP Debugger, Git compare and conflicts, the API definition tabs (Preview, Lint, Fuzz, Generate tests), test data, database datasets, secrets from a secret manager, AsyncAPI, .http files, Kafka, GraphQL subscriptions in tests and the variable popover."
 ---
 
 ::: v-pre
@@ -8,6 +8,45 @@ description: "Step by step: the API definition tabs (Preview, Lint, Fuzz, Genera
 # What's new: how to use it
 
 The options added in 0.44, each with the steps to use it and a link to the full reference. Every one also works from the terminal (`testpion …`, with `--json`) and for AI agents (an MCP tool of `testpion mcp-server`).
+
+## HTTP Debugger: see what other programs send
+
+The **Debugger** (on the rail, and a tile on Home) shows the HTTP traffic of other programs (a browser, a mobile app, a script, a service you are building) as it happens.
+
+1. Open **Debugger** and click **Start capturing**. The proxy listens on `127.0.0.1` and shows its address.
+2. Point a program at it with **Capture**: open a browser through it (Chrome, Edge, Firefox or Brave, in a profile of their own), open a terminal with `HTTP_PROXY` set, copy the lines for a shell, or switch the Windows **system proxy** to TestPion (it is switched back when you stop or quit).
+3. Use the program. Every request appears with the program that sent it, status, type, size and time. Filter by host, method, status or text (**In bodies** searches the bodies too); ↑ ↓ Enter, Delete, Ctrl+F and Ctrl+E work in the list.
+4. Click a row for the request and response: **Response**, **Request**, **Headers**, **Raw**, **Hex**, **Auth** (a JWT's claims, a Basic user; never the secret) and **Timing**. **Open** makes it a request tab, **Resend** sends it again, **Ask AI** explains it.
+
+**HTTPS.** HTTPS shows as a tunnel by host until you choose **Decrypt HTTPS**: a root certificate made on this computer (trust it with one click; **Settings** shows how to remove it) lets the Debugger read the traffic of programs that trust it. Hosts can stay encrypted. WebSocket frames and Server-Sent Events show live; HTTP/2 and gRPC calls are decoded (with the workspace's `.proto` files when it has them).
+
+**Rules** change the traffic on the way: hide (ignore), highlight, modify headers or the body, reply with a canned response (the server never sees the request), redirect to another host, or set a **breakpoint** that pauses a request or response in a dialog so you can edit it. **Rule** on a row adds *Reply with this response from now on*. Rules live in `debugger/rules.json`, shared through git.
+
+**Sessions.** **Session ▸ Save** keeps a capture as a HAR file in `debugger/`; AutoSave keeps the live one every minute; HAR and Fiddler `.saz` files open too. **Compare** shows two exchanges side by side.
+
+**A phone or another computer.** **Capture ▸ A phone or another computer** listens on the network and shows QR codes; the page they open has the proxy settings and, with HTTPS decryption on, the certificate to install.
+
+While capturing, the **status bar** shows *Debugger :port* wherever you are, in the warning colour when rules change traffic or the system proxy points at TestPion; click it to come back. Terminal: `testpion debug`; agents: `debugger_capture`, `debugger_exchanges`, `debugger_rules`. [More](/api-testing/http-debugger)
+
+## Git: compare, conflicts side by side, history
+
+- **Compare a change.** In the **Git** view, **Compare** on a changed request, folder, collection setting or environment shows it side by side with the last commit, part by part (request line, params, headers, auth, body, scripts, checks).
+- **Conflicts side by side.** After a pull that conflicts, **Compare…** on the file shows each conflict with the version before, yours and theirs. Pick **Mine** or **Theirs** per conflict, then **Resolve with these choices**; every change that didn't conflict stays. Environments merge variable by variable and library files item by item, like collections.
+- **Branches.** The branch menu renames the current branch and deletes another (an unmerged one asks again).
+- **History.** **History in git…** on a request, a collection or an environment lists its versions, each compared with now; **Restore this version** puts it back as a change to commit.
+- **Open tabs follow the disk.** After a pull or branch switch, open requests show the new version; a tab with unsaved edits asks **Keep mine** or **Take the new version**.
+
+[More](/getting-started/git#merging-collections-request-by-request)
+
+## Commit without leaking secrets
+
+Before a commit, the Git view lists every secret the commit would publish (a token typed into a header, a password in a body …), grouped by where it is. **Open** goes to it; **Fix** moves the value into a secret variable of the active environment (kept in the OS credential store) and leaves `{{variable}}` in its place; **Fix all** does every one. [More](/getting-started/git#the-secret-guard)
+
+## Editors that know what they edit
+
+- **Test files (YAML):** keys complete with a line of help for the test's type, check types complete under `assertions:` (or `checks:`), hovering a key explains it, and mistakes are underlined a moment after you type (an unknown type or check, a key the runner doesn't read, a `dependsOn` nobody defines). The same checks run as `testpion lint-tests`.
+- **JSON bodies:** when a request belongs to an API definition in `specs/`, its body completes and is checked against the operation's schema (fields, required ones, types); a line above the body names the operation.
+- **Scripts:** `tp.*` (and `pm.*`) complete, and `{{braces}}` in a script aren't flagged as missing variables.
 
 ## API definitions: Preview, Lint, Fuzz, Generate tests
 
@@ -124,6 +163,11 @@ In a long list, the filter above the requests narrows it by name, folder or meth
 
 A collection variable wins over the environment, so the same value is used in every environment. When **Where it's set** shows the collection's value is used, click **Move to environments…** (also on the collection's **Variables** tab). Tick the variables and environments, check the preview, then **Move**, and set each environment's value. [More](/api-testing/environments#move-collection-variables-to-environments)
 
+## The collection Overview and Tools menu
+
+- **Overview ▸ Request health** lists the requests sent from the app (failing first, then the slowest). The chips above it switch to **Not sent yet** or **Without checks**, with their counts; when nothing has been sent it offers **Run the collection**.
+- **Tools** in the collection header holds **Find and replace…**, **Tidy up…**, **Move variables to environments…** and **Security review…** (secrets typed in, secrets in URLs, plain http, TLS checks turned off). **Export** offers TestPion, Postman, OpenAPI, Bruno, `.http` and AsyncAPI.
+
 ## Collection name
 
 In a collection's settings the name is plain text. **Double-click** it (or press F2 or Enter on it) to rename it in place. **Enter** saves the new name and **Escape** keeps the old one, as when renaming a request.
@@ -138,6 +182,10 @@ In a collection's settings the name is plain text. **Double-click** it (or press
 4. In **Produce**, choose the topic, a key and headers, write the message and **Produce**. Each message shows its topic, partition, offset, key and headers.
 
 [More](/api-testing/websocket#kafka)
+
+### Check realtime messages against AsyncAPI
+
+Add `{ type: asyncapi, spec: specs/asyncapi/events.yaml }` to a WebSocket, MQTT or Kafka test's assertions: each received message must match one of the messages its channel declares. A message that doesn't says which one, on which channel, and what is wrong. For plain WebSocket, add `channel: /path`. [More](/api-testing/websocket#check-messages-against-an-asyncapi-document)
 
 ### Import and export AsyncAPI
 
