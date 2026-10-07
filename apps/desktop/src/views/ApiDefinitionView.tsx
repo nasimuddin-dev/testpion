@@ -180,7 +180,7 @@ export function ApiDefinitionView() {
             />
           )
         ) : tab === 'preview' ? (
-          <ApiPreviewPanel outline={outline.outline} error={outline.error} />
+          <ApiPreviewPanel outline={outline.outline} error={outline.error} spec={spec} />
         ) : tab === 'lint' ? (
           <ApiLintPanel spec={spec} text={text} result={lint} onOpen={openProblem} />
         ) : tab === 'fuzz' ? (

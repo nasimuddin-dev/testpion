@@ -46,6 +46,17 @@ const steps = [
     })()`,
   ],
   [
+    'generate-tests-from-the-preview',
+    `(async () => {
+      await __t.tab('Preview'); await __t.sleep(500);
+      [...document.querySelectorAll('main [data-api-preview] button')].find((b) => b.textContent.trim() === 'Generate tests')?.click();
+      const ok = await __t.waitFor(() => [...document.querySelectorAll('[role=dialog] button')].find((b) => b.textContent.trim() === 'Generate tests'), 4000);
+      ok?.click();
+      const toast = await __t.waitFor(() => [...document.querySelectorAll('[data-sonner-toast]')].map((t) => t.textContent).find((t) => /tests: review the example values|exists already/.test(t)), 6000);
+      return 'toast: ' + !!toast;
+    })()`,
+  ],
+  [
     'fuzz-runs-and-summarises',
     `(async () => {
       await __t.esc(); await __t.open('petstore.json'); await __t.sleep(600);
@@ -61,6 +72,7 @@ const steps = [
 ];
 
 module.exports = withExpect(steps, {
+  'generate-tests-from-the-preview': /^toast: true$/,
   'fuzz-runs-and-summarises': /^summary: \d+ requests to 16 operations:/,
   'preview-lists-the-operations': /^operations: 19 \| tags: pet,store,user$/,
   'an-operation-opens-as-a-request': /^params: true \| opened: true$/,

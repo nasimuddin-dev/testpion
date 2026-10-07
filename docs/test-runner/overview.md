@@ -23,6 +23,15 @@ environment: Staging
 
 The editor (Tests view) knows the format: keys complete with a line of help (the keys of the test's type, the checks' keys with every check type, `dependsOn` with the ids of the file), hovering a key explains it, and mistakes get a marker a moment after you type: an unknown `type`, an unknown check type, a key the runner does not read (with the key you probably meant), a `dependsOn` nobody defines. The same checks run from the terminal with `testpion lint-tests` (exit 1 on errors, `--json` for scripts) and for AI agents through the `lint_tests` tool, so a pull request can be checked before the tests run.
 
+## A first suite from an API definition
+
+An API definition's **Preview ▸ Generate tests** writes a test file per tag under `tests/<api>/` and a suite, `tests/<api>.suite.yaml`. Each operation gets two tests:
+
+- its example request, checked for the documented success status, the [OpenAPI contract](/test-runner/assertions#openapi-contract-testing) and a latency under 2 seconds;
+- one invalid request (a required field left out, a wrong type, a path parameter that isn't a number …) that must get a 4xx.
+
+Requests use `{{baseUrl}}` and the auth variables an import uses (`{{accessToken}}`). The example values (ids, bodies) come from the document, so look at them before trusting the results. Files that exist are kept. From the terminal, `testpion tests-from-spec specs/clinic.yaml`; agents use `generate_tests`.
+
 ## Execution model
 
 - Tests stream from disk and are never loaded all at once. At most 2× the concurrency is pulled ahead of the workers (**backpressure**).

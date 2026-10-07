@@ -39,7 +39,7 @@ describe('generated datasets', () => {
     }
     // not all alike
     expect(new Set(rows.map((r) => r.email)).size).toBeGreaterThan(10);
-    expect(generateValue('lastName', { type: 'string' })).toMatch(/^[A-Z][a-z]+/);
+    expect(generateValue('lastName', { type: 'string' })).toMatch(/^\p{Lu}\p{L}/u);
   });
 
   it('writes CSV with nested values as JSON, quoted when needed', () => {

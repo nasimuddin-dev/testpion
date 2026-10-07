@@ -1,6 +1,7 @@
-import { ChevronDown, ChevronRight, ExternalLink, Lock } from 'lucide-react';
+import { ChevronDown, ChevronRight, ExternalLink, FlaskConical, Lock } from 'lucide-react';
 import { useState } from 'react';
-import { useApp } from '../store';
+import { asError, call } from '../api';
+import { confirmAction, useApp } from '../store';
 import { TreeBadge } from './CollectionTree';
 import { Badge, Button, Empty } from './ui';
 
@@ -115,7 +116,32 @@ function Operation({ op }: { op: OutlineOperation }) {
 }
 
 /** An API definition as its readers see it: the operations by tag, each with its parameters, body and responses, and Open as request. */
-export function ApiPreviewPanel({ outline, error }: { outline?: ApiOutline; error?: string }) {
+/** Write the first test suite from the definition: a file per tag, each operation's example and one invalid request. */
+async function generateTests(spec: string) {
+  const ok = await confirmAction({
+    title: 'Generate tests from this definition?',
+    message: `A test file per tag under tests/, with each operation's example (its documented status, the OpenAPI contract, latency) and one invalid request that must get a 4xx, and a suite that runs them. Test files that exist are kept.`,
+    confirmLabel: 'Generate tests',
+  });
+  if (!ok) return;
+  try {
+    const r = await call<{ written: Array<{ path: string; tests: number }>; skipped: string[] }>('openapi.generateTests', { path: spec });
+    const n = r.written.reduce((k, f) => k + f.tests, 0);
+    useApp
+      .getState()
+      .toast(
+        r.written.length
+          ? `${r.written.length} files, ${n} tests${r.skipped.length ? ` (${r.skipped.length} kept as they were)` : ''}: review the example values, then run the suite`
+          : `Every file exists already: ${r.skipped.join(', ')}`,
+        r.written.length ? 'success' : 'warning',
+        r.written.length ? { label: 'Open Tests', onClick: () => useApp.getState().setView('tests') } : undefined,
+      );
+  } catch (e) {
+    useApp.getState().toast(asError(e).message, 'error');
+  }
+}
+
+export function ApiPreviewPanel({ outline, error, spec }: { outline?: ApiOutline; error?: string; spec?: string }) {
   if (error) return <Empty title="Couldn't read the document">{error}</Empty>;
   if (!outline) return <Empty title="Reading the document…" />;
   return (
@@ -125,6 +151,11 @@ export function ApiPreviewPanel({ outline, error }: { outline?: ApiOutline; erro
           <span className="font-semibold">{outline.title}</span>
           {outline.version && <Badge>v{outline.version}</Badge>}
           <span className="text-xs text-muted">{outline.operations} operations</span>
+          {spec && (
+            <Button size="sm" className="ml-auto" icon={<FlaskConical size={12} />} onClick={() => void generateTests(spec)}>
+              Generate tests
+            </Button>
+          )}
         </div>
         {outline.servers.length > 0 && <div className="mono text-xs text-muted">{outline.servers.join(' · ')}</div>}
         {outline.description && <p className="text-sm text-muted whitespace-pre-wrap max-h-24 overflow-auto">{outline.description}</p>}

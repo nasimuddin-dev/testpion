@@ -25,6 +25,7 @@ export * from './openapi/diff.js';
 export * from './openapi/lint.js';
 export * from './openapi/outline.js';
 export * from './openapi/fuzz.js';
+export * from './openapi/tests-from-spec.js';
 export * from './openapi/coverage.js';
 export * from './openapi/from-collection.js';
 export * from './import/workspace-import.js';

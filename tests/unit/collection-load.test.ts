@@ -44,8 +44,7 @@ const collection = (): Collection => ({
 });
 
 describe('load-testing a collection', () => {
-  // timing under load: on a machine busy with the whole suite a run can be short of iterations, so it may try again
-  it('warms up with scripts, then runs the requests in order under load', { retry: 2 }, async () => {
+  it('warms up with scripts, then runs the requests in order under load', async () => {
     const svc = services();
     const { target, warmUp, unresolved } = await collectionLoadTarget({ collection: collection(), services: svc, warmUp: true });
     expect(warmUp).toMatchObject({ total: 3, passed: 3 });
@@ -63,9 +62,11 @@ describe('load-testing a collection', () => {
     for (const p of snap.perRequest!) expect(p.requests).toBeGreaterThan(1);
     expect(snap.requests).toBe(snap.perRequest!.reduce((n, p) => n + p.requests, 0));
     expect(snap.statusCodes['401']).toBeUndefined();
-    // two virtual users keep their connections: a few are opened, the rest reused, and the server time is measured
-    expect(snap.http!.newConnections).toBeGreaterThan(0);
-    expect(snap.http!.newConnections + snap.http!.reused).toBe(snap.requests);
+    // two virtual users keep their connections: most are reused (some may come from the warm-up), and the server
+    // time is measured; a request still in flight when the run stops may have no connection figures yet
+    const seen = snap.http!.newConnections + snap.http!.reused;
+    expect(seen).toBeLessThanOrEqual(snap.requests);
+    expect(seen).toBeGreaterThanOrEqual(snap.requests - 2);
     expect(snap.http!.reused).toBeGreaterThan(snap.http!.newConnections);
     expect(snap.http!.ttfb.p50).toBeGreaterThanOrEqual(0);
   });

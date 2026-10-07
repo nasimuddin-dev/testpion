@@ -9,6 +9,7 @@ import {
   fuzzMarkdown,
   openApiOutline,
   runFuzz,
+  writeTestsFromSpec,
   WorkspaceManager,
   type FuzzVerdict,
   type HttpRequestSpec,
@@ -140,4 +141,27 @@ export function registerOpenApiCommands(program: Command): void {
         }
       },
     );
+  program
+    .command('tests-from-spec')
+    .description("write a first test suite from an API definition in the workspace: a test file per tag under tests/<api>/ with each operation's example (documented status, OpenAPI contract, latency) and one invalid request that must get a 4xx, plus tests/<api>.suite.yaml")
+    .argument('<spec>', 'the API definition in the workspace, e.g. specs/clinic.yaml')
+    .option('--no-negative', 'leave out the invalid requests')
+    .option('--include-delete', 'also test DELETE operations')
+    .option('--overwrite', 'replace test files that exist')
+    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
+    .option('--json', 'print the result as JSON (for scripts and AI agents)')
+    .action((spec: string, o: { negative: boolean; includeDelete?: boolean; overwrite?: boolean; workspace?: string; json?: boolean }) => {
+      const { store } = openWorkspace(o.workspace, undefined, new WorkspaceManager());
+      try {
+        const r = writeTestsFromSpec(store, spec.replace(/\\/g, '/'), { negative: o.negative, includeDelete: o.includeDelete, overwrite: o.overwrite });
+        if (o.json) return console.log(JSON.stringify({ written: r.written.map((f) => ({ path: f.path, tests: f.tests })), skipped: r.skipped }, null, 2));
+        for (const f of r.written) console.log(green(`  ${f.path}`) + dim(`  ${f.tests} tests`));
+        for (const s of r.skipped) console.log(yellow(`  ${s} exists: kept (--overwrite replaces it)`));
+        if (r.written.length) console.log(dim(`Review the example values (ids, tokens), then: testpion run --suite ${r.written.at(-1)!.path.replace(/^tests\//, '').replace(/\.suite\.yaml$/, '')}`));
+      } catch (e) {
+        throw new CliError((e as Error).message, EXIT.CONFIG_ERROR);
+      } finally {
+        store.close();
+      }
+    });
 }

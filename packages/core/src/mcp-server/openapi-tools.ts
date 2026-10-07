@@ -6,12 +6,33 @@ import type { EngineContext } from '../engine.js';
 import type { HttpRequestSpec } from '../model/types.js';
 import { ApsError } from '../errors.js';
 import { generateWorkspaceDataset } from '../storage/dataset-files.js';
+import { writeTestsFromSpec } from '../openapi/tests-from-spec.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { str, type Tool } from './tool.js';
 
 /** MCP tools for API definitions (OpenAPI / Swagger) beyond the diff and coverage: the linter. */
 export function openApiTools(d: { store: WorkspaceStore; readSpecRef(ref: string): Promise<string>; context?(environment?: string): EngineContext }): Tool[] {
   return [
+    {
+      name: 'generate_tests',
+      write: true,
+      description:
+        "Write a first test suite from an API definition in the workspace (`spec`, e.g. specs/clinic.yaml): a test file per tag under tests/<api>/ with, per operation, its example request checked for the documented success status, the OpenAPI contract and latency, and one invalid request (a required field left out, a wrong type …) that must get a 4xx; plus tests/<api>.suite.yaml. Existing files are kept unless overwrite. Review the example values (ids, tokens), then run_tests.",
+      inputSchema: {
+        type: 'object',
+        properties: {
+          spec: str('The API definition in the workspace'),
+          negative: { type: 'boolean', description: 'Also an invalid request per operation (default true)' },
+          includeDelete: { type: 'boolean', description: 'Also test DELETE operations' },
+          overwrite: { type: 'boolean', description: 'Replace test files that exist' },
+        },
+        required: ['spec'],
+      },
+      run: (a) => {
+        const r = writeTestsFromSpec(d.store, String(a.spec ?? ''), { negative: a.negative !== false, includeDelete: a.includeDelete === true, overwrite: a.overwrite === true });
+        return { written: r.written.map((f) => ({ path: f.path, tests: f.tests })), skipped: r.skipped };
+      },
+    },
     {
       name: 'generate_dataset',
       write: true,

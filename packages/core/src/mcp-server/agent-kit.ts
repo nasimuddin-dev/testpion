@@ -32,6 +32,7 @@ const OPEN_WORLD = new Set([
 const DESTRUCTIVE = new Set([
   'api_fuzz',
   'generate_dataset',
+  'generate_tests',
   'debugger_capture',
   'git_resolve',
   'debugger_rules',
