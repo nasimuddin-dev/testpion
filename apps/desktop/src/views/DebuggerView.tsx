@@ -445,11 +445,6 @@ export function DebuggerView() {
           { id: 'rules', label: 'Rules', badge: rules?.activeCount || undefined },
         ]}
       />
-      {(side === 'incoming' ? !incomingSel : !sel) && (
-        <div className="px-3 py-1.5 border-t border-line text-xs text-muted shrink-0" data-details-hint>
-          Select a row: its request and response open here side by side. Double-click opens it as a request.
-        </div>
-      )}
       {tab === 'stats' ? (
         <StatsPanel stats={stats} onPick={(id) => (setTab('traffic'), setSelected(id))} />
       ) : tab === 'connections' ? (
@@ -520,10 +515,10 @@ export function DebuggerView() {
                     )}
                   </div>
                 )}
-                <div className="flex gap-2 p-2 border-b border-line items-center flex-wrap" data-filter-bar>
+                <div className="flex gap-1.5 p-2 border-b border-line items-center flex-wrap text-xs" data-filter-bar>
                   <Input
                     ref={filterBox}
-                    className="h-7 min-h-7 w-52 text-sm"
+                    className="h-7 min-h-7 w-44 text-xs"
                     placeholder={filter.deep ? 'Find in URLs, headers and bodies' : 'Filter requests'}
                     aria-label="Filter exchanges"
                     value={filter.text}
@@ -532,31 +527,31 @@ export function DebuggerView() {
                   <label className="flex items-center gap-1 text-xs text-muted whitespace-nowrap" title="Search headers and bodies too">
                     <input type="checkbox" checked={filter.deep} onChange={(e) => setFilter({ ...filter, deep: e.target.checked })} /> In bodies
                   </label>
-                  <Select className="h-7 min-h-7 py-0 text-sm" aria-label="Application" value={filter.application} onChange={(e) => setFilter({ ...filter, application: e.target.value })}>
+                  <Select className="h-7 min-h-7 py-0 text-xs" aria-label="Application" value={filter.application} onChange={(e) => setFilter({ ...filter, application: e.target.value })}>
                     <option value="">All Applications</option>
                     {seen.apps.map((h) => (
                       <option key={h}>{h}</option>
                     ))}
                   </Select>
-                  <Select className="h-7 min-h-7 py-0 text-sm" aria-label="Host" value={filter.host} onChange={(e) => setFilter({ ...filter, host: e.target.value })}>
+                  <Select className="h-7 min-h-7 py-0 text-xs" aria-label="Host" value={filter.host} onChange={(e) => setFilter({ ...filter, host: e.target.value })}>
                     <option value="">All Domains</option>
                     {seen.hosts.map((h) => (
                       <option key={h}>{h}</option>
                     ))}
                   </Select>
-                  <Select className="h-7 min-h-7 py-0 text-sm" aria-label="Type" value={filter.type} onChange={(e) => setFilter({ ...filter, type: e.target.value })}>
+                  <Select className="h-7 min-h-7 py-0 text-xs" aria-label="Type" value={filter.type} onChange={(e) => setFilter({ ...filter, type: e.target.value })}>
                     <option value="">All Types</option>
                     {seen.types.map((h) => (
                       <option key={h}>{h}</option>
                     ))}
                   </Select>
-                  <Select className="h-7 min-h-7 py-0 text-sm" aria-label="Method" value={filter.method} onChange={(e) => setFilter({ ...filter, method: e.target.value })}>
+                  <Select className="h-7 min-h-7 py-0 text-xs" aria-label="Method" value={filter.method} onChange={(e) => setFilter({ ...filter, method: e.target.value })}>
                     <option value="">Any method</option>
                     {['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'CONNECT'].map((m) => (
                       <option key={m}>{m}</option>
                     ))}
                   </Select>
-                  <Select className="h-7 min-h-7 py-0 text-sm" aria-label="Status" value={filter.status} onChange={(e) => setFilter({ ...filter, status: e.target.value as typeof filter.status })}>
+                  <Select className="h-7 min-h-7 py-0 text-xs" aria-label="Status" value={filter.status} onChange={(e) => setFilter({ ...filter, status: e.target.value as typeof filter.status })}>
                     <option value="">Any status</option>
                     <option value="ok">2xx</option>
                     <option value="redirect">3xx</option>
@@ -657,6 +652,11 @@ export function DebuggerView() {
                         />
                       )}
                       <TrafficSide side={side} onSide={setSide} incoming={incoming.list.length} />
+                      {(side === 'incoming' ? !incomingSel : !sel) && (
+                        <div className="px-3 py-1.5 border-t border-line text-xs text-muted shrink-0" data-details-hint>
+                          Select a row: its request and response open here side by side. Double-click opens it as a request.
+                        </div>
+                      )}
                     </div>
                     <div className="h-full flex flex-col min-h-0">
                       {side === 'incoming' ? (
