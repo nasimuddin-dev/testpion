@@ -13,6 +13,10 @@ The **HTTP Debugger** (**Debugger** in the rail, under Testing) shows the traffi
 
 The Traffic tab is laid out like a desktop HTTP debugger:
 
+<figure class="aps-screenshot">
+  <img src="/images/debugger.jpg" alt="The HTTP Debugger: the tool rail on the left, a grid of captured requests with method, version, URL, status, type, size, speed, application, domain and IP address, a 404 selected with Request Details and Response Details side by side, and the Summary panel on the right" width="1440" height="900" loading="lazy">
+</figure>
+
 | Part | What it is |
 | --- | --- |
 | **Tool rail** (left) | Submitter, Filter, Highlight, Auto-Reply, Modify (headers, redirect), Timeline (F5), Summary, Structure (F6), Performance, Convert, Export / Import. Hover one for what it does; a click opens its panel in the dock, a second click closes it. |

@@ -99,8 +99,17 @@ module.exports = async function run(win) {
   await js(`__cap.click('Body'); true`);
   await sleep(300);
   // a token response: its id_token (a JWT) decoded in the JWT tab
-  await js(`[...document.querySelectorAll('button')].find((b) => b.offsetParent !== null && b.textContent.includes('Get access token'))?.click(); true`);
-  await sleep(1200);
+  // the request may be in a folded folder: the explorer's filter shows it, then the filter is cleared
+  await js(`(async () => {
+    const f = document.querySelector('aside input[placeholder^="Filter"]');
+    const set = (v) => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(f, v); f.dispatchEvent(new Event('input', { bubbles: true })); };
+    if (f) { set('Get access token'); await new Promise((r) => setTimeout(r, 900)); }
+    [...document.querySelectorAll('aside [data-tree-row], aside button')].find((b) => b.offsetParent !== null && b.textContent.includes('Get access token'))?.click();
+    await new Promise((r) => setTimeout(r, 1200));
+    if (f) set('');
+    return true;
+  })()`);
+  await sleep(800);
   await js(`__cap.click('Send'); true`);
   await sleep(2500);
   await js(`__cap.click('JWT'); true`);
@@ -120,8 +129,11 @@ module.exports = async function run(win) {
   await js(`__cap.nav('MCP'); true`);
   await sleep(1000);
   await js(`__cap.click('Connect'); true`);
+  await sleep(1200);
+  // the example's own stdio server: allowed for this (throwaway) workspace when TestPion asks before running it
+  await js(`(() => { const b = [...document.querySelectorAll('[role=dialog] button')].find((x) => x.textContent.trim() === 'Run once'); b?.click(); return true; })()`);
   await sleep(3500);
-  await js(`__cap.setInput(__cap.fieldInput('customer_id'), '123'); true`);
+  await js(`(() => { const i = __cap.fieldInput('customer_id'); if (!i) throw new Error('no customer_id field; dialogs: ' + [...document.querySelectorAll('[role=dialog]')].map((d) => d.innerText.slice(0, 300)).join(' | ') + ' || main: ' + (document.querySelector('main')?.innerText ?? '').slice(0, 600).replace(/\s+/g, ' ')); __cap.setInput(i, '123'); return true; })()`);
   await sleep(300);
   await js(`__cap.click('Execute'); true`);
   await sleep(1500);
@@ -167,7 +179,8 @@ module.exports = async function run(win) {
   // Traces
   await js(`__cap.nav('Traces'); true`);
   await sleep(1500);
-  await js(`__cap.click('Booking agent uses the right tools'); true`);
+  // the booking agent's trace when it is listed, else the newest one
+  await js(`(() => { const rows = [...document.querySelectorAll('main button')].filter((b) => b.offsetParent !== null && /spans/.test(b.textContent)); (rows.find((b) => b.textContent.includes('Booking agent uses the right tools')) ?? rows[0])?.click(); return true; })()`);
   await sleep(1500);
   await shot('traces');
 
@@ -188,6 +201,39 @@ module.exports = async function run(win) {
   await js(`__cap.nav('Monitors'); true`);
   await sleep(1500);
   await shot('monitors');
+
+  // the HTTP Debugger: a session of a clinic's traffic (opened from a HAR, so nothing has to listen), a 404 selected
+  await js(`__cap.nav('Debugger'); true`);
+  await sleep(1200);
+  await js(`(async () => {
+    const t0 = Date.now() - 90_000;
+    const calls = [
+      ['chrome', 'GET', '/api/patients', 200, 42], ['chrome', 'GET', '/api/patients/7', 200, 18], ['chrome', 'GET', '/api/appointments?date=today', 200, 63],
+      ['node', 'POST', '/api/appointments', 201, 88], ['node', 'GET', '/api/patients/41', 404, 9], ['python', 'GET', '/api/vaccines', 200, 120],
+      ['python', 'PUT', '/api/patients/7/vitals', 200, 47], ['chrome', 'GET', '/api/invoices?status=open', 500, 310], ['node', 'DELETE', '/api/appointments/12', 204, 21],
+      ['chrome', 'GET', '/api/patients?search=byron', 200, 35], ['python', 'POST', '/api/labs/results', 201, 152], ['node', 'GET', '/api/patients/99', 404, 8],
+      ['chrome', 'GET', '/api/staff', 200, 29], ['node', 'PATCH', '/api/appointments/13', 200, 54], ['chrome', 'GET', '/api/reports/daily', 200, 410],
+    ];
+    const entries = calls.map(([app, method, path, status, ms], i) => {
+      const body = status >= 400 ? JSON.stringify({ error: status === 404 ? 'not_found' : 'internal', message: status === 404 ? 'Patient not found' : 'Invoice service timed out' }) : status === 204 ? '' : JSON.stringify({ id: 7 + i, name: ['Byron', 'Biscuit', 'Pepper'][i % 3], species: ['dog', 'cat', 'rabbit'][i % 3] });
+      return {
+        startedDateTime: new Date(t0 + i * 5200).toISOString(), time: ms,
+        request: { method, url: 'http://api.vetclinic.test:8080' + path, httpVersion: 'HTTP/1.1', headers: [{ name: 'accept', value: 'application/json' }, { name: 'authorization', value: 'Bearer eyJhbGciOiJIUzI1NiJ9.e30.x' }, { name: 'user-agent', value: app === 'chrome' ? 'Mozilla/5.0 Chrome/141' : app === 'node' ? 'node' : 'python-requests/2.32' }], queryString: [], cookies: [], headersSize: -1, bodySize: method === 'GET' || method === 'DELETE' ? 0 : 64, ...(method === 'GET' || method === 'DELETE' ? {} : { postData: { mimeType: 'application/json', text: '{"petId":7,"note":"annual check"}' } }) },
+        response: { status, statusText: status === 404 ? 'Not Found' : status === 500 ? 'Internal Server Error' : status === 201 ? 'Created' : status === 204 ? 'No Content' : 'OK', httpVersion: 'HTTP/1.1', headers: [{ name: 'content-type', value: 'application/json' }, { name: 'x-request-id', value: 'req-' + (1000 + i) }], cookies: [], content: { size: body.length, mimeType: 'application/json', text: body }, redirectURL: '', headersSize: -1, bodySize: body.length },
+        cache: {}, timings: { send: 1, wait: Math.round(ms * 0.8), receive: Math.round(ms * 0.2) }, serverIPAddress: '10.20.0.15',
+        _testpion: { id: 'cap-' + i, kind: 'http', application: app, clientPort: 52000 + i, pid: { chrome: 8124, node: 4116, python: 9532 }[app], serverAddress: '10.20.0.15:8080' },
+      };
+    });
+    await window.aps.invoke('debug.openSession', { text: JSON.stringify({ log: { version: '1.2', creator: { name: 'TestPion', version: '1' }, entries } }) });
+    await new Promise((r) => setTimeout(r, 1200));
+    [...document.querySelectorAll('main [role=row][data-exchange]')].find((r) => r.textContent.includes('/api/patients/41'))?.click();
+    await new Promise((r) => setTimeout(r, 800));
+    if (document.querySelector('main [data-dock]')?.getAttribute('data-dock') !== 'summary') document.querySelector('[data-tool-rail] button[aria-label=Summary]')?.click();
+    return true;
+  })()`);
+  await sleep(1500);
+  await shot('debugger');
+  await js(`window.aps.invoke('debug.clear').then(() => true)`);
 
   // Home again, now with the activity of all of the above: the dashboard
   await js(`__cap.nav('Home'); true`);
