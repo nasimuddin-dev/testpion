@@ -322,7 +322,7 @@ export function Explorer() {
       quiet(call<Library<unknown>>('lib.get', { kind: 'grpc' }), empty),
       quiet(call<Library<unknown>>('lib.get', { kind: 'websocket' }), empty),
       quiet(call<Array<McpServerConfig & { connected?: boolean }>>('mcp.servers'), []),
-      quiet(call<string[]>('openapi.specs'), []),
+      quiet(call<string[]>('openapi.specs', { includeAsync: true }), []),
       quiet(call<Library<unknown>>('lib.get', { kind: 'mcp-folders' }), empty),
       quiet(call<Library<unknown>>('lib.get', { kind: 'spec-folders' }), empty),
     ]);

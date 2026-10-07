@@ -1,11 +1,12 @@
 /** RPC handlers: Collections (requests, folders, examples, import/export) and their mock servers. */
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, relative, sep } from 'node:path';
-import { ApsError, dbKindOf, redactDbUrl, isSqliteDataset, collectionVariableFlow, listWorkspaceDatasets, readDataset, sqliteTables, fetchImportText, bruFilesToBrunoExport, collectionToBru, importIntoWorkspace, diffOpenApi, lintOpenApi, openApiOutline, workspaceApiCoverage, apiCoverageMarkdown, securityLint, certificateLint, listCertificates, variableFlow, startRecorder, recordingToCollection, type RecordedExchange, collectionToOpenApiText, collectionToHttpFile, collectionToAsyncApi, generateWorkspaceDataset, writeTestsFromSpec, exampleFromResponse, startMockServer, collectionMarkdown, collectionHtml, exportPostmanCollection, withRequestExamples, type SavedExample, convertCollectionScripts, importRequestSnippet, isRequestSnippet, type Collection, collectionSavedItems, duplicateCollection, shortId, requestBodySchema, loadOpenApi } from '@testpion/core';
+import { ApsError, dbKindOf, redactDbUrl, isSqliteDataset, collectionVariableFlow, listWorkspaceDatasets, readDataset, sqliteTables, fetchImportText, bruFilesToBrunoExport, collectionToBru, importIntoWorkspace, diffOpenApi, lintOpenApi, openApiOutline, asyncApiOutline, workspaceApiCoverage, apiCoverageMarkdown, securityLint, certificateLint, listCertificates, variableFlow, startRecorder, recordingToCollection, type RecordedExchange, collectionToOpenApiText, collectionToHttpFile, collectionToAsyncApi, generateWorkspaceDataset, writeTestsFromSpec, exampleFromResponse, startMockServer, collectionMarkdown, collectionHtml, exportPostmanCollection, withRequestExamples, type SavedExample, convertCollectionScripts, importRequestSnippet, isRequestSnippet, type Collection, collectionSavedItems, duplicateCollection, shortId, requestBodySchema, loadOpenApi } from '@testpion/core';
 import type { Backend, Handlers, CollectionRunParams } from '../backend.js';
 
 /** An API definition's workspace path: a JSON or YAML file directly in specs/. */
-const SPEC_PATH = /^specs\/[^/\\]+\.(json|ya?ml)$/i;
+// an OpenAPI definition in specs/, or an AsyncAPI one its import keeps in specs/asyncapi/
+const SPEC_PATH = /^specs\/(asyncapi\/)?[^/\\]+\.(json|ya?ml)$/i;
 
 export function collectionsHandlers(be: Backend): Handlers {
   return {
@@ -129,9 +130,18 @@ export function collectionsHandlers(be: Backend): Handlers {
       }
     },
     /** OpenAPI documents kept in the workspace (specs/), for comparing versions. */
-    'openapi.specs': () => {
-      const dir = be.ws.path('specs');
-      return existsSync(dir) ? readdirSync(dir).filter((f) => /\.(json|ya?ml)$/i.test(f)).map((f) => `specs/${f}`) : [];
+    'openapi.specs': ({ includeAsync }: { includeAsync?: boolean } = {}) => {
+      const list = (rel: string) => {
+        const dir = be.ws.path(rel);
+        return existsSync(dir) ? readdirSync(dir).filter((f) => /\.(json|ya?ml)$/i.test(f)).map((f) => `${rel}/${f}`) : [];
+      };
+      // the API definitions list shows AsyncAPI documents too; coverage, diff and the data generator take OpenAPI only
+      return [...list('specs'), ...(includeAsync ? list('specs/asyncapi') : [])];
+    },
+    /** An AsyncAPI document as its readers see it: servers, channels, what the application does, messages. */
+    'asyncapi.outline': ({ path, text }: { path?: string; text?: string }) => {
+      if (text === undefined && (!path || !SPEC_PATH.test(path))) throw new ApsError('ValidationError', `Not an API definition in specs/: ${path ?? ''}`);
+      return asyncApiOutline(text ?? readFileSync(be.ws.safePath(path!), 'utf8'));
     },
     /**
      * The JSON Schema a request's body should follow, from the operation it maps to in one of the workspace's API

@@ -100,7 +100,7 @@ An AsyncAPI document becomes a collection of [realtime connections](/api-testing
 
 Who sends what follows the document: in AsyncAPI 2, `publish` is what the application receives (TestPion sends it) and `subscribe` what it sends (TestPion reads it); in AsyncAPI 3, `action: send` and `receive` say the same. Channels on other protocols (AMQP, NATS …) are listed in the collection's description as not imported.
 
-The document is kept in `specs/asyncapi/`, for the [`asyncapi` check](/api-testing/websocket#check-messages-against-an-asyncapi-document) and for `testpion tests-from-spec`, which writes a realtime test per channel.
+The document is kept in `specs/asyncapi/` and listed under **API definitions** (marked ASYNC): its **Preview** shows the servers and each channel, whether the API publishes or consumes there, and its messages with payloads and examples, with **Generate tests**. It is also used by the [`asyncapi` check](/api-testing/websocket#check-messages-against-an-asyncapi-document) and for `testpion tests-from-spec`, which writes a realtime test per channel.
 
 **Export ▸ AsyncAPI 3.0** goes the other way: a collection's connections become an AsyncAPI document, with a server per broker or server URL (a URL kept in a `{{variable}}` becomes a server variable), a channel per topic, event or path, the saved messages as examples with a schema inferred from them, and what each connection sends or reads as operations. From the terminal: `testpion export "Clinic events" -f asyncapi -o events.asyncapi.yaml`.
 

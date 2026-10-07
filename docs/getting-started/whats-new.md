@@ -114,8 +114,9 @@ In a collection's settings the name is plain text. **Double-click** it (or press
 
 1. **Import** an AsyncAPI 2 or 3 document. Each channel becomes a saved connection: a Kafka topic, an MQTT topic, a WebSocket path or a Socket.IO event, with its example messages ready to send. The servers become an environment named after the API, such as *Clinic events servers*.
 2. Choose that environment and open a connection from the collection.
-3. To test the channels: `testpion tests-from-spec specs/asyncapi/<api>.yaml` writes a test per channel that sends the example and checks what comes back with the `asyncapi` check.
-4. **Export ▸ AsyncAPI 3.0** turns a collection's connections into a document.
+3. The document is listed under **API definitions** (marked ASYNC). Its **Preview** shows the servers and each channel: whether the API publishes or consumes there, and its messages with their payloads and examples.
+4. To test the channels, click **Generate tests** in the Preview (or run `testpion tests-from-spec specs/asyncapi/<api>.yaml`). Each channel gets a test that sends the example and checks what comes back with the `asyncapi` check.
+5. **Export ▸ AsyncAPI 3.0** turns a collection's connections into a document.
 
 In a realtime test, `{ type: asyncapi, spec: specs/asyncapi/events.yaml }` fails a message that doesn't match its channel. [More](/api-testing/collections#asyncapi)
 

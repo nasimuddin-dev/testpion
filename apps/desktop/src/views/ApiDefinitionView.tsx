@@ -12,6 +12,7 @@ import { OpenApiDiffDialog } from '../components/OpenApiDiffDialog';
 import { ApiLintPanel, type ApiLintProblem, type ApiLintResult } from '../components/ApiLintPanel';
 import { ApiPreviewPanel, type ApiOutline } from '../components/ApiPreviewPanel';
 import { ApiFuzzPanel } from '../components/ApiFuzzPanel';
+import { AsyncPreviewPanel, type AsyncOutline } from '../components/AsyncPreviewPanel';
 import { useSingleEditorTab } from '../components/EditorTabs';
 import { Badge, Button, Empty, Tabs } from '../components/ui';
 
@@ -26,7 +27,11 @@ function infoOf(text: string): { title?: string; version?: string; openapi?: str
     const d = JSON.parse(text) as { info?: { title?: string; version?: string }; openapi?: string; swagger?: string };
     return { title: d.info?.title, version: d.info?.version, openapi: d.openapi ?? d.swagger };
   } catch {
-    const pick = (re: RegExp) => re.exec(text)?.[1]?.trim().replace(/^['"]|['"]$/g, '');
+    const pick = (re: RegExp) =>
+      re
+        .exec(text)?.[1]
+        ?.trim()
+        .replace(/^['"]|['"]$/g, '');
     return { title: pick(/^\s{2}title:\s*(.+)$/m), version: pick(/^\s{2}version:\s*(.+)$/m), openapi: pick(/^(?:openapi|swagger):\s*(.+)$/m) };
   }
 }
@@ -40,7 +45,12 @@ export function ApiDefinitionView() {
   const docState = useMemo(() => tabSpec.forDoc(docId), [docId]);
   const [spec, setSpec] = useState<string | undefined>(() => docState.load().spec);
   useEffect(() => docState.save({ spec }), [spec, docState]);
+  // an AsyncAPI document (kept in specs/asyncapi/): its own preview; lint, fuzz, coverage and compare read OpenAPI
+  const isAsync = !!spec?.startsWith('specs/asyncapi/');
   const [tab, setTab] = useSticky<Tab>(`apidef:tab:${docId ?? 'main'}`, 'definition');
+  useEffect(() => {
+    if (isAsync && tab !== 'definition' && tab !== 'preview') setTab('definition');
+  }, [isAsync, tab]);
   useIntent('apidef', (p) => {
     if (p?.spec) setSpec(p.spec as string);
     if (p?.tab) setTab(p.tab as Tab);
@@ -76,17 +86,22 @@ export function ApiDefinitionView() {
   // lint the text as it is typed (a moment after typing stops): the Lint tab, and markers in the editor
   const [lint, setLint] = useState<ApiLintResult>();
   useEffect(() => {
-    if (!text) return;
+    if (!text || isAsync) return;
     const t = setTimeout(() => void call<ApiLintResult>('openapi.lint', { text }).then(setLint, () => setLint(undefined)), 400);
     return () => clearTimeout(t);
   }, [text]);
   // the operations as the docs read them, for the Preview tab (only while it is shown)
-  const [outline, setOutline] = useState<{ outline?: ApiOutline; error?: string }>({});
+  const [outline, setOutline] = useState<{ outline?: ApiOutline; async?: AsyncOutline; error?: string }>({});
   useEffect(() => {
     if (!text || tab !== 'preview') return;
-    const t = setTimeout(() => void call<ApiOutline>('openapi.outline', { text }).then((o) => setOutline({ outline: o }), (e) => setOutline({ error: asError(e).message })), 300);
+    const t = setTimeout(() => {
+      const p = isAsync
+        ? call<AsyncOutline>('asyncapi.outline', { text }).then((o) => setOutline({ async: o }))
+        : call<ApiOutline>('openapi.outline', { text }).then((o) => setOutline({ outline: o }));
+      void p.catch((e) => setOutline({ error: asError(e).message }));
+    }, 300);
     return () => clearTimeout(t);
-  }, [text, tab]);
+  }, [text, tab, isAsync]);
   const editor = useRef<{ ed: Parameters<OnMount>[0]; monaco: Parameters<OnMount>[1] }>(undefined);
   const reveal = useRef<ApiLintProblem>(undefined);
   const mark = () => {
@@ -97,7 +112,14 @@ export function ApiDefinitionView() {
     e.monaco.editor.setModelMarkers(
       model,
       'openapi-lint',
-      (lint?.problems ?? []).map((p) => ({ severity: p.severity === 'error' ? S.Error : p.severity === 'warning' ? S.Warning : S.Info, message: `${p.message} (${p.rule})`, startLineNumber: p.line, startColumn: p.column, endLineNumber: p.endLine, endColumn: p.endColumn })),
+      (lint?.problems ?? []).map((p) => ({
+        severity: p.severity === 'error' ? S.Error : p.severity === 'warning' ? S.Warning : S.Info,
+        message: `${p.message} (${p.rule})`,
+        startLineNumber: p.line,
+        startColumn: p.column,
+        endLineNumber: p.endLine,
+        endColumn: p.endColumn,
+      })),
     );
     const r = reveal.current;
     if (r) {
@@ -116,7 +138,7 @@ export function ApiDefinitionView() {
 
   const info = useMemo(() => infoOf(saved), [saved]);
   const name = spec?.replace(/^specs\//, '');
-  useSingleEditorTab('apidef', spec ? { title: name!, badge: 'API', badgeClass: 'text-[#8b5cf6]', item: spec, dirty } : undefined);
+  useSingleEditorTab('apidef', spec ? { title: name!, badge: isAsync ? 'ASYNC' : 'API', badgeClass: 'text-[#8b5cf6]', item: spec, dirty } : undefined);
 
   if (!spec)
     return (
@@ -140,7 +162,11 @@ export function ApiDefinitionView() {
           {info.title || name}
         </span>
         {info.version && <Badge>v{info.version}</Badge>}
-        {info.openapi && <Badge tone="accent">{info.openapi.startsWith('2') ? 'Swagger' : 'OpenAPI'} {info.openapi}</Badge>}
+        {info.openapi && (
+          <Badge tone="accent">
+            {info.openapi.startsWith('2') ? 'Swagger' : 'OpenAPI'} {info.openapi}
+          </Badge>
+        )}
         <span className="mono text-xs text-muted truncate">{spec}</span>
         <Button className="ml-auto" icon={<Save size={14} />} disabled={!dirty} onClick={() => void save()} title="Save (Ctrl+S)">
           Save
@@ -152,15 +178,19 @@ export function ApiDefinitionView() {
         tabs={[
           { id: 'definition', label: 'Definition' },
           { id: 'preview', label: 'Preview' },
-          {
-            id: 'lint',
-            label: 'Lint',
-            badge: lint && (lint.counts.error || lint.counts.warning) ? <Badge tone={lint.counts.error ? 'bad' : 'warn'}>{lint.counts.error || lint.counts.warning}</Badge> : undefined,
-            title: lint ? `${lint.counts.error} errors, ${lint.counts.warning} warnings, ${lint.counts.info} notes` : undefined,
-          },
-          { id: 'fuzz', label: 'Fuzz' },
-          { id: 'coverage', label: 'Coverage' },
-          { id: 'compare', label: 'Compare versions' },
+          ...(isAsync
+            ? []
+            : [
+                {
+                  id: 'lint' as const,
+                  label: 'Lint',
+                  badge: lint && (lint.counts.error || lint.counts.warning) ? <Badge tone={lint.counts.error ? 'bad' : 'warn'}>{lint.counts.error || lint.counts.warning}</Badge> : undefined,
+                  title: lint ? `${lint.counts.error} errors, ${lint.counts.warning} warnings, ${lint.counts.info} notes` : undefined,
+                },
+                { id: 'fuzz' as const, label: 'Fuzz' },
+                { id: 'coverage' as const, label: 'Coverage' },
+                { id: 'compare' as const, label: 'Compare versions' },
+              ]),
         ]}
       />
       <div className="flex-1 min-h-0">
@@ -179,6 +209,8 @@ export function ApiDefinitionView() {
               }}
             />
           )
+        ) : tab === 'preview' && isAsync ? (
+          <AsyncPreviewPanel outline={outline.async} error={outline.error} spec={spec} />
         ) : tab === 'preview' ? (
           <ApiPreviewPanel outline={outline.outline} error={outline.error} spec={spec} />
         ) : tab === 'lint' ? (

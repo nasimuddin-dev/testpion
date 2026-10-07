@@ -44,6 +44,7 @@ export * from './import/asyncapi.js';
 export * from './import/http-file.js';
 export * from './import/asyncapi-export.js';
 export * from './asyncapi/contract.js';
+export * from './asyncapi/outline.js';
 export * from './protocols/realtime.js';
 export * from './protocols/mcp/client.js';
 export * from './protocols/websocket/websocket.js';
