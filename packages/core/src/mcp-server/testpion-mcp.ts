@@ -49,6 +49,7 @@ import { runRealtimeExchange, type RealtimeExchange } from '../protocols/realtim
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { workspaceEditTools } from './workspace-edit-tools.js';
 import { gitTools } from './git-tools.js';
+import { openApiTools } from './openapi-tools.js';
 import { debuggerTools } from './debugger-tools.js';
 import { str, type Tool } from './tool.js';
 import { commandLine, isCommandTrusted } from '../storage/trust.js';
@@ -1376,6 +1377,7 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
       },
     },
     ...gitTools({ store, findCollection, redactor }),
+    ...openApiTools({ store, readSpecRef }),
     ...debuggerTools({ redactor, store }),
     ...workspaceEditTools({
       store,

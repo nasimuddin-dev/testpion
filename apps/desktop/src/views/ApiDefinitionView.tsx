@@ -1,5 +1,6 @@
 import { FileCode2, Save, Upload } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { OnMount } from '@monaco-editor/react';
 import { asError, call } from '../api';
 import { persisted, useApp } from '../store';
 import { useIntent, useSaveShortcut } from '../hooks';
@@ -8,10 +9,11 @@ import { useSticky } from '../lib/sticky';
 import { CodeEditor } from '../components/CodeEditor';
 import { ApiCoverageDialog } from '../components/ApiCoverageDialog';
 import { OpenApiDiffDialog } from '../components/OpenApiDiffDialog';
+import { ApiLintPanel, type ApiLintProblem, type ApiLintResult } from '../components/ApiLintPanel';
 import { useSingleEditorTab } from '../components/EditorTabs';
 import { Badge, Button, Empty, Tabs } from '../components/ui';
 
-type Tab = 'definition' | 'coverage' | 'compare';
+type Tab = 'definition' | 'lint' | 'coverage' | 'compare';
 
 /** Which document each API definition tab shows (each tab is its own document). */
 const tabSpec = persisted<{ spec?: string }>('apidef', {});
@@ -69,6 +71,40 @@ export function ApiDefinitionView() {
   };
   useSaveShortcut('apidef', () => void save());
 
+  // lint the text as it is typed (a moment after typing stops): the Lint tab, and markers in the editor
+  const [lint, setLint] = useState<ApiLintResult>();
+  useEffect(() => {
+    if (!text) return;
+    const t = setTimeout(() => void call<ApiLintResult>('openapi.lint', { text }).then(setLint, () => setLint(undefined)), 400);
+    return () => clearTimeout(t);
+  }, [text]);
+  const editor = useRef<{ ed: Parameters<OnMount>[0]; monaco: Parameters<OnMount>[1] }>(undefined);
+  const reveal = useRef<ApiLintProblem>(undefined);
+  const mark = () => {
+    const e = editor.current;
+    const model = e?.ed.getModel();
+    if (!e || !model) return;
+    const S = e.monaco.MarkerSeverity;
+    e.monaco.editor.setModelMarkers(
+      model,
+      'openapi-lint',
+      (lint?.problems ?? []).map((p) => ({ severity: p.severity === 'error' ? S.Error : p.severity === 'warning' ? S.Warning : S.Info, message: `${p.message} (${p.rule})`, startLineNumber: p.line, startColumn: p.column, endLineNumber: p.endLine, endColumn: p.endColumn })),
+    );
+    const r = reveal.current;
+    if (r) {
+      reveal.current = undefined;
+      e.ed.revealLineInCenter(r.line);
+      e.ed.setSelection({ startLineNumber: r.line, startColumn: r.column, endLineNumber: r.endLine, endColumn: r.endColumn });
+      e.ed.focus();
+    }
+  };
+  useEffect(mark, [lint]);
+  const openProblem = (p: ApiLintProblem) => {
+    reveal.current = p;
+    if (tab === 'definition') mark();
+    else setTab('definition');
+  };
+
   const info = useMemo(() => infoOf(saved), [saved]);
   const name = spec?.replace(/^specs\//, '');
   useSingleEditorTab('apidef', spec ? { title: name!, badge: 'API', badgeClass: 'text-[#8b5cf6]', item: spec, dirty } : undefined);
@@ -106,6 +142,12 @@ export function ApiDefinitionView() {
         onChange={setTab}
         tabs={[
           { id: 'definition', label: 'Definition' },
+          {
+            id: 'lint',
+            label: 'Lint',
+            badge: lint && (lint.counts.error || lint.counts.warning) ? <Badge tone={lint.counts.error ? 'bad' : 'warn'}>{lint.counts.error || lint.counts.warning}</Badge> : undefined,
+            title: lint ? `${lint.counts.error} errors, ${lint.counts.warning} warnings, ${lint.counts.info} notes` : undefined,
+          },
           { id: 'coverage', label: 'Coverage' },
           { id: 'compare', label: 'Compare versions' },
         ]}
@@ -115,8 +157,19 @@ export function ApiDefinitionView() {
           error ? (
             <Empty title="Couldn't open the document">{error}</Empty>
           ) : (
-            <CodeEditor language={/\.json$/i.test(spec) ? 'json' : 'yaml'} path={spec} value={text} onChange={setText} />
+            <CodeEditor
+              language={/\.json$/i.test(spec) ? 'json' : 'yaml'}
+              path={spec}
+              value={text}
+              onChange={setText}
+              onMount={(ed, monaco) => {
+                editor.current = { ed, monaco };
+                mark();
+              }}
+            />
           )
+        ) : tab === 'lint' ? (
+          <ApiLintPanel spec={spec} text={text} result={lint} onOpen={openProblem} />
         ) : tab === 'coverage' ? (
           <ApiCoverageDialog inline spec={spec} onClose={() => undefined} />
         ) : (

@@ -1,5 +1,5 @@
 /** Moving data in and out: import, export, docs, script conversion, response history and environments. */
-import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { Command, Option } from 'commander';
 import {
@@ -35,6 +35,10 @@ import {
   isWsdl,
   importIntoWorkspace,
   diffOpenApi,
+  lintOpenApi,
+  OPENAPI_LINT_RULES,
+  type OpenApiLintSeverity,
+  type OpenApiLintResult,
   workspaceApiCoverage,
   apiCoverageMarkdown,
   securityLint,
@@ -193,6 +197,69 @@ export function registerDataCommands(program: Command): void {
         }
       }
       if (o.failOnBreaking && d.breaking.length) process.exitCode = EXIT.TEST_FAILURE;
+    });
+  program
+    .command('openapi-lint')
+    .description('lint OpenAPI / Swagger documents: broken $refs, undeclared path parameters, duplicate operationIds, undefined security schemes, examples that do not match their schema, missing responses (for CI: exit 1 on errors)')
+    .argument('[specs...]', 'documents: files or http(s) links (default: every document in the workspace\'s specs/ folder)')
+    .option('-w, --workspace <dir>', 'with no documents given: the workspace folder whose specs/ to lint (default: nearest workspace.json)')
+    .option('--disable <rules>', 'rules to leave out, comma separated (see --rules)')
+    .option('--severity <level>', 'show only this level and worse: error, warning or info', 'info')
+    .option('--fail-on <level>', 'exit 1 when a problem of this level or worse is found: error, warning, info or none', 'error')
+    .option('--rules', 'list the rules and exit')
+    .option('--json', 'print the result as JSON (for scripts and AI agents)')
+    .action(async (refs: string[], o: { workspace?: string; disable?: string; severity: string; failOn: string; rules?: boolean; json?: boolean }) => {
+      const levels = ['error', 'warning', 'info'];
+      if (o.rules) {
+        if (o.json) console.log(JSON.stringify(OPENAPI_LINT_RULES, null, 2));
+        else for (const r of OPENAPI_LINT_RULES) console.log(`${r.id.padEnd(28)} ${r.severity.padEnd(8)} ${r.description}`);
+        return;
+      }
+      if (!levels.includes(o.severity)) throw new CliError(`--severity must be error, warning or info`, EXIT.CONFIG_ERROR);
+      if (![...levels, 'none'].includes(o.failOn)) throw new CliError(`--fail-on must be error, warning, info or none`, EXIT.CONFIG_ERROR);
+      const disable = (o.disable ?? '').split(',').map((x) => x.trim()).filter(Boolean);
+      const unknown = disable.filter((d) => !OPENAPI_LINT_RULES.some((r) => r.id === d));
+      if (unknown.length) throw new CliError(`Unknown rule${unknown.length > 1 ? 's' : ''}: ${unknown.join(', ')} (testpion openapi-lint --rules lists them)`, EXIT.CONFIG_ERROR);
+      // a folder stands for its documents
+      let files = refs.flatMap((r) => {
+        if (/^https?:\/\//i.test(r) || !existsSync(r) || !statSync(r).isDirectory()) return [r];
+        const docs = readdirSync(r).filter((f) => /\.(ya?ml|json)$/i.test(f));
+        if (!docs.length) throw new CliError(`No OpenAPI documents in ${r}`, EXIT.CONFIG_ERROR);
+        return docs.map((f) => join(r, f));
+      });
+      if (!files.length) {
+        const ws = o.workspace ? resolve(o.workspace) : findWorkspaceUp(process.cwd());
+        const dir = ws ? join(ws, 'specs') : undefined;
+        if (!dir || !existsSync(dir)) throw new CliError('Name the documents to lint, or run it in a workspace with a specs/ folder', EXIT.CONFIG_ERROR);
+        files = readdirSync(dir)
+          .filter((f) => /\.(ya?ml|json)$/i.test(f))
+          .map((f) => join(dir, f));
+        if (!files.length) throw new CliError(`No OpenAPI documents in ${dir}`, EXIT.CONFIG_ERROR);
+      }
+      const results: Array<{ file: string } & OpenApiLintResult> = [];
+      for (const ref of files) {
+        let text: string;
+        try {
+          text = /^https?:\/\//i.test(ref) ? (await fetchImportText(ref)).text : readFileSync(ref, 'utf8');
+        } catch (e) {
+          throw new CliError(`Cannot read ${ref}: ${(e as Error).message}`, EXIT.CONFIG_ERROR);
+        }
+        results.push({ file: ref, ...lintOpenApi(text, { disable, minSeverity: o.severity as OpenApiLintSeverity }) });
+      }
+      const worst = (sev: string) => results.some((r) => r.problems.some((p) => levels.indexOf(p.severity) <= levels.indexOf(sev)));
+      if (o.json) console.log(JSON.stringify(results.length === 1 ? results[0] : results, null, 2));
+      else
+        for (const r of results) {
+          const c = r.counts;
+          const head = `${r.file}: ${r.operations} operations, ${c.error} error${c.error === 1 ? '' : 's'}, ${c.warning} warning${c.warning === 1 ? '' : 's'}, ${c.info} note${c.info === 1 ? '' : 's'}`;
+          console.log(bold(head));
+          for (const p of r.problems) {
+            const line = `  ${r.file}:${p.line}:${p.column}  ${p.severity.padEnd(7)} ${p.message}  ${dim(p.rule)}`;
+            console.log(p.severity === 'error' ? red(line) : p.severity === 'warning' ? yellow(line) : dim(line));
+          }
+          if (!r.problems.length) console.log(green('  No problems.'));
+        }
+      if (o.failOn !== 'none' && worst(o.failOn)) process.exitCode = EXIT.TEST_FAILURE;
     });
   program
     .command('coverage')

@@ -23,6 +23,7 @@ testpion mock-mcp <file>      Serve an MCP mock (stdio, or --http) for AI agents
 testpion env set|unset|get <env> -w   Set or remove plain variables of an environment (secrets stay in the app)
 testpion vars usages|rename -w   Where a variable is used; rename it everywhere
 testpion openapi-diff <old> <new>   List breaking changes between two OpenAPI versions (--fail-on-breaking for CI)
+testpion openapi-lint [specs...]     Lint OpenAPI documents: broken $refs, undeclared path parameters, duplicate operationIds …
 testpion eval list|run <name>   Evaluations saved in the app: list them, or run one by name (exit 1 on failures)
 testpion coverage <spec> -w   API coverage: which OpenAPI operations and responses the runs exercised (--min for CI)
 testpion docs <collection>    Write Markdown (or --html) documentation for a collection
@@ -185,6 +186,24 @@ Compares two versions of an OpenAPI 3 / Swagger 2 document (files or http(s) lin
 | `--fail-on-breaking` | Exit `1` when there are breaking changes. |
 | `--breaking-only` | Leave out the non-breaking changes. |
 | `--json` | Print `{ breaking, nonBreaking, operations }` as JSON. |
+
+## `openapi-lint`
+
+Lints OpenAPI 3 / Swagger 2 documents (files or http(s) links; with none given, every document in the workspace's `specs/` folder). Each problem is printed as `file:line:column`, with its level and rule. See [Lint API definitions](/test-runner/ci-cd#lint-api-definitions) for the rules.
+
+```bash
+testpion openapi-lint specs/clinic.yaml
+testpion openapi-lint --fail-on warning --disable operation-tags,component-unused
+```
+
+| Option | Description |
+|---|---|
+| `-w, --workspace <dir>` | With no documents given: the workspace folder whose `specs/` to lint. |
+| `--disable <rules>` | Rules to leave out, comma separated. |
+| `--severity <level>` | Show only `error`, `warning` or `info` (the default) and worse. |
+| `--fail-on <level>` | Exit `1` when a problem of this level or worse is found: `error` (the default), `warning`, `info` or `none`. |
+| `--rules` | List the rules and exit. |
+| `--json` | Print `{ problems, counts, operations }` as JSON (a list of them for several documents). |
 
 ## `mock`
 

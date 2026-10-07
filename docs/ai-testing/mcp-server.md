@@ -122,6 +122,7 @@ For Claude Code: `claude mcp add testpion -- testpion mcp-server -w /path/to/my-
 | `variable_usages` | Where a variable is used or defined: requests, scripts, environments, collection / folder / workspace variables, test files. |
 | `rename_variable` | Rename a variable everywhere in the workspace (secret values move with it). |
 | `openapi_diff` | Breaking and other changes between two OpenAPI versions (links, workspace paths such as `specs/…`, or text). |
+| `openapi_lint` | Lint problems of an OpenAPI document (or every document in `specs/`), each with its rule, level, line and column. |
 | `import_definition` | Import an OpenAPI document, Postman / Insomnia / Bruno / Hoppscotch collection, HAR or .env, from a public link (`url`) or `text`. OpenAPI imports get contract checks. |
 | `testpion_guide` | How to use the workspace: which tool for which job, how variables resolve, every check type this engine knows (with examples) and the YAML test file format. Agents read it before writing tests. |
 | `set_request_checks` | Add (`mode: append`) or replace the checks of a saved REST or GraphQL request; they then run whenever it is sent, in `run_collection` and in CI. Unknown check types are refused with the list of known ones. |

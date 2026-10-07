@@ -131,6 +131,15 @@ function toJsonSchema(s: unknown): unknown {
   return o;
 }
 
+/** What is wrong with a value against a schema of the document (empty when it matches); for the linter's example checks. */
+export function schemaProblems(doc: OpenApiDoc, schema: unknown, value: unknown): string[] {
+  // the schema's $refs resolve against the document's sections, so they are part of the key
+  const key = 'v:' + createHash('sha1').update(JSON.stringify([schema, doc.components ?? null, doc.definitions ?? null])).digest('hex');
+  const v = validator(doc, schema, key);
+  if (v(value)) return [];
+  return (v.errors ?? []).slice(0, 5).map((e) => `${e.instancePath || '(the value)'} ${e.message ?? 'is not valid'}`.trim());
+}
+
 function validator(doc: OpenApiDoc, schema: unknown, key: string): ValidateFunction {
   let v = validators.get(key);
   if (!v) {

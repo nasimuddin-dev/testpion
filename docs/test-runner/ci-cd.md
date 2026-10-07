@@ -134,4 +134,27 @@ In the app, open **API coverage** from a finished run, an API definition's **Cov
 
 Either side can be a file or an http(s) link. `--json` prints the result for scripts, and AI agents get the same through the MCP tool `openapi_diff`. In the app, open the command palette (**Ctrl+K**) and choose **Compare OpenAPI versions**: each side can be a document kept in the workspace (`specs/`, where imports put them), a link or a file.
 
+## Lint API definitions
+
+`testpion openapi-lint` checks OpenAPI / Swagger documents for mistakes that break tools and clients, and for gaps that make an API hard to use. It exits `1` on errors, so a pipeline can stop a broken spec before it is published:
+
+```yaml
+- run: npx testpion@0.44.0 openapi-lint specs/ --fail-on error
+```
+
+```text
+specs/clinic.yaml: 12 operations, 2 errors, 1 warning, 3 notes
+  specs/clinic.yaml:41:9   error   {petId} is in the path but not declared as a path parameter  path-param-undeclared
+  specs/clinic.yaml:88:11  error   operationId "getPet" is also used by GET /pets/{id}  operation-id-unique
+  specs/clinic.yaml:102:13 warning The example does not match its schema: /weight must be number  example-valid
+```
+
+| Level | Rules |
+|---|---|
+| Errors | `syntax`, `info` (title and version), `ref-unresolved`, `path-ambiguous` (`/pets/{id}` and `/pets/{petId}`), `path-param-undeclared`, `path-param-unused`, `path-param-required`, `parameter-duplicate`, `operation-id-unique`, `operation-responses`, `security-scheme-defined` |
+| Warnings | `example-valid`, `operation-id`, `operation-success-response`, `response-schema`, `request-body-on-get`, `path-trailing-slash`, `server-not-https` |
+| Notes | `operation-summary`, `operation-tags`, `servers`, `component-unused` |
+
+`--disable` leaves rules out and `--fail-on warning` makes warnings fail the build too. In the app, an API definition's **Lint** tab lists the problems, marks them in the editor as you type, and a click shows the place; **How to fix (AI)** asks the assistant for the changes. Agents use the MCP tool `openapi_lint`.
+
 :::

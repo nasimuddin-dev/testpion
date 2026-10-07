@@ -22,6 +22,8 @@ export const ASSISTANT_TASKS: Record<string, string> = {
     'These are the changes between two versions of an OpenAPI document. Explain which clients break and how, in order of impact, and what each client team must change. Suggest how the API could stay backwards compatible (e.g. keep the old field, make the new parameter optional, version the endpoint). Be concise; use short headings.',
   'fix-security':
     'These are security findings in an API collection (no secret values are included). For each kind of finding, explain the risk in one sentence and the exact fix in TestPion (secret variables, headers instead of query parameters, https, TLS settings). Be concise.',
+  'fix-openapi-lint':
+    'These are lint problems of an OpenAPI document (rule, line, where, message) and the document itself. Group them by rule; for each group say in one sentence why it matters for clients or tools, then give the exact change as a small YAML snippet for the first places (with the line). Errors first, then warnings; mention notes only briefly. Never invent endpoints or fields the document does not have. Be concise.',
   'analyze-load':
     'Analyse these load test results: throughput, latency percentiles, errors and per-request numbers. Point out the bottleneck requests, whether errors grow with load, and what to investigate or tune next. Be specific and concise.',
   'explain-test-failure':
