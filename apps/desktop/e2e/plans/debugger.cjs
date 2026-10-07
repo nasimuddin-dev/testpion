@@ -216,6 +216,8 @@ const steps = [
       [...document.querySelectorAll('[role=menuitem]')].find((m) => /^A phone or another computer/.test(m.textContent.trim()))?.click();
       const dialog = await __t.waitFor(() => [...document.querySelectorAll('[role=dialog]')].find((d) => /phone or another computer/.test(d.textContent)), 4000);
       if (!dialog) return 'NO DIALOG';
+      // the addresses (and their QR codes) load after the dialog opens
+      await __t.waitFor(() => !/Looking for this computer/.test(dialog.textContent), 8000);
       const offers = /Listen on the network/.test(dialog.textContent);
       dialog.querySelector('button[aria-label=Close]')?.click(); await __t.sleep(300);
       return 'dialog: true | offers to listen on the network: ' + offers;
