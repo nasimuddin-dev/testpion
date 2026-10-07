@@ -2,6 +2,7 @@ import { AlarmClock, BarChart3, Bot, Keyboard, Columns2, CopyX, Disc, GitCompare
 import { createElement, lazy, Suspense, useEffect, useMemo, useRef, useState, type ComponentType, type LazyExoticComponent } from 'react';
 import { call, on } from './api';
 import { useApp, type ViewId } from './store';
+import { watchSecretRefs } from './lib/secret-refs';
 import { AssistantPanel } from './components/AssistantPanel';
 import { VarPopoverHost } from './components/VarPopoverHost';
 import { CommandPalette, DialogHost, LogsPanel, ProgressHost, SearchDialog, Sidebar, StatusBar, Toaster, TopBar, NAV, type PaletteCommand } from './components/Shell';
@@ -179,6 +180,7 @@ export default function App() {
     const off = on('run.error', (p: { error: { message: string } }) => useApp.getState().toast(`Run failed: ${p.error.message}`, 'error'));
     const offMonitors = watchMonitorAlerts();
     const offRuns = watchRunNotifications();
+    const offSecrets = watchSecretRefs();
     const offUpdate = on('update.checkManual', () => void checkForUpdates({ manual: true }));
     // files changed outside the app (git pull, a branch switch, another editor): show the new state and say so
     const offDisk = on<{ message: string; kinds: string[] }>('workspace.changedOnDisk', (p) => {
@@ -199,6 +201,7 @@ export default function App() {
       offMenu();
       offMonitors();
       offRuns();
+      offSecrets();
     };
   }, []);
 

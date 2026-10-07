@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { externalSecrets, isSecretRef } from './vars/external-secrets.js';
 import type { ProviderConfig, AppSettings, AuthConfig, Collection, CollectionNode, Environment, McpServerConfig } from './model/types.js';
 import { defaultSettings } from './model/types.js';
 import { VariableScope } from './vars/variables.js';
@@ -53,7 +54,11 @@ export interface EngineContext {
 /** Load secret values for an environment's secret variables into a plain list (never persisted). */
 export function environmentVariables(env: Environment | undefined, secrets: SecretStore): Array<{ key: string; value: string; enabled?: boolean; secret?: boolean }> {
   if (!env) return [];
-  return env.variables.map((v) => (v.secret ? { ...v, value: secrets.get(secretKeys.envVar(env.id, v.key)) ?? '' } : v));
+  return env.variables.map((v) => {
+    // a secret manager reference (op://…, vault://…): the value read for it (prefetchEnvironmentSecrets), always a secret
+    if (isSecretRef(v.value)) return { ...v, value: externalSecrets.get(v.value) ?? '', secret: true };
+    return v.secret ? { ...v, value: secrets.get(secretKeys.envVar(env.id, v.key)) ?? '' } : v;
+  });
 }
 
 /**

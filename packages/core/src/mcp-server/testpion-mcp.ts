@@ -51,7 +51,7 @@ import { workspaceEditTools } from './workspace-edit-tools.js';
 import { gitTools } from './git-tools.js';
 import { openApiTools } from './openapi-tools.js';
 import { debuggerTools } from './debugger-tools.js';
-import { str, type Tool } from './tool.js';
+import { str, withEnvironmentSecrets, type Tool } from './tool.js';
 import { commandLine, isCommandTrusted } from '../storage/trust.js';
 import { McpSession } from '../protocols/mcp/client.js';
 import { runCollection } from '../runner/collection-run.js';
@@ -1411,7 +1411,7 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
       },
     }),
   ];
-  const tools = all.filter((t) => !(opts.readOnly && t.write));
+  const tools = withEnvironmentSecrets(store, all.filter((t) => !(opts.readOnly && t.write)));
 
   const server = new Server(
     { name: 'testpion', version: opts.version ?? ENGINE_VERSION },

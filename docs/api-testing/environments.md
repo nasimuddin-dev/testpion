@@ -62,6 +62,24 @@ The values are made up: emails use `example.test` / `example.com`, phone numbers
 
 Mark a variable as **secret** (lock icon) and its value is encrypted in the OS credential store: Windows DPAPI, macOS Keychain or Linux Secret Service. The workspace file only records that the variable exists. In CI, supply the value as the environment variable `TESTPION_SECRET_ENV_<ENVID>_<KEY>`, for example `TESTPION_SECRET_ENV_STAGING_ACCESSTOKEN`.
 
+## Secrets from a secret manager
+
+A variable can point at a secret kept in a secret manager instead of holding it. Set its value to a reference:
+
+| Manager | Reference | Read with |
+|---|---|---|
+| 1Password | `op://Clinic/API/credential` | `op read` |
+| HashiCorp Vault | `vault://secret/clinic#apiKey` (path, then the field) | `vault kv get` |
+| AWS Secrets Manager | `aws-sm://prod/clinic#apiKey` (`#key` for a JSON secret; `?region=eu-west-1`) | `aws secretsmanager get-secret-value` |
+| Azure Key Vault | `azure-kv://clinic-kv/api-key` | `az keyvault secret show` |
+| Google Secret Manager | `gcp-sm://my-project/api-key` (`#3` for a version) | `gcloud secrets versions access` |
+
+`{{apiKey}}` then sends the value the manager's own command-line tool reads, signed in as you. The reference holds no secret, so the environment file can be committed and shared; each person, and each CI job, reads the secret with their own access. The value stays in memory for ten minutes and is never written to a file, a log or a report; it is redacted like any secret.
+
+Reading a reference runs a program on your computer, so a workspace from git or a teammate doesn't do it unasked. The first time, TestPion shows the exact commands and asks; **Allow on this computer** is remembered for that workspace (in `.local/trust.json`, never committed). Under the variables, the environment shows which ones come from a manager and whether they were read; **Read again** fetches them anew after a secret is rotated.
+
+The CLI reads every reference of the environment it runs with, as it reads `{{$env.NAME}}`. `testpion secrets <environment>` checks them without sending anything (exit 1 when one can't be read, `--json` for scripts). For agents, `testpion mcp-server` reads only the references already allowed in the app.
+
 ## All variable scopes in one place
 
 The **Environments** view has a tab for each scope: **Environments**, **Collection variables**, **Workspace variables** and **Global variables**. Collection variables (an imported Postman collection keeps its variables there) are listed per collection: pick one on the left, edit its variables, **Save**; they are the same as in the collection's own settings. A scope with no variables yet says what it is for and, when your collections have variables, links to them.

@@ -6,8 +6,10 @@ import {
   ENGINE_VERSION,
   setProxySettings,
   setTlsTrust,
+  prefetchEnvironmentSecrets,
+  WorkspaceManager,
 } from '@testpion/core';
-import { EXIT, red, dim, CliError } from './shared.js';
+import { EXIT, red, dim, yellow, CliError, openWorkspace } from './shared.js';
 import { registerRunCommands } from './commands/run.js';
 import { registerEvaluationCommands } from './commands/evaluations.js';
 import { registerServeCommands } from './commands/serve.js';
@@ -15,6 +17,7 @@ import { registerDataCommands } from './commands/data.js';
 import { registerWorkspaceCommands } from './commands/workspace.js';
 import { registerMonitorCommands } from './commands/monitor.js';
 import { registerDoctorCommand } from './commands/doctor.js';
+import { registerSecretsCommands } from './commands/secrets.js';
 
 /** The testpion command line: one module per area of commands (commands/*.ts). */
 export function buildProgram(): Command {
@@ -31,6 +34,25 @@ export function buildProgram(): Command {
   registerWorkspaceCommands(program);
   registerDoctorCommand(program);
   registerMonitorCommands(program);
+  registerSecretsCommands(program);
+
+  // an environment's secret manager references (op://, vault://, aws-sm:// …) are read before the command runs
+  program.hook('preAction', async (_cmd, action) => {
+    const o = action.opts() as { environment?: unknown; workspace?: unknown };
+    if (typeof o.environment !== 'string' || !o.environment || /\.json$/i.test(o.environment)) return;
+    let store;
+    try {
+      store = openWorkspace(typeof o.workspace === 'string' ? o.workspace : undefined, undefined, new WorkspaceManager()).store;
+    } catch {
+      return; // the command says what is wrong with the workspace
+    }
+    try {
+      const r = await prefetchEnvironmentSecrets(store, o.environment, { trustAll: true });
+      for (const f of r.failed) console.error(yellow(`${f.ref}: ${f.error}`));
+    } finally {
+      store.close();
+    }
+  });
 
   return program;
 }

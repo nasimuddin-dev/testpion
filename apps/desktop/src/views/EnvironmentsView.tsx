@@ -1,4 +1,5 @@
 import { ArchiveRestore, ArrowLeftRight, Check, Copy, Grid3x3, Download, FileJson, FileText, History, KeyRound, Pencil, Save, ScanSearch, Trash2 } from 'lucide-react';
+import { SecretRefsLine } from '../components/SecretRefsLine';
 import { useGit } from '../lib/git';
 import { GitItemHistory } from '../components/GitItemHistory';
 import { useEffect, useRef, useState } from 'react';
@@ -355,6 +356,7 @@ export function EnvironmentsView() {
                     Not used anywhere in the workspace: <span className="mono text-fg">{unused.join(', ')}</span>
                   </p>
                 )}
+                <SecretRefsLine environment={draft.id} version={JSON.stringify(envs.find((e) => e.id === draft.id)?.variables ?? [])} />
                 <CurrentValues envName={draft.name} />
                 <div className="text-xs text-muted flex items-start gap-2 bg-panel rounded-md p-2">
                   <KeyRound size={13} className="mt-0.5 shrink-0" />

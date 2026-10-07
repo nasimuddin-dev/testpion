@@ -11,6 +11,7 @@ export * from './util/redact.js';
 export * from './util/jsonpath.js';
 export * from './log/logger.js';
 export * from './vars/variables.js';
+export * from './vars/external-secrets.js';
 export * from './vars/dynamic.js';
 export * from './trace/tracer.js';
 export * from './trace/otlp.js';

@@ -17,6 +17,7 @@ testpion mock <collection>    Serve a collection's saved examples on localhost
 testpion graphql-subscribe <endpoint> -q <doc>   Run a GraphQL subscription and print the events
 testpion graphql-op <Type.field> --endpoint <url> Build a ready-to-run operation for a root field (or --schema <file>)
 testpion lint <collection>    Security review of a collection's requests (--fail-on high for CI)
+testpion secrets <environment> Check an environment's secret manager references (op://, vault://, aws-sm:// …)
 testpion record <target>      Record traffic through a local reverse proxy; -w saves it as a collection (see Record traffic)
 testpion debug [-p port] [-o session.har] [--rules debugger/rules.json] [--decrypt] [-w workspace] [--json]   The HTTP Debugger's proxy: other programs' traffic (HTTP_PROXY=…), printed as it happens; rules applied
 testpion mock-mcp <file>      Serve an MCP mock (stdio, or --http) for AI agents and MCP clients
