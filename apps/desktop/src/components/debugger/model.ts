@@ -34,6 +34,8 @@ export interface Exchange {
   responseBody?: string;
   responseBodyBytes: number;
   responseBodyTruncated?: boolean;
+  /** The bodies were let go to keep the session within its memory budget. */
+  bodiesDropped?: boolean;
   /** DBG-4: captured inside a decrypted tunnel; still streaming; WebSocket frames; Server-Sent Events. */
   tls?: boolean;
   open?: boolean;

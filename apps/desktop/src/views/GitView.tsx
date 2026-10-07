@@ -237,6 +237,11 @@ export function GitView() {
       : []),
   ];
 
+  // the repository's root against the workspace folder: the examples live inside a checkout of TestPion itself
+  const wsPath = (useApp.getState().workspace as { path?: string } | undefined)?.path;
+  const norm = (p: string) => p.replace(/\\/g, '/').replace(/\/$/, '').toLowerCase();
+  const nestedIn =
+    status.root && wsPath && norm(status.root) !== norm(wsPath) ? { root: status.root, folder: wsPath.replace(/\\/g, '/').slice(status.root.replace(/\\/g, '/').replace(/\/$/, '').length + 1) } : undefined;
   const connectRemote = async () => {
     const remote = await promptText(status.remote ? 'Change the remote' : 'Connect to a remote', {
       message: status.remote ? 'The repository URL' : 'The URL of an empty repository on GitHub, GitLab, Bitbucket or Azure DevOps (create it there first). Push then sends your commits to it.',
@@ -252,7 +257,16 @@ export function GitView() {
       <PageHeader
         icon={<FolderGit2 size={18} />}
         title="Git"
-        subtitle={status.remote ?? 'No remote yet'}
+        subtitle={
+          // a workspace that is a folder of a bigger repository (the examples inside a checkout): say so, and whose remote this is
+          nestedIn ? (
+            <span>
+              {status.remote ?? 'No remote yet'} · this workspace is the folder <code className="font-mono text-fg">{nestedIn.folder}</code> of the repository at <code className="font-mono text-fg">{nestedIn.root}</code>; the changes and the history shown are this folder's
+            </span>
+          ) : (
+            (status.remote ?? 'No remote yet')
+          )
+        }
         actions={
           <>
             <Menu trigger={<Button icon={<GitBranch size={13} />}>{status.branch ?? 'detached'}</Button>} items={branchItems} />

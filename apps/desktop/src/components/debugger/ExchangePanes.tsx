@@ -139,7 +139,7 @@ export function ExchangePanes({ e, ...a }: { e: Exchange } & ExchangeActions) {
             startLine={tunnel ? `CONNECT ${e.host}` : `${e.method} ${path} ${version}`}
             headers={e.requestHeaders}
             body={e.requestBody}
-            bodyNote={e.requestBodyBytes ? `(${formatBytes(e.requestBodyBytes)}, not kept)` : '(no body)'}
+            bodyNote={e.requestBodyBytes ? `(${formatBytes(e.requestBodyBytes)}, ${e.bodiesDropped ? 'let go to keep the session within its memory budget' : 'not kept'})` : '(no body)'}
             raw={raw.request}
             extra={[
               {

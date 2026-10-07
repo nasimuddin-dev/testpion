@@ -58,6 +58,8 @@ export interface DebuggerExchange {
   responseBody?: string;
   responseBodyBytes: number;
   responseBodyTruncated?: boolean;
+  /** The bodies were let go to keep the session within its memory budget (the oldest go first). */
+  bodiesDropped?: boolean;
   contentType?: string;
   /** Milliseconds: until the request was sent whole, until the server answered its headers, and until the body ended. */
   sendMs?: number;
@@ -107,6 +109,8 @@ export interface BreakpointEdits {
 
 export interface DebuggerProxyOptions {
   port?: number;
+  /** How many bytes of bodies the session keeps in memory in all (default 200 MB); past that, the oldest exchanges lose their bodies. */
+  maxSessionBodyBytes?: number;
   /** Listen on every interface (a phone, another computer), not only this one. */
   lan?: boolean;
   maxBodyBytes?: number;
@@ -363,12 +367,38 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
     }
     return p;
   };
+  // the session keeps at most 5,000 exchanges and a budget of body bytes: 5,000 bodies of half a megabyte would be
+  // gigabytes, so the oldest exchanges lose their bodies first (their headers, sizes and timing stay)
+  const bodyBudget = opts.maxSessionBodyBytes ?? 200 * 1024 * 1024;
+  const keptOf = new WeakMap<DebuggerExchange, number>();
+  let keptBytes = 0;
+  let evictAt = 0;
+  const account = (e: DebuggerExchange) => {
+    const n = (e.requestBody?.length ?? 0) + (e.responseBody?.length ?? 0);
+    keptBytes += n - (keptOf.get(e) ?? 0);
+    keptOf.set(e, n);
+    while (keptBytes > bodyBudget && evictAt < exchanges.length) {
+      const old = exchanges[evictAt++]!;
+      const b = keptOf.get(old) ?? 0;
+      if (!b || old === e) continue;
+      delete old.requestBody;
+      delete old.responseBody;
+      old.bodiesDropped = true;
+      keptOf.set(old, 0);
+      keptBytes -= b;
+    }
+  };
   const record = (e: DebuggerExchange, phase: 'request' | 'response') => {
     if (phase === 'request') {
       recorded.add(e);
       exchanges.push(e);
-      if (exchanges.length > 5000) exchanges.shift();
+      if (exchanges.length > 5000) {
+        const gone = exchanges.shift()!;
+        keptBytes -= keptOf.get(gone) ?? 0;
+        if (evictAt > 0) evictAt--;
+      }
     }
+    account(e);
     opts.onExchange?.(e, phase);
   };
   /** Streams (frames, events) report at most a few times a second. */

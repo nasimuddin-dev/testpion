@@ -246,7 +246,8 @@ export async function gitCommit(ws: string, message: string, opts: { paths?: str
 /** Commits, newest first; with `path`, only those that changed that file (following renames). */
 export async function gitLog(ws: string, opts: { path?: string; limit?: number } = {}): Promise<GitCommit[]> {
   try {
-    const out = await runGit(ws, ['log', `--max-count=${opts.limit ?? 50}`, '--format=%H%x1f%h%x1f%an%x1f%ae%x1f%aI%x1f%s%x1e', ...(opts.path ? ['--follow', '--', opts.path] : [])]);
+    // the workspace's own history: a workspace that is a folder of a bigger repository sees the commits that touched it
+    const out = await runGit(ws, ['log', `--max-count=${opts.limit ?? 50}`, '--format=%H%x1f%h%x1f%an%x1f%ae%x1f%aI%x1f%s%x1e', ...(opts.path ? ['--follow', '--', opts.path] : ['--', '.'])]);
     return out
       .split('\x1e')
       .map((r) => r.trim())
