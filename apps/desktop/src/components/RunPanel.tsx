@@ -1,4 +1,4 @@
-import { Activity, Braces, Download, FileBarChart, FileCode2, FileText, GitCompare, Square, Target, RotateCcw, ScanSearch, Sparkles } from 'lucide-react';
+import { Activity, Braces, Download, FileBarChart, FileCode2, FileText, GitCompare, Square, Target, RotateCcw, ScanSearch, Sparkles, ThumbsDown, ThumbsUp } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { asError, call, on } from '../api';
 import { useApp } from '../store';
@@ -9,7 +9,7 @@ import { TraceView } from './TraceView';
 import { RunCharts } from './RunCharts';
 import { TestHistory } from './TestHistory';
 import { finishSave, viewContent, type SaveResult } from '../lib/files';
-import { Badge, Button, cx, Empty, Field, Input, Metric, Modal, Select, Split, Tabs, VirtualList, Menu, MetricGrid } from './ui';
+import { Badge, Button, cx, Empty, Field, Input, Metric, Modal, Segmented, Select, Split, Tabs, VirtualList, Menu, MetricGrid } from './ui';
 
 interface Progress {
   completed: number;
@@ -32,6 +32,13 @@ function displayPath(file: string): string {
 /** Live progress + paged, virtualised results for a test/evaluation run. Results are read from disk page by page. */
 const humanize = (k: string) => k.replace(/[-_]+/g, ' ').replace(/^./, (c) => c.toUpperCase());
 
+/** A result's weakest scored check (similarity, judge, RAG…): what to look at first in an evaluation. */
+function lowestScore(r: TestResult): number | undefined {
+  let low: number | undefined;
+  for (const c of r.checks ?? []) if (typeof c.score === 'number' && (low === undefined || c.score < low)) low = c.score;
+  return low;
+}
+
 export function RunPanel({ runId, expectedTotal, onRerunFailed }: { runId: string; expectedTotal?: number; onRerunFailed?(runId: string): void }) {
   const [progress, setProgress] = useState<Progress>({ completed: 0, passed: 0, failed: 0, skipped: 0, errors: 0, running: 0 });
   const [summary, setSummary] = useState<RunSummary | null>(null);
@@ -42,6 +49,16 @@ export function RunPanel({ runId, expectedTotal, onRerunFailed }: { runId: strin
   const [status, setStatus] = useState('all');
   const [query, setQuery] = useState('');
   const [sel, setSel] = useState<TestResult>();
+  const [reviewed, setReviewed] = useState(0);
+  const onReviewed = (r: TestResult) => {
+    setSel(r);
+    setRows((xs) => xs.map((x) => (x.id === r.id && x.attempts === r.attempts ? r : x)));
+    setReviewed((n) => n + 1);
+  };
+  const [rated, setRated] = useState<{ good: number; bad: number; unreviewed: number }>();
+  useEffect(() => {
+    if (done && summary) void call<{ good: number; bad: number; unreviewed: number }>('runs.reviewCounts', { runId, total: summary.total }).then(setRated, () => undefined);
+  }, [done, summary, runId, reviewed]);
   const [baselineOpen, setBaselineOpen] = useState(false);
   // results list or the run's charts (once it finished); remembered
   const [pane, setPane] = useState<'results' | 'charts'>(() => {
@@ -110,8 +127,29 @@ export function RunPanel({ runId, expectedTotal, onRerunFailed }: { runId: strin
     if (done) void loadPage(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [done, status, query]);
+  const autoPicked = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (!done || !summary || autoPicked.current === runId) return;
+    autoPicked.current = runId;
+    if (summary.failed + summary.errors > 0)
+      void call<{ items: TestResult[] }>('runs.results', { runId, offset: 0, limit: 1, status: 'failed' }).then((r) => r.items[0] && setSel((cur) => cur ?? r.items[0]), () => undefined);
+    else if (summary.total === 1) void call<{ items: TestResult[] }>('runs.results', { runId, offset: 0, limit: 1 }).then((r) => r.items[0] && setSel((cur) => cur ?? r.items[0]), () => undefined);
+  }, [done, summary, runId]);
 
   const list = done ? rows : live.filter((r) => (status === 'all' || (status === 'failed' ? r.status === 'failed' || r.status === 'error' : r.status === status)) && (!query || r.name.toLowerCase().includes(query.toLowerCase())));
+  // ↑ ↓ (or J K) move through the results, so a run can be reviewed from the keyboard
+  const onListKey = (e: React.KeyboardEvent) => {
+    const step = e.key === 'ArrowDown' || e.key === 'j' ? 1 : e.key === 'ArrowUp' || e.key === 'k' ? -1 : 0;
+    if (!step || !list.length || (e.target as HTMLElement).tagName === 'INPUT') return;
+    e.preventDefault();
+    const at = sel ? list.findIndex((r) => r.id === sel.id && r.attempts === sel.attempts) : -1;
+    const next = list[Math.max(0, Math.min(list.length - 1, at + step))];
+    if (next) {
+      setSel(next);
+      (e.currentTarget as HTMLElement).querySelector<HTMLElement>(`[data-result="${CSS.escape(`${next.id}:${next.attempts ?? ''}`)}"]`)?.focus();
+    }
+  };
+  const counts = { passed: summary?.passed ?? progress.passed, failed: (summary?.failed ?? progress.failed) + (summary?.errors ?? progress.errors), skipped: summary?.skipped ?? progress.skipped };
   const s = summary;
   const completed = s?.total ?? progress.completed;
   const pct = expectedTotal ? Math.min(100, (completed / expectedTotal) * 100) : undefined;
@@ -203,35 +241,56 @@ export function RunPanel({ runId, expectedTotal, onRerunFailed }: { runId: strin
           <Split id="run-results" initial={48}>
             <div className="h-full flex flex-col">
               <div className="flex items-center gap-2 p-2 border-b border-line">
-                <Select className="h-7 min-h-7 py-0 text-sm" value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status filter">
-                  <option value="all">All</option>
-                  <option value="failed">Failed & errors</option>
-                  <option value="passed">Passed</option>
-                  <option value="skipped">Skipped</option>
-                </Select>
+                <Segmented
+                  label="Status filter"
+                  size="xs"
+                  value={status}
+                  onChange={setStatus}
+                  options={[
+                    { value: 'all', label: 'All' },
+                    { value: 'failed', label: `Failed ${counts.failed}`, title: 'Failed and errored' },
+                    { value: 'passed', label: `Passed ${counts.passed}` },
+                    ...(counts.skipped ? [{ value: 'skipped', label: `Skipped ${counts.skipped}` }] : []),
+                    ...(done ? [{ value: 'unreviewed', label: `To review ${rated?.unreviewed ?? ''}`.trim(), title: 'Not rated good or bad yet (👍 / 👎 on a result)' }] : []),
+                  ]}
+                />
                 <Input className="flex-1 h-7 min-h-7 text-sm" placeholder="Filter by name" value={query} onChange={(e) => setQuery(e.target.value)} />
                 <span className="text-xs text-muted tabular-nums">{done ? `${rows.length}/${total}` : `${live.length} shown`}</span>
               </div>
               {list.length ? (
+                <div className="flex-1 min-h-0 flex flex-col" onKeyDown={onListKey}>
                 <VirtualList
                   className="flex-1"
                   items={list}
                   rowHeight={30}
                   onEndReached={done && rows.length < total ? () => void loadPage(false) : undefined}
                   render={(r) => (
-                    <button title={r.name} onClick={() => setSel(r)} className={cx('w-full h-full flex items-center gap-2 px-3 border-b border-line/50 text-sm text-left hover:bg-hover', sel?.id === r.id && sel.attempts === r.attempts && 'bg-accent/10')}>
+                    <button
+                      title={r.name}
+                      data-result={`${r.id}:${r.attempts ?? ''}`}
+                      onClick={() => setSel(r)}
+                      className={cx('w-full h-full flex items-center gap-2 px-3 border-b border-line/50 text-sm text-left hover:bg-hover', sel?.id === r.id && sel.attempts === r.attempts && 'bg-accent/10')}
+                    >
                       <StatusIcon status={r.status} />
                       <span className="truncate flex-1 min-w-0">{r.name}</span>
+                      {r.review?.rating === 'good' && <ThumbsUp size={12} className="text-ok shrink-0" aria-label="Rated good" />}
+                      {r.review?.rating === 'bad' && <ThumbsDown size={12} className="text-bad shrink-0" aria-label="Rated bad" />}
+                      {lowestScore(r) !== undefined && (
+                        <span title="The lowest check score" className={cx('text-xs tabular-nums shrink-0', lowestScore(r)! >= 0.7 ? 'text-ok' : 'text-warn')}>
+                          {lowestScore(r)!.toFixed(2)}
+                        </span>
+                      )}
                       <span className="text-[0.7rem] text-muted uppercase tracking-wide shrink-0">{r.type}</span>
                       <span className="text-xs text-muted tabular-nums w-14 text-right shrink-0">{formatMs(r.latencyMs ?? r.durationMs)}</span>
                     </button>
                   )}
                 />
+                </div>
               ) : (
                 <Empty title={done ? 'No results match' : 'Waiting for results…'} />
               )}
             </div>
-            <div className="h-full min-h-0">{sel ? <ResultDetail r={sel} runId={runId} /> : <Empty icon={<Target size={24} />} title="Select a result to inspect checks, output and trace" />}</div>
+            <div className="h-full min-h-0">{sel ? <ResultDetail r={sel} runId={runId} onReviewed={onReviewed} /> : <Empty icon={<Target size={24} />} title="Select a result to inspect checks, output and trace" />}</div>
           </Split>
         </div>
       )}
@@ -260,7 +319,54 @@ function ExportMenu({ runId }: { runId: string }) {
   );
 }
 
-export function ResultDetail({ r, runId }: { r: TestResult; runId?: string }) {
+/**
+ * A person's verdict: 👍 / 👎 (a second click clears it) and a note. The checks measure; the reviewer decides. A bad
+ * rating on a passing result says the checks missed something, a good one on a failure that a check is too strict.
+ */
+function ReviewButtons({ r, runId, onReviewed }: { r: TestResult; runId: string; onReviewed(r: TestResult): void }) {
+  const [noteOpen, setNoteOpen] = useState(false);
+  const [note, setNote] = useState(r.review?.note ?? '');
+  useEffect(() => setNote(r.review?.note ?? ''), [r]);
+  const save = (change: { rating?: 'good' | 'bad' | null; note?: string | null }) =>
+    call<TestResult['review'] | null>('runs.review', { runId, resultId: r.id, ...change })
+      .then((review) => onReviewed({ ...r, review: review ?? undefined }))
+      .catch((e) => useApp.getState().toast(asError(e).message, 'error'));
+  const rate = (rating: 'good' | 'bad') => void save({ rating: r.review?.rating === rating ? null : rating });
+  return (
+    <div className="flex items-center gap-0.5 shrink-0">
+      <Button size="sm" variant="ghost" aria-pressed={r.review?.rating === 'good'} title="Good result (press again to clear)" className={cx(r.review?.rating === 'good' && 'text-ok bg-ok/10')} icon={<ThumbsUp size={13} />} onClick={() => rate('good')} />
+      <Button size="sm" variant="ghost" aria-pressed={r.review?.rating === 'bad'} title="Bad result (press again to clear)" className={cx(r.review?.rating === 'bad' && 'text-bad bg-bad/10')} icon={<ThumbsDown size={13} />} onClick={() => rate('bad')} />
+      <Button size="sm" variant="ghost" title="Add a note: why it is good or bad" onClick={() => setNoteOpen(true)}>
+        Note
+      </Button>
+      {noteOpen && (
+        <Modal
+          title={`Review: ${r.name}`}
+          onClose={() => setNoteOpen(false)}
+          width={480}
+          footer={
+            <>
+              <Button onClick={() => setNoteOpen(false)}>Cancel</Button>
+              <Button
+                variant="primary"
+                onClick={() => {
+                  setNoteOpen(false);
+                  void save({ note: note.trim() || null });
+                }}
+              >
+                Save note
+              </Button>
+            </>
+          }
+        >
+          <textarea aria-label="Review note" className="field min-h-28 w-full text-sm" value={note} placeholder="Why it is good or bad (people and agents read it)" onChange={(e) => setNote(e.target.value)} autoFocus />
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+export function ResultDetail({ r, runId, onReviewed }: { r: TestResult; runId?: string; onReviewed?(r: TestResult): void }) {
   const [tab, setTab] = useState<'checks' | 'io' | 'trace' | 'history' | 'meta'>('checks');
   const [trace, setTrace] = useState<Trace | null>();
   useEffect(() => {
@@ -275,8 +381,15 @@ export function ResultDetail({ r, runId }: { r: TestResult; runId?: string }) {
       <div className="px-3 py-2 border-b border-line">
         <div className="flex items-center gap-2">
           <StatusIcon status={r.status} />
-          <span className="font-medium">{r.name}</span>
+          <span className="font-medium flex-1 min-w-0 truncate">{r.name}</span>
+          {runId && onReviewed && <ReviewButtons r={r} runId={runId} onReviewed={onReviewed} />}
         </div>
+        {r.review?.note && (
+          <div className="text-xs mt-1 border-l-2 border-line pl-2">
+            <span className="text-muted">Review{r.review.by === 'agent' ? ' (by an agent)' : ''}: </span>
+            {r.review.note}
+          </div>
+        )}
         <div className="text-xs text-muted mt-0.5 flex gap-3 flex-wrap">
           <span>{r.type}</span>
           {r.model && <span>{r.model}</span>}

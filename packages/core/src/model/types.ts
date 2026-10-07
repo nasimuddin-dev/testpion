@@ -479,6 +479,18 @@ export interface TestResult {
   output?: string;
   input?: string;
   metadata?: Record<string, unknown>;
+  /** A person's verdict on the result (kept beside the run, in reviews.json; added when results are read). */
+  review?: ResultReview;
+}
+
+/** A person's verdict on a result: good or bad, and why. The checks measure; a reviewer decides. */
+export interface ResultReview {
+  rating?: 'good' | 'bad';
+  note?: string;
+  /** ISO time of the last change. */
+  at: string;
+  /** Who reviewed (the app's user name, an agent's name), when known. */
+  by?: string;
 }
 
 export interface LatencyStats {

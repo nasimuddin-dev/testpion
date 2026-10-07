@@ -62,6 +62,8 @@ Latency, time to first token, mean time between tokens, input, output and total 
 
 Run the same prompt against several models and compare latency, tokens, cost, JSON and schema validity, and your evaluators side by side. The tool deliberately produces **no universal ranking**.
 
+Each row of the comparison marks the **fastest** (latency, time to first token) and the **cheapest** model when they differ. A model whose provider still needs an API key says so under its picker, and if it is run anyway its column shows the error once, with **Add the key**.
+
 ## Usage
 
 The AI Lab's **Usage** tab adds up the prompts you ran: prompts, input and output tokens and estimated cost (from the price table) per model, with a bar per model and the median time and time to first token. `testpion history llm` prints the same, and agents use the `llm_usage` MCP tool.

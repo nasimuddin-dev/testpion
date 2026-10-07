@@ -114,6 +114,8 @@ export function CheckList({ checks, compact, actions }: { checks: CheckResult[];
 function EvidenceList({ check }: { check: CheckResult }) {
   const items = (check.metadata?.items as Array<{ text: string; ok: boolean; evidence?: string }> | undefined) ?? [];
   if (!items.length) return null;
+  // what the check calls its verdicts (supported / not supported, useful / not useful …)
+  const [okLabel, badLabel] = (check.metadata?.itemLabels as [string, string] | undefined) ?? ['demonstrated', 'still to verify'];
   const open = items.filter((i) => !i.ok);
   const done = items.filter((i) => i.ok);
   const row = (i: { text: string; ok: boolean; evidence?: string }, k: number) => (
@@ -128,8 +130,9 @@ function EvidenceList({ check }: { check: CheckResult }) {
   return (
     <details className="mt-1 text-xs" open={!check.passed}>
       <summary className="cursor-pointer text-muted select-none">
-        {open.length ? `${open.length} still to verify, ` : ''}
-        {done.length} demonstrated{check.source === 'ai-judge' ? ' (AI-judged — check the evidence)' : ''}
+        {open.length ? `${open.length} ${badLabel}, ` : ''}
+        {done.length} {okLabel}
+        {check.source === 'ai-judge' ? ' (AI-judged — check the evidence)' : ''}
       </summary>
       <ul className="mt-1 space-y-0.5 ml-1">
         {open.map(row)}

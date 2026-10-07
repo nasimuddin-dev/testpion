@@ -44,8 +44,8 @@ evaluators:
   - type: context-entity-recall      # no model needed
 ```
 
-In the results, each check lists what is **still to verify** (unsupported claims, missing facts, documents judged not
-useful) before what was **demonstrated**, with the evidence. A failing check opens the list. The list is in
+In the results, each check lists what did not hold first (claims **not supported**, documents **not useful**, facts
+**missing**), then what did, each with its evidence. A failing check opens the list. The list is in
 `metadata.items` of the check result (`{ text, ok, evidence }`), in the JSON report and over MCP, so an agent can
 read it too. A judge is a model: read the evidence before acting on a verdict. The judge's provider, model, prompt
 version and config hash are stored with the result for reproducibility.

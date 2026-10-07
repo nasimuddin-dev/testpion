@@ -1,7 +1,7 @@
 /** RPC handlers: Collections (requests, folders, examples, import/export) and their mock servers. */
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, relative, sep } from 'node:path';
-import { ApsError, dbKindOf, redactDbUrl, isSqliteDataset, collectionVariableFlow, listWorkspaceDatasets, readDataset, sqliteTables, fetchImportText, bruFilesToBrunoExport, collectionToBru, importIntoWorkspace, diffOpenApi, lintOpenApi, openApiOutline, asyncApiOutline, workspaceApiCoverage, apiCoverageMarkdown, securityLint, certificateLint, listCertificates, variableFlow, startRecorder, recordingToCollection, type RecordedExchange, collectionToOpenApiText, collectionToHttpFile, collectionToAsyncApi, generateWorkspaceDataset, replaceInCollection, moveCollectionVariablesToEnvironments, tidyCollection, applyTidy, type ReplaceField, writeTestsFromSpec, exampleFromResponse, startMockServer, collectionMarkdown, collectionHtml, exportPostmanCollection, withRequestExamples, type SavedExample, convertCollectionScripts, importRequestSnippet, isRequestSnippet, type Collection, collectionSavedItems, duplicateCollection, shortId, requestBodySchema, loadOpenApi } from '@testpion/core';
+import { ApsError, dbKindOf, redactDbUrl, isSqliteDataset, collectionVariableFlow, listWorkspaceDatasets, appendDatasetRow, readDataset, sqliteTables, fetchImportText, bruFilesToBrunoExport, collectionToBru, importIntoWorkspace, diffOpenApi, lintOpenApi, openApiOutline, asyncApiOutline, workspaceApiCoverage, apiCoverageMarkdown, securityLint, certificateLint, listCertificates, variableFlow, startRecorder, recordingToCollection, type RecordedExchange, collectionToOpenApiText, collectionToHttpFile, collectionToAsyncApi, generateWorkspaceDataset, replaceInCollection, moveCollectionVariablesToEnvironments, tidyCollection, applyTidy, type ReplaceField, writeTestsFromSpec, exampleFromResponse, startMockServer, collectionMarkdown, collectionHtml, exportPostmanCollection, withRequestExamples, type SavedExample, convertCollectionScripts, importRequestSnippet, isRequestSnippet, type Collection, collectionSavedItems, duplicateCollection, shortId, requestBodySchema, loadOpenApi } from '@testpion/core';
 import type { Backend, Handlers, CollectionRunParams } from '../backend.js';
 import { recordIncoming } from './debugger.js';
 
@@ -273,6 +273,12 @@ export function collectionsHandlers(be: Backend): Handlers {
       if (!/\.(csv|tsv|json|jsonl|ndjson|md)$/i.test(file)) throw new ApsError('ValidationError', 'Only CSV, JSON, JSONL and Markdown datasets can be opened as text');
       if (statSync(file).size > 20 * 1024 * 1024) throw new ApsError('ValidationError', 'The dataset is larger than 20 MB');
       return { name: relative(root, file).split(sep).join('/'), text: readFileSync(file, 'utf8') };
+    },
+    /** Add a record to a JSONL dataset (made when missing): a Playground answer as an evaluation case. */
+    'datasets.appendRow': ({ name, row }: { name: string; row: Record<string, unknown> }) => {
+      const out = appendDatasetRow(be.ws, name, row);
+      be.host.emit('data.changed', { kind: 'datasets' });
+      return out;
     },
     /** Save rows (CSV text, e.g. a response's table) as datasets/<name>.csv; never overwrites: name-2.csv etc. */
     'datasets.saveCsv': ({ name, text }: { name: string; text: string }) => {

@@ -3,7 +3,7 @@ import { exportTextFormat } from './export-formats.js';
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { Command, Option } from 'commander';
-import { WorkspaceManager, formatDuration, importRequestSnippet, ciConfig, compareEnvironments, environmentMatrix, compareRequestAcrossEnvironments, collectionRequests, createEngineContext, ChainSecretStore, EnvSecretStore, type CiProvider, convertCollectionScripts, isRequestSnippet, Redactor, collectionMarkdown, collectionHtml, exportPostmanCollection, exportPostmanEnvironment, fetchImportText, readBrunoFolder, collectionToBru, type Environment, bundleWsdl, isWsdl, importIntoWorkspace, diffOpenApi, lintOpenApi, OPENAPI_LINT_RULES, type OpenApiLintSeverity, type OpenApiLintResult, workspaceApiCoverage, apiCoverageMarkdown, securityLint, findEnvironment, setEnvironmentVariables, unsetEnvironmentVariables, variableFlow, collectionToOpenApiText, variableUsages, renameVariable, collectionSavedItems, listWorkspaceDatasets, workspaceReportHtml, collectionVariableFlow, referencedVariableNames, loadHistory, workspaceStorage, deleteRunsBefore, listCertificates, workspaceAttention, decodeJwt, describeExpiry, recordCertificate, checkCertificate, certificateLint } from '@testpion/core';
+import { WorkspaceManager, formatDuration, importRequestSnippet, ciConfig, compareEnvironments, environmentMatrix, compareRequestAcrossEnvironments, collectionRequests, createEngineContext, ChainSecretStore, EnvSecretStore, type CiProvider, convertCollectionScripts, isRequestSnippet, Redactor, collectionMarkdown, collectionHtml, exportPostmanCollection, exportPostmanEnvironment, fetchImportText, readBrunoFolder, collectionToBru, type Environment, bundleWsdl, isWsdl, importIntoWorkspace, diffOpenApi, lintOpenApi, OPENAPI_LINT_RULES, type OpenApiLintSeverity, type OpenApiLintResult, workspaceApiCoverage, apiCoverageMarkdown, securityLint, findEnvironment, setEnvironmentVariables, unsetEnvironmentVariables, variableFlow, collectionToOpenApiText, variableUsages, renameVariable, collectionSavedItems, listWorkspaceDatasets, appendDatasetRow, workspaceReportHtml, collectionVariableFlow, referencedVariableNames, loadHistory, workspaceStorage, deleteRunsBefore, listCertificates, workspaceAttention, decodeJwt, describeExpiry, recordCertificate, checkCertificate, certificateLint } from '@testpion/core';
 import { EXIT, green, red, yellow, dim, bold, CliError, openWorkspace, loadCollectionRef, findWorkspaceUp } from '../shared.js';
 
 export function registerDataCommands(program: Command): void {
@@ -491,9 +491,21 @@ export function registerDataCommands(program: Command): void {
     .description('data files in the workspace datasets/ folder (for run-collection -d and test datasets), newest first; SQLite databases with their tables')
     .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
     .option('--json', 'print as JSON')
-    .action((o: { workspace?: string; json?: boolean }) => {
+    .option('--add <dataset>', 'add a record to this JSONL dataset (made when missing; ".jsonl" is added without an extension), e.g. an evaluation case')
+    .option('--row <json>', 'the record for --add, as JSON: {"message": "Cancel my booking", "expected": "cancellation"}')
+    .action((o: { workspace?: string; json?: boolean; add?: string; row?: string }) => {
       const { store } = openWorkspace(o.workspace, undefined, new WorkspaceManager());
       try {
+        if (o.add) {
+          let row: Record<string, unknown>;
+          try {
+            row = JSON.parse(o.row ?? '');
+          } catch {
+            throw new CliError(`--row must be a JSON object: --row '{"message": "hi", "expected": "greeting"}'`, EXIT.CONFIG_ERROR);
+          }
+          const out = appendDatasetRow(store, o.add, row);
+          return console.log(o.json ? JSON.stringify(out, null, 2) : green(`${out.path}: ${out.rows} record${out.rows === 1 ? '' : 's'}`));
+        }
         const rows = listWorkspaceDatasets(store);
         if (o.json) return console.log(JSON.stringify(rows, null, 2));
         if (!rows.length) return console.log(dim('No datasets. Put CSV, JSON, JSONL or SQLite files in the workspace datasets/ folder.'));

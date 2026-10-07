@@ -45,7 +45,7 @@ describe('groundedness (faithfulness) with a judge', () => {
     expect(r!.score).toBe(0.5);
     expect(r!.passed).toBe(false);
     expect(r!.source).toBe('ai-judge');
-    expect(r!.message).toMatch(/1 of 2 claims supported by the context; still to verify: "It offers free lunch\."/);
+    expect(r!.message).toMatch(/1 of 2 claims supported by the context; not supported: "It offers free lunch\."/);
     expect((r!.metadata!.items as unknown[]).length).toBe(2);
     expect(j.prompts[0]).toMatch(/RETRIEVED CONTEXT:\n\[hours\] Paws Clinic/);
   });
@@ -114,7 +114,7 @@ describe('context entity recall', () => {
     // a context without the clinic's name loses it
     const [lost] = await runChecks([{ type: 'context-entity-recall', threshold: 1 }], { ...rag(), contexts: [{ id: 'x', text: 'Open 8am to 6pm, Monday to Friday.' }] });
     expect(lost!.passed).toBe(false);
-    expect(lost!.message).toMatch(/still to verify: "Paws Clinic"/);
+    expect(lost!.message).toMatch(/missing: "Paws Clinic"/);
   });
 
   it('takes the entities to look for', async () => {

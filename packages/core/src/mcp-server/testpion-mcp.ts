@@ -1,6 +1,6 @@
 import { readResultsFile, runTests } from '../runner/runner.js';
 import { compareToBaseline, createBaseline } from '../report/regression.js';
-import { breakdownOfRun, runResultsFile } from '../runner/run-results.js';
+import { breakdownOfRun, pageRunResults, reviewCounts, reviewResult, runResultsFile } from '../runner/run-results.js';
 import { monitorRequestStats } from '../runner/monitor-requests.js';
 import { streamTests } from '../runner/loader.js';
 import { join, relative, sep } from 'node:path';
@@ -53,7 +53,7 @@ import { str, withEnvironmentSecrets, type Tool } from './tool.js';
 import { commandLine, isCommandTrusted } from '../storage/trust.js';
 import { McpSession } from '../protocols/mcp/client.js';
 import { runCollection } from '../runner/collection-run.js';
-import { listWorkspaceDatasets, readDataset, type DatasetRecord } from '../runner/datasets.js';
+import { appendDatasetRow, listWorkspaceDatasets, readDataset, type DatasetRecord } from '../runner/datasets.js';
 import { dbKindOf } from '../runner/db-datasets.js';
 import { collectionVariableFlow, referencedVariableNames } from '../runner/variable-flow.js';
 import { collectionRealtimeTests, collectionSavedItems } from '../runner/collection-realtime.js';
@@ -1087,6 +1087,47 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
       },
     },
     {
+      name: 'run_reviews',
+      description:
+        "A person's verdicts on a finished run's results (rated good or bad in the app, with a note): the counts, and each reviewed result with its status, checks' lowest score, rating and note. A bad rating on a passing result means the checks missed something; a good rating on a failing one means a check is too strict. Use it to improve tests and evaluators.",
+      inputSchema: { type: 'object', properties: { runId: str('Run id') }, required: ['runId'] },
+      run: async (a) => {
+        const runId = String(a.runId);
+        if (!existsSync(runResultsFile(store, runId))) throw new ApsError('ValidationError', `No finished run ${runId}`);
+        const all = await pageRunResults(store, { runId, limit: 100000 });
+        const reviewed = all.items.filter((r) => r.review);
+        const scores = (r: (typeof all.items)[number]) => r.checks.map((c) => c.score).filter((x): x is number => typeof x === 'number');
+        return {
+          ...reviewCounts(Object.fromEntries(reviewed.map((r) => [r.id, r.review!])), all.total),
+          results: reviewed.map((r) => ({ id: r.id, name: r.name, status: r.status, lowestScore: scores(r).length ? Math.min(...scores(r)) : undefined, ...r.review })),
+        };
+      },
+    },
+    {
+      name: 'review_result',
+      write: true,
+      description:
+        'Rate a result of a finished run good or bad, with a note (why), as the app\'s 👍 / 👎 does; rating null clears it. The review is marked as an agent\'s. Rate only after reading the result (its output and checks); people see the rating in the app.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          runId: str('Run id'),
+          resultId: str('Result id (from run_reviews, run_tests or the run results)'),
+          rating: { type: ['string', 'null'], enum: ['good', 'bad', null], description: 'good, bad, or null to clear' },
+          note: str('Why (optional)'),
+        },
+        required: ['runId', 'resultId'],
+      },
+      run: (a) => ({
+        review:
+          reviewResult(store, String(a.runId), String(a.resultId), {
+            rating: a.rating === undefined ? undefined : (a.rating as 'good' | 'bad' | null),
+            note: a.note === undefined ? undefined : String(a.note),
+            by: 'agent',
+          }) ?? null,
+      }),
+    },
+    {
       name: 'compare_runs',
       description:
         'What changed between two finished runs (ids from run_tests, run_collection results in the app, or list of runs): tests that started failing, tests that were fixed, tests that got slower beyond latencyPct (and, for AI tests, more tokens or a lower score), new and removed tests, and the change of totals (pass rate, latency percentiles, tokens, cost). `passed` is false when something regressed.',
@@ -1141,6 +1182,18 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
         'Data files in the workspace datasets/ folder, newest first: path (give it to run_collection as `data`), size, format (csv, json, jsonl, markdown, sqlite) and, for SQLite databases, their tables (run_collection then needs a `query`). A response saved with the app\'s Table ▸ Save as dataset lands here too.',
       inputSchema: { type: 'object', properties: {} },
       run: () => listWorkspaceDatasets(store),
+    },
+    {
+      name: 'add_dataset_row',
+      write: true,
+      description:
+        'Add one record to a JSONL dataset in datasets/ (made when missing), e.g. an input and the answer it should get, as an evaluation case: { "message": "Cancel my booking", "expected": "cancellation" }. Each field is a {{variable}} of the evaluation prompt; `expected` is what evaluators compare with.',
+      inputSchema: {
+        type: 'object',
+        properties: { dataset: str('File under datasets/ (".jsonl" is added when there is no extension), e.g. intent-cases'), row: { type: 'object', description: 'The record: field → value' } },
+        required: ['dataset', 'row'],
+      },
+      run: (a) => appendDatasetRow(store, String(a.dataset), a.row as Record<string, unknown>),
     },
     {
       name: 'testpion_guide',

@@ -17,6 +17,9 @@ import {
   summarizeTestHistory,
   flakyTests,
   scoreTrend,
+  pageRunResults,
+  reviewCounts,
+  reviewResult,
 } from '@testpion/core';
 import { EXIT, green, red, yellow, dim, bold, CliError, openWorkspace } from '../shared.js';
 
@@ -111,6 +114,36 @@ export function registerHistoryCommands(program: Command): void {
             .join(', ');
           if (kinds) console.log(dim(`By kind: ${kinds}`));
         }
+      } finally {
+        store.close();
+      }
+    });
+  histCmd
+    .command('review')
+    .description("a person's verdicts on a run's results: list them, or rate one good or bad with a note (the app's 👍 / 👎)")
+    .argument('<runId>', 'the run (from the app or `testpion history list`)')
+    .argument('[resultId]', 'the result to rate')
+    .requiredOption('-w, --workspace <nameOrPath>')
+    .option('--good', 'rate it good')
+    .option('--bad', 'rate it bad')
+    .option('--clear', 'remove the rating and note')
+    .option('--note <text>', 'why')
+    .option('--json', 'print as JSON')
+    .action(async (runId: string, resultId: string | undefined, o: { workspace: string; good?: boolean; bad?: boolean; clear?: boolean; note?: string; json?: boolean }) => {
+      const { store } = openWorkspace(o.workspace, undefined, new WorkspaceManager());
+      try {
+        if (resultId) {
+          if (o.good && o.bad) throw new CliError('Choose --good or --bad, not both', EXIT.CONFIG_ERROR);
+          const review = reviewResult(store, runId, resultId, o.clear ? null : { rating: o.good ? 'good' : o.bad ? 'bad' : undefined, note: o.note, by: process.env.USER ?? process.env.USERNAME });
+          if (o.json) return console.log(JSON.stringify({ resultId, review: review ?? null }, null, 2));
+          return console.log(review ? `${review.rating === 'bad' ? red('bad') : review.rating === 'good' ? green('good') : dim('no rating')}${review.note ? `  ${review.note}` : ''}` : dim('Review cleared.'));
+        }
+        const all = await pageRunResults(store, { runId, limit: 100000 });
+        const reviewed = all.items.filter((r) => r.review);
+        const counts = reviewCounts(Object.fromEntries(reviewed.map((r) => [r.id, r.review!])), all.total);
+        if (o.json) return console.log(JSON.stringify({ ...counts, results: reviewed.map((r) => ({ id: r.id, name: r.name, status: r.status, ...r.review })) }, null, 2));
+        for (const r of reviewed) console.log(`${r.review!.rating === 'bad' ? red('bad ') : r.review!.rating === 'good' ? green('good') : dim('note')}  ${r.name} ${dim(`(${r.status}, ${r.id})`)}${r.review!.note ? `\n      ${r.review!.note}` : ''}`);
+        console.log(dim(`${counts.good} good, ${counts.bad} bad, ${counts.unreviewed} not rated of ${all.total}`));
       } finally {
         store.close();
       }

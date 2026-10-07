@@ -50,6 +50,27 @@ evaluators:
 
 Each record's fields are available as variables in both the prompt and the evaluators.
 
+**Grow a dataset from the Playground:** when an answer is right, **Add to dataset** (next to the result) adds the
+prompt's inputs and the answer, as `expected`, to a JSONL file in `datasets/` (`playground-cases.jsonl` unless you
+name another; it is made when missing). The file then appears in the Evaluations dataset list. From the terminal:
+`testpion datasets --add intent-cases --row '{"message": "Cancel my booking", "expected": "cancellation"}'`; agents
+use the `add_dataset_row` MCP tool.
+
+## Reviewing results
+
+A finished run (an evaluation or a test run) opens its first failure, or its only result, by itself. The filter
+above the results counts what each choice holds: **Failed**, **Passed**, **Skipped** and **To review**. Each row
+shows its lowest check score, so weak answers stand out even when they pass. **↑ ↓** (or **J K**) move through the
+results.
+
+Checks measure; a person decides. On a result, **👍** or **👎** records your verdict (press it again to clear it)
+and **Note** says why. A 👎 on a passing result means the checks missed something, so add or tighten one; a 👍 on a
+failing one means a check is too strict. Rated results leave **To review**, so a run can be reviewed to the end.
+Reviews are kept beside the run (`runs/<id>/reviews.json`) and never change its results.
+
+- Terminal: `testpion history review <runId>` lists the reviews; `testpion history review <runId> <resultId> --bad --note "rude tone"` rates one.
+- Agents: `run_reviews` reads them (a good starting point for improving evaluators) and `review_result` adds one, marked as an agent's.
+
 ## Regression
 
 With no run open (or after **Overview of all runs** in the Runs list), the Evaluations view shows the earlier runs: pass rate and duration by run, and **Scores by run**, one small chart per evaluator with its mean score in each run (green from 0.7), to see whether a model, prompt or pipeline is getting better or worse. `testpion history scores` prints the same and agents use the `score_trend` MCP tool.

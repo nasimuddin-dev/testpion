@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { call } from '../api';
-import { formatCost, formatMs, plural, timeAgo } from '../lib/format';
+import { formatCost, formatMs, plural, timeAgo, undatedModel } from '../lib/format';
 import { BarRow, ChartCard, StatTile, Swatch } from './charts';
-import { Empty, Spinner } from './ui';
+import { Empty, LinkButton, Spinner } from './ui';
+import { useApp } from '../store';
 
 /** From `ai.usage` (llmUsage in core). */
 interface Usage {
@@ -48,7 +49,24 @@ export function AiUsage() {
         <StatTile
           label="Estimated cost"
           value={priced.length ? formatCost(cost) : '—'}
-          sub={!priced.length ? 'no price configured' : priced.length < rows.length ? 'models with a known price' : 'from the price table'}
+          sub={
+            priced.length === rows.length ? (
+              'from the price table'
+            ) : (
+              // the first model without a price gets a row in the price table, ready to fill in
+              <>
+                {priced.length ? 'models with a known price · ' : 'no price yet · '}
+                <LinkButton
+                  onClick={() => {
+                    const m = rows.find((r) => r.costUsd === undefined);
+                    useApp.getState().openIntent('settings', { tab: 'pricing', ...(m ? { addPrice: { provider: m.provider, model: undatedModel(m.model) } } : {}) });
+                  }}
+                >
+                  Set prices…
+                </LinkButton>
+              </>
+            )
+          }
         />
       </div>
       <ChartCard

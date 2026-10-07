@@ -612,11 +612,23 @@ async function judgeItems(cfg: CheckConfig, ctx: CheckContext, task: string, sec
   return { items, judge };
 }
 
-/** "3 of 4 claims supported; still to verify: …" — the items a person should look at first. */
-function itemsSummary(items: EvidenceItem[], noun: string, verdict: string): string {
+/**
+ * What a check calls its verdicts ([ok, not ok]), shown with the items: claims are "supported" or "not supported",
+ * documents "useful" or "not useful", facts "found" or "missing".
+ */
+const LABELS = {
+  claims: ['supported', 'not supported'],
+  documents: ['useful', 'not useful'],
+  statements: ['found', 'missing'],
+  entities: ['retrieved', 'missing'],
+  answer: ['matching', 'not matching'],
+} as const;
+
+/** "3 of 4 claims supported by the context; not supported: …" — the items a person should look at first. */
+function itemsSummary(items: EvidenceItem[], noun: string, verdict: string, badLabel: string): string {
   const bad = items.filter((i) => !i.ok);
   const head = `${items.length - bad.length} of ${items.length} ${noun} ${verdict}`;
-  return bad.length ? `${head}; still to verify: ${bad.slice(0, 3).map((i) => `"${short(i.text, 80)}"`).join(', ')}${bad.length > 3 ? ` and ${bad.length - 3} more` : ''}` : head;
+  return bad.length ? `${head}; ${badLabel}: ${bad.slice(0, 3).map((i) => `"${short(i.text, 80)}"`).join(', ')}${bad.length > 3 ? ` and ${bad.length - 3} more` : ''}` : head;
 }
 
 const round3 = (n: number) => Math.round(n * 1000) / 1000;
@@ -673,10 +685,10 @@ registerCheck('context-precision', async (cfg, ctx) => {
       const byId = new Map(items.map((i) => [i.text.replace(/^\[|\]$/g, ''), i]));
       const ordered = docs.map((d, i) => byId.get(d.id) ?? items[i] ?? { text: d.id, ok: false, evidence: 'not judged' });
       const score = averagePrecision(ordered.map((i) => i.ok));
-      return res(cfg, score >= t, `context precision (judge) ${score}: ${itemsSummary(ordered, 'documents', 'useful')}`, {
+      return res(cfg, score >= t, `context precision (judge) ${score}: ${itemsSummary(ordered, 'documents', 'useful', 'not useful')}`, {
         source: 'ai-judge',
         score,
-        metadata: { items: ordered, judge, threshold: t },
+        metadata: { items: ordered, itemLabels: LABELS.documents, judge, threshold: t },
       });
     } catch (e) {
       return judgeFailed(cfg, e);
@@ -689,7 +701,7 @@ registerCheck('context-precision', async (cfg, ctx) => {
   return res(cfg, score >= t, `context precision ${score} (${hits}/${docs.length} relevant)`, {
     source: 'heuristic',
     score,
-    metadata: { relevant: docs.filter((_, i) => relevance[i]).map((d) => d.id), items: docs.map((d, i) => ({ text: d.id, ok: relevance[i]!, evidence: short(d.text, 120) })) },
+    metadata: { relevant: docs.filter((_, i) => relevance[i]).map((d) => d.id), items: docs.map((d, i) => ({ text: d.id, ok: relevance[i]!, evidence: short(d.text, 120) })), itemLabels: LABELS.documents },
   });
 });
 
@@ -711,7 +723,11 @@ registerCheck('context-recall', async (cfg, ctx) => {
         'context-recall',
       );
       const score = items.length ? round3(items.filter((i) => i.ok).length / items.length) : 0;
-      return res(cfg, score >= t, `context recall (judge) ${score}: ${itemsSummary(items, 'statements', 'found in the context')}`, { source: 'ai-judge', score, metadata: { items, judge, threshold: t } });
+      return res(cfg, score >= t, `context recall (judge) ${score}: ${itemsSummary(items, 'statements', 'found in the context', 'missing')}`, {
+        source: 'ai-judge',
+        score,
+        metadata: { items, itemLabels: LABELS.statements, judge, threshold: t },
+      });
     } catch (e) {
       return judgeFailed(cfg, e);
     }
@@ -719,7 +735,7 @@ registerCheck('context-recall', async (cfg, ctx) => {
   const sents = sentences(exp);
   const found = sents.map((s) => coverage(s, all) >= 0.6);
   const score = sents.length ? round3(found.filter(Boolean).length / sents.length) : round3(coverage(exp, all));
-  return res(cfg, score >= t, `context recall ${score}`, { source: 'heuristic', score, metadata: { items: sents.map((s, i) => ({ text: s, ok: found[i]! })) } });
+  return res(cfg, score >= t, `context recall ${score}`, { source: 'heuristic', score, metadata: { items: sents.map((s, i) => ({ text: s, ok: found[i]! })), itemLabels: LABELS.statements } });
 });
 
 /** The names, numbers and dates of a text (what a retrieval must not lose). */
@@ -748,7 +764,7 @@ registerCheck('context-entity-recall', (cfg, ctx) => {
   const items = list.map((e) => ({ text: e, ok: all.includes(e.toLowerCase()) }));
   const score = items.length ? round3(items.filter((i) => i.ok).length / items.length) : 1;
   const t = threshold(cfg, 0.8);
-  return res(cfg, score >= t, `context entity recall ${score}: ${itemsSummary(items, 'entities', 'retrieved')}`, { source: 'deterministic', score, metadata: { items } });
+  return res(cfg, score >= t, `context entity recall ${score}: ${itemsSummary(items, 'entities', 'retrieved', 'missing')}`, { source: 'deterministic', score, metadata: { items, itemLabels: LABELS.entities } });
 });
 
 registerCheck('groundedness', async (cfg, ctx) => {
@@ -769,10 +785,10 @@ registerCheck('groundedness', async (cfg, ctx) => {
       );
       // an answer without a claim (a refusal, "I don't know") makes up nothing
       const score = items.length ? round3(items.filter((i) => i.ok).length / items.length) : 1;
-      return res(cfg, score >= t, `groundedness (judge) ${score}: ${itemsSummary(items, 'claims', 'supported by the context')}`, {
+      return res(cfg, score >= t, `groundedness (judge) ${score}: ${itemsSummary(items, 'claims', 'supported by the context', 'not supported')}`, {
         source: 'ai-judge',
         score,
-        metadata: { items, judge, threshold: t, hallucinationIndicator: round3(1 - score) },
+        metadata: { items, itemLabels: LABELS.claims, judge, threshold: t, hallucinationIndicator: round3(1 - score) },
       });
     } catch (e) {
       return judgeFailed(cfg, e);
@@ -785,7 +801,7 @@ registerCheck('groundedness', async (cfg, ctx) => {
   return res(cfg, score >= t, `groundedness ${score} — ${unsupported.length} unsupported sentence(s)`, {
     source: 'heuristic',
     score,
-    metadata: { unsupported: unsupported.slice(0, 10), hallucinationIndicator: round3(1 - score), items: sents.map((s, i) => ({ text: s, ok: supported[i]! })) },
+    metadata: { unsupported: unsupported.slice(0, 10), hallucinationIndicator: round3(1 - score), items: sents.map((s, i) => ({ text: s, ok: supported[i]! })), itemLabels: LABELS.claims },
   });
 });
 registry.set('hallucination', registry.get('groundedness')!);
@@ -874,6 +890,7 @@ registerCheck('answer-correctness', async (cfg, ctx) => {
       precision: round3(precision),
       ...(mode !== 'precision' ? { recall: round3(recall) } : {}),
       items: [...answerItems.map((i) => ({ ...i, text: `answer: ${i.text}` })), ...referenceItems.map((i) => ({ ...i, text: `reference: ${i.text}` }))],
+      itemLabels: LABELS.answer,
       ...(judge ? { judge } : {}),
       threshold: t,
     },

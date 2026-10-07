@@ -3,6 +3,9 @@ import { copyFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   lintTestFile,
+  reviewResult,
+  reviewCounts,
+  runReviews,
   testEditorGuide,
   evaluationTests,
   workspaceReportHtml,
@@ -93,6 +96,9 @@ export function testingHandlers(be: Backend): Handlers {
       return existsSync(f) ? JSON.parse(readFileSync(f, 'utf8')) : null;
     },
     'runs.results': (q: { runId: string; offset?: number; limit?: number; status?: string; query?: string }) => be.pageResults(q),
+    // a person's verdict on a result (good / bad and why), and how many were rated
+    'runs.review': ({ runId, resultId, rating, note }: { runId: string; resultId: string; rating?: 'good' | 'bad' | null; note?: string | null }) => reviewResult(be.ws, runId, resultId, { rating, note }) ?? null,
+    'runs.reviewCounts': ({ runId, total }: { runId: string; total: number }) => reviewCounts(runReviews(be.ws, runId), total),
     'runs.openReport': ({ runId, format }: { runId: string; format: 'html' | 'markdown' | 'junit' | 'json' }) => {
       const file = { html: 'report.html', markdown: 'report.md', junit: 'junit.xml', json: 'report.json' }[format];
       const p = join(be.ws.runDir(runId), file);

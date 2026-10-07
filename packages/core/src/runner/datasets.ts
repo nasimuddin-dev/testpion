@@ -1,9 +1,9 @@
 import { csvRecords, parseCsvLine } from '@testpion/shared';
 import { assertUrlAllowed } from '../net/policy.js';
-import { createReadStream, existsSync, readdirSync, statSync } from 'node:fs';
+import { appendFileSync, createReadStream, existsSync, mkdirSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { createInterface } from 'node:readline';
-import { extname, join, relative, sep } from 'node:path';
+import { dirname, extname, join, relative, sep } from 'node:path';
 import { ApsError } from '../errors.js';
 import { queryAll } from '../util/jsonpath.js';
 import { dbKindOf, dbRecords } from './db-datasets.js';
@@ -272,6 +272,29 @@ export interface WorkspaceDataset {
   format: 'csv' | 'json' | 'jsonl' | 'markdown' | 'sqlite';
   /** SQLite: its tables (a dataset needs a query). */
   tables?: string[];
+}
+
+/**
+ * Add one record to a JSONL dataset in the workspace's datasets/ folder, made when missing: a Playground answer
+ * worth keeping becomes an evaluation case (its inputs and the answer as `expected`). `name` is a file under
+ * datasets/ (`.jsonl` is added when it has no extension). Returns the file and how many records it now has.
+ */
+export function appendDatasetRow(
+  store: { root: string; path(...p: string[]): string; safePath(rel: string, base?: string): string },
+  name: string,
+  row: Record<string, unknown>,
+): { path: string; rows: number } {
+  const clean = name.trim().replace(/^datasets[\\/]/, '');
+  if (!clean) throw new ApsError('ValidationError', 'A dataset name is needed');
+  const rel = extname(clean) ? clean : `${clean}.jsonl`;
+  if (!/\.(jsonl|ndjson)$/i.test(rel)) throw new ApsError('ValidationError', `Records are added to JSONL datasets, not ${extname(rel)}`, { suggestions: ['Use a name ending in .jsonl, or no extension.'] });
+  if (!row || typeof row !== 'object' || Array.isArray(row)) throw new ApsError('ValidationError', 'A record is an object of fields');
+  const file = store.safePath(rel, store.path('datasets'));
+  mkdirSync(dirname(file), { recursive: true });
+  const before = existsSync(file) ? readFileSync(file, 'utf8') : '';
+  appendFileSync(file, (before && !before.endsWith('\n') ? '\n' : '') + JSON.stringify(row) + '\n');
+  const rows = (before + '\n' + JSON.stringify(row)).split('\n').filter((l) => l.trim()).length;
+  return { path: relative(store.root, file).split(sep).join('/'), rows };
 }
 
 /** Data files in the workspace's datasets/ folder (up to three levels deep), newest first. */

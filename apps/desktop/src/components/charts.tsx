@@ -315,7 +315,7 @@ export function BarRow({ label, segments, of, right, title, labelClass = 'w-20',
 }
 
 /** A headline number: label, value (green / red when it says something good / bad) and a line of context. */
-export function StatTile({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone?: 'ok' | 'bad' }) {
+export function StatTile({ label, value, sub, tone }: { label: string; value: string; sub?: ReactNode; tone?: 'ok' | 'bad' }) {
   return (
     <div className="rounded-xl border border-line bg-panel/40 px-4 py-3 min-w-0">
       <div className="text-xs text-muted">{label}</div>

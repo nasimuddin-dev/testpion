@@ -12,7 +12,7 @@ import { asError, call, on, type NormalizedError } from '../api';
 import { confirmAction, persisted, promptText, useApp } from '../store';
 import { useIntent, useSendShortcut } from '../hooks';
 import type { CheckConfig, CheckResult, ProviderConfig } from '../types';
-import { formatCost, formatMs, templateVars, uid } from '../lib/format';
+import { formatCost, formatMs, templateVars, uid, undatedModel } from '../lib/format';
 import { AssertionEditor } from '../components/AssertionEditor';
 import { CodeEditor } from '../components/CodeEditor';
 import { JsonTree } from '../components/JsonView';
@@ -21,8 +21,6 @@ import { Badge, Button, cx, Empty, Field, IconButton, Input, LinkButton, Metric,
 
 /** A cloud provider asks for a key; the offline demo, Ollama and a local OpenAI-compatible server don't. */
 const needsKey = (p: ProviderConfig) => p.kind !== 'mock' && p.kind !== 'ollama' && !(p.kind === 'openai-compatible' && /localhost|127\.0\.0\.1/.test(p.baseUrl ?? ''));
-/** A model's name without the snapshot date a provider answers with (gpt-4o-mini-2024-07-18 → gpt-4o-mini). */
-const undatedModel = (m: string) => m.replace(/(-\d{4}-\d{2}-\d{2}|-\d{8}|@\d{8})$/, '');
 
 interface ChatResult {
   id: string;
@@ -367,6 +365,28 @@ function Playground({ providers, onSetUp }: { providers: ProviderConfig[]; onSet
     await call('tests.write', { path, content: stringifyYaml(test) });
     useApp.getState().toast(`Saved tests/${path}`, 'success');
   };
+  // an answer worth keeping becomes an evaluation case: the inputs, and the answer as what is expected
+  const addToDataset = async (r: ChatResult) => {
+    let last = 'playground-cases';
+    try {
+      last = localStorage.getItem('aps.ai.dataset') || last;
+    } catch {
+      /* storage unavailable */
+    }
+    const name = await promptText('Add to dataset', { message: 'Dataset (a JSONL file in datasets/; made when missing). The inputs and this answer, as expected, become one case.', value: last, okLabel: 'Add' });
+    if (!name) return;
+    try {
+      localStorage.setItem('aps.ai.dataset', name);
+    } catch {
+      /* storage unavailable */
+    }
+    try {
+      const out = await call<{ path: string; rows: number }>('datasets.appendRow', { name, row: { ...d.input, expected: r.isJson ? r.json : r.text } });
+      useApp.getState().toast(`Added case ${out.rows} to ${out.path} (Evaluations ▸ Dataset ▸ workspace dataset)`, 'success');
+    } catch (e) {
+      useApp.getState().toast(asError(e).message, 'error');
+    }
+  };
   if (!providers.length) return <NoProviders onSetUp={onSetUp} />;
   const r = result && !('error' in result) ? result : undefined;
   return (
@@ -472,7 +492,18 @@ function Playground({ providers, onSetUp }: { providers: ProviderConfig[]; onSet
                     { id: 'evaluation', label: 'Evaluation', badge: r?.checks.length },
                     { id: 'prompt', label: 'Rendered prompt' },
                   ]}
-                  right={r && <span className="text-xs text-muted pr-2">{r.provider} · {r.model} · {r.finishReason}</span>}
+                  right={
+                    r && (
+                      <span className="flex items-center gap-3 text-xs text-muted pr-2">
+                        <LinkButton icon={<CopyPlus size={12} />} title="Keep this answer as an evaluation case: the inputs and the answer as expected" onClick={() => void addToDataset(r)}>
+                          Add to dataset
+                        </LinkButton>
+                        <span>
+                          {providers.find((p) => p.id === r.provider)?.name ?? r.provider} · {r.model} · {r.finishReason}
+                        </span>
+                      </span>
+                    )
+                  }
                 />
                 <div className="flex-1 min-h-0 overflow-auto">
                   {resTab === 'output' && <pre className="p-3 whitespace-pre-wrap text-sm leading-relaxed">{r ? r.text : stream}{running && <span className="inline-block w-2 h-4 bg-accent align-middle ml-0.5 animate-pulse" />}</pre>}
@@ -505,6 +536,7 @@ function Compare({ providers, onSetUp }: { providers: ProviderConfig[]; onSetUp(
   const [results, setResults] = useSticky<Array<ChatResult & { error?: NormalizedError }>>('ai:compare:results', []);
   const env = useApp((s) => s.environment);
   const rows = d.compare.length ? d.compare : providers.slice(0, 2).map((p) => ({ provider: p.id, name: p.defaultModel ?? '' }));
+  const providerName = (id: string) => providers.find((p) => p.id === id || p.name === id)?.name ?? id;
   const run = async () => {
     setRunning(true);
     try {
@@ -535,14 +567,20 @@ function Compare({ providers, onSetUp }: { providers: ProviderConfig[]; onSetUp(
       <div className="h-full flex flex-col">
         <div className="p-2 border-b border-line flex flex-col gap-2">
           <div className="text-xs font-semibold text-muted">Models</div>
-          {rows.map((m, i) => (
-            <div key={i} className="flex items-center gap-1">
-              <ModelPicker providers={providers} provider={m.provider} model={m.name} onChange={(p, name) => set({ compare: rows.map((x, j) => (j === i ? { provider: p, name } : x)) })} />
-              <IconButton label="Remove model" onClick={() => set({ compare: rows.filter((_, j) => j !== i) })}>
-                <Trash2 size={13} />
-              </IconButton>
-            </div>
-          ))}
+          {rows.map((m, i) => {
+            const p = providers.find((x) => x.id === m.provider);
+            return (
+              <div key={i}>
+                <div className="flex items-center gap-1">
+                  <ModelPicker providers={providers} provider={m.provider} model={m.name} onChange={(p, name) => set({ compare: rows.map((x, j) => (j === i ? { provider: p, name } : x)) })} />
+                  <IconButton label="Remove model" onClick={() => set({ compare: rows.filter((_, j) => j !== i) })}>
+                    <Trash2 size={13} />
+                  </IconButton>
+                </div>
+                {p && !p.hasKey && needsKey(p) && <AddKeyHint provider={p} />}
+              </div>
+            );
+          })}
           <div className="flex gap-2">
             <Button size="sm" icon={<Plus size={12} />} onClick={() => set({ compare: [...rows, { provider: providers[0]!.id, name: providers[0]!.defaultModel ?? '' }] })}>
               Add model
@@ -569,7 +607,7 @@ function Compare({ providers, onSetUp }: { providers: ProviderConfig[]; onSetUp(
                   <th className="px-3 py-2 w-40">Metric</th>
                   {results.map((r, i) => (
                     <th key={i} className="px-3 py-2">
-                      {r.provider} · <span className="mono">{r.model}</span>
+                      {providerName(r.provider)} · <span className="mono">{r.model}</span>
                     </th>
                   ))}
                 </tr>
@@ -586,18 +624,28 @@ function Compare({ providers, onSetUp }: { providers: ProviderConfig[]; onSetUp(
                     ['Schema valid', (r: ChatResult) => (r.schemaValid === undefined ? '–' : r.schemaValid ? '✓' : '✗')],
                     ['Checks passed', (r: ChatResult) => (r.checks ? `${r.checks.filter((c) => c.passed).length}/${r.checks.length}` : '–')],
                   ] as Array<[string, (r: ChatResult) => React.ReactNode, ((r: ChatResult) => number | undefined)?]>
-                ).map(([label, fn, num]) => {
+                ).map(([label, fn, num], row, all) => {
                   // numeric rows get a bar per model, relative to the largest value in the row
                   const max = num ? Math.max(0, ...results.filter((r) => !r.error).map((r) => num(r) ?? 0)) : 0;
+                  // the fastest and the cheapest are marked (lower is better there; for tokens it depends)
+                  const values = num && LOWER_IS_BETTER[label] ? results.map((r) => (r.error ? undefined : num(r))).filter((v): v is number => v !== undefined) : [];
+                  const best = values.length > 1 && new Set(values).size > 1 ? Math.min(...values) : undefined;
                   return (
                     <tr key={label} className="border-b border-line">
                       <td className="px-3 py-1.5 text-muted">{label}</td>
                       {results.map((r, i) => {
-                        const v = num && !r.error ? num(r) : undefined;
+                        // a model that failed: its error once, across the measurements, with the way to fix it
+                        if (r.error)
+                          return row === 0 ? (
+                            <td key={i} rowSpan={all.length} className="px-3 py-2 align-top">
+                              <ModelError error={r.error} />
+                            </td>
+                          ) : null;
+                        const v = num ? num(r) : undefined;
                         return (
                           <td key={i} className="px-3 py-1.5 tabular-nums">
-                            {/* a failed model shows its error once (first row); the message is under Output */}
-                            {r.error ? label === 'Latency' ? <span className="text-bad">{r.error.kind}</span> : <span className="text-muted">—</span> : fn(r)}
+                            {fn(r)}
+                            {best !== undefined && v === best && <span className="ml-1.5 text-[0.7rem] text-ok">{LOWER_IS_BETTER[label]}</span>}
                             {v !== undefined && max > 0 && (
                               <span aria-hidden className="block h-1 mt-1 w-full max-w-40 rounded-full bg-hover/70 overflow-hidden">
                                 <span className="block h-full rounded-full bg-accent" style={{ width: `${Math.max(3, (v / max) * 100)}%` }} />
@@ -613,7 +661,7 @@ function Compare({ providers, onSetUp }: { providers: ProviderConfig[]; onSetUp(
                   <td className="px-3 py-2 text-muted">Output</td>
                   {results.map((r, i) => (
                     <td key={i} className="px-3 py-2">
-                      {r.error ? <span className="text-bad text-xs">{r.error.message}</span> : <pre className="whitespace-pre-wrap text-xs mono max-h-80 overflow-auto">{r.text}</pre>}
+                      {r.error ? <span className="text-muted">—</span> : <pre className="whitespace-pre-wrap text-xs mono max-h-80 overflow-auto">{r.text}</pre>}
                     </td>
                   ))}
                 </tr>
@@ -633,6 +681,36 @@ function Compare({ providers, onSetUp }: { providers: ProviderConfig[]; onSetUp(
         )}
       </div>
     </Split>
+  );
+}
+
+/** The measurements where less is better, and what the best one is called. */
+const LOWER_IS_BETTER: Record<string, string> = { Latency: 'fastest', 'Time to first token': 'fastest', 'Est. cost': 'cheapest' };
+
+/** A model of the comparison that failed: what went wrong and, for a missing key, the way to add it. */
+function ModelError({ error }: { error: NormalizedError }) {
+  const setup = (error.details as { setup?: { provider?: string } } | undefined)?.setup;
+  return (
+    <div className="text-xs flex flex-col gap-1.5 items-start">
+      <Badge tone="bad">{error.kind}</Badge>
+      <span className="font-medium text-sm">{error.what || error.message}</span>
+      {error.why && error.why !== error.message && <span className="text-muted">{error.why}</span>}
+      {setup?.provider && (
+        <Button size="sm" variant="primary" icon={<KeyRound size={12} />} onClick={() => useApp.getState().openIntent('ai', { providerId: setup.provider, tab: 'providers' })}>
+          Add the key
+        </Button>
+      )}
+    </div>
+  );
+}
+
+/** Under a model picker: this provider still needs an API key (the run would stop there). */
+function AddKeyHint({ provider }: { provider: ProviderConfig }) {
+  return (
+    <div className="text-xs text-warn mt-0.5 ml-1">
+      {provider.name} needs an API key ·{' '}
+      <LinkButton icon={<KeyRound size={11} />} onClick={() => useApp.getState().openIntent('ai', { providerId: provider.id, tab: 'providers' })}>Add the key</LinkButton>
+    </div>
   );
 }
 
