@@ -3,11 +3,37 @@ import type { DebuggerExchange } from './proxy.js';
 /**
  * The HTTP Debugger's rules (planning/http-debugger.md, DBG-3): what the proxy does to the traffic that matches.
  * A rule matches on the request (host, URL, method, program) and, for highlights, on the response (status, time,
- * size). Kinds: `ignore` (not listed), `highlight` (a colour on the row), `modify` (headers added / removed, a body
- * replaced, a delay), `reply` (a canned response, the server never sees it), `redirect` (another host or scheme),
- * `breakpoint` (the request or the response pauses for editing). Rules live in profiles (sets switched as one).
+ * size). Kinds: `ignore` (filter out: not listed), `only` (capture only: when any is on, only what one of them
+ * matches is listed), `highlight` (a colour on the row), `modify` (headers added / removed, a body replaced, a delay),
+ * `reply` (a canned response, the server never sees it), `redirect` (another host or scheme), `breakpoint` (the
+ * request or the response pauses for editing). Rules live in profiles (sets switched as one). Every rule the user
+ * makes: there is no built-in list of programs to hide.
  */
-export type DebuggerRuleKind = 'ignore' | 'highlight' | 'modify' | 'reply' | 'redirect' | 'breakpoint';
+export type DebuggerRuleKind = 'ignore' | 'only' | 'highlight' | 'modify' | 'reply' | 'redirect' | 'breakpoint';
+
+/** A grid column a condition looks at. */
+export type RuleColumn = 'status' | 'url' | 'method' | 'host' | 'application' | 'type' | 'version' | 'ip' | 'duration' | 'size';
+/** How a condition compares. */
+export type RuleOperator = 'equals' | 'not-equals' | 'contains' | 'starts-with' | 'ends-with' | 'between' | 'greater-than' | 'less-than' | 'matches';
+
+/** One condition on a column, as the Highlight Rule editor makes it: Status is between 400 and 499. */
+export interface RuleCondition {
+  column: RuleColumn;
+  op: RuleOperator;
+  value: string;
+  /** The upper end of `between`. */
+  value2?: string;
+  /** `value` is a regular expression (any text operator then tests it). */
+  regex?: boolean;
+}
+
+/** How a highlight shows: a text colour per theme (#rrggbb), bold, and on the whole row or the column only. */
+export interface HighlightStyle {
+  dark?: string;
+  light?: string;
+  bold?: boolean;
+  row?: boolean;
+}
 
 export interface RuleMatch {
   /** Glob on the host (with port): api.test, *.example.com, localhost:*. */
@@ -24,6 +50,8 @@ export interface RuleMatch {
   minMs?: number;
   /** Highlights: a response body larger than this. */
   minBytes?: number;
+  /** A condition on one column (the Highlight Rule editor; any kind may use it). */
+  where?: RuleCondition;
 }
 
 export interface HeaderEdit {
@@ -40,6 +68,8 @@ export interface DebuggerRule {
   match: RuleMatch;
   /** highlight: a colour name (red, orange, yellow, green, blue, purple, grey). */
   color?: string;
+  /** highlight: the text colours, bold, whole row (when set, it is used instead of `color`). */
+  style?: HighlightStyle;
   /** modify: edits to the request and the response headers, a body to replace, and a delay before forwarding. */
   requestHeaders?: HeaderEdit[];
   responseHeaders?: HeaderEdit[];
@@ -93,6 +123,74 @@ const statusOf = (e: Pick<DebuggerExchange, 'status' | 'error'>, want: RuleMatch
   return want === 'ok' ? s >= 200 && s < 300 : want === 'redirect' ? s >= 300 && s < 400 : want === 'client-error' ? s >= 400 && s < 500 : want === 'server-error' ? s >= 500 : !!e.error;
 };
 
+const RESPONSE_COLUMNS: RuleColumn[] = ['status', 'type', 'duration', 'size'];
+
+/** The value of a column for an exchange, as the grid shows it. */
+export function columnValue(e: DebuggerExchange, column: RuleColumn): string | number | undefined {
+  switch (column) {
+    case 'status':
+      return e.status;
+    case 'url':
+      return e.url;
+    case 'method':
+      return e.method;
+    case 'host':
+      return e.host;
+    case 'application':
+      return e.application;
+    case 'type':
+      return e.contentType;
+    case 'version':
+      return e.httpVersion === '2' ? 'HTTP/2' : 'HTTP/1.1';
+    case 'ip':
+      return e.serverAddress;
+    case 'duration':
+      return e.durationMs;
+    case 'size':
+      return e.responseBodyBytes;
+  }
+}
+
+/** Does one condition hold? Numbers compare as numbers (between is inclusive); text ignores case. */
+export function conditionHolds(c: RuleCondition, e: DebuggerExchange): boolean {
+  const v = columnValue(e, c.column);
+  if (v === undefined || v === null) return c.op === 'not-equals';
+  const text = String(v);
+  const n = Number(v);
+  const a = Number(c.value);
+  const b = Number(c.value2);
+  if (c.regex || c.op === 'matches') {
+    try {
+      const re = new RegExp(c.value, 'i');
+      return c.op === 'not-equals' ? !re.test(text) : re.test(text);
+    } catch {
+      return false;
+    }
+  }
+  const low = text.toLowerCase();
+  const want = c.value.toLowerCase();
+  switch (c.op) {
+    case 'equals':
+      return Number.isFinite(n) && c.value.trim() !== '' && Number.isFinite(a) ? n === a : low === want;
+    case 'not-equals':
+      return Number.isFinite(n) && c.value.trim() !== '' && Number.isFinite(a) ? n !== a : low !== want;
+    case 'contains':
+      return low.includes(want);
+    case 'starts-with':
+      return low.startsWith(want);
+    case 'ends-with':
+      return low.endsWith(want);
+    case 'between':
+      return Number.isFinite(n) && Number.isFinite(a) && Number.isFinite(b) && n >= Math.min(a, b) && n <= Math.max(a, b);
+    case 'greater-than':
+      return Number.isFinite(n) && Number.isFinite(a) && n > a;
+    case 'less-than':
+      return Number.isFinite(n) && Number.isFinite(a) && n < a;
+    default:
+      return false;
+  }
+}
+
 /** Does the rule match this exchange? Response conditions (status, time, size) wait for the response. */
 export function ruleMatches(rule: DebuggerRule, e: DebuggerExchange, phase: 'request' | 'response'): boolean {
   const m = rule.match;
@@ -111,13 +209,14 @@ export function ruleMatches(rule: DebuggerRule, e: DebuggerExchange, phase: 'req
     return false;
   const app = patternToRegExp(m.application);
   if (app && !app.test(e.application ?? '')) return false;
-  const needsResponse = m.status !== undefined || m.minMs !== undefined || m.minBytes !== undefined;
+  const needsResponse = m.status !== undefined || m.minMs !== undefined || m.minBytes !== undefined || (!!m.where && RESPONSE_COLUMNS.includes(m.where.column));
   if (needsResponse) {
     if (phase === 'request') return false;
     if (!statusOf(e, m.status)) return false;
     if (m.minMs !== undefined && (e.durationMs ?? 0) < m.minMs) return false;
     if (m.minBytes !== undefined && e.responseBodyBytes < m.minBytes) return false;
   }
+  if (m.where && !conditionHolds(m.where, e)) return false;
   return true;
 }
 
@@ -136,10 +235,13 @@ export function applyHeaderEdits(headers: Record<string, string>, edits: HeaderE
 
 /** One line that says what a rule does, for lists and the rules bar. */
 export function describeRule(r: DebuggerRule): string {
-  const where = [r.match.method, r.match.host, r.match.url, r.match.application && `from ${r.match.application}`].filter(Boolean).join(' ') || 'everything';
+  const cond = r.match.where ? describeCondition(r.match.where) : '';
+  const where = [r.match.method, r.match.host, r.match.url, r.match.application && `from ${r.match.application}`, cond && `where ${cond}`].filter(Boolean).join(' ') || 'everything';
   switch (r.kind) {
     case 'ignore':
-      return `Ignore ${where}`;
+      return `Filter out ${where}`;
+    case 'only':
+      return `Capture only ${where}`;
     case 'highlight': {
       const when = [
         r.match.status !== undefined && `status ${r.match.status}`,
@@ -148,7 +250,7 @@ export function describeRule(r: DebuggerRule): string {
       ]
         .filter(Boolean)
         .join(', ');
-      return `Highlight ${where}${when ? ` when ${when}` : ''} in ${r.color ?? 'yellow'}`;
+      return `Highlight ${where}${when ? ` when ${when}` : ''} in ${r.style?.dark ?? r.style?.light ?? r.color ?? 'yellow'}${r.style?.bold ? ', bold' : ''}${r.style?.row ? ', whole row' : ''}`;
     }
     case 'modify': {
       const what = [
@@ -169,6 +271,24 @@ export function describeRule(r: DebuggerRule): string {
     case 'breakpoint':
       return `Pause the ${r.breakpoint ?? 'request'} of ${where}`;
   }
+}
+
+const COLUMN_LABEL: Record<RuleColumn, string> = { status: 'Status', url: 'URL', method: 'Method', host: 'Domain', application: 'Application', type: 'Type', version: 'Version', ip: 'IP address', duration: 'Duration (ms)', size: 'Size (bytes)' };
+const OP_LABEL: Record<RuleOperator, string> = {
+  equals: 'is',
+  'not-equals': 'is not',
+  contains: 'contains',
+  'starts-with': 'starts with',
+  'ends-with': 'ends with',
+  between: 'is between',
+  'greater-than': 'is greater than',
+  'less-than': 'is less than',
+  matches: 'matches',
+};
+
+/** "Status is between 400 and 499". */
+export function describeCondition(c: RuleCondition): string {
+  return `${COLUMN_LABEL[c.column]} ${c.regex && c.op !== 'matches' ? 'matches' : OP_LABEL[c.op]} ${c.value}${c.op === 'between' ? ` and ${c.value2 ?? '?'}` : ''}`;
 }
 
 /** The rules a fresh profile starts with: errors, slow and large responses stand out. */
@@ -233,7 +353,8 @@ export function rulePresets(host?: string): Array<{ id: string; label: string; r
     },
     { id: 'redirect-local', label: 'Redirect to localhost:3000', rule: { name: 'To localhost', enabled: true, kind: 'redirect', match, redirect: { host: 'localhost:3000', scheme: 'http' } } },
     { id: 'break-request', label: 'Pause every request', rule: { name: 'Breakpoint', enabled: true, kind: 'breakpoint', match, breakpoint: 'request' } },
-    { id: 'ignore', label: 'Ignore (hide from the list)', rule: { name: 'Ignore', enabled: true, kind: 'ignore', match } },
+    { id: 'ignore', label: 'Filter out (hide from the list)', rule: { name: 'Filter out', enabled: true, kind: 'ignore', match } },
+    { id: 'only', label: 'Capture only this', rule: { name: 'Capture only', enabled: true, kind: 'only', match } },
     { id: 'highlight', label: 'Highlight in blue', rule: { name: 'Highlight', enabled: true, kind: 'highlight', match, color: 'blue' } },
   ];
 }
@@ -254,15 +375,23 @@ export interface RequestDecision {
   breakpoint?: 'request' | 'response';
   responseHeaders?: HeaderEdit[];
   responseBody?: string;
-  /** The names of the rules that acted. */
+  /** The names of the rules that acted, and their ids (hit counts). */
   applied: string[];
+  appliedIds: string[];
 }
 
 /** Fold the active rules into one decision for this request (the first reply / redirect / breakpoint wins; edits add up). */
 export function decideRequest(rules: DebuggerRule[], e: DebuggerExchange): RequestDecision {
-  const d: RequestDecision = { ignore: false, delayMs: 0, applied: [] };
+  const d: RequestDecision = { ignore: false, delayMs: 0, applied: [], appliedIds: [] };
+  // capture only: when any is on, a request none of them matches is not listed
+  const only = rules.filter((r) => r.enabled && r.kind === 'only');
+  if (only.length) {
+    const hit = only.filter((r) => ruleMatches(r, e, 'request'));
+    if (!hit.length) return { ...d, ignore: true };
+    d.appliedIds.push(...hit.map((r) => r.id));
+  }
   for (const r of rules) {
-    if (!r.enabled || !ruleMatches(r, e, 'request')) continue;
+    if (!r.enabled || r.kind === 'only' || !ruleMatches(r, e, 'request')) continue;
     switch (r.kind) {
       case 'ignore':
         d.ignore = true;
@@ -288,12 +417,17 @@ export function decideRequest(rules: DebuggerRule[], e: DebuggerExchange): Reque
         break;
     }
     d.applied.push(r.name);
+    d.appliedIds.push(r.id);
   }
   return d;
 }
 
 /** Highlights that depend on the response (status, time, size), once it is in. */
 export function highlightForResponse(rules: DebuggerRule[], e: DebuggerExchange): string | undefined {
-  for (const r of rules) if (r.enabled && r.kind === 'highlight' && ruleMatches(r, e, 'response')) return r.color ?? 'yellow';
-  return undefined;
+  return highlightRuleForResponse(rules, e)?.color ?? (highlightRuleForResponse(rules, e) ? 'yellow' : undefined);
+}
+
+/** The highlight rule that matches once the response is in (its colour, style and id). */
+export function highlightRuleForResponse(rules: DebuggerRule[], e: DebuggerExchange): DebuggerRule | undefined {
+  return rules.find((r) => r.enabled && r.kind === 'highlight' && ruleMatches(r, e, 'response'));
 }

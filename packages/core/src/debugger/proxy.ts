@@ -17,7 +17,7 @@ import type { Duplex } from 'node:stream';
 import { ApsError } from '../errors.js';
 import { shortId } from '../util/ids.js';
 import { trustedCa } from '../net/proxy.js';
-import { applyHeaderEdits, decideRequest, highlightForResponse, type DebuggerRule } from './rules.js';
+import { applyHeaderEdits, decideRequest, highlightRuleForResponse, type DebuggerRule, type HighlightStyle } from './rules.js';
 import { sseParser, webSocketFrameParser, type DebuggerSseEvent, type WebSocketFrame } from './frames.js';
 import type { LeafCertificate } from './certificate.js';
 import { GRPC_STATUS, grpcDecoder, grpcDecompress, grpcMessageReader, grpcMethodOf, type GrpcCapture } from './grpc.js';
@@ -43,6 +43,10 @@ export interface DebuggerExchange {
   /** The port the client connected from, and the program behind it when it could be found. */
   clientPort: number;
   application?: string;
+  /** The program's process id, when it could be found with the program. */
+  pid?: number;
+  /** The server's address the request went to (ip:port), once connected. */
+  serverAddress?: string;
   requestHeaders: Record<string, string>;
   requestBody?: string;
   requestBodyBytes: number;
@@ -54,12 +58,15 @@ export interface DebuggerExchange {
   responseBodyBytes: number;
   responseBodyTruncated?: boolean;
   contentType?: string;
-  /** Milliseconds: until the server answered its headers, and until the body ended. */
+  /** Milliseconds: until the request was sent whole, until the server answered its headers, and until the body ended. */
+  sendMs?: number;
   waitMs?: number;
   durationMs?: number;
   error?: string;
   /** Set by the user (a star) or a rule (a colour). */
   bookmarked?: boolean;
+  /** A highlight rule's text colours, bold and whole row (with `highlight`). */
+  highlightStyle?: HighlightStyle;
   highlight?: string;
   /** The rules that acted on this exchange, by name. */
   rules?: string[];
@@ -104,7 +111,7 @@ export interface DebuggerProxyOptions {
   maxBodyBytes?: number;
   onExchange?(e: DebuggerExchange, phase: 'request' | 'response'): void;
   /** Which program owns a client port (see applicationOfPort); replaceable in tests. */
-  applicationOf?(port: number): Promise<string | undefined>;
+  applicationOf?(port: number): Promise<string | ProgramInfo | undefined>;
   /** The active rules, read for every request (so edits apply at once). */
   rules?(): DebuggerRule[];
   /** A breakpoint rule matched: show the exchange, resolve with edits (or nothing) to let it go on. */
@@ -134,6 +141,9 @@ export interface DebuggerProxy {
   close(): Promise<void>;
   /** Forget captured exchanges (the server keeps running). */
   clear(): void;
+  /** How many requests each rule acted on (by rule id) since the start or the last reset. */
+  ruleHits(): Record<string, number>;
+  resetRuleHits(): void;
 }
 
 const MAX_FRAMES = 500;
@@ -183,18 +193,26 @@ const collectWhole = (stream: NodeJS.ReadableStream) =>
   });
 
 /** The program that owns a local TCP port, best effort, per platform; undefined when unknown. */
-export function applicationOfPort(port: number): Promise<string | undefined> {
+/** A program found behind a client port. */
+export interface ProgramInfo {
+  name: string;
+  pid?: number;
+}
+
+export function applicationOfPort(port: number): Promise<ProgramInfo | undefined> {
   return new Promise((resolve) => {
-    const done = (name?: string) => resolve(name?.trim() || undefined);
+    const done = (pid: string | undefined, name: string | undefined) => (name?.trim() ? resolve({ name: name.trim(), pid: Number(pid) || undefined }) : resolve(undefined));
     const opts = { timeout: 3000, windowsHide: true };
     if (process.platform === 'win32') {
-      const ps = `$c = Get-NetTCPConnection -LocalPort ${port} -ErrorAction SilentlyContinue | Select-Object -First 1; if ($c) { (Get-Process -Id $c.OwningProcess -ErrorAction SilentlyContinue).ProcessName }`;
-      execFile('powershell', ['-NoProfile', '-NonInteractive', '-Command', ps], opts, (err, out) => done(err ? undefined : String(out)));
+      const ps = `$c = Get-NetTCPConnection -LocalPort ${port} -ErrorAction SilentlyContinue | Select-Object -First 1; if ($c) { "$($c.OwningProcess) $((Get-Process -Id $c.OwningProcess -ErrorAction SilentlyContinue).ProcessName)" }`;
+      execFile('powershell', ['-NoProfile', '-NonInteractive', '-Command', ps], opts, (err, out) => {
+        const m = /^(\d+) (.*)$/m.exec(err ? '' : String(out).trim());
+        done(m?.[1], m?.[2]);
+      });
     } else {
-      execFile('lsof', ['-nP', `-iTCP:${port}`, '-sTCP:ESTABLISHED', '-Fc'], opts, (err, out) => {
-        if (err) return done(undefined);
-        const m = /^c(.+)$/m.exec(String(out));
-        done(m?.[1]);
+      execFile('lsof', ['-nP', `-iTCP:${port}`, '-sTCP:ESTABLISHED', '-Fpc'], opts, (err, out) => {
+        if (err) return done(undefined, undefined);
+        done(/^p(\d+)$/m.exec(String(out))?.[1], /^c(.+)$/m.exec(String(out))?.[1]);
       });
     }
   });
@@ -204,7 +222,42 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
   const maxBody = opts.maxBodyBytes ?? 512 * 1024;
   const exchanges: DebuggerExchange[] = [];
   const appOf = opts.applicationOf ?? applicationOfPort;
-  const appCache = new Map<number, Promise<string | undefined>>();
+  const appCache = new Map<number, Promise<string | ProgramInfo | undefined>>();
+  /** Hits per rule, and the rules already counted for an exchange (a highlight is checked again on the response). */
+  const hits = new Map<string, number>();
+  const counted = new WeakMap<DebuggerExchange, Set<string>>();
+  const countHit = (e: DebuggerExchange, id: string) => {
+    let seen = counted.get(e);
+    if (!seen) counted.set(e, (seen = new Set()));
+    if (seen.has(id)) return;
+    seen.add(id);
+    hits.set(id, (hits.get(id) ?? 0) + 1);
+  };
+  const decideAndCount = (rules: DebuggerRule[], e: DebuggerExchange) => {
+    const d = decideRequest(rules, e);
+    for (const id of d.appliedIds) countHit(e, id);
+    // the first highlight's style goes with its colour
+    const hl = rules.find((r) => r.enabled && r.kind === 'highlight' && d.appliedIds.includes(r.id));
+    if (hl?.style) e.highlightStyle = hl.style;
+    return d;
+  };
+  /** Highlights that need the response (status, time, size, a column condition). */
+  const responseHighlight = (e: DebuggerExchange) => {
+    const r = highlightRuleForResponse(rulesNow(), e);
+    if (!r) return;
+    e.highlight = r.color ?? 'yellow';
+    e.highlightStyle = r.style;
+    countHit(e, r.id);
+  };
+  /** The program (and its process id) on the exchange. */
+  const setApp = (e: DebuggerExchange, a: string | ProgramInfo | undefined) => {
+    if (!a) return;
+    if (typeof a === 'string') e.application = a;
+    else {
+      e.application = a.name;
+      if (a.pid) e.pid = a.pid;
+    }
+  };
   /** Tunnels whose requests are read (decrypted TLS, plaintext HTTP/1 or h2c inside a CONNECT): the origin they go to. */
   const tlsOrigins = new WeakMap<object, TunnelOrigin>();
   /** A connection id per client socket (the HTTP/2 tree groups streams by it). */
@@ -291,16 +344,16 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
     // gRPC: forwarded over HTTP/2 as it streams (messages both ways, then trailers); rules may ignore or highlight it
     if (h2 && /^application\/grpc/i.test(String(req.headers['content-type'] ?? ''))) {
       void application(e.clientPort).then((a) => {
-        if (a) e.application = a;
+        setApp(e, a);
       });
       const rules = rulesNow();
-      const decision = rules.length ? decideRequest(rules, e) : undefined;
+      const decision = rules.length ? decideAndCount(rules, e) : undefined;
       if (decision?.highlight) e.highlight = decision.highlight;
       if (decision?.applied.length) e.rules = decision.applied;
       return forwardGrpc(target, req as Http2ServerRequest, res as unknown as Http2ServerResponse, e, !decision?.ignore);
     }
     const appPromise = application(e.clientPort).then((a) => {
-      if (a) e.application = a;
+      setApp(e, a);
     });
     // the request body whole, before the rules: a breakpoint or a modify rule may change it
     const reqBody = await collectWhole(req as NodeJS.ReadableStream);
@@ -310,7 +363,7 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
     let bodyToSend: Buffer | undefined = reqBody.length ? reqBody : undefined;
 
     const rules = rulesNow();
-    const decision = rules.length ? decideRequest(rules, e) : undefined;
+    const decision = rules.length ? decideAndCount(rules, e) : undefined;
     if (decision?.ignore) {
       // not listed; forwarded as is
       forward(target, e.method, { ...requestHeaders }, bodyToSend, res, e, undefined, undefined, false);
@@ -444,14 +497,14 @@ ${pem ? `<p>To see HTTPS too, install and trust TestPion's root certificate on t
     };
     delete headers.host;
     const up = session.request(headers, { endStream: false });
+    if (session.socket?.remoteAddress) e.serverAddress = `${session.socket.remoteAddress}:${session.socket.remotePort}`;
     e.open = true;
     const finish = (error?: string) => {
       if (e.durationMs !== undefined) return;
       e.durationMs = Date.now() - t0;
       e.open = undefined;
       if (error) e.error = error;
-      const hl = highlightForResponse(rulesNow(), e);
-      if (hl) e.highlight = hl;
+      responseHighlight(e);
       if (listed) record(e, 'response');
     };
     const status = (h: H2Headers) => {
@@ -527,6 +580,7 @@ ${pem ? `<p>To see HTTPS too, install and trust TestPion's root certificate on t
     const hold = !!(decision?.responseHeaders || decision?.responseBody !== undefined || breakpoint);
     const secure = target.protocol === 'https:';
     const up = (secure ? httpsRequest : httpRequest)(target, { method, headers: h, timeout: 60_000, ...(secure ? upstreamTls() : {}) }, async (ures) => {
+      e.sendMs ??= Date.now() - t0;
       e.waitMs = Date.now() - t0;
       e.status = ures.statusCode;
       e.statusText = ures.statusMessage;
@@ -614,8 +668,7 @@ ${pem ? `<p>To see HTTPS too, install and trust TestPion's root certificate on t
     });
     const done = () => {
       e.durationMs = Date.now() - t0;
-      const hl = decision ? highlightForResponse(rulesNow(), e) : undefined;
-      if (hl) e.highlight = hl;
+      if (decision) responseHighlight(e);
       if (listed) record(e, 'response');
     };
     up.on('error', (err: NodeJS.ErrnoException) => {
@@ -623,10 +676,16 @@ ${pem ? `<p>To see HTTPS too, install and trust TestPion's root certificate on t
       e.durationMs = Date.now() - t0;
       if (!res.headersSent) res.writeHead(502, { 'content-type': 'text/plain' });
       res.end(`TestPion debugger: ${e.error}`);
-      const hl = decision ? highlightForResponse(rulesNow(), e) : undefined;
-      if (hl) e.highlight = hl;
+      if (decision) responseHighlight(e);
       if (listed) record(e, 'response');
     });
+    up.on('socket', (sock) => {
+      const at = () => (e.serverAddress = sock.remoteAddress ? `${sock.remoteAddress}:${sock.remotePort}` : undefined);
+      if (sock.remoteAddress) at();
+      else sock.once('connect', at);
+    });
+    // the request is sent whole when the last byte has gone out
+    up.once('finish', () => (e.sendMs = Date.now() - t0));
     up.end(body);
   }
 
@@ -658,10 +717,10 @@ ${pem ? `<p>To see HTTPS too, install and trust TestPion's root certificate on t
       ...(origin?.scheme === 'https' ? { tls: true } : {}),
     };
     void application(e.clientPort).then((a) => {
-      if (a) e.application = a;
+      setApp(e, a);
     });
     const rules = rulesNow();
-    const decision = rules.length ? decideRequest(rules, e) : undefined;
+    const decision = rules.length ? decideAndCount(rules, e) : undefined;
     const listed = !decision?.ignore;
     if (decision?.highlight) e.highlight = decision.highlight;
     if (decision?.applied.length) e.rules = decision.applied;
@@ -765,10 +824,10 @@ ${pem ? `<p>To see HTTPS too, install and trust TestPion's root certificate on t
       responseBodyBytes: 0,
     };
     void application(e.clientPort).then((a) => {
-      if (a) e.application = a;
+      setApp(e, a);
     });
     const rules = rulesNow();
-    const decision = rules.length ? decideRequest(rules, e) : undefined;
+    const decision = rules.length ? decideAndCount(rules, e) : undefined;
     const listed = !decision?.ignore;
     if (decision?.highlight) e.highlight = decision.highlight;
     if (decision?.applied.length) e.rules = decision.applied;
@@ -927,6 +986,8 @@ ${pem ? `<p>To see HTTPS too, install and trust TestPion's root certificate on t
     port,
     exchanges,
     clear: () => exchanges.splice(0),
+    ruleHits: () => Object.fromEntries(hits),
+    resetRuleHits: () => hits.clear(),
     close: () =>
       new Promise<void>((resolve) => {
         for (const s of sockets) s.destroy();

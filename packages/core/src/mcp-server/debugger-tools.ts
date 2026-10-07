@@ -198,7 +198,7 @@ export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore })
       name: 'debugger_rules',
       write: true,
       description:
-        "The HTTP Debugger's rules, what the proxy does to matching traffic: list them, add one (a preset by id, filled in for a host, or a rule object: kind ignore | highlight | modify | reply | redirect, match {host, url, method, application} as globs, and the kind's fields: color; requestHeaders / responseHeaders [{op: set|remove, name, value}], requestBody, responseBody, delayMs; reply {status, headers, body}; redirect {host, scheme}), enable / disable or remove one. Breakpoints need the app's window.",
+        "The HTTP Debugger's rules, what the proxy does to matching traffic: list them, add one (a preset by id, filled in for a host, or a rule object: kind ignore (filter out) | only (capture only: when any is on, only what one matches is listed) | highlight | modify | reply | redirect, match {host, url, method, application} as globs plus an optional where {column: status|url|method|host|application|type|version|ip|duration|size, op: equals|not-equals|contains|starts-with|ends-with|between|greater-than|less-than|matches, value, value2, regex}, and the kind's fields: color, style {dark, light (#rrggbb), bold, row}; requestHeaders / responseHeaders [{op: set|remove, name, value}], requestBody, responseBody, delayMs; reply {status, headers, body}; redirect {host, scheme}), enable / disable or remove one. Breakpoints need the app's window.",
       inputSchema: {
         type: 'object',
         properties: {
@@ -211,12 +211,13 @@ export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore })
         required: ['action'],
       },
       run: (a) => {
-        const list = () => ({ rules: rules.map((r) => ({ ...r, summary: describeRule(r) })) });
+        const hits = proxy?.ruleHits() ?? {};
+        const list = () => ({ rules: rules.map((r) => ({ ...r, summary: describeRule(r), hits: hits[r.id] ?? 0 })) });
         if (a.action === 'presets') return { presets: rulePresets(typeof a.host === 'string' ? a.host : undefined).map((p) => ({ id: p.id, label: p.label })) };
         if (a.action === 'add') {
           const from = typeof a.preset === 'string' ? rulePresets(typeof a.host === 'string' ? a.host : undefined).find((p) => p.id === a.preset)?.rule : (a.rule as Partial<DebuggerRule> | undefined);
           if (!from) throw new ApsError('ValidationError', 'add needs a preset id or a rule object');
-          if (!['ignore', 'highlight', 'modify', 'reply', 'redirect', 'breakpoint'].includes(String(from.kind))) throw new ApsError('ValidationError', `Unknown rule kind "${String(from.kind)}"`);
+          if (!['ignore', 'only', 'highlight', 'modify', 'reply', 'redirect', 'breakpoint'].includes(String(from.kind))) throw new ApsError('ValidationError', `Unknown rule kind "${String(from.kind)}"`);
           if (from.kind === 'breakpoint') throw new ApsError('ValidationError', 'Breakpoints need the app window to edit the held exchange; use modify or reply here');
           const rule: DebuggerRule = {
             ...(from as DebuggerRule),

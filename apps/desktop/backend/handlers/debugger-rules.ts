@@ -90,13 +90,13 @@ export function holdBreakpoint(be: Backend, state: DebuggerState, e: DebuggerExc
   });
 }
 
-const validKinds = new Set(['ignore', 'highlight', 'modify', 'reply', 'redirect', 'breakpoint']);
+const validKinds = new Set(['ignore', 'only', 'highlight', 'modify', 'reply', 'redirect', 'breakpoint']);
 
 /** A rule as sent by the window or an agent, checked. */
 function cleanRule(r: Partial<DebuggerRule>, id?: string): DebuggerRule {
   if (!r || typeof r !== 'object') throw new ApsError('ValidationError', 'A rule is an object');
   if (!validKinds.has(String(r.kind)))
-    throw new ApsError('ValidationError', `Unknown rule kind "${String(r.kind)}"`, { suggestions: ['One of ignore, highlight, modify, reply, redirect, breakpoint.'] });
+    throw new ApsError('ValidationError', `Unknown rule kind "${String(r.kind)}"`, { suggestions: ['One of ignore (filter out), only (capture only), highlight, modify, reply, redirect, breakpoint.'] });
   const name = String(r.name ?? '').trim() || describeRule({ ...(r as DebuggerRule), name: '' });
   if (r.kind === 'redirect' && !r.redirect?.host?.trim()) throw new ApsError('ValidationError', 'A redirect rule needs a host (host:port)');
   if (r.kind === 'reply' && r.reply && (typeof r.reply.status !== 'number' || r.reply.status < 100 || r.reply.status > 599))
@@ -108,6 +108,7 @@ function cleanRule(r: Partial<DebuggerRule>, id?: string): DebuggerRule {
     kind: r.kind as DebuggerRule['kind'],
     match: { ...(r.match ?? {}) },
     ...(r.color !== undefined ? { color: r.color } : {}),
+    ...(r.style ? { style: { ...r.style } } : {}),
     ...(r.requestHeaders ? { requestHeaders: r.requestHeaders } : {}),
     ...(r.responseHeaders ? { responseHeaders: r.responseHeaders } : {}),
     ...(r.requestBody !== undefined ? { requestBody: r.requestBody } : {}),
@@ -131,10 +132,16 @@ export function debuggerRulesHandlers(be: Backend): Handlers {
       rules: rules.map((r) => ({ ...r, summary: describeRule(r) })),
       activeCount: rules.filter((r) => r.enabled).length,
       filterPresets: f.filterPresets ?? [],
+      // how many requests each rule acted on in this capture
+      hits: state.proxy?.ruleHits() ?? {},
     };
   };
   return {
     'debug.rules': () => list(),
+    'debug.resetRuleHits': () => {
+      state.proxy?.resetRuleHits();
+      return list();
+    },
     'debug.rulePresets': ({ host }: { host?: string } = {}) => rulePresets(host).map((p) => ({ id: p.id, label: p.label, summary: describeRule({ ...p.rule, id: p.id }) })),
     /** Add a preset (filled in for a host when given), or save a rule (new or changed). */
     'debug.addPreset': ({ preset, host }: { preset: string; host?: string }) => {
