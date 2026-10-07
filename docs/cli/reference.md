@@ -28,7 +28,7 @@ testpion export <c> -f asyncapi Write a collection's connections as an AsyncAPI 
 testpion openapi-ops <spec>    List an OpenAPI document's operations by tag (--json: schemas and a request per operation)
 testpion secrets <environment> Check an environment's secret manager references (op://, vault://, aws-sm:// …)
 testpion record <target>      Record traffic through a local reverse proxy; -w saves it as a collection (see Record traffic)
-testpion debug [-p port] [-o session.har] [--rules debugger/rules.json] [--decrypt] [-w workspace] [--json]   The HTTP Debugger's proxy: other programs' traffic (HTTP_PROXY=…), printed as it happens; rules applied
+testpion debug [-p port] [-o session.har] [--rules debugger/rules.json] [--decrypt] [-w workspace] [--json]   The HTTP Debugger's proxy: other programs' traffic (HTTP_PROXY=…), printed as it happens (program, process id, server); rules applied
 testpion mock-mcp <file>      Serve an MCP mock (stdio, or --http) for AI agents and MCP clients
 testpion env set|unset|get <env> -w   Set or remove plain variables of an environment (secrets stay in the app)
 testpion vars usages|rename -w   Where a variable is used; rename it everywhere
