@@ -43,7 +43,7 @@ A banner says when **HTTPS inspection is off**, with **Decrypt HTTPS** and **Ins
 
 ## Capture
 
-1. Click **Start capturing** (the port is 8899 unless you change it).
+1. Choose what to capture from **Capture**: **a browser** (Chrome, Edge, Firefox or Brave opened through the proxy with a profile of its own — only that window is captured), **a terminal** (opened with `HTTP_PROXY` set — only what runs in it), or **everything on this computer** (the system proxy, an explicit choice, restored when you stop). The proxy starts on its own. **Start capturing** alone starts it for a program you point at it yourself; **Capture ▸ Proxy port…** changes the port (8899).
 2. Point the program at the proxy:
    - a terminal program: `HTTP_PROXY=http://127.0.0.1:8899` (and `HTTPS_PROXY` for HTTPS) before you run it; Node, Python, curl, Go and most SDKs read it;
    - Chrome or Edge: start it with `--proxy-server=http://127.0.0.1:8899`;

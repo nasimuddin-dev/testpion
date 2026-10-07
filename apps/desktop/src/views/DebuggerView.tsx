@@ -20,6 +20,7 @@ import {
   Trash2,
   Upload,
 } from 'lucide-react';
+import { Settings2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { asError, call, on } from '../api';
 import { confirmAction, promptText, useApp } from '../store';
@@ -153,14 +154,28 @@ export function DebuggerView() {
     void loadCapture();
   }, [loadCapture, status?.running, status?.systemProxy]);
 
-  const start = async () => {
+  const start = async (): Promise<boolean> => {
     try {
       // an empty box is the usual port, not a random one: programs set up for 8899 keep working
       const p = Number(port) || 8899;
       setStatus(await call<Status>('debug.start', { port: p }));
+      return true;
     } catch (e) {
       fail(e);
+      return false;
     }
+  };
+  // what to capture is chosen first; the proxy starts on its own when it is not running yet
+  const startThen = async (action: () => Promise<void> | void) => {
+    if (!status?.running && !(await start())) return;
+    await action();
+  };
+  const changePort = async () => {
+    const v = await promptText('Proxy port', { message: 'The port the proxy listens on (programs are pointed at 127.0.0.1:<port>). 8899 unless another program uses it.', value: port, okLabel: 'Use this port' });
+    if (v === undefined || v === null) return;
+    const n = Number(v);
+    if (!Number.isInteger(n) || n < 1 || n > 65535) return void useApp.getState().toast('A port is a number from 1 to 65535', 'error');
+    setPort(String(n));
   };
   const stop = async () => setStatus(await call<Status>('debug.stop'));
   const openInTab = (e: Exchange) => useApp.getState().openIntent('rest', { request: toRequest(e), name: `${e.method} ${new URL(e.url).pathname}` });
@@ -297,22 +312,25 @@ export function DebuggerView() {
   const sel = detail;
   const copy = (text: string, what: string) => void navigator.clipboard.writeText(text).then(() => toast(`Copied ${what}`));
 
+  // What to capture: one program (a browser or a terminal opened through the proxy), or everything on this computer
+  // (the system proxy, an explicit choice, restored on stop). Each starts the proxy when it is not running yet.
   const captureItems: MenuItem[] = [
     ...(capture?.browsers ?? []).map<MenuItem>((b) => ({
-      label: `Open ${b.label} through the proxy`,
+      label: `A browser: ${b.label} (only that window)`,
       icon: <Globe size={14} />,
-      onSelect: () => void call<{ browser: string }>('debug.openBrowser', { browser: b.name }).then((r) => toast(`${r.browser} started with a profile of its own`), fail),
+      onSelect: () => void startThen(() => call<{ browser: string }>('debug.openBrowser', { browser: b.name }).then((r) => toast(`${r.browser} started with a profile of its own; only its traffic is captured`), fail)),
     })),
-    { label: 'A phone or another computer…', icon: <Smartphone size={14} />, onSelect: () => setDialog('lan') },
     {
-      label: 'Open a terminal through the proxy',
+      label: 'A terminal: commands run in it (only those)',
       icon: <Terminal size={14} />,
-      onSelect: () => void call<{ terminal: string }>('debug.openTerminal').then((r) => toast(`${r.terminal} opened with HTTP_PROXY set`), fail),
+      onSelect: () => void startThen(() => call<{ terminal: string }>('debug.openTerminal').then((r) => toast(`${r.terminal} opened with HTTP_PROXY set; only what runs in it is captured`), fail)),
     },
+    { label: 'A phone or another computer…', icon: <Smartphone size={14} />, onSelect: () => void startThen(() => setDialog('lan')) },
     status?.systemProxy
-      ? { label: 'Restore the system proxy', icon: <Globe size={14} />, onSelect: () => void systemProxy(false) }
-      : { label: 'Set the system proxy to TestPion', icon: <Globe size={14} />, onSelect: () => void systemProxy(true) },
-    ...(capture?.shells ?? []).map<MenuItem>((s) => ({ label: `Copy for ${s.shell}`, icon: <Copy size={14} />, onSelect: () => copy(s.lines, `the lines for ${s.shell}`) })),
+      ? { label: 'Stop capturing everything (restore the system proxy)', icon: <Globe size={14} />, separator: true, onSelect: () => void systemProxy(false) }
+      : { label: 'Everything on this computer (the system proxy, restored on stop)', icon: <Globe size={14} />, separator: true, onSelect: () => void startThen(() => systemProxy(true)) },
+    ...(capture?.shells ?? []).map<MenuItem>((s) => ({ label: `Copy the lines for ${s.shell}`, icon: <Copy size={14} />, onSelect: () => void startThen(() => copy(s.lines, `the lines for ${s.shell}`)) })),
+    { label: `Proxy port… (${port})`, icon: <Settings2 size={14} />, separator: true, disabled: !!status?.running, onSelect: () => void changePort() },
   ];
   const sessionItems: MenuItem[] = [
     { label: 'Save session…', icon: <Save size={14} />, disabled: !rows.length, onSelect: () => void saveSession() },
@@ -342,27 +360,26 @@ export function DebuggerView() {
               {status.systemProxy ? ' · the system proxy points here' : ' · programs sent through it show below'}
             </span>
           ) : (
-            'Start the proxy, then point a program at it: its traffic is listed here as it happens.'
+            'Watch one program: a browser or a terminal opened through the proxy; or everything on this computer. Nothing is captured until you choose.'
           )
         }
         actions={
           <>
-            {!status?.running && <Input className="w-24" aria-label="Port" value={port} onChange={(e) => setPort(e.target.value)} placeholder="Port" />}
             {status?.running ? (
               <Button icon={<Square size={13} />} onClick={() => void stop()}>
                 Stop
               </Button>
             ) : (
-              <Button variant="primary" icon={<Play size={13} />} onClick={() => void start()}>
+              <Button variant="primary" icon={<Play size={13} />} onClick={() => void start()} title="Start the proxy; point a program at it yourself, or choose what to capture from the menu">
                 Start capturing
               </Button>
             )}
             <Menu
-              width={300}
+              width={360}
               items={captureItems}
               onOpenChange={(o) => o && void loadCapture()}
               trigger={
-                <Button icon={<Globe size={13} />} disabled={!status?.running} title="A browser or a terminal that sends through the proxy, the system proxy, the lines for a shell">
+                <Button icon={<Globe size={13} />} title="What to capture: a browser or a terminal (only that program), or everything on this computer">
                   Capture <ChevronDown size={12} />
                 </Button>
               }
@@ -593,7 +610,10 @@ export function DebuggerView() {
                               <b> Decrypt HTTPS</b>.
                             </>
                           ) : (
-                            'Start capturing, then run the program you want to watch; or open a saved session from the Session menu.'
+                            <>
+                              <b>Capture</b> chooses what to watch: a browser or a terminal opened through the proxy (only that program is captured), or everything on this computer. Other programs are not affected.
+                              <b> Start capturing</b> alone starts the proxy for a program you point at it yourself; the Session menu opens a saved capture.
+                            </>
                           )}
                         </Empty>
                       ) : (
