@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSy
 import { basename, dirname, join, relative, sep } from 'node:path';
 import { ApsError, dbKindOf, redactDbUrl, isSqliteDataset, collectionVariableFlow, listWorkspaceDatasets, readDataset, sqliteTables, fetchImportText, bruFilesToBrunoExport, collectionToBru, importIntoWorkspace, diffOpenApi, lintOpenApi, openApiOutline, asyncApiOutline, workspaceApiCoverage, apiCoverageMarkdown, securityLint, certificateLint, listCertificates, variableFlow, startRecorder, recordingToCollection, type RecordedExchange, collectionToOpenApiText, collectionToHttpFile, collectionToAsyncApi, generateWorkspaceDataset, replaceInCollection, moveCollectionVariablesToEnvironments, tidyCollection, applyTidy, type ReplaceField, writeTestsFromSpec, exampleFromResponse, startMockServer, collectionMarkdown, collectionHtml, exportPostmanCollection, withRequestExamples, type SavedExample, convertCollectionScripts, importRequestSnippet, isRequestSnippet, type Collection, collectionSavedItems, duplicateCollection, shortId, requestBodySchema, loadOpenApi } from '@testpion/core';
 import type { Backend, Handlers, CollectionRunParams } from '../backend.js';
+import { recordIncoming } from './debugger.js';
 
 /** An API definition's workspace path: a JSON or YAML file directly in specs/. */
 // an OpenAPI definition in specs/, or an AsyncAPI one its import keeps in specs/asyncapi/
@@ -22,7 +23,7 @@ export function collectionsHandlers(be: Backend): Handlers {
       be.mocks.delete(collectionId);
       const c = be.ws.getCollection(collectionId);
       if (fallbackUrl && !/^https?:\/\/.+/i.test(fallbackUrl.trim())) throw new ApsError('ValidationError', 'The fallback must be an http(s) URL');
-      const m = await startMockServer(c, { port: port ?? 0, delayMs, fallbackUrl: fallbackUrl?.trim() || undefined, onRequest: (e) => be.host.emit('mock.request', { collectionId, ...e, time: new Date().toISOString() }) });
+      const m = await startMockServer(c, { port: port ?? 0, delayMs, fallbackUrl: fallbackUrl?.trim() || undefined, onRequest: (e) => (be.host.emit('mock.request', { collectionId, ...e, time: new Date().toISOString() }), recordIncoming(be, { collectionId, server: c.name, method: e.method, path: e.path, status: e.status, example: e.example, forwarded: e.forwarded })) });
       be.mocks.set(collectionId, m);
       be.logger.info(`Mock server for ${c.name} listening on ${m.url}`, { routes: m.routes.length });
       return be.mockInfo(collectionId);

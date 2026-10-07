@@ -1,10 +1,8 @@
 import {
-  Bot,
   Bug,
   ChevronDown,
   Copy,
   Download,
-  ExternalLink,
   FolderOpen,
   Globe,
   Lock,
@@ -16,82 +14,30 @@ import {
   Save,
   Scale,
   Square,
-  Star,
+  X,
+  Filter,
   Terminal,
   Trash2,
   Upload,
-  X,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { asError, call, on } from '../api';
 import { confirmAction, promptText, useApp } from '../store';
-import { Badge, Button, cx, Empty, Input, Menu, PageHeader, Select, Split, statusTone, Tabs, VirtualList, type MenuItem } from '../components/ui';
-import { formatBytes, formatMs, type DecodedJwt } from '@testpion/shared';
+import { Button, cx, Empty, Input, Menu, PageHeader, Select, Split, Tabs, type MenuItem } from '../components/ui';
+import { formatBytes, formatMs } from '@testpion/shared';
 import { finishSave, downloadContent, pickTextFile, type SaveResult } from '../lib/files';
-import { JsonTree } from '../components/JsonView';
-import { JwtView } from '../components/JwtView';
-import type { HttpRequestSpec } from '../types';
 import {
   CertificateDialog,
   ConnectionsView,
-  DecodeDialog,
-  EventsView,
-  FramesView,
-  GrpcView,
   LanDialog,
   pickBinaryFile,
-  type Frame,
-  type GrpcCall,
-  type StreamEvent,
 } from '../components/DebuggerTools';
-import { BreakpointDialog, CompareExchangesDialog, HIGHLIGHT_CLASS, loadRules, RulesPanel, type HeldBreakpoint, type RulesState } from '../components/DebuggerRules';
-
-interface Exchange {
-  id: string;
-  startedAt: string;
-  kind: 'http' | 'tunnel' | 'websocket';
-  method: string;
-  url: string;
-  host: string;
-  clientPort: number;
-  application?: string;
-  requestHeaders: Record<string, string>;
-  requestBody?: string;
-  requestBodyBytes: number;
-  requestBodyTruncated?: boolean;
-  status?: number;
-  statusText?: string;
-  responseHeaders?: Record<string, string>;
-  responseBody?: string;
-  responseBodyBytes: number;
-  responseBodyTruncated?: boolean;
-  /** DBG-4: captured inside a decrypted tunnel; still streaming; WebSocket frames; Server-Sent Events. */
-  tls?: boolean;
-  open?: boolean;
-  frames?: Frame[];
-  /** DBG-5: HTTP/2, the connection and stream, a gRPC call, trailers; in the list only counts of frames and events. */
-  httpVersion?: '1.1' | '2';
-  connectionId?: string;
-  streamId?: number;
-  grpc?: GrpcCall;
-  trailers?: Record<string, string>;
-  frameCount?: number;
-  eventCount?: number;
-  events?: StreamEvent[];
-  contentType?: string;
-  waitMs?: number;
-  durationMs?: number;
-  error?: string;
-  bookmarked?: boolean;
-  /** Rules (DBG-3): the row's colour, the rules that acted, where a redirect sent it, a reply rule answered, a breakpoint edited it. */
-  highlight?: string;
-  rules?: string[];
-  redirectedTo?: string;
-  repliedByRule?: boolean;
-  edited?: boolean;
-  /** The Auth inspector's reading (debug.exchange only). */
-  auth?: { scheme: string; user?: string; jwt?: DecodedJwt; cookies: string[]; setCookies: string[]; note?: string };
-}
+import { toRequest, type Exchange, type Stats } from '../components/debugger/model';
+import { ExchangePanes } from '../components/debugger/ExchangePanes';
+import { BreakpointDialog, CompareExchangesDialog, loadRules, RuleDialog, RulesPanel, type HeldBreakpoint, type Rule, type RulesState } from '../components/DebuggerRules';
+import { DebuggerGrid, GridTotals, IncomingList, TrafficSide, useIncoming } from '../components/debugger/DebuggerGrid';
+import { Dock } from '../components/debugger/Dock';
+import { ToolRail, type DockPanel } from '../components/debugger/ToolRail';
 
 interface Status {
   running: boolean;
@@ -119,89 +65,30 @@ interface Session {
   autosave: boolean;
 }
 
-interface Stats {
-  total: number;
-  bytes: number;
-  errors: number;
-  firstAt?: string;
-  lastAt?: string;
-  timeline: Array<{ t: string; count: number; errors: number }>;
-  statuses: Record<string, number>;
-  hosts: Array<{ name: string; count: number; bytes: number; ms: number }>;
-  contentTypes: Array<{ name: string; count: number; bytes: number }>;
-  applications: Array<{ name: string; count: number; bytes: number }>;
-  largest: Array<{ id: string; method: string; url: string; bytes: number }>;
-  slowest: Array<{ id: string; method: string; url: string; ms?: number }>;
-}
-
 const fail = (e: unknown) => useApp.getState().toast(asError(e).message, 'error');
 const toast = (m: string) => useApp.getState().toast(m, 'success');
 
 /** An exchange as a REST request, for Open in a tab and Resend. */
-function toRequest(e: Exchange): HttpRequestSpec {
-  const headers = Object.entries(e.requestHeaders)
-    .filter(([k]) => !/^(host|content-length|connection|proxy-.*|accept-encoding)$/i.test(k))
-    .map(([key, value]) => ({ key, value, enabled: true }));
-  const ct = e.requestHeaders['content-type'] ?? '';
-  const body = e.requestBody ? ({ type: /json/i.test(ct) ? 'json' : /xml/i.test(ct) ? 'xml' : 'text', content: e.requestBody } as HttpRequestSpec['body']) : undefined;
-  return { method: e.method, url: e.url, headers, body };
-}
-
-const curlOf = (e: Exchange) =>
-  `curl -X ${e.method} '${e.url}'${Object.entries(e.requestHeaders)
-    .filter(([k]) => !/^(host|content-length|proxy-.*)$/i.test(k))
-    .map(([k, v]) => ` \\\n  -H '${k}: ${v.replace(/'/g, "'\\''")}'`)
-    .join('')}${e.requestBody ? ` \\\n  --data '${e.requestBody.replace(/'/g, "'\\''")}'` : ''}`;
-
-/** The exchange as it went over the wire (headers as received; bodies as kept), the Raw inspector. */
-function rawOf(e: Exchange): { request: string; response: string } {
-  let path = e.url;
-  try {
-    const u = new URL(e.url);
-    path = e.kind === 'tunnel' ? u.host : `${u.pathname}${u.search}`;
-  } catch {
-    /* as is */
-  }
-  const lines = (h?: Record<string, string>) =>
-    Object.entries(h ?? {})
-      .map(([k, v]) => `${k}: ${v}`)
-      .join('\r\n');
-  const request = `${e.method} ${path} HTTP/1.1\r\n${lines(e.requestHeaders)}\r\n\r\n${e.requestBody ?? (e.requestBodyBytes ? `(${formatBytes(e.requestBodyBytes)} not kept)` : '')}`;
-  const response = e.error
-    ? `(no response: ${e.error})`
-    : e.status
-      ? `HTTP/1.1 ${e.status} ${e.statusText ?? ''}\r\n${lines(e.responseHeaders)}\r\n\r\n${e.responseBody ?? (e.responseBodyBytes ? `(${formatBytes(e.responseBodyBytes)} of ${e.contentType ?? 'binary'} not kept)` : '')}`
-      : '(no response yet)';
-  return { request, response };
-}
-
-/** A hex dump of the first 64 KB of a text, 16 bytes a line, the Hex inspector. */
-function hexDump(text: string): string {
-  const all = new TextEncoder().encode(text);
-  const bytes = all.subarray(0, 64 * 1024);
-  const out: string[] = [];
-  for (let i = 0; i < bytes.length; i += 16) {
-    const row = bytes.subarray(i, i + 16);
-    const hex = [...row].map((b) => b.toString(16).padStart(2, '0')).join(' ');
-    const ascii = [...row].map((b) => (b >= 32 && b < 127 ? String.fromCharCode(b) : '.')).join('');
-    out.push(`${i.toString(16).padStart(8, '0')}  ${hex.padEnd(47)}  ${ascii}`);
-  }
-  return out.join('\n') + (bytes.length < all.length ? '\n… (the first 64 KB)' : '');
-}
-
-/**
- * The HTTP Debugger (planning/http-debugger.md): other programs send through TestPion's proxy; every exchange is
- * listed as it happens, with the program that sent it, and opens whole: headers, bodies, raw, hex, auth, timing.
- * From a row: open it as a request, resend it, copy it as cURL, bookmark it, delete it, ask the assistant about it.
- * Capture helpers start a browser or a terminal through the proxy, or switch the system proxy. Sessions are HAR files
- * in the workspace's debugger/ folder (AutoSave every minute while capturing). Statistics and an overview of the session.
- */
 export function DebuggerView() {
   const [status, setStatus] = useState<Status>();
   const [rows, setRows] = useState<Exchange[]>([]);
   const [selected, setSelected] = useState<string>();
   const [detail, setDetail] = useState<Exchange>();
-  const [filter, setFilter] = useState({ text: '', deep: false, host: '', method: '', status: '' as '' | 'ok' | 'redirect' | 'client-error' | 'server-error' | 'error', bookmarked: false });
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [dock, setDock] = useState<DockPanel | undefined>(() => {
+    try {
+      return (localStorage.getItem('testpion.debugger.dock') as DockPanel | null) ?? 'summary';
+    } catch {
+      return 'summary';
+    }
+  });
+  const [side, setSide] = useState<'outgoing' | 'incoming'>('outgoing');
+  const [ruleDraft, setRuleDraft] = useState<Partial<Rule>>();
+  const [httpsBanner, setHttpsBanner] = useState(true);
+  const incoming = useIncoming();
+  /** The programs, domains and types seen in this session: the drop-downs keep them while a filter narrows the list. */
+  const [seen, setSeen] = useState<{ apps: string[]; hosts: string[]; types: string[] }>({ apps: [], hosts: [], types: [] });
+  const [filter, setFilter] = useState({ application: '', type: '', text: '', deep: false, host: '', method: '', status: '' as '' | 'ok' | 'redirect' | 'client-error' | 'server-error' | 'error', bookmarked: false });
   const [tab, setTab] = useState<'traffic' | 'stats' | 'rules' | 'connections'>('traffic');
   const [port, setPort] = useState('8899');
   const [stats, setStats] = useState<Stats>();
@@ -213,7 +100,7 @@ export function DebuggerView() {
   /** Compare: the first exchange picked; the next row clicked is the other one. */
   const [compareA, setCompareA] = useState<Exchange>();
   const [comparePair, setComparePair] = useState<{ a: string; b: string }>();
-  const [dialog, setDialog] = useState<'certificate' | 'decode' | 'lan'>();
+  const [dialog, setDialog] = useState<'certificate' | 'lan'>();
   const filterBox = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
@@ -227,10 +114,22 @@ export function DebuggerView() {
           method: filter.method || undefined,
           status: filter.status || undefined,
           bookmarked: filter.bookmarked || undefined,
+          application: filter.application || undefined,
+          type: filter.type || undefined,
         }),
       ]);
       setStatus(st);
       setRows(list);
+      setSeen((v) => {
+        const add = (have: string[], more: Array<string | undefined>) => {
+          const next = [...new Set([...have, ...more.filter((x): x is string => !!x)])].sort();
+          return next.length === have.length ? have : next;
+        };
+        const apps = add(v.apps, list.map((r) => r.application));
+        const hosts = add(v.hosts, list.map((r) => r.host));
+        const types = add(v.types, list.map((r) => r.contentType?.split(';')[0]?.trim()));
+        return apps === v.apps && hosts === v.hosts && types === v.types ? v : { apps, hosts, types };
+      });
     } catch (e) {
       fail(e);
     }
@@ -383,17 +282,36 @@ export function DebuggerView() {
 
   // keyboard: ↑ ↓ select, Enter opens, Delete removes, Ctrl+F finds, Ctrl+E clears
   const onKey = (ev: React.KeyboardEvent) => {
+    if (ev.key === 'F5' || ev.key === 'F6') {
+      ev.preventDefault();
+      return openDock(ev.key === 'F5' ? 'timeline' : 'structure');
+    }
     if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'f') return (ev.preventDefault(), filterBox.current?.focus());
     if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'e') return (ev.preventDefault(), void clear());
     if (!rows.length || (ev.target as HTMLElement).tagName === 'INPUT') return;
     const i = rows.findIndex((r) => r.id === selected);
-    if (ev.key === 'ArrowDown') return (ev.preventDefault(), setSelected(rows[Math.min(rows.length - 1, i + 1)]!.id));
-    if (ev.key === 'ArrowUp') return (ev.preventDefault(), setSelected(rows[Math.max(0, i - 1)]!.id));
+    const go = (id: string) => (setSelected(id), setSelectedIds([id]));
+    if (ev.key === 'ArrowDown') return (ev.preventDefault(), go(rows[Math.min(rows.length - 1, i + 1)]!.id));
+    if (ev.key === 'ArrowUp') return (ev.preventDefault(), go(rows[Math.max(0, i - 1)]!.id));
     if (ev.key === 'Enter' && i >= 0) return (ev.preventDefault(), openInTab(rows[i]!));
-    if (ev.key === 'Delete' && i >= 0) return (ev.preventDefault(), void remove([rows[i]!.id]));
+    if (ev.key === 'Delete' && i >= 0) return (ev.preventDefault(), void remove(selectedIds.length > 1 ? selectedIds : [rows[i]!.id]));
   };
 
-  const hosts = useMemo(() => [...new Set(rows.map((r) => r.host))].sort(), [rows]);
+  const openDock = (p: DockPanel | undefined) => {
+    setDock(p);
+    try {
+      if (p) localStorage.setItem('testpion.debugger.dock', p);
+      else localStorage.removeItem('testpion.debugger.dock');
+    } catch {
+      /* remembered for this session only */
+    }
+  };
+  const picked = useMemo(() => (selectedIds.length > 1 ? rows.filter((r) => selectedIds.includes(r.id)) : detail ? [detail] : []), [rows, selectedIds, detail]);
+  const quickRule = (kind: Rule['kind'], name: string, match: Rule['match'], extra?: Partial<Rule>) =>
+    void call<RulesState>('debug.saveRule', { rule: { kind, name, enabled: true, match, ...extra } }).then(
+      (r) => (setRules(r), toast(`Rule added: ${name}`), openDock(kind === 'ignore' || kind === 'only' ? 'filter' : kind === 'reply' ? 'auto-reply' : kind === 'highlight' ? 'highlight' : 'modify')),
+      fail,
+    );
   const sel = detail;
   const copy = (text: string, what: string) => void navigator.clipboard.writeText(text).then(() => toast(`Copied ${what}`));
 
@@ -498,7 +416,7 @@ export function DebuggerView() {
                 </Button>
               }
             />
-            <Button icon={<Binary size={13} />} onClick={() => setDialog('decode')} title="Decode URL, Base64, hex, JWT, timestamps">
+            <Button icon={<Binary size={13} />} onClick={() => (setTab('traffic'), openDock('convert'))} title="Decode URL, Base64, hex, JWT, timestamps">
               Decode
             </Button>
             <Menu
@@ -531,212 +449,274 @@ export function DebuggerView() {
       ) : tab === 'rules' ? (
         <RulesPanel state={rules} onChange={setRules} host={sel?.host} />
       ) : (
-        <Split id="debugger" initial={55}>
-          <div className="h-full flex flex-col min-h-0 outline-none" tabIndex={0} onKeyDown={onKey} aria-label="Captured exchanges">
-            {(!!rules?.activeCount || held.length > 0 || compareA) && (
-              <div className="flex items-center gap-3 px-2 py-1 border-b border-line text-xs bg-panel/60" data-rules-bar>
-                {!!rules?.activeCount && (
-                  <button
-                    type="button"
-                    className="flex items-center gap-1 text-muted hover:text-fg"
-                    onClick={() => setTab('rules')}
-                    title="The rules of the active profile act on the traffic; click to see them"
-                  >
-                    <Scale size={12} /> {rules.activeCount} rule{rules.activeCount === 1 ? '' : 's'} active · {rules.active}
-                  </button>
-                )}
-                {held.length > 0 && (
-                  <button
-                    type="button"
-                    className="flex items-center gap-1 text-warn font-medium"
-                    onClick={() => setOpenBreakpoint(held[0])}
-                    title="An exchange is paused at a breakpoint, waiting for you"
-                  >
-                    <Pause size={12} /> {held.length} held at a breakpoint · open
-                  </button>
-                )}
-                {compareA && (
-                  <span className="flex items-center gap-1 text-accent">
-                    Comparing with {compareA.method} {compareA.host}: click the other exchange{' '}
-                    <button type="button" className="underline" onClick={() => setCompareA(undefined)}>
-                      cancel
+        <div className="flex-1 min-h-0 flex">
+          <ToolRail
+            active={dock}
+            onPanel={(p) => openDock(dock === p ? undefined : p)}
+            onSubmit={() => (sel ? openInTab(sel) : useApp.getState().openIntent('rest', {}))}
+            exportItems={sessionItems}
+          />
+          <div className="flex-1 min-w-0">
+            <Split id="debugger-dock" initial={74} collapsedSecond={!dock}>
+              <div className="h-full flex flex-col min-h-0 outline-none" tabIndex={0} onKeyDown={onKey} aria-label="Captured exchanges">
+                {status?.running && !status.decrypt && httpsBanner && (
+                  <div className="flex items-center gap-2 px-3 py-1 border-b border-line text-xs bg-accent-soft" data-https-banner>
+                    <Lock size={12} className="text-accent" />
+                    <span>
+                      <b>HTTPS inspection is off</b> — HTTPS shows as a tunnel by host; decrypt it to see the requests inside (programs must trust the TestPion root certificate).
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      onClick={() => void call<Status>('debug.decrypt', { on: true }).then((st) => (setStatus(st), toast('HTTPS is decrypted for programs that trust the TestPion root')), fail)}
+                    >
+                      Decrypt HTTPS
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => setDialog('certificate')}>
+                      Install certificate…
+                    </Button>
+                    <button type="button" className="ml-auto text-muted hover:text-fg" aria-label="Hide this message" onClick={() => setHttpsBanner(false)}>
+                      <X size={12} />
                     </button>
-                  </span>
-                )}
-              </div>
-            )}
-            <div className="flex gap-2 p-2 border-b border-line items-center flex-wrap">
-              <Input
-                ref={filterBox}
-                className="flex-1 min-w-40"
-                placeholder={filter.deep ? 'Find in URLs, headers and bodies' : 'Filter (URL, method, program, type)'}
-                aria-label="Filter exchanges"
-                value={filter.text}
-                onChange={(e) => setFilter({ ...filter, text: e.target.value })}
-              />
-              <label className="flex items-center gap-1 text-xs text-muted whitespace-nowrap" title="Search headers and bodies too">
-                <input type="checkbox" checked={filter.deep} onChange={(e) => setFilter({ ...filter, deep: e.target.checked })} /> In bodies
-              </label>
-              <Select aria-label="Host" value={filter.host} onChange={(e) => setFilter({ ...filter, host: e.target.value })}>
-                <option value="">All hosts</option>
-                {hosts.map((h) => (
-                  <option key={h}>{h}</option>
-                ))}
-              </Select>
-              <Select aria-label="Method" value={filter.method} onChange={(e) => setFilter({ ...filter, method: e.target.value })}>
-                <option value="">Any method</option>
-                {['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'CONNECT'].map((m) => (
-                  <option key={m}>{m}</option>
-                ))}
-              </Select>
-              <Select aria-label="Status" value={filter.status} onChange={(e) => setFilter({ ...filter, status: e.target.value as typeof filter.status })}>
-                <option value="">Any status</option>
-                <option value="ok">2xx</option>
-                <option value="redirect">3xx</option>
-                <option value="client-error">4xx</option>
-                <option value="server-error">5xx</option>
-                <option value="error">Errors</option>
-              </Select>
-              <label className="flex items-center gap-1 text-xs text-muted whitespace-nowrap">
-                <input type="checkbox" checked={filter.bookmarked} onChange={(e) => setFilter({ ...filter, bookmarked: e.target.checked })} /> Bookmarked
-              </label>
-              <Menu
-                width={260}
-                items={[
-                  ...(rules?.filterPresets ?? []).map<MenuItem>((p) => ({ label: p.name, onSelect: () => setFilter({ ...filter, ...(p.filter as Partial<typeof filter>) }) })),
-                  {
-                    label: 'Save this filter…',
-                    icon: <Save size={14} />,
-                    onSelect: async () => {
-                      const name = await promptText('Save filter preset', {
-                        message: 'The current filter (text, host, method, status, bookmarked) under a name, for this workspace.',
-                        placeholder: 'Name',
-                      });
-                      if (name) void call<RulesState['filterPresets']>('debug.saveFilterPreset', { name, filter }).then((fp) => setRules((r) => r && { ...r, filterPresets: fp }), fail);
-                    },
-                  },
-                  ...(rules?.filterPresets ?? []).map<MenuItem>((p) => ({
-                    label: `Forget ${p.name}`,
-                    icon: <Trash2 size={14} />,
-                    danger: true,
-                    onSelect: () => void call<RulesState['filterPresets']>('debug.deleteFilterPreset', { name: p.name }).then((fp) => setRules((r) => r && { ...r, filterPresets: fp }), fail),
-                  })),
-                ]}
-                trigger={
-                  <Button size="sm" title="Saved filters">
-                    Presets <ChevronDown size={12} />
-                  </Button>
-                }
-              />
-            </div>
-            {!rows.length ? (
-              <Empty icon={<Bug size={26} />} title={status?.running ? 'Waiting for traffic' : 'Not capturing'}>
-                {status?.running ? (
-                  <>
-                    Point a program at <span className="mono">{status.url}</span>: <b>Capture</b> opens a browser or a terminal through it, or sets the system proxy; for a shell{' '}
-                    <span className="mono">HTTP_PROXY={status.url}</span>, for Chrome <span className="mono">--proxy-server={status.url}</span>. HTTPS shows as a tunnel by host until you turn on
-                    <b> Decrypt HTTPS</b>.
-                  </>
-                ) : (
-                  'Start capturing, then run the program you want to watch; or open a saved session from the Session menu.'
-                )}
-              </Empty>
-            ) : (
-              <VirtualList
-                className="flex-1"
-                items={rows}
-                rowHeight={30}
-                render={(r) => (
-                  <div
-                    role="row"
-                    aria-selected={r.id === selected}
-                    className={cx(
-                      'flex items-center gap-2 h-[30px] px-2 text-xs cursor-pointer border-b border-line/60',
-                      r.id === selected ? 'bg-accent-soft' : 'hover:bg-hover',
-                      r.highlight ? HIGHLIGHT_CLASS[r.highlight] : '',
-                      r.error || (r.status ?? 0) >= 400 ? 'text-bad' : '',
-                    )}
-                    onClick={() => {
-                      if (compareA && compareA.id !== r.id) {
-                        setComparePair({ a: compareA.id, b: r.id });
-                        setCompareA(undefined);
-                      } else setSelected(r.id);
-                    }}
-                    onDoubleClick={() => openInTab(r)}
-                    title={r.url}
-                  >
-                    <span className="w-4 shrink-0 text-warn">{r.bookmarked && <Star size={11} className="fill-current" />}</span>
-                    <span className={cx('mono w-14 shrink-0 font-bold', `method-${r.method}`)}>{r.method}</span>
-                    <span className="w-10 shrink-0">
-                      {r.grpc?.statusName && r.grpc.status !== 0 ? (
-                        <Badge tone="bad" title={`gRPC ${r.grpc.statusName}`}>
-                          {r.grpc.status}
-                        </Badge>
-                      ) : (
-                        <Badge tone={r.error ? 'bad' : statusTone(r.status)}>{r.error ? 'ERR' : (r.status ?? '…')}</Badge>
-                      )}
-                    </span>
-                    <span className="w-28 shrink-0 truncate text-muted" title={r.application ?? 'unknown program'}>
-                      {r.application ?? `:${r.clientPort}`}
-                    </span>
-                    <span className="flex-1 min-w-0 truncate">
-                      {r.tls && <Lock size={10} className="inline mr-1 text-ok" aria-label="decrypted HTTPS" />}
-                      {r.kind === 'tunnel' ? `${r.host}  (HTTPS tunnel)` : r.url}
-                      {r.grpc && <span className="ml-1 text-[10px] font-bold text-[#e535ab]">gRPC</span>}
-                      {r.httpVersion === '2' && <span className="ml-1 text-[10px] text-muted">h2</span>}
-                      {r.open && <span className="ml-1 text-accent">● live</span>}
-                    </span>
-                    <span className="w-28 shrink-0 truncate text-muted">{r.contentType?.split(';')[0]}</span>
-                    <span className="w-16 shrink-0 text-right tabular-nums text-muted">{formatBytes(r.responseBodyBytes)}</span>
-                    <span className="w-16 shrink-0 text-right tabular-nums text-muted">{r.durationMs !== undefined ? formatMs(r.durationMs) : '…'}</span>
                   </div>
                 )}
-              />
-            )}
-            {rows.length > 0 && (
-              <div className="px-2 py-1 border-t border-line text-[11px] text-muted flex gap-3 shrink-0">
-                <span>{rows.length === status?.exchanges ? `${rows.length} exchanges` : `${rows.length} of ${status?.exchanges ?? rows.length}`}</span>
-                <span className="ml-auto hidden @lg:inline">↑ ↓ select · Enter opens · Delete removes · Ctrl+F finds · Ctrl+E clears</span>
-              </div>
-            )}
-          </div>
-          <div className="h-full flex flex-col min-h-0">
-            {!sel ? (
-              <Empty title="Select an exchange">Its request, response, raw bytes, credentials and timing show here. Double-click a row to open it as a request.</Empty>
-            ) : (
-              <ExchangeDetail
-                e={sel}
-                onOpen={() => openInTab(sel)}
-                onResend={() => void resend(sel)}
-                onAsk={() => ask(sel)}
-                onBookmark={async () => (await call('debug.bookmark', { id: sel.id, on: !sel.bookmarked }), void load(), setDetail({ ...sel, bookmarked: !sel.bookmarked }))}
-                onDelete={() => void remove([sel.id])}
-                onCompare={() => setCompareA(sel)}
-                onRule={(preset) => {
-                  if (preset === 'reply-with-this') {
-                    void call<RulesState>('debug.saveRule', {
-                      rule: {
-                        kind: 'reply',
-                        name: `Reply ${sel.status ?? 200} for ${sel.host}`,
-                        enabled: true,
-                        match: { host: sel.host, url: sel.url.split('?')[0] + '*' },
-                        reply: {
-                          status: sel.status ?? 200,
-                          headers: Object.fromEntries(Object.entries(sel.responseHeaders ?? {}).filter(([k]) => /^content-type$/i.test(k))),
-                          body: sel.responseBody ?? '',
+                {(!!rules?.activeCount || held.length > 0 || compareA) && (
+                  <div className="flex items-center gap-3 px-2 py-1 border-b border-line text-xs bg-panel/60" data-rules-bar>
+                    {!!rules?.activeCount && (
+                      <button
+                        type="button"
+                        className="flex items-center gap-1 text-muted hover:text-fg"
+                        onClick={() => setTab('rules')}
+                        title="The rules of the active profile act on the traffic; click to see them"
+                      >
+                        <Scale size={12} /> {rules.activeCount} rule{rules.activeCount === 1 ? '' : 's'} active · {rules.active}
+                      </button>
+                    )}
+                    {held.length > 0 && (
+                      <button
+                        type="button"
+                        className="flex items-center gap-1 text-warn font-medium"
+                        onClick={() => setOpenBreakpoint(held[0])}
+                        title="An exchange is paused at a breakpoint, waiting for you"
+                      >
+                        <Pause size={12} /> {held.length} held at a breakpoint · open
+                      </button>
+                    )}
+                    {compareA && (
+                      <span className="flex items-center gap-1 text-accent">
+                        Comparing with {compareA.method} {compareA.host}: click the other exchange{' '}
+                        <button type="button" className="underline" onClick={() => setCompareA(undefined)}>
+                          cancel
+                        </button>
+                      </span>
+                    )}
+                  </div>
+                )}
+                <div className="flex gap-2 p-2 border-b border-line items-center flex-wrap" data-filter-bar>
+                  <Select aria-label="Application" value={filter.application} onChange={(e) => setFilter({ ...filter, application: e.target.value })}>
+                    <option value="">All Applications</option>
+                    {seen.apps.map((h) => (
+                      <option key={h}>{h}</option>
+                    ))}
+                  </Select>
+                  <Select aria-label="Host" value={filter.host} onChange={(e) => setFilter({ ...filter, host: e.target.value })}>
+                    <option value="">All Domains</option>
+                    {seen.hosts.map((h) => (
+                      <option key={h}>{h}</option>
+                    ))}
+                  </Select>
+                  <Select aria-label="Type" value={filter.type} onChange={(e) => setFilter({ ...filter, type: e.target.value })}>
+                    <option value="">All Types</option>
+                    {seen.types.map((h) => (
+                      <option key={h}>{h}</option>
+                    ))}
+                  </Select>
+                  <Select aria-label="Method" value={filter.method} onChange={(e) => setFilter({ ...filter, method: e.target.value })}>
+                    <option value="">Any method</option>
+                    {['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'CONNECT'].map((m) => (
+                      <option key={m}>{m}</option>
+                    ))}
+                  </Select>
+                  <Select aria-label="Status" value={filter.status} onChange={(e) => setFilter({ ...filter, status: e.target.value as typeof filter.status })}>
+                    <option value="">Any status</option>
+                    <option value="ok">2xx</option>
+                    <option value="redirect">3xx</option>
+                    <option value="client-error">4xx</option>
+                    <option value="server-error">5xx</option>
+                    <option value="error">Errors</option>
+                  </Select>
+                  <label className="flex items-center gap-1 text-xs text-muted whitespace-nowrap">
+                    <input type="checkbox" checked={filter.bookmarked} onChange={(e) => setFilter({ ...filter, bookmarked: e.target.checked })} /> Bookmarked
+                  </label>
+                  <Menu
+                    width={260}
+                    items={[
+                      ...(rules?.filterPresets ?? []).map<MenuItem>((p) => ({ label: p.name, onSelect: () => setFilter({ ...filter, ...(p.filter as Partial<typeof filter>) }) })),
+                      {
+                        label: 'Save this filter…',
+                        icon: <Save size={14} />,
+                        onSelect: async () => {
+                          const name = await promptText('Save filter preset', {
+                            message: 'The current filter (text, host, method, status, bookmarked) under a name, for this workspace.',
+                            placeholder: 'Name',
+                          });
+                          if (name) void call<RulesState['filterPresets']>('debug.saveFilterPreset', { name, filter }).then((fp) => setRules((r) => r && { ...r, filterPresets: fp }), fail);
                         },
                       },
-                    }).then((r) => (setRules(r), toast('Rule added: this response is served by TestPion from now on')), fail);
-                  } else void call<RulesState>('debug.addPreset', { preset, host: sel.host }).then((r) => (setRules(r), toast(`Rule added for ${sel.host}`)), fail);
-                }}
-              />
-            )}
+                      ...(rules?.filterPresets ?? []).map<MenuItem>((p) => ({
+                        label: `Forget ${p.name}`,
+                        icon: <Trash2 size={14} />,
+                        danger: true,
+                        onSelect: () => void call<RulesState['filterPresets']>('debug.deleteFilterPreset', { name: p.name }).then((fp) => setRules((r) => r && { ...r, filterPresets: fp }), fail),
+                      })),
+                    ]}
+                    trigger={
+                      <Button size="sm" title="Saved filters">
+                        Presets <ChevronDown size={12} />
+                      </Button>
+                    }
+                  />
+                  <button
+                    type="button"
+                    className="ml-auto flex items-center gap-1 text-xs text-muted hover:text-fg"
+                    onClick={() => openDock('filter')}
+                    title="Filter Out and Capture Only rules on"
+                    data-filter-rule-count
+                  >
+                    <Filter size={12} /> {(rules?.rules ?? []).filter((r) => r.enabled && (r.kind === 'ignore' || r.kind === 'only')).length}
+                  </button>
+                  <Input
+                    ref={filterBox}
+                    className="w-56"
+                    placeholder={filter.deep ? 'Find in URLs, headers and bodies' : 'Filter requests'}
+                    aria-label="Filter exchanges"
+                    value={filter.text}
+                    onChange={(e) => setFilter({ ...filter, text: e.target.value })}
+                  />
+                  <label className="flex items-center gap-1 text-xs text-muted whitespace-nowrap" title="Search headers and bodies too">
+                    <input type="checkbox" checked={filter.deep} onChange={(e) => setFilter({ ...filter, deep: e.target.checked })} /> In bodies
+                  </label>
+                </div>
+                <div className="flex-1 min-h-0">
+                  <Split id="debugger" direction="vertical" initial={58}>
+                    <div className="h-full flex flex-col min-h-0">
+                      {side === 'incoming' ? (
+                        <IncomingList list={incoming.list} onClear={incoming.clear} />
+                      ) : !rows.length ? (
+                        <Empty icon={<Bug size={26} />} title={status?.running ? 'Waiting for traffic' : 'Not capturing'}>
+                          {status?.running ? (
+                            <>
+                              Point a program at <span className="mono">{status.url}</span>: <b>Capture</b> opens a browser or a terminal through it, or sets the system proxy; for a shell{' '}
+                              <span className="mono">HTTP_PROXY={status.url}</span>, for Chrome <span className="mono">--proxy-server={status.url}</span>. HTTPS shows as a tunnel by host until you turn on
+                              <b> Decrypt HTTPS</b>.
+                            </>
+                          ) : (
+                            'Start capturing, then run the program you want to watch; or open a saved session from the Session menu.'
+                          )}
+                        </Empty>
+                      ) : (
+                        <DebuggerGrid
+                          rows={rows}
+                          selected={selected}
+                          selectedIds={selectedIds}
+                          onSelect={(id, ids) => {
+                            if (compareA && compareA.id !== id) {
+                              setComparePair({ a: compareA.id, b: id });
+                              setCompareA(undefined);
+                              return;
+                            }
+                            setSelected(id);
+                            setSelectedIds(ids);
+                          }}
+                          actions={{
+                            onOpen: openInTab,
+                            onResend: (e) => void resend(e),
+                            onBookmark: async (e) => (await call('debug.bookmark', { id: e.id, on: !e.bookmarked }), void load()),
+                            onCompare: setCompareA,
+                            onDelete: (ids) => void remove(ids),
+                            onClear: () => void clear(),
+                            onQuickRule: quickRule,
+                            onNewRule: setRuleDraft,
+                            onConnections: () => setTab('connections'),
+                          }}
+                        />
+                      )}
+                      <TrafficSide side={side} onSide={setSide} incoming={incoming.list.length} />
+                    </div>
+                    <div className="h-full flex flex-col min-h-0">
+                      {!sel ? (
+                        <Empty title="Select an exchange">Its request and response show side by side: headers, content, raw text and JSON. Double-click a row to open it as a request.</Empty>
+                      ) : (
+                        <ExchangePanes
+                          e={sel}
+                          onOpen={() => openInTab(sel)}
+                          onResend={() => void resend(sel)}
+                          onAsk={() => ask(sel)}
+                          onBookmark={async () => (await call('debug.bookmark', { id: sel.id, on: !sel.bookmarked }), void load(), setDetail({ ...sel, bookmarked: !sel.bookmarked }))}
+                          onDelete={() => void remove([sel.id])}
+                          onCompare={() => setCompareA(sel)}
+                          onRule={(preset) => {
+                            if (preset === 'reply-with-this') {
+                              void call<RulesState>('debug.saveRule', {
+                                rule: {
+                                  kind: 'reply',
+                                  name: `Reply ${sel.status ?? 200} for ${sel.host}`,
+                                  enabled: true,
+                                  match: { host: sel.host, url: sel.url.split('?')[0] + '*' },
+                                  reply: {
+                                    status: sel.status ?? 200,
+                                    headers: Object.fromEntries(Object.entries(sel.responseHeaders ?? {}).filter(([k]) => /^content-type$/i.test(k))),
+                                    body: sel.responseBody ?? '',
+                                  },
+                                },
+                              }).then((r) => (setRules(r), toast('Rule added: this response is served by TestPion from now on')), fail);
+                            } else void call<RulesState>('debug.addPreset', { preset, host: sel.host }).then((r) => (setRules(r), toast(`Rule added for ${sel.host}`)), fail);
+                          }}
+                        />
+                      )}
+                    </div>
+                  </Split>
+                </div>
+                {rows.length > 0 && <GridTotals rows={rows} selectedIds={selectedIds} total={status?.exchanges} />}
+              </div>
+              {dock ? (
+                <Dock
+                  panel={dock}
+                  onPanel={openDock}
+                  onClose={() => openDock(undefined)}
+                  rules={rules}
+                  onRules={setRules}
+                  onNewRule={setRuleDraft}
+                  onEditRule={setRuleDraft}
+                  rows={rows}
+                  picked={picked}
+                  current={sel}
+                  onPick={(id) => (setSelected(id), setSelectedIds([id]))}
+                />
+              ) : (
+                <div />
+              )}
+            </Split>
           </div>
-        </Split>
+        </div>
       )}
       {openBreakpoint && <BreakpointDialog bp={openBreakpoint} onDone={() => setOpenBreakpoint(undefined)} />}
       {dialog === 'certificate' && <CertificateDialog onClose={() => setDialog(undefined)} />}
-      {dialog === 'decode' && <DecodeDialog onClose={() => setDialog(undefined)} />}
+      {ruleDraft && (
+        <RuleDialog
+          rule={ruleDraft}
+          onClose={() => setRuleDraft(undefined)}
+          onSave={async (r) => {
+            try {
+              setRules(await call<RulesState>('debug.saveRule', { rule: r }));
+              setRuleDraft(undefined);
+              toast('Rule saved');
+            } catch (e) {
+              fail(e);
+            }
+          }}
+        />
+      )}
       {dialog === 'lan' && (
         <LanDialog
           onClose={() => setDialog(undefined)}
@@ -843,277 +823,5 @@ function StatsPanel({ stats, onPick }: { stats?: Stats; onPick(id: string): void
         </section>
       ))}
     </div>
-  );
-}
-
-function ExchangeDetail({
-  e,
-  onOpen,
-  onResend,
-  onAsk,
-  onBookmark,
-  onDelete,
-  onCompare,
-  onRule,
-}: {
-  e: Exchange;
-  onOpen(): void;
-  onResend(): void;
-  onAsk(): void;
-  onBookmark(): void;
-  onDelete(): void;
-  onCompare(): void;
-  onRule(preset: string): void;
-}) {
-  const [tab, setTab] = useState<'response' | 'request' | 'headers' | 'raw' | 'hex' | 'auth' | 'timing' | 'frames' | 'events' | 'grpc'>(
-    e.grpc ? 'grpc' : e.frames ? 'frames' : e.events?.length ? 'events' : 'response',
-  );
-  const json = (text?: string) => {
-    if (!text) return undefined;
-    try {
-      return JSON.parse(text) as unknown;
-    } catch {
-      return undefined;
-    }
-  };
-  const resJson = json(e.responseBody);
-  const reqJson = json(e.requestBody);
-  const raw = useMemo(() => rawOf(e), [e]);
-  const headers = (h?: Record<string, string>) => (
-    <table className="text-xs w-full">
-      <tbody>
-        {Object.entries(h ?? {}).map(([k, v]) => (
-          <tr key={k} className="border-t border-line/60">
-            <td className="py-1 pr-3 font-medium whitespace-nowrap align-top">{k}</td>
-            <td className="py-1 mono break-all">{v}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  );
-  const copy = (text: string, what: string) => void navigator.clipboard.writeText(text).then(() => toast(`Copied ${what}`));
-  return (
-    <>
-      <div className="flex items-center gap-2 px-3 h-9 border-b border-line text-sm shrink-0 whitespace-nowrap overflow-hidden">
-        <Badge tone={e.error ? 'bad' : statusTone(e.status)}>{e.error ? 'error' : `${e.status ?? '…'} ${e.statusText ?? ''}`}</Badge>
-        <span className="mono text-xs truncate" title={e.url}>
-          {e.method} {e.url}
-        </span>
-        <span className="ml-auto flex items-center gap-1 shrink-0">
-          <Button size="sm" variant="ghost" icon={<ExternalLink size={12} />} onClick={onOpen} title="Open as a request in a tab, to change and send">
-            Open
-          </Button>
-          <Button size="sm" variant="ghost" icon={<Play size={12} />} onClick={onResend} title="Send it again as it was">
-            Resend
-          </Button>
-          <Button size="sm" variant="ghost" icon={<Copy size={12} />} onClick={() => copy(curlOf(e), 'as cURL')}>
-            cURL
-          </Button>
-          <Button size="sm" variant="ghost" icon={<Bot size={12} />} onClick={onAsk} title="Ask the AI assistant what this exchange does, why it failed, what to check (sent redacted)">
-            Ask AI
-          </Button>
-          <Button size="sm" variant="ghost" icon={<Scale size={12} />} onClick={onCompare} title="Compare with another exchange: click it next">
-            Compare
-          </Button>
-          <Menu
-            width={280}
-            items={[
-              { label: `Reply with this response from now on`, icon: <Play size={14} />, onSelect: () => onRule('reply-with-this') },
-              { label: `Ignore ${e.host}`, onSelect: () => onRule('ignore') },
-              { label: `Highlight ${e.host}`, onSelect: () => onRule('highlight') },
-              { label: `Offline: reply 503 for ${e.host}`, onSelect: () => onRule('offline') },
-              { label: `Slow down ${e.host} by 2 s`, onSelect: () => onRule('slow') },
-              { label: `Allow CORS for ${e.host}`, onSelect: () => onRule('cors') },
-              { label: `Pause every request to ${e.host}`, icon: <Pause size={14} />, onSelect: () => onRule('break-request') },
-            ]}
-            trigger={
-              <Button size="sm" variant="ghost" title="Add a rule for this exchange's host">
-                Rule <ChevronDown size={12} />
-              </Button>
-            }
-          />
-          <Button
-            size="sm"
-            variant="ghost"
-            icon={<Star size={12} className={e.bookmarked ? 'fill-current text-warn' : ''} />}
-            onClick={onBookmark}
-            title={e.bookmarked ? 'Remove the bookmark' : 'Bookmark'}
-          >
-            {e.bookmarked ? 'Bookmarked' : 'Bookmark'}
-          </Button>
-          <Button size="sm" variant="ghost" icon={<X size={12} />} onClick={onDelete} title="Remove from the session">
-            Delete
-          </Button>
-        </span>
-      </div>
-      {e.error && <div className="px-3 py-2 text-sm text-bad border-b border-line">{e.error}</div>}
-      {(e.rules?.length || e.redirectedTo || e.repliedByRule || e.edited) && (
-        <div className="px-3 py-1.5 text-xs border-b border-line flex gap-2 flex-wrap items-center text-muted">
-          <Scale size={12} />
-          {e.repliedByRule && <Badge tone="warn">answered by a rule</Badge>}
-          {e.redirectedTo && (
-            <Badge tone="warn" title={e.redirectedTo}>
-              redirected to {e.redirectedTo.replace(/^https?:\/\//, '').split('/')[0]}
-            </Badge>
-          )}
-          {e.edited && <Badge tone="warn">edited at a breakpoint</Badge>}
-          {e.rules?.map((r) => (
-            <Badge key={r}>{r}</Badge>
-          ))}
-        </div>
-      )}
-      <Tabs
-        value={tab}
-        onChange={setTab}
-        tabs={[
-          { id: 'response', label: 'Response', badge: e.responseBodyBytes ? formatBytes(e.responseBodyBytes) : undefined },
-          { id: 'request', label: 'Request', badge: e.requestBodyBytes ? formatBytes(e.requestBodyBytes) : undefined },
-          { id: 'headers', label: 'Headers', badge: Object.keys(e.requestHeaders).length + Object.keys(e.responseHeaders ?? {}).length },
-          { id: 'raw', label: 'Raw' },
-          { id: 'hex', label: 'Hex' },
-          { id: 'auth', label: 'Auth', badge: e.auth && e.auth.scheme !== 'none' ? e.auth.scheme.split(' ')[0] : undefined },
-          { id: 'timing', label: 'Timing' },
-          ...(e.grpc ? [{ id: 'grpc' as const, label: 'gRPC', badge: e.grpc.requests.length + e.grpc.responses.length }] : []),
-          ...(e.frames ? [{ id: 'frames' as const, label: 'Frames', badge: e.frames.length }] : []),
-          ...(e.events ? [{ id: 'events' as const, label: 'Events', badge: e.events.length }] : []),
-        ]}
-      />
-      <div className="flex-1 min-h-0 overflow-auto">
-        {tab === 'response' &&
-          (e.kind === 'tunnel' ? (
-            <div className="p-3 text-sm text-muted">
-              An HTTPS tunnel: {formatBytes(e.requestBodyBytes)} sent, {formatBytes(e.responseBodyBytes)} received, encrypted end to end. Turn on <b>HTTPS ▸ Decrypt HTTPS</b> and trust the TestPion
-              root certificate to see the requests inside.
-            </div>
-          ) : resJson !== undefined ? (
-            <JsonTree data={resJson} />
-          ) : (
-            <pre className="p-3 text-xs mono whitespace-pre-wrap break-all">
-              {e.responseBody ?? (e.responseBodyBytes ? `(${formatBytes(e.responseBodyBytes)} of ${e.contentType ?? 'binary'}, not kept)` : '(empty)')}
-            </pre>
-          ))}
-        {tab === 'request' &&
-          (reqJson !== undefined ? (
-            <JsonTree data={reqJson} />
-          ) : (
-            <pre className="p-3 text-xs mono whitespace-pre-wrap break-all">{e.requestBody ?? (e.requestBodyBytes ? `(${formatBytes(e.requestBodyBytes)}, not kept)` : '(no body)')}</pre>
-          ))}
-        {tab === 'headers' && (
-          <div className="p-3 grid gap-3">
-            <div>
-              <div className="text-xs font-semibold text-muted uppercase tracking-wide mb-1">Request</div>
-              {headers(e.requestHeaders)}
-            </div>
-            <div>
-              <div className="text-xs font-semibold text-muted uppercase tracking-wide mb-1">Response</div>
-              {headers(e.responseHeaders)}
-            </div>
-            {e.trailers && Object.keys(e.trailers).length > 0 && (
-              <div>
-                <div className="text-xs font-semibold text-muted uppercase tracking-wide mb-1">Trailers</div>
-                {headers(e.trailers)}
-              </div>
-            )}
-          </div>
-        )}
-        {tab === 'raw' && (
-          <div className="p-3 grid gap-3">
-            {(
-              [
-                ['Request', raw.request],
-                ['Response', raw.response],
-              ] as Array<[string, string]>
-            ).map(([title, text]) => (
-              <div key={title}>
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-xs font-semibold text-muted uppercase tracking-wide">{title}</span>
-                  <Button size="sm" variant="ghost" icon={<Copy size={12} />} onClick={() => copy(text, `the raw ${title.toLowerCase()}`)}>
-                    Copy
-                  </Button>
-                </div>
-                <pre className="text-xs mono whitespace-pre-wrap break-all rounded border border-line p-2 bg-panel">{text}</pre>
-              </div>
-            ))}
-          </div>
-        )}
-        {tab === 'hex' && (
-          <div className="p-3 grid gap-3">
-            {(
-              [
-                ['Request body', e.requestBody],
-                ['Response body', e.responseBody],
-              ] as Array<[string, string | undefined]>
-            ).map(([title, text]) => (
-              <div key={title}>
-                <div className="text-xs font-semibold text-muted uppercase tracking-wide mb-1">{title}</div>
-                <pre className="text-xs mono whitespace-pre rounded border border-line p-2 bg-panel overflow-auto">{text ? hexDump(text) : '(no body kept)'}</pre>
-              </div>
-            ))}
-            <p className="text-xs text-muted">Binary bodies are counted, not kept; text bodies are shown as their UTF-8 bytes.</p>
-          </div>
-        )}
-        {tab === 'auth' &&
-          (!e.auth ? (
-            <div className="p-3 text-sm text-muted">No credentials in this exchange: no Authorization header, no cookies.</div>
-          ) : (
-            <div className="p-3 grid gap-3 text-sm">
-              <div>
-                <span className="text-muted">Scheme</span> <Badge tone={e.auth.scheme === 'none' ? 'default' : 'accent'}>{e.auth.scheme}</Badge>
-                {e.auth.user && (
-                  <>
-                    {' '}
-                    <span className="text-muted">user</span> <span className="mono">{e.auth.user}</span>
-                  </>
-                )}
-              </div>
-              {e.auth.note && <p className="text-xs text-warn">{e.auth.note}</p>}
-              {e.auth.jwt && (
-                <div className="h-80 min-h-0 rounded border border-line">
-                  <JwtView tokens={[e.auth.jwt]} />
-                </div>
-              )}
-              {e.auth.cookies.length > 0 && (
-                <div>
-                  <div className="text-xs font-semibold text-muted uppercase tracking-wide mb-1">Cookies sent</div>
-                  <div className="flex gap-1 flex-wrap">
-                    {e.auth.cookies.map((c) => (
-                      <Badge key={c}>{c}</Badge>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {e.auth.setCookies.length > 0 && (
-                <div>
-                  <div className="text-xs font-semibold text-muted uppercase tracking-wide mb-1">Cookies set by the response</div>
-                  <div className="flex gap-1 flex-wrap">
-                    {e.auth.setCookies.map((c) => (
-                      <Badge key={c}>{c}</Badge>
-                    ))}
-                  </div>
-                </div>
-              )}
-              <p className="text-xs text-muted">Values are never shown here: a captured token must not leave the session by a screenshot.</p>
-            </div>
-          ))}
-        {tab === 'grpc' && e.grpc && <GrpcView call={e.grpc} open={e.open} />}
-        {tab === 'frames' && e.frames && <FramesView frames={e.frames} open={e.open} />}
-        {tab === 'events' && e.events && <EventsView events={e.events} open={e.open} />}
-        {tab === 'timing' && (
-          <div className="p-3 text-sm grid gap-1">
-            <div>
-              Started <span className="mono text-xs">{e.startedAt}</span>
-            </div>
-            <div>Waiting for the server: {formatMs(e.waitMs)}</div>
-            <div>Receiving: {e.durationMs !== undefined && e.waitMs !== undefined ? formatMs(e.durationMs - e.waitMs) : '…'}</div>
-            <div>Total: {formatMs(e.durationMs)}</div>
-            <div className="text-muted">
-              From {e.application ?? 'an unknown program'} (client port {e.clientPort}) · {e.requestBodyBytes ? `${formatBytes(e.requestBodyBytes)} sent` : 'no body sent'} ·{' '}
-              {formatBytes(e.responseBodyBytes)} received
-              {e.responseBodyTruncated ? ' (the body shown is the first part)' : ''}
-            </div>
-          </div>
-        )}
-      </div>
-    </>
   );
 }

@@ -10,7 +10,16 @@ import { CompareView, type Compared } from './ResponseHistory';
  * test against them), the rule editor, the breakpoint dialog (an exchange held for editing) and the compare dialog.
  */
 
-export type RuleKind = 'ignore' | 'highlight' | 'modify' | 'reply' | 'redirect' | 'breakpoint';
+export type RuleKind = 'ignore' | 'only' | 'highlight' | 'modify' | 'reply' | 'redirect' | 'breakpoint';
+export type RuleColumn = 'status' | 'url' | 'method' | 'host' | 'application' | 'type' | 'version' | 'ip' | 'duration' | 'size';
+export type RuleOperator = 'equals' | 'not-equals' | 'contains' | 'starts-with' | 'ends-with' | 'between' | 'greater-than' | 'less-than' | 'matches';
+export interface RuleCondition {
+  column: RuleColumn;
+  op: RuleOperator;
+  value: string;
+  value2?: string;
+  regex?: boolean;
+}
 export interface HeaderEdit {
   op: 'set' | 'remove';
   name: string;
@@ -21,8 +30,9 @@ export interface Rule {
   name: string;
   enabled: boolean;
   kind: RuleKind;
-  match: { host?: string; url?: string; method?: string; application?: string; status?: string | number; minMs?: number; minBytes?: number };
+  match: { host?: string; url?: string; method?: string; application?: string; status?: string | number; minMs?: number; minBytes?: number; where?: RuleCondition };
   color?: string;
+  style?: { dark?: string; light?: string; bold?: boolean; row?: boolean };
   requestHeaders?: HeaderEdit[];
   responseHeaders?: HeaderEdit[];
   requestBody?: string;
@@ -39,6 +49,8 @@ export interface RulesState {
   rules: Rule[];
   activeCount: number;
   filterPresets: Array<{ name: string; filter: Record<string, unknown> }>;
+  /** How many requests each rule acted on in this capture, by rule id. */
+  hits?: Record<string, number>;
 }
 export interface HeldBreakpoint {
   id: string;
@@ -48,7 +60,7 @@ export interface HeldBreakpoint {
 }
 
 const fail = (e: unknown) => useApp.getState().toast(asError(e).message, 'error');
-const KIND_TONE: Record<RuleKind, 'default' | 'ok' | 'bad' | 'warn' | 'accent'> = { ignore: 'default', highlight: 'accent', modify: 'warn', reply: 'bad', redirect: 'warn', breakpoint: 'bad' };
+const KIND_TONE: Record<RuleKind, 'default' | 'ok' | 'bad' | 'warn' | 'accent'> = { ignore: 'default', only: 'ok', highlight: 'accent', modify: 'warn', reply: 'bad', redirect: 'warn', breakpoint: 'bad' };
 export const HIGHLIGHT_CLASS: Record<string, string> = {
   red: 'border-l-2 border-l-bad bg-bad/10',
   orange: 'border-l-2 border-l-warn bg-warn/10',
@@ -119,7 +131,7 @@ export function RulesPanel({ state, onChange, host }: { state?: RulesState; onCh
     try {
       const r = await call<{ applied: string[]; ignore: boolean; highlight?: string; reply?: number; redirect?: string; breakpoint?: string; delayMs: number }>('debug.ruleCheck', { url: check.url });
       const parts = [
-        r.ignore && 'ignored (not listed)',
+        r.ignore && 'not listed (filtered out, or outside Capture only)',
         r.highlight && `highlighted ${r.highlight}`,
         r.reply && `answered with ${r.reply} by a rule`,
         r.redirect && `redirected to ${r.redirect}`,
@@ -156,7 +168,7 @@ export function RulesPanel({ state, onChange, host }: { state?: RulesState; onCh
         </Button>
       </div>
       <p className="text-xs text-muted">
-        Rules act on the traffic that matches them, in this order: <b>ignore</b> hides it, <b>highlight</b> colours the row, <b>modify</b> changes headers, bodies or adds a delay, <b>reply</b> answers
+        Rules act on the traffic that matches them, in this order: <b>capture only</b> lists just what one of them matches, <b>filter out</b> hides it, <b>highlight</b> colours the row, <b>modify</b> changes headers, bodies or adds a delay, <b>reply</b> answers
         without the server, <b>redirect</b> sends it to another host, <b>breakpoint</b> pauses it for editing. Globs (<span className="mono">*.example.com</span>) or /regular expressions/ match hosts
         and URLs. The profile is saved in <span className="mono">debugger/rules.json</span>, committed with the workspace.
       </p>
@@ -307,7 +319,8 @@ export function RuleDialog({ rule, onClose, onSave }: { rule: Partial<Rule>; onC
           </Field>
           <Field label="Kind">
             <Select value={kind} onChange={(e) => set({ kind: e.target.value as RuleKind })}>
-              <option value="ignore">Ignore (hide from the list)</option>
+              <option value="ignore">Filter out (hide from the list)</option>
+              <option value="only">Capture only (list just what matches)</option>
               <option value="highlight">Highlight the row</option>
               <option value="modify">Modify headers, bodies, delay</option>
               <option value="reply">Reply without the server</option>

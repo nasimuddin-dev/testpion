@@ -44,8 +44,9 @@ const steps = [
       if (!row) return 'NO ROW';
       row.click(); await __t.sleep(800);
       const text = row.textContent;
-      const detail = [...document.querySelectorAll('main *')].some((x) => x.getAttribute('role') === 'tab' && (x.textContent?.trim() ?? '').startsWith('Response'));
-      const body = await __t.waitFor(() => [...document.querySelectorAll('main *')].some((x) => x.children.length === 0 && /"status"|ok/.test(x.textContent ?? '')), 3000);
+      const detail = !!document.querySelector('main [data-details-pane=request]') && !!document.querySelector('main [data-details-pane=response]');
+      [...document.querySelectorAll('main [data-details-pane=response] [role=tab]')].find((t) => t.textContent.trim().startsWith('Content'))?.click(); await __t.sleep(300);
+      const body = await __t.waitFor(() => [...document.querySelectorAll('main [data-details-pane=response] pre')].some((x) => /"status"|ok/.test(x.textContent ?? '')), 3000);
       ${button('Open')}?.click(); await __t.sleep(1500);
       const url = [...document.querySelectorAll('main input')].find((i) => i.offsetParent && /127\\.0\\.0\\.1:4010\\/health/.test(i.value));
       return 'row: GET ' + /GET/.test(text) + ' 200 ' + /200/.test(text) + ' | detail tabs: ' + detail + ' | body shown: ' + !!body + ' | opened as request: ' + !!url;
@@ -58,12 +59,12 @@ const steps = [
       const row = await __t.waitFor(() => [...document.querySelectorAll('main [role=row]')].find((r) => r.textContent.includes('/health')), 4000);
       if (!row) return 'NO ROW';
       row.click(); await __t.sleep(600);
-      const tab = (name) => [...document.querySelectorAll('main [role=tab]')].find((t) => t.offsetParent && t.textContent.trim().startsWith(name));
-      tab('Raw')?.click(); await __t.sleep(400);
-      const raw = [...document.querySelectorAll('main pre')].map((p) => p.textContent).join('\\n');
-      tab('Auth')?.click(); await __t.sleep(400);
+      const tab = (side, name) => [...document.querySelectorAll('main [data-details-pane=' + side + '] [role=tab]')].find((t) => t.textContent.trim().startsWith(name));
+      tab('request', 'Raw')?.click(); tab('response', 'Raw')?.click(); await __t.sleep(400);
+      const raw = [...document.querySelectorAll('main [data-details-pane] pre')].map((p) => p.textContent).join('\\n');
+      tab('request', 'Auth')?.click(); await __t.sleep(400);
       const auth = [...document.querySelectorAll('main *')].some((x) => x.children.length === 0 && /No credentials in this exchange/.test(x.textContent ?? ''));
-      tab('Hex')?.click(); await __t.sleep(400);
+      tab('response', 'Hex')?.click(); await __t.sleep(400);
       const hex = [...document.querySelectorAll('main pre')].some((p) => /^00000000  /.test(p.textContent));
       // keyboard: the grid takes the focus; Delete removes the selected row
       const grid = document.querySelector('main [aria-label="Captured exchanges"]');
@@ -137,7 +138,8 @@ const steps = [
       const edited = !!(await __t.waitFor(() => [...document.querySelectorAll('main [role=row]')].some((x) => x.textContent.includes('bp=edited')), 4000));
       const rules = await window.aps.invoke('debug.rules');
       for (const rule of rules.rules.filter((x) => x.kind === 'breakpoint')) await window.aps.invoke('debug.deleteRule', { id: rule.id });
-      return 'added: ' + st.rules.some((x) => x.kind === 'breakpoint') + ' | status: ' + r.status + ' | edited url listed: ' + edited + ' | dialog gone: ' + !document.querySelector('[role=dialog]');
+      const gone = !!(await __t.waitFor(() => (document.querySelector('[role=dialog]') ? null : true), 3000));
+      return 'added: ' + st.rules.some((x) => x.kind === 'breakpoint') + ' | status: ' + r.status + ' | edited url listed: ' + edited + ' | dialog gone: ' + gone;
     })()`,
   ],
   [
@@ -176,12 +178,11 @@ const steps = [
       document.querySelector('[role=dialog] button[aria-label=Close]')?.click(); await __t.sleep(400);
       await window.aps.invoke('debug.decrypt', { on: false });
       ${button('Decode')}?.click(); await __t.sleep(500);
-      const area = document.querySelector('[role=dialog] textarea[aria-label="Text to decode"]');
+      const area = document.querySelector('main [data-convert] textarea[aria-label="Text to convert"]');
       if (!area) return 'NO DECODE';
       const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set;
       setter.call(area, 'aGVsbG8gd29ybGQ='); area.dispatchEvent(new Event('input', { bubbles: true })); await __t.sleep(300);
-      const b64 = document.querySelector('[role=dialog] [data-decode="Base64 decoded"] pre')?.textContent;
-      document.querySelector('[role=dialog] button[aria-label=Close]')?.click(); await __t.sleep(300);
+      const b64 = document.querySelector('main [data-convert] [data-decode="Base64 Decode"] pre')?.textContent;
       return 'decrypt on: ' + st.decrypt + ' | label: ' + label + ' | fingerprint: ' + !!fp + ' | base64: ' + b64;
     })()`,
   ],
@@ -195,7 +196,7 @@ const steps = [
       await window.aps.invoke('debug.selfTest', { url: 'grpc://127.0.0.1:4014/vet.v1.PetService/GetPet?id=99' });
       const row = await __t.waitFor(() => [...document.querySelectorAll('main [role=row]')].find((r) => r.textContent.includes('/vet.v1.PetService/GetPet') && /gRPC/.test(r.textContent)), 6000);
       if (!row) return 'NO GRPC ROW';
-      const h2 = /h2/.test(row.textContent);
+      const h2 = /HTTP\\/2/.test(row.textContent);
       row.click(); await __t.sleep(700);
       const tab = (name) => [...document.querySelectorAll('main [role=tab]')].find((t) => t.offsetParent && t.textContent.trim().startsWith(name));
       tab('gRPC')?.click(); await __t.sleep(400);

@@ -1,8 +1,8 @@
-import { Copy, Download, RefreshCw, ShieldCheck, ShieldOff } from 'lucide-react';
+import { ChevronDown, Copy, Download, RefreshCw, ShieldCheck, ShieldOff } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { asError, call } from '../api';
 import { confirmAction, useApp } from '../store';
-import { Badge, Button, Empty, Field, Modal, Select } from './ui';
+import { Badge, Button, Empty, Menu, Modal, Select } from './ui';
 import { finishSave, type SaveResult } from '../lib/files';
 import { tryDecodeJwt } from '@testpion/shared';
 
@@ -149,46 +149,103 @@ const timeOf = (s: string) => {
   return `${d.toISOString()} (${d.toLocaleString()})`;
 };
 
-/** The Decode panel: one input, every reading of it that makes sense. */
-export function DecodeDialog({ initial = '', onClose }: { initial?: string; onClose(): void }) {
+const jsonOf = (s: string) => JSON.stringify(JSON.parse(s), null, 2);
+const jwtOf = (s: string) => {
+  const jwt = tryDecodeJwt(s.trim().replace(/^Bearer\s+/i, ''));
+  if (!jwt) throw new Error('not a JWT');
+  return JSON.stringify({ header: jwt.header, payload: jwt.payload, expires: jwt.expiresAt ?? 'never' }, null, 2);
+};
+const htmlDecode = (s: string) => {
+  const t = document.createElement('textarea');
+  t.innerHTML = s;
+  return t.value;
+};
+const htmlEncode = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
+/** The conversions of the Convert panel: decoders read a value, encoders write one. */
+export const DECODERS: Array<{ id: string; label: string; run(s: string): string }> = [
+  { id: 'url', label: 'URL Decode', run: (s) => decodeURIComponent(s.replace(/\+/g, ' ')) },
+  { id: 'base64', label: 'Base64 Decode', run: b64decode },
+  { id: 'hex', label: 'Hex Decode', run: fromHex },
+  { id: 'html', label: 'HTML Decode', run: htmlDecode },
+  { id: 'jwt', label: 'JWT Decode', run: jwtOf },
+  { id: 'timestamp', label: 'Timestamp', run: timeOf },
+  { id: 'json', label: 'JSON Format', run: jsonOf },
+];
+export const ENCODERS: Array<{ id: string; label: string; run(s: string): string }> = [
+  { id: 'url', label: 'URL Encode', run: encodeURIComponent },
+  { id: 'base64', label: 'Base64 Encode', run: b64encode },
+  { id: 'hex', label: 'Hex Encode', run: hexOf },
+  { id: 'html', label: 'HTML Encode', run: htmlEncode },
+  { id: 'json-min', label: 'JSON Minify', run: (s) => JSON.stringify(JSON.parse(s)) },
+];
+
+/**
+ * Convert (the Debugger's dock): text in, one Decode ▾ and one Encode ▾ (a click runs the shown conversion, the arrow
+ * picks another), the result below; then every other reading of the text that makes sense.
+ */
+export function ConvertTool({ initial = '' }: { initial?: string }) {
   const [text, setText] = useState(initial);
-  const rows = useMemo(() => {
+  const [decoder, setDecoder] = useState(DECODERS[0]!);
+  const [encoder, setEncoder] = useState(ENCODERS[0]!);
+  const [out, setOut] = useState<{ label: string; value?: string }>();
+  const run = (c: { label: string; run(s: string): string }) => setOut({ label: c.label, value: tryOr(() => c.run(text)) });
+  const readings = useMemo(() => {
     if (!text) return [];
-    const jwt = tryDecodeJwt(text.trim().replace(/^Bearer\s+/i, ''));
-    const out: Array<[string, string | undefined]> = [
-      ['URL decoded', tryOr(() => decodeURIComponent(text.replace(/\+/g, ' ')))],
-      ['URL encoded', tryOr(() => encodeURIComponent(text))],
-      ['Base64 decoded', tryOr(() => b64decode(text))],
-      ['Base64 encoded', tryOr(() => b64encode(text))],
-      ['Hex decoded', tryOr(() => fromHex(text))],
-      ['Hex', tryOr(() => hexOf(text))],
-      ['Timestamp', tryOr(() => timeOf(text))],
-      ['JWT', jwt ? JSON.stringify({ header: jwt.header, payload: jwt.payload, expires: jwt.expiresAt ?? 'never' }, null, 2) : undefined],
-      ['JSON (formatted)', tryOr(() => JSON.stringify(JSON.parse(text), null, 2))],
-    ];
-    return out.filter(([, v]) => v !== undefined && v !== text);
+    return DECODERS.map((d) => [d.label, tryOr(() => d.run(text))] as [string, string | undefined]).filter(([, v]) => v !== undefined && v !== text);
   }, [text]);
+  const split = (list: typeof DECODERS, current: (typeof DECODERS)[number], pick: (c: (typeof DECODERS)[number]) => void, label: string) => (
+    <span className="inline-flex">
+      <Button size="sm" className="rounded-r-none" onClick={() => run(current)} title={`${current.label} the text`}>
+        {current.label}
+      </Button>
+      <Menu
+        width={180}
+        align="start"
+        items={list.map((c) => ({ label: c.label, onSelect: () => (pick(c), run(c)) }))}
+        trigger={
+          <Button size="sm" className="rounded-l-none border-l-0 px-1.5" aria-label={label}>
+            <ChevronDown size={12} />
+          </Button>
+        }
+      />
+    </span>
+  );
   return (
-    <Modal title="Decode" onClose={onClose} width={760}>
-      <div className="grid gap-3">
-        <Field label="Text" hint="URL-encoded, Base64 (also base64url), hex, a Unix timestamp (s, ms, µs), a JWT, JSON">
-          <textarea className="field mono text-xs w-full" rows={4} value={text} onChange={(e) => setText(e.target.value)} autoFocus aria-label="Text to decode" />
-        </Field>
-        {rows.length === 0 ? (
-          <p className="text-sm text-muted">{text ? 'Nothing decodes this text.' : 'Paste a value from a request or a response.'}</p>
-        ) : (
-          rows.map(([label, value]) => (
-            <div key={label} data-decode={label}>
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold text-muted uppercase tracking-wide">{label}</span>
-                <Button size="sm" variant="ghost" icon={<Copy size={12} />} onClick={() => copy(value!, label.toLowerCase())} title="Copy" />
-              </div>
-              <pre className="text-xs mono whitespace-pre-wrap break-all rounded border border-line p-2 bg-panel max-h-48 overflow-auto">{value}</pre>
-            </div>
-          ))
-        )}
+    <div className="flex-1 min-h-0 flex flex-col p-2 gap-2" data-convert>
+      <div className="flex gap-2">
+        {split(DECODERS, decoder, setDecoder, 'Choose a decoder')}
+        {split(ENCODERS, encoder, setEncoder, 'Choose an encoder')}
       </div>
-    </Modal>
+      <textarea
+        className="field mono text-xs w-full flex-1 min-h-24"
+        value={text}
+        onChange={(e) => (setText(e.target.value), setOut(undefined))}
+        placeholder="Paste a value: URL-encoded, Base64, hex, HTML, a JWT, a timestamp, JSON"
+        aria-label="Text to convert"
+      />
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-semibold text-muted uppercase tracking-wide">{out?.label ?? 'Result'}</span>
+        {out?.value !== undefined && <Button size="sm" variant="ghost" icon={<Copy size={12} />} onClick={() => copy(out.value!, out.label.toLowerCase())} title="Copy" />}
+      </div>
+      <textarea className="field mono text-xs w-full flex-1 min-h-24" readOnly value={out ? (out.value ?? `This text does not ${out.label.toLowerCase()}.`) : ''} aria-label="Converted text" data-convert-result />
+      {readings.length > 0 && (
+        <details className="text-xs" open={!out}>
+          <summary className="cursor-pointer text-muted">Other readings ({readings.length})</summary>
+          <div className="grid gap-2 mt-1 max-h-64 overflow-auto">
+            {readings.map(([label, value]) => (
+              <div key={label} data-decode={label}>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-semibold text-muted uppercase tracking-wide">{label}</span>
+                  <Button size="sm" variant="ghost" icon={<Copy size={12} />} onClick={() => copy(value!, label.toLowerCase())} title="Copy" />
+                </div>
+                <pre className="mono whitespace-pre-wrap break-all rounded border border-line p-2 bg-panel max-h-40 overflow-auto">{value}</pre>
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
+    </div>
   );
 }
 

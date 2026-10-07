@@ -1,6 +1,7 @@
 /** RPC handlers: the HTTP Debugger (planning/http-debugger.md): a local proxy other programs send through, and what it saw. */
 import {
   ApsError,
+  shortId,
   ENGINE_VERSION,
   ensureRootCertificate,
   exchangesFromHar,
@@ -41,6 +42,29 @@ import { basename, join } from 'node:path';
 import { request as httpsRequest } from 'node:https';
 import { connect as h2connect } from 'node:http2';
 
+/** A request one of the workspace's mock servers received. */
+export interface IncomingRequest {
+  id: string;
+  time: string;
+  collectionId: string;
+  server?: string;
+  method: string;
+  path: string;
+  status: number;
+  example?: string;
+  forwarded?: boolean;
+}
+
+/** Keep a request a mock server received for the Debugger's Incoming tab (and tell the window). */
+export function recordIncoming(be: Backend, r: Omit<IncomingRequest, 'id' | 'time'>): void {
+  const state: DebuggerState = (be.debugger ??= { exchanges: [] });
+  const list = (state.incoming ??= []);
+  const item: IncomingRequest = { id: shortId('in-'), time: new Date().toISOString(), ...r };
+  list.push(item);
+  if (list.length > 2000) list.splice(0, list.length - 2000);
+  be.host.emit('debug.incoming', item);
+}
+
 export interface DebuggerState {
   proxy?: DebuggerProxy;
   /** Kept across stop / start, until cleared: the session. */
@@ -61,6 +85,8 @@ export interface DebuggerState {
   leafFor?(host: string): LeafCertificate;
   /** Listening on the local network (a phone, another computer), not only on this computer. */
   lan?: boolean;
+  /** Requests TestPion's mock servers received (the Incoming tab): at most the last 2000. */
+  incoming?: IncomingRequest[];
   /** Put everything back (the system proxy) and stop the timers; the backend calls it when it is disposed. */
   release?(): Promise<void>;
 }
@@ -466,9 +492,15 @@ export function debuggerHandlers(be: Backend): Handlers {
       deep,
       kind,
       bookmarked,
+      application,
+      type,
       limit = 1000,
     }: {
       host?: string;
+      /** The program, exactly as listed (All Applications). */
+      application?: string;
+      /** The content type without parameters (All Types): application/json. */
+      type?: string;
       method?: string;
       status?: 'ok' | 'redirect' | 'client-error' | 'server-error' | 'error';
       text?: string;
@@ -484,6 +516,8 @@ export function debuggerHandlers(be: Backend): Handlers {
         if (method && e.method !== method.toUpperCase()) return false;
         if (kind && e.kind !== kind) return false;
         if (bookmarked && !e.bookmarked) return false;
+        if (application && (e.application ?? '') !== application) return false;
+        if (type && (e.contentType ?? '').split(';')[0]!.trim().toLowerCase() !== type.toLowerCase()) return false;
         if (st) {
           const s = e.status ?? 0;
           const ok = st === 'ok' ? s >= 200 && s < 300 : st === 'redirect' ? s >= 300 && s < 400 : st === 'client-error' ? s >= 400 && s < 500 : st === 'server-error' ? s >= 500 : !!e.error;
@@ -498,16 +532,26 @@ export function debuggerHandlers(be: Backend): Handlers {
         }
         return true;
       });
+      // the grid's # (the place in the session) and Offset (seconds since the session's first request)
+      const seq = new Map(state.exchanges.map((e, i) => [e.id, i + 1]));
+      const first = state.exchanges.length ? Date.parse(state.exchanges[0]!.startedAt) : 0;
       return out.slice(-limit).map((e) => {
         // the grid needs a row, not its contents: frames, events and gRPC messages come with the one exchange
         const { requestBody: _rb, responseBody: _sb, frames, events, grpc, ...rest } = redacted(be, e);
         return {
           ...rest,
+          seq: seq.get(e.id),
+          offsetSec: (Date.parse(e.startedAt) - first) / 1000,
           ...(frames ? { frameCount: frames.length } : {}),
           ...(events ? { eventCount: events.length } : {}),
           ...(grpc ? { grpc: { ...grpc, requests: [], responses: [] } } : {}),
         };
       });
+    },
+    /** Requests the workspace's mock servers received (the Incoming tab), newest last. */
+    'debug.incoming': () => state.incoming ?? [],
+    'debug.clearIncoming': () => {
+      state.incoming = [];
     },
     /** One exchange whole (bodies included, redacted), with the Auth inspector's reading of its credentials (never the secret itself). */
     'debug.exchange': ({ id }: { id: string }) => {
