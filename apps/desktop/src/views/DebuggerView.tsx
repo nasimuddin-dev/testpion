@@ -621,6 +621,7 @@ export function DebuggerView() {
                             onQuickRule: quickRule,
                             onNewRule: setRuleDraft,
                             onConnections: () => setTab('connections'),
+                            onRulesPanel: (k) => openDock(k === 'ignore' || k === 'only' ? 'filter' : k === 'highlight' ? 'highlight' : k === 'reply' ? 'auto-reply' : 'modify'),
                           }}
                         />
                       )}

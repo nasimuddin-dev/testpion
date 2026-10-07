@@ -96,14 +96,33 @@ describe('capture only and filter out', () => {
 
 describe('sessions keep the new columns', () => {
   it('a HAR round trip keeps the process id, the server address, HTTP/2, the three times and the highlight style', () => {
-    const e = ex({ pid: 4116, serverAddress: '127.0.0.1:4010', httpVersion: '2', sendMs: 2, waitMs: 9, durationMs: 12, status: 404, highlightStyle: { dark: '#00ff00', bold: true } });
+    const e = ex({
+      pid: 4116,
+      user: 'CLINIC\\nasim',
+      serverAddress: '127.0.0.1:4010',
+      httpVersion: '2',
+      sendMs: 2,
+      waitMs: 9,
+      durationMs: 12,
+      status: 404,
+      highlightStyle: { dark: '#00ff00', bold: true },
+    });
     const har = exchangesToHar([e], new Redactor(), '1');
     const entry = har.log.entries[0]!;
     expect(entry.serverIPAddress).toBe('127.0.0.1');
     expect(entry.timings).toEqual({ send: 2, wait: 7, receive: 3 });
     expect(entry.request.httpVersion).toBe('HTTP/2');
     const [back] = exchangesFromHar(JSON.parse(JSON.stringify(har)));
-    expect(back).toMatchObject({ pid: 4116, serverAddress: '127.0.0.1:4010', httpVersion: '2', sendMs: 2, waitMs: 9, durationMs: 12, highlightStyle: { dark: '#00ff00', bold: true } });
+    expect(back).toMatchObject({
+      pid: 4116,
+      user: 'CLINIC\\nasim',
+      serverAddress: '127.0.0.1:4010',
+      httpVersion: '2',
+      sendMs: 2,
+      waitMs: 9,
+      durationMs: 12,
+      highlightStyle: { dark: '#00ff00', bold: true },
+    });
   });
 
   it("another tool's HAR: send and wait together are the time to the first byte", () => {

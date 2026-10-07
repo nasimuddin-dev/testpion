@@ -11,7 +11,7 @@ import { CompareView, type Compared } from './ResponseHistory';
  */
 
 export type RuleKind = 'ignore' | 'only' | 'highlight' | 'modify' | 'reply' | 'redirect' | 'breakpoint';
-export type RuleColumn = 'status' | 'url' | 'method' | 'host' | 'application' | 'type' | 'version' | 'ip' | 'duration' | 'size';
+export type RuleColumn = 'status' | 'url' | 'method' | 'host' | 'application' | 'user' | 'type' | 'version' | 'ip' | 'duration' | 'size';
 export type RuleOperator = 'equals' | 'not-equals' | 'contains' | 'starts-with' | 'ends-with' | 'between' | 'greater-than' | 'less-than' | 'matches';
 export interface RuleCondition {
   column: RuleColumn;

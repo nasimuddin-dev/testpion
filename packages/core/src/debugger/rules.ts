@@ -12,7 +12,7 @@ import type { DebuggerExchange } from './proxy.js';
 export type DebuggerRuleKind = 'ignore' | 'only' | 'highlight' | 'modify' | 'reply' | 'redirect' | 'breakpoint';
 
 /** A grid column a condition looks at. */
-export type RuleColumn = 'status' | 'url' | 'method' | 'host' | 'application' | 'type' | 'version' | 'ip' | 'duration' | 'size';
+export type RuleColumn = 'status' | 'url' | 'method' | 'host' | 'application' | 'user' | 'type' | 'version' | 'ip' | 'duration' | 'size';
 /** How a condition compares. */
 export type RuleOperator = 'equals' | 'not-equals' | 'contains' | 'starts-with' | 'ends-with' | 'between' | 'greater-than' | 'less-than' | 'matches';
 
@@ -157,6 +157,8 @@ export function columnValue(e: DebuggerExchange, column: RuleColumn): string | n
       return e.host;
     case 'application':
       return e.application;
+    case 'user':
+      return e.user;
     case 'type':
       return e.contentType;
     case 'version':
@@ -289,7 +291,7 @@ export function describeRule(r: DebuggerRule): string {
   }
 }
 
-const COLUMN_LABEL: Record<RuleColumn, string> = { status: 'Status', url: 'URL', method: 'Method', host: 'Domain', application: 'Application', type: 'Type', version: 'Version', ip: 'IP address', duration: 'Duration (ms)', size: 'Size (bytes)' };
+const COLUMN_LABEL: Record<RuleColumn, string> = { status: 'Status', url: 'URL', method: 'Method', host: 'Domain', application: 'Application', user: 'User', type: 'Type', version: 'Version', ip: 'IP address', duration: 'Duration (ms)', size: 'Size (bytes)' };
 const OP_LABEL: Record<RuleOperator, string> = {
   equals: 'is',
   'not-equals': 'is not',

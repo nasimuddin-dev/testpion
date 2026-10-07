@@ -43,8 +43,9 @@ export interface DebuggerExchange {
   /** The port the client connected from, and the program behind it when it could be found. */
   clientPort: number;
   application?: string;
-  /** The program's process id, when it could be found with the program. */
+  /** The program's process id and the account it runs as, when they could be found with the program. */
   pid?: number;
+  user?: string;
   /** The server's address the request went to (ip:port), once connected. */
   serverAddress?: string;
   requestHeaders: Record<string, string>;
@@ -198,22 +199,27 @@ const collectWhole = (stream: NodeJS.ReadableStream) =>
 export interface ProgramInfo {
   name: string;
   pid?: number;
+  /** The account the program runs as (DOMAIN\\user on Windows). */
+  user?: string;
 }
 
 export function applicationOfPort(port: number): Promise<ProgramInfo | undefined> {
   return new Promise((resolve) => {
-    const done = (pid: string | undefined, name: string | undefined) => (name?.trim() ? resolve({ name: name.trim(), pid: Number(pid) || undefined }) : resolve(undefined));
+    const done = (pid: string | undefined, name: string | undefined, user?: string) =>
+      name?.trim() ? resolve({ name: name.trim(), pid: Number(pid) || undefined, ...(user?.trim() ? { user: user.trim() } : {}) }) : resolve(undefined);
     const opts = { timeout: 3000, windowsHide: true };
     if (process.platform === 'win32') {
-      const ps = `$c = Get-NetTCPConnection -LocalPort ${port} -ErrorAction SilentlyContinue | Select-Object -First 1; if ($c) { "$($c.OwningProcess) $((Get-Process -Id $c.OwningProcess -ErrorAction SilentlyContinue).ProcessName)" }`;
+      // pid, owner and name, tab-separated (the owner from CIM: Get-Process -IncludeUserName needs an elevated shell)
+      const ps = `$c = Get-NetTCPConnection -LocalPort ${port} -ErrorAction SilentlyContinue | Select-Object -First 1; if ($c) { $o = Get-CimInstance Win32_Process -Filter "ProcessId=$($c.OwningProcess)" -ErrorAction SilentlyContinue | Invoke-CimMethod -MethodName GetOwner -ErrorAction SilentlyContinue; $u = if ($o.User) { if ($o.Domain) { "$($o.Domain)\\$($o.User)" } else { $o.User } } else { '' }; "$($c.OwningProcess)\`t$u\`t$((Get-Process -Id $c.OwningProcess -ErrorAction SilentlyContinue).ProcessName)" }`;
       execFile('powershell', ['-NoProfile', '-NonInteractive', '-Command', ps], opts, (err, out) => {
-        const m = /^(\d+) (.*)$/m.exec(err ? '' : String(out).trim());
-        done(m?.[1], m?.[2]);
+        const m = /^(\d+)\t([^\t]*)\t(.*)$/m.exec(err ? '' : String(out).trim());
+        done(m?.[1], m?.[3], m?.[2]);
       });
     } else {
-      execFile('lsof', ['-nP', `-iTCP:${port}`, '-sTCP:ESTABLISHED', '-Fpc'], opts, (err, out) => {
+      // p: process id, c: command, L: login name
+      execFile('lsof', ['-nP', `-iTCP:${port}`, '-sTCP:ESTABLISHED', '-FpcL'], opts, (err, out) => {
         if (err) return done(undefined, undefined);
-        done(/^p(\d+)$/m.exec(String(out))?.[1], /^c(.+)$/m.exec(String(out))?.[1]);
+        done(/^p(\d+)$/m.exec(String(out))?.[1], /^c(.+)$/m.exec(String(out))?.[1], /^L(.+)$/m.exec(String(out))?.[1]);
       });
     }
   });
@@ -257,6 +263,7 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
     else {
       e.application = a.name;
       if (a.pid) e.pid = a.pid;
+      if (a.user) e.user = a.user;
     }
     // the lookup often ends after the exchange was listed: say it changed
     if (recorded.has(e)) opts.onExchange?.(e, 'update');

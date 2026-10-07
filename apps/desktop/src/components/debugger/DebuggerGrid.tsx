@@ -47,7 +47,7 @@ const headerLines = (h?: Record<string, string>) =>
     .map(([k, v]) => `${k}: ${v}`)
     .join('\n');
 
-type ColumnId = 'seq' | 'offset' | 'duration' | 'method' | 'version' | 'url' | 'status' | 'type' | 'size' | 'speed' | 'application' | 'domain' | 'ip' | 'pid';
+type ColumnId = 'seq' | 'offset' | 'duration' | 'method' | 'version' | 'url' | 'status' | 'type' | 'size' | 'speed' | 'application' | 'domain' | 'ip' | 'user' | 'pid';
 interface Column {
   id: ColumnId;
   label: string;
@@ -71,6 +71,7 @@ const COLUMNS: Column[] = [
   { id: 'application', label: 'Application', width: 110, sort: (e) => e.application ?? '' },
   { id: 'domain', label: 'Domain', width: 150, sort: (e) => e.host },
   { id: 'ip', label: 'IP Address', width: 140, sort: (e) => e.serverAddress ?? '' },
+  { id: 'user', label: 'User', width: 120, sort: (e) => e.user ?? '' },
   { id: 'pid', label: 'PID', width: 60, align: 'right', sort: (e) => e.pid ?? 0 },
 ];
 const DEFAULT_HIDDEN: ColumnId[] = ['pid'];
@@ -119,6 +120,8 @@ export interface GridActions {
   /** Open the rule editor, filled in. */
   onNewRule(rule: Partial<Rule>): void;
   onConnections(): void;
+  /** The dock's panel for rules of this kind. */
+  onRulesPanel(kind: RuleKind): void;
 }
 
 /**
@@ -245,6 +248,9 @@ export function DebuggerGrid({
         return e.host;
       case 'ip':
         return e.serverAddress ?? '';
+      case 'user':
+        // the account, without the domain (DOMAIN\user): the full name on hover
+        return <span title={e.user}>{e.user?.split('\\').pop() ?? ''}</span>;
       case 'pid':
         return e.pid ?? '';
     }
@@ -258,6 +264,7 @@ export function DebuggerGrid({
         .filter((q) => !(q.match.where?.column === 'ip' && (kind === 'only' || kind === 'ignore')))
         .map<MenuItem>((q) => ({ label: q.label, onSelect: () => actions.onQuickRule(kind, `${verb} ${q.label}`, q.match, extra) })),
       { label: `New ${verb.toLowerCase()} rule…`, separator: true, onSelect: () => actions.onNewRule({ kind, enabled: true, match: { host: e.host }, ...extra }) },
+      { label: 'See all rules', onSelect: () => actions.onRulesPanel(kind) },
     ];
     return [
       {

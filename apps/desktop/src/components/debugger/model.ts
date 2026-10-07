@@ -21,6 +21,8 @@ export interface Exchange {
   application?: string;
   /** The program's process id, and the server's address (ip:port). */
   pid?: number;
+  /** The account the program runs as. */
+  user?: string;
   serverAddress?: string;
   requestHeaders: Record<string, string>;
   requestBody?: string;

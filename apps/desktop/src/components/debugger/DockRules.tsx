@@ -192,6 +192,7 @@ const COLUMNS: Array<[RuleColumn, string]> = [
   ['method', 'Method'],
   ['host', 'Domain'],
   ['application', 'Application'],
+  ['user', 'User'],
   ['type', 'Type'],
   ['version', 'Version'],
   ['ip', 'IP Address'],

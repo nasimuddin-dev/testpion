@@ -56,6 +56,7 @@ export interface HarEntry {
     rules?: string[];
     /** The program's process id, the server's ip:port, a highlight rule's style. */
     pid?: number;
+    user?: string;
     serverAddress?: string;
     highlightStyle?: DebuggerExchange['highlightStyle'];
   };
@@ -115,6 +116,7 @@ export function exchangesToHar(exchanges: DebuggerExchange[], redactor: Redactor
           highlight: e.highlight,
           rules: e.rules,
           pid: e.pid,
+          user: e.user,
           serverAddress: e.serverAddress,
           highlightStyle: e.highlightStyle,
         },
@@ -168,6 +170,7 @@ export function exchangesFromHar(har: unknown): DebuggerExchange[] {
         ...(x.request.httpVersion === 'HTTP/2' || x.request.httpVersion === 'h2' ? { httpVersion: '2' as const } : {}),
         ...(t?.serverAddress || x.serverIPAddress ? { serverAddress: t?.serverAddress ?? x.serverIPAddress } : {}),
         ...(t?.pid ? { pid: t.pid } : {}),
+        ...(t?.user ? { user: t.user } : {}),
         ...(t?.highlightStyle ? { highlightStyle: t.highlightStyle } : {}),
         error: t?.error,
         bookmarked: t?.bookmarked,

@@ -167,6 +167,7 @@ export function SummaryPanel({ e }: { e?: Exchange }) {
             rows: [
               ['PID', e.pid],
               ['Application', e.application ?? `unknown (client port ${e.clientPort})`],
+              ['User', e.user],
               ['IP Address', e.serverAddress],
               ['Total Size (kb)', kb(e.requestBodyBytes + e.responseBodyBytes + reqHead + resHead)],
             ],
