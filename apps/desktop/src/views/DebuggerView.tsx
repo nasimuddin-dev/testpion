@@ -32,7 +32,7 @@ import {
   LanDialog,
   pickBinaryFile,
 } from '../components/DebuggerTools';
-import { toRequest, type Exchange, type Stats } from '../components/debugger/model';
+import { incomingAsExchange, toRequest, type Exchange, type Stats } from '../components/debugger/model';
 import { ExchangePanes } from '../components/debugger/ExchangePanes';
 import { useExchangeList, type ListFilter } from '../components/debugger/useExchangeList';
 import { BreakpointDialog, CompareExchangesDialog, loadRules, RuleDialog, RulesPanel, type HeldBreakpoint, type Rule, type RulesState } from '../components/DebuggerRules';
@@ -86,6 +86,7 @@ export function DebuggerView() {
     }
   });
   const [side, setSide] = useState<'outgoing' | 'incoming'>('outgoing');
+  const [incomingSel, setIncomingSel] = useState<string>();
   const [ruleDraft, setRuleDraft] = useState<Partial<Rule>>();
   const [httpsBanner, setHttpsBanner] = useState(true);
   const incoming = useIncoming();
@@ -582,7 +583,7 @@ export function DebuggerView() {
                   <Split id="debugger" direction="vertical" initial={58}>
                     <div className="h-full flex flex-col min-h-0">
                       {side === 'incoming' ? (
-                        <IncomingList list={incoming.list} onClear={incoming.clear} />
+                        <IncomingList list={incoming.list} onClear={incoming.clear} selected={incomingSel} onSelect={setIncomingSel} />
                       ) : !rows.length ? (
                         <Empty icon={<Bug size={26} />} title={status?.running ? 'Waiting for traffic' : 'Not capturing'}>
                           {status?.running ? (
@@ -626,7 +627,14 @@ export function DebuggerView() {
                       <TrafficSide side={side} onSide={setSide} incoming={incoming.list.length} />
                     </div>
                     <div className="h-full flex flex-col min-h-0">
-                      {!sel ? (
+                      {side === 'incoming' ? (
+                        (() => {
+                          const r = incoming.list.find((x) => x.id === incomingSel);
+                          if (!r) return <Empty title="Select a request">What your program sent to the mock server and what it answered, side by side.</Empty>;
+                          const e = incomingAsExchange(r);
+                          return <ExchangePanes e={e} onOpen={() => openInTab(e)} onAsk={() => ask(e)} />;
+                        })()
+                      ) : !sel ? (
                         <Empty title="Select an exchange">Its request and response show side by side: headers, content, raw text and JSON. Double-click a row to open it as a request.</Empty>
                       ) : (
                         <ExchangePanes

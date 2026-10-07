@@ -53,6 +53,14 @@ export interface IncomingRequest {
   status: number;
   example?: string;
   forwarded?: boolean;
+  /** The mock server's address (http://127.0.0.1:port). */
+  base?: string;
+  query?: string;
+  headers?: Record<string, string>;
+  body?: string;
+  responseHeaders?: Record<string, string>;
+  responseBody?: string;
+  ms?: number;
 }
 
 interface ListSync {
@@ -115,7 +123,20 @@ function leanRow(be: Backend, state: DebuggerState, e: DebuggerExchange) {
 export function recordIncoming(be: Backend, r: Omit<IncomingRequest, 'id' | 'time'>): void {
   const state: DebuggerState = (be.debugger ??= { exchanges: [] });
   const list = (state.incoming ??= []);
-  const item: IncomingRequest = { id: shortId('in-'), time: new Date().toISOString(), ...r };
+  // secrets masked, bodies capped: the list is kept in memory and shown in the window
+  const red = be.logger.redactor;
+  const headers = (h?: Record<string, string>) => (h ? Object.fromEntries(Object.entries(h).map(([k, v]) => [k, red.isSensitiveKey(k) ? '***' : v])) : undefined);
+  const text = (t?: string) => (t === undefined ? undefined : red.redactString(t.slice(0, 64 * 1024)));
+  const item: IncomingRequest = {
+    id: shortId('in-'),
+    time: new Date().toISOString(),
+    ...r,
+    query: r.query ? red.redactUrl(`http://x/${r.query}`).slice('http://x/'.length) : undefined,
+    headers: headers(r.headers),
+    responseHeaders: headers(r.responseHeaders),
+    body: text(r.body),
+    responseBody: text(r.responseBody),
+  };
   list.push(item);
   if (list.length > 2000) list.splice(0, list.length - 2000);
   be.host.emit('debug.incoming', item);

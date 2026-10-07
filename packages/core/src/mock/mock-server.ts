@@ -148,7 +148,21 @@ export interface MockServerOptions {
   host?: string;
   /** Extra delay before every response, in ms. */
   delayMs?: number;
-  onRequest?: (e: { method: string; path: string; status: number; example?: string; request?: string; forwarded?: boolean }) => void;
+  onRequest?: (e: {
+    method: string;
+    path: string;
+    status: number;
+    example?: string;
+    request?: string;
+    forwarded?: boolean;
+    /** What came in and went out (the Debugger's Incoming tab): the query string, the headers, the bodies, the time. */
+    query?: string;
+    headers?: Record<string, string>;
+    body?: string;
+    responseHeaders?: Record<string, string>;
+    responseBody?: string;
+    ms?: number;
+  }) => void;
   /** Forward requests that match no example to this API (partial mocking); without it they get a 404. */
   fallbackUrl?: string;
 }
@@ -265,18 +279,21 @@ export async function startMockServer(collection: Collection, opts: MockServerOp
       res.writeHead(204, cors);
       return res.end();
     }
+    const t0 = Date.now();
     const query = Object.fromEntries(u.searchParams);
     const body = await readBody(req);
+    const flatHeaders = Object.fromEntries(Object.entries(req.headers).map(([k, v]) => [k, Array.isArray(v) ? v.join(', ') : String(v ?? '')]));
+    const seen = { method: req.method ?? 'GET', path: u.pathname, query: u.search, headers: flatHeaders, ...(body ? { body } : {}) };
     const r = matchMockRoute(routes, { method: req.method ?? 'GET', path: u.pathname, query, headers: req.headers, body });
     if (opts.delayMs) await new Promise((ok) => setTimeout(ok, opts.delayMs));
     if (!r && opts.fallbackUrl) {
       try {
         const status = await forward(opts.fallbackUrl, req, body, res, cors);
-        opts.onRequest?.({ method: req.method ?? 'GET', path: u.pathname, status, forwarded: true });
+        opts.onRequest?.({ ...seen, status, forwarded: true, ms: Date.now() - t0 });
       } catch (e) {
         if (!res.headersSent) res.writeHead(502, { ...cors, 'content-type': 'application/json' });
         res.end(JSON.stringify({ error: 'fallback_failed', message: (e as Error).message, fallback: opts.fallbackUrl }));
-        opts.onRequest?.({ method: req.method ?? 'GET', path: u.pathname, status: 502, forwarded: true });
+        opts.onRequest?.({ ...seen, status: 502, forwarded: true, ms: Date.now() - t0 });
       }
       return;
     }
@@ -292,14 +309,15 @@ export async function startMockServer(collection: Collection, opts: MockServerOp
       );
       res.writeHead(404, { ...cors, 'content-type': 'application/json', 'x-mock-match': 'none' });
       res.end(body);
-      opts.onRequest?.({ method: req.method ?? 'GET', path: u.pathname, status: 404 });
+      opts.onRequest?.({ ...seen, status: 404, responseHeaders: { 'content-type': 'application/json' }, responseBody: body, ms: Date.now() - t0 });
       return;
     }
     const headers: Record<string, string> = { ...cors, 'x-mock-example': encodeURIComponent(r.example.name) };
     for (const { key, value } of r.example.headers) if (key && !HOP_HEADERS.test(key)) headers[key.toLowerCase()] = fillDynamic(value);
     res.writeHead(r.example.status, r.example.statusText || undefined, headers);
-    res.end(req.method === 'HEAD' ? undefined : fillDynamic(r.example.body));
-    opts.onRequest?.({ method: req.method ?? 'GET', path: u.pathname, status: r.example.status, example: r.example.name, request: r.requestName });
+    const sent = req.method === 'HEAD' ? undefined : fillDynamic(r.example.body);
+    res.end(sent);
+    opts.onRequest?.({ ...seen, status: r.example.status, example: r.example.name, request: r.requestName, responseHeaders: headers, ...(sent ? { responseBody: sent } : {}), ms: Date.now() - t0 });
   };
 
   const server: Server = createServer((req, res) => {

@@ -161,6 +161,44 @@ export interface IncomingRequest {
   status: number;
   example?: string;
   forwarded?: boolean;
+  base?: string;
+  query?: string;
+  headers?: Record<string, string>;
+  body?: string;
+  responseHeaders?: Record<string, string>;
+  responseBody?: string;
+  ms?: number;
+}
+
+/** A request a mock server received, shown in the same panes as a captured exchange. */
+export function incomingAsExchange(r: IncomingRequest): Exchange {
+  const url = `${r.base ?? 'http://mock'}${r.path}${r.query ?? ''}`;
+  let host = 'mock';
+  try {
+    host = new URL(url).host;
+  } catch {
+    /* keep "mock" */
+  }
+  return {
+    id: r.id,
+    startedAt: r.time,
+    kind: 'http',
+    method: r.method,
+    url,
+    host,
+    clientPort: 0,
+    application: r.server ? `mock: ${r.server}` : 'mock server',
+    requestHeaders: r.headers ?? {},
+    requestBody: r.body,
+    requestBodyBytes: r.body?.length ?? 0,
+    status: r.status,
+    statusText: r.forwarded ? 'forwarded' : r.example ? `example "${r.example}"` : 'no matching example',
+    responseHeaders: r.responseHeaders,
+    responseBody: r.responseBody,
+    responseBodyBytes: r.responseBody?.length ?? 0,
+    contentType: r.responseHeaders?.['content-type'],
+    durationMs: r.ms,
+  };
 }
 
 /** The size of both header blocks, from a lean row's counts or the headers themselves. */

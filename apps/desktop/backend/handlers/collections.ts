@@ -25,7 +25,7 @@ export function collectionsHandlers(be: Backend): Handlers {
       be.mocks.delete(collectionId);
       const c = be.ws.getCollection(collectionId);
       if (fallbackUrl && !/^https?:\/\/.+/i.test(fallbackUrl.trim())) throw new ApsError('ValidationError', 'The fallback must be an http(s) URL');
-      const m = await startMockServer(c, { port: port ?? 0, delayMs, fallbackUrl: fallbackUrl?.trim() || undefined, onRequest: (e) => (be.host.emit('mock.request', { collectionId, ...e, time: new Date().toISOString() }), recordIncoming(be, { collectionId, server: c.name, method: e.method, path: e.path, status: e.status, example: e.example, forwarded: e.forwarded })) });
+      const m = await startMockServer(c, { port: port ?? 0, delayMs, fallbackUrl: fallbackUrl?.trim() || undefined, onRequest: (e) => (be.host.emit('mock.request', { collectionId, ...e, time: new Date().toISOString() }), recordIncoming(be, { collectionId, server: c.name, base: be.mocks.get(collectionId)?.url, method: e.method, path: e.path, status: e.status, example: e.example, forwarded: e.forwarded, query: e.query, headers: e.headers, body: e.body, responseHeaders: e.responseHeaders, responseBody: e.responseBody, ms: e.ms })) });
       be.mocks.set(collectionId, m);
       be.logger.info(`Mock server for ${c.name} listening on ${m.url}`, { routes: m.routes.length });
       return be.mockInfo(collectionId);

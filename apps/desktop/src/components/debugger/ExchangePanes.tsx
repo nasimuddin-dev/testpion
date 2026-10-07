@@ -19,14 +19,15 @@ const parseJson = (text?: string) => {
   }
 };
 
+/** What can be done with the exchange shown: a captured one has every action; a request a mock server received only the first three. */
 export interface ExchangeActions {
   onOpen(): void;
-  onResend(): void;
   onAsk(): void;
-  onBookmark(): void;
-  onDelete(): void;
-  onCompare(): void;
-  onRule(preset: string): void;
+  onResend?(): void;
+  onBookmark?(): void;
+  onDelete?(): void;
+  onCompare?(): void;
+  onRule?(preset: string): void;
 }
 
 /**
@@ -58,48 +59,58 @@ export function ExchangePanes({ e, ...a }: { e: Exchange } & ExchangeActions) {
           <Button size="sm" variant="ghost" icon={<ExternalLink size={12} />} onClick={a.onOpen} title="Edit & Submit: open it as a request in a tab, to change and send">
             Open
           </Button>
-          <Button size="sm" variant="ghost" icon={<Play size={12} />} onClick={a.onResend} title="Send it again as it was">
-            Resend
-          </Button>
+          {a.onResend && (
+            <Button size="sm" variant="ghost" icon={<Play size={12} />} onClick={a.onResend} title="Send it again as it was">
+              Resend
+            </Button>
+          )}
           <Button size="sm" variant="ghost" icon={<Copy size={12} />} onClick={() => copy(curlOf(e), 'as cURL')}>
             cURL
           </Button>
           <Button size="sm" variant="ghost" icon={<Bot size={12} />} onClick={a.onAsk} title="Ask the AI assistant what this exchange does, why it failed, what to check (sent redacted)">
             Ask AI
           </Button>
-          <Button size="sm" variant="ghost" icon={<Scale size={12} />} onClick={a.onCompare} title="Compare with another exchange: click it next">
-            Compare
-          </Button>
-          <Menu
-            width={280}
-            items={[
-              { label: `Reply with this response from now on`, icon: <Play size={14} />, onSelect: () => a.onRule('reply-with-this') },
-              { label: `Filter out ${e.host}`, onSelect: () => a.onRule('ignore') },
-              { label: `Capture only ${e.host}`, onSelect: () => a.onRule('only') },
-              { label: `Highlight ${e.host}`, onSelect: () => a.onRule('highlight') },
-              { label: `Offline: reply 503 for ${e.host}`, onSelect: () => a.onRule('offline') },
-              { label: `Slow down ${e.host} by 2 s`, onSelect: () => a.onRule('slow') },
-              { label: `Allow CORS for ${e.host}`, onSelect: () => a.onRule('cors') },
-              { label: `Pause every request to ${e.host}`, icon: <Pause size={14} />, onSelect: () => a.onRule('break-request') },
-            ]}
-            trigger={
-              <Button size="sm" variant="ghost" title="Add a rule for this exchange's host">
-                Rule <ChevronDown size={12} />
-              </Button>
-            }
-          />
-          <Button
-            size="sm"
-            variant="ghost"
-            icon={<Star size={12} className={e.bookmarked ? 'fill-current text-warn' : ''} />}
-            onClick={a.onBookmark}
-            title={e.bookmarked ? 'Remove the bookmark' : 'Bookmark'}
-          >
-            {e.bookmarked ? 'Bookmarked' : 'Bookmark'}
-          </Button>
-          <Button size="sm" variant="ghost" icon={<X size={12} />} onClick={a.onDelete} title="Remove from the session">
-            Delete
-          </Button>
+          {a.onCompare && (
+            <Button size="sm" variant="ghost" icon={<Scale size={12} />} onClick={a.onCompare} title="Compare with another exchange: click it next">
+              Compare
+            </Button>
+          )}
+          {a.onRule && (
+            <Menu
+              width={280}
+              items={[
+                { label: `Reply with this response from now on`, icon: <Play size={14} />, onSelect: () => a.onRule!('reply-with-this') },
+                { label: `Filter out ${e.host}`, onSelect: () => a.onRule!('ignore') },
+                { label: `Capture only ${e.host}`, onSelect: () => a.onRule!('only') },
+                { label: `Highlight ${e.host}`, onSelect: () => a.onRule!('highlight') },
+                { label: `Offline: reply 503 for ${e.host}`, onSelect: () => a.onRule!('offline') },
+                { label: `Slow down ${e.host} by 2 s`, onSelect: () => a.onRule!('slow') },
+                { label: `Allow CORS for ${e.host}`, onSelect: () => a.onRule!('cors') },
+                { label: `Pause every request to ${e.host}`, icon: <Pause size={14} />, onSelect: () => a.onRule!('break-request') },
+              ]}
+              trigger={
+                <Button size="sm" variant="ghost" title="Add a rule for this exchange's host">
+                  Rule <ChevronDown size={12} />
+                </Button>
+              }
+            />
+          )}
+          {a.onBookmark && (
+            <Button
+              size="sm"
+              variant="ghost"
+              icon={<Star size={12} className={e.bookmarked ? 'fill-current text-warn' : ''} />}
+              onClick={a.onBookmark}
+              title={e.bookmarked ? 'Remove the bookmark' : 'Bookmark'}
+            >
+              {e.bookmarked ? 'Bookmarked' : 'Bookmark'}
+            </Button>
+          )}
+          {a.onDelete && (
+            <Button size="sm" variant="ghost" icon={<X size={12} />} onClick={a.onDelete} title="Remove from the session">
+              Delete
+            </Button>
+          )}
         </span>
       </div>
       {e.error && <div className="px-3 py-2 text-sm text-bad border-b border-line">{e.error}</div>}

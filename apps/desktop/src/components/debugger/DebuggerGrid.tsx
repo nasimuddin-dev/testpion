@@ -470,7 +470,7 @@ export function useIncoming() {
   return { list, clear: () => void call('debug.clearIncoming').then(() => setList([])) };
 }
 
-export function IncomingList({ list, onClear }: { list: IncomingRequest[]; onClear(): void }) {
+export function IncomingList({ list, onClear, selected, onSelect }: { list: IncomingRequest[]; onClear(): void; selected?: string; onSelect(id: string): void }) {
   if (!list.length)
     return (
       <Empty title="No incoming requests">
@@ -496,7 +496,13 @@ export function IncomingList({ list, onClear }: { list: IncomingRequest[]; onCle
         items={list}
         rowHeight={24}
         render={(r, i) => (
-          <div role="row" className="flex items-center h-[24px] text-xs border-b border-line/40 tabular-nums hover:bg-hover">
+          <div
+            role="row"
+            aria-selected={r.id === selected}
+            data-incoming-row={r.id}
+            className={cx('flex items-center h-[24px] text-xs border-b border-line/40 tabular-nums cursor-default', r.id === selected ? 'bg-accent-soft' : 'hover:bg-hover')}
+            onClick={() => onSelect(r.id)}
+          >
             <span className="w-12 px-2 text-right text-muted">{i + 1}</span>
             <span className="w-24 px-2 text-muted">{new Date(r.time).toLocaleTimeString(undefined, { hour12: false })}</span>
             <span className={cx('w-16 px-2 font-bold', `method-${r.method}`)}>{r.method}</span>

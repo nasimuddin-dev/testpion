@@ -114,6 +114,36 @@ describe('the Debugger list by changes', () => {
     await be.invoke('debug.deleteRule', { id: ok.rule.id });
   });
 
+  it('a request a mock server received is kept for the Incoming tab: headers (secrets masked), bodies, the example', async () => {
+    await be.invoke('col.save', {
+      schemaVersion: '1.0',
+      id: 'mocked',
+      name: 'Mocked',
+      version: 0,
+      variables: [],
+      updatedAt: '',
+      items: [
+        {
+          kind: 'http',
+          id: 'm1',
+          name: 'Pet',
+          request: { method: 'POST', url: 'http://api.test/pets' },
+          examples: [{ id: 'ex1', name: 'Created', status: 201, headers: [{ key: 'content-type', value: 'application/json', enabled: true }], body: '{"id":7}' }],
+        },
+      ],
+    });
+    const info = (await be.invoke('mock.start', { collectionId: 'mocked' })) as { url: string };
+    const res = await fetch(`${info.url}/pets?x=1`, { method: 'POST', headers: { authorization: 'Bearer top-secret', 'content-type': 'application/json' }, body: '{"name":"Rex"}' });
+    expect(res.status).toBe(201);
+    await new Promise((r) => setTimeout(r, 50));
+    const list = (await be.invoke('debug.incoming', {})) as Array<Record<string, any>>;
+    const r = list.at(-1)!;
+    expect(r).toMatchObject({ method: 'POST', path: '/pets', query: '?x=1', status: 201, example: 'Created', body: '{"name":"Rex"}', responseBody: '{"id":7}', base: info.url, server: 'Mocked' });
+    expect(r.headers.authorization).toBe('***');
+    expect(JSON.stringify(list)).not.toMatch(/top-secret/);
+    await be.invoke('mock.stop', { collectionId: 'mocked' });
+  });
+
   it('a search in bodies returns ids; the list filters by program and type', async () => {
     await be.invoke('debug.openSession', { text: har(5) });
     expect(await be.invoke('debug.exchanges', { text: '"id":3', deep: true, idsOnly: true })).toHaveLength(1);

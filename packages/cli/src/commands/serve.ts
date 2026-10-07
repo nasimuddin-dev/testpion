@@ -395,7 +395,7 @@ ${cyan(r.url)}`);
           if (o.json) console.log(JSON.stringify({ ...e, url: redactor.redactUrl(e.url), requestBody: undefined, responseBody: undefined }));
           else {
             const code = e.grpc?.statusName && e.grpc.status !== 0 ? red(`gRPC ${e.grpc.statusName}`) : e.error ? red('ERR') : (e.status ?? 0) >= 400 ? red(String(e.status)) : green(String(e.status ?? '-'));
-            console.log(`${code}  ${bold(e.method.padEnd(7))} ${redactor.redactUrl(e.url)}${e.httpVersion === '2' ? dim(' h2') : ''}  ${dim(`${e.application ?? ''} ${e.responseBodyBytes} B ${e.durationMs ?? 0} ms`)}`);
+            console.log(`${code}  ${bold(e.method.padEnd(7))} ${redactor.redactUrl(e.url)}${e.httpVersion === '2' ? dim(' h2') : ''}  ${dim(`${e.application ?? ''}${e.pid ? ` (${e.pid})` : ''}${e.serverAddress ? ` → ${e.serverAddress}` : ''} ${e.responseBodyBytes} B ${e.durationMs ?? 0} ms`)}`);
           }
         },
       });
