@@ -625,8 +625,8 @@ export function DebuggerView() {
                 {status?.running ? (
                   <>
                     Point a program at <span className="mono">{status.url}</span>: <b>Capture</b> opens a browser or a terminal through it, or sets the system proxy; for a shell{' '}
-                    <span className="mono">HTTP_PROXY={status.url}</span>, for Chrome <span className="mono">--proxy-server={status.url}</span>. HTTPS shows as a tunnel by host until the root
-                    certificate (coming) decrypts it.
+                    <span className="mono">HTTP_PROXY={status.url}</span>, for Chrome <span className="mono">--proxy-server={status.url}</span>. HTTPS shows as a tunnel by host until you turn on
+                    <b> Decrypt HTTPS</b>.
                   </>
                 ) : (
                   'Start capturing, then run the program you want to watch; or open a saved session from the Session menu.'

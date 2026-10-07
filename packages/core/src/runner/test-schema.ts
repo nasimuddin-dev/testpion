@@ -65,6 +65,8 @@ const BY_TYPE: Record<string, TestKeyDoc[]> = {
     { key: 'operationName', description: 'Which operation of the document to run.', shape: 'text' },
     { key: 'headers', description: 'Headers: { Name: value }.', shape: 'map' },
     { key: 'auth', description: 'Authentication, as for http.', shape: 'map' },
+    { key: 'events', description: 'A subscription: stop after this many events (default 1). The body is the first event ($.data…), every event is in $.events.', shape: 'number' },
+    { key: 'wait', description: 'A subscription: milliseconds to listen at most (default 10000; waitMs works too).', shape: 'number' },
   ],
   grpc: [
     { key: 'target', description: 'host:port of the server (address or url work too).', shape: 'text' },

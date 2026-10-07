@@ -70,8 +70,8 @@ export async function executeGraphQL(spec: GraphQLRequestSpec, opts: HttpExecOpt
   const variables = parseVariables(spec.variables);
   const op = detectOperation(spec.query, spec.operationName);
   if (op.type === 'subscription')
-    throw new ApsError('ConfigurationError', 'Subscriptions require a WebSocket transport (graphql-ws), which is not yet supported in this build', {
-      suggestions: ['Use the WebSocket client with the graphql-transport-ws subprotocol to test subscriptions manually.'],
+    throw new ApsError('ConfigurationError', 'A subscription runs over WebSocket, not as one HTTP request', {
+      suggestions: ['In the app, Subscribe in the GraphQL editor; in a test file or a collection run it is subscribed to by itself (events: and wait: set how long).', 'From the terminal: testpion graphql-subscribe <endpoint>.'],
     });
   const body: Record<string, unknown> = { query: spec.query };
   if (variables) body.variables = variables;

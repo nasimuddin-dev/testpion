@@ -10,6 +10,7 @@ import type {
   WebSocketTest,
   HttpTest,
   HttpResponseData,
+  KeyValue,
   LlmTest,
   McpServerConfig,
   McpTest,
@@ -26,7 +27,8 @@ import { timingSpans, type Tracer, type SpanHandle } from '../trace/tracer.js';
 import type { Redactor } from '../util/redact.js';
 import type { Logger } from '../log/logger.js';
 import { executeHttp, timingSummary } from '../protocols/http/client.js';
-import { executeGraphQL } from '../protocols/graphql/graphql.js';
+import { detectOperation, executeGraphQL, type GraphQLResult } from '../protocols/graphql/graphql.js';
+import { collectSubscriptionEvents, subscriptionUrl } from '../protocols/graphql/subscription.js';
 import { executeGrpc, parseGrpcTarget } from '../protocols/grpc/grpc.js';
 import { reflectServer } from '../protocols/grpc/reflection.js';
 import { mcpResultBody, type McpManager } from '../protocols/mcp/client.js';
@@ -319,10 +321,55 @@ async function runHttp(test: HttpTest, scope: VariableScope, svc: ExecServices, 
   }
 }
 
+/**
+ * A subscription in a test file or a collection run: subscribe over WebSocket (graphql-transport-ws or graphql-ws),
+ * collect `events` events (default 1) or listen `waitMs` at most, then stop. The body looks like a query's: the first
+ * event's `data` and `errors`, plus every event in `events`, so `$.data.x` checks work the same.
+ */
+async function runGraphQLSubscription(test: GraphQLTest, r: { endpoint: string; query: string; variables?: unknown; operationName?: string; headers?: KeyValue[] }, auth: AuthConfig | undefined, svc: ExecServices, s: SpanHandle, signal: AbortSignal): Runner {
+  const t0 = Date.now();
+  const headers = [...(r.headers ?? [])];
+  // the usual header auth travels with the WebSocket handshake
+  if (auth?.type === 'bearer' && auth.token) headers.push({ key: 'Authorization', value: `Bearer ${auth.token}`, enabled: true });
+  else if (auth?.type === 'basic') headers.push({ key: 'Authorization', value: `Basic ${Buffer.from(`${auth.username ?? ''}:${auth.password ?? ''}`).toString('base64')}`, enabled: true });
+  else if (auth?.type === 'apiKey' && (auth.in ?? 'header') === 'header' && auth.key) headers.push({ key: auth.key, value: auth.value ?? '', enabled: true });
+  const vars = typeof r.variables === 'string' ? (r.variables.trim() ? (JSON.parse(r.variables) as Record<string, unknown>) : undefined) : (r.variables as Record<string, unknown> | undefined);
+  const wait = Math.min(Math.max(100, test.waitMs ?? 10_000), 600_000);
+  try {
+    if (signal.aborted) throw new ApsError('CancelledError', 'The run was stopped');
+    const out = await collectSubscriptionEvents({
+      url: subscriptionUrl(r.endpoint),
+      query: r.query,
+      variables: vars,
+      operationName: r.operationName,
+      headers,
+      cookieJar: svc.cookieJar,
+      maxEvents: Math.max(1, test.events ?? 1),
+      durationMs: wait,
+    });
+    const events = out.events as Array<{ data?: unknown; errors?: unknown[] }>;
+    const first = events[0];
+    const errors = [...((first?.errors as GraphQLResult['errors']) ?? []), ...(out.errors.flat() as NonNullable<GraphQLResult['errors']>)];
+    const body = { data: first?.data ?? null, ...(errors.length ? { errors } : {}), events, count: events.length, completed: out.completed, protocol: out.protocol };
+    const latencyMs = Date.now() - t0;
+    s.setAttributes({ endpoint: svc.redactor.redactUrl(r.endpoint), operationType: 'subscription', events: events.length, errors: errors.length });
+    s.end({ status: errors.length || !events.length ? 'error' : 'ok', output: summarize(body, 16_000) });
+    return {
+      // no event at all fails the default check (graphql-no-errors) with the reason
+      ctx: { testType: 'graphql', status: 101, headers: [], body, text: JSON.stringify(body), latencyMs, graphqlErrors: errors.length ? errors : events.length ? undefined : [{ message: `No subscription event arrived within ${wait} ms` }] },
+      partial: { input: summarize(r.query, 1000), output: summarize(body) },
+    };
+  } catch (e) {
+    s.fail(e);
+    throw e;
+  }
+}
+
 async function runGraphQL(test: GraphQLTest, scope: VariableScope, svc: ExecServices, span: SpanHandle, signal: AbortSignal): Runner {
   const r = scope.resolveDeep({ endpoint: test.endpoint, query: test.query, variables: test.graphqlVariables, operationName: test.operationName, headers: test.headers, auth: test.auth });
   const auth = !r.auth || r.auth.type === 'inherit' ? (svc.inheritedAuth ? scope.resolveDeep(svc.inheritedAuth) : undefined) : r.auth;
   const s = span.child(`graphql ${test.operationName ?? ''}`.trim(), 'graphql', { input: { query: r.query, variables: r.variables } });
+  if (detectOperation(r.query, r.operationName).type === 'subscription') return runGraphQLSubscription(test, r, auth, svc, s, signal);
   try {
     const out = await executeGraphQL({ ...r, auth }, { signal, redactor: svc.redactor, maxPreviewBytes: svc.maxPreviewBytes ?? 1024 * 1024, cookieJar: svc.cookieJar });
     svc.onHttpResponse?.({ testId: test.id ?? test.name, status: out.response.status, statusText: out.response.statusText ?? '', headers: out.response.headers, body: out.response.bodyPreview, durationMs: out.response.durationMs, url: out.prepared.url, timing: timingSummary(out.response) });

@@ -111,6 +111,8 @@ export function normalizeTest(raw: Record<string, unknown>, file?: string, index
         operationName: raw.operationName as string | undefined,
         headers: kvList(raw.headers),
         auth: authOf(raw.auth),
+        events: raw.events === undefined ? undefined : Number(raw.events),
+        waitMs: (raw.waitMs ?? raw.wait) === undefined ? undefined : Number(raw.waitMs ?? raw.wait),
         variables: raw.vars as Record<string, unknown> | undefined,
       };
     case 'grpc': {

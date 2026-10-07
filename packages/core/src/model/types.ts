@@ -307,6 +307,10 @@ export interface GraphQLTest extends TestBase {
   operationName?: string;
   headers?: KeyValue[];
   auth?: AuthConfig;
+  /** A subscription: stop after this many events (default 1). */
+  events?: number;
+  /** A subscription: listen at most this long, in milliseconds (default 10000). */
+  waitMs?: number;
 }
 
 export interface GrpcTest extends TestBase {
