@@ -55,6 +55,62 @@ export interface IncomingRequest {
   forwarded?: boolean;
 }
 
+interface ListSync {
+  rev: number;
+  epoch: number;
+  nextSeq: number;
+  /** When the session's first request started (the grid's Offset counts from it). */
+  firstAt?: number;
+  seqs: WeakMap<DebuggerExchange, number>;
+  revs: WeakMap<DebuggerExchange, number>;
+}
+
+function listOf(state: DebuggerState): ListSync {
+  return (state.list ??= { rev: 0, epoch: 1, nextSeq: 1, seqs: new WeakMap(), revs: new WeakMap() });
+}
+/** An exchange was added or changed: its revision moves on (and it gets its place the first time). */
+function changed(state: DebuggerState, e: DebuggerExchange): void {
+  const l = listOf(state);
+  if (!l.seqs.has(e)) {
+    l.seqs.set(e, l.nextSeq++);
+    l.firstAt ??= Date.parse(e.startedAt);
+  }
+  l.revs.set(e, ++l.rev);
+}
+/** The list was replaced, cleared or shortened by the user: the window reloads it once. */
+function replaced(state: DebuggerState): void {
+  const l = listOf(state);
+  l.epoch++;
+  l.rev++;
+  l.nextSeq = 1;
+  l.firstAt = undefined;
+  l.seqs = new WeakMap();
+  for (const e of state.exchanges) changed(state, e);
+}
+
+/**
+ * A row of the grid: what the columns, filters and panels need, not the contents. Headers become their sizes;
+ * bodies, frames, events and gRPC messages come with the one exchange (debug.exchange).
+ */
+function leanRow(be: Backend, state: DebuggerState, e: DebuggerExchange) {
+  const { requestBody: _rb, responseBody: _sb, frames, events, grpc, requestHeaders, responseHeaders, trailers: _t, ...rest } = e;
+  const l = listOf(state);
+  const size = (h?: Record<string, string>) => Object.entries(h ?? {}).reduce((n, [k, v]) => n + k.length + 2 + v.length + 2, 0);
+  return {
+    ...rest,
+    url: be.logger.redactor.redactUrl(e.url),
+    requestHeaders: {},
+    seq: l.seqs.get(e),
+    offsetSec: l.firstAt !== undefined ? (Date.parse(e.startedAt) - l.firstAt) / 1000 : 0,
+    requestHeaderBytes: size(requestHeaders),
+    responseHeaderBytes: responseHeaders ? size(responseHeaders) : undefined,
+    requestContentType: requestHeaders['content-type'],
+    ...(frames ? { frameCount: frames.length } : {}),
+    ...(events ? { eventCount: events.length } : {}),
+    ...(grpc ? { grpc: { ...grpc, requests: [], responses: [] } } : {}),
+  };
+}
+
 /** Keep a request a mock server received for the Debugger's Incoming tab (and tell the window). */
 export function recordIncoming(be: Backend, r: Omit<IncomingRequest, 'id' | 'time'>): void {
   const state: DebuggerState = (be.debugger ??= { exchanges: [] });
@@ -87,6 +143,11 @@ export interface DebuggerState {
   lan?: boolean;
   /** Requests TestPion's mock servers received (the Incoming tab): at most the last 2000. */
   incoming?: IncomingRequest[];
+  /**
+   * The window's list stays in sync by changes, not by reloading it: every exchange has a place in the session (seq,
+   * the grid's #) and a revision; `rev` is the latest; `epoch` changes when the list is replaced or rows removed.
+   */
+  list?: ListSync;
   /** Put everything back (the system proxy) and stop the timers; the backend calls it when it is disposed. */
   release?(): Promise<void>;
 }
@@ -389,8 +450,9 @@ export function debuggerHandlers(be: Backend): Handlers {
             state.exchanges.push(e);
             if (state.exchanges.length > 5000) state.exchanges.shift();
           }
+          changed(state, e);
           touch();
-          be.host.emit('debug.exchange', { exchange: redacted(be, e), phase });
+          be.host.emit('debug.exchange', { id: e.id, phase });
         },
       });
       startAutosave();
@@ -494,8 +556,11 @@ export function debuggerHandlers(be: Backend): Handlers {
       bookmarked,
       application,
       type,
-      limit = 1000,
+      idsOnly,
+      limit = 5000,
     }: {
+      /** Only the ids of the matches (a search in headers and bodies, the rest is filtered in the window). */
+      idsOnly?: boolean;
       host?: string;
       /** The program, exactly as listed (All Applications). */
       application?: string;
@@ -532,21 +597,18 @@ export function debuggerHandlers(be: Backend): Handlers {
         }
         return true;
       });
-      // the grid's # (the place in the session) and Offset (seconds since the session's first request)
-      const seq = new Map(state.exchanges.map((e, i) => [e.id, i + 1]));
-      const first = state.exchanges.length ? Date.parse(state.exchanges[0]!.startedAt) : 0;
-      return out.slice(-limit).map((e) => {
-        // the grid needs a row, not its contents: frames, events and gRPC messages come with the one exchange
-        const { requestBody: _rb, responseBody: _sb, frames, events, grpc, ...rest } = redacted(be, e);
-        return {
-          ...rest,
-          seq: seq.get(e.id),
-          offsetSec: (Date.parse(e.startedAt) - first) / 1000,
-          ...(frames ? { frameCount: frames.length } : {}),
-          ...(events ? { eventCount: events.length } : {}),
-          ...(grpc ? { grpc: { ...grpc, requests: [], responses: [] } } : {}),
-        };
-      });
+      if (idsOnly) return out.slice(-limit).map((e) => e.id);
+      return out.slice(-limit).map((e) => leanRow(be, state, e));
+    },
+    /**
+     * The grid's changes since the window last asked: the rows added or changed after revision `since`, or every row
+     * (reset) when the list was replaced since `epoch`; `firstSeq` drops the rows the session no longer keeps.
+     */
+    'debug.changes': ({ epoch, since = 0 }: { epoch?: number; since?: number } = {}) => {
+      const l = listOf(state);
+      const reset = epoch !== l.epoch;
+      const rows = state.exchanges.filter((e) => reset || (l.revs.get(e) ?? 0) > since).map((e) => leanRow(be, state, e));
+      return { epoch: l.epoch, rev: l.rev, reset, rows, firstSeq: state.exchanges.length ? l.seqs.get(state.exchanges[0]!) : undefined, total: state.exchanges.length };
     },
     /** Requests the workspace's mock servers received (the Incoming tab), newest last. */
     'debug.incoming': () => state.incoming ?? [],
@@ -561,7 +623,10 @@ export function debuggerHandlers(be: Backend): Handlers {
     },
     'debug.bookmark': ({ id, on }: { id: string; on: boolean }) => {
       const e = state.exchanges.find((x) => x.id === id);
-      if (e) e.bookmarked = on;
+      if (e) {
+        e.bookmarked = on;
+        changed(state, e);
+      }
       touch();
       return true;
     },
@@ -569,12 +634,15 @@ export function debuggerHandlers(be: Backend): Handlers {
       const set = new Set(ids);
       state.exchanges = state.exchanges.filter((e) => !set.has(e.id));
       if (be.debugger) be.debugger.exchanges = state.exchanges;
+      listOf(state).epoch++;
+      listOf(state).rev++;
       touch();
       return status();
     },
     'debug.clear': () => {
       state.exchanges.length = 0;
       state.proxy?.clear();
+      replaced(state);
       state.dirty = false;
       // the window refreshes whoever cleared (a menu, a shortcut, an agent)
       be.host.emit('debug.exchange', { phase: 'cleared' });
@@ -678,6 +746,8 @@ export function debuggerHandlers(be: Backend): Handlers {
       if (!loaded.length) throw new ApsError('ValidationError', 'No entries in that file');
       state.exchanges = append ? [...state.exchanges, ...loaded] : loaded;
       if (be.debugger) be.debugger.exchanges = state.exchanges;
+      if (append) for (const e of loaded) changed(state, e);
+      else replaced(state);
       state.dirty = false;
       be.host.emit('debug.exchange', { phase: 'session' });
       return { ...status(), loaded: loaded.length };

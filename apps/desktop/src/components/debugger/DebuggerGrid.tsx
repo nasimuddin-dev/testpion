@@ -9,6 +9,13 @@ import { curlOf, kb, speedOf, versionOf, type Exchange, type IncomingRequest } f
 
 const toast = (m: string) => useApp.getState().toast(m, 'success');
 const copy = (text: string, what: string) => void navigator.clipboard.writeText(text).then(() => toast(`Copied ${what}`));
+/** The whole exchange: the grid's rows are lean (no headers, no bodies). */
+const whole = (e: Exchange) => call<Exchange>('debug.exchange', { id: e.id });
+const copyWhole = (e: Exchange, what: string, pick: (x: Exchange) => string) => void whole(e).then((x) => copy(pick(x), what), () => undefined);
+const headerLines = (h?: Record<string, string>) =>
+  Object.entries(h ?? {})
+    .map(([k, v]) => `${k}: ${v}`)
+    .join('\n');
 
 type ColumnId = 'seq' | 'offset' | 'duration' | 'method' | 'version' | 'url' | 'status' | 'type' | 'size' | 'speed' | 'application' | 'domain' | 'ip' | 'pid';
 interface Column {
@@ -222,27 +229,9 @@ export function DebuggerGrid({
         onSelect: () => undefined,
         items: [
           { label: 'URL', onSelect: () => copy(e.url, 'the URL') },
-          { label: 'As cURL', onSelect: () => copy(curlOf(e), 'as cURL') },
-          {
-            label: 'Request headers',
-            onSelect: () =>
-              copy(
-                Object.entries(e.requestHeaders)
-                  .map(([k, v]) => `${k}: ${v}`)
-                  .join('\n'),
-                'the request headers',
-              ),
-          },
-          {
-            label: 'Response headers',
-            onSelect: () =>
-              copy(
-                Object.entries(e.responseHeaders ?? {})
-                  .map(([k, v]) => `${k}: ${v}`)
-                  .join('\n'),
-                'the response headers',
-              ),
-          },
+          { label: 'As cURL', onSelect: () => copyWhole(e, 'as cURL', curlOf) },
+          { label: 'Request headers', onSelect: () => copyWhole(e, 'the request headers', (x) => headerLines(x.requestHeaders)) },
+          { label: 'Response headers', onSelect: () => copyWhole(e, 'the response headers', (x) => headerLines(x.responseHeaders)) },
         ],
       },
       { label: e.bookmarked ? 'Remove the bookmark' : 'Bookmark', icon: <Star size={14} />, onSelect: () => actions.onBookmark(e) },
@@ -264,18 +253,23 @@ export function DebuggerGrid({
         items: [
           {
             label: 'Reply with this response from now on',
+            // the row is lean: the response's headers and body come with the whole exchange
             onSelect: () =>
-              actions.onQuickRule(
-                'reply',
-                `Reply ${e.status ?? 200} for ${e.method} ${e.url.split('?')[0]}`,
-                { method: e.method, url: e.url.split('?')[0] + '*' },
-                {
-                  reply: {
-                    status: e.status ?? 200,
-                    headers: Object.fromEntries(Object.entries(e.responseHeaders ?? {}).filter(([k]) => /^content-type$/i.test(k))),
-                    body: e.responseBody ?? '',
-                  },
-                },
+              void whole(e).then(
+                (x) =>
+                  actions.onQuickRule(
+                    'reply',
+                    `Reply ${x.status ?? 200} for ${x.method} ${x.url.split('?')[0]}`,
+                    { method: x.method, url: x.url.split('?')[0] + '*' },
+                    {
+                      reply: {
+                        status: x.status ?? 200,
+                        headers: Object.fromEntries(Object.entries(x.responseHeaders ?? {}).filter(([k]) => /^content-type$/i.test(k))),
+                        body: x.responseBody ?? '',
+                      },
+                    },
+                  ),
+                () => undefined,
               ),
           },
           {

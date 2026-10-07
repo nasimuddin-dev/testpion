@@ -8,6 +8,10 @@ export interface Exchange {
   /** In the list: the place in the session (#) and the seconds since its first request (Offset). */
   seq?: number;
   offsetSec?: number;
+  /** In the list (lean rows): the header blocks' sizes and the request's content type instead of the headers. */
+  requestHeaderBytes?: number;
+  responseHeaderBytes?: number;
+  requestContentType?: string;
   startedAt: string;
   kind: 'http' | 'tunnel' | 'websocket';
   method: string;
@@ -135,7 +139,7 @@ export function hexDump(text: string): string {
  */
 
 /** The size of a header block as sent: `name: value\r\n` per line (the start line not counted). */
-export const headerBytes = (h?: Record<string, string>) => Object.entries(h ?? {}).reduce((n, [k, v]) => n + k.length + 2 + v.length + 2, 0);
+export const headerBytes = (h?: Record<string, string>): number => Object.entries(h ?? {}).reduce((n, [k, v]) => n + k.length + 2 + v.length + 2, 0);
 /** Kilobytes with three decimals, as the grid shows sizes. */
 export const kb = (bytes: number | undefined) => (bytes === undefined ? '' : (bytes / 1024).toFixed(3));
 /** Speed in KB/s of the response body (empty while it streams). */
@@ -158,3 +162,6 @@ export interface IncomingRequest {
   example?: string;
   forwarded?: boolean;
 }
+
+/** The size of both header blocks, from a lean row's counts or the headers themselves. */
+export const headerSizes = (e: Exchange) => ({ request: e.requestHeaderBytes ?? headerBytes(e.requestHeaders), response: e.responseHeaderBytes ?? headerBytes(e.responseHeaders) });

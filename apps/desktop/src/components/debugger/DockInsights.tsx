@@ -2,7 +2,7 @@ import { ChevronDown, ChevronRight } from 'lucide-react';
 import { Fragment, useMemo, useState, type ReactNode } from 'react';
 import { formatBytes, formatMs } from '@testpion/shared';
 import { cx, Empty } from '../ui';
-import { headerBytes, kb, speedOf, versionOf, type Exchange } from './model';
+import { headerBytes, headerSizes, kb, speedOf, versionOf, type Exchange } from './model';
 
 const pathOf = (url: string) => {
   try {
@@ -25,7 +25,10 @@ const BAR = { sending: 'bg-accent', waiting: 'bg-muted/60', receiving: 'bg-ok' }
 /** Timeline (F5): one request's Sending / Waiting / Receiving, or several on one time axis; their count, time and size. */
 export function TimelinePanel({ picked }: { picked: Exchange[] }) {
   if (!picked.length) return <Empty title="Select a request">Its timing shows here: sending, waiting for the server, receiving. Select several (Ctrl / Shift) to see them on one axis.</Empty>;
-  const bytes = picked.reduce((n, e) => n + e.requestBodyBytes + e.responseBodyBytes + headerBytes(e.requestHeaders) + headerBytes(e.responseHeaders), 0);
+  const bytes = picked.reduce((n, e) => {
+    const h = headerSizes(e);
+    return n + e.requestBodyBytes + e.responseBodyBytes + h.request + h.response;
+  }, 0);
   const start = Math.min(...picked.map((e) => Date.parse(e.startedAt)));
   const end = Math.max(...picked.map((e) => Date.parse(e.startedAt) + (e.durationMs ?? 0)));
   const span = Math.max(1, end - start);

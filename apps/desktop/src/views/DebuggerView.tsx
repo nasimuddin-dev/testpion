@@ -34,6 +34,7 @@ import {
 } from '../components/DebuggerTools';
 import { toRequest, type Exchange, type Stats } from '../components/debugger/model';
 import { ExchangePanes } from '../components/debugger/ExchangePanes';
+import { useExchangeList, type ListFilter } from '../components/debugger/useExchangeList';
 import { BreakpointDialog, CompareExchangesDialog, loadRules, RuleDialog, RulesPanel, type HeldBreakpoint, type Rule, type RulesState } from '../components/DebuggerRules';
 import { DebuggerGrid, GridTotals, IncomingList, TrafficSide, useIncoming } from '../components/debugger/DebuggerGrid';
 import { Dock } from '../components/debugger/Dock';
@@ -71,7 +72,6 @@ const toast = (m: string) => useApp.getState().toast(m, 'success');
 /** An exchange as a REST request, for Open in a tab and Resend. */
 export function DebuggerView() {
   const [status, setStatus] = useState<Status>();
-  const [rows, setRows] = useState<Exchange[]>([]);
   const [selected, setSelected] = useState<string>();
   const [detail, setDetail] = useState<Exchange>();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -86,9 +86,7 @@ export function DebuggerView() {
   const [ruleDraft, setRuleDraft] = useState<Partial<Rule>>();
   const [httpsBanner, setHttpsBanner] = useState(true);
   const incoming = useIncoming();
-  /** The programs, domains and types seen in this session: the drop-downs keep them while a filter narrows the list. */
-  const [seen, setSeen] = useState<{ apps: string[]; hosts: string[]; types: string[] }>({ apps: [], hosts: [], types: [] });
-  const [filter, setFilter] = useState({ application: '', type: '', text: '', deep: false, host: '', method: '', status: '' as '' | 'ok' | 'redirect' | 'client-error' | 'server-error' | 'error', bookmarked: false });
+  const [filter, setFilter] = useState<ListFilter>({ application: '', type: '', text: '', deep: false, host: '', method: '', status: '' as '' | 'ok' | 'redirect' | 'client-error' | 'server-error' | 'error', bookmarked: false });
   const [tab, setTab] = useState<'traffic' | 'stats' | 'rules' | 'connections'>('traffic');
   const [port, setPort] = useState('8899');
   const [stats, setStats] = useState<Stats>();
@@ -103,49 +101,23 @@ export function DebuggerView() {
   const [dialog, setDialog] = useState<'certificate' | 'lan'>();
   const filterBox = useRef<HTMLInputElement>(null);
 
+  const list = useExchangeList(filter);
+  const rows = list.rows;
+  const seen = list.seen;
+  const loadStatus = useCallback(() => call<Status>('debug.status').then(setStatus, fail), []);
+  /** After an action: the list's changes and the status (the capture's count, the system proxy, …). */
   const load = useCallback(async () => {
-    try {
-      const [st, list] = await Promise.all([
-        call<Status>('debug.status'),
-        call<Exchange[]>('debug.exchanges', {
-          text: filter.text || undefined,
-          deep: filter.deep || undefined,
-          host: filter.host || undefined,
-          method: filter.method || undefined,
-          status: filter.status || undefined,
-          bookmarked: filter.bookmarked || undefined,
-          application: filter.application || undefined,
-          type: filter.type || undefined,
-        }),
-      ]);
-      setStatus(st);
-      setRows(list);
-      setSeen((v) => {
-        const add = (have: string[], more: Array<string | undefined>) => {
-          const next = [...new Set([...have, ...more.filter((x): x is string => !!x)])].sort();
-          return next.length === have.length ? have : next;
-        };
-        const apps = add(v.apps, list.map((r) => r.application));
-        const hosts = add(v.hosts, list.map((r) => r.host));
-        const types = add(v.types, list.map((r) => r.contentType?.split(';')[0]?.trim()));
-        return apps === v.apps && hosts === v.hosts && types === v.types ? v : { apps, hosts, types };
-      });
-    } catch (e) {
-      fail(e);
-    }
-  }, [filter]);
+    await Promise.all([list.sync(), loadStatus()]);
+  }, [list.sync, loadStatus]);
   useEffect(() => {
-    void load();
-  }, [load]);
-  // rows arrive as programs send; a batch of updates is one refresh
-  useEffect(() => {
+    void loadStatus();
     let t: ReturnType<typeof setTimeout> | undefined;
     const off = on('debug.exchange', () => {
       clearTimeout(t);
-      t = setTimeout(() => void load(), 150);
+      t = setTimeout(() => void loadStatus(), 500);
     });
     return () => (off(), clearTimeout(t));
-  }, [load]);
+  }, [loadStatus]);
   // the rules (DBG-3): the active profile's count for the bar, and exchanges held at a breakpoint
   useEffect(() => {
     void loadRules().then((r) => r && setRules(r));
@@ -163,10 +135,11 @@ export function DebuggerView() {
     });
     return () => (offRules(), offBp());
   }, []);
+  const selectedRow = selected ? list.byId.get(selected) : undefined;
   useEffect(() => {
     if (!selected) return setDetail(undefined);
     void call<Exchange>('debug.exchange', { id: selected }).then(setDetail, () => setDetail(undefined));
-  }, [selected, rows.length]);
+  }, [selected, selectedRow]);
   useEffect(() => {
     if (tab === 'stats') void call<Stats>('debug.stats').then(setStats, fail);
   }, [tab, rows.length]);
@@ -677,7 +650,7 @@ export function DebuggerView() {
                     </div>
                   </Split>
                 </div>
-                {rows.length > 0 && <GridTotals rows={rows} selectedIds={selectedIds} total={status?.exchanges} />}
+                {rows.length > 0 && <GridTotals rows={rows} selectedIds={selectedIds} total={list.all.length} />}
               </div>
               {dock ? (
                 <Dock
