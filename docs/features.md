@@ -121,6 +121,16 @@ Load-test one endpoint, a gRPC method or a whole collection (every virtual user 
 
 [Load testing](/performance/load-testing)
 
+## HTTP Debugger
+
+<figure class="aps-screenshot">
+  <img src="/images/debugger.jpg" alt="The HTTP Debugger: a tool rail, a grid of captured requests with application, domain and IP address, a 404 with its request and response side by side, and the Summary panel" width="1440" height="900" loading="lazy">
+</figure>
+
+See the traffic of other programs (a browser, an app under test, a service, an agent) through TestPion's local proxy: a grid with the program, status, type, size, speed, domain and server address of every request; the request and response side by side; HTTPS decryption, HTTP/2, gRPC, WebSocket frames and Server-Sent Events. Rules filter, capture only, highlight, modify, auto-reply, redirect or pause the traffic; panels show its timeline, summary, structure and performance; sessions save as HAR. Requests your programs send to TestPion's mock servers are listed too. `testpion debug` and the `debugger_*` MCP tools do the same from a terminal or an agent.
+
+[HTTP Debugger](/api-testing/http-debugger)
+
 ## Traces
 
 <figure class="aps-screenshot">
