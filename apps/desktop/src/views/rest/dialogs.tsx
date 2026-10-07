@@ -167,7 +167,7 @@ export function ImportModal({ onClose, onDone }: { onClose(): void; onDone(): vo
         </>
       }
     >
-      <p className="text-sm text-muted mb-2">OpenAPI 3 / Swagger 2 (JSON or YAML), Postman v2.1 collections and environments, Insomnia exports (v4 JSON, v5 YAML), Bruno collection folders (<b>Bruno folder…</b>), exports and .bru files, Hoppscotch collections, WSDL 1.1 (SOAP services), HAR files, .env files, TestPion collections (as a file, pasted, or a link), or a request copied as cURL, fetch, PowerShell or HTTPie (saved to the <b>Imported</b> collection, with secrets replaced by variables).</p>
+      <p className="text-sm text-muted mb-2">OpenAPI 3 / Swagger 2 (JSON or YAML), Postman v2.1 collections and environments, Insomnia exports (v4 JSON, v5 YAML), Bruno collection folders (<b>Bruno folder…</b>), exports and .bru files, Hoppscotch collections, WSDL 1.1 and 2.0 (SOAP services), AsyncAPI 2 and 3 (Kafka, MQTT and WebSocket channels as connections), HAR files, .env files, TestPion collections (as a file, pasted, or a link), or a request copied as cURL, fetch, PowerShell or HTTPie (saved to the <b>Imported</b> collection, with secrets replaced by variables).</p>
       <form
         className="flex gap-2 mb-2"
         onSubmit={(e) => {

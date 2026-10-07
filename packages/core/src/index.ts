@@ -36,6 +36,7 @@ export * from './protocols/kafka/kafka.js';
 export * from './import/bru.js';
 export * from './import/bru-export.js';
 export * from './import/wsdl.js';
+export * from './import/asyncapi.js';
 export * from './protocols/realtime.js';
 export * from './protocols/mcp/client.js';
 export * from './protocols/websocket/websocket.js';

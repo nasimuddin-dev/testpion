@@ -643,7 +643,7 @@ export function Explorer() {
           items={[{ label: 'Collection', icon: <FolderPlus size={14} />, onSelect: () => void newCollection() }, ...newRequestItems().map((it, i) => (i === 0 ? { ...it, separator: true } : it))]}
         />
         {/* in the header, not in a menu: the actions used every day */}
-        <IconButton label="Import (OpenAPI, Postman, Insomnia, Bruno, HAR, WSDL, cURL …)" className="h-7 w-7" onClick={importDefinition}>
+        <IconButton label="Import (OpenAPI, AsyncAPI, Postman, Insomnia, Bruno, HAR, WSDL, cURL …)" className="h-7 w-7" onClick={importDefinition}>
           <Upload size={14} />
         </IconButton>
         <IconButton label="Export a collection or the workspace" className="h-7 w-7" onClick={() => setExporting(true)}>

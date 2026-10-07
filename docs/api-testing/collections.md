@@ -51,6 +51,7 @@ Copied commands include the request's real header and token values, so they run 
 - Bruno collections: the collection folder itself (**Bruno folder…**, the folder with `bruno.json` and the `.bru` files you keep in git), a single `.bru` request file, or a JSON export (*Export collection*). See [Bruno](#bruno) below.
 - Hoppscotch collections (JSON).
 - WSDL 1.1 and 2.0 documents of SOAP services (a file, or a `?wsdl` link). See [SOAP](#soap-wsdl) below.
+- AsyncAPI 2 and 3 documents of event-driven APIs (Kafka, MQTT, WebSocket, Socket.IO). See [AsyncAPI](#asyncapi) below.
 - HAR files.
 
 From Insomnia, Bruno and Hoppscotch, TestPion takes folders, requests, bodies, headers, parameters, auth and variables. `{{ _.name }}` and `<<name>>` become `{{name}}`. Insomnia's pre-request and after-response scripts run: its `insomnia.*` script API follows Postman's, so `insomnia.test`, `insomnia.expect`, `insomnia.environment` and `insomnia.response` become their `pm.*` twins. Bruno scripts and tests run as they are (`bru`, `req`, `res`). Hoppscotch scripts use their own API (`pw.*`), so they come over as comments to rewrite with `pm.*` / `tp.*`. An imported environment never replaces one you already have: a name that's taken gets *(imported)* added.
@@ -72,6 +73,18 @@ A WSDL 1.1 or 2.0 document becomes a collection of SOAP requests, one folder per
 Replace the placeholders and send. The response is XML: `xml2Json(pm.response.text())` turns it into an object for tests. Schemas and WSDLs it imports (`xsd:import`, `xsd:include`, `wsdl:import`, like the `?xsd=xsd0` and `?wsdl=wsdl0` documents of JAX-WS and WCF services) are fetched from the same site for a link, or read from next to the file for a file.
 
 To try it, run the [demo servers](/getting-started/installation#try-it-with-the-demo-servers) and import the link `http://127.0.0.1:4010/soap/patients?wsdl` (`GetPatient` with id `1` or `2`, `RegisterPatient`).
+
+### AsyncAPI
+
+An AsyncAPI document becomes a collection of [realtime connections](/api-testing/websocket), one per channel, in folders by the operations' first tag:
+
+- **Servers** become an environment, *<API> servers*, with a variable per server (`{{productionUrl}}` = `kafkas://broker.example.com:9093`). The connections use the channel's server, or the first one.
+- **Kafka:** the channel's address is the topic to produce to, with the first message's example payload, its key (from the Kafka binding) and its headers. When the application sends on the channel, the topic is also read on connect.
+- **MQTT:** the topic to publish to, with the channel's QoS; when the application sends on it, the topic filter is subscribed on connect (`{parameters}` become `+`).
+- **WebSocket:** the channel's address is a path on the server; **Socket.IO:** it is the event.
+- Every message a channel carries is kept as a saved message to send again, built from its first example or its schema. `{parameters}` in addresses become `{{variables}}`.
+
+Who sends what follows the document: in AsyncAPI 2, `publish` is what the application receives (TestPion sends it) and `subscribe` what it sends (TestPion reads it); in AsyncAPI 3, `action: send` and `receive` say the same. Channels on other protocols (AMQP, NATS …) are listed in the collection's description as not imported.
 
 ### Bruno
 

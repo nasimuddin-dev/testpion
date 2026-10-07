@@ -17,7 +17,7 @@ Everything below is in the app today; the [changelog](/changelog) has the detail
 
 - **Protocols:** REST, GraphQL (with subscriptions, a schema explorer and an operation builder), gRPC (proto files or server reflection, TLS), WebSocket, Socket.IO, MQTT, Kafka, Server-Sent Events and MCP; HTTP/2.
 - **Mock servers:** HTTP mocks from saved examples (with forwarding for partial mocks), a GraphQL mock from a schema, and MCP mocks.
-- **Imports:** OpenAPI, Postman, Insomnia, Bruno (collection folders too, with Bruno scripts running as they are), Hoppscotch, WSDL 1.1 and 2.0, HAR and pasted cURL / fetch / PowerShell; recording traffic through a local proxy.
+- **Imports:** OpenAPI, Postman, Insomnia, Bruno (collection folders too, with Bruno scripts running as they are), Hoppscotch, WSDL 1.1 and 2.0, AsyncAPI 2 and 3, HAR and pasted cURL / fetch / PowerShell; recording traffic through a local proxy.
 - **Running:** a Collection Runner and Newman-compatible `testpion run-collection`, suites, monitors (scheduled runs with webhooks), load tests of one endpoint or a whole collection, CI pipeline generation, and watch mode.
 - **AI:** an AI Lab with model comparison, evaluations for LLMs, RAG and agents, an assistant in the request builder, and `testpion mcp-server` for AI agents.
 - **OpenTelemetry export** of traces (OTLP/HTTP) from the app, the CLI and MCP.
