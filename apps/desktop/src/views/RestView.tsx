@@ -354,7 +354,7 @@ export function RestView() {
     const items = exists ? mapNodes(c.items, (n) => (n.id === node.id ? node : n)) : addToFolder(c.items, folderId, node);
     await saveCollection({ ...c, items });
     // the snapshot of the request as the file holds it (the writer normalises), so a later disk change is compared fairly
-    const stored = await call<Collection[]>('col.list').then((all) => findNode(all.find((x) => x.id === collectionId)?.items ?? [], node.id), () => undefined);
+    const stored = await call<Collection>('col.get', { id: collectionId }).then((c) => findNode(c.items, node.id), () => undefined);
     const base = savedSnapshot(stored?.kind === 'http' ? stored : node);
     setTabs((ts) => ts.map((t) => (t.id === tab.id ? { ...t, name, collectionId, requestId: node.id, dirty: false, base } : t)));
     useApp.getState().toast('Saved', 'success');
@@ -414,7 +414,7 @@ export function RestView() {
     setTabs((ts) => ts.map((x) => (x.id === t.id ? { ...x, name } : x)));
     if (!t.collectionId || !t.requestId) return;
     try {
-      const c = (await call<Collection[]>('col.list')).find((x) => x.id === t.collectionId);
+      const c = await call<Collection>('col.get', { id: t.collectionId }).catch(() => undefined);
       if (!c || !findNode(c.items, t.requestId)) return;
       await saveCollection({ ...c, items: mapNodes(c.items, (x) => (x.id === t.requestId ? { ...x, name } : x)) });
     } catch (e) {

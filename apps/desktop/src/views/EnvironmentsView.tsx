@@ -2,11 +2,12 @@ import { ArchiveRestore, ArrowLeftRight, Check, Copy, Grid3x3, Download, FileJso
 import { SecretRefsLine } from '../components/SecretRefsLine';
 import { useGit } from '../lib/git';
 import { GitItemHistory } from '../components/GitItemHistory';
-import { useEffect, useRef, useState } from 'react';
-import { asError, call, on } from '../api';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCollections } from '../lib/collections-store';
+import { asError, call } from '../api';
 import { confirmAction, promptText, useApp } from '../store';
 import { useIntent } from '../hooks';
-import type { Collection, Environment, KeyValue } from '../types';
+import type { Environment, KeyValue } from '../types';
 import { CollectionVariablesPane } from '../components/CollectionVariablesPane';
 import { download, uid } from '../lib/format';
 import { KeyValueEditor } from '../components/KeyValueEditor';
@@ -81,12 +82,8 @@ export function EnvironmentsView() {
   const [secretStatus, setSecretStatus] = useState<Record<string, boolean>>({});
   const [scope, setScope] = useState<'environment' | 'collection' | 'workspace' | 'global'>('environment');
   const [colVarsFor, setColVarsFor] = useState<string>();
-  const [colVarCount, setColVarCount] = useState(0);
-  useEffect(() => {
-    const count = () => void call<Collection[]>('col.list').then((l) => setColVarCount(l.reduce((n, c) => n + (c.variables?.length ?? 0), 0)), () => undefined);
-    count();
-    return on('data.changed', count);
-  }, []);
+  const allCollections = useCollections();
+  const colVarCount = useMemo(() => allCollections.reduce((n, c) => n + (c.variables?.length ?? 0), 0), [allCollections]);
   const [wsVars, setWsVars] = useState<KeyValue[]>(ws?.variables ?? []);
   const [globals, setGlobals] = useState<KeyValue[]>(settings?.globalVariables ?? []);
   const load = async () => {

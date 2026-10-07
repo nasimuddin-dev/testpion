@@ -308,7 +308,7 @@ export function GraphQLView() {
     return saveTo(d.collectionId!, d.name);
   };
   const saveTo = async (collectionId: string, name: string, folderId?: string) => {
-    const c = (await call<Collection[]>('col.list')).find((x) => x.id === collectionId);
+    const c = await call<Collection>('col.get', { id: collectionId }).catch(() => undefined);
     if (!c) return useApp.getState().toast('That collection no longer exists — pick another one', 'error');
     // keep what this view doesn't edit (favorite …) when updating a saved request
     const before = d.requestId ? (findNode(c.items, d.requestId) as SavedGraphQLRequest | undefined) : undefined;

@@ -27,5 +27,20 @@ const steps = [
     for (const ch of 'folder 7 request') { const t1 = performance.now(); set.call(input, input.value + ch); input.dispatchEvent(new Event('input', { bubbles: true })); await new Promise((r) => requestAnimationFrame(r)); lag.push(performance.now() - t1); await ${painted}(); }
     return 'filter 16 keys ms: ' + Math.round(performance.now() - t0) + ' | input lag max ms: ' + Math.round(Math.max(...lag)) + ' avg: ' + Math.round(lag.reduce((a, b) => a + b) / lag.length);
   })()`, false],
+  ['views', `profile:(async () => {
+    const t0 = performance.now();
+    for (let i = 0; i < 3; i++) { await __t.view('Home'); await ${painted}(); await __t.requests(); await __t.waitFor(() => document.querySelectorAll('aside [data-tree-row]').length > 400, 5000); await ${painted}(); }
+    return 'home and back x3 ms: ' + Math.round(performance.now() - t0);
+  })()`, false],
+  ['save', `profile:(async () => {
+    const c = (await window.aps.invoke('col.list')).find((x) => x.id === 'big');
+    const t0 = performance.now();
+    for (let i = 0; i < 3; i++) {
+      await window.aps.invoke('col.save', { ...c, name: 'Big collection ' + i });
+      await __t.waitFor(() => [...document.querySelectorAll('aside [data-tree-row]')].some((b) => b.textContent.includes('Big collection ' + i)), 10000);
+      await ${painted}();
+    }
+    return 'save x3 ms: ' + Math.round(performance.now() - t0);
+  })()`, false],
 ];
 module.exports = withExpect(steps, {}, { prepare: bigCollection });

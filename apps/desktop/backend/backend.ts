@@ -573,7 +573,8 @@ export class Backend {
       if (own) this.lastOwnChange = Date.now();
       this.logger.trace(`rpc ${method}`, { ms: Math.round(performance.now() - t0) });
       // the Collections explorer (and anything else listing workspace items) refreshes on this
-      if (DATA_CHANGING.test(method)) this.host.emit('data.changed', { method });
+      // (a save names its collection: the window then reads that one, not every collection again)
+      if (DATA_CHANGING.test(method)) this.host.emit('data.changed', method === 'col.save' ? { method, collectionId: (params as { id?: string } | undefined)?.id } : { method });
       return r;
     } catch (e) {
       const err = normalizeError(e);

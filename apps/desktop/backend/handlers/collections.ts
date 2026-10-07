@@ -12,6 +12,8 @@ const SPEC_PATH = /^specs\/(asyncapi\/)?[^/\\]+\.(json|ya?ml)$/i;
 export function collectionsHandlers(be: Backend): Handlers {
   return {
     'col.list': () => be.ws.listCollections(),
+    /** One collection (a view that needs one does not read them all). */
+    'col.get': ({ id }: { id: string }) => be.ws.getCollection(id),
     'col.save': (c: Collection) => {
       const r = be.ws.saveCollection(c);
       be.refreshMock(c.id);

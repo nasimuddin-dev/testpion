@@ -24,14 +24,45 @@ export function refreshCollections(): Promise<Collection[]> {
   return pending;
 }
 
+/** Read only the collections that were saved and put them in the list (a save of one does not reload them all). */
+async function refreshSome(ids: string[]): Promise<void> {
+  const fresh = await Promise.all(ids.map((id) => call<Collection>('col.get', { id }).catch(() => undefined)));
+  if (fresh.some((c) => !c)) return void refreshCollections();
+  const byId = new Map(fresh.map((c) => [c!.id, c!]));
+  useStore.setState((st) => ({ list: st.list.map((c) => byId.get(c.id) ?? c) }));
+}
+
 let wired = false;
 function wire() {
   if (wired) return;
   wired = true;
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  on('data.changed', () => {
-    clearTimeout(timer);
-    timer = setTimeout(() => void refreshCollections(), 100);
+  // the changes since the last refresh: the saved collections, or "everything" (an import, a delete, a move, git,
+  // the disk). The first change refreshes at once (in the next task, so a burst in one task is one refresh); changes
+  // that come while it runs are read in one more round after it, not one each.
+  let saved = new Set<string>();
+  let all = false;
+  let running = false;
+  const run = async () => {
+    try {
+      while (all || saved.size) {
+        const ids = [...saved];
+        const everything = all;
+        saved = new Set();
+        all = false;
+        // a fetch already under way may have started before this change: read again after it
+        await (everything ? (pending ? pending.then(() => refreshCollections()) : refreshCollections()) : refreshSome(ids));
+      }
+    } finally {
+      running = false;
+    }
+  };
+  on<{ method?: string; collectionId?: string }>('data.changed', (e) => {
+    const known = e?.method === 'col.save' && e.collectionId && useStore.getState().list.some((c) => c.id === e.collectionId);
+    if (known) saved.add(e.collectionId!);
+    else all = true;
+    if (running) return;
+    running = true;
+    setTimeout(() => void run(), 0);
   });
 }
 

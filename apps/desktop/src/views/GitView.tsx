@@ -481,7 +481,7 @@ function SecretsPanel({ findings, onChange, onCommitAnyway }: { findings: Secret
     const { name } = splitWhere(f.where);
     if (!(await confirmAction({ title: 'Remove request', message: `Remove "${name}" from the collection?`, detail: 'The request is deleted; its collection keeps everything else. Undo with git until you commit.', confirmLabel: 'Remove', danger: true }))) return;
     try {
-      const c = (await call<Array<{ id: string; items: unknown[] }>>('col.list')).find((x) => x.id === f.collectionId);
+      const c = await call<{ id: string; items: unknown[] }>('col.get', { id: f.collectionId }).catch(() => undefined);
       if (!c) return;
       const prune = (nodes: Array<{ id: string; kind: string; items?: unknown[] }>): unknown[] => nodes.filter((n) => n.id !== f.itemId).map((n) => (n.kind === 'folder' ? { ...n, items: prune(n.items as typeof nodes) } : n));
       await call('col.save', { ...c, items: prune(c.items as Array<{ id: string; kind: string; items?: unknown[] }>) });

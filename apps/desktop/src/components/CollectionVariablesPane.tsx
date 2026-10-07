@@ -1,8 +1,9 @@
 import { Copy, ExternalLink, Save } from 'lucide-react';
-import { useEffect, useState } from 'react';
-import { asError, call, on } from '../api';
+import { useEffect, useMemo, useState } from 'react';
+import { useCollections } from '../lib/collections-store';
+import { asError, call } from '../api';
 import { confirmAction, useApp } from '../store';
-import type { Collection, Environment, KeyValue } from '../types';
+import type { Environment, KeyValue } from '../types';
 import { KeyValueEditor } from './KeyValueEditor';
 import { CountPill, TreeHeader, treeKeys } from './TreeParts';
 import { Button, cx, Empty, Split } from './ui';
@@ -12,20 +13,13 @@ import { Button, cx, Empty, Split } from './ui';
  * settings). Pick a collection on the left, edit its variables on the right, Save.
  */
 export function CollectionVariablesPane({ initial }: { initial?: string }) {
-  const [cols, setCols] = useState<Collection[]>([]);
+  // the shared list: a save elsewhere replaces only that collection, so unsaved edits here stay
+  const all = useCollections();
+  const cols = useMemo(() => all.filter((c) => !c.problem), [all]);
   const [sel, setSel] = useState<string | undefined>(initial);
   const [rows, setRows] = useState<KeyValue[]>([]);
   const [saved, setSaved] = useState<string>('[]');
-  const load = () =>
-    void call<Collection[]>('col.list').then((list) => {
-      const ok = list.filter((c) => !c.problem);
-      setCols(ok);
-      setSel((s) => (s && ok.some((c) => c.id === s) ? s : ok.find((c) => c.variables?.length)?.id ?? ok[0]?.id));
-    });
-  useEffect(() => {
-    load();
-    return on('data.changed', load);
-  }, []);
+  useEffect(() => setSel((s) => (s && cols.some((c) => c.id === s) ? s : (cols.find((c) => c.variables?.length)?.id ?? cols[0]?.id))), [cols]);
   useEffect(() => setSel((s) => initial ?? s), [initial]);
   const current = cols.find((c) => c.id === sel);
   useEffect(() => {
@@ -46,7 +40,6 @@ export function CollectionVariablesPane({ initial }: { initial?: string }) {
       await call('col.save', { ...current, variables: rows });
       setSaved(JSON.stringify(rows));
       useApp.getState().toast(`Saved the variables of "${current.name}"`, 'success');
-      load();
     } catch (e) {
       useApp.getState().toast(asError(e).message, 'error');
     }
