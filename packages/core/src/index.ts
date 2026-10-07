@@ -81,6 +81,7 @@ export * from './runner/generate-dataset.js';
 export * from './storage/dataset-files.js';
 export * from './storage/collection-replace.js';
 export * from './storage/move-variables.js';
+export * from './storage/collection-tidy.js';
 export * from './runner/db-datasets.js';
 export * from './runner/collection-run.js';
 export * from './runner/breakdown.js';

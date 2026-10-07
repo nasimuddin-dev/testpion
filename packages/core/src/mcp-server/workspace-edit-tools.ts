@@ -1,3 +1,4 @@
+import { applyTidy, tidyCollection } from '../storage/collection-tidy.js';
 import { moveCollectionVariablesToEnvironments } from '../storage/move-variables.js';
 import { replaceInCollection, REPLACE_FIELDS, type ReplaceField } from '../storage/collection-replace.js';
 import type { Collection, CollectionFolder, CollectionNode, HttpRequestSpec, KeyValue, SavedHttpRequest } from '../model/types.js';
@@ -154,9 +155,38 @@ export function workspaceEditTools(d: EditToolsDeps): Tool[] {
         dryRun: a.dryRun === true,
       }),
   };
+  const tidyTool: Tool = {
+    name: 'collection_tidy',
+    write: true,
+    description:
+      "What piles up in a collection: duplicate requests (same method, URL and body), hosts typed into URLs instead of a {{variable}}, empty folders, collection variables nothing uses. Returns the findings; removeDuplicates (keeps the first of each), removeEmptyFolders and removeUnusedVariables also fix those and save. For a typed-in host, use replace_in_collection to put a variable in its place.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        collection: { type: 'string', description: 'Collection name or id' },
+        removeDuplicates: { type: 'boolean' },
+        removeEmptyFolders: { type: 'boolean' },
+        removeUnusedVariables: { type: 'boolean' },
+      },
+      required: ['collection'],
+    },
+    run: (a) => {
+      const c = findCollection(a.collection);
+      const findings = tidyCollection(c);
+      const fix = { removeDuplicates: a.removeDuplicates === true, removeEmptyFolders: a.removeEmptyFolders === true, removeUnusedVariables: a.removeUnusedVariables === true };
+      let removed = 0;
+      if (fix.removeDuplicates || fix.removeEmptyFolders || fix.removeUnusedVariables) {
+        const r = applyTidy(c, fix);
+        removed = r.removed;
+        if (removed) store.saveCollection(r.collection);
+      }
+      return { collection: c.name, findings: findings.map((f) => ({ ...f, ids: f.ids.slice(0, 50), where: f.where.slice(0, 50) })), removed };
+    },
+  };
   return [
     replaceTool,
     moveVarsTool,
+    tidyTool,
     {
       name: 'update_request',
       write: true,

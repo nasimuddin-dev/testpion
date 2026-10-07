@@ -29,9 +29,9 @@ interface Match {
  * Find and replace across a collection's requests: every change is shown before anything is saved, and Undo puts the
  * collection back as it was.
  */
-export function ReplaceDialog({ collection, onClose, onDone }: { collection: Collection; onClose(): void; onDone(): void }) {
-  const [find, setFind] = useState('');
-  const [replace, setReplace] = useState('');
+export function ReplaceDialog({ collection, onClose, onDone, initialFind, initialReplace }: { collection: Collection; onClose(): void; onDone(): void; initialFind?: string; initialReplace?: string }) {
+  const [find, setFind] = useState(initialFind ?? '');
+  const [replace, setReplace] = useState(initialReplace ?? '');
   const [regex, setRegex] = useState(false);
   const [caseSensitive, setCaseSensitive] = useState(false);
   const [fields, setFields] = useState<Set<Field>>(new Set(FIELDS.map(([f]) => f)));

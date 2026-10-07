@@ -41,6 +41,16 @@ Right-click a request in the tree, or click its **⋯** button:
 
 Copied commands include the request's real header and token values, so they run as they are, like Postman's *Copy as cURL*. When they do, the confirmation message says so. Folders have their own menu (Run, Monitor on a schedule, Edit folder, New HTTP request, New folder, Rename, Move to…, Delete).
 
+## Tidy up
+
+**Tidy up** in a collection's header finds what piles up in big or imported collections:
+
+- **Duplicate requests**: the same method, URL and body (query parameter order and spacing don't matter).
+- **Hosts typed into URLs**: `http://localhost:5002/…` instead of `{{bannerManagementBaseUrl}}/…`. **Use a variable…** opens **Replace** with the host filled in.
+- **Empty folders**, and **unused variables** (collection variables no request or script reads).
+
+Tick the fixes to make (remove the copies of duplicates, keeping the first; remove empty folders; remove unused variables) and **Remove what is ticked**; **Undo** in the message puts the collection back. From the terminal, `testpion tidy "Master Collections"` lists them and `--remove-duplicates`, `--remove-empty-folders` and `--remove-unused-variables` fix them; agents use `collection_tidy`.
+
 ## Find and replace
 
 **Replace** in a collection's header changes text across its requests at once: a host that moved, a header that was renamed, a value that should become a `{{variable}}`.

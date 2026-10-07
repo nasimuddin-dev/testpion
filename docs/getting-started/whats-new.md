@@ -103,6 +103,14 @@ The reference is safe to commit: it holds no secret, and each person reads the v
 
 In a long list, the filter above the requests narrows it by name, folder or method, and **Select all** / **Deselect all** act on what it shows. From the terminal: `testpion run-collection "Master Collections" -e Development --method GET`.
 
+## Tidy up a collection
+
+1. Open a collection and click **Tidy up** in its header.
+2. Read the findings: duplicate requests, hosts typed into URLs, empty folders, unused variables.
+3. Tick the fixes to make and **Remove what is ticked** (**Undo** puts it back). For a typed-in host, **Use a variable…** opens Replace with the host filled in.
+
+[More](/api-testing/collections#tidy-up)
+
 ## Find and replace in a collection
 
 1. Open a collection and click **Replace** in its header.

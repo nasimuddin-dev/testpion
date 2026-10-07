@@ -22,6 +22,7 @@ import { registerOpenApiCommands } from './commands/openapi.js';
 import { registerGenerateCommands } from './commands/generate.js';
 import { registerReplaceCommands } from './commands/replace.js';
 import { registerVarsMoveCommand } from './commands/vars-move.js';
+import { registerTidyCommand } from './commands/tidy.js';
 
 /** The testpion command line: one module per area of commands (commands/*.ts). */
 export function buildProgram(): Command {
@@ -43,6 +44,7 @@ export function buildProgram(): Command {
   registerGenerateCommands(program);
   registerReplaceCommands(program);
   registerVarsMoveCommand(program);
+  registerTidyCommand(program);
 
   // an environment's secret manager references (op://, vault://, aws-sm:// …) are read before the command runs
   program.hook('preAction', async (_cmd, action) => {

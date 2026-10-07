@@ -49,9 +49,20 @@ const steps = [
      vis('[role=dialog] button[aria-label=Close]')[0]?.click(); await __t.sleep(300);
      return 'preview: ' + !!head + ' | replace button: ' + !!button;`,
   ),
+  step(
+    'tidy-up-lists-findings',
+    `vis('main button').find((b) => b.textContent.trim() === 'Tidy up')?.click();
+     const dlg = await __t.waitFor(() => vis('[role=dialog] [data-tidy-dialog]')[0], 3000);
+     if (!dlg) return 'NO DIALOG';
+     await __t.waitFor(() => !/Looking through/.test(dlg.textContent), 5000);
+     const kinds = vis('[role=dialog] [data-tidy-kind]').map((x) => x.getAttribute('data-tidy-kind'));
+     vis('[role=dialog] button[aria-label=Close]')[0]?.click(); await __t.sleep(300);
+     return 'dialog: true | kinds: ' + (kinds.length ? 'some' : 'none');`,
+  ),
 ];
 
 module.exports = withExpect(steps, {
+  'tidy-up-lists-findings': /^dialog: true \| kinds: (some|none)$/,
   'replace-previews-every-change': /^preview: true \| replace button: true$/,
   'name-is-text-not-a-field': /^text: true \| field: false$/,
   'double-click-renames-and-saves': /^renamed: true \| saved: true \| escape keeps: true$/,

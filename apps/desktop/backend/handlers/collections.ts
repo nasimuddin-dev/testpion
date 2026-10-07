@@ -1,7 +1,7 @@
 /** RPC handlers: Collections (requests, folders, examples, import/export) and their mock servers. */
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, relative, sep } from 'node:path';
-import { ApsError, dbKindOf, redactDbUrl, isSqliteDataset, collectionVariableFlow, listWorkspaceDatasets, readDataset, sqliteTables, fetchImportText, bruFilesToBrunoExport, collectionToBru, importIntoWorkspace, diffOpenApi, lintOpenApi, openApiOutline, asyncApiOutline, workspaceApiCoverage, apiCoverageMarkdown, securityLint, certificateLint, listCertificates, variableFlow, startRecorder, recordingToCollection, type RecordedExchange, collectionToOpenApiText, collectionToHttpFile, collectionToAsyncApi, generateWorkspaceDataset, replaceInCollection, moveCollectionVariablesToEnvironments, type ReplaceField, writeTestsFromSpec, exampleFromResponse, startMockServer, collectionMarkdown, collectionHtml, exportPostmanCollection, withRequestExamples, type SavedExample, convertCollectionScripts, importRequestSnippet, isRequestSnippet, type Collection, collectionSavedItems, duplicateCollection, shortId, requestBodySchema, loadOpenApi } from '@testpion/core';
+import { ApsError, dbKindOf, redactDbUrl, isSqliteDataset, collectionVariableFlow, listWorkspaceDatasets, readDataset, sqliteTables, fetchImportText, bruFilesToBrunoExport, collectionToBru, importIntoWorkspace, diffOpenApi, lintOpenApi, openApiOutline, asyncApiOutline, workspaceApiCoverage, apiCoverageMarkdown, securityLint, certificateLint, listCertificates, variableFlow, startRecorder, recordingToCollection, type RecordedExchange, collectionToOpenApiText, collectionToHttpFile, collectionToAsyncApi, generateWorkspaceDataset, replaceInCollection, moveCollectionVariablesToEnvironments, tidyCollection, applyTidy, type ReplaceField, writeTestsFromSpec, exampleFromResponse, startMockServer, collectionMarkdown, collectionHtml, exportPostmanCollection, withRequestExamples, type SavedExample, convertCollectionScripts, importRequestSnippet, isRequestSnippet, type Collection, collectionSavedItems, duplicateCollection, shortId, requestBodySchema, loadOpenApi } from '@testpion/core';
 import type { Backend, Handlers, CollectionRunParams } from '../backend.js';
 
 /** An API definition's workspace path: a JSON or YAML file directly in specs/. */
@@ -75,6 +75,14 @@ export function collectionsHandlers(be: Backend): Handlers {
       be.ws.saveCollection(withRequestExamples(be.ws.getCollection(p.collectionId), p.requestId, () => p.examples));
       be.refreshMock(p.collectionId);
       return p.examples;
+    },
+    /** What piles up in a collection: duplicate requests, typed-in hosts, empty folders, unused variables. */
+    'col.tidy': ({ collectionId }: { collectionId: string }) => tidyCollection(be.ws.getCollection(collectionId)),
+    /** Remove duplicate copies, empty folders and / or unused variables. */
+    'col.tidyApply': (p: { collectionId: string; removeDuplicates?: boolean; removeEmptyFolders?: boolean; removeUnusedVariables?: boolean }) => {
+      const r = applyTidy(be.ws.getCollection(p.collectionId), p);
+      if (r.removed) be.ws.saveCollection(r.collection);
+      return { removed: r.removed };
     },
     /** Move collection variables into environments (each can then set its own value); `dryRun` only says what would happen. */
     'vars.moveToEnvironments': (p: { collectionId: string; keys?: string[]; environments: string[]; dryRun?: boolean }) => moveCollectionVariablesToEnvironments(be.ws, p),

@@ -35,6 +35,7 @@ const DESTRUCTIVE = new Set([
   'generate_tests',
   'replace_in_collection',
   'move_variables_to_environments',
+  'collection_tidy',
   'debugger_capture',
   'git_resolve',
   'debugger_rules',
