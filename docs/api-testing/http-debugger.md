@@ -7,7 +7,35 @@ description: "See the HTTP traffic of other programs: a browser, an app under te
 
 # HTTP Debugger
 
-The **HTTP Debugger** (**Debugger** in the rail, under Testing) shows the traffic of *other* programs. TestPion runs a local proxy; a program pointed at it sends every request through, and each exchange is listed as it happens with the program that sent it, the status, the size and the timing. A row opens whole: the request and response headers and bodies, and a timing breakdown.
+The **HTTP Debugger** (**Debugger** in the rail, under Testing) shows the traffic of *other* programs. TestPion runs a local proxy; a program pointed at it sends every request through, and each exchange is listed as it happens with the program that sent it, the status, the size and the timing. A row opens whole: the request and response side by side, and a timing breakdown.
+
+## The workbench
+
+The Traffic tab is laid out like a desktop HTTP debugger:
+
+| Part | What it is |
+| --- | --- |
+| **Tool rail** (left) | Submitter, Filter, Highlight, Auto-Reply, Modify (headers, redirect), Timeline (F5), Summary, Structure (F6), Performance, Convert, Export / Import. Hover one for what it does; a click opens its panel in the dock, a second click closes it. |
+| **Filter bar** | All Applications, All Domains, All Types, method, status, Bookmarked, saved **Presets**, the number of Filter Out / Capture Only rules on (click it for the Filter panel), and the text filter (**In bodies** searches headers and bodies too). |
+| **Grid** | `#`, Offset (seconds since the session's first request), Duration (s), Method, Version, URL, Status, Type, Size (KB), Speed (KB/s), Application, Domain, IP Address, and PID on demand. Click a header to sort, again to reverse; the columns button shows or hides columns (remembered). Ctrl+click and Shift+click select several. |
+| **Outgoing / Incoming** | Outgoing is what programs sent through the proxy; **Incoming requests** lists what your programs sent to TestPion's own mock servers (a collection's **Mock** tab), with the example that answered. |
+| **Request Details / Response Details** | Side by side under the grid. Each is a header table with the start line first (`[Request] POST /pet HTTP/1.1`, `[Response] HTTP/1.1 404 Not Found`) and **Filter headers**; tabs at the bottom: **Header**, **Content**, **Raw**, **JSON**, plus **Auth** and **Hex** on the request, and **Hex**, **gRPC**, **Frames** or **Events** on the response when the exchange has them. |
+| **Dock** (right) | One panel at a time, chosen from the rail or the tabs at its bottom. |
+| **Footer** | How many requests are listed (or selected), their size and their total time. |
+
+A banner says when **HTTPS inspection is off**, with **Decrypt HTTPS** and **Install certificate…** next to it.
+
+### The dock's panels
+
+- **Filter**: **Filter Out** rules hide what they match (it still goes through); **Capture Only** rules, when one is on, list only what one of them matches. Each rule has a box to turn it on or off and its **Hits** (how many requests it acted on in this capture; the reset button counts from zero).
+- **Highlight** and **Highlight Rule**: the highlight rules, and an editor for one: a rule name, a **Column** (Status, URL, Method, Domain, Application, Type, Version, IP Address, Duration, Size), an **Expression** (equals, does not equal, contains, starts with, ends with, is between, greater than, less than, matches), the value (two for *is between*), **Use regex**, a colour for the dark theme and one for the light theme, **Make bold** and **Entire row**. *Status is between 400 and 499* colours client errors; a new rule goes first, so it wins over the built-in ones.
+- **Auto-Reply**: the rules that answer without the server.
+- **Modify**: the rules that change headers and bodies, add a delay, or redirect a host.
+- **Timeline**: the selected request's **Sending**, **Waiting** and **Receiving** as bars, with its total time and size; several selected requests show on one time axis.
+- **Summary**: the selected request in groups: **Main** (PID, application, IP address, total size), **Connection** (protocol, HTTPS, connection and stream id, client port), **Request Details** and **Response Details** (header and content sizes, content types, status), **Timing**.
+- **Structure**: the listed requests by domain, then path segment by segment, with counts and sizes and a total; double-click one to select its first request.
+- **Performance**: where the time and bytes go: the share of time spent waiting for servers, the slowest responses, the largest payloads, the slowest transfers (KB/s) and every domain's average and slowest time.
+- **Convert**: paste a value; **URL Decode** and **URL Encode** run the shown conversion (their arrows pick another: Base64, hex, HTML, JWT, timestamp, JSON format or minify) into the result box; **Other readings** lists every decoding that makes sense. The header's **Decode** button opens it.
 
 ## Capture
 
@@ -47,19 +75,23 @@ A WebSocket through the proxy is one row (status 101, *live* while open) with a 
 
 ## What you can do with a row
 
-- **Open**: the exchange becomes a request in a tab, to change and send; double-click does the same.
+- **Open** (**Edit & Submit**, or the rail's **Submitter**): the exchange becomes a request in a tab, to change and send; double-click does the same.
 - **Resend**: send it again as it was (the response lands in History).
 - **cURL**: copy it as a cURL command.
 - **Ask AI**: the assistant explains what the exchange does, what the response means, why it failed and what to check (it gets the exchange redacted).
 - **Bookmark**, **Delete**.
 
-The row's tabs are the inspectors: **Response** and **Request** (JSON as a tree), **Headers**, **Raw** (the request and the response as they went over the wire, to copy), **Hex** (the bodies as bytes), **Auth** (what the request authenticates with, without the secret: a Basic user, a Bearer JWT's claims and expiry, the cookie names) and **Timing**.
+The panes' tabs are the inspectors: **Header**, **Content**, **JSON** (as a tree), **Raw** (the request and the response as they went over the wire, to copy), **Hex** (the bodies as bytes) and **Auth** (what the request authenticates with, without the secret: a Basic user, a Bearer JWT's claims and expiry, the cookie names). The timing is in the dock's **Timeline** and **Summary**.
+
+**Right-click a row** for the same and more: **Copy** (URL, as cURL, request or response headers), **Bookmark**, **Edit & Submit**, **Resend**, **Compare with…**, and rules made from the row's values: **Capture only**, **Filter out** and **Highlight** with *Application = node.exe*, *URL starts with …*, *Domain = …*, *Method = POST*, *IP Address = …* (or a new rule to fill in), **Auto-reply** (*Reply with this response from now on*), **Modify headers…**, **Redirect connections…**, the **HTTP/2 connection tree**, **Delete** (the selected rows) and **Clear**. Every rule is one you make: TestPion has no built-in list of programs to hide.
 
 **Statistics** show the session: requests over time, the status mix, by host, content type and program, the largest and the slowest exchanges.
 
-**Decode** reads a value as URL-encoded, Base64, hex, a Unix timestamp, a JWT or JSON, and encodes it back.
+**Decode** opens the dock's **Convert** panel.
 
-Keyboard: **↑ ↓** select, **Enter** opens the exchange as a request, **Delete** removes it, **Ctrl+F** goes to the filter box, **Ctrl+E** clears the session.
+Keyboard: **↑ ↓** select, **Ctrl/Shift+click** select several, **Enter** opens the exchange as a request, **Delete** removes the selection, **F5** the Timeline, **F6** the Structure, **Ctrl+F** goes to the filter box, **Ctrl+E** clears the session.
+
+A long capture stays quick: the session keeps the last 5,000 exchanges, the list gets only what changed (a new request is one row, not the list again), and sorting, filtering and scrolling 5,000 rows stay at the screen's frame rate.
 
 ### Sessions
 
@@ -71,8 +103,9 @@ Secrets (Authorization headers, API keys, passwords in bodies) are masked wherev
 
 The **Rules** tab is what the proxy does to matching traffic, in the order listed:
 
-- **ignore** hides it from the list (it still goes through);
-- **highlight** colours the row: by host, URL, program, or by the response (a status class or code, slower than *n* ms, larger than *n* bytes). A fresh profile highlights errors, server and client errors, slow and large responses;
+- **capture only** (when one is on) lists only what one of them matches; the rest still goes through;
+- **ignore** (**Filter out**) hides it from the list (it still goes through);
+- **highlight** colours the row: by host, URL, program, or by the response (a status class or code, slower than *n* ms, larger than *n* bytes), or by a condition on one column with its own colours, bold and whole row (the **Highlight Rule** editor). A fresh profile highlights errors, server and client errors, slow and large responses;
 - **modify** sets or removes request and response headers, replaces a body, adds a delay;
 - **reply** answers without the server: a status, headers and a body (offline, a canned error, a mock);
 - **redirect** sends the request to another host (and scheme): a staging API to a local one, a CDN to a mock;
@@ -92,7 +125,7 @@ testpion debug --decrypt                     # HTTPS too, for programs that trus
 testpion debug -w .                          # gRPC decoded with this workspace's .proto files
 ```
 
-AI agents have the same through the workspace's MCP server: `debugger_capture` (start / stop / status / clear; `decrypt` for HTTPS), `debugger_exchanges` (the list, with filters; `deep` searches bodies), `debugger_exchange` (one, with bodies), `debugger_session` (save the session as HAR, or open a HAR file), `debugger_rules` (list, presets, add, enable, remove: an agent can take an API offline, slow it down or redirect it while it tests), `debugger_stats`. An agent can start the proxy, run a program against it and read what it did.
+AI agents have the same through the workspace's MCP server: `debugger_capture` (start / stop / status / clear; `decrypt` for HTTPS), `debugger_exchanges` (the list, with filters; `deep` searches bodies), `debugger_exchange` (one, with bodies), `debugger_session` (save the session as HAR, or open a HAR file), `debugger_rules` (list with each rule's hits, presets, add, enable, remove; kinds include `only` for Capture Only and a `where` condition on a column with a `style`: an agent can take an API offline, slow it down, redirect it or narrow the capture while it tests), `debugger_stats`. An agent can start the proxy, run a program against it and read what it did.
 
 ## Coming next
 
