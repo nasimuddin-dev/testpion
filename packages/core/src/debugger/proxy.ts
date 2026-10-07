@@ -205,16 +205,56 @@ export interface ProgramInfo {
   user?: string;
 }
 
+/** Windows: the owning PID of every TCP connection by its local port, from one `netstat` (shared by the lookups of a burst). */
+let winOwnersPending: Promise<Map<number, number>> | undefined;
+function winOwners(): Promise<Map<number, number>> {
+  if (winOwnersPending) return winOwnersPending;
+  winOwnersPending = new Promise<Map<number, number>>((resolve) => {
+    execFile('netstat', ['-ano', '-p', 'tcp'], { timeout: 5000, windowsHide: true, maxBuffer: 16 * 1024 * 1024 }, (err, out) => {
+      const map = new Map<number, number>();
+      if (!err)
+        for (const m of String(out).matchAll(/^\s*TCP\s+\S+:(\d+)\s+\S+\s+(\S+)\s+(\d+)\s*$/gm)) {
+          const local = Number(m[1]);
+          const pid = Number(m[3]);
+          // an established connection wins over a closing one of the same port
+          if (pid > 0 && (m[2] === 'ESTABLISHED' || !map.has(local))) map.set(local, pid);
+        }
+      resolve(map);
+    });
+  });
+  // the next burst gets a fresh table
+  void winOwnersPending.finally(() => setTimeout(() => (winOwnersPending = undefined), 250));
+  return winOwnersPending;
+}
+
+const winNames = new Map<number, Promise<string | undefined>>();
+/** Windows: a process's name by PID (as Get-Process names it: "chrome", "node"), each PID looked up once. */
+function winProcessName(pid: number): Promise<string | undefined> {
+  let p = winNames.get(pid);
+  if (!p) {
+    p = new Promise<string | undefined>((resolve) => {
+      execFile('tasklist', ['/FI', `PID eq ${pid}`, '/FO', 'CSV', '/NH'], { timeout: 5000, windowsHide: true }, (err, out) => {
+        const m = /^"([^"]+)"/m.exec(err ? '' : String(out));
+        resolve(m ? m[1]!.replace(/\.exe$/i, '') : undefined);
+      });
+    });
+    winNames.set(pid, p);
+    if (winNames.size > 500) winNames.clear();
+  }
+  return p;
+}
+
 export function applicationOfPort(port: number): Promise<ProgramInfo | undefined> {
   return new Promise((resolve) => {
     const done = (pid: string | undefined, name: string | undefined, user?: string) =>
       name?.trim() ? resolve({ name: name.trim(), pid: Number(pid) || undefined, ...(user?.trim() ? { user: user.trim() } : {}) }) : resolve(undefined);
     const opts = { timeout: 3000, windowsHide: true };
     if (process.platform === 'win32') {
-      const ps = `$c = Get-NetTCPConnection -LocalPort ${port} -ErrorAction SilentlyContinue | Select-Object -First 1; if ($c) { "$($c.OwningProcess) $((Get-Process -Id $c.OwningProcess -ErrorAction SilentlyContinue).ProcessName)" }`;
-      execFile('powershell', ['-NoProfile', '-NonInteractive', '-Command', ps], opts, (err, out) => {
-        const m = /^(\d+) (.*)$/m.exec(err ? '' : String(out).trim());
-        done(m?.[1], m?.[2]);
+      // one netstat names the owners of every connection open right now (PowerShell takes a second per call, and a
+      // browser's or curl's connection is often gone by then); a closed connection (TIME_WAIT) belongs to PID 0, nobody
+      void winOwners().then(async (owners) => {
+        const pid = owners.get(port);
+        done(pid ? String(pid) : undefined, pid ? await winProcessName(pid) : undefined);
       });
     } else {
       execFile('lsof', ['-nP', `-iTCP:${port}`, '-sTCP:ESTABLISHED', '-Fpc'], opts, (err, out) => {
@@ -1019,6 +1059,9 @@ ${pem ? `<p>To see HTTPS too, install and trust TestPion's root certificate on t
   server.on('connection', (socket: Duplex) => {
     sockets.add(socket);
     socket.on('close', () => sockets.delete(socket));
+    // the program is looked up as soon as it connects, while the connection is still open (its requests find the answer)
+    const clientPort = (socket as Socket).remotePort;
+    if (clientPort) void application(clientPort);
   });
   await new Promise<void>((resolve, reject) => {
     server.once('error', (err: NodeJS.ErrnoException) =>
