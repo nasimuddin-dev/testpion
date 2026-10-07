@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
 import type { Collection, CollectionNode, Environment } from '../model/types.js';
-import { assertGitRev, gitLog, gitShow, runGit, type GitCommit, type GitFile } from './git.js';
+import { assertGitRev, gitLog, gitShow, realFolder, runGit, type GitCommit, type GitFile } from './git.js';
 import { requestParts } from './merge.js';
 
 /**
@@ -166,7 +166,7 @@ export async function describeRevChanges(ws: string, from: string, to?: string):
   const out = await runGit(ws, ['diff', '--name-status', '-z', '-M', from, ...(to ? [to] : []), '--', '.']);
   const parts = out.split('\0').filter((p) => p !== '');
   const repo = (await runGit(ws, ['rev-parse', '--show-toplevel'])).trim();
-  const rel = (p: string) => relative(ws, resolve(repo, p)).split(sep).join('/');
+  const rel = (p: string) => relative(realFolder(ws), resolve(repo, p)).split(sep).join('/');
   const files: Array<{ path: string; from?: string; status: string }> = [];
   for (let i = 0; i < parts.length; i++) {
     const status = parts[i]!;

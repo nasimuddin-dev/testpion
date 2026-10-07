@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { existsSync, writeFileSync } from 'node:fs';
+import { existsSync, realpathSync, writeFileSync } from 'node:fs';
 import { mergeWorkspaceTexts, requestParts, type MergeConflict, type MergeResolutions } from './merge.js';
 
 /** The files TestPion merges by meaning (collections, environments, library), not by lines. */
@@ -141,8 +141,23 @@ export async function repoRoot(dir: string): Promise<string | undefined> {
 /** Forget the remembered repository roots (after `git init`, a clone into the folder …). */
 export const forgetRepoRoots = () => roots.clear();
 
+/**
+ * The workspace folder as git sees it: git reports the real path of the repository (links resolved, Windows 8.3
+ * short names like RUNNER~1 expanded, macOS /var as /private/var), so paths are related to the real folder, not to a
+ * link to it (else every file came out as ../../real/path).
+ */
+export function realFolder(dir: string): string {
+  try {
+    return realpathSync.native(dir);
+  } catch {
+    return resolve(dir);
+  }
+}
+
 /** Paths in git output are relative to the repository root: make them relative to the workspace. */
-const toWorkspacePath = (repo: string, ws: string, p: string) => relative(ws, resolve(repo, p)).split(sep).join('/');
+const toWorkspacePath = (repo: string, ws: string, p: string) => relative(realFolder(ws), resolve(repo, p)).split(sep).join('/');
+/** A workspace path as a path in the repository. */
+export const toRepoPath = (repo: string, ws: string, p: string) => relative(repo, resolve(realFolder(ws), p)).split(sep).join('/');
 
 /** `git status` of the workspace folder: branch, ahead / behind, and each changed file. */
 export async function gitStatus(ws: string): Promise<GitStatus> {
@@ -182,7 +197,7 @@ export async function gitStatus(ws: string): Promise<GitStatus> {
 export async function gitShow(ws: string, path: string, rev = 'HEAD'): Promise<string | undefined> {
   const repo = await repoRoot(ws);
   if (!repo) return undefined;
-  const inRepo = relative(repo, resolve(ws, path)).split(sep).join('/');
+  const inRepo = toRepoPath(repo, ws, path);
   try {
     return await runGit(ws, ['show', `${assertGitRev(rev)}:${inRepo}`]);
   } catch {
@@ -382,7 +397,7 @@ export async function gitResolve(ws: string, path: string, side: 'ours' | 'their
 /** The three versions of a conflicted file: the common ancestor, ours, theirs (empty when a side has none). */
 async function conflictStages(ws: string, path: string): Promise<[string, string, string]> {
   const repo = await repoRoot(ws);
-  const inRepo = repo ? relative(repo, resolve(ws, path)).split(sep).join('/') : path;
+  const inRepo = repo ? toRepoPath(repo, ws, path) : path;
   const stage = (n: 1 | 2 | 3) => runGit(ws, ['show', `:${n}:${inRepo}`]).catch(() => '');
   return Promise.all([stage(1), stage(2), stage(3)]);
 }

@@ -24,7 +24,14 @@ import {
 
 // GIT-201 / GIT-205: the git service against real temporary repositories (a bare one stands in for the remote).
 const root = mkdtempSync(join(tmpdir(), 'tp-git-'));
-afterAll(() => rmSync(root, { recursive: true, force: true }));
+// best effort: on Windows git can still hold a file for a moment (the temp folder is cleaned up anyway)
+afterAll(() => {
+  try {
+    rmSync(root, { recursive: true, force: true, maxRetries: 3 });
+  } catch {
+    /* left for the system's temp cleanup */
+  }
+});
 
 const identity = async (dir: string) => {
   await runGit(dir, ['config', 'user.name', 'Tester']);

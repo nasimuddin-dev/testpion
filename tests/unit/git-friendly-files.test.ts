@@ -6,7 +6,14 @@ import { WorkspaceStore, collectionFileContent, makeGitReady, type Collection } 
 
 // GIT-101: a collection file changes only when what people wrote changes, so it diffs and merges cleanly in git.
 const root = mkdtempSync(join(tmpdir(), 'tp-gitfiles-'));
-afterAll(() => rmSync(root, { recursive: true, force: true }));
+// best effort: on Windows git can still hold a file for a moment (the temp folder is cleaned up anyway)
+afterAll(() => {
+  try {
+    rmSync(root, { recursive: true, force: true, maxRetries: 3 });
+  } catch {
+    /* left for the system's temp cleanup */
+  }
+});
 
 const base: Collection = {
   schemaVersion: '1.0',

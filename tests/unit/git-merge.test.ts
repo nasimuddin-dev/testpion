@@ -7,7 +7,14 @@ import { WorkspaceStore, assertGitRef, assertGitRev, assertRemoteUrl, describeRe
 
 // GIT-301 (merge by id), GIT-304 (pull request links), GIT-401 (semantic diff between commits).
 const root = mkdtempSync(join(tmpdir(), 'tp-merge-'));
-afterAll(() => rmSync(root, { recursive: true, force: true }));
+// best effort: on Windows git can still hold a file for a moment (the temp folder is cleaned up anyway)
+afterAll(() => {
+  try {
+    rmSync(root, { recursive: true, force: true, maxRetries: 3 });
+  } catch {
+    /* left for the system's temp cleanup */
+  }
+});
 
 const req = (id: string, name: string, url: string, extra: Record<string, unknown> = {}) => ({ kind: 'http', id, name, request: { method: 'GET', url, headers: [] }, ...extra });
 const col = (items: unknown[], extra: Record<string, unknown> = {}) => JSON.stringify({ schemaVersion: '1.0', id: 'api', name: 'API', items, ...extra }, null, 2);

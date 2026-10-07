@@ -6,7 +6,14 @@ import { MemorySecretStore, WorkspaceStore, findCommittableSecrets, fixCommittab
 
 // GIT-104: secrets typed into a workspace are found before a commit would publish them.
 const root = mkdtempSync(join(tmpdir(), 'tp-guard-'));
-afterAll(() => rmSync(root, { recursive: true, force: true }));
+// best effort: on Windows git can still hold a file for a moment (the temp folder is cleaned up anyway)
+afterAll(() => {
+  try {
+    rmSync(root, { recursive: true, force: true, maxRetries: 3 });
+  } catch {
+    /* left for the system's temp cleanup */
+  }
+});
 
 describe('secret guard', () => {
   it('finds typed-in secrets, and not secret variables or {{references}}', () => {
