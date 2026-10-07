@@ -63,6 +63,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - run: npm run build -w @testpion/shared
       - run: npm run build -w @testpion/core
       - run: npm run build -w @testpion/desktop
       - name: Package

@@ -95,7 +95,7 @@ Before a commit, the secrets a commit would publish are a list to act on, groupe
 - Test files read `checks:` as well as `assertions:` (a file written with `checks:` used to run with no checks).
 - A variable's popover has **Where it's set** (it was *All*): the value the request uses and why, scope by scope.
 - A collection's name in its settings is text, renamed in place with a double-click, like a request's.
-- A `{{variable}}` defined nowhere says so: **All** opens the variables overview on it with **Add to <environment>**. New WebSocket tabs start with an empty URL instead of `{{wsUrl}}`.
+- A `{{variable}}` defined nowhere says so: **All** opens the variables overview on it with **Add to** the active environment. New WebSocket tabs start with an empty URL instead of `{{wsUrl}}`.
 - AI Lab opens on **Providers** (nothing else works without one).
 - `tp.*` everywhere TestPion speaks for itself; `pm.*` stays for Postman compatibility.
 
