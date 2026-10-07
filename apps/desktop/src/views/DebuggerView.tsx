@@ -410,8 +410,12 @@ export function DebuggerView() {
                 },
               ]}
               trigger={
-                <Button icon={status?.decrypt ? <Lock size={13} /> : <LockOpen size={13} />} title="HTTPS decryption with the TestPion root certificate">
-                  HTTPS {status?.decrypt ? 'decrypted' : 'tunnel'} <ChevronDown size={12} />
+                <Button
+                  icon={status?.decrypt ? <Lock size={13} className="text-ok" /> : <LockOpen size={13} className="text-muted" />}
+                  title={status?.decrypt ? 'HTTPS is decrypted for programs that trust the TestPion root certificate' : 'HTTPS shows as tunnels by host; decrypt it to see the requests inside'}
+                  aria-label={status?.decrypt ? 'HTTPS (decrypted)' : 'HTTPS (tunnels)'}
+                >
+                  HTTPS <ChevronDown size={12} />
                 </Button>
               }
             />
@@ -441,6 +445,11 @@ export function DebuggerView() {
           { id: 'rules', label: 'Rules', badge: rules?.activeCount || undefined },
         ]}
       />
+      {(side === 'incoming' ? !incomingSel : !sel) && (
+        <div className="px-3 py-1.5 border-t border-line text-xs text-muted shrink-0" data-details-hint>
+          Select a row: its request and response open here side by side. Double-click opens it as a request.
+        </div>
+      )}
       {tab === 'stats' ? (
         <StatsPanel stats={stats} onPick={(id) => (setTab('traffic'), setSelected(id))} />
       ) : tab === 'connections' ? (
@@ -514,7 +523,7 @@ export function DebuggerView() {
                 <div className="flex gap-2 p-2 border-b border-line items-center flex-wrap" data-filter-bar>
                   <Input
                     ref={filterBox}
-                    className="w-60"
+                    className="h-7 min-h-7 w-52 text-sm"
                     placeholder={filter.deep ? 'Find in URLs, headers and bodies' : 'Filter requests'}
                     aria-label="Filter exchanges"
                     value={filter.text}
@@ -523,31 +532,31 @@ export function DebuggerView() {
                   <label className="flex items-center gap-1 text-xs text-muted whitespace-nowrap" title="Search headers and bodies too">
                     <input type="checkbox" checked={filter.deep} onChange={(e) => setFilter({ ...filter, deep: e.target.checked })} /> In bodies
                   </label>
-                  <Select aria-label="Application" value={filter.application} onChange={(e) => setFilter({ ...filter, application: e.target.value })}>
+                  <Select className="h-7 min-h-7 py-0 text-sm" aria-label="Application" value={filter.application} onChange={(e) => setFilter({ ...filter, application: e.target.value })}>
                     <option value="">All Applications</option>
                     {seen.apps.map((h) => (
                       <option key={h}>{h}</option>
                     ))}
                   </Select>
-                  <Select aria-label="Host" value={filter.host} onChange={(e) => setFilter({ ...filter, host: e.target.value })}>
+                  <Select className="h-7 min-h-7 py-0 text-sm" aria-label="Host" value={filter.host} onChange={(e) => setFilter({ ...filter, host: e.target.value })}>
                     <option value="">All Domains</option>
                     {seen.hosts.map((h) => (
                       <option key={h}>{h}</option>
                     ))}
                   </Select>
-                  <Select aria-label="Type" value={filter.type} onChange={(e) => setFilter({ ...filter, type: e.target.value })}>
+                  <Select className="h-7 min-h-7 py-0 text-sm" aria-label="Type" value={filter.type} onChange={(e) => setFilter({ ...filter, type: e.target.value })}>
                     <option value="">All Types</option>
                     {seen.types.map((h) => (
                       <option key={h}>{h}</option>
                     ))}
                   </Select>
-                  <Select aria-label="Method" value={filter.method} onChange={(e) => setFilter({ ...filter, method: e.target.value })}>
+                  <Select className="h-7 min-h-7 py-0 text-sm" aria-label="Method" value={filter.method} onChange={(e) => setFilter({ ...filter, method: e.target.value })}>
                     <option value="">Any method</option>
                     {['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'CONNECT'].map((m) => (
                       <option key={m}>{m}</option>
                     ))}
                   </Select>
-                  <Select aria-label="Status" value={filter.status} onChange={(e) => setFilter({ ...filter, status: e.target.value as typeof filter.status })}>
+                  <Select className="h-7 min-h-7 py-0 text-sm" aria-label="Status" value={filter.status} onChange={(e) => setFilter({ ...filter, status: e.target.value as typeof filter.status })}>
                     <option value="">Any status</option>
                     <option value="ok">2xx</option>
                     <option value="redirect">3xx</option>
@@ -597,7 +606,7 @@ export function DebuggerView() {
                   </button>
                 </div>
                 <div className="flex-1 min-h-0">
-                  <Split id="debugger" direction="vertical" initial={58}>
+                  <Split id="debugger" direction="vertical" initial={58} collapsedSecond={side === 'incoming' ? !incomingSel : !sel}>
                     <div className="h-full flex flex-col min-h-0">
                       {side === 'incoming' ? (
                         <IncomingList list={incoming.list} onClear={incoming.clear} selected={incomingSel} onSelect={setIncomingSel} />
@@ -658,7 +667,7 @@ export function DebuggerView() {
                           return <ExchangePanes e={e} onOpen={() => openInTab(e)} onAsk={() => ask(e)} />;
                         })()
                       ) : !sel ? (
-                        <Empty title="Select an exchange">Its request and response show side by side: headers, content, raw text and JSON. Double-click a row to open it as a request.</Empty>
+                        <Empty title="Select an exchange">Its request and response show side by side: headers, content, raw text and JSON.</Empty>
                       ) : (
                         <ExchangePanes
                           e={sel}

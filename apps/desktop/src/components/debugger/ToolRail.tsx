@@ -1,4 +1,5 @@
-import { ArrowRightLeft, BarChart3, Download, Filter, Gauge, Highlighter, Info, ListTree, Reply, Send, SlidersHorizontal, type LucideIcon } from 'lucide-react';
+import { ArrowRightLeft, BarChart3, Captions, Download, Filter, Gauge, Highlighter, Info, ListTree, Reply, Send, SlidersHorizontal, type LucideIcon } from 'lucide-react';
+import { useState } from 'react';
 import { cx, Menu, Tooltip, type MenuItem } from '../ui';
 
 /** The panels of the Debugger's dock, in the order of their tabs. */
@@ -22,7 +23,27 @@ interface RailItem {
  * modify and redirect), what the selection looks like (timeline, summary, structure), performance, conversions, and
  * export / import. Each opens its panel in the dock on the right; the active one is lit.
  */
+const LABELS_KEY = 'testpion.debugger.railLabels';
+
 export function ToolRail({ active, onPanel, onSubmit, exportItems }: { active?: DockPanel; onPanel(p: DockPanel): void; onSubmit(): void; exportItems: MenuItem[] }) {
+  // icons only (as in HTTP Debugger Pro), or each with its name under it for whoever is new to them; remembered
+  const [labels, setLabels] = useState(() => {
+    try {
+      return localStorage.getItem(LABELS_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
+  const toggleLabels = () => {
+    setLabels((v) => {
+      try {
+        localStorage.setItem(LABELS_KEY, v ? '0' : '1');
+      } catch {
+        /* remembered for this session only */
+      }
+      return !v;
+    });
+  };
   const items: RailItem[] = [
     { id: 'submitter', label: 'Submitter', hint: 'Send custom requests to a server: the selected one, ready to change, or a new one.', icon: Send, onClick: onSubmit },
     { id: 'filter', label: 'Filter', hint: 'Filter out requests you do not need, or capture only the ones you do: rules you make.', icon: Filter, panel: 'filter' },
@@ -51,15 +72,20 @@ export function ToolRail({ active, onPanel, onSubmit, exportItems }: { active?: 
       type="button"
       aria-label={i.label}
       aria-pressed={lit(i)}
-      className={cx('h-9 w-9 inline-flex items-center justify-center rounded-md text-muted transition-colors hover:text-fg hover:bg-hover', lit(i) && 'bg-accent-soft text-accent')}
+      className={cx(
+        'inline-flex items-center justify-center rounded-md text-muted transition-colors hover:text-fg hover:bg-hover',
+        labels ? 'h-12 w-[4.5rem] flex-col gap-0.5 text-[10px] leading-none' : 'h-9 w-9',
+        lit(i) && 'bg-accent-soft text-accent',
+      )}
       onClick={i.panel ? () => onPanel(i.panel!) : i.onClick}
       {...extra}
     >
       <i.icon size={17} />
+      {labels && <span className="max-w-full truncate px-0.5">{i.label}</span>}
     </button>
   );
   return (
-    <nav className="w-11 shrink-0 border-r border-line flex flex-col items-center gap-0.5 py-1 bg-panel/40" aria-label="Debugger tools" data-tool-rail>
+    <nav className={cx('shrink-0 border-r border-line flex flex-col items-center gap-0.5 py-1 bg-panel/40', labels ? 'w-20' : 'w-11')} aria-label="Debugger tools" data-tool-rail data-labels={labels || undefined}>
       {items.map((i) => (
         <div key={i.id} className="contents">
           {i.separator && <div className="w-6 border-t border-line my-1" />}
@@ -84,6 +110,19 @@ export function ToolRail({ active, onPanel, onSubmit, exportItems }: { active?: 
           )}
         </div>
       ))}
+      <div className="mt-auto pt-1">
+        <Tooltip side="right" content={labels ? 'Icons only' : 'Show the tools\' names'}>
+          <button
+            type="button"
+            aria-label={labels ? 'Hide the tool names' : 'Show the tool names'}
+            aria-pressed={labels}
+            className={cx('h-8 w-8 inline-flex items-center justify-center rounded-md text-muted hover:text-fg hover:bg-hover', labels && 'text-accent')}
+            onClick={toggleLabels}
+          >
+            <Captions size={15} />
+          </button>
+        </Tooltip>
+      </div>
     </nav>
   );
 }

@@ -168,11 +168,11 @@ const steps = [
     'https-certificate-and-decode',
     `(async () => {
       // the HTTPS menu: decryption on, the certificate dialog shows a fingerprint; the Decode panel reads Base64 and a JWT
-      ${button('HTTPS tunnel')}?.click(); await __t.sleep(500);
+      document.querySelector('main button[aria-label="HTTPS (tunnels)"]')?.click(); await __t.sleep(500);
       [...document.querySelectorAll('[role=menuitem]')].find((m) => /^Decrypt HTTPS/.test(m.textContent.trim()))?.click(); await __t.sleep(800);
       const st = await window.aps.invoke('debug.status');
-      const label = !!${button('HTTPS decrypted')};
-      ${button('HTTPS decrypted')}?.click(); await __t.sleep(500);
+      const label = !!document.querySelector('main button[aria-label="HTTPS (decrypted)"]');
+      document.querySelector('main button[aria-label="HTTPS (decrypted)"]')?.click(); await __t.sleep(500);
       [...document.querySelectorAll('[role=menuitem]')].find((m) => /^Root certificate/.test(m.textContent.trim()))?.click();
       const fp = await __t.waitFor(() => [...document.querySelectorAll('[role=dialog] *')].find((x) => x.children.length === 0 && /^([0-9A-F]{2}:){31}[0-9A-F]{2}$/.test(x.textContent.trim())), 15000);
       document.querySelector('[role=dialog] button[aria-label=Close]')?.click(); await __t.sleep(400);
