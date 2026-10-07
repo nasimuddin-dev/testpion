@@ -18,6 +18,7 @@ import { registerWorkspaceCommands } from './commands/workspace.js';
 import { registerMonitorCommands } from './commands/monitor.js';
 import { registerDoctorCommand } from './commands/doctor.js';
 import { registerSecretsCommands } from './commands/secrets.js';
+import { registerHistoryCommands } from './commands/history.js';
 import { registerOpenApiCommands } from './commands/openapi.js';
 import { registerGenerateCommands } from './commands/generate.js';
 import { registerReplaceCommands } from './commands/replace.js';
@@ -40,6 +41,7 @@ export function buildProgram(): Command {
   registerDoctorCommand(program);
   registerMonitorCommands(program);
   registerSecretsCommands(program);
+  registerHistoryCommands(program);
   registerOpenApiCommands(program);
   registerGenerateCommands(program);
   registerReplaceCommands(program);
