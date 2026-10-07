@@ -17,7 +17,12 @@ import { AssertionEditor } from '../components/AssertionEditor';
 import { CodeEditor } from '../components/CodeEditor';
 import { JsonTree } from '../components/JsonView';
 import { CheckList, ErrorPanel } from '../components/Results';
-import { Badge, Button, cx, Empty, Field, IconButton, Input, Metric, PageHeader, Select, Split, Tabs, type MenuItem } from '../components/ui';
+import { Badge, Button, cx, Empty, Field, IconButton, Input, LinkButton, Metric, PageHeader, Select, Split, Tabs, type MenuItem } from '../components/ui';
+
+/** A cloud provider asks for a key; the offline demo, Ollama and a local OpenAI-compatible server don't. */
+const needsKey = (p: ProviderConfig) => p.kind !== 'mock' && p.kind !== 'ollama' && !(p.kind === 'openai-compatible' && /localhost|127\.0\.0\.1/.test(p.baseUrl ?? ''));
+/** A model's name without the snapshot date a provider answers with (gpt-4o-mini-2024-07-18 → gpt-4o-mini). */
+const undatedModel = (m: string) => m.replace(/(-\d{4}-\d{2}-\d{2}|-\d{8}|@\d{8})$/, '');
 
 interface ChatResult {
   id: string;
@@ -88,10 +93,15 @@ export function AiLabView() {
     landed.current = true;
     if (!providers.length) setTab('providers');
   }, [providers, setTab]);
+  /** A provider to show (a link such as an error's "Add the key"): selected, its key field focused. */
+  const [focusProvider, setFocusProvider] = useState<{ id: string; at: number }>();
   useIntent('ai', (p) => {
     if (p?.savedId) setTab('playground');
     if (p?.tab) setTab(p.tab);
-    if (p?.providerId) setTab('providers');
+    if (p?.providerId) {
+      setTab('providers');
+      setFocusProvider({ id: p.providerId, at: Date.now() });
+    }
     if (p?.reset) setTab('playground');
   });
   return (
@@ -110,7 +120,7 @@ export function AiLabView() {
       <div className="flex-1 min-h-0">
         {tab === 'playground' && <Playground providers={providers ?? []} onSetUp={() => setTab('providers')} />}
         {tab === 'compare' && <Compare providers={providers ?? []} onSetUp={() => setTab('providers')} />}
-        {tab === 'providers' && <Providers providers={providers ?? []} onSaved={load} />}
+        {tab === 'providers' && <Providers providers={providers ?? []} onSaved={load} focus={focusProvider} />}
         {tab === 'usage' && <AiUsage />}
       </div>
     </div>
@@ -433,7 +443,24 @@ function Playground({ providers, onSetUp }: { providers: ProviderConfig[]; onSet
                   <Metric label="Latency" value={r ? formatMs(r.timing.totalMs) : '…'} />
                   <Metric label="Time to first token" value={r?.timing.firstTokenMs !== undefined ? formatMs(r.timing.firstTokenMs) : '–'} />
                   <Metric label="Tokens in / out" value={r ? `${r.usage.inputTokens} / ${r.usage.outputTokens}` : '…'} sub={r?.usageEstimated ? 'estimated' : undefined} />
-                  <Metric label="Est. cost" value={r ? formatCost(r.costUsd) : '…'} sub={r?.priceVersion ? `prices ${r.priceVersion}` : r ? 'no price configured' : undefined} />
+                  <Metric
+                    label="Est. cost"
+                    value={r ? formatCost(r.costUsd) : '…'}
+                    sub={
+                      r?.priceVersion ? (
+                        `prices ${r.priceVersion}`
+                      ) : r ? (
+                        // no price for this model yet: one click to a price row filled in for it (Settings ▸ Model pricing)
+                        <LinkButton
+                          icon={null}
+                          onClick={() => useApp.getState().openIntent('settings', { tab: 'pricing', addPrice: { provider: d.provider, model: undatedModel(r.model || d.model) } })}
+                          title="Prices are yours to set (they change): add this model's price per million tokens"
+                        >
+                          Set a price…
+                        </LinkButton>
+                      ) : undefined
+                    }
+                  />
                   {r && d.format !== 'text' && <Metric label="Structured output" value={r.schemaValid === false ? 'invalid' : r.isJson ? 'valid' : 'not JSON'} tone={r.schemaValid === false || !r.isJson ? 'bad' : 'ok'} />}
                 </div>
                 <Tabs
@@ -635,10 +662,16 @@ const KINDS: Array<[ProviderConfig['kind'], string, string]> = [
   ['mock', 'Mock (offline, deterministic)', 'mock://local'],
 ];
 
-function Providers({ providers, onSaved }: { providers: ProviderConfig[]; onSaved(): void }) {
+function Providers({ providers, onSaved, focus }: { providers: ProviderConfig[]; onSaved(): void; focus?: { id: string; at: number } }) {
   const [list, setList] = useState<ProviderConfig[]>(providers);
   const [keys, setKeys] = useState<Record<string, string>>({});
-  const [sel, setSel] = useState(providers[0]?.id);
+  const [sel, setSel] = useState(focus?.id ?? providers[0]?.id);
+  const keyField = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (!focus) return;
+    setSel(focus.id);
+    requestAnimationFrame(() => keyField.current?.focus());
+  }, [focus]);
   const [testing, setTesting] = useState(false);
   const env = useApp((s) => s.environment);
   useEffect(() => setList(providers), [providers]);
@@ -716,7 +749,10 @@ function Providers({ providers, onSaved }: { providers: ProviderConfig[]; onSave
                   {x.hasKey && <KeyRound size={11} className="text-warn shrink-0" aria-label="API key stored" />}
                   {(x as { builtIn?: boolean }).builtIn && <Badge>Settings</Badge>}
                 </div>
-                <div className="text-xs text-muted truncate">{KINDS.find((k) => k[0] === x.kind)?.[1]}</div>
+                <div className="text-xs text-muted truncate">
+                  {KINDS.find((k) => k[0] === x.kind)?.[1]}
+                  {!x.hasKey && needsKey(x) && <span className="text-warn"> · needs an API key</span>}
+                </div>
               </button>
               <RowMenu label={x.name} items={providerMenu(x)} open={menuFor === x.id} onOpenChange={(o) => setMenuFor(o ? x.id : undefined)} />
             </div>
@@ -778,7 +814,7 @@ function Providers({ providers, onSaved }: { providers: ProviderConfig[]; onSave
             </Field>
             {p.kind !== 'mock' && (
               <Field label="API key" hint={p.hasKey ? 'A key is stored in the OS credential store. Type to replace it.' : 'Stored encrypted in the OS credential store — never in workspace files. You can also reference {{$env.NAME}} in the field below.'}>
-                <Input type="password" placeholder={p.hasKey ? '••••••••••••' : p.kind === 'bedrock' ? 'accessKeyId:secretAccessKey[:sessionToken] or a Bedrock API key' : 'sk-…'} value={keys[p.id] ?? ''} onChange={(e) => setKeys({ ...keys, [p.id]: e.target.value })} />
+                <Input ref={keyField} type="password" placeholder={p.hasKey ? '••••••••••••' : p.kind === 'bedrock' ? 'accessKeyId:secretAccessKey[:sessionToken] or a Bedrock API key' : 'sk-…'} value={keys[p.id] ?? ''} onChange={(e) => setKeys({ ...keys, [p.id]: e.target.value })} />
               </Field>
             )}
             {p.kind !== 'mock' && (

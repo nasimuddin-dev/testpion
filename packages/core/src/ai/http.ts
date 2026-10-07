@@ -53,12 +53,31 @@ export async function doFetch(
     }
     const err = new ApsError(kind, `${opts.provider} returned HTTP ${res.status}: ${(opts.redactor?.redactString(msg) ?? msg).slice(0, 500)}`, {
       details: { status: res.status },
+      ...(providerAdvice(opts.provider, res.status, msg) ?? {}),
     });
     const ra = res.headers.get('retry-after');
     if (ra) (err as ApsError & { retryAfterMs?: number }).retryAfterMs = Number.isFinite(Number(ra)) ? Number(ra) * 1000 : undefined;
     throw err;
   }
   return res;
+}
+
+/** What to do about an AI provider's error status: where the key is set, quota, the model list. */
+export function providerAdvice(provider: string, status: number, message: string): { why: string; suggestions: string[] } | undefined {
+  const key = [
+    `Check the key: AI Lab ▸ Providers ▸ ${provider} ▸ API key. A key that worked before may have been revoked or may have expired: make a new one in the provider's dashboard.`,
+    'In the CLI or CI the key comes from an environment variable: TESTPION_SECRET_PROVIDER_<ID>_APIKEY for a provider whose key is a secret.',
+  ];
+  if (status === 401) return { why: `${provider} did not accept the API key.`, suggestions: key };
+  if (status === 403) return { why: `The key is valid, but ${provider} does not allow it this model or operation.`, suggestions: ['Check that the key\'s project or organization has access to this model.', ...key] };
+  if (status === 429 && /quota|billing|credit|insufficient/i.test(message))
+    return { why: `The ${provider} account has no credit left or reached its spending limit.`, suggestions: [`Check billing and limits in the ${provider} dashboard, then run again.`] };
+  if (status === 429)
+    return { why: `${provider} is limiting how many requests this key may send.`, suggestions: ['Wait a moment and run again.', 'Run fewer tests at once (concurrency) or add retries.'] };
+  if (status === 404)
+    return { why: `${provider} does not know this model (or the address is wrong).`, suggestions: ['Pick a model from the list: the refresh button next to the model name reads the models your key can use.', 'Check the provider\'s base URL.'] };
+  if (status >= 500) return { why: `${provider} had a problem of its own.`, suggestions: ['Run again in a moment; check the provider\'s status page if it persists.'] };
+  return undefined;
 }
 
 /** Iterate Server-Sent Events from a fetch Response. Yields `{ event, data }`. */

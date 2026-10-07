@@ -24,6 +24,7 @@ All checks share `type`, an optional `name`, and usually `path` (JSONPath such a
 | `asyncapi` | Realtime tests: `spec` (an AsyncAPI 2 / 3 file, or the document inline), `channel` (WebSocket), `allowUnknownChannels`. See [AsyncAPI checks](/api-testing/websocket#check-messages-against-an-asyncapi-document). |
 | `type`, `length`, `threshold`, `greater-than`, `less-than` | `path`, `expected` / `min` / `max` |
 | `latency`, `tokens`, `cost` | `max` (`tokens` also takes `field: input\|output\|total`) |
+| `first-token` (alias `ttft`) | LLM: `max` milliseconds until the first token of a streamed answer (without streaming, the whole latency) |
 | `header` | `header`, `expected` |
 | `jwt` | A JSON Web Token in the response: from `header` (e.g. `Authorization`), from `path` (a JSONPath such as `$.access_token`), or the first one found. Fails when there is none, it has expired, or it expires within `min` seconds; `claims` must match (a list claim such as `aud` must contain the value). The signature is not verified. Example: `{ type: jwt, path: $.id_token, min: 300, claims: { iss: https://auth.example.com } }`. |
 | `certificate` | HTTPS: `min` days the server's TLS certificate must still be valid (default 14). Fails when it expires sooner or has expired; the message names the subject, issuer and date. Useful in [monitors](./monitors.md). |

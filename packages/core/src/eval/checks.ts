@@ -24,6 +24,8 @@ export interface CheckContext {
   /** Raw text output (response body, LLM text, tool text). */
   text: string;
   latencyMs?: number;
+  /** LLM: until the first token arrived (streamed answers). */
+  firstTokenMs?: number;
   tokens?: TokenUsage;
   costUsd?: number;
   error?: NormalizedError;
@@ -355,6 +357,9 @@ registerCheck('less-than', (cfg, ctx) => {
 });
 registerCheck('latency', (cfg, ctx) => numericCheck({ ...cfg, max: cfg.max ?? cfg.expected }, ctx.latencyMs, 'latency (ms)'));
 registry.set('response-time', registry.get('latency')!);
+// how long until the model started answering (a streamed answer; without streaming it is the whole latency)
+registerCheck('first-token', (cfg, ctx) => numericCheck({ ...cfg, max: cfg.max ?? cfg.expected }, ctx.firstTokenMs ?? ctx.latencyMs, 'time to first token (ms)'));
+registry.set('ttft', registry.get('first-token')!);
 registerCheck('tokens', (cfg, ctx) => {
   const field = String(cfg.field ?? 'total');
   const v = field === 'output' ? ctx.tokens?.outputTokens : field === 'input' ? ctx.tokens?.inputTokens : ctx.tokens?.totalTokens;
@@ -524,30 +529,25 @@ function judgePrompt(criteria: string, ctx: CheckContext, extra: { reference?: s
   ].join('\n');
 }
 
-export async function runJudge(
-  cfg: CheckConfig,
-  ctx: CheckContext,
-  criteria: string,
-  extra: { reference?: string; contexts?: string } = {},
-): Promise<{ score: number; reasoning: string; judge: Record<string, unknown> }> {
+/** Asks the judge model one prompt for a JSON answer; the judge's identity goes with the result (reproducibility). */
+async function askJudge(cfg: CheckConfig, ctx: CheckContext, prompt: string, key: string, maxTokens = 400): Promise<{ text: string; value: unknown; judge: Record<string, unknown> }> {
   const providers = ctx.services?.providers;
   if (!providers) throw new Error('no provider registry available for the judge');
   const jref = (cfg.judge ?? { provider: cfg.provider ?? 'mock', name: cfg.model }) as ModelRef;
   const { provider, model } = providers.resolveModel(jref);
-  const prompt = judgePrompt(criteria, ctx, extra);
   const judge = {
     provider: provider.config.name,
     model,
     temperature: jref.temperature ?? 0,
     promptVersion: JUDGE_PROMPT_VERSION,
-    configHash: createHash('sha256').update(JSON.stringify({ jref, criteria, v: JUDGE_PROMPT_VERSION })).digest('hex').slice(0, 12),
+    configHash: createHash('sha256').update(JSON.stringify({ jref, criteria: key, v: JUDGE_PROMPT_VERSION })).digest('hex').slice(0, 12),
   };
   const span = ctx.services?.span?.child(`judge ${model}`, 'llm', { attributes: judge, input: prompt });
   try {
     const r = await provider.chat({
       model,
       temperature: jref.temperature ?? 0,
-      maxTokens: jref.maxTokens ?? 400,
+      maxTokens: jref.maxTokens ?? maxTokens,
       seed: jref.seed,
       messages: [{ role: 'user', content: prompt }],
       responseFormat: { type: 'json' },
@@ -555,20 +555,86 @@ export async function runJudge(
     });
     span?.end({ output: r.text });
     const p = tryParseJson(r.text);
-    const obj = (p.ok ? p.value : {}) as { score?: unknown; reasoning?: unknown };
-    let score = Number(obj.score);
-    if (!Number.isFinite(score)) {
-      const m = /score"?\s*[:=]\s*([0-9.]+)/i.exec(r.text);
-      score = m ? Number(m[1]) : NaN;
-    }
-    if (!Number.isFinite(score)) throw new Error(`judge returned no parseable score: ${short(r.text, 200)}`);
-    if (score > 1 && score <= 10) score /= 10;
-    return { score: Math.max(0, Math.min(1, score)), reasoning: String(obj.reasoning ?? r.text).slice(0, 2000), judge };
+    return { text: r.text, value: p.ok ? p.value : undefined, judge };
   } catch (e) {
     span?.fail(e);
     throw e;
   }
 }
+
+export async function runJudge(
+  cfg: CheckConfig,
+  ctx: CheckContext,
+  criteria: string,
+  extra: { reference?: string; contexts?: string } = {},
+): Promise<{ score: number; reasoning: string; judge: Record<string, unknown> }> {
+  const { text, value, judge } = await askJudge(cfg, ctx, judgePrompt(criteria, ctx, extra), criteria);
+  const obj = (value ?? {}) as { score?: unknown; reasoning?: unknown };
+  let score = Number(obj.score);
+  if (!Number.isFinite(score)) {
+    const m = /score"?\s*[:=]\s*([0-9.]+)/i.exec(text);
+    score = m ? Number(m[1]) : NaN;
+  }
+  if (!Number.isFinite(score)) throw new Error(`judge returned no parseable score: ${short(text, 200)}`);
+  if (score > 1 && score <= 10) score /= 10;
+  return { score: Math.max(0, Math.min(1, score)), reasoning: String(obj.reasoning ?? text).slice(0, 2000), judge };
+}
+
+/**
+ * One judged item of a claim-by-claim check: a claim of the answer, a retrieved document, a statement of the reference.
+ * `ok` is the verdict (supported, relevant, found); `evidence` is what the judge pointed at, so a person can check it.
+ */
+export interface EvidenceItem {
+  text: string;
+  ok: boolean;
+  evidence?: string;
+}
+
+/**
+ * Claim-by-claim judging (the way Ragas measures faithfulness, context precision and recall): the judge returns a
+ * verdict per item, with the evidence, instead of one number. The score is computed here from the verdicts, so it
+ * can be followed item by item, and the items are kept in the result (what was demonstrated, what is still to verify).
+ */
+async function judgeItems(cfg: CheckConfig, ctx: CheckContext, task: string, sections: Array<[string, string | undefined]>, key: string): Promise<{ items: EvidenceItem[]; judge: Record<string, unknown> }> {
+  const prompt = [
+    'You are a strict, impartial evaluator. Judge only from the text given here, not from your own knowledge.',
+    task,
+    'Return ONLY a JSON object: {"items": [{"text": "<the item>", "ok": true|false, "evidence": "<a short quote or document id that decides it, or why nothing does>"}]}.',
+    ...sections.filter(([, v]) => v).map(([k, v]) => `\n${k}:\n${v}`),
+  ].join('\n');
+  const { text, value, judge } = await askJudge(cfg, ctx, prompt, key, 1500);
+  const raw = (value as { items?: unknown } | undefined)?.items;
+  if (!Array.isArray(raw)) throw new Error(`judge returned no items: ${short(text, 200)}`);
+  const items = raw
+    .map((x) => x as { text?: unknown; ok?: unknown; evidence?: unknown })
+    .filter((x) => x && typeof x.text === 'string')
+    .map((x) => ({ text: String(x.text).slice(0, 500), ok: x.ok === true || x.ok === 'true', ...(x.evidence ? { evidence: String(x.evidence).slice(0, 300) } : {}) }));
+  return { items, judge };
+}
+
+/** "3 of 4 claims supported; still to verify: …" — the items a person should look at first. */
+function itemsSummary(items: EvidenceItem[], noun: string, verdict: string): string {
+  const bad = items.filter((i) => !i.ok);
+  const head = `${items.length - bad.length} of ${items.length} ${noun} ${verdict}`;
+  return bad.length ? `${head}; still to verify: ${bad.slice(0, 3).map((i) => `"${short(i.text, 80)}"`).join(', ')}${bad.length > 3 ? ` and ${bad.length - 3} more` : ''}` : head;
+}
+
+const round3 = (n: number) => Math.round(n * 1000) / 1000;
+
+/** Rank-aware average precision: relevant documents ranked first score higher. */
+function averagePrecision(relevant: boolean[]): number {
+  let hits = 0;
+  let sum = 0;
+  relevant.forEach((r, i) => {
+    if (r) {
+      hits++;
+      sum += hits / (i + 1);
+    }
+  });
+  return hits ? round3(sum / hits) : 0;
+}
+
+const judgeFailed = (cfg: CheckConfig, e: unknown) => res(cfg, false, `judge failed: ${(e as Error).message}`, { source: 'ai-judge' });
 
 registerCheck('llm-judge', async (cfg, ctx) => {
   const criteria = String(cfg.criteria ?? cfg.rubric ?? 'The response is correct, relevant, complete and follows the instructions.');
@@ -587,36 +653,102 @@ function ragContexts(ctx: CheckContext): RetrievedDoc[] {
   return ctx.contexts ?? [];
 }
 
-registerCheck('context-precision', (cfg, ctx) => {
+registerCheck('context-precision', async (cfg, ctx) => {
   const docs = ragContexts(ctx);
-  const ref = `${ctx.question ?? ''} ${asText(cfg.expected ?? ctx.expected ?? '')}`;
-  const relevance = docs.map((d) => coverage(d.text, ref) >= Number(cfg.docThreshold ?? 0.1) || coverage(ref, d.text) >= 0.3);
-  // rank-aware average precision
-  let hits = 0;
-  let sum = 0;
-  relevance.forEach((r, i) => {
-    if (r) {
-      hits++;
-      sum += hits / (i + 1);
-    }
-  });
-  const score = hits ? Math.round((sum / hits) * 1000) / 1000 : 0;
   const t = threshold(cfg, 0.5);
+  const reference = cfg.expected ?? ctx.expected;
+  if (cfg.judge) {
+    try {
+      const { items, judge } = await judgeItems(
+        cfg,
+        ctx,
+        'For each RETRIEVED DOCUMENT, in the order given, decide whether it is useful for answering the QUESTION (to reach the REFERENCE ANSWER when one is given). One item per document; "text" is the document id.',
+        [
+          ['QUESTION', asText(ctx.question ?? ctx.input ?? '')],
+          ['REFERENCE ANSWER', reference !== undefined ? asText(reference) : undefined],
+          ['RETRIEVED DOCUMENTS', docs.map((d) => `[${d.id}] ${d.text}`).join('\n')],
+        ],
+        'context-precision',
+      );
+      const byId = new Map(items.map((i) => [i.text.replace(/^\[|\]$/g, ''), i]));
+      const ordered = docs.map((d, i) => byId.get(d.id) ?? items[i] ?? { text: d.id, ok: false, evidence: 'not judged' });
+      const score = averagePrecision(ordered.map((i) => i.ok));
+      return res(cfg, score >= t, `context precision (judge) ${score}: ${itemsSummary(ordered, 'documents', 'useful')}`, {
+        source: 'ai-judge',
+        score,
+        metadata: { items: ordered, judge, threshold: t },
+      });
+    } catch (e) {
+      return judgeFailed(cfg, e);
+    }
+  }
+  const ref = `${ctx.question ?? ''} ${asText(reference ?? '')}`;
+  const relevance = docs.map((d) => coverage(d.text, ref) >= Number(cfg.docThreshold ?? 0.1) || coverage(ref, d.text) >= 0.3);
+  const score = averagePrecision(relevance);
+  const hits = relevance.filter(Boolean).length;
   return res(cfg, score >= t, `context precision ${score} (${hits}/${docs.length} relevant)`, {
     source: 'heuristic',
     score,
-    metadata: { relevant: docs.filter((_, i) => relevance[i]).map((d) => d.id) },
+    metadata: { relevant: docs.filter((_, i) => relevance[i]).map((d) => d.id), items: docs.map((d, i) => ({ text: d.id, ok: relevance[i]!, evidence: short(d.text, 120) })) },
   });
 });
 
-registerCheck('context-recall', (cfg, ctx) => {
+registerCheck('context-recall', async (cfg, ctx) => {
   const exp = asText(cfg.expected ?? ctx.expected ?? '');
   const all = ragContexts(ctx).map((d) => d.text).join('\n');
-  const sents = sentences(exp);
-  const covered = sents.filter((s) => coverage(s, all) >= 0.6).length;
-  const score = sents.length ? Math.round((covered / sents.length) * 1000) / 1000 : Math.round(coverage(exp, all) * 1000) / 1000;
   const t = threshold(cfg, 0.6);
-  return res(cfg, score >= t, `context recall ${score}`, { source: 'heuristic', score });
+  if (cfg.judge) {
+    try {
+      const { items, judge } = await judgeItems(
+        cfg,
+        ctx,
+        'Split the REFERENCE ANSWER into its statements. For each, decide whether the RETRIEVED CONTEXT contains the information it needs (ok: true) or not.',
+        [
+          ['QUESTION', asText(ctx.question ?? ctx.input ?? '') || undefined],
+          ['REFERENCE ANSWER', exp],
+          ['RETRIEVED CONTEXT', ragContexts(ctx).map((d) => `[${d.id}] ${d.text}`).join('\n')],
+        ],
+        'context-recall',
+      );
+      const score = items.length ? round3(items.filter((i) => i.ok).length / items.length) : 0;
+      return res(cfg, score >= t, `context recall (judge) ${score}: ${itemsSummary(items, 'statements', 'found in the context')}`, { source: 'ai-judge', score, metadata: { items, judge, threshold: t } });
+    } catch (e) {
+      return judgeFailed(cfg, e);
+    }
+  }
+  const sents = sentences(exp);
+  const found = sents.map((s) => coverage(s, all) >= 0.6);
+  const score = sents.length ? round3(found.filter(Boolean).length / sents.length) : round3(coverage(exp, all));
+  return res(cfg, score >= t, `context recall ${score}`, { source: 'heuristic', score, metadata: { items: sents.map((s, i) => ({ text: s, ok: found[i]! })) } });
+});
+
+/** The names, numbers and dates of a text (what a retrieval must not lose). */
+function entities(text: string): string[] {
+  const found = new Set<string>();
+  for (const m of text.matchAll(/\b(?:[A-Z][\w'-]*(?:\s+(?:of|de|the|and|&)?\s*[A-Z][\w'-]*)*)\b/g)) {
+    const e = m[0].trim();
+    // a capitalized word that starts a sentence is not a name
+    const at = m.index ?? 0;
+    const startsSentence = at === 0 || /[.!?]\s*$/.test(text.slice(Math.max(0, at - 3), at));
+    if (!startsSentence || e.includes(' ')) found.add(e);
+  }
+  // numbers with their unit (8am, 25%, 3.5kg, 2024-07-18)
+  for (const m of text.matchAll(/\b\d(?:[\d,./:-]*\d)?[a-z%]*/gi)) found.add(m[0]);
+  return [...found];
+}
+
+// the reference's entities that the retrieved context holds (Ragas' context entity recall), with no model
+registerCheck('context-entity-recall', (cfg, ctx) => {
+  const exp = asText(cfg.expected ?? ctx.expected ?? '');
+  const all = ragContexts(ctx)
+    .map((d) => d.text)
+    .join('\n')
+    .toLowerCase();
+  const list = Array.isArray(cfg.entities) ? (cfg.entities as unknown[]).map(String) : entities(exp);
+  const items = list.map((e) => ({ text: e, ok: all.includes(e.toLowerCase()) }));
+  const score = items.length ? round3(items.filter((i) => i.ok).length / items.length) : 1;
+  const t = threshold(cfg, 0.8);
+  return res(cfg, score >= t, `context entity recall ${score}: ${itemsSummary(items, 'entities', 'retrieved')}`, { source: 'deterministic', score, metadata: { items } });
 });
 
 registerCheck('groundedness', async (cfg, ctx) => {
@@ -624,22 +756,40 @@ registerCheck('groundedness', async (cfg, ctx) => {
   const t = threshold(cfg, 0.7);
   if (cfg.judge) {
     try {
-      const j = await runJudge(cfg, ctx, 'Every claim in the RESPONSE is supported by the RETRIEVED CONTEXT. Score 1 if fully supported, 0 if mostly unsupported.', { contexts: all });
-      return res(cfg, j.score >= t, `groundedness (judge) ${j.score}`, { source: 'ai-judge', score: j.score, explanation: j.reasoning, metadata: { judge: j.judge } });
+      const { items, judge } = await judgeItems(
+        cfg,
+        ctx,
+        'Break the RESPONSE into its atomic factual claims. For each claim, decide whether the RETRIEVED CONTEXT supports it (ok: true) or not (unsupported or contradicted); the evidence is the supporting quote or document id.',
+        [
+          ['QUESTION', asText(ctx.question ?? ctx.input ?? '') || undefined],
+          ['RETRIEVED CONTEXT', all],
+          ['RESPONSE', ctx.text || asText(ctx.body)],
+        ],
+        'groundedness',
+      );
+      // an answer without a claim (a refusal, "I don't know") makes up nothing
+      const score = items.length ? round3(items.filter((i) => i.ok).length / items.length) : 1;
+      return res(cfg, score >= t, `groundedness (judge) ${score}: ${itemsSummary(items, 'claims', 'supported by the context')}`, {
+        source: 'ai-judge',
+        score,
+        metadata: { items, judge, threshold: t, hallucinationIndicator: round3(1 - score) },
+      });
     } catch (e) {
-      return res(cfg, false, `judge failed: ${(e as Error).message}`, { source: 'ai-judge' });
+      return judgeFailed(cfg, e);
     }
   }
   const sents = sentences(ctx.text);
-  const unsupported = sents.filter((s) => coverage(s, all) < Number(cfg.sentenceThreshold ?? 0.5));
-  const score = sents.length ? Math.round(((sents.length - unsupported.length) / sents.length) * 1000) / 1000 : 1;
+  const supported = sents.map((s) => coverage(s, all) >= Number(cfg.sentenceThreshold ?? 0.5));
+  const unsupported = sents.filter((_, i) => !supported[i]);
+  const score = sents.length ? round3((sents.length - unsupported.length) / sents.length) : 1;
   return res(cfg, score >= t, `groundedness ${score} — ${unsupported.length} unsupported sentence(s)`, {
     source: 'heuristic',
     score,
-    metadata: { unsupported: unsupported.slice(0, 10), hallucinationIndicator: Math.round((1 - score) * 1000) / 1000 },
+    metadata: { unsupported: unsupported.slice(0, 10), hallucinationIndicator: round3(1 - score), items: sents.map((s, i) => ({ text: s, ok: supported[i]! })) },
   });
 });
 registry.set('hallucination', registry.get('groundedness')!);
+registry.set('faithfulness', registry.get('groundedness')!);
 
 registerCheck('answer-relevance', async (cfg, ctx) => {
   const t = threshold(cfg, cfg.judge ? 0.7 : 0.2);
@@ -648,13 +798,86 @@ registerCheck('answer-relevance', async (cfg, ctx) => {
       const j = await runJudge(cfg, ctx, 'The RESPONSE directly and completely answers the INPUT question.');
       return res(cfg, j.score >= t, `answer relevance (judge) ${j.score}`, { source: 'ai-judge', score: j.score, explanation: j.reasoning, metadata: { judge: j.judge } });
     } catch (e) {
-      return res(cfg, false, `judge failed: ${(e as Error).message}`, { source: 'ai-judge' });
+      return judgeFailed(cfg, e);
     }
   }
   const q = asText(ctx.question ?? ctx.input ?? '');
   const exp = asText(cfg.expected ?? ctx.expected ?? '');
-  const score = Math.round(Math.max(coverage(q, ctx.text) * 0.5 + (exp ? tokenF1(ctx.text, exp) * 0.5 : coverage(q, ctx.text) * 0.5), 0) * 1000) / 1000;
+  const score = round3(Math.max(coverage(q, ctx.text) * 0.5 + (exp ? tokenF1(ctx.text, exp) * 0.5 : coverage(q, ctx.text) * 0.5), 0));
   return res(cfg, score >= t, `answer relevance ${score}`, { source: 'heuristic', score });
+});
+
+/**
+ * The answer's facts against the reference's (Ragas' factual correctness): precision is the share of the answer's
+ * claims the reference supports, recall the share of the reference's claims the answer makes; `mode` picks f1
+ * (default), precision or recall.
+ */
+registerCheck('answer-correctness', async (cfg, ctx) => {
+  const reference = asText(cfg.expected ?? ctx.expected ?? '');
+  const answer = cfg.path ? asText(query(ctx.body, String(cfg.path))) : ctx.text;
+  const mode = String(cfg.mode ?? 'f1');
+  const t = threshold(cfg, 0.7);
+  if (!reference) return res(cfg, false, 'answer-correctness needs a reference answer (expected)', { source: cfg.judge ? 'ai-judge' : 'heuristic' });
+  let answerItems: EvidenceItem[];
+  let referenceItems: EvidenceItem[];
+  let judge: Record<string, unknown> | undefined;
+  if (cfg.judge) {
+    try {
+      const a = await judgeItems(
+        cfg,
+        ctx,
+        'Break the RESPONSE into its atomic factual claims. For each, decide whether the REFERENCE ANSWER supports it (ok: true) or not.',
+        [
+          ['QUESTION', asText(ctx.question ?? ctx.input ?? '') || undefined],
+          ['REFERENCE ANSWER', reference],
+          ['RESPONSE', answer],
+        ],
+        'answer-correctness:precision',
+      );
+      const b =
+        mode === 'precision'
+          ? { items: [] }
+          : await judgeItems(
+              cfg,
+              ctx,
+              'Break the REFERENCE ANSWER into its atomic factual claims. For each, decide whether the RESPONSE states it too (ok: true) or misses or contradicts it.',
+              [
+                ['QUESTION', asText(ctx.question ?? ctx.input ?? '') || undefined],
+                ['REFERENCE ANSWER', reference],
+                ['RESPONSE', answer],
+              ],
+              'answer-correctness:recall',
+            );
+      answerItems = a.items;
+      referenceItems = b.items;
+      judge = a.judge;
+    } catch (e) {
+      return judgeFailed(cfg, e);
+    }
+  } else {
+    answerItems = sentences(answer).map((s) => ({ text: s, ok: coverage(s, reference) >= 0.5 }));
+    referenceItems = sentences(reference).map((s) => ({ text: s, ok: coverage(s, answer) >= 0.5 }));
+  }
+  const share = (xs: EvidenceItem[]) => (xs.length ? xs.filter((x) => x.ok).length / xs.length : 0);
+  const precision = share(answerItems);
+  const recall = share(referenceItems);
+  const f1 = precision + recall ? (2 * precision * recall) / (precision + recall) : 0;
+  const score = round3(mode === 'precision' ? precision : mode === 'recall' ? recall : f1);
+  const missing = referenceItems.filter((i) => !i.ok);
+  const wrong = answerItems.filter((i) => !i.ok);
+  const detail = [wrong.length ? `${wrong.length} claim(s) not in the reference` : '', mode !== 'precision' && missing.length ? `${missing.length} reference fact(s) missing` : ''].filter(Boolean).join(', ');
+  return res(cfg, score >= t, `answer correctness ${mode} ${score}${detail ? ` — ${detail}` : ''}`, {
+    source: cfg.judge ? 'ai-judge' : 'heuristic',
+    score,
+    metadata: {
+      mode,
+      precision: round3(precision),
+      ...(mode !== 'precision' ? { recall: round3(recall) } : {}),
+      items: [...answerItems.map((i) => ({ ...i, text: `answer: ${i.text}` })), ...referenceItems.map((i) => ({ ...i, text: `reference: ${i.text}` }))],
+      ...(judge ? { judge } : {}),
+      threshold: t,
+    },
+  });
 });
 
 registerCheck('citation', (cfg, ctx) => {

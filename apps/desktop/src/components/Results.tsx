@@ -1,4 +1,4 @@
-import { AlertTriangle, Bot, CheckCircle2, CircleSlash, Lightbulb, Sparkles, XCircle } from 'lucide-react';
+import { AlertTriangle, Bot, CheckCircle2, CircleHelp, CircleSlash, KeyRound, Lightbulb, Sparkles, XCircle } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { NormalizedError } from '../api';
 import type { CheckResult } from '../types';
@@ -7,10 +7,12 @@ import { Badge, Button, cx } from './ui';
 
 /** Normalised error display: what happened, why, and how to fix it (spec §45). */
 export function ErrorPanel({ error, context }: { error: NormalizedError; context?: unknown }) {
+  // an AI provider without its key: the way to fix it is one click away (the assistant can't explain it without a key)
+  const setup = (error.details as { setup?: { provider?: string } } | undefined)?.setup;
   const ask = () =>
     useApp.getState().set({ assistant: { task: 'explain-error', title: `Explain ${error.kind}`, context: { error, ...((context as object) ?? {}) } } });
   return (
-    <div className="m-3 rounded-lg border border-bad/40 bg-bad/5 p-4 text-sm">
+    <div role="alert" className="m-3 rounded-lg border border-bad/40 bg-bad/5 p-4 text-sm">
       <div className="flex items-start gap-2">
         <XCircle size={18} className="text-bad shrink-0 mt-0.5" />
         <div className="flex-1 min-w-0">
@@ -36,10 +38,22 @@ export function ErrorPanel({ error, context }: { error: NormalizedError; context
               </ul>
             </div>
           )}
-          {error.details && <pre className="mt-3 mono text-xs bg-panel p-2 rounded overflow-auto max-h-40">{JSON.stringify(error.details, null, 2)}</pre>}
-          <Button size="sm" variant="ghost" className="mt-3 -ml-2" icon={<Sparkles size={12} />} onClick={ask}>
-            Explain with AI assistant
-          </Button>
+          {error.details && !setup && <pre className="mt-3 mono text-xs bg-panel p-2 rounded overflow-auto max-h-40">{JSON.stringify(error.details, null, 2)}</pre>}
+          {setup ? (
+            <Button
+              size="sm"
+              variant="primary"
+              className="mt-3"
+              icon={<KeyRound size={12} />}
+              onClick={() => useApp.getState().openIntent('ai', { providerId: setup.provider, tab: 'providers' })}
+            >
+              Add the key
+            </Button>
+          ) : (
+            <Button size="sm" variant="ghost" className="mt-3 -ml-2" icon={<Sparkles size={12} />} onClick={ask}>
+              Explain with AI assistant
+            </Button>
+          )}
         </div>
       </div>
     </div>
@@ -85,10 +99,43 @@ export function CheckList({ checks, compact, actions }: { checks: CheckResult[];
                 {c.explanation}
               </div>
             )}
+            <EvidenceList check={c} />
           </div>
         </div>
       ))}
     </div>
+  );
+}
+
+/**
+ * The items a claim-by-claim check judged (claims, documents, statements, entities): what is still to verify first,
+ * then what was demonstrated, each with its evidence. A person decides; the list is what they look at.
+ */
+function EvidenceList({ check }: { check: CheckResult }) {
+  const items = (check.metadata?.items as Array<{ text: string; ok: boolean; evidence?: string }> | undefined) ?? [];
+  if (!items.length) return null;
+  const open = items.filter((i) => !i.ok);
+  const done = items.filter((i) => i.ok);
+  const row = (i: { text: string; ok: boolean; evidence?: string }, k: number) => (
+    <li key={k} className="flex items-start gap-1.5">
+      {i.ok ? <CheckCircle2 size={12} className="text-ok mt-0.5 shrink-0" /> : <CircleHelp size={12} className="text-warn mt-0.5 shrink-0" />}
+      <span className="min-w-0">
+        {i.text}
+        {i.evidence && <span className="text-muted"> — {i.evidence}</span>}
+      </span>
+    </li>
+  );
+  return (
+    <details className="mt-1 text-xs" open={!check.passed}>
+      <summary className="cursor-pointer text-muted select-none">
+        {open.length ? `${open.length} still to verify, ` : ''}
+        {done.length} demonstrated{check.source === 'ai-judge' ? ' (AI-judged — check the evidence)' : ''}
+      </summary>
+      <ul className="mt-1 space-y-0.5 ml-1">
+        {open.map(row)}
+        {done.map((i, k) => row(i, open.length + k))}
+      </ul>
+    </details>
   );
 }
 

@@ -18,8 +18,21 @@ export function SettingsView() {
   const ws = useApp((s) => s.workspace);
   const [s, setS] = useState<AppSettings | undefined>(settings);
   const [tab, setTab] = useState<Tab>('appearance');
-  // other views open a tab directly, e.g. the assistant's "Set up" button
-  useIntent('settings', (p?: { tab?: Tab }) => p?.tab && setTab(p.tab), 'settings-tab');
+  // other views open a tab directly, e.g. the assistant's "Set up" button; AI Lab's "Set a price…" adds a row for its model
+  useIntent(
+    'settings',
+    (p?: { tab?: Tab; addPrice?: { provider: string; model: string } }) => {
+      if (p?.tab) setTab(p.tab);
+      const add = p?.addPrice;
+      if (add)
+        setS((cur) =>
+          cur && !cur.pricing.some((x) => x.provider === add.provider && x.model === add.model)
+            ? { ...cur, pricing: [...cur.pricing, { provider: add.provider, model: add.model, inputPerMillion: 0, outputPerMillion: 0, version: new Date().toISOString().slice(0, 10) }] }
+            : cur,
+        );
+    },
+    'settings-tab',
+  );
   const [providers, setProviders] = useState<ProviderConfig[]>([]);
   useEffect(() => setS(settings), [settings]);
   useEffect(() => {
@@ -143,7 +156,8 @@ export function SettingsView() {
             <>
               <p className="text-sm text-muted">
                 Estimated cost = input tokens × input price + output tokens × output price. Prices change — enter the current prices from your provider and bump the version when they change. Reports record which price
-                version was used. No prices are built in.
+                version was used. No prices are built in. A price for a model (<span className="mono">gpt-4o-mini</span>) also applies to its dated versions (
+                <span className="mono">gpt-4o-mini-2024-07-18</span>); then press <b>Save</b>.
               </p>
               <table className="w-full text-sm">
                 <thead>

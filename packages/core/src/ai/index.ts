@@ -1,3 +1,4 @@
+import { envNameForSecret } from '../storage/secrets.js';
 import type { ModelRef, PriceEntry, ProviderConfig, TokenUsage } from '../model/types.js';
 import { ApsError } from '../errors.js';
 import type { ChatRequest, ChatResponse, LlmProvider } from './types.js';
@@ -97,6 +98,22 @@ export function createProvider(config: ProviderConfig, apiKey: string | undefine
   return new ManagedProvider(p);
 }
 
+/** "No API key for OpenAI", with where to add it: the app's Providers, or the variable the CLI and CI read. */
+export function missingKeyError(cfg: ProviderConfig): ApsError {
+  const secret = /\{\{\s*\$secret\.([^}\s]+)\s*\}\}/.exec(cfg.apiKey ?? '')?.[1];
+  const env = /\{\{\s*\$env\.([^}\s]+)\s*\}\}/.exec(cfg.apiKey ?? '')?.[1];
+  return new ApsError('ConfigurationError', `No API key for ${cfg.name}`, {
+    why: `The provider's key (${cfg.apiKey}) has no value on this computer, so nothing was sent.`,
+    // the app shows "Add the key", which opens this provider in AI Lab
+    details: { setup: { provider: cfg.id } },
+    suggestions: [
+      `In the app: AI Lab ▸ Providers ▸ ${cfg.name} ▸ API key (it is kept in the operating system's secret store, never in the workspace).`,
+      secret ? `In the CLI or CI: set the environment variable ${envNameForSecret(secret)}.` : env ? `Set the environment variable ${env}.` : 'In the CLI or CI: set the key as an environment variable the provider refers to.',
+      ...(cfg.kind === 'openai-compatible' && /localhost|127\.0\.0\.1/.test(cfg.baseUrl ?? '') ? ['A local server that needs no key: clear the provider\'s API key field.'] : []),
+    ],
+  });
+}
+
 /**
  * Resolves `ModelRef`s to live providers. Providers are matched by id, then name, then kind.
  * API keys are resolved from templates (`{{$secret.x}}`, `{{$env.X}}`) through the variable scope.
@@ -133,6 +150,9 @@ export class ProviderRegistry {
     if (!p) {
       const resolved = this.vars.resolveDeep(cfg);
       const key = resolved.apiKey && !/\{\{/.test(resolved.apiKey) ? resolved.apiKey : undefined;
+      // the provider names a key (a secret, an environment variable) that has no value here: say so before anything
+      // is sent (the provider would answer 401 with a message about Authorization headers)
+      if (cfg.apiKey && !key && cfg.kind !== 'mock' && cfg.kind !== 'ollama') throw missingKeyError(cfg);
       p = createProvider(resolved, key, this.redactor);
       this.cache.set(cfg.id, p);
     }
@@ -171,9 +191,12 @@ function globMatch(pattern: string, value: string): boolean {
  * Prices are user configuration (versioned); nothing is hard-coded.
  */
 export function estimateCost(pricing: PriceEntry[], provider: ProviderConfig | undefined, model: string, usage: TokenUsage): { cost?: number; priceVersion?: string } {
-  const candidates = pricing.filter(
-    (p) => (p.provider === '*' || p.provider === provider?.id || p.provider === provider?.kind || p.provider === provider?.name) && globMatch(p.model, model),
-  );
+  const forProvider = (p: PriceEntry) => p.provider === '*' || p.provider === provider?.id || p.provider === provider?.kind || p.provider === provider?.name;
+  let candidates = pricing.filter((p) => forProvider(p) && globMatch(p.model, model));
+  // providers answer with a dated snapshot (gpt-4o-mini-2024-07-18, claude-3-5-sonnet-20240620, …@20240620):
+  // a price set for the model's name applies to its snapshots
+  const undated = model.replace(/(-\d{4}-\d{2}-\d{2}|-\d{8}|@\d{8})$/, '');
+  if (!candidates.length && undated !== model) candidates = pricing.filter((p) => forProvider(p) && globMatch(p.model, undated));
   // prefer the most specific pattern (longest without wildcards)
   const p = candidates.sort((a, b) => b.model.replace(/\*/g, '').length - a.model.replace(/\*/g, '').length)[0];
   if (!p) return {};

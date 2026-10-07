@@ -48,9 +48,15 @@ The Playground's **Saved prompts** list keeps prompts with their model, paramete
 
 Providers support per-provider rate limits (requests per second or minute, tokens per minute, concurrency) and retries with exponential backoff that honour `Retry-After`.
 
+### API keys
+
+A provider's key is kept in the operating system's secret store, never in the workspace: **AI Lab ▸ Providers ▸ the provider ▸ API key**. The list marks the cloud providers that still **need an API key**. In the CLI and in CI the key comes from an environment variable: `TESTPION_SECRET_PROVIDER_OPENAI_APIKEY` for a provider whose key is `{{$secret.provider.openai.apiKey}}`, or the variable a `{{$env.NAME}}` key names.
+
+When the key has no value, nothing is sent: the run stops with **No API key for OpenAI**, says where to add it, and the app shows **Add the key**, which opens that provider with its key field ready. Errors from a provider say what to do by status: a key that was not accepted (401), no access to the model (403), no credit left or rate-limited (429), an unknown model or base URL (404), or a problem on the provider's side (5xx).
+
 ## Metrics
 
-Latency, time to first token, mean time between tokens, input, output and total tokens, and estimated cost. Cost comes from the price table you configure in Settings; no prices are built in, and each entry is versioned. When a provider doesn't report usage, tokens are estimated and labelled as such.
+Latency, time to first token, mean time between tokens, input, output and total tokens, and estimated cost. Cost comes from the price table you configure in Settings; no prices are built in, and each entry is versioned. A price set for a model also prices its dated versions (`gpt-4o-mini` covers `gpt-4o-mini-2024-07-18`). When a run has no price, **Set a price…** under the cost opens the price table with a row for that model. When a provider doesn't report usage, tokens are estimated and labelled as such.
 
 ## Model comparison
 

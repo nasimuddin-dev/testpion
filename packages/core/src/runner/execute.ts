@@ -620,6 +620,7 @@ async function runLlm(test: LlmTest, scope: VariableScope, svc: ExecServices, sp
       body: parsed.ok ? parsed.value : r.text,
       text: r.text,
       latencyMs: r.timing.totalMs,
+      firstTokenMs: r.timing.firstTokenMs,
       tokens: r.usage,
       costUsd: cost.cost,
       input,

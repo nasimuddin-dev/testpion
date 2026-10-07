@@ -1,6 +1,6 @@
 /** Commands that run things: test files, suites, collections and load tests; re-generating reports. */
 import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
-import { dirname, join, relative, sep } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { Command, Option } from 'commander';
 import {
   isSuiteFile,
@@ -47,7 +47,13 @@ export function registerRunCommands(program: Command): void {
           if (statSync(abs).isDirectory()) for (const e of readdirSync(abs).sort()) walk(join(p, e));
           else if (/\.(ya?ml|json)$/.test(abs)) files.push(abs);
         };
-        for (const p of paths.length ? paths : ['.']) walk(p);
+        // a path as `testpion test` takes it (from the current folder, e.g. tests/ai/rag.yaml) or under tests/ (ai/rag.yaml)
+        const underTests = (p: string) => {
+          const fromCwd = resolve(p);
+          const rel = relative(tests, fromCwd);
+          return existsSync(fromCwd) && !rel.startsWith('..') && !isAbsolute(rel) ? rel || '.' : p;
+        };
+        for (const p of paths.length ? paths : ['.']) walk(underTests(p));
         const results = files.map((f) => ({ file: relative(tests, f).split(sep).join('/'), problems: lintTestFile(readFileSync(f, 'utf8'), { file: f, suite: isSuiteFile(f) }) })).filter((x) => x.problems.length);
         const errors = results.reduce((n, x) => n + x.problems.filter((p) => p.severity === 'error').length, 0);
         const total = results.reduce((n, x) => n + x.problems.length, 0);
