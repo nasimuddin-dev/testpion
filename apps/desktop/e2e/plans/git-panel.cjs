@@ -110,6 +110,17 @@ const steps = [
       return r + ' | ' + ((await ${toast('/^Pushed/')}) ?? 'NO TOAST');
     })()`,
   ],
+  // a commit picked in the history shows what it changed on the right: the files with their lines, and a diff
+  [
+    'commit-details',
+    `(async () => {
+      document.querySelector('[aria-label="Commits"] li button')?.click();
+      const panel = await __t.waitFor(() => document.querySelector('[data-commit-detail]'), 8000);
+      const diff = await __t.waitFor(() => document.querySelector('[data-commit-detail] [aria-label="Diff"]'), 8000);
+      const files = panel ? panel.querySelectorAll('[aria-label="Files changed"] li button').length : 0;
+      return 'subject: ' + (panel?.querySelector('.font-medium')?.textContent.trim() ?? 'NONE') + ' | files: ' + files + ' | diff: ' + !!diff;
+    })()`,
+  ],
   // a teammate changes another request in their own clone and pushes
   [
     'teammate-pushes',
@@ -259,6 +270,7 @@ module.exports = withExpect(
     'connect-and-push': /^Pushed \| upstream: origin\/main \| changes: 0$/,
     'change-by-meaning': /^git view: .*GET with query parameters.*URL.* \| status bar: main.*• 1 \| explorer mark: M$/,
     'second-commit-and-push': /^not blocked \| Committed [0-9a-f]{7} \| Pushed/,
+    'commit-details': /^subject: Call \/anything \| files: [1-9]\d* \| diff: true$/,
     'teammate-pushes': /^pushed$/,
     pull: /^Up to date with the remote \| teammate change: true \| commits: Rename the JSON post \/ Call \/anything \/ Start the API tests$/,
     'request-history': /^versions: Call \/anything \/ Start the API tests$/,
