@@ -1,11 +1,26 @@
 import { readdirSync } from 'node:fs';
 import { lintOpenApi, OPENAPI_LINT_RULES, type OpenApiLintSeverity } from '../openapi/lint.js';
+import { openApiOutline } from '../openapi/outline.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { str, type Tool } from './tool.js';
 
 /** MCP tools for API definitions (OpenAPI / Swagger) beyond the diff and coverage: the linter. */
 export function openApiTools(d: { store: WorkspaceStore; readSpecRef(ref: string): Promise<string> }): Tool[] {
   return [
+    {
+      name: 'openapi_outline',
+      description:
+        "Read an OpenAPI 3 / Swagger 2 document the way a person reads its docs: operations grouped by tag with method, path, operationId, summary, parameters (name, in, required, type), the request body and each response with its schema as a short type outline, the security schemes, and the request an import would make (method, url with {{path params}}, query, headers, sample body). Narrow it with `tag` or `operationId`. `spec` is an http(s) link, a path inside the workspace (e.g. specs/pets.yaml) or the document text. Use it to understand an API before writing requests or tests.",
+      inputSchema: { type: 'object', properties: { spec: str('OpenAPI document: link, workspace path or text'), tag: str('Only this tag'), operationId: str('Only this operation') }, required: ['spec'] },
+      run: async (a) => {
+        const o = openApiOutline(await d.readSpecRef(String(a.spec ?? '')));
+        const tags = o.tags
+          .filter((t) => !a.tag || t.name.toLowerCase() === String(a.tag).toLowerCase())
+          .map((t) => ({ ...t, operations: t.operations.filter((op) => !a.operationId || op.operationId === String(a.operationId)) }))
+          .filter((t) => t.operations.length);
+        return { ...o, tags };
+      },
+    },
     {
       name: 'openapi_lint',
       description:

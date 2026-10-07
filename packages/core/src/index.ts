@@ -23,6 +23,7 @@ export * from './protocols/http/sse.js';
 export * from './openapi/contract.js';
 export * from './openapi/diff.js';
 export * from './openapi/lint.js';
+export * from './openapi/outline.js';
 export * from './openapi/coverage.js';
 export * from './openapi/from-collection.js';
 export * from './import/workspace-import.js';

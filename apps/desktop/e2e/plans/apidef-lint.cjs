@@ -23,9 +23,33 @@ const steps = [
       return 'tab: ' + tab + ' | line: ' + (sel?.startLineNumber ?? 0);
     })()`,
   ],
+  [
+    'preview-lists-the-operations',
+    `(async () => {
+      await __t.tab('Preview');
+      const ops = await __t.waitFor(() => { const r = [...document.querySelectorAll('main [data-api-preview] [data-operation]')]; return r.length ? r : null; }, 6000);
+      const tags = [...document.querySelectorAll('main [data-api-preview] h3')].map((h) => h.firstChild?.textContent?.trim()).join(',');
+      return 'operations: ' + (ops ?? []).length + ' | tags: ' + tags;
+    })()`,
+  ],
+  [
+    'an-operation-opens-as-a-request',
+    `(async () => {
+      const row = document.querySelector('main [data-api-preview] [data-operation="GET /pet/{petId}"] button');
+      row?.click(); await __t.sleep(300);
+      const detail = row?.parentElement?.textContent ?? '';
+      const params = /petId\\*/.test(detail) && /integer \\(int64\\)/.test(detail);
+      [...(row?.parentElement?.querySelectorAll('button') ?? [])].find((b) => b.textContent.trim() === 'Open as request')?.click();
+      await __t.sleep(1200);
+      const url = [...document.querySelectorAll('main input')].map((i) => i.value).find((v) => /\\/pet\\/\\{\\{petId\\}\\}$/.test(v));
+      return 'params: ' + params + ' | opened: ' + !!url;
+    })()`,
+  ],
 ];
 
 module.exports = withExpect(steps, {
+  'preview-lists-the-operations': /^operations: 19 \| tags: pet,store,user$/,
+  'an-operation-opens-as-a-request': /^params: true \| opened: true$/,
   'lint-tab-lists-the-notes': /^rules: component-unused,component-unused$/,
   'a-row-opens-its-place': /^tab: Definition \| line: [1-9]\d+$/,
 });

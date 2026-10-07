@@ -170,7 +170,7 @@ const SHORT_METHOD: Record<string, string> = { DELETE: 'DEL', OPTIONS: 'OPT' };
  * The type label in front of every row of the explorer (GET, POST, MCP, gRPC, WS …): one pill of one width, so names
  * line up and the space between the label and the name is the same on every row.
  */
-function TreeBadge({ label, className }: { label: string; className?: string }) {
+export function TreeBadge({ label, className }: { label: string; className?: string }) {
   const text = SHORT_METHOD[label.toUpperCase()] ?? label.slice(0, 5);
   return (
     <span className={cx('mono method-badge text-[0.64rem] font-bold w-[2.375rem] shrink-0', className)} title={label}>

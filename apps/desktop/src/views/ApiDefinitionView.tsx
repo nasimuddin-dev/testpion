@@ -10,10 +10,11 @@ import { CodeEditor } from '../components/CodeEditor';
 import { ApiCoverageDialog } from '../components/ApiCoverageDialog';
 import { OpenApiDiffDialog } from '../components/OpenApiDiffDialog';
 import { ApiLintPanel, type ApiLintProblem, type ApiLintResult } from '../components/ApiLintPanel';
+import { ApiPreviewPanel, type ApiOutline } from '../components/ApiPreviewPanel';
 import { useSingleEditorTab } from '../components/EditorTabs';
 import { Badge, Button, Empty, Tabs } from '../components/ui';
 
-type Tab = 'definition' | 'lint' | 'coverage' | 'compare';
+type Tab = 'definition' | 'preview' | 'lint' | 'coverage' | 'compare';
 
 /** Which document each API definition tab shows (each tab is its own document). */
 const tabSpec = persisted<{ spec?: string }>('apidef', {});
@@ -78,6 +79,13 @@ export function ApiDefinitionView() {
     const t = setTimeout(() => void call<ApiLintResult>('openapi.lint', { text }).then(setLint, () => setLint(undefined)), 400);
     return () => clearTimeout(t);
   }, [text]);
+  // the operations as the docs read them, for the Preview tab (only while it is shown)
+  const [outline, setOutline] = useState<{ outline?: ApiOutline; error?: string }>({});
+  useEffect(() => {
+    if (!text || tab !== 'preview') return;
+    const t = setTimeout(() => void call<ApiOutline>('openapi.outline', { text }).then((o) => setOutline({ outline: o }), (e) => setOutline({ error: asError(e).message })), 300);
+    return () => clearTimeout(t);
+  }, [text, tab]);
   const editor = useRef<{ ed: Parameters<OnMount>[0]; monaco: Parameters<OnMount>[1] }>(undefined);
   const reveal = useRef<ApiLintProblem>(undefined);
   const mark = () => {
@@ -142,6 +150,7 @@ export function ApiDefinitionView() {
         onChange={setTab}
         tabs={[
           { id: 'definition', label: 'Definition' },
+          { id: 'preview', label: 'Preview' },
           {
             id: 'lint',
             label: 'Lint',
@@ -168,6 +177,8 @@ export function ApiDefinitionView() {
               }}
             />
           )
+        ) : tab === 'preview' ? (
+          <ApiPreviewPanel outline={outline.outline} error={outline.error} />
         ) : tab === 'lint' ? (
           <ApiLintPanel spec={spec} text={text} result={lint} onOpen={openProblem} />
         ) : tab === 'coverage' ? (
