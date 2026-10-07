@@ -87,7 +87,7 @@ See [WebSocket](./api-testing/websocket.md).
   <img src="/images/ai-lab.jpg" alt="The AI Lab playground with a streaming response and metrics" width="1440" height="900" loading="lazy">
 </figure>
 
-Prompt templates with variables, JSON mode and JSON Schema outputs, and streaming with time to first token. Token counts and estimated cost from a price table you control. Compare models side by side without a one-size-fits-all ranking. Providers include OpenAI-compatible, Azure OpenAI, Anthropic, Gemini, Amazon Bedrock, Ollama and an offline mock.
+Prompt templates with variables, JSON mode and JSON Schema outputs, and streaming with time to first token. Token counts and estimated cost from a price table you control. Compare models side by side without a one-size-fits-all ranking (the fastest and the cheapest are marked). Providers include OpenAI-compatible, Azure OpenAI, Anthropic, Gemini, Amazon Bedrock, Ollama and an offline mock; a provider without its key says so before anything is sent, with **Add the key** one click away. An answer worth keeping becomes an evaluation case with **Add to dataset**.
 
 [AI testing guide](/ai-testing/overview)
 
@@ -97,7 +97,7 @@ Prompt templates with variables, JSON mode and JSON Schema outputs, and streamin
   <img src="/images/evaluations.jpg" alt="The Evaluations view with a JSONL dataset and a completed run" width="1440" height="900" loading="lazy">
 </figure>
 
-Stream JSONL, CSV, JSON or Markdown datasets through evaluators. **Deterministic** evaluators cover exact match, JSON Schema, regex and thresholds. **Heuristic and semantic** evaluators cover similarity and RAG metrics. **LLM-as-judge** scores are clearly labelled and reproducible. Also included: agent tool-use checks, safety checks (prompt injection, data leakage, tool misuse), and baselines for regression tracking.
+Stream JSONL, CSV, JSON or Markdown datasets through evaluators. **Deterministic** evaluators cover exact match, JSON Schema, regex and thresholds. **Heuristic and semantic** evaluators cover similarity and RAG metrics; with a judge, the RAG checks work **claim by claim** (faithfulness, context precision and recall, answer correctness), each verdict with its evidence. **LLM-as-judge** scores are clearly labelled and reproducible. Also included: agent tool-use checks, safety checks (prompt injection, data leakage, tool misuse), baselines for regression tracking, and **human review**: 👍 / 👎 and a note on any result, kept beside the run and read by agents.
 
 [Evaluations](/ai-testing/evaluations) · [RAG](/ai-testing/rag) · [Agents](/ai-testing/agents) · [Safety](/ai-testing/safety)
 
@@ -107,7 +107,7 @@ Stream JSONL, CSV, JSON or Markdown datasets through evaluators. **Deterministic
   <img src="/images/tests.jpg" alt="The Tests view with test files, a completed run and the checks of an agent test" width="1440" height="900" loading="lazy">
 </figure>
 
-YAML tests in your repository, with parallel workers, backpressure, retries, timeouts, dependencies, setup and teardown, and runs you can cancel and resume. Every run writes JUnit, JSON, HTML and Markdown reports. The CLI returns CI-friendly exit codes. A test file's preview shows each test's latest result; a result's **History** shows the test across runs, and the runs overview lists the flaky tests of the workspace and, for evaluations, each evaluator's score by run.
+YAML tests in your repository, with parallel workers, backpressure, retries, timeouts, dependencies, setup and teardown, and runs you can cancel and resume. An API definition or a collection generates a first suite — a test per operation, or an **integration suite** with a flow per resource (create, read, update, list, delete). Every run writes JUnit, JSON, HTML and Markdown reports. The CLI returns CI-friendly exit codes. A test file's preview shows each test's latest result; a result's **History** shows the test across runs, and the runs overview lists the flaky tests of the workspace and, for evaluations, each evaluator's score by run.
 
 [Test runner](/test-runner/overview) · [CI/CD](/test-runner/ci-cd)
 

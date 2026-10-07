@@ -168,6 +168,10 @@ Ready-made instructions for the common jobs, which you pick in your agent (in Cl
 
 The read-only server offers `investigate_failures` and `api_health_report`.
 
+## agent-info
+
+`testpion agent-info` prints, as one JSON object, what an agent needs to use TestPion on this machine: the workspace it would get, the commands with their exit codes and output modes, the environment variables, the MCP server command and profiles, and where the docs for agents are. An agent reads it instead of guessing from `--help`.
+
 ## AGENTS.md
 
 Coding agents (Claude Code, Codex, Cursor, Copilot) read `AGENTS.md` first when they open a folder. **Write AGENTS.md** in Settings ▸ AI agents, or `testpion agents-md -w <workspace>`, adds a section to the workspace's `AGENTS.md` (or creates it): how to reach the workspace over MCP and the CLI, the check types and the test file format. What you wrote around it stays; writing it again refreshes only the TestPion part. It holds no paths of your machine, so it can be committed with the workspace.

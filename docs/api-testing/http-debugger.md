@@ -19,15 +19,15 @@ The Traffic tab is laid out like a desktop HTTP debugger:
 
 | Part | What it is |
 | --- | --- |
-| **Tool rail** (left) | Submitter, Filter, Highlight, Auto-Reply, Modify (headers, redirect), Timeline (F5), Summary, Structure (F6), Performance, Convert, Export / Import. Hover one for what it does; a click opens its panel in the dock, a second click closes it. |
-| **Filter bar** | All Applications, All Domains, All Types, method, status, Bookmarked, saved **Presets**, the number of Filter Out / Capture Only rules on (click it for the Filter panel), and the text filter (**In bodies** searches headers and bodies too). |
+| **Tool rail** (left) | Submitter, Filter, Highlight, Auto-Reply, Modify (headers, redirect), Timeline (F5), Summary, Structure (F6), Performance, Convert, Export / Import. Hover one for what it does; a click opens its panel in the dock, a second click closes it. The button at the foot of the rail shows each tool's name under its icon (remembered). |
+| **Filter bar** | The text filter first (**In bodies** searches headers and bodies too), then All Applications, All Domains, All Types, method, status, Bookmarked, saved **Presets**, and the number of Filter Out / Capture Only rules on (click it for the Filter panel). |
 | **Grid** | `#`, Offset (seconds since the session's first request), Duration (s), Method, Version, URL, Status, Type, Size (KB), Speed (KB/s), Application, Domain, IP Address, User (the account the program runs as), and PID on demand. Click a header to sort, again to reverse; the columns button shows or hides columns (remembered). Ctrl+click and Shift+click select several. |
 | **Outgoing / Incoming** | Outgoing is what programs sent through the proxy; **Incoming requests** lists what your programs sent to TestPion's own mock servers (a collection's **Mock** tab), with the example that answered; click one for its headers and body and the mock's answer in the same panes (**Open** makes it a request tab). |
-| **Request Details / Response Details** | Side by side under the grid. Each is a header table with the start line first (`[Request] POST /pet HTTP/1.1`, `[Response] HTTP/1.1 404 Not Found`) and **Filter headers**; tabs at the bottom: **Header**, **Content**, **Raw**, **JSON**, plus **Auth** and **Hex** on the request, and **Hex**, **gRPC**, **Frames** or **Events** on the response when the exchange has them. |
-| **Dock** (right) | One panel at a time, chosen from the rail or the tabs at its bottom. |
+| **Request Details / Response Details** | Side by side under the grid once a row is selected (until then, a one-line hint). Each is a header table with the start line first (`[Request] POST /pet HTTP/1.1`, `[Response] HTTP/1.1 404 Not Found`) and **Filter headers**; tabs at the bottom: **Header**, **Content**, **Raw**, **JSON**, plus **Auth** and **Hex** on the request, and **Hex**, **gRPC**, **Frames** or **Events** on the response when the exchange has them. |
+| **Dock** (right) | One panel at a time, chosen from the rail; its title says which. |
 | **Footer** | How many requests are listed (or selected), their size and their total time. |
 
-A banner says when **HTTPS inspection is off**, with **Decrypt HTTPS** and **Install certificate…** next to it.
+Once HTTPS traffic shows up as tunnels, a one-line notice offers **Decrypt HTTPS** and **Install certificate…**. The **HTTPS** menu in the header holds the same, and its lock says the state: green when decrypted.
 
 ### The dock's panels
 
