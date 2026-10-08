@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { asError, call, on } from '../api';
 import { confirmAction, promptText, toastError, useApp } from '../store';
 import { Badge, Button, Callout, cx, Empty, LinkButton, Menu, MoreMenu, PageHeader, SectionTitle, Spinner, Split } from '../components/ui';
-import { GitCommitPanel } from '../components/GitCommitPanel';
+import { DiffText, GitCommitPanel } from '../components/GitCommitPanel';
 import { plural } from '../lib/format';
 import { GitItemDiffDialog } from '../components/GitItemDiffDialog';
 import { GitConflictDialog } from '../components/GitConflictDialog';
@@ -387,7 +387,11 @@ export function GitView() {
                       ))}
                     </ul>
                   )}
-                  {diff?.path === f.path && <pre className="border-t border-line max-h-80 overflow-auto p-2 text-[0.72rem] font-mono whitespace-pre">{diff.text || '(no line changes: a new or binary file)'}</pre>}
+                  {diff?.path === f.path && (
+                    <div className="border-t border-line max-h-80 overflow-auto text-[0.9em]">
+                      <DiffText text={diff.text} />
+                    </div>
+                  )}
                 </li>
               ))}
             </ul>

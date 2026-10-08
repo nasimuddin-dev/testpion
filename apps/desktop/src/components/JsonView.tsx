@@ -1,3 +1,4 @@
+import { detectLanguage, highlight as syntaxTokens, type CodeLanguage } from '../lib/highlight';
 import { Camera, ChevronDown, ChevronRight, ChevronUp, CircleCheck, Copy, Equal, ListChecks, ListOrdered, Search, Shapes, Variable, WrapText } from 'lucide-react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { JSONPath } from 'jsonpath-plus';
@@ -207,7 +208,7 @@ export function JsonTree({ data: full, query, onAssert: assertOnFull, onSaveVari
                     align="start"
                     width={230}
                     trigger={
-                      <button title={`${r.path}: copy the path or add an assertion`} className="text-[#0550ae] dark:text-[#79c0ff] hover:underline">
+                      <button title={`${r.path}: copy the path or add an assertion`} className="syn-key hover:underline">
                         {/^\d+$/.test(r.key) ? r.key : `"${r.key}"`}
                       </button>
                     }
@@ -220,7 +221,7 @@ export function JsonTree({ data: full, query, onAssert: assertOnFull, onSaveVari
                     ]}
                   />
                 ) : (
-                  <button title={`Copy ${r.path}`} onClick={() => void copyText(r.path, 'the JSONPath')} className="text-[#0550ae] dark:text-[#79c0ff] hover:underline">
+                  <button title={`Copy ${r.path}`} onClick={() => void copyText(r.path, 'the JSONPath')} className="syn-key hover:underline">
                     {/^\d+$/.test(r.key) ? r.key : `"${r.key}"`}
                   </button>
                 ))}
@@ -247,17 +248,17 @@ export function JsonTree({ data: full, query, onAssert: assertOnFull, onSaveVari
 }
 
 function Scalar({ v }: { v: unknown }) {
-  if (v === null) return <span className="text-muted">null</span>;
+  if (v === null) return <span className="syn-keyword">null</span>;
   if (typeof v === 'string') {
     const s = v.length > 500 ? v.slice(0, 500) + '…' : v;
     return (
-      <span className="text-[#0a3069] dark:text-[#a5d6ff]" title={v.length > 500 ? `${v.length} chars` : undefined}>
+      <span className="syn-string" title={v.length > 500 ? `${v.length} chars` : undefined}>
         "{s}"
       </span>
     );
   }
-  if (typeof v === 'number') return <span className="text-[#0550ae] dark:text-[#79c0ff]">{v}</span>;
-  if (typeof v === 'boolean') return <span className="text-[#cf222e] dark:text-[#ff7b72]">{String(v)}</span>;
+  if (typeof v === 'number') return <span className="syn-number">{v}</span>;
+  if (typeof v === 'boolean') return <span className="syn-keyword">{String(v)}</span>;
   return <span>{String(v)}</span>;
 }
 
@@ -309,8 +310,13 @@ export function RawView({ text, language }: { text: string; language?: string })
   }, [lines, query]);
   useEffect(() => setActive(0), [query]);
   const activeLine = matches[active];
+  // syntax colours line by line (only the visible rows are drawn); a search shows its matches instead
+  const syntax = useMemo<CodeLanguage>(() => {
+    const l = (language ?? '').toLowerCase();
+    return /json/.test(l) ? 'json' : /xml|html/.test(l) ? 'xml' : /ya?ml/.test(l) ? 'yaml' : detectLanguage(text.slice(0, 4000));
+  }, [language, text]);
   const highlight = (l: string, isActive: boolean) => {
-    if (!query) return l || ' ';
+    if (!query) return l ? syntaxTokens(l, syntax === 'http' ? 'plain' : syntax).map((t, i) => (t.kind ? <span key={i} className={`syn-${t.kind}`}>{t.text}</span> : t.text)) : ' ';
     const parts: React.ReactNode[] = [];
     const lower = l.toLowerCase();
     const q = query.toLowerCase();
@@ -330,7 +336,6 @@ export function RawView({ text, language }: { text: string; language?: string })
     parts.push(l.slice(i));
     return parts;
   };
-  void language;
   return (
     <div className="h-full flex flex-col min-h-0">
       <div className="flex items-center gap-1 px-2 py-1 shrink-0 border-b border-line">

@@ -60,7 +60,7 @@ export function CodeModal({ request, collectionId, requestId, onClose }: { reque
           ))}
         </div>
         <div className="flex-1 min-w-0 border border-line rounded-md overflow-hidden">
-          <CodeEditor value={code} language={current?.syntax === 'http' ? 'plaintext' : current?.syntax ?? 'plaintext'} readOnly />
+          <CodeEditor value={code} language={current?.syntax ?? 'plaintext'} readOnly />
         </div>
       </div>
       <p className="text-xs text-muted mt-2">Variables and auth are resolved with the current environment. Secret values are shown as &lt;secret&gt; unless you include them.</p>

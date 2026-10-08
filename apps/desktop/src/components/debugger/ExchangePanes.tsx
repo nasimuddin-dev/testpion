@@ -1,3 +1,4 @@
+import { CodeBlock } from '../CodeBlock';
 import { Bot, ChevronDown, Copy, ExternalLink, Pause, Play, Scale, Star, X } from 'lucide-react';
 import { useMemo, useState, type ReactNode } from 'react';
 import { formatBytes } from '@testpion/shared';
@@ -266,8 +267,8 @@ function DetailsPane({
             </tbody>
           </table>
         )}
-        {tab === 'content' && <pre className="p-3 text-xs mono whitespace-pre-wrap break-all">{body ?? bodyNote}</pre>}
-        {tab === 'raw' && <pre className="p-3 text-xs mono whitespace-pre-wrap break-all">{raw}</pre>}
+        {tab === 'content' && <CodeBlock className="p-3 text-xs mono whitespace-pre-wrap break-all" text={body ?? bodyNote} />}
+        {tab === 'raw' && <CodeBlock className="p-3 text-xs mono whitespace-pre-wrap break-all" language={'http'} text={raw} />}
         {tab === 'json' && (json !== undefined ? <JsonTree data={json} /> : <Empty title="Not JSON">{body ? 'The body is not JSON: see Content.' : bodyNote}</Empty>)}
         {current?.render()}
       </div>

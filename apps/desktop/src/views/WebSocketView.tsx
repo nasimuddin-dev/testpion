@@ -1,3 +1,4 @@
+import { CodeBlock } from '../components/CodeBlock';
 import { ArrowDownLeft, ArrowUpRight, BookmarkPlus, Info, ListTree, Plug, Plus, Radio, Save, Send, Trash2, Unplug, X, FileCheck2, Bookmark, History, KeyRound } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { useAssistantContext } from '../lib/assistant-context';
@@ -654,7 +655,7 @@ export function WebSocketView() {
                   ))}
                 </div>
               )}
-              {selected ? parsed !== undefined ? <JsonTree data={parsed} /> : <pre className="p-3 mono text-xs whitespace-pre-wrap">{selected.data}</pre> : <Empty title="Select a message" />}
+              {selected ? parsed !== undefined ? <JsonTree data={parsed} /> : <CodeBlock className="p-3 mono text-xs whitespace-pre-wrap" text={selected.data} /> : <Empty title="Select a message" />}
             </div>
           </Split>
         </Split>

@@ -671,7 +671,7 @@ function SchemaExplorer({ schema, error, sdl, onInsert, onBuild, onIntrospect, l
   const typeLink = (t: string) => {
     const name = t.replace(/[[\]!]/g, '');
     return (
-      <button className="text-[#953800] dark:text-[#ffa657] hover:underline mono" onClick={() => setStack([...stack, name])}>
+      <button className="syn-number hover:underline mono" onClick={() => setStack([...stack, name])}>
         {t}
       </button>
     );
@@ -708,7 +708,7 @@ function SchemaExplorer({ schema, error, sdl, onInsert, onBuild, onIntrospect, l
                   <div key={x.name} className="group">
                     <div className="flex items-start gap-2">
                       <div className="flex items-center gap-1 flex-wrap min-w-0 flex-1">
-                        <button className={cx('mono text-[#0550ae] dark:text-[#79c0ff] hover:underline', x.deprecated && 'line-through')} title="Insert field" onClick={() => onInsert(x.name)}>
+                        <button className={cx('mono syn-key hover:underline', x.deprecated && 'line-through')} title="Insert field" onClick={() => onInsert(x.name)}>
                           {x.name}
                         </button>
                         {x.args?.length ? <span className="text-muted mono text-xs">({x.args.map((a) => `${a.name}: ${a.type}`).join(', ')})</span> : null}

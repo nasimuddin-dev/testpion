@@ -26,6 +26,21 @@ const steps = [
   ),
   step('switch-to-jsonl', `vis('main [data-format-mismatch] button')[0]?.click(); await __t.sleep(800); return ${state};`),
   step(
+    'every-format-is-coloured',
+    `const ed = ${EDITOR}; const m = ed.getModel();
+     const md = window.__monaco.editor.createModel('# x', 'markdown'); await __t.sleep(1200); md.dispose();
+     const kinds = (lang) => [...new Set(window.__monaco.editor.tokenize(lang === 'csv' ? 'input,expected\\nCancel,"a, b"' : lang === 'markdown' ? '| input | expected |\\n|---|---|' : m.getValue(), lang).flat().map((t) => t.type))].filter((t) => /json|csv|\.md$|number|keyword/.test(t)).sort().join(' ');
+     return 'language: ' + m.getLanguageId() + ' | jsonl: ' + kinds('jsonl') + ' | csv: ' + kinds('csv') + ' | markdown: ' + (kinds('markdown') ? 'coloured' : 'plain');`,
+  ),
+  step(
+    'a-broken-line-is-marked-on-its-own',
+    `const m = ${EDITOR}.getModel(); const text = m.getValue();
+     m.setValue(text.trimEnd() + '\\n{"input": "Hello"'); await __t.sleep(1200);
+     const marks = window.__monaco.editor.getModelMarkers({ resource: m.uri }).filter((x) => x.severity === 8).map((x) => 'line ' + x.startLineNumber);
+     m.setValue(text); await __t.sleep(800);
+     return 'lines: ' + m.getLineCount() + ' | marked: ' + marks.join(', ') + ' | after the fix: ' + window.__monaco.editor.getModelMarkers({ resource: m.uri }).filter((x) => x.severity === 8).length;`,
+  ),
+  step(
     'run-without-a-key',
     `const sel = vis('main label').find((l) => l.textContent.trim().startsWith('Provider'))?.parentElement?.querySelector('select') ?? vis('main select').find((x) => [...x.options].some((o) => o.textContent.trim() === 'OpenAI'));
      const opt = [...sel.options].find((o) => o.textContent.trim() === 'OpenAI');
@@ -49,6 +64,8 @@ module.exports = withExpect(steps, {
   'json-selected': /^checked: JSON \| note: shown \| editor errors: 0 \| preview: 3$/,
   'broken-json-is-still-marked': /^checked: JSON \| note: none \| editor errors: [1-9]/,
   'switch-to-jsonl': /^checked: JSONL \| note: none \| editor errors: 0 \| preview: 3$/,
+  'every-format-is-coloured': /^language: jsonl \| jsonl: .*string\.key\.json.*string\.value\.json.* \| csv: csv\.column0\S* csv\.column1\S* .*\| markdown: coloured$/,
+  'a-broken-line-is-marked-on-its-own': /^lines: 3 \| marked: line 4 \| after the fix: 0$/,
   'run-without-a-key': /^error: No API key for OpenAI \| button: Add the key$/,
   'add-the-key-opens-the-provider': /^view: Providers\d* \| focused: API key \| provider: OpenAI$/,
 });

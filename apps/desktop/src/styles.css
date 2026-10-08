@@ -43,6 +43,12 @@
   --judge: oklch(0.56 0.24 335);
   --focus: oklch(0.62 0.2 259);
   --code-bg: oklch(0.984 0.005 268);
+  --syn-key: #1d5fd6;
+  --syn-string: #15803d;
+  --syn-number: #c2410c;
+  --syn-keyword: #7c3aed;
+  --syn-comment: #8a8a95;
+  --syn-punct: #6b6b76;
   --overlay: oklch(0.16 0.06 272 / 0.42);
   --elev-sm: 0 1px 2px oklch(0.2 0.02 275 / 0.06);
   --elev-md: 0 4px 14px -3px oklch(0.2 0.02 275 / 0.12), 0 2px 4px -2px oklch(0.2 0.02 275 / 0.06);
@@ -80,6 +86,12 @@
   --judge: oklch(0.74 0.2 335);
   --focus: oklch(0.74 0.15 250);
   --code-bg: oklch(0.172 0.038 270);
+  --syn-key: #7fb2ff;
+  --syn-string: #9ee6b8;
+  --syn-number: #fbbf77;
+  --syn-keyword: #c4a5fd;
+  --syn-comment: #6b6b76;
+  --syn-punct: #8b93ad;
   --overlay: oklch(0.08 0.04 272 / 0.62);
   --elev-sm: 0 1px 2px oklch(0 0 0 / 0.35);
   --elev-md: 0 8px 20px -6px oklch(0 0 0 / 0.55);
@@ -445,4 +457,31 @@ input[type='range'] {
     opacity: 1;
     transform: none;
   }
+}
+
+/* syntax colours of read-only code (components/CodeBlock, lib/highlight): the editor theme's */
+.syn-key,
+.syn-tag,
+.syn-method {
+  color: var(--syn-key);
+}
+.syn-method {
+  font-weight: 600;
+}
+.syn-string {
+  color: var(--syn-string);
+}
+.syn-number {
+  color: var(--syn-number);
+}
+.syn-keyword,
+.syn-attr {
+  color: var(--syn-keyword);
+}
+.syn-comment {
+  color: var(--syn-comment);
+  font-style: italic;
+}
+.syn-punct {
+  color: var(--syn-punct);
 }

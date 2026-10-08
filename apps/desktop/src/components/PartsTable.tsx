@@ -1,3 +1,4 @@
+import { CodeBlock } from './CodeBlock';
 import { cx } from './ui';
 
 /**
@@ -45,8 +46,10 @@ export function PartsTable({ columns, rows, emptyText = 'No part differs.' }: { 
                 <td key={c.key} className={cx('align-top p-1.5 border-l border-line/60', r.differs && c.highlight && 'bg-warn/10', c.chosen && 'ring-1 ring-inset ring-accent/60')}>
                   {v === undefined ? (
                     <span className="text-xs text-muted italic">{c.missing ?? '—'}</span>
+                  ) : v ? (
+                    <CodeBlock className="text-xs mono whitespace-pre-wrap break-all max-h-40 overflow-auto" text={v} />
                   ) : (
-                    <pre className="text-xs mono whitespace-pre-wrap break-all max-h-40 overflow-auto">{v || <span className="text-muted">(empty)</span>}</pre>
+                    <span className="text-xs text-muted">(empty)</span>
                   )}
                 </td>
               );

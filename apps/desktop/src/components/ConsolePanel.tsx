@@ -1,3 +1,4 @@
+import { CodeBlock } from './CodeBlock';
 import { ChevronRight, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { call } from '../api';
@@ -154,7 +155,7 @@ function Section({ title, headers, body }: { title: string; headers: Array<[stri
           ))}
         </tbody>
       </table>
-      {body && <pre className="mono text-xs bg-[var(--code-bg)] border border-line rounded p-2 max-h-56 overflow-auto whitespace-pre-wrap">{body}</pre>}
+      {body && <CodeBlock className="mono text-xs bg-[var(--code-bg)] border border-line rounded p-2 max-h-56 overflow-auto whitespace-pre-wrap" text={body} />}
     </div>
   );
 }

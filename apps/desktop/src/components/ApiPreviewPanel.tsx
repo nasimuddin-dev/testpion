@@ -1,3 +1,4 @@
+import { CodeBlock } from './CodeBlock';
 import { ChevronDown, ChevronRight, ExternalLink, FlaskConical, Lock, Workflow } from 'lucide-react';
 import { useState } from 'react';
 import { call } from '../api';
@@ -94,7 +95,7 @@ function Operation({ op }: { op: OutlineOperation }) {
                 Request body · {op.requestBody.contentType}
                 {op.requestBody.required ? '' : ' · optional'}
               </div>
-              {op.requestBody.schema && <pre className="mono text-xs bg-panel rounded p-2 overflow-auto max-h-64">{op.requestBody.schema}</pre>}
+              {op.requestBody.schema && <CodeBlock className="mono text-xs bg-panel rounded p-2 overflow-auto max-h-64" text={op.requestBody.schema} />}
             </div>
           )}
           <div className="grid gap-1">
@@ -106,7 +107,7 @@ function Operation({ op }: { op: OutlineOperation }) {
                   <span className="text-xs">{r.description}</span>
                   {r.contentType && <span className="text-xs text-muted mono">{r.contentType}</span>}
                 </div>
-                {r.schema && <pre className="mono text-xs bg-panel rounded p-2 overflow-auto max-h-64 ml-1">{r.schema}</pre>}
+                {r.schema && <CodeBlock className="mono text-xs bg-panel rounded p-2 overflow-auto max-h-64 ml-1" text={r.schema} />}
               </div>
             ))}
           </div>

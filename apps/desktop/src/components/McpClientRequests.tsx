@@ -1,3 +1,4 @@
+import { CodeBlock } from './CodeBlock';
 import { MessageSquareText, Sparkles } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { call, on } from '../api';
@@ -121,7 +122,7 @@ export function McpClientRequests() {
       {current.params.systemPrompt && (
         <div className="mb-2">
           <div className="text-xs text-muted mb-0.5">System prompt</div>
-          <pre className="text-xs mono whitespace-pre-wrap bg-field rounded p-2 max-h-28 overflow-auto">{current.params.systemPrompt}</pre>
+          <CodeBlock className="text-xs mono whitespace-pre-wrap bg-field rounded p-2 max-h-28 overflow-auto" text={current.params.systemPrompt} />
         </div>
       )}
       <div className="flex flex-col gap-1.5 max-h-52 overflow-auto mb-3">

@@ -1,3 +1,4 @@
+import { CodeBlock } from '../CodeBlock';
 import { Copy, Download, Play, Save, Sparkles, Wrench } from 'lucide-react';
 import { useState } from 'react';
 import { asError, call, type NormalizedError } from '../../api';
@@ -254,7 +255,7 @@ function ToolResult({ r, name }: { r: Extract<ToolRun, { content: unknown[] }>; 
                     <JsonTree data={parsed} />
                   </div>
                 ) : (
-                  <pre className="px-3 pb-3 mono text-xs whitespace-pre-wrap">{c.text ?? JSON.stringify(c, null, 2)}</pre>
+                  <CodeBlock className="px-3 pb-3 mono text-xs whitespace-pre-wrap" text={c.text ?? JSON.stringify(c, null, 2)} />
                 )}
               </div>
             );

@@ -1,3 +1,4 @@
+import { CodeBlock } from './CodeBlock';
 import { useMemo, useState } from 'react';
 import { Check, Copy } from 'lucide-react';
 import type { Span, Trace } from '../types';
@@ -216,7 +217,7 @@ function PayloadBox({ title, payload, emptyText }: { title: string; payload?: { 
         ) : p.json !== undefined && !raw ? (
           <JsonTree data={p.json} />
         ) : (
-          <pre className="p-3 text-xs mono whitespace-pre-wrap break-words">{p.text}</pre>
+          <CodeBlock className="p-3 text-xs mono whitespace-pre-wrap break-words" text={p.text} />
         )}
       </div>
     </div>

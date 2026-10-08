@@ -1,4 +1,5 @@
 /** The request editor: params, auth, headers, body, cookies, scripts, tests, examples, docs and settings. */
+import { editorLanguageOfText } from '../../data-languages';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useApp } from '../../store';
 import type { BodyConfig, HttpRequestSpec, KeyValue, SavedExample } from '../../types';
@@ -205,7 +206,7 @@ function BodyEditor({ body, onChange, stashKey = 'default', method, url }: { bod
             )}
             <div className="flex-1 min-h-0">
               <CodeEditor
-                language={body.type === 'json' ? 'json' : body.type === 'xml' ? 'xml' : body.type === 'html' ? 'html' : 'plaintext'}
+                language={body.type === 'json' ? 'json' : body.type === 'xml' ? 'xml' : body.type === 'html' ? 'html' : editorLanguageOfText(body.content)}
                 value={body.content}
                 onChange={(content) => onChange({ ...body, content })}
                 path={body.type === 'json' ? `body/${stashKey}.json` : undefined}

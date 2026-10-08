@@ -57,7 +57,7 @@ function varAt(line: string, column: number): { name: string; start: number; end
   return undefined;
 }
 
-const LANGUAGES = ['json', 'javascript', 'typescript', 'plaintext', 'yaml', 'xml', 'html', 'graphql', 'markdown', 'proto', 'shell'];
+const LANGUAGES = ['json', 'jsonl', 'csv', 'javascript', 'typescript', 'plaintext', 'yaml', 'xml', 'html', 'graphql', 'markdown', 'proto', 'shell'];
 
 /* ------------------------------------------------------------------ tp.* snippets (pm.* is the same API) */
 

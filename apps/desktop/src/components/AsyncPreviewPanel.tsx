@@ -1,3 +1,4 @@
+import { CodeBlock } from './CodeBlock';
 import { ArrowDownToLine, ArrowUpFromLine, ChevronDown, ChevronRight, FlaskConical } from 'lucide-react';
 import { useState } from 'react';
 import { call } from '../api';
@@ -67,11 +68,11 @@ function ChannelRow({ c }: { c: Channel }) {
                 {m.contentType && <span className="text-xs text-muted mono">{m.contentType}</span>}
                 {m.summary && <span className="text-xs text-muted truncate">{m.summary}</span>}
               </div>
-              {m.payload && <pre className="mono text-xs bg-panel rounded p-2 overflow-auto max-h-56">{m.payload}</pre>}
+              {m.payload && <CodeBlock className="mono text-xs bg-panel rounded p-2 overflow-auto max-h-56" text={m.payload} />}
               {m.example !== undefined && (
                 <details className="text-xs">
                   <summary className="cursor-pointer text-muted">Example</summary>
-                  <pre className="mono bg-panel rounded p-2 overflow-auto max-h-48 mt-1">{JSON.stringify(m.example, null, 2)}</pre>
+                  <CodeBlock className="mono bg-panel rounded p-2 overflow-auto max-h-48 mt-1" text={JSON.stringify(m.example, null, 2)} />
                 </details>
               )}
             </div>

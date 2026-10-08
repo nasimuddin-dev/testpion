@@ -1,3 +1,4 @@
+import { CodeBlock } from './CodeBlock';
 import { ChevronDown, Copy, Download, RefreshCw, ShieldCheck, ShieldOff } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { call } from '../api';
@@ -239,7 +240,7 @@ export function ConvertTool({ initial = '' }: { initial?: string }) {
                   <span className="text-[11px] font-semibold text-muted uppercase tracking-wide">{label}</span>
                   <Button size="sm" variant="ghost" icon={<Copy size={12} />} onClick={() => void copyText(value!, label.toLowerCase())} title="Copy" />
                 </div>
-                <pre className="mono whitespace-pre-wrap break-all rounded border border-line p-2 bg-panel max-h-40 overflow-auto">{value}</pre>
+                <CodeBlock className="mono whitespace-pre-wrap break-all rounded border border-line p-2 bg-panel max-h-40 overflow-auto" text={value ?? ''} />
               </div>
             ))}
           </div>
@@ -374,9 +375,7 @@ export function GrpcView({ call: g, open }: { call: GrpcCall; open?: boolean }) 
             {title} · {plural(list.length, 'message')}
           </div>
           {list.map((m, i) => (
-            <pre key={i} className="text-xs mono whitespace-pre-wrap break-all rounded border border-line p-2 bg-panel mb-1" data-grpc-message={title}>
-              {JSON.stringify(m, null, 2)}
-            </pre>
+            <CodeBlock key={i} className="text-xs mono whitespace-pre-wrap break-all rounded border border-line p-2 bg-panel mb-1" data-grpc-message={title} language="json" text={JSON.stringify(m, null, 2)} />
           ))}
         </section>
       ))}

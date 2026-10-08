@@ -1,3 +1,4 @@
+import { CodeBlock } from '../CodeBlock';
 import { Braces, FileText, MessageSquare } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { asError, call, on, type NormalizedError } from '../../api';
@@ -227,7 +228,7 @@ export function ResourcesPanel({ serverId, disc }: { serverId: string; disc: Dis
                         <JsonTree data={parsed} />
                       </div>
                     ) : (
-                      <pre className="px-3 pb-3 mono text-xs whitespace-pre-wrap">{c.text ?? `<binary ${c.blob?.length ?? 0} base64 chars>`}</pre>
+                      <CodeBlock className="px-3 pb-3 mono text-xs whitespace-pre-wrap" text={c.text ?? `<binary ${c.blob?.length ?? 0} base64 chars>`} />
                     )}
                   </div>
                 );

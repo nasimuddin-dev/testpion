@@ -1,3 +1,4 @@
+import { CodeBlock } from './CodeBlock';
 import { Activity, Braces, Download, FileBarChart, FileCode2, FileText, GitCompare, Square, Target, RotateCcw, ScanSearch, Sparkles, ThumbsDown, ThumbsUp } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { call, on } from '../api';
@@ -444,17 +445,17 @@ export function ResultDetail({ r, runId, onReviewed }: { r: TestResult; runId?: 
           <div className="p-3 flex flex-col gap-3 text-sm">
             <div>
               <div className="text-xs text-muted font-semibold mb-1">Input</div>
-              <pre className="mono text-xs whitespace-pre-wrap bg-panel p-2 rounded">{r.input ?? '—'}</pre>
+              <CodeBlock className="mono text-xs whitespace-pre-wrap bg-panel p-2 rounded" text={r.input ?? '—'} />
             </div>
             <div>
               <div className="text-xs text-muted font-semibold mb-1">Output</div>
-              <pre className="mono text-xs whitespace-pre-wrap bg-panel p-2 rounded">{r.output ?? '—'}</pre>
+              <CodeBlock className="mono text-xs whitespace-pre-wrap bg-panel p-2 rounded" text={r.output ?? '—'} />
             </div>
           </div>
         )}
         {tab === 'trace' && (trace ? <TraceView trace={trace} /> : trace === null ? <Empty title="No trace stored for this result" /> : <Empty title="Loading…" />)}
         {tab === 'history' && runId && <TestHistory id={r.id} name={r.name} runId={runId} />}
-        {tab === 'meta' && <pre className="p-3 mono text-xs whitespace-pre-wrap">{JSON.stringify(r.metadata ?? {}, null, 2)}</pre>}
+        {tab === 'meta' && <CodeBlock className="p-3 mono text-xs whitespace-pre-wrap" language={'json'} text={JSON.stringify(r.metadata ?? {}, null, 2)} />}
       </div>
     </div>
   );

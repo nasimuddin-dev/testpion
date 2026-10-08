@@ -12,6 +12,7 @@ import { SidebarShell } from '../components/SidebarShell';
 import { KindBadge, RowMenu, TreeHeader, treeKeys } from '../components/TreeParts';
 import { EnvironmentsPane } from '../components/SidebarPanes';
 import { finishSave, type SaveResult } from '../lib/files';
+import { dataLanguageOf } from '../data-languages';
 import { Badge, Button, cx, Empty, IconButton, Input, rowActionClass, SectionTitle, Split, Tabs, type MenuItem } from '../components/ui';
 
 interface Node {
@@ -476,7 +477,7 @@ export function TestsView() {
           {tab === 'editor' ? (
             file ? (
               <Split id="tests-editor" initial={65}>
-                <CodeEditor language={file.endsWith('.json') ? 'json' : file.endsWith('.jsonl') || file.endsWith('.csv') ? 'plaintext' : 'yaml'} path={`tests/${file}`} value={content} onChange={setContent} />
+                <CodeEditor language={dataLanguageOf(file)} path={`tests/${file}`} value={content} onChange={setContent} />
                 <div className="h-full overflow-auto text-sm">
                   <SectionTitle>Parsed tests</SectionTitle>
                   {preview && 'error' in preview ? (

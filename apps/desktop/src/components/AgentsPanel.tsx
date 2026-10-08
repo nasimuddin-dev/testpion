@@ -1,3 +1,4 @@
+import { CodeBlock } from './CodeBlock';
 import { Bot, Check, Copy, FileText, PlugZap } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { asError, call } from '../api';
@@ -117,7 +118,7 @@ export function AgentsPanel() {
         <div className="p-3 flex flex-col gap-2">
           <div className="text-xs text-muted">{s.where}</div>
           <div className="relative">
-            <pre className="mono text-xs bg-bg border border-line rounded-lg p-3 pr-20 whitespace-pre-wrap break-all">{s.text}</pre>
+            <CodeBlock className="mono text-xs bg-bg border border-line rounded-lg p-3 pr-20 whitespace-pre-wrap break-all" text={s.text} />
             <Button size="sm" className="absolute top-2 right-2" icon={copied ? <Check size={12} /> : <Copy size={12} />} onClick={() => void copy()}>
               {copied ? 'Copied' : 'Copy'}
             </Button>

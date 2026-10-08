@@ -1,3 +1,4 @@
+import { CodeBlock } from './CodeBlock';
 import { Bug, ChevronDown, ChevronRight, ExternalLink, FlaskConical, Play, Sparkles, Square, TriangleAlert } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { call, on } from '../api';
@@ -57,11 +58,11 @@ function Row({ r }: { r: FuzzResult }) {
           <div className="mono text-xs break-all">
             {r.case.request.method} {r.case.request.url}
           </div>
-          {r.case.request.body?.content && <pre className="mono text-xs bg-panel rounded p-2 overflow-auto max-h-48">{r.case.request.body.content}</pre>}
+          {r.case.request.body?.content && <CodeBlock className="mono text-xs bg-panel rounded p-2 overflow-auto max-h-48" text={r.case.request.body.content} />}
           {r.bodyPreview && (
             <div>
               <div className="text-xs text-muted mb-1">Response</div>
-              <pre className="mono text-xs bg-panel rounded p-2 overflow-auto max-h-48">{r.bodyPreview}</pre>
+              <CodeBlock className="mono text-xs bg-panel rounded p-2 overflow-auto max-h-48" text={r.bodyPreview} />
             </div>
           )}
           <div>

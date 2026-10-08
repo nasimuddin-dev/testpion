@@ -1,3 +1,4 @@
+import { CodeBlock } from './CodeBlock';
 import { AlertTriangle, BookOpen, Bot, CheckCircle2, CircleHelp, CircleSlash, KeyRound, Lightbulb, Plus, Sparkles, XCircle } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { NormalizedError } from '../api';
@@ -85,7 +86,7 @@ export function ErrorPanel({ error, context, raw = true }: { error: NormalizedEr
               </ul>
             </div>
           )}
-          {raw && error.details && !setup && !missing && <pre className="mt-3 mono text-xs bg-panel p-2 rounded overflow-auto max-h-40">{JSON.stringify(error.details, null, 2)}</pre>}
+          {raw && error.details && !setup && !missing && <CodeBlock className="mt-3 mono text-xs bg-panel p-2 rounded overflow-auto max-h-40" text={JSON.stringify(error.details, null, 2)} />}
           {setup ? (
             <AddKeyButton provider={setup} className="mt-3" />
           ) : missing ? (

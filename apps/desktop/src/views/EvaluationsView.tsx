@@ -57,6 +57,9 @@ const drafts = persisted<Draft>('eval', {
 });
 
 /** Evaluation Lab: dataset × prompt × model × evaluators, streamed through the test runner. */
+/** The editor's language for each dataset format: colours, and each format's own checks (JSONL line by line). */
+const EDITOR_LANGUAGE = { json: 'json', jsonl: 'jsonl', csv: 'csv', md: 'markdown' } as const;
+
 export function EvaluationsView() {
   const [d, setD] = useState<Draft>(drafts.load);
   const [providers, setProviders] = useState<ProviderConfig[]>([]);
@@ -325,7 +328,7 @@ export function EvaluationsView() {
               )}
               <div className="flex-1 min-h-0">
                 <Split id="eval-dataset" direction="vertical" initial={65}>
-                  <CodeEditor language={readAs === 'json' ? 'json' : 'plaintext'} value={d.dataset} onChange={(dataset) => set({ dataset })} />
+                  <CodeEditor language={EDITOR_LANGUAGE[readAs]} value={d.dataset} onChange={(dataset) => set({ dataset })} />
                   <div className="h-full overflow-auto p-2 text-xs">
                     <div className="text-muted mb-1">
                       Preview · {count} records · each record's fields are available as {'{{field}}'} in the prompt and evaluators

@@ -5,6 +5,7 @@ import JsonWorker from 'monaco-editor/language/json/json.worker?worker';
 import TsWorker from 'monaco-editor/language/typescript/ts.worker?worker';
 import { BRUNO_TYPES, PM_TYPES } from './lib/snippets';
 import { installEditorIntel } from './editor-intel';
+import { dataLanguageThemeRules, installDataLanguages } from './data-languages';
 import { buildSchema, type GraphQLSchema } from 'graphql';
 import { getAutocompleteSuggestions, getDiagnostics, Position } from 'graphql-language-service';
 
@@ -58,6 +59,7 @@ monaco.editor.defineTheme('aps-dark', {
     { token: 'number', foreground: 'fbbf77' },
     { token: 'keyword', foreground: 'c4a5fd' },
     { token: 'comment', foreground: '6b6b76', fontStyle: 'italic' },
+    ...dataLanguageThemeRules('dark'),
   ],
   colors: {
     'editor.background': '#090f20',
@@ -88,6 +90,7 @@ monaco.editor.defineTheme('aps-light', {
     { token: 'number', foreground: 'c2410c' },
     { token: 'keyword', foreground: '7c3aed' },
     { token: 'comment', foreground: '8a8a95', fontStyle: 'italic' },
+    ...dataLanguageThemeRules('light'),
   ],
   colors: {
     'editor.background': '#ffffff',
@@ -225,5 +228,6 @@ monaco.editor.onDidCreateModel((m) => {
 });
 
 installEditorIntel(monaco);
+installDataLanguages(monaco);
 
 export { monaco };

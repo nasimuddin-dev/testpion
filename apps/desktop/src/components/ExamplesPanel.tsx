@@ -1,3 +1,4 @@
+import { editorLanguageOfText } from '../data-languages';
 import { BookmarkPlus, Pencil, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { call } from '../api';
@@ -12,7 +13,7 @@ const languageOf = (ex: SavedExample) => {
   if (/json/i.test(ct) || /^\s*[{[]/.test(ex.body)) return 'json';
   if (/html/i.test(ct)) return 'html';
   if (/xml/i.test(ct)) return 'xml';
-  return 'plaintext';
+  return editorLanguageOfText(ex.body);
 };
 
 /**

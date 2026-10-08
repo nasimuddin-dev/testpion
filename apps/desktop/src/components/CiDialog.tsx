@@ -1,3 +1,4 @@
+import { CodeBlock } from './CodeBlock';
 import { Check, Copy, Download } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { asError, call } from '../api';
@@ -144,7 +145,7 @@ export function CiDialog() {
         {error && <div className="text-sm text-bad">{error}</div>}
         {cfg && (
           <>
-            <pre className="mono text-xs leading-relaxed rounded-lg border border-line bg-bg p-3 max-h-[46vh] overflow-auto whitespace-pre">{cfg.content}</pre>
+            <CodeBlock className="mono text-xs leading-relaxed rounded-lg border border-line bg-bg p-3 max-h-[46vh] overflow-auto whitespace-pre" language={'yaml'} text={cfg.content} />
             <div className="text-sm">
               {cfg.secrets.length ? (
                 <>

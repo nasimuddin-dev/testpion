@@ -1,3 +1,4 @@
+import { CodeBlock } from './CodeBlock';
 import { Bug, Copy, Download, ExternalLink, HelpCircle, Lightbulb, Mail, Paintbrush } from 'lucide-react';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { call } from '../api';
@@ -184,7 +185,7 @@ export function FeedbackDialog({ request, onClose }: { request: FeedbackRequest;
           <LinkButton className="text-sm" onClick={() => setPreview(!preview)} aria-expanded={preview}>
             {preview ? 'Hide' : 'Show'} the report that will be sent
           </LinkButton>
-          {preview && report && <pre className="mt-2 mono text-xs bg-bg border border-line rounded-lg p-3 max-h-64 overflow-auto whitespace-pre-wrap">{`# ${report.title}\n\n${report.body}`}</pre>}
+          {preview && report && <CodeBlock className="mt-2 mono text-xs bg-bg border border-line rounded-lg p-3 max-h-64 overflow-auto whitespace-pre-wrap" text={`# ${report.title}\n\n${report.body}`} />}
         </div>
       </div>
     </Modal>

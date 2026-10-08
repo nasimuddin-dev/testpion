@@ -17,7 +17,8 @@ interface CommitDetail {
 }
 
 /** A unified diff, line by line: additions and removals in their colours, hunk heads muted. */
-function DiffText({ text }: { text: string }) {
+/** A unified diff, its added and removed lines coloured: the one way the app shows a diff. */
+export function DiffText({ text }: { text: string }) {
   if (!text.trim()) return <div className="p-3 text-sm text-muted">No text difference (a binary file, or a rename).</div>;
   return (
     <pre className="p-3 text-xs mono whitespace-pre overflow-auto leading-relaxed" aria-label="Diff">
