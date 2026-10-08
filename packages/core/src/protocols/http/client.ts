@@ -38,6 +38,8 @@ export interface HttpExecOptions extends AuthContext {
   discardBody?: boolean;
   /** Workspace cookie jar: matching cookies are sent and Set-Cookie responses stored (also across redirects). */
   cookieJar?: CookieJar;
+  /** The variable names defined where the request was resolved: a `{{name}}` left in the host names the one it likely meant. */
+  variableNames?: () => string[];
 }
 
 export interface PreparedRequest {
@@ -98,6 +100,49 @@ export function applyPathVariables(url: string, vars?: KeyValue[], encode = true
   const path = q >= 0 ? rest.slice(0, q) : rest;
   const tail = q >= 0 ? rest.slice(q) : '';
   return head + path.replace(/\/:([A-Za-z_][\w-]*)/g, (whole, name: string) => (map.has(name) ? '/' + (encode ? encodeURIComponent(map.get(name)!) : map.get(name)!) : whole)) + tail;
+}
+
+/** The closest defined name to a missing one: the same name in another case first, then one or two letters off. */
+function closestName(name: string, known: string[]): string | undefined {
+  const lower = name.toLowerCase();
+  const same = known.find((k) => k.toLowerCase() === lower);
+  if (same) return same;
+  const distance = (a: string, b: string) => {
+    const d = Array.from({ length: b.length + 1 }, (_, i) => i);
+    for (let i = 1; i <= a.length; i++) {
+      let prev = d[0]!;
+      d[0] = i;
+      for (let j = 1; j <= b.length; j++) {
+        const cur = d[j]!;
+        d[j] = Math.min(d[j]! + 1, d[j - 1]! + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1));
+        prev = cur;
+      }
+    }
+    return d[b.length]!;
+  };
+  const best = known.map((k) => ({ k, d: distance(lower, k.toLowerCase()) })).sort((a, b) => a.d - b.d)[0];
+  return best && best.d <= 2 && best.d < name.length / 2 ? best.k : undefined;
+}
+
+/**
+ * A `{{variable}}` still in the URL's scheme or host once variables are filled in: the request cannot reach anything
+ * (the lookup fails with ENOTFOUND {{name}}), so it is not sent, and the error names the variable, the defined name
+ * it most likely meant, and where to set it. `known` are the names defined in any scope.
+ */
+export function unresolvedHostError(url: string, known: string[] = []): ApsError | undefined {
+  const head = /^([a-z][a-z0-9+.-]*:\/\/)?[^/?#]*/i.exec(url.trim())?.[0] ?? '';
+  const name = /\{\{\s*([^{}\s]+)\s*\}\}/.exec(head)?.[1];
+  if (!name || name.startsWith('$')) return undefined;
+  const meant = closestName(name, known);
+  return new ApsError('ConfigurationError', `{{${name}}} has no value`, {
+    why: `The URL starts with {{${name}}}, but no variable named "${name}" is set in the selected environment, the collection or the globals, so the request was not sent.`,
+    suggestions: [
+      ...(meant ? [`Did you mean {{${meant}}}? Variable names are case-sensitive: rename it in the URL, or add "${name}" as well.`] : []),
+      `Choose an environment that defines ${name} in the top bar, or add ${name} to the current environment.`,
+      `Or set it on the collection (its Variables tab) or as a global, so every environment has it.`,
+    ],
+    details: { setup: { variable: name, ...(meant ? { meant } : {}) } },
+  });
 }
 
 export function buildUrl(raw: string, params?: KeyValue[], pathVariables?: KeyValue[], opts: { encode?: boolean } = {}): URL {
@@ -223,6 +268,8 @@ const REDIRECT_CODES = new Set([301, 302, 303, 307, 308]);
 
 /** Execute an HTTP request, streaming the response with bounded memory. */
 export async function executeHttp(spec: HttpRequestSpec, opts: HttpExecOptions = {}): Promise<{ response: HttpResponseData; prepared: PreparedRequest }> {
+  const unresolved = unresolvedHostError(spec.url, opts.variableNames?.());
+  if (unresolved) throw unresolved;
   if (spec.settings?.disableCookieJar && opts.cookieJar) opts = { ...opts, cookieJar: undefined };
   const retries = Math.max(0, Math.min(5, Math.floor(spec.settings?.retries ?? 0)));
   if (!retries) return executeHttpOnce(spec, opts);

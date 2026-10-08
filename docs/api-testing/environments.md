@@ -27,6 +27,8 @@ Everywhere you can write a value, `{{variables}}` help you:
 
 Dynamic values (`{{$uuid}}`, `{{$timestamp}}` …) and `{{$env.NAME}}` count as defined.
 
+A request whose host is a variable without a value (`{{baseurl}}/users` when no scope defines `baseurl`) is not sent: it could only fail with "ENOTFOUND {{baseurl}}". The error names the variable and the defined one it most likely meant (`{{baseUrl}}`: names are case-sensitive), and **Add baseurl to …** opens the current environment with a new row for it, ready for its value. The CLI and the MCP server report the same error, with the same suggestions.
+
 ## Find usages and rename
 
 **Usages** in an environment's toolbar (or **Find variable usages** in the command palette, Ctrl+K) shows where a variable is used and defined: `{{name}}` in URLs, parameters, headers, bodies, auth and assertions, `pm.environment.get('name')` and the like in scripts, environments, collection, folder and workspace variables, and test files. Click a request to open it.

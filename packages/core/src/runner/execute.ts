@@ -292,7 +292,14 @@ async function runHttp(test: HttpTest, scope: VariableScope, svc: ExecServices, 
   if (spec.auth?.type === 'inherit' || !spec.auth) spec.auth = svc.inheritedAuth ? scope.resolveDeep(svc.inheritedAuth) : spec.auth;
   const s = span.child(`${spec.method} ${svc.redactor.redactUrl(spec.url)}`, 'http', { attributes: { method: spec.method } });
   try {
-    const { response, prepared } = await executeHttp(spec, { signal, redactor: svc.redactor, maxPreviewBytes: svc.maxPreviewBytes ?? 1024 * 1024, openExternal: svc.openExternal, cookieJar: svc.cookieJar });
+    const { response, prepared } = await executeHttp(spec, {
+      signal,
+      redactor: svc.redactor,
+      maxPreviewBytes: svc.maxPreviewBytes ?? 1024 * 1024,
+      openExternal: svc.openExternal,
+      cookieJar: svc.cookieJar,
+      variableNames: () => scope.names(),
+    });
     svc.onHttpResponse?.({ testId: test.id ?? test.name, status: response.status, statusText: response.statusText ?? '', headers: response.headers, body: response.bodyPreview, durationMs: response.durationMs, url: prepared.url, timing: timingSummary(response) });
     if (response.connection?.certificate) svc.onCertificate?.(prepared.url, response.connection.certificate);
     timingSpans(s, response.timeline);
@@ -372,7 +379,7 @@ async function runGraphQL(test: GraphQLTest, scope: VariableScope, svc: ExecServ
   const s = span.child(`graphql ${test.operationName ?? ''}`.trim(), 'graphql', { input: { query: r.query, variables: r.variables } });
   if (detectOperation(r.query, r.operationName).type === 'subscription') return runGraphQLSubscription(test, r, auth, svc, s, signal);
   try {
-    const out = await executeGraphQL({ ...r, auth }, { signal, redactor: svc.redactor, maxPreviewBytes: svc.maxPreviewBytes ?? 1024 * 1024, cookieJar: svc.cookieJar });
+    const out = await executeGraphQL({ ...r, auth }, { signal, redactor: svc.redactor, maxPreviewBytes: svc.maxPreviewBytes ?? 1024 * 1024, cookieJar: svc.cookieJar, variableNames: () => scope.names() });
     svc.onHttpResponse?.({ testId: test.id ?? test.name, status: out.response.status, statusText: out.response.statusText ?? '', headers: out.response.headers, body: out.response.bodyPreview, durationMs: out.response.durationMs, url: out.prepared.url, timing: timingSummary(out.response) });
     if (out.response.connection?.certificate) svc.onCertificate?.(out.prepared.url, out.response.connection.certificate);
     timingSpans(s, out.response.timeline);

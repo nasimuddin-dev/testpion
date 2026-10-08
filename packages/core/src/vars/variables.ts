@@ -63,6 +63,13 @@ export class VariableScope {
     this.scopes.set(scope, m);
   }
 
+  /** Every variable name defined in any scope (for "did you mean" when a reference has no value). */
+  names(): string[] {
+    const out = new Set<string>();
+    for (const m of this.scopes.values()) for (const k of m.keys()) out.add(k);
+    return [...out];
+  }
+
   markSecret(key: string, value: unknown): void {
     this.secretKeys.add(key);
     if (typeof value === 'string') this.redactor?.addSecret(value);

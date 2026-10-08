@@ -1,3 +1,4 @@
+import { openDocs } from '../lib/docs-link';
 import { Activity as ActivityIcon, AlarmClock, BookOpen, Bug, Gauge, FileDown, Bot, LockKeyhole, ShieldCheck, FolderPlus, FolderTree, GitBranch, History, KeyRound, Network, Play, Plug, Sparkles, Upload, ArrowRight } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { asError, call, modKey } from '../api';
@@ -24,7 +25,6 @@ interface HistoryItem {
   request?: unknown;
 }
 
-const DOCS = 'https://nasimuddin-dev.github.io/testpion/';
 
 /** Hue per quick action so the grid is easy to scan. */
 const HUES = { blue: 'oklch(0.62 0.19 255)', violet: 'oklch(0.6 0.22 295)', teal: 'oklch(0.66 0.13 190)', green: 'oklch(0.64 0.16 150)', orange: 'oklch(0.7 0.16 55)', pink: 'oklch(0.64 0.21 350)', indigo: 'oklch(0.58 0.2 270)', slate: 'oklch(0.6 0.03 260)', red: 'oklch(0.62 0.2 25)', amber: 'oklch(0.74 0.15 75)' };
@@ -261,7 +261,7 @@ export function HomeView() {
           <Action icon={<Plug size={16} />} hue="green" title="Test an MCP server" text="Connect over stdio or HTTP and call tools with generated forms." onClick={() => setView('mcp')} />
           <Action icon={<Sparkles size={16} />} hue="violet" title="Try an AI prompt" text="Compare models, check structured output, track tokens and cost." onClick={() => open('ai', { reset: true })} />
           <Action icon={<Bot size={16} />} hue="indigo" title="Ask the assistant" text="Explain an error, draft tests or ask how to do something." onClick={() => useApp.getState().set({ assistant: { task: 'free', title: 'Ask the assistant', context: {} } })} />
-          <Action icon={<BookOpen size={16} />} hue="slate" title="Read the docs" text="Guides for requests, scripts, the runner, mocks and the CLI." onClick={() => window.open(DOCS, '_blank', 'noopener')} />
+          <Action icon={<BookOpen size={16} />} hue="slate" title="Read the docs" text="Guides for requests, scripts, the runner, mocks and the CLI." onClick={() => openDocs()} />
         </div>
 
         <AttentionCard />

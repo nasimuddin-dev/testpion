@@ -306,7 +306,7 @@ export function RestView() {
           label: 'Open Settings',
           onClick: () => useApp.getState().openIntent('settings', { tab: 'privacy' }),
         });
-      else if (r.unresolved?.length) useApp.getState().toast(`Unresolved variables: ${r.unresolved.join(', ')}`, 'error');
+      else if (r.unresolved?.length && !r.error) useApp.getState().toast(`Unresolved variables: ${r.unresolved.join(', ')}`, 'error');
     } catch (e) {
       setResults((rs) => ({ ...rs, [tabId]: { error: asError(e) } }));
     } finally {

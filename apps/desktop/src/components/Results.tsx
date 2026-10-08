@@ -1,8 +1,10 @@
-import { AlertTriangle, Bot, CheckCircle2, CircleHelp, CircleSlash, KeyRound, Lightbulb, Sparkles, XCircle } from 'lucide-react';
+import { AlertTriangle, BookOpen, Bot, CheckCircle2, CircleHelp, CircleSlash, KeyRound, Lightbulb, Plus, Sparkles, XCircle } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { NormalizedError } from '../api';
 import type { CheckResult } from '../types';
 import { useApp } from '../store';
+import { refreshEnvironments } from '../lib/environments-store';
+import { openDocs } from '../lib/docs-link';
 import { Badge, Button, cx, LinkButton } from './ui';
 import { Callout } from '../components/ui';
 
@@ -30,9 +32,30 @@ export function AddKeyButton({ provider, link, className }: { provider: string; 
  * An error: what happened, why, and how to fix it. `raw={false}` leaves out the details as JSON (a test result's
  * panes show them elsewhere); a missing AI key still offers "Add the key", which the details name.
  */
+/** The variable an error names as missing (a `{{name}}` left in a URL's host), and the defined name it likely meant. */
+export function missingVariableOf(error: NormalizedError | undefined): { variable: string; meant?: string } | undefined {
+  const s = (error?.details as { setup?: { variable?: string; meant?: string } } | undefined)?.setup;
+  return s?.variable ? { variable: s.variable, meant: s.meant } : undefined;
+}
+
+/** Opens the current environment with a new row for the variable, its value ready to type (the globals without one). */
+export function AddVariableButton({ variable, className }: { variable: string; className?: string }) {
+  const env = useApp((s) => s.environment);
+  const go = async () => {
+    const e = env ? (await refreshEnvironments()).find((x) => x.name === env) : undefined;
+    useApp.getState().openIntent('environments', e ? { environmentId: e.id, addVariable: variable } : { tab: 'globals' });
+  };
+  return (
+    <Button size="sm" variant="primary" className={className} icon={<Plus size={12} />} onClick={() => void go()}>
+      {env ? `Add ${variable} to ${env}` : 'Open the globals'}
+    </Button>
+  );
+}
+
 export function ErrorPanel({ error, context, raw = true }: { error: NormalizedError; context?: unknown; raw?: boolean }) {
   // an AI provider without its key: the way to fix it is one click away (the assistant can't explain it without a key)
   const setup = setupProviderOf(error);
+  const missing = missingVariableOf(error);
   const ask = () =>
     useApp.getState().set({ assistant: { task: 'explain-error', title: `Explain ${error.kind}`, context: { error, ...((context as object) ?? {}) } } });
   return (
@@ -62,9 +85,19 @@ export function ErrorPanel({ error, context, raw = true }: { error: NormalizedEr
               </ul>
             </div>
           )}
-          {raw && error.details && !setup && <pre className="mt-3 mono text-xs bg-panel p-2 rounded overflow-auto max-h-40">{JSON.stringify(error.details, null, 2)}</pre>}
+          {raw && error.details && !setup && !missing && <pre className="mt-3 mono text-xs bg-panel p-2 rounded overflow-auto max-h-40">{JSON.stringify(error.details, null, 2)}</pre>}
           {setup ? (
             <AddKeyButton provider={setup} className="mt-3" />
+          ) : missing ? (
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <AddVariableButton variable={missing.variable} />
+              <LinkButton icon={<BookOpen size={12} />} onClick={() => openDocs('api-testing/environments')}>
+                How variables work
+              </LinkButton>
+              <LinkButton icon={<Sparkles size={12} />} onClick={ask}>
+                Explain with AI assistant
+              </LinkButton>
+            </div>
           ) : (
             <Button size="sm" variant="ghost" className="mt-3 -ml-2" icon={<Sparkles size={12} />} onClick={ask}>
               Explain with AI assistant

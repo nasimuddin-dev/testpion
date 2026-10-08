@@ -711,6 +711,7 @@ export class Backend {
       try {
         result = await executeHttp(spec, {
           signal: ctrl.signal,
+          variableNames: () => ctx.vars.names(),
           payloadDir: this.ws.path('payloads'),
           maxPreviewBytes: this.settings.maxPreviewBytes,
           redactor: ctx.redactor,
