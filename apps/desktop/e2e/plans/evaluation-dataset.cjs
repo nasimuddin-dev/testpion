@@ -1,6 +1,7 @@
 // An evaluation's dataset: records pasted one per line while JSON is selected are read as JSONL; the editor does not
 // flag them as broken JSON ("End of file expected"), a note says so and switches the format in one click. JSON that
-// is really broken is still marked.
+// is really broken is still marked. A run on a provider without its key says so with "Add the key", which opens
+// AI Lab ▸ Providers on that provider with its key field focused.
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
 const { withExpect, step } = require('../lib.cjs');
 
@@ -24,10 +25,30 @@ const steps = [
      return r;`,
   ),
   step('switch-to-jsonl', `vis('main [data-format-mismatch] button')[0]?.click(); await __t.sleep(800); return ${state};`),
+  step(
+    'run-without-a-key',
+    `const sel = vis('main label').find((l) => l.textContent.trim().startsWith('Provider'))?.parentElement?.querySelector('select') ?? vis('main select').find((x) => [...x.options].some((o) => o.textContent.trim() === 'OpenAI'));
+     const opt = [...sel.options].find((o) => o.textContent.trim() === 'OpenAI');
+     Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(sel, opt.value);
+     sel.dispatchEvent(new Event('change', { bubbles: true })); await __t.sleep(400);
+     vis('main button').find((b) => { const t = b.textContent.trim(); return t.startsWith('Run ') && /case/.test(t); })?.click();
+     const alert = await __t.waitFor(() => vis('main [role=alert]').find((a) => /No API key for OpenAI/.test(a.textContent)), 20000);
+     const add = alert && [...alert.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Add the key');
+     return 'error: ' + (alert ? 'No API key for OpenAI' : 'NONE') + ' | button: ' + (add ? 'Add the key' : 'NONE');`,
+  ),
+  step(
+    'add-the-key-opens-the-provider',
+    `const add = vis('main [role=alert] button').find((b) => b.textContent.trim() === 'Add the key'); add?.click();
+     await __t.waitFor(() => document.activeElement?.getAttribute('aria-label') === 'API key', 5000).catch(() => undefined);
+     const f = document.activeElement;
+     return 'view: ' + (vis('main [role=tab][aria-selected=true]').map((t) => t.textContent.trim()).join(',')) + ' | focused: ' + (f?.tagName === 'INPUT' ? f.getAttribute('aria-label') || 'an input without a name' : 'nothing') + ' | provider: ' + (/OpenAI/.test(document.querySelector('main')?.innerText ?? '') ? 'OpenAI' : '?');`,
+  ),
 ];
 module.exports = withExpect(steps, {
   'jsonl-records': /^checked: JSONL \| note: none \| editor errors: 0 \| preview: 3$/,
   'json-selected': /^checked: JSON \| note: shown \| editor errors: 0 \| preview: 3$/,
   'broken-json-is-still-marked': /^checked: JSON \| note: none \| editor errors: [1-9]/,
   'switch-to-jsonl': /^checked: JSONL \| note: none \| editor errors: 0 \| preview: 3$/,
+  'run-without-a-key': /^error: No API key for OpenAI \| button: Add the key$/,
+  'add-the-key-opens-the-provider': /^view: Providers\d* \| focused: API key \| provider: OpenAI$/,
 });

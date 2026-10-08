@@ -26,7 +26,11 @@ export function AddKeyButton({ provider, link, className }: { provider: string; 
   );
 }
 
-export function ErrorPanel({ error, context }: { error: NormalizedError; context?: unknown }) {
+/**
+ * An error: what happened, why, and how to fix it. `raw={false}` leaves out the details as JSON (a test result's
+ * panes show them elsewhere); a missing AI key still offers "Add the key", which the details name.
+ */
+export function ErrorPanel({ error, context, raw = true }: { error: NormalizedError; context?: unknown; raw?: boolean }) {
   // an AI provider without its key: the way to fix it is one click away (the assistant can't explain it without a key)
   const setup = setupProviderOf(error);
   const ask = () =>
@@ -58,7 +62,7 @@ export function ErrorPanel({ error, context }: { error: NormalizedError; context
               </ul>
             </div>
           )}
-          {error.details && !setup && <pre className="mt-3 mono text-xs bg-panel p-2 rounded overflow-auto max-h-40">{JSON.stringify(error.details, null, 2)}</pre>}
+          {raw && error.details && !setup && <pre className="mt-3 mono text-xs bg-panel p-2 rounded overflow-auto max-h-40">{JSON.stringify(error.details, null, 2)}</pre>}
           {setup ? (
             <AddKeyButton provider={setup} className="mt-3" />
           ) : (

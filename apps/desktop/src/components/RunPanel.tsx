@@ -408,7 +408,7 @@ export function ResultDetail({ r, runId, onReviewed }: { r: TestResult; runId?: 
       <div className="flex-1 min-h-0 overflow-auto">
         {tab === 'checks' && (
           <>
-            {r.error && <ErrorPanel error={{ ...r.error, details: undefined }} context={{ test: r.name, input: r.input }} />}
+            {r.error && <ErrorPanel error={r.error} raw={false} context={{ test: r.name, input: r.input }} />}
             {r.status === 'skipped' && <div className="p-3 text-sm text-warn">Skipped: {String(r.metadata?.reason ?? '')}</div>}
             {r.status === 'failed' && (
               <div className="px-3 pt-3">

@@ -17,14 +17,19 @@ export function Providers({ providers, onSaved, focus }: { providers: ProviderCo
   const [sel, setSel] = useState(focus?.id ?? providers[0]?.id);
   const keyField = useRef<HTMLInputElement>(null);
   useEffect(() => {
-    if (!focus) return;
-    setSel(focus.id);
-    requestAnimationFrame(() => keyField.current?.focus());
+    if (focus) setSel(focus.id);
   }, [focus]);
   const [testing, setTesting] = useState(false);
   const env = useApp((s) => s.environment);
   useEffect(() => setList(providers), [providers]);
   const p = list.find((x) => x.id === sel);
+  // the key field is focused once the provider's form is there (the list may still be loading when a link opens it)
+  const focused = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    if (!focus || focused.current === focus.at || p?.id !== focus.id) return;
+    focused.current = focus.at;
+    requestAnimationFrame(() => keyField.current?.focus());
+  }, [focus, p?.id]);
   const upd = (patch: Partial<ProviderConfig>) => setList(list.map((x) => (x.id === sel ? { ...x, ...patch } : x)));
   const save = async (next = list) => {
     try {
@@ -176,7 +181,7 @@ export function Providers({ providers, onSaved, focus }: { providers: ProviderCo
             </Field>
             {p.kind !== 'mock' && (
               <Field label="API key" hint={p.hasKey ? 'A key is stored in the OS credential store. Type to replace it.' : 'Stored encrypted in the OS credential store — never in workspace files. You can also reference {{$env.NAME}} in the field below.'}>
-                <Input ref={keyField} type="password" placeholder={p.hasKey ? '••••••••••••' : p.kind === 'bedrock' ? 'accessKeyId:secretAccessKey[:sessionToken] or a Bedrock API key' : 'sk-…'} value={keys[p.id] ?? ''} onChange={(e) => setKeys({ ...keys, [p.id]: e.target.value })} />
+                <Input ref={keyField} type="password" aria-label="API key" placeholder={p.hasKey ? '••••••••••••' : p.kind === 'bedrock' ? 'accessKeyId:secretAccessKey[:sessionToken] or a Bedrock API key' : 'sk-…'} value={keys[p.id] ?? ''} onChange={(e) => setKeys({ ...keys, [p.id]: e.target.value })} />
               </Field>
             )}
             {p.kind !== 'mock' && (

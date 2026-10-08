@@ -285,9 +285,13 @@ export const useApp = create<AppState>((set, get) => ({
   },
 }));
 
-/** Show an error (anything thrown) as an error toast. */
+/** Show an error (anything thrown) as an error toast; a missing AI key offers "Add the key" (AI Lab ▸ Providers, its key field). */
 export function toastError(e: unknown): void {
-  useApp.getState().toast(asError(e).message, 'error');
+  const err = asError(e);
+  const provider = (err.details as { setup?: { provider?: string } } | undefined)?.setup?.provider;
+  useApp
+    .getState()
+    .toast(err.message, 'error', provider ? { label: 'Add the key', onClick: () => useApp.getState().openIntent('ai', { providerId: provider, tab: 'providers' }) } : undefined);
 }
 
 /** Persist per-view drafts in localStorage (UI state only — never secrets or responses). */
