@@ -1,15 +1,13 @@
 import { Bot, ChevronDown, Copy, ExternalLink, Pause, Play, Scale, Star, X } from 'lucide-react';
 import { useMemo, useState, type ReactNode } from 'react';
 import { formatBytes } from '@testpion/shared';
-import { useApp } from '../../store';
 import { Badge, Button, Empty, Input, Menu, Split, statusTone, Tabs } from '../ui';
 import { JsonTree } from '../JsonView';
 import { JwtView } from '../JwtView';
 import { EventsView, FramesView, GrpcView } from '../DebuggerTools';
 import { bodyNote, curlOf, hexDump, rawOf, versionOf, type Exchange } from './model';
+import { copyText } from '../../lib/clipboard';
 
-const toast = (m: string) => useApp.getState().toast(m, 'success');
-const copy = (text: string, what: string) => void navigator.clipboard.writeText(text).then(() => toast(`Copied ${what}`));
 const parseJson = (text?: string) => {
   if (!text) return undefined;
   try {
@@ -64,7 +62,7 @@ export function ExchangePanes({ e, ...a }: { e: Exchange } & ExchangeActions) {
               Resend
             </Button>
           )}
-          <Button size="sm" variant="ghost" icon={<Copy size={12} />} onClick={() => copy(curlOf(e), 'as cURL')}>
+          <Button size="sm" variant="ghost" icon={<Copy size={12} />} onClick={() => void copyText(curlOf(e), 'as cURL')}>
             cURL
           </Button>
           <Button size="sm" variant="ghost" icon={<Bot size={12} />} onClick={a.onAsk} title="Ask the AI assistant what this exchange does, why it failed, what to check (sent redacted)">
@@ -225,7 +223,7 @@ function DetailsPane({
         <span className="text-sm font-semibold">{title}</span>
         {tab === 'header' && <Input className="ml-auto w-48 h-6 text-xs" placeholder="Filter headers" aria-label={`Filter ${side} headers`} value={find} onChange={(ev) => setFind(ev.target.value)} />}
         {(tab === 'raw' || tab === 'content') && (
-          <Button size="sm" variant="ghost" className="ml-auto" icon={<Copy size={12} />} onClick={() => copy(tab === 'raw' ? raw : (body ?? ''), `the ${tab} of the ${side}`)}>
+          <Button size="sm" variant="ghost" className="ml-auto" icon={<Copy size={12} />} onClick={() => void copyText(tab === 'raw' ? raw : (body ?? ''), `the ${tab} of the ${side}`)}>
             Copy
           </Button>
         )}

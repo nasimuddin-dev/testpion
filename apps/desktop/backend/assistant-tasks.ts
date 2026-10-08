@@ -3,7 +3,7 @@
  * commit message …): one instruction per task, prepended to the user's context. Secrets are hidden before anything is
  * sent (the context is redacted); an instruction may therefore never ask for a value.
  */
-export const ASSISTANT_TASKS: Record<string, string> = {
+const ASSISTANT_TASKS: Record<string, string> = {
   'explain-error': 'Explain what went wrong in plain language, the most likely cause, and concrete troubleshooting steps. Be concise. Use short headings: What happened, Why, How to fix.',
   'generate-assertions':
     'Propose assertions for this response as a YAML list using the TestPion check types (status, exists, equals, contains, regex, json-schema, type, length, latency, header). Output only YAML.',

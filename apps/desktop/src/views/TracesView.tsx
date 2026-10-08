@@ -1,7 +1,7 @@
 import { Activity, RefreshCw, Send } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
-import { asError, call } from '../api';
-import { persisted, useApp } from '../store';
+import { call } from '../api';
+import { persisted, toastError, useApp } from '../store';
 import { KeyValueEditor } from '../components/KeyValueEditor';
 import type { KeyValue } from '../types';
 import { useIntent } from '../hooks';
@@ -37,7 +37,7 @@ function OtlpDialog({ ids, selected, onClose }: { ids: string[]; selected?: stri
       useApp.getState().toast(`Sent ${r.spans} spans to ${r.url}`, 'success');
       onClose();
     } catch (e) {
-      useApp.getState().toast(asError(e).message, 'error');
+      toastError(e);
     } finally {
       setBusy(false);
     }

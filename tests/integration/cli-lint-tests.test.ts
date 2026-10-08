@@ -1,16 +1,13 @@
 import { describe, it, expect, afterAll } from 'vitest';
+import { runCliSync } from '../helpers.js';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { spawnSync } from 'node:child_process';
 
 // `testpion lint-tests`: a path as `testpion test` takes it (tests/ai/rag.yaml, from the workspace folder) or under tests/ (ai/rag.yaml).
 const dir = mkdtempSync(join(tmpdir(), 'tp-lint-tests-'));
 afterAll(() => rmSync(dir, { recursive: true, force: true, maxRetries: 3 }));
-const cli = (...args: string[]) => {
-  const r = spawnSync(process.execPath, [join(process.cwd(), 'packages/cli/bin/testpion.js'), 'lint-tests', ...args], { encoding: 'utf8', cwd: dir, env: { ...process.env, NO_COLOR: '1' } });
-  return { status: r.status, out: r.stdout, err: r.stderr };
-};
+const cli = (...args: string[]) => runCliSync(['lint-tests', ...args], { cwd: dir });
 
 describe('CLI: lint-tests', () => {
   it('takes a path from the workspace folder or under tests/, and knows the RAG checks', () => {

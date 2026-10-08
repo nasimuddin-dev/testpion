@@ -77,7 +77,7 @@ import {
   type SnippetRequest,
   tryParseJson,
   validateSchema,
-  writeReports,
+  recordRun,
   renderPrompt,
   isSuiteFile,
   DEFAULT_BASE_URLS,
@@ -130,6 +130,7 @@ import { debuggerHandlers, type DebuggerState } from './handlers/debugger.js';
 import { debuggerRulesHandlers } from './handlers/debugger-rules.js';
 import { externalSecretsHandlers, prefetchSecretsFor } from './handlers/external-secrets.js';
 import { fuzzHandlers } from './handlers/fuzz.js';
+import { hasTemplate } from '@testpion/shared';
 import { assistantInstruction } from './assistant-tasks.js';
 import { readRunData } from './run-data.js';
 
@@ -623,7 +624,7 @@ export class Backend {
 
   /** Resolve {{variables}} in a text with an environment (for messages typed in the WebSocket view and similar). */
   async resolveText(text: string, environment?: string): Promise<string> {
-    if (!text.includes('{{')) return text;
+    if (!hasTemplate(text)) return text;
     const ctx = this.context({ environment });
     try {
       return ctx.vars.resolve(text);
@@ -1180,9 +1181,7 @@ export class Backend {
             else if (e.type !== 'test-start') events.push(e);
           },
         });
-        writeFileSync(join(dir, 'summary.json'), JSON.stringify(summary, null, 2));
-        await writeReports(dir, summary, () => this.results(runId));
-        store.meta.addRun(summary, dir);
+        await recordRun(store, summary, dir, { reports: ['json', 'junit', 'html', 'markdown'] });
         this.logger.info(`Run ${name} finished`, { runId, total: summary.total, passed: summary.passed, ms: Date.now() - started });
       } catch (e) {
         const err = normalizeError(e);

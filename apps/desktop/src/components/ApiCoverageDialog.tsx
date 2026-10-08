@@ -1,12 +1,12 @@
 import { Download, ScanSearch, Sparkles } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { asError, call } from '../api';
-import { useApp, type AssistantApplied } from '../store';
+import { call } from '../api';
+import { type AssistantApplied, toastError, useApp } from '../store';
 import { parseYaml } from '../lib/yaml';
-import { download } from '../lib/format';
 import { SidePicker, type Side } from './OpenApiDiffDialog';
 import { Badge, Button, cx, Field, Input, Metric, MetricGrid, ModalOrPanel, Select, Toggle } from './ui';
 import { BarRow, ChartCard, Swatch } from './charts';
+import { downloadContent } from '../lib/files';
 
 interface OperationCoverage {
   method: string;
@@ -96,7 +96,7 @@ export function ApiCoverageDialog({ runId, spec: initialSpec, onClose, inline }:
       );
     } catch (e) {
       setResult(undefined);
-      useApp.getState().toast(asError(e).message, 'error');
+      toastError(e);
     } finally {
       setBusy(false);
     }
@@ -132,7 +132,7 @@ export function ApiCoverageDialog({ runId, spec: initialSpec, onClose, inline }:
         <>
           {result && (
             <>
-              <Button icon={<Download size={13} />} onClick={() => download(`api-coverage${result.report.title ? `-${result.report.title.replace(/[^\w-]+/g, '-')}` : ''}.md`, result.markdown, 'text/markdown')}>
+              <Button icon={<Download size={13} />} onClick={() => downloadContent(`api-coverage${result.report.title ? `-${result.report.title.replace(/[^\w-]+/g, '-')}` : ''}.md`, result.markdown, { type: 'text/markdown' })}>
                 Markdown
               </Button>
               <Button icon={<Sparkles size={13} />} disabled={!result.report.operations.some((o) => !o.covered || o.untestedStatuses.length)} onClick={suggest}>

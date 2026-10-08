@@ -1,8 +1,9 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { ApsError } from '../errors.js';
 import { shortId, slugify } from '../util/ids.js';
 import type { WorkspaceStore } from './workspace.js';
+import { readJson } from './fsutil.js';
 
 /**
  * Recently deleted collections and environments. Deleting moves the file to the workspace's `trash/`
@@ -60,7 +61,7 @@ export function listTrash(store: WorkspaceStore, now = Date.now()): TrashItem[] 
         continue;
       }
       try {
-        const data = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>;
+        const data = readJson<Record<string, unknown>>(path);
         out.push({ id: `${kind}/${f}`, kind, itemId: String(data.id ?? m[2]), name: String(data.name ?? m[2]), deletedAt: new Date(at).toISOString(), size: count(kind, data) });
       } catch {
         /* unreadable entry: leave it for "Empty trash" */
@@ -84,7 +85,7 @@ function entryPath(store: WorkspaceStore, id: string): { kind: TrashKind; path: 
  */
 export function restoreFromTrash(store: WorkspaceStore, id: string): { kind: TrashKind; id: string; name: string } {
   const { kind, path } = entryPath(store, id);
-  const data = JSON.parse(readFileSync(path, 'utf8')) as { id: string; name: string } & Record<string, unknown>;
+  const data = readJson<{ id: string; name: string } & Record<string, unknown>>(path);
   const existing = kind === 'collection' ? store.listCollections().map((c) => ({ id: c.id, name: c.name })) : store.listEnvironments().map((e) => ({ id: e.id, name: e.name }));
   const clash = existing.some((x) => x.id === data.id || x.name.toLowerCase() === String(data.name).toLowerCase());
   const item = clash ? { ...data, id: `${slugify(String(data.name))}-${shortId().slice(-4)}`, name: `${data.name} (restored)` } : data;
@@ -103,10 +104,4 @@ export function purgeTrash(store: WorkspaceStore, id?: string): number {
   const items = listTrash(store);
   for (const kind of Object.keys(DIRS) as TrashKind[]) rmSync(trashDir(store, kind), { recursive: true, force: true });
   return items.length;
-}
-
-/** How much the trash holds (for a badge). */
-export function trashCount(store: WorkspaceStore): number {
-  const dir = trashDir(store);
-  return existsSync(dir) && statSync(dir).isDirectory() ? listTrash(store).length : 0;
 }

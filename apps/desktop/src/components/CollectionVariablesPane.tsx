@@ -1,12 +1,14 @@
 import { Copy, ExternalLink, Save } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useCollections } from '../lib/collections-store';
-import { asError, call } from '../api';
-import { confirmAction, useApp } from '../store';
-import type { Environment, KeyValue } from '../types';
+import { call } from '../api';
+import { confirmAction, toastError, useApp } from '../store';
+import type { KeyValue } from '../types';
 import { KeyValueEditor } from './KeyValueEditor';
 import { CountPill, TreeHeader, treeKeys } from './TreeParts';
 import { Button, cx, Empty, Split } from './ui';
+import { refreshEnvironments } from '../lib/environments-store';
+import { plural } from '../lib/format';
 
 /**
  * Environments ▸ Collection variables: every collection's variables in one place (they are also in each collection's
@@ -51,7 +53,7 @@ export function CollectionVariablesPane({ initial }: { initial?: string }) {
       setSaved(JSON.stringify(rows));
       useApp.getState().toast(`Saved the variables of "${current.name}"`, 'success');
     } catch (e) {
-      useApp.getState().toast(asError(e).message, 'error');
+      toastError(e);
     }
   };
 
@@ -59,7 +61,7 @@ export function CollectionVariablesPane({ initial }: { initial?: string }) {
   const copyToEnvironment = async () => {
     const name = useApp.getState().environment;
     if (!name) return useApp.getState().toast('Choose an environment in the top bar first: the variables are copied into it.', 'error');
-    const env = (await call<Environment[]>('env.list')).find((e) => e.name === name);
+    const env = (await refreshEnvironments()).find((e) => e.name === name);
     if (!env) return;
     const have = new Set(env.variables.map((v) => v.key));
     const add = rows.filter((r) => r.key && !have.has(r.key));
@@ -67,7 +69,7 @@ export function CollectionVariablesPane({ initial }: { initial?: string }) {
     if (!add.length) return useApp.getState().toast(`"${name}" already has all ${rows.filter((r) => r.key).length} of these variables`, 'success');
     const ok = await confirmAction({
       title: 'Copy to environment',
-      message: `Copy ${add.length} variable${add.length === 1 ? '' : 's'} of "${current?.name}" to the environment "${name}"?`,
+      message: `Copy ${plural(add.length, 'variable')} of "${current?.name}" to the environment "${name}"?`,
       detail: `${kept ? `${kept} it already has keep their value there. ` : ''}Then they work everywhere this environment is active (MCP servers, other collections). In this collection's requests the collection's own value still wins.`,
       confirmLabel: 'Copy',
       tone: 'question',
@@ -76,9 +78,9 @@ export function CollectionVariablesPane({ initial }: { initial?: string }) {
     try {
       await call('env.save', { env: { ...env, variables: [...env.variables, ...add.map((r) => ({ key: r.key, value: r.value, enabled: r.enabled !== false }))] } });
       await useApp.getState().refreshWorkspace();
-      useApp.getState().toast(`Copied ${add.length} variable${add.length === 1 ? '' : 's'} to "${name}"`, 'success');
+      useApp.getState().toast(`Copied ${plural(add.length, 'variable')} to "${name}"`, 'success');
     } catch (e) {
-      useApp.getState().toast(asError(e).message, 'error');
+      toastError(e);
     }
   };
 

@@ -1,4 +1,5 @@
-import { describe, it, expect, afterAll, beforeAll } from 'vitest';
+import { describe, it, expect, afterAll } from 'vitest';
+import { gitIdentity } from '../helpers.js';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -33,27 +34,19 @@ afterAll(() => {
   }
 });
 
-const identity = async (dir: string) => {
-  await runGit(dir, ['config', 'user.name', 'Tester']);
-  await runGit(dir, ['config', 'user.email', 'tester@example.com']);
-  await runGit(dir, ['config', 'commit.gpgsign', 'false']);
-};
 
 const collection = (items: Collection['items']): Collection => ({ schemaVersion: '1.0', id: 'api', name: 'API', version: 0, updatedAt: '', items }) as Collection;
 
-let hasGit = false;
-beforeAll(async () => {
-  hasGit = !!(await gitVersion());
-});
+// skipped, not silently green, where git is not installed
+const hasGit = !!(await gitVersion());
 
 describe('git service', () => {
-  it('status, commit, log, show, discard, semantic changes', async () => {
-    if (!hasGit) return;
+  it.skipIf(!hasGit)('status, commit, log, show, discard, semantic changes', async () => {
     const ws = join(root, 'ws');
     const store = WorkspaceStore.create(ws, 'Git');
     expect((await gitStatus(ws)).repository).toBe(false);
     await gitInit(ws);
-    await identity(ws);
+    await gitIdentity(ws);
     store.saveCollection(collection([{ kind: 'http', id: 'r1', name: 'List', request: { method: 'GET', url: 'https://x/list', headers: [] } }] as Collection['items']));
     let st = await gitStatus(ws);
     expect(st.repository).toBe(true);
@@ -93,12 +86,11 @@ describe('git service', () => {
     store.close();
   });
 
-  it('a workspace inside a bigger repository sees only its own files', async () => {
-    if (!hasGit) return;
+  it.skipIf(!hasGit)('a workspace inside a bigger repository sees only its own files', async () => {
     const repo = join(root, 'mono');
     mkdirSync(repo);
     await gitInit(repo);
-    await identity(repo);
+    await gitIdentity(repo);
     writeFileSync(join(repo, 'README.md'), 'hi');
     const ws = join(repo, 'api-tests');
     WorkspaceStore.create(ws, 'Inside').close();
@@ -108,21 +100,20 @@ describe('git service', () => {
     expect(st.files.every((f) => !f.path.startsWith('api-tests/'))).toBe(true);
   });
 
-  it('branches, push, clone and pull through a remote', async () => {
-    if (!hasGit) return;
+  it.skipIf(!hasGit)('branches, push, clone and pull through a remote', async () => {
     const remote = join(root, 'remote.git');
     await runGit(root, ['init', '--bare', '-b', 'main', remote]);
     const a = join(root, 'a');
     WorkspaceStore.create(a, 'Shared').close();
     await gitInit(a, { remote });
-    await identity(a);
+    await gitIdentity(a);
     await gitCommit(a, 'Start', { paths: ['.'] });
     await gitPush(a);
     expect((await gitStatus(a)).upstream).toBe('origin/main');
 
     const b = join(root, 'b');
     await gitClone(remote, b);
-    await identity(b);
+    await gitIdentity(b);
     expect((await gitLog(b)).map((c) => c.subject)).toEqual(['Start']);
 
     // a feature branch

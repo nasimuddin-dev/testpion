@@ -4,7 +4,7 @@ import { Plus, Save, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { asError, call } from '../api';
 import { pickTextFile } from '../lib/files';
-import { useApp } from '../store';
+import { toastError, useApp } from '../store';
 import { useIntent } from '../hooks';
 import type { AppSettings, PriceEntry, ProviderConfig } from '../types';
 import { checkForUpdates } from '../updates';
@@ -46,7 +46,7 @@ export function SettingsView() {
       .saveSettings(s)
       .then(
         () => useApp.getState().toast('Settings saved', 'success'),
-        (e) => useApp.getState().toast(asError(e).message, 'error'),
+        (e) => toastError(e),
       );
   const setPrice = (i: number, p: Partial<PriceEntry>) => set({ pricing: s.pricing.map((x, j) => (j === i ? { ...x, ...p } : x)) });
   return (
@@ -430,7 +430,7 @@ function AssistantSettings({ s, set, providers }: { s: AppSettings; set(p: Parti
       useApp.getState().toast(value ? 'API key checked and saved in the secret store' : 'API key removed', 'success');
       load();
     } catch (e) {
-      useApp.getState().toast(asError(e).message, 'error');
+      toastError(e);
     } finally {
       setBusy(false);
     }

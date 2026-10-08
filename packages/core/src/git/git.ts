@@ -141,7 +141,7 @@ export async function repoRoot(dir: string): Promise<string | undefined> {
 }
 
 /** Forget the remembered repository roots (after `git init`, a clone into the folder …). */
-export const forgetRepoRoots = () => roots.clear();
+const forgetRepoRoots = () => roots.clear();
 
 /**
  * The workspace folder as git sees it: git reports the real path of the repository (links resolved, Windows 8.3
@@ -159,7 +159,7 @@ export function realFolder(dir: string): string {
 /** Paths in git output are relative to the repository root: make them relative to the workspace. */
 const toWorkspacePath = (repo: string, ws: string, p: string) => relative(realFolder(ws), resolve(repo, p)).split(sep).join('/');
 /** A workspace path as a path in the repository. */
-export const toRepoPath = (repo: string, ws: string, p: string) => relative(repo, resolve(realFolder(ws), p)).split(sep).join('/');
+const toRepoPath = (repo: string, ws: string, p: string) => relative(repo, resolve(realFolder(ws), p)).split(sep).join('/');
 
 /** `git status` of the workspace folder: branch, ahead / behind, and each changed file. */
 export async function gitStatus(ws: string): Promise<GitStatus> {

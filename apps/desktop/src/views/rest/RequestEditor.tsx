@@ -122,7 +122,7 @@ export function beautify(text: string, type: string): string {
  * and back) restores it, as in Postman. Kept for the session; only the selected type is saved.
  */
 const bodyStash = new Map<string, BodyStash>();
-export function BodyEditor({ body, onChange, stashKey = 'default', method, url }: { body: BodyConfig; onChange(b: BodyConfig): void; stashKey?: string; method?: string; url?: string }) {
+function BodyEditor({ body, onChange, stashKey = 'default', method, url }: { body: BodyConfig; onChange(b: BodyConfig): void; stashKey?: string; method?: string; url?: string }) {
   // the schema of the body from the API definition the request belongs to (specs/): completion and checks in the editor
   const environment = useApp((s) => s.environment);
   const [spec, setSpec] = useState<{ schema: unknown; spec: string; path: string; summary?: string } | null>(null);
@@ -235,7 +235,7 @@ export function BodyEditor({ body, onChange, stashKey = 'default', method, url }
 }
 
 /** Request documentation: Markdown source and a live preview side by side. */
-export function DocsEditor({ value, onChange }: { value: string; onChange(v: string): void }) {
+function DocsEditor({ value, onChange }: { value: string; onChange(v: string): void }) {
   return (
     <div className="h-full grid grid-cols-2 gap-3 p-2 min-h-0">
       <textarea

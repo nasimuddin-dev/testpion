@@ -2,15 +2,9 @@
 // environment, never in a file:  TESTPION_SECRET_PROVIDER_OPENAI_APIKEY=sk-… npm run e2e -- --only _ai-live
 // The examples' "openai" provider reads {{$secret.provider.openai.apiKey}}, which the app's environment secret store
 // answers from that variable; the assistant is set to OpenAI for this run.
-const { withExpect } = require('../lib.cjs');
+const { withExpect, stepWith } = require('../lib.cjs');
 
-const H = `
-  const vis = (sel) => [...document.querySelectorAll(sel)].filter((x) => x.getClientRects().length);
-  const button = (label) => vis('main button').find((b) => b.textContent.trim() === label && b.getAttribute('role') !== 'tab');
-  const tab = (name) => vis('main [role=tab]').find((t) => t.textContent.trim().startsWith(name));
-  const short = (s, n = 120) => String(s ?? '').replace(/\\s+/g, ' ').trim().slice(0, n);
-`;
-const step = (name, body) => [name, `(async () => { ${H} ${body} })()`];
+const step = stepWith({ short: 120 });
 const panel = `document.querySelector('aside[aria-label="AI assistant"]')`;
 
 const steps = [

@@ -35,7 +35,7 @@ export function refreshCollections(): Promise<Collection[]> {
 }
 
 /** Read only the collections that were saved and put them in the list (a save of one does not reload them all). */
-export async function refreshSome(ids: string[]): Promise<void> {
+async function refreshSome(ids: string[]): Promise<void> {
   const g = ++gen;
   const fresh = await Promise.all(ids.map((id) => call<Collection>('col.get', { id }).catch(() => undefined)));
   if (fresh.some((c) => !c)) return void refreshCollections();

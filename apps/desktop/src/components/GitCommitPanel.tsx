@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { call } from '../api';
 import { plural } from '../lib/format';
 import { Badge, cx, Empty, IconButton, Spinner } from './ui';
+import { useRpc } from '../lib/use-rpc';
 
 interface CommitDetail {
   hash: string;
@@ -16,7 +17,7 @@ interface CommitDetail {
 }
 
 /** A unified diff, line by line: additions and removals in their colours, hunk heads muted. */
-export function DiffText({ text }: { text: string }) {
+function DiffText({ text }: { text: string }) {
   if (!text.trim()) return <div className="p-3 text-sm text-muted">No text difference (a binary file, or a rename).</div>;
   return (
     <pre className="p-3 text-xs mono whitespace-pre overflow-auto leading-relaxed" aria-label="Diff">
@@ -43,21 +44,15 @@ const TONE = { added: 'ok', deleted: 'bad', renamed: 'accent', modified: 'defaul
 export function GitCommitPanel({ hash, onClose }: { hash: string; onClose(): void }) {
   const [detail, setDetail] = useState<CommitDetail | null>();
   const [file, setFile] = useState<string>();
-  const [diff, setDiff] = useState<string>();
   useEffect(() => {
     setDetail(undefined);
     setFile(undefined);
-    setDiff(undefined);
     void call<CommitDetail | undefined>('git.commitDetail', { hash }).then((d) => {
       setDetail(d ?? null);
       if (d?.files[0]) setFile(d.files[0].path);
     });
   }, [hash]);
-  useEffect(() => {
-    if (!file) return;
-    setDiff(undefined);
-    void call<string>('git.commitDiff', { hash, path: file }).then(setDiff, () => setDiff(''));
-  }, [hash, file]);
+  const diff = useRpc<string>('git.commitDiff', { hash, path: file }, { fallback: '', enabled: !!file });
   if (detail === undefined) return <Empty icon={<Spinner size={20} />} title="Reading the commit…" />;
   if (!detail) return <Empty title="Commit not found">It may be on another branch, or the repository changed.</Empty>;
   const added = detail.files.reduce((n, f) => n + f.additions, 0);

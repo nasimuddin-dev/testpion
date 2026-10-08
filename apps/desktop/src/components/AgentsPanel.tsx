@@ -1,8 +1,9 @@
 import { Bot, Check, Copy, FileText, PlugZap } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { asError, call } from '../api';
-import { useApp } from '../store';
+import { toastError, useApp } from '../store';
 import { Badge, Button, Tabs, Toggle } from './ui';
+import { useCopied } from '../lib/clipboard';
 
 interface AgentInfo {
   command: string;
@@ -51,19 +52,15 @@ export function AgentsPanel() {
   const [opts, setOpts] = useState({ readOnly: false, allowProduction: false });
   const [info, setInfo] = useState<AgentInfo>();
   const [client, setClient] = useState<Client>('claude-code');
-  const [copied, setCopied] = useState(false);
+  const { copied, copy: copyToClipboard } = useCopied();
   const [test, setTest] = useState<{ busy?: boolean; result?: TestResult; error?: string }>({});
   useEffect(() => {
-    void call<AgentInfo>('agents.info', opts).then(setInfo, (e) => useApp.getState().toast(asError(e).message, 'error'));
+    void call<AgentInfo>('agents.info', opts).then(setInfo, (e) => toastError(e));
     setTest({});
   }, [opts.readOnly, opts.allowProduction, ws?.id]);
   if (!info) return null;
   const s = snippet(client, info);
-  const copy = async () => {
-    await navigator.clipboard.writeText(s.text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  };
+  const copy = () => copyToClipboard(s.text);
   const runTest = async () => {
     setTest({ busy: true });
     try {
@@ -78,7 +75,7 @@ export function AgentsPanel() {
       useApp.getState().toast(`${r.updated ? 'Updated the TestPion part of' : 'Wrote'} ${r.path}`, 'success');
       setInfo({ ...info, agentsMd: true });
     } catch (e) {
-      useApp.getState().toast(asError(e).message, 'error');
+      toastError(e);
     }
   };
   return (

@@ -1,12 +1,9 @@
 /** Servers and inspectors: the workspace MCP server, mock servers (REST, MCP, GraphQL) and the MCP inspector. */
-import { existsSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Command } from 'commander';
 import {
-  ChainSecretStore,
-  createEngineContext,
   debuggerCertDir, ensureRootCertificate, exchangesToHar, grpcDecoder, grpcMethodIndex, leafSigner, startDebuggerProxy, workspaceProtoRoots, type DebuggerRule, type DebuggerRulesFile,
-  EnvSecretStore,
   McpSession,
   recordingToCollection,
   startRecorder,
@@ -36,7 +33,7 @@ import {
   upsertAgentsMarkdown,
   checkTypes,
 } from '@testpion/core';
-import { EXIT, dim, bold, cyan, green, red, yellow, CliError, openWorkspace } from '../shared.js';
+import { EXIT, green, red, yellow, dim, bold, cyan, CliError, printJson, withWorkspace, cliSecrets, cliContext } from '../shared.js';
 import { executeMock } from '../run.js';
 
 export function registerServeCommands(program: Command): void {
@@ -53,19 +50,11 @@ export function registerServeCommands(program: Command): void {
       if (o.profile && o.profile !== 'full' && o.profile !== 'minimal') throw new CliError(`--profile is full or minimal, not ${o.profile}`, EXIT.CONFIG_ERROR);
       if (o.blockPrivateNetworks) setNetworkPolicy({ blockPrivateNetworks: true, allowHosts: o.allowHost ?? [] });
       // stdout carries the MCP protocol: everything else goes to stderr
-      const mgr = new WorkspaceManager();
-      const { store, ephemeral } = openWorkspace(o.workspace, undefined, mgr);
-      if (ephemeral) {
-        store.close();
-        rmSync(ephemeral, { recursive: true, force: true });
-        throw new CliError('No workspace found: run inside a workspace folder or pass -w <name|path>', EXIT.CONFIG_ERROR);
-      }
-      console.error(dim(`TestPion MCP server for "${store.workspace.name}"${o.readOnly ? ' (read-only)' : ''} on stdio`));
-      try {
-        await serveTestPionMcp({ store, secrets: new ChainSecretStore([new EnvSecretStore()]), settings: mgr.loadSettings(), readOnly: o.readOnly, profile: o.profile as 'full' | 'minimal' | undefined, allowProduction: o.allowProduction, version: ENGINE_VERSION });
-      } finally {
-        store.close();
-      }
+      await withWorkspace(o.workspace, async (store, ephemeral) => {
+        if (ephemeral) throw new CliError('No workspace found: run inside a workspace folder or pass -w <name|path>', EXIT.CONFIG_ERROR);
+        console.error(dim(`TestPion MCP server for "${store.workspace.name}"${o.readOnly ? ' (read-only)' : ''} on stdio`));
+        await serveTestPionMcp({ store, secrets: cliSecrets(), settings: new WorkspaceManager().loadSettings(), readOnly: o.readOnly, profile: o.profile as 'full' | 'minimal' | undefined, allowProduction: o.allowProduction, version: ENGINE_VERSION });
+      });
     });
   program
     .command('feedback')
@@ -88,7 +77,7 @@ export function registerServeCommands(program: Command): void {
         where: 'CLI',
         diagnostics: o.diagnostics ? [`TestPion CLI ${ENGINE_VERSION}`, `${process.platform} ${process.arch} · Node ${process.versions.node}`] : undefined,
       });
-      if (o.json) return void console.log(JSON.stringify(r, null, 2));
+      if (o.json) return void printJson(r);
       console.log(`${bold(r.title)}
 
 ${r.body}
@@ -102,8 +91,7 @@ ${cyan(r.url)}`);
     .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
     .option('--stdout', 'print it instead of writing the file')
     .action((o: { workspace?: string; stdout?: boolean }) => {
-      const { store, ephemeral } = openWorkspace(o.workspace, undefined, new WorkspaceManager());
-      try {
+      return withWorkspace(o.workspace, (store, ephemeral) => {
         if (ephemeral) throw new CliError('No workspace found: run inside a workspace folder or pass -w <name|path>', EXIT.CONFIG_ERROR);
         const block = agentsMarkdown({ workspace: store.workspace.name, checkTypes: checkTypes() });
         if (o.stdout) return void process.stdout.write(block);
@@ -111,10 +99,7 @@ ${cyan(r.url)}`);
         const before = existsSync(path) ? readFileSync(path, 'utf8') : undefined;
         writeFileSync(path, upsertAgentsMarkdown(before, block));
         console.log(`${before === undefined ? 'Wrote' : 'Updated the TestPion part of'} ${path}`);
-      } finally {
-        store.close();
-        if (ephemeral) rmSync(ephemeral, { recursive: true, force: true });
-      }
+      });
     });
   program
     .command('graphql-subscribe')
@@ -138,7 +123,7 @@ ${cyan(r.url)}`);
       };
       const headers = (o.header ?? []).map((h) => ({ key: h.slice(0, h.indexOf(':')).trim(), value: h.slice(h.indexOf(':') + 1).trim(), enabled: true }));
       const r = await collectSubscriptionEvents({ url: endpoint, query: o.query, variables: parseJson(o.variables, '--variables'), connectionParams: parseJson(o.connectionParams, '--connection-params'), headers, maxEvents: Number(o.max) || 10, durationMs: (Number(o.duration) || 30) * 1000 });
-      if (o.json) console.log(JSON.stringify(r, null, 2));
+      if (o.json) printJson(r);
       else {
         for (const e of r.events) console.log(JSON.stringify(e));
         for (const e of r.errors) console.log(red(`error: ${JSON.stringify(e)}`));
@@ -175,18 +160,13 @@ ${cyan(r.url)}`);
       });
       await rec.close();
       console.log(dim(`\n${rec.exchanges.length} exchanges recorded.`));
-      if (o.workspace && rec.exchanges.length) {
-        const mgr = new WorkspaceManager();
-        const { store } = openWorkspace(o.workspace, undefined, mgr);
-        try {
-          const r = recordingToCollection(rec.exchanges, { name: o.collection, target: rec.target, redactor: new Redactor(mgr.loadSettings().redactFields) });
+      if (o.workspace && rec.exchanges.length)
+        await withWorkspace(o.workspace, (store) => {
+          const r = recordingToCollection(rec.exchanges, { name: o.collection, target: rec.target, redactor: new Redactor(new WorkspaceManager().loadSettings().redactFields) });
           const saved = store.saveCollection(r.collection);
           console.log(green(`Saved ${r.requests} requests to the collection "${saved.name}".`));
           if (r.placeholders.length) console.log(yellow(`Secrets were replaced by variables; set them as secret environment variables: ${r.placeholders.map((p) => p.variable).join(', ')}`));
-        } finally {
-          store.close();
-        }
-      }
+        });
     });
   program
     .command('mock')
@@ -268,7 +248,7 @@ ${cyan(r.url)}`);
       });
       const schema = o.schema ? schemaFromText(readFileSync(o.schema, 'utf8')) : (await introspect({ endpoint: o.endpoint!, headers })).schema;
       const op = buildGraphQLOperation(schema, field, { depth: Number(o.depth), includeOptionalArgs: !o.requiredArgs });
-      if (o.json) console.log(JSON.stringify(op, null, 2));
+      if (o.json) printJson(op);
       else {
         console.log(op.query);
         if (Object.keys(op.variables).length) console.log(`\n${dim('# variables')}\n${JSON.stringify(op.variables, null, 2)}`);
@@ -287,64 +267,58 @@ ${cyan(r.url)}`);
     .option('--json', 'print as JSON (for scripts and AI agents)')
     .argument('[command...]', 'stdio command, e.g. -- node server.js')
     .action(async (command: string[], o) => {
-      let cfg: McpServerConfig;
-      let dispose: (() => Promise<void>) | undefined;
-      if (o.server) {
-        const { store } = openWorkspace(o.workspace, undefined, new WorkspaceManager());
-        const ctx = createEngineContext({ store, secrets: new ChainSecretStore([new EnvSecretStore()]), settings: new WorkspaceManager().loadSettings(), environment: o.environment });
-        const r = String(o.server).toLowerCase();
-        const found = ctx.services.mcpServers.find((x) => x.id.toLowerCase() === r) ?? ctx.services.mcpServers.find((x) => x.name.toLowerCase() === r);
-        if (!found) throw new CliError(`No MCP server "${o.server}" in the workspace. Available: ${ctx.services.mcpServers.map((x) => x.name).join(', ') || 'none'}`, EXIT.CONFIG_ERROR);
-        cfg = found;
-        dispose = async () => {
-          await ctx.dispose();
-          store.close();
-        };
-      } else
-        cfg = o.url
-          ? { id: 'cli', name: o.url, transport: 'streamable-http', url: o.url }
-          : o.sse
-            ? { id: 'cli', name: o.sse, transport: 'sse', url: o.sse }
-            : command.length
-              ? { id: 'cli', name: command.join(' '), transport: 'stdio', command: command[0]!, args: command.slice(1) }
-              : (() => {
-                  throw new CliError('Provide --url, --sse, --server or a stdio command', EXIT.CONFIG_ERROR);
-                })();
-      const s = new McpSession(cfg);
-      await s.connect();
-      try {
-        if (o.call) {
-          let args: Record<string, unknown>;
-          try {
-            args = JSON.parse(String(o.args)) as Record<string, unknown>;
-          } catch {
-            throw new CliError(`--args is not valid JSON: ${String(o.args)}`, EXIT.CONFIG_ERROR);
+      /** Connect, then list what the server offers, or call one tool. */
+      const talk = async (cfg: McpServerConfig) => {
+        const s = new McpSession(cfg);
+        await s.connect();
+        try {
+          if (o.call) {
+            let args: Record<string, unknown>;
+            try {
+              args = JSON.parse(String(o.args)) as Record<string, unknown>;
+            } catch {
+              throw new CliError(`--args is not valid JSON: ${String(o.args)}`, EXIT.CONFIG_ERROR);
+            }
+            const r = await s.callTool(String(o.call), args);
+            if (o.json) printJson({ tool: o.call, isError: r.isError, durationMs: r.durationMs, content: r.content, structuredContent: r.structuredContent });
+            else {
+              console.log(`${r.isError ? red('error') : green('ok')} ${dim(`${r.durationMs} ms`)}`);
+              for (const c of r.content as Array<{ type: string; text?: string }>) console.log(c.type === 'text' ? c.text : dim(`[${c.type}]`));
+              if (r.structuredContent !== undefined) printJson(r.structuredContent);
+            }
+            if (r.isError) process.exitCode = EXIT.TEST_FAILURE;
+            return;
           }
-          const r = await s.callTool(String(o.call), args);
-          if (o.json) console.log(JSON.stringify({ tool: o.call, isError: r.isError, durationMs: r.durationMs, content: r.content, structuredContent: r.structuredContent }, null, 2));
-          else {
-            console.log(`${r.isError ? red('error') : green('ok')} ${dim(`${r.durationMs} ms`)}`);
-            for (const c of r.content as Array<{ type: string; text?: string }>) console.log(c.type === 'text' ? c.text : dim(`[${c.type}]`));
-            if (r.structuredContent !== undefined) console.log(JSON.stringify(r.structuredContent, null, 2));
-          }
-          if (r.isError) process.exitCode = EXIT.TEST_FAILURE;
-          return;
+          const d = await s.discover();
+          if (o.json) return printJson({ serverInfo: d.serverInfo, instructions: d.instructions, capabilities: d.capabilities, tools: d.tools, resources: d.resources, resourceTemplates: d.resourceTemplates, prompts: d.prompts });
+          console.log(bold(`${d.serverInfo?.name ?? 'server'} ${d.serverInfo?.version ?? ''}`), dim(JSON.stringify(d.capabilities)));
+          if (d.instructions) console.log(dim(d.instructions));
+          console.log(cyan(`\nTools (${d.tools.length})`));
+          for (const t of d.tools) console.log(`  ${t.name} ${dim(t.description ?? '')}\n    ${dim(JSON.stringify(t.inputSchema))}`);
+          console.log(cyan(`\nResources (${d.resources.length})`));
+          for (const r of d.resources) console.log(`  ${r.uri} ${dim(r.name)}`);
+          for (const r of d.resourceTemplates) console.log(`  ${r.uriTemplate} ${dim(`${r.name} (template)`)}`);
+          console.log(cyan(`\nPrompts (${d.prompts.length})`));
+          for (const p of d.prompts) console.log(`  ${p.name} ${dim(p.description ?? '')}`);
+        } finally {
+          await s.close();
         }
-        const d = await s.discover();
-        if (o.json) return console.log(JSON.stringify({ serverInfo: d.serverInfo, instructions: d.instructions, capabilities: d.capabilities, tools: d.tools, resources: d.resources, resourceTemplates: d.resourceTemplates, prompts: d.prompts }, null, 2));
-        console.log(bold(`${d.serverInfo?.name ?? 'server'} ${d.serverInfo?.version ?? ''}`), dim(JSON.stringify(d.capabilities)));
-        if (d.instructions) console.log(dim(d.instructions));
-        console.log(cyan(`\nTools (${d.tools.length})`));
-        for (const t of d.tools) console.log(`  ${t.name} ${dim(t.description ?? '')}\n    ${dim(JSON.stringify(t.inputSchema))}`);
-        console.log(cyan(`\nResources (${d.resources.length})`));
-        for (const r of d.resources) console.log(`  ${r.uri} ${dim(r.name)}`);
-        for (const r of d.resourceTemplates) console.log(`  ${r.uriTemplate} ${dim(`${r.name} (template)`)}`);
-        console.log(cyan(`\nPrompts (${d.prompts.length})`));
-        for (const p of d.prompts) console.log(`  ${p.name} ${dim(p.description ?? '')}`);
-      } finally {
-        await s.close();
-        await dispose?.();
-      }
+      };
+      // a server saved in the workspace needs its environment's variables while the session runs
+      if (o.server)
+        return withWorkspace(o.workspace, async (store) => {
+          const ctx = cliContext(store, o.environment);
+          try {
+            const r = String(o.server).toLowerCase();
+            const found = ctx.services.mcpServers.find((x) => x.id.toLowerCase() === r) ?? ctx.services.mcpServers.find((x) => x.name.toLowerCase() === r);
+            if (!found) throw new CliError(`No MCP server "${o.server}" in the workspace. Available: ${ctx.services.mcpServers.map((x) => x.name).join(', ') || 'none'}`, EXIT.CONFIG_ERROR);
+            await talk(found);
+          } finally {
+            await ctx.dispose();
+          }
+        });
+      if (!o.url && !o.sse && !command.length) throw new CliError('Provide --url, --sse, --server or a stdio command', EXIT.CONFIG_ERROR);
+      await talk(o.url ? { id: 'cli', name: o.url, transport: 'streamable-http', url: o.url } : o.sse ? { id: 'cli', name: o.sse, transport: 'sse', url: o.sse } : { id: 'cli', name: command.join(' '), transport: 'stdio', command: command[0]!, args: command.slice(1) });
     });
 
   program
@@ -381,7 +355,7 @@ ${cyan(r.url)}`);
       // gRPC: decoded with the workspace's protos when there is a workspace, else field by field
       let protoRoots: ReturnType<typeof workspaceProtoRoots> = [];
       try {
-        protoRoots = workspaceProtoRoots(openWorkspace(o.workspace, undefined, new WorkspaceManager()).store);
+        protoRoots = await withWorkspace(o.workspace, (store) => workspaceProtoRoots(store));
       } catch {
         /* no workspace here: field by field */
       }
@@ -453,7 +427,7 @@ ${cyan(r.url)}`);
         },
         { redactor: new Redactor() },
       );
-      if (o.json) console.log(JSON.stringify(r, null, 2));
+      if (o.json) printJson(r);
       else {
         console.log(`${r.connected ? green('connected') : red('not connected')} ${dim(`${r.mode} · ${url} · ${r.durationMs} ms`)}`);
         for (const m of r.messages) console.log(`${dim(`${(m.atMs / 1000).toFixed(2)}s`)} ${m.direction === 'sent' ? cyan('→') : m.direction === 'received' ? green('←') : dim('·')} ${m.event ? bold(`${m.ack ? 'ack ' : ''}${m.event} `) : ''}${m.data}`);
@@ -500,7 +474,7 @@ ${cyan(r.url)}`);
         },
         { redactor },
       );
-      if (o.json) console.log(JSON.stringify(r, null, 2));
+      if (o.json) printJson(r);
       else {
         console.log(`${r.connected ? green('connected') : red('not connected')} ${dim(`mqtt · ${url} · ${r.durationMs} ms`)}`);
         for (const m of r.messages) console.log(`${dim(`${(m.atMs / 1000).toFixed(2)}s`)} ${m.direction === 'sent' ? cyan('→') : m.direction === 'received' ? green('←') : dim('·')} ${m.topic ? bold(`${m.topic} `) : ''}${m.data}`);
@@ -555,7 +529,7 @@ ${cyan(r.url)}`);
         },
         { redactor },
       );
-      if (o.json) console.log(JSON.stringify(r, null, 2));
+      if (o.json) printJson(r);
       else {
         console.log(`${r.connected ? green('connected') : red('not connected')} ${dim(`kafka · ${url} · ${r.durationMs} ms`)}`);
         for (const m of r.messages)
@@ -588,16 +562,16 @@ ${cyan(r.url)}`);
       const descriptorSet = protoFiles.length ? undefined : (await reflectServer(parseGrpcTarget(target, o.tls), { metadata })).descriptorSet;
       if (!method) {
         const methods = describeRoot(grpcRoot({ protoFiles, descriptorSet }));
-        if (o.json) console.log(JSON.stringify(methods, null, 2));
+        if (o.json) printJson(methods);
         else for (const m of methods) console.log(`${m.name} ${dim(`${m.clientStreaming ? 'stream ' : ''}${m.requestType} → ${m.serverStreaming ? 'stream ' : ''}${m.responseType}`)}\n  ${dim(JSON.stringify(m.example))}`);
         return;
       }
       const data = String(o.data).startsWith('@') ? readFileSync(String(o.data).slice(1), 'utf8') : String(o.data);
       const r = await executeGrpc({ target, method, message: data, metadata, protoFiles, descriptorSet, tls: o.tls, timeoutMs: Number(o.timeout) }, { redactor: new Redactor() });
-      if (o.json) console.log(JSON.stringify(r, null, 2));
+      if (o.json) printJson(r);
       else {
         console.log(`${r.code === 0 ? green(`${r.code} ${r.codeName}`) : red(`${r.code} ${r.codeName}`)} ${dim(`${r.method} @ ${r.target} · ${Math.round(r.durationMs)} ms`)}${r.details ? ` ${r.details}` : ''}`);
-        if (r.response !== undefined) console.log(JSON.stringify(r.response, null, 2));
+        if (r.response !== undefined) printJson(r.response);
         for (const m of r.messages ?? []) console.log(`${dim(`${(m.atMs / 1000).toFixed(2)}s`)} ${JSON.stringify(m.data)}`);
       }
       process.exitCode = r.code === 0 ? EXIT.SUCCESS : EXIT.TEST_FAILURE;

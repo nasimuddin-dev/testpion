@@ -1,7 +1,7 @@
 import { Database, FileSpreadsheet, History, ListChecks, Play, Wand2, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { asError, call, on } from '../api';
-import { promptText, useApp } from '../store';
+import { promptText, toastError, useApp } from '../store';
 import type { Collection, CollectionNode, Library } from '../types';
 import { timeAgo, plural } from '../lib/format';
 import { RunPanel } from './RunPanel';
@@ -153,7 +153,7 @@ export function CollectionRunner({ collection, folderId, onFolderChange }: { col
       setRunId(r.runId);
       setTimeout(() => void loadRuns(), 500);
     } catch (e) {
-      useApp.getState().toast(asError(e).message, 'error');
+      toastError(e);
     } finally {
       setStarting(false);
     }
@@ -167,7 +167,7 @@ export function CollectionRunner({ collection, folderId, onFolderChange }: { col
     try {
       setData(await call<DataFile>('col.previewDataFile', { path: data.path, query: q, environment: environment || undefined }));
     } catch (e) {
-      useApp.getState().toast(asError(e).message, 'error');
+      toastError(e);
     }
   };
 
@@ -265,7 +265,7 @@ export function CollectionRunner({ collection, folderId, onFolderChange }: { col
                         setData(await call<DataFile>('col.previewDataFile', { path: url.trim(), environment: environment || undefined }));
                         setIterations('');
                       } catch (e) {
-                        useApp.getState().toast(asError(e).message, 'error');
+                        toastError(e);
                       }
                     }}
                   >
@@ -283,7 +283,7 @@ export function CollectionRunner({ collection, folderId, onFolderChange }: { col
                           setData(await call<DataFile>('col.previewDataFile', { path: g.file }));
                           setIterations('');
                         } catch (e) {
-                          useApp.getState().toast(asError(e).message, 'error');
+                          toastError(e);
                         }
                       }}
                     />
@@ -435,7 +435,7 @@ export function CollectionRunner({ collection, folderId, onFolderChange }: { col
               <span className="truncate">Run {folderId ? findName(collection.items, folderId) : collection.name}</span>
             </Button>
             <span className="text-xs text-muted whitespace-nowrap">
-              {selected.length} request{selected.length === 1 ? '' : 's'} × {iterCount} iteration{iterCount === 1 ? '' : 's'}
+              {plural(selected.length, 'request')} × {plural(iterCount, 'iteration')}
             </span>
           </div>
         </div>
@@ -464,7 +464,7 @@ export function CollectionRunner({ collection, folderId, onFolderChange }: { col
                       setRunId(r.runId);
                       setTimeout(() => void loadRuns(), 500);
                     },
-                    (e) => useApp.getState().toast(asError(e).message, 'error'),
+                    (e) => toastError(e),
                   )
                 }
               />

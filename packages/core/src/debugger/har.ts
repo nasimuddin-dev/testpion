@@ -63,7 +63,7 @@ export interface HarEntry {
 }
 
 export function exchangesToHar(exchanges: DebuggerExchange[], redactor: Redactor, version = '1'): HarLog {
-  const headers = (h?: Record<string, string>) => Object.entries(h ?? {}).map(([name, value]) => ({ name, value: redactor.isSensitiveKey(name) ? '***' : value }));
+  const headers = (h?: Record<string, string>) => Object.entries(redactor.redactHeaders(h ?? {})).map(([name, value]) => ({ name, value }));
   return {
     log: {
       version: '1.2',

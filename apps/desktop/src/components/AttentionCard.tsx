@@ -1,8 +1,11 @@
 import { AlertTriangle, ChevronRight, Copy, Sparkles } from 'lucide-react';
-import { useEffect, useState } from 'react';
-import { asError, call, on } from '../api';
-import { useApp } from '../store';
+import { useState } from 'react';
+import { call } from '../api';
+import { toastError, useApp } from '../store';
 import { LinkButton, cx } from './ui';
+import { useRpc } from '../lib/use-rpc';
+import { copyText } from '../lib/clipboard';
+import { plural } from '../lib/format';
 
 /** From `stats.attention` (workspaceAttention in core). */
 interface Item {
@@ -30,20 +33,14 @@ function runMonitor(id: string) {
       useApp
         .getState()
         .toast(r.status === 'passed' ? `Monitor passed (${r.passed}/${r.total})` : `Monitor still ${r.status === 'error' ? 'cannot run' : 'failing'}`, r.status === 'passed' ? 'success' : 'error'),
-    (e) => useApp.getState().toast(asError(e).message, 'error'),
+    (e) => toastError(e),
   );
 }
 
 /** What needs attention in the workspace, most severe first; nothing is shown when all is well. */
 export function AttentionCard() {
-  const [items, setItems] = useState<Item[]>([]);
+  const items = useRpc<Item[]>('stats.attention', undefined, { fallback: [], reloadOn: ['run.finished', 'monitor.result'] }) ?? [];
   const [all, setAll] = useState(false);
-  useEffect(() => {
-    const load = () => void call<Item[]>('stats.attention').then(setItems, () => setItems([]));
-    load();
-    const offs = [on('run.finished', load), on('monitor.result', load)];
-    return () => offs.forEach((off) => off());
-  }, []);
   if (!items.length) return null;
   const shown = all ? items : items.slice(0, 5);
   return (
@@ -68,16 +65,13 @@ export function AttentionCard() {
           className="inline-flex items-center gap-1 text-xs font-normal text-accent hover:underline"
           title="Copy the list as Markdown (to paste into a chat or an issue)"
           onClick={() =>
-            void navigator.clipboard.writeText(['**Needs attention**', ...items.map((i) => `- ${i.severity === 'high' ? '🔴' : i.severity === 'medium' ? '🟠' : '⚪'} ${i.message}`)].join('\n')).then(
-              () => useApp.getState().toast('Copied', 'success'),
-              () => useApp.getState().toast('Could not copy to the clipboard', 'error'),
-            )
+            void copyText(['**Needs attention**', ...items.map((i) => `- ${i.severity === 'high' ? '🔴' : i.severity === 'medium' ? '🟠' : '⚪'} ${i.message}`)].join('\n'))
           }
         >
           <Copy size={12} /> Copy
         </button>
         <span className="text-xs font-normal text-muted">
-          {items.length} item{items.length === 1 ? '' : 's'}
+          {plural(items.length, 'item')}
         </span>
       </header>
       <div className="p-2">

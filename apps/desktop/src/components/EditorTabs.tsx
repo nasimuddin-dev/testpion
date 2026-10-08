@@ -7,6 +7,8 @@ import { loadDraft, saveDraft } from '../lib/draft-store';
 import { Button, cx, Empty, Menu, type MenuItem } from './ui';
 import { InlineRename } from './TreeParts';
 import { ResponseLayoutButton } from './ResponseSplit';
+import { readPersisted, writePersisted } from '../lib/sticky';
+import type { PersistFormat } from '../lib/sticky';
 
 /**
  * One tab strip for every request editor (Postman-style): REST's tabs and a tab for each other editor that
@@ -56,48 +58,26 @@ interface EditorTabsState {
 
 const OPEN_KEY = 'aps.openEditors';
 const PIN_KEY = 'aps.pinnedTabs';
-function loadPinned(): Record<string, boolean> {
-  try {
-    const v = JSON.parse(localStorage.getItem(PIN_KEY) ?? '{}');
-    return v && typeof v === 'object' ? v : {};
-  } catch {
-    return {};
-  }
-}
-function loadOpen(): ViewId[] {
-  try {
-    const v = JSON.parse(localStorage.getItem(OPEN_KEY) ?? '[]');
-    return Array.isArray(v) ? v : [];
-  } catch {
-    return [];
-  }
-}
+const PINNED: PersistFormat<Record<string, boolean>> = { parse: (raw) => (((v) => (v && typeof v === 'object' ? v : undefined))(JSON.parse(raw))) };
+const OPEN: PersistFormat<ViewId[]> = { parse: (raw) => (((v) => (Array.isArray(v) ? v : undefined))(JSON.parse(raw))) };
 
 export const useEditorTabsStore = create<EditorTabsState>((set, get) => ({
   byView: {},
   activeByView: {},
-  openViews: loadOpen(),
-  pinned: loadPinned(),
+  openViews: readPersisted(OPEN_KEY, [], OPEN),
+  pinned: readPersisted(PIN_KEY, {}, PINNED),
   togglePin: (key) => {
     const next = { ...get().pinned };
     if (next[key]) delete next[key];
     else next[key] = true;
-    try {
-      localStorage.setItem(PIN_KEY, JSON.stringify(next));
-    } catch {
-      /* storage unavailable */
-    }
+    writePersisted(PIN_KEY, next, PINNED);
     set({ pinned: next });
   },
   setOpen: (view, open) => {
     const cur = get().openViews;
     if (open === cur.includes(view)) return;
     const next = open ? [...cur, view] : cur.filter((v) => v !== view);
-    try {
-      localStorage.setItem(OPEN_KEY, JSON.stringify(next));
-    } catch {
-      /* storage unavailable */
-    }
+    writePersisted(OPEN_KEY, next, OPEN);
     set({ openViews: next });
   },
   publish: (view, tabs, active) => {

@@ -2,15 +2,16 @@ import { Activity as ActivityIcon, AlarmClock, BookOpen, Bug, Gauge, FileDown, B
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { asError, call, modKey } from '../api';
 import { finishSave, type SaveResult } from '../lib/files';
-import { promptText, useApp } from '../store';
+import { promptText, toastError, useApp } from '../store';
 import { runMenuCommand } from '../menu-commands';
-import type { Collection, CollectionNode, HttpRequestSpec } from '../types';
+import type { CollectionNode, HttpRequestSpec } from '../types';
 import { timeAgo, uid, plural } from '../lib/format';
-import { LinkButton, Badge, cx, Empty, Kbd, Segmented, statusTone } from '../components/ui';
+import { Badge, Callout, cx, Empty, Kbd, LinkButton, Segmented, statusTone } from '../components/ui';
 import { CheckCircle2, Circle } from 'lucide-react';
 import { ActivityCharts, type Activity } from '../components/ActivityCharts';
 import { AttentionCard } from '../components/AttentionCard';
 import { RecentRuns } from '../components/charts';
+import { refreshCollections, useCollections } from '../lib/collections-store';
 
 interface HistoryItem {
   id: string;
@@ -57,7 +58,7 @@ const greeting = () => {
 function GetStarted({ steps, onHide }: { steps: Array<{ id: string; label: string; text: string; done: boolean; onClick(): void }>; onHide(): void }) {
   const done = steps.filter((s) => s.done).length;
   return (
-    <section className="rounded-2xl border border-accent/40 bg-accent/5 px-5 py-4" aria-label="Get started">
+    <Callout tone="accent" block as="section" className="rounded-2xl px-5 py-4" aria-label="Get started">
       <div className="flex items-center gap-3">
         <h2 className="text-sm font-semibold">Get started</h2>
         <span className="text-xs text-muted">
@@ -88,7 +89,7 @@ function GetStarted({ steps, onHide }: { steps: Array<{ id: string; label: strin
           </li>
         ))}
       </ol>
-    </section>
+    </Callout>
   );
 }
 
@@ -131,7 +132,7 @@ interface HomeRun {
 export function HomeView() {
   const ws = useApp((s) => s.workspace);
   const env = useApp((s) => s.environment);
-  const [cols, setCols] = useState<Collection[]>([]);
+  const cols = useCollections();
   // saved gRPC calls and connections belong to collections too (they are kept in the library)
   const [saved, setSaved] = useState<Record<string, number>>({});
   const [recent, setRecent] = useState<HistoryItem[]>([]);
@@ -175,7 +176,7 @@ export function HomeView() {
   const setView = useApp((s) => s.setView);
 
   const load = () => {
-    void call<Collection[]>('col.list').then(setCols);
+    void refreshCollections();
     void Promise.all(['grpc', 'websocket'].map((kind) => call<{ items: Array<{ collectionId?: string }> }>('lib.get', { kind }).catch(() => ({ items: [] }))))
       .then((libs) => {
         const n: Record<string, number> = {};
@@ -278,7 +279,7 @@ export function HomeView() {
                 onClick={() =>
                   void call<SaveResult>('report.workspace', { days, tzOffsetMin: new Date().getTimezoneOffset() }).then(
                     (r) => finishSave(r, 'Workspace report'),
-                    (e) => useApp.getState().toast(asError(e).message, 'error'),
+                    (e) => toastError(e),
                   )
                 }
               >

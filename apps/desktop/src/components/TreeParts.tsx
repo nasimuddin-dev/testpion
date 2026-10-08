@@ -1,7 +1,7 @@
 import { ChevronDown, ChevronRight, Folder, FolderInput, FolderOpen, FolderPlus, MoreHorizontal, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState, type HTMLAttributes, type ReactNode } from 'react';
 import { confirmAction, promptText } from '../store';
-import { cx, IconButton, Menu, rowActionClass, type MenuItem } from './ui';
+import { cx, Menu, rowActionClass, type MenuItem } from './ui';
 
 /*
  * The parts every sidebar tree is made of (the explorer, monitors, load tests, saved prompts …), so they all look
@@ -22,34 +22,6 @@ export function RowMenu({ label, items, open, onOpenChange, header }: { label: s
         </button>
       }
     />
-  );
-}
-
-/** The + button of a row (new item in it); with `items` it opens a menu of what to create. */
-export function RowAdd({ label, onClick, header, items }: { label: string; onClick?(): void; header?: boolean; items?: MenuItem[] }) {
-  if (items)
-    return (
-      <Menu
-        width={230}
-        items={items}
-        trigger={
-          <button aria-label={label} title={label} className={rowActionClass(header)} onClick={(e) => e.stopPropagation()}>
-            <Plus size={14} />
-          </button>
-        }
-      />
-    );
-  return (
-    <IconButton
-      label={label}
-      className={rowActionClass(header)}
-      onClick={(e) => {
-        e.stopPropagation();
-        onClick?.();
-      }}
-    >
-      <Plus size={14} />
-    </IconButton>
   );
 }
 

@@ -2,6 +2,7 @@ import type { Collection, CollectionNode, KeyValue } from '../model/types.js';
 import type { WorkspaceStore } from './workspace.js';
 import { secretKeys, type SecretStore } from './secrets.js';
 import { ApsError } from '../errors.js';
+import { escapeRegex } from '../util/redact.js';
 
 /**
  * Where a variable is used in a workspace, and renaming it everywhere: `{{name}}` in requests (URL,
@@ -19,7 +20,7 @@ export interface VariableUsage {
   requestId?: string;
 }
 
-const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const esc = escapeRegex;
 const tokenRe = (name: string) => new RegExp(`\\{\\{\\s*${esc(name)}\\s*\\}\\}`, 'g');
 /** pm.environment.get('x'), pm.variables.set("x", …), tp.globals.has(`x`) … */
 const scriptRe = (name: string) => new RegExp(`((?:pm|tp|aps)\\.(?:environment|globals|collectionVariables|variables|iterationData)\\.(?:get|set|has|unset)\\(\\s*)(['"\`])${esc(name)}\\2`, 'g');

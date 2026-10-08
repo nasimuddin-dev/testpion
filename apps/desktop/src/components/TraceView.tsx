@@ -4,6 +4,7 @@ import type { Span, Trace } from '../types';
 import { formatMs } from '../lib/format';
 import { Badge, cx, Split, Tabs } from './ui';
 import { JsonTree } from './JsonView';
+import { useCopied } from '../lib/clipboard';
 
 const KIND_COLORS: Record<string, string> = {
   http: '#0969da',
@@ -180,16 +181,10 @@ const sizeOf = (text: string) => {
 
 function PayloadBox({ title, payload, emptyText }: { title: string; payload?: { body: unknown; contentType?: string; status?: unknown }; emptyText: string }) {
   const [raw, setRaw] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const { copied, copy: copyToClipboard } = useCopied(1200);
   const body = payload?.body;
   const p = body === undefined ? undefined : parsed(body);
-  const copy = () => {
-    if (!p) return;
-    void navigator.clipboard.writeText(p.text).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1200);
-    });
-  };
+  const copy = () => p && void copyToClipboard(p.text);
   return (
     <div className="h-full flex flex-col min-h-0">
       <div className="flex items-center gap-2 h-8 px-3 border-b border-line bg-panel/40 shrink-0 text-xs">

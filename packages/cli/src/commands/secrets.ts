@@ -1,6 +1,6 @@
 import type { Command } from 'commander';
-import { environmentSecretRefs, externalSecrets, prefetchEnvironmentSecrets, secretRefCommand, WorkspaceManager, type Environment } from '@testpion/core';
-import { EXIT, green, red, dim, bold, CliError, openWorkspace } from '../shared.js';
+import { environmentSecretRefs, externalSecrets, prefetchEnvironmentSecrets, secretRefCommand, type Environment } from '@testpion/core';
+import { EXIT, green, red, dim, bold, CliError, printJson, withWorkspace } from '../shared.js';
 
 /** `testpion secrets <environment>`: the environment's secret manager references, and whether each one can be read here. */
 export function registerSecretsCommands(program: Command): void {
@@ -13,16 +13,10 @@ export function registerSecretsCommands(program: Command): void {
     .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
     .option('--json', 'print the result as JSON (for scripts and AI agents)')
     .action(async (environment: string, o: { workspace?: string; json?: boolean }) => {
-      const { store } = openWorkspace(o.workspace, undefined, new WorkspaceManager());
-      let env: Environment | undefined;
-      const root = store.root;
-      let failed: Array<{ ref: string; error: string }> = [];
-      try {
-        env = store.getEnvironment(environment);
-        if (env) failed = (await prefetchEnvironmentSecrets(store, environment, { trustAll: true })).failed;
-      } finally {
-        store.close();
-      }
+      const { env, root, failed } = await withWorkspace(o.workspace, async (store) => {
+        const found: Environment | undefined = store.getEnvironment(environment);
+        return { env: found, root: store.root, failed: found ? (await prefetchEnvironmentSecrets(store, environment, { trustAll: true })).failed : [] };
+      });
       if (!env) throw new CliError(`No environment "${environment}"`, EXIT.CONFIG_ERROR);
       const refs = environmentSecretRefs(env);
       // every reference is read (the CLI reads them, as it reads $env); the values are never printed
@@ -37,7 +31,7 @@ export function registerSecretsCommands(program: Command): void {
           }
           return { key: v.key, ref: v.value.trim(), manager, read: externalSecrets.get(v.value, root) !== undefined, error: failed.find((f) => f.ref === v.value.trim())?.error };
         });
-      if (o.json) console.log(JSON.stringify({ environment: env.name, references: rows }, null, 2));
+      if (o.json) printJson({ environment: env.name, references: rows });
       else if (!rows.length) console.log(dim(`${env.name} has no secret manager references.`));
       else {
         console.log(bold(`${env.name}: ${rows.length} reference${rows.length === 1 ? '' : 's'}`));

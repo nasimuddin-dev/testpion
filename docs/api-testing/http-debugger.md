@@ -43,7 +43,7 @@ Once HTTPS traffic shows up as tunnels, a one-line notice offers **Decrypt HTTPS
 
 ## Capture
 
-1. Choose what to capture from **Capture**: **a browser** (Chrome, Edge, Firefox or Brave opened through the proxy with a profile of its own — only that window is captured), **a terminal** (opened with `HTTP_PROXY` set — only what runs in it), or **everything on this computer** (the system proxy, an explicit choice, restored when you stop). The proxy starts on its own. **Start capturing** alone starts it for a program you point at it yourself; **Capture ▸ Proxy port…** changes the port (8899).
+1. Choose what to capture from **Capture**: **a browser** (Chrome, Edge, Firefox or Brave opened through the proxy with a profile of its own — only that window is captured; on macOS, Safari, which has no proxy of its own, is opened with the system proxy pointed at TestPion and restored when you stop), **a terminal** (opened with `HTTP_PROXY` set — only what runs in it), or **everything on this computer** (the system proxy, an explicit choice, restored when you stop). The proxy starts on its own. **Start capturing** alone starts it for a program you point at it yourself; **Capture ▸ Proxy port…** changes the port (8899).
 2. Point the program at the proxy:
    - a terminal program: `HTTP_PROXY=http://127.0.0.1:8899` (and `HTTPS_PROXY` for HTTPS) before you run it; Node, Python, curl, Go and most SDKs read it;
    - Chrome or Edge: start it with `--proxy-server=http://127.0.0.1:8899`;
@@ -53,6 +53,7 @@ Once HTTPS traffic shows up as tunnels, a one-line notice offers **Decrypt HTTPS
 The **Capture** menu does the pointing for you:
 
 - **Open Chrome / Edge / Firefox / Brave through the proxy**: the browser starts with a profile of its own (your real profile, cookies and extensions stay out of it) and every page it loads goes through TestPion.
+- **Open Safari (macOS)**: Safari always follows the system proxy, so TestPion points the system proxy at itself and opens Safari; other programs that follow the system proxy are captured too until you stop, when the proxy is put back. For HTTPS, trust the root certificate (**HTTPS ▸ Root certificate…** adds it to the login keychain). Safari on an iPhone or iPad is **a phone or another computer**.
 - **Open a terminal through the proxy**: a new terminal window whose shell has `HTTP_PROXY` and `HTTPS_PROXY` set; anything you run in it is captured.
 - **Set the system proxy to TestPion**: every program that honours the operating system's proxy sends through (Windows: Internet Settings; macOS: `networksetup`; GNOME: `gsettings`). It is put back as it was when you **Restore** it, when you stop capturing and when TestPion quits.
 - **Copy for bash / PowerShell / cmd / curl / Chrome**: the lines for a shell that is already open.

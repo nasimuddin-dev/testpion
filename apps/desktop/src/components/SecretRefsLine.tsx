@@ -1,8 +1,8 @@
 import { RefreshCw, ShieldCheck, Vault } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { asError, call } from '../api';
+import { call } from '../api';
 import { allowSecretRefs } from '../lib/secret-refs';
-import { useApp } from '../store';
+import { toastError } from '../store';
 import { Button } from './ui';
 
 interface RefRow {
@@ -47,7 +47,7 @@ export function SecretRefsLine({ environment, version }: { environment: string; 
           variant="ghost"
           icon={<RefreshCw size={12} />}
           title="Forget the values read and read them again (after rotating a secret)"
-          onClick={() => void call('secrets.refresh', { environment }).then(load, (e) => useApp.getState().toast(asError(e).message, 'error'))}
+          onClick={() => void call('secrets.refresh', { environment }).then(load, (e) => toastError(e))}
         >
           Read again
         </Button>

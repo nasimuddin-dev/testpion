@@ -2,12 +2,13 @@ import { openQuickLook } from './EnvQuickLook';
 import { Copy, KeyRound, Layers, Save, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { asError, call } from '../api';
-import { useApp } from '../store';
+import { call } from '../api';
+import { toastError, useApp } from '../store';
 import { dynamicVariables } from '../editor-intel';
 import { inspectVariables, type VarInfo } from '../lib/vars-cache';
 import { collectionOf, useVarPopover, VARS_CHANGED } from '../lib/var-popover';
 import { Button, cx, useDebounced } from './ui';
+import { copyText } from '../lib/clipboard';
 
 
 /**
@@ -238,7 +239,7 @@ export function VarPopover({ name, info, environment, collectionId, x, y, onClos
       onSaved();
       onClose();
     } catch (e) {
-      useApp.getState().toast(asError(e).message, 'error');
+      toastError(e);
     } finally {
       setBusy(false);
     }
@@ -284,7 +285,7 @@ export function VarPopover({ name, info, environment, collectionId, x, y, onClos
       {/* the buttons wrap when they do not fit; Save keeps the right end of its row */}
       <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 pt-1">
         {!dynamic && defined && !info?.secret && (
-          <Button size="sm" icon={<Copy size={12} />} onClick={() => void navigator.clipboard.writeText(info?.value ?? '').then(() => useApp.getState().toast('Copied'))}>
+          <Button size="sm" icon={<Copy size={12} />} onClick={() => void copyText(info?.value ?? '')}>
             Copy
           </Button>
         )}

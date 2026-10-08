@@ -10,6 +10,7 @@ import { BedrockProvider } from './providers/bedrock.js';
 import { MockProvider } from './providers/mock.js';
 import { RateLimiter, Semaphore, withRetry } from '../util/concurrency.js';
 import type { Redactor } from '../util/redact.js';
+import { globToRegex } from '../util/glob.js';
 import type { VariableScope } from '../vars/variables.js';
 
 export * from './types.js';
@@ -174,11 +175,8 @@ export class ProviderRegistry {
 
 /* ------------------------------------------------------------------ cost */
 
-function globMatch(pattern: string, value: string): boolean {
-  if (pattern === '*' || pattern === value) return true;
-  const re = new RegExp('^' + pattern.split('*').map((s) => s.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*') + '$', 'i');
-  return re.test(value);
-}
+/** A price entry's model (`gpt-4o*`, `*`) against the model used; a `?` in a model name is literal. */
+const globMatch = (pattern: string, value: string): boolean => globToRegex(pattern, { question: false }).test(value);
 
 /**
  * Estimated cost = input tokens × input price + output tokens × output price.

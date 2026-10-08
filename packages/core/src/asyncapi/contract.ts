@@ -2,6 +2,8 @@ import { parse as parseYaml } from 'yaml';
 import { registerCheck, type CheckContext } from '../eval/checks.js';
 import type { CheckConfig, CheckResult } from '../model/types.js';
 import { schemaProblems, type OpenApiDoc } from '../openapi/contract.js';
+import { deref } from '../util/json-ref.js';
+import { escapeRegex } from '../util/redact.js';
 
 /**
  * Contract testing for realtime tests: every message a WebSocket, Socket.IO, MQTT or Kafka test received must be one of
@@ -18,16 +20,6 @@ export interface AsyncApiChannel {
   payloads: Array<{ name: string; schema: unknown }>;
   match: RegExp;
 }
-
-function deref(doc: Json, node: any, seen = 0): any {
-  if (!node || typeof node !== 'object' || typeof node.$ref !== 'string' || seen > 20) return node;
-  if (!node.$ref.startsWith('#/')) return {};
-  let cur: any = doc;
-  for (const p of node.$ref.slice(2).split('/')) cur = cur?.[decodeURIComponent(p.replace(/~1/g, '/').replace(/~0/g, '~'))];
-  return deref(doc, cur, seen + 1);
-}
-
-const escape = (s: string) => s.replace(/[.*+?^$()|[\]\\]/g, '\\$&');
 
 /** The channels of an AsyncAPI document with their messages' payload schemas. */
 export function asyncApiChannels(doc: Json): AsyncApiChannel[] {
@@ -51,7 +43,7 @@ export function asyncApiChannels(doc: Json): AsyncApiChannel[] {
       }
     const pattern = address
       .split(/(\{[^}]+\})/)
-      .map((part) => (/^\{[^}]+\}$/.test(part) ? '[^/]+' : escape(part)))
+      .map((part) => (/^\{[^}]+\}$/.test(part) ? '[^/]+' : escapeRegex(part)))
       .join('');
     out.push({ id, address, payloads: messages.map(payloadOf).filter((p) => p.schema !== undefined), match: new RegExp(`^/?${pattern.replace(/^\\?\//, '')}$`) });
   }

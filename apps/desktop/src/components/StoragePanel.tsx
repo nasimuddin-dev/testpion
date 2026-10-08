@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { HardDrive, Trash2 } from 'lucide-react';
-import { asError, call } from '../api';
-import { confirmAction, useApp } from '../store';
+import { call } from '../api';
+import { confirmAction, toastError, useApp } from '../store';
 import { formatBytes, plural, timeAgo } from '../lib/format';
 import { BarRow, ChartCard, StatTile } from './charts';
 import { Button, Input } from './ui';
@@ -19,7 +19,7 @@ interface StorageUsage {
 export function StoragePanel() {
   const [u, setU] = useState<StorageUsage>();
   const [days, setDays] = useState('30');
-  const load = () => void call<StorageUsage>('storage.usage').then(setU, (e) => useApp.getState().toast(asError(e).message, 'error'));
+  const load = () => void call<StorageUsage>('storage.usage').then(setU, (e) => toastError(e));
   useEffect(load, []);
   if (!u) return <p className="text-sm text-muted">Measuring…</p>;
   const max = Math.max(1, ...u.parts.map((p) => p.bytes));
@@ -31,7 +31,7 @@ export function StoragePanel() {
       useApp.getState().toast(r.deleted ? `Deleted ${plural(r.deleted, 'run')} (${formatBytes(r.bytes)})` : 'No runs that old', 'success');
       load();
     } catch (e) {
-      useApp.getState().toast(asError(e).message, 'error');
+      toastError(e);
     }
   };
   const clearHistory = async () => {

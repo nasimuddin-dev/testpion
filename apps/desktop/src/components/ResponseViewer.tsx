@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { call, visualizationUrl } from '../api';
 import type { CheckResult, HttpResponseData, Trace } from '../types';
 import { SseEvents } from './SseEvents';
-import { formatBytes, formatMs } from '../lib/format';
+import { formatBytes, formatMs, plural } from '../lib/format';
 import { CheckList } from './Results';
 import { ResponseHistory } from './ResponseHistory';
 import { JsonTree, RawView, type TreeAssertion, type TreeVariable } from './JsonView';
@@ -263,7 +263,7 @@ export function ResponseViewer({
   );
 }
 
-export function KvTable({ rows }: { rows: Array<[string, string]> }) {
+function KvTable({ rows }: { rows: Array<[string, string]> }) {
   return (
     <div className="overflow-auto h-full">
       <table className="w-full text-sm table-fixed">
@@ -299,7 +299,7 @@ function CertificateLine({ c }: { c: NonNullable<NonNullable<HttpResponseData['c
       {c.validTo && (
         <span>
           valid until {new Date(c.validTo).toLocaleDateString()}
-          {days !== undefined && <b className={'font-medium ml-1 ' + tone}>{days < 0 ? `expired ${-days} day${days === -1 ? '' : 's'} ago` : `${days} day${days === 1 ? '' : 's'} left`}</b>}
+          {days !== undefined && <b className={'font-medium ml-1 ' + tone}>{days < 0 ? `expired ${-days} day${days === -1 ? '' : 's'} ago` : `${plural(days, 'day')} left`}</b>}
         </span>
       )}
     </div>

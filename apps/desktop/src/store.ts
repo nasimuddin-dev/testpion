@@ -4,7 +4,7 @@ import { docKey, isDocView, routeDoc, useDocs } from './lib/docs';
 import { create } from 'zustand';
 import type { AppSettings, WorkspaceCurrent } from './types';
 import type { FeedbackRequest } from './components/FeedbackDialog';
-import { call } from './api';
+import { asError, call } from './api';
 import { loadDraft, saveDraft } from './lib/draft-store';
 
 export type ViewId =
@@ -284,6 +284,11 @@ export const useApp = create<AppState>((set, get) => ({
     set({ environment: name });
   },
 }));
+
+/** Show an error (anything thrown) as an error toast. */
+export function toastError(e: unknown): void {
+  useApp.getState().toast(asError(e).message, 'error');
+}
 
 /** Persist per-view drafts in localStorage (UI state only — never secrets or responses). */
 export function persisted<T>(key: string, fallback: T): { load(): T; save(v: T): void; forDoc(docId?: string): { load(): T; save(v: T): void } } {

@@ -167,3 +167,6 @@ export * from './engine.js';
 
 export { ENGINE_VERSION } from './version.js';
 export * from './report/feedback.js';
+export * from './runner/run-records.js';
+export * from './runner/collection-findings.js';
+export * from './openapi/spec-files.js';

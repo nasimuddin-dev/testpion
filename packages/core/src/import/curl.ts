@@ -61,7 +61,7 @@ export function isCurlCommand(text: string): boolean {
  * Undo cmd.exe caret escaping as produced by Chrome's "Copy as cURL (cmd)": `^"` quotes, `^X`
  * escaped characters, `^` + newline continuations and `^` + blank line for newlines inside strings.
  */
-export function unescapeCmd(input: string): string {
+function unescapeCmd(input: string): string {
   return input
     .replace(/\^\r?\n\r?\n/g, '\u0000')
     .replace(/\^\r?\n/g, ' ')

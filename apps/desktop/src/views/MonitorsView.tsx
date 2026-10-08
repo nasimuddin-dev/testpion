@@ -9,10 +9,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { asError, call, on } from '../api';
 import type { MonitorResult } from '../lib/monitor-alerts';
 import { useIntent } from '../hooks';
-import { confirmAction, useApp } from '../store';
+import { confirmAction, toastError, useApp } from '../store';
 import type { Collection, CollectionNode, Library } from '../types';
 import { formatMs, timeAgo } from '../lib/format';
 import { Badge, Button, cx, Empty, Field, Input, Metric, Menu, MetricGrid, ModalOrPanel, PageHeader, Select, Split, Toggle, Tooltip } from '../components/ui';
+import { useCollections } from '../lib/collections-store';
 
 interface MonitorDraft {
   id?: string;
@@ -58,7 +59,7 @@ export function MonitorsView() {
   const [loaded, setLoaded] = useState(false);
   const [sel, setSel] = useState<string>();
   const [resultsById, setResultsById] = useState<Record<string, MonitorResult[]>>({});
-  const [collections, setCollections] = useState<Collection[]>([]);
+  const collections = useCollections();
   const [editing, setEditing] = useState<MonitorDraft>();
   const [busy, setBusy] = useState<string[]>([]);
   // monitors open in tabs, like requests (several can be open and running at once); remembered
@@ -96,10 +97,9 @@ export function MonitorsView() {
   // folders of the list (empty ones included) live in the workspace library "monitors"
   const [folders, setFolders] = useState<string[]>([]);
   const load = useCallback(async () => {
-    const [list, cols, lib] = await Promise.all([call<MonitorRow[]>('monitor.list'), call<Collection[]>('col.list'), call<Library<unknown>>('lib.get', { kind: 'monitors' }).catch(() => ({ folders: [], items: [] }))]);
+    const [list, lib] = await Promise.all([call<MonitorRow[]>('monitor.list'), call<Library<unknown>>('lib.get', { kind: 'monitors' }).catch(() => ({ folders: [], items: [] }))]);
     setRows(list);
     setFolders(lib.folders);
-    setCollections(cols);
     setLoaded(true);
     // deleted monitors leave their tabs
     setOpenIds((ids) => ids.filter((id) => list.some((m) => m.id === id)));
@@ -155,7 +155,7 @@ export function MonitorsView() {
       const r = await call<MonitorResult>('monitor.run', { id: m.id });
       toast(`${m.name}: ${statusLabel(r).toLowerCase()} (${r.passed}/${r.total})`, r.status === 'passed' ? 'success' : 'error');
     } catch (e) {
-      toast(asError(e).message, 'error');
+      toastError(e);
     } finally {
       setBusy((b) => b.filter((x) => x !== m.id));
       await load();
@@ -172,7 +172,7 @@ export function MonitorsView() {
     try {
       await call('monitor.save', { monitor: { ...m, enabled: !m.enabled } });
     } catch (e) {
-      toast(asError(e).message, 'error');
+      toastError(e);
     }
     await load();
   };
@@ -196,7 +196,7 @@ export function MonitorsView() {
       await call('monitor.save', { monitor: { ...m, ...change } });
       await load();
     } catch (e) {
-      toast(asError(e).message, 'error');
+      toastError(e);
     }
   };
   const monitorOps: FolderListOps = {
@@ -312,11 +312,7 @@ export function MonitorsView() {
             <Empty
               icon={<AlarmClock size={24} />}
               title="Run collections on a schedule"
-              action={
-                <Button variant="primary" icon={<Plus size={13} />} disabled={!collections.length} onClick={() => setEditing({ name: '', collectionId: collections[0]?.id ?? '', everyMinutes: 15, enabled: true, environment: useApp.getState().environment })}>
-                  New monitor
-                </Button>
-              }
+              actions={[{ label: 'New monitor', icon: <Plus size={13} />, disabled: !collections.length, onClick: () => setEditing({ name: '', collectionId: collections[0]?.id ?? '', everyMinutes: 15, enabled: true, environment: useApp.getState().environment }) }]}
             >
               {collections.length ? 'A monitor runs a collection, or some of its folders, every few minutes while TestPion is open, and tells you when it starts failing. From the terminal: testpion monitor.' : 'Create a collection first: a monitor runs a collection on a schedule.'}
             </Empty>
@@ -652,7 +648,7 @@ function MonitorEditor({ draft, collections, onCancel, onSave }: { draft: Monito
               onClick={() =>
                 void call('monitor.testWebhook', { webhook: d.webhook, environment: d.environment, name: (d as { name?: string }).name }).then(
                   () => useApp.getState().toast('Test alert sent', 'success'),
-                  (e) => useApp.getState().toast(asError(e).message, 'error'),
+                  (e) => toastError(e),
                 )
               }
             >

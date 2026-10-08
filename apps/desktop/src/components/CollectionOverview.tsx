@@ -7,6 +7,7 @@ import { BarRow, ChartCard, RecentRuns, StatTile } from './charts';
 import { TimeByPhase } from './RunCharts';
 import { useApp } from '../store';
 import { LinkButton, Badge, cx, statusTone } from './ui';
+import { useRpc } from '../lib/use-rpc';
 
 /** From `stats.requests` (summarizeRequestStats in core). */
 interface RequestStat {
@@ -38,10 +39,7 @@ const ISSUE: Record<NonNullable<VariableFlow['issue']>, string> = { 'used-before
 
 /** Variables set by scripts (the request chain) and variables with a likely mistake: who sets them, who uses them. */
 function VariableFlowCard({ collectionId, onOpen }: { collectionId: string; onOpen(requestId: string): void }) {
-  const [flows, setFlows] = useState<VariableFlow[]>();
-  useEffect(() => {
-    void call<VariableFlow[]>('col.variableFlow', { collectionId }).then(setFlows, () => setFlows([]));
-  }, [collectionId]);
+  const flows = useRpc<VariableFlow[]>('col.variableFlow', { collectionId }, { fallback: [] });
   const rows = (flows ?? []).filter((f) => f.setBy.length || f.issue);
   if (!flows || !rows.length) return null;
   const place = (p: FlowPlace) =>
@@ -140,12 +138,8 @@ export function CollectionOverview({ collection, onOpen, onRun }: { collection: 
   /** Which requests the health card lists: the sent ones (with their health), or one group of the others. */
   const [show, setShow] = useState<'sent' | 'unsent' | 'unchecked'>('sent');
   const [all, setAll] = useState(false);
-  const [stats, setStats] = useState<RequestStat[]>([]);
-  const [timing, setTiming] = useState<Parameters<typeof TimeByPhase>[0]['p'] | null>(null);
-  useEffect(() => {
-    void call<RequestStat[]>('stats.requests', { collectionId: collection.id }).then(setStats, () => setStats([]));
-    void call<Parameters<typeof TimeByPhase>[0]['p'] | null>('stats.collectionTiming', { collectionId: collection.id }).then(setTiming, () => setTiming(null));
-  }, [collection.id]);
+  const stats = useRpc<RequestStat[]>('stats.requests', { collectionId: collection.id }, { fallback: [] }) ?? [];
+  const timing = useRpc<Parameters<typeof TimeByPhase>[0]['p'] | null>('stats.collectionTiming', { collectionId: collection.id }, { fallback: null }) ?? null;
   const { rows, folders } = useMemo(() => {
     const out = { rows: [] as Row[], folders: 0 };
     walk(collection.items, [], out);

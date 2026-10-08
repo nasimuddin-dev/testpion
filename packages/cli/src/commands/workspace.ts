@@ -13,7 +13,7 @@ import {
   gitSetupMergeDriver,
   isInGitRepository,
 } from '@testpion/core';
-import { EXIT, green, dim, bold, CliError, openWorkspace } from '../shared.js';
+import { EXIT, green, dim, bold, CliError, printJson, withWorkspace } from '../shared.js';
 import { registerGitCommands } from './git.js';
 
 /** This very CLI as a command line (forward slashes: git runs it with sh), for git hooks and the merge driver. */
@@ -25,7 +25,7 @@ export function registerWorkspaceCommands(program: Command): void {
     .option('--json', 'print as JSON')
     .action((o) => {
       const list = new WorkspaceManager().list();
-      if (o.json) console.log(JSON.stringify(list, null, 2));
+      if (o.json) printJson(list);
       else for (const w of list) console.log(`${w.name}\t${dim(w.path)}`);
     });
   ws.command('rename')
@@ -64,12 +64,12 @@ export function registerWorkspaceCommands(program: Command): void {
   ws.command('export')
     .argument('<nameOrPath>')
     .requiredOption('-o, --output <file>')
-    .action((ref: string, o) => {
-      const { store } = openWorkspace(ref, undefined, new WorkspaceManager());
-      writeFileSync(o.output, JSON.stringify(store.exportBundle(), null, 2));
-      console.log(green(`Exported to ${o.output} (secret values are never exported)`));
-      store.close();
-    });
+    .action((ref: string, o) =>
+      withWorkspace(ref, (store) => {
+        writeFileSync(o.output, JSON.stringify(store.exportBundle(), null, 2));
+        console.log(green(`Exported to ${o.output} (secret values are never exported)`));
+      }),
+    );
 
   const git = program.command('git').description('keep a workspace in git (see the docs: Keep your workspace in git)');
   git
@@ -78,20 +78,17 @@ export function registerWorkspaceCommands(program: Command): void {
     .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest)')
     .option('--json', 'print what changed as JSON')
     .action(async (o) => {
-      const { store } = openWorkspace(o.workspace, undefined, new WorkspaceManager());
-      try {
+      return withWorkspace(o.workspace, async (store) => {
         const r = makeGitReady(store);
         // in a repository: collection files merge request by request (this CLI is the merge driver)
         const mergeDriver = isInGitRepository(store.root) ? await gitSetupMergeDriver(store.root, `${cliSelf()} merge-driver`).then(() => true, () => false) : false;
-        if (o.json) return console.log(JSON.stringify({ ...r, mergeDriver }, null, 2));
+        if (o.json) return printJson({ ...r, mergeDriver });
         if (mergeDriver) console.log(`${green('set up')} merging collections request by request ${dim('(git config merge.testpion)')}`);
         if (!r.files.length && !r.collections.length) console.log(green('Already git-ready.'));
         for (const f of r.files) console.log(`${green('wrote')} ${f}`);
         for (const c of r.collections) console.log(`${green('tidied')} ${c} ${dim('(no save counter / time in the file)')}`);
         if (!r.inRepository) console.log(dim(`Not a git repository yet: run  git init  in ${store.root}`));
-      } finally {
-        store.close();
-      }
+      });
     });
 
   git
@@ -100,19 +97,16 @@ export function registerWorkspaceCommands(program: Command): void {
     .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest)')
     .option('--json', 'print the findings as JSON')
     .action((o) => {
-      const { store } = openWorkspace(o.workspace, undefined, new WorkspaceManager());
-      try {
+      return withWorkspace(o.workspace, (store) => {
         const found = findCommittableSecrets(store);
-        if (o.json) console.log(JSON.stringify(found, null, 2));
+        if (o.json) printJson(found);
         else if (!found.length) console.log(green('No secrets typed in: safe to commit.'));
         else {
           console.log(bold(`${found.length} secret${found.length === 1 ? '' : 's'} would be committed:`));
           for (const f of found) console.log(`  ${f.where} ${dim(`(${f.file})`)}\n    ${f.message}`);
         }
         if (found.length) process.exitCode = EXIT.TEST_FAILURE;
-      } finally {
-        store.close();
-      }
+      });
     });
   git
     .command('hook')
@@ -121,15 +115,12 @@ export function registerWorkspaceCommands(program: Command): void {
     .description('install a pre-commit hook that runs `testpion git check` and refuses a commit that would publish a secret (an existing hook of yours is never overwritten)')
     .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest)')
     .action((o) => {
-      const { store } = openWorkspace(o.workspace, undefined, new WorkspaceManager());
-      try {
+      return withWorkspace(o.workspace, (store) => {
         // the hook can call this very CLI when `testpion` is not on the PATH (e.g. run from a checkout)
         const r = installPreCommitHook(store.root, cliSelf());
         console.log(r.installed ? `${green('installed')} ${r.path}` : r.message);
         if (!r.installed) process.exitCode = EXIT.TEST_FAILURE;
-      } finally {
-        store.close();
-      }
+      });
     });
 
   registerGitCommands(git, program);
@@ -140,15 +131,12 @@ export function registerWorkspaceCommands(program: Command): void {
     .requiredOption('-w, --workspace <nameOrPath>')
     .option('--json', 'print as JSON')
     .action((o) => {
-      const { store } = openWorkspace(o.workspace, undefined, new WorkspaceManager());
-      try {
+      return withWorkspace(o.workspace, (store) => {
         const items = listTrash(store);
-        if (o.json) return console.log(JSON.stringify(items, null, 2));
+        if (o.json) return printJson(items);
         if (!items.length) return console.log(dim('Nothing deleted in the last 30 days.'));
         for (const i of items) console.log(`${bold(i.name)}  ${dim(`${i.kind} · deleted ${i.deletedAt} · ${i.id}`)}`);
-      } finally {
-        store.close();
-      }
+      });
     });
   trash
     .command('restore')
@@ -157,13 +145,10 @@ export function registerWorkspaceCommands(program: Command): void {
     .requiredOption('-w, --workspace <nameOrPath>')
     .option('--json', 'print the restored item as JSON')
     .action((id: string, o) => {
-      const { store } = openWorkspace(o.workspace, undefined, new WorkspaceManager());
-      try {
+      return withWorkspace(o.workspace, (store) => {
         const r = restoreFromTrash(store, id);
         console.log(o.json ? JSON.stringify(r, null, 2) : green(`Restored ${r.kind} "${r.name}"`));
-      } finally {
-        store.close();
-      }
+      });
     });
   trash
     .command('empty')
@@ -173,11 +158,8 @@ export function registerWorkspaceCommands(program: Command): void {
     .option('--yes', 'confirm; required, because this cannot be undone')
     .action((o) => {
       if (!o.yes) throw new CliError('Refusing to delete for good without --yes', EXIT.CONFIG_ERROR);
-      const { store } = openWorkspace(o.workspace, undefined, new WorkspaceManager());
-      try {
+      return withWorkspace(o.workspace, (store) => {
         console.log(green(`Deleted ${purgeTrash(store, o.id)} item(s) for good`));
-      } finally {
-        store.close();
-      }
+      });
     });
 }

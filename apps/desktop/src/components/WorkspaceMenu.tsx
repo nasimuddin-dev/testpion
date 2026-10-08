@@ -2,9 +2,10 @@ import { Check, ChevronDown, Copy, Download, FolderOpen, FolderPlus, GitBranch, 
 import { runMenuCommand } from '../menu-commands';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { asError, call } from '../api';
-import { promptText, useApp } from '../store';
-import { downloadContent, hasNativeDialogs } from '../lib/files';
+import { promptText, toastError, useApp } from '../store';
+import { downloadContent, hasNativeDialogs, pickTextFile } from '../lib/files';
 import { Badge, Button, cx, IconButton, Input, Menu, Modal, Spinner, type MenuItem } from './ui';
+import { plural } from '../lib/format';
 
 interface WorkspaceInfo {
   id: string;
@@ -21,7 +22,6 @@ interface WorkspaceDetails extends WorkspaceInfo {
 }
 type NameDialog = { mode: 'create' | 'rename' | 'duplicate'; target?: WorkspaceInfo; value: string };
 
-const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;
 
 /**
  * The workspace switcher (top bar): search, switch, and a menu per workspace (the ⋯ button or a
@@ -58,7 +58,7 @@ export function WorkspaceMenu() {
       load();
       return true;
     } catch (e) {
-      toast(asError(e).message, 'error');
+      toastError(e);
       return false;
     }
   };
@@ -82,17 +82,12 @@ export function WorkspaceMenu() {
       return void act(async () => (r = await call<ImportResult>('ws.importPick'))).then(() => imported(r));
     }
     // browser / cloud: pick the file in the page
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.json,.yaml,.yml,.har,.env,.wsdl,.xml,.http,.rest,.bru';
-    input.onchange = async () => {
-      const f = input.files?.[0];
+    void pickTextFile('.json,.yaml,.yml,.har,.env,.wsdl,.xml,.http,.rest,.bru').then(async (f) => {
       if (!f) return;
       let r: ImportResult = null;
-      await act(async () => (r = await call<ImportResult>('ws.importFile', { text: await f.text(), fileName: f.name })));
+      await act(async () => (r = await call<ImportResult>('ws.importFile', { text: f.text, fileName: f.name })));
       imported(r);
-    };
-    input.click();
+    });
   };
   /** Export a workspace to one .json file (asks where; in the browser it downloads). Secret values are never exported. */
   const exportWorkspace = (w: { name: string; path: string }) =>
@@ -102,7 +97,7 @@ export function WorkspaceMenu() {
         if (r.bundle) downloadContent(`${w.name}.apsworkspace.json`, JSON.stringify(r.bundle, null, 2), { type: 'application/json' });
         toast(`Exported "${w.name}" (${plural(r.collections ?? 0, 'collection')}, ${plural(r.environments ?? 0, 'environment')})${r.path ? ` to ${r.path}` : ''}. Secret values are never exported.`, 'success');
       },
-      (e) => toast(asError(e).message, 'error'),
+      (e) => toastError(e),
     );
   const rowMenu = (w: WorkspaceInfo): MenuItem[] => [
     { label: isCurrent(w) ? 'Open (current)' : 'Open', icon: <Check size={14} />, disabled: isCurrent(w), onSelect: () => switchTo(w) },

@@ -1,10 +1,12 @@
 import { Check, Copy, Download } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { asError, call } from '../api';
-import { useApp } from '../store';
-import type { Collection } from '../types';
+import { toastError, useApp } from '../store';
 import { finishSave, type SaveResult } from '../lib/files';
 import { Button, Field, Input, Modal, Select, Tabs } from './ui';
+import { useCollections } from '../lib/collections-store';
+import { usePersisted } from '../lib/sticky';
+import { useCopied } from '../lib/clipboard';
 
 interface CiConfig {
   path: string;
@@ -37,20 +39,19 @@ export function CiDialog() {
   const req = useApp((s) => s.ci)!;
   const close = () => useApp.getState().set({ ci: undefined });
   const environments = useApp((s) => s.workspace?.environments ?? []);
-  const [provider, setProvider] = useState<Provider>(() => (localStorage.getItem('aps.ci.provider') as Provider) || 'github');
+  const [provider, setProvider] = usePersisted<Provider>('aps.ci.provider', 'github', { parse: (v) => (v as Provider) || undefined, text: true });
   const [target, setTarget] = useState<string>(req.collection ? `collection:${req.collection}` : req.suite ? `suite:${req.suite}` : 'tests');
   const [environment, setEnvironment] = useState(useApp.getState().environment ?? '');
   const [workspaceDir, setWorkspaceDir] = useState('.');
   const [openapi, setOpenapi] = useState('');
   const [suites, setSuites] = useState<string[]>([]);
-  const [collections, setCollections] = useState<Collection[]>([]);
+  const collections = useCollections();
   const [cfg, setCfg] = useState<CiConfig>();
   const [error, setError] = useState<string>();
-  const [copied, setCopied] = useState(false);
+  const { copied, copy: copyToClipboard } = useCopied();
 
   useEffect(() => {
     void call<TreeNode[]>('tests.tree').then((t) => setSuites(suitesOf(t)));
-    void call<Collection[]>('col.list').then(setCollections);
   }, []);
   const options = () => {
     const [kind, value] = target.includes(':') ? [target.slice(0, target.indexOf(':')), target.slice(target.indexOf(':') + 1)] : [target, ''];
@@ -63,11 +64,6 @@ export function CiDialog() {
     };
   };
   useEffect(() => {
-    try {
-      localStorage.setItem('aps.ci.provider', provider);
-    } catch {
-      /* private mode */
-    }
     call<CiConfig>('ci.config', options()).then(
       (c) => (setCfg(c), setError(undefined)),
       (e) => (setCfg(undefined), setError(asError(e).message)),
@@ -75,17 +71,12 @@ export function CiDialog() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [provider, target, environment, workspaceDir, openapi]);
 
-  const copy = async () => {
-    if (!cfg) return;
-    await navigator.clipboard.writeText(cfg.content);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  };
+  const copy = () => (cfg ? copyToClipboard(cfg.content) : undefined);
   const save = async () => {
     try {
       finishSave(await call<SaveResult>('ci.save', options()), 'Pipeline');
     } catch (e) {
-      useApp.getState().toast(asError(e).message, 'error');
+      toastError(e);
     }
   };
 

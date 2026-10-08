@@ -1,5 +1,6 @@
-import { useState, type ReactNode } from 'react';
+import { type ReactNode } from 'react';
 import { cx, Tooltip } from './ui';
+import { usePersisted } from '../lib/sticky';
 
 export interface SidebarPane {
   id: string;
@@ -17,22 +18,10 @@ const key = (id: string) => `aps.sidebar.${id}`;
  * active pane below it. The chosen pane is remembered per view.
  */
 export function SidebarShell({ id, panes, value, onChange }: { id: string; panes: SidebarPane[]; value?: string; onChange?(id: string): void }) {
-  const [own, setOwn] = useState<string>(() => {
-    try {
-      const v = localStorage.getItem(key(id));
-      return v && panes.some((p) => p.id === v) ? v : panes[0]!.id;
-    } catch {
-      return panes[0]!.id;
-    }
-  });
+  const [own, setOwn] = usePersisted<string>(key(id), panes[0]!.id, { text: true, parse: (v) => (v && panes.some((p) => p.id === v) ? v : undefined) });
   const active = value ?? own;
   const pick = (p: string) => {
     setOwn(p);
-    try {
-      localStorage.setItem(key(id), p);
-    } catch {
-      /* private mode */
-    }
     onChange?.(p);
   };
   const pane = panes.find((p) => p.id === active) ?? panes[0]!;

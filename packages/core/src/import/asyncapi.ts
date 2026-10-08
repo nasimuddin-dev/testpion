@@ -3,6 +3,7 @@ import type { Collection, Environment, KeyValue, LibraryItem } from '../model/ty
 import { SCHEMA_VERSION } from '../model/types.js';
 import { ApsError } from '../errors.js';
 import { shortId, slugify } from '../util/ids.js';
+import { deref } from '../util/json-ref.js';
 
 /**
  * AsyncAPI 2.x and 3.0 → a collection of realtime connections (Kafka, MQTT, WebSocket, Socket.IO), the way an
@@ -68,14 +69,6 @@ function sample(schema: any, doc: Json, depth = 0): unknown {
     default:
       return null;
   }
-}
-
-function deref(doc: Json, node: any, seen = 0): any {
-  if (!node || typeof node !== 'object' || typeof node.$ref !== 'string' || seen > 20) return node;
-  if (!node.$ref.startsWith('#/')) return {};
-  let cur: any = doc;
-  for (const p of node.$ref.slice(2).split('/')) cur = cur?.[decodeURIComponent(p.replace(/~1/g, '/').replace(/~0/g, '~'))];
-  return deref(doc, cur, seen + 1);
 }
 
 /** {param} → {{param}}, the TestPion way. */

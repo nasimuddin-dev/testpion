@@ -1,20 +1,17 @@
 import { describe, it, expect, afterAll } from 'vitest';
-import { cpSync, mkdtempSync, rmSync } from 'node:fs';
+import { copyExample, runCliSync } from '../helpers.js';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { spawnSync } from 'node:child_process';
 import { McpSession, mcpResultBody } from '../../packages/core/src/index.js';
 
 // `testpion collections` and `testpion requests` show what a workspace holds, gRPC calls and connections
 // included (the same as the list_collections / list_requests MCP tools).
 const dir = mkdtempSync(join(tmpdir(), 'tp-cli-cols-'));
 const ws = join(dir, 'ws');
-cpSync(join(process.cwd(), 'examples', 'public-workspace'), ws, { recursive: true, filter: (p) => !/database\.sqlite|[\/](runs|traces|payloads)([\/]|$)/.test(p) });
+copyExample('public-workspace', ws);
 afterAll(() => rmSync(dir, { recursive: true, force: true, maxRetries: 3 }));
-const cli = (...args: string[]) => {
-  const r = spawnSync(process.execPath, [join(process.cwd(), 'packages/cli/bin/testpion.js'), ...args, '-w', ws], { encoding: 'utf8', env: { ...process.env, NO_COLOR: '1' } });
-  return { status: r.status, out: r.stdout, err: r.stderr };
-};
+const cli = (...args: string[]) => runCliSync([...args, '-w', ws]);
 
 describe('CLI: collections and requests', () => {
   it('lists collections with their gRPC calls and connections', () => {

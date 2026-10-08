@@ -1,11 +1,10 @@
 import { Check, Pencil, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { asError, call } from '../../api';
-import { useApp } from '../../store';
+import { call } from '../../api';
+import { toastError, useApp } from '../../store';
 import { Button, cx, Empty, Field, Input, Menu, Segmented, Select, type MenuItem } from '../ui';
 import type { Rule, RuleColumn, RuleCondition, RuleKind, RuleOperator, RulesState } from '../DebuggerRules';
 
-const fail = (e: unknown) => useApp.getState().toast(asError(e).message, 'error');
 const toast = (m: string) => useApp.getState().toast(m, 'success');
 
 /** The hits keep counting while traffic flows: the rule panels read them again every two seconds. */
@@ -40,7 +39,7 @@ export function RuleList({
   const f = find.trim().toLowerCase();
   const rules = (state?.rules ?? []).filter((r) => kinds.includes(r.kind) && (!f || r.name.toLowerCase().includes(f) || (r.summary ?? '').toLowerCase().includes(f)));
   const hits = state?.hits ?? {};
-  const act = (p: Promise<RulesState>) => void p.then(onChange, fail);
+  const act = (p: Promise<RulesState>) => void p.then(onChange, toastError);
   const addButton = (
     <Button size="sm" icon={<Plus size={12} />} onClick={add.onClick} title={add.label}>
       Add
@@ -231,7 +230,7 @@ export function HighlightRuleEditor({ rule, onSaved, onCancel }: { rule?: Rule; 
     })
       // a new highlight goes first: the first rule that matches colours the row, and this is the one just made
       .then((s) => (rule ? s : call<RulesState>('debug.moveRule', { id: (s as RulesState & { rule?: Rule }).rule?.id ?? '', to: 0 })))
-      .then((s) => (onSaved(s), toast(`Saved ${name}`)), fail);
+      .then((s) => (onSaved(s), toast(`Saved ${name}`)), toastError);
   return (
     <div className="flex-1 min-h-0 overflow-auto p-3 grid gap-3 content-start text-sm" data-highlight-editor>
       <div className="flex items-end gap-2">

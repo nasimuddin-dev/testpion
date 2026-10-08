@@ -60,7 +60,7 @@ function uptimeSince(runs: RunPoint[], ms: number): number | undefined {
 const pct = (v?: number) => (v === undefined ? '—' : `${v}%`);
 
 /** Availability, like a status page: one block per run (oldest → newest), passed or not, with uptime over 24 h and 7 days. */
-export function AvailabilityStrip({ runs }: { runs: RunPoint[] }) {
+function AvailabilityStrip({ runs }: { runs: RunPoint[] }) {
   const ordered = useMemo(() => [...runs].slice(0, 90).reverse(), [runs]);
   const [ref, width] = useWidth<HTMLDivElement>();
   const [hover, setHover] = useState<number>();
@@ -105,7 +105,7 @@ export function AvailabilityStrip({ runs }: { runs: RunPoint[] }) {
 }
 
 /** Run time over the last runs: one line (one axis), each point coloured by its result, the median dashed. */
-export function RunTimeChart({ runs }: { runs: RunPoint[] }) {
+function RunTimeChart({ runs }: { runs: RunPoint[] }) {
   const ordered = useMemo(() => [...runs].slice(0, 60).reverse(), [runs]);
   const sorted = ordered.map((r) => r.durationMs).sort((a, b) => a - b);
   const median = sorted.length ? sorted[Math.floor((sorted.length - 1) / 2)]! : 0;
@@ -127,7 +127,7 @@ export function RunTimeChart({ runs }: { runs: RunPoint[] }) {
 }
 
 /** Requests per run: passed stacked under failed (failed + errors), one column per run. */
-export function RequestsChart({ runs }: { runs: RunPoint[] }) {
+function RequestsChart({ runs }: { runs: RunPoint[] }) {
   const ordered = useMemo(() => [...runs].slice(0, 40).reverse(), [runs]);
   const anyFailed = ordered.some((r) => r.failed + r.errors > 0);
   return (
@@ -158,7 +158,7 @@ export function RequestsChart({ runs }: { runs: RunPoint[] }) {
 
 /** The monitor's charts: availability across the top, run time and requests side by side. */
 /** p95 response time of each run's requests, with the monitor's limit dashed (points over it in red). */
-export function ResponseP95Chart({ runs, limit }: { runs: RunPoint[]; limit?: number }) {
+function ResponseP95Chart({ runs, limit }: { runs: RunPoint[]; limit?: number }) {
   const ordered = useMemo(() => [...runs].filter((r) => typeof r.p95Ms === 'number').slice(0, 60).reverse(), [runs]);
   if (ordered.length < 2 && limit === undefined) return null;
   if (!ordered.length) return null;
@@ -198,7 +198,7 @@ const dayColor = (d: MonitorDay) => (!d.runs ? 'var(--line)' : d.uptime === 100 
 const dayLabel = (date: string) => new Date(`${date}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
 
 /** Uptime per day over 30 days, like a status page: one block per calendar day (in this browser's time zone). */
-export function DailyUptime({ monitorId, refresh }: { monitorId: string; refresh?: string }) {
+function DailyUptime({ monitorId, refresh }: { monitorId: string; refresh?: string }) {
   const [days, setDays] = useState<MonitorDay[]>([]);
   useEffect(() => {
     let live = true;

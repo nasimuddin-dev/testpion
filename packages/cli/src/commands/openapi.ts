@@ -1,11 +1,9 @@
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, relative, resolve as resolvePath, sep } from 'node:path';
 import type { Command } from 'commander';
 import {
-  ChainSecretStore,
-  createEngineContext,
-  EnvSecretStore,
   fetchImportText,
+  findCollection,
   fuzzCases,
   writeFlows,
   fuzzMarkdown,
@@ -17,7 +15,7 @@ import {
   type FuzzVerdict,
   type HttpRequestSpec,
 } from '@testpion/core';
-import { readDefinition, EXIT, bold, dim, green, red, yellow, CliError, openWorkspace } from '../shared.js';
+import { EXIT, green, red, yellow, dim, bold, CliError, printJson, openWorkspace, withWorkspace, cliContext, requireEnvironment, readDefinition } from '../shared.js';
 
 /** `testpion openapi-ops <spec>`: an OpenAPI document's operations, the way its docs read. */
 export function registerOpenApiCommands(program: Command): void {
@@ -39,7 +37,7 @@ export function registerOpenApiCommands(program: Command): void {
       }
       const tags = outline.tags.filter((t) => !o.tag || t.name.toLowerCase() === o.tag.toLowerCase());
       if (o.tag && !tags.length) throw new CliError(`No tag "${o.tag}": ${outline.tags.map((t) => t.name).join(', ')}`, EXIT.CONFIG_ERROR);
-      if (o.json) return console.log(JSON.stringify({ ...outline, tags }, null, 2));
+      if (o.json) return printJson({ ...outline, tags });
       console.log(bold(`${outline.title}${outline.version ? ` ${outline.version}` : ''}: ${outline.operations} operations`) + (outline.servers.length ? dim(`  ${outline.servers.join(', ')}`) : ''));
       for (const t of tags) {
         console.log(`\n${bold(t.name)}${t.description ? dim(`  ${t.description.split('\n')[0]}`) : ''}`);
@@ -90,12 +88,7 @@ export function registerOpenApiCommands(program: Command): void {
           json?: boolean;
         },
       ) => {
-        let text: string;
-        try {
-          text = await readDefinition(ref, o.workspace);
-        } catch (e) {
-          throw new CliError(`Cannot read ${ref}: ${(e as Error).message}`, EXIT.CONFIG_ERROR);
-        }
+        const text = await readDefinition(ref, o.workspace);
         let resolve: ((r: HttpRequestSpec) => HttpRequestSpec) | undefined;
         let close = () => undefined as void;
         const vars = Object.fromEntries((o.var ?? []).map((kv) => (kv.includes('=') ? [kv.slice(0, kv.indexOf('=')), kv.slice(kv.indexOf('=') + 1)] : [kv, ''])));
@@ -103,14 +96,18 @@ export function registerOpenApiCommands(program: Command): void {
         if (!o.environment && Object.keys(vars).length)
           resolve = (r) => JSON.parse(JSON.stringify(r).replace(/\{\{\s*([\w.-]+)\s*\}\}/g, (m, k: string) => (k in vars ? JSON.stringify(vars[k]).slice(1, -1) : m)));
         if (o.environment) {
-          const { store } = openWorkspace(o.workspace, undefined, new WorkspaceManager());
-          const env = store.getEnvironment(o.environment);
-          if (!env) throw new CliError(`No environment "${o.environment}"`, EXIT.CONFIG_ERROR);
+          const { store, ephemeral } = openWorkspace(o.workspace, undefined, new WorkspaceManager());
+          close = () => {
+            store.close();
+            if (ephemeral) rmSync(ephemeral, { recursive: true, force: true });
+          };
+          const env = requireEnvironment(store, o.environment);
           if (env.isProduction) throw new CliError(`${env.name} is a production environment: fuzzing sends invalid and data-changing requests, so it is not run there`, EXIT.CONFIG_ERROR);
-          const ctx = createEngineContext({ store, secrets: new ChainSecretStore([new EnvSecretStore()]), settings: new WorkspaceManager().loadSettings(), environment: o.environment });
+          const ctx = cliContext(store, o.environment);
           for (const [k, v] of Object.entries(vars)) ctx.vars.set(k, v);
           resolve = (r) => ctx.vars.resolveDeep(r);
-          close = () => void ctx.dispose().finally(() => store.close());
+          const closeStore = close;
+          close = () => void ctx.dispose().finally(closeStore);
         }
         try {
           const baseUrl = o.baseUrl ?? (o.environment && resolve ? resolve({ method: 'GET', url: '{{baseUrl}}' }).url.replace(/\{\{baseUrl\}\}/, '') || undefined : undefined);
@@ -122,16 +119,13 @@ export function registerOpenApiCommands(program: Command): void {
           });
           if (o.markdown) writeFileSync(o.markdown, fuzzMarkdown(report));
         if (o.saveTests) {
-          const { store } = openWorkspace(o.workspace, undefined, new WorkspaceManager());
-          try {
+          return withWorkspace(o.workspace, (store) => {
             const rel = relative(store.root, resolvePath(ref)).split(sep).join('/');
             const saved = writeFuzzFindingTests(store, rel.startsWith('..') ? `specs/${basename(ref)}` : rel, report, { baseUrl: runBase || undefined });
             if (!o.json) console.error(saved ? green(`${saved.path}: ${saved.tests} regression tests`) : dim('Nothing to save as tests.'));
-          } finally {
-            store.close();
-          }
+          });
         }
-          if (o.json) console.log(JSON.stringify(report, null, 2));
+          if (o.json) printJson(report);
           else {
             const c = report.counts;
             console.log(
@@ -167,24 +161,21 @@ export function registerOpenApiCommands(program: Command): void {
     .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
     .option('--json', 'print the result as JSON (for scripts and AI agents)')
     .action((source: string, o: { overwrite?: boolean; workspace?: string; json?: boolean }) => {
-      const { store } = openWorkspace(o.workspace, undefined, new WorkspaceManager());
-      try {
+      return withWorkspace(o.workspace, (store) => {
         const spec = source.replace(/\\/g, '/');
-        const col = /\.(ya?ml|json)$/i.test(spec) ? undefined : store.listCollections().find((c) => c.id === source || c.name.toLowerCase() === source.toLowerCase());
+        const col = /\.(ya?ml|json)$/i.test(spec) ? undefined : findCollection(store, source);
         if (!col && !/\.(ya?ml|json)$/i.test(spec)) throw new CliError(`No collection "${source}" and not an API definition file`, EXIT.CONFIG_ERROR);
         const r = writeFlows(store, col ? { collection: store.getCollection(col.id) } : { spec }, { overwrite: o.overwrite });
-        if (o.json) return console.log(JSON.stringify({ written: r.written.map((f) => ({ path: f.path, tests: f.tests })), skipped: r.skipped, resources: r.resources, variables: r.variables }, null, 2));
+        if (o.json) return printJson({ written: r.written.map((f) => ({ path: f.path, tests: f.tests })), skipped: r.skipped, resources: r.resources, variables: r.variables });
         if (!r.written.length && !r.skipped.length) return console.log(yellow('No resource to make a flow of: the API needs a POST with a sibling GET/PUT/DELETE /{id} path.'));
         for (const f of r.written) console.log(green(`  ${f.path}`) + dim(`  ${f.tests} steps`));
         for (const s of r.skipped) console.log(yellow(`  ${s} exists: kept (--overwrite replaces it)`));
         console.log(dim(`Resources: ${r.resources.join(', ') || 'none'}. The environment must set ${r.variables.map((v) => `{{${v}}}`).join(', ')}.`));
         const suite = r.written.find((f) => f.path.endsWith('.suite.yaml'));
         if (suite) console.log(dim(`Review the bodies, then: testpion run --suite ${suite.path.replace(/^tests\//, '').replace(/\.suite\.yaml$/, '')} -e <environment>`));
-      } catch (e) {
+      }).catch((e) => {
         throw e instanceof CliError ? e : new CliError((e as Error).message, EXIT.CONFIG_ERROR);
-      } finally {
-        store.close();
-      }
+      });
     });
   program
     .command('tests-from-spec')
@@ -196,17 +187,14 @@ export function registerOpenApiCommands(program: Command): void {
     .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
     .option('--json', 'print the result as JSON (for scripts and AI agents)')
     .action((spec: string, o: { negative: boolean; includeDelete?: boolean; overwrite?: boolean; workspace?: string; json?: boolean }) => {
-      const { store } = openWorkspace(o.workspace, undefined, new WorkspaceManager());
-      try {
+      return withWorkspace(o.workspace, (store) => {
         const r = writeTestsFromSpec(store, spec.replace(/\\/g, '/'), { negative: o.negative, includeDelete: o.includeDelete, overwrite: o.overwrite });
-        if (o.json) return console.log(JSON.stringify({ written: r.written.map((f) => ({ path: f.path, tests: f.tests })), skipped: r.skipped }, null, 2));
+        if (o.json) return printJson({ written: r.written.map((f) => ({ path: f.path, tests: f.tests })), skipped: r.skipped });
         for (const f of r.written) console.log(green(`  ${f.path}`) + dim(`  ${f.tests} tests`));
         for (const s of r.skipped) console.log(yellow(`  ${s} exists: kept (--overwrite replaces it)`));
         if (r.written.length) console.log(dim(`Review the example values (ids, tokens), then: testpion run --suite ${r.written.at(-1)!.path.replace(/^tests\//, '').replace(/\.suite\.yaml$/, '')}`));
-      } catch (e) {
+      }).catch((e) => {
         throw new CliError((e as Error).message, EXIT.CONFIG_ERROR);
-      } finally {
-        store.close();
-      }
+      });
     });
 }

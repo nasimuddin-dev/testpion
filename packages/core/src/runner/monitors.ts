@@ -4,7 +4,7 @@ import type { LibraryItem, RunSummary } from '../model/types.js';
 import type { ExecServices } from './execute.js';
 import { ApsError } from '../errors.js';
 import { shortId } from '../util/ids.js';
-import { writeReports } from '../report/reports.js';
+import { recordRun } from './run-records.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { collectionRequests, runCollection } from './collection-run.js';
 import { collectionRealtimeTests } from './collection-realtime.js';
@@ -306,9 +306,7 @@ export async function executeMonitor(o: ExecuteMonitorOptions): Promise<MonitorR
     } finally {
       await ctx.dispose();
     }
-    writeFileSync(join(dir, 'summary.json'), JSON.stringify(summary, null, 2));
-    await writeReports(dir, summary, () => readResults(join(dir, 'results.jsonl')), ['json', 'html']);
-    store.meta.addRun(summary, dir);
+    await recordRun(store, summary, dir, { reports: ['json', 'html'] });
   } catch (e) {
     const r: MonitorResult = { ...base, durationMs: Date.now() - Date.parse(startedAt), status: 'error', total: 0, passed: 0, failed: 0, errors: 0, error: e instanceof Error ? e.message : String(e) };
     recordResult(store, r);
@@ -357,10 +355,6 @@ async function soonestCertificate(file: string): Promise<{ host: string; daysLef
     best = { host, daysLeft: d };
   }
   return best;
-}
-
-async function* readResults(file: string) {
-  yield* await readResultsFile(file);
 }
 
 export interface MonitorSchedulerOptions {

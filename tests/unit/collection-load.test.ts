@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { fakeServices } from '../helpers.js';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { McpManager, ProviderRegistry, Redactor, VariableScope, collectionLoadTarget, runLoadTest, type Collection, type ExecServices } from '../../packages/core/src/index.js';
+import { VariableScope, collectionLoadTarget, runLoadTest, type Collection, type ExecServices } from '../../packages/core/src/index.js';
 
 let server: Server;
 let base: string;
@@ -21,12 +22,7 @@ beforeAll(async () => {
 });
 afterAll(() => new Promise<void>((r) => server.close(() => r())));
 
-const services = (): ExecServices => {
-  const vars = new VariableScope();
-  vars.setScope('environment', { baseUrl: base });
-  const redactor = new Redactor();
-  return { vars, providers: new ProviderRegistry([], vars, redactor), mcp: new McpManager(() => undefined), mcpServers: [], redactor, pricing: [], defaultTimeoutMs: 5000 };
-};
+const services = (vars?: VariableScope): ExecServices => fakeServices({ scope: vars, vars: { baseUrl: base }, timeoutMs: 5000 });
 
 const collection = (): Collection => ({
   schemaVersion: '1.0',

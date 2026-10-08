@@ -98,7 +98,7 @@ function rootOf(blocks: BruBlock[]): Any {
 }
 
 /** A request .bru file as a Bruno JSON export item (undefined when it is not a request). */
-export function bruRequest(text: string, fallbackName: string): Any | undefined {
+function bruRequest(text: string, fallbackName: string): Any | undefined {
   const blocks = parseBru(text);
   const find = (n: string) => blocks.find((b) => b.name === n);
   const meta = dict(find('meta'));
@@ -145,7 +145,7 @@ export function bruRequest(text: string, fallbackName: string): Any | undefined 
 }
 
 /** An environments/*.bru file as a Bruno JSON export environment. Secret variables have no value in the file. */
-export function bruEnvironment(text: string, name: string): Any {
+function bruEnvironment(text: string, name: string): Any {
   const blocks = parseBru(text);
   const vars = nv(blocks.find((b) => b.name === 'vars'));
   const secrets = blocks.find((b) => b.name === 'vars:secret')?.list ?? [];

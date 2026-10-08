@@ -1,4 +1,5 @@
 import type { Collection, CollectionNode } from '../model/types.js';
+import { escapeRegex } from '../util/redact.js';
 
 /**
  * Tidy up a collection (the collection's Tidy up, `testpion tidy`, `collection_tidy`): what piles up in big or imported
@@ -146,7 +147,7 @@ export function tidyCollection(c: Collection): TidyFinding[] {
   };
   collect([c.items, c.auth, c.preRequestScript, c.testScript, (c.variables ?? []).map((v) => v.value)]);
   for (const v of c.variables ?? []) {
-    const name = v.key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const name = escapeRegex(v.key);
     const re = new RegExp(`\\{\\{\\s*${name}[\\s}.]|(variables|collectionVariables|environment|globals)\\.(get|has)\\(\\s*['"\`]${name}['"\`]`);
     const used = strings.some((x) => re.test(x));
     if (!used) findings.push({ kind: 'unused-variable', message: `{{${v.key}}} is not used by any request or script of the collection`, ids: [], where: [], variable: v.key });

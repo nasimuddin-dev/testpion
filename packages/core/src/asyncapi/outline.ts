@@ -1,6 +1,7 @@
 import { parse as parseYaml } from 'yaml';
 import { ApsError } from '../errors.js';
 import { schemaOutline } from '../openapi/outline.js';
+import { deref } from '../util/json-ref.js';
 
 /**
  * An AsyncAPI 2 / 3 document as a reader sees it (the API definition's Preview for an AsyncAPI document): its servers,
@@ -34,14 +35,6 @@ export interface AsyncApiOutline {
   asyncapi: string;
   servers: Array<{ name: string; url: string; protocol: string }>;
   channels: AsyncOutlineChannel[];
-}
-
-function deref(doc: Json, node: any, seen = 0): any {
-  if (!node || typeof node !== 'object' || typeof node.$ref !== 'string' || seen > 20) return node;
-  if (!node.$ref.startsWith('#/')) return {};
-  let cur: any = doc;
-  for (const p of node.$ref.slice(2).split('/')) cur = cur?.[decodeURIComponent(p.replace(/~1/g, '/').replace(/~0/g, '~'))];
-  return deref(doc, cur, seen + 1);
 }
 
 function message(doc: Json, m0: unknown, i: number): AsyncOutlineMessage {

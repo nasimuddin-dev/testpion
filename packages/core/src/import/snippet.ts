@@ -69,7 +69,7 @@ const HTTPIE_VALUE_FLAGS = new Set(['-a', '--auth', '-A', '--auth-type', '--time
  * name=value is a JSON string field (a form field with --form), name:=json raw JSON, name==value a
  * query parameter, Name:value a header, field@file a file (multipart).
  */
-export function parseHttpie(text: string): HttpRequestSpec {
+function parseHttpie(text: string): HttpRequestSpec {
   const args = shellSplit(text.trim());
   const prog = (args.shift() ?? '').toLowerCase();
   let form = false;

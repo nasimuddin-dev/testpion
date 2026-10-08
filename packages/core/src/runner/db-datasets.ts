@@ -40,7 +40,7 @@ export function redactDbUrl(url: string): string {
 }
 
 /** One read-only statement, as datasets only read. */
-export function assertReadOnlyQuery(sql: string | undefined, kind: string): string {
+function assertReadOnlyQuery(sql: string | undefined, kind: string): string {
   const s = sql?.trim().replace(/;\s*$/, '');
   if (!s)
     throw new ApsError('ConfigurationError', `A ${kind} dataset needs a query (for example SELECT * FROM users)`, {

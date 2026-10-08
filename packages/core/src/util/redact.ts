@@ -38,6 +38,11 @@ export class Redactor {
    * Exact match (case/separator-insensitive), or the key *ends with* a configured field:
    * `accessToken`, `x-api-key`, `client_secret` match; `totalTokens`, `maxTokens` do not.
    */
+  /** Headers with the values of the sensitive ones (authorization, cookie, api keys …) masked as `***`. */
+  redactHeaders(headers: Record<string, string>): Record<string, string> {
+    return Object.fromEntries(Object.entries(headers).map(([k, v]) => [k, this.isSensitiveKey(k) ? '***' : v]));
+  }
+
   isSensitiveKey(key: string): boolean {
     return this.matchKey(key) !== 'none';
   }
@@ -106,7 +111,8 @@ function norm(s: string): string {
   return s.toLowerCase().replace(/[-_\s.]/g, '');
 }
 
-function escapeRegex(s: string): string {
+/** A string as a literal for a RegExp source: every special character escaped. */
+export function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 

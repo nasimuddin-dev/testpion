@@ -5,6 +5,8 @@ import { useApp } from '../store';
 import type { HttpRequestSpec } from '../types';
 import { CodeEditor } from './CodeEditor';
 import { Button, cx, Modal, Toggle } from './ui';
+import { usePersisted } from '../lib/sticky';
+import { useCopied } from '../lib/clipboard';
 
 interface Lang {
   id: string;
@@ -16,16 +18,15 @@ interface Lang {
 export function CodeModal({ request, collectionId, requestId, onClose }: { request: HttpRequestSpec; collectionId?: string; requestId?: string; onClose(): void }) {
   const env = useApp((s) => s.environment);
   const [langs, setLangs] = useState<Lang[]>([]);
-  const [lang, setLang] = useState(() => localStorage.getItem('aps.codeLang') ?? 'curl');
+  const [lang, setLang] = usePersisted('aps.codeLang', 'curl', { text: true });
   const [reveal, setReveal] = useState(false);
   const [code, setCode] = useState('');
-  const [copied, setCopied] = useState(false);
+  const { copied, copy } = useCopied();
   useEffect(() => {
     void call<Lang[]>('http.codeLanguages').then(setLangs);
   }, []);
   const requestKey = JSON.stringify(request);
   useEffect(() => {
-    localStorage.setItem('aps.codeLang', lang);
     call<string>('http.code', { request, environment: env, collectionId, requestId, language: lang, revealSecrets: reveal }).then(setCode, (e) => setCode(`// ${asError(e).message}`));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lang, reveal, requestKey, env, collectionId, requestId]);
@@ -43,11 +44,7 @@ export function CodeModal({ request, collectionId, requestId, onClose }: { reque
           <Button
             variant="primary"
             icon={copied ? <Check size={13} /> : <Copy size={13} />}
-            onClick={() => {
-              void navigator.clipboard.writeText(code);
-              setCopied(true);
-              setTimeout(() => setCopied(false), 1500);
-            }}
+            onClick={() => void copy(code)}
           >
             {copied ? 'Copied' : 'Copy'}
           </Button>

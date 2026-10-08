@@ -26,11 +26,11 @@ import {
 } from 'lucide-react';
 import { downloadContent, generateFlows } from '../lib/files';
 import { useCallback, useEffect, useState } from 'react';
-import { asError, call } from '../api';
-import { confirmAction, promptText, useApp } from '../store';
+import { call } from '../api';
+import { confirmAction, promptText, toastError, useApp } from '../store';
 import { useIntent } from '../hooks';
 import type { Collection, CollectionNode } from '../types';
-import { download, timeAgo, uid, plural } from '../lib/format';
+import { timeAgo, uid, plural } from '../lib/format';
 import { AuthEditor } from '../components/AuthEditor';
 import { ScriptsPanel } from '../components/ScriptsPanel';
 import { CollectionRunner } from '../components/CollectionRunner';
@@ -45,6 +45,7 @@ import { closeTabsFor } from '../components/EditorTabs';
 import { subtreeIds } from '../components/MoveDialog';
 import { ImportModal } from './rest/dialogs';
 import { SecurityReviewDialog } from '../components/SecurityReviewDialog';
+import { refreshCollections, useCollections } from '../lib/collections-store';
 
 export function CollectionsView() {
   const [trashOpen, setTrashOpen] = useState(false);
@@ -53,7 +54,7 @@ export function CollectionsView() {
   const [tidyOpen, setTidyOpen] = useState(false);
   const [moveVarsOpen, setMoveVarsOpen] = useState(false);
   const [moveVarsInitial, setMoveVarsInitial] = useState<string[]>();
-  const [cols, setCols] = useState<Collection[]>([]);
+  const cols = useCollections();
   const [sel, setSel] = useState<string>();
   const [draft, setDraft] = useState<Collection>();
   const [tab, setTab] = useState<'overview' | 'requests' | 'variables' | 'auth' | 'scripts' | 'docs' | 'run' | 'mock'>('requests');
@@ -68,8 +69,7 @@ export function CollectionsView() {
     }
   };
   const load = useCallback(async () => {
-    const c = await call<Collection[]>('col.list');
-    setCols(c);
+    const c = await refreshCollections();
     setSel((s) => s ?? c[0]?.id);
   }, []);
   useEffect(() => {
@@ -111,7 +111,7 @@ export function CollectionsView() {
       setDraft({ ...draft, name });
       await load();
     } catch (e) {
-      useApp.getState().toast(asError(e).message, 'error');
+      toastError(e);
     }
   };
   const save = async (c: Collection) => {
@@ -122,13 +122,13 @@ export function CollectionsView() {
   const exportAs = async (id: string, format: 'testpion' | 'postman' | 'openapi' | 'bruno' | 'http' | 'asyncapi') => {
     try {
       const r = await call<{ path?: string; collection?: unknown; text?: string; name: string; notes: string[] }>('col.export', { id, format });
-      if (r.collection) download(r.name, JSON.stringify(r.collection, null, 2));
-      else if (r.text !== undefined) download(r.name, r.text);
+      if (r.collection) downloadContent(r.name, JSON.stringify(r.collection, null, 2), { type: 'application/json' });
+      else if (r.text !== undefined) downloadContent(r.name, r.text, { type: 'application/json' });
       else if (!r.path) return;
       const extra = r.notes.length ? ` Not exported (no Postman equivalent): ${r.notes.join('; ')}.` : '';
       useApp.getState().toast(`${r.path ? `Exported to ${r.path}.` : 'Exported.'}${extra}`, r.notes.length ? 'info' : 'success');
     } catch (e) {
-      useApp.getState().toast(asError(e).message, 'error');
+      toastError(e);
     }
   };
   const open = (c: Collection, n: CollectionNode) => useApp.getState().openIntent(n.kind === 'graphql' ? 'graphql' : 'rest', { collectionId: c.id, requestId: n.id });
@@ -181,7 +181,7 @@ export function CollectionsView() {
                               if (r.bundle) downloadContent(`${useApp.getState().workspace?.name ?? 'workspace'}.apsworkspace.json`, JSON.stringify(r.bundle, null, 2), { type: 'application/json' });
                               if (r.path || r.bundle) useApp.getState().toast('Workspace exported (secret values are never exported)', 'success');
                             },
-                            (e) => useApp.getState().toast(asError(e).message, 'error'),
+                            (e) => toastError(e),
                           ),
                       },
                     ];

@@ -1,7 +1,7 @@
 import { RotateCcw } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { asError, call } from '../api';
-import { confirmAction, useApp } from '../store';
+import { call } from '../api';
+import { confirmAction, toastError, useApp } from '../store';
 import { Button, cx, Empty, Modal, Spinner } from './ui';
 import { PartsTable } from './PartsTable';
 
@@ -32,7 +32,7 @@ export function GitItemHistory({ target, name, onClose }: { target: HistoryTarge
   const what = 'environmentId' in target ? 'environment' : target.itemId ? 'request' : 'collection';
   useEffect(() => {
     void call<{ file: string; itemId?: string; versions: Commit[] }>('git.history', target).then(setHistory, (e) => {
-      useApp.getState().toast(asError(e).message, 'error');
+      toastError(e);
       setHistory({ file: '', versions: [] });
     });
   }, [JSON.stringify(target)]);
@@ -62,7 +62,7 @@ export function GitItemHistory({ target, name, onClose }: { target: HistoryTarge
       useApp.getState().toast(`Restored ${name} from ${v.short}`, 'success');
       onClose();
     } catch (e) {
-      useApp.getState().toast(asError(e).message, 'error');
+      toastError(e);
     }
   };
   const rows = (diff?.parts ?? []).filter((p) => !onlyDiffs || p.differs).map((p) => ({ part: p.part, differs: p.differs, values: { then: p.before, now: p.after } }));

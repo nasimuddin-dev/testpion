@@ -1,19 +1,6 @@
 import { describe, it, expect, afterAll, beforeAll } from 'vitest';
-import {
-  McpManager,
-  ProviderRegistry,
-  Redactor,
-  VariableScope,
-  KafkaSession,
-  normalizeTest,
-  parseKafkaUrl,
-  realtimeModeFor,
-  runRealtimeExchange,
-  runTests,
-  type ExecServices,
-  type KafkaMessage,
-  type TestResult,
-} from '../../packages/core/src/index.js';
+import { fakeServices } from '../helpers.js';
+import { Redactor, VariableScope, KafkaSession, normalizeTest, parseKafkaUrl, realtimeModeFor, runRealtimeExchange, runTests, type ExecServices, type KafkaMessage, type TestResult } from '../../packages/core/src/index.js';
 import { startKafkaBroker } from '../../examples/servers/kafka-broker.mjs';
 
 // Kafka as a realtime mode: a session (produce, read from the beginning or new messages, list topics), the scripted
@@ -29,10 +16,7 @@ afterAll(async () => {
   await broker.close();
 });
 
-function services(vars = new VariableScope()): ExecServices {
-  const redactor = new Redactor();
-  return { vars, providers: new ProviderRegistry([], vars, redactor), mcp: new McpManager(() => undefined), mcpServers: [], redactor, pricing: [], defaultTimeoutMs: 15_000 };
-}
+const services = (vars?: VariableScope): ExecServices => fakeServices({ scope: vars, timeoutMs: 15_000 });
 const waitFor = async (check: () => boolean, ms = 10_000) => {
   const until = Date.now() + ms;
   while (!check()) {

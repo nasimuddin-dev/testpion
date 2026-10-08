@@ -1,5 +1,4 @@
-import { readResultsFile, runTests } from '../runner/runner.js';
-import { compareToBaseline, createBaseline } from '../report/regression.js';
+import { runTests } from '../runner/runner.js';
 import { breakdownOfRun, reviewResult, runResultsFile, runReviewReport } from '../runner/run-results.js';
 import { monitorRequestStats } from '../runner/monitor-requests.js';
 import { streamTests } from '../runner/loader.js';
@@ -19,7 +18,7 @@ import {
   ListToolsRequestSchema,
   ReadResourceRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import type { AppSettings, CheckConfig, Collection, CollectionNode, HttpRequestSpec, RunSummary, TestResult } from '../model/types.js';
+import type { AppSettings, CheckConfig, Collection, CollectionNode, HttpRequestSpec, TestResult } from '../model/types.js';
 import { AGENT_PROMPTS, agentGuide, toolAnnotations } from './agent-kit.js';
 import { checkTypes } from '../eval/checks.js';
 import { isSuiteFile, loadSuite, loadTestsFromFile } from '../runner/loader.js';
@@ -43,7 +42,7 @@ import { executeHttp, timingSummary } from '../protocols/http/client.js';
 import { describeRoot, executeGrpc, grpcRoot, parseGrpcTarget } from '../protocols/grpc/grpc.js';
 import { reflectServer } from '../protocols/grpc/reflection.js';
 import { runRealtimeExchange, type RealtimeExchange } from '../protocols/realtime.js';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { workspaceEditTools } from './workspace-edit-tools.js';
 import { gitTools } from './git-tools.js';
 import { openApiTools } from './openapi-tools.js';
@@ -56,7 +55,7 @@ import { McpSession } from '../protocols/mcp/client.js';
 import { runCollection } from '../runner/collection-run.js';
 import { appendDatasetRow, listWorkspaceDatasets, readDataset, type DatasetRecord } from '../runner/datasets.js';
 import { dbKindOf } from '../runner/db-datasets.js';
-import { collectionVariableFlow, referencedVariableNames } from '../runner/variable-flow.js';
+import { collectionVariableFlow, definedVariableNames, unusedVariables } from '../runner/variable-flow.js';
 import { collectionRealtimeTests, collectionSavedItems } from '../runner/collection-realtime.js';
 import { collectionMarkdown } from '../report/collection-docs.js';
 import { detectRequestSnippet, parseRequestSnippet } from '../import/snippet.js';
@@ -66,14 +65,16 @@ import { fetchImportText } from '../import/fetch-url.js';
 import { diffOpenApi } from '../openapi/diff.js';
 import { workspaceApiCoverage } from '../openapi/coverage.js';
 import { evaluationTests, findSavedEvaluation, listSavedEvaluations } from '../runner/saved-evaluations.js';
-import { certificateLint, securityLint, variableFlow } from '../eval/security.js';
+import { collectionSecurityFindings } from '../runner/collection-findings.js';
+import { compareRuns, recordRun } from '../runner/run-records.js';
+import { readSpecRef } from '../openapi/spec-files.js';
 import { collectSubscriptionEvents } from '../protocols/graphql/subscription.js';
 import { introspect } from '../protocols/graphql/graphql.js';
 import { buildGraphQLOperation } from '../protocols/graphql/operation-builder.js';
 import { exportOtlp } from '../trace/otlp.js';
 import { collectionToOpenApiText } from '../openapi/from-collection.js';
 import { renameVariable, variableUsages } from '../storage/variable-refactor.js';
-import { setEnvironmentVariables } from '../storage/env-edit.js';
+import { requireCollection, requireEnvironment, setEnvironmentVariables } from '../storage/env-edit.js';
 import { runLoadTest, type LoadTarget } from '../load/load.js';
 import { collectionLoadTarget } from '../load/collection-load.js';
 import { compareHistory } from '../storage/history-compare.js';
@@ -113,18 +114,9 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
   const { store, secrets, settings } = opts;
   const redactor = new Redactor(settings.redactFields);
   const collections = () => store.listCollections().filter((c) => !c.problem);
-  const findCollection = (ref: unknown): Collection => {
-    const r = String(ref ?? '').toLowerCase();
-    const c = collections().find((x) => x.id.toLowerCase() === r) ?? collections().find((x) => x.name.toLowerCase() === r);
-    if (!c) throw new ApsError('ConfigurationError', `No collection "${String(ref)}". Available: ${collections().map((x) => x.name).join(', ') || 'none'}`);
-    return c;
-  };
+  const findCollection = (ref: unknown): Collection => requireCollection(store, String(ref ?? ''), { loadable: true });
   /** An OpenAPI document given as an http(s) link, a path inside the workspace (never outside it) or the text itself. */
-  const readSpecRef = async (ref: string): Promise<string> => {
-    if (/^https?:\/\//i.test(ref)) return (await fetchImportText(ref)).text;
-    if (!/[\n{]/.test(ref) && /\.(json|ya?ml)$/i.test(ref)) return readFileSync(store.safePath(ref), 'utf8');
-    return ref;
-  };
+  const readSpec = (ref: string): Promise<string> => readSpecRef(store, ref);
   type Flat = { node: Exclude<CollectionNode, { kind: 'folder' }>; folder: string };
   const flatten = (nodes: CollectionNode[], path: string[] = []): Flat[] => nodes.flatMap((n) => (n.kind === 'folder' ? flatten(n.items, [...path, n.name]) : [{ node: n, folder: path.join(' / ') }]));
   const findRequest = (c: Collection, ref: unknown): Flat => {
@@ -142,7 +134,6 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
     const ctx = createEngineContext({ store, secrets, settings, environment });
     const runId = shortId('run-');
     const outDir = store.runDir(runId);
-    mkdirSync(outDir, { recursive: true });
     const results: TestResult[] = [];
     try {
       const summary = await runTests({
@@ -157,8 +148,7 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
         environment,
         onEvent: (e: RunEvent) => void (e.type === 'test-end' && results.push(e.result)),
       });
-      writeFileSync(join(outDir, 'summary.json'), JSON.stringify(summary, null, 2));
-      store.meta.addRun(summary, outDir);
+      await recordRun(store, summary, outDir);
       return { summary, runId, total: summary.total, passed: summary.passed, failed: summary.failed, errors: summary.errors, durationMs: summary.durationMs, results: results.slice(0, 200).map(summarizeResult) };
     } finally {
       await ctx.dispose();
@@ -679,7 +669,7 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
         const c = findCollection(a.collection);
         const ctx = createEngineContext({ store, secrets, settings, environment: checkEnvironment(a.environment), collectionId: c.id });
         try {
-          return [...securityLint(c, settings.redactFields), ...certificateLint(c, (u) => ctx.vars.resolve(u), listCertificates(store)), ...variableFlow(c, Object.keys(ctx.vars.toObject()))];
+          return collectionSecurityFindings(store, c, ctx, settings.redactFields);
         } finally {
           await ctx.dispose();
         }
@@ -712,7 +702,7 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
       description:
         'Compare two versions of an OpenAPI / Swagger document and list breaking changes (removed operations or success responses, new required parameters or body fields, type changes, removed or now-optional response fields, narrowed enums) and non-breaking ones. `old` and `new` are each an http(s) link, a path inside the workspace (e.g. specs/pets.openapi.json) or the document text.',
       inputSchema: { type: 'object', properties: { old: str('Previous version: link, workspace path or text'), new: str('New version: link, workspace path or text') }, required: ['old', 'new'] },
-      run: async (a) => diffOpenApi(await readSpecRef(String(a.old ?? '')), await readSpecRef(String(a.new ?? ''))),
+      run: async (a) => diffOpenApi(await readSpec(String(a.old ?? '')), await readSpec(String(a.new ?? ''))),
     },
     {
       name: 'api_coverage',
@@ -730,7 +720,7 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
         required: ['spec'],
       },
       run: async (a) => {
-        const { report, sources } = await workspaceApiCoverage(store, await readSpecRef(String(a.spec ?? '')), {
+        const { report, sources } = await workspaceApiCoverage(store, await readSpec(String(a.spec ?? '')), {
           runs: Array.isArray(a.runs) && a.runs.length ? a.runs.map(String) : undefined,
           history: typeof a.history === 'number' && a.history > 0 ? Math.min(a.history, 10_000) : undefined,
           baseUrl: a.baseUrl ? String(a.baseUrl) : undefined,
@@ -788,13 +778,7 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
       inputSchema: { type: 'object', properties: { order: { type: 'array', items: { type: 'string' }, description: 'Environment names or ids, first to last' } }, required: ['order'] },
       run: (a) => {
         const refs = Array.isArray(a.order) ? a.order.map((x) => String(x)) : [];
-        const envs = store.listEnvironments();
-        const ids = refs.map((r) => {
-          const e = envs.find((x) => x.id === r) ?? envs.find((x) => x.name.toLowerCase() === r.toLowerCase());
-          if (!e) throw new ApsError('ConfigurationError', `No environment "${r}". Available: ${envs.map((x) => x.name).join(', ') || 'none'}`);
-          return e.id;
-        });
-        return store.reorderEnvironments(ids).map((e) => e.name);
+        return store.reorderEnvironments(refs.map((r) => requireEnvironment(store, r).id)).map((e) => e.name);
       },
     },
     {
@@ -817,7 +801,7 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
       description: 'Every variable across every environment of the workspace: for each, whether it is set, empty, missing or disabled in each environment (and whether it is a secret), incomplete variables first. Never returns values. Use it to find a variable that one environment lacks.',
       inputSchema: { type: 'object', properties: { onlyIncomplete: { type: 'boolean', description: 'Only variables that are missing, empty or disabled somewhere' } } },
       run: (a) => {
-        const m = environmentMatrix(store.listEnvironments().map((e) => store.getEnvironment(e.id)!).filter(Boolean), { secrets });
+        const m = environmentMatrix(store, { secrets });
         return a.onlyIncomplete ? { ...m, rows: m.rows.filter((r) => r.incompleteIn.length) } : m;
       },
     },
@@ -1133,30 +1117,14 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
         },
         required: ['before', 'after'],
       },
-      run: async (a) => {
-        const summaryOf = (id: string) => {
-          const f = join(store.runDir(String(id)), 'summary.json');
-          if (!existsSync(f)) throw new ApsError('ValidationError', `No finished run ${String(id)}`);
-          return JSON.parse(readFileSync(f, 'utf8')) as RunSummary;
-        };
-        const before = summaryOf(String(a.before));
-        const after = summaryOf(String(a.after));
-        const baseline = await createBaseline(`run ${before.runId}`, before, await readResultsFile(join(store.runDir(before.runId), 'results.jsonl')));
-        return compareToBaseline(baseline, after, await readResultsFile(join(store.runDir(after.runId), 'results.jsonl')), { latencyPct: Number(a.latencyPct) || 25, tokensPct: 20, scoreDrop: 0.05 });
-      },
+      run: (a) => compareRuns(store, String(a.before), String(a.after), { latencyPct: Number(a.latencyPct) || 25, tokensPct: 20, scoreDrop: 0.05 }),
     },
     {
       name: 'unused_variables',
       description:
         'Variables defined in environments and the workspace that nothing in the workspace reads ({{name}} in requests, saved items, MCP servers, test files or other variables, or a script get). Use it to clean up; variable_usages double-checks one name before deleting it.',
       inputSchema: { type: 'object', properties: {} },
-      run: () => {
-        const used = referencedVariableNames(store);
-        return [
-          ...store.listEnvironments().map((e) => ({ scope: `environment ${e.name}`, unused: e.variables.map((v) => v.key).filter((k) => k && !used.has(k)) })),
-          { scope: 'workspace', unused: (store.workspace.variables ?? []).map((v) => v.key).filter((k) => k && !used.has(k)) },
-        ].filter((x) => x.unused.length);
-      },
+      run: () => unusedVariables(store),
     },
     {
       name: 'variable_flow',
@@ -1165,8 +1133,7 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
       inputSchema: { type: 'object', properties: { collection: str('Collection name or id') }, required: ['collection'] },
       run: (a) => {
         const c = findCollection(a.collection);
-        const defined = [...store.listEnvironments().flatMap((e) => e.variables.map((v) => v.key)), ...(store.workspace.variables ?? []).map((v) => v.key), ...(settings.globalVariables ?? []).map((v) => v.key)];
-        return collectionVariableFlow(c, defined);
+        return collectionVariableFlow(c, definedVariableNames(store, settings));
       },
     },
     {
@@ -1351,7 +1318,7 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
     },
     ...historyTools({ store, redactor, findCollection, findRequest }),
     ...gitTools({ store, findCollection, redactor }),
-    ...openApiTools({ store, readSpecRef, context: (environment) => createEngineContext({ store, secrets, settings, environment }) }),
+    ...openApiTools({ store, readSpecRef: readSpec, context: (environment) => createEngineContext({ store, secrets, settings, environment }) }),
     ...debuggerTools({ redactor, store }),
     ...workspaceEditTools({
       store,

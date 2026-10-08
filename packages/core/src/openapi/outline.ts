@@ -2,6 +2,7 @@ import { parse as parseYaml } from 'yaml';
 import { ApsError } from '../errors.js';
 import { importOpenApi } from '../import/importers.js';
 import type { CollectionNode, HttpRequestSpec } from '../model/types.js';
+import { deref } from '../util/json-ref.js';
 
 /**
  * An OpenAPI 3 / Swagger 2 document as a reader sees it (the API definition's Preview, `testpion openapi-ops`, the
@@ -51,12 +52,11 @@ export interface ApiOutline {
 type Json = Record<string, any>;
 const METHODS = ['get', 'post', 'put', 'patch', 'delete', 'head', 'options', 'trace'];
 
-export function deref(doc: Json, node: any, seen = 0): any {
-  if (!node || typeof node !== 'object' || typeof node.$ref !== 'string' || seen > 20) return node;
-  if (!node.$ref.startsWith('#/')) return {};
-  let cur: any = doc;
-  for (const p of node.$ref.slice(2).split('/')) cur = cur?.[decodeURIComponent(p.replace(/~1/g, '/').replace(/~0/g, '~'))];
-  return deref(doc, cur, seen + 1);
+export { deref };
+
+/** The success response of an operation: its first exact 2xx code, else a `2XX`-style range. */
+export function successCode(codes: string[]): string | undefined {
+  return codes.find((c) => /^2\d\d$/.test(c)) ?? codes.find((c) => /^2/i.test(c));
 }
 
 const refName = (node: any) => (node && typeof node.$ref === 'string' ? String(node.$ref).split('/').pop() : undefined);

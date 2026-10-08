@@ -49,7 +49,7 @@ export function TimeByPhase({ p }: { p: NonNullable<Breakdown['phases']> }) {
           <Swatch color="color-mix(in oklab, var(--accent) 50%, transparent)" label="Setting up connections" />
           <Swatch color="var(--accent)" label="The request itself" />
           <span className="ml-auto">
-            {p.newConnections} new connection{p.newConnections === 1 ? '' : 's'}, {p.reused} reused
+            {plural(p.newConnections, 'new connection')}, {p.reused} reused
           </span>
         </>
       }

@@ -1,8 +1,11 @@
 import { Check, Copy, Play, Radio, Square } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { asError, call, on } from '../api';
-import { useApp } from '../store';
+import { call, on } from '../api';
+import { toastError, useApp } from '../store';
 import { Badge, Button, cx, Empty, Field, Input, statusTone } from './ui';
+import { usePersisted } from '../lib/sticky';
+import { useCopied } from '../lib/clipboard';
+import { plural } from '../lib/format';
 
 interface MockInfo {
   running: boolean;
@@ -29,24 +32,12 @@ const portKey = (id: string) => `aps.mockPort.${id}`;
 export function MockPanel({ collectionId, onOpenRequest }: { collectionId: string; onOpenRequest(requestId: string): void }) {
   const toast = useApp((s) => s.toast);
   const [info, setInfo] = useState<MockInfo>({ running: false, routes: [] });
-  const [port, setPort] = useState(() => {
-    try {
-      return localStorage.getItem(portKey(collectionId)) ?? '';
-    } catch {
-      return '';
-    }
-  });
+  const [port, setPort] = usePersisted(portKey(collectionId), '', { text: true });
   const [delay, setDelay] = useState('');
-  const [fallback, setFallback] = useState(() => {
-    try {
-      return localStorage.getItem(`aps.mockFallback.${collectionId}`) ?? '';
-    } catch {
-      return '';
-    }
-  });
+  const [fallback, setFallback] = usePersisted(`aps.mockFallback.${collectionId}`, '', { text: true });
   const [busy, setBusy] = useState(false);
   const [hits, setHits] = useState<MockHit[]>([]);
-  const [copied, setCopied] = useState(false);
+  const { copied, copy } = useCopied();
 
   useEffect(() => {
     void call<MockInfo>('mock.status', { collectionId }).then(setInfo);
@@ -59,21 +50,11 @@ export function MockPanel({ collectionId, onOpenRequest }: { collectionId: strin
     try {
       const p = port.trim() ? Number(port) : undefined;
       if (p !== undefined && !(p > 0 && p < 65536)) throw new Error('Port must be between 1 and 65535, or empty for any free port');
-      try {
-        localStorage.setItem(`aps.mockFallback.${collectionId}`, fallback.trim());
-      } catch {
-        /* private mode */
-      }
       const r = await call<MockInfo>('mock.start', { collectionId, port: p, delayMs: delay ? Number(delay) : undefined, fallbackUrl: fallback.trim() || undefined });
       setInfo(r);
-      try {
-        localStorage.setItem(portKey(collectionId), p ? String(p) : '');
-      } catch {
-        /* ignore */
-      }
       toast(`Mock server running on ${r.url}`, 'success');
     } catch (e) {
-      toast(asError(e).message, 'error');
+      toastError(e);
     } finally {
       setBusy(false);
     }
@@ -125,11 +106,7 @@ export function MockPanel({ collectionId, onOpenRequest }: { collectionId: strin
               size="sm"
               variant="ghost"
               icon={copied ? <Check size={12} /> : <Copy size={12} />}
-              onClick={() => {
-                void navigator.clipboard.writeText(info.url!);
-                setCopied(true);
-                setTimeout(() => setCopied(false), 1500);
-              }}
+              onClick={() => void copy(info.url!)}
             >
               {copied ? 'Copied' : 'Copy URL'}
             </Button>
@@ -152,7 +129,7 @@ export function MockPanel({ collectionId, onOpenRequest }: { collectionId: strin
                   <td className="text-muted truncate">
                     {r.example} <span className="text-xs">· {r.request}</span>
                   </td>
-                  {info.running && <td className="w-16 pr-3 text-right text-xs tabular-nums" title="Requests answered with this example">{hitsOf(r) ? `${hitsOf(r)} hit${hitsOf(r) === 1 ? '' : 's'}` : <span className="text-muted">—</span>}</td>}
+                  {info.running && <td className="w-16 pr-3 text-right text-xs tabular-nums" title="Requests answered with this example">{hitsOf(r) ? `${plural(hitsOf(r), 'hit')}` : <span className="text-muted">—</span>}</td>}
                 </tr>
               ))}
             </tbody>

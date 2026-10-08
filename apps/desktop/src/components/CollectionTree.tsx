@@ -34,10 +34,10 @@ import type { Collection, CollectionFolder, CollectionNode, SavedHttpRequest } f
 import { asError, call, on } from '../api';
 import { Button, cx, Menu, menuKeys, rowActionClass, type MenuItem } from './ui';
 import { CountPill, focusRow, InlineRename } from './TreeParts';
-import { confirmAction, promptText, useApp } from '../store';
+import { confirmAction, promptText, toastError, useApp } from '../store';
 import { MoveDialog, subtreeIds } from './MoveDialog';
 import { closeTabsFor } from './EditorTabs';
-import { uid } from '../lib/format';
+import { plural, uid } from '../lib/format';
 import { FolderEditor } from './FolderEditor';
 import { ChangeMark } from './ChangeMark';
 import { GitItemHistory } from './GitItemHistory';
@@ -47,6 +47,7 @@ import { countCategory, hasCategory, isEmptyFolder, matchesCollectionNode, reque
 // the tree's data operations live in lib/collection-nodes (re-exported: views import them from here)
 export { mapNodes, findNode, addToFolder, insertBefore, folderIdsTo, withNewIds, duplicateNode } from '../lib/collection-nodes';
 import { mapNodes, findNode, addToFolder, insertBefore, folderIdsTo, withNewIds, duplicateNode } from '../lib/collection-nodes';
+import { usePersisted } from '../lib/sticky';
 
 /** Rows of one list (a collection's or folder's direct items) shown at first, and added by "Show more". */
 const LIST_PAGE = 300;
@@ -195,7 +196,7 @@ export function CollectionTree({
       const copy = await call<Collection>('col.duplicate', { id: c.id });
       useApp.getState().toast(`Duplicated as "${copy.name}"`, 'success');
     } catch (e) {
-      useApp.getState().toast(asError(e).message, 'error');
+      toastError(e);
     }
   };
   /** Move a collection to Recently deleted (restorable for 30 days); its tabs close. */
@@ -215,7 +216,7 @@ export function CollectionTree({
       await call('col.delete', { id: c.id });
       useApp.getState().toast(`Deleted "${c.name}"`, 'info');
     } catch (e) {
-      useApp.getState().toast(asError(e).message, 'error');
+      toastError(e);
     }
   };
   const renameNode = (_c: Collection, n: CollectionNode) => setRenaming(n.id);
@@ -356,7 +357,7 @@ export function CollectionTree({
         dryRun: true,
       });
       const skippedNote = r.skipped.length
-        ? `\n\n${r.skipped.length} script${r.skipped.length === 1 ? '' : 's'} left as they are: ${r.skipped
+        ? `\n\n${plural(r.skipped.length, 'script')} left as they are: ${r.skipped
             .slice(0, 3)
             .map((s) => `${s.where} (${s.reason})`)
             .join('; ')}${r.skipped.length > 3 ? ' …' : ''}`
@@ -367,30 +368,22 @@ export function CollectionTree({
       }
       const ok = await confirmAction({
         title: `Convert scripts to ${to}.*`,
-        message: `${r.changed} script${r.changed === 1 ? '' : 's'} in "${c.name}" use ${from}.* (${r.replacements} place${r.replacements === 1 ? '' : 's'}).`,
+        message: `${plural(r.changed, 'script')} in "${c.name}" use ${from}.* (${plural(r.replacements, 'place')}).`,
         detail: `They will use ${to}.* instead. Both names always work in TestPion, and exports to Postman always use pm.*. Only code changes, not text in strings or comments.${skippedNote}`,
         confirmLabel: 'Convert',
         tone: 'question',
       });
       if (!ok) return;
       onChange(r.collection);
-      useApp.getState().toast(`Converted ${r.changed} script${r.changed === 1 ? '' : 's'} to ${to}.*`, 'success');
+      useApp.getState().toast(`Converted ${plural(r.changed, 'script')} to ${to}.*`, 'success');
     } catch (e) {
       useApp.getState().toast(`Couldn't convert the scripts: ${asError(e).message}`, 'error');
     }
   };
-  const [open, setOpen] = useState<Record<string, boolean>>(() => {
-    try {
-      return JSON.parse(localStorage.getItem('aps.tree.open') ?? '{}');
-    } catch {
-      return {};
-    }
-  });
+  const [open, setOpen] = usePersisted<Record<string, boolean>>('aps.tree.open', {});
   // flips what is shown: an item open by default (a category, the collection of the open request) closes on the first click
   const toggle = (id: string, shown: boolean) => {
-    const next = { ...open, [id]: !shown };
-    setOpen(next);
-    localStorage.setItem('aps.tree.open', JSON.stringify(next));
+    setOpen({ ...open, [id]: !shown });
   };
   useEffect(() => {
     if (!collapseAll) return;
@@ -398,11 +391,6 @@ export function CollectionTree({
     setOpen((o) => {
       const next: Record<string, boolean> = Object.fromEntries(Object.keys(o).map((k) => [k, false]));
       for (const c of collections) next[c.id] = false;
-      try {
-        localStorage.setItem('aps.tree.open', JSON.stringify(next));
-      } catch {
-        /* storage unavailable */
-      }
       return next;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -421,13 +409,7 @@ export function CollectionTree({
       for (const k of Object.keys(open)) if (k.startsWith(`${c.id}:`)) keys.push(k);
     }
     setOpen((o) => {
-      const next = { ...o, ...Object.fromEntries(keys.map((k) => [k, shown])), [folder?.id ?? c.id]: shown };
-      try {
-        localStorage.setItem('aps.tree.open', JSON.stringify(next));
-      } catch {
-        /* storage unavailable */
-      }
-      return next;
+      return { ...o, ...Object.fromEntries(keys.map((k) => [k, shown])), [folder?.id ?? c.id]: shown };
     });
   };
   // reveal the open request: scroll its row into view when it changes (a tab, search or history opened it)

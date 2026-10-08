@@ -3,9 +3,10 @@
  * the server's certificate here, so the workspace can list which ones expire soon. Kept in `runs/certificates.json`
  * (names and dates only), at most one write per host an hour unless the certificate changed.
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { WorkspaceStore } from './workspace.js';
+import { readJson } from './fsutil.js';
 
 export interface SeenCertificate {
   /** host[:port] */
@@ -27,7 +28,7 @@ function load(store: WorkspaceStore): Map<string, SeenCertificate> {
   if (m) return m;
   m = new Map();
   try {
-    if (existsSync(file(store))) for (const c of JSON.parse(readFileSync(file(store), 'utf8')) as SeenCertificate[]) if (c?.host) m.set(c.host, c);
+    for (const c of readJson<SeenCertificate[]>(file(store), [])) if (c?.host) m.set(c.host, c);
   } catch {
     /* unreadable: start over */
   }

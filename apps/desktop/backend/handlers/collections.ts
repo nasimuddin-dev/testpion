@@ -1,7 +1,7 @@
 /** RPC handlers: Collections (requests, folders, examples, import/export) and their mock servers. */
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, relative, sep } from 'node:path';
-import { ApsError, dbKindOf, redactDbUrl, isSqliteDataset, collectionVariableFlow, listWorkspaceDatasets, appendDatasetRow, readDataset, sqliteTables, fetchImportText, bruFilesToBrunoExport, collectionToBru, importIntoWorkspace, diffOpenApi, lintOpenApi, openApiOutline, asyncApiOutline, workspaceApiCoverage, apiCoverageMarkdown, securityLint, certificateLint, listCertificates, variableFlow, startRecorder, recordingToCollection, type RecordedExchange, collectionToOpenApiText, collectionToHttpFile, collectionToAsyncApi, generateWorkspaceDataset, replaceInCollection, moveCollectionVariablesToEnvironments, tidyCollection, applyTidy, type ReplaceField, writeTestsFromSpec, writeFlows, exampleFromResponse, startMockServer, collectionMarkdown, collectionHtml, exportPostmanCollection, withRequestExamples, type SavedExample, convertCollectionScripts, importRequestSnippet, isRequestSnippet, type Collection, collectionSavedItems, duplicateCollection, shortId, requestBodySchema, loadOpenApi } from '@testpion/core';
+import { ApsError, dbKindOf, redactDbUrl, isSqliteDataset, collectionVariableFlow, listWorkspaceDatasets, appendDatasetRow, readDataset, sqliteTables, fetchImportText, bruFilesToBrunoExport, collectionToBru, importIntoWorkspace, diffOpenApi, lintOpenApi, openApiOutline, asyncApiOutline, workspaceApiCoverage, apiCoverageMarkdown, collectionSecurityFindings, definedVariableNames, listSpecs, findBodySchema, readSpecRef, type SpecRef, startRecorder, recordingToCollection, type RecordedExchange, collectionToOpenApiText, collectionToHttpFile, collectionToAsyncApi, generateWorkspaceDataset, replaceInCollection, moveCollectionVariablesToEnvironments, tidyCollection, applyTidy, type ReplaceField, writeTestsFromSpec, writeFlows, exampleFromResponse, startMockServer, collectionMarkdown, collectionHtml, exportPostmanCollection, withRequestExamples, type SavedExample, convertCollectionScripts, importRequestSnippet, isRequestSnippet, type Collection, collectionSavedItems, duplicateCollection, shortId } from '@testpion/core';
 import type { Backend, Handlers, CollectionRunParams } from '../backend.js';
 import { recordIncoming } from './debugger.js';
 
@@ -145,20 +145,14 @@ export function collectionsHandlers(be: Backend): Handlers {
       // variables the requests use that the environment, collection, workspace and globals don't define
       const ctx = be.context({ environment, collectionId: id });
       try {
-        return [...securityLint(c, be.settings.redactFields), ...certificateLint(c, (u) => ctx.vars.resolve(u), listCertificates(be.ws)), ...variableFlow(c, Object.keys(ctx.vars.toObject()))];
+        return collectionSecurityFindings(be.ws, c, ctx, be.settings.redactFields);
       } finally {
         void ctx.dispose();
       }
     },
     /** OpenAPI documents kept in the workspace (specs/), for comparing versions. */
-    'openapi.specs': ({ includeAsync }: { includeAsync?: boolean } = {}) => {
-      const list = (rel: string) => {
-        const dir = be.ws.path(rel);
-        return existsSync(dir) ? readdirSync(dir).filter((f) => /\.(json|ya?ml)$/i.test(f)).map((f) => `${rel}/${f}`) : [];
-      };
-      // the API definitions list shows AsyncAPI documents too; coverage, diff and the data generator take OpenAPI only
-      return [...list('specs'), ...(includeAsync ? list('specs/asyncapi') : [])];
-    },
+    // the API definitions list shows AsyncAPI documents too; coverage, diff and the data generator take OpenAPI only
+    'openapi.specs': ({ includeAsync }: { includeAsync?: boolean } = {}) => listSpecs(be.ws, { includeAsync }),
     /** An AsyncAPI document as its readers see it: servers, channels, what the application does, messages. */
     'asyncapi.outline': ({ path, text }: { path?: string; text?: string }) => {
       if (text === undefined && (!path || !SPEC_PATH.test(path))) throw new ApsError('ValidationError', `Not an API definition in specs/: ${path ?? ''}`);
@@ -169,20 +163,10 @@ export function collectionsHandlers(be: Backend): Handlers {
      * definitions (specs/): the body editor completes and checks against it. {{variables}} in the URL resolve first.
      */
     'openapi.bodySchema': ({ method, url, environment }: { method: string; url: string; environment?: string }) => {
-      const dir = be.ws.path('specs');
-      if (!existsSync(dir) || !url) return null;
+      if (!url) return null;
       const ctx = be.context({ environment });
       try {
-        const resolved = ctx.vars.resolve(url);
-        for (const f of readdirSync(dir).filter((x) => /\.(json|ya?ml)$/i.test(x)).sort()) {
-          try {
-            const r = requestBodySchema(loadOpenApi(readFileSync(join(dir, f), 'utf8')), method, resolved);
-            if (r) return { ...r, spec: `specs/${f}` };
-          } catch {
-            /* not an OpenAPI document, or unreadable: the next one */
-          }
-        }
-        return null;
+        return findBodySchema(be.ws, method, ctx.vars.resolve(url));
       } finally {
         void ctx.dispose();
       }
@@ -223,15 +207,10 @@ export function collectionsHandlers(be: Backend): Handlers {
       return lintOpenApi(text ?? readFileSync(be.ws.safePath(path!), 'utf8'), { disable });
     },
     /** Breaking and other changes between two OpenAPI versions; each side is a workspace path, a link or the text. */
-    'openapi.diff': async ({ old, new: next }: { old: { path?: string; url?: string; text?: string }; new: { path?: string; url?: string; text?: string } }) => {
-      const read = async (s: { path?: string; url?: string; text?: string }) =>
-        s.text ?? (s.url ? (await fetchImportText(s.url)).text : s.path ? readFileSync(be.ws.safePath(s.path), 'utf8') : '');
-      return diffOpenApi(await read(old), await read(next));
-    },
+    'openapi.diff': async ({ old, new: next }: { old: SpecRef; new: SpecRef }) => diffOpenApi(await readSpecRef(be.ws, old), await readSpecRef(be.ws, next)),
     /** API coverage of an OpenAPI document by test runs (default: the latest) and optionally the request history. */
-    'openapi.coverage': async (p: { spec: { path?: string; url?: string; text?: string }; runs?: string[]; history?: number; baseUrl?: string; excludeDeprecated?: boolean }) => {
-      const s = p.spec ?? {};
-      const text = s.text ?? (s.url ? (await fetchImportText(s.url)).text : s.path ? readFileSync(be.ws.safePath(s.path), 'utf8') : '');
+    'openapi.coverage': async (p: { spec: SpecRef; runs?: string[]; history?: number; baseUrl?: string; excludeDeprecated?: boolean }) => {
+      const text = await readSpecRef(be.ws, p.spec ?? {});
       if (!text.trim()) throw new ApsError('ValidationError', 'Choose an OpenAPI document');
       const { report, sources } = await workspaceApiCoverage(be.ws, text, {
         runs: p.runs?.length ? p.runs : undefined,
@@ -267,8 +246,7 @@ export function collectionsHandlers(be: Backend): Handlers {
     },
     /** Which requests set and use each variable of a collection, in run order, with likely mistakes flagged. */
     'col.variableFlow': ({ collectionId }: { collectionId: string }) => {
-      const defined = [...be.ws.listEnvironments().flatMap((e) => e.variables.map((v) => v.key)), ...(be.ws.workspace.variables ?? []).map((v) => v.key), ...(be.settings.globalVariables ?? []).map((v) => v.key)];
-      return collectionVariableFlow(be.ws.getCollection(collectionId), defined);
+      return collectionVariableFlow(be.ws.getCollection(collectionId), definedVariableNames(be.ws, be.settings));
     },
     /** Data files in the workspace's datasets/ folder (for the Collection Runner and tests), newest first. */
     'datasets.list': () =>

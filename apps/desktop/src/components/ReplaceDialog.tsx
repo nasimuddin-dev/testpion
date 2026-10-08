@@ -1,9 +1,10 @@
 import { Replace, Search } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { asError, call } from '../api';
-import { useApp } from '../store';
+import { toastError, useApp } from '../store';
 import type { Collection } from '../types';
-import { Badge, Button, Empty, Field, Input, Modal, Toggle } from './ui';
+import { Badge, Button, Empty, Field, Input, Modal, Toggle, useDebounced } from './ui';
+import { plural } from '../lib/format';
 
 type Field = 'url' | 'params' | 'headers' | 'body' | 'auth' | 'scripts' | 'name';
 const FIELDS: Array<[Field, string]> = [
@@ -40,11 +41,13 @@ export function ReplaceDialog({ collection, onClose, onDone, initialFind, initia
   const opts = useMemo(() => ({ collectionId: collection.id, find, replace, regex, caseSensitive, fields: [...fields] }), [collection.id, find, replace, regex, caseSensitive, fields]);
 
   // the preview follows what is typed, a moment after typing stops
+  const settled = useDebounced(opts, 300);
   useEffect(() => {
     if (!find) return setPreview(undefined);
-    const t = setTimeout(() => void call<{ count: number; matches: Match[] }>('col.replace', opts).then(setPreview, (e) => setPreview({ count: 0, matches: [], error: asError(e).message })), 300);
-    return () => clearTimeout(t);
-  }, [opts, find]);
+    // typing is ahead of the settled options: wait for them
+    if (settled.find !== find) return;
+    void call<{ count: number; matches: Match[] }>('col.replace', settled).then(setPreview, (e) => setPreview({ count: 0, matches: [], error: asError(e).message }));
+  }, [settled, find]);
 
   const apply = async () => {
     setBusy(true);
@@ -55,10 +58,10 @@ export function ReplaceDialog({ collection, onClose, onDone, initialFind, initia
       // Undo: the collection as it was before
       useApp.getState().toast(`${r.count} changes saved in ${collection.name}`, 'success', {
         label: 'Undo',
-        onClick: () => void call('col.save', collection).then(onDone, (e) => useApp.getState().toast(asError(e).message, 'error')),
+        onClick: () => void call('col.save', collection).then(onDone, (e) => toastError(e)),
       });
     } catch (e) {
-      useApp.getState().toast(asError(e).message, 'error');
+      toastError(e);
     } finally {
       setBusy(false);
     }
@@ -119,7 +122,7 @@ export function ReplaceDialog({ collection, onClose, onDone, initialFind, initia
           ) : (
             <>
               <div className="px-3 py-2 text-xs text-muted border-b border-line">
-                {preview.count} changes in {requests} request{requests === 1 ? '' : 's'}
+                {preview.count} changes in {plural(requests, 'request')}
                 {preview.count > preview.matches.length ? ` (the first ${preview.matches.length} shown)` : ''}
               </div>
               <ul>

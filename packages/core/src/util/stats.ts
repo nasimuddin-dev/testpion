@@ -31,7 +31,7 @@ export class LatencyRecorder {
   stats(): LatencyStats {
     if (!this.n) return { count: 0, min: 0, max: 0, mean: 0, p50: 0, p90: 0, p95: 0, p99: 0 };
     const sorted = this.buf.slice(0, this.n).sort();
-    const pct = (p: number) => sorted[Math.min(this.n - 1, Math.max(0, Math.ceil((p / 100) * this.n) - 1))]!;
+    const pct = (p: number) => percentile(sorted, p / 100)!;
     return {
       count: this.n,
       min: round(this.minV),
@@ -43,6 +43,12 @@ export class LatencyRecorder {
       p99: round(pct(99)),
     };
   }
+}
+
+/** Nearest-rank percentile of sorted values (p in 0..1). */
+export function percentile(sorted: ArrayLike<number>, p: number): number | undefined {
+  if (!sorted.length) return undefined;
+  return sorted[Math.min(sorted.length - 1, Math.max(0, Math.ceil(p * sorted.length) - 1))];
 }
 
 export function round(v: number, digits = 2): number {

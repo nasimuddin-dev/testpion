@@ -22,38 +22,31 @@ import {
 } from 'lucide-react';
 import { Settings2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { asError, call, on } from '../api';
-import { confirmAction, promptText, useApp } from '../store';
+import { call } from '../api';
+import { confirmAction, promptText, toastError, useApp } from '../store';
 import { Button, cx, Empty, Input, Menu, PageHeader, Select, Split, Tabs, type MenuItem } from '../components/ui';
 import { formatBytes, formatMs } from '@testpion/shared';
-import { finishSave, downloadContent, pickTextFile, type SaveResult } from '../lib/files';
+import { downloadContent, finishSave, pickBinaryFile, pickTextFile, type SaveResult } from '../lib/files';
 import {
   CertificateDialog,
   ConnectionsView,
   LanDialog,
-  pickBinaryFile,
 } from '../components/DebuggerTools';
 import { incomingAsExchange, toRequest, type Exchange, type Stats } from '../components/debugger/model';
 import { ExchangePanes } from '../components/debugger/ExchangePanes';
 import { useExchangeList, type ListFilter } from '../components/debugger/useExchangeList';
-import { BreakpointDialog, CompareExchangesDialog, loadRules, RuleDialog, RulesPanel, type HeldBreakpoint, type Rule, type RulesState } from '../components/DebuggerRules';
+import { BreakpointDialog, CompareExchangesDialog, RuleDialog, RulesPanel, type Rule, type RulesState } from '../components/DebuggerRules';
 import { DebuggerGrid, GridTotals, IncomingList, TrafficSide, useIncoming } from '../components/debugger/DebuggerGrid';
 import { Dock } from '../components/debugger/Dock';
 import { ToolRail, type DockPanel } from '../components/debugger/ToolRail';
-
-interface Status {
-  running: boolean;
-  url?: string;
-  port?: number;
-  exchanges: number;
-  systemProxy: boolean;
-  autosave: boolean;
-  decrypt: boolean;
-  noDecrypt: string[];
-}
+import { copyText } from '../lib/clipboard';
+import { plural } from '../lib/format';
+import { useDebuggerSession } from '../components/debugger/use-debugger-session';
+import type { Status } from '../components/debugger/use-debugger-session';
 
 interface CaptureOptions {
-  browsers: Array<{ name: string; label: string }>;
+  /** `systemProxy`: the browser follows the system proxy (Safari), which is pointed here while it is captured. */
+  browsers: Array<{ name: string; label: string; systemProxy?: boolean }>;
   shells: Array<{ shell: string; lines: string }>;
   systemProxy: boolean;
   platform: string;
@@ -67,12 +60,11 @@ interface Session {
   autosave: boolean;
 }
 
-const fail = (e: unknown) => useApp.getState().toast(asError(e).message, 'error');
 const toast = (m: string) => useApp.getState().toast(m, 'success');
 
 /** An exchange as a REST request, for Open in a tab and Resend. */
 export function DebuggerView() {
-  const [status, setStatus] = useState<Status>();
+  const { status, setStatus, rules, setRules, held, openBreakpoint, setOpenBreakpoint, loadStatus } = useDebuggerSession();
   const [selected, setSelected] = useState<string>();
   const [detail, setDetail] = useState<Exchange>();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -97,9 +89,6 @@ export function DebuggerView() {
   const [stats, setStats] = useState<Stats>();
   const [capture, setCapture] = useState<CaptureOptions>();
   const [sessions, setSessions] = useState<Session[]>([]);
-  const [rules, setRules] = useState<RulesState>();
-  const [held, setHeld] = useState<HeldBreakpoint[]>([]);
-  const [openBreakpoint, setOpenBreakpoint] = useState<HeldBreakpoint>();
   /** Compare: the first exchange picked; the next row clicked is the other one. */
   const [compareA, setCompareA] = useState<Exchange>();
   const [comparePair, setComparePair] = useState<{ a: string; b: string }>();
@@ -109,44 +98,17 @@ export function DebuggerView() {
   const list = useExchangeList(filter);
   const rows = list.rows;
   const seen = list.seen;
-  const loadStatus = useCallback(() => call<Status>('debug.status').then(setStatus, fail), []);
   /** After an action: the list's changes and the status (the capture's count, the system proxy, …). */
   const load = useCallback(async () => {
     await Promise.all([list.sync(), loadStatus()]);
   }, [list.sync, loadStatus]);
-  useEffect(() => {
-    void loadStatus();
-    let t: ReturnType<typeof setTimeout> | undefined;
-    const off = on('debug.exchange', () => {
-      clearTimeout(t);
-      t = setTimeout(() => void loadStatus(), 500);
-    });
-    return () => (off(), clearTimeout(t));
-  }, [loadStatus]);
-  // the rules (DBG-3): the active profile's count for the bar, and exchanges held at a breakpoint
-  useEffect(() => {
-    void loadRules().then((r) => r && setRules(r));
-    void call<HeldBreakpoint[]>('debug.breakpoints').then(setHeld, () => undefined);
-    const offRules = on('debug.rules', () => void loadRules().then((r) => r && setRules(r)));
-    const offBp = on<{ id: string; released?: boolean; phase?: 'request' | 'response'; exchange?: HeldBreakpoint['exchange'] }>('debug.breakpoint', (b) => {
-      if (b.released) {
-        setHeld((h) => h.filter((x) => x.id !== b.id));
-        setOpenBreakpoint((o) => (o?.id === b.id ? undefined : o));
-      } else if (b.exchange) {
-        const bp: HeldBreakpoint = { id: b.id, phase: b.phase ?? 'request', since: new Date().toISOString(), exchange: b.exchange };
-        setHeld((h) => [...h, bp]);
-        setOpenBreakpoint((o) => o ?? bp);
-      }
-    });
-    return () => (offRules(), offBp());
-  }, []);
   const selectedRow = selected ? list.byId.get(selected) : undefined;
   useEffect(() => {
     if (!selected) return setDetail(undefined);
     void call<Exchange>('debug.exchange', { id: selected }).then(setDetail, () => setDetail(undefined));
   }, [selected, selectedRow]);
   useEffect(() => {
-    if (tab === 'stats') void call<Stats>('debug.stats').then(setStats, fail);
+    if (tab === 'stats') void call<Stats>('debug.stats').then(setStats, toastError);
   }, [tab, rows.length]);
   const loadCapture = useCallback(() => call<CaptureOptions>('debug.captureOptions').then(setCapture, () => undefined), []);
   const loadSessions = useCallback(() => call<Session[]>('debug.sessions').then(setSessions, () => setSessions([])), []);
@@ -161,7 +123,7 @@ export function DebuggerView() {
       setStatus(await call<Status>('debug.start', { port: p }));
       return true;
     } catch (e) {
-      fail(e);
+      toastError(e);
       return false;
     }
   };
@@ -184,7 +146,7 @@ export function DebuggerView() {
       await call('http.send', { request: toRequest(e), environment: useApp.getState().environment, id: `dbg-resend-${e.id}` });
       toast('Sent again (see the History view for the response)');
     } catch (err) {
-      fail(err);
+      toastError(err);
     }
   };
   const ask = (e: Exchange) => {
@@ -224,7 +186,7 @@ export function DebuggerView() {
       const r = await call<{ name: string; exchanges: number }>('debug.saveSession', { name });
       toast(`Saved ${r.exchanges} exchanges as ${r.name}`);
     } catch (e) {
-      fail(e);
+      toastError(e);
     }
   };
   const openSession = async (s: Session) => {
@@ -239,7 +201,7 @@ export function DebuggerView() {
       toast(`Opened ${r.loaded} exchanges`);
       void load();
     } catch (e) {
-      fail(e);
+      toastError(e);
     }
   };
   const importHar = async () => {
@@ -251,7 +213,7 @@ export function DebuggerView() {
       toast(`Imported ${r.loaded} exchanges from ${f.name}`);
       void load();
     } catch (e) {
-      fail(e);
+      toastError(e);
     }
   };
   const importSaz = async () => {
@@ -263,7 +225,7 @@ export function DebuggerView() {
       toast(`Imported ${r.loaded} exchanges from ${f.name}`);
       void load();
     } catch (e) {
-      fail(e);
+      toastError(e);
     }
   };
   const systemProxy = async (onOff: boolean) => {
@@ -271,7 +233,7 @@ export function DebuggerView() {
       setStatus(await call<Status>('debug.systemProxy', { on: onOff }));
       toast(onOff ? 'System proxy set: programs that honour it send through TestPion' : 'System proxy restored');
     } catch (e) {
-      fail(e);
+      toastError(e);
     }
   };
 
@@ -307,29 +269,42 @@ export function DebuggerView() {
   const quickRule = (kind: Rule['kind'], name: string, match: Rule['match'], extra?: Partial<Rule>) =>
     void call<RulesState>('debug.saveRule', { rule: { kind, name, enabled: true, match, ...extra } }).then(
       (r) => (setRules(r), toast(`Rule added: ${name}`), openDock(kind === 'ignore' || kind === 'only' ? 'filter' : kind === 'reply' ? 'auto-reply' : kind === 'highlight' ? 'highlight' : 'modify')),
-      fail,
+      toastError,
     );
   const sel = detail;
-  const copy = (text: string, what: string) => void navigator.clipboard.writeText(text).then(() => toast(`Copied ${what}`));
 
   // What to capture: one program (a browser or a terminal opened through the proxy), or everything on this computer
   // (the system proxy, an explicit choice, restored on stop). Each starts the proxy when it is not running yet.
   const captureItems: MenuItem[] = [
-    ...(capture?.browsers ?? []).map<MenuItem>((b) => ({
-      label: `A browser: ${b.label} (only that window)`,
-      icon: <Globe size={14} />,
-      onSelect: () => void startThen(() => call<{ browser: string }>('debug.openBrowser', { browser: b.name }).then((r) => toast(`${r.browser} started with a profile of its own; only its traffic is captured`), fail)),
-    })),
+    ...(capture?.browsers ?? []).map<MenuItem>((b) =>
+      b.systemProxy
+        ? {
+            label: `A browser: ${b.label} (through the system proxy, restored on stop)`,
+            icon: <Globe size={14} />,
+            onSelect: () =>
+              void startThen(() =>
+                call<{ browser: string }>('debug.openBrowser', { browser: b.name }).then(
+                  (r) => (toast(`${r.browser} opened; the system proxy points here until you stop, so other programs that follow it are captured too`), void loadStatus()),
+                  toastError,
+                ),
+              ),
+          }
+        : {
+            label: `A browser: ${b.label} (only that window)`,
+            icon: <Globe size={14} />,
+            onSelect: () => void startThen(() => call<{ browser: string }>('debug.openBrowser', { browser: b.name }).then((r) => toast(`${r.browser} started with a profile of its own; only its traffic is captured`), toastError)),
+          },
+    ),
     {
       label: 'A terminal: commands run in it (only those)',
       icon: <Terminal size={14} />,
-      onSelect: () => void startThen(() => call<{ terminal: string }>('debug.openTerminal').then((r) => toast(`${r.terminal} opened with HTTP_PROXY set; only what runs in it is captured`), fail)),
+      onSelect: () => void startThen(() => call<{ terminal: string }>('debug.openTerminal').then((r) => toast(`${r.terminal} opened with HTTP_PROXY set; only what runs in it is captured`), toastError)),
     },
     { label: 'A phone or another computer…', icon: <Smartphone size={14} />, onSelect: () => void startThen(() => setDialog('lan')) },
     status?.systemProxy
       ? { label: 'Stop capturing everything (restore the system proxy)', icon: <Globe size={14} />, separator: true, onSelect: () => void systemProxy(false) }
       : { label: 'Everything on this computer (the system proxy, restored on stop)', icon: <Globe size={14} />, separator: true, onSelect: () => void startThen(() => systemProxy(true)) },
-    ...(capture?.shells ?? []).map<MenuItem>((s) => ({ label: `Copy the lines for ${s.shell}`, icon: <Copy size={14} />, onSelect: () => void startThen(() => copy(s.lines, `the lines for ${s.shell}`)) })),
+    ...(capture?.shells ?? []).map<MenuItem>((s) => ({ label: `Copy the lines for ${s.shell}`, icon: <Copy size={14} />, onSelect: () => void startThen(() => void copyText(s.lines, `the lines for ${s.shell}`)) })),
     { label: `Proxy port… (${port})`, icon: <Settings2 size={14} />, separator: true, disabled: !!status?.running, onSelect: () => void changePort() },
   ];
   const sessionItems: MenuItem[] = [
@@ -354,7 +329,7 @@ export function DebuggerView() {
           status?.running ? (
             <span className="inline-flex items-center gap-1.5">
               Proxy address <code className="font-mono text-fg">{status.url}</code>
-              <button type="button" className="text-muted hover:text-fg" title="Copy the proxy address" aria-label="Copy the proxy address" onClick={() => copy(status.url ?? '', 'the proxy address')}>
+              <button type="button" className="text-muted hover:text-fg" title="Copy the proxy address" aria-label="Copy the proxy address" onClick={() => void copyText(status.url ?? '', 'the proxy address')}>
                 <Copy size={12} />
               </button>
               {status.systemProxy ? ' · the system proxy points here' : ' · programs sent through it show below'}
@@ -393,7 +368,7 @@ export function DebuggerView() {
                   onSelect: () =>
                     void call<Status>('debug.decrypt', { on: !status?.decrypt }).then(
                       (st) => (setStatus(st), toast(st.decrypt ? 'HTTPS is decrypted for programs that trust the TestPion root' : 'HTTPS is a tunnel again')),
-                      fail,
+                      toastError,
                     ),
                 },
                 { label: 'Root certificate…', icon: <Lock size={14} />, onSelect: () => setDialog('certificate') },
@@ -405,7 +380,7 @@ export function DebuggerView() {
                       value: (status?.noDecrypt ?? []).join(', '),
                       placeholder: '*.bank.example, login.example.com',
                     });
-                    if (v !== null) void call<Status>('debug.decrypt', { noDecrypt: v.split(',') }).then(setStatus, fail);
+                    if (v !== null) void call<Status>('debug.decrypt', { noDecrypt: v.split(',') }).then(setStatus, toastError);
                   },
                 },
               ]}
@@ -471,7 +446,7 @@ export function DebuggerView() {
                     <Button
                       size="sm"
                       variant="primary"
-                      onClick={() => void call<Status>('debug.decrypt', { on: true }).then((st) => (setStatus(st), toast('HTTPS is decrypted for programs that trust the TestPion root')), fail)}
+                      onClick={() => void call<Status>('debug.decrypt', { on: true }).then((st) => (setStatus(st), toast('HTTPS is decrypted for programs that trust the TestPion root')), toastError)}
                     >
                       Decrypt HTTPS
                     </Button>
@@ -492,7 +467,7 @@ export function DebuggerView() {
                         onClick={() => setTab('rules')}
                         title="The rules of the active profile act on the traffic; click to see them"
                       >
-                        <Scale size={12} /> {rules.activeCount} rule{rules.activeCount === 1 ? '' : 's'} active · {rules.active}
+                        <Scale size={12} /> {plural(rules.activeCount, 'rule')} active · {rules.active}
                       </button>
                     )}
                     {held.length > 0 && (
@@ -574,14 +549,14 @@ export function DebuggerView() {
                             message: 'The current filter (text, host, method, status, bookmarked) under a name, for this workspace.',
                             placeholder: 'Name',
                           });
-                          if (name) void call<RulesState['filterPresets']>('debug.saveFilterPreset', { name, filter }).then((fp) => setRules((r) => r && { ...r, filterPresets: fp }), fail);
+                          if (name) void call<RulesState['filterPresets']>('debug.saveFilterPreset', { name, filter }).then((fp) => setRules((r) => r && { ...r, filterPresets: fp }), toastError);
                         },
                       },
                       ...(rules?.filterPresets ?? []).map<MenuItem>((p) => ({
                         label: `Forget ${p.name}`,
                         icon: <Trash2 size={14} />,
                         danger: true,
-                        onSelect: () => void call<RulesState['filterPresets']>('debug.deleteFilterPreset', { name: p.name }).then((fp) => setRules((r) => r && { ...r, filterPresets: fp }), fail),
+                        onSelect: () => void call<RulesState['filterPresets']>('debug.deleteFilterPreset', { name: p.name }).then((fp) => setRules((r) => r && { ...r, filterPresets: fp }), toastError),
                       })),
                     ]}
                     trigger={
@@ -610,7 +585,7 @@ export function DebuggerView() {
                           {status?.running ? (
                             <>
                               <b>Capture</b> opens a browser or a terminal through the proxy; or point a program at{' '}
-                              <button type="button" className="mono text-fg underline decoration-dotted" title="Copy the proxy address" onClick={() => copy(status.url ?? '', 'the proxy address')}>
+                              <button type="button" className="mono text-fg underline decoration-dotted" title="Copy the proxy address" onClick={() => void copyText(status.url ?? '', 'the proxy address')}>
                                 {status.url}
                               </button>{' '}
                               yourself (<span className="mono">HTTP_PROXY</span>, <span className="mono">--proxy-server</span>). Requests appear here as they happen.
@@ -691,8 +666,8 @@ export function DebuggerView() {
                                     body: sel.responseBody ?? '',
                                   },
                                 },
-                              }).then((r) => (setRules(r), toast('Rule added: this response is served by TestPion from now on')), fail);
-                            } else void call<RulesState>('debug.addPreset', { preset, host: sel.host }).then((r) => (setRules(r), toast(`Rule added for ${sel.host}`)), fail);
+                              }).then((r) => (setRules(r), toast('Rule added: this response is served by TestPion from now on')), toastError);
+                            } else void call<RulesState>('debug.addPreset', { preset, host: sel.host }).then((r) => (setRules(r), toast(`Rule added for ${sel.host}`)), toastError);
                           }}
                         />
                       )}
@@ -734,7 +709,7 @@ export function DebuggerView() {
               setRuleDraft(undefined);
               toast('Rule saved');
             } catch (e) {
-              fail(e);
+              toastError(e);
             }
           }}
         />
@@ -746,7 +721,7 @@ export function DebuggerView() {
             try {
               setStatus(await call<Status>('debug.start', { port: status?.port, lan: true }));
             } catch (e) {
-              fail(e);
+              toastError(e);
             }
           }}
         />

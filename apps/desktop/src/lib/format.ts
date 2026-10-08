@@ -43,24 +43,7 @@ export function uid(prefix = ''): string {
   return prefix + Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 }
 
-export function prettyJson(text: string): string {
-  try {
-    return JSON.stringify(JSON.parse(text), null, 2);
-  } catch {
-    return text;
-  }
-}
-
 export { templateVariables as templateVars } from '@testpion/shared';
-
-export function download(name: string, content: string, type = 'application/json'): void {
-  const url = URL.createObjectURL(new Blob([content], { type }));
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = name;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
 
 /** "1 request", "3 requests" (irregular plurals can be passed: plural(n, 'entry', 'entries')). */
 export function plural(n: number, word: string, many = `${word}s`): string {

@@ -1,7 +1,7 @@
 import { existsSync, statSync, watch, type FSWatcher } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { WorkspaceManager } from '@testpion/core';
-import { bold, dim, findWorkspaceUp } from './shared.js';
+import { dim, bold, findWorkspaceUp } from './shared.js';
 
 /** Files a run writes itself (results, reports, traces, the database): changes there never trigger a re-run. */
 const IGNORED = /(^|[\\/])(runs|reports|traces|payloads|baselines|\.git|node_modules|\.testpion)([\\/]|$)|\.(sqlite|sqlite-journal|sqlite-wal|sqlite-shm|db|log)$|~$|\.swp$/;

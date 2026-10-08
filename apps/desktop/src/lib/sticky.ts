@@ -1,4 +1,4 @@
-import { useCallback, useState, type SetStateAction } from 'react';
+import { useCallback, useRef, useState, type SetStateAction } from 'react';
 
 /**
  * Component state that survives unmounting (switching tabs, servers or views) for the rest of the
@@ -65,7 +65,55 @@ export function useSticky<T>(key: string, initial: T | (() => T), opts: { persis
   return [current, set];
 }
 
-/** Forget everything kept under a prefix (e.g. a server that was removed). */
-export function forgetSticky(prefix: string): void {
-  for (const k of memory.keys()) if (k.startsWith(prefix)) memory.delete(k);
+/**
+ * How a setting is stored under its own localStorage key: JSON by default, or the plain string (`text`), or a custom
+ * `parse` (what is stored → the value, or undefined to use the initial one) and `stringify`.
+ */
+export interface PersistFormat<T> {
+  text?: boolean;
+  parse?(raw: string): T | undefined;
+  stringify?(v: T): string;
+}
+
+/** Read a setting kept under its own key (see usePersisted); `initial` when there is none or it cannot be read. */
+export function readPersisted<T>(key: string, initial: T | (() => T), fmt: PersistFormat<T> = {}): T {
+  const init = () => (typeof initial === 'function' ? (initial as () => T)() : initial);
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw === null) return init();
+    const v = fmt.parse ? fmt.parse(raw) : fmt.text ? (raw as unknown as T) : (JSON.parse(raw) as T);
+    return v === undefined ? init() : v;
+  } catch {
+    return init();
+  }
+}
+
+/** Write a setting under its own key (see usePersisted); storage that is unavailable is ignored. */
+export function writePersisted<T>(key: string, v: T, fmt: PersistFormat<T> = {}): void {
+  try {
+    localStorage.setItem(key, fmt.stringify ? fmt.stringify(v) : fmt.text ? String(v) : JSON.stringify(v));
+  } catch {
+    /* storage unavailable: the choice lasts this session */
+  }
+}
+
+/**
+ * A small UI setting (a pane, a width, what is collapsed) kept under its own localStorage key: read once when the
+ * component mounts, written on every change. Never for secrets or responses. Unlike useSticky, the key is used as
+ * it is (settings older than useSticky keep their keys and formats).
+ */
+export function usePersisted<T>(key: string, initial: T | (() => T), fmt: PersistFormat<T> = {}): [T, (v: SetStateAction<T>) => void] {
+  const [value, setValue] = useState<T>(() => readPersisted(key, initial, fmt));
+  const format = useRef(fmt);
+  format.current = fmt;
+  const set = useCallback(
+    (v: SetStateAction<T>) =>
+      setValue((prev) => {
+        const next = typeof v === 'function' ? (v as (p: T) => T)(prev) : v;
+        writePersisted(key, next, format.current);
+        return next;
+      }),
+    [key],
+  );
+  return [value, set];
 }

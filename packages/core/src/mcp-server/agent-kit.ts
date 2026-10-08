@@ -66,7 +66,7 @@ const IDEMPOTENT = new Set(['set_environment_variable', 'reorder_environments', 
 const WORDS: Record<string, string> = { jwt: 'JWT', openapi: 'OpenAPI', ci: 'CI', mcp: 'MCP', llm: 'LLM', grpc: 'gRPC', graphql: 'GraphQL', api: 'API', testpion: 'TestPion' };
 
 /** "list_collections" → "List collections", "decode_jwt" → "Decode JWT". */
-export function toolTitle(name: string): string {
+function toolTitle(name: string): string {
   const t = name
     .split('_')
     .map((w) => WORDS[w] ?? w)

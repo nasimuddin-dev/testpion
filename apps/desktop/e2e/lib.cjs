@@ -29,18 +29,21 @@ const allUnder = (label, max) => (r) => {
 
 /**
  * Prepended to a renderer step by `step()`: the visible elements of a selector, a visible button or tab by its text,
- * a short one-line rendering of a text, and a paint (two frames).
+ * a short one-line rendering of a text (`short` characters by default), and a paint (two frames).
  */
-const DOM = `
+const dom = ({ short = 300 } = {}) => `
   const vis = (sel) => [...document.querySelectorAll(sel)].filter((x) => x.getClientRects().length);
   const button = (label) => vis('main button').find((b) => b.textContent.trim() === label && b.getAttribute('role') !== 'tab');
   const tab = (name) => vis('main [role=tab]').find((t) => t.textContent.trim().startsWith(name));
-  const short = (s, n = 300) => String(s ?? '').replace(/\\s+/g, ' ').trim().slice(0, n);
+  const short = (s, n = ${short}) => String(s ?? '').replace(/\\s+/g, ' ').trim().slice(0, n);
   const painted = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
   const ms = (t0) => Math.round(performance.now() - t0);
 `;
-/** A renderer step: `body` runs in the page with the DOM helpers in scope. */
-const step = (name, body, shot) => [name, `(async () => { ${DOM} ${body} })()`, shot];
+const DOM = dom();
+/** A renderer step: `body` runs in the page with the DOM helpers in scope; `extra` adds a plan's own helpers. */
+const step = (name, body, shot, { extra = '', ...opts } = {}) => [name, `(async () => { ${dom(opts)} ${extra} ${body} })()`, shot];
+/** `step` with fixed options, for a plan that wants its own helpers or a different `short` length in every step. */
+const stepWith = (opts) => (name, body, shot) => step(name, body, shot, opts);
 
 /** The Debugger's captured exchanges, oldest first (the list call answers an array). */
 const EXCHANGES = `await window.aps.invoke('debug.exchanges', {})`;
@@ -66,4 +69,4 @@ const closeByCommandLine = (like, label, excludeNames = []) =>
 const mainMemory = (label, gc = false) =>
   `main: ${gc ? "const v8 = require('v8'); v8.setFlagsFromString('--expose_gc'); require('vm').runInNewContext('gc')(); require('vm').runInNewContext('gc')(); " : ''}const m = process.memoryUsage(); return '${label}: rss MB ' + Math.round(m.rss / 1048576) + ' | heap MB ' + Math.round(m.heapUsed / 1048576);`;
 
-module.exports = { withExpect, allUnder, DOM, step, EXCHANGES, waitRunning, run, curl, powershell, closeByCommandLine, mainMemory };
+module.exports = { withExpect, allUnder, DOM, step, stepWith, EXCHANGES, waitRunning, run, curl, powershell, closeByCommandLine, mainMemory };

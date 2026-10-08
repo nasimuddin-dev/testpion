@@ -247,7 +247,7 @@ export async function executeTest(testIn: TestCase, svc: ExecServices, opts: { t
 }
 
 /** `…/tests/rest/auth.yaml` → `tests/rest/auth.yaml`, so traces don't embed machine-specific absolute paths. */
-export function workspaceRelative(file: string): string {
+function workspaceRelative(file: string): string {
   const p = file.split('\\').join('/');
   const i = p.lastIndexOf('/tests/');
   return i >= 0 ? p.slice(i + 1) : p.slice(p.lastIndexOf('/') + 1);

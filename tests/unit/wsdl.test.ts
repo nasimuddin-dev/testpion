@@ -1,9 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { fakeServices } from '../helpers.js';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { readFileSync } from 'node:fs';
 import { join, sep } from 'node:path';
-import { bundleWsdl, detectFormat, fetchImportText, importAny, runCollection, McpManager, ProviderRegistry, Redactor, VariableScope, type CollectionFolder, type ExecServices, type SavedHttpRequest, type TestResult } from '../../packages/core/src/index.js';
+import { bundleWsdl, detectFormat, fetchImportText, importAny, runCollection, type CollectionFolder, type SavedHttpRequest, type TestResult } from '../../packages/core/src/index.js';
 
 const wsdl = readFileSync(join(__dirname, '../../examples/servers/patients.wsdl'), 'utf8');
 
@@ -89,11 +90,8 @@ describe('WSDL import', () => {
   it('sends the imported SOAP request', async () => {
     const c = importAny(wsdl).collection!;
     const results: TestResult[] = [];
-    const redactor = new Redactor();
-    const vars = new VariableScope();
     // collection variables come from the engine context; here the environment gives baseUrl
-    vars.setScope('environment', { baseUrl: base });
-    const services = { vars, providers: new ProviderRegistry([], vars, redactor), mcp: new McpManager(() => undefined), mcpServers: [], redactor, pricing: [], defaultTimeoutMs: 5000 } as ExecServices;
+    const services = fakeServices({ vars: { baseUrl: base } });
     const first = (c.items[0] as CollectionFolder).items[0] as SavedHttpRequest;
     await runCollection({ name: 'soap', collection: { ...c, items: [first] }, services, onEvent: (e) => void (e.type === 'test-end' && results.push(e.result)) });
     expect(results[0]?.status, JSON.stringify(results[0]?.error)).toBe('passed');

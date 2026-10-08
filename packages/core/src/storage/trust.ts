@@ -1,6 +1,6 @@
-import { existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { atomicWrite } from './fsutil.js';
+import { atomicWrite, readJson } from './fsutil.js';
 import type { WorkspaceStore } from './workspace.js';
 
 /**
@@ -19,7 +19,7 @@ const file = (store: Pick<WorkspaceStore, 'root'>) => join(store.root, '.local',
 
 function load(store: Pick<WorkspaceStore, 'root'>): { commands: TrustedCommand[] } {
   try {
-    return existsSync(file(store)) ? (JSON.parse(readFileSync(file(store), 'utf8')) as { commands: TrustedCommand[] }) : { commands: [] };
+    return readJson<{ commands: TrustedCommand[] }>(file(store), { commands: [] });
   } catch {
     return { commands: [] };
   }

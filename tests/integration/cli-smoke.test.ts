@@ -1,18 +1,13 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { cpSync, mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { join } from 'node:path';
+import { copyExample, runCli, runCliSync, tempDir } from '../helpers.js';
 
 // Every CLI command answers --help (exit 0, a usage line), and the commands that read a workspace answer --json with
 // the shape a script or an agent relies on, against a copy of the examples workspace and no network.
+let tmp: ReturnType<typeof tempDir>;
 let dir: string;
 let ws: string;
-const cli = resolve('packages/cli/bin/testpion.js');
-const run = (args: string[], cwd = dir) => {
-  const r = spawnSync(process.execPath, [cli, ...args], { encoding: 'utf8', cwd, env: { ...process.env, NO_COLOR: '1', TESTPION_HOME: join(dir, 'home') }, timeout: 60_000 });
-  return { status: r.status, out: r.stdout, err: r.stderr };
-};
+const run = (args: string[]) => runCliSync(args, { cwd: dir, home: join(dir, 'home'), timeout: 60_000 });
 const json = (args: string[]) => {
   const r = run(args);
   expect(r.status, `${args.join(' ')}: ${r.err}`).toBe(0);
@@ -21,21 +16,23 @@ const json = (args: string[]) => {
 };
 
 beforeAll(() => {
-  dir = mkdtempSync(join(tmpdir(), 'tp-cli-smoke-'));
-  ws = join(dir, 'vet');
-  cpSync(resolve('examples/veterinary-workspace'), ws, { recursive: true, filter: (s) => !/runs|traces|database\.sqlite/.test(s) });
+  tmp = tempDir('tp-cli-smoke-');
+  dir = tmp.dir;
+  ws = copyExample('veterinary-workspace', join(dir, 'vet'));
 });
-afterAll(() => rmSync(dir, { recursive: true, force: true, maxRetries: 3 }));
+afterAll(() => tmp.cleanup());
 
 describe('CLI smoke', () => {
-  it('every command answers --help', () => {
+  it('every command answers --help', async () => {
     const top = run(['--help']);
     expect(top.status).toBe(0);
     const commands = [...top.out.matchAll(/^  ([a-z][\w-]*)/gm)].map((m) => m[1]!).filter((c) => c !== 'help');
     expect(commands.length).toBeGreaterThan(40);
-    const broken = commands.map((c) => ({ c, r: run([c, '--help']) })).filter(({ r }) => r.status !== 0 || !/Usage:/.test(r.out));
+    // all at once: sixty processes, a second each
+    const results = await Promise.all(commands.map((c) => runCli([c, '--help'], { cwd: dir, home: join(dir, 'home') }).then((r) => ({ c, r }))));
+    const broken = results.filter(({ r }) => r.status !== 0 || !/Usage:/.test(r.out));
     expect(broken.map(({ c, r }) => `${c}: ${r.err.slice(0, 120)}`)).toEqual([]);
-  }, 180_000);
+  }, 120_000);
 
   it('the workspace readers answer --json', () => {
     expect(json(['doctor', '--json'])).toHaveProperty('checks');
@@ -54,7 +51,7 @@ describe('CLI smoke', () => {
     expect(json(['attention', '-w', ws, '--json'])).toBeDefined();
     expect(json(['monitor', 'list', '-w', ws, '--json'])).toBeDefined();
     expect(json(['history', 'list', '-w', ws, '--json'])).toBeDefined();
-  });
+  }, 120_000);
 
   it('generators write where they say, and a dry request is linted, not sent', () => {
     const flows = json(['integration-suite', 'specs/veterinary-api.yaml', '-w', ws, '--json']);
@@ -64,7 +61,7 @@ describe('CLI smoke', () => {
     expect((tests.written as unknown[]).length).toBeGreaterThan(0);
     const jwt = json(['jwt', 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ2ZXQiLCJleHAiOjQxMDI0NDQ4MDB9.c2ln', '--json']);
     expect(jwt).toHaveProperty('payload.sub', 'vet');
-  });
+  }, 120_000);
 
   it('a wrong argument is a configuration error (exit 2) with a message, never a stack trace', () => {
     const r = run(['run', '-w', ws, '--suite', 'no-such-suite', '-o', join(dir, 'out')]);

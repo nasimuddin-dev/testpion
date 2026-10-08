@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { fakeServices } from '../helpers.js';
 import { WebSocketServer } from 'ws';
 import type { AddressInfo } from 'node:net';
-import { MemorySecretStore, Redactor, VariableScope, ProviderRegistry, McpManager, runTests, normalizeTest, type ExecServices } from '../../packages/core/src/index.js';
+import { runTests, normalizeTest, type ExecServices } from '../../packages/core/src/index.js';
 
 // A GraphQL subscription in a test file (or a collection run): the runner subscribes, collects events, and the
 // checks see a body shaped like a query's ($.data…) plus every event in $.events.
@@ -31,11 +32,7 @@ const url = () => `http://127.0.0.1:${(wss.address() as AddressInfo).port}/graph
 beforeAll(() => new Promise<void>((r) => (wss.address() ? r() : wss.once('listening', () => r()))));
 afterAll(() => wss.close());
 
-const services = (): ExecServices => {
-  const redactor = new Redactor();
-  const vars = new VariableScope(new MemorySecretStore(), redactor);
-  return { vars, providers: new ProviderRegistry([], vars, redactor), mcp: new McpManager(() => undefined, redactor), mcpServers: [], redactor, pricing: [], defaultTimeoutMs: 5000 };
-};
+const services = (): ExecServices => fakeServices({ secrets: true });
 
 describe('GraphQL subscriptions in test files', () => {
   it('checks the first event by default, with the bearer token on the handshake', async () => {

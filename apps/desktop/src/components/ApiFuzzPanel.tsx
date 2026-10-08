@@ -1,7 +1,7 @@
 import { Bug, ChevronDown, ChevronRight, ExternalLink, FlaskConical, Play, Sparkles, Square, TriangleAlert } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { asError, call, on } from '../api';
-import { useApp } from '../store';
+import { call, on } from '../api';
+import { toastError, useApp } from '../store';
 import { TreeBadge } from './CollectionTree';
 import { Badge, Button, Empty, Field, Input, Toggle } from './ui';
 
@@ -96,7 +96,7 @@ export function ApiFuzzPanel({ spec }: { spec: string }) {
     try {
       setReport(await call<FuzzReport>('openapi.fuzz', { path: spec, environment: environment || undefined, baseUrl: baseUrl.trim() || undefined, includeDelete, allowRemote }));
     } catch (e) {
-      useApp.getState().toast(asError(e).message, 'error');
+      toastError(e);
     } finally {
       setRunning(false);
     }
@@ -162,7 +162,7 @@ export function ApiFuzzPanel({ spec }: { spec: string }) {
                   onClick={() =>
                     void call<{ path: string; tests: number }>('openapi.fuzzSaveTests', { path: spec, report, baseUrl: report.baseUrl }).then(
                       (r) => useApp.getState().toast(`${r.path}: ${r.tests} regression tests`, 'success', { label: 'Open Tests', onClick: () => useApp.getState().setView('tests') }),
-                      (e) => useApp.getState().toast(asError(e).message, 'error'),
+                      (e) => toastError(e),
                     )
                   }
                 >

@@ -1,7 +1,7 @@
 import { MessageSquareText, Sparkles } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { asError, call, on } from '../api';
-import { useApp } from '../store';
+import { call, on } from '../api';
+import { toastError, useApp } from '../store';
 import { JsonSchemaForm } from './JsonSchemaForm';
 import { Badge, Button, Modal } from './ui';
 
@@ -50,7 +50,7 @@ export function McpClientRequests() {
     try {
       await call('mcp.clientRespond', { id: current.id, result });
     } catch (e) {
-      useApp.getState().toast(asError(e).message, 'error');
+      toastError(e);
     }
     setQueue((q) => q.filter((x) => x.id !== current.id));
   };
@@ -90,7 +90,7 @@ export function McpClientRequests() {
       setReply(r.text);
       setModel(r.model);
     } catch (e) {
-      useApp.getState().toast(asError(e).message, 'error');
+      toastError(e);
     } finally {
       setDrafting(false);
     }

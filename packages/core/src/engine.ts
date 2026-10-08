@@ -52,7 +52,7 @@ export interface EngineContext {
 }
 
 /** Load secret values for an environment's secret variables into a plain list (never persisted). */
-export function environmentVariables(env: Environment | undefined, secrets: SecretStore, scope = ''): Array<{ key: string; value: string; enabled?: boolean; secret?: boolean }> {
+function environmentVariables(env: Environment | undefined, secrets: SecretStore, scope = ''): Array<{ key: string; value: string; enabled?: boolean; secret?: boolean }> {
   if (!env) return [];
   return env.variables.map((v) => {
     // a secret manager reference (op://…, vault://…): the value read for it (prefetchEnvironmentSecrets), always a secret

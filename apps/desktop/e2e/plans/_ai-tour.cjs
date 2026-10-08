@@ -1,14 +1,6 @@
 // Not part of the suite (the _ prefix): screenshots of every AI screen as a person meets it, for a UI review —
 // AI Lab (Playground before and after a run, Model comparison, Usage, Providers), Evaluations, a RAG test's result, the assistant.
-const { withExpect } = require('../lib.cjs');
-
-const H = `
-  const vis = (sel) => [...document.querySelectorAll(sel)].filter((x) => x.getClientRects().length);
-  const button = (label) => vis('main button').find((b) => b.textContent.trim() === label && b.getAttribute('role') !== 'tab');
-  const tab = (name) => vis('main [role=tab]').find((t) => t.textContent.trim().startsWith(name));
-  const short = (s, n = 300) => String(s ?? '').replace(/\\s+/g, ' ').trim().slice(0, n);
-`;
-const step = (name, body) => [name, `(async () => { ${H} ${body} })()`];
+const { withExpect, step } = require('../lib.cjs');
 
 const steps = [
   step('playground', `await __t.view('AI Lab'); await __t.sleep(800); tab('Playground')?.click(); await __t.sleep(800); return short(document.querySelector('main')?.innerText);`),

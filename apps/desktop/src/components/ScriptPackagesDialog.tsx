@@ -1,7 +1,7 @@
 import { Package, Plus, Save, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { asError, call } from '../api';
-import { confirmAction, promptText, useApp } from '../store';
+import { call } from '../api';
+import { confirmAction, promptText, toastError, useApp } from '../store';
 import { CodeEditor } from './CodeEditor';
 import { Button, cx, Empty, Modal } from './ui';
 
@@ -42,7 +42,7 @@ export function ScriptPackagesDialog({ onClose }: { onClose(): void }) {
       await reload();
       useApp.getState().toast(`Saved package ${sel}`, 'success');
     } catch (e) {
-      useApp.getState().toast(asError(e).message, 'error');
+      toastError(e);
     }
   };
   const create = async () => {

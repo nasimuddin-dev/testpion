@@ -3,7 +3,7 @@ import { FileCode2, Plus, RefreshCw, Save, ScanSearch, Send, Sparkles, Square, T
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAssistantContext } from '../lib/assistant-context';
 import { asError, call, on } from '../api';
-import { persisted, promptText, useApp } from '../store';
+import { persisted, promptText, toastError, useApp } from '../store';
 import { FolderList } from '../components/FolderList';
 import { SidebarShell } from '../components/SidebarShell';
 import { NEW_TAB_TITLE, useSingleEditorTab } from '../components/EditorTabs';
@@ -23,6 +23,7 @@ import { useSticky } from '../lib/sticky';
 import { useDoc } from '../lib/docs';
 import { plural } from '../lib/format';
 import { saveAsTestFile } from '../lib/save-test';
+import { copyText } from '../lib/clipboard';
 
 interface ProtoFile {
   name: string;
@@ -211,7 +212,7 @@ export function GrpcView() {
       if (!quiet) useApp.getState().toast(`Server reflection: ${r.services.length} services, ${r.methods.length} methods`, 'success');
       setTab('message');
     } catch (e) {
-      useApp.getState().toast(asError(e).message, 'error');
+      toastError(e);
     } finally {
       setReflecting(false);
     }
@@ -308,7 +309,7 @@ export function GrpcView() {
                 set({ target: g.target, tls: g.tls, ...(g.method ? { method: g.method } : {}), ...(g.message ? { message: g.message } : {}), metadata: g.metadata.map((m) => ({ ...m, enabled: true })), ...(g.timeoutMs ? { timeoutMs: g.timeoutMs } : {}) });
                 useApp.getState().toast(g.protoFiles.length ? `Filled in from grpcurl. Load the proto files it uses: ${g.protoFiles.join(', ')}` : 'Filled in from grpcurl (the methods come from server reflection)', 'success');
               },
-              (e) => useApp.getState().toast(asError(e).message, 'error'),
+              (e) => toastError(e),
             );
             return true;
           }}
@@ -336,8 +337,7 @@ export function GrpcView() {
           title="Copy the call as a grpcurl command ({{variables}} resolved)"
           onClick={() =>
             void call<string>('grpc.grpcurl', { target: d.target, method: d.method, message: d.message, metadata: d.metadata, tls: d.tls, protoFiles: d.descriptorSet ? [] : d.protoFiles.map((f) => f.name), timeoutMs: d.timeoutMs, environment: env })
-              .then((cmd) => navigator.clipboard.writeText(cmd))
-              .then(() => useApp.getState().toast('Copied as grpcurl', 'success'), (e) => useApp.getState().toast(asError(e).message, 'error'))
+              .then((cmd) => copyText(cmd, 'as grpcurl'), (e) => toastError(e))
           }
         >
           grpcurl

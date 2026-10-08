@@ -1,9 +1,9 @@
 import { ChevronDown, ChevronRight, ChevronsDownUp, Copy, CopyPlus, Download, ExternalLink, FileCode2, FolderInput, FolderPlus, FolderX, GitCompare, Inbox, Layers, PanelLeftClose, Pencil, Plug, Plus, RefreshCw, ScanSearch, Star, Trash2, Unplug, Upload } from 'lucide-react';
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { asError, call, on } from '../api';
-import { confirmAction, promptText, useApp } from '../store';
+import { call, on } from '../api';
+import { confirmAction, promptText, toastError, useApp } from '../store';
 import type { Collection, CollectionNode, Library, LibraryItem, McpServerConfig } from '../types';
-import { uid } from '../lib/format';
+import { plural, uid } from '../lib/format';
 import { addToFolder, CATEGORY_META, CollectionTree, mapNodes, savedItemDragProps, type ExtraGroup } from './CollectionTree';
 import type { RequestCategory } from '../lib/collection-filter';
 import { closeTabsFor, newRequestItems, useEditorTabsStore } from './EditorTabs';
@@ -13,6 +13,8 @@ import { ImportModal } from '../views/rest/dialogs';
 import { isDocView, useDocs } from '../lib/docs';
 import { Button, cx, IconButton, Input, Menu, menuKeys, type MenuItem } from './ui';
 import { askFolderName, focusRow, folderMenuItems, InlineRename, KindBadge, moveToFolderItem, RowMenu, TreeFolderRow, treeKeys } from './TreeParts';
+import { usePersisted } from '../lib/sticky';
+import { copyText } from '../lib/clipboard';
 
 /**
  * The Collections explorer: the one sidebar of the request editors. The workspace lists its collections;
@@ -23,23 +25,8 @@ import { askFolderName, focusRow, folderMenuItems, InlineRename, KindBadge, move
 
 const openKey = 'aps.explorer.sections.v2';
 function useOpenSections() {
-  const [open, setOpen] = useState<Record<string, boolean>>(() => {
-    try {
-      return JSON.parse(localStorage.getItem(openKey) ?? '{}');
-    } catch {
-      return {};
-    }
-  });
-  const toggle = (id: string, def: boolean) =>
-    setOpen((o) => {
-      const next = { ...o, [id]: !(o[id] ?? def) };
-      try {
-        localStorage.setItem(openKey, JSON.stringify(next));
-      } catch {
-        /* storage unavailable */
-      }
-      return next;
-    });
+  const [open, setOpen] = usePersisted<Record<string, boolean>>(openKey, {});
+  const toggle = (id: string, def: boolean) => setOpen((o) => ({ ...o, [id]: !(o[id] ?? def) }));
   return { isOpen: (id: string, def = true) => open[id] ?? def, toggle };
 }
 
@@ -224,22 +211,10 @@ const clampWidth = (w: number) => Math.round(Math.min(Math.max(w, 200), Math.min
 
 /** The sidebar's width: dragged on its right edge, remembered; double-click the edge resets it. */
 function useExplorerWidth() {
-  const [width, setWidth] = useState(() => {
-    try {
-      const w = Number(localStorage.getItem(WIDTH_KEY));
-      return w ? clampWidth(w) : DEFAULT_WIDTH;
-    } catch {
-      return DEFAULT_WIDTH;
-    }
-  });
-  const save = (w: number) => {
-    setWidth(w);
-    try {
-      localStorage.setItem(WIDTH_KEY, String(w));
-    } catch {
-      /* storage unavailable */
-    }
-  };
+  const [saved, save] = usePersisted(WIDTH_KEY, DEFAULT_WIDTH, { text: true, parse: (v) => (Number(v) ? clampWidth(Number(v)) : undefined) });
+  // while the edge is dragged the width follows the pointer; it is remembered when it is let go
+  const [dragged, setDragged] = useState<number>();
+  const width = dragged ?? saved;
   const handle = (
     <div
       role="separator"
@@ -255,10 +230,11 @@ function useExplorerWidth() {
         const start = width;
         const el = e.currentTarget;
         el.setPointerCapture(e.pointerId);
-        const move = (ev: PointerEvent) => setWidth(clampWidth(start + ev.clientX - startX));
+        const move = (ev: PointerEvent) => setDragged(clampWidth(start + ev.clientX - startX));
         const up = (ev: PointerEvent) => {
           el.removeEventListener('pointermove', move);
           el.removeEventListener('pointerup', up);
+          setDragged(undefined);
           save(clampWidth(start + ev.clientX - startX));
         };
         el.addEventListener('pointermove', move);
@@ -371,7 +347,7 @@ export function Explorer() {
       await call('col.save', c);
       await load();
     } catch (e) {
-      useApp.getState().toast(asError(e).message, 'error');
+      toastError(e);
     }
   };
   const newCollection = async () => {
@@ -397,7 +373,7 @@ export function Explorer() {
       await call('lib.save', { kind, library: { folders: lib.folders, items: fn(lib.items) } });
       await load();
     } catch (e) {
-      useApp.getState().toast(asError(e).message, 'error');
+      toastError(e);
     }
   };
   const moveItem = (kind: 'grpc' | 'websocket', id: string, collectionId: string | undefined) => editLibrary(kind, (items) => items.map((i) => (i.id === id ? { ...i, collectionId } : i)));
@@ -413,10 +389,9 @@ export function Explorer() {
         kind === 'grpc'
           ? await call<string>('grpc.grpcurl', { target: d.target, method: d.method, message: d.message, metadata: d.metadata, tls: d.tls, protoFiles: d.descriptorSet ? [] : (d.protoFiles ?? []).map((f: { name: string }) => f.name), timeoutMs: d.timeoutMs, environment: env })
           : String(d.url ?? '');
-      await navigator.clipboard.writeText(text);
-      useApp.getState().toast(kind === 'grpc' ? 'Copied as grpcurl' : 'Copied the URL', 'success');
+      await copyText(text, kind === 'grpc' ? 'as grpcurl' : 'the URL');
     } catch (e) {
-      useApp.getState().toast(asError(e).message, 'error');
+      toastError(e);
     }
   };
   /** The server, saved gRPC call or connection being renamed in place. */
@@ -477,7 +452,7 @@ export function Explorer() {
       await call('mcp.saveServers', { servers: fn(servers.map(({ connected: _c, ...s }) => s as McpServerConfig)) });
       await load();
     } catch (e) {
-      useApp.getState().toast(asError(e).message, 'error');
+      toastError(e);
     }
   };
   /** The menu of an MCP server: open, connect, rename, duplicate, delete. */
@@ -514,7 +489,7 @@ export function Explorer() {
       await call('lib.save', { kind, library: fn(lib) });
       await load();
     } catch (e) {
-      useApp.getState().toast(asError(e).message, 'error');
+      toastError(e);
     }
   };
   const specFolderOf = new Map(specFolders.items.map((i) => [i.id, i.folder]));
@@ -611,9 +586,9 @@ export function Explorer() {
         await editLibrary(kind, (list) => list.map((i) => (ids.has(i.id) ? { ...i, collectionId: colId } : i)));
         moved += items.length;
       }
-      useApp.getState().toast(`Moved ${moved} item${moved === 1 ? '' : 's'} into collections`, 'success');
+      useApp.getState().toast(`Moved ${plural(moved, 'item')} into collections`, 'success');
     } catch (e) {
-      useApp.getState().toast(asError(e).message, 'error');
+      toastError(e);
     }
   };
   const extraGroups = (c: Collection): ExtraGroup[] => [

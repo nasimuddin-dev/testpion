@@ -1,7 +1,7 @@
 import { AlertTriangle, Bookmark, Gauge, KeyRound, Play, Save, Sparkles, Square } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { asError, call, on } from '../api';
-import { confirmAction, persisted, promptText, useApp } from '../store';
+import { confirmAction, persisted, promptText, toastError, useApp } from '../store';
 import type { Collection, CollectionNode, KeyValue, LatencyStats, ProviderConfig } from '../types';
 import { formatBytes, formatCost, formatMs, plural } from '../lib/format';
 import { KeyValueEditor } from '../components/KeyValueEditor';
@@ -12,11 +12,12 @@ import { EnvironmentsPane } from '../components/SidebarPanes';
 import { useLibrary } from '../lib/library';
 import { useSticky } from '../lib/sticky';
 import { useIntent } from '../hooks';
-import { Badge, Button, cx, Empty, Field, Input, Metric, PageHeader, Select, Split, Tabs, Toggle, MetricGrid } from '../components/ui';
+import { Badge, Button, Callout, cx, Empty, Field, Input, Metric, MetricGrid, PageHeader, Select, Split, Tabs, Toggle } from '../components/ui';
 import { ErrorPanel } from '../components/Results';
 import { LoadTimeline, StatusCodes } from '../components/LoadCharts';
 import { LoadHistory } from '../components/LoadHistory';
 import type { NormalizedError } from '../api';
+import { useCollections } from '../lib/collections-store';
 
 interface Snapshot {
   elapsedSec: number;
@@ -81,7 +82,8 @@ export function LoadView() {
   const [snap, setSnap] = useState<Snapshot>();
   const [error, setError] = useState<NormalizedError>();
   const [tab, setTab] = useState<'headers' | 'body'>('headers');
-  const [collections, setCollections] = useState<Collection[]>([]);
+  const allCollections = useCollections();
+  const collections = useMemo(() => allCollections.filter((c) => !(c as { problem?: string }).problem), [allCollections]);
   const [preparing, setPreparing] = useState(false);
   const [prep, setPrep] = useState<{ requests: string[]; unresolved: string[]; warmUp?: { passed: number; failed: number } }>();
   // pass/fail rules, checked when the test finishes
@@ -124,7 +126,6 @@ export function LoadView() {
   };
   useEffect(() => {
     void call<ProviderConfig[]>('ai.providers').then(setProviders);
-    void call<Collection[]>('col.list').then((cs) => setCollections(cs.filter((c) => !(c as { problem?: string }).problem)));
     const a = on<{ id: string; snapshot: Snapshot }>('load.snapshot', (p) => {
       if (p.id !== idRef.current) return;
       setSnap(p.snapshot);
@@ -132,7 +133,7 @@ export function LoadView() {
         useApp.getState().setActivity(p.id);
         setId(undefined);
         if (rulesRef.current.length)
-          void call<Array<{ expr: string; actual?: number; passed: boolean; percent?: boolean }>>('load.thresholds', { rules: rulesRef.current, snapshot: p.snapshot }).then(setChecked, (e) => useApp.getState().toast(asError(e).message, 'error'));
+          void call<Array<{ expr: string; actual?: number; passed: boolean; percent?: boolean }>>('load.thresholds', { rules: rulesRef.current, snapshot: p.snapshot }).then(setChecked, (e) => toastError(e));
       }
     });
     const b = on<{ id: string; error: NormalizedError }>('load.error', (p) => {
@@ -155,7 +156,7 @@ export function LoadView() {
       try {
         await call('load.parseThreshold', { rule });
       } catch (e) {
-        useApp.getState().toast(asError(e).message, 'error');
+        toastError(e);
         return;
       }
     }
@@ -379,7 +380,7 @@ export function LoadView() {
         <Field label="Pass if" hint="Rules checked at the end, comma separated: p95<500, errors<1%, rps>=50, p99[Get pet]<800 (the same as testpion load --threshold)">
           <Input className="mono" value={d.thresholds ?? ''} placeholder="p95<500, errors<1%" onChange={(e) => set({ thresholds: e.target.value })} />
         </Field>
-        <div className="rounded-md border border-warn/40 bg-warn/5 p-3 text-sm flex flex-col gap-2">
+        <Callout tone="warn" block className="rounded-md p-3 text-sm flex flex-col gap-2">
           <div className="flex items-center gap-2 font-medium text-warn">
             <AlertTriangle size={14} /> Safeguards
           </div>
@@ -387,7 +388,7 @@ export function LoadView() {
           <Toggle checked={d.allowRemote} onChange={(allowRemote) => set({ allowRemote })} label="Allow remote hosts (I am authorised to test the target)" />
           {isProd && <Toggle checked={d.allowProduction} onChange={(allowProduction) => set({ allowProduction })} label="Allow this production environment" />}
           {isProd && <Badge tone="bad">Active environment is marked PRODUCTION</Badge>}
-        </div>
+        </Callout>
         {id ? (
           <Button variant="danger" icon={<Square size={12} />} onClick={() => call('load.stop', { id })}>
             Stop
@@ -423,7 +424,7 @@ export function LoadView() {
               )}
             </div>
             {s.done && checked && (
-              <div className={cx('rounded-md border p-2 text-sm flex flex-wrap items-center gap-2', checked.every((c) => c.passed) ? 'border-ok/40 bg-ok/5' : 'border-bad/40 bg-bad/5')}>
+              <Callout tone={checked.every((c) => c.passed) ? 'ok' : 'bad'} block className="rounded-md p-2 text-sm flex flex-wrap items-center gap-2">
                 <span className="font-medium">{checked.every((c) => c.passed) ? 'Passed' : 'Failed'}</span>
                 {checked.map((c) => (
                   <Badge key={c.expr} tone={c.passed ? 'ok' : 'bad'} title={`actual ${c.actual ?? 'n/a'}${c.percent ? '%' : ''}`}>
@@ -431,7 +432,7 @@ export function LoadView() {
                     {c.percent ? '%' : ''})
                   </Badge>
                 ))}
-              </div>
+              </Callout>
             )}
             <MetricGrid>
               <Metric label="Requests" value={s.requests.toLocaleString()} />

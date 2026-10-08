@@ -2,6 +2,8 @@ import { Camera, ChevronDown, ChevronRight, ChevronUp, CircleCheck, Copy, Equal,
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { JSONPath } from 'jsonpath-plus';
 import { cx, IconButton, Input, Menu, VirtualList, type MenuItem } from './ui';
+import { copyText } from '../lib/clipboard';
+import { plural } from '../lib/format';
 
 const ROW = 20;
 
@@ -65,7 +67,7 @@ function assertionItems(r: { path: string; value: unknown; expandable: boolean }
   });
   if (Array.isArray(r.value)) {
     items.push({
-      label: `Has ${r.value.length} item${r.value.length === 1 ? '' : 's'}`,
+      label: `Has ${plural(r.value.length, 'item')}`,
       icon: <ListOrdered size={14} />,
       onSelect: () => onAssert({ type: 'length', path: r.path, expected: (r.value as unknown[]).length }),
     });
@@ -202,7 +204,7 @@ export function JsonTree({ data: full, query, onAssert: assertOnFull, onSaveVari
                       </button>
                     }
                     items={[
-                      { label: 'Copy JSONPath', icon: <Copy size={14} />, onSelect: () => void navigator.clipboard.writeText(r.path) },
+                      { label: 'Copy JSONPath', icon: <Copy size={14} />, onSelect: () => void copyText(r.path, 'the JSONPath') },
                       ...(onSaveVariable
                         ? [{ label: 'Save to variable…', icon: <Variable size={14} />, onSelect: () => onSaveVariable({ name: variableName(r.key!), access: r.access ?? '', value: r.value }) }]
                         : []),
@@ -210,7 +212,7 @@ export function JsonTree({ data: full, query, onAssert: assertOnFull, onSaveVari
                     ]}
                   />
                 ) : (
-                  <button title={`Copy ${r.path}`} onClick={() => navigator.clipboard.writeText(r.path)} className="text-[#0550ae] dark:text-[#79c0ff] hover:underline">
+                  <button title={`Copy ${r.path}`} onClick={() => void copyText(r.path, 'the JSONPath')} className="text-[#0550ae] dark:text-[#79c0ff] hover:underline">
                     {/^\d+$/.test(r.key) ? r.key : `"${r.key}"`}
                   </button>
                 ))}
@@ -345,7 +347,7 @@ export function RawView({ text, language }: { text: string; language?: string })
           <IconButton label="Wrap long lines" active={wrapAt} onClick={() => setWrapAt(!wrapAt)}>
             <WrapText size={14} />
           </IconButton>
-          <IconButton label="Copy" onClick={() => navigator.clipboard.writeText(text)}>
+          <IconButton label="Copy" onClick={() => void copyText(text)}>
             <Copy size={14} />
           </IconButton>
         </div>

@@ -7,7 +7,7 @@ import { slugify } from '../util/ids.js';
 import { loadOpenApi } from './contract.js';
 import { fuzzCases, type FuzzCase } from './fuzz.js';
 import { collectionToOpenApiText } from './from-collection.js';
-import { deref, openApiOutline, type OutlineOperation } from './outline.js';
+import { deref, openApiOutline, successCode, type OutlineOperation } from './outline.js';
 import type { GeneratedTestFile } from './tests-from-spec.js';
 
 /**
@@ -48,10 +48,10 @@ const LOGIN_VALUES: Array<[RegExp, string]> = [
 ];
 
 const singular = (s: string) => (s.endsWith('ies') ? `${s.slice(0, -3)}y` : s.endsWith('ses') || s.endsWith('xes') ? s.slice(0, -2) : s.endsWith('s') ? s.slice(0, -1) : s);
-const success = (op: OutlineOperation) => op.responses.map((r) => r.code).find((c) => /^2\d\d$/.test(c));
+const success = (op: OutlineOperation) => successCode(op.responses.map((r) => r.code));
 const statusOf = (op: OutlineOperation, fallback: number | string) => {
   const s = success(op);
-  return s ? Number(s) : fallback;
+  return s && /^\d+$/.test(s) ? Number(s) : fallback;
 };
 
 /** The resources of a document: every path with a POST whose sibling `<path>/{param}` holds the item operations. */

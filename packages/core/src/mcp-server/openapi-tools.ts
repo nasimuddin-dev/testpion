@@ -9,6 +9,7 @@ import { generateWorkspaceDataset } from '../storage/dataset-files.js';
 import { writeFuzzFindingTests, writeTestsFromSpec } from '../openapi/tests-from-spec.js';
 import { writeFlows } from '../openapi/flows-from-spec.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
+import { findCollection } from '../storage/env-edit.js';
 import { str, type Tool } from './tool.js';
 
 /** MCP tools for API definitions (OpenAPI / Swagger) beyond the diff and coverage: the linter. */
@@ -49,7 +50,7 @@ export function openApiTools(d: { store: WorkspaceStore; readSpecRef(ref: string
       },
       run: (a) => {
         const ref = a.collection !== undefined ? String(a.collection) : undefined;
-        const col = ref ? d.store.listCollections().find((c) => c.id === ref || c.name.toLowerCase() === ref.toLowerCase()) : undefined;
+        const col = ref ? findCollection(d.store, ref) : undefined;
         if (ref && !col) throw new ApsError('ValidationError', `No collection "${ref}"`, { suggestions: ['list_collections names them.'] });
         if (!col && !a.spec) throw new ApsError('ValidationError', 'Give spec (an API definition in specs/) or collection (a name or id)');
         const r = writeFlows(d.store, col ? { collection: d.store.getCollection(col.id) } : { spec: String(a.spec) }, { overwrite: a.overwrite === true });

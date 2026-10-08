@@ -298,13 +298,34 @@ export function Empty({ icon, title, children, action, actions, steps }: { icon?
   );
 }
 
-/** A line that says the next step and offers it: the push after a commit, a key to add. One look everywhere. */
-export function Callout({ tone = 'accent', children, action, ...rest }: { tone?: 'accent' | 'warn'; children: ReactNode; action?: ReactNode } & Record<`data-${string}`, string | undefined>) {
+const CALLOUT_TONE = { accent: 'border-accent/40 bg-accent/5', warn: 'border-warn/40 bg-warn/5', bad: 'border-bad/40 bg-bad/5', ok: 'border-ok/40 bg-ok/5' } as const;
+
+/**
+ * A tinted box with a border in its tone: a line that says the next step and offers it (the push after a commit, a key
+ * to add), or, as a `block`, a titled notice with lines of its own (an error with its reasons, the conflicts to
+ * resolve, the safeguards of a load test). One look everywhere. A block lays out as `rounded-md p-3 text-sm grid gap-2`;
+ * `className` replaces that layout when a place needs another spacing or radius.
+ */
+export function Callout({
+  tone = 'accent',
+  block,
+  as: Tag = 'div',
+  className,
+  children,
+  action,
+  ...rest
+}: { tone?: 'accent' | 'warn' | 'bad' | 'ok'; block?: boolean; as?: 'div' | 'section'; className?: string; role?: string; 'aria-label'?: string; children: ReactNode; action?: ReactNode } & Record<`data-${string}`, string | undefined>) {
+  if (block)
+    return (
+      <Tag className={cx('border', CALLOUT_TONE[tone], className ?? 'rounded-md p-3 text-sm grid gap-2')} {...rest}>
+        {children}
+      </Tag>
+    );
   return (
-    <div className={cx('rounded-lg border px-3 py-2 text-sm flex items-center gap-3 flex-wrap', tone === 'warn' ? 'border-warn/40 bg-warn/5' : 'border-accent/40 bg-accent/5')} {...rest}>
+    <Tag className={cx('rounded-lg border px-3 py-2 text-sm flex items-center gap-3 flex-wrap', CALLOUT_TONE[tone], className)} {...rest}>
       <span className="min-w-0">{children}</span>
       {action && <span className="ml-auto shrink-0">{action}</span>}
-    </div>
+    </Tag>
   );
 }
 

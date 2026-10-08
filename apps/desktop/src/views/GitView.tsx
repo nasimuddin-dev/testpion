@@ -1,7 +1,7 @@
 import { ArrowDown, ArrowUp, Check, Columns2, ExternalLink, FolderGit2, GitBranch, GitCommitHorizontal, GitPullRequest, KeyRound, Pencil, Minus, Plus, RefreshCw, RotateCcw, ShieldAlert, Sparkles, Trash2, Undo2, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { asError, call, on } from '../api';
-import { confirmAction, promptText, useApp } from '../store';
+import { confirmAction, promptText, toastError, useApp } from '../store';
 import { Badge, Button, Callout, cx, Empty, LinkButton, Menu, MoreMenu, PageHeader, SectionTitle, Spinner, Split } from '../components/ui';
 import { GitCommitPanel } from '../components/GitCommitPanel';
 import { plural } from '../lib/format';
@@ -58,7 +58,6 @@ interface SecretFinding {
   variable?: string;
 }
 
-const fail = (e: unknown) => useApp.getState().toast(asError(e).message, 'error');
 
 /** Open a changed request in its editor. */
 function openItem(c: SemanticChange) {
@@ -103,7 +102,7 @@ export function GitView() {
       setLog(lg);
       setPrUrl(pr.url);
     } catch (e) {
-      fail(e);
+      toastError(e);
     }
   }, []);
 
@@ -119,7 +118,7 @@ export function GitView() {
       await op();
       if (done) useApp.getState().toast(done, 'success');
     } catch (e) {
-      fail(e);
+      toastError(e);
     } finally {
       setBusy(undefined);
       void load();
@@ -145,7 +144,7 @@ export function GitView() {
       setMessage('');
       useApp.getState().toast(`Committed ${r.commit?.short ?? ''}`, 'success');
     } catch (e) {
-      fail(e);
+      toastError(e);
     } finally {
       setBusy(undefined);
       void load();
@@ -164,22 +163,17 @@ export function GitView() {
       <Empty
         icon={<FolderGit2 size={26} />}
         title="This workspace is not in git yet"
-        action={
-          <div className="flex gap-2 justify-center">
-            <Button variant="primary" loading={busy === 'init'} onClick={() => void run('init', () => call('git.init', {}), 'The workspace is now a git repository')}>
-              Initialize repository
-            </Button>
-            <Button
-              loading={busy === 'remote'}
-              onClick={async () => {
-                const remote = await promptText('Connect to a git repository', { message: 'The URL of an empty repository (GitHub, GitLab, Bitbucket, Azure DevOps …). Push sends the workspace there.', placeholder: 'https://github.com/team/api-tests.git' });
-                if (remote) await run('remote', () => call('git.init', { remote }), 'Connected: commit, then Push');
-              }}
-            >
-              Connect to a remote…
-            </Button>
-          </div>
-        }
+        actions={[
+          { label: 'Initialize repository', loading: busy === 'init', onClick: () => void run('init', () => call('git.init', {}), 'The workspace is now a git repository') },
+          {
+            label: 'Connect to a remote…',
+            loading: busy === 'remote',
+            onClick: async () => {
+              const remote = await promptText('Connect to a git repository', { message: 'The URL of an empty repository (GitHub, GitLab, Bitbucket, Azure DevOps …). Push sends the workspace there.', placeholder: 'https://github.com/team/api-tests.git' });
+              if (remote) await run('remote', () => call('git.init', { remote }), 'Connected: commit, then Push');
+            },
+          },
+        ]}
       >
         Keep the collections, environments and tests in a git repository to review changes, share them with your team and run them in CI. Results, history and secrets stay on this computer.
       </Empty>
@@ -232,7 +226,7 @@ export function GitView() {
                     useApp.getState().toast(`Deleted ${b}`, 'success');
                     void load();
                   } catch (e) {
-                    if (!/not fully merged/i.test(asError(e).message)) return fail(e);
+                    if (!/not fully merged/i.test(asError(e).message)) return toastError(e);
                     if (await confirmAction({ title: `${b} is not merged`, message: `${b} has commits no other branch has. Delete it anyway?`, confirmLabel: 'Delete anyway', danger: true }))
                       await run('delete', () => call('git.deleteBranch', { branch: b, force: true }), `Deleted ${b}`);
                   }
@@ -335,7 +329,7 @@ export function GitView() {
                     variant="ghost"
                     icon={<Undo2 size={12} />}
                     onClick={async () => {
-                      if (await confirmAction({ title: 'Discard all changes', message: `Throw away ${files.length} changed file${files.length === 1 ? '' : 's'}?`, detail: 'Files go back to the last commit; new files are deleted.', confirmLabel: 'Discard', danger: true }))
+                      if (await confirmAction({ title: 'Discard all changes', message: `Throw away ${plural(files.length, 'changed file')}?`, detail: 'Files go back to the last commit; new files are deleted.', confirmLabel: 'Discard', danger: true }))
                         await run('discard', () => call('git.discard', { files }), 'Changes discarded');
                     }}
                   >
@@ -355,7 +349,7 @@ export function GitView() {
                 <li key={f.path} className="rounded-md border border-line bg-panel">
                   <div className="flex items-center gap-2 px-2 py-1.5 text-sm">
                     <ChangeMark change={f.state} />
-                    <button className="font-mono text-xs truncate text-left hover:underline" title="Show the line diff" onClick={() => void call<string>('git.diff', { path: f.path, staged: f.staged }).then((text) => setDiff(diff?.path === f.path ? undefined : { path: f.path, text }), fail)}>
+                    <button className="font-mono text-xs truncate text-left hover:underline" title="Show the line diff" onClick={() => void call<string>('git.diff', { path: f.path, staged: f.staged }).then((text) => setDiff(diff?.path === f.path ? undefined : { path: f.path, text }), toastError)}>
                       {f.path}
                     </button>
                     {f.staged && <Badge tone="accent">staged</Badge>}
@@ -531,11 +525,11 @@ function SecretsPanel({ findings, onChange, onCommitAnyway }: { findings: Secret
       const left = await call<SecretFinding[]>('git.check');
       onChange(left.length ? left : undefined);
       useApp.getState().toast(
-        r.fixed.length ? `${r.fixed.length} secret${r.fixed.length === 1 ? '' : 's'} moved to ${r.variables.length ? `secret variable${r.variables.length === 1 ? '' : 's'} ${r.variables.join(', ')} of ${env.name}` : 'the secret store'}${r.skipped.length ? `; ${r.skipped.length} left to do by hand` : ''}` : 'Nothing could be fixed by itself; open each one.',
+        r.fixed.length ? `${plural(r.fixed.length, 'secret')} moved to ${r.variables.length ? `secret variable${r.variables.length === 1 ? '' : 's'} ${r.variables.join(', ')} of ${env.name}` : 'the secret store'}${r.skipped.length ? `; ${r.skipped.length} left to do by hand` : ''}` : 'Nothing could be fixed by itself; open each one.',
         r.fixed.length ? 'success' : 'warning',
       );
     } catch (e) {
-      fail(e);
+      toastError(e);
     } finally {
       setBusy(undefined);
     }
@@ -553,12 +547,12 @@ function SecretsPanel({ findings, onChange, onCommitAnyway }: { findings: Secret
       onChange(left.length ? left : undefined);
       useApp.getState().toast(`Removed "${name}"`, 'success');
     } catch (e) {
-      fail(e);
+      toastError(e);
     }
   };
 
   return (
-    <div role="alert" className="rounded-md border border-bad/40 bg-bad/5 p-3 text-sm grid gap-2">
+    <Callout tone="bad" block role="alert">
       <div className="flex items-center gap-2 font-medium">
         <ShieldAlert size={15} className="text-bad" /> Not committed: {findings.length} secret{findings.length === 1 ? ' is' : 's are'} typed into the workspace
       </div>
@@ -617,7 +611,7 @@ function SecretsPanel({ findings, onChange, onCommitAnyway }: { findings: Secret
           Commit anyway
         </Button>
       </div>
-    </div>
+    </Callout>
   );
 }
 
@@ -631,13 +625,13 @@ function ConflictPanel({ files, onDone }: { files: GitFile[]; onDone(): void }) 
       await call('git.resolve', { path, side });
       onDone();
     } catch (e) {
-      fail(e);
+      toastError(e);
     } finally {
       setBusy(undefined);
     }
   };
   return (
-    <section role="alert" className="rounded-md border border-warn/50 bg-warn/5 p-3 grid gap-2">
+    <Callout tone="warn" block as="section" role="alert" className="rounded-md p-3 grid gap-2">
       <SectionTitle>Conflicts · changed by you and by someone else</SectionTitle>
       <ul className="grid gap-1">
         {files.map((f) => (
@@ -661,12 +655,12 @@ function ConflictPanel({ files, onDone }: { files: GitFile[]; onDone(): void }) 
         ))}
       </ul>
       <div className="flex gap-2 items-center">
-        <Button size="sm" variant="ghost" onClick={() => void call('git.abortMerge').then(onDone, fail)}>
+        <Button size="sm" variant="ghost" onClick={() => void call('git.abortMerge').then(onDone, toastError)}>
           Cancel the pull
         </Button>
         <span className="text-xs text-muted">In a collection, only the requests changed on both sides take the side you choose; every other change of both sides stays. When every file is resolved, commit to finish the pull.</span>
       </div>
       {comparing && <GitConflictDialog path={comparing} onClose={() => setComparing(undefined)} onResolved={() => (setComparing(undefined), onDone())} />}
-    </section>
+    </Callout>
   );
 }

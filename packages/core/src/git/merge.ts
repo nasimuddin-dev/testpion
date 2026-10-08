@@ -133,7 +133,7 @@ const parseObj = (s: string): Obj | undefined => {
  * taken; the same variable changed differently on both sides is a conflict (`var:<key>`); the environment's own
  * fields (name, production, colour) merge one by one. Secret values are empty in the files, so they never conflict.
  */
-export function mergeEnvironmentTexts(baseText: string, oursText: string, theirsText: string, resolutions: MergeResolutions = {}): MergeResult | undefined {
+function mergeEnvironmentTexts(baseText: string, oursText: string, theirsText: string, resolutions: MergeResolutions = {}): MergeResult | undefined {
   const [base, ours, theirs] = [parseObj(baseText), parseObj(oursText), parseObj(theirsText)];
   if (!base || !ours || !theirs || !Array.isArray(ours.variables) || !Array.isArray(theirs.variables) || 'items' in ours) return undefined;
   // the by-id merge keys a conflict item:<id>; a variable's id is var:<key>, and its conflict is reported as var:<key>
@@ -160,7 +160,7 @@ const without = (o: Obj, ...keys: string[]): Obj => Object.fromEntries(Object.en
  * A library file (saved gRPC calls, WebSocket connections, AI prompts …) merged by item id; its folders are the
  * union of both sides less the ones a side removed, plus every folder an item is in (as the store writes them).
  */
-export function mergeLibraryTexts(baseText: string, oursText: string, theirsText: string, resolutions: MergeResolutions = {}): MergeResult | undefined {
+function mergeLibraryTexts(baseText: string, oursText: string, theirsText: string, resolutions: MergeResolutions = {}): MergeResult | undefined {
   const [base, ours, theirs] = [parseObj(baseText), parseObj(oursText), parseObj(theirsText)];
   if (!base || !ours || !theirs || !Array.isArray(ours.items) || !Array.isArray(theirs.items) || !Array.isArray(ours.folders)) return undefined;
   const ctx: Ctx = { conflicts: [], items: [], resolutions };

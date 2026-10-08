@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAssistantContext } from '../lib/assistant-context';
 import { parse, print } from 'graphql';
 import { asError, call, on, type NormalizedError } from '../api';
-import { confirmAction, persisted, promptText, useApp } from '../store';
+import { confirmAction, persisted, promptText, toastError, useApp } from '../store';
 import { useIntent, useSendShortcut, useSaveShortcut } from '../hooks';
 import { setGraphQLSchema } from '../monaco';
 import type { AuthConfig, CheckConfig, CheckResult, Collection, HttpRequestSpec, HttpResponseData, KeyValue, SavedGraphQLRequest } from '../types';
@@ -30,6 +30,7 @@ import { VarInput } from '../components/VarInput';
 import { Badge, Button, cx, Empty, IconButton, Input, Select, Split, statusTone, Tabs, Tooltip } from '../components/ui';
 import { ResponseSplit } from '../components/ResponseSplit';
 import { saveAsTestFile } from '../lib/save-test';
+import { currentCollections, refreshCollections, useCollections } from '../lib/collections-store';
 
 interface SchemaType {
   name: string;
@@ -186,7 +187,7 @@ export function GraphQLView() {
       set({ query: op.query, variables: JSON.stringify(op.variables, null, 2), operationName: op.operationName });
       setSub('variables');
     } catch (e) {
-      useApp.getState().toast(asError(e).message, 'error');
+      toastError(e);
     }
   };
 
@@ -276,9 +277,8 @@ export function GraphQLView() {
   useSendShortcut('graphql', () => !running && void run());
 
   // collections sidebar (like REST): folders, new GraphQL requests, drag and drop, run
-  const [collections, setCollections] = useState<Collection[]>([]);
-  const loadCollections = () => call<Collection[]>('col.list').then(setCollections);
-  useEffect(() => void loadCollections(), []);
+  const collections = useCollections();
+  const loadCollections = refreshCollections;
   const saveCollection = async (c: Collection) => {
     await call('col.save', c);
     await loadCollections();
@@ -295,7 +295,7 @@ export function GraphQLView() {
   useIntent('graphql', async (p) => {
     if (p?.reset) setD({ ...docDrafts.load(), query: DEFAULT_QUERY, collectionId: undefined, requestId: undefined, name: NEW_TAB_TITLE.graphql });
     if (p?.collectionId) {
-      const cols = await call<Collection[]>('col.list');
+      const cols = await refreshCollections();
       const c = cols.find((x) => x.id === p.collectionId);
       const n = c && (findNode(c.items, p.requestId) as SavedGraphQLRequest | undefined);
       if (n?.kind === 'graphql') openNode(c!, n);
@@ -303,7 +303,7 @@ export function GraphQLView() {
   });
 
   const save = async () => {
-    const cols = await call<Collection[]>('col.list');
+    const cols = currentCollections();
     if (!cols.some((x) => x.id === d.collectionId) || !d.requestId) return setSaving(true);
     return saveTo(d.collectionId!, d.name);
   };

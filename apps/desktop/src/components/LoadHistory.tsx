@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
-import { call, on } from '../api';
+import { useState } from 'react';
 import { formatMs, timeAgo } from '../lib/format';
 import { axisMs, ChartCard, PointLine } from './charts';
 import { Badge, cx } from './ui';
+import { useRpc } from '../lib/use-rpc';
 
 /** From `load.history` (LoadRunRecord in core). */
 export interface LoadRun {
@@ -70,14 +70,9 @@ function Delta({ value, base, higherIsBetter }: { value: number; base?: number; 
 }
 
 export function LoadHistory({ savedId }: { savedId?: string }) {
-  const [runs, setRuns] = useState<LoadRun[]>([]);
+  const runs = useRpc<LoadRun[]>('load.history', { savedId, limit: 30 }, { fallback: [], reloadOn: ['load.recorded'], keep: true }) ?? [];
   // click a run to compare the others with it
   const [refId, setRefId] = useState<string>();
-  useEffect(() => {
-    const load = () => void call<LoadRun[]>('load.history', { savedId, limit: 30 }).then(setRuns, () => setRuns([]));
-    load();
-    return on('load.recorded', load);
-  }, [savedId]);
   if (!runs.length) return null;
   const ordered = [...runs].reverse();
   const ref = runs.find((r) => r.id === refId);

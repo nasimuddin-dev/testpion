@@ -1,6 +1,6 @@
 import type { Command } from 'commander';
-import { moveCollectionVariablesToEnvironments, WorkspaceManager } from '@testpion/core';
-import { EXIT, bold, dim, green, yellow, CliError, openWorkspace } from '../shared.js';
+import { moveCollectionVariablesToEnvironments, } from '@testpion/core';
+import { EXIT, green, yellow, dim, bold, CliError, printJson, withWorkspace, requireCollection } from '../shared.js';
 
 /** `testpion vars move <collection> --to <environments>`: collection variables into environments (each can set its own value). */
 export function registerVarsMoveCommand(program: Command): void {
@@ -17,11 +17,8 @@ export function registerVarsMoveCommand(program: Command): void {
     .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
     .option('--json', 'print the result as JSON (for scripts and AI agents)')
     .action(async (ref: string, o: { to: string; keys?: string; dryRun?: boolean; workspace?: string; json?: boolean }) => {
-      const { store } = openWorkspace(o.workspace, undefined, new WorkspaceManager());
-      try {
-        const want = ref.toLowerCase();
-        const c = store.listCollections().find((x) => x.id.toLowerCase() === want) ?? store.listCollections().find((x) => x.name.toLowerCase() === want);
-        if (!c) throw new CliError(`No collection "${ref}"`, EXIT.CONFIG_ERROR);
+      return withWorkspace(o.workspace, async (store) => {
+        const c = requireCollection(store, ref);
         let r;
         try {
           r = await moveCollectionVariablesToEnvironments(store, {
@@ -39,13 +36,11 @@ export function registerVarsMoveCommand(program: Command): void {
         } catch (e) {
           throw new CliError((e as Error).message, EXIT.CONFIG_ERROR);
         }
-        if (o.json) return console.log(JSON.stringify({ ...r, dryRun: !!o.dryRun }, null, 2));
+        if (o.json) return printJson({ ...r, dryRun: !!o.dryRun });
         console.log(bold(`${r.moved.length} variable${r.moved.length === 1 ? '' : 's'} of ${c.name}${o.dryRun ? ' would move' : ' moved'}`));
         for (const e of r.environments) console.log(`  ${e.name}: ${green(`${e.added.length} added`)}${e.kept.length ? dim(`, ${e.kept.length} kept (it has them: ${e.kept.join(', ')})`) : ''}`);
         if (r.notMoved.length) console.log(yellow(`Not moved (secret: move them in the app, which keeps their values in the OS secret store): ${r.notMoved.join(', ')}`));
         if (o.dryRun) console.log(yellow('Nothing saved (--dry-run).'));
-      } finally {
-        store.close();
-      }
+      });
     });
 }

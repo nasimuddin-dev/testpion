@@ -5,15 +5,12 @@ import { Command, Option } from 'commander';
 import {
   isSuiteFile,
   lintTestFile,
-  ChainSecretStore,
-  EnvSecretStore,
   WorkspaceManager,
   collectionLoadTarget,
   parseGrpcTarget,
   reflectServer,
   evaluateThresholds,
   parseThreshold,
-  createEngineContext,
   runLoadTest,
   recordLoadRun,
   loadRunRecord,
@@ -21,7 +18,8 @@ import {
   writeReports,
   type LoadTarget,
 } from '@testpion/core';
-import { EXIT, bold, dim, green, red, yellow, CliError, collectVar, openWorkspace, readResults, printLoad } from '../shared.js';
+import { hasTemplate } from '@testpion/shared';
+import { EXIT, green, red, yellow, dim, bold, CliError, printJson, collectVar, withWorkspace, cliContext, requireCollection, readResults, printLoad } from '../shared.js';
 import { runWatching, watchTargets } from '../watch.js';
 import { type RunCliOptions, executeRun, type CollectionCliOptions, executeCollectionRun, executeSend, resolveSelection, runOptions } from '../run.js';
 
@@ -37,8 +35,7 @@ export function registerRunCommands(program: Command): void {
     .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest)')
     .option('--json', 'print the problems as JSON (for scripts and AI agents)')
     .action((paths: string[], o) => {
-      const { store } = openWorkspace(o.workspace, undefined, new WorkspaceManager());
-      try {
+      return withWorkspace(o.workspace, (store) => {
         const tests = store.path('tests');
         const files: string[] = [];
         const walk = (p: string) => {
@@ -57,15 +54,13 @@ export function registerRunCommands(program: Command): void {
         const results = files.map((f) => ({ file: relative(tests, f).split(sep).join('/'), problems: lintTestFile(readFileSync(f, 'utf8'), { file: f, suite: isSuiteFile(f) }) })).filter((x) => x.problems.length);
         const errors = results.reduce((n, x) => n + x.problems.filter((p) => p.severity === 'error').length, 0);
         const total = results.reduce((n, x) => n + x.problems.length, 0);
-        if (o.json) console.log(JSON.stringify({ files: files.length, problems: total, errors, results }, null, 2));
+        if (o.json) printJson({ files: files.length, problems: total, errors, results });
         else {
           for (const r of results) for (const p of r.problems) console.log(`${p.severity === 'error' ? red('error') : p.severity === 'warning' ? yellow('warning') : dim('info')}  ${r.file}:${p.line}:${p.column}  ${p.message}`);
           console.log(total ? `${total} problem${total === 1 ? '' : 's'} in ${results.length} of ${files.length} files (${errors} error${errors === 1 ? '' : 's'})` : green(`${files.length} test files, nothing to fix.`));
         }
         if (errors) process.exitCode = EXIT.TEST_FAILURE;
-      } finally {
-        store.close();
-      }
+      });
     });
   runOptions(program.command('run').description('run a named suite from a workspace').requiredOption('-s, --suite <name>', 'suite name (tests/<name>.suite.yaml)')).action(async (o: RunCliOptions & { watch?: boolean }) => {
     process.exitCode = o.watch ? await runWatching(watchTargets(o.workspace), () => executeRun([], o)) : await executeRun([], o);
@@ -142,7 +137,7 @@ export function registerRunCommands(program: Command): void {
     .option('--saved <name>', 'a load test saved in the app (Load ▸ Save): its target, users, duration, ramps, rate and pass/fail rules; options given here win')
     .action(async (urlArg: string | undefined, o, cmd: Command) => {
       let url = urlArg;
-      if (o.saved) url = applySavedLoadTest(o, cmd, url);
+      if (o.saved) url = await applySavedLoadTest(o, cmd, url);
       if (!url && !o.collection) throw new CliError('Give a URL, --collection or --saved <name>', EXIT.CONFIG_ERROR);
       // thresholds are checked before the test runs, so a typo doesn't waste a run
       const rules = ((o.threshold as string[] | undefined) ?? []).map((r) => {
@@ -156,8 +151,7 @@ export function registerRunCommands(program: Command): void {
         const i = h.indexOf(':');
         return { key: h.slice(0, i).trim(), value: h.slice(i + 1).trim() };
       });
-      const mgr = new WorkspaceManager();
-      const settings = mgr.loadSettings();
+      const settings = new WorkspaceManager().loadSettings();
       let target: LoadTarget = { kind: 'http', request: { method: o.method, url: url ?? '', headers, body: o.data ? { type: /^\s*[{[]/.test(o.data) ? 'json' : 'text', content: o.data } : undefined } };
       let isProduction = false;
       if (o.grpc) {
@@ -170,35 +164,33 @@ export function registerRunCommands(program: Command): void {
         }
         target = { kind: 'grpc', request: { target: url, method: o.grpc, message: o.data ?? '{}', metadata: headers, protoFiles, descriptorSet } };
       } else if (o.collection) {
-        const { store } = openWorkspace(o.workspace, undefined, mgr);
-        const ctx = createEngineContext({ store, secrets: new ChainSecretStore([new EnvSecretStore()]), settings, environment: o.environment });
-        try {
-          const cols = store.listCollections().filter((c) => !c.problem);
-          const col = cols.find((c) => c.id === o.collection) ?? cols.find((c) => c.name.toLowerCase() === String(o.collection).toLowerCase());
-          if (!col) throw new CliError(`Collection "${o.collection}" not found. Available: ${cols.map((c) => c.name).join(', ') || 'none'}`, EXIT.CONFIG_ERROR);
-          const t = await collectionLoadTarget({ collection: col, selection: resolveSelection(col, o.folder), services: ctx.services, warmUp: !!o.warmUp });
-          if (t.warmUp) console.log(dim(`Warm-up: ${t.warmUp.passed} passed, ${t.warmUp.failed + t.warmUp.errors} failed`));
-          if (t.unresolved.length) console.log(yellow(`Unresolved variables: ${t.unresolved.join(', ')} (set them in the environment, or use --warm-up when scripts set them)`));
-          target = t.target;
-          isProduction = !!ctx.environment?.isProduction;
-          console.log(dim(`${t.target.requests.length} requests per pass: ${t.target.requests.map((r) => r.name).join(' → ')}`));
-        } finally {
-          await ctx.dispose();
-          store.close();
-        }
+        ({ target, isProduction } = await withWorkspace(o.workspace, async (store) => {
+          const ctx = cliContext(store, o.environment);
+          try {
+            const col = requireCollection(store, String(o.collection), { loadable: true });
+            const t = await collectionLoadTarget({ collection: col, selection: resolveSelection(col, o.folder), services: ctx.services, warmUp: !!o.warmUp });
+            if (t.warmUp) console.log(dim(`Warm-up: ${t.warmUp.passed} passed, ${t.warmUp.failed + t.warmUp.errors} failed`));
+            if (t.unresolved.length) console.log(yellow(`Unresolved variables: ${t.unresolved.join(', ')} (set them in the environment, or use --warm-up when scripts set them)`));
+            console.log(dim(`${t.target.requests.length} requests per pass: ${t.target.requests.map((r) => r.name).join(' → ')}`));
+            return { target: t.target as LoadTarget, isProduction: !!ctx.environment?.isProduction };
+          } finally {
+            await ctx.dispose();
+          }
+        }));
       }
       // {{variables}} in a URL / saved load test resolve from the workspace and -e environment
-      if (target.kind !== 'sequence' && JSON.stringify(target).includes('{{')) {
-        const { store, ephemeral } = openWorkspace(o.workspace, undefined, mgr);
-        const ctx = createEngineContext({ store, secrets: new ChainSecretStore([new EnvSecretStore()]), settings, environment: o.environment });
-        try {
-          target = ctx.vars.resolveDeep(target);
-          isProduction = !!ctx.environment?.isProduction;
-          if (ctx.vars.unresolved.size) console.log(yellow(`Unresolved variables: ${[...ctx.vars.unresolved].join(', ')}${ephemeral ? ' (no workspace found: pass -w)' : ' (pick an environment with -e)'}`));
-        } finally {
-          await ctx.dispose();
-          store.close();
-        }
+      if (target.kind !== 'sequence' && hasTemplate(JSON.stringify(target))) {
+        const unresolved = target;
+        ({ target, isProduction } = await withWorkspace(o.workspace, async (store, ephemeral) => {
+          const ctx = cliContext(store, o.environment);
+          try {
+            const resolved: LoadTarget = ctx.vars.resolveDeep(unresolved);
+            if (ctx.vars.unresolved.size) console.log(yellow(`Unresolved variables: ${[...ctx.vars.unresolved].join(', ')}${ephemeral ? ' (no workspace found: pass -w)' : ' (pick an environment with -e)'}`));
+            return { target: resolved, isProduction: !!ctx.environment?.isProduction };
+          } finally {
+            await ctx.dispose();
+          }
+        }));
       }
       let last = 0;
       const startedAt = new Date().toISOString();
@@ -232,10 +224,9 @@ export function registerRunCommands(program: Command): void {
       // in a workspace, the run joins its load test history (the app's Load view and the load_history MCP tool)
       if ((o.workspace || o.saved || o.collection) && snap.requests) {
         try {
-          const { store, ephemeral } = openWorkspace(o.workspace, undefined, mgr);
-          try {
-            if (!ephemeral) {
-              const targetText =
+          await withWorkspace(o.workspace, (store, ephemeral) => {
+            if (ephemeral) return;
+            const targetText =
                 target.kind === 'http'
                   ? `${target.request.method} ${new Redactor(settings.redactFields).redactUrl(target.request.url)}`
                   : target.kind === 'grpc'
@@ -257,10 +248,7 @@ export function registerRunCommands(program: Command): void {
                   thresholds: checked?.map((t) => ({ expr: t.expr, passed: t.passed, actual: t.actual })),
                 }),
               );
-            }
-          } finally {
-            store.close();
-          }
+          });
         } catch {
           /* the history is a convenience: never fail the run for it */
         }
@@ -321,18 +309,12 @@ interface SavedLoadTest {
  * `testpion load --saved <name>`: fill the options from a load test saved in the app (library/load-tests.json).
  * Options typed on the command line win; remote hosts still need --allow-remote here.
  */
-function applySavedLoadTest(o: Record<string, unknown>, cmd: Command, url: string | undefined): string | undefined {
-  const { store } = openWorkspace(o.workspace as string | undefined, undefined, new WorkspaceManager());
-  let item: { id: string; name: string; data: SavedLoadTest } | undefined;
-  let names: string[] = [];
-  try {
+async function applySavedLoadTest(o: Record<string, unknown>, cmd: Command, url: string | undefined): Promise<string | undefined> {
+  const { item, names } = await withWorkspace(o.workspace as string | undefined, (store) => {
     const items = store.getLibrary<SavedLoadTest>('load-tests').items;
-    names = items.map((i) => i.name);
     const ref = String(o.saved).toLowerCase();
-    item = items.find((i) => i.id === o.saved) ?? items.find((i) => i.name.toLowerCase() === ref);
-  } finally {
-    store.close();
-  }
+    return { items, names: items.map((i) => i.name), item: items.find((i) => i.id === o.saved) ?? items.find((i) => i.name.toLowerCase() === ref) };
+  });
   if (item) {
     // remembered for the load history
     o._savedId = item.id;

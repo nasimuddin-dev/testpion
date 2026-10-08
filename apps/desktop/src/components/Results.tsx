@@ -4,6 +4,7 @@ import type { NormalizedError } from '../api';
 import type { CheckResult } from '../types';
 import { useApp } from '../store';
 import { Badge, Button, cx, LinkButton } from './ui';
+import { Callout } from '../components/ui';
 
 /** Normalised error display: what happened, why, and how to fix it (spec §45). */
 /** The provider an error names as the one to set up (a missing API key), if any. */
@@ -31,7 +32,7 @@ export function ErrorPanel({ error, context }: { error: NormalizedError; context
   const ask = () =>
     useApp.getState().set({ assistant: { task: 'explain-error', title: `Explain ${error.kind}`, context: { error, ...((context as object) ?? {}) } } });
   return (
-    <div role="alert" className="m-3 rounded-lg border border-bad/40 bg-bad/5 p-4 text-sm">
+    <Callout tone="bad" block role="alert" className="m-3 rounded-lg p-4 text-sm">
       <div className="flex items-start gap-2">
         <XCircle size={18} className="text-bad shrink-0 mt-0.5" />
         <div className="flex-1 min-w-0">
@@ -67,7 +68,7 @@ export function ErrorPanel({ error, context }: { error: NormalizedError; context
           )}
         </div>
       </div>
-    </div>
+    </Callout>
   );
 }
 

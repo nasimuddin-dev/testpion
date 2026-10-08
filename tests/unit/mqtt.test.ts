@@ -1,8 +1,9 @@
 import { describe, it, expect, afterAll, beforeAll } from 'vitest';
+import { fakeServices } from '../helpers.js';
 import { createServer, type Server } from 'node:net';
 import type { AddressInfo } from 'node:net';
 import { Aedes } from 'aedes';
-import { McpManager, MqttSession, ProviderRegistry, Redactor, VariableScope, normalizeTest, realtimeModeFor, runRealtimeExchange, runTests, type ExecServices, type TestResult } from '../../packages/core/src/index.js';
+import { MqttSession, VariableScope, normalizeTest, realtimeModeFor, runRealtimeExchange, runTests, type ExecServices, type TestResult } from '../../packages/core/src/index.js';
 
 let broker: Aedes;
 let server: Server;
@@ -22,10 +23,7 @@ afterAll(async () => {
   await new Promise<void>((ok) => broker.close(() => ok()));
 });
 
-function services(vars = new VariableScope()): ExecServices {
-  const redactor = new Redactor();
-  return { vars, providers: new ProviderRegistry([], vars, redactor), mcp: new McpManager(() => undefined), mcpServers: [], redactor, pricing: [], defaultTimeoutMs: 10_000 };
-}
+const services = (vars?: VariableScope): ExecServices => fakeServices({ scope: vars, timeoutMs: 10_000 });
 
 describe('MQTT', () => {
   it('picks the mode from the URL', () => {

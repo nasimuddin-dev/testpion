@@ -1,9 +1,11 @@
 import { ArrowRightLeft } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
-import { asError, call } from '../api';
-import { useApp } from '../store';
-import type { Collection, Environment } from '../types';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { call } from '../api';
+import { toastError, useApp } from '../store';
+import type { Collection } from '../types';
 import { Badge, Button, Modal } from './ui';
+import { useEnvironments } from '../lib/environments-store';
+import { plural } from '../lib/format';
 
 interface Preview {
   moved: string[];
@@ -16,18 +18,19 @@ interface Preview {
  * own), and the collection loses them.
  */
 export function MoveVariablesDialog({ collection, initial, onClose, onDone }: { collection: Collection; initial?: string[]; onClose(): void; onDone(): void }) {
-  const [envs, setEnvs] = useState<Environment[]>([]);
+  const envs = useEnvironments();
   const [keys, setKeys] = useState<Set<string>>(new Set(initial ?? []));
-  const [targets, setTargets] = useState<Set<string>>(new Set());
+  const [targets, setTargets] = useState<Set<string>>(() => new Set(envs.map((x) => x.id)));
   const [preview, setPreview] = useState<Preview>();
   const [filter, setFilter] = useState('');
   const [busy, setBusy] = useState(false);
+  // every environment is a target once the list is there (the dialog may open before it was fetched)
+  const seeded = useRef(envs.length > 0);
   useEffect(() => {
-    void call<Environment[]>('env.list').then((e) => {
-      setEnvs(e);
-      setTargets(new Set(e.map((x) => x.id)));
-    });
-  }, []);
+    if (seeded.current || !envs.length) return;
+    seeded.current = true;
+    setTargets(new Set(envs.map((x) => x.id)));
+  }, [envs]);
   const opts = useMemo(() => ({ collectionId: collection.id, keys: [...keys], environments: [...targets] }), [collection.id, keys, targets]);
   useEffect(() => {
     if (!keys.size || !targets.size) return setPreview(undefined);
@@ -46,11 +49,11 @@ export function MoveVariablesDialog({ collection, initial, onClose, onDone }: { 
       await call('vars.moveToEnvironments', opts);
       useApp
         .getState()
-        .toast(`${keys.size} variable${keys.size === 1 ? '' : 's'} moved to ${targets.size} environment${targets.size === 1 ? '' : 's'}: set their values per environment now`, 'success');
+        .toast(`${plural(keys.size, 'variable')} moved to ${plural(targets.size, 'environment')}: set their values per environment now`, 'success');
       onDone();
       onClose();
     } catch (e) {
-      useApp.getState().toast(asError(e).message, 'error');
+      toastError(e);
     } finally {
       setBusy(false);
     }

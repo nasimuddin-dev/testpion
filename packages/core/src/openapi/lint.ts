@@ -1,5 +1,6 @@
 import { LineCounter, isMap, isScalar, isSeq, parseDocument, type Node } from 'yaml';
 import { schemaProblems, type OpenApiDoc } from './contract.js';
+import { jsonPointerGet } from '../util/json-ref.js';
 
 /**
  * Lint an OpenAPI 3.x / Swagger 2.0 document: mistakes that break tools and clients (a $ref to nothing, a path
@@ -146,14 +147,7 @@ export function lintOpenApi(text: string, opts: { disable?: string[]; minSeverit
 
   // $refs: every local one resolves; remember what is used
   const used = new Set<string>();
-  const resolve = (ref: string): unknown => {
-    let cur: any = doc;
-    for (const p of ref.slice(2).split('/')) {
-      cur = cur?.[decodeURIComponent(p.replace(/~1/g, '/').replace(/~0/g, '~'))];
-      if (cur === undefined) return undefined;
-    }
-    return cur;
-  };
+  const resolve = (ref: string): unknown => jsonPointerGet(doc, ref);
   const walk = (node: unknown, path: Seg[], depth: number) => {
     if (depth > 60 || !node || typeof node !== 'object') return;
     if (Array.isArray(node)) return node.forEach((x, i) => walk(x, [...path, i], depth + 1));

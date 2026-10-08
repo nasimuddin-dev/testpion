@@ -1,9 +1,10 @@
-import { createReadStream, existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { createReadStream, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 import type { ResultReview, TestResult } from '../model/types.js';
 import { ApsError } from '../errors.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
+import { readJson, writeJson } from '../storage/fsutil.js';
 import { readResultsFile } from './runner.js';
 import { runBreakdown, type RunBreakdown } from './breakdown.js';
 
@@ -30,10 +31,8 @@ export interface ResultsPage {
 export const runReviewsFile = (store: Pick<WorkspaceStore, 'runDir'>, runId: string) => join(store.runDir(runId), 'reviews.json');
 
 export function runReviews(store: Pick<WorkspaceStore, 'runDir'>, runId: string): Record<string, ResultReview> {
-  const f = runReviewsFile(store, runId);
-  if (!existsSync(f)) return {};
   try {
-    return JSON.parse(readFileSync(f, 'utf8')) as Record<string, ResultReview>;
+    return readJson<Record<string, ResultReview>>(runReviewsFile(store, runId), {});
   } catch {
     return {};
   }
@@ -58,9 +57,7 @@ export function reviewResult(
   const note = review === null ? undefined : review.note === undefined ? prev?.note : review.note?.trim() || undefined;
   if (!rating && !note) delete all[resultId];
   else all[resultId] = { ...(rating ? { rating } : {}), ...(note ? { note: note.slice(0, 2000) } : {}), at: new Date().toISOString(), ...(review?.by ? { by: review.by } : prev?.by ? { by: prev.by } : {}) };
-  const f = runReviewsFile(store, runId);
-  writeFileSync(`${f}.tmp`, JSON.stringify(all, null, 2));
-  renameSync(`${f}.tmp`, f);
+  writeJson(runReviewsFile(store, runId), all);
   return all[resultId];
 }
 

@@ -3,6 +3,7 @@ import { ApsError } from '../errors.js';
 import { ENGINE_VERSION } from '../version.js';
 import { envNameForSecret, secretKeys } from '../storage/secrets.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
+import { findCollection } from '../storage/env-edit.js';
 
 /**
  * CI configuration for running a workspace's tests in a pipeline (Postman's "Run in CI"): GitHub Actions,
@@ -87,8 +88,7 @@ export function ciConfig(store: WorkspaceStore, o: CiConfigOptions): CiConfig {
   if (!CI_PROVIDERS.includes(o.provider)) throw new ApsError('ValidationError', `CI provider must be one of ${CI_PROVIDERS.join(', ')}`, { suggestions: [] });
   if (o.suite && !existsSync(store.path('tests', `${o.suite}.suite.yaml`))) throw new ApsError('ValidationError', `No suite "${o.suite}" (tests/${o.suite}.suite.yaml)`, { suggestions: [] });
   if (o.collection) {
-    const r = o.collection.toLowerCase();
-    if (!store.listCollections().some((c) => c.id === o.collection || c.name.toLowerCase() === r)) throw new ApsError('ValidationError', `No collection "${o.collection}"`, { suggestions: [] });
+    if (!findCollection(store, o.collection)) throw new ApsError('ValidationError', `No collection "${o.collection}"`, { suggestions: [] });
   }
   const version = o.version ?? ENGINE_VERSION;
   const tag = version.startsWith('v') ? version : `v${version}`;

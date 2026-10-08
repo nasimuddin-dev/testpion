@@ -3,8 +3,8 @@ import { exportTextFormat } from './export-formats.js';
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { Command, Option } from 'commander';
-import { WorkspaceManager, formatDuration, importRequestSnippet, ciConfig, compareEnvironments, environmentMatrix, compareRequestAcrossEnvironments, collectionRequests, createEngineContext, ChainSecretStore, EnvSecretStore, type CiProvider, convertCollectionScripts, isRequestSnippet, Redactor, collectionMarkdown, collectionHtml, exportPostmanCollection, exportPostmanEnvironment, fetchImportText, readBrunoFolder, collectionToBru, type Environment, bundleWsdl, isWsdl, importIntoWorkspace, diffOpenApi, lintOpenApi, OPENAPI_LINT_RULES, type OpenApiLintSeverity, type OpenApiLintResult, workspaceApiCoverage, apiCoverageMarkdown, securityLint, findEnvironment, setEnvironmentVariables, unsetEnvironmentVariables, variableFlow, collectionToOpenApiText, variableUsages, renameVariable, collectionSavedItems, listWorkspaceDatasets, appendDatasetRow, workspaceReportHtml, collectionVariableFlow, referencedVariableNames, loadHistory, workspaceStorage, deleteRunsBefore, listCertificates, workspaceAttention, decodeJwt, describeExpiry, recordCertificate, checkCertificate, certificateLint } from '@testpion/core';
-import { readDefinition, EXIT, green, red, yellow, dim, bold, CliError, openWorkspace, loadCollectionRef, findWorkspaceUp } from '../shared.js';
+import { WorkspaceManager, formatDuration, importRequestSnippet, ciConfig, compareEnvironments, environmentMatrix, compareRequestAcrossEnvironments, collectionRequests, type CiProvider, convertCollectionScripts, isRequestSnippet, Redactor, collectionMarkdown, collectionHtml, exportPostmanCollection, exportPostmanEnvironment, fetchImportText, readBrunoFolder, collectionToBru, type Environment, bundleWsdl, isWsdl, importIntoWorkspace, diffOpenApi, lintOpenApi, OPENAPI_LINT_RULES, type OpenApiLintSeverity, type OpenApiLintResult, workspaceApiCoverage, apiCoverageMarkdown, securityLint, collectionSecurityFindings, type SecurityFinding, listSpecs, unusedVariables, definedVariableNames, findEnvironment, setEnvironmentVariables, unsetEnvironmentVariables, variableFlow, collectionToOpenApiText, variableUsages, renameVariable, collectionSavedItems, listWorkspaceDatasets, appendDatasetRow, workspaceReportHtml, collectionVariableFlow, loadHistory, workspaceStorage, deleteRunsBefore, listCertificates, workspaceAttention, decodeJwt, describeExpiry, recordCertificate, checkCertificate } from '@testpion/core';
+import { EXIT, green, red, yellow, dim, bold, CliError, printJson, findWorkspaceUp, withWorkspace, cliSecrets, cliContext, requireCollection, requireEnvironment, loadCollectionRef, readDefinition } from '../shared.js';
 
 export function registerDataCommands(program: Command): void {
   program
@@ -18,21 +18,22 @@ export function registerDataCommands(program: Command): void {
     .action(async (ref: string, o: { workspace?: string; environment?: string; failOn?: 'high' | 'medium' | 'low'; json?: boolean }) => {
       const c = await loadCollectionRef(ref, o.workspace);
       const settings = new WorkspaceManager().loadSettings();
-      // variables: those of the environment, collection, workspace and globals count as defined
-      let known: string[] = [];
-      let certs: ReturnType<typeof certificateLint> = [];
+      let findings: SecurityFinding[];
       try {
-        const { store } = openWorkspace(o.workspace, undefined, new WorkspaceManager());
-        const ctx = createEngineContext({ store, secrets: new ChainSecretStore([new EnvSecretStore()]), settings, environment: o.environment });
-        known = Object.keys(ctx.vars.toObject());
-        certs = certificateLint(c, (u) => ctx.vars.resolve(u), listCertificates(store));
-        await ctx.dispose();
-        store.close();
+        // variables: those of the environment, collection, workspace and globals count as defined
+        findings = await withWorkspace(o.workspace, async (store) => {
+          const ctx = cliContext(store, o.environment);
+          try {
+            return collectionSecurityFindings(store, c, ctx, settings.redactFields);
+          } finally {
+            await ctx.dispose();
+          }
+        });
       } catch {
         /* a collection file outside a workspace: only its own variables */
+        findings = [...securityLint(c, settings.redactFields), ...variableFlow(c, [])];
       }
-      const findings = [...securityLint(c, settings.redactFields), ...certs, ...variableFlow(c, known)];
-      if (o.json) console.log(JSON.stringify(findings, null, 2));
+      if (o.json) printJson(findings);
       else if (!findings.length) console.log(green(`No findings in "${c.name}".`));
       else {
         for (const f of findings) console.log(`${f.severity === 'high' ? red('high  ') : f.severity === 'medium' ? yellow('medium') : dim('low   ')} ${f.message}\n       ${dim(f.where)}`);
@@ -49,15 +50,12 @@ export function registerDataCommands(program: Command): void {
     .requiredOption('-w, --workspace <nameOrPath>')
     .option('--json', 'print as JSON')
     .action((name: string, o) => {
-      const { store } = openWorkspace(o.workspace, undefined, new WorkspaceManager());
-      try {
+      return withWorkspace(o.workspace, (store) => {
         const uses = variableUsages(store, name);
-        if (o.json) console.log(JSON.stringify(uses, null, 2));
+        if (o.json) printJson(uses);
         else if (!uses.length) console.log(yellow(`{{${name}}} isn't used or defined in this workspace.`));
         else for (const u of uses) console.log(`${u.where}  ${dim(u.field)}`);
-      } finally {
-        store.close();
-      }
+      });
     });
   varsCmd
     .command('unused')
@@ -65,19 +63,12 @@ export function registerDataCommands(program: Command): void {
     .requiredOption('-w, --workspace <nameOrPath>')
     .option('--json', 'print as JSON')
     .action((o) => {
-      const { store } = openWorkspace(o.workspace, undefined, new WorkspaceManager());
-      try {
-        const used = referencedVariableNames(store);
-        const rows = [
-          ...store.listEnvironments().map((e) => ({ scope: `environment ${e.name}`, unused: e.variables.map((v) => v.key).filter((k) => k && !used.has(k)) })),
-          { scope: 'workspace', unused: (store.workspace.variables ?? []).map((v) => v.key).filter((k) => k && !used.has(k)) },
-        ].filter((x) => x.unused.length);
-        if (o.json) console.log(JSON.stringify(rows, null, 2));
+      return withWorkspace(o.workspace, (store) => {
+        const rows = unusedVariables(store);
+        if (o.json) printJson(rows);
         else if (!rows.length) console.log(green('Every variable is used.'));
         else for (const r of rows) console.log(`${r.scope}: ${r.unused.join(', ')}`);
-      } finally {
-        store.close();
-      }
+      });
     });
   varsCmd
     .command('rename')
@@ -87,16 +78,13 @@ export function registerDataCommands(program: Command): void {
     .requiredOption('-w, --workspace <nameOrPath>')
     .option('--json', 'print as JSON')
     .action(async (from: string, to: string, o) => {
-      const { store } = openWorkspace(o.workspace, undefined, new WorkspaceManager());
-      try {
-        const r = await renameVariable(store, from, to, { secrets: new ChainSecretStore([new EnvSecretStore()]) });
-        if (o.json) console.log(JSON.stringify({ from, to, files: r.files, changed: r.changed }, null, 2));
+      return withWorkspace(o.workspace, async (store) => {
+        const r = await renameVariable(store, from, to, { secrets: cliSecrets() });
+        if (o.json) printJson({ from, to, files: r.files, changed: r.changed });
         else console.log(green(`Renamed {{${from}}} to {{${to}}} in ${r.changed.length} places (${r.files} files).`));
-      } catch (e) {
+      }).catch((e) => {
         throw new CliError((e as Error).message, EXIT.CONFIG_ERROR);
-      } finally {
-        store.close();
-      }
+      });
     });
   program
     .command('openapi-diff')
@@ -115,7 +103,7 @@ export function registerDataCommands(program: Command): void {
         throw new CliError((e as Error).message, EXIT.CONFIG_ERROR);
       }
       if (o.breakingOnly) d = { ...d, nonBreaking: [] };
-      if (o.json) console.log(JSON.stringify(d, null, 2));
+      if (o.json) printJson(d);
       else {
         const ops = d.operations;
         console.log(bold(`${ops.old} → ${ops.new} operations (${ops.added} added, ${ops.removed} removed)`));
@@ -143,7 +131,7 @@ export function registerDataCommands(program: Command): void {
     .action(async (refs: string[], o: { workspace?: string; disable?: string; severity: string; failOn: string; rules?: boolean; json?: boolean }) => {
       const levels = ['error', 'warning', 'info'];
       if (o.rules) {
-        if (o.json) console.log(JSON.stringify(OPENAPI_LINT_RULES, null, 2));
+        if (o.json) printJson(OPENAPI_LINT_RULES);
         else for (const r of OPENAPI_LINT_RULES) console.log(`${r.id.padEnd(28)} ${r.severity.padEnd(8)} ${r.description}`);
         return;
       }
@@ -159,27 +147,20 @@ export function registerDataCommands(program: Command): void {
         if (!docs.length) throw new CliError(`No OpenAPI documents in ${r}`, EXIT.CONFIG_ERROR);
         return docs.map((f) => join(r, f));
       });
-      if (!files.length) {
-        const ws = o.workspace ? resolve(o.workspace) : findWorkspaceUp(process.cwd());
-        const dir = ws ? join(ws, 'specs') : undefined;
-        if (!dir || !existsSync(dir)) throw new CliError('Name the documents to lint, or run it in a workspace with a specs/ folder', EXIT.CONFIG_ERROR);
-        files = readdirSync(dir)
-          .filter((f) => /\.(ya?ml|json)$/i.test(f))
-          .map((f) => join(dir, f));
-        if (!files.length) throw new CliError(`No OpenAPI documents in ${dir}`, EXIT.CONFIG_ERROR);
-      }
+      if (!files.length)
+        files = await withWorkspace(o.workspace, (store, ephemeral) => {
+          const dir = store.path('specs');
+          if (ephemeral || !existsSync(dir)) throw new CliError('Name the documents to lint, or run it in a workspace with a specs/ folder', EXIT.CONFIG_ERROR);
+          const docs = listSpecs(store).map((p) => join(store.root, ...p.split('/')));
+          if (!docs.length) throw new CliError(`No OpenAPI documents in ${dir}`, EXIT.CONFIG_ERROR);
+          return docs;
+        });
       const results: Array<{ file: string } & OpenApiLintResult> = [];
       for (const ref of files) {
-        let text: string;
-        try {
-          text = await readDefinition(ref, (o as { workspace?: string }).workspace);
-        } catch (e) {
-          throw new CliError(`Cannot read ${ref}: ${(e as Error).message}`, EXIT.CONFIG_ERROR);
-        }
-        results.push({ file: ref, ...lintOpenApi(text, { disable, minSeverity: o.severity as OpenApiLintSeverity }) });
+        results.push({ file: ref, ...lintOpenApi(await readDefinition(ref, o.workspace), { disable, minSeverity: o.severity as OpenApiLintSeverity }) });
       }
       const worst = (sev: string) => results.some((r) => r.problems.some((p) => levels.indexOf(p.severity) <= levels.indexOf(sev)));
-      if (o.json) console.log(JSON.stringify(results.length === 1 ? results[0] : results, null, 2));
+      if (o.json) printJson(results);
       else
         for (const r of results) {
           const c = r.counts;
@@ -209,32 +190,24 @@ export function registerDataCommands(program: Command): void {
     .option('--markdown <file>', 'also write a Markdown report (for pull requests)')
     .option('--json', 'print the full report as JSON (for scripts and AI agents)')
     .action(async (specRef: string, o: { workspace?: string; run?: string[]; history?: string | boolean; baseUrl?: string; excludeDeprecated?: boolean; min?: string; markdown?: string; json?: boolean }) => {
-      let specText: string;
-      try {
-        specText = await readDefinition(specRef, o.workspace);
-      } catch (e) {
-        throw new CliError(`Could not read ${specRef}: ${(e as Error).message}`, EXIT.CONFIG_ERROR);
-      }
+      const specText = await readDefinition(specRef, o.workspace);
       const min = o.min === undefined ? undefined : Number(o.min);
       if (min !== undefined && !(min >= 0 && min <= 100)) throw new CliError('--min must be a percentage between 0 and 100', EXIT.CONFIG_ERROR);
-      const { store, ephemeral } = openWorkspace(o.workspace, undefined, new WorkspaceManager());
-      if (ephemeral) throw new CliError('No workspace found: run inside a workspace or pass -w <nameOrPath>', EXIT.CONFIG_ERROR);
-      let result: Awaited<ReturnType<typeof workspaceApiCoverage>>;
-      try {
-        result = await workspaceApiCoverage(store, specText, {
-          runs: o.run,
-          history: o.history === undefined ? undefined : o.history === true ? 1000 : Number(o.history),
-          baseUrl: o.baseUrl,
-          excludeDeprecated: o.excludeDeprecated,
-        });
-      } catch (e) {
-        throw new CliError((e as Error).message, EXIT.CONFIG_ERROR);
-      } finally {
-        store.close();
-      }
-      const { report, sources } = result;
+      const { report, sources } = await withWorkspace(o.workspace, async (store, ephemeral) => {
+        if (ephemeral) throw new CliError('No workspace found: run inside a workspace or pass -w <nameOrPath>', EXIT.CONFIG_ERROR);
+        try {
+          return await workspaceApiCoverage(store, specText, {
+            runs: o.run,
+            history: o.history === undefined ? undefined : o.history === true ? 1000 : Number(o.history),
+            baseUrl: o.baseUrl,
+            excludeDeprecated: o.excludeDeprecated,
+          });
+        } catch (e) {
+          throw new CliError((e as Error).message, EXIT.CONFIG_ERROR);
+        }
+      });
       if (o.markdown) writeFileSync(o.markdown, apiCoverageMarkdown(report));
-      if (o.json) console.log(JSON.stringify({ ...report, sources }, null, 2));
+      if (o.json) printJson({ ...report, sources });
       else {
         const s = report.summary;
         const from = [sources.runs.map((r) => `run ${r.name} (${r.id})`).join(', '), sources.historyEntries ? `${sources.historyEntries} history entries` : ''].filter(Boolean).join(' + ');
@@ -264,8 +237,7 @@ export function registerDataCommands(program: Command): void {
     .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
     .option('--json', 'print as JSON')
     .action((o: { workspace?: string; json?: boolean }) => {
-      const { store } = openWorkspace(o.workspace, undefined, new WorkspaceManager());
-      try {
+      return withWorkspace(o.workspace, (store) => {
         const rows = store
           .listCollections()
           .filter((c) => !c.problem)
@@ -273,12 +245,10 @@ export function registerDataCommands(program: Command): void {
             const saved = collectionSavedItems(store, c.id);
             return { id: c.id, name: c.name, requests: collectionRequests(c).length, grpcCalls: saved?.grpc?.length ?? 0, connections: saved?.websocket?.length ?? 0 };
           });
-        if (o.json) return console.log(JSON.stringify(rows, null, 2));
+        if (o.json) return printJson(rows);
         if (!rows.length) return console.log(dim('No collections. Create one in the app, or import one: testpion import <file>'));
         for (const r of rows) console.log(`${r.name}  ${dim(r.id)}  ${[`${r.requests} request${r.requests === 1 ? '' : 's'}`, r.grpcCalls ? `${r.grpcCalls} gRPC` : '', r.connections ? `${r.connections} connection${r.connections === 1 ? '' : 's'}` : ''].filter(Boolean).join(', ')}`);
-      } finally {
-        store.close();
-      }
+      });
     });
   program
     .command('storage')
@@ -287,8 +257,7 @@ export function registerDataCommands(program: Command): void {
     .option('--delete-runs-older-than <days>', 'delete runs that started more than this many days ago (results and reports; baselines stay)')
     .option('--json', 'print as JSON')
     .action((o: { workspace?: string; deleteRunsOlderThan?: string; json?: boolean }) => {
-      const { store } = openWorkspace(o.workspace, undefined, new WorkspaceManager());
-      try {
+      return withWorkspace(o.workspace, (store) => {
         let deleted: { deleted: number; bytes: number } | undefined;
         if (o.deleteRunsOlderThan !== undefined) {
           const days = Number(o.deleteRunsOlderThan);
@@ -296,14 +265,12 @@ export function registerDataCommands(program: Command): void {
           deleted = deleteRunsBefore(store, new Date(Date.now() - days * 86_400_000).toISOString());
         }
         const u = workspaceStorage(store);
-        if (o.json) return console.log(JSON.stringify({ ...u, ...(deleted ? { deleted } : {}) }, null, 2));
+        if (o.json) return printJson({ ...u, ...(deleted ? { deleted } : {}) });
         if (deleted) console.log(green(`Deleted ${deleted.deleted} run${deleted.deleted === 1 ? '' : 's'} (${(deleted.bytes / 1048576).toFixed(1)} MB)`));
         for (const p of u.parts) console.log(`${p.label.padEnd(28)} ${(p.bytes / 1048576).toFixed(1).padStart(8)} MB  ${dim(`${p.files} files`)}`);
         console.log(`${'Total'.padEnd(28)} ${(u.totalBytes / 1048576).toFixed(1).padStart(8)} MB`);
         console.log(dim(`${u.runs} runs, ${u.history} history entries, ${u.traces} traces`));
-      } finally {
-        store.close();
-      }
+      });
     });
   program
     .command('jwt')
@@ -323,10 +290,10 @@ export function registerDataCommands(program: Command): void {
       } catch (e) {
         throw new CliError((e as Error).message, EXIT.CONFIG_ERROR);
       }
-      if (o.json) return console.log(JSON.stringify(d, null, 2));
+      if (o.json) return printJson(d);
       console.log(bold('Header'), JSON.stringify(d.header));
       console.log(bold('Claims'));
-      console.log(JSON.stringify(d.payload, null, 2));
+      printJson(d.payload);
       if (d.issuedAt) console.log(dim(`issued at  ${d.issuedAt}`));
       if (d.expiresAt) console.log(`${dim('expires at')} ${d.expiresAt}  ${d.expired ? red(`expired ${describeExpiry(d.expiresInSec!)}`) : green(`expires ${describeExpiry(d.expiresInSec!)}`)}`);
       else console.log(yellow('no expiry (exp) claim'));
@@ -341,17 +308,14 @@ export function registerDataCommands(program: Command): void {
     .option('--json', 'print as JSON')
     .option('--markdown', 'print a Markdown list (to post to a chat or a pull request)')
     .action(async (o: { workspace?: string; certDays: string; json?: boolean; markdown?: boolean }) => {
-      const { store } = openWorkspace(o.workspace, undefined, new WorkspaceManager());
-      try {
+      return withWorkspace(o.workspace, async (store) => {
         const items = await workspaceAttention(store, { certDays: Number(o.certDays) || 30 });
-        if (o.json) console.log(JSON.stringify(items, null, 2));
+        if (o.json) printJson(items);
         else if (o.markdown) console.log(items.length ? ['**Needs attention**', ...items.map((i) => `- ${i.severity === 'high' ? '🔴' : i.severity === 'medium' ? '🟠' : '⚪'} ${i.message}`)].join('\n') : '✅ Nothing needs attention.');
         else if (!items.length) console.log(green('Nothing needs attention.'));
         else for (const i of items) console.log(`${i.severity === 'high' ? red('high  ') : i.severity === 'medium' ? yellow('medium') : dim('low   ')} ${i.message}`);
         process.exitCode = items.some((i) => i.severity === 'high') ? EXIT.TEST_FAILURE : EXIT.SUCCESS;
-      } finally {
-        store.close();
-      }
+      });
     });
   program
     .command('certificates')
@@ -377,13 +341,13 @@ export function registerDataCommands(program: Command): void {
           }
         }
         try {
-          const { store } = openWorkspace(o.workspace, undefined, new WorkspaceManager());
-          for (const c of out) if (!c.error) recordCertificate(store, `https://${c.host}:${c.port}/`, c as { validTo?: string });
-          store.close();
+          await withWorkspace(o.workspace, (store) => {
+            for (const c of out) if (!c.error) recordCertificate(store, `https://${c.host}:${c.port}/`, c as { validTo?: string });
+          });
         } catch {
           /* no workspace here: nothing to record */
         }
-        if (o.json) console.log(JSON.stringify(out, null, 2));
+        if (o.json) printJson(out);
         else
           for (const c of out) {
             if (c.error) {
@@ -397,13 +361,12 @@ export function registerDataCommands(program: Command): void {
         if (bad) process.exitCode = EXIT.TEST_FAILURE;
         return;
       }
-      const { store } = openWorkspace(o.workspace, undefined, new WorkspaceManager());
-      try {
+      return withWorkspace(o.workspace, (store) => {
         const list = listCertificates(store);
         const warn = o.warn === undefined ? undefined : Number(o.warn);
         if (warn !== undefined && !(warn >= 0)) throw new CliError('--warn needs a number of days', EXIT.CONFIG_ERROR);
         const soon = warn === undefined ? [] : list.filter((c) => c.daysLeft !== undefined && c.daysLeft <= warn);
-        if (o.json) console.log(JSON.stringify(list, null, 2));
+        if (o.json) printJson(list);
         else if (!list.length) console.log(dim('No certificates yet: they are recorded when HTTPS requests are sent from the app, test runs, monitors or agents.'));
         else {
           const w = Math.min(40, Math.max(...list.map((c) => c.host.length)));
@@ -418,9 +381,7 @@ export function registerDataCommands(program: Command): void {
           if (!o.json) console.error(red(`${soon.length} certificate${soon.length === 1 ? '' : 's'} expire${soon.length === 1 ? 's' : ''} within ${warn} days: ${soon.map((c) => c.host).join(', ')}`));
           process.exitCode = EXIT.TEST_FAILURE;
         }
-      } finally {
-        store.close();
-      }
+      });
     });
   program
     .command('load-history')
@@ -430,18 +391,15 @@ export function registerDataCommands(program: Command): void {
     .option('-n, --limit <n>', 'how many', '20')
     .option('--json', 'print as JSON')
     .action((o: { workspace?: string; query?: string; limit: string; json?: boolean }) => {
-      const { store } = openWorkspace(o.workspace, undefined, new WorkspaceManager());
-      try {
+      return withWorkspace(o.workspace, (store) => {
         const rows = loadHistory(store, { query: o.query, limit: Number(o.limit) || 20 });
-        if (o.json) return console.log(JSON.stringify(rows, null, 2));
+        if (o.json) return printJson(rows);
         if (!rows.length) return console.log(dim('No load tests yet.'));
         for (const r of rows)
           console.log(
             `${new Date(r.startedAt).toLocaleString()}  ${r.name}  ${dim(`${r.virtualUsers} VUs, ${r.durationSec}s`)}  ${Math.round(r.throughput)} req/s  p95 ${formatDuration(r.p95)}${r.ttfbP95 !== undefined ? dim(` (server ${formatDuration(r.ttfbP95)})`) : ''}  ${r.errorRate > 0.01 ? red(`${(r.errorRate * 100).toFixed(1)}% errors`) : `${(r.errorRate * 100).toFixed(1)}% errors`}${r.passed === undefined ? '' : r.passed ? green('  passed') : red('  failed')}`,
           );
-      } finally {
-        store.close();
-      }
+      });
     });
   program
     .command('variable-flow')
@@ -449,16 +407,11 @@ export function registerDataCommands(program: Command): void {
     .argument('<collection>', 'collection name or id')
     .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
     .option('--json', 'print as JSON')
-    .action((ref: string, o: { workspace?: string; json?: boolean }) => {
-      const mgr = new WorkspaceManager();
-      const { store } = openWorkspace(o.workspace, undefined, mgr);
-      try {
-        const cols = store.listCollections().filter((c) => !c.problem);
-        const c = cols.find((x) => x.id === ref) ?? cols.find((x) => x.name.toLowerCase() === ref.toLowerCase());
-        if (!c) throw new CliError(`No collection "${ref}". Collections: ${cols.map((x) => x.name).join(', ') || 'none'}`, EXIT.CONFIG_ERROR);
-        const defined = [...store.listEnvironments().flatMap((e) => e.variables.map((v) => v.key)), ...(store.workspace.variables ?? []).map((v) => v.key), ...(mgr.loadSettings().globalVariables ?? []).map((v) => v.key)];
-        const flows = collectionVariableFlow(store.getCollection(c.id), defined);
-        if (o.json) return console.log(JSON.stringify(flows, null, 2));
+    .action((ref: string, o: { workspace?: string; json?: boolean }) =>
+      withWorkspace(o.workspace, (store) => {
+        const c = requireCollection(store, ref, { loadable: true });
+        const flows = collectionVariableFlow(store.getCollection(c.id), definedVariableNames(store, new WorkspaceManager().loadSettings()));
+        if (o.json) return printJson(flows);
         const shown = flows.filter((f) => f.setBy.length || f.issue);
         if (!shown.length) return console.log(dim('No variables set by scripts, and no problems found.'));
         for (const f of shown) {
@@ -466,10 +419,8 @@ export function registerDataCommands(program: Command): void {
           console.log(`{{${f.name}}}  ${f.setBy.map((p) => p.name).join(', ') || dim(f.defined ? 'environment / collection' : 'nothing sets it')} → ${f.usedBy.length} use${f.usedBy.length === 1 ? '' : 's'}${issue}`);
         }
         if (shown.some((f) => f.issue && f.issue !== 'unused')) process.exitCode = EXIT.TEST_FAILURE;
-      } finally {
-        store.close();
-      }
-    });
+      }),
+    );
   program
     .command('workspace-report')
     .description('the workspace at a glance as one HTML file to share: requests and tests per day, the health of each collection, monitors and the latest runs (names, counts and timings only)')
@@ -477,14 +428,11 @@ export function registerDataCommands(program: Command): void {
     .option('-d, --days <n>', 'days of activity, up to 90', '14')
     .option('-o, --out <file>', 'write here (default: <workspace>-report.html)')
     .action(async (o: { workspace?: string; days: string; out?: string }) => {
-      const { store } = openWorkspace(o.workspace, undefined, new WorkspaceManager());
-      try {
+      return withWorkspace(o.workspace, async (store) => {
         const out = resolve(o.out ?? `${store.workspace.name.replace(/[^\w.-]+/g, '-').slice(0, 60) || 'workspace'}-report.html`);
         writeFileSync(out, workspaceReportHtml(store, { days: Number(o.days) || 14, tzOffsetMin: new Date().getTimezoneOffset(), attention: await workspaceAttention(store) }));
         console.log(green(`Wrote ${out}`));
-      } finally {
-        store.close();
-      }
+      });
     });
   program
     .command('datasets')
@@ -494,8 +442,7 @@ export function registerDataCommands(program: Command): void {
     .option('--add <dataset>', 'add a record to this JSONL dataset (made when missing; ".jsonl" is added without an extension), e.g. an evaluation case')
     .option('--row <json>', 'the record for --add, as JSON: {"message": "Cancel my booking", "expected": "cancellation"}')
     .action(async (o: { workspace?: string; json?: boolean; add?: string; row?: string }) => {
-      const { store } = openWorkspace(o.workspace, undefined, new WorkspaceManager());
-      try {
+      return withWorkspace(o.workspace, async (store) => {
         if (o.add) {
           let row: Record<string, unknown>;
           try {
@@ -507,12 +454,10 @@ export function registerDataCommands(program: Command): void {
           return console.log(o.json ? JSON.stringify(out, null, 2) : green(`${out.path}: ${out.rows} record${out.rows === 1 ? '' : 's'}`));
         }
         const rows = listWorkspaceDatasets(store);
-        if (o.json) return console.log(JSON.stringify(rows, null, 2));
+        if (o.json) return printJson(rows);
         if (!rows.length) return console.log(dim('No datasets. Put CSV, JSON, JSONL or SQLite files in the workspace datasets/ folder.'));
         for (const r of rows) console.log(`${r.path}  ${dim(`${r.format}, ${(r.size / 1024).toFixed(1)} KB${r.tables ? `, tables: ${r.tables.join(', ') || 'none'}` : ''}`)}`);
-      } finally {
-        store.close();
-      }
+      });
     });
   program
     .command('requests')
@@ -522,11 +467,8 @@ export function registerDataCommands(program: Command): void {
     .option('--health', 'add how each HTTP and GraphQL request has been doing in the app: responses, failed, latest status, median time, whether it has checks')
     .option('--json', 'print as JSON')
     .action((ref: string, o: { workspace?: string; json?: boolean; health?: boolean }) => {
-      const { store } = openWorkspace(o.workspace, undefined, new WorkspaceManager());
-      try {
-        const cols = store.listCollections().filter((c) => !c.problem);
-        const c = cols.find((x) => x.id === ref) ?? cols.find((x) => x.name.toLowerCase() === ref.toLowerCase());
-        if (!c) throw new CliError(`No collection "${ref}". Collections: ${cols.map((x) => x.name).join(', ') || 'none'}`, EXIT.CONFIG_ERROR);
+      return withWorkspace(o.workspace, (store) => {
+        const c = requireCollection(store, ref, { loadable: true });
         const redactor = new Redactor();
         const saved = collectionSavedItems(store, c.id);
         const rows = [
@@ -546,7 +488,7 @@ export function registerDataCommands(program: Command): void {
             Object.assign(r, { hasChecks: checks.get(r.id as string), responses: s?.count ?? 0, failed: s?.failed, lastStatus: s?.lastStatus, lastOk: s?.lastOk, medianMs: s?.medianMs });
           }
         }
-        if (o.json) return console.log(JSON.stringify(rows, null, 2));
+        if (o.json) return printJson(rows);
         for (const r of rows as Array<(typeof rows)[number] & { responses?: number; failed?: number; lastStatus?: number | string; lastOk?: boolean; medianMs?: number; hasChecks?: boolean }>) {
           const health =
             o.health && r.responses !== undefined
@@ -554,9 +496,7 @@ export function registerDataCommands(program: Command): void {
               : '';
           console.log(`${r.method.padEnd(6)} ${r.folder ? dim(`${r.folder} / `) : ''}${r.name}  ${dim(r.target)}${health}`);
         }
-      } finally {
-        store.close();
-      }
+      });
     });
   program
     .command('export')
@@ -572,12 +512,7 @@ export function registerDataCommands(program: Command): void {
         // a folder like the one Bruno keeps in git; the workspace's environments go to environments/ (secret values never)
         if (!o.out) throw new CliError('--format bruno writes a folder: give it with --out <folder>', EXIT.CONFIG_ERROR);
         const wsDir = o.workspace ? undefined : findWorkspaceUp(process.cwd());
-        let envs: Environment[] = [];
-        if (o.workspace || wsDir) {
-          const { store } = openWorkspace(o.workspace ?? wsDir, undefined, new WorkspaceManager());
-          envs = store.listEnvironments();
-          store.close();
-        }
+        const envs: Environment[] = o.workspace || wsDir ? await withWorkspace(o.workspace ?? wsDir, (store) => store.listEnvironments()) : [];
         const out = resolve(o.out);
         const files = collectionToBru(c, envs);
         for (const f of files) {
@@ -588,7 +523,7 @@ export function registerDataCommands(program: Command): void {
         console.error(dim(`Bruno collection written to ${out} (${files.length} files${envs.length ? `, ${envs.length} environments without secret values` : ''})`));
         return;
       }
-      if (exportTextFormat(o.format, c, o)) return;
+      if (await exportTextFormat(o.format, c, o)) return;
       if (o.format === 'openapi') {
         const text = collectionToOpenApiText(c, { format: o.json ? 'json' : 'yaml' });
         if (o.out) {
@@ -602,9 +537,7 @@ export function registerDataCommands(program: Command): void {
       const wsDir = o.workspace ?? findWorkspaceUp(process.cwd());
       if (wsDir) {
         try {
-          const { store } = openWorkspace(wsDir, undefined, new WorkspaceManager());
-          savedItems = collectionSavedItems(store, c.id);
-          store.close();
+          savedItems = await withWorkspace(wsDir, (store) => collectionSavedItems(store, c.id));
         } catch {
           savedItems = undefined;
         }
@@ -625,19 +558,13 @@ export function registerDataCommands(program: Command): void {
     .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
     .option('-o, --out <file>', 'write to this file instead of stdout')
     .action((ref: string, o: { workspace?: string; out?: string }) => {
-      const { store, ephemeral } = openWorkspace(o.workspace, undefined, new WorkspaceManager());
-      try {
-        const env = store.getEnvironment(ref);
-        if (!env) throw new CliError(`Environment "${ref}" not found. Available: ${store.listEnvironments().map((e) => e.name).join(', ') || 'none'}`, EXIT.CONFIG_ERROR);
-        const json = JSON.stringify(exportPostmanEnvironment(env), null, 2) + '\n';
+      return withWorkspace(o.workspace, (store, ephemeral) => {
+        const json = JSON.stringify(exportPostmanEnvironment(requireEnvironment(store, ref)), null, 2) + '\n';
         if (o.out) {
           writeFileSync(resolve(o.out), json);
           console.error(dim(`Environment written to ${resolve(o.out)}`));
         } else process.stdout.write(json);
-      } finally {
-        store.close();
-        if (ephemeral) rmSync(ephemeral, { recursive: true, force: true });
-      }
+      });
     });
   program
     .command('docs')
@@ -665,10 +592,8 @@ export function registerDataCommands(program: Command): void {
     .option('--name <name>', 'for a request: its name (default: method and path)')
     .option('--no-contract-checks', 'for an OpenAPI document: do not add openapi contract checks to the requests')
     .option('--json', 'print the result as JSON (for scripts and AI agents)')
-    .action(async (file: string, o) => {
-      const mgr = new WorkspaceManager();
-      const { store } = openWorkspace(o.workspace, undefined, mgr);
-      try {
+    .action((file: string, o) =>
+      withWorkspace(o.workspace, async (store) => {
         const link = /^https?:\/\//i.test(file) ? await fetchImportText(file) : undefined;
         // a folder is a Bruno collection (bruno.json and .bru files)
         const folder = !link && file !== '-' && existsSync(file) && statSync(file).isDirectory();
@@ -678,10 +603,10 @@ export function registerDataCommands(program: Command): void {
         const source = link?.fileName ?? file;
         if (isRequestSnippet(text)) {
           // secrets in the command (tokens, keys, cookies) become {{variables}}; they are never written to disk
-          const r = importRequestSnippet(store.listCollections().filter((c) => !c.problem), text, new Redactor(mgr.loadSettings().redactFields), { collection: o.collection, folder: o.folder, name: o.name });
+          const r = importRequestSnippet(store.listCollections().filter((c) => !c.problem), text, new Redactor(new WorkspaceManager().loadSettings().redactFields), { collection: o.collection, folder: o.folder, name: o.name });
           const saved = store.saveCollection(r.collection);
           const out = { format: r.format, collection: saved.name, collectionId: saved.id, createdCollection: r.created, request: r.node.name, requestId: r.node.id, method: r.node.request.method, url: r.node.request.url, placeholders: r.placeholders };
-          if (o.json) console.log(JSON.stringify(out, null, 2));
+          if (o.json) printJson(out);
           else {
             console.log(green(`Imported ${r.format} request "${r.node.name}" into collection "${saved.name}"`));
             if (r.placeholders.length) console.log(yellow(`Secrets were replaced by variables; set them as secret environment variables: ${r.placeholders.map((p) => `${p.variable} (${p.where})`).join(', ')}`));
@@ -689,7 +614,7 @@ export function registerDataCommands(program: Command): void {
           return;
         }
         const r = importIntoWorkspace(store, text, { contractChecks: o.contractChecks !== false, name: dotenvName(source) ?? httpFileName(source) });
-        if (o.json) console.log(JSON.stringify({ format: r.format, collection: r.collection?.name, collectionId: r.collection?.id, environment: r.environment?.name, environments: r.environments?.map((e) => e.name), secretsToSet: r.secretsToSet, specPath: r.specPath, contractChecks: r.contractChecks, scriptWarnings: r.scriptWarnings, notes: r.notes }, null, 2));
+        if (o.json) printJson({ format: r.format, collection: r.collection?.name, collectionId: r.collection?.id, environment: r.environment?.name, environments: r.environments?.map((e) => e.name), secretsToSet: r.secretsToSet, specPath: r.specPath, contractChecks: r.contractChecks, scriptWarnings: r.scriptWarnings, notes: r.notes });
         else {
           console.log(green(`Imported ${r.format}: ${r.collection ? `collection "${r.collection.name}"` : ''}${r.environments?.length ? ` ${r.environments.length > 1 ? 'environments' : 'environment'} ${r.environments.map((e) => `"${e.name}"`).join(', ')}` : ''}`));
           if (r.specPath) console.log(dim(`Kept the document as ${r.specPath}${r.contractChecks ? `; ${r.contractChecks} requests check the OpenAPI contract` : ''}`));
@@ -700,10 +625,8 @@ export function registerDataCommands(program: Command): void {
           for (const n of r.notes ?? []) console.log(yellow(`  ${n}`));
           if (r.secretsToSet?.length) console.log(yellow(`Secret values were not saved (set them in the app, or as TESTPION_SECRET_* variables): ${r.secretsToSet.join(', ')}`));
         }
-      } finally {
-        store.close();
-      }
-    });
+      }),
+    );
   program
     .command('scripts')
     .description('script tools')
@@ -716,23 +639,18 @@ export function registerDataCommands(program: Command): void {
     .option('--json', 'print the result as JSON')
     .action((o) => {
       if (o.to !== 'tp' && o.to !== 'pm') throw new CliError('--to must be tp or pm', EXIT.CONFIG_ERROR);
-      const { store } = openWorkspace(o.workspace, undefined, new WorkspaceManager());
-      try {
-        const want = o.collection ? String(o.collection).toLowerCase() : undefined;
-        const cols = store.listCollections().filter((c) => !c.problem && (!want || c.id.toLowerCase() === want || c.name.toLowerCase() === want));
-        if (want && !cols.length) throw new CliError(`No collection "${o.collection}"`, EXIT.CONFIG_ERROR);
+      return withWorkspace(o.workspace, (store) => {
+        const cols = o.collection ? [requireCollection(store, String(o.collection), { loadable: true })] : store.listCollections().filter((c) => !c.problem);
         const results = cols.map((c) => {
           const r = convertCollectionScripts(c, o.to === 'tp' ? 'pm' : 'tp', o.to);
           if (!o.dryRun && r.changed) store.saveCollection(r.collection);
           return { collection: c.name, changed: r.changed, replacements: r.replacements, skipped: r.skipped };
         });
-        if (o.json) console.log(JSON.stringify({ to: o.to, dryRun: !!o.dryRun, results }, null, 2));
+        if (o.json) printJson({ to: o.to, dryRun: !!o.dryRun, results });
         else
           for (const r of results)
             console.log(`${r.changed ? green(`${o.dryRun ? 'Would convert' : 'Converted'} ${r.changed} script(s)`) : dim('No change')} in "${r.collection}"${r.skipped.length ? yellow(` (${r.skipped.length} skipped: ${r.skipped.map((s) => s.where).join(', ')})`) : ''}`);
-      } finally {
-        store.close();
-      }
+      });
     });
   program
     .command('ci')
@@ -752,8 +670,7 @@ export function registerDataCommands(program: Command): void {
     .option('-o, --out <file>', 'write the file here (default: print it)')
     .option('--json', 'print { path, content, secrets, command } as JSON')
     .action((provider: string, o) => {
-      const { store } = openWorkspace(o.workspace, undefined, new WorkspaceManager());
-      try {
+      return withWorkspace(o.workspace, (store) => {
         const c = ciConfig(store, {
           provider: provider as CiProvider,
           suite: o.suite,
@@ -767,15 +684,13 @@ export function registerDataCommands(program: Command): void {
           waitFor: o.waitFor,
           waitSeconds: o.waitSeconds ? Number(o.waitSeconds) : undefined,
         });
-        if (o.json) return console.log(JSON.stringify(c, null, 2));
+        if (o.json) return printJson(c);
         if (o.out) {
           writeFileSync(resolve(o.out), c.content);
           console.error(green(`Wrote ${o.out}`) + dim(` (usually ${c.path})`));
         } else process.stdout.write(c.content);
         if (c.secrets.length) console.error(dim(`CI secrets to create: ${c.secrets.map((x) => `${x.name} (${x.description})`).join(', ')}`));
-      } finally {
-        store.close();
-      }
+      });
     });
   program
     .command('wait-for')
@@ -796,7 +711,8 @@ export function registerDataCommands(program: Command): void {
           const res = await fetch(url, { redirect: 'manual', signal: AbortSignal.timeout(Math.min(interval * 5, 10_000)) });
           if (res.status < 400) {
             const r = { ready: true, url, status: res.status, afterMs: Date.now() - t0, attempts };
-            console.log(o.json ? JSON.stringify(r) : green(`${url} answered ${res.status} after ${r.afterMs} ms (${attempts} ${attempts === 1 ? 'try' : 'tries'})`));
+            if (o.json) printJson(r);
+            else console.log(green(`${url} answered ${res.status} after ${r.afterMs} ms (${attempts} ${attempts === 1 ? 'try' : 'tries'})`));
             return;
           }
           last = `status ${res.status}`;
@@ -806,7 +722,8 @@ export function registerDataCommands(program: Command): void {
         await new Promise((r) => setTimeout(r, interval));
       }
       const r = { ready: false, url, afterMs: Date.now() - t0, attempts, last };
-      console.log(o.json ? JSON.stringify(r) : red(`${url} did not answer within ${timeout / 1000} s (${attempts} tries; last: ${last})`));
+      if (o.json) printJson(r);
+      else console.log(red(`${url} did not answer within ${timeout / 1000} s (${attempts} tries; last: ${last})`));
       process.exitCode = EXIT.EXECUTION_ERROR;
     });
   const envCmd = program.command('env').description('list environments, set plain variables, and set their order');
@@ -817,11 +734,10 @@ export function registerDataCommands(program: Command): void {
     .option('--all', 'also list variables that are set everywhere')
     .option('--json', 'print as JSON')
     .action((o: { workspace?: string; all?: boolean; json?: boolean }) => {
-      const { store } = openWorkspace(o.workspace, undefined, new WorkspaceManager());
-      try {
-        const m = environmentMatrix(store.listEnvironments().map((e) => store.getEnvironment(e.id)!).filter(Boolean), { secrets: new EnvSecretStore() });
+      return withWorkspace(o.workspace, (store) => {
+        const m = environmentMatrix(store, { secrets: cliSecrets() });
         const rows = o.all ? m.rows : m.rows.filter((r) => r.incompleteIn.length);
-        if (o.json) console.log(JSON.stringify({ ...m, rows }, null, 2));
+        if (o.json) printJson({ ...m, rows });
         else {
           const w = Math.min(32, Math.max(8, ...m.rows.map((r) => r.key.length)));
           console.log(`${''.padEnd(w)}  ${m.environments.map((e) => bold(e.slice(0, 12).padEnd(12))).join(' ')}`);
@@ -830,9 +746,7 @@ export function registerDataCommands(program: Command): void {
           console.log(m.incomplete ? yellow(`${m.incomplete} of ${m.rows.length} variables are missing, empty or off somewhere`) : green(`All ${m.rows.length} variables are set in every environment`));
         }
         process.exitCode = m.incomplete ? EXIT.TEST_FAILURE : EXIT.SUCCESS;
-      } finally {
-        store.close();
-      }
+      });
     });
   envCmd
     .command('set')
@@ -843,8 +757,7 @@ export function registerDataCommands(program: Command): void {
     .option('--create', 'create the environment if it does not exist')
     .option('--json', 'print the variable names as JSON')
     .action((ref: string, pairs: string[], o) => {
-      const { store } = openWorkspace(o.workspace, undefined, new WorkspaceManager());
-      try {
+      return withWorkspace(o.workspace, (store) => {
         const values: Record<string, string> = {};
         for (const p of pairs) {
           const i = p.indexOf('=');
@@ -852,13 +765,11 @@ export function registerDataCommands(program: Command): void {
           values[p.slice(0, i)] = p.slice(i + 1);
         }
         const env = setEnvironmentVariables(store, ref, values, { create: !!o.create });
-        if (o.json) console.log(JSON.stringify({ environment: env.name, set: Object.keys(values) }, null, 2));
+        if (o.json) printJson({ environment: env.name, set: Object.keys(values) });
         else console.log(green(`${env.name}: set ${Object.keys(values).join(', ')}`));
-      } catch (e) {
+      }).catch((e) => {
         throw e instanceof CliError ? e : new CliError((e as Error).message, EXIT.CONFIG_ERROR);
-      } finally {
-        store.close();
-      }
+      });
     });
   envCmd
     .command('unset')
@@ -867,15 +778,12 @@ export function registerDataCommands(program: Command): void {
     .argument('<keys...>', 'variable names')
     .requiredOption('-w, --workspace <nameOrPath>')
     .action((ref: string, keys: string[], o) => {
-      const { store } = openWorkspace(o.workspace, undefined, new WorkspaceManager());
-      try {
+      return withWorkspace(o.workspace, (store) => {
         const env = unsetEnvironmentVariables(store, ref, keys);
         console.log(green(`${env.name}: removed ${keys.join(', ')}`));
-      } catch (e) {
+      }).catch((e) => {
         throw e instanceof CliError ? e : new CliError((e as Error).message, EXIT.CONFIG_ERROR);
-      } finally {
-        store.close();
-      }
+      });
     });
   envCmd
     .command('get')
@@ -884,17 +792,14 @@ export function registerDataCommands(program: Command): void {
     .argument('<key>', 'variable name')
     .requiredOption('-w, --workspace <nameOrPath>')
     .action((ref: string, key: string, o) => {
-      const { store } = openWorkspace(o.workspace, undefined, new WorkspaceManager());
-      try {
+      return withWorkspace(o.workspace, (store) => {
         const env = findEnvironment(store, ref);
         if (!env) throw new CliError(`No environment "${ref}"`, EXIT.CONFIG_ERROR);
         const v = env.variables.find((x) => x.key === key);
         if (!v) throw new CliError(`${env.name} has no variable "${key}"`, EXIT.CONFIG_ERROR);
         if ((v as { secret?: boolean }).secret) throw new CliError(`"${key}" is a secret variable: its value is never printed`, EXIT.CONFIG_ERROR);
         console.log(v.value);
-      } finally {
-        store.close();
-      }
+      });
     });
   envCmd
     .command('list')
@@ -902,14 +807,11 @@ export function registerDataCommands(program: Command): void {
     .requiredOption('-w, --workspace <nameOrPath>')
     .option('--json', 'print as JSON')
     .action((o) => {
-      const { store } = openWorkspace(o.workspace, undefined, new WorkspaceManager());
-      try {
-        const envs = store.listEnvironments().map((e) => ({ id: e.id, name: e.name, production: !!e.isProduction, variables: e.variables.filter((v) => v.enabled !== false).map((v) => (v.secret ? `${v.key} (secret)` : v.key)) }));
-        if (o.json) console.log(JSON.stringify(envs, null, 2));
+      return withWorkspace(o.workspace, (store) => {
+        const envs = store.listEnvironments().map((e) => ({ id: e.id, name: e.name, production: !!e.isProduction, isProduction: !!e.isProduction, variables: e.variables.filter((v) => v.enabled !== false).map((v) => (v.secret ? `${v.key} (secret)` : v.key)) }));
+        if (o.json) printJson(envs);
         else for (const e of envs) console.log(`${e.name}${e.production ? red(' (production)') : ''}\t${dim(e.variables.join(', '))}`);
-      } finally {
-        store.close();
-      }
+      });
     });
   envCmd
     .command('order')
@@ -918,19 +820,11 @@ export function registerDataCommands(program: Command): void {
     .requiredOption('-w, --workspace <nameOrPath>')
     .option('--json', 'print the new order as JSON')
     .action((refs: string[], o) => {
-      const { store } = openWorkspace(o.workspace, undefined, new WorkspaceManager());
-      try {
-        const envs = store.listEnvironments();
-        const ids = refs.map((r) => {
-          const e = envs.find((x) => x.id === r) ?? envs.find((x) => x.name.toLowerCase() === r.toLowerCase());
-          if (!e) throw new CliError(`No environment "${r}". Available: ${envs.map((x) => x.name).join(', ') || 'none'}`, EXIT.CONFIG_ERROR);
-          return e.id;
-        });
-        const names = store.reorderEnvironments(ids).map((e) => e.name);
-        console.log(o.json ? JSON.stringify(names) : names.join('\n'));
-      } finally {
-        store.close();
-      }
+      return withWorkspace(o.workspace, (store) => {
+        const names = store.reorderEnvironments(refs.map((r) => requireEnvironment(store, r).id)).map((e) => e.name);
+        if (o.json) printJson(names);
+        else console.log(names.join('\n'));
+      });
     });
   envCmd
     .command('diff')
@@ -944,18 +838,15 @@ export function registerDataCommands(program: Command): void {
     .option('--collection <nameOrId>', 'collection of --request')
     .option('--json', 'print as JSON')
     .action(async (left: string, right: string, o) => {
-      const { store } = openWorkspace(o.workspace, undefined, new WorkspaceManager());
-      try {
+      return withWorkspace(o.workspace, async (store) => {
         if (o.request) {
-          const cols = store.listCollections().filter((c) => !c.problem && (!o.collection || c.id === o.collection || c.name.toLowerCase() === String(o.collection).toLowerCase()));
+          const cols = o.collection ? [requireCollection(store, String(o.collection), { loadable: true })] : store.listCollections().filter((c) => !c.problem);
           const want = String(o.request).toLowerCase();
           const collection = cols.find((c) => collectionRequests(c).some((r) => r.id === o.request || r.name.toLowerCase() === want));
           if (!collection) throw new CliError(`No saved request "${o.request}"`, EXIT.CONFIG_ERROR);
           for (const e of [left, right]) if (!store.getEnvironment(e)) throw new CliError(`No environment "${e}"`, EXIT.CONFIG_ERROR);
-          const settings = new WorkspaceManager().loadSettings();
-          const secrets = new ChainSecretStore([new EnvSecretStore()]);
-          const r = await compareRequestAcrossEnvironments({ collection, request: o.request, left, right, context: (environment) => createEngineContext({ store, secrets, settings, environment, collectionId: collection.id }) });
-          if (o.json) console.log(JSON.stringify(r, null, 2));
+          const r = await compareRequestAcrossEnvironments({ collection, request: o.request, left, right, context: (environment) => cliContext(store, environment, { collectionId: collection.id }) });
+          if (o.json) printJson(r);
           else {
             const side = (x: typeof r.left) => `${bold(x.environment)} ${x.error ? red(x.error) : `${x.status} ${dim(formatDuration(x.durationMs ?? 0))}`}`;
             console.log(`${r.request}: ${side(r.left)} vs ${side(r.right)}`);
@@ -971,9 +862,9 @@ export function registerDataCommands(program: Command): void {
           if (!e) throw new CliError(`No environment "${ref}". Available: ${store.listEnvironments().map((x) => x.name).join(', ') || 'none'}`, EXIT.CONFIG_ERROR);
           return e;
         };
-        const d = compareEnvironments(get(left), get(right), { values: !!o.values, secrets: new EnvSecretStore(), redactor: new Redactor(new WorkspaceManager().loadSettings().redactFields) });
+        const d = compareEnvironments(get(left), get(right), { values: !!o.values, secrets: cliSecrets(), redactor: new Redactor(new WorkspaceManager().loadSettings().redactFields) });
         if (!o.all) d.rows = d.rows.filter((r) => r.status !== 'same');
-        if (o.json) console.log(JSON.stringify(d, null, 2));
+        if (o.json) printJson(d);
         else {
           const { summary: s } = d;
           console.log(`${bold(d.left)} vs ${bold(d.right)}: ${s.different} different, ${s.onlyLeft} only in ${d.left}, ${s.onlyRight} only in ${d.right}, ${s.same} same`);
@@ -985,9 +876,7 @@ export function registerDataCommands(program: Command): void {
           }
         }
         process.exitCode = d.summary.different + d.summary.onlyLeft + d.summary.onlyRight ? EXIT.TEST_FAILURE : EXIT.SUCCESS;
-      } finally {
-        store.close();
-      }
+      });
     });
 }
 

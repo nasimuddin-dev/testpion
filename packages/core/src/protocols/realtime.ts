@@ -69,6 +69,10 @@ export async function runRealtimeExchange(x: RealtimeExchange, opts: { redactor?
   const wait = Math.min(Math.max(x.waitMs ?? 1500, 0), 60_000);
   const messages: RealtimeResult['messages'] = [];
   const redact = (s: string) => opts.redactor?.redactString(s) ?? s;
+  const redactHeaders = (h: Record<string, string>) => {
+    const values = Object.fromEntries(Object.entries(h).map(([k, v]) => [k, redact(v)]));
+    return opts.redactor?.redactHeaders(values) ?? values;
+  };
   const record = (m: { direction: 'sent' | 'received' | 'system'; data: string; event?: string; topic?: string; ack?: boolean; key?: string; partition?: number; offset?: string; headers?: Record<string, string> }) =>
     messages.length < 1000 &&
     messages.push({
@@ -80,7 +84,7 @@ export async function runRealtimeExchange(x: RealtimeExchange, opts: { redactor?
       ...(m.key !== undefined ? { key: redact(m.key) } : {}),
       ...(m.partition !== undefined ? { partition: m.partition } : {}),
       ...(m.offset !== undefined ? { offset: m.offset } : {}),
-      ...(m.headers ? { headers: Object.fromEntries(Object.entries(m.headers).map(([k, v]) => [k, opts.redactor?.isSensitiveKey(k) ? '***' : redact(v)])) } : {}),
+      ...(m.headers ? { headers: redactHeaders(m.headers) } : {}),
       data: redact(m.data).slice(0, 20_000),
     });
 

@@ -7,9 +7,8 @@ import {
   setProxySettings,
   setTlsTrust,
   prefetchEnvironmentSecrets,
-  WorkspaceManager,
 } from '@testpion/core';
-import { EXIT, red, dim, yellow, CliError, openWorkspace } from './shared.js';
+import { EXIT, red, dim, yellow, CliError, withWorkspace } from './shared.js';
 import { registerRunCommands } from './commands/run.js';
 import { registerEvaluationCommands } from './commands/evaluations.js';
 import { registerServeCommands } from './commands/serve.js';
@@ -27,7 +26,7 @@ import { registerVarsMoveCommand } from './commands/vars-move.js';
 import { registerTidyCommand } from './commands/tidy.js';
 
 /** The testpion command line: one module per area of commands (commands/*.ts). */
-export function buildProgram(): Command {
+function buildProgram(): Command {
   const program = new Command();
   program
     .name('testpion')
@@ -54,18 +53,15 @@ export function buildProgram(): Command {
   program.hook('preAction', async (_cmd, action) => {
     const o = action.opts() as { environment?: unknown; workspace?: unknown };
     if (typeof o.environment !== 'string' || !o.environment || /\.json$/i.test(o.environment)) return;
-    let store;
+    const environment = o.environment;
+    let r: Awaited<ReturnType<typeof prefetchEnvironmentSecrets>>;
     try {
-      store = openWorkspace(typeof o.workspace === 'string' ? o.workspace : undefined, undefined, new WorkspaceManager()).store;
-    } catch {
-      return; // the command says what is wrong with the workspace
+      r = await withWorkspace(typeof o.workspace === 'string' ? o.workspace : undefined, (store) => prefetchEnvironmentSecrets(store, environment, { trustAll: true }));
+    } catch (e) {
+      if (e instanceof CliError) return; // the command says what is wrong with the workspace
+      throw e;
     }
-    try {
-      const r = await prefetchEnvironmentSecrets(store, o.environment, { trustAll: true });
-      for (const f of r.failed) console.error(yellow(`${f.ref}: ${f.error}`));
-    } finally {
-      store.close();
-    }
+    for (const f of r.failed) console.error(yellow(`${f.ref}: ${f.error}`));
   });
 
   return program;

@@ -515,14 +515,21 @@ export function debuggerHandlers(be: Backend): Handlers {
     },
     /** The browsers found on this computer, the shell lines to paste, and whether the system proxy is ours. */
     'debug.captureOptions': () => ({
-      browsers: installedBrowsers().map(({ name, label }) => ({ name, label })),
+      browsers: installedBrowsers().map(({ name, label, systemProxy }) => ({ name, label, systemProxy: !!systemProxy })),
       shells: state.proxy ? proxyShellLines(state.proxy.url) : [],
       systemProxy: !!state.systemProxy,
       platform: process.platform,
     }),
-    /** A browser with a throw-away profile that sends through the proxy. */
-    'debug.openBrowser': ({ browser, url }: { browser?: BrowserName; url?: string }) => {
+    /**
+     * A browser with a throw-away profile that sends through the proxy. Safari has no proxy of its own: the system
+     * proxy points here first (restored on stop, like "everything on this computer").
+     */
+    'debug.openBrowser': async ({ browser, url }: { browser?: BrowserName; url?: string }) => {
       if (!state.proxy) throw new ApsError('ConfigurationError', 'Start capturing first');
+      if (installedBrowsers().find((b) => b.name === browser)?.systemProxy && !state.systemProxy) {
+        state.systemProxy = await setSystemProxy(state.proxy.url);
+        be.logger.info(`System proxy set to ${state.proxy.url} for ${browser}`);
+      }
       const r = openBrowserWithProxy(state.proxy.url, browser, url);
       be.logger.info(`Debugger: opened ${r.browser} through ${state.proxy.url}`);
       return r;
@@ -795,7 +802,7 @@ export function debuggerHandlers(be: Backend): Handlers {
   };
   // the status bar shows the Debugger wherever you are (running, rules that change traffic, the system proxy):
   // whatever changes that state says so
-  for (const name of ['debug.start', 'debug.stop', 'debug.systemProxy', 'debug.decrypt', 'debug.clear']) {
+  for (const name of ['debug.start', 'debug.stop', 'debug.systemProxy', 'debug.openBrowser', 'debug.decrypt', 'debug.clear']) {
     const h = handlers[name]!;
     handlers[name] = async (p: unknown) => {
       const r = await h(p);

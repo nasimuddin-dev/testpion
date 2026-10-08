@@ -500,10 +500,3 @@ export function timingSummary(r: Pick<HttpResponseData, 'timeline' | 'connection
   const out = { dnsMs: ms('DNS lookup'), tcpMs: ms('TCP connect'), tlsMs: ms('TLS handshake'), ttfbMs: ms('waiting (TTFB)'), downloadMs: ms('download'), totalMs: r.durationMs, reusedConnection: r.connection?.reused, tlsProtocol: r.connection?.tlsProtocol, certificateDaysLeft: r.connection?.certificate?.daysLeft };
   return Object.fromEntries(Object.entries(out).filter(([, v]) => v !== undefined)) as typeof out;
 }
-
-export function toCurl(p: PreparedRequest): string {
-  const parts = [`curl -X ${p.method} '${p.url.replace(/'/g, "'\\''")}'`];
-  for (const [k, v] of p.headers) parts.push(`  -H '${k}: ${v.replace(/'/g, "'\\''")}'`);
-  if (p.bodyPreview) parts.push(`  --data-raw '${p.bodyPreview.replace(/'/g, "'\\''")}'`);
-  return parts.join(' \\\n');
-}

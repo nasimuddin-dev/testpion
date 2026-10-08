@@ -1,8 +1,9 @@
 import { ChevronRight, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { call, on } from '../api';
+import { call } from '../api';
 import { formatBytes, formatMs } from '../lib/format';
 import { Badge, cx, IconButton, Input, statusTone } from './ui';
+import { useEventLog } from '../lib/use-rpc';
 
 export interface ConsoleEntry {
   id: string;
@@ -36,17 +37,12 @@ const KIND_LABEL = { graphql: 'GraphQL', mcp: 'MCP', websocket: 'WebSocket' } as
  * Everything is redacted by the backend before it arrives here.
  */
 export function ConsolePanel() {
-  const [entries, setEntries] = useState<ConsoleEntry[]>([]);
+  const [entries, setEntries] = useEventLog<ConsoleEntry>('console', 500, 'console.recent');
   const [open, setOpen] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState<Filter>('all');
   const [q, setQ] = useState('');
   const bottom = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
-
-  useEffect(() => {
-    void call<ConsoleEntry[]>('console.recent').then(setEntries);
-    return on<ConsoleEntry>('console', (e) => setEntries((l) => [...l.slice(-499), e]));
-  }, []);
 
   const shown = useMemo(() => {
     const needle = q.trim().toLowerCase();

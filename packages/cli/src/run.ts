@@ -6,15 +6,12 @@ import { Command, Option } from 'commander';
 import {
   ApsError,
   collectionRequests,
-  ChainSecretStore,
-  EnvSecretStore,
   Logger,
   WorkspaceManager,
   WorkspaceStore,
   compareToBaseline,
   consoleSink,
   createBaseline,
-  createEngineContext,
   executeHttp,
   timingSummary,
   formatDuration,
@@ -30,7 +27,7 @@ import {
   dbKindOf,
   shortId,
   streamTests,
-  writeReports,
+  recordRun,
   loadTestsFromFile,
   isSuiteFile,
   DEFAULT_THRESHOLDS,
@@ -49,7 +46,7 @@ import {
   otlpTargetFromEnv,
   collectionRealtimeTests,
 } from '@testpion/core';
-import { EXIT, green, red, yellow, dim, bold, cyan, CliError, collectVar, openWorkspace, readImport, loadCollectionRef, cleanupFailedRun, readResults } from './shared.js';
+import { EXIT, green, red, yellow, dim, bold, cyan, CliError, printJson, collectVar, openWorkspace, cliContext, requireCollection, requireEnvironment, readImport, loadCollectionRef, cleanupFailedRun, readResults } from './shared.js';
 
 export function printResult(r: TestResult, verbose: boolean): void {
   const icon = r.status === 'passed' ? green('✓') : r.status === 'skipped' ? yellow('○') : red('✗');
@@ -96,13 +93,10 @@ export interface RunCliOptions {
 }
 
 export async function executeRun(paths: string[], o: RunCliOptions, label?: string): Promise<number> {
-  const mgr = new WorkspaceManager();
-  const settings = mgr.loadSettings();
   const firstPath = paths[0] ? resolve(paths[0]) : undefined;
-  const { store, ephemeral } = openWorkspace(o.workspace, firstPath && existsSync(firstPath) ? dirname(firstPath) : undefined, mgr);
+  const { store, ephemeral } = openWorkspace(o.workspace, firstPath && existsSync(firstPath) ? dirname(firstPath) : undefined, new WorkspaceManager());
   const logger = new Logger((o.logLevel?.toUpperCase() as 'INFO') ?? 'WARN');
   if (o.logLevel) logger.addSink(consoleSink());
-  const secrets = new ChainSecretStore([new EnvSecretStore()]);
 
   let suite: Awaited<ReturnType<typeof loadSuite>> | undefined;
   let patterns = paths;
@@ -123,10 +117,9 @@ export async function executeRun(paths: string[], o: RunCliOptions, label?: stri
   }
 
   const environment = o.environment ?? suite?.environment ?? (store.listEnvironments().length === 1 ? store.listEnvironments()[0]!.name : undefined);
-  if (o.environment && !store.getEnvironment(o.environment))
-    throw new CliError(`Environment "${o.environment}" not found. Available: ${store.listEnvironments().map((e) => e.name).join(', ')}`, EXIT.CONFIG_ERROR);
+  if (o.environment) requireEnvironment(store, o.environment);
 
-  const ctx = createEngineContext({ store, secrets, settings, environment, logger, runtimeVars: o.var, fileRoot: ephemeral ? process.cwd() : undefined });
+  const ctx = cliContext(store, environment, { logger, runtimeVars: o.var, fileRoot: ephemeral ? process.cwd() : undefined });
   const runId = o.resume ?? shortId('run-');
   // outside a workspace the ephemeral one is deleted afterwards, so keep results next to the caller (like Newman's ./newman)
   const outDir = o.out ? resolve(o.out) : ephemeral ? resolve('testpion-results', runId) : store.runDir(runId);
@@ -152,6 +145,8 @@ export async function executeRun(paths: string[], o: RunCliOptions, label?: stri
   if (rerun && !rerun.ids.length) {
     console.log(green('Nothing failed in that run.'));
     await ctx.dispose();
+    store.close();
+    if (ephemeral) rmSync(ephemeral, { recursive: true, force: true });
     return EXIT.SUCCESS;
   }
   const concurrency = Number(o.concurrency ?? suite?.concurrency ?? 4);
@@ -218,9 +213,7 @@ export async function finishRun(a: {
   const { store, ephemeral, summary, outDir, resultsFile, o } = a;
   const results = () => readResults(resultsFile);
   const formats = o.reporter.filter((r) => r !== 'console') as ReportFormat[];
-  const paths2 = formats.length ? await writeReports(outDir, summary, results, formats) : ({} as Record<string, string>);
-  writeFileSync(join(outDir, 'summary.json'), JSON.stringify(summary, null, 2));
-  if (!ephemeral) store.meta.addRun(summary, outDir);
+  const paths2 = await recordRun(store, summary, outDir, { reports: formats, history: !ephemeral });
 
   let regressionFailed = false;
   if (o.baseline) {
@@ -311,31 +304,23 @@ export function resolveSelection(collection: Collection, refs: string[] | undefi
 }
 
 export async function executeCollectionRun(ref: string, o: CollectionCliOptions): Promise<number> {
-  const mgr = new WorkspaceManager();
-  const settings = mgr.loadSettings();
   const fromUrl = /^https?:\/\//i.test(ref);
   const fromFile = fromUrl || (existsSync(ref) && statSync(ref).isFile());
   // a collection file never touches the user's workspace: it runs in an ephemeral one unless -w is given
-  const { store, ephemeral } = openWorkspace(o.workspace, fromFile && !o.workspace ? tmpdir() : undefined, mgr);
+  const { store, ephemeral } = openWorkspace(o.workspace, fromFile && !o.workspace ? tmpdir() : undefined, new WorkspaceManager());
   const logger = new Logger((o.logLevel?.toUpperCase() as 'INFO') ?? 'WARN');
   if (o.logLevel) logger.addSink(consoleSink());
-  const secrets = new ChainSecretStore([new EnvSecretStore()]);
 
   let collection: Collection;
   if (fromUrl) collection = await loadCollectionRef(ref, undefined);
   else if (fromFile) collection = readImport(resolve(ref), 'collection');
-  else {
-    const cols = store.listCollections().filter((c) => !c.problem);
-    const found = cols.find((c) => c.id === ref) ?? cols.find((c) => c.name.toLowerCase() === ref.toLowerCase());
-    if (!found) throw new CliError(`Collection "${ref}" not found. Available: ${cols.map((c) => c.name).join(', ') || 'none'} (or pass a collection file)`, EXIT.CONFIG_ERROR);
-    collection = found;
-  }
+  else collection = requireCollection(store, ref, { loadable: true, hint: '(or pass a collection file)' });
 
   let envFile: Environment | undefined;
   let envName: string | undefined;
   if (o.environment && existsSync(o.environment) && statSync(o.environment).isFile()) envFile = readImport(resolve(o.environment), 'environment');
   else if (o.environment) {
-    if (!store.getEnvironment(o.environment)) throw new CliError(`Environment "${o.environment}" not found. Available: ${store.listEnvironments().map((e) => e.name).join(', ') || 'none'} (or pass an environment file)`, EXIT.CONFIG_ERROR);
+    requireEnvironment(store, o.environment, { hint: '(or pass an environment file)' });
     envName = o.environment;
   } else if (!fromFile && store.listEnvironments().length === 1) envName = store.listEnvironments()[0]!.name;
 
@@ -345,6 +330,7 @@ export async function executeCollectionRun(ref: string, o: CollectionCliOptions)
   const rerun = o.rerunFailed && !ephemeral ? store.failedTestIds(typeof o.rerunFailed === 'string' ? o.rerunFailed : 'last') : undefined;
   if (rerun && !rerun.ids.length) {
     console.log(green('Nothing failed in that run.'));
+    store.close();
     return EXIT.SUCCESS;
   }
   let selection = rerun ? rerun.ids : resolveSelection(collection, o.folder);
@@ -377,7 +363,7 @@ export async function executeCollectionRun(ref: string, o: CollectionCliOptions)
       throw new CliError(`Could not read cookie jar ${o.cookieJar}: ${(e as Error).message}`, EXIT.CONFIG_ERROR);
     }
   }
-  const ctx = createEngineContext({ store, secrets, settings, environment: envName, collectionId: fromFile ? undefined : collection.id, logger, runtimeVars: o.var, cookieJar, fileRoot: ephemeral ? process.cwd() : undefined });
+  const ctx = cliContext(store, envName, { collectionId: fromFile ? undefined : collection.id, logger, runtimeVars: o.var, cookieJar, fileRoot: ephemeral ? process.cwd() : undefined });
   if (fromFile) ctx.vars.setScope('collection', collection.variables);
   if (envFile) ctx.vars.setScope('environment', envFile.variables);
   if (envFile) ctx.services.environmentName = envFile.name;
@@ -478,17 +464,15 @@ export async function executeSend(
   target: string,
   o: { workspace?: string; environment?: string; method: string; header?: string[]; data?: string; include?: boolean; fail?: boolean; json?: boolean },
 ): Promise<number> {
-  const mgr = new WorkspaceManager();
-  const settings = mgr.loadSettings();
+  const settings = new WorkspaceManager().loadSettings();
   const isUrl = /^(https?:\/\/|\{\{)/i.test(target);
-  const { store, ephemeral } = openWorkspace(o.workspace, isUrl && !o.workspace ? tmpdir() : undefined, mgr);
-  const secrets = new ChainSecretStore([new EnvSecretStore()]);
+  const { store, ephemeral } = openWorkspace(o.workspace, isUrl && !o.workspace ? tmpdir() : undefined, new WorkspaceManager());
   let response: { status: number; statusText: string; headers: Array<[string, string]>; body: string; durationMs: number; url: string; timing?: ReturnType<typeof timingSummary> } | undefined;
   let checks: Array<{ name: string; passed: boolean; message?: string }> = [];
   let error: string | undefined;
   try {
     if (isUrl) {
-      const ctx = createEngineContext({ store, secrets, settings, environment: o.environment });
+      const ctx = cliContext(store, o.environment);
       try {
         const headers = (o.header ?? []).map((h) => ({ key: h.slice(0, h.indexOf(':')).trim(), value: h.slice(h.indexOf(':') + 1).trim(), enabled: true }));
         const body = o.data === undefined ? undefined : /^\s*[{[]/.test(o.data) ? { type: 'json' as const, content: o.data } : { type: 'text' as const, content: o.data };
@@ -518,7 +502,7 @@ export async function executeSend(
       if (!matches.length) throw new CliError(`No saved request "${target}". Use "Collection/Request", or a URL.`, EXIT.CONFIG_ERROR);
       if (matches.length > 1) throw new CliError(`"${target}" matches ${matches.length} requests: ${matches.slice(0, 5).map((m) => m.path).join('; ')}. Add the collection or folder.`, EXIT.CONFIG_ERROR);
       const { c, id } = matches[0]!;
-      const ctx = createEngineContext({ store, secrets, settings, environment: o.environment, collectionId: c.id });
+      const ctx = cliContext(store, o.environment, { collectionId: c.id });
       ctx.services.onHttpResponse = (r) => (response = r);
       try {
         await runCollection({
@@ -542,7 +526,7 @@ export async function executeSend(
     if (ephemeral) rmSync(ephemeral, { recursive: true, force: true });
   }
   if (!response) {
-    if (o.json) console.log(JSON.stringify({ error: error ?? 'no response', checks }, null, 2));
+    if (o.json) printJson({ error: error ?? 'no response', checks });
     else console.error(red(error ?? 'The request got no response'));
     return EXIT.EXECUTION_ERROR;
   }
@@ -554,7 +538,7 @@ export async function executeSend(
     } catch {
       /* not JSON */
     }
-    console.log(JSON.stringify({ status: response.status, statusText: response.statusText, url: response.url, durationMs: response.durationMs, timing: response.timing, headers: Object.fromEntries(response.headers), body, checks }, null, 2));
+    printJson({ status: response.status, statusText: response.statusText, url: response.url, durationMs: response.durationMs, timing: response.timing, headers: Object.fromEntries(response.headers), body, checks });
   } else {
     if (o.include) {
       console.log(bold(`${response.status} ${response.statusText}`) + dim(`  ${response.url} · ${formatDuration(response.durationMs)}`));
@@ -620,7 +604,7 @@ export async function executeMock(ref: string, o: { workspace?: string; port?: s
  * OpenTelemetry export of a run's traces: to --otlp, or to the collector in the standard
  * OTEL_EXPORTER_OTLP_* environment variables. Traces are sent in batches while the run goes on.
  */
-export function otlpExporter(o: { otlp?: string; otlpHeader?: string[] }) {
+function otlpExporter(o: { otlp?: string; otlpHeader?: string[] }) {
   const headers: Record<string, string> = {};
   for (const h of o.otlpHeader ?? []) {
     const i = h.indexOf(':');

@@ -4,6 +4,7 @@ import { confirmAction } from '../store';
 import { Button, cx, Input, type MenuItem } from './ui';
 import { closeTabsFor } from './EditorTabs';
 import { askFolderName, focusRow, folderMenuItems, InlineRename, moveToFolderItem, RowMenu, TreeFolderRow, TreeHeader, treeKeys } from './TreeParts';
+import { usePersisted } from '../lib/sticky';
 
 export interface FolderListItem {
   id: string;
@@ -62,13 +63,7 @@ export function FolderList({
   itemNoun?: string;
   empty?: ReactNode;
 }) {
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => {
-    try {
-      return JSON.parse(localStorage.getItem(collapsedKey(id)) ?? '{}') as Record<string, boolean>;
-    } catch {
-      return {};
-    }
-  });
+  const [collapsed, setCollapsed] = usePersisted<Record<string, boolean>>(collapsedKey(id), {});
   const [menuFor, setMenuFor] = useState<string>();
   /** The item being renamed in place (F2, or Rename in its menu). */
   const [renaming, setRenaming] = useState<string>();
@@ -82,16 +77,7 @@ export function FolderList({
   const ql = q.trim().toLowerCase();
   const shown = ql ? items.filter((i) => [i.name, i.folder ?? '', typeof i.subtitle === 'string' ? i.subtitle : ''].some((t) => t.toLowerCase().includes(ql))) : items;
   const [dropTarget, setDropTarget] = useState<string | null>();
-  const toggle = (f: string) =>
-    setCollapsed((c) => {
-      const next = { ...c, [f]: !c[f] };
-      try {
-        localStorage.setItem(collapsedKey(id), JSON.stringify(next));
-      } catch {
-        /* storage unavailable */
-      }
-      return next;
-    });
+  const toggle = (f: string) => setCollapsed((c) => ({ ...c, [f]: !c[f] }));
   const allFolders = [...new Set([...folders, ...items.map((i) => i.folder).filter((f): f is string => !!f)])].sort((a, b) => a.localeCompare(b));
 
   const newFolder = async () => {

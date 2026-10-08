@@ -1,9 +1,9 @@
 import { Download } from 'lucide-react';
 import { useState } from 'react';
-import { asError, call } from '../api';
-import { useApp } from '../store';
-import { download } from '../lib/format';
+import { call } from '../api';
+import { toastError, useApp } from '../store';
 import { Button, Field, Modal, Select } from './ui';
+import { downloadContent } from '../lib/files';
 
 type Format = 'testpion' | 'postman' | 'openapi' | 'bruno' | 'http' | 'asyncapi';
 
@@ -33,20 +33,20 @@ export function ExportDialog({ collections, initial, onClose }: { collections: A
       if (what === 'workspace') {
         if (!workspace) return;
         const r = await call<{ path?: string; bundle?: unknown }>('ws.export', { ref: workspace.path });
-        if (r.bundle) download(`${workspace.name}.apsworkspace.json`, JSON.stringify(r.bundle, null, 2));
+        if (r.bundle) downloadContent(`${workspace.name}.apsworkspace.json`, JSON.stringify(r.bundle, null, 2), { type: 'application/json' });
         if (r.bundle || r.path) toast(`Workspace exported${r.path ? ` to ${r.path}` : ''} (secret values are never exported)`, 'success');
         if (r.bundle || r.path) onClose();
         return;
       }
       const r = await call<{ path?: string; collection?: unknown; text?: string; name: string; notes: string[] }>('col.export', { id: what, format });
-      if (r.collection) download(r.name, JSON.stringify(r.collection, null, 2));
-      else if (r.text !== undefined) download(r.name, r.text, format === 'openapi' || format === 'asyncapi' ? 'application/yaml' : 'text/plain');
+      if (r.collection) downloadContent(r.name, JSON.stringify(r.collection, null, 2), { type: 'application/json' });
+      else if (r.text !== undefined) downloadContent(r.name, r.text, { type: format === 'openapi' || format === 'asyncapi' ? 'application/yaml' : 'text/plain' });
       else if (!r.path) return; // the save dialog was cancelled
       const extra = r.notes.length ? ` Not exported: ${r.notes.join('; ')}.` : '';
       toast(`${r.path ? `Exported to ${r.path}.` : 'Exported.'}${extra}`, r.notes.length ? 'info' : 'success');
       onClose();
     } catch (e) {
-      toast(asError(e).message, 'error');
+      toastError(e);
     } finally {
       setBusy(false);
     }

@@ -1,7 +1,7 @@
 import { ArrowDown, ArrowUp, Check, Pencil, Plus, Play, Scale, Trash2, X, Zap } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { asError, call } from '../api';
-import { confirmAction, promptText, useApp } from '../store';
+import { confirmAction, promptText, toastError } from '../store';
 import { Badge, Button, cx, Empty, Field, Input, Menu, Modal, Select, Toggle, type MenuItem } from './ui';
 import { CompareView, type Compared } from './ResponseHistory';
 
@@ -59,7 +59,6 @@ export interface HeldBreakpoint {
   exchange: { id: string; method: string; url: string; requestHeaders: Record<string, string>; requestBody?: string; status?: number; responseHeaders?: Record<string, string>; responseBody?: string };
 }
 
-const fail = (e: unknown) => useApp.getState().toast(asError(e).message, 'error');
 const KIND_TONE: Record<RuleKind, 'default' | 'ok' | 'bad' | 'warn' | 'accent'> = { ignore: 'default', only: 'ok', highlight: 'accent', modify: 'warn', reply: 'bad', redirect: 'warn', breakpoint: 'bad' };
 export const HIGHLIGHT_CLASS: Record<string, string> = {
   red: 'border-l-2 border-l-bad bg-bad/10',
@@ -75,7 +74,7 @@ export async function loadRules(): Promise<RulesState | undefined> {
   try {
     return await call<RulesState>('debug.rules');
   } catch (e) {
-    fail(e);
+    toastError(e);
     return undefined;
   }
 }
@@ -92,7 +91,7 @@ export function RulesPanel({ state, onChange, host }: { state?: RulesState; onCh
     try {
       onChange(await call<RulesState>(method, params));
     } catch (e) {
-      fail(e);
+      toastError(e);
     }
   };
   const profileItems: MenuItem[] = [
@@ -454,7 +453,7 @@ export function BreakpointDialog({ bp, onDone }: { bp: HeldBreakpoint; onDone():
     try {
       await call('debug.resumeBreakpoint', { id: bp.id, edits, abort });
     } catch (err) {
-      fail(err);
+      toastError(err);
     }
     onDone();
   };

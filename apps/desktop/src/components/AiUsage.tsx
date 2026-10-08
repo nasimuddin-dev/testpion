@@ -1,9 +1,8 @@
-import { useEffect, useState } from 'react';
-import { call } from '../api';
 import { formatCost, formatMs, plural, timeAgo, undatedModel } from '../lib/format';
 import { BarRow, ChartCard, StatTile, Swatch } from './charts';
 import { Empty, LinkButton, Spinner } from './ui';
 import { useApp } from '../store';
+import { useRpc } from '../lib/use-rpc';
 
 /** From `ai.usage` (llmUsage in core). */
 interface Usage {
@@ -23,10 +22,7 @@ const OUT = 'var(--accent)';
 
 /** What the prompts run here used, per model: tokens (input and output), estimated cost and time. */
 export function AiUsage() {
-  const [rows, setRows] = useState<Usage[]>();
-  useEffect(() => {
-    void call<Usage[]>('ai.usage').then(setRows, () => setRows([]));
-  }, []);
+  const rows = useRpc<Usage[]>('ai.usage', undefined, { fallback: [] });
   if (!rows)
     return (
       <div className="h-full grid place-items-center">

@@ -1,5 +1,6 @@
 import { ApsError } from '../errors.js';
 import type { Collection, CollectionNode, KeyValue } from '../model/types.js';
+import { escapeRegex } from '../util/redact.js';
 
 /**
  * Find and replace across a collection's requests (the collection's Find and replace…, `testpion replace`,
@@ -36,7 +37,7 @@ function matcher(o: ReplaceOptions): (s: string) => string {
   if (!o.find) throw new ApsError('ValidationError', 'Give the text to find');
   let re: RegExp;
   try {
-    re = new RegExp(o.regex ? o.find : o.find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), o.caseSensitive ? 'g' : 'gi');
+    re = new RegExp(o.regex ? o.find : escapeRegex(o.find), o.caseSensitive ? 'g' : 'gi');
   } catch (e) {
     throw new ApsError('ValidationError', `Not a valid regular expression: ${(e as Error).message}`);
   }

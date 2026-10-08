@@ -2,7 +2,7 @@ import { FileCode2, Save, Upload } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { OnMount } from '@monaco-editor/react';
 import { asError, call } from '../api';
-import { persisted, useApp } from '../store';
+import { persisted, toastError, useApp } from '../store';
 import { useIntent, useSaveShortcut } from '../hooks';
 import { useDoc } from '../lib/docs';
 import { useSticky } from '../lib/sticky';
@@ -14,7 +14,7 @@ import { ApiPreviewPanel, type ApiOutline } from '../components/ApiPreviewPanel'
 import { ApiFuzzPanel } from '../components/ApiFuzzPanel';
 import { AsyncPreviewPanel, type AsyncOutline } from '../components/AsyncPreviewPanel';
 import { useSingleEditorTab } from '../components/EditorTabs';
-import { Badge, Button, Empty, Tabs } from '../components/ui';
+import { Badge, Button, Empty, Tabs, useDebounced } from '../components/ui';
 
 type Tab = 'definition' | 'preview' | 'lint' | 'fuzz' | 'coverage' | 'compare';
 
@@ -78,18 +78,19 @@ export function ApiDefinitionView() {
       setSaved(text);
       useApp.getState().toast(`Saved ${spec}`, 'success');
     } catch (e) {
-      useApp.getState().toast(asError(e).message, 'error');
+      toastError(e);
     }
   };
   useSaveShortcut('apidef', () => void save());
 
   // lint the text as it is typed (a moment after typing stops): the Lint tab, and markers in the editor
   const [lint, setLint] = useState<ApiLintResult>();
+  const settledText = useDebounced(text, 400);
   useEffect(() => {
-    if (!text || isAsync) return;
-    const t = setTimeout(() => void call<ApiLintResult>('openapi.lint', { text }).then(setLint, () => setLint(undefined)), 400);
-    return () => clearTimeout(t);
-  }, [text]);
+    if (!settledText || isAsync) return;
+    void call<ApiLintResult>('openapi.lint', { text: settledText }).then(setLint, () => setLint(undefined));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settledText]);
   // the operations as the docs read them, for the Preview tab (only while it is shown)
   const [outline, setOutline] = useState<{ outline?: ApiOutline; async?: AsyncOutline; error?: string }>({});
   useEffect(() => {
@@ -145,11 +146,7 @@ export function ApiDefinitionView() {
       <Empty
         icon={<FileCode2 size={28} />}
         title="Open an API definition"
-        action={
-          <Button variant="primary" icon={<Upload size={14} />} onClick={() => useApp.getState().openIntent('collections', { import: true })}>
-            Import OpenAPI
-          </Button>
-        }
+        actions={[{ label: 'Import OpenAPI', icon: <Upload size={14} />, onClick: () => useApp.getState().openIntent('collections', { import: true }) }]}
       >
         Pick an OpenAPI document under <b>API definitions</b> in the sidebar, or import one: it's kept in the workspace for contract checks, API coverage and comparing versions.
       </Empty>

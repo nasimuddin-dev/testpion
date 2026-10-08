@@ -126,14 +126,10 @@ describe('pull request links', () => {
   });
 });
 
-describe('git with the merge driver', () => {
-  let hasGit = false;
-  beforeAll(async () => {
-    hasGit = !!(await gitVersion());
-  });
+const hasGit = !!(await gitVersion());
 
-  it('two branches that change different requests merge without a conflict; the semantic diff between commits', async () => {
-    if (!hasGit) return;
+describe('git with the merge driver', () => {
+  it.skipIf(!hasGit)('two branches that change different requests merge without a conflict; the semantic diff between commits', async () => {
     const ws = join(root, 'ws');
     const store = WorkspaceStore.create(ws, 'Merge');
     await gitInit(ws);
@@ -195,7 +191,7 @@ describe('git with the merge driver', () => {
     expect(settled.items.map((i) => i.request.url)).toEqual(['https://x/a-2-theirs', 'https://x/b-theirs', 'https://x/c-ours']);
     expect((await gitStatus(ws)).files.find((f) => f.path === 'collections/api.json')).toMatchObject({ staged: true });
     store.close();
-  });
+  }, 120_000);
 });
 
 describe('git arguments from users and agents', () => {

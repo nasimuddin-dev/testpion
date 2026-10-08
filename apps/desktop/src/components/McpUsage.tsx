@@ -1,8 +1,7 @@
-import { useEffect, useState } from 'react';
-import { call } from '../api';
 import { formatMs, plural, timeAgo } from '../lib/format';
 import { BarRow, ChartCard, Swatch } from './charts';
 import { Empty, Spinner } from './ui';
+import { useRpc } from '../lib/use-rpc';
 
 /** From `mcp.toolUsage` (mcpToolUsage in core). */
 interface Usage {
@@ -16,11 +15,7 @@ interface Usage {
 
 /** How this server's tools have been called from the app: calls and failures per tool, and their times. */
 export function McpUsage({ serverId }: { serverId: string }) {
-  const [rows, setRows] = useState<Usage[]>();
-  useEffect(() => {
-    setRows(undefined);
-    void call<Usage[]>('mcp.toolUsage', { serverId }).then(setRows, () => setRows([]));
-  }, [serverId]);
+  const rows = useRpc<Usage[]>('mcp.toolUsage', { serverId }, { fallback: [] });
   if (!rows)
     return (
       <div className="h-full grid place-items-center">

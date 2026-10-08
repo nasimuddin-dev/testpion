@@ -1,6 +1,7 @@
 import { randomInt, randomUUID } from 'node:crypto';
 import { ApsError } from '../errors.js';
 import { dynamicValue } from '../vars/dynamic.js';
+import { deref, typeOf as schemaType } from '../util/json-ref.js';
 
 /**
  * Test data for data-driven runs (`testpion datasets generate`, the Datasets view's Generate, `generate_dataset`):
@@ -49,15 +50,7 @@ const BY_NAME: Array<[RegExp, string]> = [
 
 const ISO_DATE = (d: Date) => d.toISOString();
 
-function deref(doc: Json | undefined, node: any, seen = 0): any {
-  if (!doc || !node || typeof node !== 'object' || typeof node.$ref !== 'string' || seen > 20) return node;
-  if (!node.$ref.startsWith('#/')) return {};
-  let cur: any = doc;
-  for (const p of node.$ref.slice(2).split('/')) cur = cur?.[decodeURIComponent(p.replace(/~1/g, '/').replace(/~0/g, '~'))];
-  return deref(doc, cur, seen + 1);
-}
-
-const typeOf = (s: any): string | undefined => (Array.isArray(s?.type) ? s.type.find((t: string) => t !== 'null') : (s?.type ?? (s?.properties ? 'object' : s?.items ? 'array' : undefined)));
+const typeOf = (s: any) => schemaType(s, { infer: true });
 
 /** One value for a field: its enum, its format, what its name says, or its type within its limits. */
 export function generateValue(name: string, s0: unknown, doc?: Json, depth = 0, row = 0): unknown {

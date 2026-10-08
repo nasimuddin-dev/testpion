@@ -4,7 +4,7 @@ import { stringify } from 'yaml';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { slugify } from '../util/ids.js';
 import { fuzzCases, fuzzFindingsToTests, type FuzzCase, type FuzzReport } from './fuzz.js';
-import { openApiOutline } from './outline.js';
+import { openApiOutline, successCode } from './outline.js';
 import { parse as parseYaml } from 'yaml';
 import { importAsyncApi } from '../import/asyncapi.js';
 
@@ -80,7 +80,7 @@ export function testsFromSpec(text: string, opts: { specPath?: string; negative?
       const mine = cases.filter((c) => c.operation === label);
       const valid = mine.find((c) => c.mutation === 'valid');
       if (!valid) continue; // DELETE without includeDelete
-      const success = op.responses.map((r) => r.code).find((c) => /^2\d\d$/.test(c)) ?? op.responses.map((r) => r.code).find((c) => /^2/i.test(c));
+      const success = successCode(op.responses.map((r) => r.code));
       const title = op.summary ?? op.operationId ?? label;
       tests.push(testOf(valid, { id: idOf(op.operationId ?? label), name: title, status: success, specPath: opts.specPath }));
       if (opts.negative !== false) {
@@ -140,7 +140,7 @@ const parseMsg = (m: unknown) => {
  * came back against the document (the asyncapi check). Brokers come from the "<API> servers" environment its import
  * makes ({{productionUrl}} …).
  */
-export function testsFromAsyncApi(text: string, specPath?: string): GeneratedTestFile[] {
+function testsFromAsyncApi(text: string, specPath?: string): GeneratedTestFile[] {
   const imp = importAsyncApi(text);
   const items = imp.savedItems?.websocket ?? [];
   const api = slugify(specPath?.split('/').pop()?.replace(/\.(asyncapi\.)?(ya?ml|json)$/i, '') || imp.collection.name) || 'events';

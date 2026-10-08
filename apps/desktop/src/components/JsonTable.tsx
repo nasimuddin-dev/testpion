@@ -3,8 +3,9 @@ import { useMemo, useState } from 'react';
 import { plural } from '../lib/format';
 import { Button, cx, Input, Segmented, Select } from './ui';
 import { ChartCard } from './charts';
-import { promptText, useApp } from '../store';
-import { asError, call } from '../api';
+import { promptText, toastError, useApp } from '../store';
+import { call } from '../api';
+import { copyText } from '../lib/clipboard';
 
 type Row = Record<string, unknown>;
 const isRow = (v: unknown): v is Row => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -36,7 +37,7 @@ export function tableRowsOf(json: unknown): { rows: Row[]; path: string } | unde
 
 const LIMIT = 500;
 /** Rows as CSV (RFC 4180 quoting), every row that matches the filter, in the shown order. */
-export function rowsToCsv(rows: Row[], columns: string[]): string {
+function rowsToCsv(rows: Row[], columns: string[]): string {
   const q = (s: string) => (/[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s);
   return [columns.map(q).join(','), ...rows.map((r) => columns.map((c) => q(cell(r[c]))).join(','))].join('\r\n') + '\r\n';
 }
@@ -102,10 +103,7 @@ export function JsonTable({ rows, path }: { rows: Row[]; path: string }) {
           icon={<Copy size={12} />}
           title="Copy the rows shown (all of them, not only the first 500) as CSV"
           onClick={() =>
-            void navigator.clipboard.writeText(rowsToCsv(shown, columns)).then(
-              () => useApp.getState().toast(`Copied ${plural(shown.length, 'row')} as CSV`, 'success'),
-              () => useApp.getState().toast('Could not copy to the clipboard', 'error'),
-            )
+            void copyText(rowsToCsv(shown, columns), `${plural(shown.length, 'row')} as CSV`)
           }
         >
           Copy CSV
@@ -121,7 +119,7 @@ export function JsonTable({ rows, path }: { rows: Row[]; path: string }) {
               const r = await call<{ name: string }>('datasets.saveCsv', { name, text: rowsToCsv(shown, columns) });
               useApp.getState().toast(`Saved ${plural(shown.length, 'row')} to datasets/${r.name}. Pick it in the Collection Runner.`, 'success');
             } catch (e) {
-              useApp.getState().toast(asError(e).message, 'error');
+              toastError(e);
             }
           }}
         >

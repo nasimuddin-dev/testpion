@@ -18,6 +18,9 @@ export { applicationOfPort, ownerOfProcess, type ProgramInfo };
 import type { Duplex } from 'node:stream';
 import { ApsError } from '../errors.js';
 import { shortId } from '../util/ids.js';
+import { sleep } from '../util/concurrency.js';
+import { flattenHeaders } from '../util/headers.js';
+import { BoundedMap } from '../util/collections.js';
 import { trustedCa } from '../net/proxy.js';
 import { applyHeaderEdits, decideRequest, highlightRuleForResponse, type DebuggerRule, type HighlightStyle } from './rules.js';
 import { sseParser, webSocketFrameParser, type DebuggerSseEvent, type WebSocketFrame } from './frames.js';
@@ -161,12 +164,6 @@ export interface DebuggerProxy {
 }
 
 const MAX_FRAMES = 500;
-const flat = (h: IncomingMessage['headers']): Record<string, string> =>
-  Object.fromEntries(
-    Object.entries(h)
-      .filter(([k, v]) => v !== undefined && !k.startsWith(':'))
-      .map(([k, v]) => [k, Array.isArray(v) ? v.join(', ') : String(v)]),
-  );
 /** Headers HTTP/2 forbids (connection-specific) and HTTP/2's pseudo-headers, which HTTP/1.1 has no place for. */
 const HOP_BY_HOP = new Set(['connection', 'keep-alive', 'proxy-connection', 'transfer-encoding', 'upgrade', 'http2-settings', 'te']);
 const forH2 = (h: Record<string, string | string[] | number | undefined>) =>
@@ -177,7 +174,6 @@ const forH2Out = (h: Record<string, string | string[] | number | undefined>) => 
 /** The HTTP/2 compatibility response has the same methods as ServerResponse; it is handled as one and told apart here. */
 const isH2 = (res: ServerResponse): boolean => 'stream' in res && !!(res as unknown as Http2ServerResponse).stream;
 const textLike = (ct: string | undefined) => !ct || /json|text|xml|javascript|html|form|yaml|graphql|csv|urlencoded/i.test(ct);
-const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 /** Collect a stream into text, up to `max` bytes (the rest is counted, not kept). */
 function collect(stream: NodeJS.ReadableStream, max: number, keep: boolean): Promise<{ text?: string; bytes: number; truncated: boolean }> {
@@ -212,7 +208,7 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
   const session = opts.session ?? new DebuggerSession({ maxBodyBytes: opts.maxSessionBodyBytes });
   const exchanges = session.items;
   const appOf = opts.applicationOf ?? applicationOfPort;
-  const appCache = new Map<number, Promise<string | ProgramInfo | undefined>>();
+  const appCache = new BoundedMap<number, Promise<string | ProgramInfo | undefined>>(500);
   /** Hits per rule, and the rules already counted for an exchange (a highlight is checked again on the response). */
   const hits = new Map<string, number>();
   const counted = new WeakMap<DebuggerExchange, Set<string>>();
@@ -258,13 +254,12 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
         if (recorded.has(e)) opts.onExchange?.(e, 'update');
       });
   };
-  const owners = new Map<number, Promise<string | undefined>>();
+  const owners = new BoundedMap<number, Promise<string | undefined>>(500);
   const ownerFor = (pid: number) => {
     let p = owners.get(pid);
     if (!p) {
       p = (opts.ownerOf ?? ownerOfProcess)(pid).catch(() => undefined);
       owners.set(pid, p);
-      if (owners.size > 500) owners.delete(owners.keys().next().value!);
     }
     return p;
   };
@@ -294,7 +289,6 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
           return a;
         });
       appCache.set(port, p);
-      if (appCache.size > 500) appCache.delete(appCache.keys().next().value!);
     }
     return p;
   };
@@ -342,7 +336,7 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
     }
     if (origin) origin.requests++;
     const h2 = isH2(res);
-    const requestHeaders = flat(req.headers as IncomingMessage['headers']);
+    const requestHeaders = flattenHeaders(req.headers as IncomingMessage['headers']);
     if (h2 && !requestHeaders.host && req.headers[':authority']) requestHeaders.host = String(req.headers[':authority']);
     const e: DebuggerExchange = {
       id: shortId('dbg-'),
@@ -545,7 +539,7 @@ ${pem ? `<p>To see HTTPS too, install and trust TestPion's root certificate on t
       e.waitMs = Date.now() - t0;
       e.status = Number(h[':status']);
       e.statusText = '';
-      e.responseHeaders = flat(withoutPseudo(h as Record<string, string>) as IncomingMessage['headers']);
+      e.responseHeaders = flattenHeaders(withoutPseudo(h as Record<string, string>) as IncomingMessage['headers']);
       responseEncoding = h['grpc-encoding'] as string | undefined;
       status(h);
       if (flags & h2c.NGHTTP2_FLAG_END_STREAM) {
@@ -562,7 +556,7 @@ ${pem ? `<p>To see HTTPS too, install and trust TestPion's root certificate on t
       res.write(c);
     });
     up.on('trailers', (t) => {
-      e.trailers = flat(withoutPseudo(t as Record<string, string>) as IncomingMessage['headers']);
+      e.trailers = flattenHeaders(withoutPseudo(t as Record<string, string>) as IncomingMessage['headers']);
       status(t);
       res.addTrailers(forH2(t as Record<string, string>) as Record<string, string>);
     });
@@ -604,7 +598,7 @@ ${pem ? `<p>To see HTTPS too, install and trust TestPion's root certificate on t
       e.waitMs = Date.now() - t0;
       e.status = ures.statusCode;
       e.statusText = ures.statusMessage;
-      e.responseHeaders = flat(ures.headers);
+      e.responseHeaders = flattenHeaders(ures.headers);
       e.contentType = ures.headers['content-type'];
       const keep = textLike(e.contentType);
       if (!hold) {
@@ -730,7 +724,7 @@ ${pem ? `<p>To see HTTPS too, install and trust TestPion's root certificate on t
       connectionId: origin?.id ?? connectionOf(req.socket),
       host: target.host,
       clientPort: origin?.clientPort ?? req.socket.remotePort ?? 0,
-      requestHeaders: flat(req.headers),
+      requestHeaders: flattenHeaders(req.headers),
       requestBodyBytes: 0,
       responseBodyBytes: 0,
       frames: [],
@@ -776,7 +770,7 @@ ${pem ? `<p>To see HTTPS too, install and trust TestPion's root certificate on t
       e.waitMs = Date.now() - t0;
       e.status = ures.statusCode;
       e.statusText = ures.statusMessage;
-      e.responseHeaders = flat(ures.headers);
+      e.responseHeaders = flattenHeaders(ures.headers);
       e.open = true;
       const lines = [
         `HTTP/1.1 ${ures.statusCode} ${ures.statusMessage}`,
@@ -809,7 +803,7 @@ ${pem ? `<p>To see HTTPS too, install and trust TestPion's root certificate on t
       e.waitMs = Date.now() - t0;
       e.status = ures.statusCode;
       e.statusText = ures.statusMessage;
-      e.responseHeaders = flat(ures.headers);
+      e.responseHeaders = flattenHeaders(ures.headers);
       const lines = [
         `HTTP/1.1 ${ures.statusCode} ${ures.statusMessage}`,
         ...Object.entries(ures.headers).flatMap(([k, v]) => (Array.isArray(v) ? v.map((x) => `${k}: ${x}`) : v !== undefined ? [`${k}: ${v}`] : [])),
@@ -839,7 +833,7 @@ ${pem ? `<p>To see HTTPS too, install and trust TestPion's root certificate on t
       url: `https://${host}:${port}`,
       host: `${host}:${port}`,
       clientPort: socket.remotePort ?? 0,
-      requestHeaders: flat(req.headers),
+      requestHeaders: flattenHeaders(req.headers),
       requestBodyBytes: 0,
       responseBodyBytes: 0,
     };

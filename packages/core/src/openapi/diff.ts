@@ -1,4 +1,5 @@
 import { loadOpenApi, type OpenApiDoc } from './contract.js';
+import { deref, typeOf as schemaType } from '../util/json-ref.js';
 
 /**
  * Breaking-change report between two versions of an OpenAPI 3 / Swagger 2 document, for CI
@@ -27,21 +28,8 @@ type Json = Record<string, any>;
 const METHODS = ['get', 'put', 'post', 'delete', 'options', 'head', 'patch', 'trace'];
 const MAX_DEPTH = 10;
 
-/** Resolve a local `$ref` (`#/components/schemas/Pet`); cycles resolve to an empty schema. */
-function deref(doc: OpenApiDoc, node: any, seen: Set<string> = new Set()): any {
-  if (!node || typeof node !== 'object' || typeof node.$ref !== 'string') return node;
-  if (seen.has(node.$ref) || !node.$ref.startsWith('#/')) return {};
-  seen.add(node.$ref);
-  let cur: any = doc;
-  for (const p of node.$ref.slice(2).split('/')) cur = cur?.[p.replace(/~1/g, '/').replace(/~0/g, '~')];
-  return deref(doc, cur, seen);
-}
-
-const typeOf = (s: any): string | undefined => {
-  if (!s || typeof s !== 'object') return undefined;
-  const t = Array.isArray(s.type) ? s.type.filter((x: string) => x !== 'null').join('|') : s.type;
-  return t || (s.properties ? 'object' : s.items ? 'array' : undefined);
-};
+/** Every non-null type of a schema (`string|integer`), inferred from properties / items when it does not say. */
+const typeOf = (s: any) => (s && typeof s === 'object' ? schemaType(s, { infer: true, all: true }) : undefined);
 
 /** Operations by `METHOD /path` with path parameters normalised (`/pets/{id}` = `/pets/{petId}`). */
 function operations(doc: OpenApiDoc): Map<string, { label: string; op: Json; pathItem: Json }> {

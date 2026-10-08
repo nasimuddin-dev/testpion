@@ -116,7 +116,7 @@ export function describeRoot(root: protobuf.Root): GrpcMethodInfo[] {
 }
 
 /** A message with every field set to an example value (nested messages to a limited depth). */
-export function exampleMessage(type: protobuf.Type, depth = 0): Record<string, unknown> {
+function exampleMessage(type: protobuf.Type, depth = 0): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   const oneofSeen = new Set<string>();
   for (const f of type.fieldsArray) {
@@ -132,7 +132,7 @@ export function exampleMessage(type: protobuf.Type, depth = 0): Record<string, u
 }
 
 /** JSON Schema of a message in the JSON form used here (64-bit integers as strings, enums as names). */
-export function messageSchema(type: protobuf.Type, depth = 0): Record<string, unknown> {
+function messageSchema(type: protobuf.Type, depth = 0): Record<string, unknown> {
   const properties: Record<string, unknown> = {};
   for (const f of type.fieldsArray) {
     f.resolve();

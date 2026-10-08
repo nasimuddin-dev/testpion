@@ -7,6 +7,7 @@ import { useApp, type AssistantRequest } from '../store';
 import { Markdown } from './Markdown';
 import { AiGeneratedNotice, ErrorPanel } from './Results';
 import { Badge, Button, cx, IconButton, Input, Spinner } from './ui';
+import { copyText } from '../lib/clipboard';
 
 interface Turn {
   role: 'user' | 'assistant';
@@ -272,7 +273,7 @@ const Answer = memo(function Answer({ turn, live, apply }: { turn: Turn; live?: 
               <BookOpen size={10} /> {turn.provider} · {turn.model}
             </Badge>
           </span>
-          <button className="inline-flex items-center gap-1 hover:text-fg" onClick={() => void navigator.clipboard.writeText(turn.content)}>
+          <button className="inline-flex items-center gap-1 hover:text-fg" onClick={() => void copyText(turn.content, 'the answer')}>
             <Copy size={11} /> Copy
           </button>
         </div>

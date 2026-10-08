@@ -1,16 +1,13 @@
 import { describe, it, expect, afterAll } from 'vitest';
+import { runCliSync } from '../helpers.js';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { spawnSync } from 'node:child_process';
 
 // `testpion openapi-lint`: problems as file:line:column, exit 1 on errors (or the --fail-on level), a folder or the workspace's specs/.
 const dir = mkdtempSync(join(tmpdir(), 'tp-oalint-'));
 afterAll(() => rmSync(dir, { recursive: true, force: true, maxRetries: 3 }));
-const cli = (...args: string[]) => {
-  const r = spawnSync(process.execPath, [join(process.cwd(), 'packages/cli/bin/testpion.js'), 'openapi-lint', ...args], { encoding: 'utf8', cwd: dir, env: { ...process.env, NO_COLOR: '1' } });
-  return { status: r.status, out: r.stdout, err: r.stderr };
-};
+const cli = (...args: string[]) => runCliSync(['openapi-lint', ...args], { cwd: dir });
 const good = [
   'openapi: 3.0.0',
   'info: { title: Pets, version: "1" }',
@@ -45,7 +42,7 @@ describe('CLI: openapi-lint', () => {
     mkdirSync(join(dir, 'specs'), { recursive: true });
     writeFileSync(join(dir, 'workspace.json'), JSON.stringify({ name: 'lint' }));
     writeFileSync(join(dir, 'specs', 'pets.yaml'), bad);
-    const json = JSON.parse(cli('--json', '--fail-on', 'none').out) as { problems: Array<{ rule: string; line: number }> };
+    const [json] = JSON.parse(cli('--json', '--fail-on', 'none').out) as Array<{ problems: Array<{ rule: string; line: number }> }>;
     expect(json.problems.map((p) => `${p.rule}@${p.line}`)).toEqual(['path-param-undeclared@6']);
     expect(cli('specs').status).toBe(1);
     const rules = JSON.parse(cli('--rules', '--json').out) as Array<{ id: string }>;

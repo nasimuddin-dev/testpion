@@ -1,7 +1,7 @@
-import { asError, call } from './api';
-import { promptText, useApp } from './store';
+import { call } from './api';
+import { promptText, toastError, useApp } from './store';
 import { downloadContent, hasNativeDialogs } from './lib/files';
-import { uid } from './lib/format';
+import { plural, uid } from './lib/format';
 
 /**
  * Commands of the application menu (File ▸ New, Import, Export …) and the command palette. The menu
@@ -31,7 +31,6 @@ export type MenuCommand =
   | 'settings'
   | 'feedback';
 
-const toastError = (e: unknown) => useApp.getState().toast(asError(e).message, 'error');
 
 export async function runMenuCommand(cmd: MenuCommand): Promise<void> {
   const s = useApp.getState();
@@ -86,7 +85,7 @@ export async function runMenuCommand(cmd: MenuCommand): Promise<void> {
       case 'git-ready': {
         // the open workspace: .gitignore, .gitattributes and git-friendly collection files (safe to repeat)
         const r = await call<{ files: string[]; collections: string[]; inRepository: boolean }>('ws.gitReady');
-        const did = [...r.files, ...(r.collections.length ? [`${r.collections.length} collection file${r.collections.length === 1 ? '' : 's'} tidied`] : [])];
+        const did = [...r.files, ...(r.collections.length ? [`${plural(r.collections.length, 'collection file')} tidied`] : [])];
         const repo = r.inRepository ? '' : ' It is not a git repository yet: run git init in its folder (Show in folder).';
         return s.toast(did.length ? `Ready for git: ${did.join(', ')}.${repo}` : `This workspace is already ready for git.${repo}`, 'success');
       }

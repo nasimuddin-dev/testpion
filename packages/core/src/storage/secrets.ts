@@ -1,6 +1,5 @@
-import { existsSync, readFileSync } from 'node:fs';
 import { ApsError } from '../errors.js';
-import { atomicWrite } from './fsutil.js';
+import { atomicWrite, readJson } from './fsutil.js';
 import type { SecretReader } from '../vars/variables.js';
 
 /**
@@ -89,12 +88,10 @@ export class EncryptedFileSecretStore implements SecretStore {
     private cipher: SecretCipher,
   ) {
     this.kind = `encrypted (${cipher.backend ?? 'os'})`;
-    if (existsSync(path)) {
-      try {
-        this.raw = JSON.parse(readFileSync(path, 'utf8')).secrets ?? {};
-      } catch {
-        this.raw = {};
-      }
+    try {
+      this.raw = readJson<{ secrets?: Record<string, string> }>(path, {}).secrets ?? {};
+    } catch {
+      this.raw = {};
     }
   }
 

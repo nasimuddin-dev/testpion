@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { copyExample } from '../helpers.js';
 import { execFile } from 'node:child_process';
-import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -82,7 +83,7 @@ describe('the testpion npm package', () => {
 
   it('serves a workspace to agents over MCP', async () => {
     const ws = join(dir, 'ws');
-    cpSync(join(process.cwd(), 'examples', 'public-workspace'), ws, { recursive: true, filter: (p) => !/database\.sqlite|[\/](runs|traces|payloads)([\/]|$)/.test(p) });
+    copyExample('public-workspace', ws);
     const s = new McpSession({ id: 'tp', name: 'testpion', transport: 'stdio', command: process.execPath, args: [bin, 'mcp-server', '-w', ws], env: { TESTPION_HOME: join(dir, 'home') } });
     await s.connect(20_000);
     try {

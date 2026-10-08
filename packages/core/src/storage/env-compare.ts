@@ -1,4 +1,5 @@
 import type { Environment } from '../model/types.js';
+import type { WorkspaceStore } from './workspace.js';
 import type { SecretStore } from './secrets.js';
 import { secretKeys } from './secrets.js';
 import { Redactor } from '../util/redact.js';
@@ -111,7 +112,8 @@ export interface EnvMatrixRow {
  * Every variable across every environment (statuses only, never values): what is missing, empty or disabled where,
  * incomplete variables first. Secrets count as set when the secret store has a value.
  */
-export function environmentMatrix(envs: Environment[], opts: { secrets?: SecretStore } = {}): { environments: string[]; rows: EnvMatrixRow[]; incomplete: number } {
+export function environmentMatrix(source: Pick<WorkspaceStore, 'listEnvironments' | 'getEnvironment'> | Environment[], opts: { secrets?: SecretStore } = {}): { environments: string[]; rows: EnvMatrixRow[]; incomplete: number } {
+  const envs = Array.isArray(source) ? source : source.listEnvironments().map((e) => source.getEnvironment(e.id)!).filter(Boolean);
   const keys = [...new Set(envs.flatMap((e) => e.variables.filter((v) => v.key).map((v) => v.key)))];
   const rows: EnvMatrixRow[] = keys.map((key) => {
     const values = new Set<string>();

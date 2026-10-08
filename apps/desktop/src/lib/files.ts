@@ -1,5 +1,5 @@
-import { asError, call } from '../api';
-import { useApp } from '../store';
+import { call } from '../api';
+import { toastError, useApp } from '../store';
 
 /**
  * Host-agnostic file handling for the UI (desktop today, browser / cloud later). The UI never gets
@@ -73,7 +73,7 @@ export async function generateFlows(source: { path: string } | { collectionId: s
         r.written.length ? { label: 'Open Tests', onClick: () => useApp.getState().setView('tests') } : undefined,
       );
   } catch (e) {
-    useApp.getState().toast(asError(e).message, 'error');
+    toastError(e);
   }
 }
 
@@ -85,6 +85,25 @@ export function pickTextFile(accept: string): Promise<{ name: string; text: stri
     input.onchange = async () => {
       const f = input.files?.[0];
       resolve(f ? { name: f.name, text: await f.text() } : null);
+    };
+    input.addEventListener('cancel', () => resolve(null));
+    input.click();
+  });
+}
+
+/** Read a picked file as base64 (a SAZ archive is binary). */
+export function pickBinaryFile(accept: string): Promise<{ name: string; base64: string } | null> {
+  return new Promise((resolve) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = accept;
+    input.onchange = async () => {
+      const f = input.files?.[0];
+      if (!f) return resolve(null);
+      const bytes = new Uint8Array(await f.arrayBuffer());
+      let bin = '';
+      for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+      resolve({ name: f.name, base64: btoa(bin) });
     };
     input.addEventListener('cancel', () => resolve(null));
     input.click();

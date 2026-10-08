@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { asError, call } from '../api';
-import { useApp } from '../store';
+import { call } from '../api';
+import { toastError } from '../store';
 import { Empty, Modal } from './ui';
 import { PartsTable } from './PartsTable';
 
@@ -17,7 +17,7 @@ export function GitItemDiffDialog({ file, itemId, onClose }: { file: string; ite
   const [d, setD] = useState<ItemDiff>();
   const [onlyDiffs, setOnlyDiffs] = useState(true);
   useEffect(() => {
-    void call<ItemDiff>('git.itemDiff', { file, itemId }).then(setD, (e) => useApp.getState().toast(asError(e).message, 'error'));
+    void call<ItemDiff>('git.itemDiff', { file, itemId }).then(setD, (e) => toastError(e));
   }, [file, itemId]);
   const rows = (d?.parts ?? []).filter((p) => !onlyDiffs || p.differs).map((p) => ({ part: p.part, differs: p.differs, values: { before: p.before, after: p.after } }));
   return (

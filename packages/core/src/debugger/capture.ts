@@ -36,11 +36,23 @@ export function proxyShellLines(proxyUrl: string): Array<{ shell: string; lines:
 
 /* ------------------------------------------------------------------ a browser with the proxy */
 
-export type BrowserName = 'chrome' | 'edge' | 'chromium' | 'firefox' | 'brave';
+export type BrowserName = 'chrome' | 'edge' | 'chromium' | 'firefox' | 'brave' | 'safari';
 
-/** The browsers installed on this computer that can start with a proxy of their own, best effort. */
-export function installedBrowsers(): Array<{ name: BrowserName; label: string; path: string }> {
-  const candidates: Array<{ name: BrowserName; label: string; paths: string[] }> =
+/**
+ * A browser found on this computer. `systemProxy`: it has no proxy of its own (Safari always follows the macOS system
+ * proxy), so opening it through TestPion means pointing the system proxy here first, and every program that honours
+ * the system proxy is captured with it until capturing stops.
+ */
+export interface InstalledBrowser {
+  name: BrowserName;
+  label: string;
+  path: string;
+  systemProxy?: boolean;
+}
+
+/** The browsers installed on this computer that can be opened through the proxy, best effort. */
+export function installedBrowsers(): InstalledBrowser[] {
+  const candidates: Array<{ name: BrowserName; label: string; paths: string[]; systemProxy?: boolean }> =
     process.platform === 'win32'
       ? [
           {
@@ -67,6 +79,7 @@ export function installedBrowsers(): Array<{ name: BrowserName; label: string; p
             { name: 'brave', label: 'Brave', paths: ['/Applications/Brave Browser.app/Contents/MacOS/Brave Browser'] },
             { name: 'chromium', label: 'Chromium', paths: ['/Applications/Chromium.app/Contents/MacOS/Chromium'] },
             { name: 'firefox', label: 'Firefox', paths: ['/Applications/Firefox.app/Contents/MacOS/firefox'] },
+            { name: 'safari', label: 'Safari', paths: ['/Applications/Safari.app', '/System/Applications/Safari.app'], systemProxy: true },
           ]
         : [
             { name: 'chrome', label: 'Google Chrome', paths: ['/usr/bin/google-chrome', '/usr/bin/google-chrome-stable', '/opt/google/chrome/chrome'] },
@@ -77,21 +90,29 @@ export function installedBrowsers(): Array<{ name: BrowserName; label: string; p
           ];
   return candidates.flatMap((c) => {
     const path = c.paths.find((p) => p && existsSync(p));
-    return path ? [{ name: c.name, label: c.label, path }] : [];
+    return path ? [{ name: c.name, label: c.label, path, ...(c.systemProxy ? { systemProxy: true } : {}) }] : [];
   });
 }
 
 /**
  * Start a browser that sends through the proxy, with a profile of its own (your real profile, cookies and extensions
  * stay out of it). Chromium browsers take `--proxy-server`; Firefox takes a profile folder with the proxy in user.js.
+ * Safari has neither: it is opened as it is, and it sends through TestPion only while the system proxy points here
+ * (the caller sets it first; `systemProxy` in the answer says so).
  */
-export function openBrowserWithProxy(proxyUrl: string, browser?: BrowserName, startUrl = 'http://neverssl.com/'): { browser: string; profileDir: string } {
+export function openBrowserWithProxy(proxyUrl: string, browser?: BrowserName, startUrl = 'http://neverssl.com/'): { browser: string; profileDir: string; systemProxy?: boolean } {
   const all = installedBrowsers();
   const b = browser ? all.find((x) => x.name === browser) : all[0];
   if (!b)
     throw new ApsError('ConfigurationError', browser ? `${browser} is not installed where TestPion looks for it` : 'No browser found', {
       suggestions: ['Start your browser by hand with --proxy-server=' + proxyUrl + ' (Chromium browsers) or set the proxy in its settings.'],
     });
+  if (b.systemProxy) {
+    const child = spawn('open', ['-a', b.path, startUrl], { detached: true, stdio: 'ignore' });
+    child.on('error', () => undefined);
+    child.unref();
+    return { browser: b.label, profileDir: '', systemProxy: true };
+  }
   const profileDir = join(tmpdir(), 'testpion-debugger', b.name);
   mkdirSync(profileDir, { recursive: true });
   let args: string[];
@@ -178,7 +199,7 @@ export interface SystemProxySnapshot {
 const WIN_KEY = 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings';
 const ps = (script: string) => run('powershell', ['-NoProfile', '-NonInteractive', '-Command', script]);
 
-export async function readSystemProxy(): Promise<SystemProxySnapshot> {
+async function readSystemProxy(): Promise<SystemProxySnapshot> {
   if (process.platform === 'win32') {
     const out = await ps(
       `$p = Get-ItemProperty -Path '${WIN_KEY}'; @{ enable = [int]$p.ProxyEnable; server = [string]$p.ProxyServer; override = [string]$p.ProxyOverride } | ConvertTo-Json -Compress`,

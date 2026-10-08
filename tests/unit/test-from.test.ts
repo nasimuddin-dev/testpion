@@ -1,8 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { fakeServices } from '../helpers.js';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { parse } from 'yaml';
-import { McpManager, ProviderRegistry, Redactor, VariableScope, normalizeTest, runTests, testFromRequest, type ExecServices, type TestResult } from '../../packages/core/src/index.js';
+import { normalizeTest, runTests, testFromRequest, type TestResult } from '../../packages/core/src/index.js';
 
 let server: Server;
 let base = '';
@@ -28,11 +29,8 @@ describe('Save as test', () => {
     expect(t.path).toBe('rest/create-patient.yaml');
     expect(t.yaml).toContain('{{token}}');
     const test = normalizeTest(parse(t.yaml), t.path);
-    const vars = new VariableScope();
-    vars.setScope('environment', { baseUrl: base, token: 't0k' });
-    const redactor = new Redactor();
     const results: TestResult[] = [];
-    await runTests({ name: 't', runId: 'r', tests: [test], services: { vars, providers: new ProviderRegistry([], vars, redactor), mcp: new McpManager(() => undefined), mcpServers: [], redactor, pricing: [], defaultTimeoutMs: 5000 } as ExecServices, concurrency: 1, onEvent: (e) => e.type === 'test-end' && results.push(e.result) });
+    await runTests({ name: 't', runId: 'r', tests: [test], services: fakeServices({ vars: { baseUrl: base, token: 't0k' } }), concurrency: 1, onEvent: (e) => e.type === 'test-end' && results.push(e.result) });
     expect(results[0]!.checks.map((c) => [c.name, c.passed]).sort()).toEqual([
       ['created', true],
       ['status', true],

@@ -1,6 +1,6 @@
 import { ArrowRightLeft, BarChart3, Captions, Download, Filter, Gauge, Highlighter, Info, ListTree, Reply, Send, SlidersHorizontal, type LucideIcon } from 'lucide-react';
-import { useState } from 'react';
 import { cx, Menu, Tooltip, type MenuItem } from '../ui';
+import { usePersisted } from '../../lib/sticky';
 
 /** The panels of the Debugger's dock, in the order of their tabs. */
 export type DockPanel = 'filter' | 'highlight' | 'highlight-rule' | 'auto-reply' | 'modify' | 'timeline' | 'summary' | 'structure' | 'performance' | 'convert';
@@ -27,23 +27,8 @@ const LABELS_KEY = 'testpion.debugger.railLabels';
 
 export function ToolRail({ active, onPanel, onSubmit, exportItems }: { active?: DockPanel; onPanel(p: DockPanel): void; onSubmit(): void; exportItems: MenuItem[] }) {
   // icons only (as in HTTP Debugger Pro), or each with its name under it for whoever is new to them; remembered
-  const [labels, setLabels] = useState(() => {
-    try {
-      return localStorage.getItem(LABELS_KEY) === '1';
-    } catch {
-      return false;
-    }
-  });
-  const toggleLabels = () => {
-    setLabels((v) => {
-      try {
-        localStorage.setItem(LABELS_KEY, v ? '0' : '1');
-      } catch {
-        /* remembered for this session only */
-      }
-      return !v;
-    });
-  };
+  const [labels, setLabels] = usePersisted(LABELS_KEY, false, { parse: (v) => v === '1', stringify: (v) => (v ? '1' : '0') });
+  const toggleLabels = () => setLabels((v) => !v);
   const items: RailItem[] = [
     { id: 'submitter', label: 'Submitter', hint: 'Send custom requests to a server: the selected one, ready to change, or a new one.', icon: Send, onClick: onSubmit },
     { id: 'filter', label: 'Filter', hint: 'Filter out requests you do not need, or capture only the ones you do: rules you make.', icon: Filter, panel: 'filter' },

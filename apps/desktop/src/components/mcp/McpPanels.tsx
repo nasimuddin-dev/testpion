@@ -1,7 +1,7 @@
 import { Braces, FileText, MessageSquare } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { asError, call, on, type NormalizedError } from '../../api';
-import { useApp } from '../../store';
+import { toastError } from '../../store';
 import { formatMs, plural } from '../../lib/format';
 import { JsonTree } from '../JsonView';
 import { useSticky } from '../../lib/sticky';
@@ -121,7 +121,7 @@ export function ResourcesPanel({ serverId, disc }: { serverId: string; disc: Dis
       else next.add(uri);
       setSubscribed(next);
     } catch (e) {
-      useApp.getState().toast(asError(e).message, 'error');
+      toastError(e);
     }
   };
   const [content, setContent] = useSticky<{ contents: Array<{ uri: string; mimeType?: string; text?: string; blob?: string }>; durationMs: number } | { error: NormalizedError } | undefined>(

@@ -1,6 +1,7 @@
 import { CircleAlert, CircleCheck, Info, Sparkles, TriangleAlert } from 'lucide-react';
 import { useApp } from '../store';
 import { Badge, Button, Empty } from './ui';
+import { plural } from '../lib/format';
 
 export interface ApiLintProblem {
   rule: string;
@@ -25,7 +26,6 @@ const ICON = {
   info: <Info size={13} className="text-muted shrink-0" />,
 };
 const TONE = { error: 'bad', warning: 'warn', info: 'default' } as const;
-const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;
 
 /** The lint problems of an API definition: one row per problem (opens its place in the document), and AI advice on fixing them. */
 export function ApiLintPanel({ spec, text, result, onOpen }: { spec: string; text: string; result?: ApiLintResult; onOpen(p: ApiLintProblem): void }) {

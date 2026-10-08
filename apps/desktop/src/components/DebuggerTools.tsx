@@ -1,19 +1,19 @@
 import { ChevronDown, Copy, Download, RefreshCw, ShieldCheck, ShieldOff } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { asError, call } from '../api';
-import { confirmAction, useApp } from '../store';
+import { call } from '../api';
+import { confirmAction, toastError, useApp } from '../store';
 import { Badge, Button, Empty, Menu, Modal, Select } from './ui';
 import { finishSave, type SaveResult } from '../lib/files';
 import { tryDecodeJwt } from '@testpion/shared';
+import { copyText } from '../lib/clipboard';
+import { plural } from '../lib/format';
 
 /**
  * The HTTP Debugger's tools (planning/http-debugger.md, DBG-4): the root certificate that decrypts HTTPS, the decode
  * panel (URL, Base64, hex, JWT, timestamps), the frames of a WebSocket and the events of a stream.
  */
 
-const fail = (e: unknown) => useApp.getState().toast(asError(e).message, 'error');
 const toast = (m: string) => useApp.getState().toast(m, 'success');
-const copy = (text: string, what: string) => void navigator.clipboard.writeText(text).then(() => toast(`Copied ${what}`));
 
 interface CertInfo {
   path: string;
@@ -36,7 +36,7 @@ export function CertificateDialog({ onClose }: { onClose(): void }) {
       setInfo(r);
       if (r.note) toast(r.note);
     } catch (e) {
-      fail(e);
+      toastError(e);
     } finally {
       setBusy(false);
     }
@@ -78,7 +78,7 @@ export function CertificateDialog({ onClose }: { onClose(): void }) {
             )}
             <Button
               icon={<Download size={13} />}
-              onClick={() => void call<SaveResult>('debug.certificate', { action: 'export' }).then((r) => finishSave(r, 'certificate'), fail)}
+              onClick={() => void call<SaveResult>('debug.certificate', { action: 'export' }).then((r) => finishSave(r, 'certificate'), toastError)}
               title="For a phone, another computer or Firefox"
             >
               Export…
@@ -103,7 +103,7 @@ export function CertificateDialog({ onClose }: { onClose(): void }) {
               {info.instructions.map((line) => (
                 <li key={line} className="flex gap-2 items-start">
                   <span className="mono break-all flex-1">{line}</span>
-                  <Button size="sm" variant="ghost" icon={<Copy size={12} />} onClick={() => copy(line, 'the line')} title="Copy" />
+                  <Button size="sm" variant="ghost" icon={<Copy size={12} />} onClick={() => void copyText(line, 'the line')} title="Copy" />
                 </li>
               ))}
             </ul>
@@ -163,7 +163,7 @@ const htmlDecode = (s: string) => {
 const htmlEncode = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
 /** The conversions of the Convert panel: decoders read a value, encoders write one. */
-export const DECODERS: Array<{ id: string; label: string; run(s: string): string }> = [
+const DECODERS: Array<{ id: string; label: string; run(s: string): string }> = [
   { id: 'url', label: 'URL Decode', run: (s) => decodeURIComponent(s.replace(/\+/g, ' ')) },
   { id: 'base64', label: 'Base64 Decode', run: b64decode },
   { id: 'hex', label: 'Hex Decode', run: fromHex },
@@ -172,7 +172,7 @@ export const DECODERS: Array<{ id: string; label: string; run(s: string): string
   { id: 'timestamp', label: 'Timestamp', run: timeOf },
   { id: 'json', label: 'JSON Format', run: jsonOf },
 ];
-export const ENCODERS: Array<{ id: string; label: string; run(s: string): string }> = [
+const ENCODERS: Array<{ id: string; label: string; run(s: string): string }> = [
   { id: 'url', label: 'URL Encode', run: encodeURIComponent },
   { id: 'base64', label: 'Base64 Encode', run: b64encode },
   { id: 'hex', label: 'Hex Encode', run: hexOf },
@@ -226,7 +226,7 @@ export function ConvertTool({ initial = '' }: { initial?: string }) {
       />
       <div className="flex items-center gap-2">
         <span className="text-xs font-semibold text-muted uppercase tracking-wide">{out?.label ?? 'Result'}</span>
-        {out?.value !== undefined && <Button size="sm" variant="ghost" icon={<Copy size={12} />} onClick={() => copy(out.value!, out.label.toLowerCase())} title="Copy" />}
+        {out?.value !== undefined && <Button size="sm" variant="ghost" icon={<Copy size={12} />} onClick={() => void copyText(out.value!, out.label.toLowerCase())} title="Copy" />}
       </div>
       <textarea className="field mono text-xs w-full flex-1 min-h-24" readOnly value={out ? (out.value ?? `This text does not ${out.label.toLowerCase()}.`) : ''} aria-label="Converted text" data-convert-result />
       {readings.length > 0 && (
@@ -237,7 +237,7 @@ export function ConvertTool({ initial = '' }: { initial?: string }) {
               <div key={label} data-decode={label}>
                 <div className="flex items-center gap-2">
                   <span className="text-[11px] font-semibold text-muted uppercase tracking-wide">{label}</span>
-                  <Button size="sm" variant="ghost" icon={<Copy size={12} />} onClick={() => copy(value!, label.toLowerCase())} title="Copy" />
+                  <Button size="sm" variant="ghost" icon={<Copy size={12} />} onClick={() => void copyText(value!, label.toLowerCase())} title="Copy" />
                 </div>
                 <pre className="mono whitespace-pre-wrap break-all rounded border border-line p-2 bg-panel max-h-40 overflow-auto">{value}</pre>
               </div>
@@ -315,7 +315,7 @@ export function EventsView({ events, open }: { events: StreamEvent[]; open?: boo
   return (
     <div className="p-3 grid gap-2">
       <div className="text-xs text-muted">
-        {events.length} event{events.length === 1 ? '' : 's'}
+        {plural(events.length, 'event')}
         {open ? ' · the stream is open' : ''}
       </div>
       <table className="text-xs w-full">
@@ -332,25 +332,6 @@ export function EventsView({ events, open }: { events: StreamEvent[]; open?: boo
       </table>
     </div>
   );
-}
-
-/** Read a picked file as base64 (a SAZ archive is binary). */
-export function pickBinaryFile(accept: string): Promise<{ name: string; base64: string } | null> {
-  return new Promise((resolve) => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = accept;
-    input.onchange = async () => {
-      const f = input.files?.[0];
-      if (!f) return resolve(null);
-      const bytes = new Uint8Array(await f.arrayBuffer());
-      let bin = '';
-      for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-      resolve({ name: f.name, base64: btoa(bin) });
-    };
-    input.addEventListener('cancel', () => resolve(null));
-    input.click();
-  });
 }
 
 /* ------------------------------------------------------------------ gRPC, HTTP/2 connections, a phone on the LAN */
@@ -390,7 +371,7 @@ export function GrpcView({ call: g, open }: { call: GrpcCall; open?: boolean }) 
       ).map(([title, list]) => (
         <section key={title}>
           <div className="text-xs font-semibold text-muted uppercase tracking-wide mb-1">
-            {title} · {list.length} message{list.length === 1 ? '' : 's'}
+            {title} · {plural(list.length, 'message')}
           </div>
           {list.map((m, i) => (
             <pre key={i} className="text-xs mono whitespace-pre-wrap break-all rounded border border-line p-2 bg-panel mb-1" data-grpc-message={title}>
@@ -474,7 +455,7 @@ interface LanInfo {
 /** A phone or another computer: listen on the network, then scan the QR code for the proxy settings and the certificate. */
 export function LanDialog({ onClose, onRestartOnLan }: { onClose(): void; onRestartOnLan(): Promise<void> }) {
   const [info, setInfo] = useState<LanInfo>();
-  const load = () => void call<LanInfo>('debug.lan').then(setInfo, fail);
+  const load = () => void call<LanInfo>('debug.lan').then(setInfo, toastError);
   useEffect(load, []);
   return (
     <Modal title="Capture a phone or another computer" onClose={onClose} width={720}>
@@ -507,7 +488,7 @@ export function LanDialog({ onClose, onRestartOnLan }: { onClose(): void; onRest
               <div key={a.ip} className="rounded-lg border border-line p-3 grid gap-2 justify-items-center" data-lan={a.ip}>
                 {a.qrSvg && <div className="w-44 h-44 bg-white rounded p-1 [&_svg]:w-full [&_svg]:h-full" dangerouslySetInnerHTML={{ __html: a.qrSvg }} />}
                 <div className="mono text-xs">{a.proxy}</div>
-                <Button size="sm" icon={<Copy size={12} />} onClick={() => copy(a.proxy ?? '', 'the proxy address')}>
+                <Button size="sm" icon={<Copy size={12} />} onClick={() => void copyText(a.proxy ?? '', 'the proxy address')}>
                   Copy
                 </Button>
               </div>

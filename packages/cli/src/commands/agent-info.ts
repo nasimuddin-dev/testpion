@@ -1,6 +1,6 @@
 import { Command } from 'commander';
-import { WorkspaceManager, ENGINE_VERSION, MINIMAL_TOOLS } from '@testpion/core';
-import { openWorkspace } from '../shared.js';
+import { ENGINE_VERSION, MINIMAL_TOOLS } from '@testpion/core';
+import { withWorkspace } from '../shared.js';
 
 /**
  * `testpion agent-info`: what an AI agent needs to drive TestPion from this machine, as one JSON object — the version,
@@ -12,23 +12,16 @@ export function registerAgentInfoCommand(program: Command): void {
     .command('agent-info')
     .description('what an AI agent needs to use TestPion here, as JSON: the workspace, the commands and exit codes, environment variables, the MCP server setup, the docs for agents')
     .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
-    .action((o: { workspace?: string }) => {
-      const mgr = new WorkspaceManager();
+    .action(async (o: { workspace?: string }) => {
       let workspace: Record<string, unknown> | null = null;
       try {
-        const { store } = openWorkspace(o.workspace, undefined, mgr);
-        try {
-          const cols = store.listCollections();
-          workspace = {
-            name: store.workspace.name,
-            root: store.root,
-            collections: cols.map((c) => c.name),
-            environments: store.listEnvironments().map((e) => e.name),
-            folders: { tests: 'tests/ (YAML test files and *.suite.yaml)', specs: 'specs/ (OpenAPI, AsyncAPI)', datasets: 'datasets/', mocks: 'mocks/', collections: 'collections/' },
-          };
-        } finally {
-          store.close();
-        }
+        workspace = await withWorkspace(o.workspace, (store) => ({
+          name: store.workspace.name,
+          root: store.root,
+          collections: store.listCollections().map((c) => c.name),
+          environments: store.listEnvironments().map((e) => e.name),
+          folders: { tests: 'tests/ (YAML test files and *.suite.yaml)', specs: 'specs/ (OpenAPI, AsyncAPI)', datasets: 'datasets/', mocks: 'mocks/', collections: 'collections/' },
+        }));
       } catch {
         workspace = null;
       }

@@ -1,20 +1,13 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { runCli, cliPath, copyExample } from '../helpers.js';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 
 /** Async spawn — the demo servers live in this process, so a blocking spawnSync would deadlock. */
-function run(args: string[], env: NodeJS.ProcessEnv): Promise<{ status: number | null; stdout: string; stderr: string }> {
-  return new Promise((resolve) => {
-    const p = spawn(process.execPath, args, { env });
-    let stdout = '';
-    let stderr = '';
-    p.stdout.on('data', (d) => (stdout += d));
-    p.stderr.on('data', (d) => (stderr += d));
-    p.on('close', (status) => resolve({ status, stdout, stderr }));
-  });
-}
+// args start with the CLI's path, as the commands below spell them out
+const run = (args: string[], env: NodeJS.ProcessEnv) => runCli(args.slice(1), { env }).then((r) => ({ status: r.status, stdout: r.out, stderr: r.err }));
 import {
   WorkspaceStore,
   MemorySecretStore,
@@ -45,7 +38,7 @@ beforeAll(async () => {
     servers = undefined; // ports already in use — assume the demo servers are already running
   }
   dir = mkdtempSync(join(tmpdir(), 'aps-ws-'));
-  cpSync(resolve('examples/veterinary-workspace'), join(dir, 'veterinary-workspace'), { recursive: true, filter: (s) => !/runs|traces|database\.sqlite/.test(s) });
+  copyExample('veterinary-workspace', join(dir, 'veterinary-workspace'));
   ws = WorkspaceStore.open(join(dir, 'veterinary-workspace'));
   // the copy lives outside the repo, so point the stdio MCP server at the repo's script (and its node_modules)
   ws.saveMcpServers([{ id: 'customer-mcp', name: 'customer-mcp', transport: 'stdio', command: process.execPath, args: [resolve('examples/servers/mcp-server.mjs')] }]);
@@ -110,7 +103,7 @@ describe('example workspace (end-to-end)', () => {
   });
 
   it('CLI: `testpion run` exits 0 and writes all report formats', async () => {
-    const cli = resolve('packages/cli/bin/testpion.js');
+    const cli = cliPath;
     const out = join(dir, 'cli-out');
     const r = await run([cli, 'run', '-w', ws.root, '--suite', 'smoke', '-o', out, '-q'], { ...process.env, TESTPION_HOME: join(dir, 'home') });
     expect(r.stderr).toBe('');
@@ -124,7 +117,7 @@ describe('example workspace (end-to-end)', () => {
   });
 
   it('CLI: `testpion run-collection` runs workspace collections and Postman files (Newman-style)', async () => {
-    const cli = resolve('packages/cli/bin/testpion.js');
+    const cli = cliPath;
     const env = { ...process.env, TESTPION_HOME: join(dir, 'home') };
 
     // workspace collection, one folder, two iterations: the token script feeds the next requests
@@ -170,7 +163,7 @@ describe('example workspace (end-to-end)', () => {
   });
 
   it('CLI: run-collection takes Newman options (globals, --env-var, exports, --suppress-exit-code, junit export)', async () => {
-    const cli = resolve('packages/cli/bin/testpion.js');
+    const cli = cliPath;
     const env = { ...process.env, TESTPION_HOME: join(dir, 'home') };
     writeFileSync(
       join(dir, 'nm.postman_collection.json'),
@@ -219,7 +212,7 @@ describe('example workspace (end-to-end)', () => {
   });
 
   it('CLI: run-collection keeps cookies across requests and exports / imports the cookie jar', async () => {
-    const cli = resolve('packages/cli/bin/testpion.js');
+    const cli = cliPath;
     const env = { ...process.env, TESTPION_HOME: join(dir, 'home') };
     const collection = (items: unknown[]) => JSON.stringify({ info: { name: 'Cookies', schema: 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json' }, item: items });
     const me = {
@@ -255,7 +248,7 @@ describe('example workspace (end-to-end)', () => {
   });
 
   it('CLI: `testpion export` / `export-environment` write Postman files that run-collection runs', async () => {
-    const cli = resolve('packages/cli/bin/testpion.js');
+    const cli = cliPath;
     const env = { ...process.env, TESTPION_HOME: join(dir, 'home') };
     const col = join(dir, 'vet.postman_collection.json');
     const envFile = join(dir, 'dev.postman_environment.json');
@@ -272,7 +265,7 @@ describe('example workspace (end-to-end)', () => {
 
   it('CLI: `testpion mcp-server --profile minimal` lists the common tools; search_tools finds the rest, which still run', async () => {
     const env = { TESTPION_HOME: join(dir, 'home') } as Record<string, string>;
-    const cli = resolve('packages/cli/bin/testpion.js');
+    const cli = cliPath;
     const s = new McpSession({ id: 'min', name: 'testpion', transport: 'stdio', command: process.execPath, args: [cli, 'mcp-server', '-w', ws.root, '--profile', 'minimal'], env });
     await s.connect(20_000);
     try {
@@ -293,7 +286,7 @@ describe('example workspace (end-to-end)', () => {
 
   it('CLI: `testpion mcp-server` gives AI agents the workspace as MCP tools', async () => {
     const env = { TESTPION_HOME: join(dir, 'home') } as Record<string, string>;
-    const cli = resolve('packages/cli/bin/testpion.js');
+    const cli = cliPath;
     const s = new McpSession({ id: 'pl', name: 'testpion', transport: 'stdio', command: process.execPath, args: [cli, 'mcp-server', '-w', ws.root], env });
     await s.connect(20_000);
     try {
@@ -449,7 +442,7 @@ describe('example workspace (end-to-end)', () => {
   });
 
   it('CLI: `testpion send` sends a saved request (scripts, checks) or a URL', async () => {
-    const cli = resolve('packages/cli/bin/testpion.js');
+    const cli = cliPath;
     const env = { ...process.env, TESTPION_HOME: join(dir, 'home') };
     const saved = await run([cli, 'send', 'Veterinary API/Authentication/Get access token', '-w', ws.root, '-e', 'Development', '--json'], env);
     expect(saved.status).toBe(0);
@@ -464,7 +457,7 @@ describe('example workspace (end-to-end)', () => {
   });
 
   it('CLI: `testpion import` takes a copied request and `testpion env` lists and orders environments (--json)', async () => {
-    const cli = resolve('packages/cli/bin/testpion.js');
+    const cli = cliPath;
     const env = { ...process.env, TESTPION_HOME: join(dir, 'home') };
     const file = join(dir, 'copied.ps1');
     writeFileSync(file, 'Invoke-RestMethod -Uri "https://api.test/v1/owners" -Method "POST" -Headers @{ "x-api-key" = "key-LEAK-9" } -ContentType "application/json" -Body \'{"name":"Ada","password":"pw-LEAK-8"}\'');
@@ -494,7 +487,7 @@ describe('example workspace (end-to-end)', () => {
   });
 
   it('response history: CLI list/diff and MCP request_history/compare_responses', async () => {
-    const cli = resolve('packages/cli/bin/testpion.js');
+    const cli = cliPath;
     const env = { ...process.env, TESTPION_HOME: join(dir, 'home') };
     const store = WorkspaceStore.open(ws.root);
     const payload = (name: string, body: unknown) => {
@@ -534,7 +527,7 @@ describe('example workspace (end-to-end)', () => {
   });
 
   it('monitors: CLI add/run/list/results and MCP list_monitors/monitor_results/run_monitor', async () => {
-    const cli = resolve('packages/cli/bin/testpion.js');
+    const cli = cliPath;
     const env = { ...process.env, TESTPION_HOME: join(dir, 'home') };
     const add = await run([cli, 'monitor', 'add', 'Diagnostics check', '--collection', 'Veterinary API', '--folder', 'Diagnostics', '--every', '10m', '-e', 'Development', '-w', ws.root, '--json'], env);
     expect(add.stderr).toBe('');
@@ -568,7 +561,7 @@ describe('example workspace (end-to-end)', () => {
   }, 90_000);
 
   it('compare a saved request across two environments (CLI env diff --request, MCP)', async () => {
-    const cli = resolve('packages/cli/bin/testpion.js');
+    const cli = cliPath;
     const env = { ...process.env, TESTPION_HOME: join(dir, 'home') };
     const store = WorkspaceStore.open(ws.root);
     const dev = store.getEnvironment('Development')!;
@@ -593,7 +586,7 @@ describe('example workspace (end-to-end)', () => {
   }, 90_000);
 
   it('CLI: `testpion docs` writes Markdown documentation with examples and no secrets', async () => {
-    const cli = resolve('packages/cli/bin/testpion.js');
+    const cli = cliPath;
     const r = await run([cli, 'docs', 'Veterinary API', '-w', ws.root], { ...process.env, TESTPION_HOME: join(dir, 'home') });
     expect(r.status).toBe(0);
     expect(r.stdout).toContain('# Veterinary API');
@@ -603,7 +596,7 @@ describe('example workspace (end-to-end)', () => {
   });
 
   it('CLI: `testpion mock` serves the saved examples of a collection', async () => {
-    const cli = resolve('packages/cli/bin/testpion.js');
+    const cli = cliPath;
     const p = spawn(process.execPath, [cli, 'mock', 'Veterinary API', '-w', ws.root, '-q'], { env: { ...process.env, TESTPION_HOME: join(dir, 'home') } });
     try {
       const url = await new Promise<string>((ok, fail) => {
@@ -628,7 +621,7 @@ describe('example workspace (end-to-end)', () => {
     }
   });
   it('API coverage: CLI `testpion coverage` and the api_coverage MCP tool', async () => {
-    const cli = resolve('packages/cli/bin/testpion.js');
+    const cli = cliPath;
     const env = { ...process.env, TESTPION_HOME: join(dir, 'home') };
     const runOut = await run([cli, 'run-collection', 'Veterinary API', '-w', ws.root, '-e', 'Development', '--folder', 'Authentication', 'Patients', '-q'], env);
     expect(runOut.status).toBe(0);
@@ -660,7 +653,7 @@ describe('example workspace (end-to-end)', () => {
     }
   }, 90_000);
   it('saved evaluations: `testpion eval list|run` and the list_evaluations / run_evaluation MCP tools', async () => {
-    const cli = resolve('packages/cli/bin/testpion.js');
+    const cli = cliPath;
     const env = { ...process.env, TESTPION_HOME: join(dir, 'home') };
     ws.saveLibrary('evaluations', {
       folders: ['Intents'],
@@ -708,7 +701,7 @@ describe('example workspace (end-to-end)', () => {
     }
   }, 90_000);
   it('CLI: `testpion load --saved` runs a load test saved in the app, with variables resolved', async () => {
-    const cli = resolve('packages/cli/bin/testpion.js');
+    const cli = cliPath;
     const env = { ...process.env, TESTPION_HOME: join(dir, 'home') };
     ws.saveLibrary('load-tests', {
       folders: [],

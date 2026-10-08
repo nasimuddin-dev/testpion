@@ -1,5 +1,5 @@
-import { asError, call } from '../api';
-import { promptText, useApp } from '../store';
+import { call } from '../api';
+import { promptText, toastError, useApp } from '../store';
 import type { CheckConfig } from '../types';
 
 /**
@@ -13,6 +13,6 @@ export async function saveAsTestFile(defaultName: string, source: Record<string,
     const r = await call<{ path: string }>('tests.saveFrom', { name, source, assertions });
     useApp.getState().toast(`Saved tests/${r.path}. Run it in the Tests view or with testpion test.`, 'success');
   } catch (e) {
-    useApp.getState().toast(asError(e).message, 'error');
+    toastError(e);
   }
 }

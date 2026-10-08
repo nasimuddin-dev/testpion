@@ -1,7 +1,7 @@
 import { Brush, Copy, FolderX, Globe, KeyRound, Replace, Variable } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
-import { asError, call } from '../api';
-import { useApp } from '../store';
+import { call } from '../api';
+import { toastError, useApp } from '../store';
 import type { Collection } from '../types';
 import { Badge, Button, Empty, Modal, Toggle } from './ui';
 
@@ -32,7 +32,7 @@ export function TidyDialog({ collection, onClose, onDone, onReplace }: { collect
   const [fix, setFix] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState(false);
   useEffect(() => {
-    void call<Finding[]>('col.tidy', { collectionId: collection.id }).then(setFindings, (e) => (useApp.getState().toast(asError(e).message, 'error'), setFindings([])));
+    void call<Finding[]>('col.tidy', { collectionId: collection.id }).then(setFindings, (e) => (toastError(e), setFindings([])));
   }, [collection.id]);
   const apply = async () => {
     setBusy(true);
@@ -48,7 +48,7 @@ export function TidyDialog({ collection, onClose, onDone, onReplace }: { collect
       onClose();
       useApp.getState().toast(`${r.removed} removed from ${collection.name}`, 'success', { label: 'Undo', onClick: () => void call('col.save', collection).then(onDone) });
     } catch (e) {
-      useApp.getState().toast(asError(e).message, 'error');
+      toastError(e);
     } finally {
       setBusy(false);
     }

@@ -21,13 +21,13 @@ export type CookieInput = Pick<StoredCookie, 'name' | 'value'> & Partial<Omit<St
 const isIp = (host: string) => /^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host.includes(':');
 
 /** RFC 6265 §5.1.3 domain matching. */
-export function domainMatches(host: string, domain: string): boolean {
+function domainMatches(host: string, domain: string): boolean {
   host = host.toLowerCase();
   return host === domain || (!isIp(host) && host.endsWith('.' + domain));
 }
 
 /** RFC 6265 §5.1.4 path matching. */
-export function pathMatches(requestPath: string, cookiePath: string): boolean {
+function pathMatches(requestPath: string, cookiePath: string): boolean {
   if (requestPath === cookiePath) return true;
   if (!requestPath.startsWith(cookiePath)) return false;
   return cookiePath.endsWith('/') || requestPath[cookiePath.length] === '/';

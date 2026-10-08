@@ -22,7 +22,9 @@ import {
   type Environment,
   type WorkspaceBundle,
   findLiteralSecrets,
-  referencedVariableNames,
+  unusedVariables,
+  findEnvironment,
+  setEnvironmentVariables,
   makeGitReady,
 } from '@testpion/core';
 import type { Backend, Handlers } from '../backend.js';
@@ -70,7 +72,7 @@ export function workspaceHandlers(be: Backend): Handlers {
       return compareEnvironments(get(left), get(right), { values: true, secrets: be.secrets, redactor: be.logger.redactor });
     },
     /** Every variable across every environment: statuses only (set, empty, missing, off), never values. */
-    'env.matrix': () => environmentMatrix(be.ws.listEnvironments().map((e) => be.ws.getEnvironment(e.id)!).filter(Boolean), { secrets: be.secrets }),
+    'env.matrix': () => environmentMatrix(be.ws, { secrets: be.secrets }),
     'ws.open': async ({ ref }: { ref?: string }) => {
       let path = ref ? be.manager.resolve(ref) : undefined;
       if (!ref && be.host.openDialog) {
@@ -204,22 +206,14 @@ export function workspaceHandlers(be: Backend): Handlers {
     /** Set one variable in an environment (from the {{variable}} popover): updates it, or adds it; secret ones stay in the secret store. */
     /** Variables defined in this environment (or, without one, in the workspace) that nothing in the workspace reads. */
     'vars.unused': ({ environment }: { environment?: string } = {}) => {
-      const used = referencedVariableNames(be.ws);
-      const keys = environment ? (be.ws.getEnvironment(environment)?.variables ?? []).map((v) => v.key) : (be.ws.workspace.variables ?? []).map((v) => v.key);
-      return [...new Set(keys.filter((k) => k && !used.has(k)))];
+      const scope = environment ? `environment ${be.ws.getEnvironment(environment)?.name ?? environment}` : 'workspace';
+      return [...new Set(unusedVariables(be.ws).find((x) => x.scope === scope)?.unused ?? [])];
     },
     'vars.setInEnvironment': async ({ environment, name, value }: { environment: string; name: string; value: string }) => {
-      const env = be.ws.getEnvironment(environment) ?? be.ws.listEnvironments().find((e) => e.name === environment);
+      const env = findEnvironment(be.ws, environment);
       if (!env) throw new ApsError('ConfigurationError', 'Choose an environment first (top bar), then add the variable to it');
-      if (!/^[\w.$-]+$/.test(name)) throw new ApsError('ValidationError', `"${name}" isn't a valid variable name`);
-      const existing = env.variables.find((v) => v.key === name);
-      if (existing?.secret) {
-        await be.secrets.set(secretKeys.envVar(env.id, name), value);
-        return { environment: env.name, secret: true };
-      }
-      const variables = existing ? env.variables.map((v) => (v.key === name ? { ...v, value, enabled: true } : v)) : [...env.variables, { key: name, value, enabled: true }];
-      be.ws.saveEnvironment({ ...env, variables });
-      return { environment: env.name, secret: false };
+      await setEnvironmentVariables(be.ws, env.id, { [name]: value }, { secrets: be.secrets });
+      return { environment: env.name, secret: !!env.variables.find((v) => v.key === name)?.secret };
     },
     'env.delete': ({ id }: { id: string }) => be.ws.deleteEnvironment(id),
     /** Recently deleted collections and environments (30 days). */

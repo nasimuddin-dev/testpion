@@ -3,7 +3,7 @@ import { ArrowLeftRight, ChevronDown, Code2, Pencil, Cookie, Download, FolderPlu
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAssistantContext } from '../lib/assistant-context';
 import { asError, call, on } from '../api';
-import { ask, confirmAction, promptText, useApp } from '../store';
+import { ask, confirmAction, promptText, toastError, useApp } from '../store';
 import { useIntent, useSendShortcut, useSaveShortcut } from '../hooks';
 import type { CheckConfig, Collection, CollectionNode, HttpRequestSpec, KeyValue, SavedExample, SavedHttpRequest, SseEvent } from '../types';
 import { parseYaml } from '../lib/yaml';
@@ -171,7 +171,7 @@ export function RestView() {
     () =>
       on<{ kinds: string[] }>('workspace.changedOnDisk', (p) => {
         if (!p.kinds.includes('collections')) return;
-        void call<Collection[]>('col.list').then(async (cols) => {
+        void refreshCollections().then(async (cols) => {
           for (const t of tabsRef.current) {
             if (!t.collectionId || !t.requestId || t.base === undefined) continue;
             const n = findNode(cols.find((c) => c.id === t.collectionId)?.items ?? [], t.requestId);
@@ -416,7 +416,7 @@ export function RestView() {
       if (!c || !findNode(c.items, t.requestId)) return;
       await saveCollection({ ...c, items: mapNodes(c.items, (x) => (x.id === t.requestId ? { ...x, name } : x)) });
     } catch (e) {
-      useApp.getState().toast(asError(e).message, 'error');
+      toastError(e);
     }
   };
 
@@ -464,7 +464,7 @@ export function RestView() {
       setExamples([...(tab.examples ?? []), ex]);
       useApp.getState().toast(`Saved example "${ex.name}"`, 'success');
     } catch (e) {
-      useApp.getState().toast(asError(e).message, 'error');
+      toastError(e);
     }
   };
 
@@ -661,11 +661,7 @@ export function RestView() {
                       <Empty
                         icon={<FolderTree size={22} />}
                         title="No collections yet"
-                        action={
-                          <Button size="sm" icon={<Upload size={12} />} onClick={() => setImporting(true)}>
-                            Import
-                          </Button>
-                        }
+                        actions={[{ label: 'Import', icon: <Upload size={12} />, primary: false, onClick: () => setImporting(true) }]}
                       >
                         Save a request with Ctrl+S, create a collection, or import OpenAPI, Postman, Insomnia, Bruno or HAR.
                       </Empty>

@@ -1,8 +1,8 @@
 import { Bug, Copy, Download, ExternalLink, HelpCircle, Lightbulb, Mail, Paintbrush } from 'lucide-react';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { asError, call } from '../api';
+import { call } from '../api';
 import { finishSave, type SaveResult } from '../lib/files';
-import { useApp } from '../store';
+import { toastError, useApp } from '../store';
 import { LinkButton, Button, cx, Field, Input, Modal, Toggle } from './ui';
 
 export type FeedbackKind = 'bug' | 'idea' | 'ui' | 'question';
@@ -116,7 +116,7 @@ export function FeedbackDialog({ request, onClose }: { request: FeedbackRequest;
     try {
       finishSave(await call<SaveResult>('feedback.save', { title: report.title, body: report.body }), 'Report');
     } catch (e) {
-      useApp.getState().toast(asError(e).message, 'error');
+      toastError(e);
     }
   };
 

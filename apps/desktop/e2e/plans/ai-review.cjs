@@ -2,16 +2,9 @@
 // rated 👍 and leaves the "To review" filter, a Playground answer is kept as a dataset case, and the model
 // comparison marks the fastest and says which model still needs a key.
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
-const { withExpect } = require('../lib.cjs');
+const { withExpect, stepWith } = require('../lib.cjs');
 
-const H = `
-  const vis = (sel) => [...document.querySelectorAll(sel)].filter((x) => x.getClientRects().length);
-  const button = (label) => vis('main button').find((b) => b.textContent.trim() === label && b.getAttribute('role') !== 'tab');
-  const tab = (name) => vis('main [role=tab]').find((t) => t.textContent.trim().startsWith(name));
-  const radio = (name) => vis('main [role=radio]').find((t) => t.textContent.trim().startsWith(name));
-  const short = (s, n = 300) => String(s ?? '').replace(/\\s+/g, ' ').trim().slice(0, n);
-`;
-const step = (name, body) => [name, `(async () => { ${H} ${body} })()`];
+const step = stepWith({ extra: `const radio = (name) => vis('main [role=radio]').find((t) => t.textContent.trim().startsWith(name));` });
 
 const steps = [
   step(

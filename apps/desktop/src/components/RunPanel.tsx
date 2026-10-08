@@ -1,7 +1,7 @@
 import { Activity, Braces, Download, FileBarChart, FileCode2, FileText, GitCompare, Square, Target, RotateCcw, ScanSearch, Sparkles, ThumbsDown, ThumbsUp } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { asError, call, on } from '../api';
-import { useApp } from '../store';
+import { call, on } from '../api';
+import { toastError, useApp } from '../store';
 import type { RunSummary, TestResult, Trace } from '../types';
 import { formatCost, formatMs, plural, timeAgo } from '../lib/format';
 import { CheckList, ErrorPanel, StatusIcon } from './Results';
@@ -10,6 +10,7 @@ import { RunCharts } from './RunCharts';
 import { TestHistory } from './TestHistory';
 import { finishSave, viewContent, type SaveResult } from '../lib/files';
 import { Badge, Button, cx, Empty, Field, Input, Metric, Modal, Segmented, Select, Split, Tabs, VirtualList, Menu, MetricGrid } from './ui';
+import { usePersisted } from '../lib/sticky';
 
 interface Progress {
   completed: number;
@@ -61,21 +62,7 @@ export function RunPanel({ runId, expectedTotal, onRerunFailed }: { runId: strin
   }, [done, summary, runId, reviewed]);
   const [baselineOpen, setBaselineOpen] = useState(false);
   // results list or the run's charts (once it finished); remembered
-  const [pane, setPane] = useState<'results' | 'charts'>(() => {
-    try {
-      return localStorage.getItem('aps.runPane') === 'charts' ? 'charts' : 'results';
-    } catch {
-      return 'results';
-    }
-  });
-  const pickPane = (p: 'results' | 'charts') => {
-    setPane(p);
-    try {
-      localStorage.setItem('aps.runPane', p);
-    } catch {
-      /* storage unavailable */
-    }
-  };
+  const [pane, pickPane] = usePersisted<'results' | 'charts'>('aps.runPane', 'results', { text: true, parse: (v) => (v === 'charts' ? 'charts' : 'results') });
   const loadingPage = useRef(false);
 
   useEffect(() => {
@@ -189,7 +176,7 @@ export function RunPanel({ runId, expectedTotal, onRerunFailed }: { runId: strin
             <Button size="sm" icon={<FileBarChart size={12} />} onClick={() =>
               call<{ path: string; view?: { content: string; encoding: 'base64'; type: string } }>('runs.openReport', { runId, format: 'html' })
                 .then((r) => r.view && viewContent(r.view))
-                .catch((e) => useApp.getState().toast(asError(e).message, 'error'))
+                .catch((e) => toastError(e))
             }>
               HTML report
             </Button>
@@ -215,7 +202,7 @@ export function RunPanel({ runId, expectedTotal, onRerunFailed }: { runId: strin
           {s.tokens.totalTokens > 0 && <Metric label="Tokens" value={s.tokens.totalTokens.toLocaleString()} sub={`${s.tokens.inputTokens} in / ${s.tokens.outputTokens} out`} />}
           {s.costUsd > 0 && <Metric label="Est. cost" value={formatCost(s.costUsd)} />}
           {Object.entries(s.scores).map(([k, v]) => (
-            <Metric key={k} label={humanize(k)} value={v.mean.toFixed(3)} sub={`score · ${v.count} check${v.count === 1 ? '' : 's'}`} tone={v.mean >= 0.7 ? 'ok' : 'warn'} />
+            <Metric key={k} label={humanize(k)} value={v.mean.toFixed(3)} sub={`score · ${plural(v.count, 'check')}`} tone={v.mean >= 0.7 ? 'ok' : 'warn'} />
           ))}
         </MetricGrid>
       )}
@@ -337,7 +324,7 @@ function ReviewButtons({ r, runId, onReviewed }: { r: TestResult; runId: string;
   const save = (change: { rating?: 'good' | 'bad' | null; note?: string | null }) =>
     call<TestResult['review'] | null>('runs.review', { runId, resultId: r.id, ...change })
       .then((review) => onReviewed({ ...r, review: review ?? undefined }))
-      .catch((e) => useApp.getState().toast(asError(e).message, 'error'));
+      .catch((e) => toastError(e));
   const rate = (rating: 'good' | 'bad') => void save({ rating: r.review?.rating === rating ? null : rating });
   return (
     <div className="flex items-center gap-0.5 shrink-0">

@@ -1,8 +1,8 @@
 import { FolderTree, KeyRound, RotateCcw, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { asError, call } from '../api';
-import { confirmAction, useApp } from '../store';
-import { timeAgo } from '../lib/format';
+import { call } from '../api';
+import { confirmAction, toastError, useApp } from '../store';
+import { plural, timeAgo } from '../lib/format';
 import { Button, Empty, IconButton, Modal, Tooltip } from './ui';
 
 export interface TrashItem {
@@ -28,7 +28,7 @@ export function TrashDialog({ kind, onClose, onRestored }: { kind?: TrashItem['k
       onRestored?.(r);
       load();
     } catch (e) {
-      toast(asError(e).message, 'error');
+      toastError(e);
     }
   };
   const purge = async (it?: TrashItem) => {
@@ -65,7 +65,7 @@ export function TrashDialog({ kind, onClose, onRestored }: { kind?: TrashItem['k
               <div className="min-w-0 flex-1">
                 <div className="font-medium truncate">{it.name}</div>
                 <div className="text-xs text-muted">
-                  {it.kind === 'collection' ? `Collection · ${it.size} request${it.size === 1 ? '' : 's'}` : `Environment · ${it.size} variable${it.size === 1 ? '' : 's'}`} · deleted {timeAgo(it.deletedAt)}
+                  {it.kind === 'collection' ? `Collection · ${plural(it.size, 'request')}` : `Environment · ${plural(it.size, 'variable')}`} · deleted {timeAgo(it.deletedAt)}
                 </div>
               </div>
               <Button size="sm" icon={<RotateCcw size={13} />} onClick={() => void restore(it)}>

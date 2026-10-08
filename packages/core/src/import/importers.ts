@@ -4,6 +4,8 @@ import { SCHEMA_VERSION } from '../model/types.js';
 import { ApsError } from '../errors.js';
 import { shortId, slugify } from '../util/ids.js';
 import { WORKSPACE_FORMATS } from '../storage/workspace.js';
+import { deref } from '../util/json-ref.js';
+import { successCode } from '../openapi/outline.js';
 import { looksLikeBru } from './bru.js';
 import { importWsdl, isWsdl } from './wsdl.js';
 import { detectOtherTool, importBruno, importHoppscotch, importInsomnia } from './other-tools.js';
@@ -48,12 +50,7 @@ export function detectFormat(text: string): 'openapi' | 'swagger' | 'postman' | 
 
 export function sampleFromSchema(schema: any, spec: any, depth = 0): unknown {
   if (!schema || depth > 6) return null;
-  if (schema.$ref) {
-    const path = String(schema.$ref).replace(/^#\//, '').split('/');
-    let cur = spec;
-    for (const p of path) cur = cur?.[p.replace(/~1/g, '/').replace(/~0/g, '~')];
-    return sampleFromSchema(cur, spec, depth + 1);
-  }
+  if (schema.$ref) return sampleFromSchema(deref(spec, schema), spec, depth + 1);
   if (schema.example !== undefined) return schema.example;
   if (schema.default !== undefined) return schema.default;
   if (schema.enum?.length) return schema.enum[0];
@@ -137,7 +134,7 @@ export function importOpenApi(text: string): { collection: Collection; environme
         id: shortId('req-'),
         name: op.summary ?? op.operationId ?? `${method.toUpperCase()} ${path}`,
         request: { method: method.toUpperCase(), url, params: query, headers, body, auth: authFor(op.security ?? spec.security) ?? { type: 'inherit' } },
-        assertions: [{ type: 'status', expected: Number(Object.keys(op.responses ?? {}).find((c) => /^2/.test(c)) ?? 200) }],
+        assertions: [{ type: 'status', expected: Number(successCode(Object.keys(op.responses ?? {})) ?? 200) }],
         ...(examples.length ? { examples } : {}),
       };
       const tag = op.tags?.[0];

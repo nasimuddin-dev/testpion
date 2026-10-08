@@ -1,14 +1,12 @@
 import { describe, it, expect, afterAll } from 'vitest';
+import { fakeServices } from '../helpers.js';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { WebSocketServer } from 'ws';
 import { Server } from 'socket.io';
-import { McpManager, ProviderRegistry, Redactor, VariableScope, normalizeTest, runRealtimeExchange, runTests, type ExecServices, type TestResult } from '../../packages/core/src/index.js';
+import { VariableScope, normalizeTest, runRealtimeExchange, runTests, type ExecServices, type TestResult } from '../../packages/core/src/index.js';
 
-function services(vars = new VariableScope()): ExecServices {
-  const redactor = new Redactor();
-  return { vars, providers: new ProviderRegistry([], vars, redactor), mcp: new McpManager(() => undefined), mcpServers: [], redactor, pricing: [], defaultTimeoutMs: 10_000 };
-}
+const services = (vars?: VariableScope): ExecServices => fakeServices({ scope: vars, timeoutMs: 10_000 });
 async function runOne(raw: Record<string, unknown>, vars?: VariableScope): Promise<TestResult> {
   const results: TestResult[] = [];
   await runTests({ name: 't', runId: 'r', tests: [normalizeTest(raw, 'ws.yaml')], services: services(vars), concurrency: 1, onEvent: (e) => e.type === 'test-end' && results.push(e.result) });

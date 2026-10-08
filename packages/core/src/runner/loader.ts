@@ -4,6 +4,7 @@ import { parse as parseYaml } from 'yaml';
 import type { AuthConfig, BodyConfig, HttpRequestSpec, KeyValue, McpTest, ModelRef, SuiteConfig, TestCase } from '../model/types.js';
 import { ApsError } from '../errors.js';
 import { slugify } from '../util/ids.js';
+import { globToRegex } from '../util/glob.js';
 import { readDataset, type DatasetSource } from './datasets.js';
 import { dbKindOf } from './db-datasets.js';
 
@@ -13,7 +14,7 @@ export function isSuiteFile(p: string): boolean {
   return /\.suite\.(ya?ml|json)$/i.test(p);
 }
 
-export async function parseFile(path: string): Promise<unknown> {
+async function parseFile(path: string): Promise<unknown> {
   const text = await readFile(path, 'utf8');
   try {
     return extname(path).toLowerCase() === '.json' ? JSON.parse(text) : parseYaml(text);
@@ -224,23 +225,6 @@ export function normalizeTest(raw: Record<string, unknown>, file?: string, index
 
 /* ------------------------------------------------------------------ discovery */
 
-function globToRegex(glob: string): RegExp {
-  let re = '';
-  for (let i = 0; i < glob.length; i++) {
-    const c = glob[i]!;
-    if (c === '*') {
-      if (glob[i + 1] === '*') {
-        re += '.*';
-        i++;
-        if (glob[i + 1] === '/' || glob[i + 1] === '\\') i++;
-      } else re += '[^/\\\\]*';
-    } else if (c === '?') re += '[^/\\\\]';
-    else if (c === '/' || c === '\\') re += '[/\\\\]';
-    else re += c.replace(/[.+^${}()|[\]]/g, '\\$&');
-  }
-  return new RegExp(`^${re}$`, 'i');
-}
-
 async function* walk(dir: string): AsyncGenerator<string> {
   let entries;
   try {
@@ -258,7 +242,7 @@ async function* walk(dir: string): AsyncGenerator<string> {
 }
 
 /** Resolve a path/glob into test files (lazily). */
-export async function* discoverFiles(pattern: string, cwd = process.cwd()): AsyncGenerator<string> {
+async function* discoverFiles(pattern: string, cwd = process.cwd()): AsyncGenerator<string> {
   const abs = isAbsolute(pattern) ? pattern : resolve(cwd, pattern);
   if (!/[*?]/.test(pattern)) {
     const st = await stat(abs).catch(() => undefined);
@@ -274,7 +258,7 @@ export async function* discoverFiles(pattern: string, cwd = process.cwd()): Asyn
   const parts = abs.split(/[/\\]/);
   const firstGlob = parts.findIndex((p) => /[*?]/.test(p));
   const root = parts.slice(0, firstGlob).join(sep) || sep;
-  const re = globToRegex(abs.slice(root.length + 1));
+  const re = globToRegex(abs.slice(root.length + 1), { segments: true });
   for await (const f of walk(root)) if (re.test(relative(root, f)) && !isSuiteFile(f)) yield f;
 }
 

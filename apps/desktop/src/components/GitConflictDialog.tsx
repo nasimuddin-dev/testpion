@@ -1,7 +1,7 @@
 import { Check, GitMerge } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { asError, call } from '../api';
-import { useApp } from '../store';
+import { call } from '../api';
+import { toastError, useApp } from '../store';
 import { Badge, Button, Empty, Modal, Segmented } from './ui';
 import { PartsTable } from './PartsTable';
 
@@ -37,7 +37,6 @@ const KIND: Record<ConflictItem['kind'], string> = {
   setting: 'setting changed on both sides',
 };
 
-const fail = (e: unknown) => useApp.getState().toast(asError(e).message, 'error');
 
 export function GitConflictDialog({ path, onClose, onResolved }: { path: string; onClose(): void; onResolved(): void }) {
   const [detail, setDetail] = useState<Detail>();
@@ -48,7 +47,7 @@ export function GitConflictDialog({ path, onClose, onResolved }: { path: string;
     void call<Detail>('git.conflictDetail', { path }).then((d) => {
       setDetail(d);
       setChoices(Object.fromEntries(d.items.map((i) => [i.key, 'ours'])));
-    }, fail);
+    }, toastError);
   }, [path]);
   const counts = useMemo(() => {
     const v = Object.values(choices);
@@ -61,7 +60,7 @@ export function GitConflictDialog({ path, onClose, onResolved }: { path: string;
       useApp.getState().toast(`${path} resolved: ${counts.ours} kept as mine, ${counts.theirs} taken from theirs`, 'success');
       onResolved();
     } catch (e) {
-      fail(e);
+      toastError(e);
     } finally {
       setBusy(false);
     }

@@ -3,12 +3,22 @@ import { existsSync, mkdtempSync, readFileSync, rmdirSync, rmSync, statSync } fr
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import {
+  ApsError,
+  ChainSecretStore,
+  EnvSecretStore,
   WorkspaceManager,
   WorkspaceStore,
+  createEngineContext,
   formatBytes,
   importAny,
   fetchImportText,
   readResultsFile,
+  readSpecRef,
+  requireCollection as findCollectionOrThrow,
+  requireEnvironment as findEnvironmentOrThrow,
+  type ContextOptions,
+  type EngineContext,
+  type Environment,
   type LoadSnapshot,
   type Collection,
   type TestResult,
@@ -17,7 +27,7 @@ import {
 /** Exit codes (spec §37). */
 export const EXIT = { SUCCESS: 0, TEST_FAILURE: 1, CONFIG_ERROR: 2, EXECUTION_ERROR: 3 } as const;
 
-export const tty = process.stdout.isTTY && !process.env.NO_COLOR && !process.env.CI;
+const tty = process.stdout.isTTY && !process.env.NO_COLOR && !process.env.CI;
 
 export const c = (code: number) => (s: string) => (tty ? `\x1b[${code}m${s}\x1b[0m` : s);
 
@@ -40,6 +50,11 @@ export class CliError extends Error {
   ) {
     super(message);
   }
+}
+
+/** `--json` output: one indented JSON document on stdout. */
+export function printJson(value: unknown): void {
+  console.log(JSON.stringify(value, null, 2));
 }
 
 export function collectVar(v: string, prev: Record<string, string> = {}): Record<string, string> {
@@ -71,6 +86,56 @@ export function openWorkspace(ref: string | undefined, hintPath: string | undefi
   return { store: WorkspaceStore.create(tmp, 'ephemeral'), ephemeral: tmp };
 }
 
+/**
+ * Run `fn` with the workspace `ref` names (or the nearest one, or an ephemeral one) open; the store is closed
+ * afterwards and an ephemeral workspace removed, whether `fn` returns, throws or rejects. `ephemeral` tells `fn`
+ * when there is no real workspace.
+ */
+export async function withWorkspace<T>(ref: string | undefined, fn: (store: WorkspaceStore, ephemeral: string | undefined) => T | Promise<T>): Promise<T> {
+  const { store, ephemeral } = openWorkspace(ref, undefined, new WorkspaceManager());
+  try {
+    return await fn(store, ephemeral);
+  } finally {
+    store.close();
+    if (ephemeral) rmSync(ephemeral, { recursive: true, force: true });
+  }
+}
+
+/** The CLI has no OS keychain: secret variables come from TESTPION_SECRET_* environment variables. */
+export const cliSecrets = () => new ChainSecretStore([new EnvSecretStore()]);
+
+/** An engine context as every command builds it: the workspace, the CLI's secrets, the app settings and an environment. */
+export function cliContext(store: WorkspaceStore, environment?: string, extra: Partial<Omit<ContextOptions, 'store' | 'secrets' | 'settings' | 'environment'>> = {}): EngineContext {
+  return createEngineContext({ store, secrets: cliSecrets(), settings: new WorkspaceManager().loadSettings(), environment, ...extra });
+}
+
+/** A core lookup that failed ("not found") as the CLI reports it: the message alone, with the configuration exit code. */
+function configError<T>(fn: () => T): T {
+  try {
+    return fn();
+  } catch (e) {
+    throw e instanceof ApsError ? new CliError(e.message, EXIT.CONFIG_ERROR) : e;
+  }
+}
+
+/** The collection `ref` names (id or name), or a configuration error listing the collections; `hint` is added to it. */
+export function requireCollection(store: WorkspaceStore, ref: string, opts: { loadable?: boolean; hint?: string } = {}): Collection {
+  try {
+    return findCollectionOrThrow(store, ref, { loadable: opts.loadable });
+  } catch (e) {
+    throw e instanceof ApsError ? new CliError(`${e.message}${opts.hint ? ` ${opts.hint}` : ''}`, EXIT.CONFIG_ERROR) : e;
+  }
+}
+
+/** The environment `ref` names (id or name), or a configuration error listing the environments; `hint` is added to it. */
+export function requireEnvironment(store: WorkspaceStore, ref: string, opts: { hint?: string } = {}): Environment {
+  try {
+    return findEnvironmentOrThrow(store, ref);
+  } catch (e) {
+    throw e instanceof ApsError ? new CliError(`${e.message}${opts.hint ? ` ${opts.hint}` : ''}`, EXIT.CONFIG_ERROR) : e;
+  }
+}
+
 export function readImport<K extends 'collection' | 'environment'>(file: string, want: K): NonNullable<ReturnType<typeof importAny>[K]> {
   let r: ReturnType<typeof importAny>;
   try {
@@ -97,16 +162,7 @@ export async function loadCollectionRef(ref: string, workspace: string | undefin
     return r.collection;
   }
   if (existsSync(ref) && statSync(ref).isFile()) return readImport(resolve(ref), 'collection');
-  const { store, ephemeral } = openWorkspace(workspace, undefined, new WorkspaceManager());
-  try {
-    const cols = store.listCollections().filter((c) => !c.problem);
-    const found = cols.find((c) => c.id === ref) ?? cols.find((c) => c.name.toLowerCase() === ref.toLowerCase());
-    if (!found) throw new CliError(`Collection "${ref}" not found. Available: ${cols.map((c) => c.name).join(', ') || 'none'} (or pass a collection file)`, EXIT.CONFIG_ERROR);
-    return found;
-  } finally {
-    store.close();
-    if (ephemeral) rmSync(ephemeral, { recursive: true, force: true });
-  }
+  return withWorkspace(workspace, (store) => requireCollection(store, ref, { loadable: true, hint: '(or pass a collection file)' }));
 }
 
 /** A run that failed to start leaves nothing behind: drop the default output folder and the ephemeral workspace. */
@@ -153,13 +209,10 @@ export function printLoad(s: LoadSnapshot): void {
  * one above the current folder), so `specs/clinic.yaml` works from anywhere like the other commands' paths.
  */
 export async function readDefinition(ref: string, workspace?: string): Promise<string> {
-  if (/^https?:\/\//i.test(ref)) return (await fetchImportText(ref)).text;
   const root = workspace && existsSync(workspace) && statSync(workspace).isDirectory() ? workspace : findWorkspaceUp(process.cwd());
-  const candidates = [resolve(ref), ...(root ? [resolve(root, ref)] : [])];
-  const file = candidates.find((c) => existsSync(c)) ?? candidates[0]!;
   try {
-    return readFileSync(file, 'utf8');
+    return await readSpecRef(undefined, /^https?:\/\//i.test(ref) ? { url: ref } : { path: ref }, { roots: [process.cwd(), ...(root ? [root] : [])] });
   } catch (e) {
-    throw new CliError(`Cannot read ${ref}: ${(e as Error).message}`, EXIT.CONFIG_ERROR);
+    throw e instanceof ApsError ? new CliError(e.message, EXIT.CONFIG_ERROR) : e;
   }
 }

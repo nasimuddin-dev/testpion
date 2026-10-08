@@ -3,10 +3,7 @@ import { join } from 'node:path';
 import { resolve } from 'node:path';
 import { Command, Option } from 'commander';
 import {
-  ChainSecretStore,
-  EnvSecretStore,
   WorkspaceManager,
-  createEngineContext,
   evaluationTests,
   findSavedEvaluation,
   listSavedEvaluations,
@@ -15,7 +12,7 @@ import {
   type RunEvent,
   type RunSummary,
 } from '@testpion/core';
-import { EXIT, bold, dim, CliError, openWorkspace } from '../shared.js';
+import { EXIT, dim, bold, CliError, printJson, openWorkspace, withWorkspace, cliContext, requireEnvironment } from '../shared.js';
 import { finishRun, printResult } from '../run.js';
 
 export function registerEvaluationCommands(program: Command): void {
@@ -24,18 +21,15 @@ export function registerEvaluationCommands(program: Command): void {
     .description('list the saved evaluations of a workspace')
     .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
     .option('--json', 'print as JSON (for scripts and AI agents)')
-    .action((o: { workspace?: string; json?: boolean }) => {
-      const { store, ephemeral } = openWorkspace(o.workspace, undefined, new WorkspaceManager());
-      if (ephemeral) throw new CliError('No workspace found: run inside a workspace or pass -w <nameOrPath>', EXIT.CONFIG_ERROR);
-      try {
+    .action((o: { workspace?: string; json?: boolean }) =>
+      withWorkspace(o.workspace, (store, ephemeral) => {
+        if (ephemeral) throw new CliError('No workspace found: run inside a workspace or pass -w <nameOrPath>', EXIT.CONFIG_ERROR);
         const list = listSavedEvaluations(store);
-        if (o.json) return console.log(JSON.stringify(list, null, 2));
+        if (o.json) return printJson(list);
         if (!list.length) return console.log(dim('No saved evaluations. Save one in the app: Evaluations ▸ Save.'));
         for (const e of list) console.log(`${bold(e.name)}${e.folder ? dim(`  (${e.folder})`) : ''}\n  ${dim(`${e.type} · ${e.provider}${e.model ? `/${e.model}` : ''} · ${e.cases} cases · ${e.evaluators.join(', ') || 'no evaluators'}`)}`);
-      } finally {
-        store.close();
-      }
-    });
+      }),
+    );
   ev.command('run')
     .description('run a saved evaluation by name or id; exits 1 when a case fails (for CI)')
     .argument('<name>', 'saved evaluation name or id')
@@ -60,22 +54,18 @@ async function executeEvalRun(
   ref: string,
   o: { workspace?: string; environment?: string; concurrency?: string; retries?: string; limit?: string; reporter: string[]; out?: string; baseline?: string; saveBaseline?: string; failOnRegression?: boolean; verbose?: boolean; quiet?: boolean },
 ): Promise<number> {
-  const mgr = new WorkspaceManager();
-  const { store, ephemeral } = openWorkspace(o.workspace, undefined, mgr);
+  const { store, ephemeral } = openWorkspace(o.workspace, undefined, new WorkspaceManager());
   if (ephemeral) throw new CliError('No workspace found: run inside a workspace or pass -w <nameOrPath>', EXIT.CONFIG_ERROR);
   let evaluation: ReturnType<typeof findSavedEvaluation>;
   try {
     evaluation = findSavedEvaluation(store, ref);
+    if (o.environment) requireEnvironment(store, o.environment);
   } catch (e) {
     store.close();
-    throw new CliError((e as Error).message, EXIT.CONFIG_ERROR);
-  }
-  if (o.environment && !store.getEnvironment(o.environment)) {
-    store.close();
-    throw new CliError(`Environment "${o.environment}" not found. Available: ${store.listEnvironments().map((e) => e.name).join(', ') || 'none'}`, EXIT.CONFIG_ERROR);
+    throw e instanceof CliError ? e : new CliError((e as Error).message, EXIT.CONFIG_ERROR);
   }
   const d = { ...evaluation, limit: o.limit ? Number(o.limit) : evaluation.limit };
-  const ctx = createEngineContext({ store, secrets: new ChainSecretStore([new EnvSecretStore()]), settings: mgr.loadSettings(), environment: o.environment });
+  const ctx = cliContext(store, o.environment);
   const runId = shortId('run-');
   const outDir = o.out ? resolve(o.out) : store.runDir(runId);
   const resultsFile = join(outDir, 'results.jsonl');

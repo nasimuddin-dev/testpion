@@ -1,7 +1,7 @@
 import { Sparkles, Wand2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { asError, call } from '../api';
-import { useApp } from '../store';
+import { call } from '../api';
+import { toastError, useApp } from '../store';
 import { Button, Field, Input, Modal, Select, Toggle } from './ui';
 
 interface Outline {
@@ -72,7 +72,7 @@ export function GenerateDataDialog({ onClose, onDone }: { onClose(): void; onDon
       useApp.getState().toast(`${out.path}: ${out.rows} rows (${out.columns.join(', ')})`, 'success');
       onDone(out);
     } catch (e) {
-      useApp.getState().toast(asError(e).message, 'error');
+      toastError(e);
     } finally {
       setBusy(false);
     }

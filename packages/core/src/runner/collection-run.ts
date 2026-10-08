@@ -59,7 +59,7 @@ export function folderVariables(folders: CollectionFolder[]): Record<string, str
 }
 
 /** Join collection-level, folder-level and request-level scripts; blocks keep their `const`s apart. */
-export function joinScripts(...scripts: Array<string | undefined>): string | undefined {
+function joinScripts(...scripts: Array<string | undefined>): string | undefined {
   const parts = scripts.filter((s): s is string => !!s?.trim());
   if (!parts.length) return undefined;
   return parts.length === 1 ? parts[0] : parts.map((s) => `{\n${s}\n}`).join('\n');

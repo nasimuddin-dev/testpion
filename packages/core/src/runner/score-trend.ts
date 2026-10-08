@@ -1,8 +1,6 @@
 /** Evaluator scores run by run: is the model, prompt or pipeline getting better or worse? */
-import { existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
-import type { RunSummary } from '../model/types.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
+import { readRunSummary } from './run-records.js';
 
 export interface ScoreTrendPoint {
   runId: string;
@@ -23,10 +21,9 @@ export function scoreTrend(store: WorkspaceStore, opts: { runIds?: string[]; nam
   for (const r of runs) {
     if (wanted && !wanted.has(r.id)) continue;
     if (opts.name && !r.name.toLowerCase().includes(opts.name.toLowerCase())) continue;
-    const f = join(store.runDir(r.id), 'summary.json');
-    if (!existsSync(f)) continue;
     try {
-      const s = JSON.parse(readFileSync(f, 'utf8')) as Pick<RunSummary, 'scores'>;
+      const s = readRunSummary(store, r.id);
+      if (!s) continue;
       const scores = Object.fromEntries(Object.entries(s.scores ?? {}).map(([k, v]) => [k, Math.round(v.mean * 1000) / 1000]));
       if (Object.keys(scores).length) out.push({ runId: r.id, name: r.name, startedAt: r.startedAt, scores });
     } catch {

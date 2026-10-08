@@ -1,20 +1,21 @@
 import { ArrowDown, ArrowUp, Columns3, Copy, Download, ExternalLink, Filter, Highlighter, Lock, Network, Play, Reply, Shuffle, Star, Trash2, Wrench } from 'lucide-react';
 import { useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { formatBytes } from '@testpion/shared';
-import { call, on } from '../../api';
+import { call } from '../../api';
 import { useApp } from '../../store';
 import { Badge, cx, Empty, Menu, Tabs, VirtualList, type MenuItem } from '../ui';
 import { HIGHLIGHT_CLASS, type Rule, type RuleKind } from '../DebuggerRules';
 import { curlOf, kb, speedOf, versionOf, type Exchange, type IncomingRequest } from './model';
 import { downloadContent } from '../../lib/files';
+import { useEventLog } from '../../lib/use-rpc';
+import { usePersisted } from '../../lib/sticky';
+import { copyText } from '../../lib/clipboard';
 
-const toast = (m: string) => useApp.getState().toast(m, 'success');
-const copy = (text: string, what: string) => void navigator.clipboard.writeText(text).then(() => toast(`Copied ${what}`));
 /** The whole exchange: the grid's rows are lean (no headers, no bodies). */
 const whole = (e: Exchange) => call<Exchange>('debug.exchange', { id: e.id });
 const copyWhole = (e: Exchange, what: string, pick: (x: Exchange) => string) =>
   void whole(e).then(
-    (x) => copy(pick(x), what),
+    (x) => void copyText(pick(x), what),
     () => undefined,
   );
 /** A body to a file named after the request (bodies kept as text; a binary one is counted, not kept). */
@@ -76,13 +77,9 @@ const COLUMNS: Column[] = [
 ];
 const DEFAULT_HIDDEN: ColumnId[] = ['pid'];
 const HIDDEN_KEY = 'testpion.debugger.hiddenColumns';
-const readHidden = (): ColumnId[] => {
-  try {
-    const v = JSON.parse(localStorage.getItem(HIDDEN_KEY) ?? 'null') as unknown;
-    return Array.isArray(v) ? (v as ColumnId[]) : DEFAULT_HIDDEN;
-  } catch {
-    return DEFAULT_HIDDEN;
-  }
+const parseHidden = (raw: string): ColumnId[] | undefined => {
+  const v = JSON.parse(raw) as unknown;
+  return Array.isArray(v) ? (v as ColumnId[]) : undefined;
 };
 
 const theme = () => (document.documentElement.dataset.theme === 'light' ? 'light' : 'dark');
@@ -147,7 +144,7 @@ export function DebuggerGrid({
   onOrder?(rows: Exchange[]): void;
 }) {
   const [sort, setSort] = useState<{ col: ColumnId; desc: boolean }>({ col: 'seq', desc: false });
-  const [hidden, setHidden] = useState<ColumnId[]>(readHidden);
+  const [hidden, setHidden] = usePersisted<ColumnId[]>(HIDDEN_KEY, DEFAULT_HIDDEN, { parse: parseHidden });
   const [menu, setMenu] = useState<{ x: number; y: number; e: Exchange }>();
   const cols = COLUMNS.filter((c) => !hidden.includes(c.id));
   const minWidth = cols.reduce((n, c) => n + c.width, 0);
@@ -165,11 +162,6 @@ export function DebuggerGrid({
   const toggleColumn = (id: ColumnId) => {
     const next = hidden.includes(id) ? hidden.filter((x) => x !== id) : [...hidden, id];
     setHidden(next);
-    try {
-      localStorage.setItem(HIDDEN_KEY, JSON.stringify(next));
-    } catch {
-      /* the choice lasts this session */
-    }
   };
   const click = (ev: ReactMouseEvent, e: Exchange) => {
     if (ev.ctrlKey || ev.metaKey) {
@@ -272,7 +264,7 @@ export function DebuggerGrid({
         icon: <Copy size={14} />,
         onSelect: () => undefined,
         items: [
-          { label: 'URL', onSelect: () => copy(e.url, 'the URL') },
+          { label: 'URL', onSelect: () => void copyText(e.url, 'the URL') },
           { label: 'As cURL', onSelect: () => copyWhole(e, 'as cURL', curlOf) },
           { label: 'Request headers', onSelect: () => copyWhole(e, 'the request headers', (x) => headerLines(x.requestHeaders)) },
           { label: 'Response headers', onSelect: () => copyWhole(e, 'the response headers', (x) => headerLines(x.responseHeaders)) },
@@ -469,11 +461,7 @@ export function TrafficSide({ side, onSide, incoming }: { side: 'outgoing' | 'in
 
 /** Requests the workspace's mock servers received, as they come. */
 export function useIncoming() {
-  const [list, setList] = useState<IncomingRequest[]>([]);
-  useEffect(() => {
-    void call<IncomingRequest[]>('debug.incoming').then(setList, () => undefined);
-    return on<IncomingRequest>('debug.incoming', (r) => setList((l) => [...l.slice(-1999), r]));
-  }, []);
+  const [list, setList] = useEventLog<IncomingRequest>('debug.incoming', 2000, 'debug.incoming');
   return { list, clear: () => void call('debug.clearIncoming').then(() => setList([])) };
 }
 

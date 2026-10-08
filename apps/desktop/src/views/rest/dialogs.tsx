@@ -1,8 +1,8 @@
 /** Save-to-collection and Import dialogs of the REST view. */
 import { FolderOpen, Link2, Upload } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { asError, call } from '../../api';
-import { useApp } from '../../store';
+import { call } from '../../api';
+import { toastError, useApp } from '../../store';
 import type { Collection, CollectionNode } from '../../types';
 import { uid } from '../../lib/format';
 
@@ -126,7 +126,7 @@ export function ImportModal({ onClose, onDone }: { onClose(): void; onDone(): vo
         onClose();
       }
     } catch (e) {
-      useApp.getState().toast(asError(e).message, 'error');
+      toastError(e);
     } finally {
       setBusy(false);
     }

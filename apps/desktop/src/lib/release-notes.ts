@@ -1,3 +1,4 @@
+import { plural } from './format';
 /**
  * Release notes for the update dialog, as short plain text. electron-updater delivers the GitHub
  * release body as HTML (from the releases feed); the GitHub API delivers Markdown. Both become a
@@ -55,5 +56,5 @@ export function summariseNotes(notes: string, max = 6): string {
     return `• ${head.length > 120 ? head.slice(0, 120).replace(/\s+\S*$/, '') + '…' : head}`;
   });
   const more = bullets.length - heads.length;
-  return heads.join('\n') + (more > 0 ? `\n…and ${more} more change${more === 1 ? '' : 's'}` : '');
+  return heads.join('\n') + (more > 0 ? `\n…and ${plural(more, 'more change')}` : '');
 }

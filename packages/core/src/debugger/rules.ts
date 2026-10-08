@@ -1,4 +1,5 @@
 import type { DebuggerExchange } from './proxy.js';
+import { globToRegex } from '../util/glob.js';
 
 /**
  * The HTTP Debugger's rules (planning/http-debugger.md, DBG-3): what the proxy does to the traffic that matches.
@@ -91,8 +92,6 @@ export interface DebuggerRulesFile {
   filterPresets?: Array<{ name: string; filter: Record<string, unknown> }>;
 }
 
-export const RULE_COLORS = ['red', 'orange', 'yellow', 'green', 'blue', 'purple', 'grey'] as const;
-
 /** A glob (`*` any run, `?` one character) or a /regular expression/ as a RegExp; empty means anything. */
 export function patternToRegExp(pattern: string | undefined): RegExp | undefined {
   const p = pattern?.trim();
@@ -105,23 +104,16 @@ export function patternToRegExp(pattern: string | undefined): RegExp | undefined
       return undefined;
     }
   }
-  return new RegExp(
-    '^' +
-      p
-        .replace(/[.+^${}()|[\]\\]/g, '\\$&')
-        .replace(/\*/g, '.*')
-        .replace(/\?/g, '.') +
-      '$',
-    'i',
-  );
+  return globToRegex(p);
 }
 
-const statusOf = (e: Pick<DebuggerExchange, 'status' | 'error'>, want: RuleMatch['status']) => {
+/** Whether an exchange's status (or its failure) is what a rule or a filter asks for: a code, ok / redirect / client-error / server-error, or error. */
+export function statusMatches(want: RuleMatch['status'], status: number | undefined, error: string | undefined): boolean {
   if (want === undefined) return true;
-  const s = e.status ?? 0;
+  const s = status ?? 0;
   if (typeof want === 'number') return s === want;
-  return want === 'ok' ? s >= 200 && s < 300 : want === 'redirect' ? s >= 300 && s < 400 : want === 'client-error' ? s >= 400 && s < 500 : want === 'server-error' ? s >= 500 : !!e.error;
-};
+  return want === 'ok' ? s >= 200 && s < 300 : want === 'redirect' ? s >= 300 && s < 400 : want === 'client-error' ? s >= 400 && s < 500 : want === 'server-error' ? s >= 500 : !!error;
+}
 
 // the server's address is known once the request went out: like the response's columns, checked afterwards
 const RESPONSE_COLUMNS: RuleColumn[] = ['status', 'type', 'duration', 'size', 'ip'];
@@ -230,7 +222,7 @@ export function ruleMatches(rule: DebuggerRule, e: DebuggerExchange, phase: 'req
   const needsResponse = m.status !== undefined || m.minMs !== undefined || m.minBytes !== undefined || (!!m.where && RESPONSE_COLUMNS.includes(m.where.column));
   if (needsResponse) {
     if (phase === 'request') return false;
-    if (!statusOf(e, m.status)) return false;
+    if (!statusMatches(m.status, e.status, e.error)) return false;
     if (m.minMs !== undefined && (e.durationMs ?? 0) < m.minMs) return false;
     if (m.minBytes !== undefined && e.responseBodyBytes < m.minBytes) return false;
   }
@@ -438,11 +430,6 @@ export function decideRequest(rules: DebuggerRule[], e: DebuggerExchange): Reque
     d.appliedIds.push(r.id);
   }
   return d;
-}
-
-/** Highlights that depend on the response (status, time, size), once it is in. */
-export function highlightForResponse(rules: DebuggerRule[], e: DebuggerExchange): string | undefined {
-  return highlightRuleForResponse(rules, e)?.color ?? (highlightRuleForResponse(rules, e) ? 'yellow' : undefined);
 }
 
 /** The highlight rule that matches once the response is in (its colour, style and id). */

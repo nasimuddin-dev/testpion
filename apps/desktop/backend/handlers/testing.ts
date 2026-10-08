@@ -31,6 +31,8 @@ import {
   scoreTrend,
   latestResults,
   workspaceAttention,
+  readRunSummary,
+  compareRuns,
 } from '@testpion/core';
 import type { Backend, Handlers, EvalRunParams } from '../backend.js';
 
@@ -91,10 +93,7 @@ export function testingHandlers(be: Backend): Handlers {
     'runs.latestResults': ({ names }: { names: string[] }) => latestResults(be.ws, names ?? []),
     'runs.flaky': ({ runs }: { runs?: number } = {}) => flakyTests(be.ws, { runs }),
     'runs.testHistory': ({ id, name, limit }: { id?: string; name?: string; limit?: number }) => testHistory(be.ws, { id, name }, { limit }),
-    'runs.summary': ({ runId }: { runId: string }) => {
-      const f = join(be.ws.runDir(runId), 'summary.json');
-      return existsSync(f) ? JSON.parse(readFileSync(f, 'utf8')) : null;
-    },
+    'runs.summary': ({ runId }: { runId: string }) => readRunSummary(be.ws, runId) ?? null,
     'runs.results': (q: { runId: string; offset?: number; limit?: number; status?: string; query?: string }) => be.pageResults(q),
     // a person's verdict on a result (good / bad and why), and how many were rated
     'runs.review': ({ runId, resultId, rating, note }: { runId: string; resultId: string; rating?: 'good' | 'bad' | null; note?: string | null }) => reviewResult(be.ws, runId, resultId, { rating, note }) ?? null,
@@ -130,14 +129,9 @@ export function testingHandlers(be: Backend): Handlers {
     },
     /** Compare a run with a saved baseline (`name`) or with an earlier run (`withRun`, used as the baseline). */
     'baselines.compare': async ({ runId, name, withRun, thresholds }: { runId: string; name?: string; withRun?: string; thresholds?: { latencyPct: number; tokensPct: number; scoreDrop: number } }) => {
+      if (withRun) return compareRuns(be.ws, withRun, runId, thresholds);
       const summary = await be.handlers['runs.summary']!({ runId });
-      let baseline;
-      if (withRun) {
-        const before = await be.handlers['runs.summary']!({ runId: withRun });
-        if (!before) throw new ApsError('ValidationError', `No finished run ${withRun}`);
-        baseline = await createBaseline(`run ${withRun}`, before as never, be.results(withRun));
-      } else baseline = be.ws.getBaseline(String(name));
-      return compareToBaseline(baseline, summary as never, be.results(runId), thresholds);
+      return compareToBaseline(be.ws.getBaseline(String(name)), summary as never, be.results(runId), thresholds);
     },
 
     'traces.list': (q: { query?: string; kind?: string; failed?: boolean; limit?: number; offset?: number }) => be.ws.meta.listTraces(q),

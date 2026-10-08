@@ -145,7 +145,7 @@ export function Sidebar() {
 }
 
 /** The environment switcher: a colour dot on the left of every environment (red for production), the app's own menu. */
-export function EnvironmentPicker() {
+function EnvironmentPicker() {
   const ws = useApp((s) => s.workspace);
   const env = useApp((s) => s.environment);
   const envObj = ws?.environments.find((e) => e.name === env);
@@ -301,11 +301,11 @@ function DebuggerSegment() {
   return (
     <button
       className={cx('flex items-center gap-1 hover:text-fg', warn && 'text-warn')}
-      title={`HTTP Debugger capturing on port ${st.port}${st.changingRules ? `; ${st.changingRules} rule${st.changingRules === 1 ? '' : 's'} change traffic` : ''}${st.systemProxy ? '; the system proxy points here' : ''}. Click to open it.`}
+      title={`HTTP Debugger capturing on port ${st.port}${st.changingRules ? `; ${plural(st.changingRules, 'rule')} change traffic` : ''}${st.systemProxy ? '; the system proxy points here' : ''}. Click to open it.`}
       onClick={() => useApp.getState().setView('debugger')}
     >
       <Bug size={12} /> Debugger :{st.port}
-      {st.changingRules > 0 && ` · ${st.changingRules} rule${st.changingRules === 1 ? '' : 's'} active`}
+      {st.changingRules > 0 && ` · ${plural(st.changingRules, 'rule')} active`}
       {st.systemProxy && ' · system proxy'}
     </button>
   );
@@ -374,7 +374,7 @@ function GitSegment() {
   return (
     <button
       className="flex items-center gap-1 hover:text-fg"
-      title={`Git: branch ${status.branch ?? '(detached)'}${status.ahead ? `, ${status.ahead} to push` : ''}${status.behind ? `, ${status.behind} to pull` : ''}${n ? `, ${n} changed file${n === 1 ? '' : 's'}` : ', no changes'}`}
+      title={`Git: branch ${status.branch ?? '(detached)'}${status.ahead ? `, ${status.ahead} to push` : ''}${status.behind ? `, ${status.behind} to pull` : ''}${n ? `, ${plural(n, 'changed file')}` : ', no changes'}`}
       onClick={() => useApp.getState().setView('git')}
     >
       <GitBranch size={12} /> {status.branch ?? 'detached'}
@@ -407,12 +407,8 @@ export function LogsPanel() {
 }
 
 function AppLogs() {
-  const [logs, setLogs] = useState<Array<{ time: string; level: string; scope: string; message: string; data?: unknown }>>([]);
+  const [logs] = useEventLog<{ time: string; level: string; scope: string; message: string; data?: unknown }>('log', 500, 'logs.recent');
   const [level, setLevel] = useState('ALL');
-  useEffect(() => {
-    void call('logs.recent').then(setLogs);
-    return on('log', (rec) => setLogs((l) => [...l.slice(-499), rec]));
-  }, []);
   const shown = logs.filter((l) => level === 'ALL' || l.level === level);
   return (
     <>
@@ -646,6 +642,8 @@ const DIALOG_TONES: Record<DialogTone, { icon: ReactNode; className: string }> =
 
 /** The icon a dialog button gets from its label, so every button in the app carries one: Create → +, Delete → bin, Cancel → ×. */
 import { iconForLabel } from './action-icons';
+import { useEventLog } from '../lib/use-rpc';
+import { plural } from '../lib/format';
 export { iconForLabel };
 
 function DialogView({ d }: { d: DialogRequest }) {

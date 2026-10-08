@@ -1,18 +1,13 @@
 import { compareSnapshot, describeDifference } from './snapshot.js';
 import { decodeJwt, describeExpiry, findJwts, type DecodedJwt } from '../util/jwt.js';
 import { createHash } from 'node:crypto';
-import AjvModule, { type ValidateFunction } from 'ajv';
-import addFormatsModule from 'ajv-formats';
 import type { CheckConfig, CheckResult, CheckSource, ModelRef, NormalizedError, RetrievedDoc, TestType, TokenUsage } from '../model/types.js';
 import { deepEqual, exists, inferSchema, query, queryAll, tryParseJson } from '../util/jsonpath.js';
 import { coverage, coverageIn, cosine, lexicalCosine, sentences, tokenF1, wordSet } from './text.js';
 import type { ProviderRegistry } from '../ai/index.js';
 import type { SpanHandle } from '../trace/tracer.js';
 import { normalizeError } from '../errors.js';
-
-// ajv ships CJS; normalise default export under NodeNext/ESM
-const Ajv = ((AjvModule as unknown as { default?: unknown }).default ?? AjvModule) as typeof AjvModule.default;
-const addFormats = ((addFormatsModule as unknown as { default?: unknown }).default ?? addFormatsModule) as unknown as (a: unknown) => void;
+import { compileSchema } from '../util/json-schema.js';
 
 /** Everything a check may inspect about an execution. */
 export interface CheckContext {
@@ -64,25 +59,8 @@ export function checkTypes(): string[] {
   return [...registry.keys()].sort();
 }
 
-const ajv = new Ajv({ allErrors: true, strict: false });
-addFormats(ajv);
-const schemaCache = new Map<string, ValidateFunction>();
-// the same schema object validates many values (a tool's arguments per call, a dataset's records): compiled once
-const compiled = new WeakMap<object, ValidateFunction>();
-
 export function validateSchema(schema: unknown, data: unknown): { valid: boolean; errors: string[] } {
-  const obj = schema && typeof schema === 'object' ? (schema as object) : undefined;
-  let v = obj && compiled.get(obj);
-  if (!v) {
-    const key = JSON.stringify(schema);
-    v = schemaCache.get(key);
-    if (!v) {
-      v = ajv.compile(schema as object);
-      if (schemaCache.size > 500) schemaCache.clear();
-      schemaCache.set(key, v);
-    }
-    if (obj) compiled.set(obj, v);
-  }
+  const v = compileSchema(schema);
   const valid = v(data) as boolean;
   return { valid, errors: valid ? [] : (v.errors ?? []).map((e) => `${e.instancePath || '$'} ${e.message}`) };
 }
@@ -521,7 +499,7 @@ registry.set('semantic-similarity', registry.get('similarity')!);
 
 /* ------------------------------------------------------------------ LLM as judge */
 
-export const JUDGE_PROMPT_VERSION = 'judge-v1';
+const JUDGE_PROMPT_VERSION = 'judge-v1';
 
 function judgePrompt(criteria: string, ctx: CheckContext, extra: { reference?: string; contexts?: string }): string {
   return [
@@ -569,7 +547,7 @@ async function askJudge(cfg: CheckConfig, ctx: CheckContext, prompt: string, key
   }
 }
 
-export async function runJudge(
+async function runJudge(
   cfg: CheckConfig,
   ctx: CheckContext,
   criteria: string,

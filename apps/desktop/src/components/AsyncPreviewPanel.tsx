@@ -1,7 +1,7 @@
 import { ArrowDownToLine, ArrowUpFromLine, ChevronDown, ChevronRight, FlaskConical } from 'lucide-react';
 import { useState } from 'react';
-import { asError, call } from '../api';
-import { confirmAction, useApp } from '../store';
+import { call } from '../api';
+import { confirmAction, toastError, useApp } from '../store';
 import { Badge, Button, Empty } from './ui';
 
 interface Message {
@@ -106,7 +106,7 @@ export function AsyncPreviewPanel({ outline, error, spec }: { outline?: AsyncOut
           r.written.length ? { label: 'Open Tests', onClick: () => useApp.getState().setView('tests') } : undefined,
         );
     } catch (e) {
-      useApp.getState().toast(asError(e).message, 'error');
+      toastError(e);
     }
   };
   return (

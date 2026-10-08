@@ -1,7 +1,7 @@
 import { Code, FileText, KeyRound, Link2, PenLine } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { asError, call } from '../api';
-import { confirmAction, useApp } from '../store';
+import { call } from '../api';
+import { confirmAction, toastError, useApp } from '../store';
 import { plural } from '../lib/format';
 import { Button, Field, Input, Modal } from './ui';
 
@@ -46,7 +46,7 @@ export function VariableUsagesDialog({ names, initial, onClose, onRenamed }: { n
       setName(to);
       setRenameTo('');
     } catch (e) {
-      useApp.getState().toast(asError(e).message, 'error');
+      toastError(e);
     } finally {
       setBusy(false);
     }

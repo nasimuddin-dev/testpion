@@ -1,7 +1,7 @@
 import { BarChart3, ChevronDown, ChevronRight, CopyPlus, FileCode2, FilePlus2, Folder, History, KeyRound, Layers, Pencil, Play, Save, ShieldCheck, Trash2, Workflow } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { asError, call, on } from '../api';
-import { confirmAction, promptText, useApp } from '../store';
+import { confirmAction, promptText, toastError, useApp } from '../store';
 import { useIntent, useSaveShortcut } from '../hooks';
 import { timeAgo } from '../lib/format';
 import { StatusIcon } from '../components/Results';
@@ -251,7 +251,7 @@ export function TestsView() {
       setTab('run');
       setTimeout(loadRuns, 500);
     } catch (e) {
-      useApp.getState().toast(asError(e).message, 'error');
+      toastError(e);
     }
   };
   const newFile = async (kind: string) => {
@@ -289,7 +289,7 @@ export function TestsView() {
       renameOpen(path, to);
       await loadTree();
     } catch (e) {
-      useApp.getState().toast(asError(e).message, 'error');
+      toastError(e);
     }
   };
   const duplicateFile = async (path: string) => {
@@ -542,7 +542,7 @@ export function TestsView() {
                       setRunId(r.runId);
                       setTimeout(loadRuns, 500);
                     },
-                    (e) => useApp.getState().toast(asError(e).message, 'error'),
+                    (e) => toastError(e),
                   )
                 }
               />

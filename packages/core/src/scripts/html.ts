@@ -1,4 +1,5 @@
 import { parse, type HTMLElement, type Node } from 'node-html-parser';
+import { BoundedMap } from '../util/collections.js';
 
 /**
  * Host side of the sandbox's cheerio: parse HTML (a few documents are cached) and run CSS selectors.
@@ -13,12 +14,11 @@ export interface HtmlNode {
   outer: string;
 }
 
-const cache = new Map<string, HTMLElement>();
+const cache = new BoundedMap<string, HTMLElement>(4);
 function rootOf(html: string): HTMLElement {
   let r = cache.get(html);
   if (!r) {
     r = parse(html, { comment: false, blockTextElements: { script: true, style: true, pre: true, noscript: true } });
-    if (cache.size >= 4) cache.delete(cache.keys().next().value!);
     cache.set(html, r);
   }
   return r;

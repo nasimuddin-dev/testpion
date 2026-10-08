@@ -236,7 +236,7 @@ function loadSqlite() {
   return sqliteModule;
 }
 
-export const SQLITE_SCHEMA_VERSION = 1;
+const SQLITE_SCHEMA_VERSION = 1;
 
 /** History entries and traces kept; older ones are pruned, with their files. */
 const MAX_HISTORY = 20_000;

@@ -5,6 +5,7 @@ import { call } from '../api';
 import { activeCollectionId } from '../lib/var-popover';
 import { useApp } from '../store';
 import { Badge, Button, cx, Input, Tooltip } from './ui';
+import { Callout } from '../components/ui';
 
 interface Row {
   key: string;
@@ -250,7 +251,7 @@ export function EnvQuickLook() {
             </ol>
           )}
           {focus && data && ![data.collection?.variables, data.environment?.variables, data.workspace, data.globals].some((rows) => rows?.some((r) => r.key === focus)) && (
-            <div role="status" className="rounded-md border border-warn/50 bg-warn/5 p-2 text-sm flex items-center gap-2 flex-wrap" data-not-defined={focus}>
+            <Callout tone="warn" block role="status" className="rounded-md p-2 text-sm flex items-center gap-2 flex-wrap" data-not-defined={focus}>
               <span>
                 <span className="mono">{`{{${focus}}}`}</span> is not defined anywhere: not in the collection, the environment{data.environment ? ` (${data.environment.name})` : ''}, the workspace or
                 the globals.
@@ -260,7 +261,7 @@ export function EnvQuickLook() {
                   Add to {data.environment.name}
                 </Button>
               )}
-            </div>
+            </Callout>
           )}
           {!focus &&
             section(

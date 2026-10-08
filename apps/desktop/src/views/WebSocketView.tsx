@@ -2,7 +2,7 @@ import { ArrowDownLeft, ArrowUpRight, BookmarkPlus, Info, ListTree, Plug, Plus, 
 import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { useAssistantContext } from '../lib/assistant-context';
 import { asError, call, on } from '../api';
-import { persisted, promptText, useApp } from '../store';
+import { persisted, promptText, toastError, useApp } from '../store';
 import { FolderList } from '../components/FolderList';
 import { SidebarShell } from '../components/SidebarShell';
 import { NEW_TAB_TITLE, useSingleEditorTab } from '../components/EditorTabs';
@@ -218,7 +218,7 @@ export function WebSocketView() {
       : sio
         ? call('sio.emit', { id: session, event: d.event ?? '', args: d.message, ack: !!d.ack, environment: env })
         : call('wsock.send', { id: session, data: d.message, environment: env })
-    ).catch((e) => useApp.getState().toast(asError(e).message, 'error'));
+    ).catch((e) => toastError(e));
   // MQTT subscriptions: kept with the connection and subscribed on connect; changes apply at once while connected
   const addSubscription = async () => {
     const topic = newSub.topic.trim();
@@ -227,7 +227,7 @@ export function WebSocketView() {
       try {
         await call('mqtt.subscribe', { id: session, topic, qos: newSub.qos, environment: env });
       } catch (e) {
-        useApp.getState().toast(asError(e).message, 'error');
+        toastError(e);
         return;
       }
     }
@@ -235,7 +235,7 @@ export function WebSocketView() {
     setNewSub({ topic: '', qos: newSub.qos });
   };
   const removeSubscription = (topic: string) => {
-    if (session && status === 'open') void call('mqtt.unsubscribe', { id: session, topic, environment: env }).catch((e) => useApp.getState().toast(asError(e).message, 'error'));
+    if (session && status === 'open') void call('mqtt.unsubscribe', { id: session, topic, environment: env }).catch((e) => toastError(e));
     setD({ ...d, subscriptions: (d.subscriptions ?? []).filter((s) => s.topic !== topic) });
   };
   // Kafka topics: kept with the connection and read on connect; changes apply at once while connected
@@ -246,7 +246,7 @@ export function WebSocketView() {
       try {
         await call('kafka.read', { id: session, topic, fromBeginning: newRead.fromBeginning, environment: env });
       } catch (e) {
-        useApp.getState().toast(asError(e).message, 'error');
+        toastError(e);
         return;
       }
     }
@@ -254,11 +254,11 @@ export function WebSocketView() {
     setNewRead({ topic: '', fromBeginning: newRead.fromBeginning });
   };
   const removeRead = (topic: string) => {
-    if (session && status === 'open') void call('kafka.stopReading', { id: session, topic, environment: env }).catch((e) => useApp.getState().toast(asError(e).message, 'error'));
+    if (session && status === 'open') void call('kafka.stopReading', { id: session, topic, environment: env }).catch((e) => toastError(e));
     setD({ ...d, reads: (d.reads ?? []).filter((r) => r.topic !== topic) });
   };
   const listClusterTopics = () =>
-    session && void call<Array<{ name: string; partitions: number }>>('kafka.topics', { id: session }).then(setClusterTopics, (e) => useApp.getState().toast(asError(e).message, 'error'));
+    session && void call<Array<{ name: string; partitions: number }>>('kafka.topics', { id: session }).then(setClusterTopics, (e) => toastError(e));
   const [direction, setDirection] = useState<'all' | 'sent' | 'received'>('all');
   const shown = messages.filter((m) => (direction === 'all' || m.direction === direction) && (!filter || `${m.topic ?? ''} ${m.event ?? ''} ${m.data}`.toLowerCase().includes(filter.toLowerCase())));
   let parsed: unknown;

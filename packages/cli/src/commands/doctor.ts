@@ -2,7 +2,7 @@
 import { accessSync, constants, existsSync } from 'node:fs';
 import { Command } from 'commander';
 import { WorkspaceManager, workspaceStorage, ENGINE_VERSION } from '@testpion/core';
-import { EXIT, green, red, yellow, dim, bold, findWorkspaceUp, openWorkspace } from '../shared.js';
+import { EXIT, green, red, yellow, dim, bold, printJson, findWorkspaceUp, withWorkspace } from '../shared.js';
 
 interface Check {
   name: string;
@@ -16,7 +16,7 @@ export function registerDoctorCommand(program: Command): void {
     .description('check that this machine and the workspace are ready: Node.js, SQLite, the app folder, secrets, proxy and certificates, and the workspace files (exit 1 on an error)')
     .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
     .option('--json', 'print the checks as JSON')
-    .action((o: { workspace?: string; json?: boolean }) => {
+    .action(async (o: { workspace?: string; json?: boolean }) => {
       const checks: Check[] = [];
       const add = (name: string, status: Check['status'], detail: string) => checks.push({ name, status, detail });
 
@@ -72,8 +72,7 @@ export function registerDoctorCommand(program: Command): void {
       const where = o.workspace ? undefined : findWorkspaceUp(process.cwd());
       if (o.workspace || where) {
         try {
-          const { store } = openWorkspace(o.workspace, undefined, mgr);
-          try {
+          await withWorkspace(o.workspace, (store) => {
             const cols = store.listCollections();
             const broken = cols.filter((c) => (c as { problem?: string }).problem);
             add('Workspace', 'ok', `${store.workspace.name} (${store.root})`);
@@ -93,16 +92,14 @@ export function registerDoctorCommand(program: Command): void {
               u.totalBytes > 2 * 1024 ** 3 ? 'warn' : 'ok',
               `${(u.totalBytes / 1048576).toFixed(1)} MB in ${u.runs} runs, ${u.history} history entries, ${u.traces} traces${u.totalBytes > 2 * 1024 ** 3 ? ' (clean up with testpion storage --delete-runs-older-than 30)' : ''}`,
             );
-          } finally {
-            store.close();
-          }
+          });
         } catch (e) {
           add('Workspace', 'error', (e as Error).message);
         }
       } else add('Workspace', 'warn', 'none here: pass -w <name or folder>, or run in a workspace folder');
 
       const failed = checks.some((c) => c.status === 'error');
-      if (o.json) console.log(JSON.stringify({ version: ENGINE_VERSION, ok: !failed, checks }, null, 2));
+      if (o.json) printJson({ version: ENGINE_VERSION, ok: !failed, checks });
       else {
         console.log(bold(`TestPion ${ENGINE_VERSION} doctor`));
         for (const c of checks) console.log(`${c.status === 'ok' ? green('✓') : c.status === 'warn' ? yellow('!') : red('✗')} ${c.name.padEnd(14)} ${c.status === 'ok' ? dim(c.detail) : c.detail}`);

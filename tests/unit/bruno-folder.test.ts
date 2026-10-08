@@ -1,27 +1,11 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { fakeServices } from '../helpers.js';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import {
-  bruFilesToBrunoExport,
-  collectionToBru,
-  detectFormat,
-  importAny,
-  parseBru,
-  readBrunoFolder,
-  runCollection,
-  runScript,
-  McpManager,
-  ProviderRegistry,
-  Redactor,
-  VariableScope,
-  type CollectionFolder,
-  type ExecServices,
-  type SavedHttpRequest,
-  type TestResult,
-} from '../../packages/core/src/index.js';
+import { bruFilesToBrunoExport, collectionToBru, detectFormat, importAny, parseBru, readBrunoFolder, runCollection, runScript, type CollectionFolder, type ExecServices, type SavedHttpRequest, type TestResult } from '../../packages/core/src/index.js';
 
 const LOGIN = `meta {
   name: Log in
@@ -135,12 +119,7 @@ afterAll(() => {
   return new Promise<void>((r) => server.close(() => r()));
 });
 
-function services(): ExecServices {
-  const vars = new VariableScope();
-  vars.setScope('environment', { baseUrl: base, password: 'pw' });
-  const redactor = new Redactor();
-  return { vars, providers: new ProviderRegistry([], vars, redactor), mcp: new McpManager(() => undefined), mcpServers: [], redactor, pricing: [], defaultTimeoutMs: 5000, environmentName: 'Local' } as ExecServices;
-}
+const services = (): ExecServices => fakeServices({ vars: { baseUrl: base, password: 'pw' }, extra: { environmentName: 'Local' } });
 
 describe('Bruno .bru files', () => {
   it('parses blocks: key/value entries (~ = disabled), text blocks and lists', () => {

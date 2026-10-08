@@ -1,6 +1,6 @@
 import { startDebuggerProxy, type DebuggerExchange, type DebuggerProxy } from '../debugger/proxy.js';
 import { exchangesFromHar, exchangesToHar } from '../debugger/har.js';
-import { describeRule, rulePresets, type DebuggerRule } from '../debugger/rules.js';
+import { describeRule, rulePresets, statusMatches, type DebuggerRule } from '../debugger/rules.js';
 import { shortId } from '../util/ids.js';
 import { debuggerCertDir, ensureRootCertificate, leafSigner } from '../debugger/certificate.js';
 import { exchangesFromSaz } from '../debugger/saz.js';
@@ -24,7 +24,7 @@ export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore })
   const rules: DebuggerRule[] = [];
   const red = d.redactor;
   const safe = (e: DebuggerExchange, bodies: boolean) => {
-    const headers = (h?: Record<string, string>) => (h ? Object.fromEntries(Object.entries(h).map(([k, v]) => [k, red.isSensitiveKey(k) ? '***' : v])) : h);
+    const headers = (h?: Record<string, string>) => (h ? red.redactHeaders(h) : h);
     // bodies, frames, events and gRPC messages only for one exchange, and redacted like everything else
     const { requestBody, responseBody, frames, events, grpc, trailers, ...rest } = e;
     return {
@@ -122,20 +122,7 @@ export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore })
         const out = session.filter((e) => {
           if (a.host && !e.host.toLowerCase().includes(String(a.host).toLowerCase())) return false;
           if (a.method && e.method !== String(a.method).toUpperCase()) return false;
-          if (a.status) {
-            const s = e.status ?? 0;
-            const ok =
-              a.status === 'ok'
-                ? s >= 200 && s < 300
-                : a.status === 'redirect'
-                  ? s >= 300 && s < 400
-                  : a.status === 'client-error'
-                    ? s >= 400 && s < 500
-                    : a.status === 'server-error'
-                      ? s >= 500
-                      : !!e.error;
-            if (!ok) return false;
-          }
+          if (a.status && !statusMatches(String(a.status) as DebuggerRule['match']['status'], e.status, e.error)) return false;
           if (needle) {
             if (`${e.method} ${e.url} ${e.application ?? ''} ${e.contentType ?? ''}`.toLowerCase().includes(needle)) return true;
             if (!a.deep) return false;

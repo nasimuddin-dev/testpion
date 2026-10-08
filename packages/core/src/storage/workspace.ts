@@ -25,7 +25,7 @@ export interface Migration {
  * Ordered workspace-format migrations. Each step upgrades exactly one version; `migrateWorkspace`
  * chains them. Never silently break existing workspaces: unknown future versions are rejected.
  */
-export const MIGRATIONS: Migration[] = [
+const MIGRATIONS: Migration[] = [
   {
     from: '0.9',
     to: '1.0',

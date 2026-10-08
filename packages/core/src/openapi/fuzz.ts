@@ -4,6 +4,8 @@ import { importOpenApi, sampleFromSchema } from '../import/importers.js';
 import { isLocalHost } from '../load/load.js';
 import type { AuthConfig, CollectionNode, HttpRequestSpec, KeyValue } from '../model/types.js';
 import { executeHttp, type HttpExecOptions } from '../protocols/http/client.js';
+import { slugify, uniqueId } from '../util/ids.js';
+import { deref, typeOf } from '../util/json-ref.js';
 import { loadOpenApi } from './contract.js';
 
 /**
@@ -56,14 +58,6 @@ export interface FuzzReport {
 
 const METHODS = ['get', 'post', 'put', 'patch', 'delete'];
 
-function deref(doc: Json, node: any, seen = 0): any {
-  if (!node || typeof node !== 'object' || typeof node.$ref !== 'string' || seen > 20) return node;
-  if (!node.$ref.startsWith('#/')) return {};
-  let cur: any = doc;
-  for (const p of node.$ref.slice(2).split('/')) cur = cur?.[decodeURIComponent(p.replace(/~1/g, '/').replace(/~0/g, '~'))];
-  return deref(doc, cur, seen + 1);
-}
-
 /** An object schema with allOf merged and $refs followed one level. */
 function objectSchema(doc: Json, s0: any): { properties: Json; required: string[] } | undefined {
   const s = deref(doc, s0);
@@ -75,8 +69,6 @@ function objectSchema(doc: Json, s0: any): { properties: Json; required: string[
   if (s.type !== 'object' && !s.properties) return undefined;
   return { properties: (s.properties as Json) ?? {}, required: (s.required as string[]) ?? [] };
 }
-
-const typeOf = (s: any): string | undefined => (Array.isArray(s?.type) ? s.type.find((t: string) => t !== 'null') : s?.type);
 
 /** A value of the wrong JSON type for a schema. */
 function wrongType(s: any): unknown {
@@ -373,13 +365,7 @@ export function fuzzFindingsToTests(report: FuzzReport, opts: { baseUrl?: string
   const used = new Set<string>();
   const tests = findings.map((r) => {
     const req = r.case.request;
-    let id = `${r.case.operation} ${r.case.name}`
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-|-$/g, '')
-      .slice(0, 60);
-    for (let i = 2; used.has(id); i++) id = `${id.replace(/-\d+$/, '')}-${i}`;
-    used.add(id);
+    const id = uniqueId(used, slugify(`${r.case.operation} ${r.case.name}`).slice(0, 60));
     const url = opts.baseUrl && req.url.startsWith(opts.baseUrl) ? `{{baseUrl}}${req.url.slice(opts.baseUrl.length)}` : req.url;
     const content = req.body && 'content' in req.body ? req.body.content : undefined;
     let body: unknown;

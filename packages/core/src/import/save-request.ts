@@ -1,6 +1,7 @@
 import type { AuthConfig, Collection, CollectionFolder, CollectionNode, HttpRequestSpec, KeyValue, SavedHttpRequest } from '../model/types.js';
 import { ApsError } from '../errors.js';
 import { shortId } from '../util/ids.js';
+import { matchCollection } from '../storage/env-edit.js';
 import type { Redactor } from '../util/redact.js';
 import { detectRequestSnippet, parseRequestSnippet } from './snippet.js';
 
@@ -82,8 +83,7 @@ export function addRequestToCollection(
   collections: Collection[],
   opts: { collection: string; folder?: string; name: string; request: HttpRequestSpec; description?: string; create?: boolean },
 ): { collection: Collection; node: SavedHttpRequest; created: boolean } {
-  const ref = opts.collection.trim().toLowerCase();
-  let col = collections.find((c) => c.id.toLowerCase() === ref) ?? collections.find((c) => c.name.toLowerCase() === ref);
+  let col = matchCollection(collections, opts.collection);
   let created = false;
   if (!col) {
     if (!opts.create) throw new ApsError('ConfigurationError', `No collection "${opts.collection}". Available: ${collections.map((c) => c.name).join(', ') || 'none'} (set create to make a new one)`);

@@ -1,7 +1,7 @@
 import { Cookie, Lock, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { asError, call } from '../api';
-import { confirmAction, promptText, useApp } from '../store';
+import { call } from '../api';
+import { confirmAction, promptText, toastError, useApp } from '../store';
 import { Badge, Button, cx, Empty, Field, IconButton, Input, Modal, Toggle } from './ui';
 
 export interface JarCookie {
@@ -67,7 +67,7 @@ export function CookiesModal({ initialDomain, onClose }: { initialDomain?: strin
       await reload();
       if (done) toast(done, 'success');
     } catch (e) {
-      toast(asError(e).message, 'error');
+      toastError(e);
     }
   };
 

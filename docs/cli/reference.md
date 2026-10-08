@@ -215,7 +215,7 @@ testpion openapi-lint --fail-on warning --disable operation-tags,component-unuse
 | `--severity <level>` | Show only `error`, `warning` or `info` (the default) and worse. |
 | `--fail-on <level>` | Exit `1` when a problem of this level or worse is found: `error` (the default), `warning`, `info` or `none`. |
 | `--rules` | List the rules and exit. |
-| `--json` | Print `{ problems, counts, operations }` as JSON (a list of them for several documents). |
+| `--json` | Print a list with one `{ file, problems, counts, operations }` per document as JSON (a list even for one document). |
 
 ## `mock`
 

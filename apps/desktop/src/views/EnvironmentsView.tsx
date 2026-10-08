@@ -4,18 +4,20 @@ import { useGit } from '../lib/git';
 import { GitItemHistory } from '../components/GitItemHistory';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useCollections } from '../lib/collections-store';
-import { asError, call } from '../api';
-import { confirmAction, promptText, useApp } from '../store';
+import { call } from '../api';
+import { confirmAction, promptText, toastError, useApp } from '../store';
 import { useIntent } from '../hooks';
 import type { Environment, KeyValue } from '../types';
 import { CollectionVariablesPane } from '../components/CollectionVariablesPane';
-import { download, uid } from '../lib/format';
+import { uid } from '../lib/format';
 import { KeyValueEditor } from '../components/KeyValueEditor';
 import { EnvCompare } from '../components/EnvCompare';
 import { EnvMatrix } from '../components/EnvMatrix';
 import { TrashDialog } from '../components/TrashDialog';
 import { Badge, Button, cx, Empty, Field, Input, Menu, MoreMenu, Split, Tabs, Toggle } from '../components/ui';
 import { CountPill, focusRow, InlineRename, RowMenu, TreeHeader, treeKeys } from '../components/TreeParts';
+import { refreshEnvironments, useEnvironments } from '../lib/environments-store';
+import { downloadContent } from '../lib/files';
 
 export function EnvironmentsView() {
   const git = useGit();
@@ -23,7 +25,7 @@ export function EnvironmentsView() {
   const ws = useApp((s) => s.workspace);
   const settings = useApp((s) => s.settings);
   const activeEnv = useApp((s) => s.environment);
-  const [envs, setEnvs] = useState<Environment[]>([]);
+  const envs = useEnvironments();
   const [comparing, setComparing] = useState(false);
   const [matrix, setMatrix] = useState(false);
   const [trashOpen, setTrashOpen] = useState(false);
@@ -32,11 +34,11 @@ export function EnvironmentsView() {
     if (!draft) return;
     try {
       const r = await call<{ path?: string; environment?: unknown; text?: string; name: string }>('env.export', { id: draft.id, format });
-      if (r.environment) download(r.name, JSON.stringify(r.environment, null, 2));
-      else if (r.text !== undefined) download(r.name, r.text, 'text/plain');
+      if (r.environment) downloadContent(r.name, JSON.stringify(r.environment, null, 2), { type: 'application/json' });
+      else if (r.text !== undefined) downloadContent(r.name, r.text, { type: 'text/plain' });
       else if (r.path) useApp.getState().toast(`Exported to ${r.path} (secret values are left out)`, 'success');
     } catch (e) {
-      useApp.getState().toast(asError(e).message, 'error');
+      toastError(e);
     }
   };
   const [sel, setSel] = useState<string>();
@@ -81,7 +83,7 @@ export function EnvironmentsView() {
       await useApp.getState().refreshWorkspace();
     } catch (e) {
       reordering.current = false;
-      useApp.getState().toast(asError(e).message, 'error');
+      toastError(e);
     }
   };
   // variables of the open environment that nothing reads (refreshed when it is opened or saved)
@@ -96,8 +98,7 @@ export function EnvironmentsView() {
   const [wsVars, setWsVars] = useState<KeyValue[]>(ws?.variables ?? []);
   const [globals, setGlobals] = useState<KeyValue[]>(settings?.globalVariables ?? []);
   const load = async () => {
-    const e = await call<Environment[]>('env.list');
-    setEnvs(e);
+    const e = await refreshEnvironments();
     setSel((s) => s ?? e[0]?.id);
   };
   const envsVersion = useApp((s) => s.envsVersion);
@@ -116,12 +117,12 @@ export function EnvironmentsView() {
     const [m] = next.splice(from, 1);
     next.splice(to, 0, m!);
     try {
-      const saved = await call<Environment[]>('env.reorder', { ids: next.map((e) => e.id) });
+      await call('env.reorder', { ids: next.map((e) => e.id) });
       reordering.current = true;
-      setEnvs(saved);
+      await refreshEnvironments();
       await useApp.getState().refreshWorkspace();
     } catch (e) {
-      useApp.getState().toast(asError(e).message, 'error');
+      toastError(e);
       await load();
     }
   };
@@ -179,7 +180,7 @@ export function EnvironmentsView() {
       await useApp.getState().refreshWorkspace();
       useApp.getState().toast('Environment saved', 'success');
     } catch (e) {
-      useApp.getState().toast(asError(e).message, 'error');
+      toastError(e);
     }
   };
   return (

@@ -1,23 +1,16 @@
 import { createHash } from 'node:crypto';
-import AjvModule, { type ValidateFunction } from 'ajv';
-import addFormatsModule from 'ajv-formats';
+import type { ValidateFunction } from 'ajv';
 import { parse as parseYaml } from 'yaml';
 import { ApsError } from '../errors.js';
 import { registerCheck, type CheckContext } from '../eval/checks.js';
 import type { CheckConfig, CheckResult } from '../model/types.js';
+import { compileSchema } from '../util/json-schema.js';
 
 /**
  * Contract testing against an OpenAPI 3.x (or Swagger 2.0) document: the response of a request must
  * be documented for its operation (status code, content type) and its body must match the schema.
  * Used by the `openapi` check.
  */
-
-const Ajv = ((AjvModule as unknown as { default?: unknown }).default ?? AjvModule) as typeof AjvModule.default;
-const addFormats = ((addFormatsModule as unknown as { default?: unknown }).default ?? addFormatsModule) as unknown as (a: unknown) => void;
-const ajv = new Ajv({ allErrors: true, strict: false, logger: false });
-addFormats(ajv);
-// OpenAPI's own formats (numbers and strings of any content): accepted, like most validators do
-for (const f of ['int32', 'int64', 'float', 'double', 'byte', 'binary', 'password']) ajv.addFormat(f, true);
 
 type Json = Record<string, unknown>;
 export interface OpenApiDoc extends Json {
@@ -28,7 +21,6 @@ export interface OpenApiDoc extends Json {
 
 const METHODS = ['get', 'put', 'post', 'delete', 'options', 'head', 'patch', 'trace'];
 const docs = new Map<string, OpenApiDoc>();
-const validators = new Map<string, ValidateFunction>();
 
 /** Parse an OpenAPI / Swagger document (YAML or JSON), cached by content. */
 export function loadOpenApi(text: string): OpenApiDoc {
@@ -91,7 +83,7 @@ export function findOperation(doc: OpenApiDoc, method: string, url: string): Ope
       const op = item?.[m] as Json | undefined;
       if (!op) continue;
       const names: string[] = [];
-      // escape everything but the {param} placeholders, which match one path segment
+      // escape everything but the {param} placeholders, which match one path segment (not escapeRegex: the braces must stay as they are for the replace that follows)
       const re = new RegExp(`^${path.replace(/[.*+?^$()|[\]\\]/g, '\\$&').replace(/\{([^}]+)\}/g, (_x, name: string) => (names.push(name), '([^/]+)'))}/?$`);
       const hit = re.exec(rest);
       if (!hit) continue;
@@ -108,7 +100,7 @@ export function findOperation(doc: OpenApiDoc, method: string, url: string): Ope
 }
 
 /** An operation by its operationId. */
-export function operationById(doc: OpenApiDoc, operationId: string): OpenApiOperation | undefined {
+function operationById(doc: OpenApiDoc, operationId: string): OpenApiOperation | undefined {
   for (const [path, item] of Object.entries(doc.paths ?? {}))
     for (const m of METHODS) {
       const op = item?.[m] as Json | undefined;
@@ -141,15 +133,8 @@ export function schemaProblems(doc: OpenApiDoc, schema: unknown, value: unknown)
 }
 
 function validator(doc: OpenApiDoc, schema: unknown, key: string): ValidateFunction {
-  let v = validators.get(key);
-  if (!v) {
-    // references (#/components/…, #/definitions/…) resolve against the document's own sections
-    const root = { ...(toJsonSchema(schema) as Json), components: toJsonSchema(doc.components ?? {}), definitions: toJsonSchema(doc.definitions ?? {}) };
-    v = ajv.compile(root);
-    if (validators.size > 500) validators.clear();
-    validators.set(key, v);
-  }
-  return v;
+  // references (#/components/…, #/definitions/…) resolve against the document's own sections
+  return compileSchema(() => ({ ...(toJsonSchema(schema) as Json), components: toJsonSchema(doc.components ?? {}), definitions: toJsonSchema(doc.definitions ?? {}) }), key);
 }
 
 export interface ContractResult {

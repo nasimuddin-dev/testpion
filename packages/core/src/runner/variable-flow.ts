@@ -124,3 +124,15 @@ export function referencedVariableNames(store: Pick<WorkspaceStore, 'listCollect
   walk(store.testTree());
   return found;
 }
+
+/** The variables of each environment and of the workspace that nothing reads (scopes with none are left out). */
+export function unusedVariables(store: Parameters<typeof referencedVariableNames>[0]): Array<{ scope: string; unused: string[] }> {
+  const used = referencedVariableNames(store);
+  const unusedOf = (vars: Array<{ key: string }>) => vars.map((v) => v.key).filter((k) => k && !used.has(k));
+  return [...store.listEnvironments().map((e) => ({ scope: `environment ${e.name}`, unused: unusedOf(e.variables) })), { scope: 'workspace', unused: unusedOf(store.workspace.variables ?? []) }].filter((x) => x.unused.length);
+}
+
+/** Every variable name an environment, the workspace or the global settings define: what a collection need not set itself. */
+export function definedVariableNames(store: Pick<WorkspaceStore, 'listEnvironments' | 'workspace'>, settings?: { globalVariables?: Array<{ key: string }> }): string[] {
+  return [...store.listEnvironments().flatMap((e) => e.variables.map((v) => v.key)), ...(store.workspace.variables ?? []).map((v) => v.key), ...(settings?.globalVariables ?? []).map((v) => v.key)];
+}

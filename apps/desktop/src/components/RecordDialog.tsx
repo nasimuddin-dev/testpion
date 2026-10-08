@@ -1,9 +1,12 @@
 import { Circle, Copy, FolderPlus, Square, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { asError, call, on } from '../api';
-import { useApp } from '../store';
+import { call } from '../api';
+import { toastError, useApp } from '../store';
 import { plural } from '../lib/format';
 import { Badge, Button, Empty, Field, Input, Modal, VirtualList, statusTone } from './ui';
+import { useEventLog } from '../lib/use-rpc';
+import { usePersisted } from '../lib/sticky';
+import { copyText } from '../lib/clipboard';
 
 interface Exchange {
   id: string;
@@ -21,31 +24,25 @@ interface Exchange {
  * (responses become examples, tokens become {{variables}}), then replay, test or mock it.
  */
 export function RecordDialog({ onClose }: { onClose(): void }) {
-  const [target, setTarget] = useState(() => localStorage.getItem('aps.record.target') ?? 'https://');
+  const [target, setTarget] = usePersisted('aps.record.target', 'https://', { text: true });
   const [port, setPort] = useState('');
   const [running, setRunning] = useState<{ url: string; target: string }>();
-  const [items, setItems] = useState<Exchange[]>([]);
+  const [items, setItems] = useEventLog<Exchange>('record.exchange', 2000);
   const [name, setName] = useState('Recorded');
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     void call<{ url: string; target: string; exchanges: number } | null>('record.status').then((s) => s && setRunning({ url: s.url, target: s.target }));
-    return on<Exchange>('record.exchange', (e) => setItems((xs) => [...xs.slice(-1999), e]));
   }, []);
   const start = async () => {
     setBusy(true);
     try {
-      try {
-        localStorage.setItem('aps.record.target', target);
-      } catch {
-        /* private mode */
-      }
       const r = await call<{ url: string; target: string }>('record.start', { target: target.trim(), port: port ? Number(port) : undefined });
       setRunning(r);
       setItems([]);
       await navigator.clipboard.writeText(r.url).catch(() => undefined);
       useApp.getState().toast(`Recording. Point your client at ${r.url} (copied)`, 'success');
     } catch (e) {
-      useApp.getState().toast(asError(e).message, 'error');
+      toastError(e);
     } finally {
       setBusy(false);
     }
@@ -63,7 +60,7 @@ export function RecordDialog({ onClose }: { onClose(): void }) {
         'success',
       );
     } catch (e) {
-      useApp.getState().toast(asError(e).message, 'error');
+      toastError(e);
     }
   };
   return (
@@ -77,7 +74,7 @@ export function RecordDialog({ onClose }: { onClose(): void }) {
             </Badge>
             <span className="mono text-sm">{running.url}</span>
             <span className="text-sm text-muted">→ {running.target}</span>
-            <Button size="sm" variant="ghost" icon={<Copy size={12} />} className="ml-auto" onClick={() => void navigator.clipboard.writeText(running.url)}>
+            <Button size="sm" variant="ghost" icon={<Copy size={12} />} className="ml-auto" onClick={() => void copyText(running.url, 'the URL')}>
               Copy
             </Button>
             <Button size="sm" variant="danger" icon={<Square size={11} />} onClick={() => void stop()}>

@@ -1,6 +1,6 @@
 import type { Command } from 'commander';
-import { applyTidy, tidyCollection, WorkspaceManager } from '@testpion/core';
-import { EXIT, bold, dim, green, yellow, CliError, openWorkspace } from '../shared.js';
+import { applyTidy, tidyCollection, } from '@testpion/core';
+import { green, yellow, dim, bold, printJson, withWorkspace, requireCollection } from '../shared.js';
 
 /** `testpion tidy <collection>`: duplicate requests, typed-in hosts, empty folders, unused variables; --remove-* fixes them. */
 export function registerTidyCommand(program: Command): void {
@@ -15,12 +15,8 @@ export function registerTidyCommand(program: Command): void {
     .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
     .option('--json', 'print the result as JSON (for scripts and AI agents)')
     .action((ref: string, o: { removeDuplicates?: boolean; removeEmptyFolders?: boolean; removeUnusedVariables?: boolean; useCollectionAuth?: boolean; workspace?: string; json?: boolean }) => {
-      const { store } = openWorkspace(o.workspace, undefined, new WorkspaceManager());
-      try {
-        const want = ref.toLowerCase();
-        const s = store.listCollections().find((x) => x.id.toLowerCase() === want) ?? store.listCollections().find((x) => x.name.toLowerCase() === want);
-        if (!s) throw new CliError(`No collection "${ref}"`, EXIT.CONFIG_ERROR);
-        const c = store.getCollection(s.id);
+      return withWorkspace(o.workspace, (store) => {
+        const c = store.getCollection(requireCollection(store, ref).id);
         const findings = tidyCollection(c);
         let removed = 0;
         if (o.removeDuplicates || o.removeEmptyFolders || o.removeUnusedVariables || o.useCollectionAuth) {
@@ -28,7 +24,7 @@ export function registerTidyCommand(program: Command): void {
           removed = r.removed;
           if (removed) store.saveCollection(r.collection);
         }
-        if (o.json) return console.log(JSON.stringify({ collection: c.name, findings, removed }, null, 2));
+        if (o.json) return printJson({ collection: c.name, collectionId: c.id, findings, removed });
         if (!findings.length) return console.log(green(`${c.name} is tidy.`));
         const titles = { duplicate: 'Duplicate requests', 'hard-coded-host': 'Hosts typed into URLs', 'empty-folder': 'Empty folders', 'unused-variable': 'Unused variables', 'repeated-auth-header': 'The same Authorization header on many requests' } as const;
         for (const kind of Object.keys(titles) as Array<keyof typeof titles>) {
@@ -42,8 +38,6 @@ export function registerTidyCommand(program: Command): void {
         }
         if (removed) console.log(green(`\n${removed} removed.`));
         else console.log(yellow('\nNothing removed: --remove-duplicates, --remove-empty-folders and --remove-unused-variables fix those; testpion replace puts a variable in place of a host.'));
-      } finally {
-        store.close();
-      }
+      });
     });
 }

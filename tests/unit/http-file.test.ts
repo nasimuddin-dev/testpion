@@ -1,22 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { fakeServices } from '../helpers.js';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import {
-  collectionToHttpFile,
-  detectFormat,
-  importAny,
-  importHttpFile,
-  isHttpFile,
-  McpManager,
-  MemorySecretStore,
-  ProviderRegistry,
-  Redactor,
-  runTests,
-  VariableScope,
-  type ExecServices,
-  type SavedHttpRequest,
-  type TestCase,
-} from '../../packages/core/src/index.js';
+import { collectionToHttpFile, detectFormat, importAny, importHttpFile, isHttpFile, runTests, type ExecServices, type SavedHttpRequest, type TestCase } from '../../packages/core/src/index.js';
 
 const restClient = `@baseUrl = http://127.0.0.1:PORT
 @contentType = application/json
@@ -89,11 +75,7 @@ beforeAll(async () => {
 afterAll(() => new Promise((r) => server.close(r)));
 
 const flat = (items: unknown[]) => items as SavedHttpRequest[];
-const services = (): ExecServices => {
-  const redactor = new Redactor();
-  const vars = new VariableScope(new MemorySecretStore(), redactor);
-  return { vars, providers: new ProviderRegistry([], vars, redactor), mcp: new McpManager(() => undefined, redactor), mcpServers: [], redactor, pricing: [], defaultTimeoutMs: 5000 };
-};
+const services = (): ExecServices => fakeServices({ secrets: true });
 
 describe('.http files', () => {
   it('are told apart from other formats', () => {

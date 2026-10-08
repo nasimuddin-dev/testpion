@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSticky } from '../lib/sticky';
 import { useIntent } from '../hooks';
 import { asError, call, on } from '../api';
-import { persisted, promptText, useApp } from '../store';
+import { persisted, promptText, toastError, useApp } from '../store';
 import type { CheckConfig, ProviderConfig } from '../types';
 import { templateVars, timeAgo } from '../lib/format';
 import { countDatasetRecords, datasetFormatOfName, previewDatasetRecords } from '@testpion/shared';
@@ -136,7 +136,7 @@ export function EvaluationsView() {
       setRunId(r.runId);
       setRuns((rs) => [{ id: r.runId, name: d.name, startedAt: new Date().toISOString(), passed: 0, total: 0, failed: 0, errors: 0 }, ...rs]);
     } catch (e) {
-      useApp.getState().toast(asError(e).message, 'error');
+      toastError(e);
     }
   };
 

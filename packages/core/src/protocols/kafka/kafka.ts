@@ -2,6 +2,7 @@ import { Kafka, logLevel, type Admin, type Consumer, type Producer, type SASLOpt
 import { ApsError } from '../../errors.js';
 import { assertUrlAllowed } from '../../net/policy.js';
 import { shortId } from '../../util/ids.js';
+import { flattenHeaders } from '../../util/headers.js';
 
 /**
  * Kafka client session: connect to a cluster (one or more bootstrap brokers), produce messages (key, value, headers),
@@ -199,9 +200,7 @@ export class KafkaSession {
     });
     await consumer.run({
       eachMessage: async ({ topic: t, partition, message }) => {
-        const headers = message.headers
-          ? Object.fromEntries(Object.entries(message.headers).map(([k, v]) => [k, Array.isArray(v) ? v.map((x) => x?.toString() ?? '').join(', ') : (v?.toString() ?? '')]))
-          : undefined;
+        const headers = message.headers ? flattenHeaders(message.headers) : undefined;
         this.emitMessage('received', message.value?.toString('utf8') ?? '', {
           topic: t,
           partition,

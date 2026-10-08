@@ -1,7 +1,7 @@
 import { ArrowLeft, ArrowRight, Eye, GitCompareArrows, History as HistoryIcon, RefreshCw } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { asError, call } from '../api';
-import { formatBytes, formatMs, timeAgo } from '../lib/format';
+import { formatBytes, formatMs, plural, timeAgo } from '../lib/format';
 import { JsonTree, RawView } from './JsonView';
 import { LatencyTrend } from './LatencyTrend';
 import { LinkButton, Badge, Button, cx, Empty, IconButton, Spinner, statusTone } from './ui';
@@ -103,7 +103,7 @@ export function ResponseHistory({ requestId, latestId }: { requestId: string; la
     <div className="h-full flex min-h-0">
       <div className="w-72 shrink-0 border-r border-line flex flex-col min-h-0">
         <div className="flex items-center gap-1 px-2 h-9 border-b border-line text-xs text-muted shrink-0">
-          <span className="flex-1">{entries.length} response{entries.length === 1 ? '' : 's'} · pick two to compare</span>
+          <span className="flex-1">{plural(entries.length, 'response')} · pick two to compare</span>
           <IconButton label="Refresh" className="h-7 w-7" onClick={load}>
             <RefreshCw size={13} />
           </IconButton>

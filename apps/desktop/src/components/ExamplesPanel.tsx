@@ -1,7 +1,7 @@
 import { BookmarkPlus, Pencil, Trash2 } from 'lucide-react';
 import { useState } from 'react';
-import { asError, call } from '../api';
-import { confirmAction, useApp } from '../store';
+import { call } from '../api';
+import { confirmAction, toastError } from '../store';
 import type { SavedExample } from '../types';
 import { CodeEditor } from './CodeEditor';
 import { Badge, cx, Empty, IconButton, statusTone } from './ui';
@@ -20,7 +20,6 @@ const languageOf = (ex: SavedExample) => {
  * status, headers and body on the right. Changes are saved to the collection straight away.
  */
 export function ExamplesPanel({ collectionId, requestId, examples, onChange }: { collectionId?: string; requestId?: string; examples: SavedExample[]; onChange(examples: SavedExample[]): void }) {
-  const toast = useApp((s) => s.toast);
   const [selected, setSelected] = useState<string | undefined>(examples[0]?.id);
   /** The example whose name is being edited in place (the pencil, or F2 on it in the list). */
   const [renaming, setRenaming] = useState<string>();
@@ -31,7 +30,7 @@ export function ExamplesPanel({ collectionId, requestId, examples, onChange }: {
     try {
       onChange(await call<SavedExample[]>('col.setExamples', { collectionId, requestId, examples: next }));
     } catch (e) {
-      toast(asError(e).message, 'error');
+      toastError(e);
     }
   };
 

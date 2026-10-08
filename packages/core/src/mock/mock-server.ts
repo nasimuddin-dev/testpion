@@ -3,6 +3,7 @@ import type { AddressInfo } from 'node:net';
 import type { Collection, CollectionNode, SavedExample, SavedHttpRequest } from '../model/types.js';
 import { ApsError } from '../errors.js';
 import { dynamicValue } from '../vars/dynamic.js';
+import { flattenHeaders } from '../util/headers.js';
 
 /** One example the mock server can answer with. */
 export interface MockRoute {
@@ -259,7 +260,7 @@ function readBody(req: IncomingMessage): Promise<string | undefined> {
  * Dynamic variables in a saved example (`{{$randomFirstName}}`, `{{$guid}}`, `{{$timestamp}}` …) get a
  * fresh value on every response, like Postman's mock servers. Other `{{…}}` text is left as it is.
  */
-export function fillDynamic(text: string): string {
+function fillDynamic(text: string): string {
   if (!text.includes('{{')) return text;
   return text.replace(/\{\{\s*(\$[\w.]+(?:\([^)]*\))?)\s*\}\}/g, (m, name: string) => {
     const v = dynamicValue(name);
@@ -282,7 +283,7 @@ export async function startMockServer(collection: Collection, opts: MockServerOp
     const t0 = Date.now();
     const query = Object.fromEntries(u.searchParams);
     const body = await readBody(req);
-    const flatHeaders = Object.fromEntries(Object.entries(req.headers).map(([k, v]) => [k, Array.isArray(v) ? v.join(', ') : String(v ?? '')]));
+    const flatHeaders = flattenHeaders(req.headers);
     const seen = { method: req.method ?? 'GET', path: u.pathname, query: u.search, headers: flatHeaders, ...(body ? { body } : {}) };
     const r = matchMockRoute(routes, { method: req.method ?? 'GET', path: u.pathname, query, headers: req.headers, body });
     if (opts.delayMs) await new Promise((ok) => setTimeout(ok, opts.delayMs));

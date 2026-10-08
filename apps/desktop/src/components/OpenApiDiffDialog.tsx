@@ -1,7 +1,7 @@
 import { CircleAlert, CircleCheck, FileUp, GitCompare, Sparkles } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { asError, call } from '../api';
-import { useApp } from '../store';
+import { call } from '../api';
+import { toastError, useApp } from '../store';
 import { pickTextFile } from '../lib/files';
 import { Button, cx, Field, Input, ModalOrPanel, Select } from './ui';
 
@@ -89,7 +89,7 @@ export function OpenApiDiffDialog({ onClose, inline, before: fixedBefore }: { on
       setResult(await call<OpenApiDiff>('openapi.diff', { old: before, new: after }));
     } catch (e) {
       setResult(undefined);
-      useApp.getState().toast(asError(e).message, 'error');
+      toastError(e);
     } finally {
       setBusy(false);
     }
