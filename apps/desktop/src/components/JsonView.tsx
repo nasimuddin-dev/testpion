@@ -77,6 +77,9 @@ function assertionItems(r: { path: string; value: unknown; expandable: boolean }
   return items;
 }
 
+/** The tree's own path of a child: `[i]` in an array, `.key` in an object (what expanding and walking both use). */
+const childPath = (parent: string, value: unknown, key: string) => (Array.isArray(value) ? `${parent}[${key}]` : `${parent}.${key}`);
+
 export function JsonTree({ data: full, query, onAssert: assertOnFull, onSaveVariable }: { data: unknown; query?: string; onAssert?(a: TreeAssertion): void; onSaveVariable?(v: TreeVariable): void }) {
   // "Filter with JSONPath": show only what the expression selects
   const [filter, setFilter] = useState('');
@@ -95,11 +98,16 @@ export function JsonTree({ data: full, query, onAssert: assertOnFull, onSaveVari
   const onAssert = filtered ? undefined : assertOnFull;
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set(['$']));
   useEffect(() => {
-    // auto-expand first level on new data
+    // new data opens its first level; a filter's matches open one level more, so a matched object shows its fields
     const s = new Set(['$']);
-    if (data && typeof data === 'object') for (const k of Object.keys(data as object).slice(0, 50)) s.add(`$.${k}`);
+    if (data && typeof data === 'object')
+      for (const [k, v] of Object.entries(data as object).slice(0, 50)) {
+        const p = childPath('$', data, k);
+        s.add(p);
+        if (filtered && v && typeof v === 'object') for (const k2 of Object.keys(v).slice(0, 50)) s.add(childPath(p, v, k2));
+      }
     setExpanded(s);
-  }, [data]);
+  }, [data, filtered]);
 
   const rows = useMemo(() => {
     const out: TreeRow[] = [];
@@ -112,7 +120,7 @@ export function JsonTree({ data: full, query, onAssert: assertOnFull, onSaveVari
         entries
           .slice(0, limit)
           .forEach(([k, x]) =>
-            walk(x, k, Array.isArray(v) ? `${path}[${k}]` : `${path}.${k}`, depth + 1, `${access}${Array.isArray(v) ? `[${k}]` : /^[A-Za-z_$][\w$]*$/.test(k) ? `.${k}` : `[${JSON.stringify(k)}]`}`),
+            walk(x, k, childPath(path, v, k), depth + 1, `${access}${Array.isArray(v) ? `[${k}]` : /^[A-Za-z_$][\w$]*$/.test(k) ? `.${k}` : `[${JSON.stringify(k)}]`}`),
           );
         if (entries.length > limit) out.push({ depth: depth + 1, path: `${path}#more`, value: `… ${entries.length - limit} more items (use Raw view / Save response)`, expandable: false });
         out.push({ depth, path: `${path}#close`, value: undefined, expandable: false, closing: Array.isArray(v) ? ']' : '}' });
@@ -136,7 +144,7 @@ export function JsonTree({ data: full, query, onAssert: assertOnFull, onSaveVari
       if (!v || typeof v !== 'object' || n > 20000) return;
       s.add(p);
       n++;
-      for (const [k, x] of Object.entries(v)) walk(x, Array.isArray(v) ? `${p}[${k}]` : `${p}.${k}`);
+      for (const [k, x] of Object.entries(v)) walk(x, childPath(p, v, k));
     };
     walk(data, '$');
     setExpanded(s);

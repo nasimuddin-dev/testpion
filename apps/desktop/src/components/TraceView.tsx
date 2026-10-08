@@ -183,7 +183,8 @@ function PayloadBox({ title, payload, emptyText }: { title: string; payload?: { 
   const [raw, setRaw] = useState(false);
   const { copied, copy: copyToClipboard } = useCopied(1200);
   const body = payload?.body;
-  const p = body === undefined ? undefined : parsed(body);
+  // parsed once per body: a new value each render would fold the tree up again whenever the panel re-renders
+  const p = useMemo(() => (body === undefined ? undefined : parsed(body)), [body]);
   const copy = () => p && void copyToClipboard(p.text);
   return (
     <div className="h-full flex flex-col min-h-0">

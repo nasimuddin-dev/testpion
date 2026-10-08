@@ -3,11 +3,11 @@ import { BarChart3, Bookmark, FlaskConical, History, KeyRound, Play, Save } from
 import { useEffect, useMemo, useState } from 'react';
 import { useSticky } from '../lib/sticky';
 import { useIntent } from '../hooks';
-import { asError, call, on } from '../api';
+import { call, on } from '../api';
 import { persisted, promptText, toastError, useApp } from '../store';
 import type { CheckConfig, ProviderConfig } from '../types';
 import { templateVars, timeAgo } from '../lib/format';
-import { countDatasetRecords, datasetFormatOfName, previewDatasetRecords } from '@testpion/shared';
+import { countDatasetRecords, datasetFormatOf, datasetFormatOfName, previewDatasetRecords } from '@testpion/shared';
 import { pickTextFile } from '../lib/files';
 import { AssertionEditor } from '../components/AssertionEditor';
 import { CodeEditor } from '../components/CodeEditor';
@@ -16,7 +16,7 @@ import { FolderList } from '../components/FolderList';
 import { SidebarShell } from '../components/SidebarShell';
 import { EnvironmentsPane } from '../components/SidebarPanes';
 import { useLibrary } from '../lib/library';
-import { Badge, Button, cx, Empty, Field, Input, Select, Split, Tabs } from '../components/ui';
+import { Badge, Button, Callout, cx, Empty, Field, Input, Select, Split, Tabs } from '../components/ui';
 
 interface Draft {
   name: string;
@@ -111,6 +111,8 @@ export function EvaluationsView() {
     const names = new Set(saved.lib.items.map((i) => i.name));
     return runs.filter((r) => names.has(r.name) || r.name === d.name);
   }, [runs, saved.lib.items, d.name]);
+  // the format the text really has: JSON whose text is one object per line is read as JSONL (the editor checks it as such too)
+  const readAs = useMemo(() => datasetFormatOf(d.dataset, d.datasetFormat), [d.dataset, d.datasetFormat]);
   const count = useMemo(() => countDatasetRecords(d.dataset, d.datasetFormat), [d.dataset, d.datasetFormat]);
   const preview = useMemo(() => previewDatasetRecords(d.dataset, d.datasetFormat), [d.dataset, d.datasetFormat]);
   const previewKeys = useMemo(() => (preview[0] ? Object.keys(preview[0]) : []), [preview]);
@@ -294,7 +296,7 @@ export function EvaluationsView() {
                         const r = await call<{ name: string; text: string }>('datasets.read', { path: e.target.value });
                         set({ dataset: r.text, datasetFormat: datasetFormatOfName(r.name) ?? 'jsonl' });
                       } catch (err) {
-                        useApp.getState().toast(asError(err).message, 'error');
+                        toastError(err);
                       }
                     }}
                   >
@@ -307,9 +309,23 @@ export function EvaluationsView() {
                   </Select>
                 )}
               </div>
+              {readAs !== d.datasetFormat && (
+                <Callout
+                  tone="warn"
+                  className="m-2 mb-0"
+                  data-format-mismatch="jsonl"
+                  action={
+                    <Button size="sm" onClick={() => set({ datasetFormat: readAs })}>
+                      Switch to {readAs.toUpperCase()}
+                    </Button>
+                  }
+                >
+                  This text has one JSON object per line, so it is read as {readAs.toUpperCase()}, not as one JSON document.
+                </Callout>
+              )}
               <div className="flex-1 min-h-0">
                 <Split id="eval-dataset" direction="vertical" initial={65}>
-                  <CodeEditor language={d.datasetFormat === 'json' ? 'json' : 'plaintext'} value={d.dataset} onChange={(dataset) => set({ dataset })} />
+                  <CodeEditor language={readAs === 'json' ? 'json' : 'plaintext'} value={d.dataset} onChange={(dataset) => set({ dataset })} />
                   <div className="h-full overflow-auto p-2 text-xs">
                     <div className="text-muted mb-1">
                       Preview · {count} records · each record's fields are available as {'{{field}}'} in the prompt and evaluators
