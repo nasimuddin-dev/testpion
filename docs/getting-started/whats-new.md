@@ -15,6 +15,8 @@ Importing from Postman or Insomnia converts scripts to TestPion's `tp.*` (the im
 
 Saved requests of every kind belong to a collection: saving a gRPC call or a connection asks for its collection like a REST request, and loose gRPC calls and connections were moved into collections named after their folders ("gRPC calls" or "Connections" without one) when the workspace was opened. [Collections](/api-testing/collections)
 
+The same tab bar and right-click menu everywhere: request tabs, test files in **Tests** and open monitors share one strip, so right-clicking any tab offers **Rename**, **Close tab**, **Close other tabs**, **Close tabs to the right** and **Close all tabs** (plus what the view adds: Pin, Run, Expose as MCP tool…), and middle-click, double-click and <kbd>F2</kbd> do the same in each.
+
 ## An AI provider that says what is missing
 
 1. Open **AI Lab ▸ Providers**: cloud providers without a saved key are marked **needs an API key**.

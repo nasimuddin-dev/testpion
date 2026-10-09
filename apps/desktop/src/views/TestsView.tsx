@@ -16,7 +16,8 @@ import { stepLine, type FlowStep } from '@testpion/shared';
 import { EnvironmentsPane } from '../components/SidebarPanes';
 import { finishSave, type SaveResult } from '../lib/files';
 import { dataLanguageOf } from '../data-languages';
-import { Badge, Button, cx, Empty, IconButton, Input, rowActionClass, SectionTitle, Spinner, Split, Tabs, type MenuItem } from '../components/ui';
+import { Badge, Button, cx, Empty, IconButton, Input, rowActionClass, SectionTitle, Spinner, Split, type MenuItem } from '../components/ui';
+import { DocTabStrip } from '../components/DocTabStrip';
 
 interface Node {
   name: string;
@@ -481,31 +482,35 @@ export function TestsView() {
         ]}
       />
       <div className="h-full flex flex-col min-w-0">
-        <Tabs<string>
-          value={tab === 'run' ? 'run' : tab === 'flow' ? 'flow' : file ? `file:${file}` : 'editor'}
-          onChange={(id) => (id === 'run' ? setTab('run') : id === 'flow' ? setTab('flow') : id === 'editor' ? setTab('editor') : show(id.slice(5)))}
+        <DocTabStrip<string>
+          label="Open test files"
+          activeId={tab === 'run' ? 'run' : tab === 'flow' ? 'flow' : file ? `file:${file}` : 'editor'}
+          onSelect={({ id }) => (id === 'run' ? setTab('run') : id === 'flow' ? setTab('flow') : id === 'editor' ? setTab('editor') : show(id.slice(5)))}
+          onClose={async (_ids, closing) => {
+            // one at a time: each asks about its unsaved changes
+            for (const t of closing) await closeFile(t.data!);
+          }}
+          onRename={(t) => void renameFile(t.data!)}
+          extraItems={({ data: p }) => [
+            { label: 'Run', icon: <Play size={13} />, onSelect: () => void run([p!], p!) },
+            { label: 'Expose as MCP tool…', icon: <Bot size={13} />, disabled: !/\.(ya?ml|json)$/.test(p!), onSelect: () => void exposeFile(p!) },
+          ]}
           tabs={[
             ...(openFiles.length
-              ? openFiles.map((p) => {
-                  const dirty = p === file ? content !== saved : buffers.current[p] ? buffers.current[p]!.content !== buffers.current[p]!.saved : false;
-                  return {
-                    id: `file:${p}`,
-                    title: `tests/${p}`,
-                    label: (
-                      <span className="flex items-center gap-1.5">
-                        <TestFileBadge path={p} />
-                        {p.split('/').pop()}
-                        {dirty && <span className="w-1.5 h-1.5 rounded-full bg-accent" aria-label="unsaved changes" />}
-                      </span>
-                    ),
-                    onClose: () => void closeFile(p),
-                  };
-                })
-              : [{ id: 'editor', label: 'Editor' }]),
-            ...(file ? [{ id: 'flow', label: 'Flow' }] : []),
-            { id: 'run', label: 'Runs', badge: runs.length },
+              ? openFiles.map((p) => ({
+                  id: `file:${p}`,
+                  title: p.split('/').pop() ?? p,
+                  tooltip: `tests/${p}`,
+                  badge: <TestFileBadge path={p} />,
+                  dirty: p === file ? content !== saved : buffers.current[p] ? buffers.current[p]!.content !== buffers.current[p]!.saved : false,
+                  rename: 'dialog' as const,
+                  data: p,
+                }))
+              : [{ id: 'editor', title: 'Editor', closable: false }]),
+            ...(file ? [{ id: 'flow', title: 'Flow', closable: false }] : []),
+            { id: 'run', title: 'Runs', count: runs.length, closable: false },
           ]}
-          right={
+          actions={
             tab !== 'run' &&
             file && (
               <>

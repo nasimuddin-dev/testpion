@@ -1,11 +1,11 @@
-import { ArrowRightToLine, ChevronDown, ChevronLeft, ChevronRight, Copy, FileCheck2, ListX, Pencil, Pin, PinOff, Plug, Plus, Radio, Send, Sparkles, SquareX, Waypoints, X } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { ChevronDown, Copy, FileCheck2, Pin, PinOff, Plug, Plus, Radio, Send, Sparkles, Waypoints } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { create } from 'zustand';
 import { useApp, type ViewId } from '../store';
 import { docKey, isDocView, useDoc, useDocs } from '../lib/docs';
 import { loadDraft, saveDraft } from '../lib/draft-store';
-import { Button, cx, Empty, Menu, type MenuItem } from './ui';
-import { InlineRename } from './TreeParts';
+import { Button, Empty, Menu, type MenuItem } from './ui';
+import { DocTabStrip, type DocTab } from './DocTabStrip';
 import { ResponseLayoutButton } from './ResponseSplit';
 import { readPersisted, writePersisted } from '../lib/sticky';
 import type { PersistFormat } from '../lib/sticky';
@@ -279,52 +279,19 @@ export function newRequestItems(): MenuItem[] {
 /** Set while a batch of tabs closes (Close all / others / to the right). */
 let batchClosing = false;
 
-/** The right-click menu of every tab: pin, rename, duplicate, save as test, and closing across every tab in the strip. */
-function defaultTabMenu(t: EditorTab, all: EditorTab[], startRename: (t: EditorTab) => void): MenuItem[] {
-  const i = all.indexOf(t);
-  // per editor: one batch close where the editor offers it (REST), else tab by tab
-  const close = (list: EditorTab[]) => {
-    const open = list.filter((x) => !x.pinned);
-    batchClosing = true;
-    try {
-      for (const view of new Set(open.map((x) => x.view))) {
-        const mine = open.filter((x) => x.view === view);
-        if (mine[0]?.closeMany) mine[0].closeMany(mine.map((x) => x.key));
-        else mine.forEach((x) => x.onClose());
-      }
-    } finally {
-      batchClosing = false;
-    }
-    // then, once: if the editor on screen lost all its tabs, show the last tab left (or the empty HTTP editor)
-    const closed = new Set(open);
-    const left = all.filter((x) => !closed.has(x));
-    const current = useApp.getState().view;
-    if (!left.some((x) => x.view === current)) {
-      const next = left[left.length - 1];
-      useApp.getState().setView(next?.view ?? 'rest');
-      next?.onSelect?.();
-    }
-  };
-  const others = all.filter((x) => x !== t && !x.pinned);
-  const right = all.slice(i + 1).filter((x) => !x.pinned);
-  // one menu for every tab; what an editor can't do is shown disabled, so every menu reads the same
-  return [
-    { label: t.pinned ? 'Unpin tab' : 'Pin tab', icon: t.pinned ? <PinOff size={13} /> : <Pin size={13} />, disabled: !t.onTogglePin, onSelect: () => t.onTogglePin?.() },
-    { label: 'Rename', icon: <Pencil size={13} />, shortcut: 'F2', disabled: !t.onRename && !t.onRenameTo, onSelect: () => startRename(t) },
-    { label: 'Duplicate tab', icon: <Copy size={13} />, disabled: !t.onDuplicate, onSelect: () => t.onDuplicate?.() },
-    { label: 'Save as test file…', icon: <FileCheck2 size={13} />, disabled: !t.onSaveAsTest, onSelect: () => t.onSaveAsTest?.() },
-    { label: 'Close tab', icon: <X size={13} />, separator: true, shortcut: 'Middle-click', disabled: !!t.pinned, onSelect: () => t.onClose() },
-    { label: 'Close other tabs', icon: <SquareX size={13} />, disabled: !others.length, onSelect: () => close(others) },
-    { label: 'Close tabs to the right', icon: <ArrowRightToLine size={13} />, disabled: !right.length, onSelect: () => close(right) },
-    { label: 'Close all tabs', icon: <ListX size={13} />, disabled: !all.some((x) => !x.pinned), onSelect: () => close(all) },
-  ];
-}
-
-/** Every tab's menu, the same for every kind of request. */
-const tabMenu = defaultTabMenu;
-
 const ORDER: ViewId[] = ['rest', 'graphql', 'grpc', 'websocket', 'mcp', 'apidef', 'dataset'];
-const TAB_W = 190;
+
+/** The strip's tab for an editor's tab: the shared model, the editor's tab kept behind it. */
+const toDocTab = (t: EditorTab): DocTab<EditorTab> => ({
+  id: t.key,
+  title: t.title,
+  badge: t.badge,
+  badgeClass: t.badgeClass,
+  dirty: t.dirty,
+  pinned: t.pinned,
+  rename: t.onRenameTo ? 'inline' : t.onRename ? 'dialog' : undefined,
+  data: t,
+});
 
 export function EditorTabStrip() {
   const view = useApp((s) => s.view);
@@ -335,205 +302,60 @@ export function EditorTabStrip() {
   const inOrder = ORDER.flatMap((v) => (isDocView(v) ? (docs[v] ?? []).flatMap((d) => byView[`${v}:${d}`] ?? []) : (byView[v] ?? byView[`${v}:main`] ?? [])));
   const tabs = [...inOrder.filter((t) => t.pinned), ...inOrder.filter((t) => !t.pinned)];
   const activeKey = isDocView(view) ? `${view}:${activeDocs[view]}` : activeByView[view];
-  const [menuFor, setMenuFor] = useState<string>();
-  /** The tab whose title is being edited in place (double-click, F2 or Rename in its menu). */
-  const [editingTab, setEditingTab] = useState<string>();
-  const startRename = (t: EditorTab) => {
-    if (t.onRenameTo) {
-      select(t);
-      setEditingTab(t.key);
-    } else t.onRename?.();
-  };
-  const stripRef = useRef<HTMLDivElement>(null);
-  // the strip scrolls without a scrollbar: when it overflows, ‹ › buttons show that there is more, and the leftmost
-  // tab is always whole (a tab cut at the left edge looked hidden behind the sidebar)
-  const [overflow, setOverflow] = useState<{ left: boolean; right: boolean }>({ left: false, right: false });
-  const measure = useCallback(() => {
-    const strip = stripRef.current;
-    if (!strip) return;
-    const left = strip.scrollLeft > 1;
-    const right = strip.scrollLeft + strip.clientWidth < strip.scrollWidth - 1;
-    setOverflow((o) => (o.left === left && o.right === right ? o : { left, right }));
-  }, []);
-  /**
-   * Scroll so that a tab starts exactly at the left edge: the one nearest to it (a tab more than half hidden gives way
-   * to the next). The active tab stays whole: when aligning would push it off the right edge, it becomes the leftmost.
-   */
-  const snap = useCallback(() => {
-    const strip = stripRef.current;
-    if (!strip || strip.scrollLeft <= 0) return;
-    const s = strip.getBoundingClientRect();
-    const tabs = [...strip.querySelectorAll<HTMLElement>('[role=tab]')];
-    let first = tabs.find((t) => {
-      const r = t.getBoundingClientRect();
-      return r.right - s.left > r.width / 2;
-    });
-    if (!first) return;
-    const active = tabs.find((t) => t.getAttribute('aria-selected') === 'true');
-    if (active) {
-      const a = active.getBoundingClientRect();
-      const shift = first.getBoundingClientRect().left - s.left; // how far the content moves left (negative: right)
-      if (a.right - shift > s.right + 1 && tabs.indexOf(active) >= tabs.indexOf(first)) first = active;
-    }
-    const delta = first.getBoundingClientRect().left - s.left;
-    if (Math.abs(delta) > 1) strip.scrollLeft = Math.max(0, strip.scrollLeft + delta);
-  }, []);
-  const scrollByTabs = (dir: -1 | 1) => {
-    const strip = stripRef.current;
-    if (!strip) return;
-    strip.scrollLeft += dir * Math.max(TAB_W, strip.clientWidth - TAB_W);
-    snap();
-    measure();
-  };
-  useEffect(() => {
-    const strip = stripRef.current;
-    if (!strip) return;
-    measure();
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const onScroll = () => {
-      measure();
-      // after the wheel stops: no half tab at the left edge
-      clearTimeout(timer);
-      timer = setTimeout(snap, 120);
-    };
-    const onWheel = (e: WheelEvent) => {
-      // a mouse wheel scrolls the strip sideways (it has no vertical direction to go)
-      if (Math.abs(e.deltaY) > Math.abs(e.deltaX) && strip.scrollWidth > strip.clientWidth) {
-        e.preventDefault();
-        strip.scrollLeft += e.deltaY;
-      }
-    };
-    strip.addEventListener('scroll', onScroll, { passive: true });
-    strip.addEventListener('wheel', onWheel, { passive: false });
-    const ro = new ResizeObserver(measure);
-    ro.observe(strip);
-    return () => {
-      clearTimeout(timer);
-      strip.removeEventListener('scroll', onScroll);
-      strip.removeEventListener('wheel', onWheel);
-      ro.disconnect();
-    };
-  }, [measure, snap, view]);
-  // keep the active tab in view (scrolling only the strip: scrollIntoView could shift the whole window)
-  useEffect(() => {
-    const reveal = () => {
-      const strip = stripRef.current;
-      const el = strip?.querySelector<HTMLElement>('[aria-selected="true"]');
-      if (!strip || !el) return;
-      // measured on screen: offsetLeft counts from the nearest positioned ancestor, not the strip, so it overshot and
-      // left the active tab half hidden at the left edge
-      const s = strip.getBoundingClientRect();
-      const r = el.getBoundingClientRect();
-      if (r.left < s.left) strip.scrollLeft -= s.left - r.left;
-      else if (r.right > s.right) strip.scrollLeft += Math.min(r.right - s.right, r.left - s.left);
-      snap();
-      measure();
-    };
-    reveal();
-    // a tab just opened is drawn a moment later (its editor publishes it): look again then
-    const id = requestAnimationFrame(reveal);
-    const t = setTimeout(reveal, 150);
-    return () => (cancelAnimationFrame(id), clearTimeout(t));
-  }, [activeKey, view, tabs.length, snap, measure]);
+  const activeTab = tabs.find((t) => t.view === view && t.key === activeKey);
   const select = (t: EditorTab) => {
     if (useApp.getState().view !== t.view) useApp.getState().setView(t.view);
     t.onSelect?.();
   };
+  /** Close several tabs at once (Close other / all / to the right): per editor one batch close where the editor offers it (REST), else tab by tab. */
+  const close = (list: EditorTab[]) => {
+    const open = list.filter((x) => !x.pinned);
+    batchClosing = true;
+    try {
+      for (const v of new Set(open.map((x) => x.view))) {
+        const mine = open.filter((x) => x.view === v);
+        if (mine[0]?.closeMany) mine[0].closeMany(mine.map((x) => x.key));
+        else mine.forEach((x) => x.onClose());
+      }
+    } finally {
+      batchClosing = false;
+    }
+    // then, once: if the editor on screen lost all its tabs, show the last tab left (or the empty HTTP editor)
+    const closed = new Set(open);
+    const left = tabs.filter((x) => !closed.has(x));
+    const current = useApp.getState().view;
+    if (!left.some((x) => x.view === current)) {
+      const next = left[left.length - 1];
+      useApp.getState().setView(next?.view ?? 'rest');
+      next?.onSelect?.();
+    }
+  };
   return (
-    <div className="flex items-end h-9 border-b border-line bg-panel/40 shrink-0 min-w-0">
-      {overflow.left && (
-        <button aria-label="Earlier tabs" title="Earlier tabs" className="shrink-0 h-9 w-6 grid place-items-center text-muted hover:text-fg hover:bg-hover border-r border-line" onClick={() => scrollByTabs(-1)}>
-          <ChevronLeft size={14} />
-        </button>
-      )}
-      <div ref={stripRef} role="tablist" aria-label="Open requests" className="flex items-end min-w-0 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {tabs.map((t) => {
-          const active = t.view === view && t.key === activeKey;
-          return (
-            <div
-              key={t.key}
-              role="tab"
-              aria-selected={active}
-              title={t.dirty ? `${t.title} (unsaved changes)` : t.title}
-              onClick={() => select(t)}
-              onDoubleClick={() => startRename(t)}
-              tabIndex={active ? 0 : -1}
-              onKeyDown={(e) => {
-                if (e.target !== e.currentTarget) return;
-                if (e.key === 'F2') {
-                  e.preventDefault();
-                  startRename(t);
-                }
-              }}
-              onAuxClick={(e) => e.button === 1 && !t.pinned && t.onClose()}
-              onContextMenu={(e) => {
-                e.preventDefault();
-                setMenuFor(t.key);
-              }}
-              style={{ width: t.pinned ? 120 : TAB_W }}
-              className={cx(
-                'group relative flex items-center gap-1.5 h-9 px-3 border-r border-line text-sm cursor-pointer shrink-0',
-                active ? 'bg-bg text-fg after:absolute after:inset-x-0 after:top-0 after:h-0.5 after:bg-[image:var(--brand-gradient)]' : 'text-muted hover:bg-hover hover:text-fg',
-              )}
-            >
-              {t.pinned && <Pin size={11} className="shrink-0 text-muted" aria-label="Pinned" />}
-              <span className={cx('mono method-badge text-[0.62rem] font-bold shrink-0', t.badgeClass)}>{t.badge}</span>
-              {editingTab === t.key ? (
-                <InlineRename
-                  value={t.title}
-                  label="Tab name"
-                  onCommit={(name) => {
-                    setEditingTab(undefined);
-                    void t.onRenameTo?.(name);
-                  }}
-                  onCancel={() => setEditingTab(undefined)}
-                />
-              ) : (
-                <span className="truncate flex-1 min-w-0">{t.title}</span>
-              )}
-              {t.dirty && <span className="w-1.5 h-1.5 rounded-full bg-accent shrink-0" aria-label="Unsaved changes" />}
-              {!t.pinned && (
-                <button aria-label={`Close ${t.title}`} className={cx('shrink-0 rounded p-0.5 hover:text-fg hover:bg-hover focus:opacity-100', active ? 'opacity-60' : 'opacity-0 group-hover:opacity-100')} onClick={(e) => (e.stopPropagation(), t.onClose())}>
-                  <X size={12} />
-                </button>
-              )}
-              {menuFor === t.key && (
-                <Menu open onOpenChange={(o) => !o && setMenuFor(undefined)} align="start" width={210} items={tabMenu(t, tabs, startRename)} trigger={<span aria-hidden className="absolute left-2 bottom-0 w-0 h-0" />} />
-              )}
-            </div>
-          );
-        })}
-      </div>
-      {overflow.right && (
-        <button aria-label="Later tabs" title="Later tabs" className="shrink-0 h-9 w-6 grid place-items-center text-muted hover:text-fg hover:bg-hover border-l border-line" onClick={() => scrollByTabs(1)}>
-          <ChevronRight size={14} />
-        </button>
-      )}
-      <Menu
-        width={240}
-        align="start"
-        trigger={
-          <button aria-label="New tab" title="New request (HTTP, GraphQL, gRPC, WebSocket, MCP)" className="mx-1 mb-1 shrink-0 grid place-items-center h-7 w-7 rounded-md text-muted hover:text-fg hover:bg-hover data-[state=open]:bg-hover">
-            <Plus size={14} />
-          </button>
-        }
-        items={newRequestItems()}
-      />
-      <span className="ml-auto" />
-      <ResponseLayoutButton />
-      {tabs.length > 1 && (
+    <DocTabStrip<EditorTab>
+      label="Open requests"
+      tabs={tabs.map(toDocTab)}
+      activeId={activeTab?.key}
+      onSelect={(t) => select(t.data!)}
+      onClose={(_ids, closing) => (closing.length === 1 ? closing[0]!.data!.onClose() : close(closing.map((t) => t.data!)))}
+      onRename={(t, name) => (name !== undefined ? t.data!.onRenameTo?.(name) : t.data!.onRename?.())}
+      extraItems={({ data: t }) => [
+        { label: t!.pinned ? 'Unpin tab' : 'Pin tab', icon: t!.pinned ? <PinOff size={13} /> : <Pin size={13} />, disabled: !t!.onTogglePin, onSelect: () => t!.onTogglePin?.() },
+        { label: 'Duplicate tab', icon: <Copy size={13} />, disabled: !t!.onDuplicate, onSelect: () => t!.onDuplicate?.() },
+        { label: 'Save as test file…', icon: <FileCheck2 size={13} />, disabled: !t!.onSaveAsTest, onSelect: () => t!.onSaveAsTest?.() },
+      ]}
+      afterTabs={
         <Menu
-          align="end"
-          width={300}
-          items={tabs.map((t) => ({ label: `${t.title}${t.dirty ? ' •' : ''}`, icon: <span className={cx('mono method-badge text-[0.6rem] font-bold w-11', t.badgeClass)}>{t.badge}</span>, onSelect: () => select(t) }))}
+          width={240}
+          align="start"
           trigger={
-            <button aria-label="All open tabs" title="All open tabs" className="mr-1.5 mb-1 shrink-0 inline-flex items-center gap-1 h-7 px-2 rounded-md text-xs font-medium text-muted border border-line bg-bg hover:text-fg hover:bg-hover data-[state=open]:text-fg data-[state=open]:bg-hover">
-              {tabs.length}
-              <ChevronDown size={13} />
+            <button aria-label="New tab" title="New request (HTTP, GraphQL, gRPC, WebSocket, MCP)" className="mx-1 mb-1 shrink-0 grid place-items-center h-7 w-7 rounded-md text-muted hover:text-fg hover:bg-hover data-[state=open]:bg-hover">
+              <Plus size={14} />
             </button>
           }
+          items={newRequestItems()}
         />
-      )}
-    </div>
+      }
+      actions={<ResponseLayoutButton />}
+    />
   );
 }

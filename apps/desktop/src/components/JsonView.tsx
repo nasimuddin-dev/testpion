@@ -18,6 +18,23 @@ interface TreeRow {
   expandable: boolean;
   count?: number;
   closing?: string;
+  /** The value is JSON carried in a text field (a body saved as a string): shown as a tree, but no path of the document leads into it. */
+  embedded?: boolean;
+  /** The row where embedded JSON starts (the text value itself): it carries the "JSON in text" mark. */
+  embeddedRoot?: boolean;
+}
+
+/** JSON carried inside a string (a body kept as text, a stringified payload): its value, or undefined. */
+export function embeddedJson(v: unknown): unknown {
+  if (typeof v !== 'string' || v.length < 2 || v.length > 2_000_000) return undefined;
+  const c = v.charCodeAt(0);
+  if (c !== 123 && c !== 91) return undefined; // { or [
+  try {
+    const parsed: unknown = JSON.parse(v);
+    return parsed && typeof parsed === 'object' ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /** A response field to keep in a variable: the test script sets it after every send. */
@@ -112,16 +129,19 @@ export function JsonTree({ data: full, query, onAssert: assertOnFull, onSaveVari
 
   const rows = useMemo(() => {
     const out: TreeRow[] = [];
-    const walk = (v: unknown, key: string | undefined, path: string, depth: number, access = '') => {
+    const walk = (v: unknown, key: string | undefined, path: string, depth: number, access = '', embedded = false) => {
+      // a string that holds JSON opens like the object it holds (the body of a traced request, a payload kept as text)
+      const inner = embeddedJson(v);
+      if (inner !== undefined) (v = inner), (embedded = true);
       const expandable = !!v && typeof v === 'object';
-      out.push({ depth, key, path, access, value: v, expandable, count: expandable ? Object.keys(v as object).length : undefined });
+      out.push({ depth, key, path, access, value: v, expandable, count: expandable ? Object.keys(v as object).length : undefined, embedded, embeddedRoot: inner !== undefined });
       if (expandable && expanded.has(path)) {
         const entries = Array.isArray(v) ? v.map((x, i) => [String(i), x] as const) : Object.entries(v as object);
         const limit = 5000;
         entries
           .slice(0, limit)
           .forEach(([k, x]) =>
-            walk(x, k, childPath(path, v, k), depth + 1, `${access}${Array.isArray(v) ? `[${k}]` : /^[A-Za-z_$][\w$]*$/.test(k) ? `.${k}` : `[${JSON.stringify(k)}]`}`),
+            walk(x, k, childPath(path, v, k), depth + 1, `${access}${Array.isArray(v) ? `[${k}]` : /^[A-Za-z_$][\w$]*$/.test(k) ? `.${k}` : `[${JSON.stringify(k)}]`}`, embedded),
           );
         if (entries.length > limit) out.push({ depth: depth + 1, path: `${path}#more`, value: `… ${entries.length - limit} more items (use Raw view / Save response)`, expandable: false });
         out.push({ depth, path: `${path}#close`, value: undefined, expandable: false, closing: Array.isArray(v) ? ']' : '}' });
@@ -203,7 +223,7 @@ export function JsonTree({ data: full, query, onAssert: assertOnFull, onSaveVari
                 )}
               </span>
               {r.key !== undefined &&
-                (onAssert ? (
+                (onAssert && !r.embedded ? (
                   <Menu
                     align="start"
                     width={230}
@@ -220,6 +240,10 @@ export function JsonTree({ data: full, query, onAssert: assertOnFull, onSaveVari
                       ...assertionItems(r, onAssert).map((it, i) => (i === 0 ? { ...it, separator: true } : it)),
                     ]}
                   />
+                ) : r.embedded ? (
+                  <span className="syn-key" title="JSON carried in a text value: no JSONPath of the document reaches inside it">
+                    {/^\d+$/.test(r.key) ? r.key : `"${r.key}"`}
+                  </span>
                 ) : (
                   <button title={`Copy ${r.path}`} onClick={() => void copyText(r.path, 'the JSONPath')} className="syn-key hover:underline">
                     {/^\d+$/.test(r.key) ? r.key : `"${r.key}"`}
@@ -233,6 +257,11 @@ export function JsonTree({ data: full, query, onAssert: assertOnFull, onSaveVari
                     <span>
                       {' '}
                       {summary(r.value)} {Array.isArray(r.value) ? ']' : '}'}
+                    </span>
+                  )}
+                  {r.embeddedRoot && (
+                    <span className="ml-2 text-[10px] uppercase tracking-wide text-muted align-middle" title="This text value holds JSON; it is shown as what it holds">
+                      JSON in text
                     </span>
                   )}
                 </span>

@@ -1,5 +1,6 @@
 import { RecentRuns } from '../components/charts';
-import { AlarmClock, ExternalLink, Sparkles, Folder, KeyRound, ListX, Pause, Pencil, Play, Plus, SquareX, Trash2, X } from 'lucide-react';
+import { AlarmClock, ExternalLink, Sparkles, Folder, KeyRound, Pause, Pencil, Play, Plus, Trash2 } from 'lucide-react';
+import { DocTabStrip } from '../components/DocTabStrip';
 import { SidebarShell } from '../components/SidebarShell';
 import { MonitorCharts } from '../components/MonitorCharts';
 import { MonitorRequests } from '../components/MonitorRequests';
@@ -12,8 +13,11 @@ import { useIntent } from '../hooks';
 import { confirmAction, toastError, useApp } from '../store';
 import type { Collection, CollectionNode, Library } from '../types';
 import { formatMs, timeAgo } from '../lib/format';
-import { Badge, Button, cx, Empty, Field, Input, Metric, Menu, MetricGrid, ModalOrPanel, PageHeader, Select, Split, Toggle, Tooltip } from '../components/ui';
+import { Badge, Button, cx, Empty, Field, Input, Metric, MetricGrid, ModalOrPanel, PageHeader, Select, Split, Toggle, Tooltip } from '../components/ui';
 import { useCollections } from '../lib/collections-store';
+
+/** The tab of a monitor being created (not saved yet, so no id). */
+const NEW_TAB = 'new';
 
 interface MonitorDraft {
   id?: string;
@@ -275,19 +279,40 @@ export function MonitorsView() {
         ]}
       />
       <div className="h-full min-h-0 flex flex-col">
-        <MonitorTabs
-          tabs={openIds.map((id) => rows.find((m) => m.id === id)).filter((m): m is MonitorRow => !!m)}
-          active={editing && !editing.id ? undefined : sel}
-          busy={busy}
-          extra={editing && !editing.id ? 'New monitor' : undefined}
-          onSelect={(id) => {
-            setEditing(undefined);
-            setSel(id);
-          }}
-          onClose={(ids) => closeTabs(ids)}
-          onRun={(m) => void run(m)}
-          onCancelNew={() => setEditing(undefined)}
-        />
+        {(openIds.length > 0 || (editing && !editing.id)) && (
+          <DocTabStrip<MonitorRow>
+            label="Open monitors"
+            activeId={editing && !editing.id ? NEW_TAB : sel}
+            tabs={[
+              ...openIds
+                .map((id) => rows.find((m) => m.id === id))
+                .filter((m): m is MonitorRow => !!m)
+                .map((m) => {
+                  const running = busy.includes(m.id) || m.running;
+                  return {
+                    id: m.id,
+                    title: m.name,
+                    badge: <span className={cx('w-2 h-2 rounded-full shrink-0', running ? 'bg-accent animate-pulse' : !m.lastResult ? 'bg-muted/50' : m.lastResult.status === 'passed' ? 'bg-ok' : 'bg-bad')} />,
+                    rename: 'inline' as const,
+                    data: m,
+                  };
+                }),
+              // the monitor being created: its tab closes by cancelling
+              ...(editing && !editing.id ? [{ id: NEW_TAB, title: 'New monitor', badge: <span className="w-2 h-2 rounded-full shrink-0 bg-muted/50" /> }] : []),
+            ]}
+            onSelect={({ id }) => {
+              if (id === NEW_TAB) return;
+              setEditing(undefined);
+              setSel(id);
+            }}
+            onClose={(ids) => {
+              if (ids.includes(NEW_TAB)) setEditing(undefined);
+              closeTabs(ids.filter((id) => id !== NEW_TAB));
+            }}
+            onRename={(t, name) => name && name !== t.title && void update(t.id, { name })}
+            extraItems={({ id, data: m }) => [{ label: 'Run now', icon: <Play size={13} />, disabled: !m || busy.includes(id) || m.running, onSelect: () => m && void run(m) }]}
+          />
+        )}
         <div className="flex-1 min-h-0 overflow-auto">
         {/* a monitor is created and edited here, like any item in its editor, not in a dialog */}
         {editing ? (
@@ -658,68 +683,5 @@ function MonitorEditor({ draft, collections, onCancel, onSave }: { draft: Monito
         </Field>
       </div>
     </ModalOrPanel>
-  );
-}
-
-/** Open monitors as tabs, like the request editors' tabs: middle-click or ✕ closes, right-click for more. */
-function MonitorTabs({ tabs, active, busy, extra, onSelect, onClose, onRun, onCancelNew }: { tabs: MonitorRow[]; active?: string; busy: string[]; extra?: string; onSelect(id: string): void; onClose(ids: string[]): void; onRun(m: MonitorRow): void; onCancelNew(): void }) {
-  const [menuFor, setMenuFor] = useState<string>();
-  if (!tabs.length && !extra) return null;
-  const tabClass = (on: boolean) =>
-    cx(
-      'group relative flex items-center gap-1.5 h-9 px-3 border-r border-line text-sm cursor-pointer shrink-0 w-[190px]',
-      on ? 'bg-bg text-fg after:absolute after:inset-x-0 after:top-0 after:h-0.5 after:bg-[image:var(--brand-gradient)]' : 'text-muted hover:bg-hover hover:text-fg',
-    );
-  return (
-    <div role="tablist" aria-label="Open monitors" className="flex items-end h-9 border-b border-line bg-panel/40 shrink-0 min-w-0 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-      {tabs.map((m) => {
-        const running = busy.includes(m.id) || m.running;
-        return (
-          <div
-            key={m.id}
-            role="tab"
-            aria-selected={m.id === active}
-            title={m.name}
-            className={tabClass(m.id === active)}
-            onClick={() => onSelect(m.id)}
-            onAuxClick={(e) => e.button === 1 && onClose([m.id])}
-            onContextMenu={(e) => {
-              e.preventDefault();
-              setMenuFor(m.id);
-            }}
-          >
-            <span className={cx('w-2 h-2 rounded-full shrink-0', running ? 'bg-accent animate-pulse' : !m.lastResult ? 'bg-muted/50' : m.lastResult.status === 'passed' ? 'bg-ok' : 'bg-bad')} />
-            <span className="truncate flex-1 min-w-0">{m.name}</span>
-            <button aria-label={`Close ${m.name}`} className={cx('shrink-0 rounded p-0.5 hover:text-fg hover:bg-hover', m.id === active ? 'opacity-60' : 'opacity-0 group-hover:opacity-100')} onClick={(e) => (e.stopPropagation(), onClose([m.id]))}>
-              <X size={12} />
-            </button>
-            {menuFor === m.id && (
-              <Menu
-                open
-                onOpenChange={(o) => !o && setMenuFor(undefined)}
-                align="start"
-                width={210}
-                trigger={<span aria-hidden className="absolute left-2 bottom-0 w-0 h-0" />}
-                items={[
-                  { label: 'Run now', icon: <Play size={13} />, disabled: running, onSelect: () => onRun(m) },
-                  { label: 'Close tab', icon: <X size={13} />, separator: true, shortcut: 'Middle-click', onSelect: () => onClose([m.id]) },
-                  { label: 'Close other tabs', icon: <SquareX size={13} />, disabled: tabs.length < 2, onSelect: () => onClose(tabs.filter((t) => t.id !== m.id).map((t) => t.id)) },
-                  { label: 'Close all tabs', icon: <ListX size={13} />, onSelect: () => onClose(tabs.map((t) => t.id)) },
-                ]}
-              />
-            )}
-          </div>
-        );
-      })}
-      {extra && (
-        <div role="tab" aria-selected className={tabClass(true)}>
-          <span className="w-2 h-2 rounded-full shrink-0 bg-muted/50" />
-          <span className="truncate flex-1 min-w-0">{extra}</span>
-          <button aria-label="Cancel the new monitor" className="shrink-0 rounded p-0.5 opacity-60 hover:text-fg hover:bg-hover" onClick={onCancelNew}>
-            <X size={12} />
-          </button>
-        </div>
-      )}
-    </div>
   );
 }
