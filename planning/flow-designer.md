@@ -68,3 +68,30 @@ block.
 
 Every block: loader + lint + runner + flow graph kinds + canvas palette and inspector + MCP flow tools schema + docs +
 unit tests + an e2e step.
+
+## Third release: better than Postman Flows
+
+From research of Postman Flows feedback (no polling, flows can't set variables, hard to debug nested flows, parallel by
+default, no text format, free-plan limits, no Arazzo) and n8n's debugging (execution history, pinned data, replay).
+Built in this order:
+
+1. **Debugging**: run history per flow (every past run: each step's request, response, variables, timing); breakpoints
+   (pause before a step, inspect and edit variables, continue / step over); run from here / run to here (earlier
+   steps' results reused); pin a step's response (later steps build on it without calling the API); replay a failed
+   run on its own data; a variables timeline (each variable's value after every step). *Built:* engine hooks in
+   `runner/debug-hooks.ts` (runTests `pauseBefore`, `onlyIds`, `seed`, `pins`, per-step `variables` in results),
+   history / plans / designer state in `runner/flow-history.ts` (`.local/flows/`), RPC in
+   `backend/handlers/flow-debug.ts` (`tests.flowRun`, `run.paused` / `runs.resume`), canvas parts in
+   `FlowDebugParts.tsx`; `testpion flow runs`, `testpion test --from/--to/--seed-run`, MCP `flow_runs` and
+   `run_tests` `from`/`seedRunId`.
+2. **Blocks**: Wait until (repeat a step until a condition, interval, timeout, backoff); Finally (clean-up that always
+   runs); Parallel group (sequential by default, a frame marks steps that may run together); Set variable (writes
+   environment / collection / global scope); Assert (checks only).
+3. **Record a flow** from the HTTP Debugger: selected exchanges become steps in order, with extracts and dependencies
+   found from values that flow from one response into a later request.
+4. **Canvas comfort**: sticky notes, coloured group frames, minimap, search, hover preview of the last response, checks
+   as you edit (unset variables, unreachable steps, cycles), command palette in the canvas, align and snap.
+5. **Standards and review**: Arazzo 1.0 import and export; git diff of flows by meaning (step added / removed /
+   changed, edges changed) in the Git view and pull-request summaries.
+6. **Scale**: data-driven runs with a per-row results grid; an environment matrix; a flow as a load-test scenario
+   (each virtual user runs the flow); a run timeline report (critical path) shareable as HTML.

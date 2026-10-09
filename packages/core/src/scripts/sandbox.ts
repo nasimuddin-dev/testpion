@@ -445,3 +445,65 @@ async function runScriptOnce(code: string, input: ScriptInput, opts: ScriptOptio
     }
   }
 }
+
+/** What an `if:` expression sees: the previous step's response and the variables. */
+export interface ExpressionInput {
+  status?: number;
+  /** Header names in lower case. */
+  headers?: Record<string, string>;
+  body?: unknown;
+  text?: string;
+  vars?: Record<string, unknown>;
+}
+
+/**
+ * Evaluate a flow's `if:` expression (`status == 200 && $.role == 'admin'`) in the script runtime, in a fresh context
+ * of its own: no tp API, no host functions (no network, files, processes or require), only the data passed in as JSON,
+ * a few milliseconds of CPU and a small heap. `$` and `body` are the response body, `status`, `headers`, `text` and
+ * `vars` the rest. Answers the value, or the error (a syntax error, a timeout).
+ */
+export async function evaluateExpression(expr: string, input: ExpressionInput, opts: { timeoutMs?: number; memoryMb?: number } = {}): Promise<{ value?: unknown; error?: string }> {
+  if (!expr?.trim()) return { error: 'The expression is empty' };
+  const mod = await getModule();
+  const rt = getRuntime(mod);
+  const timeoutMs = opts.timeoutMs ?? 250;
+  rt.setMemoryLimit((opts.memoryMb ?? 16) * 1024 * 1024);
+  const deadline = Date.now() + timeoutMs;
+  rt.setInterruptHandler(() => Date.now() > deadline);
+  const vm = rt.newContext();
+  try {
+    const source = `"use strict";
+const __d = JSON.parse(${JSON.stringify(JSON.stringify(input ?? {}))});
+const status = __d.status, headers = __d.headers || {}, body = __d.body, $ = __d.body, text = __d.text, vars = __d.vars || {};
+JSON.stringify({ v: (function () { return (
+${expr}
+); })() });`;
+    const r = vm.evalCode(source, 'expression.js');
+    if (r.error) {
+      const err = vm.dump(r.error);
+      r.error.dispose();
+      const msg = typeof err === 'object' && err ? `${(err as { name?: string }).name ?? 'Error'}: ${(err as { message?: string }).message ?? JSON.stringify(err)}` : String(err);
+      return { error: /interrupted/i.test(msg) ? `The expression took longer than ${timeoutMs} ms` : msg };
+    }
+    const json = vm.typeof(r.value) === 'string' ? vm.getString(r.value) : undefined;
+    r.value.dispose();
+    const parsed = json === undefined ? {} : (JSON.parse(json) as { v?: unknown });
+    return { value: parsed.v };
+  } catch (e) {
+    return { error: (e as Error).message };
+  } finally {
+    // jobs of promises an expression made run out within its time (an endless one is interrupted), then the context goes
+    if (rt.hasPendingJob()) {
+      const j = rt.executePendingJobs();
+      if (j.error) j.error.dispose();
+    }
+    rt.removeInterruptHandler();
+    vm.dispose();
+    if (rt.hasPendingJob()) {
+      if (pooled) disposeSlot(pooled);
+      pooled = undefined;
+      rt.dispose();
+      runtime = undefined;
+    }
+  }
+}

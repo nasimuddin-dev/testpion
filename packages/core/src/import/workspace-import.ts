@@ -1,11 +1,12 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { Collection, CollectionNode, Environment, LibraryItem } from '../model/types.js';
 import { COLLECTION_ITEM_KINDS } from '../runner/collection-realtime.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { shortId, slugify } from '../util/ids.js';
 import { secretKeys, type SecretStore } from '../storage/secrets.js';
-import { importAny } from './importers.js';
+import { detectFormat, importAny } from './importers.js';
+import { importArazzo, resolveArazzoSourcesLocally } from './arazzo.js';
 import { scriptCompatibility, type ScriptWarning } from '../scripts/compat.js';
 import type { ImportScriptsMode, ImportScriptsSummary } from './import-scripts.js';
 
@@ -29,6 +30,28 @@ export interface WorkspaceImportResult {
   scripts?: ImportScriptsSummary;
   /** gRPC calls and connections restored from a TestPion collection file, by kind. */
   savedItems?: Record<string, number>;
+  /** Arazzo imports: the flow files written (one per workflow), relative to the workspace. */
+  flows?: Array<{ path: string; workflowId: string; steps: number }>;
+}
+
+/**
+ * An Arazzo document's workflows as flow files under tests/arazzo/ (never replacing a file: a clash gets -2, -3 …).
+ * Its OpenAPI sources are looked up in the workspace (and `baseDir`, the Arazzo file's folder); `sources` gives
+ * documents the caller already has (fetched with permission).
+ */
+export function importArazzoIntoWorkspace(store: WorkspaceStore, text: string, opts: { baseDir?: string; sources?: Record<string, string> } = {}): WorkspaceImportResult {
+  const local = resolveArazzoSourcesLocally(text, { workspace: store.root, baseDir: opts.baseDir }).sources;
+  const r = importArazzo(text, { sources: { ...local, ...(opts.sources ?? {}) } });
+  const flows: NonNullable<WorkspaceImportResult['flows']> = [];
+  for (const f of r.flows) {
+    let rel = f.path;
+    for (let i = 2; existsSync(store.safePath(rel)); i++) rel = f.path.replace(/\.yaml$/, `-${i}.yaml`);
+    const file = store.safePath(rel);
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, f.text);
+    flows.push({ path: rel, workflowId: f.workflowId, steps: f.steps });
+  }
+  return { format: 'arazzo', flows, ...(r.notes.length ? { notes: r.notes } : {}) };
 }
 
 /**
@@ -75,8 +98,9 @@ export function importIntoWorkspace(
   store: WorkspaceStore,
   text: string,
   /** `scripts: 'keep'` leaves Postman's `pm.*` in imported scripts; the default rewrites them to `tp.*`. */
-  opts: { contractChecks?: boolean; name?: string; secrets?: SecretStore; scripts?: ImportScriptsMode } = {},
+  opts: { contractChecks?: boolean; name?: string; secrets?: SecretStore; scripts?: ImportScriptsMode; arazzo?: { baseDir?: string; sources?: Record<string, string> } } = {},
 ): WorkspaceImportResult {
+  if (detectFormat(text) === 'arazzo') return importArazzoIntoWorkspace(store, text, opts.arazzo);
   const r = importAny(text, { name: opts.name, scripts: opts.scripts });
   const out: WorkspaceImportResult = { format: r.format, ...(r.scripts ? { scripts: r.scripts } : {}) };
   let collection = r.collection;

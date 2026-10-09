@@ -1,6 +1,6 @@
 import { Maximize2 } from 'lucide-react';
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { flowGraph, type FlowEdge, type FlowStep } from '@testpion/shared';
+import { flowGraph, stepDetail, type FlowEdge, type FlowStep } from '@testpion/shared';
 import { Button, Callout, cx } from './ui';
 import { TEST_KINDS } from './TreeParts';
 
@@ -8,6 +8,13 @@ import { TEST_KINDS } from './TreeParts';
 export interface FlowSelection {
   steps: string[];
   edge?: FlowEdge;
+}
+
+/** The flow debugger's marks on a step: a breakpoint, a pinned response, the step a debugged run is paused before. */
+export interface FlowMark {
+  breakpoint?: boolean;
+  pinned?: boolean;
+  paused?: boolean;
 }
 
 /**
@@ -34,6 +41,8 @@ export function FlowDiagram({
   onOpen,
   toolbar,
   fitKey,
+  marks,
+  onNodeMenu,
 }: {
   steps: FlowStep[];
   /** The id of the step drawn as chosen. */
@@ -47,8 +56,8 @@ export function FlowDiagram({
   editable?: boolean;
   selection?: FlowSelection;
   onSelectionChange?(s: FlowSelection): void;
-  /** A drag from a step's output port to another step: `to` should wait for `from`. */
-  onConnect?(from: string, to: string): void;
+  /** A drag from a step's output port to another step: `to` should wait for `from` (from a condition's true or false port: on that branch). */
+  onConnect?(from: string, to: string, when?: boolean): void;
   /** Steps dragged to a new place (top-left corners, in the diagram's units). */
   onMove?(positions: Record<string, [number, number]>): void;
   /** Delete (or Backspace) with something selected. */
@@ -61,6 +70,10 @@ export function FlowDiagram({
   toolbar?: ReactNode;
   /** With it, the view fits again only when it (or the number of steps) changes: a designer that moves steps keeps its view. Without it, when the graph's size does. */
   fitKey?: string;
+  /** Breakpoints, pins and the paused step, by step id (the flow debugger). */
+  marks?: Record<string, FlowMark>;
+  /** A right-click on a node, where (in the window): the designer opens the step's menu there. */
+  onNodeMenu?(step: FlowStep, at: { x: number; y: number }): void;
 }) {
   const graph = useMemo(() => flowGraph(steps), [steps]);
   const box = useRef<HTMLDivElement>(null);
@@ -146,7 +159,7 @@ export function FlowDiagram({
   const drag = useRef<{ x: number; y: number; vx: number; vy: number; moved?: boolean } | undefined>(undefined);
   const nodeDrag = useRef<{ ids: string[]; x: number; y: number; moved: boolean } | undefined>(undefined);
   const [offset, setOffset] = useState<{ ids: Set<string>; dx: number; dy: number }>();
-  const [link, setLink] = useState<{ from: string; x: number; y: number }>();
+  const [link, setLink] = useState<{ from: string; x: number; y: number; when?: boolean }>();
   const linkRef = useRef(link);
   linkRef.current = link;
   /** A click that ended a drag is not a click on the node. */
@@ -161,7 +174,8 @@ export function FlowDiagram({
       const port = t.closest('[data-flow-port="out"]');
       if (port && node) {
         const [x, y] = toGraph(e.clientX, e.clientY);
-        setLink({ from: node, x, y });
+        const when = port.getAttribute('data-flow-when');
+        setLink({ from: node, x, y, ...(when ? { when: when === 'true' } : {}) });
         capture(e);
         return;
       }
@@ -202,7 +216,7 @@ export function FlowDiagram({
     if (l) {
       setLink(undefined);
       const target = document.elementFromPoint(e.clientX, e.clientY)?.closest('[data-flow-node]')?.getAttribute('data-flow-node');
-      if (target && target !== l.from) onConnect?.(l.from, target);
+      if (target && target !== l.from) onConnect?.(l.from, target, l.when);
       return;
     }
     const n = nodeDrag.current;
@@ -278,7 +292,7 @@ export function FlowDiagram({
             const a = at(e.from);
             const b = at(e.to);
             const x1 = a.x + a.w;
-            const y1 = a.y + a.h / 2;
+            const y1 = a.y + (e.when === undefined ? a.h / 2 : portY(a.h, e.when));
             const x2 = b.x;
             const y2 = b.y + b.h / 2;
             const dx = Math.max(24, Math.abs(x2 - x1) / 2);
@@ -311,6 +325,18 @@ export function FlowDiagram({
                     {label.length > 32 ? `${label.slice(0, 31)}…` : label}
                   </text>
                 )}
+                {e.when !== undefined && (
+                  <text
+                    x={x1 + 12}
+                    y={y1 + (e.when ? -6 : 13)}
+                    className={cx('stroke-bg text-[10px] font-semibold pointer-events-none', e.when ? 'fill-ok' : 'fill-bad')}
+                    strokeWidth={3}
+                    paintOrder="stroke"
+                    data-flow-edge-when={key}
+                  >
+                    {String(e.when)}
+                  </text>
+                )}
               </g>
             );
           })}
@@ -324,12 +350,14 @@ export function FlowDiagram({
               onOpen={onOpen}
               onSelect={onSelect}
               onOpenResult={onOpenResult}
+              mark={marks?.[n.id]}
+              onMenu={onNodeMenu}
             />
           ))}
           {link &&
             (() => {
               const a = byId.get(link.from)!;
-              return <path d={`M ${a.x + a.w} ${a.y + a.h / 2} L ${link.x} ${link.y}`} className="fill-none stroke-accent pointer-events-none" strokeWidth={1.5} strokeDasharray="5 4" data-flow-link />;
+              return <path d={`M ${a.x + a.w} ${a.y + (link.when === undefined ? a.h / 2 : portY(a.h, link.when))} L ${link.x} ${link.y}`} className="fill-none stroke-accent pointer-events-none" strokeWidth={1.5} strokeDasharray="5 4" data-flow-link />;
             })()}
         </g>
       </svg>
@@ -367,6 +395,8 @@ export function FlowDiagram({
 const STATUS_STROKE: Record<string, string> = { passed: 'stroke-ok', failed: 'stroke-bad', error: 'stroke-bad', skipped: 'stroke-muted', running: 'stroke-accent' };
 const STATUS_FILL: Record<string, string> = { passed: 'fill-ok', failed: 'fill-bad', error: 'fill-bad', skipped: 'fill-muted', running: 'fill-accent' };
 const cut = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
+/** A condition's true port is in the upper part of its right edge, its false port in the lower part. */
+const portY = (h: number, when: boolean) => (when ? h * 0.32 : h * 0.72);
 
 function FlowNodeView({
   node: n,
@@ -376,6 +406,8 @@ function FlowNodeView({
   onOpen,
   onSelect,
   onOpenResult,
+  mark,
+  onMenu,
 }: {
   node: ReturnType<typeof flowGraph>['nodes'][number];
   selected: boolean;
@@ -384,17 +416,30 @@ function FlowNodeView({
   onOpen?(s: FlowStep): void;
   onSelect?(s: FlowStep): void;
   onOpenResult?(s: FlowStep): void;
+  mark?: FlowMark;
+  onMenu?(s: FlowStep, at: { x: number; y: number }): void;
 }) {
   const s = n.step;
   const kind = TEST_KINDS[s.type] ?? [s.type.toUpperCase().slice(0, 4), 'text-muted'];
-  const where = s.method && s.url ? s.url : s.type === 'delay' && s.ms !== undefined ? `wait ${s.ms} ms` : (s.url ?? '');
-  const result = s.status && s.status !== 'running' ? `${s.status}${s.durationMs !== undefined ? ` · ${s.durationMs} ms` : ''}` : s.status === 'running' ? 'running…' : undefined;
-  const missing = s.unresolved?.length ? s.unresolved : undefined;
+  // the kind badge already says IF / LOG: the expression and the message stand alone
+  const where = s.method && s.url ? s.url : s.type === 'condition' ? (s.if ?? '') : s.type === 'log' ? (s.message ?? '') : ['delay', 'flow'].includes(s.type) ? stepDetail(s) : (s.url ?? '');
+  const condition = s.type === 'condition';
+  const missingVars = s.unresolved?.length ? s.unresolved : undefined;
+  const nameRoom = (s.status ? 22 : 24) - (missingVars ? 3 : 0) - (s.loop ? Math.min(8, s.loop.length) : 0);
+  const result =
+    s.status && s.status !== 'running'
+      ? `${mark?.pinned && s.status === 'passed' ? 'pinned · ' : ''}${s.status}${s.durationMs !== undefined && !(mark?.pinned && s.status === 'passed') ? ` · ${s.durationMs} ms` : ''}`
+      : s.status === 'running'
+        ? 'running…'
+        : undefined;
   return (
     <g
       data-flow-node={s.id}
       data-status={s.status}
       data-selected={selected || undefined}
+      data-breakpoint={mark?.breakpoint || undefined}
+      data-pinned={mark?.pinned || undefined}
+      data-paused={mark?.paused || undefined}
       transform={`translate(${n.x} ${n.y})`}
       className={cx('outline-none', editable ? 'cursor-move' : 'cursor-pointer')}
       role="button"
@@ -404,20 +449,40 @@ function FlowNodeView({
       onClick={(e) => onClick(s, e)}
       onDoubleClick={() => onOpen?.(s)}
       onKeyDown={(e) => e.key === 'Enter' && (editable ? onOpen?.(s) : onSelect?.(s))}
+      onContextMenu={
+        onMenu
+          ? (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onMenu(s, { x: e.clientX, y: e.clientY });
+            }
+          : undefined
+      }
     >
       <title>
         {[
           s.name,
-          s.method && s.url ? `${s.method} ${s.url}` : s.type === 'delay' && s.ms !== undefined ? `waits ${s.ms} ms` : s.type,
+          s.method && s.url ? `${s.method} ${s.url}` : s.type === 'delay' && s.ms !== undefined ? `waits ${s.ms} ms` : stepDetail(s),
+          !condition && s.if ? `runs only if ${s.if}` : '',
+          s.when !== undefined ? `on the ${s.when} branch of ${s.dependsOn?.join(', ') ?? 'its condition'}` : '',
+          s.loop ? `runs ${s.loop}` : '',
           s.extract?.length ? `extracts ${s.extract.join(', ')}` : '',
           s.dependsOn?.length ? `after ${s.dependsOn.join(', ')}` : '',
-          missing ? `reads ${missing.map((v) => `{{${v}}}`).join(', ')}, which no earlier step extracts and the environment does not define` : '',
+          missingVars ? `reads ${missingVars.map((v) => `{{${v}}}`).join(', ')}, which no earlier step extracts and the environment does not define` : '',
           result ?? '',
-          editable ? 'Drag to move · drag the right dot onto another step to connect · double-click opens it in the editor' : '',
+          mark?.breakpoint ? 'breakpoint: a debug run pauses before this step' : '',
+          mark?.pinned ? 'pinned: runs from the designer use its pinned response instead of calling the API' : '',
+          mark?.paused ? 'paused here: Continue, Step over or Stop in the inspector' : '',
+          editable
+            ? condition
+              ? 'Drag to move · drag the true or false dot onto a step: it runs on that branch · double-click opens it in the editor'
+              : 'Drag to move · drag the right dot onto another step to connect · double-click opens it in the editor'
+            : '',
         ]
           .filter(Boolean)
           .join('\n')}
       </title>
+      {mark?.paused && <rect x={-5} y={-5} width={n.w + 10} height={n.h + 10} rx={11} className="fill-none stroke-accent" strokeWidth={2} strokeDasharray="6 4" data-flow-paused-ring />}
       <rect
         width={n.w}
         height={n.h}
@@ -426,12 +491,38 @@ function FlowNodeView({
         strokeWidth={selected ? 2.5 : 1.5}
         strokeDasharray={s.status === 'skipped' ? '4 3' : undefined}
       />
+      {mark?.breakpoint && <circle cx={0} cy={0} r={6} className="fill-bad stroke-panel" strokeWidth={1.5} data-flow-breakpoint-dot />}
+      {(mark?.pinned || mark?.paused) && (
+        <g transform={`translate(${mark?.breakpoint ? 12 : 8} -8)`}>
+          {mark?.pinned && (
+            <g data-flow-pin>
+              <rect width={40} height={15} rx={7.5} className="fill-warn" />
+              <text x={20} y={11} textAnchor="middle" className="fill-bg text-[9.5px] font-bold">
+                PINNED
+              </text>
+            </g>
+          )}
+          {mark?.paused && (
+            <g transform={`translate(${mark?.pinned ? 46 : 0} 0)`}>
+              <rect width={46} height={15} rx={7.5} className="fill-accent" />
+              <text x={23} y={11} textAnchor="middle" className="fill-bg text-[9.5px] font-bold">
+                PAUSED
+              </text>
+            </g>
+          )}
+        </g>
+      )}
       {s.status && <circle cx={14} cy={17} r={4} className={STATUS_FILL[s.status] ?? 'fill-muted'} />}
       <text x={s.status ? 24 : 12} y={21} className="fill-fg text-[13px] font-medium">
-        {cut(s.name, (s.status ? 22 : 24) - (missing ? 3 : 0))}
+        {cut(s.name, nameRoom)}
       </text>
-      {missing && (
-        <g transform={`translate(${n.w - 16} 15)`} data-flow-unresolved={missing.join(',')}>
+      {s.loop && (
+        <text x={n.w - (missingVars ? 28 : 10)} y={21} textAnchor="end" className="fill-accent text-[11px] font-semibold tabular-nums" data-flow-loop={s.loop}>
+          {cut(s.loop, 10)}
+        </text>
+      )}
+      {missingVars && (
+        <g transform={`translate(${n.w - 16} 15)`} data-flow-unresolved={missingVars.join(',')}>
           <circle r={7} className="fill-warn" />
           <text y={3.5} textAnchor="middle" className="fill-bg text-[10px] font-bold">
             !
@@ -452,11 +543,17 @@ function FlowNodeView({
         </tspan>
       </text>
       <text x={12} y={60} className="fill-muted text-[11px]">
-        {s.extract?.length ? `→ ${cut(s.extract.join(', '), result ? 14 : 28)}` : s.dependsOn?.length ? `after ${cut(s.dependsOn.join(', '), result ? 12 : 26)}` : ''}
+        {!condition && s.if
+          ? `if ${cut(s.if, result ? 13 : 27)}`
+          : s.extract?.length
+            ? `→ ${cut(s.extract.join(', '), result ? 14 : 28)}`
+            : s.dependsOn?.length
+              ? `after ${cut(s.dependsOn.join(', '), result ? (condition && editable ? 7 : 12) : 26)}`
+              : ''}
       </text>
       {result && (
         <text
-          x={n.w - 10}
+          x={n.w - (condition && editable ? 44 : 10)}
           y={60}
           textAnchor="end"
           data-flow-result
@@ -475,9 +572,28 @@ function FlowNodeView({
           <circle data-flow-port="in" cx={0} cy={n.h / 2} r={5} className="fill-panel stroke-line-strong" strokeWidth={1.5}>
             <title>Input: drop a connection here</title>
           </circle>
-          <circle data-flow-port="out" cx={n.w} cy={n.h / 2} r={6} className="fill-accent stroke-panel cursor-crosshair" strokeWidth={1.5}>
-            <title>Drag onto another step: it then waits for this one</title>
-          </circle>
+          {condition ? (
+            ([true, false] as const).map((w) => (
+              <g key={String(w)}>
+                <text x={n.w - 10} y={portY(n.h, w) + 3.5} textAnchor="end" className={cx('text-[10px] font-semibold pointer-events-none', w ? 'fill-ok' : 'fill-bad')}>
+                  {String(w)}
+                </text>
+                <circle data-flow-port="out" data-flow-when={String(w)} cx={n.w} cy={portY(n.h, w)} r={6} className={cx('stroke-panel cursor-crosshair', w ? 'fill-ok' : 'fill-bad')} strokeWidth={1.5}>
+                  <title>{`Drag onto a step: it runs when the condition is ${w}`}</title>
+                </circle>
+              </g>
+            ))
+          ) : (
+            <circle data-flow-port="out" cx={n.w} cy={n.h / 2} r={6} className="fill-accent stroke-panel cursor-crosshair" strokeWidth={1.5}>
+              <title>Drag onto another step: it then waits for this one</title>
+            </circle>
+          )}
+        </>
+      )}
+      {!editable && condition && (
+        <>
+          <circle cx={n.w} cy={portY(n.h, true)} r={3} className="fill-ok" />
+          <circle cx={n.w} cy={portY(n.h, false)} r={3} className="fill-bad" />
         </>
       )}
     </g>

@@ -1,4 +1,4 @@
-import { ClipboardPaste, Copy, CopyPlus, FileCode2, FolderInput, LayoutGrid, Play, Plus, Redo2, Sparkles, StepForward, Trash2, Undo2, Workflow } from 'lucide-react';
+import { Bug, ChevronsRight, CircleDot, ClipboardPaste, Copy, CopyPlus, FileCode2, FolderInput, History, LayoutGrid, LogOut, Pin, PinOff, Play, Plus, Redo2, Sparkles, StepForward, Target, Trash2, Undo2, Workflow } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { flowGraph, type FlowStep } from '@testpion/shared';
 import { asError, call, on } from '../api';
@@ -8,16 +8,21 @@ import type { AuthConfig, CheckConfig, CollectionNode, KeyValue, TestResult } fr
 import { AssertionEditor } from './AssertionEditor';
 import { AuthEditor } from './AuthEditor';
 import { CodeEditor } from './CodeEditor';
-import { FlowDiagram, type FlowSelection } from './FlowDiagram';
+import { asMap, asRows, asText, BlockFields, FlowOutputEditor, RunControlFields, useCommitted } from './FlowBlockFields';
+import { FlowDiagram, type FlowMark, type FlowSelection } from './FlowDiagram';
+import { FlowHistoryList, PausePanel, VariablesTimeline, type FlowPause, type FlowRunRow } from './FlowDebugParts';
+import { ResultDetail } from './RunPanel';
 import { KeyValueEditor } from './KeyValueEditor';
 import { VarInput } from './VarInput';
-import { Badge, Button, cx, Empty, Field, Input, LinkButton, Menu, Modal, SectionTitle, Select, Split, Textarea, type MenuItem } from './ui';
+import { Badge, Button, cx, Empty, Field, Input, LinkButton, Menu, Modal, SectionTitle, Segmented, Select, Split, Textarea, type MenuItem } from './ui';
 
 /** A test file as a flow, as the tests.flow RPC reads it for the designer (with each step as written). */
 export interface DesignerFlow {
   steps: FlowStep[];
   run?: { runId: string };
   raw?: Record<string, Record<string, unknown>>;
+  /** The file's output: (what the flow returns). */
+  output?: Record<string, unknown>;
 }
 
 /** What tests.flowEdit answers: the text before (undo) and after (the editor), and the flow read again. */
@@ -31,8 +36,24 @@ export interface FlowEditAnswer {
 
 type Op = Record<string, unknown> & { op: string };
 
-/** The steps a new flow starts from (the palette). */
-const PALETTE: Array<{ type: string; label: string; step: Record<string, unknown> }> = [
+/** What a run from the designer runs (tests.flowRun): every step, `ids`, from / to a step, a replay (`seedRunId`), a debug run with breakpoints. */
+export interface FlowRunRequest {
+  ids?: string[];
+  from?: string;
+  to?: string;
+  seedRunId?: string;
+  debug?: boolean;
+  breakpoints?: string[];
+}
+
+/** The designer's state of a file (tests.flowState): breakpoints and pinned responses, kept per computer, never in the YAML. */
+interface DesignerState {
+  breakpoints: string[];
+  pins: Record<string, { status?: number; pinnedAt: string; fromRunId?: string; truncated?: boolean }>;
+}
+
+/** The steps a new flow starts from (the palette); `separator` starts the blocks that are not requests. */
+const PALETTE: Array<{ type: string; label: string; step: Record<string, unknown>; separator?: boolean }> = [
   { type: 'http', label: 'HTTP request', step: { name: 'HTTP request', type: 'http', method: 'GET', url: '{{baseUrl}}/', assertions: [{ type: 'status', expected: 200 }] } },
   {
     type: 'graphql',
@@ -51,7 +72,16 @@ const PALETTE: Array<{ type: string; label: string; step: Record<string, unknown
   },
   { type: 'mcp', label: 'MCP tool call', step: { name: 'MCP tool call', type: 'mcp', server: 'my-server', tool: 'my_tool', arguments: {} } },
   { type: 'llm', label: 'LLM prompt', step: { name: 'LLM prompt', type: 'llm', model: 'mock', prompt: 'Answer in one word: {{question}}' } },
-  { type: 'delay', label: 'Delay', step: { name: 'Wait', type: 'delay', ms: 1000 } },
+  { type: 'delay', label: 'Delay', step: { name: 'Wait', type: 'delay', ms: 1000 }, separator: true },
+  { type: 'condition', label: 'Condition (if / else)', step: { name: 'Condition', type: 'condition', if: 'status == 200' } },
+  {
+    type: 'foreach',
+    label: 'For each (loop)',
+    step: { name: 'For each', type: 'http', method: 'GET', url: '{{baseUrl}}/items/{{id}}', forEach: [{ id: 1 }, { id: 2 }, { id: 3 }], assertions: [{ type: 'status', expected: 200 }] },
+  },
+  { type: 'script', label: 'Script', step: { name: 'Script', type: 'script', script: "tp.variables.set('value', 42);\n" } },
+  { type: 'flow', label: 'Sub-flow', step: { name: 'Sub-flow', type: 'flow', file: 'other-flow.yaml' } },
+  { type: 'log', label: 'Log', step: { name: 'Log', type: 'log', message: 'Value: {{value}}' } },
 ];
 
 /** Undo and redo per file: texts of the file before each canvas change (kept while the app runs, across tab switches). */
@@ -83,8 +113,8 @@ export function FlowDesigner({
   onEdited(r: FlowEditAnswer): void;
   /** Before an edit: the editor's unsaved changes are saved first. */
   beforeEdit(): Promise<void>;
-  /** Run the file (or only these steps); answers the run's id. */
-  onRun(ids?: string[]): Promise<string | undefined>;
+  /** Run the file (or part of it, or debug it: tests.flowRun); answers the run's id. */
+  onRun(o?: FlowRunRequest): Promise<string | undefined>;
   /** Show the step in the editor (double-click, Open in editor). */
   onOpenStep(step: FlowStep): void;
   /** Show a step's result of a run in the Runs tab. */
@@ -122,7 +152,76 @@ export function FlowDesigner({
   useEffect(() => {
     if (liveRun && flow.run?.runId === liveRun) setLiveRun(undefined);
   }, [flow.run?.runId, liveRun]);
-  const steps = useMemo(() => (liveRun ? flow.steps.map((s) => ({ ...s, status: live[s.id]?.status, durationMs: live[s.id]?.durationMs })) : flow.steps), [flow.steps, liveRun, live]);
+  // the debugger: breakpoints and pins of the file, the run history, a run shown on the canvas, a paused run
+  const [state, setState] = useState<DesignerState>({ breakpoints: [], pins: {} });
+  useEffect(() => {
+    let mounted = true;
+    call<DesignerState>('tests.flowState', { file }).then(
+      (s) => mounted && setState(s),
+      () => undefined,
+    );
+    return () => {
+      mounted = false;
+    };
+  }, [file]);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [runs, setRuns] = useState<FlowRunRow[]>();
+  const loadRuns = useCallback(() => {
+    call<{ runs: FlowRunRow[] }>('tests.flowRuns', { file }).then((h) => setRuns(h.runs), toastError);
+  }, [file]);
+  useEffect(() => {
+    if (historyOpen) loadRuns();
+  }, [historyOpen, loadRuns, flow.run?.runId]);
+  const [viewRun, setViewRun] = useState<{ runId: string; results: TestResult[] }>();
+  const showRun = (runId: string | undefined) => {
+    if (!runId) return setViewRun(undefined);
+    call<{ results: TestResult[] }>('tests.flowRunResults', { file, runId }).then((r) => setViewRun({ runId, results: r.results }), toastError);
+  };
+  const [pause, setPause] = useState<FlowPause>();
+  useEffect(() => {
+    if (!liveRun) return;
+    const offs = [
+      on<FlowPause>('run.paused', (p) => p.runId === liveRun && setPause(p)),
+      on<{ runId: string }>('run.resumed', (p) => p.runId === liveRun && setPause(undefined)),
+      on<{ runId: string }>('run.finished', (p) => p.runId === liveRun && setPause(undefined)),
+    ];
+    // a pause before the first step can come before the run's id did
+    call<FlowPause | null>('runs.paused', { runId: liveRun }).then((p) => p && setPause((cur) => cur ?? p), () => undefined);
+    return () => offs.forEach((off) => off());
+  }, [liveRun]);
+  // paused: the steps that finished before the pause show their results (a result that came before the run's id did is read back)
+  useEffect(() => {
+    if (!pause) return;
+    call<{ items: TestResult[] } | TestResult[]>('runs.results', { runId: pause.runId, limit: 500 }).then(
+      (page) =>
+        setLive((l) => {
+          const next = { ...l };
+          for (const r of Array.isArray(page) ? page : page.items) next[r.id] ??= { status: r.status, durationMs: r.durationMs };
+          return next;
+        }),
+      () => undefined,
+    );
+  }, [pause]);
+  const [menu, setMenu] = useState<{ step: FlowStep; x: number; y: number }>();
+  const [inspectorMode, setInspectorMode] = useState<'result' | 'step'>('result');
+
+  const viewed = useMemo(() => (viewRun ? new Map(viewRun.results.map((r) => [r.id, r])) : undefined), [viewRun]);
+  const steps = useMemo(
+    () =>
+      liveRun
+        ? flow.steps.map((s) => ({ ...s, status: live[s.id]?.status, durationMs: live[s.id]?.durationMs }))
+        : viewed
+          ? flow.steps.map((s) => ({ ...s, status: viewed.get(s.id)?.status, durationMs: viewed.get(s.id)?.durationMs }))
+          : flow.steps,
+    [flow.steps, liveRun, live, viewed],
+  );
+  const marks = useMemo(() => {
+    const m: Record<string, FlowMark> = {};
+    for (const id of state.breakpoints) m[id] = { ...m[id], breakpoint: true };
+    for (const id of Object.keys(state.pins)) m[id] = { ...m[id], pinned: true };
+    if (pause) m[pause.stepId] = { ...m[pause.stepId], paused: true };
+    return m;
+  }, [state, pause]);
   const graph = useMemo(() => flowGraph(flow.steps), [flow.steps]);
   const hasLayout = flow.steps.some((s) => s.position);
   const ids = new Set(flow.steps.map((s) => s.id));
@@ -176,7 +275,16 @@ export function FlowDesigner({
     if (canvasAt.current) return { at: canvasAt.current };
     return { at: [graph.nodes.reduce((m, x) => Math.max(m, x.x + x.w), 0) + 64, 0] };
   };
-  const addStep = (step: Record<string, unknown>) => void apply({ op: 'addStep', step, ...placeNew() }, { select: true });
+  const addStep = (step: Record<string, unknown>) => {
+    const where = placeNew();
+    // after a condition: on its true branch, or the false one when only that is still empty
+    let branch: Record<string, unknown> = {};
+    if (one?.type === 'condition' && where.after === one.id) {
+      const on = (w: boolean) => flow.steps.some((s) => s.when === w && s.dependsOn?.includes(one.id));
+      branch = { when: on(true) && !on(false) ? false : true };
+    }
+    void apply({ op: 'addStep', step: { ...step, ...branch }, ...where }, { select: true });
+  };
   const addFromCollection = async (collection: string, item: string) => {
     setPicking(false);
     await apply({ op: 'addFromCollection', collection, items: [item], chain: true, ...placeNew() }, { select: true });
@@ -243,15 +351,77 @@ export function FlowDesigner({
     walk(id);
     return flow.steps.filter((s) => out.has(s.id)).map((s) => s.id);
   };
-  const run = async (only?: string[]) => {
-    const id = await onRun(only);
+  const run = async (o?: FlowRunRequest) => {
+    const id = await onRun(o);
     if (!id) return;
     setLive({});
+    setPause(undefined);
+    setViewRun(undefined);
     setLiveRun(id);
   };
+  const debug = () => void run({ debug: true, breakpoints: state.breakpoints });
+  const setBreakpoints = (ids: string[]) => {
+    setState((s) => ({ ...s, breakpoints: ids }));
+    call<DesignerState>('tests.flowBreakpoints', { file, ids }).then(setState, toastError);
+    // a debugged run takes the change at once
+    if (liveRun) void call('runs.setBreakpoints', { runId: liveRun, ids }).catch(() => undefined);
+  };
+  const toggleBreakpoint = (id: string) => setBreakpoints(state.breakpoints.includes(id) ? state.breakpoints.filter((x) => x !== id) : [...state.breakpoints, id]);
+  const pin = async (s: FlowStep) => {
+    try {
+      setState(await call<DesignerState>('tests.flowPin', { file, stepId: s.id }));
+      useApp.getState().toast(`"${s.name}" is pinned: runs from the designer use its response instead of calling the API`);
+    } catch (e) {
+      toastError(e);
+    }
+  };
+  const unpin = async (s: FlowStep) => {
+    try {
+      setState(await call<DesignerState>('tests.flowUnpin', { file, stepId: s.id }));
+    } catch (e) {
+      toastError(e);
+    }
+  };
+  const resume = async (action: 'continue' | 'step' | 'stop', vars: Record<string, unknown>) => {
+    if (!pause) return;
+    try {
+      await call('runs.resume', { runId: pause.runId, action, vars });
+      setPause(undefined);
+    } catch (e) {
+      toastError(e);
+    }
+  };
+  /** The menu of a step (right-click on the canvas, the inspector's Debug menu). Run from here seeds from the run shown from the history, else the latest. */
+  const stepMenu = (s: FlowStep): MenuItem[] => [
+    {
+      label: 'Run from here',
+      icon: <ChevronsRight size={14} />,
+      onSelect: () => void run({ from: s.id, seedRunId: viewRun?.runId }),
+      title: 'Run this step and every step after it, with the variables and responses the steps before it had in the selected (or latest) run',
+    },
+    { label: 'Run to here', icon: <Target size={14} />, onSelect: () => void run({ to: s.id }), title: 'Run this step with only the steps it waits for' },
+    { label: state.breakpoints.includes(s.id) ? 'Remove breakpoint' : 'Add breakpoint', icon: <CircleDot size={14} />, shortcut: 'F9', separator: true, onSelect: () => toggleBreakpoint(s.id) },
+    state.pins[s.id]
+      ? { label: 'Unpin response', icon: <PinOff size={14} />, onSelect: () => void unpin(s), title: 'Call the API again in runs from the designer' }
+      : {
+          label: 'Pin last response',
+          icon: <Pin size={14} />,
+          onSelect: () => void pin(s),
+          title: 'Keep the step\u2019s last response: runs from the designer use it instead of calling the API (the CLI, CI and monitors never do)',
+        },
+    { label: 'Open in editor', icon: <FileCode2 size={14} />, separator: true, onSelect: () => onOpenStep(s) },
+  ];
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     if ((e.target as HTMLElement).closest('input, textarea, select, [contenteditable], .monaco-editor')) return;
+    if (e.key === 'F9' && one) {
+      e.preventDefault();
+      return toggleBreakpoint(one.id);
+    }
+    if (pause && (e.key === 'F8' || e.key === 'F10')) {
+      e.preventDefault();
+      return void resume(e.key === 'F8' ? 'continue' : 'step', {});
+    }
     const mod = e.ctrlKey || e.metaKey;
     if (!mod) return;
     const k = e.key.toLowerCase();
@@ -267,7 +437,15 @@ export function FlowDesigner({
   };
 
   const addItems: MenuItem[] = [
-    ...PALETTE.map((p) => ({ label: p.label, icon: <Plus size={14} />, onSelect: () => addStep(p.step) })),
+    ...PALETTE.map((p) => ({ label: p.label, icon: <Plus size={14} />, separator: p.separator, onSelect: () => addStep(p.step) })),
+    {
+      label: 'Flow output…',
+      icon: <LogOut size={14} />,
+      onSelect: () => {
+        setSel({ steps: [] });
+        setTimeout(() => document.querySelector<HTMLInputElement>('[data-flow-output] input[aria-label="New name"]')?.focus(), 50);
+      },
+    },
     { label: 'From a collection…', icon: <FolderInput size={14} />, separator: true, onSelect: () => setPicking(true) },
     { label: 'Generate the flow with AI…', icon: <Sparkles size={14} />, onSelect: () => void generate() },
   ];
@@ -305,11 +483,35 @@ export function FlowDesigner({
       <Button
         size="sm"
         icon={<StepForward size={12} />}
-        onClick={() => one && void run(withDependencies(one.id))}
+        onClick={() => one && void run({ ids: withDependencies(one.id) })}
         disabled={!one}
         title={one ? `Run "${one.name}" with the steps it waits for` : 'Select a step to run it with the steps it waits for'}
       >
         Run step
+      </Button>
+      <Button
+        size="sm"
+        icon={<Bug size={12} />}
+        onClick={debug}
+        disabled={!flow.steps.length || !!pause}
+        data-flow-debug
+        title={
+          state.breakpoints.length
+            ? `Run the flow one step at a time, pausing before the ${state.breakpoints.length} breakpoint${state.breakpoints.length === 1 ? '' : 's'}: inspect and change variables, then Continue, Step over or Stop`
+            : 'Run the flow pausing before breakpoints: add one with F9 or a step\u2019s right-click menu'
+        }
+      >
+        Debug
+      </Button>
+      <Button
+        size="sm"
+        icon={<History size={12} />}
+        onClick={() => setHistoryOpen((o) => !o)}
+        aria-pressed={historyOpen}
+        data-flow-history-toggle
+        title="The runs of this flow: select one to see its results, requests, responses and variables on the canvas"
+      >
+        History
       </Button>
     </>
   );
@@ -333,6 +535,145 @@ export function FlowDesigner({
       </div>
     );
 
+  const viewedResult = one && viewed ? viewed.get(one.id) : undefined;
+  const timelineIndex = viewRun ? Math.max(0, one ? viewRun.results.findIndex((r) => r.id === one.id) : viewRun.results.length - 1) : 0;
+  const inspector = (
+    <div className="h-full overflow-auto text-sm" data-flow-inspector>
+      {pause && (
+        <PausePanel
+          key={`${pause.runId}:${pause.stepId}`}
+          pause={pause}
+          stepName={flow.steps.find((s) => s.id === pause.stepId)?.name ?? pause.stepId}
+          onResume={(a, v) => void resume(a, v)}
+        />
+      )}
+      {viewRun && (
+        <div className="grid gap-3 p-3 border-b border-line" data-flow-run-view={viewRun.runId}>
+          <div className="flex items-center gap-2 text-xs">
+            <History size={13} className="text-muted shrink-0" />
+            <span className="flex-1 truncate">
+              Run <span className="mono">{viewRun.runId}</span>
+            </span>
+            {one && (
+              <Segmented
+                label="Inspector"
+                value={inspectorMode}
+                onChange={setInspectorMode}
+                options={[
+                  { value: 'result', label: 'Run result' },
+                  { value: 'step', label: 'Edit step' },
+                ]}
+              />
+            )}
+          </div>
+          {(!one || inspectorMode === 'result') && (
+            <>
+              {one &&
+                (viewedResult ? (
+                  <div className="h-[380px] border border-line rounded-md overflow-hidden" data-flow-run-result={one.id}>
+                    <ResultDetail r={viewedResult} runId={viewRun.runId} initialTab="io" />
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted">&quot;{one.name}&quot; did not run in this run.</p>
+                ))}
+              <VariablesTimeline results={viewRun.results} index={timelineIndex} onIndex={(i) => setSel({ steps: [viewRun.results[i]!.id] })} />
+            </>
+          )}
+        </div>
+      )}
+      {(!viewRun || !one || inspectorMode === 'step') && (
+        one ? (
+          <StepInspector
+            key={`${one.id}:${version}`}
+            file={file}
+            step={one}
+            raw={flow.raw?.[one.id]}
+            steps={flow.steps}
+            lastRunId={liveRun ?? flow.run?.runId}
+            update={(set) => apply({ op: 'updateStep', id: one.id, set })}
+            actions={
+              <>
+                <Button size="sm" icon={<StepForward size={12} />} onClick={() => void run({ ids: withDependencies(one.id) })}>
+                  Run step
+                </Button>
+                <Menu
+                  align="start"
+                  width={230}
+                  items={stepMenu(one)}
+                  trigger={
+                    <Button size="sm" icon={<Bug size={12} />} data-inspector-debug-menu title="Run from here, run to here, breakpoint, pin the response">
+                      Debug
+                    </Button>
+                  }
+                />
+                <Button size="sm" icon={<FileCode2 size={12} />} onClick={() => onOpenStep(one)} title="Show the step in the YAML editor">
+                  Open in editor
+                </Button>
+                <Button size="sm" icon={<CopyPlus size={12} />} onClick={() => void apply({ op: 'duplicateStep', id: one.id }, { select: true })} title="Ctrl+D">
+                  Duplicate
+                </Button>
+                <Button size="sm" variant="danger" icon={<Trash2 size={12} />} onClick={remove} title="Delete">
+                  Delete step
+                </Button>
+              </>
+            }
+          />
+        ) : selSteps.length > 1 ? (
+          <div className="p-3 grid gap-3">
+            <SectionTitle>{selSteps.length} steps selected</SectionTitle>
+            <div className="flex flex-wrap gap-1.5">
+              <Button size="sm" icon={<CopyPlus size={12} />} onClick={() => void apply({ op: 'duplicateStep', id: selSteps }, { select: true })}>
+                Duplicate
+              </Button>
+              <Button
+                size="sm"
+                icon={<Copy size={12} />}
+                onClick={() => {
+                  copied = { file, ids: selSteps };
+                  useApp.getState().toast(`${selSteps.length} steps copied: Ctrl+V pastes them into this or another flow`);
+                }}
+              >
+                Copy
+              </Button>
+              <Button size="sm" variant="danger" icon={<Trash2 size={12} />} onClick={remove}>
+                Delete steps
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="p-3 grid gap-2 text-xs text-muted">
+            <SectionTitle>Flow</SectionTitle>
+            <p>
+              {flow.steps.length} step{flow.steps.length === 1 ? '' : 's'}, {graph.edges.length} connection{graph.edges.length === 1 ? '' : 's'}.{' '}
+              {sel.edge ? (
+                <>
+                  <b className="text-fg">{sel.edge.to}</b> waits for <b className="text-fg">{sel.edge.from}</b>: Delete removes the connection.
+                </>
+              ) : (
+                'Select a step to edit it.'
+              )}
+            </p>
+            <ul className="list-disc ml-4 grid gap-1">
+              <li>Drag the dot on a step's right edge onto another step: that step then waits for it and can use what it extracts.</li>
+              <li>A condition has a true and a false dot: the step you drop it on runs only on that branch; the other branch shows as skipped after a run.</li>
+              <li>Drag steps to arrange them; Shift+click selects several; Delete removes the selection; Ctrl+Z undoes.</li>
+              <li>Ctrl+C / Ctrl+V copy steps between flows; Ctrl+D duplicates.</li>
+              <li>
+                A <span className="text-warn font-bold">!</span> marks a step that reads a variable no earlier step extracts and the environment does not define.
+              </li>
+            </ul>
+            {copied && (
+              <LinkButton icon={<ClipboardPaste size={12} />} onClick={() => void apply({ op: 'pasteSteps', from: copied!.file, ids: copied!.ids, ...placeNew() }, { select: true })}>
+                Paste {copied.ids.length} copied step{copied.ids.length === 1 ? '' : 's'}
+              </LinkButton>
+            )}
+            <FlowOutputEditor key={`output:${version}`} output={flow.output} update={(output) => apply({ op: 'setOutput', output })} />
+          </div>
+        )
+      )}
+    </div>
+  );
+
   return (
     <div className="h-full min-h-0" data-flow-designer onKeyDown={onKeyDown}>
       <Split id="flow-designer" initial={68} min={30}>
@@ -342,140 +683,51 @@ export function FlowDesigner({
           steps={steps}
           selection={{ steps: selSteps, edge: sel.edge }}
           onSelectionChange={setSel}
-          onConnect={(from, to) => void apply({ op: 'connect', from, to })}
+          onConnect={(from, to, when) => void apply({ op: 'connect', from, to, ...(when !== undefined ? { when } : {}) })}
           onMove={move}
           onDelete={remove}
           onCanvasClick={(at) => (canvasAt.current = at)}
           onOpen={onOpenStep}
           onOpenResult={(s) => {
-            const runId = liveRun ?? flow.run?.runId;
+            const runId = liveRun ?? viewRun?.runId ?? flow.run?.runId;
             if (runId) onOpenResult(s, runId);
           }}
           toolbar={toolbar}
+          marks={marks}
+          onNodeMenu={(s, at) => {
+            setSel({ steps: [s.id] });
+            setMenu({ step: s, ...at });
+          }}
         />
-        <div className="h-full overflow-auto text-sm" data-flow-inspector>
-          {one ? (
-            <StepInspector
-              key={`${one.id}:${version}`}
-              step={one}
-              raw={flow.raw?.[one.id]}
-              steps={flow.steps}
-              lastRunId={liveRun ?? flow.run?.runId}
-              update={(set) => apply({ op: 'updateStep', id: one.id, set })}
-              actions={
-                <>
-                  <Button size="sm" icon={<StepForward size={12} />} onClick={() => void run(withDependencies(one.id))}>
-                    Run step
-                  </Button>
-                  <Button size="sm" icon={<FileCode2 size={12} />} onClick={() => onOpenStep(one)} title="Show the step in the YAML editor">
-                    Open in editor
-                  </Button>
-                  <Button size="sm" icon={<CopyPlus size={12} />} onClick={() => void apply({ op: 'duplicateStep', id: one.id }, { select: true })} title="Ctrl+D">
-                    Duplicate
-                  </Button>
-                  <Button size="sm" variant="danger" icon={<Trash2 size={12} />} onClick={remove} title="Delete">
-                    Delete step
-                  </Button>
-                </>
-              }
+        {historyOpen ? (
+          <Split id="flow-history" direction="vertical" initial={34} min={15}>
+            <FlowHistoryList
+              runs={runs}
+              selected={viewRun?.runId}
+              onSelect={showRun}
+              onReplay={(r) => void run({ seedRunId: r.runId })}
+              onClose={() => {
+                setHistoryOpen(false);
+                setViewRun(undefined);
+              }}
             />
-          ) : selSteps.length > 1 ? (
-            <div className="p-3 grid gap-3">
-              <SectionTitle>{selSteps.length} steps selected</SectionTitle>
-              <div className="flex flex-wrap gap-1.5">
-                <Button size="sm" icon={<CopyPlus size={12} />} onClick={() => void apply({ op: 'duplicateStep', id: selSteps }, { select: true })}>
-                  Duplicate
-                </Button>
-                <Button
-                  size="sm"
-                  icon={<Copy size={12} />}
-                  onClick={() => {
-                    copied = { file, ids: selSteps };
-                    useApp.getState().toast(`${selSteps.length} steps copied: Ctrl+V pastes them into this or another flow`);
-                  }}
-                >
-                  Copy
-                </Button>
-                <Button size="sm" variant="danger" icon={<Trash2 size={12} />} onClick={remove}>
-                  Delete steps
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <div className="p-3 grid gap-2 text-xs text-muted">
-              <SectionTitle>Flow</SectionTitle>
-              <p>
-                {flow.steps.length} step{flow.steps.length === 1 ? '' : 's'}, {graph.edges.length} connection{graph.edges.length === 1 ? '' : 's'}.{' '}
-                {sel.edge ? (
-                  <>
-                    <b className="text-fg">{sel.edge.to}</b> waits for <b className="text-fg">{sel.edge.from}</b>: Delete removes the connection.
-                  </>
-                ) : (
-                  'Select a step to edit it.'
-                )}
-              </p>
-              <ul className="list-disc ml-4 grid gap-1">
-                <li>Drag the dot on a step's right edge onto another step: that step then waits for it and can use what it extracts.</li>
-                <li>Drag steps to arrange them; Shift+click selects several; Delete removes the selection; Ctrl+Z undoes.</li>
-                <li>Ctrl+C / Ctrl+V copy steps between flows; Ctrl+D duplicates.</li>
-                <li>
-                  A <span className="text-warn font-bold">!</span> marks a step that reads a variable no earlier step extracts and the environment does not define.
-                </li>
-              </ul>
-              {copied && (
-                <LinkButton icon={<ClipboardPaste size={12} />} onClick={() => void apply({ op: 'pasteSteps', from: copied!.file, ids: copied!.ids, ...placeNew() }, { select: true })}>
-                  Paste {copied.ids.length} copied step{copied.ids.length === 1 ? '' : 's'}
-                </LinkButton>
-              )}
-            </div>
-          )}
-        </div>
+            {inspector}
+          </Split>
+        ) : (
+          inspector
+        )}
       </Split>
+      {menu && (
+        <div className="fixed" style={{ left: menu.x, top: menu.y }} data-flow-step-menu={menu.step.id}>
+          <Menu open onOpenChange={(o) => !o && setMenu(undefined)} align="start" width={230} items={stepMenu(menu.step)} trigger={<span className="block w-px h-px" aria-hidden />} />
+        </div>
+      )}
       {picking && <CollectionPicker onPick={(c, item) => void addFromCollection(c, item)} onClose={() => setPicking(false)} />}
     </div>
   );
 }
 
 /* ------------------------------------------------------------------ the inspector */
-
-/** A value edited here and saved a moment after the last change (and when the inspector closes). */
-function useCommitted<T>(initial: T, commit: (v: T) => unknown, ms = 600): [T, (v: T) => void, () => void] {
-  const [value, setValue] = useState(initial);
-  const pending = useRef<{ v: T; t: ReturnType<typeof setTimeout> } | undefined>(undefined);
-  const commitRef = useRef(commit);
-  commitRef.current = commit;
-  const flush = useCallback(() => {
-    const p = pending.current;
-    if (!p) return;
-    clearTimeout(p.t);
-    pending.current = undefined;
-    void commitRef.current(p.v);
-  }, []);
-  const set = useCallback(
-    (v: T) => {
-      setValue(v);
-      if (pending.current) clearTimeout(pending.current.t);
-      pending.current = { v, t: setTimeout(flush, ms) };
-    },
-    [flush, ms],
-  );
-  useEffect(() => flush, [flush]);
-  return [value, set, flush];
-}
-
-const asRows = (v: unknown): KeyValue[] =>
-  Array.isArray(v)
-    ? v.map((x) =>
-        x && typeof x === 'object' ? { key: String((x as KeyValue).key ?? ''), value: String((x as KeyValue).value ?? ''), enabled: (x as KeyValue).enabled !== false } : { key: String(x), value: '' },
-      )
-    : v && typeof v === 'object'
-      ? Object.entries(v as Record<string, unknown>).map(([key, value]) => ({ key, value: typeof value === 'string' ? value : JSON.stringify(value) }))
-      : [];
-const asMap = (rows: KeyValue[]): Record<string, string> | null => {
-  const on = rows.filter((r) => r.key && r.enabled !== false);
-  return on.length ? Object.fromEntries(on.map((r) => [r.key, r.value])) : null;
-};
-const asText = (v: unknown) => (typeof v === 'string' ? v : v === undefined || v === null ? '' : undefined);
 
 /** Text fields of the other step types (what the inspector edits; the rest is in the YAML). */
 const FIELDS: Record<string, Array<[key: string, label: string, kind: 'line' | 'text']>> = {
@@ -501,6 +753,7 @@ const FIELDS: Record<string, Array<[key: string, label: string, kind: 'line' | '
 };
 
 function StepInspector({
+  file,
   step,
   raw,
   steps,
@@ -508,6 +761,7 @@ function StepInspector({
   update,
   actions,
 }: {
+  file: string;
   step: FlowStep;
   raw?: Record<string, unknown>;
   steps: FlowStep[];
@@ -649,6 +903,8 @@ function StepInspector({
           </Field>
           <p className="text-xs text-muted">The flow pauses here; never longer than the step's timeout, and Stop ends the wait at once.</p>
         </>
+      ) : ['condition', 'script', 'flow', 'log'].includes(step.type) ? (
+        <BlockFields file={file} step={step} raw={r} steps={steps} update={update} />
       ) : FIELDS[step.type] ? (
         <>
           <SectionTitle>{step.type}</SectionTitle>
@@ -678,7 +934,7 @@ function StepInspector({
       ) : null}
       {raw && (
         <>
-          {step.type !== 'delay' && (
+          {!['delay', 'condition', 'log'].includes(step.type) && (
             <>
               <SectionTitle
                 right={
@@ -716,6 +972,7 @@ function StepInspector({
               <AssertionEditor checks={checks} onChange={setChecks} />
             </>
           )}
+          <RunControlFields step={step} raw={r} steps={steps} update={update} />
           <SectionTitle>Waits for</SectionTitle>
           {others.length ? (
             <div className="grid gap-1" data-inspector-waits>

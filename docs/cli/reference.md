@@ -9,7 +9,7 @@ description: "Reference for the testpion command-line interface."
 
 ```text
 testpion test [paths...]      Run test files, directories, globs or a *.suite.yaml
-testpion run --suite <name>   Run tests/<name>.suite.yaml from a workspace
+testpion run --suite <name>   Run tests/<name>.suite.yaml from a workspace (or testpion run <file> for one test file)
 testpion send <request|url>   Send one saved request (scripts, auth, checks) or a URL and print the response, like curl
 testpion run-collection <collection>   Run a collection like Postman's Collection Runner / Newman
 testpion mock-graphql --schema <file>   Fake data for any query against a GraphQL schema (see GraphQL mock server)
@@ -43,13 +43,15 @@ testpion export <collection>  Export a collection as Postman v2.1 (or TestPion J
 testpion export-environment <name>   Export an environment in Postman's format
 testpion mcp-server           Serve a workspace to AI agents over MCP (stdio)
 testpion load <url>           Safeguarded load test (--threshold "p95<500" "errors<1%" to pass/fail; --grpc <method> for a gRPC server)
-testpion import <file|-> -w   Import OpenAPI/Swagger, Postman, Insomnia, Bruno (a collection folder too), WSDL (SOAP), HAR, collections, or a copied cURL / fetch / PowerShell request
+testpion import <file|-> -w   Import OpenAPI/Swagger, Postman, Insomnia, Bruno (a collection folder too), WSDL (SOAP), HAR, collections, Arazzo workflows (as flow files), or a copied cURL / fetch / PowerShell request
 testpion env list|order|diff -w  List environments; set their order; compare two
 testpion monitor list|add|remove|run|results|uptime|start -w  Collections on a schedule (monitors)
 testpion ci <github|gitlab|azure|jenkins> -w  A CI pipeline file for a suite, collection or tests (--start, --wait-for: start the system under test first)
 testpion lint-tests [paths] -w   Check test files before running them: unknown types, check types, misspelt keys, dependsOn ids (--json; exit 1 on errors)
 testpion flow <file> -w       A test file as a flow: the steps in columns with the latest run's results (--json for steps, edges, layers and problems; --dot for Graphviz)
+testpion flow runs <file> -w  A flow's run history, newest first; --run <id> shows that run's steps with the variables after each (--json)
 testpion flow edit <file> -w  Edit a flow as the app's designer does: --op '<json>' (addStep, updateStep, connect, removeStep …; a JSON list for several), --connect <a> --to <b>, --remove <step>, --dry-run (--json)
+testpion flow export <file> --arazzo -w   A flow as an Arazzo 1.0 workflow document (-o file.arazzo.yaml, --spec specs/api.yaml, --json)
 testpion flows -w             The flows exposed as MCP tools (test files and suites with an expose: block): tool, file, inputs (--json)
 testpion wait-for <url>       Wait until a URL answers (the health check before integration tests); exit 3 when it never does
 testpion trash list|restore|empty -w  Recently deleted collections and environments (30 days)
@@ -85,6 +87,9 @@ testpion report <results.jsonl>              Re-generate reports
 | `--log-level` | Enable debug logging; secrets stay redacted. |
 | `--watch` | Run again whenever a test, collection, environment or data file in the workspace (or the given paths) changes, until Ctrl+C. Results and reports the run writes don't count as changes. |
 | `--rerun-failed [runId]` | Run only the tests that failed or errored in a run (default: the last one). In the app: **Re-run failed** on a finished run. |
+| `--from <step>` | One flow file: run this step and the steps after it; the steps before it are seeded from `--seed-run` (default: the latest run of the file that has them). In the app: **Run from here**. |
+| `--to <step>` | One flow file: run this step with only the steps it waits for. In the app: **Run to here**. |
+| `--seed-run <runId>` | One flow file: the run whose variables and responses seed the steps before `--from`; alone, replays that run from its first failing step (see `testpion flow runs`). |
 | `--otlp <url>`, `--otlp-header k:v` | Send the run's traces to an OpenTelemetry collector (OTLP/HTTP); without `--otlp`, `OTEL_EXPORTER_OTLP_ENDPOINT` / `OTEL_EXPORTER_OTLP_HEADERS` are used. See [traces](/test-runner/traces). Also for `run-collection`. |
 
 ## `send`
@@ -418,6 +423,7 @@ testpion import 'http://127.0.0.1:4010/soap/patients?wsdl' -w my-workspace   # a
 # a request copied from browser devtools (cURL for bash or cmd, fetch, PowerShell), from a file or stdin
 testpion import copied-request.txt -w my-workspace --collection "Checkout API" --folder "Cart" --json
 pbpaste | testpion import - -w my-workspace
+testpion import adopt-pet.arazzo.yaml -w my-workspace --json   # Arazzo: one flow file per workflow under tests/arazzo/
 ```
 
 | Option | Description |
@@ -428,9 +434,29 @@ pbpaste | testpion import - -w my-workspace
 | `--name <name>` | For a copied request: its name (default: the method and path, e.g. `POST /v1/owners`). |
 | `--no-contract-checks` | For an OpenAPI / Swagger document: don't add `openapi` contract checks to the imported requests (the document is still kept in `specs/`). |
 | `--keep-pm` | For a Postman or Insomnia file: keep `pm.*` in scripts. By default they are converted to TestPion's `tp.*` and the output says `Converted N scripts to tp.*` (`pm.*` runs either way; `testpion export -f postman` turns `tp.*` back into `pm.*`). |
-| `--json` | Print the result as JSON, for scripts and AI agents (includes `specPath` and `contractChecks` for OpenAPI imports, and `scripts` — `{ converted, unchanged: [{ where, reason }] }` — for Postman and Insomnia imports). |
+| `--fetch-sources` | For an Arazzo document: download the OpenAPI source descriptions given as http(s) links. By default they are looked up next to the Arazzo file and in the workspace (`specs/`); an `operationId` whose document is not found becomes a skipped step to fill in. |
+| `--json` | Print the result as JSON, for scripts and AI agents (includes `specPath` and `contractChecks` for OpenAPI imports, `flows` — `[{ path, workflowId, steps }]` — and `notes` (what did not come over) for Arazzo imports, and `scripts` — `{ converted, unchanged: [{ where, reason }] }` — for Postman and Insomnia imports). |
+
+An Arazzo document's workflows become flow files: operations become method and URL (`{{baseUrl}}` + path), `$inputs.x` becomes `{{x}}`, `$steps.s.outputs.o` becomes `{{s_o}}` with an `extract` on step `s`, success criteria become checks, a retry action `retries`. See [Arazzo workflows](/test-runner/integration-testing#arazzo-workflows-import-and-export) for the whole mapping and `testpion flow export` for the way back.
 
 Secrets in a copied request (the `Authorization` header and other sensitive headers, auth credentials, cookies, and sensitive query or body fields) are not written to the workspace. They are replaced by `{{variables}}`, and the output lists them (`placeholders` with `--json`) so you can add them as secret environment variables.
+
+## `flow export`
+
+```bash
+testpion flow export arazzo/adoptpet.yaml --arazzo -o adopt-pet.arazzo.yaml -w my-workspace
+testpion flow export checkout.yaml --spec specs/shop.openapi.yaml --json -w my-workspace
+```
+
+| Option | Description |
+|---|---|
+| `--arazzo` | The format: Arazzo 1.0 (the only one, and the default). |
+| `--spec <file>` | The OpenAPI document (a workspace file) the requests are matched against. Default: the sources an Arazzo import noted at the top of the file, else the workspace spec in `specs/` that describes the most requests. |
+| `--workflow-id <id>` | The `workflowId` (default: the one an import noted, else the file name). |
+| `-o, --out <file>` | Write the document (`.yaml`, or `.json`); without it the YAML is printed. |
+| `--json` | Print `{ file, out, document, notes, sources }`. |
+
+What Arazzo cannot say (checks other than status, body and header ones, `if`, `forEach`, scripts, non-HTTP steps, a request no OpenAPI operation describes) is kept under `x-testpion-*` keys and listed as notes (on stderr without `--json`).
 
 ## `scripts convert`
 

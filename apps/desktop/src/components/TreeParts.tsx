@@ -373,4 +373,8 @@ export const TEST_KINDS: Record<string, [string, string]> = {
   rag: ['RAG', 'text-judge'],
   agent: ['AGT', 'text-judge'],
   delay: ['WAIT', 'text-muted'],
+  condition: ['IF', 'text-warn'],
+  script: ['JS', 'text-[#ca8a04]'],
+  flow: ['FLOW', 'text-accent'],
+  log: ['LOG', 'text-muted'],
 };

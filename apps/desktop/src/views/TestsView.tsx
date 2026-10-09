@@ -13,7 +13,7 @@ import { ExposeFlowDialog } from '../components/ExposeFlowDialog';
 import { SidebarShell } from '../components/SidebarShell';
 import { KindBadge, RowMenu, TEST_KINDS, TreeHeader, treeKeys } from '../components/TreeParts';
 import { FlowDiagram } from '../components/FlowDiagram';
-import { FlowDesigner, type DesignerFlow, type FlowEditAnswer } from '../components/FlowDesigner';
+import { FlowDesigner, type DesignerFlow, type FlowEditAnswer, type FlowRunRequest } from '../components/FlowDesigner';
 import { stepLine, type FlowStep } from '@testpion/shared';
 import { EnvironmentsPane } from '../components/SidebarPanes';
 import { finishSave, type SaveResult } from '../lib/files';
@@ -326,21 +326,26 @@ export function TestsView() {
     call('tests.preview', { path: file }).then(setPreview, (e) => setPreview({ error: asError(e).message }));
     void loadTree();
   };
-  /** Run files; the flow designer runs its file (or some steps of it, `ids`) and stays on the Flow tab (`stay`). */
-  const run = async (paths: string[], name?: string, o: { ids?: string[]; stay?: boolean } = {}): Promise<string | undefined> => {
+  /**
+   * Run files; the flow designer runs its file (or part of it, a replay, a debug run: `flow`, through tests.flowRun with
+   * the file's pins) and stays on the Flow tab (`stay`).
+   */
+  const run = async (paths: string[], name?: string, o: { ids?: string[]; stay?: boolean; flow?: FlowRunRequest } = {}): Promise<string | undefined> => {
     if (file && content !== saved) await save();
     try {
-      const r = await call<{ runId: string }>('tests.run', {
-        paths,
-        name,
-        environment: env,
-        concurrency: opts.concurrency,
-        retries: opts.retries,
-        // the designer runs what it shows: the sidebar's name and tag filters are for the tree's runs
-        grep: o.stay ? undefined : opts.grep || undefined,
-        tags: o.stay ? undefined : opts.tags ? opts.tags.split(',').map((s) => s.trim()) : undefined,
-        ids: o.ids,
-      });
+      const r = o.flow
+        ? await call<{ runId: string }>('tests.flowRun', { file: paths[0], environment: env, concurrency: opts.concurrency, retries: opts.retries, ...o.flow })
+        : await call<{ runId: string }>('tests.run', {
+            paths,
+            name,
+            environment: env,
+            concurrency: opts.concurrency,
+            retries: opts.retries,
+            // the designer runs what it shows: the sidebar's name and tag filters are for the tree's runs
+            grep: o.stay ? undefined : opts.grep || undefined,
+            tags: o.stay ? undefined : opts.tags ? opts.tags.split(',').map((s) => s.trim()) : undefined,
+            ids: o.ids,
+          });
       setRunId(r.runId);
       if (!o.stay) setTab('run');
       setTimeout(loadRuns, 500);
@@ -430,6 +435,16 @@ export function TestsView() {
     } else if (buffers.current[path] && buffers.current[path]!.content === buffers.current[path]!.saved) buffers.current[path] = { content: text, saved: text };
     if (file === path) call('tests.preview', { path }).then(setPreview, (e) => setPreview({ error: asError(e).message }));
   };
+  /** Export as Arazzo…: the flow as an Arazzo 1.0 workflow, saved with a dialog (or downloaded); what did not fit is said in a toast. */
+  const exportArazzo = async (path: string) => {
+    try {
+      const r = await call<{ notes: string[]; saved: SaveResult }>('tests.exportArazzo', { path, save: true });
+      finishSave(r.saved, 'Arazzo workflow');
+      if ((r.saved?.path || r.saved?.download) && r.notes.length) useApp.getState().toast(`Arazzo: ${r.notes.slice(0, 3).join('; ')}${r.notes.length > 3 ? ` (+${r.notes.length - 3} more)` : ''}`, 'warning');
+    } catch (e) {
+      toastError(e);
+    }
+  };
   const nodeMenu = (n: Node): MenuItem[] =>
     n.kind === 'dir'
       ? [
@@ -440,6 +455,7 @@ export function TestsView() {
           { label: 'Open', icon: <FileCode2 size={14} />, onSelect: () => void openFile(n.path) },
           ...(/\.(ya?ml|json)$/.test(n.name) ? [{ label: 'Run', icon: <Play size={14} />, onSelect: () => void run([n.path], n.path) }] : []),
           ...(/\.(ya?ml|json)$/.test(n.name) ? [{ label: 'Expose as MCP tool…', icon: <Bot size={14} />, onSelect: () => void exposeFile(n.path) }] : []),
+          ...(/\.(ya?ml|json)$/.test(n.name) && !/\.suite\./.test(n.name) ? [{ label: 'Export as Arazzo…', icon: <Workflow size={14} />, onSelect: () => void exportArazzo(n.path) }] : []),
           { label: 'Rename', icon: <Pencil size={14} />, separator: true, onSelect: () => void renameFile(n.path) },
           { label: 'Duplicate', icon: <CopyPlus size={14} />, onSelect: () => void duplicateFile(n.path) },
           { label: 'Delete', icon: <Trash2 size={14} />, danger: true, separator: true, onSelect: () => void deletePath(n) },
@@ -708,7 +724,7 @@ export function TestsView() {
                 beforeEdit={async () => {
                   if (content !== saved) await save();
                 }}
-                onRun={(ids) => run([file], ids ? `${file} (${ids.length} step${ids.length === 1 ? '' : 's'})` : file, { ids, stay: true })}
+                onRun={(o) => run([file], undefined, { stay: true, flow: o ?? {} })}
                 onOpenStep={openStep}
                 onOpenResult={(s, id) => {
                   setRunId(id);

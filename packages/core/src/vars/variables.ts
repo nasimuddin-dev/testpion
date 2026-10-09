@@ -125,7 +125,23 @@ export class VariableScope {
 
   private lookup(expr: string): unknown {
     const name = expr.trim();
-    if (name.startsWith('$')) return this.dynamic(name);
+    if (name.startsWith('$')) {
+      // a loop's own $index / $item (set on the step) come before the dynamic variables
+      for (let i = SCOPE_ORDER.length - 1; i >= 0; i--) {
+        const m = this.scopes.get(SCOPE_ORDER[i]!)!;
+        if (m.has(name)) return m.get(name);
+      }
+      const dot = name.indexOf('.');
+      if (dot > 0 && (name.startsWith('$item.') || name.startsWith('$row.'))) {
+        let cur = this.lookup(name.slice(0, dot));
+        for (const part of name.slice(dot + 1).split('.')) {
+          if (cur == null || typeof cur !== 'object') return undefined;
+          cur = (cur as Record<string, unknown>)[part];
+        }
+        return cur;
+      }
+      return this.dynamic(name);
+    }
     // Postman Vault references ({{vault:apiKey}}) read the variable of the same name (keep it secret)
     if (name.startsWith('vault:')) return this.lookup(name.slice(6));
     for (let i = SCOPE_ORDER.length - 1; i >= 0; i--) {

@@ -13,6 +13,16 @@ export interface FlowStep {
   url?: string;
   /** A delay step: the milliseconds it waits. */
   ms?: number;
+  /** A condition step: its expression; any other step: its `if:` (it runs only when that is true). */
+  if?: string;
+  /** A branch of a condition it depends on: runs when the condition came out true (or false). */
+  when?: boolean;
+  /** A repeat / forEach step: "× 3", "× each row of datasets/users.csv". */
+  loop?: string;
+  /** A sub-flow step: the file it runs. */
+  flow?: string;
+  /** A log step: the message (a template). */
+  message?: string;
   /** The names the step extracts for the steps after it. */
   extract?: string[];
   /** The {{variables}} the step reads (its request, checks and scripts). */
@@ -47,6 +57,18 @@ export interface FlowEdge {
   to: string;
   /** The variables the source extracts and the target reads: what flows along the edge (only when there are some). */
   vars?: string[];
+  /** From a condition: the branch (its true or false output) the target runs on. */
+  when?: boolean;
+}
+
+/** What a step shows under its name: the request, the wait, the condition, the sub-flow, the message. */
+export function stepDetail(s: FlowStep): string {
+  if (s.method && s.url) return `${s.method} ${s.url}`;
+  if (s.type === 'delay' && s.ms !== undefined) return `wait ${s.ms} ms`;
+  if (s.type === 'condition' && s.if) return `if ${s.if}`;
+  if (s.type === 'flow' && s.flow) return `runs ${s.flow}`;
+  if (s.type === 'log' && s.message !== undefined) return `log ${s.message}`;
+  return s.type;
 }
 
 /** Something the layout could not honour: a dependency nobody defines, a cycle. The diagram still draws. */
@@ -98,8 +120,9 @@ export function flowGraph(steps: FlowStep[], opts: FlowLayoutOptions = {}): Flow
       else if (!deps.get(id)!.includes(d)) {
         deps.get(id)!.push(d);
         const src = byId.get(d)!;
-        const vars = (src.extract ?? []).filter((v) => byId.get(id)!.uses?.includes(v));
-        edges.push(vars.length ? { from: d, to: id, vars } : { from: d, to: id });
+        const target = byId.get(id)!;
+        const vars = (src.extract ?? []).filter((v) => target.uses?.includes(v));
+        edges.push({ from: d, to: id, ...(vars.length ? { vars } : {}), ...(src.type === 'condition' && target.when !== undefined ? { when: target.when } : {}) });
       }
     }
   }
@@ -192,14 +215,19 @@ export function toDot(steps: FlowStep[], name = 'flow'): string {
   for (const n of g.nodes) {
     const s = n.step;
     const detail = [
-      s.method && s.url ? `${s.method} ${s.url}` : s.type === 'delay' && s.ms !== undefined ? `wait ${s.ms} ms` : s.type,
+      stepDetail(s),
+      s.type !== 'condition' && s.if ? `if ${s.if}` : '',
+      s.loop ?? '',
       s.extract?.length ? `→ ${s.extract.join(', ')}` : '',
       s.status ? `${s.status}${s.durationMs !== undefined ? ` · ${s.durationMs} ms` : ''}` : '',
     ].filter(Boolean);
     const colour = s.status === 'passed' ? ', color="#2e8b57"' : s.status === 'failed' || s.status === 'error' ? ', color="#c0392b"' : s.status === 'skipped' ? ', color="#999999", style=dashed' : '';
-    lines.push(`  ${dotId(s.id)} [label="${dotText([s.name, ...detail].join('\n'))}"${colour}];`);
+    lines.push(`  ${dotId(s.id)} [label="${dotText([s.name, ...detail].join('\n'))}"${s.type === 'condition' ? ', shape=diamond' : ''}${colour}];`);
   }
-  for (const e of g.edges) lines.push(`  ${dotId(e.from)} -> ${dotId(e.to)}${e.vars?.length ? ` [label="${dotText(e.vars.join(', '))}"]` : ''};`);
+  for (const e of g.edges) {
+    const label = [e.when !== undefined ? String(e.when) : '', e.vars?.length ? e.vars.join(', ') : ''].filter(Boolean).join(': ');
+    lines.push(`  ${dotId(e.from)} -> ${dotId(e.to)}${label ? ` [label="${dotText(label)}"]` : ''};`);
+  }
   for (const p of g.problems) lines.push(`  // ${dotText(p.message)}`);
   lines.push('}');
   return lines.join('\n') + '\n';

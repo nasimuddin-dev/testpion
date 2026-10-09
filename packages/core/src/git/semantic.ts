@@ -3,6 +3,7 @@ import { join, relative, resolve, sep } from 'node:path';
 import type { Collection, CollectionNode, Environment } from '../model/types.js';
 import { assertGitRev, gitLog, gitShow, realFolder, runGit, type GitCommit, type GitFile } from './git.js';
 import { requestParts } from './merge.js';
+import { flowChanges, flowItemParts, isFlowFile } from './flow-diff.js';
 
 /**
  * Changes said by what they mean (GIT-205): "Payments ▸ Create invoice: URL and 2 headers changed" rather than
@@ -130,6 +131,7 @@ export async function describeGitChanges(ws: string, files: GitFile[]): Promise<
     const head = f.state === 'untracked' || f.state === 'added' ? undefined : await gitShow(ws, f.from ?? f.path);
     if (/^collections\/[^/]+\.json$/.test(f.path)) out.push(...collectionChanges(f.path, parse<Collection>(head), parse<Collection>(read())));
     else if (/^environments\/[^/]+\.json$/.test(f.path)) out.push(...environmentChanges(f.path, parse<Environment>(head), parse<Environment>(read())));
+    else if (isFlowFile(f.path) && f.state !== 'renamed' && flowChanges(f.path, head, read())) out.push(...flowChanges(f.path, head, read())!);
     else {
       const kind = f.path.startsWith('tests/') ? 'test' : f.path.startsWith('library/') ? 'library' : 'other';
       const change = f.state === 'untracked' || f.state === 'added' ? 'added' : f.state === 'deleted' ? 'removed' : f.state === 'renamed' ? 'renamed' : 'changed';
@@ -179,6 +181,7 @@ export async function describeRevChanges(ws: string, from: string, to?: string):
     const after = f.status === 'D' ? undefined : to ? await gitShow(ws, f.path, to) : readOrUndefined(join(ws, f.path));
     if (/^collections\/[^/]+\.json$/.test(f.path)) result.push(...collectionChanges(f.path, parse<Collection>(before), parse<Collection>(after)));
     else if (/^environments\/[^/]+\.json$/.test(f.path)) result.push(...environmentChanges(f.path, parse<Environment>(before), parse<Environment>(after)));
+    else if (isFlowFile(f.path) && f.status !== 'R' && flowChanges(f.path, before, after)) result.push(...flowChanges(f.path, before, after)!);
     else {
       const kind = f.path.startsWith('tests/') ? 'test' : f.path.startsWith('library/') ? 'library' : 'other';
       result.push({ file: f.path, kind, change: f.status === 'A' ? 'added' : f.status === 'D' ? 'removed' : f.status === 'R' ? 'renamed' : 'changed', title: f.path, details: f.from ? [`was ${f.from}`] : [] });
@@ -241,7 +244,8 @@ export interface PartChange {
 }
 
 /**
- * One changed item side by side (GIT-205): a request or folder of a collection file (`itemId`), the collection's own
+ * One changed item side by side (GIT-205): a request or folder of a collection file (`itemId`), a step of a test or
+ * flow file (`itemId` is the step id; without it the file's settings and steps), the collection's own
  * settings (no `itemId`), or an environment (its variables; secret values never appear, they live in the OS store).
  * `rev` is the version to compare with (the last commit by default); the other side is the file in the working folder.
  */
@@ -290,6 +294,12 @@ export async function describeItemDiff(ws: string, file: string, itemId?: string
         ...Object.fromEntries(e.variables.map((v) => [`{{${v.key}}}`, `${v.enabled === false ? '(off) ' : ''}${v.secret ? '•••• (secret, in the OS store)' : v.value}`])),
       };
     return { title: `environment ${ae?.name ?? be?.name ?? file}`, parts: rows(vars(be), vars(ae)) };
+  }
+  // a test or flow file: one step part by part (itemId is its id), or the file's own settings and steps
+  if (isFlowFile(file)) {
+    const b = flowItemParts(file, before, itemId);
+    const a = flowItemParts(file, after, itemId);
+    if ((b || before === undefined || itemId) && (a || after === undefined || itemId) && (a || b)) return { title: itemId ? `${file} ▸ ${itemId}` : file, parts: rows(b, a) };
   }
   // any other file: the text as one part
   return { title: file, parts: rows(before === undefined ? undefined : { Text: before }, after === undefined ? undefined : { Text: after }) };

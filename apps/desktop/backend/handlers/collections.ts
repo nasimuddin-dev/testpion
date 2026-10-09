@@ -140,7 +140,7 @@ export function collectionsHandlers(be: Backend): Handlers {
       // an OpenAPI document is kept in specs/ and its requests get an openapi contract check
       // .env imports: secret-looking values go to the OS secret store, never into workspace files
       const r = importIntoWorkspace(be.ws, text, { name: envName, secrets: be.secrets, scripts: keepPm ? 'keep' : 'tp' });
-      return { format: r.format, collection: r.collection?.name, environment: r.environments?.map((e) => e.name).join(', ') || r.environment?.name, specPath: r.specPath, contractChecks: r.contractChecks, scriptWarnings: r.scriptWarnings, savedItems: r.savedItems, notes: r.notes, scripts: r.scripts };
+      return { format: r.format, collection: r.collection?.name, environment: r.environments?.map((e) => e.name).join(', ') || r.environment?.name, specPath: r.specPath, contractChecks: r.contractChecks, scriptWarnings: r.scriptWarnings, savedItems: r.savedItems, notes: r.notes, scripts: r.scripts, flows: r.flows?.map((f) => f.path) };
     },
     /** Record traffic: a reverse proxy on 127.0.0.1 in front of `target`; every exchange is sent as a `record.exchange` event. */
     'record.start': async ({ target, port }: { target: string; port?: number }) => {

@@ -8,8 +8,10 @@ import { Tracer } from '../trace/tracer.js';
 import { LatencyRecorder, round } from '../util/stats.js';
 import { Semaphore, sleep } from '../util/concurrency.js';
 import { shortId } from '../util/ids.js';
-import { executeTest, type ExecServices } from './execute.js';
+import type { ExecServices } from './execute.js';
+import { evaluateCondition, executeStep, type StepResponse } from './flow-blocks.js';
 import { endAndClose } from '../storage/fsutil.js';
+import { VariableTracker, type PauseBefore, type PinnedResponse, type RunSeed } from './debug-hooks.js';
 
 export type RunEvent =
   | { type: 'run-start'; runId: string; name: string; startedAt: string }
@@ -43,6 +45,16 @@ export interface RunOptions {
   environment?: string;
   bail?: boolean;
   runId?: string;
+  /** The flow debugger: asked before each step that runs; the run waits for its answer (steps then run one at a time). */
+  pauseBefore?: PauseBefore;
+  /** Run only these steps (by id); the others are taken as done (passed, or skipped when the seed says their branch was not taken). */
+  onlyIds?: Iterable<string>;
+  /** Start from an earlier run's state: its variables, responses and conditions (Run from here, replay). */
+  seed?: RunSeed;
+  /** Answer these steps (by id) with a stored response instead of calling the API: the flow designer's pins, never CLI, CI or monitors. */
+  pins?: Record<string, PinnedResponse>;
+  /** After each step that ran: its variables and its response as they are (not redacted, not stored), e.g. to seed a later run in memory. */
+  onStepEnd?: (id: string, info: { vars?: Record<string, unknown>; response?: StepResponse }) => void;
 }
 
 /** Incremental aggregation — never holds all results in memory. */
@@ -56,9 +68,11 @@ export class RunAggregator {
   tokens = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
   cost = 0;
   scores = new Map<string, { sum: number; count: number }>();
+  files = new Set<string>();
 
   add(r: TestResult): void {
     this.total++;
+    if (r.file && this.files.size < 50) this.files.add(r.file);
     if (r.status === 'passed') this.passed++;
     else if (r.status === 'failed') this.failed++;
     else if (r.status === 'skipped') this.skipped++;
@@ -94,6 +108,7 @@ export class RunAggregator {
       tokens: { ...this.tokens },
       costUsd: round(this.cost, 6),
       scores: Object.fromEntries([...this.scores].map(([k, v]) => [k, { mean: round(v.sum / v.count, 4), count: v.count }])),
+      ...(this.files.size ? { files: [...this.files] } : {}),
     };
   }
 }
@@ -132,9 +147,18 @@ export async function runTests(opts: RunOptions): Promise<RunSummary> {
   const runId = opts.runId ?? shortId('run-');
   const startedAt = new Date().toISOString();
   const agg = new RunAggregator();
-  const concurrency = Math.max(1, opts.concurrency ?? 4);
+  // a debugged run goes one step at a time: a pause holds the run, not one branch of it
+  const concurrency = opts.pauseBefore ? 1 : Math.max(1, opts.concurrency ?? 4);
   const sem = new Semaphore(concurrency);
   const ctrl = new AbortController();
+  /** Stopped at a pause: the run counts as cancelled. */
+  let stopped = false;
+  const only = opts.onlyIds ? new Set(opts.onlyIds) : undefined;
+  // the designer's pins answer their steps (sub-flows never see them: their step ids are another file's)
+  const pins = opts.pins && Object.keys(opts.pins).length ? opts.pins : undefined;
+  const services: ExecServices = pins ? { ...opts.services, pinned: (id) => (Object.hasOwn(pins, id) ? pins[id] : undefined) } : opts.services;
+  if (opts.seed?.vars) for (const [k, v] of Object.entries(opts.seed.vars)) opts.services.vars.set(k, v, 'runtime');
+  const tracker = new VariableTracker(opts.services.vars);
   const onAbort = () => ctrl.abort();
   const signal = ctrl.signal;
   const emit = (e: RunEvent) => {
@@ -249,9 +273,31 @@ export async function runTests(opts: RunOptions): Promise<RunSummary> {
     metadata: { reason },
   });
 
-  const runOne = async (t: TestCase): Promise<{ result: TestResult; trace?: Trace }> => {
+  // the flow blocks: the latest responses (what a step's if: reads), the conditions' outcomes, the steps of branches not taken
+  const responses = new Map<string, StepResponse>();
+  let lastResponse: StepResponse | undefined;
+  const conditionById = new Map<string, boolean>();
+  const branchSkipped = new Set<string>();
+  const remember = (id: string, full: StepResponse) => {
+    // a big body is not kept (an if: then sees its status and headers): a long run holds at most 100 small responses
+    const r = (full.text?.length ?? 0) > 262_144 ? { status: full.status, headers: full.headers } : full;
+    responses.delete(id);
+    responses.set(id, r);
+    lastResponse = r;
+    if (responses.size > 100) responses.delete(responses.keys().next().value!);
+  };
+  for (const [id, r] of Object.entries(opts.seed?.responses ?? {})) remember(id, r);
+  for (const [id, c] of Object.entries(opts.seed?.conditions ?? {})) conditionById.set(id, c);
+  for (const id of opts.seed?.branchSkipped ?? []) branchSkipped.add(id);
+  /** The response a step's if: reads: of the last step it waits for that has one, else the latest of the run. */
+  const prevFor = (t: TestCase): StepResponse | undefined => {
+    for (const d of [...(t.dependsOn ?? [])].reverse()) if (responses.has(d)) return responses.get(d);
+    return lastResponse;
+  };
+
+  const runOne = async (t: TestCase): Promise<{ result: TestResult; trace?: Trace; response?: StepResponse }> => {
     const retries = t.retries ?? opts.retries ?? 0;
-    let last: { result: TestResult; trace?: Trace } | undefined;
+    let last: { result: TestResult; trace?: Trace; response?: StepResponse } | undefined;
     for (let attempt = 1; attempt <= retries + 1; attempt++) {
       if (signal.aborted) throw new ApsError('CancelledError', 'Run cancelled');
       emit({ type: 'test-start', runId, id: t.id ?? t.name, name: t.name, attempt });
@@ -259,7 +305,7 @@ export async function runTests(opts: RunOptions): Promise<RunSummary> {
       const t0 = performance.now();
       const started = new Date().toISOString();
       const test = { ...t, timeoutMs: t.timeoutMs ?? opts.timeoutMs };
-      const o = await executeTest(test, opts.services, { tracer, signal });
+      const o = await executeStep(test, services, { tracer, signal, prev: prevFor(t) });
       const trace = tracer.finish(o.status === 'passed' ? 'ok' : 'error');
       const result: TestResult = {
         id: t.id ?? t.name,
@@ -281,7 +327,8 @@ export async function runTests(opts: RunOptions): Promise<RunSummary> {
         input: o.input,
         metadata: Object.keys(o.metadata).length ? o.metadata : undefined,
       };
-      last = { result, trace };
+      const c = o.context;
+      last = { result, trace, response: c && (c.status !== undefined || c.body !== undefined) ? { status: c.status, headers: c.headers, body: c.body, text: c.text } : undefined };
       if (o.status === 'passed' || o.status === 'skipped') break;
       if (attempt <= retries) await sleep(Math.min(5000, (opts.retryDelayMs ?? 250) * 2 ** (attempt - 1)), signal).catch(() => undefined);
     }
@@ -291,15 +338,57 @@ export async function runTests(opts: RunOptions): Promise<RunSummary> {
   const exec = async (t: TestCase) => {
     const id = t.id ?? t.name;
     if (t.skip) return record(skippedResult(t, 'marked skip'));
+    /** Skipped because its branch was not taken: the steps after it skip too, unless another of their dependencies ran. */
+    const notTaken = (reason: string) => {
+      branchSkipped.add(id);
+      return record(skippedResult(t, reason));
+    };
     if (t.dependsOn?.length) {
       const statuses = await Promise.all(t.dependsOn.map((d) => (statusById.has(d) ? statusById.get(d)! : dep(d).promise)));
-      const bad = t.dependsOn.map((d, i) => [d, statuses[i]] as const).filter(([, s]) => s !== 'passed');
+      const all = t.dependsOn.map((d, i) => [d, statuses[i]] as const);
+      const bad = all.filter(([d, s]) => s !== 'passed' && !(s === 'skipped' && branchSkipped.has(d)));
       if (bad.length) return record(skippedResult(t, `dependency did not pass: ${bad.map(([d, s]) => `${d} (${s})`).join(', ')}`));
+      if (all.every(([d]) => branchSkipped.has(d))) return notTaken(`its branch was not taken: ${t.dependsOn.join(', ')} skipped`);
+      if (t.when !== undefined) {
+        const wrong = t.dependsOn.filter((d) => conditionById.has(d) && conditionById.get(d) !== t.when);
+        if (wrong.length) return notTaken(`branch not taken: ${wrong[0]} came out ${String(!t.when)} (this step runs when it is ${String(t.when)})`);
+      }
+    }
+    if (t.if !== undefined && t.type !== 'condition') {
+      let ok: boolean;
+      try {
+        ok = await evaluateCondition(t.if, opts.services.vars, prevFor(t));
+      } catch (e) {
+        return record({ ...skippedResult(t, 'if: could not be evaluated'), status: 'error', error: normalizeError(e) });
+      }
+      if (!ok) return notTaken(`if: ${t.if} is false`);
     }
     const release = await sem.acquire(signal);
     running++;
     try {
-      const { result, trace } = await runOne(t);
+      if (opts.pauseBefore) {
+        // the step waits here (nothing of it has started: no timeout runs while the run is paused)
+        const answer = await opts.pauseBefore(id, opts.services.vars.toObject());
+        for (const [k, v] of Object.entries(answer?.vars ?? {})) opts.services.vars.set(k, v, 'runtime');
+        if (answer?.action === 'stop') {
+          stopped = true;
+          ctrl.abort();
+          throw new ApsError('CancelledError', 'Run stopped at a breakpoint');
+        }
+      }
+      const { result, trace, response } = await runOne(t);
+      if (response) remember(id, response);
+      const raw = tracker.raw();
+      const vars = tracker.recorded(opts.services.redactor, raw);
+      if (vars) result.variables = vars;
+      if (opts.onStepEnd) {
+        try {
+          opts.onStepEnd(id, { vars: raw, response });
+        } catch {
+          /* listeners must not break the run */
+        }
+      }
+      if (t.type === 'condition' && result.status === 'passed') conditionById.set(id, result.metadata?.condition === true);
       await record(result, trace);
     } catch (e) {
       if (!isAbortError(e)) {
@@ -334,6 +423,13 @@ export async function runTests(opts: RunOptions): Promise<RunSummary> {
         dep(id).resolve(statusById.get(id)!);
         continue;
       }
+      if (only && !only.has(id)) {
+        // not run: done in the run it was seeded from (the steps after it go on as if it had just run)
+        const s: TestStatus = branchSkipped.has(id) ? 'skipped' : 'passed';
+        statusById.set(id, s);
+        dep(id).resolve(s);
+        continue;
+      }
       if (setupFailed) {
         await record(skippedResult(t, 'setup failed'));
         continue;
@@ -347,7 +443,7 @@ export async function runTests(opts: RunOptions): Promise<RunSummary> {
     for (const [id, d] of deferreds) if (!seen.has(id)) d.resolve('missing');
     await Promise.all(inflight);
   } finally {
-    cancelled = signal.aborted && (opts.signal?.aborted ?? false);
+    cancelled = signal.aborted && (stopped || (opts.signal?.aborted ?? false));
     // teardown always runs (not cancellable by bail, but honours user cancellation)
     for (const t of opts.teardown ?? []) {
       if (opts.signal?.aborted) break;

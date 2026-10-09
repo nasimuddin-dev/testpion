@@ -40,6 +40,8 @@ const one = (i) =>
       failed++;
       resolve();
     });
+    // a request nobody answers (the proxy stopped mid-flood) counts as failed instead of hanging the tool
+    req.setTimeout(30_000, () => req.destroy(new Error('timeout')));
     if (body) req.write(body);
     req.end();
   });
@@ -50,8 +52,15 @@ async function worker() {
     await one(i);
   }
 }
+const finish = (timedOut) => {
+  const seconds = (Date.now() - t0) / 1000;
+  const out = { sent, ok, failed, seconds: Math.round(seconds * 100) / 100, rps: Math.round((ok + failed) / seconds), ...(timedOut ? { timedOut: true } : {}) };
+  writeFileSync(resultFile, JSON.stringify(out));
+  console.log(JSON.stringify(out));
+  // keep-alive sockets would keep the process (and its Electron helpers) alive after the plan has moved on
+  process.exit(0);
+};
+// never outlive the plan waiting for it (it gives up after 170 s): write what was done and leave
+setTimeout(() => finish(true), 175_000).unref();
 await Promise.all(Array.from({ length: concurrency }, worker));
-const seconds = (Date.now() - t0) / 1000;
-const out = { sent, ok, failed, seconds: Math.round(seconds * 100) / 100, rps: Math.round(count / seconds) };
-writeFileSync(resultFile, JSON.stringify(out));
-console.log(JSON.stringify(out));
+finish(false);

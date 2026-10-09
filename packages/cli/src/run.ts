@@ -45,6 +45,9 @@ import {
   exportOtlp,
   otlpTargetFromEnv,
   collectionRealtimeTests,
+  flowRunPlan,
+  testFileRef,
+  type FlowRunPlan,
 } from '@testpion/core';
 import { EXIT, green, red, yellow, dim, bold, cyan, CliError, printJson, collectVar, openWorkspace, cliContext, requireCollection, requireEnvironment, readImport, loadCollectionRef, cleanupFailedRun, readResults } from './shared.js';
 
@@ -90,6 +93,12 @@ export interface RunCliOptions {
   otlp?: string;
   otlpHeader?: string[];
   rerunFailed?: string | boolean;
+  /** Run a flow file from this step on (the steps before it seeded from --seed-run, or the file's latest run). */
+  from?: string;
+  /** Run a flow file's step with only the steps it waits for. */
+  to?: string;
+  /** The run whose variables and responses seed the steps before --from; alone, replays it from its first failing step. */
+  seedRun?: string;
 }
 
 export async function executeRun(paths: string[], o: RunCliOptions, label?: string): Promise<number> {
@@ -149,6 +158,13 @@ export async function executeRun(paths: string[], o: RunCliOptions, label?: stri
     if (ephemeral) rmSync(ephemeral, { recursive: true, force: true });
     return EXIT.SUCCESS;
   }
+  // --from / --to / --seed-run: part of one flow file, seeded from an earlier run
+  let plan: FlowRunPlan | undefined;
+  if (o.from || o.to || o.seedRun) {
+    if (paths.length !== 1 || suite) throw new CliError('--from, --to and --seed-run run part of one flow file: give exactly one test file', EXIT.CONFIG_ERROR);
+    plan = await flowRunPlan(store, testFileRef(store, paths[0]!), { from: o.from, to: o.to, seedRunId: o.seedRun });
+    if (!o.quiet) console.log(dim(plan.note));
+  }
   const concurrency = Number(o.concurrency ?? suite?.concurrency ?? 4);
   const ctrl = new AbortController();
   let interrupted = 0;
@@ -187,6 +203,7 @@ export async function executeRun(paths: string[], o: RunCliOptions, label?: stri
       onEvent,
       environment,
       bail: o.bail,
+      ...(plan ? { onlyIds: plan.onlyIds, seed: plan.seed } : {}),
     });
   } catch (e) {
     cleanupFailedRun({ ephemeral, outDir, explicitOut: !!o.out, store });
@@ -683,6 +700,9 @@ export function runOptions(cmd: Command): Command {
     .option('--log-level <level>', 'ERROR | WARN | INFO | DEBUG | TRACE (secrets are always redacted)')
     .option('--watch', 'run again whenever a test, collection, environment or data file changes (until Ctrl+C)')
     .option('--rerun-failed [runId]', 'only the tests that failed or errored in a run (default: the last one)')
+    .option('--from <step>', 'one flow file: run this step (id or name) and the steps after it, the steps before it taken from --seed-run (default: the latest run of the file)')
+    .option('--to <step>', 'one flow file: run this step with only the steps it waits for')
+    .option('--seed-run <runId>', "one flow file: the earlier run whose variables and responses seed the steps before --from; alone, replays that run from its first failing step (see testpion flow runs)")
     .option('--otlp <url>', 'send the traces to an OpenTelemetry collector (OTLP/HTTP, e.g. http://localhost:4318); default: OTEL_EXPORTER_OTLP_ENDPOINT')
     .option('--otlp-header <key:value...>', 'headers for the collector, e.g. an API key (also OTEL_EXPORTER_OTLP_HEADERS)');
 }

@@ -524,6 +524,12 @@ export interface TestResult {
   output?: string;
   input?: string;
   metadata?: Record<string, unknown>;
+  /**
+   * The run's variables after the step: what earlier steps extracted or scripts set, and any other value that changed
+   * since the run started (the flow debugger's history and variables timeline). Bounded: each value at most 4 KB,
+   * secrets redacted; absent when the run has no such variables.
+   */
+  variables?: Record<string, unknown>;
   /** A person's verdict on the result (kept beside the run, in reviews.json; added when results are read). */
   review?: ResultReview;
 }
@@ -568,6 +574,8 @@ export interface RunSummary {
   /** Averages of scored checks by type, e.g. `{ "llm-judge": 0.87 }`. */
   scores: Record<string, { mean: number; count: number }>;
   reproducibility: Record<string, unknown>;
+  /** The test files the run included (at most 50, as the results name them): a flow's run history finds its runs by them. */
+  files?: string[];
 }
 
 /* ------------------------------------------------------------------ errors */

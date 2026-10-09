@@ -12,6 +12,7 @@ import { createEngineContext } from '../engine.js';
 import { exposedFlows, inputRequired, type ExposedFlow } from '../runner/exposed-flows.js';
 import { loadSuite, loadTestsFromFile, streamTests } from '../runner/loader.js';
 import { recordRun } from '../runner/run-records.js';
+import { readFlowOutput, resolveOutput } from '../runner/flow-blocks.js';
 import { runTests, type RunEvent } from '../runner/runner.js';
 import type { SecretStore } from '../storage/secrets.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
@@ -42,6 +43,8 @@ export interface FlowRunResult {
   steps: Array<{ name: string; status: string; durationMs: number; error?: string; failedChecks?: string[] }>;
   /** Variables the steps extracted (extract:), minus the inputs; sensitive names are masked. */
   extracted: Record<string, unknown>;
+  /** What the flow declares it returns (its `output:`), resolved after the run; sensitive names are masked. */
+  output?: Record<string, unknown>;
   /** True when a step failed or errored (the MCP result is then marked isError). */
   isError?: boolean;
 }
@@ -93,6 +96,10 @@ export async function runFlow(deps: FlowToolDeps, flow: ExposedFlow, args: Recor
     await recordRun(store, summary, outDir);
     const extracted: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(ctx.vars.scopeValues('runtime'))) if (!(k in inputs)) extracted[k] = redactor.isSensitiveKey(k) ? '***' : typeof v === 'string' ? redactor.redactString(v) : v;
+    const declared = readFlowOutput(abs);
+    const output = declared
+      ? Object.fromEntries(Object.entries(resolveOutput(declared, ctx.vars)).map(([k, v]) => [k, redactor.isSensitiveKey(k) ? '***' : typeof v === 'string' ? redactor.redactString(v) : redactor.redact(v)]))
+      : undefined;
     const isError = summary.failed + summary.errors > 0;
     return {
       runId,
@@ -112,6 +119,7 @@ export async function runFlow(deps: FlowToolDeps, flow: ExposedFlow, args: Recor
         ...(r.checks.some((c) => !c.passed) ? { failedChecks: r.checks.filter((c) => !c.passed).map((c) => `${c.name ?? c.type}: ${c.message ?? 'failed'}`) } : {}),
       })),
       extracted,
+      ...(output ? { output } : {}),
       ...(isError ? { isError: true } : {}),
     };
   } finally {
@@ -133,7 +141,7 @@ export function flowTools(deps: FlowToolDeps): Tool[] {
     .map((f): Tool => ({
       name: f.tool,
       write: true,
-      description: `${f.description ?? `Run the flow ${f.file}`} (a TestPion flow: tests/${f.file}). Runs its steps with the arguments as variables and returns each step's status and the values it extracted; the run is recorded in the workspace history.`,
+      description: `${f.description ?? `Run the flow ${f.file}`} (a TestPion flow: tests/${f.file}). Runs its steps with the arguments as variables and returns each step's status, the values it extracted and its declared output; the run is recorded in the workspace history.`,
       inputSchema: flowInputSchema(f),
       run: (a) => runFlow(deps, f, a),
     }));

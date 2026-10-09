@@ -46,7 +46,7 @@ When git can't sign in, TestPion says so in plain words ("Git could not sign in 
 
 The **Git** view shows the branch and remote at the top, then:
 
-- **Changes, by meaning.** Each changed file, and under it what changed in words: *HTTP basics ▸ Requests & responses ▸ GET with query parameters: URL, headers (0 → 1)*, *environment Staging: added baseUrl*, a test file added. Click a request to open it; **Compare** shows a changed request, the collection's settings or an environment side by side, part by part: the last commit and now. Click a file name for its line diff. **Stage** / **Unstage** per file, **Discard** (back to the last commit; new files are deleted, after a confirmation) per file or all.
+- **Changes, by meaning.** Each changed file, and under it what changed in words: *HTTP basics ▸ Requests & responses ▸ GET with query parameters: URL, headers (0 → 1)*, *environment Staging: added baseUrl*, *Checkout ▸ pay: body, if, checks (1 → 2)*. Click a request to open it; **Compare** shows a changed request, a flow step, the collection's settings or an environment side by side, part by part: the last commit and now. Click a file name for its line diff. **Stage** / **Unstage** per file, **Discard** (back to the last commit; new files are deleted, after a confirmation) per file or all.
 - **Commit.** Write a message, or click **Write message** and the AI assistant writes one from the changes (it sees the changes' meaning, never secret values). With nothing staged, **Commit** commits every change of the workspace.
 - **History.** The latest commits of the workspace.
 
@@ -54,6 +54,17 @@ The rest of the app shows git too:
 
 - **Status bar:** the branch, `↑2` commits to push, `↓1` to pull, `• 3` changed files. Click it to open the Git view.
 - **Explorer:** changed requests carry a mark: **M** changed, **A** added, **D** deleted, **R** renamed, **!** conflict.
+
+### Flows, step by step
+
+A test or flow file under `tests/` is compared by meaning too, step by step (a step is known by its `id`):
+
+- **Steps added, removed or renamed**: *Checkout ▸ receipt: step* added; a step whose id changed but whose content did not is *renamed* (*was cart*); a new `name:` is *renamed from "Cart"*.
+- **Steps changed, with the parts**: *request line* (method, URL), *params*, *headers*, *cookies*, *auth*, *body*, *extract*, *checks (1 → 2)*, *if* (`if:` / `when:`), *forEach* (`repeat:` / `forEach:`), *scripts*, *sub-flow*, and settings such as *retries* or *timeout* by name.
+- **Connections**: *Checkout ▸ connections: added login → pay, removed cart → pay* (the `dependsOn` edges; those of added or removed steps go without saying).
+- **The file**: *flow Checkout: expose (MCP tool), output, steps reordered*, and **rearranged** when only the designer's `layout:` moved: dragging steps on the canvas is never reported as a change to what runs. A change to comments or formatting alone is *formatting or comments*.
+
+**Compare** on a step shows it part by part; on the flow line, the file's settings and its list of steps with what each waits for. The same meaning goes into pull-request descriptions (**Pull request** in the Git view), `testpion diff --json` / `--markdown` and the `git_diff` MCP tool (`file` + `itemId` = a step id for one step side by side).
 
 ### The secret guard
 
@@ -126,7 +137,7 @@ The workspace's MCP server (see [Use from AI agents](/ai-testing/mcp-server)) ha
 | Tool | What it does |
 |---|---|
 | `git_status` | Branch, ahead / behind, changed files. |
-| `git_diff` | The changes by meaning; with `from` / `to`, between two commits (`markdown: true` for a pull-request comment). |
+| `git_diff` | The changes by meaning (requests, environments, flow steps and connections); with `from` / `to`, between two commits (`markdown: true` for a pull-request comment). |
 | `git_log` | Commits of the workspace, a file or a collection. |
 | `git_sync` | Pull & push in one step; returns `pushed`, `up-to-date`, `pulled-nothing-to-push`, or `conflicts` with the files (nothing is pushed then). Not available on a read-only server. |
 | `git_propose_commit` | Stages the changes and saves the agent's commit message as a proposal (after the secret check). It does **not** commit: the message appears in the Git view's commit box for you to review and commit. Not available on a read-only server. |

@@ -133,6 +133,7 @@ import { debuggerHandlers, type DebuggerState } from './handlers/debugger.js';
 import { debuggerRulesHandlers } from './handlers/debugger-rules.js';
 import { externalSecretsHandlers, prefetchSecretsFor } from './handlers/external-secrets.js';
 import { fuzzHandlers } from './handlers/fuzz.js';
+import { flowDebugHandlers } from './handlers/flow-debug.js';
 import { checkRpcParams, guardHandler } from './rpc-params.js';
 import { hasTemplate } from '@testpion/shared';
 import { assistantInstruction } from './assistant-tasks.js';
@@ -703,7 +704,7 @@ export class Backend {
    */
   private buildHandlers(): Handlers {
     const all: Handlers = {};
-    for (const group of [appHandlers, workspaceHandlers, collectionsHandlers, requestsHandlers, grpcHandlers, mcpHandlers, aiHandlers, testingHandlers, monitorHandlers, agentHandlers, feedbackHandlers, gitHandlers, debuggerHandlers, debuggerRulesHandlers, externalSecretsHandlers, fuzzHandlers]) {
+    for (const group of [appHandlers, workspaceHandlers, collectionsHandlers, requestsHandlers, grpcHandlers, mcpHandlers, aiHandlers, testingHandlers, monitorHandlers, agentHandlers, feedbackHandlers, gitHandlers, debuggerHandlers, debuggerRulesHandlers, externalSecretsHandlers, fuzzHandlers, flowDebugHandlers]) {
       for (const [name, fn] of Object.entries(group(this))) {
         if (name in all) throw new Error(`RPC method ${name} is defined twice`);
         // the parameters are checked first; a TypeError from inside becomes an InternalError naming the method

@@ -33,8 +33,8 @@ export type FlowEditOp =
   | { op: 'removeStep'; id: string | string[] }
   /** Rename a step (its name, and with newId its id); every dependsOn that names it follows. */
   | { op: 'renameStep'; id: string; name?: string; newId?: string }
-  /** `to` waits for `from` (refused when it would make a cycle). */
-  | { op: 'connect'; from: string; to: string }
+  /** `to` waits for `from` (refused when it would make a cycle); from a condition, `when` says on which branch (its true or false output). */
+  | { op: 'connect'; from: string; to: string; when?: boolean }
   | { op: 'disconnect'; from: string; to: string }
   /** Place steps on the canvas (null removes one's place); positions null removes the whole layout (auto-arrange). */
   | { op: 'setLayout'; positions: Record<string, [number, number] | null> | null }
@@ -42,6 +42,8 @@ export type FlowEditOp =
   | { op: 'duplicateStep'; id: string | string[] }
   /** The whole text (an AI draft that was reviewed, or undo). */
   | { op: 'replace'; text: string }
+  /** What the flow returns (`output:` at the top: { name: "{{template}}" }); null removes it. */
+  | { op: 'setOutput'; output: Record<string, unknown> | null }
   /** Steps from a saved collection: requests (or every request of folders) by id or name, in order, chained. Needs the workspace. */
   | { op: 'addFromCollection'; collection: string; items?: string[]; after?: string; at?: [number, number]; chain?: boolean }
   /** Copy steps of another test file (copy / paste between flows); dependsOn among the copied steps is kept. Needs the workspace. */
@@ -178,6 +180,45 @@ function setKey(ctx: Ctx, m: YAMLMap, key: string, value: unknown) {
 function setDeps(ctx: Ctx, m: YAMLMap, deps: string[]) {
   const unique = [...new Set(deps)];
   setKey(ctx, m, 'dependsOn', unique.length ? unique : null);
+}
+
+/** The ids of the condition steps of the flow. */
+function conditionIds(ctx: Ctx): Set<string> {
+  const ids = idsOf(ctx);
+  return new Set(items(ctx).flatMap((m, i) => (valueOf(m, 'type') === 'condition' ? [ids[i]!] : [])));
+}
+
+/** A step that no longer waits for any condition has no branch: its `when:` goes. */
+function dropStrayWhen(ctx: Ctx) {
+  const conds = conditionIds(ctx);
+  for (const m of items(ctx)) if (pairOf(m, 'when') && !depsOf(m).some((d) => conds.has(d))) setKey(ctx, m, 'when', null);
+}
+
+/** Set (or with null remove) the file's `output:`: before its tests, after name, description and expose. */
+function setOutput(ctx: Ctx, output: Record<string, unknown> | null) {
+  const root = ctx.doc.contents;
+  if (!isMap(root)) fail('output: needs a test file written as a map (name, tests: …), not a bare list');
+  const map = root as YAMLMap;
+  const existing = pairOf(map, 'output');
+  if (output === null || output === undefined) {
+    if (existing) map.items.splice(map.items.indexOf(existing), 1);
+    return;
+  }
+  if (typeof output !== 'object' || Array.isArray(output)) fail('output is a map { name: "{{template}}" }');
+  const clean = Object.fromEntries(Object.entries(output).filter(([k]) => k.trim()));
+  if (!Object.keys(clean).length) {
+    if (existing) map.items.splice(map.items.indexOf(existing), 1);
+    return;
+  }
+  const node = ctx.doc.createNode(clean) as Node;
+  if (existing) {
+    existing.value = node;
+    return;
+  }
+  const pair = ctx.doc.createPair('output', node);
+  const tests = (map.items as Pair[]).findIndex((p) => keyOf(p) === 'tests');
+  if (tests >= 0) map.items.splice(tests, 0, pair);
+  else map.items.push(pair);
 }
 
 /** Replace a step id everywhere it is named: dependsOn of every step and the layout. */
@@ -350,7 +391,7 @@ function addMany(ctx: Ctx, steps: FlowStepInput[], after: string | undefined, ch
 /** Apply one edit to a test file's text and return the new text (comments, key order and line endings kept). */
 export function applyFlowEdit(text: string, op: FlowEditOp, opts: { file?: string } = {}): FlowEditResult {
   if (!op || typeof op !== 'object' || typeof (op as { op?: unknown }).op !== 'string')
-    fail('An edit is { op: addStep | addSteps | updateStep | removeStep | renameStep | connect | disconnect | setLayout | duplicateStep | replace, … }');
+    fail('An edit is { op: addStep | addSteps | updateStep | removeStep | renameStep | connect | disconnect | setLayout | duplicateStep | setOutput | replace, … }');
   if (opts.file && isSuiteFile(opts.file)) fail('A suite names other test files; open one of them to design its flow');
   if (op.op === 'replace') {
     if (typeof op.text !== 'string') fail('replace needs the text');
@@ -411,6 +452,7 @@ export function applyFlowEdit(text: string, op: FlowEditOp, opts: { file?: strin
         }
         place(ctx, id, null);
       }
+      dropStrayWhen(ctx);
       dropEmptyLayout(ctx);
       break;
     }
@@ -425,6 +467,10 @@ export function applyFlowEdit(text: string, op: FlowEditOp, opts: { file?: strin
       const own = ensureId(ctx, idsOf(ctx).indexOf(from));
       const m = items(ctx)[indexOf(ctx, to)]!;
       setDeps(ctx, m, [...depsOf(m), own]);
+      if (op.when !== undefined && op.when !== null) {
+        if (!conditionIds(ctx).has(own)) fail(`when: picks a branch of a condition step; "${from}" is not one`);
+        setKey(ctx, m, 'when', op.when === true || String(op.when) === 'true');
+      }
       break;
     }
     case 'disconnect': {
@@ -438,8 +484,12 @@ export function applyFlowEdit(text: string, op: FlowEditOp, opts: { file?: strin
         m,
         d.filter((x) => x !== from),
       );
+      dropStrayWhen(ctx);
       break;
     }
+    case 'setOutput':
+      setOutput(ctx, op.output);
+      break;
     case 'setLayout': {
       if (op.positions === null) {
         const root = ctx.doc.contents;
@@ -481,7 +531,7 @@ export function applyFlowEdit(text: string, op: FlowEditOp, opts: { file?: strin
       break;
     default:
       fail(
-        `Unknown flow edit "${(op as { op: string }).op}": addStep, addSteps, updateStep, removeStep, renameStep, connect, disconnect, setLayout, duplicateStep, replace, addFromCollection, pasteSteps`,
+        `Unknown flow edit "${(op as { op: string }).op}": addStep, addSteps, updateStep, removeStep, renameStep, connect, disconnect, setLayout, duplicateStep, setOutput, replace, addFromCollection, pasteSteps`,
       );
   }
   return { text: finish(ctx, text), ...(added ? { added } : {}) };

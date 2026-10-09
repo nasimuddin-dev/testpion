@@ -236,7 +236,7 @@ export function registerGitCommands(git: Command, program: Command): void {
   // the semantic diff between two commits: for reviews and CI (a pull-request comment with --markdown)
   program
     .command('diff')
-    .description('what changed in the workspace between two commits, branches or tags, by meaning (requests, folders, environment variables, test files); without <to>: up to the working folder')
+    .description('what changed in the workspace between two commits, branches or tags, by meaning (requests, folders, environment variables; flow and test files step by step: added, removed, renamed, which parts changed, connections, rearranged); without <to>: up to the working folder')
     .argument('<from>', 'commit, branch or tag, e.g. origin/main')
     .argument('[to]', 'commit, branch or tag (default: the working folder)')
     .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest)')

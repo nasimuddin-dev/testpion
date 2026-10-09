@@ -71,10 +71,12 @@ Not sure which tool? **`search_tools`** takes what you want to do ("capture traf
 | `test_history` | One test across the latest runs (status, latency, failed checks) with how often its result flipped. |
 | `flow_graph` | A test file as a [flow](/test-runner/integration-testing#see-a-flow): steps (type, method and URL, extracted names, `dependsOn`), edges, the steps in columns, problems (a missing dependency, a cycle), the latest run's status and duration per step, and the diagram as Graphviz DOT. |
 | `flow_add_step` | Add a step to a flow ([the designer's edits](/test-runner/integration-testing#design-a-flow)): one `step` as a test is written, several `steps` (`chain`), or saved requests of a `collection` (`items`: requests or folders, chained, with extracts suggested from saved examples); `after` makes it wait for a step. Comments and line endings of the file stay. |
-| `flow_connect` | Make step `to` wait for step `from` (its `dependsOn`); refused when it would make a cycle. |
+| `flow_connect` | Make step `to` wait for step `from` (its `dependsOn`); from a condition step, `when` (true or false) puts it on that branch. Refused when it would make a cycle. |
 | `flow_disconnect` | Step `to` no longer waits for step `from`. |
 | `flow_update_step` | Set keys of a step (`set`: url, headers, body, extract, assertions …; `null` removes one); `name` and `id` rename it and every `dependsOn` follows; `dependsOn` replaces what it waits for. |
 | `flow_remove_step` | Remove steps; the steps that waited for them no longer do. |
+| `flow_runs` | A flow file's run history, newest first (status, when, how long, the first failing step); with `runId`, that run's steps in file order with input, output, failed checks and the variables after each step ([Debug a flow](/test-runner/integration-testing#debug-a-flow)). |
+| `flow_set_output` | Set what a flow returns (`output:` { name: template }); sub-flows get it and exposed flows return it as `output`. |
 | `recent_failures` | The latest failed responses across the workspace (4xx/5xx, transport errors, non-OK gRPC codes, MCP tool errors): time, kind, name, URL, status and duration. |
 | `response_time_stats` | Response-time summary of a saved request's recent responses: count, failed, fastest, mean, median (p50), p95 and slowest (ms). |
 | `collection_timing` | Where a collection's request time went (DNS, TCP, TLS, server, download; new vs reused connections). |
@@ -123,7 +125,7 @@ Not sure which tool? **`search_tools`** takes what you want to do ("capture traf
 | `export_traces` | Send the newest traces (optionally of one kind) to an OpenTelemetry collector as OTLP, redacted; header values may be `{{variables}}`. |
 | `lint_tests` | What is wrong in test files before they run: unknown test or check types, keys the runner does not read (with the likely key), `dependsOn` ids nobody defines; each with a line. Files, or the text of one file. |
 | `list_tests` | The test files under `tests/` with their tests (id, name, type, tags). |
-| `run_tests` | Run test files (all, or files / folders, filtered by name or tags) like `testpion test`; `rerunFailed` runs only the failures of the last run (or a run id). The run is recorded in the workspace history. |
+| `run_tests` | Run test files (all, or files / folders, filtered by name or tags) like `testpion test`; `rerunFailed` runs only the failures of the last run (or a run id). With one flow file in `paths`, `from` runs from that step on and `seedRunId` seeds the steps before it from that run (alone: replays it from its first failing step). The run is recorded in the workspace history. |
 | `save_test` | Save a collection's REST or GraphQL request as a YAML test file under `tests/`, with its checks. |
 | `graphql_operation` | Build a valid, ready-to-run operation for a root field of a GraphQL endpoint (introspected): variables with placeholder values and a selection of fields, so agents don't guess field names. |
 | `graphql_subscribe` | Run a GraphQL subscription over WebSocket and return the events received (up to a count or 60 seconds). |
@@ -143,11 +145,13 @@ Not sure which tool? **`search_tools`** takes what you want to do ("capture traf
 | `openapi_outline` | An OpenAPI document's operations by tag, with parameters, request body, responses (schemas as short type outlines) and the request an import would make; narrow it with `tag` or `operationId`. |
 | `openapi_lint` | Lint problems of an OpenAPI document (or every document in `specs/`), each with its rule, level, line and column. |
 | `import_definition` | Import an OpenAPI document, Postman / Insomnia / Bruno / Hoppscotch collection, HAR or .env, from a public link (`url`) or `text`. OpenAPI imports get contract checks. |
+| `import_arazzo` | Import an [Arazzo 1.0](/test-runner/integration-testing#arazzo-workflows-import-and-export) document (`text`, a workspace `file` or a `url`) as flow files under `tests/arazzo/`, one per workflow; its OpenAPI sources are found in the workspace (`fetch_sources: true` downloads http(s) ones). Returns the files and `notes` (what did not come over); `dry_run: true` writes nothing. |
+| `export_arazzo` | A flow file as an Arazzo 1.0 document (`text` as YAML, `document`, `notes`), matched against an OpenAPI `spec` (default: the sources an import noted, else the best-matching spec in `specs/`). |
 | `testpion_guide` | How to use the workspace: which tool for which job, how variables resolve, every check type this engine knows (with examples) and the YAML test file format. Agents read it before writing tests. |
 | `set_request_checks` | Add (`mode: append`) or replace the checks of a saved REST or GraphQL request; they then run whenever it is sent, in `run_collection` and in CI. Unknown check types are refused with the list of known ones. |
 | `write_test_file` | Write a YAML or JSON test file under `tests/`. The content is checked first (it must parse as tests or a suite and use known check types), so a broken file never lands in the workspace; an existing file is replaced only with `overwrite: true`. |
 
-`save_request`, `import_definition`, `rename_variable`, `reorder_environments`, `set_request_checks` and `write_test_file` change workspace files, `load_test` generates load, and `--read-only` hides them together with the tools that send requests.
+`save_request`, `import_definition`, `import_arazzo`, `rename_variable`, `reorder_environments`, `set_request_checks` and `write_test_file` change workspace files, `load_test` generates load, and `--read-only` hides them together with the tools that send requests.
 
 Every tool has a **title** and **annotations** (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`), so agents can run the read-only ones without asking and ask before the ones that send requests or change files. Results come as JSON text and as **structured content** (a list is wrapped as `{ "items": [...] }`).
 

@@ -12,6 +12,7 @@ import type { TestCase } from '../model/types.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { isSuiteFile, loadTestsFromFile } from './loader.js';
 import { readResultsFile } from './runner.js';
+import { loopLabel } from './flow-blocks.js';
 
 export interface FlowOfFile {
   /** The file inside tests/, with forward slashes. */
@@ -20,7 +21,8 @@ export interface FlowOfFile {
   /** The latest run that included the file, when there is one: the steps carry its status and duration. */
   run?: { runId: string; name: string; startedAt: string };
   /** With `raw: true`: each step as written in the file (by step id), for the flow designer's inspector. */
-  raw?: Record<string, Record<string, unknown>>;
+  raw?: Record<string, Record<string, unknown>>;  /** With `raw: true`: the file's `output:` (what the flow returns), when it declares one. */
+  output?: Record<string, unknown>;
 }
 
 // tp.environment.set('x', ...) and the like: a script that sets a variable for the steps after it
@@ -35,7 +37,7 @@ export function variablesUsedBy(t: TestCase): string[] {
 /** The variables a test makes for the tests after it: what it extracts and what its scripts set. */
 export function variablesSetBy(t: TestCase): string[] {
   const out = new Set(Object.keys(t.extract ?? {}));
-  for (const s of [t.preRequestScript, t.testScript]) for (const m of (s ?? '').matchAll(SET_RE)) out.add(m[2]!);
+  for (const s of [t.preRequestScript, t.testScript, t.type === 'script' ? t.script : undefined]) for (const m of (s ?? '').matchAll(SET_RE)) out.add(m[2]!);
   return [...out];
 }
 
@@ -79,7 +81,15 @@ export function flowStepOf(t: TestCase): FlowStep {
     s.method = t.method;
     s.url = t.target;
   } else if (t.type === 'delay') s.ms = t.ms;
-  if (t.extract && Object.keys(t.extract).length) s.extract = Object.keys(t.extract);
+  else if (t.type === 'flow') s.flow = t.flowFile;
+  else if (t.type === 'log') s.message = t.message;
+  if (t.if !== undefined) s.if = t.if;
+  if (t.when !== undefined) s.when = t.when;
+  const loop = loopLabel(t);
+  if (loop) s.loop = loop;
+  // a script step's values are what it sets (tp.variables.set …): the edges after it are labelled with them
+  const made = t.type === 'script' ? variablesSetBy(t) : Object.keys(t.extract ?? {});
+  if (made.length) s.extract = made;
   if (t.dependsOn?.length) s.dependsOn = [...t.dependsOn];
   const uses = variablesUsedBy(t);
   if (uses.length) s.uses = uses;
@@ -129,6 +139,7 @@ export async function flowOfFile(store: WorkspaceStore, file: string, opts: { ru
   if (opts.raw) {
     const items = Array.isArray(data) ? data : Array.isArray(root?.tests) ? (root!.tests as unknown[]) : root ? [root] : [];
     if (items.length === steps.length) out.raw = Object.fromEntries(steps.map((s, i) => [s.id, (items[i] ?? {}) as Record<string, unknown>]));
+    if (root?.output && typeof root.output === 'object' && !Array.isArray(root.output)) out.output = root.output as Record<string, unknown>;
   }
   if (!steps.length) return out;
   // the latest run that included the file (by the results' file, else by the steps' ids), newest first

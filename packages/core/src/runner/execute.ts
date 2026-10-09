@@ -44,6 +44,8 @@ import { query, tryParseJson } from '../util/jsonpath.js';
 import { sleep, withTimeout } from '../util/concurrency.js';
 import { applyCookieJarOps, type CookieJar } from '../cookies/cookie-jar.js';
 import { realtimeModeFor, runRealtimeExchange } from '../protocols/realtime.js';
+import { runCondition, runLog, runScriptStep, runSubFlow, type StepResponse } from './flow-blocks.js';
+import type { PinnedResponse } from './debug-hooks.js';
 
 export interface ExecServices {
   /** Source of a workspace script package (tp.require), when there is one. */
@@ -72,6 +74,10 @@ export interface ExecServices {
   environmentName?: string;
   /** Reads a workspace file by relative path (OpenAPI documents for contract checks); never outside the workspace. */
   readFile?: (path: string) => string;
+  /** The flow files being run, outermost first (sub-flows: a cycle or more than five levels is refused). */
+  flowStack?: string[];
+  /** A step's pinned response (the flow designer's pins, set by runTests' `pins`): the step is answered with it, the API is not called. */
+  pinned?: (testId: string) => PinnedResponse | undefined;
 }
 
 export interface ExecutionOutcome {
@@ -101,7 +107,7 @@ function sha(s: string): string {
 }
 
 /** Execute one test case: scripts → protocol call → checks → extraction. Never throws (except cancellation). */
-export async function executeTest(testIn: TestCase, svc: ExecServices, opts: { tracer: Tracer; signal?: AbortSignal; parentSpan?: SpanHandle }): Promise<ExecutionOutcome> {
+export async function executeTest(testIn: TestCase, svc: ExecServices, opts: { tracer: Tracer; signal?: AbortSignal; parentSpan?: SpanHandle; prev?: StepResponse }): Promise<ExecutionOutcome> {
   let test = testIn;
   const scope = svc.vars.clone();
   if (test.variables) scope.setScope('request', test.variables);
@@ -141,7 +147,9 @@ export async function executeTest(testIn: TestCase, svc: ExecServices, opts: { t
       }
     }
 
+    const pin = svc.pinned?.(test.id ?? test.name);
     const run = async (signal: AbortSignal) => {
+      if (pin) return pinnedAnswer(test, pin, svc);
       switch (test.type) {
         case 'http':
           return runHttp(test, scope, svc, root, signal);
@@ -161,6 +169,14 @@ export async function executeTest(testIn: TestCase, svc: ExecServices, opts: { t
           return runAgentTest(test, scope, svc, root, signal);
         case 'delay':
           return runDelay(test, test.timeoutMs ?? svc.defaultTimeoutMs, signal);
+        case 'condition':
+          return runCondition(test, scope, root, opts.prev);
+        case 'script':
+          return runScriptStep(test, scope, svc, { sendRequest, info: scriptInfo(test, svc) });
+        case 'flow':
+          return runSubFlow(test, scope, svc, root, signal);
+        case 'log':
+          return runLog(test, scope, svc);
         default:
           throw new ApsError('ConfigurationError', `Unknown test type "${(test as TestCase).type}"`);
       }
@@ -169,6 +185,8 @@ export async function executeTest(testIn: TestCase, svc: ExecServices, opts: { t
     ctx = r.ctx;
     partial = r.partial;
     Object.assign(metadata, r.metadata ?? {});
+    // the blocks' own checks (a script step's tp.test, a sub-flow's steps)
+    if ('checks' in r && r.checks) scriptChecks.push(...(r.checks as CheckResult[]));
   } catch (e) {
     const err = normalizeError(e);
     if (err.kind === 'CancelledError' && opts.signal?.aborted) {
@@ -280,6 +298,18 @@ function implicitChecks(test: TestCase, ctx: CheckContext): CheckConfig[] {
   return out;
 }
 
+/** A pinned step: its stored response stands in for the call (checks, extracts and scripts read it as usual). */
+async function pinnedAnswer(test: TestCase, pin: PinnedResponse, svc: ExecServices): Runner {
+  const text = pin.text ?? (typeof pin.body === 'string' ? pin.body : (JSON.stringify(pin.body) ?? ''));
+  const parsed = pin.body === undefined ? tryParseJson(text) : undefined;
+  const body = pin.body !== undefined ? pin.body : parsed?.ok ? parsed.value : text;
+  return {
+    ctx: { testType: test.type, status: pin.status, headers: pin.headers, body, text, latencyMs: 0 },
+    partial: { input: `pinned response${pin.status !== undefined ? ` (${pin.status})` : ''}`, output: summarize(svc.redactor.redact(body)) },
+    metadata: { pinned: true, pinnedAt: pin.pinnedAt, ...(pin.fromRunId ? { pinnedFrom: pin.fromRunId } : {}), ...(pin.status !== undefined ? { status: pin.status } : {}) },
+  };
+}
+
 /** `tp.cookies`: the jar's cookies for the response URL, overlaid with the response's own Set-Cookie values. */
 export function responseCookies(set: Array<{ name: string; value: string }>, jar: CookieJar | undefined, url: string): Record<string, string> {
   const out: Record<string, string> = {};
@@ -288,7 +318,7 @@ export function responseCookies(set: Array<{ name: string; value: string }>, jar
   return out;
 }
 
-type Runner = Promise<{ ctx: CheckContext; partial: Partial<ExecutionOutcome>; metadata?: Record<string, unknown> }>;
+type Runner = Promise<{ ctx: CheckContext; partial: Partial<ExecutionOutcome>; metadata?: Record<string, unknown>; checks?: CheckResult[] }>;
 
 async function runHttp(test: HttpTest, scope: VariableScope, svc: ExecServices, span: SpanHandle, signal: AbortSignal): Runner {
   const spec = scope.resolveDeep(test.request);

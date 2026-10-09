@@ -13,12 +13,13 @@ import { importDotenv, isDotenv } from './dotenv.js';
 import { importAsyncApi, isAsyncApi } from './asyncapi.js';
 import { importHttpFile, isHttpFile } from './http-file.js';
 import { importScriptsToTp, type ImportScriptsMode, type ImportScriptsSummary } from './import-scripts.js';
+import { importArazzo, isArazzo, type ArazzoFlowFile } from './arazzo.js';
 
 function newCollection(name: string, items: CollectionNode[], extra: Partial<Collection> = {}): Collection {
   return { schemaVersion: SCHEMA_VERSION, id: slugify(name) + '-' + shortId().slice(-4), name, version: 0, variables: [], items, updatedAt: new Date().toISOString(), ...extra };
 }
 
-export function detectFormat(text: string): 'openapi' | 'swagger' | 'postman' | 'postman-env' | 'har' | 'aps-collection' | 'aps-workspace' | 'graphql-sdl' | 'insomnia' | 'bruno' | 'hoppscotch' | 'dotenv' | 'wsdl' | 'asyncapi' | 'http-file' | 'unknown' {
+export function detectFormat(text: string): 'openapi' | 'swagger' | 'postman' | 'postman-env' | 'har' | 'aps-collection' | 'aps-workspace' | 'graphql-sdl' | 'insomnia' | 'bruno' | 'hoppscotch' | 'dotenv' | 'wsdl' | 'asyncapi' | 'http-file' | 'arazzo' | 'unknown' {
   const t = text.trim();
   if (isWsdl(t)) return 'wsdl';
   // an .http / .rest file (VS Code REST Client, JetBrains HTTP Client)
@@ -34,6 +35,8 @@ export function detectFormat(text: string): 'openapi' | 'swagger' | 'postman' | 
     return 'unknown';
   }
   if (!d || typeof d !== 'object') return 'unknown';
+  // an Arazzo workflow description (arazzo: 1.0.x): its workflows become flow files under tests/
+  if (isArazzo(d)) return 'arazzo';
   const other = detectOtherTool(d);
   if (other) return other;
   if (isAsyncApi(d)) return 'asyncapi';
@@ -425,7 +428,7 @@ export function importHar(text: string): { collection: Collection } {
 export function importAny(
   text: string,
   opts: { name?: string; scripts?: ImportScriptsMode } = {},
-): { format: string; collection?: Collection; environment?: Environment; environments?: Environment[]; secretValues?: Record<string, Record<string, string>>; savedItems?: unknown; notes?: string[]; scripts?: ImportScriptsSummary } {
+): { format: string; collection?: Collection; environment?: Environment; environments?: Environment[]; secretValues?: Record<string, Record<string, string>>; savedItems?: unknown; notes?: string[]; scripts?: ImportScriptsSummary; flows?: ArazzoFlowFile[] } {
   const format = detectFormat(text);
   switch (format) {
     case 'openapi':
@@ -461,6 +464,11 @@ export function importAny(
       const r = importDotenv(text, opts.name);
       return { format, environment: r.environment, environments: [r.environment], secretValues: { [r.environment.id]: r.secretValues } };
     }
+    case 'arazzo': {
+      // without the OpenAPI documents (importIntoWorkspace finds them): operationPath steps still convert
+      const r = importArazzo(text);
+      return { format, flows: r.flows, notes: r.notes };
+    }
     case 'aps-collection': {
       // `savedItems` (its gRPC calls and connections) are restored by importIntoWorkspace, not kept in the collection
       const { savedItems: _items, ...c } = JSON.parse(text) as Collection & { savedItems?: unknown };
@@ -482,7 +490,7 @@ export function importAny(
         }
       }
       throw new ApsError('ValidationError', `Unrecognised import format (${format})`, {
-        suggestions: ['Supported: OpenAPI 3 / Swagger 2 (JSON or YAML), Postman v2.1 collections & environments, Insomnia (v4 export, v5 YAML), Bruno collections (folder, .bru file or export), Hoppscotch collections, WSDL 1.1 and 2.0 (SOAP), AsyncAPI 2 and 3 (Kafka, MQTT, WebSocket), .http / .rest files (REST Client, JetBrains), .env files, HAR, TestPion collections and workspace exports.'],
+        suggestions: ['Supported: OpenAPI 3 / Swagger 2 (JSON or YAML), Postman v2.1 collections & environments, Insomnia (v4 export, v5 YAML), Bruno collections (folder, .bru file or export), Hoppscotch collections, WSDL 1.1 and 2.0 (SOAP), AsyncAPI 2 and 3 (Kafka, MQTT, WebSocket), .http / .rest files (REST Client, JetBrains), .env files, HAR, TestPion collections and workspace exports, Arazzo 1.0 workflows (as flow files).'],
       });
     }
   }

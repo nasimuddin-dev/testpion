@@ -67,8 +67,16 @@ export function registerRunCommands(program: Command): void {
         if (errors) process.exitCode = EXIT.TEST_FAILURE;
       });
     });
-  runOptions(program.command('run').description('run a named suite from a workspace').requiredOption('-s, --suite <name>', 'suite name (tests/<name>.suite.yaml)')).action(async (o: RunCliOptions & { watch?: boolean }) => {
-    process.exitCode = o.watch ? await runWatching(watchTargets(o.workspace), () => executeRun([], o)) : await executeRun([], o);
+  runOptions(
+    program
+      .command('run')
+      .description('run a named suite from a workspace (-s), or one test file: testpion run <file> --from <step> --seed-run <runId> runs part of a flow on the data of an earlier run')
+      .argument('[file]', 'a test file (instead of --suite)')
+      .option('-s, --suite <name>', 'suite name (tests/<name>.suite.yaml)'),
+  ).action(async (file: string | undefined, o: RunCliOptions & { watch?: boolean }) => {
+    if (!file && !o.suite) throw new CliError('Give a suite (-s <name>) or a test file', EXIT.CONFIG_ERROR);
+    const paths = file && !o.suite ? [file] : [];
+    process.exitCode = o.watch ? await runWatching(watchTargets(o.workspace, paths), () => executeRun(paths, o)) : await executeRun(paths, o);
   });
   program
     .command('run-collection')

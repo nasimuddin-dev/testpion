@@ -35,8 +35,16 @@ beforeAll(async () => {
       res.writeHead(200, { 'content-type': 'application/json', 'content-length': String(BIG + 2) });
       const chunk = Buffer.alloc(1024 * 1024, 'a');
       res.write('"');
-      for (let i = 0; i < 50; i++) res.write(chunk);
-      res.end('"');
+      // like a real server: write as the client reads (all 50 MB at once was cut short under load: "other side closed")
+      let sent = 0;
+      const pump = () => {
+        while (sent < 50) {
+          sent++;
+          if (!res.write(chunk)) return void res.once('drain', pump);
+        }
+        res.end('"');
+      };
+      pump();
     } else {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ url: req.url }));

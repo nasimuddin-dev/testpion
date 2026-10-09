@@ -141,6 +141,7 @@ export function ImportModal({ onClose, onDone }: { onClose(): void; onDone(): vo
       notes?: string[];
       scriptWarnings?: Array<{ where: string; script: string; api: string; hint: string }>;
       scripts?: ImportScriptsSummary;
+      flows?: string[];
     } | null>,
   ) => {
     setBusy(true);
@@ -154,7 +155,7 @@ export function ImportModal({ onClose, onDone }: { onClose(): void; onDone(): vo
           );
         else
           useApp.getState().toast(
-            `Imported ${r.format}${r.collection ? `: ${r.collection}` : ''}${r.environment ? ` (${r.environment.includes(', ') ? 'environments' : 'environment'} ${r.environment})` : ''}${r.contractChecks ? `. Each request checks the OpenAPI contract (${r.specPath})` : ''}${r.savedItems ? `, with ${[r.savedItems.grpc ? `${r.savedItems.grpc} gRPC call${r.savedItems.grpc > 1 ? 's' : ''}` : '', r.savedItems.websocket ? `${r.savedItems.websocket} connection${r.savedItems.websocket > 1 ? 's' : ''}` : ''].filter(Boolean).join(' and ')}` : ''}${convertedScriptsText(r.scripts) ? `. ${convertedScriptsText(r.scripts)}` : ''}`,
+            `Imported ${r.format}${r.collection ? `: ${r.collection}` : ''}${r.flows?.length ? `: ${r.flows.length === 1 ? 'flow' : `${r.flows.length} flows`} ${r.flows.join(', ')} (in the Tests view)` : ''}${r.environment ? ` (${r.environment.includes(', ') ? 'environments' : 'environment'} ${r.environment})` : ''}${r.contractChecks ? `. Each request checks the OpenAPI contract (${r.specPath})` : ''}${r.savedItems ? `, with ${[r.savedItems.grpc ? `${r.savedItems.grpc} gRPC call${r.savedItems.grpc > 1 ? 's' : ''}` : '', r.savedItems.websocket ? `${r.savedItems.websocket} connection${r.savedItems.websocket > 1 ? 's' : ''}` : ''].filter(Boolean).join(' and ')}` : ''}${convertedScriptsText(r.scripts) ? `. ${convertedScriptsText(r.scripts)}` : ''}`,
             'success',
           );
         toastUnchangedScripts(r.scripts);
@@ -212,7 +213,7 @@ export function ImportModal({ onClose, onDone }: { onClose(): void; onDone(): vo
         </>
       }
     >
-      <p className="text-sm text-muted mb-2">OpenAPI 3 / Swagger 2 (JSON or YAML), Postman v2.1 collections and environments, Insomnia exports (v4 JSON, v5 YAML), Bruno collection folders (<b>Bruno folder…</b>), exports and .bru files, Hoppscotch collections, WSDL 1.1 and 2.0 (SOAP services), AsyncAPI 2 and 3 (Kafka, MQTT and WebSocket channels as connections), HAR files, .env files, TestPion collections (as a file, pasted, or a link), or a request copied as cURL, fetch, PowerShell or HTTPie (saved to the <b>Imported</b> collection, with secrets replaced by variables).</p>
+      <p className="text-sm text-muted mb-2">OpenAPI 3 / Swagger 2 (JSON or YAML), Postman v2.1 collections and environments, Insomnia exports (v4 JSON, v5 YAML), Bruno collection folders (<b>Bruno folder…</b>), exports and .bru files, Hoppscotch collections, WSDL 1.1 and 2.0 (SOAP services), AsyncAPI 2 and 3 (Kafka, MQTT and WebSocket channels as connections), HAR files, .env files, TestPion collections (as a file, pasted, or a link), Arazzo 1.0 workflows (each becomes a flow file under tests/arazzo/; its OpenAPI sources are looked up in specs/), or a request copied as cURL, fetch, PowerShell or HTTPie (saved to the <b>Imported</b> collection, with secrets replaced by variables).</p>
       <form
         className="flex gap-2 mb-2"
         onSubmit={(e) => {

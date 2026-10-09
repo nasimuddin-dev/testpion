@@ -72,7 +72,7 @@ describe('test files: lint and keys', () => {
     expect(testKeys('assertion').find((k) => k.key === 'type')!.values).toContain('json-schema');
     const g = testEditorGuide();
     expect(g.httpMethods).toContain('PATCH');
-    expect(Object.keys(g.byType).sort()).toEqual(['agent', 'delay', 'graphql', 'grpc', 'http', 'llm', 'mcp', 'rag', 'websocket']);
+    expect(Object.keys(g.byType).sort()).toEqual(['agent', 'condition', 'delay', 'flow', 'graphql', 'grpc', 'http', 'llm', 'log', 'mcp', 'rag', 'script', 'websocket']);
     const schema = testFileJsonSchema() as { oneOf: unknown[]; definitions: { assertion: { properties: { type: { enum: string[] } } } } };
     expect(schema.oneOf).toHaveLength(2);
     expect(schema.definitions.assertion.properties.type.enum).toContain('status');

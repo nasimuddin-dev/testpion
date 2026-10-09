@@ -24,8 +24,21 @@ The same tab bar and right-click menu everywhere: request tabs, test files in **
 3. Drag the dot on a step's right edge onto another step to connect them (`dependsOn`); the connection shows the variables that flow along it, and a step reading a variable nothing provides is marked **!**.
 4. Select a step to edit it on the right: URL, headers, body, auth, **Extract**, **Checks**, **Waits for**. **Run flow** (or **Run step**) lights the steps up; **Undo** takes back any change.
 5. The file stays plain YAML (the Editor tab shows every change); `testpion flow edit <file> --op '<json>'` and the `flow_add_step`, `flow_connect`, `flow_update_step`, `flow_remove_step` MCP tools make the same edits.
+6. More blocks in **Add step**: a **Condition** with a true and a false output (the branch not taken is skipped), **For each** / repeat (`forEach:`, `repeat:`; the node shows **× 3**), a **Script**, a **Sub-flow** (another file as one step; refused for cycles and more than five levels), a **Log**, and the flow's **Output**, which exposed flows return to agents. `if:` on any step runs it only when true.
 
 [Design a flow](/test-runner/integration-testing#design-a-flow)
+
+Arazzo workflows in and out: **Import** an Arazzo 1.0 document and each workflow becomes a flow file under `tests/arazzo/` (its OpenAPI documents are found in `specs/`); right-click a flow in **Tests** ▸ **Export as Arazzo…** for the way back (`testpion flow export <file> --arazzo`). In the **Git** view a changed flow reads step by step (*Checkout ▸ pay: body, if*; *connections: added login → pay*), and dragging steps shows as *rearranged*. [Arazzo workflows](/test-runner/integration-testing#arazzo-workflows-import-and-export) · [Flows in git](/getting-started/git#flows-step-by-step)
+
+## Debug a flow
+
+1. In a flow's **Flow** tab, **History** lists its runs; select one to colour the canvas with its results and see each step's request, response and variables, with a **variables timeline** slider over the steps.
+2. Right-click a step: **Add breakpoint** (<kbd>F9</kbd>), then **Debug**: the run pauses before it, the inspector shows the variables (change them for this run), then **Continue**, **Step over** or **Stop**.
+3. **Run from here** reuses the earlier steps' data from the selected or latest run; **Run to here** runs a step with only what it waits for.
+4. **Pin last response** answers a step from a kept response in the designer's runs (never in the CLI, CI or monitors); **Replay with this run's data** re-runs a failed run from its first failing step on its own data.
+5. `testpion flow runs <file>`, `testpion test <file> --from <step> --seed-run <runId>` and the `flow_runs` MCP tool do the same from the terminal and for agents.
+
+[Debug a flow](/test-runner/integration-testing#debug-a-flow)
 
 ## An AI provider that says what is missing
 

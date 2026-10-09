@@ -48,7 +48,7 @@ const steps = [
 
 module.exports = withExpect(steps, {
   'open-file': /^open: true$/,
-  'menu-has-expose': /Open \| Run \| Expose as MCP tool… \| Rename/,
+  'menu-has-expose': /Open \| Run \| Expose as MCP tool… \| Export as Arazzo… \| Rename/,
   'dialog-writes-expose': /expose:\r?\n\s+tool: httpbin_smoke\r?\n\s+description: Smoke-test httpbin\r?\n\s+inputs:\r?\n\s+- \{ name: who, default: tester \}/,
   'agents-lists-flow': /httpbin_smoke\s*\(who\)\s*tests\/rest\/httpbin\.yaml\s*Smoke-test httpbin/,
   'stop-exposing': /^Exposed as MCP tool \/ httpbin_smoke \/ expose present: false$/,

@@ -39,10 +39,11 @@ import { gitTools } from './git-tools.js';
 import { openApiTools } from './openapi-tools.js';
 import { debuggerTools } from './debugger-tools.js';
 import { historyTools } from './history-tools.js';
-import { flowGraphTools } from './flow-graph-tools.js';
+import { flowGraphTools, planFlowRun } from './flow-graph-tools.js';
 import { flowTools } from './flow-tools.js';
 import { mockTools } from './mock-tools.js';
 import { datasetTools } from './dataset-tools.js';
+import { arazzoTools } from './arazzo-tools.js';
 import { str, withEnvironmentSecrets, type Tool } from './tool.js';
 import { MINIMAL_TOOLS, searchTool } from './search-tools.js';
 import { commandLine, isCommandTrusted } from '../storage/trust.js';
@@ -125,7 +126,7 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
    * A run recorded like the app's (runs/<id>/results.jsonl, summary.json, the history): the tests, run with the
    * engine, their results written as they finish; the first 200 come back summarized. run_tests and run_evaluation.
    */
-  const recordedRun = async (environment: string | undefined, o: { name: string; tests: Parameters<typeof runTests>[0]['tests']; concurrency: number; retries?: number }) => {
+  const recordedRun = async (environment: string | undefined, o: { name: string; tests: Parameters<typeof runTests>[0]['tests']; concurrency: number; retries?: number; plan?: Pick<Parameters<typeof runTests>[0], 'onlyIds' | 'seed'> }) => {
     const ctx = createEngineContext({ store, secrets, settings, environment });
     const runId = shortId('run-');
     const outDir = store.runDir(runId);
@@ -141,6 +142,7 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
         resultsFile: join(outDir, 'results.jsonl'),
         traceMode: 'none',
         environment,
+        ...(o.plan ?? {}),
         onEvent: (e: RunEvent) => void (e.type === 'test-end' && results.push(e.result)),
       });
       await recordRun(store, summary, outDir);
@@ -1022,6 +1024,8 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
           tags: { type: 'array', items: { type: 'string' }, description: 'Only tests with one of these tags' },
           environment: str('Environment name'),
           rerunFailed: { anyOf: [{ type: 'boolean' }, { type: 'string' }], description: 'true: the failed tests of the last run; or a run id' },
+          from: str('With one flow file in paths: run from this step (id or name) on, the steps before it taken from seedRunId (default: the latest run of the file); see flow_runs'),
+          seedRunId: str('With one flow file in paths: the earlier run whose variables and responses seed the steps before `from`; alone, replays that run from its first failing step'),
         },
       },
       run: async (a) => {
@@ -1029,12 +1033,14 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
         const rerun = a.rerunFailed ? store.failedTestIds(typeof a.rerunFailed === 'string' ? a.rerunFailed : 'last') : undefined;
         if (rerun && !rerun.ids.length) return { total: 0, message: `Nothing failed in ${rerun.runId}` };
         const paths = Array.isArray(a.paths) && a.paths.length ? (a.paths as unknown[]).map(String) : ['.'];
+        const plan = a.from || a.seedRunId ? await planFlowRun(store, paths, a) : undefined;
         const { summary, ...run } = await recordedRun(environment, {
           name: rerun ? `Failed tests of ${rerun.runId}` : paths.join(', '),
           tests: streamTests(paths, store.path('tests'), { grep: a.grep ? String(a.grep) : undefined, tags: Array.isArray(a.tags) ? (a.tags as unknown[]).map(String) : undefined, ...(rerun ? { ids: rerun.ids } : {}) }),
           concurrency: 4,
+          ...(plan ? { plan: { onlyIds: plan.onlyIds, seed: plan.seed } } : {}),
         });
-        return { ...run, skipped: summary.skipped };
+        return { ...run, skipped: summary.skipped, ...(plan ? { plan: plan.note } : {}) };
       },
     },
     {
@@ -1299,6 +1305,7 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
     ...historyTools({ store, redactor, findCollection, findRequest }),
     ...mockTools({ store }),
     ...datasetTools({ store }),
+    ...arazzoTools({ store }),
     ...gitTools({ store, findCollection, redactor }),
     ...openApiTools({ store, readSpecRef: readSpec, context: (environment) => createEngineContext({ store, secrets, settings, environment }) }),
     ...debuggerTools({ redactor, store }),

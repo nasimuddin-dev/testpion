@@ -3,6 +3,7 @@ import { copyFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   lintTestFile,
+  exportArazzoFromWorkspace,
   reviewResult,
   reviewCounts,
   runReviews,
@@ -95,6 +96,15 @@ export function testingHandlers(be: Backend): Handlers {
     /** The first 500 tests of a test file inside tests/ (or its suite), read so that no file blocks the main process. */
     'tests.preview': ({ path }: { path: string }) => previewTests(be.ws.safePath(path, be.ws.path('tests')), path),
     /** A test file as a flow: its steps (name, type, request line, extracted names, dependsOn) with the latest run's result of each. */
+    /** A flow file as an Arazzo 1.0 document (the Tests tree's Export as Arazzo…): { text, document, notes, sources }; `spec` picks the OpenAPI document to match; `save` also saves it (or returns it to download). */
+    'tests.exportArazzo': async ({ path, spec, workflowId, save }: { path: string; spec?: string; workflowId?: string; save?: boolean }) => {
+      const r = exportArazzoFromWorkspace(be.ws, path, { spec, workflowId });
+      if (!save) return r;
+      // save: a native save dialog on the desktop, a download in the browser / cloud
+      const name = `${r.file.split('/').pop()!.replace(/\.(ya?ml|json)$/i, '')}.arazzo.yaml`;
+      const saved = await be.saveOrDownload(name, [{ name: 'Arazzo', extensions: ['yaml', 'yml'] }], (dest) => writeFileSync(dest, r.text), () => Buffer.from(r.text));
+      return { ...r, saved };
+    },
     'tests.flow': async ({ file, raw, environment }: { file: string; raw?: boolean; environment?: string }) => flowOfFile(be.ws, file, { raw, known: raw ? knownVariables(environment) : undefined }),
     /**
      * The flow designer: one edit of a test file (add, connect, change, remove, place steps …) applied and saved; the

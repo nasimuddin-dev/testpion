@@ -445,7 +445,7 @@ export function GitView() {
                             {c.title}
                           </button>
                           {c.details.length > 0 && <span className="text-muted truncate">{c.details.join(', ')}</span>}
-                          {(c.kind === 'collection' || c.kind === 'environment') && c.change !== 'conflicted' && (
+                          {(c.kind === 'collection' || c.kind === 'environment' || c.kind === 'test') && c.change !== 'conflicted' && (
                             <LinkButton className="ml-auto shrink-0" icon={<Columns2 size={12} />} title="Side by side: the last commit and now, part by part" onClick={() => setItemDiff({ file: c.file, itemId: c.itemId })}>
                               Compare
                             </LinkButton>

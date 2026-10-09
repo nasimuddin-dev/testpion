@@ -68,7 +68,7 @@ export function gitTools(d: { store: WorkspaceStore; findCollection(ref: unknown
     {
       name: 'git_diff',
       description:
-        'What changed in the workspace, by meaning rather than JSON lines: requests and folders added, changed (which parts: URL, headers, body, auth, scripts, checks …) or removed, environment variables added / changed / removed, test files. Without `from`: the uncommitted changes. With `from` (and optionally `to`): between two commits, branches or tags (e.g. from "main" to "HEAD"). `markdown: true` also returns a Markdown list for a pull-request comment.',
+        'What changed in the workspace, by meaning rather than JSON lines: requests and folders added, changed (which parts: URL, headers, body, auth, scripts, checks …) or removed, environment variables added / changed / removed, flow and test files step by step (steps added, removed, renamed or changed with the parts: request line, headers, body, extract, checks, if, forEach …; connections added / removed; a layout-only change is "rearranged"; `itemId` is the step id). Without `from`: the uncommitted changes. With `from` (and optionally `to`): between two commits, branches or tags (e.g. from "main" to "HEAD"). `markdown: true` also returns a Markdown list for a pull-request comment.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -76,7 +76,7 @@ export function gitTools(d: { store: WorkspaceStore; findCollection(ref: unknown
           to: str('Compare to this commit (default: the working folder)'),
           markdown: { type: 'boolean', description: 'Also return the changes as Markdown' },
           file: str('With itemId (or alone for collection settings / an environment): one item side by side, part by part (before = `from` or the last commit, after = the working folder)'),
-          itemId: str('A request or folder id in `file`'),
+          itemId: str('A request or folder id in `file`, or a step id of a flow file in tests/'),
         },
       },
       run: async (a) => {

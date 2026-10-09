@@ -9,6 +9,7 @@ import { CheckList, ErrorPanel, StatusIcon } from './Results';
 import { TraceView } from './TraceView';
 import { RunCharts } from './RunCharts';
 import { TestHistory } from './TestHistory';
+import { VariablesTable } from './VariablesTable';
 import { finishSave, viewContent, type SaveResult } from '../lib/files';
 import { Badge, Button, cx, Empty, Field, Input, Metric, Modal, Segmented, Select, Split, Tabs, VirtualList, Menu, MetricGrid, Textarea } from './ui';
 import { usePersisted } from '../lib/sticky';
@@ -370,13 +371,13 @@ function ReviewButtons({ r, runId, onReviewed }: { r: TestResult; runId: string;
   );
 }
 
-export function ResultDetail({ r, runId, onReviewed }: { r: TestResult; runId?: string; onReviewed?(r: TestResult): void }) {
-  const [tab, setTab] = useState<'checks' | 'io' | 'trace' | 'history' | 'meta'>('checks');
+export function ResultDetail({ r, runId, onReviewed, initialTab = 'checks' }: { r: TestResult; runId?: string; onReviewed?(r: TestResult): void; /** The tab shown first (the flow debugger opens Input / output). */ initialTab?: 'checks' | 'io' | 'variables' }) {
+  const [tab, setTab] = useState<'checks' | 'io' | 'variables' | 'trace' | 'history' | 'meta'>(initialTab);
   const [trace, setTrace] = useState<Trace | null>();
   useEffect(() => {
     setTrace(undefined);
-    setTab('checks');
-  }, [r]);
+    setTab(initialTab === 'variables' && !r.variables ? 'checks' : initialTab);
+  }, [r, initialTab]);
   useEffect(() => {
     if (tab === 'trace' && r.traceId && trace === undefined) void call<Trace | null>('traces.get', { id: r.traceId }).then((t) => setTrace(t ?? null));
   }, [tab, r.traceId, trace]);
@@ -410,6 +411,7 @@ export function ResultDetail({ r, runId, onReviewed }: { r: TestResult; runId?: 
         tabs={[
           { id: 'checks', label: 'Checks', badge: r.checks.length },
           { id: 'io', label: 'Input / output' },
+          ...(r.variables ? [{ id: 'variables' as const, label: 'Variables', badge: Object.keys(r.variables).length, title: 'The variables of the run after this step' }] : []),
           { id: 'trace', label: 'Trace' },
           ...(runId ? [{ id: 'history' as const, label: 'History' }] : []),
           { id: 'meta', label: 'Metadata' },
@@ -462,6 +464,7 @@ export function ResultDetail({ r, runId, onReviewed }: { r: TestResult; runId?: 
             </div>
           </div>
         )}
+        {tab === 'variables' && <VariablesTable vars={r.variables ?? {}} empty="No variables after this step." />}
         {tab === 'trace' && (trace ? <TraceView trace={trace} /> : trace === null ? <Empty title="No trace stored for this result" /> : <Empty title="Loading…" />)}
         {tab === 'history' && runId && <TestHistory id={r.id} name={r.name} runId={runId} />}
         {tab === 'meta' && <CodeBlock className="p-3 mono text-xs whitespace-pre-wrap" language={'json'} text={JSON.stringify(r.metadata ?? {}, null, 2)} />}

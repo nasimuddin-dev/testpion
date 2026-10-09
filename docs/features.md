@@ -115,6 +115,10 @@ A test file's **Flow** tab draws its steps as a diagram (an arrow per `dependsOn
 
 The **flow designer** builds a flow on that canvas: add steps (blank, from a collection's requests, or generated with AI), connect them by dragging port to port, edit each step in an inspector (request, extracts, checks, what it waits for), see which variables flow along each connection, run the flow or one step and watch the steps light up, with undo and redo; every change is written to the YAML (comments and line endings kept). `testpion flow edit <file> --op '<json>'` and the `flow_add_step`, `flow_connect`, `flow_disconnect`, `flow_update_step` and `flow_remove_step` MCP tools make the same edits. [Design a flow](/test-runner/integration-testing#design-a-flow)
 
+**Arazzo 1.0** (the OpenAPI Initiative's workflow format) comes in and goes out: importing an Arazzo document writes one flow file per workflow (operations from its OpenAPI documents, runtime expressions as variables with the extracts that set them, success criteria as checks, retries; what does not fit stays as a comment and in the summary), and **Export as Arazzo…** in the Tests tree (`testpion flow export <file> --arazzo`, the `import_arazzo` / `export_arazzo` MCP tools) writes a flow back as a workflow. [Arazzo workflows](/test-runner/integration-testing#arazzo-workflows-import-and-export)
+
+In git, flow files are compared by meaning like collections: steps added, removed, renamed or changed with the parts (request line, headers, body, extract, checks, if, forEach), connections added or removed, and "rearranged" when only the layout moved; in the Git view, pull-request descriptions and `testpion diff --json`. [Flows, step by step](/getting-started/git#flows-step-by-step)
+
 [Test runner](/test-runner/overview) · [CI/CD](/test-runner/ci-cd)
 
 ## Load testing

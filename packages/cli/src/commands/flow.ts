@@ -1,7 +1,7 @@
 /** `testpion flow <file>`: a test file as a flow, in columns (what runs first, what waits), as JSON or as Graphviz DOT. */
 import { Command } from 'commander';
-import { ApsError, applyFlowEdit, editFlowFile, flowOfFile, flowReport, flowStepsOfText, testFileRef, type FlowEditOp, type FlowFileEdit } from '@testpion/core';
-import { flowGraph, toDot } from '@testpion/shared';
+import { ApsError, applyFlowEdit, editFlowFile, flowOfFile, flowReport, flowRunResults, flowRuns, flowStepsOfText, testFileRef, type FlowEditOp, type FlowFileEdit } from '@testpion/core';
+import { flowGraph, stepDetail, toDot } from '@testpion/shared';
 import { bold, dim, green, printJson, red, withWorkspace, yellow } from '../shared.js';
 
 export function registerFlowCommand(program: Command): void {
@@ -32,7 +32,10 @@ export function registerFlowCommand(program: Command): void {
             const s = byId.get(id)!;
             const status = s.status === 'passed' ? green('passed') : s.status === 'failed' || s.status === 'error' ? red(s.status) : s.status === 'skipped' ? yellow('skipped') : '';
             const detail = [
-              s.method && s.url ? `${s.method} ${s.url}` : s.type,
+              stepDetail(s),
+              s.type !== 'condition' && s.if ? `if ${s.if}` : '',
+              s.when !== undefined ? `on the ${s.when} branch` : '',
+              s.loop ?? '',
               s.extract?.length ? `extracts ${s.extract.join(', ')}` : '',
               s.dependsOn?.length ? `after ${s.dependsOn.join(', ')}` : '',
             ]
@@ -47,22 +50,66 @@ export function registerFlowCommand(program: Command): void {
       });
     });
 
+  // testpion flow runs <file>: the flow's run history (the designer's History panel), or one run's steps with --run
+  flow
+    .command('runs')
+    .description("a flow's run history, newest first (status, when, how long, the first failing step); --run <id> shows that run's steps with the variables after each. Re-run part of it: testpion test <file> --from <step> [--seed-run <id>]")
+    .argument('<file>', 'a test file (inside tests/, or from the current folder)')
+    .option('--run <runId>', "one run's steps in file order: status, timing, input, output and variables")
+    .option('-n, --limit <n>', 'how many runs (default 30)')
+    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
+    .option('--json', 'print the runs (or the run) as JSON (for scripts and AI agents)')
+    .action(async (file: string, o: { run?: string; limit?: string; workspace?: string; json?: boolean }) => {
+      const parent = flow.opts() as { workspace?: string; json?: boolean };
+      o.json ||= parent.json;
+      return withWorkspace(o.workspace ?? parent.workspace, async (store) => {
+        const ref = testFileRef(store, file);
+        if (o.run) {
+          const r = await flowRunResults(store, ref, o.run);
+          if (o.json) return printJson(r);
+          if (!r.results.length) return console.log(dim(`Run ${o.run} did not include tests/${r.file}.`));
+          console.log(bold(`tests/${r.file}`) + dim(`  run ${o.run}`));
+          for (const x of r.results) {
+            const status = x.status === 'passed' ? green('passed') : x.status === 'skipped' ? yellow('skipped') : red(x.status);
+            console.log(`  ${x.name}  ${dim(`[${x.id}]`)}  ${status}${dim(` ${x.durationMs} ms`)}${x.metadata?.pinned ? yellow('  pinned') : ''}`);
+            if (x.input) console.log(dim(`    ${x.input.split('\n')[0]!.slice(0, 160)}`));
+            for (const [k, v] of Object.entries(x.variables ?? {})) console.log(dim(`    {{${k}}} = ${(typeof v === 'string' ? v : JSON.stringify(v)).slice(0, 120)}`));
+          }
+          return;
+        }
+        const h = await flowRuns(store, ref, { limit: o.limit ? Number(o.limit) : undefined });
+        if (o.json) return printJson(h);
+        if (!h.runs.length) return console.log(dim(`tests/${h.file} has not been run yet.`));
+        console.log(bold(`tests/${h.file}`) + dim(`  ${h.runs.length} run${h.runs.length === 1 ? '' : 's'}, newest first`));
+        for (const r of h.runs) {
+          const status = r.status === 'passed' ? green('passed') : r.status === 'cancelled' ? yellow('cancelled') : red('failed');
+          console.log(
+            `  ${r.runId}  ${status}  ${dim(new Date(r.startedAt).toLocaleString())}  ${dim(`${r.durationMs} ms`)}  ${r.passed}/${r.steps} passed${r.firstFailed ? red(`  first failing step: ${r.firstFailed}`) : ''}`,
+          );
+        }
+        const failed = h.runs.find((r) => r.status === 'failed');
+        console.log(dim(`\ntestpion flow runs ${ref} --run <id> shows a run's steps${failed ? `; testpion test ${ref} --seed-run ${failed.runId} replays it on its own data` : ''}.`));
+      });
+    });
+
   // testpion flow edit <file> --op '{"op":"connect","from":"login","to":"me"}': the flow designer's edits, for scripts and agents
   flow
     .command('edit')
     .description(
-      'edit a flow the way the app\'s flow designer does (comments, key order and line endings kept): --op \'{"op":"addStep","step":{"name":"Health","type":"http","url":"{{baseUrl}}/health"},"after":"login"}\'; ops: addStep, addSteps, updateStep, removeStep, renameStep, connect, disconnect, setLayout, duplicateStep, addFromCollection, pasteSteps',
+      'edit a flow the way the app\'s flow designer does (comments, key order and line endings kept): --op \'{"op":"addStep","step":{"name":"Health","type":"http","url":"{{baseUrl}}/health"},"after":"login"}\'; ops: addStep, addSteps, updateStep, removeStep, renameStep, connect (with "when": true|false from a condition), disconnect, setLayout, duplicateStep, setOutput, addFromCollection, pasteSteps. Blocks: type condition (if:), script (script:), flow (file:, inputs:), log (message:); any step: if, when, repeat, forEach',
     )
     .argument('<file>', 'a test file (inside tests/, or from the current folder); an empty flow is "name: X\\ntests: []"')
     .option('--op <json>', 'the edit as JSON, or several as a JSON list (applied in order)')
     .option('--connect <from>', 'shorthand: make --to wait for this step')
     .option('--disconnect <from>', 'shorthand: --to no longer waits for this step')
     .option('--to <step>', 'the step that waits (with --connect / --disconnect)')
+    .option('--when <branch>', 'with --connect from a condition step: the branch the step runs on (true or false)')
+    .option('--output <json>', 'shorthand: set what the flow returns, e.g. \'{"token":"{{token}}"}\' (null removes it)')
     .option('--remove <step>', 'shorthand: remove this step (and every dependsOn that names it)')
     .option('--dry-run', 'print the new text (or, with --json, the result) without writing the file')
     .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
     .option('--json', 'print { file, written, added, steps, edges, problems } as JSON (for scripts and AI agents)')
-    .action(async (file: string, o: { op?: string; connect?: string; disconnect?: string; to?: string; remove?: string; dryRun?: boolean; workspace?: string; json?: boolean }) => {
+    .action(async (file: string, o: { op?: string; connect?: string; disconnect?: string; to?: string; when?: string; output?: string; remove?: string; dryRun?: boolean; workspace?: string; json?: boolean }) => {
       // the parent command reads -w and --json wherever they are written: take them from it too
       const parent = flow.opts() as { workspace?: string; json?: boolean };
       o.json ||= parent.json;
@@ -79,10 +126,20 @@ export function registerFlowCommand(program: Command): void {
         }
         if (o.connect || o.disconnect) {
           if (!o.to) throw new ApsError('ValidationError', `--${o.connect ? 'connect' : 'disconnect'} needs --to <step>`);
-          ops.push(o.connect ? { op: 'connect', from: o.connect, to: o.to } : { op: 'disconnect', from: o.disconnect!, to: o.to });
+          if (o.when !== undefined && !['true', 'false'].includes(o.when)) throw new ApsError('ValidationError', `--when is true or false, not "${o.when}"`);
+          ops.push(o.connect ? { op: 'connect', from: o.connect, to: o.to, ...(o.when !== undefined ? { when: o.when === 'true' } : {}) } : { op: 'disconnect', from: o.disconnect!, to: o.to });
+        }
+        if (o.output !== undefined) {
+          let output: unknown;
+          try {
+            output = JSON.parse(o.output);
+          } catch (e) {
+            throw new ApsError('ValidationError', `--output is not JSON: ${(e as Error).message}`);
+          }
+          ops.push({ op: 'setOutput', output: output as Record<string, unknown> | null });
         }
         if (o.remove) ops.push({ op: 'removeStep', id: o.remove });
-        if (!ops.length) throw new ApsError('ValidationError', 'Nothing to do: give --op \'<json>\', --connect/--disconnect <from> --to <step>, or --remove <step>');
+        if (!ops.length) throw new ApsError('ValidationError', 'Nothing to do: give --op \'<json>\', --connect/--disconnect <from> --to <step> [--when true|false], --output \'<json>\', or --remove <step>');
         const ref = testFileRef(store, file);
         let r: FlowFileEdit | undefined;
         const added: string[] = [];

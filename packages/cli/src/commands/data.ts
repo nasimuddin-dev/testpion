@@ -3,7 +3,7 @@ import { exportTextFormat } from './export-formats.js';
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { Command, Option } from 'commander';
-import { WorkspaceManager, formatDuration, importRequestSnippet, ciConfig, compareEnvironments, environmentMatrix, compareRequestAcrossEnvironments, collectionRequests, type CiProvider, convertCollectionScripts, isRequestSnippet, Redactor, collectionMarkdown, collectionHtml, exportPostmanCollection, exportPostmanEnvironment, fetchImportText, readBrunoFolder, collectionToBru, type Environment, bundleWsdl, isWsdl, importIntoWorkspace, diffOpenApi, lintOpenApi, OPENAPI_LINT_RULES, type OpenApiLintSeverity, type OpenApiLintResult, workspaceApiCoverage, apiCoverageMarkdown, securityLint, collectionSecurityFindings, type SecurityFinding, listSpecs, unusedVariables, definedVariableNames, findEnvironment, setEnvironmentVariables, unsetEnvironmentVariables, variableFlow, collectionToOpenApiText, variableUsages, renameVariable, collectionSavedItems, listWorkspaceDatasets, appendDatasetRow, readWorkspaceDataset, workspaceReportHtml, collectionVariableFlow, loadHistory, workspaceStorage, deleteRunsBefore, listCertificates, workspaceAttention, decodeJwt, describeExpiry, recordCertificate, checkCertificate } from '@testpion/core';
+import { WorkspaceManager, formatDuration, importRequestSnippet, ciConfig, compareEnvironments, environmentMatrix, compareRequestAcrossEnvironments, collectionRequests, type CiProvider, convertCollectionScripts, isRequestSnippet, Redactor, collectionMarkdown, collectionHtml, exportPostmanCollection, exportPostmanEnvironment, fetchImportText, readBrunoFolder, collectionToBru, type Environment, bundleWsdl, isWsdl, importIntoWorkspace, diffOpenApi, lintOpenApi, OPENAPI_LINT_RULES, type OpenApiLintSeverity, type OpenApiLintResult, workspaceApiCoverage, apiCoverageMarkdown, securityLint, collectionSecurityFindings, type SecurityFinding, listSpecs, unusedVariables, definedVariableNames, findEnvironment, setEnvironmentVariables, unsetEnvironmentVariables, variableFlow, collectionToOpenApiText, variableUsages, renameVariable, collectionSavedItems, listWorkspaceDatasets, appendDatasetRow, readWorkspaceDataset, workspaceReportHtml, collectionVariableFlow, loadHistory, workspaceStorage, deleteRunsBefore, listCertificates, workspaceAttention, decodeJwt, describeExpiry, recordCertificate, checkCertificate, detectFormat, resolveArazzoSources } from '@testpion/core';
 import { EXIT, green, red, yellow, dim, bold, CliError, printJson, findWorkspaceUp, withWorkspace, warnProblems, cliSecrets, cliContext, requireCollection, requireEnvironment, loadCollectionRef, readDefinition } from '../shared.js';
 
 export function registerDataCommands(program: Command): void {
@@ -611,7 +611,7 @@ export function registerDataCommands(program: Command): void {
     });
   program
     .command('import')
-    .description('import OpenAPI/Swagger, Postman, Insomnia, Bruno, Hoppscotch, HAR, .env or collection files, or a copied cURL / fetch / PowerShell request, into a workspace')
+    .description('import OpenAPI/Swagger, Postman, Insomnia, Bruno, Hoppscotch, HAR, .env or collection files, Arazzo workflows (as flow files under tests/arazzo/), or a copied cURL / fetch / PowerShell request, into a workspace')
     .argument('<file>', 'file to import, a Bruno collection folder, an http(s) link to download (OpenAPI URL, GitHub file, Postman API link), or - to read stdin (e.g. a cURL command from the clipboard)')
     .requiredOption('-w, --workspace <nameOrPath>')
     .option('--collection <name>', 'for a cURL / fetch / PowerShell request: the collection to add it to (created if needed)', 'Imported')
@@ -619,6 +619,7 @@ export function registerDataCommands(program: Command): void {
     .option('--name <name>', 'for a request: its name (default: method and path)')
     .option('--no-contract-checks', 'for an OpenAPI document: do not add openapi contract checks to the requests')
     .option('--keep-pm', "for Postman / Insomnia: keep pm.* in scripts (default: they are converted to TestPion's tp.*; pm.* runs either way)")
+    .option('--fetch-sources', 'for Arazzo: download OpenAPI source descriptions given as http(s) URLs (default: only files next to the Arazzo file or in the workspace, e.g. specs/)')
     .option('--json', 'print the result as JSON (for scripts and AI agents)')
     .action((file: string, o) =>
       withWorkspace(o.workspace, async (store) => {
@@ -641,10 +642,17 @@ export function registerDataCommands(program: Command): void {
           }
           return;
         }
-        const r = importIntoWorkspace(store, text, { contractChecks: o.contractChecks !== false, name: dotenvName(source) ?? httpFileName(source), scripts: o.keepPm ? 'keep' : 'tp' });
-        if (o.json) printJson({ format: r.format, collection: r.collection?.name, collectionId: r.collection?.id, environment: r.environment?.name, environments: r.environments?.map((e) => e.name), secretsToSet: r.secretsToSet, specPath: r.specPath, contractChecks: r.contractChecks, scriptWarnings: r.scriptWarnings, notes: r.notes, scripts: r.scripts });
+        // Arazzo: OpenAPI sources next to the file or in the workspace; URLs only with --fetch-sources
+        let arazzo: { baseDir?: string; sources?: Record<string, string> } | undefined;
+        if (detectFormat(text) === 'arazzo') {
+          const baseDir = !link && file !== '-' && !folder ? dirname(resolve(file)) : undefined;
+          arazzo = { baseDir, sources: (await resolveArazzoSources(text, { workspace: store.root, baseDir, fetch: o.fetchSources ? async (u) => (await fetchImportText(u)).text : undefined })).sources };
+        }
+        const r = importIntoWorkspace(store, text, { contractChecks: o.contractChecks !== false, name: dotenvName(source) ?? httpFileName(source), scripts: o.keepPm ? 'keep' : 'tp', arazzo });
+        if (o.json) printJson({ format: r.format, collection: r.collection?.name, collectionId: r.collection?.id, environment: r.environment?.name, environments: r.environments?.map((e) => e.name), flows: r.flows, secretsToSet: r.secretsToSet, specPath: r.specPath, contractChecks: r.contractChecks, scriptWarnings: r.scriptWarnings, notes: r.notes, scripts: r.scripts });
         else {
-          console.log(green(`Imported ${r.format}: ${r.collection ? `collection "${r.collection.name}"` : ''}${r.environments?.length ? ` ${r.environments.length > 1 ? 'environments' : 'environment'} ${r.environments.map((e) => `"${e.name}"`).join(', ')}` : ''}`));
+          console.log(green(`Imported ${r.format}: ${r.collection ? `collection "${r.collection.name}"` : ''}${r.environments?.length ? ` ${r.environments.length > 1 ? 'environments' : 'environment'} ${r.environments.map((e) => `"${e.name}"`).join(', ')}` : ''}${r.flows?.length ? `${r.flows.length} flow${r.flows.length > 1 ? 's' : ''}` : ''}`));
+          for (const f of r.flows ?? []) console.log(dim(`  ${f.path}  (workflow ${f.workflowId}, ${f.steps} steps; testpion flow ${f.path.replace(/^tests\//, '')} shows it)`));
           if (r.specPath) console.log(dim(`Kept the document as ${r.specPath}${r.contractChecks ? `; ${r.contractChecks} requests check the OpenAPI contract` : ''}`));
           if (r.scripts?.converted) console.log(dim(`Converted ${r.scripts.converted} script${r.scripts.converted === 1 ? '' : 's'} to tp.* (--keep-pm keeps pm.*)`));
           for (const u of r.scripts?.unchanged ?? []) console.log(yellow(`  Kept pm.* in ${u.where}: ${u.reason}`));
