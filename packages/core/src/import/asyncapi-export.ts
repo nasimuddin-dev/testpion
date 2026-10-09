@@ -1,4 +1,4 @@
-import { stringify } from 'yaml';
+import { stringifyYaml as stringify } from '../util/lazy-yaml.js';
 import type { Collection, LibraryItem } from '../model/types.js';
 
 /**

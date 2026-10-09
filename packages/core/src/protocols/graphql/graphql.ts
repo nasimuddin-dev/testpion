@@ -1,24 +1,9 @@
-import {
-  buildClientSchema,
-  buildSchema,
-  getIntrospectionQuery,
-  getOperationAST,
-  parse,
-  print,
-  printSchema,
-  validate,
-  isObjectType,
-  isInterfaceType,
-  isInputObjectType,
-  isEnumType,
-  isUnionType,
-  isScalarType,
-  type GraphQLSchema,
-  type IntrospectionQuery,
-  type GraphQLField,
-  type GraphQLInputField,
-  type GraphQLNamedType,
-} from 'graphql';
+import type { GraphQLSchema, IntrospectionQuery, GraphQLField, GraphQLInputField, GraphQLNamedType } from 'graphql';
+import { nodeRequire } from '../../util/lazy-require.js';
+
+// graphql loads at first use, not at startup (see util/lazy-require.ts)
+let graphqlMod: typeof import('graphql') | undefined;
+const gql = (): typeof import('graphql') => (graphqlMod ??= typeof require === 'function' ? require('graphql') : nodeRequire('graphql'));
 import type { GraphQLRequestSpec, HttpRequestSpec, HttpResponseData } from '../../model/types.js';
 import { ApsError } from '../../errors.js';
 import { executeHttp, type HttpExecOptions, type PreparedRequest } from '../http/client.js';
@@ -57,9 +42,9 @@ function parseVariables(v: GraphQLRequestSpec['variables']): Record<string, unkn
 
 export function detectOperation(query: string, operationName?: string): { type?: 'query' | 'mutation' | 'subscription'; name?: string; names: string[] } {
   try {
-    const doc = parse(query);
+    const doc = gql().parse(query);
     const names = doc.definitions.flatMap((d) => (d.kind === 'OperationDefinition' && d.name ? [d.name.value] : []));
-    const op = getOperationAST(doc, operationName);
+    const op = gql().getOperationAST(doc, operationName);
     return { type: op?.operation, name: op?.name?.value, names };
   } catch {
     return { names: [] };
@@ -83,7 +68,7 @@ export async function executeGraphQL(spec: GraphQLRequestSpec, opts: HttpExecOpt
 
 export async function introspect(spec: Omit<GraphQLRequestSpec, 'query'>, opts: HttpExecOptions = {}): Promise<{ schema: GraphQLSchema; sdl: string; introspection: IntrospectionQuery }> {
   const { response } = await executeHttp(
-    toHttp({ ...spec, query: '' }, { query: getIntrospectionQuery({ descriptions: true, inputValueDeprecation: true }), operationName: 'IntrospectionQuery' }),
+    toHttp({ ...spec, query: '' }, { query: gql().getIntrospectionQuery({ descriptions: true, inputValueDeprecation: true }), operationName: 'IntrospectionQuery' }),
     { ...opts, maxPreviewBytes: 64 * 1024 * 1024 },
   );
   const json = response.json as { data?: IntrospectionQuery; errors?: Array<{ message: string }> } | undefined;
@@ -93,22 +78,22 @@ export async function introspect(spec: Omit<GraphQLRequestSpec, 'query'>, opts: 
       suggestions: ['Introspection may be disabled on this server — import the schema SDL instead.', 'Check authentication headers.'],
     });
   }
-  const schema = buildClientSchema(json.data);
-  return { schema, sdl: printSchema(schema), introspection: json.data };
+  const schema = gql().buildClientSchema(json.data);
+  return { schema, sdl: gql().printSchema(schema), introspection: json.data };
 }
 
 /** A schema from a file's text: SDL, or an introspection result (`{ data: { __schema } }` or `{ __schema }`). */
 export function schemaFromText(text: string): GraphQLSchema {
   if (/^\s*[{[]/.test(text)) {
     const json = JSON.parse(text) as { data?: IntrospectionQuery } & Partial<IntrospectionQuery>;
-    return buildClientSchema((json.data ?? json) as IntrospectionQuery);
+    return gql().buildClientSchema((json.data ?? json) as IntrospectionQuery);
   }
   return schemaFromSdl(text);
 }
 
 export function schemaFromSdl(sdl: string): GraphQLSchema {
   try {
-    return buildSchema(sdl);
+    return gql().buildSchema(sdl);
   } catch (e) {
     throw new ApsError('SchemaError', `Invalid GraphQL SDL: ${(e as Error).message}`);
   }
@@ -116,9 +101,9 @@ export function schemaFromSdl(sdl: string): GraphQLSchema {
 
 export function validateQuery(schema: GraphQLSchema | undefined, query: string): Array<{ message: string; line?: number; column?: number }> {
   try {
-    const doc = parse(query);
+    const doc = gql().parse(query);
     if (!schema) return [];
-    return validate(schema, doc).map((e) => ({ message: e.message, line: e.locations?.[0]?.line, column: e.locations?.[0]?.column }));
+    return gql().validate(schema, doc).map((e) => ({ message: e.message, line: e.locations?.[0]?.line, column: e.locations?.[0]?.column }));
   } catch (e) {
     const err = e as { message: string; locations?: Array<{ line: number; column: number }> };
     return [{ message: err.message, line: err.locations?.[0]?.line, column: err.locations?.[0]?.column }];
@@ -126,7 +111,7 @@ export function validateQuery(schema: GraphQLSchema | undefined, query: string):
 }
 
 export function formatQuery(query: string): string {
-  return print(parse(query));
+  return gql().print(gql().parse(query));
 }
 
 /* ------------------------------------------------------------------ schema explorer model */
@@ -171,15 +156,15 @@ export function summarizeSchema(schema: GraphQLSchema): SchemaSummary {
   const types: SchemaTypeInfo[] = [];
   for (const t of Object.values(schema.getTypeMap()) as GraphQLNamedType[]) {
     if (t.name.startsWith('__')) continue;
-    if (isObjectType(t))
+    if (gql().isObjectType(t))
       types.push({ name: t.name, kind: 'OBJECT', description: t.description ?? undefined, fields: Object.values(t.getFields()).map(field), interfaces: t.getInterfaces().map((i) => i.name) });
-    else if (isInterfaceType(t))
+    else if (gql().isInterfaceType(t))
       types.push({ name: t.name, kind: 'INTERFACE', description: t.description ?? undefined, fields: Object.values(t.getFields()).map(field), possibleTypes: schema.getPossibleTypes(t).map((p) => p.name) });
-    else if (isInputObjectType(t)) types.push({ name: t.name, kind: 'INPUT_OBJECT', description: t.description ?? undefined, fields: Object.values(t.getFields()).map(field) });
-    else if (isEnumType(t))
+    else if (gql().isInputObjectType(t)) types.push({ name: t.name, kind: 'INPUT_OBJECT', description: t.description ?? undefined, fields: Object.values(t.getFields()).map(field) });
+    else if (gql().isEnumType(t))
       types.push({ name: t.name, kind: 'ENUM', description: t.description ?? undefined, enumValues: t.getValues().map((v) => ({ name: v.name, description: v.description ?? undefined, deprecated: v.deprecationReason ?? undefined })) });
-    else if (isUnionType(t)) types.push({ name: t.name, kind: 'UNION', description: t.description ?? undefined, possibleTypes: t.getTypes().map((p) => p.name) });
-    else if (isScalarType(t)) types.push({ name: t.name, kind: 'SCALAR', description: t.description ?? undefined });
+    else if (gql().isUnionType(t)) types.push({ name: t.name, kind: 'UNION', description: t.description ?? undefined, possibleTypes: t.getTypes().map((p) => p.name) });
+    else if (gql().isScalarType(t)) types.push({ name: t.name, kind: 'SCALAR', description: t.description ?? undefined });
   }
   types.sort((a, b) => a.name.localeCompare(b.name));
   return {

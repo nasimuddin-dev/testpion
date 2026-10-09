@@ -46,16 +46,35 @@ export function watchWorkspace(root: string, onChange: (changes: WorkspaceChange
    * as a change, so an event only counts when the file itself is different (or appeared, or is gone).
    */
   const seen = new Map<string, string>();
-  const fingerprint = (path: string) => {
+  /**
+   * What a file is: its size and last write (`stat:` — cheap, taken for every file at open), or its size and content
+   * hash (`hash:` — taken the first time a file reports an event, and from then on: a rewrite with the same bytes, git
+   * restoring a file, is no change either). Opening a big workspace reads no file at all.
+   */
+  const fingerprint = (path: string, mode: 'stat' | 'hash') => {
     try {
       const full = join(root, path);
       const st = statSync(full);
       if (st.isDirectory()) return 'dir';
-      // the content, not the times: a rewrite with the same bytes (git restoring a file) is no change either
-      return st.size > 8 * 1024 * 1024 ? `${st.size}:${st.mtimeMs}` : `${st.size}:${createHash('sha1').update(readFileSync(full)).digest('hex')}`;
+      // whole milliseconds: a tool that sets the time back (an access-time touch) gives it to the millisecond
+      if (mode === 'stat' || st.size > 8 * 1024 * 1024) return `stat:${st.size}:${Math.round(st.mtimeMs)}`;
+      return `hash:${st.size}:${createHash('sha1').update(readFileSync(full)).digest('hex')}`;
     } catch {
       return 'gone';
     }
+  };
+  /** The file now, against what was seen: `same` when it only looks touched (an access time, a same-bytes rewrite). */
+  const compare = (path: string): { now: string; same: boolean } => {
+    const before = seen.get(path) ?? 'gone';
+    if (before.startsWith('stat:')) {
+      // only a size:mtime is known: unchanged when those are; else the content is hashed from now on
+      const quick = fingerprint(path, 'stat');
+      if (quick === before) return { now: before, same: true };
+      const now = quick === 'gone' || quick === 'dir' ? quick : fingerprint(path, 'hash');
+      return { now, same: now === before };
+    }
+    const now = fingerprint(path, 'hash');
+    return { now, same: now === before };
   };
   const snapshot = (dir: string, depth = 0) => {
     if (depth > 8) return;
@@ -69,7 +88,7 @@ export function watchWorkspace(root: string, onChange: (changes: WorkspaceChange
       const path = dir ? `${dir}/${e.name}` : e.name;
       if (!changeKind(path)) continue;
       if (e.isDirectory()) snapshot(path, depth + 1);
-      else seen.set(path, fingerprint(path));
+      else seen.set(path, fingerprint(path, 'stat'));
     }
   };
   snapshot('');
@@ -77,12 +96,11 @@ export function watchWorkspace(root: string, onChange: (changes: WorkspaceChange
     timer = undefined;
     if (!pending.size) return;
     const batch = [...pending.values()].filter((c) => {
-      const now = fingerprint(c.path);
-      const before = seen.get(c.path) ?? 'gone';
+      const { now, same } = compare(c.path);
       if (now === 'gone') seen.delete(c.path);
       else seen.set(c.path, now);
       // a folder event says nothing by itself: its files report their own changes
-      return now !== 'dir' && now !== before;
+      return now !== 'dir' && !same;
     });
     pending.clear();
     if (batch.length) onChange(batch);
@@ -95,7 +113,7 @@ export function watchWorkspace(root: string, onChange: (changes: WorkspaceChange
       if (!kind) return;
       if (writtenByUs(join(root, path)) || opts.isOwnChange?.()) {
         // the app's own write: the file's new state is the known one
-        const f = fingerprint(path);
+        const f = fingerprint(path, 'hash');
         if (f === 'gone') seen.delete(path);
         else seen.set(path, f);
         return;

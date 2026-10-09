@@ -60,7 +60,10 @@ function freshHome(name, settings = {}) {
 function launch(planFile, home, planOut, env) {
   const electron = exe ? exe : join(repo, 'node_modules', 'electron', 'dist', process.platform === 'win32' ? 'electron.exe' : 'electron');
   // E2E_INSPECT=9339: the app's main process listens for a debugger (a hung run can be paused and its stack read)
-  const appArgs = [...(process.env.E2E_INSPECT ? [`--inspect=${process.env.E2E_INSPECT}`] : []), ...(process.env.E2E_RDP ? [`--remote-debugging-port=${process.env.E2E_RDP}`] : []), ...(exe ? [] : [join(repo, 'apps', 'desktop')])];
+  // a window behind others (or minimised) must keep running: Chromium pauses an occluded window's frames and throttles
+  // its timers, which hung every wait for a painted frame
+  const keepRunning = ['--disable-renderer-backgrounding', '--disable-background-timer-throttling', '--disable-backgrounding-occluded-windows', '--disable-features=CalculateNativeWinOcclusion'];
+  const appArgs = [...keepRunning, ...(process.env.E2E_INSPECT ? [`--inspect=${process.env.E2E_INSPECT}`] : []), ...(process.env.E2E_RDP ? [`--remote-debugging-port=${process.env.E2E_RDP}`] : []), ...(exe ? [] : [join(repo, 'apps', 'desktop')])];
   return new Promise((done) => {
     const child = spawn(electron, appArgs, {
       env: { ...process.env, TESTPION_HOME: home, TESTPION_CAPTURE_SCRIPT: join(here, 'harness.cjs'), E2E_PLAN: planFile, E2E_OUT: planOut, ...env },
@@ -107,7 +110,9 @@ async function runPlan(file, attempt) {
   }
   const missing = plan.filter((s) => !report.steps.some((r) => r.name === s[0])).map((s) => s[0]);
   for (const m of missing) failures.push({ step: m, why: 'did not run' });
-  return { name, ok: failures.length === 0, seconds: Math.round((Date.now() - t0) / 1000), steps: report.steps.length, failures, out: planOut };
+  // console warnings never fail a step; they are listed, so a run shows them
+  const warnings = [...new Set(report.steps.flatMap((s) => (s.warnings ?? []).map((w) => `${s.name}: ${w}`)))];
+  return { name, ok: failures.length === 0, seconds: Math.round((Date.now() - t0) / 1000), steps: report.steps.length, failures, ...(warnings.length ? { warnings } : {}), out: planOut };
 }
 
 /** The local demo servers (REST on 4010, GraphQL, WebSocket, gRPC, …) some plans send to; started unless already up. */
@@ -143,6 +148,7 @@ for (const file of plans) {
   results.push(r);
   console.log(`${r.ok ? (r.flaky ? 'FLAKY' : 'PASS ') : 'FAIL '} ${r.name.padEnd(22)} ${String(r.steps ?? 0).padStart(3)} steps  ${r.seconds}s`);
   for (const f of r.ok ? (r.flaky ?? []) : r.failures) console.log(`        ${r.ok ? '(first run) ' : ''}${f.step}: ${f.why}${f.result ? `\n          → ${f.result}` : ''}`);
+  if (r.warnings?.length) console.log(`        ${r.warnings.length} console warning${r.warnings.length > 1 ? 's' : ''} (summary.json), first: ${r.warnings[0].slice(0, 160)}`);
 }
 servers?.kill();
 writeFileSync(join(out, 'summary.json'), JSON.stringify(results, null, 2));

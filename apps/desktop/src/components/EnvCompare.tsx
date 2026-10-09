@@ -61,8 +61,9 @@ export function EnvCompare({ environments, initialLeft, onClose }: { environment
   const picker = (value: string, set: (v: string) => void, label: string) => (
     <Select aria-label={label} value={value} onChange={(e) => set(e.target.value)} className="flex-1">
       {environments.map((e) => (
-        <option key={e.id} value={e.id}>
+        <option key={e.id} value={e.id} disabled={!!e.problem} title={e.problem}>
           {e.name}
+          {e.problem ? '  (cannot be read)' : ''}
         </option>
       ))}
     </Select>

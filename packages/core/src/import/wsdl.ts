@@ -1,4 +1,8 @@
-import { XMLParser } from 'fast-xml-parser';
+import { nodeRequire } from '../util/lazy-require.js';
+
+// the XML parser loads with the first WSDL import (see util/lazy-require.ts)
+let fxp: typeof import('fast-xml-parser') | undefined;
+const xmlParser = (): typeof import('fast-xml-parser') => (fxp ??= typeof require === 'function' ? require('fast-xml-parser') : nodeRequire('fast-xml-parser'));
 import { ApsError } from '../errors.js';
 import type { Collection, CollectionFolder, KeyValue, SavedHttpRequest } from '../model/types.js';
 import { SCHEMA_VERSION } from '../model/types.js';
@@ -66,7 +70,7 @@ const local = (q: unknown) => String(q ?? '').split(':').pop()!;
 export function importWsdl(text: string): { collection: Collection } {
   let doc: X;
   try {
-    doc = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@', parseTagValue: false, parseAttributeValue: false, trimValues: true, isArray: (_n, _p, _leaf, isAttr) => !isAttr }).parse(text) as X;
+    doc = new (xmlParser().XMLParser)({ ignoreAttributes: false, attributeNamePrefix: '@', parseTagValue: false, parseAttributeValue: false, trimValues: true, isArray: (_n, _p, _leaf, isAttr) => !isAttr }).parse(text) as X;
   } catch (e) {
     throw new ApsError('ValidationError', `The WSDL is not valid XML: ${(e as Error).message}`);
   }

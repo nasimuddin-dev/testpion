@@ -1,26 +1,14 @@
 import { ENGINE_VERSION } from '../../version.js';
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { readFileSync } from 'node:fs';
 import { createMcpMockServer, loadMcpMock } from '../../mcp-server/mcp-mock.js';
 import { assertProcessesAllowed, assertUrlAllowed } from '../../net/policy.js';
+import { ensureProxyApplied } from '../../net/proxy.js';
 import type { CookieJar } from '../../cookies/cookie-jar.js';
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { StdioClientTransport, getDefaultEnvironment } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
+import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { mcpClient, mcpClientHttp, mcpClientSse, mcpClientStdio, mcpInMemory, mcpTypes } from '../../mcp-server/sdk.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import type { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
-import {
-  CreateMessageRequestSchema,
-  ElicitRequestSchema,
-  ListRootsRequestSchema,
-  LoggingMessageNotificationSchema,
-  ResourceUpdatedNotificationSchema,
-  type CreateMessageRequest,
-  type CreateMessageResult,
-  type ElicitRequest,
-  type ElicitResult,
-} from '@modelcontextprotocol/sdk/types.js';
+import type { CreateMessageRequest, CreateMessageResult, ElicitRequest, ElicitResult } from '@modelcontextprotocol/sdk/types.js';
 import type { McpServerConfig } from '../../model/types.js';
 import { ApsError } from '../../errors.js';
 import type { Redactor } from '../../util/redact.js';
@@ -192,15 +180,15 @@ export class McpSession {
     if (features.has('roots')) capabilities.roots = { listChanged: false };
     if (features.has('sampling')) capabilities.sampling = {};
     if (features.has('elicitation')) capabilities.elicitation = {};
-    this.client = new Client({ name: 'testpion', version: ENGINE_VERSION }, { capabilities });
-    if (features.has('roots')) this.client.setRequestHandler(ListRootsRequestSchema, async () => ({ roots: this.handlers.roots?.() ?? [] }));
+    this.client = new (mcpClient().Client)({ name: 'testpion', version: ENGINE_VERSION }, { capabilities });
+    if (features.has('roots')) this.client.setRequestHandler(mcpTypes().ListRootsRequestSchema, async () => ({ roots: this.handlers.roots?.() ?? [] }));
     if (features.has('sampling'))
-      this.client.setRequestHandler(CreateMessageRequestSchema, async (req) => {
+      this.client.setRequestHandler(mcpTypes().CreateMessageRequestSchema, async (req) => {
         if (!this.handlers.sampling) throw new Error('Sampling is not answered here: set a sampling reply for this test');
         return this.handlers.sampling(req.params);
       });
     if (features.has('elicitation'))
-      this.client.setRequestHandler(ElicitRequestSchema, async (req) => (this.handlers.elicitation ? this.handlers.elicitation(req.params) : { action: 'decline' }));
+      this.client.setRequestHandler(mcpTypes().ElicitRequestSchema, async (req) => (this.handlers.elicitation ? this.handlers.elicitation(req.params) : { action: 'decline' }));
   }
 
   /** Change how server requests (roots, sampling, elicitation) are answered. */
@@ -258,6 +246,8 @@ export class McpSession {
     // every HTTP request to the server is checked against the network policy and shares the cookie jar
     const jarFetch = async (url: string | URL, init?: RequestInit): Promise<Response> => {
       await assertUrlAllowed(url);
+      // global fetch goes through undici's global dispatcher: the app's proxy settings, applied with undici's first load
+      await ensureProxyApplied();
       const headers = new Headers(init?.headers);
       if (jar && !headers.has('cookie')) {
         const cookie = jar.headerFor(url);
@@ -271,10 +261,10 @@ export class McpSession {
     switch (c.transport) {
       case 'stdio': {
         assertProcessesAllowed(`MCP server "${c.name}"`);
-        const t = new StdioClientTransport({
+        const t = new (mcpClientStdio().StdioClientTransport)({
           command: c.command,
           args: c.args ?? [],
-          env: { ...getDefaultEnvironment(), ...(c.env ?? {}) },
+          env: { ...mcpClientStdio().getDefaultEnvironment(), ...(c.env ?? {}) },
           cwd: c.cwd || undefined,
           stderr: 'pipe',
         });
@@ -287,14 +277,14 @@ export class McpSession {
       case 'mock': {
         // in-process: the mock server and this client are joined by an in-memory channel
         const def = loadMcpMock(readFileSync(c.mockFile, 'utf8'));
-        const [client, server] = InMemoryTransport.createLinkedPair();
+        const [client, server] = mcpInMemory().InMemoryTransport.createLinkedPair();
         void createMcpMockServer(def).connect(server);
         return client;
       }
       case 'streamable-http':
-        return new StreamableHTTPClientTransport(new URL(c.url), { requestInit: { headers: headersOf(c.headers) }, fetch: jarFetch });
+        return new (mcpClientHttp().StreamableHTTPClientTransport)(new URL(c.url), { requestInit: { headers: headersOf(c.headers) }, fetch: jarFetch });
       case 'sse':
-        return new SSEClientTransport(new URL(c.url), { requestInit: { headers: headersOf(c.headers) }, fetch: jarFetch, eventSourceInit: { fetch: jarFetch } });
+        return new (mcpClientSse().SSEClientTransport)(new URL(c.url), { requestInit: { headers: headersOf(c.headers) }, fetch: jarFetch, eventSourceInit: { fetch: jarFetch } });
     }
   }
 
@@ -309,10 +299,10 @@ export class McpSession {
       metadata: this.redactor?.redact({ ...this.config }) ?? { ...this.config },
     });
     this.transport = new TracingTransport(this.createTransport(), this.emit, this.redactor);
-    this.client.setNotificationHandler(LoggingMessageNotificationSchema, () => {
+    this.client.setNotificationHandler(mcpTypes().LoggingMessageNotificationSchema, () => {
       /* recorded by the tracing transport */
     });
-    this.client.setNotificationHandler(ResourceUpdatedNotificationSchema, (n) => {
+    this.client.setNotificationHandler(mcpTypes().ResourceUpdatedNotificationSchema, (n) => {
       for (const l of this.updateListeners) l(n.params.uri);
     });
     try {

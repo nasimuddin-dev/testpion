@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useApp, type ViewId } from './store';
 import { useDoc } from './lib/docs';
 
@@ -63,4 +63,44 @@ export function useSaveShortcut(view: ViewId, fn: () => void): void {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [view]);
+}
+
+/**
+ * Load a filtered list: at once on mount and whenever a picked filter changes, and 200 ms after the last keystroke in
+ * its search text. (A first open used to wait out the typing debounce for nothing.) `skipMount` when something else
+ * already loads it on mount, e.g. a view that loads whenever it becomes the active one.
+ */
+export function useFilteredLoad(load: () => void, query: string, filters: unknown[], skipMount = false): void {
+  const fn = useRef(load);
+  fn.current = load;
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current && skipMount) return;
+    fn.current();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, filters);
+  useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    const t = setTimeout(() => fn.current(), 200);
+    return () => clearTimeout(t);
+  }, [query]);
+}
+
+/**
+ * Callbacks for a memoised child: the same functions on every render, each calling the latest one given (so a parent
+ * that re-renders on every keystroke doesn't re-render a list of thousands of rows through new props). The keys must
+ * stay the same from one render to the next.
+ */
+export function useStableCallbacks<T extends object>(fns: T): T {
+  const latest = useRef(fns);
+  latest.current = fns;
+  const [stable] = useState(() => {
+    const o: Record<string, unknown> = {};
+    for (const k of Object.keys(fns)) o[k] = (...args: unknown[]) => (latest.current as Record<string, ((...a: unknown[]) => unknown) | undefined>)[k]?.(...args);
+    return o as T;
+  });
+  return stable;
 }

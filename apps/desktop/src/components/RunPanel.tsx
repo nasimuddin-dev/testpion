@@ -162,7 +162,7 @@ export function RunPanel({ runId, expectedTotal, onRerunFailed, focusName }: { r
           <>
             <Activity size={15} className="text-accent" />
             <span className="text-sm font-medium">Running…</span>
-            <Button size="sm" variant="danger" icon={<Square size={11} />} onClick={() => call('runs.cancel', { runId })}>
+            <Button size="sm" variant="danger" icon={<Square size={11} />} onClick={() => void call('runs.cancel', { runId }).catch(toastError)}>
               Cancel
             </Button>
           </>
@@ -304,7 +304,7 @@ export function RunPanel({ runId, expectedTotal, onRerunFailed, focusName }: { r
 }
 
 function ExportMenu({ runId }: { runId: string }) {
-  const exp = (format: 'html' | 'json' | 'junit' | 'markdown') => void call<SaveResult>('runs.exportReport', { runId, format }).then((r) => finishSave(r, 'Report'));
+  const exp = (format: 'html' | 'json' | 'junit' | 'markdown') => void call<SaveResult>('runs.exportReport', { runId, format }).then((r) => finishSave(r, 'Report'), toastError);
   return (
     <Menu
       width={210}
@@ -503,7 +503,7 @@ function BaselineModal({ runId, onClose }: { runId: string; onClose(): void }) {
           <Field label="Save this run as baseline" className="flex-1">
             <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. main-2026-09" />
           </Field>
-          <Button disabled={!name} onClick={() => call('baselines.save', { runId, name }).then(() => (useApp.getState().toast('Baseline saved', 'success'), void load()))}>
+          <Button disabled={!name} onClick={() => void call('baselines.save', { runId, name }).then(() => (useApp.getState().toast('Baseline saved', 'success'), void load()), toastError)}>
             Save baseline
           </Button>
         </div>

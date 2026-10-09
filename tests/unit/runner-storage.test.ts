@@ -237,12 +237,13 @@ describe('workspace storage', () => {
     expect(ws.getCollection('c1').version).toBe(1);
     ws.close();
 
-    // corrupted collection is reported, preserved and does not break listing
+    // a broken collection is reported on every listing and left exactly where it is (nothing renamed on read)
     writeFileSync(join(ws.root, 'collections', 'broken.json'), '{ not json');
     const reopened = mgr.open('veterinary api');
     const cols = reopened.listCollections();
-    expect(cols.find((c) => c.id === 'broken')?.problem).toMatch(/Corrupted/);
-    expect(readdirSync(join(ws.root, 'collections')).some((f) => f.startsWith('broken.json.corrupt-'))).toBe(true);
+    expect(cols.find((c) => c.id === 'broken')?.problem).toMatch(/cannot be read: it is not valid JSON/);
+    expect(reopened.listCollections().find((c) => c.id === 'broken')?.problem).toBeTruthy();
+    expect(readdirSync(join(ws.root, 'collections')).filter((f) => f.startsWith('broken.json'))).toEqual(['broken.json']);
     reopened.close();
 
     const dup = mgr.duplicate('Veterinary API', 'Copy');
@@ -407,7 +408,10 @@ describe('settings recovery', () => {
     const mgr = new WorkspaceManager(home);
     const s = mgr.loadSettings();
     expect(s.theme).toBe('system');
-    expect(mgr.settingsProblem).toMatch(/Corrupted/);
-    expect(readdirSync(home).some((f) => f.startsWith('settings.json.corrupt-'))).toBe(true);
+    expect(mgr.settingsProblem).toMatch(/cannot be read/);
+    // the broken file stays until settings are saved; saving keeps a copy of it
+    expect(readdirSync(home).filter((f) => f.startsWith('settings.json'))).toEqual(['settings.json']);
+    mgr.saveSettings(s);
+    expect(readdirSync(home).some((f) => f.startsWith('settings.json.broken-'))).toBe(true);
   });
 });

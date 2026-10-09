@@ -1,12 +1,12 @@
 import { assertUrlAllowed, getNetworkPolicy } from '../../net/policy.js';
 import { ENGINE_VERSION } from '../../version.js';
-import { baseDispatcher, makeDispatcher, proxyGeneration } from '../../net/proxy.js';
+import { baseDispatcher, ensureProxyApplied, makeDispatcher, proxyGeneration } from '../../net/proxy.js';
 import { createWriteStream, openAsBlob, readFileSync, mkdirSync, type WriteStream } from 'node:fs';
 import { basename, join } from 'node:path';
 import { subscribe } from 'node:diagnostics_channel';
 import { STATUS_CODES } from 'node:http';
 import { endAndClose } from '../../storage/fsutil.js';
-import { fetch as undiciFetch, FormData as UndiciFormData, type Dispatcher } from 'undici';
+import type { Dispatcher } from 'undici';
 import type { BodyConfig, HttpRequestSpec, HttpResponseData, KeyValue, TimelinePhase } from '../../model/types.js';
 import { ApsError, normalizeError } from '../../errors.js';
 import { applyAuth, type AuthContext } from './auth.js';
@@ -40,7 +40,15 @@ export interface HttpExecOptions extends AuthContext {
   cookieJar?: CookieJar;
   /** The variable names defined where the request was resolved: a `{{name}}` left in the host names the one it likely meant. */
   variableNames?: () => string[];
+  /**
+   * How long one attempt may take, in ms (until its body has arrived; for an event stream, until the stream starts).
+   * Default: the request's `settings.timeoutMs`, else DEFAULT_HTTP_TIMEOUT_MS. 0: no timeout.
+   */
+  timeoutMs?: number;
 }
+
+/** The timeout of a request that sets none (and whose caller passes none). */
+export const DEFAULT_HTTP_TIMEOUT_MS = 30_000;
 
 export interface PreparedRequest {
   method: string;
@@ -48,6 +56,10 @@ export interface PreparedRequest {
   headers: Array<[string, string]>;
   bodyPreview?: string;
 }
+
+// undici (fetch, its connection pools) loads with the first request, not at startup
+let undiciMod: Promise<typeof import('undici')> | undefined;
+const undici = () => (undiciMod ??= import('undici'));
 
 const dispatchers = new Map<string, Dispatcher>();
 
@@ -190,7 +202,7 @@ async function buildBody(body: BodyConfig | undefined, headers: Headers): Promis
       return { body: s, preview: s };
     }
     case 'multipart': {
-      const fd = new UndiciFormData();
+      const fd = new (await undici()).FormData();
       const preview: string[] = [];
       for (const f of body.fields) {
         if (f.enabled === false || !f.key) continue;
@@ -280,8 +292,18 @@ export async function executeHttp(spec: HttpRequestSpec, opts: HttpExecOptions =
     const ra = retryAfter ? (/^\d+$/.test(retryAfter) ? Number(retryAfter) * 1000 : Date.parse(retryAfter) - Date.now()) : NaN;
     const ms = Math.min(10_000, Number.isFinite(ra) && ra >= 0 ? ra : base * 2 ** attempt);
     return new Promise<void>((resolve, reject) => {
-      const t = setTimeout(resolve, ms);
-      opts.signal?.addEventListener('abort', () => (clearTimeout(t), reject(new ApsError('CancelledError', 'Request cancelled'))), { once: true });
+      const signal = opts.signal;
+      if (signal?.aborted) return reject(new ApsError('CancelledError', 'Request cancelled'));
+      // the listener goes when the wait ends: a long-lived signal (a whole run) must not keep every request reachable
+      const onAbort = () => {
+        clearTimeout(t);
+        reject(new ApsError('CancelledError', 'Request cancelled'));
+      };
+      const t = setTimeout(() => {
+        signal?.removeEventListener('abort', onAbort);
+        resolve();
+      }, ms);
+      signal?.addEventListener('abort', onAbort, { once: true });
     });
   };
   for (let attempt = 0; ; attempt++) {
@@ -305,7 +327,45 @@ export async function executeHttp(spec: HttpRequestSpec, opts: HttpExecOptions =
   }
 }
 
+/**
+ * One attempt, within the request's timeout: the caller's signal and the timer abort it, and the timer stops once an
+ * event stream has started (a stream may stay open for as long as the user wants). Listeners on the caller's signal
+ * are removed when the attempt ends.
+ */
 async function executeHttpOnce(spec: HttpRequestSpec, opts: HttpExecOptions = {}): Promise<{ response: HttpResponseData; prepared: PreparedRequest }> {
+  const raw = opts.timeoutMs ?? spec.settings?.timeoutMs ?? DEFAULT_HTTP_TIMEOUT_MS;
+  const timeoutMs = Number.isFinite(raw) && raw > 0 ? raw : 0;
+  if (!timeoutMs) return executeHttpAttempt(spec, opts);
+  const ctrl = new AbortController();
+  const timeoutError = new ApsError('TimeoutError', `Request timed out after ${timeoutMs} ms`, {
+    why: `The server did not answer within ${timeoutMs} ms.`,
+    suggestions: ['Increase the timeout in the request settings (or Settings ▸ default timeout).', 'Check whether the server is overloaded or the URL points at the right host.'],
+    details: { timeoutMs },
+  });
+  const timer = setTimeout(() => ctrl.abort(timeoutError), timeoutMs);
+  const outer = opts.signal;
+  const onAbort = () => ctrl.abort(outer?.reason);
+  if (outer?.aborted) onAbort();
+  else outer?.addEventListener('abort', onAbort, { once: true });
+  try {
+    return await executeHttpAttempt(spec, {
+      ...opts,
+      signal: ctrl.signal,
+      onResponseStart: (status, headers) => {
+        if (isEventStream(headers.get('content-type'))) clearTimeout(timer);
+        opts.onResponseStart?.(status, headers);
+      },
+    });
+  } catch (e) {
+    if (ctrl.signal.reason === timeoutError && !outer?.aborted) throw timeoutError;
+    throw e;
+  } finally {
+    clearTimeout(timer);
+    outer?.removeEventListener('abort', onAbort);
+  }
+}
+
+async function executeHttpAttempt(spec: HttpRequestSpec, opts: HttpExecOptions = {}): Promise<{ response: HttpResponseData; prepared: PreparedRequest }> {
   const t0 = performance.now();
   const timeline: TimelinePhase[] = [];
   const mark = (name: string, start: number) => timeline.push({ name, startMs: round(start - t0), durationMs: round(performance.now() - start) });
@@ -338,6 +398,9 @@ async function executeHttpOnce(spec: HttpRequestSpec, opts: HttpExecOptions = {}
   const custom = !!(s.followOriginalMethod || s.followAuthorizationHeader || s.removeRefererOnRedirect);
   // the connection the (first) request goes over: DNS, TCP and TLS phases when it is a new one
   const watch = watchSend(url, method);
+  // undici loads with the first request, with the app's proxy and certificate settings applied
+  await ensureProxyApplied();
+  const { fetch: undiciFetch } = await undici();
   for (;;) {
     await assertUrlAllowed(current);
     res = await undiciFetch(current, {
@@ -424,7 +487,7 @@ async function executeHttpOnce(spec: HttpRequestSpec, opts: HttpExecOptions = {}
             streamStopped = true;
             break;
           }
-          throw e;
+          throw bodyDecodeError(e, res.headers.get('content-encoding')) ?? e;
         }
         const { done, value } = step;
         if (done) break;
@@ -507,6 +570,20 @@ async function executeHttpOnce(spec: HttpRequestSpec, opts: HttpExecOptions = {}
   }
   if (streamStopped) response.streamStopped = true;
   return { response, prepared };
+}
+
+/** A body that does not decode with its Content-Encoding (zlib's Z_DATA_ERROR …): say so, with the encoding. */
+function bodyDecodeError(e: unknown, encoding: string | null): ApsError | undefined {
+  const err = e as { code?: string; message?: string; cause?: { code?: string; message?: string } };
+  const code = err?.cause?.code ?? err?.code;
+  if (!code || !/^Z_/.test(code)) return undefined;
+  const detail = err?.cause?.message ?? err?.message ?? code;
+  return new ApsError('ProtocolError', `The server's compressed response body is invalid (content-encoding ${encoding || 'unknown'} could not be decoded)`, {
+    why: `The body did not decode with its Content-Encoding (${detail}).`,
+    suggestions: ['Check the server: it sent a body that is not in the encoding its Content-Encoding header names.', 'Or send Accept-Encoding: identity to ask for an uncompressed body.'],
+    details: { code, contentEncoding: encoding ?? undefined },
+    cause: e,
+  });
 }
 
 function decodeBody(buf: Buffer, contentType: string): string {

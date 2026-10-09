@@ -6,6 +6,7 @@ import type { AppSettings, WorkspaceCurrent } from './types';
 import type { FeedbackRequest } from './components/FeedbackDialog';
 import { asError, call } from './api';
 import { loadDraft, saveDraft } from './lib/draft-store';
+import { normalizeEnvironment } from './lib/environments-store';
 
 export type ViewId =
   | 'home'
@@ -270,9 +271,13 @@ export const useApp = create<AppState>((set, get) => ({
     set({ view, ...lastRequest(view), intent: { view, payload, nonce: Date.now(), docId: routeDoc(view, payload) } });
   },
   refreshWorkspace: async () => {
-    const ws = await call<WorkspaceCurrent>('ws.current');
+    const raw = await call<WorkspaceCurrent>('ws.current');
+    // environment files are hand-edited and merged: every one has a text name and a list of variables here
+    const ws = raw && { ...raw, environments: (raw.environments ?? []).map(normalizeEnvironment) };
     const stored = ws ? localStorage.getItem(`aps.env.${ws.id}`) : null;
-    const env = ws?.environments.find((e) => e.name === (get().environment ?? stored)) ?? ws?.environments[0];
+    // an environment whose file cannot be read is never the active one
+    const usable = ws?.environments.filter((e) => !e.problem) ?? [];
+    const env = usable.find((e) => e.name === (get().environment ?? stored)) ?? usable[0];
     set({ workspace: ws, environment: env?.name });
   },
   saveSettings: async (s) => {

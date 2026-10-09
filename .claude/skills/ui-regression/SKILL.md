@@ -26,6 +26,7 @@ npm run e2e -w @testpion/desktop
 - Some plans: `npm run e2e -w @testpion/desktop -- --only rename-explorer,keyboard`
 - Installed app: `npm run e2e -w @testpion/desktop -- --exe "$LOCALAPPDATA/Programs/TestPion/TestPion.exe"`
 - Output (screenshots `NN-step.png`, `report.json` per plan, `summary.json`): `-- --out <dir>` (default: a temp folder, printed at the end).
+- Leak / slowdown soak (not in the suite): `SOAK_CYCLES=36 SOAK_OUT=<dir> node apps/desktop/e2e/run-e2e.mjs --only _soak --timeout 3600` writes `metrics.jsonl` (both processes GC'd per cycle) and heap snapshots after cycle `SOAK_SNAP_AT` (5) and the last; with other agents rebuilding `dist`, run it against a private copy of Electron with the build in `resources/app` (`--exe`).
 
 Plans run one at a time on purpose: running several apps at once was tried (2026-10-01) and was no faster on a
 CPU-bound machine and flakier (inline rename and typing steps need the window's keyboard focus, which only one
@@ -67,6 +68,9 @@ module.exports = withExpect(steps, {
 - A step is `[name, code, screenshot = true]`; `code` is an expression run in the window. It returns a short string
   describing what is on screen: labels, counts, focus, selection. It should not return just `ok`.
 - The helpers in `e2e/helpers.js` are available as `__t`: `view(label)`, `requests()`, `expand(row)`, `open(row)`, `menu`, `tab`, `button`, `key`, `tabMenu`, `sleep`, `esc`, ….
+- `requests()` waits for the Collections sidebar and its rows (at most 3 s), not a fixed sleep: time it and you measure the app.
+- `run-e2e.mjs` starts Electron with background throttling and occlusion detection off, so a window behind others keeps painting (`painted()` waits don't hang).
+- Menu items run their action just after the menu closes (a `setTimeout 0`): after clicking one, wait (`waitFor`/`sleep`) before checking its effect.
 - Steps run in order in one app session, so a plan can build on earlier steps. Put things back if a later step depends on them.
 - Expectations are by step name (a RegExp, or `(result) => true | 'reason'`); `withExpect` throws on an unknown name.
 - Native open/save dialogs: `E2E_STUB_OPEN` / `E2E_STUB_SAVE` (`CANCEL` cancels).

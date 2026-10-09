@@ -1,11 +1,14 @@
-import * as grpc from '@grpc/grpc-js';
-import * as protoLoader from '@grpc/proto-loader';
-import protobuf from 'protobufjs';
-import descriptor from 'protobufjs/ext/descriptor/index.js';
+import type * as grpc from '@grpc/grpc-js';
+import type descriptorTypes from 'protobufjs/ext/descriptor/index.js';
+import { nodeRequire } from '../../util/lazy-require.js';
 import { ApsError } from '../../errors.js';
 import type { KeyValue } from '../../model/types.js';
 import { assertUrlAllowed } from '../../net/policy.js';
-import { grpcChannel, type GrpcTlsOptions } from './grpc.js';
+import { grpcChannel, grpcJs, protobufLib, protoLoaderLib, type GrpcTlsOptions } from './grpc.js';
+
+// protobuf's descriptor extension loads at first use (see util/lazy-require.ts)
+let descriptorMod: typeof descriptorTypes | undefined;
+const descriptorLib = (): typeof descriptorTypes => (descriptorMod ??= typeof require === 'function' ? require('protobufjs/ext/descriptor/index.js') : nodeRequire('protobufjs/ext/descriptor/index.js'));
 
 /**
  * gRPC server reflection (grpc.reflection.v1, falling back to v1alpha): lists a server's services and
@@ -49,8 +52,8 @@ type ReflectionResponse = {
 };
 
 function reflectionClient(pkg: string, address: string, channel: { credentials: grpc.ChannelCredentials; options: grpc.ChannelOptions }) {
-  const root = protobuf.parse(REFLECTION_PROTO(pkg), { keepCase: true }).root;
-  const def = grpc.loadPackageDefinition(protoLoader.fromJSON(root.toJSON(), { keepCase: true, oneofs: true }));
+  const root = protobufLib().parse(REFLECTION_PROTO(pkg), { keepCase: true }).root;
+  const def = grpcJs().loadPackageDefinition(protoLoaderLib().fromJSON(root.toJSON(), { keepCase: true, oneofs: true }));
   const Ctor = pkg.split('.').reduce<unknown>((o, k) => (o as Record<string, unknown>)[k], def) as Record<string, grpc.ServiceClientConstructor>;
   return new Ctor.ServerReflection!(address, channel.credentials, channel.options);
 }
@@ -93,7 +96,7 @@ export async function reflectServer(target: { address: string; tls: boolean }, o
   const tls = target.tls || !!opts.tlsOptions?.ca || !!opts.tlsOptions?.cert;
   await assertUrlAllowed(new URL(`${tls ? 'https' : 'http'}://${target.address}`));
   const channel = grpcChannel(target.address, tls, opts.tlsOptions);
-  const md = new grpc.Metadata();
+  const md = new (grpcJs().Metadata)();
   for (const h of opts.metadata ?? []) if (h.enabled !== false && h.key) md.add(h.key.toLowerCase(), h.value);
   const deadline = new Date(Date.now() + (opts.timeoutMs ?? 15_000));
 
@@ -108,7 +111,7 @@ export async function reflectServer(target: { address: string; tls: boolean }, o
       const files = new Map<string, Uint8Array>();
       const add = (r: ReflectionResponse) => {
         for (const bytes of r.file_descriptor_response?.file_descriptor_proto ?? []) {
-          const fd = descriptor.FileDescriptorProto.decode(bytes) as unknown as { name: string };
+          const fd = descriptorLib().FileDescriptorProto.decode(bytes) as unknown as { name: string };
           if (!files.has(fd.name)) files.set(fd.name, bytes);
         }
       };
@@ -118,7 +121,7 @@ export async function reflectServer(target: { address: string; tls: boolean }, o
         add(r);
       }
       for (let guard = 0; guard < 200; guard++) {
-        const missing = [...files.values()].flatMap((b) => ((descriptor.FileDescriptorProto.decode(b) as unknown as { dependency?: string[] }).dependency ?? [])).find((d) => !files.has(d));
+        const missing = [...files.values()].flatMap((b) => ((descriptorLib().FileDescriptorProto.decode(b) as unknown as { dependency?: string[] }).dependency ?? [])).find((d) => !files.has(d));
         if (!missing) break;
         const r = await s.ask({ file_by_filename: missing });
         if (r.error_response) throw new ApsError('ProtocolError', `Reflection could not provide ${missing}: ${r.error_response.error_message}`);
@@ -126,28 +129,28 @@ export async function reflectServer(target: { address: string; tls: boolean }, o
         add(r);
         if (files.size === before) throw new ApsError('ProtocolError', `Reflection did not return ${missing}`);
       }
-      const set = descriptor.FileDescriptorSet.encode(descriptor.FileDescriptorSet.create({ file: [...files.values()].map((b) => descriptor.FileDescriptorProto.decode(b)) })).finish();
+      const set = descriptorLib().FileDescriptorSet.encode(descriptorLib().FileDescriptorSet.create({ file: [...files.values()].map((b) => descriptorLib().FileDescriptorProto.decode(b)) })).finish();
       return { services, descriptorSet: Buffer.from(set).toString('base64') };
     } catch (e) {
       lastError = e as Error;
       const code = (e as { code?: number }).code;
       // v1 not offered: try v1alpha; anything else is final
-      if (code !== grpc.status.UNIMPLEMENTED) break;
+      if (code !== grpcJs().status.UNIMPLEMENTED) break;
     } finally {
       s.close();
     }
   }
   const code = (lastError as { code?: number } | undefined)?.code;
-  if (code === grpc.status.UNIMPLEMENTED) throw new ApsError('ProtocolError', 'This server does not offer gRPC server reflection', { suggestions: ['Add the .proto files instead.'] });
-  if (code === grpc.status.UNAVAILABLE) throw new ApsError('NetworkError', `Can't reach ${target.address}: ${(lastError as { details?: string }).details ?? lastError!.message}`, { suggestions: ['Check the address and whether the server uses TLS (grpcs://) or plaintext.'] });
+  if (code === grpcJs().status.UNIMPLEMENTED) throw new ApsError('ProtocolError', 'This server does not offer gRPC server reflection', { suggestions: ['Add the .proto files instead.'] });
+  if (code === grpcJs().status.UNAVAILABLE) throw new ApsError('NetworkError', `Can't reach ${target.address}: ${(lastError as { details?: string }).details ?? lastError!.message}`, { suggestions: ['Check the address and whether the server uses TLS (grpcs://) or plaintext.'] });
   throw lastError instanceof ApsError ? lastError : new ApsError('ProtocolError', `Reflection failed: ${lastError?.message}`);
 }
 
 /** A protobufjs Root from a FileDescriptorSet (base64). */
 export function rootFromDescriptorSet(b64: string): protobuf.Root {
   try {
-    const set = descriptor.FileDescriptorSet.decode(Buffer.from(b64, 'base64'));
-    const root = (protobuf.Root as unknown as { fromDescriptor(s: unknown): protobuf.Root }).fromDescriptor(set);
+    const set = descriptorLib().FileDescriptorSet.decode(Buffer.from(b64, 'base64'));
+    const root = (protobufLib().Root as unknown as { fromDescriptor(s: unknown): protobuf.Root }).fromDescriptor(set);
     root.resolveAll();
     return root;
   } catch (e) {

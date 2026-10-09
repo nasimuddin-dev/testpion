@@ -2,7 +2,7 @@ import { useCallback, useState, type ReactNode } from 'react';
 import { call } from '../api';
 import type { Collection, LibraryItem } from '../types';
 import { SaveModal } from '../views/rest/dialogs';
-import { refreshCollections, useCollections } from './collections-store';
+import { refreshCollections, useCollectionTree } from './collections-store';
 
 export interface SaveTarget {
   collectionId: string;
@@ -19,7 +19,7 @@ export function useSaveInCollection(
   items: Array<Pick<LibraryItem, 'folder' | 'collectionId'>>,
   title: string,
 ): { ask(defaults: { name: string; collectionId?: string; folder?: string }): Promise<SaveTarget | undefined>; modal: ReactNode } {
-  const collections = useCollections();
+  const collections = useCollectionTree();
   const [asking, setAsking] = useState<{ name: string; collectionId?: string; folder?: string; resolve(t: SaveTarget | undefined): void }>();
   const ask = useCallback((defaults: { name: string; collectionId?: string; folder?: string }) => new Promise<SaveTarget | undefined>((resolve) => setAsking({ ...defaults, resolve })), []);
   const folderNames = useCallback(

@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import type {
   AgentTest,
   AuthConfig,
+  DelayTest,
   CheckConfig,
   CheckResult,
   GraphQLTest,
@@ -40,7 +41,7 @@ import { runScript } from '../scripts/sandbox.js';
 import { renderVisualizer } from '../scripts/visualizer.js';
 import { applyScriptOutput, scriptRequestSender, scriptScopes, type PersistVariable } from '../scripts/bridge.js';
 import { query, tryParseJson } from '../util/jsonpath.js';
-import { withTimeout } from '../util/concurrency.js';
+import { sleep, withTimeout } from '../util/concurrency.js';
 import { applyCookieJarOps, type CookieJar } from '../cookies/cookie-jar.js';
 import { realtimeModeFor, runRealtimeExchange } from '../protocols/realtime.js';
 
@@ -158,6 +159,8 @@ export async function executeTest(testIn: TestCase, svc: ExecServices, opts: { t
           return runRag(test, scope, svc, root, signal);
         case 'agent':
           return runAgentTest(test, scope, svc, root, signal);
+        case 'delay':
+          return runDelay(test, test.timeoutMs ?? svc.defaultTimeoutMs, signal);
         default:
           throw new ApsError('ConfigurationError', `Unknown test type "${(test as TestCase).type}"`);
       }
@@ -704,6 +707,13 @@ async function runRag(test: RagTest, scope: VariableScope, svc: ExecServices, sp
       },
     },
   };
+}
+
+/** A pause: no request, no trace payload; never longer than the test's timeout; the run's cancel stops it at once. */
+async function runDelay(test: DelayTest, timeoutMs: number | undefined, signal: AbortSignal): Runner {
+  const ms = timeoutMs && timeoutMs > 0 ? Math.min(test.ms, timeoutMs) : test.ms;
+  await sleep(ms, signal);
+  return { ctx: { testType: 'delay', body: undefined, text: '' }, partial: {}, metadata: { waitedMs: ms, ...(ms < test.ms ? { cappedByTimeoutMs: timeoutMs } : {}) } };
 }
 
 async function runAgentTest(test: AgentTest, scope: VariableScope, svc: ExecServices, span: SpanHandle, signal: AbortSignal): Runner {

@@ -14,8 +14,6 @@ import {
   ApsError,
   compareToBaseline,
   createBaseline,
-  loadSuite,
-  loadTestsFromFile,
   isSuiteFile,
   ciConfig,
   type CiConfigOptions,
@@ -34,13 +32,32 @@ import {
   readRunSummary,
   compareRuns,
   flowOfFile,
+  editFlowFile,
+  type FlowEditOp,
   readExposure,
   setExposure,
   type FlowExposure,
 } from '@testpion/core';
 import type { Backend, Handlers, EvalRunParams } from '../backend.js';
+import { previewTests } from '../test-preview.js';
+
+const REPORT_FILES: Record<string, string> = { html: 'report.html', markdown: 'report.md', junit: 'junit.xml', json: 'report.json' };
+function reportFile(format: string): string {
+  const f = Object.hasOwn(REPORT_FILES, format) ? REPORT_FILES[format] : undefined;
+  if (!f) throw new ApsError('ValidationError', `No report format ${format}. Available: ${Object.keys(REPORT_FILES).join(', ')}`);
+  return f;
+}
 
 export function testingHandlers(be: Backend): Handlers {
+  /** The variable names an environment, the globals and the workspace define: a step that reads another one is marked in the Flow tab. */
+  const knownVariables = (environment?: string): string[] => {
+    const ctx = be.context({ environment });
+    try {
+      return ctx.vars.names();
+    } finally {
+      void ctx.dispose();
+    }
+  };
   return {
     'tests.tree': () => be.ws.testTree(),
     'tests.read': ({ path }: { path: string }) => be.ws.readTestFile(path),
@@ -75,18 +92,18 @@ export function testingHandlers(be: Backend): Handlers {
       be.ws.writeTestFile(path, next);
       return { path, expose: readExposure(next, path) };
     },
-    'tests.preview': async ({ path }: { path: string }) => {
-      const out: Array<{ id?: string; name: string; type: string; tags?: string[] }> = [];
-      const abs = join(be.ws.path('tests'), path);
-      if (isSuiteFile(abs)) return { suite: await loadSuite(abs), tests: [] };
-      for await (const t of loadTestsFromFile(abs)) {
-        out.push({ id: t.id, name: t.name, type: t.type, tags: t.tags });
-        if (out.length >= 500) break;
-      }
-      return { tests: out };
-    },
+    /** The first 500 tests of a test file inside tests/ (or its suite), read so that no file blocks the main process. */
+    'tests.preview': ({ path }: { path: string }) => previewTests(be.ws.safePath(path, be.ws.path('tests')), path),
     /** A test file as a flow: its steps (name, type, request line, extracted names, dependsOn) with the latest run's result of each. */
-    'tests.flow': ({ file }: { file: string }) => flowOfFile(be.ws, file),
+    'tests.flow': async ({ file, raw, environment }: { file: string; raw?: boolean; environment?: string }) => flowOfFile(be.ws, file, { raw, known: raw ? knownVariables(environment) : undefined }),
+    /**
+     * The flow designer: one edit of a test file (add, connect, change, remove, place steps …) applied and saved; the
+     * answer has the text before (the designer's undo) and after (the editor shows it), and the flow as tests.flow reads it.
+     */
+    'tests.flowEdit': async ({ file, op, environment }: { file: string; op: FlowEditOp; environment?: string }) => {
+      const r = editFlowFile(be.ws, file, op);
+      return { file: r.file, before: r.before, text: r.text, added: r.added ?? [], flow: await flowOfFile(be.ws, r.file, { raw: true, known: knownVariables(environment) }) };
+    },
     /** A CI pipeline (GitHub Actions, GitLab CI, Azure Pipelines, Jenkins) for a suite, collection or test files. */
     'ci.config': (o: CiConfigOptions) => ciConfig(be.ws, o),
     'ci.save': (o: CiConfigOptions) => {
@@ -122,7 +139,7 @@ export function testingHandlers(be: Backend): Handlers {
     'runs.review': ({ runId, resultId, rating, note }: { runId: string; resultId: string; rating?: 'good' | 'bad' | null; note?: string | null }) => reviewResult(be.ws, runId, resultId, { rating, note }) ?? null,
     'runs.reviewCounts': ({ runId, total }: { runId: string; total: number }) => reviewCounts(runReviews(be.ws, runId), total),
     'runs.openReport': ({ runId, format }: { runId: string; format: 'html' | 'markdown' | 'junit' | 'json' }) => {
-      const file = { html: 'report.html', markdown: 'report.md', junit: 'junit.xml', json: 'report.json' }[format];
+      const file = reportFile(format);
       const p = join(be.ws.runDir(runId), file);
       if (!existsSync(p)) throw new ApsError('ConfigurationError', 'Report not found');
       if (be.host.openPath) {
@@ -133,8 +150,9 @@ export function testingHandlers(be: Backend): Handlers {
       return { path: p, view: { name: file, content: readFileSync(p).toString('base64'), encoding: 'base64', type: format === 'html' ? 'text/html' : 'text/plain' } };
     },
     'runs.exportReport': async ({ runId, format }: { runId: string; format: 'html' | 'markdown' | 'junit' | 'json' }) => {
-      const file = { html: 'report.html', markdown: 'report.md', junit: 'junit.xml', json: 'report.json' }[format];
+      const file = reportFile(format);
       const src = join(be.ws.runDir(runId), file);
+      if (!existsSync(src)) throw new ApsError('ConfigurationError', `Run ${runId} has no ${format} report`);
       return be.saveOrDownload(file, undefined, (dest) => copyFileSync(src, dest), () => readFileSync(src));
     },
     /** The workspace report (activity, collection health, monitors, runs) as one HTML file, saved where the user picks. */
@@ -146,6 +164,8 @@ export function testingHandlers(be: Backend): Handlers {
     'baselines.list': () => be.ws.listBaselines(),
     'baselines.save': async ({ runId, name }: { runId: string; name: string }) => {
       const summary = await be.handlers['runs.summary']!({ runId });
+      if (!summary) throw new ApsError('ValidationError', `No run ${runId}`);
+      if (!name?.trim()) throw new ApsError('ValidationError', 'baselines.save: missing name');
       const b = await createBaseline(name, summary as never, be.results(runId));
       be.ws.saveBaseline(b);
       return { name, tests: Object.keys(b.tests).length };

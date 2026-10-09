@@ -1,5 +1,5 @@
 /** RPC handlers: git for the open workspace (GIT-201 … GIT-304, planning/git-integration.md). Uses the system git. */
-import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { readdirSync, readFileSync, rmSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import {
   ApsError,
@@ -45,6 +45,8 @@ import {
   type GitFile,
   gitCommitDetail,
   gitCommitDiff,
+  atomicWrite,
+  isWorkspaceDir,
 } from '@testpion/core';
 import type { Backend, Handlers } from '../backend.js';
 
@@ -79,7 +81,8 @@ export function gitHandlers(be: Backend): Handlers {
 
   /** The workspace folders in a cloned repository: the root, or folders one or two levels down. */
   const findWorkspaces = (dir: string, depth = 2): string[] => {
-    if (existsSync(join(dir, 'workspace.json'))) return [dir];
+    // a TestPion workspace.json only (an Nx / Angular monorepo has one too)
+    if (isWorkspaceDir(dir)) return [dir];
     if (depth === 0) return [];
     return readdirSync(dir, { withFileTypes: true })
       .filter((d) => d.isDirectory() && !d.name.startsWith('.') && d.name !== 'node_modules')
@@ -188,7 +191,7 @@ export function gitHandlers(be: Backend): Handlers {
       const text = await gitShow(ws(), file, rev);
       if (text === undefined) throw new ApsError('ValidationError', `${file} is not in commit ${rev.slice(0, 7)}`);
       be.lastOwnChange = Date.now();
-      writeFileSync(be.ws.safePath(file), text);
+      atomicWrite(be.ws.safePath(file), text);
       be.host.emit('data.changed', { method: collectionId ? 'col.save' : 'env.save' });
       return { file, rev };
     },
@@ -262,7 +265,7 @@ export function gitHandlers(be: Backend): Handlers {
     },
     /** Open a workspace folder of a cloned repository. */
     'git.openFolder': ({ path }: { path: string }) => {
-      if (!existsSync(join(path, 'workspace.json'))) throw new ApsError('ConfigurationError', `${path} is not a TestPion workspace`);
+      if (!isWorkspaceDir(path)) throw new ApsError('ConfigurationError', `${path} is not a TestPion workspace`);
       openFolder(path);
       return { opened: path };
     },

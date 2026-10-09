@@ -2,8 +2,8 @@ import { CompareView, type Compared } from '../components/ResponseHistory';
 import { Download, History, RotateCcw, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { asError, call } from '../api';
-import { confirmAction, useApp } from '../store';
-import { useIntent } from '../hooks';
+import { confirmAction, useApp, toastError } from '../store';
+import { useFilteredLoad, useIntent } from '../hooks';
 import type { HttpRequestSpec } from '../types';
 import { formatBytes, formatMs, groupByDay } from '../lib/format';
 import { DurationBar } from '../components/charts';
@@ -142,11 +142,7 @@ export function HistoryView() {
     },
     [query, kind, failedOnly, items.length],
   );
-  useEffect(() => {
-    const t = setTimeout(() => void load(true), 200);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, kind, failedOnly]);
+  useFilteredLoad(() => void load(true), query, [kind, failedOnly]);
   useEffect(() => {
     const onVis = () => useApp.getState().view === 'history' && void load(true);
     return useApp.subscribe((s, p) => s.view !== p.view && onVis());
@@ -182,7 +178,7 @@ export function HistoryView() {
             variant="ghost"
             icon={<Download size={13} />}
             title="Export the HTTP and GraphQL entries shown here as a HAR file (secrets are masked)"
-            onClick={() => void call<SaveResult>('history.exportHar', { query: query || undefined, kind: kind || undefined }).then((r) => finishSave(r, 'HAR file'))}
+            onClick={() => void call<SaveResult>('history.exportHar', { query: query || undefined, kind: kind || undefined }).then((r) => finishSave(r, 'HAR file'), toastError)}
           >
             HAR
           </Button>

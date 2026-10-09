@@ -30,7 +30,7 @@ import { VarInput } from '../components/VarInput';
 import { Badge, Button, cx, Empty, IconButton, Input, Select, Split, statusTone, Tabs, Tooltip } from '../components/ui';
 import { ResponseSplit } from '../components/ResponseSplit';
 import { saveAsTestFile } from '../lib/save-test';
-import { currentCollections, refreshCollections, useCollections } from '../lib/collections-store';
+import { currentCollectionTree, fullCollection, refreshCollections, useCollectionTree } from '../lib/collections-store';
 
 interface SchemaType {
   name: string;
@@ -243,7 +243,7 @@ export function GraphQLView() {
       setResult({ error: asError(e) });
     }
   };
-  const unsubscribe = () => subscription && void call('gql.unsubscribe', { id: subscription.id }).then(() => setSubscription(undefined));
+  const unsubscribe = () => subscription && void call('gql.unsubscribe', { id: subscription.id }).then(() => setSubscription(undefined), toastError);
 
   const run = async () => {
     if (isSubscription) return subscribe();
@@ -276,8 +276,9 @@ export function GraphQLView() {
   };
   useSendShortcut('graphql', () => !running && void run());
 
-  // collections sidebar (like REST): folders, new GraphQL requests, drag and drop, run
-  const collections = useCollections();
+  // collections sidebar (like REST): folders, new GraphQL requests, drag and drop, run. The outline: a request opened
+  // from it is read from its whole collection
+  const collections = useCollectionTree();
   const loadCollections = refreshCollections;
   const saveCollection = async (c: Collection) => {
     await call('col.save', c);
@@ -295,16 +296,14 @@ export function GraphQLView() {
   useIntent('graphql', async (p) => {
     if (p?.reset) setD({ ...docDrafts.load(), query: DEFAULT_QUERY, collectionId: undefined, requestId: undefined, name: NEW_TAB_TITLE.graphql });
     if (p?.collectionId) {
-      const cols = await refreshCollections();
-      const c = cols.find((x) => x.id === p.collectionId);
+      const c = await call<Collection>('col.get', { id: p.collectionId }).catch(() => undefined);
       const n = c && (findNode(c.items, p.requestId) as SavedGraphQLRequest | undefined);
       if (n?.kind === 'graphql') openNode(c!, n);
     }
   });
 
   const save = async () => {
-    const cols = currentCollections();
-    if (!cols.some((x) => x.id === d.collectionId) || !d.requestId) return setSaving(true);
+    if (!currentCollectionTree().some((x) => x.id === d.collectionId) || !d.requestId) return setSaving(true);
     return saveTo(d.collectionId!, d.name);
   };
   const saveTo = async (collectionId: string, name: string, folderId?: string) => {
@@ -382,7 +381,7 @@ export function GraphQLView() {
             Stop
           </Button>
         ) : running ? (
-          <Button variant="danger" icon={<Square size={12} />} onClick={() => call('http.cancel', { id: running })}>
+          <Button variant="danger" icon={<Square size={12} />} onClick={() => void call('http.cancel', { id: running }).catch(toastError)}>
             Cancel
           </Button>
         ) : (
@@ -449,7 +448,14 @@ export function GraphQLView() {
                           filter={treeFilter}
                           activeRequestId={d.requestId}
                           newRequestLabel="New GraphQL request"
-                          onOpen={(c, n) => (n.kind === 'graphql' ? openNode(c, n) : useApp.getState().openIntent('rest', { collectionId: c.id, requestId: n.id }))}
+                          onOpen={(c, n) =>
+                            n.kind === 'graphql'
+                              ? void fullCollection(c).then((w) => {
+                                  const whole = findNode(w.items, n.id);
+                                  if (whole?.kind === 'graphql') openNode(w, whole);
+                                }, toastError)
+                              : useApp.getState().openIntent('rest', { collectionId: c.id, requestId: n.id })
+                          }
                           onChange={(c) => void saveCollection(c)}
                           onMoved={(ids, from, to) => d.collectionId === from && d.requestId && ids.includes(d.requestId) && set({ collectionId: to })}
                           onRun={(c, folderId) => useApp.getState().openIntent('collections', { collectionId: c.id, run: true, folderId })}

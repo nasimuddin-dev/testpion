@@ -57,7 +57,8 @@ publish:
     repo: testpion
     releaseType: release
 extraMetadata:
-  main: dist-electron/main.cjs
+  # boot.cjs turns on V8's compile cache and loads main.cjs
+  main: dist-electron/boot.cjs
   # package / executable name on Linux (.deb, .rpm, binary); the display name stays "TestPion"
   name: testpion
 

@@ -119,7 +119,7 @@ export function ApiFuzzPanel({ spec }: { spec: string }) {
           <Toggle checked={includeDelete} onChange={setIncludeDelete} label="Include DELETE" />
           <Toggle checked={allowRemote} onChange={setAllowRemote} label="Allow remote hosts" />
           {running ? (
-            <Button icon={<Square size={13} />} onClick={() => void call('openapi.fuzzStop')}>
+            <Button icon={<Square size={13} />} onClick={() => void call('openapi.fuzzStop').catch(toastError)}>
               Stop
             </Button>
           ) : (

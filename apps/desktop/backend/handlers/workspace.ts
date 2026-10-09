@@ -1,6 +1,6 @@
 /** RPC handlers: Workspaces, environments, current values, cookies and variables. */
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { basename, join, resolve as resolvePath } from 'node:path';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { basename, resolve as resolvePath } from 'node:path';
 import {
   ApsError,
   listTrash,
@@ -27,6 +27,8 @@ import {
   setEnvironmentVariables,
   makeGitReady,
   requireCollectionFor,
+  requireEnvironment,
+  isWorkspaceDir,
 } from '@testpion/core';
 import type { Backend, Handlers } from '../backend.js';
 
@@ -80,8 +82,8 @@ export function workspaceHandlers(be: Backend): Handlers {
         const dir = await be.host.openDialog({ directory: true });
         if (!dir) return null;
         path = dir;
-        if (!existsSync(join(dir, 'workspace.json')))
-          throw new ApsError('ConfigurationError', `${dir} is not a TestPion workspace (it has no workspace.json)`, {
+        if (!isWorkspaceDir(dir))
+          throw new ApsError('ConfigurationError', `${dir} is not a TestPion workspace (it has no TestPion workspace.json)`, {
             suggestions: ['Choose the folder that contains workspace.json, e.g. a workspace kept in a git repository.', 'To start a new workspace use New; to bring in a Postman collection or OpenAPI file use Import.'],
           });
         const s = be.manager.loadSettings();
@@ -92,14 +94,22 @@ export function workspaceHandlers(be: Backend): Handlers {
       be.openStore(path);
       return be.handlers['ws.current']!({});
     },
-    'ws.update': ({ name, description, variables }: { name?: string; description?: string; variables?: Array<{ key: string; value: string; enabled?: boolean; secret?: boolean }> }) => {
+    'ws.update': async ({ name, description, variables }: { name?: string; description?: string; variables?: Array<{ key: string; value: string; enabled?: boolean; secret?: boolean }> }) => {
       const ws = be.ws;
       let vars = variables;
-      if (vars)
-        vars = vars.map((v) => {
-          if (v.secret && v.value) void be.secrets.set(secretKeys.workspaceVar(ws.id, v.key), v.value);
-          return v.secret ? { ...v, value: '' } : v;
-        });
+      if (vars) {
+        // the secret values go to the secret store first: the file only gets the blanked value once they are safe there
+        for (const v of vars)
+          if (v.secret && v.value)
+            try {
+              await be.secrets.set(secretKeys.workspaceVar(ws.id, v.key), v.value);
+            } catch (e) {
+              throw new ApsError('ConfigurationError', `Could not keep the secret workspace variable ${v.key} in the secret store: ${(e as Error).message}. Nothing was saved.`, {
+                suggestions: ['Check the secret store (Settings > Secrets), then save again.'],
+              });
+            }
+        vars = vars.map((v) => (v.secret ? { ...v, value: '' } : v));
+      }
       return ws.updateWorkspace({ ...(name ? { name } : {}), ...(description !== undefined ? { description } : {}), ...(vars ? { variables: vars } : {}) });
     },
     'ws.duplicate': ({ ref, name }: { ref: string; name: string }) => be.manager.duplicate(ref, name),
@@ -254,7 +264,8 @@ export function workspaceHandlers(be: Backend): Handlers {
           return { key, initial: v ? (v.secret ? mask : show(v.value)) : undefined, current: show(current[key]), secret: sensitive, enabled: v?.enabled !== false };
         });
       };
-      const env = environment ? be.ws.getEnvironment(environment) : undefined;
+      // an unknown or unreadable environment says so (never an empty look that hides why)
+      const env = environment ? requireEnvironment(be.ws, environment) : undefined;
       let collection: { id: string; name: string; variables: ReturnType<typeof rows> } | undefined;
       try {
         const c = collectionId ? be.ws.getCollection(collectionId) : undefined;

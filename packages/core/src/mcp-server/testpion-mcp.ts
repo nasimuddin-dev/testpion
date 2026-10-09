@@ -7,17 +7,8 @@ import { testFromRequest } from '../runner/test-from.js';
 import { evaluateThresholds, parseThreshold } from '../load/thresholds.js';
 import { loadHistory, loadRunRecord, recordLoadRun } from '../load/history.js';
 import { ENGINE_VERSION } from '../version.js';
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import {
-  CallToolRequestSchema,
-  GetPromptRequestSchema,
-  ListPromptsRequestSchema,
-  ListResourcesRequestSchema,
-  ListResourceTemplatesRequestSchema,
-  ListToolsRequestSchema,
-  ReadResourceRequestSchema,
-} from '@modelcontextprotocol/sdk/types.js';
+import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { mcpServer, mcpServerStdio, mcpTypes } from './sdk.js';
 import type { AppSettings, CheckConfig, Collection, CollectionNode, HttpRequestSpec, TestResult } from '../model/types.js';
 import { AGENT_PROMPTS, agentGuide, toolAnnotations } from './agent-kit.js';
 import { checkTypes } from '../eval/checks.js';
@@ -323,6 +314,8 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
         },
       },
       run: async (a) => {
+        // an unknown environment, or one whose file cannot be read, is an error (never a send without its variables)
+        if (a.environment !== undefined && a.environment !== null && a.environment !== '') requireEnvironment(store, String(a.environment));
         const environment = checkEnvironment(a.environment);
         if (a.collection && a.request) {
           const c = findCollection(a.collection);
@@ -1348,14 +1341,14 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
   tools.push(searchTool(tools, (name, write) => toolAnnotations(name, write).title));
   const listed = opts.profile === 'minimal' ? tools.filter((t) => MINIMAL_TOOLS.has(t.name)) : tools;
 
-  const server = new Server(
+  const server = new (mcpServer().Server)(
     { name: 'testpion', version: opts.version ?? ENGINE_VERSION },
     {
       capabilities: { tools: {}, resources: {}, prompts: {} },
       instructions: `TestPion workspace "${store.workspace.name}". what_needs_attention lists what is failing or about to (monitors, certificates, runs, requests, flaky tests). Use list_collections and list_requests to find requests, get_request or collection_docs to understand them${opts.readOnly ? '' : ', send_request to call one and run_collection to run tests'}. list_monitors and monitor_results show scheduled checks${opts.readOnly ? '' : ' (run_monitor runs one now)'}. parse_request_snippet reads a cURL / fetch / PowerShell command${opts.readOnly ? '' : ' and save_request stores it in a collection (secrets become {{variables}})'}. Values of secrets are never returned. Read testpion_guide (or the testpion://guide resource) for the check types and the test file format before writing tests${opts.readOnly ? '' : ' (set_request_checks, write_test_file)'}; the prompts investigate_failures, write_tests, debug_request, api_health_report and import_and_test walk through the common jobs. ${opts.profile === 'minimal' ? 'This is the minimal profile: the listed tools cover the common jobs; search_tools finds the others (mocks, the debugger, git, load tests, certificates …), and any tool it names can be called.' : 'search_tools finds a tool by what you want to do.'}`,
     },
   );
-  server.setRequestHandler(ListToolsRequestSchema, async () => ({
+  server.setRequestHandler(mcpTypes().ListToolsRequestSchema, async () => ({
     tools: listed.map(({ name, description, inputSchema, write }) => {
       const annotations = toolAnnotations(name, !!write);
       return { name, title: annotations.title, description, inputSchema, annotations };
@@ -1364,7 +1357,7 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
   // resources: what an agent (or its user, e.g. with @ in Claude Code) can read as context without calling tools
   const json = (uri: string, data: unknown) => ({ contents: [{ uri, mimeType: 'application/json', text: JSON.stringify(data, null, 2) }] });
   const runTool = (name: string, args: Record<string, unknown> = {}) => all.find((t) => t.name === name)!.run(args);
-  server.setRequestHandler(ListResourcesRequestSchema, async () => ({
+  server.setRequestHandler(mcpTypes().ListResourcesRequestSchema, async () => ({
     resources: [
       { uri: 'testpion://guide', name: 'guide', title: 'TestPion guide for agents', description: 'Which tool to use for what, variables, check types and the test file format', mimeType: 'text/markdown' },
       { uri: 'testpion://workspace', name: 'workspace', title: `Workspace "${store.workspace.name}"`, description: 'Collections (with request counts), environments (variable names) and monitors', mimeType: 'application/json' },
@@ -1372,13 +1365,13 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
       ...collections().map((c) => ({ uri: `testpion://collections/${encodeURIComponent(c.id)}`, name: c.name, title: `Collection "${c.name}"`, description: 'Its documentation: every request with parameters, headers, body and examples', mimeType: 'text/markdown' })),
     ],
   }));
-  server.setRequestHandler(ListResourceTemplatesRequestSchema, async () => ({
+  server.setRequestHandler(mcpTypes().ListResourceTemplatesRequestSchema, async () => ({
     resourceTemplates: [
       { uriTemplate: 'testpion://collections/{collection}', name: 'collection', title: 'A collection\'s documentation', description: 'Collection name or id', mimeType: 'text/markdown' },
       { uriTemplate: 'testpion://collections/{collection}/requests/{request}', name: 'request', title: 'A saved request', description: 'Its method, URL, headers, body, auth type, scripts and checks (secrets masked)', mimeType: 'application/json' },
     ],
   }));
-  server.setRequestHandler(ReadResourceRequestSchema, async (req) => {
+  server.setRequestHandler(mcpTypes().ReadResourceRequestSchema, async (req) => {
     const uri = req.params.uri;
     if (uri === 'testpion://guide') return { contents: [{ uri, mimeType: 'text/markdown', text: agentGuide({ workspace: store.workspace.name, checkTypes: checkTypes(), readOnly: opts.readOnly }) }] };
     if (uri === 'testpion://workspace')
@@ -1392,10 +1385,10 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
     }
     throw new ApsError('ConfigurationError', `Unknown resource ${uri}`);
   });
-  server.setRequestHandler(ListPromptsRequestSchema, async () => ({
+  server.setRequestHandler(mcpTypes().ListPromptsRequestSchema, async () => ({
     prompts: AGENT_PROMPTS.filter((p) => !opts.readOnly || p.name === 'investigate_failures' || p.name === 'api_health_report').map(({ name, title, description, arguments: args }) => ({ name, title, description, arguments: args })),
   }));
-  server.setRequestHandler(GetPromptRequestSchema, async (req) => {
+  server.setRequestHandler(mcpTypes().GetPromptRequestSchema, async (req) => {
     const p = AGENT_PROMPTS.find((x) => x.name === req.params.name);
     if (!p) throw new ApsError('ConfigurationError', `Unknown prompt ${req.params.name}. Available: ${AGENT_PROMPTS.map((x) => x.name).join(', ')}`);
     const args = (req.params.arguments ?? {}) as Record<string, string | undefined>;
@@ -1403,7 +1396,7 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
     if (missing.length) throw new ApsError('ValidationError', `Missing: ${missing.join(', ')}`);
     return { description: p.description, messages: [{ role: 'user', content: { type: 'text', text: p.text(args) } }] };
   });
-  server.setRequestHandler(CallToolRequestSchema, async (req) => {
+  server.setRequestHandler(mcpTypes().CallToolRequestSchema, async (req) => {
     const tool = tools.find((t) => t.name === req.params.name);
     if (!tool) return { isError: true, content: [{ type: 'text', text: `Unknown tool ${req.params.name}` }] };
     try {
@@ -1427,7 +1420,7 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
  */
 export async function serveTestPionMcp(opts: TestPionMcpOptions & { stdio?: { input: NodeJS.ReadableStream; output: NodeJS.WritableStream } }): Promise<void> {
   const server = createTestPionMcpServer(opts);
-  const transport = new StdioServerTransport(opts.stdio?.input as never, opts.stdio?.output as never);
+  const transport = new (mcpServerStdio().StdioServerTransport)(opts.stdio?.input as never, opts.stdio?.output as never);
   const closed = new Promise<void>((resolve) => (server.onclose = () => resolve()));
   await server.connect(transport);
   await closed;

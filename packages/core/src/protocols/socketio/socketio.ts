@@ -1,4 +1,4 @@
-import { io, type Socket } from 'socket.io-client';
+import type { Socket } from 'socket.io-client';
 import { ApsError } from '../../errors.js';
 import type { KeyValue } from '../../model/types.js';
 import { assertUrlAllowed } from '../../net/policy.js';
@@ -33,6 +33,9 @@ export interface SocketIoOptions {
   transports?: Array<'websocket' | 'polling'>;
   timeoutMs?: number;
 }
+
+// the client library loads on the first connection (not at startup)
+let socketIoMod: Promise<typeof import('socket.io-client')> | undefined;
 
 export class SocketIoSession {
   readonly id = shortId('sio-');
@@ -74,6 +77,7 @@ export class SocketIoSession {
     const extraHeaders: Record<string, string> = {};
     for (const h of this.opts.headers ?? []) if (h.enabled !== false && h.key) extraHeaders[h.key] = h.value;
     this.setStatus('connecting');
+    const { io } = await (socketIoMod ??= import('socket.io-client'));
     const socket = io(target.toString(), {
       path: this.opts.path || '/socket.io',
       extraHeaders,

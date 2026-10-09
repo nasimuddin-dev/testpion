@@ -112,7 +112,55 @@ testpion flow rest/patient-lifecycle.yaml --json     # steps, edges, layers, pro
 testpion flow rest/patient-lifecycle.yaml --dot | dot -Tsvg > flow.svg
 ```
 
-The `flow_graph` MCP tool answers the same JSON (with the DOT) for a file, so an agent can read a flow before it changes one with `write_test_file`.
+The `flow_graph` MCP tool answers the same JSON (with the DOT) for a file, so an agent can read a flow before it changes one with `flow_add_step`, `flow_connect` and the other flow tools (below) or `write_test_file`.
+
+## Design a flow
+
+The **Flow** tab of a test file is also where you build one, on a canvas (a suite stays a read-only diagram: it names other files). The YAML file stays the only source of truth: every change on the canvas is written to the file at once, keeping its comments, key order and line endings, and the **Editor** tab shows the same text. The CLI, CI, monitors and agents run it unchanged.
+
+1. **Start**: **Tests ▸ + ▸ New flow (designer)** creates `name: …` with `tests: []` and opens the designer. An empty flow offers **Add a step**, **Create from a collection** (one saved request, or a folder's requests in order, each waiting for the one before it, with `extract` suggested for the ids and tokens in their saved example responses) and **Generate with AI** (describe the flow; the assistant writes the YAML, you read it in the assistant and **Review and use this flow** replaces the file, marked as AI-generated; Undo brings the old file back).
+2. **Add steps** with **Add step**: an HTTP request, GraphQL, gRPC, WebSocket, an MCP tool call, an LLM prompt, a **Delay** (a pause, `type: delay` with `ms: 2000`: for a search index or a queue to catch up; **Wait (ms)** in the inspector), or **From a collection…**. With a step selected, the new one goes after it and waits for it.
+3. **Connect** two steps by dragging the dot on a step's right edge onto another step: that step gains a `dependsOn` on the first and can use what it extracts as `{{name}}`. A connection that would make a cycle is refused with a message. Click a connection and press <kbd>Delete</kbd> to remove it.
+4. **Edit** the selected step in the inspector on the right: its name; for HTTP the method, URL, headers, authorization and body (the request view's editors); the values to **Extract** (variable → JSONPath, with **Pick from the last response** once the flow has run); its **Checks** (the same editor as a request's Tests tab); and the steps it **Waits for**. **Open in editor** shows the step in the YAML.
+5. **See the data flow**: a connection is labelled with the variables the first step extracts and the second reads (`{{token}}`). A step that reads a variable no earlier step extracts and the active environment does not define is marked with **!**.
+6. **Run**: **Run flow** runs the file; **Run step** runs the selected step with the steps it waits for. The steps light up as their results come in; click a result to open it in **Runs**.
+7. **Arrange**: drag steps (their places are saved in the file under `layout:`, which only the Flow tab reads), **Auto-arrange** lays them out in columns again, the wheel zooms and **Fit** shows everything. <kbd>Shift</kbd>+click selects several; <kbd>Delete</kbd> removes them (the steps that waited for them no longer do); <kbd>Ctrl</kbd>+<kbd>D</kbd> duplicates; <kbd>Ctrl</kbd>+<kbd>C</kbd> / <kbd>Ctrl</kbd>+<kbd>V</kbd> copy steps to this or another flow; **Undo** / **Redo** (<kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Y</kbd>) take back any canvas change.
+
+```yaml
+name: Health then echo
+tests:
+  - id: health
+    name: Health
+    type: http
+    method: GET
+    url: http://127.0.0.1:4010/health
+    extract:
+      status: $.status
+    assertions:
+      - type: status
+        expected: 200
+  - id: echo
+    name: Echo the status
+    type: http
+    url: "http://127.0.0.1:4010/health?s={{status}}"
+    dependsOn: [ health ]
+
+layout:            # where the designer draws each step; the runner ignores it
+  health: [ 0, 0 ]
+  echo: [ 284, 0 ]
+```
+
+The same edits from the command line and for agents, on the same code (comments and line endings kept):
+
+```bash
+testpion flow edit rest/checkout.yaml --op '{"op":"addStep","step":{"name":"Health","type":"http","url":"{{baseUrl}}/health"}}'
+testpion flow edit rest/checkout.yaml --connect health --to login          # login waits for health
+testpion flow edit rest/checkout.yaml --op '{"op":"updateStep","id":"login","set":{"extract":{"token":"$.access_token"}}}' --json
+testpion flow edit rest/checkout.yaml --op '{"op":"addFromCollection","collection":"Shop","items":["Checkout"]}'
+testpion flow edit rest/checkout.yaml --remove health --dry-run            # print the new text, write nothing
+```
+
+`--op` takes one edit or a JSON list of them: `addStep` (`step`, `after`, `at`), `addSteps` (`steps`, `chain`), `updateStep` (`id`, `set`; `null` removes a key; `name` / `id` rename and every `dependsOn` follows), `removeStep`, `renameStep`, `connect` / `disconnect` (`from`, `to`), `setLayout` (`positions`, or `null` to auto-arrange), `duplicateStep`, `addFromCollection` (`collection`, `items`) and `pasteSteps` (`from`, `ids`). The MCP tools `flow_add_step`, `flow_connect`, `flow_disconnect`, `flow_update_step` and `flow_remove_step` do the same for an agent and answer the steps, edges and problems after the change.
 
 ## Run it in CI/CD
 

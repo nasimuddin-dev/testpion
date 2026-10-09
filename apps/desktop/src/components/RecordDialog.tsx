@@ -98,7 +98,7 @@ export function RecordDialog({ onClose }: { onClose(): void }) {
           <span className="font-medium">Exchanges</span>
           <span className="text-muted">{items.length}</span>
           {!!items.length && (
-            <Button size="sm" variant="ghost" icon={<Trash2 size={12} />} className="ml-auto" onClick={() => void call('record.clear').then(() => setItems([]))}>
+            <Button size="sm" variant="ghost" icon={<Trash2 size={12} />} className="ml-auto" onClick={() => void call('record.clear').then(() => setItems([]), toastError)}>
               Clear
             </Button>
           )}

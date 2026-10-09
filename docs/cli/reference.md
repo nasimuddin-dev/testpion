@@ -49,6 +49,7 @@ testpion monitor list|add|remove|run|results|uptime|start -w  Collections on a s
 testpion ci <github|gitlab|azure|jenkins> -w  A CI pipeline file for a suite, collection or tests (--start, --wait-for: start the system under test first)
 testpion lint-tests [paths] -w   Check test files before running them: unknown types, check types, misspelt keys, dependsOn ids (--json; exit 1 on errors)
 testpion flow <file> -w       A test file as a flow: the steps in columns with the latest run's results (--json for steps, edges, layers and problems; --dot for Graphviz)
+testpion flow edit <file> -w  Edit a flow as the app's designer does: --op '<json>' (addStep, updateStep, connect, removeStep …; a JSON list for several), --connect <a> --to <b>, --remove <step>, --dry-run (--json)
 testpion flows -w             The flows exposed as MCP tools (test files and suites with an expose: block): tool, file, inputs (--json)
 testpion wait-for <url>       Wait until a URL answers (the health check before integration tests); exit 3 when it never does
 testpion trash list|restore|empty -w  Recently deleted collections and environments (30 days)

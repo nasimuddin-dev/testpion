@@ -1,4 +1,5 @@
-import { Marked, type Tokens } from 'marked';
+import type { Tokens } from 'marked';
+import { nodeRequire } from '../util/lazy-require.js';
 import type { Collection } from '../model/types.js';
 import { collectionMarkdown, type CollectionDocsOptions } from './collection-docs.js';
 
@@ -22,6 +23,8 @@ export function collectionHtml(collection: Collection, opts: CollectionDocsOptio
   // `html` is already-escaped text (marked escapes it); tags are stripped
   const toc: Array<{ depth: number; id: string; html: string }> = [];
   const used = new Map<string, number>();
+  // marked loads with the first document, not at startup (see util/lazy-require.ts)
+  const { Marked } = (typeof require === 'function' ? require('marked') : nodeRequire('marked')) as typeof import('marked');
   const marked = new Marked({
     gfm: true,
     async: false,

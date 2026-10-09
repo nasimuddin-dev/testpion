@@ -1,4 +1,8 @@
-import { JSONPath } from 'jsonpath-plus';
+import { nodeRequire } from './lazy-require.js';
+
+// jsonpath-plus loads with the first query, not at startup (see lazy-require.ts)
+let jsonPathMod: typeof import('jsonpath-plus') | undefined;
+const jsonPathLib = (): typeof import('jsonpath-plus') => (jsonPathMod ??= typeof require === 'function' ? require('jsonpath-plus') : nodeRequire('jsonpath-plus'));
 
 /**
  * Evaluate a JSONPath expression. Returns the list of matches.
@@ -9,7 +13,7 @@ export function queryAll(data: unknown, path: string): unknown[] {
   if (p === '$') return [data];
   if (data === null || typeof data !== 'object') return [];
   try {
-    return JSONPath({ path: p, json: data as object, wrap: true }) as unknown[];
+    return jsonPathLib().JSONPath({ path: p, json: data as object, wrap: true }) as unknown[];
   } catch {
     return [];
   }

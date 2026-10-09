@@ -66,10 +66,27 @@ const steps = [
       const t0 = performance.now(); tab.click();
       await __t.waitFor(() => (document.querySelectorAll('[data-flow-node]').length > 400 ? true : null), 20000); await ${painted}();
       const ms = Math.round(performance.now() - t0);
-      const back = vis('main [role=tab]').find((t) => t.textContent.trim().startsWith('Editor')); const t1 = performance.now(); back?.click(); await ${painted}();
+      const nodes = document.querySelectorAll('[data-flow-node]').length;
+      const back = vis('main [role=tab]').find((t) => t.textContent.includes('big-500.yaml')); if (!back) return 'NO TAB big-500.yaml'; const t1 = performance.now(); back?.click(); await __t.waitFor(() => (vis('main .monaco-editor .view-lines')[0]?.textContent?.includes('step-') ? true : null), 20000); await ${painted}(); const backMs = Math.round(performance.now() - t1);
       const tree = await window.aps.invoke('tests.tree'); const find = (ns) => { for (const n of ns) { if (n.name === 'big-500.yaml') return n.path; const p = n.items ? find(n.items) : n.children ? find(n.children) : undefined; if (p) return p; } };
       const p500 = find(tree);
-      return 'flow ms: ' + ms + ' | ' + (p500 ? (await sized('tests.flow', { file: p500 })) + ' | ' + (await sized('tests.read', { path: p500 })) : 'no path') + ' | nodes: ' + document.querySelectorAll('[data-flow-node]').length + ' | back to editor ms: ' + Math.round(performance.now() - t1) + ipc() + loaf();
+      return 'flow ms: ' + ms + ' | ' + (p500 ? (await sized('tests.flow', { file: p500 })) + ' | ' + (await sized('tests.read', { path: p500 })) : 'no path') + ' | nodes: ' + nodes + ' | back to editor ms: ' + backMs + ipc() + loaf();
+    })()`,
+    false,
+  ],
+  [
+    // another file after the first (the editor stays: only its model changes), then back to the first one's tab
+    'open-second-file',
+    `profile:(async () => { ${METER}
+      const shows = (name) => () => { const ed = window.__monaco?.editor.getEditors().find((e) => e.getDomNode()?.offsetParent); return ed?.getModel()?.uri.path.endsWith(name) && ed.getDomNode().querySelector('.view-lines')?.textContent?.includes('step-') ? true : null; };
+      const r = treeRow('big-1000.yaml'); if (!r) return 'NO ROW big-1000';
+      const t0 = performance.now(); r.click();
+      await __t.waitFor(shows('big-1000.yaml'), 20000); await ${painted}();
+      const open = Math.round(performance.now() - t0);
+      const tab = vis('main [role=tab]').find((t) => t.textContent.includes('big-500.yaml')); if (!tab) return 'open ms: ' + open + ' | NO TAB big-500';
+      const t1 = performance.now(); tab.click();
+      await __t.waitFor(shows('big-500.yaml'), 20000); await ${painted}();
+      return 'second file open ms: ' + open + ' | back to the first tab ms: ' + Math.round(performance.now() - t1) + ' | editors: ' + window.__monaco.editor.getEditors().length + ipc() + loaf();
     })()`,
     false,
   ],

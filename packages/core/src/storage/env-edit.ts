@@ -10,15 +10,25 @@ import { secretKeys, type SecretStore } from './secrets.js';
  * the CLI as TESTPION_SECRET_* environment variables), never through here.
  */
 export function findEnvironment(store: Pick<WorkspaceStore, 'listEnvironments'>, ref: string): Environment | undefined {
+  if (typeof ref !== 'string') return undefined;
   const envs = store.listEnvironments();
   return envs.find((e) => e.id === ref) ?? envs.find((e) => e.name.toLowerCase() === ref.toLowerCase());
 }
 
-/** The environment, or a configuration error naming the ones there are. */
+/** The environment, or a configuration error naming the ones there are (or saying why its file cannot be read). */
 export function requireEnvironment(store: Pick<WorkspaceStore, 'listEnvironments'>, ref: string): Environment {
   const env = findEnvironment(store, ref);
-  if (!env) throw new ApsError('ConfigurationError', `Environment "${ref}" not found. Available: ${store.listEnvironments().map((e) => e.name).join(', ') || 'none'}`);
+  if (!env) throw new ApsError('ConfigurationError', `No environment "${ref}". Available: ${store.listEnvironments().map((e) => e.name).join(', ') || 'none'}`);
+  if (env.problem) throw brokenEnvironmentError(env);
   return env;
+}
+
+/** Using an environment whose file cannot be read: say so (sending without its variables would be silently wrong). */
+export function brokenEnvironmentError(env: Pick<Environment, 'name' | 'problem'>): ApsError {
+  return new ApsError('ConfigurationError', `Environment "${env.name}" is broken: ${env.problem}`, {
+    why: 'Its file is not valid JSON, so none of its variables can be used.',
+    suggestions: ['Fix the environment file by hand, or restore it from version control.', 'Or choose another environment.'],
+  });
 }
 
 /** The collection `ref` names in a list: its id as given, then its id or name ignoring case. */
@@ -39,6 +49,15 @@ export function findCollection(store: Pick<WorkspaceStore, 'listCollections'>, r
 /** The collection, or a configuration error naming the ones there are. */
 export function requireCollection(store: Pick<WorkspaceStore, 'listCollections'>, ref: string, opts: { loadable?: boolean } = {}): Collection {
   const c = findCollection(store, ref, opts);
+  if (!c && opts.loadable) {
+    // a collection whose file cannot be read: say so and why, not "No collection"
+    const broken = findCollection(store, ref) as (Collection & { problem?: string }) | undefined;
+    if (broken?.problem)
+      throw new ApsError('ConfigurationError', `Collection "${broken.name}" is broken: ${broken.problem}`, {
+        why: 'Its file is not valid JSON, so it cannot be run or edited.',
+        suggestions: ['Fix the collection file by hand, or restore it from version control.'],
+      });
+  }
   if (!c) {
     const all = store.listCollections();
     throw new ApsError('ConfigurationError', `No collection "${ref}". Available: ${(opts.loadable ? all.filter((x) => !x.problem) : all).map((x) => x.name).join(', ') || 'none'}`);

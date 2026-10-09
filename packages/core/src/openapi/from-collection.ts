@@ -1,4 +1,4 @@
-import { stringify as stringifyYaml } from 'yaml';
+import { stringifyYaml } from '../util/lazy-yaml.js';
 import type { AuthConfig, BodyConfig, Collection, SavedExample } from '../model/types.js';
 import { collectionRequests } from '../runner/collection-run.js';
 

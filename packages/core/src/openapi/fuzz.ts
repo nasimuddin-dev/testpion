@@ -1,4 +1,4 @@
-import { stringify as stringifyYaml } from 'yaml';
+import { stringifyYaml } from '../util/lazy-yaml.js';
 import { ApsError } from '../errors.js';
 import { importOpenApi, sampleFromSchema } from '../import/importers.js';
 import { isLocalHost } from '../load/load.js';

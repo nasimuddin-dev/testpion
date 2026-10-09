@@ -52,3 +52,20 @@ export function plural(n: number, word: string, many = `${word}s`): string {
 
 /** A model's name without the snapshot date a provider answers with (gpt-4o-mini-2024-07-18 → gpt-4o-mini). */
 export const undatedModel = (m: string) => m.replace(/(-\d{4}-\d{2}-\d{2}|-\d{8}|@\d{8})$/, '');
+
+/**
+ * A name read from a user's file, as text: a hand edit or a bad merge can leave an object, a number or nothing where a
+ * name belongs, and React cannot render an object (the window would go blank).
+ */
+export function displayName(name: unknown, fallback = 'Untitled'): string {
+  if (typeof name === 'string') return name;
+  if (name === undefined || name === null || name === '') return fallback;
+  if (typeof name === 'object') {
+    try {
+      return JSON.stringify(name);
+    } catch {
+      return fallback;
+    }
+  }
+  return String(name);
+}

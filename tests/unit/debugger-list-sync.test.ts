@@ -84,9 +84,10 @@ describe('the Debugger list by changes', () => {
     events.length = 0;
     await be.invoke('debug.selfTest', { url: `http://127.0.0.1:${apiPort}/live` });
     await new Promise((r) => setTimeout(r, 100));
-    // the event is a signal, not the exchange
+    // the event is a signal, not the exchange: one per 50 ms at most, with how many and the latest ids
     const signal = events.find((e) => e.name === 'debug.exchange')!;
-    expect(Object.keys(signal.data).sort()).toEqual(['id', 'phase']);
+    expect(Object.keys(signal.data).sort()).toEqual(['count', 'ids', 'phase']);
+    expect(signal.data).toMatchObject({ phase: 'batch' });
     const d = (await be.invoke('debug.changes', { epoch: base.epoch, since: base.rev })) as Changes;
     expect(d.reset).toBe(false);
     expect(d.rows).toHaveLength(1);

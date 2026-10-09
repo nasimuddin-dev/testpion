@@ -1,10 +1,9 @@
 import { AlarmClock, BarChart3, Bot, Code2, Keyboard, Columns2, CopyX, Disc, GitCompare, ScanSearch, TerminalSquare, Variable, Download, FileDown, FlaskConical, FolderOpen, FolderPlus, FolderTree, Gauge, GitBranch, History, KeyRound, Layers, ListChecks, ListX, Network, Play, Plug, Radio, RefreshCw, ScrollText, Search, Settings, Sparkles, SquareTerminal, Upload, Waypoints, Workflow, X, type LucideIcon } from 'lucide-react';
-import { createElement, lazy, Suspense, useEffect, useMemo, useRef, useState, type ComponentType, type LazyExoticComponent } from 'react';
+import { createElement, lazy, Suspense, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from 'react';
 import { call, on } from './api';
 import { useApp, type ViewId } from './store';
 import { watchSecretRefs } from './lib/secret-refs';
 import { focusedScriptEditor } from './lib/script-editor';
-import { AssistantPanel } from './components/AssistantPanel';
 import { VarPopoverHost } from './components/VarPopoverHost';
 import { CommandPalette, DialogHost, LogsPanel, ProgressHost, SearchDialog, Sidebar, StatusBar, Toaster, TopBar, NAV, type PaletteCommand } from './components/Shell';
 import { checkForUpdates, scheduleUpdateCheck } from './updates';
@@ -21,11 +20,16 @@ import { loadMonaco } from './components/CodeEditor';
 import { Spinner, TooltipProvider } from './components/ui';
 import { McpClientRequests } from './components/McpClientRequests';
 
+// the AI assistant's panel (with its Markdown renderer) loads when it is first opened
+const AssistantPanel = lazy(async () => ({ default: (await import('./components/AssistantPanel')).AssistantPanel }));
+
 /**
  * Each tool is a separate product surface. Loading it only when selected keeps
  * startup fast and, importantly, defers Monaco and protocol-specific code until
  * it is useful. Named exports keep view modules simple.
  */
+/** Where a dialog (or another floating part) that failed says so: a line over the status bar, with Close. */
+const DIALOG_FALLBACK = 'fixed bottom-9 left-1/2 -translate-x-1/2 z-[60] w-[min(720px,92vw)] rounded-lg border shadow-lg';
 const ShortcutsDialog = lazy(async () => ({ default: (await import('./components/ShortcutsDialog')).ShortcutsDialog }));
 const CiDialog = lazy(async () => ({ default: (await import('./components/CiDialog')).CiDialog }));
 const RecordDialog = lazy(async () => ({ default: (await import('./components/RecordDialog')).RecordDialog }));
@@ -33,8 +37,16 @@ const FeedbackDialog = lazy(async () => ({ default: (await import('./components/
 const VariableUsagesDialog = lazy(async () => ({ default: (await import('./components/VariableUsagesDialog')).VariableUsagesDialog }));
 const OpenApiDiffDialog = lazy(async () => ({ default: (await import('./components/OpenApiDiffDialog')).OpenApiDiffDialog }));
 const ApiCoverageDialog = lazy(async () => ({ default: (await import('./components/ApiCoverageDialog')).ApiCoverageDialog }));
-const view = (load: () => Promise<any>, name: string) => lazy(async () => ({ default: (await load())[name] as ComponentType }));
-const VIEWS: Record<ViewId, LazyExoticComponent<ComponentType>> = {
+/** A view, loaded on first use or by `prefetch()`; once loaded it renders at once (a Suspense fallback is held 300 ms). */
+type View = ComponentType & { prefetch(): Promise<unknown> };
+const view = (load: () => Promise<any>, name: string): View => {
+  let loaded: ComponentType | undefined;
+  const prefetch = async () => (loaded ??= (await load())[name] as ComponentType);
+  const Lazy = lazy(async () => ({ default: await prefetch() }));
+  const V = () => createElement(useState(() => loaded ?? Lazy)[0]);
+  return Object.assign(V, { prefetch });
+};
+const VIEWS: Record<ViewId, View> = {
   home: view(() => import('./views/HomeView'), 'HomeView'),
   rest: view(() => import('./views/RestView'), 'RestView'),
   graphql: view(() => import('./views/GraphQLView'), 'GraphQLView'),
@@ -61,6 +73,21 @@ const VIEWS: Record<ViewId, LazyExoticComponent<ComponentType>> = {
 // as a stream or an unsaved request), without letting every editor and listener
 // in a long session consume memory and CPU indefinitely.
 const MAX_CACHED_VIEWS = 4;
+
+// The rail's screens are fetched and parsed in idle time once the app is up, one per idle slot, so a first visit to
+// History, Traces, the Debugger … shows at once instead of waiting for its chunk. (Startup itself loads none of them.)
+const RAIL_VIEWS: ViewId[] = ['history', 'traces', 'debugger', 'tests', 'environments', 'git', 'monitors', 'load', 'ai', 'evaluations', 'settings'];
+function prefetchRailViews() {
+  const idle = (fn: () => void) => (typeof requestIdleCallback === 'function' ? requestIdleCallback(fn, { timeout: 4000 }) : setTimeout(fn, 200));
+  const next = (i: number) => {
+    if (i < RAIL_VIEWS.length) idle(() => void VIEWS[RAIL_VIEWS[i]!].prefetch().catch(() => undefined).finally(() => next(i + 1)));
+  };
+  setTimeout(() => next(0), 1500);
+}
+if (typeof window !== 'undefined') {
+  if (document.readyState === 'complete') prefetchRailViews();
+  else window.addEventListener('load', prefetchRailViews, { once: true });
+}
 
 function useThemeEffect() {
   const settings = useApp((s) => s.settings);
@@ -166,8 +193,9 @@ export default function App() {
         useApp.getState().set({ info, settings });
         await useApp.getState().refreshWorkspace();
         scheduleUpdateCheck();
-        // warm the code editor in the background once the first screen is up
-        setTimeout(() => void loadMonaco(), 1500);
+        // warm the code editor in the background once the first screen is up, when the window is idle (it is a long task)
+        if (typeof requestIdleCallback === 'function') requestIdleCallback(() => void loadMonaco(), { timeout: 5000 });
+        else setTimeout(() => void loadMonaco(), 1500);
         // examples that came with this version (added to the user's copy at start): say so once
         setTimeout(() => void announceNewExamples(), 2500);
         // certificates that expire within 7 days: a reminder once a day
@@ -365,7 +393,7 @@ export default function App() {
     for (const c of cmds) c.icon = createElement(PALETTE_ICONS[c.id] ?? TerminalSquare, { size: 16 });
     // "Go to" commands use the navigation's own icons
     for (const n of NAV) cmds.push({ id: `go-${n.id}`, label: `Go to ${n.label}`, icon: n.icon, run: () => s.setView(n.id) });
-    for (const e of workspace?.environments ?? [])
+    for (const e of (workspace?.environments ?? []).filter((x) => !x.problem))
       cmds.push({ id: `env-${e.id}`, label: `Switch Environment: ${e.name}`, icon: <span className="block w-2.5 h-2.5 rounded-full" style={{ background: e.color ?? 'var(--ok)' }} />, run: () => s.setEnvironment(e.name) });
     return cmds;
   }, [workspace]);
@@ -382,19 +410,35 @@ export default function App() {
       </div>
     );
 
+  // every part of the window outside the views has a boundary of its own: one that fails leaves the rest working
+  const close = (patch: Partial<ReturnType<typeof useApp.getState>>) => () => useApp.getState().set(patch);
+  const guard = (name: string, node: ReactNode, onDismiss?: () => void) => (
+    <ViewBoundary view={name} variant="bar" label={name} onDismiss={onDismiss} className={DIALOG_FALLBACK}>
+      {node}
+    </ViewBoundary>
+  );
+
   return (
     <TooltipProvider delayDuration={350} skipDelayDuration={150}>
     <div className="h-full flex flex-col">
-      <TopBar />
+      <ViewBoundary view="topbar" variant="bar" label="top bar" className="h-12 border-b">
+        <TopBar />
+      </ViewBoundary>
       <div className="flex-1 flex min-h-0">
-        <Sidebar />
+        <ViewBoundary view="sidebar" variant="bar" label="sidebar" className="w-48 border-r flex-col items-start">
+          <Sidebar />
+        </ViewBoundary>
         {explorerOpen && isRequestView(view) && (
           <ViewBoundary view="explorer">
             <Explorer />
           </ViewBoundary>
         )}
         <main className="flex-1 min-w-0 flex flex-col">
-          {isRequestView(view) && view !== 'collections' && <EditorTabStrip />}
+          {isRequestView(view) && view !== 'collections' && (
+            <ViewBoundary view="tabs" variant="bar" label="tab strip" className="border-b">
+              <EditorTabStrip />
+            </ViewBoundary>
+          )}
           <div className="flex-1 min-h-0 relative">
             {/* a multi-document view with every tab closed: the same "No open requests" as the HTTP view */}
             {isDocView(view) && !(docs[view] ?? []).length && (
@@ -431,57 +475,90 @@ export default function App() {
               )];
             })}
           </div>
-          {logsOpen && <LogsPanel />}
+          {logsOpen && (
+            <ViewBoundary view="logs" variant="bar" label="bottom panel" className="border-t" onDismiss={close({ logsOpen: false })}>
+              <LogsPanel />
+            </ViewBoundary>
+          )}
         </main>
-        {assistant && <AssistantPanel key={JSON.stringify(assistant).slice(0, 200)} />}
+        {assistant && (
+          <ViewBoundary view="assistant" variant="bar" label="assistant" className="w-80 border-l flex-col items-start" onDismiss={close({ assistant: undefined })}>
+            <Suspense fallback={null}>
+              <AssistantPanel key={JSON.stringify(assistant).slice(0, 200)} />
+            </Suspense>
+          </ViewBoundary>
+        )}
       </div>
-      <StatusBar />
-      {paletteOpen && <CommandPalette commands={paletteCommands} />}
-      {searchOpen && <SearchDialog />}
-      {shortcutsOpen && (
-        <Suspense fallback={null}>
-          <ShortcutsDialog />
-        </Suspense>
-      )}
-      {ci && (
-        <Suspense fallback={null}>
-          <CiDialog />
-        </Suspense>
-      )}
-      <McpClientRequests />
-      {feedback && (
-        <Suspense fallback={null}>
-          <FeedbackDialog request={feedback} onClose={() => useApp.getState().set({ feedback: undefined })} />
-        </Suspense>
-      )}
-      {recordOpen && (
-        <Suspense fallback={null}>
-          <RecordDialog onClose={() => useApp.getState().set({ recordOpen: false })} />
-        </Suspense>
-      )}
-      {variableUsages && (
-        <Suspense fallback={null}>
-          <VariableUsagesDialog
-            names={[...new Set((workspace?.environments ?? []).flatMap((e) => (e as { variables?: Array<{ key: string }> }).variables?.map((v) => v.key) ?? []))]}
-            initial={typeof variableUsages === 'string' ? variableUsages : undefined}
-            onClose={() => useApp.getState().set({ variableUsages: undefined })}
-          />
-        </Suspense>
-      )}
-      {openapiDiff && (
-        <Suspense fallback={null}>
-          <OpenApiDiffDialog onClose={() => useApp.getState().set({ openapiDiff: false })} />
-        </Suspense>
-      )}
-      {apiCoverage && (
-        <Suspense fallback={null}>
-          <ApiCoverageDialog runId={apiCoverage.runId} spec={apiCoverage.spec} onClose={() => useApp.getState().set({ apiCoverage: undefined })} />
-        </Suspense>
-      )}
-      <Toaster />
-      <DialogHost />
-      <VarPopoverHost />
-      <ProgressHost />
+      <ViewBoundary view="statusbar" variant="bar" label="status bar" className="border-t">
+        <StatusBar />
+      </ViewBoundary>
+      {paletteOpen && guard('command palette', <CommandPalette commands={paletteCommands} />, close({ paletteOpen: false }))}
+      {searchOpen && guard('search', <SearchDialog />, close({ searchOpen: false }))}
+      {shortcutsOpen &&
+        guard(
+          'shortcuts',
+          <Suspense fallback={null}>
+            <ShortcutsDialog />
+          </Suspense>,
+          close({ shortcutsOpen: false }),
+        )}
+      {ci &&
+        guard(
+          'CI dialog',
+          <Suspense fallback={null}>
+            <CiDialog />
+          </Suspense>,
+          close({ ci: undefined }),
+        )}
+      {guard('MCP requests', <McpClientRequests />)}
+      {feedback &&
+        guard(
+          'feedback dialog',
+          <Suspense fallback={null}>
+            <FeedbackDialog request={feedback} onClose={() => useApp.getState().set({ feedback: undefined })} />
+          </Suspense>,
+          close({ feedback: undefined }),
+        )}
+      {recordOpen &&
+        guard(
+          'record dialog',
+          <Suspense fallback={null}>
+            <RecordDialog onClose={() => useApp.getState().set({ recordOpen: false })} />
+          </Suspense>,
+          close({ recordOpen: false }),
+        )}
+      {variableUsages &&
+        guard(
+          'variable usages',
+          <Suspense fallback={null}>
+            <VariableUsagesDialog
+              names={[...new Set((workspace?.environments ?? []).flatMap((e) => (e as { variables?: Array<{ key: string }> }).variables?.map((v) => v.key) ?? []))]}
+              initial={typeof variableUsages === 'string' ? variableUsages : undefined}
+              onClose={() => useApp.getState().set({ variableUsages: undefined })}
+            />
+          </Suspense>,
+          close({ variableUsages: undefined }),
+        )}
+      {openapiDiff &&
+        guard(
+          'OpenAPI comparison',
+          <Suspense fallback={null}>
+            <OpenApiDiffDialog onClose={() => useApp.getState().set({ openapiDiff: false })} />
+          </Suspense>,
+          close({ openapiDiff: false }),
+        )}
+      {apiCoverage &&
+        guard(
+          'API coverage',
+          <Suspense fallback={null}>
+            <ApiCoverageDialog runId={apiCoverage.runId} spec={apiCoverage.spec} onClose={() => useApp.getState().set({ apiCoverage: undefined })} />
+          </Suspense>,
+          close({ apiCoverage: undefined }),
+        )}
+      {guard('notifications', <Toaster />)}
+      {guard('dialog', <DialogHost />)}
+      {guard('variable popover', <VarPopoverHost />)}
+      {guard('progress', <ProgressHost />)}
     </div>
     </TooltipProvider>
   );

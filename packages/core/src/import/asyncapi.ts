@@ -1,4 +1,4 @@
-import { parse as parseYaml } from 'yaml';
+import { parseYaml } from '../util/lazy-yaml.js';
 import type { Collection, Environment, KeyValue, LibraryItem } from '../model/types.js';
 import { SCHEMA_VERSION } from '../model/types.js';
 import { ApsError } from '../errors.js';

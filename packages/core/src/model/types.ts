@@ -269,7 +269,10 @@ export interface CheckResult {
 
 /* ------------------------------------------------------------------ tests */
 
-export type TestType = 'http' | 'graphql' | 'grpc' | 'websocket' | 'mcp' | 'llm' | 'rag' | 'agent';
+export type TestType = 'http' | 'graphql' | 'grpc' | 'websocket' | 'mcp' | 'llm' | 'rag' | 'agent' | 'delay' | 'condition' | 'script' | 'flow' | 'log';
+
+/** `forEach:` of a step: an inline list of rows, or `{ dataset: path }` (CSV, JSON, JSONL, Markdown; relative to the test file). */
+export type ForEachSpec = unknown[] | { dataset: string; limit?: number };
 
 export interface TestBase {
   id?: string;
@@ -292,6 +295,14 @@ export interface TestBase {
   evaluators?: CheckConfig[];
   /** Source file this test was loaded from (set by the loader). */
   file?: string;
+  /** Run the step only when this expression is true (`status == 200 && {{count}} > 0`); else it is skipped with the reason. */
+  if?: string;
+  /** A branch of a condition step it depends on: runs when the condition came out true (or false); else it is skipped. */
+  when?: boolean;
+  /** Run the step this many times ({{$index}} is 0, 1, …). */
+  repeat?: number;
+  /** Run the step once per row: the row's fields, {{$index}} and {{$item}} are its variables. */
+  forEach?: ForEachSpec;
 }
 
 export interface HttpTest extends TestBase {
@@ -432,7 +443,39 @@ export interface AgentTest extends TestBase {
   maxSteps?: number;
 }
 
-export type TestCase = HttpTest | GraphQLTest | GrpcTest | WebSocketTest | McpTest | LlmTest | RagTest | AgentTest;
+/** A pause in a flow: waits `ms` milliseconds (never longer than the test's timeout; a cancelled run stops it at once). */
+export interface DelayTest extends TestBase {
+  type: 'delay';
+  ms: number;
+}
+
+/** A condition block: evaluates `if:` and passes; the steps that depend on it with `when: true|false` run on its branch. */
+export interface ConditionTest extends TestBase {
+  type: 'condition';
+  if: string;
+}
+
+/** A script block: runs `script:` (the tp.* API) with no request; the variables it sets flow to the steps after it. */
+export interface ScriptTest extends TestBase {
+  type: 'script';
+  script: string;
+}
+
+/** A sub-flow: runs another test file as one step with `inputs:` as its variables; its `output:` (or extracted values) come back. */
+export interface FlowTest extends TestBase {
+  type: 'flow';
+  /** The test file to run, relative to this file (or to tests/). */
+  flowFile: string;
+  inputs?: Record<string, unknown>;
+}
+
+/** A log block: shows `message:` (a template) in the run's results. */
+export interface LogTest extends TestBase {
+  type: 'log';
+  message: string;
+}
+
+export type TestCase = HttpTest | GraphQLTest | GrpcTest | WebSocketTest | McpTest | LlmTest | RagTest | AgentTest | DelayTest | ConditionTest | ScriptTest | FlowTest | LogTest;
 
 export interface SuiteConfig {
   name: string;
@@ -542,7 +585,9 @@ export type ErrorKind =
   | 'EvaluationError'
   | 'ConfigurationError'
   | 'CancelledError'
-  | 'ScriptError';
+  | 'ScriptError'
+  /** A bug in TestPion itself (a TypeError, an unexpected exception): not the user's request or server. */
+  | 'InternalError';
 
 export interface NormalizedError {
   kind: ErrorKind;
@@ -614,6 +659,8 @@ export interface Environment {
   color?: string;
   /** Position in environment lists and pickers (lowest first); environments without one follow, by file name. */
   order?: number;
+  /** Set on a listed environment whose file cannot be read (invalid JSON): why. It has no variables then; never saved. */
+  problem?: string;
 }
 
 /** A saved response of a request (Postman "example"): documents the API and feeds the mock server. */
@@ -705,6 +752,8 @@ export interface HistoryEntry {
   /** The saved request this entry was sent from (for per-request response history). */
   collectionId?: string;
   requestId?: string;
+  /** `request` is a preview: a value (a body, a prompt) longer than 64 KB was cut when it was stored. */
+  requestPreview?: boolean;
 }
 
 export interface AppSettings {
@@ -728,6 +777,8 @@ export interface AppSettings {
   telemetry: false;
   loadTesting: { allowRemoteHosts: boolean; maxVirtualUsers: number };
   lastWorkspace?: string;
+  /** The app version whose new examples were last added to the examples workspace (once per version). */
+  examplesOfferedVersion?: string;
   assistantProvider?: string;
   assistantModel?: string;
   workspacePaths: string[];

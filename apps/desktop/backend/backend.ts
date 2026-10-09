@@ -9,6 +9,7 @@ import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import {
   ApsError,
+  ENGINE_VERSION,
   ChainSecretStore,
   EncryptedFileSecretStore,
   EnvSecretStore,
@@ -31,7 +32,6 @@ import {
   pageRunResults,
   breakdownOfRun,
   type RunBreakdown,
-  isEventStream,
   createEngineContext,
   estimateCost,
   executeHttp,
@@ -101,6 +101,7 @@ import {
   lastMonitorResult,
   type WorkspaceInfo,
   setProxySettings,
+  ensureProxyApplied,
   setTlsTrust,
   APP_CLAUDE_ID,
   APP_CLAUDE_SECRET,
@@ -113,6 +114,7 @@ import {
   readJson,
   describeChanges,
   watchWorkspace,
+  requireEnvironment,
 } from '@testpion/core';
 import { appHandlers } from './handlers/app.js';
 import { workspaceHandlers } from './handlers/workspace.js';
@@ -131,10 +133,15 @@ import { debuggerHandlers, type DebuggerState } from './handlers/debugger.js';
 import { debuggerRulesHandlers } from './handlers/debugger-rules.js';
 import { externalSecretsHandlers, prefetchSecretsFor } from './handlers/external-secrets.js';
 import { fuzzHandlers } from './handlers/fuzz.js';
+import { checkRpcParams, guardHandler } from './rpc-params.js';
 import { hasTemplate } from '@testpion/shared';
 import { assistantInstruction } from './assistant-tasks.js';
 import { readRunData } from './run-data.js';
 
+/** How long after start the monitor scheduler and the background git fetch begin (the window's first paint comes first). */
+const SCHEDULERS_DELAY_MS = 3000;
+/** What the window reads at start-up: nothing of it goes over the network, so it never waits for the HTTP stack to load. */
+const LOCAL_READS = /^(app\.info|settings\.get|ws\.(current|list|examplesAdded)|col\.(list|tree|get)|env\.list|lib\.get|mcp\.servers|openapi\.specs|datasets\.list|stats\.\w+|debug\.status|git\.(status|changes|log)|monitor\.list|history\.list|runs\.list|traces\.list)$/;
 /** RPC methods that change what the workspace lists (collections, saved items, environments, monitors, MCP servers). */
 const DATA_CHANGING = /^(col\.(save|delete|import\w*|move\w*|duplicate\w*)|lib\.save|env\.(save|delete|reorder|import\w*)|vars\.setInEnvironment|monitor\.(save|delete)|mcp\.(saveServers|connect|disconnect)|trash\.restore|ws\.(open|import\w*|openExamples))$/;
 
@@ -236,8 +243,18 @@ export class Backend {
   gitAutoFetch = new GitAutoFetch(this);
   readonly handlers: Handlers;
 
+  /** Counts the `data.changed` events (anything saved, imported, deleted, changed on disk): caches key on it. */
+  dataEpoch = 0;
+
   constructor(host: BackendHost) {
-    this.host = host;
+    // every data.changed passes here, whoever emits it: the caches of what was read from the workspace go stale
+    const emit = host.emit.bind(host);
+    this.host = Object.assign(Object.create(host) as BackendHost, {
+      emit: (channel: string, payload: unknown) => {
+        if (channel === 'data.changed') this.dataEpoch++;
+        emit(channel, payload);
+      },
+    });
     this.manager = new WorkspaceManager(host.appDir);
     this.settings = this.manager.loadSettings();
     const stores: SecretStore[] = [];
@@ -273,9 +290,14 @@ export class Backend {
       onWebhook: (m, r) => (r.ok ? this.logger.info(`Monitor ${m.name}: webhook notified`) : this.logger.warn(`Monitor ${m.name}: webhook failed: ${r.error ?? `HTTP ${r.status}`}`)),
       onError: (m, e) => this.logger.error(`Monitor ${m.name} could not run: ${(e as Error).message}`),
     });
-    if (!host.noMonitors) this.monitorScheduler.start();
-    if (!host.noMonitors) this.gitAutoFetch.start();
+    // the schedulers and the examples update start once the window is up: nothing of them is needed in the first seconds
+    if (!host.noMonitors) this.deferred.push(setTimeout(() => (this.monitorScheduler.start(), this.gitAutoFetch.start()), SCHEDULERS_DELAY_MS));
+    this.deferred.push(setTimeout(() => this.updateExamples(), 0));
+    for (const t of this.deferred) (t as { unref?(): void }).unref?.();
   }
+
+  /** Work put off past startup (the schedulers, the examples update); `close` cancels what has not run. */
+  private deferred: Array<ReturnType<typeof setTimeout>> = [];
 
   /** Apply the proxy and certificate settings (the proxy password comes from the secret store and is redacted from logs). */
   applyProxy(): void {
@@ -308,16 +330,27 @@ export class Backend {
     }
   }
 
-  /** Examples that shipped with this version go into the user's copy: additions only, never a change (addTemplateAdditions). */
+  /**
+   * Examples that shipped with this version go into the user's copy: additions only, never a change
+   * (addTemplateAdditions). Once per app version: the settings remember the version whose examples were offered.
+   */
   private updateExamples(): void {
     const dir = this.host.examplesDir;
     if (!dir || !existsSync(join(dir, 'workspace.json'))) return;
+    if (this.settings.examplesOfferedVersion === ENGINE_VERSION) return;
     try {
       const id = readJson<{ id: string }>(join(dir, 'workspace.json')).id;
       const mine = this.manager.list().find((w) => w.id === id);
       if (!mine) return;
+      // the files it adds are the app's own (no "changed on disk" for them)
+      this.lastOwnChange = Date.now();
       const added = addTemplateAdditions(dir, mine.path);
       this.examplesAdded = added;
+      if (added.length && this.store?.root === mine.path) {
+        this.lastOwnChange = Date.now();
+        this.host.emit('data.changed', { method: 'ws.import' });
+      }
+      this.settings = this.manager.saveSettings({ ...this.settings, examplesOfferedVersion: ENGINE_VERSION });
       if (added.length) this.logger.info(`Added to the examples workspace: ${added.join(', ')}`);
     } catch (e) {
       this.logger.warn(`Could not add the new examples: ${(e as Error).message}`);
@@ -326,7 +359,6 @@ export class Backend {
 
   /** Open the last workspace, or create a starter workspace on first launch. */
   private bootstrapWorkspace(): void {
-    this.updateExamples();
     try {
       const last = this.settings.lastWorkspace && this.manager.resolve(this.settings.lastWorkspace);
       if (last) return this.openStore(last);
@@ -358,14 +390,33 @@ export class Backend {
         if (!this.store || this.store.root !== root) return;
         if (changes.some((c) => c.kind === 'workspace')) this.store.reloadWorkspaceFile();
         this.logger.info(describeChanges(changes), { files: changes.map((c) => c.path).slice(0, 50) });
-        this.host.emit('data.changed', { method: 'disk' });
+        // which collections changed (by file: the id is the file name, or whatever the file says): the window then
+        // reads those, not every collection again; a change elsewhere in collections/ (a new file, a folder) reads all
+        const kinds = [...new Set(changes.map((c) => c.kind))];
+        const collectionIds = changes.filter((c) => c.kind === 'collections').map((c) => this.collectionIdOfPath(c.path));
+        const complete = !collectionIds.some((id) => id === undefined);
+        this.host.emit('data.changed', { method: 'disk', kinds, paths: changes.map((c) => c.path).slice(0, 50), ...(complete ? { collectionIds: collectionIds as string[] } : {}) });
         this.host.emit('workspace.changedOnDisk', { message: describeChanges(changes), kinds: [...new Set(changes.map((c) => c.kind))], files: changes.map((c) => c.path).slice(0, 50) });
       },
       { isOwnChange: () => Date.now() - this.lastOwnChange < 1500 },
     );
   }
 
+  /** The id of the collection in a changed `collections/<file>.json`; undefined when the file is not one collection. */
+  private collectionIdOfPath(path: string): string | undefined {
+    const m = /^collections\/([^/]+)\.json$/.exec(path);
+    if (!m || !this.store) return undefined;
+    try {
+      const id = readJson<{ id?: string }>(join(this.store.root, path)).id;
+      return typeof id === 'string' && id ? id : m[1];
+    } catch {
+      return m[1];
+    }
+  }
+
   openStore(path: string): void {
+    // the new workspace opens first: when it is refused (not a TestPion folder) the open one stays as it was
+    const next = WorkspaceStore.open(path);
     this.store?.close();
     for (const s of this.mcpSessions.values()) void s.close();
     this.mcpSessions.clear();
@@ -373,13 +424,13 @@ export class Backend {
     this.mocks.clear();
     void this.gqlMock?.close();
     this.gqlMock = undefined;
-    this.store = WorkspaceStore.open(path);
+    this.store = next;
     this.watchStore(this.store.root);
     this.currentValues = new CurrentValues(join(this.host.appDir, 'current-values', `${this.store.id}.json`), this.secrets, this.store.id);
     void this.cookieStore?.flush().catch(() => undefined);
     this.cookieStore = new CookieJarStore(this.secrets, this.store.id);
     this.search = new WorkspaceSearch(this.store);
-    this.settings = this.manager.saveSettings({ ...this.settings, lastWorkspace: this.store.root });
+    if (this.settings.lastWorkspace !== this.store.root) this.settings = this.manager.saveSettings({ ...this.settings, lastWorkspace: this.store.root });
     this.logger.info(`Opened workspace ${this.store.workspace.name}`, { migrations: this.store.migrationsApplied });
   }
 
@@ -573,7 +624,10 @@ export class Backend {
     try {
       const own = DATA_CHANGING.test(method);
       if (own) this.lastOwnChange = Date.now();
+      params = checkRpcParams(method, params); // "<method>: missing <param>" before anything runs
       await prefetchSecretsFor(this, params); // the environment's secret manager references, before they're needed
+      // the proxy settings apply from the first method that may go over the network (start-up's reads don't wait)
+      if (!LOCAL_READS.test(method)) await ensureProxyApplied();
       const r = await h(params ?? {});
       if (own) this.lastOwnChange = Date.now();
       this.logger.trace(`rpc ${method}`, { ms: Math.round(performance.now() - t0) });
@@ -619,7 +673,8 @@ export class Backend {
       ctx.services.persistVariable = (scope, key, value) => {
         const owner = scope === 'environment' ? envName : scope === 'collectionVariables' ? opts.collectionId : '';
         if (owner === undefined) return; // no environment / collection selected: keep it for this run only
-        const sensitive = ctx.redactor.isSensitiveKey(key) || (scope === 'environment' && secretEnvKeys.has(key));
+        // a value that is (or holds) a known secret stays secret, whatever its key: tp.environment.set("copy", tp.environment.get("token"))
+        const sensitive = ctx.redactor.isSensitiveKey(key) || (scope === 'environment' && secretEnvKeys.has(key)) || (typeof value === 'string' && value.length > 0 && ctx.redactor.redactString(value) !== value);
         void cv.set(scope, owner, key, value, sensitive).catch((e) => this.logger.warn(`Could not save current value ${key}: ${(e as Error).message}`));
       };
     }
@@ -651,7 +706,8 @@ export class Backend {
     for (const group of [appHandlers, workspaceHandlers, collectionsHandlers, requestsHandlers, grpcHandlers, mcpHandlers, aiHandlers, testingHandlers, monitorHandlers, agentHandlers, feedbackHandlers, gitHandlers, debuggerHandlers, debuggerRulesHandlers, externalSecretsHandlers, fuzzHandlers]) {
       for (const [name, fn] of Object.entries(group(this))) {
         if (name in all) throw new Error(`RPC method ${name} is defined twice`);
-        all[name] = fn;
+        // the parameters are checked first; a TypeError from inside becomes an InternalError naming the method
+        all[name] = guardHandler(name, fn);
       }
     }
     return all;
@@ -666,7 +722,15 @@ export class Backend {
   /* ------------------------------------------------------------------ HTTP */
 
   async httpSend(p: HttpSendParams) {
+    // an environment that does not exist (or whose file cannot be read) is an error, never a silent send without its variables
+    // (answered like any failed send: the response pane shows it with its why and suggestions)
     const id = p.id ?? shortId('req-');
+    if (p.environment)
+      try {
+        requireEnvironment(this.ws, p.environment);
+      } catch (e) {
+        return { id, error: normalizeError(e), scriptLogs: [], unresolved: [], cycles: [], blockedEnv: [] };
+      }
     const ctrl = new AbortController();
     this.controllers.set(id, ctrl);
     const ctx = this.context({ environment: p.environment, collectionId: p.collectionId });
@@ -709,7 +773,7 @@ export class Backend {
       preLogCount = scriptLogs.length;
       const spec = ctx.vars.resolveDeep(request);
       spec.settings = { timeoutMs: this.settings.defaultTimeoutMs, ...spec.settings };
-      const timeout = setTimeout(() => ctrl.abort(new ApsError('TimeoutError', `Request timed out after ${spec.settings!.timeoutMs} ms`)), spec.settings.timeoutMs);
+      // executeHttp applies spec.settings.timeoutMs itself (and stops the timer once an event stream starts); ctrl is the cancel
       let result;
       const sentAt = Date.now();
       try {
@@ -722,14 +786,9 @@ export class Backend {
           openExternal: this.host.openExternal?.bind(this.host),
           cookieJar: ctx.services.cookieJar,
           onChunk: /event-stream|stream/i.test(JSON.stringify(spec.headers ?? '')) || p.stream ? (c) => chunks.push({ id, chunk: c }) : undefined,
-          // an event stream may stay open for as long as the user wants: the timeout covers only its start
-          onResponseStart: (_status, headers) => {
-            if (isEventStream(headers.get('content-type'))) clearTimeout(timeout);
-          },
           onSseEvent: (event) => sseEvents.push({ id, event: { ...event, data: ctx.redactor.redactString(event.data) } }),
         });
       } finally {
-        clearTimeout(timeout);
         chunks.flush();
         sseEvents.flush();
       }
@@ -842,7 +901,7 @@ export class Backend {
       const rendered = visual ? renderVisualizer(visual.template, visual.data) : undefined;
       // scripts (charts) run only on the isolated visualization origin; the id is its access key
       const visualizer = rendered && { ...rendered, vizId: rendered.html !== undefined ? this.publishVisualization(rendered.html, visual!.data) : undefined };
-      return { id, response, prepared, checks, scriptLogs, visualizer, unresolved: [...ctx.vars.unresolved], blockedEnv: [...ctx.vars.blockedEnv], traceId: trace.traceId, historyId };
+      return { id, response, prepared, checks, scriptLogs, visualizer, unresolved: [...ctx.vars.unresolved], cycles: [...ctx.vars.cycles], blockedEnv: [...ctx.vars.blockedEnv], traceId: trace.traceId, historyId };
     } catch (e) {
       const err = normalizeError(ctrl.signal.reason instanceof ApsError ? ctrl.signal.reason : e);
       root.fail(e);
@@ -860,7 +919,10 @@ export class Backend {
         logs: logsOf(),
         error: err.message,
       });
-      return { id, error: err, scriptLogs, unresolved: [...ctx.vars.unresolved], blockedEnv: [...ctx.vars.blockedEnv], traceId: trace.traceId };
+      // variables that refer to each other ({{a}} -> {{b}} -> {{a}}) are why a value is missing: say so with the error
+      const cycles = [...ctx.vars.cycles];
+      if (cycles.length) err.why = `${err.why ? `${err.why} ` : ''}Variables refer to each other in a loop: ${cycles.join('; ')}.`;
+      return { id, error: err, scriptLogs, unresolved: [...ctx.vars.unresolved], cycles, blockedEnv: [...ctx.vars.blockedEnv], traceId: trace.traceId };
     } finally {
       this.controllers.delete(id);
     }
@@ -1178,6 +1240,8 @@ export class Backend {
           resultsFile: join(dir, 'results.jsonl'),
           traceMode: opts.traceMode ?? 'all',
           onTrace: (t) => void store.saveTrace(t, 'test', runId),
+          // a run's traces go into the database in one transaction per batch, not one each
+          traceBatch: (fn) => store.meta.batch(fn),
           environment: opts.environment,
           // test-end events carry results; forward only compact info — the UI pages full results from disk
           onEvent: (e) => {
@@ -1194,7 +1258,8 @@ export class Backend {
         this.host.emit('run.error', { runId, error: err });
       } finally {
         events.flush();
-        this.runs.get(runId)!.done = true;
+        // a finished run is forgotten: kept, its controller held the run's services and scope alive (soak test)
+        this.runs.delete(runId);
         await ctx.dispose();
         // the counts let the app say how it went (a desktop notification when it's in the background)
         this.host.emit('run.finished', { runId, name, total: summary?.total, passed: summary?.passed, failed: summary?.failed, errors: summary?.errors, durationMs: Date.now() - started, cancelled: ctrl.signal.aborted });
@@ -1345,6 +1410,7 @@ export class Backend {
   }
 
   async dispose(): Promise<void> {
+    for (const t of this.deferred) clearTimeout(t);
     this.stopWatching?.();
     this.monitorScheduler.stop();
     this.gitAutoFetch.stop();

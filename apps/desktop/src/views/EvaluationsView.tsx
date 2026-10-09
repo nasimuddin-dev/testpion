@@ -79,7 +79,7 @@ export function EvaluationsView() {
       setProviders(p);
       if (!d.provider && p[0]) set({ provider: p[0].id, model: p[0].defaultModel ?? '' });
     });
-    const loadRuns = () => void call('runs.list', { limit: 30 }).then((r) => setRuns(r.items));
+    const loadRuns = () => void call('runs.list', { limit: 30 }).then((r) => setRuns(r.items), toastError);
     loadRuns();
     // a finished run replaces its placeholder row (passed / total, duration) in the list and the overview
     const off = on<{ runId: string }>('run.finished', () => loadRuns());

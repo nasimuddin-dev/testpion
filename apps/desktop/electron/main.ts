@@ -1,6 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, protocol, safeStorage, screen, shell, nativeTheme } from 'electron';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+import * as nodeModule from 'node:module';
 import { createRequire } from 'node:module';
 import { Backend } from '../backend/backend.js';
 import { canInstallInPlace, createUpdater } from './updater.js';
@@ -9,6 +10,15 @@ import { defaultAppDir, normalizeError, runMergeDriver } from '@testpion/core';
 import { parseMcpMode, runMcpMode } from './mcp-mode.js';
 
 const isDev = !!process.env.VITE_DEV_SERVER_URL;
+
+/**
+ * When each step of the start happened, in ms since the process started (the window reads them with aps:startup;
+ * e2e/plans/_startup.cjs prints them): the bundle loaded, Electron ready, the window created, the backend ready, the
+ * page loaded, the first paint ready to show.
+ */
+const startupMarks: Record<string, number> = {};
+const mark = (name: string) => void (startupMarks[name] ??= Math.round(process.uptime() * 1000));
+mark('mainLoaded');
 
 // `TestPion --merge-driver %O %A %B %P`: git merges a collection file request by request (GIT-301); no window
 const mergeAt = process.argv.indexOf('--merge-driver');
@@ -31,6 +41,16 @@ let win: BrowserWindow | null = null;
 let rendererCheckedUpdates = false;
 let nativePromptShown = false;
 let backend: Backend | null = null;
+/** How long the backend took to construct. */
+let backendMs: number | undefined;
+// The window is created before the backend (the window's start overlaps with the backend's): its calls wait for this.
+let backendStarted!: (b: Backend) => void;
+let backendFailed!: (e: unknown) => void;
+const backendReady = new Promise<Backend>((resolve, reject) => {
+  backendStarted = resolve;
+  backendFailed = reject;
+});
+backendReady.catch(() => undefined);
 
 // An exception nobody catches in the main process (a socket callback in the proxy, a timer) is logged and the app goes
 // on. Electron's default is a native error box, and its modal loop stops the backend (every request, the proxy, the
@@ -121,6 +141,8 @@ function createWindow(): void {
     show: false,
     webPreferences: {
       preload: join(__dirname, 'preload.cjs'),
+      // the preload reads whether the app draws the title bar from here (no synchronous call to a busy main process)
+      additionalArguments: [`--tp-titlebar=${overlayTitleBar ? 1 : 0}`],
       contextIsolation: true,
       sandbox: true,
       nodeIntegration: false,
@@ -133,12 +155,17 @@ function createWindow(): void {
     win.setAppDetails({ appId: APP_ID, appIconPath: icon, appIconIndex: 0, relaunchCommand: app.isPackaged ? `"${process.execPath}"` : `"${process.execPath}" "${app.getAppPath()}"`, relaunchDisplayName: 'TestPion' });
   }
   win.once('ready-to-show', () => {
+    mark('readyToShow');
+    // V8's compile cache (boot.cjs): written now, with the code compiled for the start, not only at exit
+    setTimeout(() => (nodeModule as { flushCompileCache?: () => void }).flushCompileCache?.(), 3000).unref();
     if (capture) return;
     win?.maximize();
     win?.show();
+    mark('shown');
   });
   installTextContextMenu(win);
-  win.webContents.on('did-finish-load', () => console.log('[aps] renderer loaded'));
+  win.webContents.once('dom-ready', () => mark('domReady'));
+  win.webContents.on('did-finish-load', () => (mark('didFinishLoad'), console.log('[aps] renderer loaded')));
   win.webContents.on('render-process-gone', (_e, d) => console.error(`[aps] renderer gone: ${d.reason} (exit ${d.exitCode})`));
   win.webContents.on('console-message', (e) => {
     const level = (e as unknown as { level?: string }).level;
@@ -185,20 +212,98 @@ function emit(channel: string, payload: unknown): void {
 const menu = (command: string) => emit('menu.command', { command });
 
 app.whenReady().then(() => {
+  mark('electronReady');
   if (mergeAt >= 0) return;
   if (mcpMode) return void runMcpMode(mcpMode, process.env.TESTPION_HOME || defaultAppDir()).then((code) => app.exit(code));
   try {
     start();
   } catch (e) {
-    // never fail silently with no window: show what went wrong
-    dialog.showErrorBox('TestPion failed to start', `${(e as Error).message}
-
-Data directory: ${process.env.TESTPION_HOME || defaultAppDir()}`);
-    app.quit();
+    failedToStart(e);
   }
 });
 
+/** Never fail silently with no window: show what went wrong. */
+function failedToStart(e: unknown): void {
+  dialog.showErrorBox('TestPion failed to start', `${(e as Error)?.message ?? String(e)}
+
+Data directory: ${process.env.TESTPION_HOME || defaultAppDir()}`);
+  app.quit();
+}
+
+/**
+ * The window first, then the backend: Electron's main thread is also the browser's UI thread, so the backend is
+ * constructed once the window's page is on its way, and the page's first calls wait for it (backendReady).
+ */
 function start(): void {
+  ipcMain.handle('aps:rpc', async (e, method: string, params: unknown) => {
+    // only the app's own page (the window's top frame) may call the backend, never an embedded frame
+    if (!win || e.sender !== win.webContents || e.senderFrame !== win.webContents.mainFrame) return { ok: false, error: normalizeError(new Error('Not allowed')) };
+    try {
+      const be = await backendReady;
+      return { ok: true, data: await be.invoke(method, params) };
+    } catch (err) {
+      // a plain object keeps kind and suggestions (IPC would reduce an Error to its message)
+      return { ok: false, error: normalizeError(err) };
+    }
+  });
+  ipcMain.handle('aps:startup', () => ({ backendMs, marks: { ...startupMarks } }));
+  // the drawn title bar: whether there is one, its colours (the page follows the app's theme), and the ☰ menu
+  ipcMain.on('aps:titlebar', (e) => (e.returnValue = overlayTitleBar));
+  ipcMain.on('aps:titlebar-colors', (e, c: { color: string; symbolColor: string; height?: number }) => {
+    if (!overlayTitleBar || !win || e.sender !== win.webContents) return;
+    try {
+      // the top bar's height in CSS pixels, times the page zoom (the UI scale setting), is its height on screen
+      const height = c.height ? Math.round(c.height * win.webContents.getZoomFactor()) : TITLE_BAR_HEIGHT;
+      win.setTitleBarOverlay({ color: c.color, symbolColor: c.symbolColor, height });
+    } catch {
+      /* not a colour Electron understands */
+    }
+  });
+  ipcMain.on('aps:app-menu', (e, p: { x: number; y: number }) => {
+    if (!win || e.sender !== win.webContents) return;
+    Menu.getApplicationMenu()?.popup({ window: win, x: Math.round(p.x), y: Math.round(p.y) });
+  });
+
+  installAppMenu({
+    menu,
+    tabs: (command) => emit('tabs.command', { command }),
+    checkForUpdates: () => emit('update.checkManual', {}),
+    openExternal: (url) => void shell.openExternal(url),
+  });
+  protocol.handle('tpviz', (req) => {
+    const page = backend?.visualizationPage(new URL(req.url).hostname);
+    return new Response(page ?? 'This visualization is no longer available. Send the request again.', {
+      status: page ? 200 : 404,
+      headers: { 'content-type': 'text/html; charset=utf-8', 'content-security-policy': Backend.VIZ_CSP, 'x-content-type-options': 'nosniff' },
+    });
+  });
+  createWindow();
+  mark('windowCreated');
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+  });
+  // The backend is constructed once the window has painted its first frame (ready-to-show): loading and painting the
+  // page need this thread, and the page's first calls wait for the backend anyway. A page that fails to load, or takes
+  // long, doesn't hold it up.
+  let started = false;
+  const begin = () => {
+    if (started) return;
+    started = true;
+    clearTimeout(fallback);
+    try {
+      startBackend();
+    } catch (e) {
+      backendFailed(e);
+      failedToStart(e);
+    }
+  };
+  const fallback = setTimeout(begin, 1500);
+  win?.once('ready-to-show', () => setImmediate(begin));
+  win?.webContents.once('did-fail-load', begin);
+  if (!win) begin();
+}
+
+function startBackend(): void {
   const t0 = Date.now();
   backend = new Backend({
     appDir: process.env.TESTPION_HOME || defaultAppDir(),
@@ -279,57 +384,17 @@ function start(): void {
     }
   };
 
-  ipcMain.handle('aps:rpc', async (e, method: string, params: unknown) => {
-    // only the app's own page (the window's top frame) may call the backend, never an embedded frame
-    if (!win || e.sender !== win.webContents || e.senderFrame !== win.webContents.mainFrame) return { ok: false, error: normalizeError(new Error('Not allowed')) };
-    try {
-      return { ok: true, data: await backend!.invoke(method, params) };
-    } catch (err) {
-      // a plain object keeps kind and suggestions (IPC would reduce an Error to its message)
-      return { ok: false, error: normalizeError(err) };
-    }
-  });
-  ipcMain.handle('aps:startup', () => ({ backendMs: Date.now() - t0 }));
-  // the drawn title bar: whether there is one, its colours (the page follows the app's theme), and the ☰ menu
-  ipcMain.on('aps:titlebar', (e) => (e.returnValue = overlayTitleBar));
-  ipcMain.on('aps:titlebar-colors', (e, c: { color: string; symbolColor: string; height?: number }) => {
-    if (!overlayTitleBar || !win || e.sender !== win.webContents) return;
-    try {
-      // the top bar's height in CSS pixels, times the page zoom (the UI scale setting), is its height on screen
-      const height = c.height ? Math.round(c.height * win.webContents.getZoomFactor()) : TITLE_BAR_HEIGHT;
-      win.setTitleBarOverlay({ color: c.color, symbolColor: c.symbolColor, height });
-    } catch {
-      /* not a colour Electron understands */
-    }
-  });
-  ipcMain.on('aps:app-menu', (e, p: { x: number; y: number }) => {
-    if (!win || e.sender !== win.webContents) return;
-    Menu.getApplicationMenu()?.popup({ window: win, x: Math.round(p.x), y: Math.round(p.y) });
-  });
-
-  installAppMenu({
-    menu,
-    tabs: (command) => emit('tabs.command', { command }),
-    checkForUpdates: () => emit('update.checkManual', {}),
-    openExternal: (url) => void shell.openExternal(url),
-  });
-  protocol.handle('tpviz', (req) => {
-    const page = be.visualizationPage(new URL(req.url).hostname);
-    return new Response(page ?? 'This visualization is no longer available. Send the request again.', {
-      status: page ? 200 : 404,
-      headers: { 'content-type': 'text/html; charset=utf-8', 'content-security-policy': Backend.VIZ_CSP, 'x-content-type-options': 'nosniff' },
-    });
-  });
-  createWindow();
+  // the window's crash, or a window that never asked about updates, gets the native prompt (see above)
   win?.webContents.on('render-process-gone', () => void nativeUpdatePrompt('the window crashed'));
-  win?.webContents.once('did-finish-load', () =>
+  const unchecked = () =>
     setTimeout(() => {
       if (!rendererCheckedUpdates) void nativeUpdatePrompt('the window did not check');
-    }, 20_000),
-  );
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
-  });
+    }, 20_000);
+  if (win && !win.webContents.isLoading()) unchecked();
+  else win?.webContents.once('did-finish-load', unchecked);
+  backendMs = Date.now() - t0;
+  mark('backendReady');
+  backendStarted(be);
 }
 
 app.on('second-instance', () => {

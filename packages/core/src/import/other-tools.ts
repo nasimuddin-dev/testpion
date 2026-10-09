@@ -1,4 +1,4 @@
-import { parse as parseYaml } from 'yaml';
+import { parseYaml } from '../util/lazy-yaml.js';
 import type { AuthConfig, BodyConfig, CheckConfig, Collection, CollectionFolder, CollectionNode, Environment, KeyValue, LibraryItem, SavedGraphQLRequest, SavedHttpRequest } from '../model/types.js';
 import { SCHEMA_VERSION } from '../model/types.js';
 import { shortId, slugify } from '../util/ids.js';

@@ -69,7 +69,7 @@ export function historyOk(status: number | string | undefined): boolean {
  * `tzOffsetMin` is the caller's offset (Date#getTimezoneOffset) so days follow the user's calendar.
  */
 export function summarizeActivity(
-  history: Array<Pick<HistoryEntry, 'timestamp' | 'kind' | 'status' | 'durationMs' | 'name'>>,
+  history: Array<Pick<HistoryEntry, 'timestamp' | 'kind' | 'status' | 'durationMs' | 'name'> | ActivityRow>,
   runs: Array<Pick<RunMeta, 'startedAt' | 'total' | 'passed' | 'failed' | 'errors'>>,
   opts: { days?: number; tzOffsetMin?: number; now?: number } = {},
 ): Activity {
@@ -89,10 +89,11 @@ export function summarizeActivity(
   const byKind: Record<string, number> = {};
   const slow = new Map<string, { name: string; kind: string; total: number; count: number }>();
   for (const h of history) {
-    const d = index.get(dayOf(Date.parse(h.timestamp)));
+    const pre = 'day' in h ? h : undefined;
+    const d = index.get(pre ? pre.day : dayOf(Date.parse((h as HistoryEntry).timestamp)));
     if (!d) continue;
     d.requests++;
-    if (!historyOk(h.status)) d.failedRequests++;
+    if (!(pre ? pre.ok : historyOk((h as HistoryEntry).status))) d.failedRequests++;
     byKind[h.kind] = (byKind[h.kind] ?? 0) + 1;
     if (typeof h.durationMs === 'number' && h.durationMs >= 0) {
       (durations.get(d.day) ?? durations.set(d.day, []).get(d.day)!).push(h.durationMs);
@@ -123,6 +124,15 @@ export function summarizeActivity(
     .sort((a, b) => b.durationMs - a.durationMs)
     .slice(0, 5);
   return { days, medianMs: all.length ? median(all) : undefined, byKind, slowest };
+}
+
+/** A history row for summarizeActivity with its local day and historyOk(status) already worked out. */
+export interface ActivityRow {
+  day: string;
+  ok: boolean | number;
+  kind: string;
+  name: string;
+  durationMs?: number | null;
 }
 
 /** How the saved requests of a collection have been doing, from the responses sent in the app. */
@@ -179,6 +189,8 @@ export interface ListQuery {
   requestId?: string;
   /** History only: only responses that failed (4xx/5xx, transport errors, non-OK gRPC codes, MCP tool errors). */
   failed?: boolean;
+  /** History only: the list columns without `request` and `responseMeta` (lists that show only the summary; `getHistory` has the rest). */
+  brief?: boolean;
   limit?: number;
   offset?: number;
 }
@@ -204,7 +216,43 @@ export interface MetaStore {
   activity(opts?: { days?: number; tzOffsetMin?: number }): Activity;
   /** Per saved request of a collection: responses, failures, latest status, median time. */
   requestStats(collectionId: string): RequestStat[];
+  /** Per collection: how many of its saved requests were sent, and how many of those failed the last time. */
+  historyByCollection(): Record<string, { sent: number; failing: number }>;
+  /** Run `fn` in one transaction (a burst of inserts: a run's traces). Nested calls join the outer one. */
+  batch<T>(fn: () => T): T;
   close(): void;
+}
+
+/** Longest string kept in a history entry's request (a body, a prompt): history is for finding and re-sending, not archiving. */
+export const HISTORY_VALUE_MAX = 64 * 1024;
+
+/** The request with every string longer than HISTORY_VALUE_MAX cut to that length, and whether anything was cut. */
+export function capHistoryRequest(v: unknown): { value: unknown; cut: boolean } {
+  let cut = false;
+  const walk = (x: unknown, depth: number): unknown => {
+    if (typeof x === 'string') {
+      if (x.length <= HISTORY_VALUE_MAX) return x;
+      cut = true;
+      return x.slice(0, HISTORY_VALUE_MAX);
+    }
+    if (!x || typeof x !== 'object' || depth > 20) return x;
+    if (Array.isArray(x)) {
+      let out: unknown[] | undefined;
+      x.forEach((e, i) => {
+        const w = walk(e, depth + 1);
+        if (w !== e) (out ??= [...x])[i] = w;
+      });
+      return out ?? x;
+    }
+    let out: Record<string, unknown> | undefined;
+    for (const [k, e] of Object.entries(x)) {
+      const w = walk(e, depth + 1);
+      if (w !== e) (out ??= { ...(x as Record<string, unknown>) })[k] = w;
+    }
+    return out ?? x;
+  };
+  const value = walk(v, 0);
+  return { value, cut };
 }
 
 /** Start of the activity window (one extra day so any time zone's first day is complete). */
@@ -236,7 +284,8 @@ function loadSqlite() {
   return sqliteModule;
 }
 
-const SQLITE_SCHEMA_VERSION = 1;
+/** v2: history has collection_id, request_id and status_ok columns (indexed) instead of reading them out of `doc`. */
+const SQLITE_SCHEMA_VERSION = 2;
 
 /** History entries and traces kept; older ones are pruned, with their files. */
 const MAX_HISTORY = 20_000;
@@ -269,6 +318,7 @@ class SqliteMetaStore implements MetaStore {
   /** Prepared once: inserts happen for every request sent and every trace of a run. */
   private statements = new Map<string, ReturnType<SqliteDb['prepare']>>();
   private inserts = { history: 0, traces: 0 };
+  private batchDepth = 0;
 
   private stmt(sql: string) {
     let s = this.statements.get(sql);
@@ -280,7 +330,7 @@ class SqliteMetaStore implements MetaStore {
     mkdirSync(dirname(path), { recursive: true });
     this.root = dirname(path);
     this.db = new Db(path);
-    this.db.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;');
+    this.db.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA cache_size=-16000;');
     this.migrate();
   }
 
@@ -298,21 +348,93 @@ class SqliteMetaStore implements MetaStore {
         CREATE TABLE IF NOT EXISTS traces (id TEXT PRIMARY KEY, name TEXT, kind TEXT, status TEXT, start INTEGER, duration REAL, spans INTEGER, run_id TEXT, path TEXT);
         CREATE INDEX IF NOT EXISTS traces_start ON traces(start DESC);
       `);
-      this.db.prepare("INSERT OR REPLACE INTO meta(key, value) VALUES('schema', ?)").run(String(SQLITE_SCHEMA_VERSION));
+    }
+    if (v < 2) {
+      // columns the lists filter on, backfilled from each row's doc, in one transaction with the schema bump
+      this.batch(() => {
+        const cols = new Set((this.db.prepare('PRAGMA table_info(history)').all() as Array<{ name: string }>).map((c) => c.name));
+        for (const [c, type] of [
+          ['collection_id', 'TEXT'],
+          ['request_id', 'TEXT'],
+          ['status_ok', 'INTEGER'],
+        ] as const)
+          if (!cols.has(c)) this.db.exec(`ALTER TABLE history ADD COLUMN ${c} ${type}`);
+        this.db.exec("UPDATE history SET collection_id = json_extract(doc, '$.collectionId'), request_id = json_extract(doc, '$.requestId') WHERE json_valid(doc)");
+        const set = this.db.prepare('UPDATE history SET status_ok = ? WHERE rowid = ?');
+        for (const r of this.db.prepare('SELECT rowid AS id, status FROM history').all() as Array<{ id: number; status: string | null }>) set.run(historyOk(statusOf(r.status)) ? 1 : 0, r.id);
+        this.db.exec(`
+          DROP INDEX IF EXISTS history_kind;
+          CREATE INDEX IF NOT EXISTS history_kind_ts ON history(kind, ts DESC);
+          CREATE INDEX IF NOT EXISTS history_collection_ts ON history(collection_id, ts DESC);
+          CREATE INDEX IF NOT EXISTS history_request_ts ON history(request_id, ts DESC);
+        `);
+        this.db.prepare("INSERT OR REPLACE INTO meta(key, value) VALUES('schema', ?)").run(String(SQLITE_SCHEMA_VERSION));
+      });
     }
   }
 
-  addHistory(e: HistoryEntry): void {
-    this.stmt('INSERT OR REPLACE INTO history (id, ts, kind, name, method, url, status, duration, size, trace_id, payload, doc) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
-      .run(e.id, e.timestamp, e.kind, e.name, e.method ?? null, e.url ?? null, e.status === undefined ? null : String(e.status), e.durationMs ?? null, e.size ?? null, e.traceId ?? null, e.payloadPath ?? null, JSON.stringify({ request: e.request, responseMeta: e.responseMeta, collectionId: e.collectionId, requestId: e.requestId }));
-    // bound history size (and delete the saved response bodies of what goes)
-    if (this.inserts.history++ % PRUNE_EVERY === 0) {
-      const old = this.db.prepare(`SELECT id, payload FROM history ORDER BY ts DESC LIMIT -1 OFFSET ${MAX_HISTORY}`).all() as Array<{ id: string; payload: string | null }>;
-      if (old.length) {
-        this.db.exec(`DELETE FROM history WHERE id IN (SELECT id FROM history ORDER BY ts DESC LIMIT -1 OFFSET ${MAX_HISTORY})`);
-        removeFiles(this.root, old.map((r) => r.payload));
+  batch<T>(fn: () => T): T {
+    if (this.batchDepth > 0) return fn();
+    this.db.exec('BEGIN');
+    this.batchDepth++;
+    try {
+      const out = fn();
+      this.db.exec('COMMIT');
+      return out;
+    } catch (e) {
+      try {
+        this.db.exec('ROLLBACK');
+      } catch {
+        /* already rolled back */
       }
+      throw e;
+    } finally {
+      this.batchDepth--;
     }
+  }
+
+  /** Bound a table to `max` rows: counted first (the common case is "nothing to do"), then the oldest by `order` go, by rowid, with their files. */
+  private prune(table: 'history' | 'traces', order: string, fileCol: string, max: number): void {
+    const n = (this.stmt(`SELECT COUNT(*) AS n FROM ${table}`).get() as { n: number }).n;
+    if (n <= max) return;
+    const old = this.db.prepare(`SELECT rowid AS id, ${fileCol} AS file FROM ${table} ORDER BY ${order} ASC LIMIT ?`).all(n - max) as Array<{ id: number; file: string | null }>;
+    this.batch(() => {
+      const del = this.stmt(`DELETE FROM ${table} WHERE rowid = ?`);
+      for (const r of old) del.run(r.id);
+    });
+    removeFiles(this.root, old.map((r) => r.file));
+  }
+
+  /** `total` of a page: free when the page is not full, else counted (indexed filters are cheap; a text query scans). */
+  private total(from: string, w: { sql: string; args: unknown[] }, q: ListQuery, got: number): number {
+    const limit = q.limit ?? 100;
+    if (got < limit && (got > 0 || !q.offset)) return (q.offset ?? 0) + got;
+    return (this.db.prepare(`SELECT COUNT(*) AS n FROM ${from} ${w.sql}`).get(...w.args) as { n: number }).n;
+  }
+
+  addHistory(e: HistoryEntry): void {
+    // long bodies are cut: the entry is then a preview of what was sent
+    const req = capHistoryRequest(e.request);
+    const doc = { request: req.value, responseMeta: e.responseMeta, collectionId: e.collectionId, requestId: e.requestId, ...(req.cut || e.requestPreview ? { requestPreview: true } : {}) };
+    this.stmt('INSERT OR REPLACE INTO history (id, ts, kind, name, method, url, status, duration, size, trace_id, payload, doc, collection_id, request_id, status_ok) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(
+      e.id,
+      e.timestamp,
+      e.kind,
+      e.name,
+      e.method ?? null,
+      e.url ?? null,
+      e.status === undefined ? null : String(e.status),
+      e.durationMs ?? null,
+      e.size ?? null,
+      e.traceId ?? null,
+      e.payloadPath ?? null,
+      JSON.stringify(doc),
+      e.collectionId ?? null,
+      e.requestId ?? null,
+      historyOk(e.status) ? 1 : 0,
+    );
+    // bound history size (and delete the saved response bodies of what goes)
+    if (this.inserts.history++ % PRUNE_EVERY === 0) this.prune('history', 'ts', 'payload', MAX_HISTORY);
   }
 
   private where(q: ListQuery, cols: string[]): { sql: string; args: unknown[] } {
@@ -332,18 +454,14 @@ class SqliteMetaStore implements MetaStore {
   listHistory(q: ListQuery = {}): Page<HistoryEntry> {
     const w = this.where(q, ['name', 'url', 'method', 'status']);
     if (q.requestId) {
-      w.sql = (w.sql ? w.sql + ' AND ' : 'WHERE ') + "json_extract(doc, '$.requestId') = ?";
+      w.sql = (w.sql ? w.sql + ' AND ' : 'WHERE ') + 'request_id = ?';
       w.args.push(q.requestId);
     }
-    if (q.failed) {
-      // the same rule as historyOk: 1xx-3xx and ok / passed / success / connected / closed worked
-      w.sql =
-        (w.sql ? w.sql + ' AND ' : 'WHERE ') +
-        "status IS NOT NULL AND status <> '' AND NOT (status GLOB '[1-3][0-9][0-9]') AND lower(status) NOT IN ('ok', 'passed', 'success', 'connected', 'closed')";
-    }
-    const total = (this.db.prepare(`SELECT COUNT(*) AS n FROM history ${w.sql}`).get(...w.args) as { n: number }).n;
-    const rows = this.db.prepare(`SELECT * FROM history ${w.sql} ORDER BY ts DESC LIMIT ? OFFSET ?`).all(...w.args, q.limit ?? 100, q.offset ?? 0) as Array<Record<string, unknown>>;
-    return { total, items: rows.map(historyRow) };
+    // status_ok is historyOk(status), set on insert
+    if (q.failed) w.sql = (w.sql ? w.sql + ' AND ' : 'WHERE ') + 'status_ok = 0';
+    const cols = q.brief ? 'id, ts, kind, name, method, url, status, duration, size, trace_id, payload, collection_id, request_id' : '*';
+    const rows = this.db.prepare(`SELECT ${cols} FROM history ${w.sql} ORDER BY ts DESC LIMIT ? OFFSET ?`).all(...w.args, q.limit ?? 100, q.offset ?? 0) as Array<Record<string, unknown>>;
+    return { total: this.total('history', w, q, rows.length), items: rows.map(historyRow) };
   }
 
   getHistory(id: string): HistoryEntry | undefined {
@@ -372,10 +490,9 @@ class SqliteMetaStore implements MetaStore {
 
   listRuns(q: ListQuery = {}): Page<RunMeta> {
     const w = this.where({ query: q.query }, ['name']);
-    const total = (this.db.prepare(`SELECT COUNT(*) AS n FROM runs ${w.sql}`).get(...w.args) as { n: number }).n;
     const rows = this.db.prepare(`SELECT * FROM runs ${w.sql} ORDER BY started DESC LIMIT ? OFFSET ?`).all(...w.args, q.limit ?? 100, q.offset ?? 0) as Array<Record<string, unknown>>;
     return {
-      total,
+      total: this.total('runs', w, q, rows.length),
       items: rows.map((r) => ({
         id: r.id as string,
         name: r.name as string,
@@ -398,13 +515,6 @@ class SqliteMetaStore implements MetaStore {
 
   activity(opts: { days?: number; tzOffsetMin?: number } = {}): Activity {
     const since = activitySince(opts.days);
-    const hist = (this.db.prepare('SELECT ts, kind, name, status, duration FROM history WHERE ts >= ?').all(since) as Array<Record<string, unknown>>).map((r) => ({
-      timestamp: r.ts as string,
-      kind: r.kind as HistoryEntry['kind'],
-      name: r.name as string,
-      status: r.status === null ? undefined : isNaN(Number(r.status)) ? (r.status as string) : Number(r.status),
-      durationMs: (r.duration as number) ?? undefined,
-    }));
     const runs = (this.db.prepare('SELECT started, total, passed, failed, errors FROM runs WHERE started >= ?').all(since) as Array<Record<string, number | string>>).map((r) => ({
       startedAt: r.started as string,
       total: Number(r.total),
@@ -412,33 +522,41 @@ class SqliteMetaStore implements MetaStore {
       failed: Number(r.failed),
       errors: Number(r.errors),
     }));
+    // only the columns counted, with the local day and the status verdict worked out by SQLite (no date parsing per row)
+    const hist = this.stmt('SELECT date(ts, ?) AS day, kind, name, status_ok AS ok, duration AS durationMs FROM history WHERE ts >= ?').all(`${-(opts.tzOffsetMin ?? 0)} minutes`, since) as unknown as ActivityRow[];
     return summarizeActivity(hist, runs, opts);
   }
 
   requestStats(collectionId: string): RequestStat[] {
-    const rows = this.db
-      .prepare("SELECT ts, status, duration, json_extract(doc, '$.requestId') AS rid, json_extract(doc, '$.responseMeta.checksOk') AS cok FROM history WHERE json_extract(doc, '$.collectionId') = ? ORDER BY ts DESC LIMIT 5000")
-      .all(collectionId) as Array<Record<string, unknown>>;
+    const rows = this.stmt("SELECT ts, status, duration, request_id AS rid, json_extract(doc, '$.responseMeta.checksOk') AS cok FROM history WHERE collection_id = ? ORDER BY ts DESC LIMIT 5000").all(
+      collectionId,
+    ) as Array<Record<string, unknown>>;
     return summarizeRequestStats(
       rows.map((r) => ({
         requestId: (r.rid as string) ?? undefined,
         timestamp: r.ts as string,
-        status: r.status === null ? undefined : isNaN(Number(r.status)) ? (r.status as string) : Number(r.status),
+        status: statusOf(r.status),
         durationMs: (r.duration as number) ?? undefined,
         checksOk: r.cok === null || r.cok === undefined ? undefined : !!r.cok,
       })),
     );
   }
 
+  historyByCollection(): Record<string, { sent: number; failing: number }> {
+    // the newest row of each saved request (one index probe each), then per collection; a response is fine when
+    // its own checks passed, else by its status (as summarizeRequestStats decides)
+    const rows = this.stmt(
+      `SELECT k.cid, COUNT(*) AS sent, SUM(CASE WHEN COALESCE(json_extract(h.doc, '$.responseMeta.checksOk'), h.status_ok) THEN 0 ELSE 1 END) AS failing
+       FROM (SELECT DISTINCT collection_id AS cid, request_id AS rid FROM history WHERE collection_id IS NOT NULL AND request_id IS NOT NULL) k
+       JOIN history h ON h.rowid = (SELECT rowid FROM history WHERE request_id = k.rid AND collection_id = k.cid ORDER BY ts DESC LIMIT 1)
+       GROUP BY k.cid`,
+    ).all() as Array<{ cid: string; sent: number; failing: number }>;
+    return Object.fromEntries(rows.map((r) => [r.cid, { sent: r.sent, failing: r.failing }]));
+  }
+
   addTrace(t: TraceMeta): void {
     this.stmt('INSERT OR REPLACE INTO traces (id, name, kind, status, start, duration, spans, run_id, path) VALUES (?,?,?,?,?,?,?,?,?)').run(t.id, t.name, t.kind, t.status, t.startTime, t.durationMs, t.spanCount, t.runId ?? null, t.path);
-    if (this.inserts.traces++ % PRUNE_EVERY === 0) {
-      const old = this.db.prepare(`SELECT path FROM traces ORDER BY start DESC LIMIT -1 OFFSET ${MAX_TRACES}`).all() as Array<{ path: string | null }>;
-      if (old.length) {
-        this.db.exec(`DELETE FROM traces WHERE id IN (SELECT id FROM traces ORDER BY start DESC LIMIT -1 OFFSET ${MAX_TRACES})`);
-        removeFiles(this.root, old.map((r) => r.path));
-      }
-    }
+    if (this.inserts.traces++ % PRUNE_EVERY === 0) this.prune('traces', 'start', 'path', MAX_TRACES);
   }
 
   listTraces(q: ListQuery = {}): Page<TraceMeta> {
@@ -447,9 +565,8 @@ class SqliteMetaStore implements MetaStore {
     if (q.failed) {
       w.sql = (w.sql ? w.sql + ' AND ' : 'WHERE ') + "status <> 'ok'";
     }
-    const total = (this.db.prepare(`SELECT COUNT(*) AS n FROM traces ${w.sql}`).get(...w.args) as { n: number }).n;
     const rows = this.db.prepare(`SELECT * FROM traces ${w.sql} ORDER BY start DESC LIMIT ? OFFSET ?`).all(...w.args, q.limit ?? 100, q.offset ?? 0) as Array<Record<string, unknown>>;
-    return { total, items: rows.map(traceRow) };
+    return { total: this.total('traces', w, q, rows.length), items: rows.map(traceRow) };
   }
 
   getTrace(id: string): TraceMeta | undefined {
@@ -462,8 +579,14 @@ class SqliteMetaStore implements MetaStore {
   }
 }
 
+/** A stored status: numbers come back as numbers. */
+function statusOf(s: unknown): number | string | undefined {
+  return s === null || s === undefined ? undefined : isNaN(Number(s)) ? (s as string) : Number(s);
+}
+
 function historyRow(r: Record<string, unknown>): HistoryEntry {
-  const doc = r.doc ? JSON.parse(r.doc as string) : {};
+  // a brief list has no doc: the ids come from their columns
+  const doc = r.doc ? JSON.parse(r.doc as string) : { collectionId: r.collection_id ?? undefined, requestId: r.request_id ?? undefined };
   return {
     id: r.id as string,
     timestamp: r.ts as string,
@@ -480,6 +603,7 @@ function historyRow(r: Record<string, unknown>): HistoryEntry {
     responseMeta: doc.responseMeta,
     collectionId: doc.collectionId,
     requestId: doc.requestId,
+    ...(doc.requestPreview ? { requestPreview: true } : {}),
   };
 }
 
@@ -538,6 +662,8 @@ class JsonlMetaStore implements MetaStore {
   }
 
   addHistory(e: HistoryEntry) {
+    const req = capHistoryRequest(e.request);
+    if (req.cut) e = { ...e, request: req.value, requestPreview: true };
     this.data.history.push(e);
     this.log('history', e);
   }
@@ -586,6 +712,18 @@ class JsonlMetaStore implements MetaStore {
         .slice(0, 5000)
         .map((h) => ({ ...h, checksOk: (h.responseMeta as { checksOk?: boolean } | undefined)?.checksOk })),
     );
+  }
+  historyByCollection() {
+    const ids = new Set(this.data.history.map((h) => h.collectionId).filter((c): c is string => !!c));
+    return Object.fromEntries(
+      [...ids].map((c) => {
+        const stats = this.requestStats(c);
+        return [c, { sent: stats.length, failing: stats.filter((s) => !s.lastOk).length }];
+      }),
+    );
+  }
+  batch<T>(fn: () => T): T {
+    return fn();
   }
   addTrace(t: TraceMeta) {
     this.data.traces.push(t);

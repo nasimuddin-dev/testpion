@@ -116,7 +116,7 @@ export async function executeRun(paths: string[], o: RunCliOptions, label?: stri
     patterns = [store.path('tests')];
   }
 
-  const environment = o.environment ?? suite?.environment ?? (store.listEnvironments().length === 1 ? store.listEnvironments()[0]!.name : undefined);
+  const environment = o.environment ?? suite?.environment ?? (store.listEnvironments().length === 1 && !store.listEnvironments()[0]!.problem ? store.listEnvironments()[0]!.name : undefined);
   if (o.environment) requireEnvironment(store, o.environment);
 
   const ctx = cliContext(store, environment, { logger, runtimeVars: o.var, fileRoot: ephemeral ? process.cwd() : undefined });
@@ -183,6 +183,7 @@ export async function executeRun(paths: string[], o: RunCliOptions, label?: stri
         void store.saveTrace(trace, 'test', runId);
         otlp.add(trace);
       },
+      traceBatch: (fn) => store.meta.batch(fn),
       onEvent,
       environment,
       bail: o.bail,
@@ -322,7 +323,7 @@ export async function executeCollectionRun(ref: string, o: CollectionCliOptions)
   else if (o.environment) {
     requireEnvironment(store, o.environment, { hint: '(or pass an environment file)' });
     envName = o.environment;
-  } else if (!fromFile && store.listEnvironments().length === 1) envName = store.listEnvironments()[0]!.name;
+  } else if (!fromFile && store.listEnvironments().length === 1 && !store.listEnvironments()[0]!.problem) envName = store.listEnvironments()[0]!.name;
 
   if (o.insecure) collection = insecureCollection(collection);
   const globalsFile = o.globals ? readImport(resolve(o.globals), 'environment') : undefined;
@@ -415,6 +416,7 @@ export async function executeCollectionRun(ref: string, o: CollectionCliOptions)
         void store.saveTrace(trace, 'test', runId);
         otlp.add(trace);
       },
+      traceBatch: (fn) => store.meta.batch(fn),
       environment,
       onEvent: (e: RunEvent) => {
         if (e.type !== 'test-end' || o.quiet) return;
@@ -471,6 +473,8 @@ export async function executeSend(
   let checks: Array<{ name: string; passed: boolean; message?: string }> = [];
   let error: string | undefined;
   try {
+    // an unknown or broken environment is an error, not a request sent without its variables
+    if (o.environment) requireEnvironment(store, o.environment);
     if (isUrl) {
       const ctx = cliContext(store, o.environment);
       try {

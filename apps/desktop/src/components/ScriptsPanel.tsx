@@ -114,13 +114,16 @@ export function ScriptsPanel({ pre, post, onPre, onPost }: { pre: string; post: 
             onMount={(editor, monaco) => {
               editorRef.current = editor;
               const open = () => setPicking(true);
-              editor.addAction({
+              // addAction registers in Monaco's global command registry: released with the editor, or every closed
+              // Scripts editor stays alive through it (soak test: 250 detached nodes per closed tab)
+              const action = editor.addAction({
                 id: 'testpion.insertSnippet',
                 label: 'Insert Snippet…',
                 keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyI],
                 contextMenuGroupId: 'navigation',
                 run: open,
               });
+              editor.onDidDispose(() => action.dispose());
               const register = () => {
                 unregister.current?.();
                 const root = editor.getDomNode();

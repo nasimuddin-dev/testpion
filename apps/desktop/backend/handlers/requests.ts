@@ -1,5 +1,6 @@
 /** RPC handlers: Sending requests: HTTP (with response history), GraphQL and WebSocket. */
 import { copyFileSync, readFileSync, writeFileSync } from 'node:fs';
+import { cachedAttention, collectionsHealth } from '../stats-cache.js';
 import {
   ApsError,
   applyAuth,
@@ -33,7 +34,6 @@ import {
   listCertificates,
   checkCertificate,
   recordCertificate,
-  workspaceAttention,
   collectionTiming,
 } from '@testpion/core';
 import type { Backend, Handlers, HttpSendParams, GqlSendParams } from '../backend.js';
@@ -94,13 +94,7 @@ export function requestsHandlers(be: Backend): Handlers {
     /** Per saved request of a collection: responses, failures, latest status and median time (collection Overview). */
     'stats.requests': ({ collectionId }: { collectionId: string }) => be.ws.meta.requestStats(collectionId),
     /** Per collection: how many of its requests were sent from the app and how many of those are failing now. */
-    'stats.collectionsHealth': () =>
-      Object.fromEntries(
-        be.ws.listCollections().map((c) => {
-          const stats = be.ws.meta.requestStats(c.id);
-          return [c.id, { sent: stats.length, failing: stats.filter((s) => !s.lastOk).length }];
-        }),
-      ),
+    'stats.collectionsHealth': () => collectionsHealth(be.ws),
     /** TLS certificates of the HTTPS hosts called, soonest to expire first. */
     'certificates.list': () => listCertificates(be.ws),
     /** Connect to a host now, read its certificate and record it (the list then shows the fresh one). */
@@ -110,7 +104,7 @@ export function requestsHandlers(be: Backend): Handlers {
       return c;
     },
     /** What needs attention: failing monitors, expiring certificates, the latest failed run, failing requests, flaky tests. */
-    'stats.attention': () => workspaceAttention(be.ws),
+    'stats.attention': () => cachedAttention(be.ws, be.dataEpoch),
     /** Where the time of a collection's requests went (DNS, TCP, TLS, server, download), from responses sent in the app. */
     'stats.collectionTiming': ({ collectionId }: { collectionId: string }) => collectionTiming(be.ws, collectionId) ?? null,
     'history.get': ({ id }: { id: string }) => be.ws.meta.getHistory(id),

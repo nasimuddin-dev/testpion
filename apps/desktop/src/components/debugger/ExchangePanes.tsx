@@ -132,7 +132,7 @@ export function ExchangePanes({ e, ...a }: { e: Exchange } & ExchangeActions) {
       <div className="flex-1 min-h-0">
         <Split id="debugger-panes" initial={50}>
           <DetailsPane
-            key={`req-${e.id}`}
+            exchangeId={e.id}
             title="Request Details"
             side="request"
             startLabel="[Request]"
@@ -152,7 +152,7 @@ export function ExchangePanes({ e, ...a }: { e: Exchange } & ExchangeActions) {
             ]}
           />
           <DetailsPane
-            key={`res-${e.id}`}
+            exchangeId={e.id}
             title="Response Details"
             side="response"
             startLabel="[Response]"
@@ -200,7 +200,10 @@ function DetailsPane({
   raw,
   extra,
   initial,
+  exchangeId,
 }: {
+  /** Another exchange starts on its first tab with no header filter, as a new pane would, without remounting the pane. */
+  exchangeId: string;
   title: string;
   side: 'request' | 'response';
   startLabel: string;
@@ -215,6 +218,12 @@ function DetailsPane({
 }) {
   const [tab, setTab] = useState<string>(initial ?? 'header');
   const [find, setFind] = useState('');
+  const [shownId, setShownId] = useState(exchangeId);
+  if (shownId !== exchangeId) {
+    setShownId(exchangeId);
+    setTab(initial ?? 'header');
+    setFind('');
+  }
   const json = useMemo(() => parseJson(body), [body]);
   const f = find.trim().toLowerCase();
   const rows = (h?: Record<string, string>) => Object.entries(h ?? {}).filter(([k, v]) => !f || k.toLowerCase().includes(f) || v.toLowerCase().includes(f));

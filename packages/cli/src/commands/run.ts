@@ -31,27 +31,32 @@ export function registerRunCommands(program: Command): void {
   program
     .command('lint-tests')
     .description('check test files before running them: unknown test or check types, keys the runner does not read (typos), dependsOn ids nobody defines; exit 1 when there are errors')
-    .argument('[paths...]', 'test files or folders under tests/ (default: all)')
+    .argument('[paths...]', "test files or folders: any readable path (from the current folder, or absolute), else under the workspace's tests/ (default: all of tests/)")
     .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest)')
     .option('--json', 'print the problems as JSON (for scripts and AI agents)')
     .action((paths: string[], o) => {
       return withWorkspace(o.workspace, (store) => {
         const tests = store.path('tests');
         const files: string[] = [];
-        const walk = (p: string) => {
-          const abs = store.safePath(p, tests);
-          if (!existsSync(abs)) throw new CliError(`No such test file or folder: ${p}`, EXIT.CONFIG_ERROR);
-          if (statSync(abs).isDirectory()) for (const e of readdirSync(abs).sort()) walk(join(p, e));
+        // linting only reads: a file anywhere is fine (as given, from the current folder), else a path under tests/
+        const walk = (abs: string, shown: string) => {
+          if (statSync(abs).isDirectory()) for (const e of readdirSync(abs).sort()) walk(join(abs, e), join(shown, e));
           else if (/\.(ya?ml|json)$/.test(abs)) files.push(abs);
         };
-        // a path as `testpion test` takes it (from the current folder, e.g. tests/ai/rag.yaml) or under tests/ (ai/rag.yaml)
-        const underTests = (p: string) => {
-          const fromCwd = resolve(p);
-          const rel = relative(tests, fromCwd);
-          return existsSync(fromCwd) && !rel.startsWith('..') && !isAbsolute(rel) ? rel || '.' : p;
+        const locate = (p: string): string => {
+          if (existsSync(resolve(p))) return resolve(p);
+          const inTests = resolve(tests, p);
+          const rel = relative(tests, inTests);
+          if (!rel.startsWith('..') && !isAbsolute(rel) && existsSync(inTests)) return inTests;
+          throw new CliError(`No such test file or folder: ${p}`, EXIT.CONFIG_ERROR);
         };
-        for (const p of paths.length ? paths : ['.']) walk(underTests(p));
-        const results = files.map((f) => ({ file: relative(tests, f).split(sep).join('/'), problems: lintTestFile(readFileSync(f, 'utf8'), { file: f, suite: isSuiteFile(f) }) })).filter((x) => x.problems.length);
+        for (const p of paths.length ? paths : [tests]) walk(paths.length ? locate(p) : p, p);
+        // files under tests/ are named from there (ai/rag.yaml); others as a path from the current folder
+        const shownName = (f: string) => {
+          const rel = relative(tests, f);
+          return (!rel.startsWith('..') && !isAbsolute(rel) ? rel : relative(process.cwd(), f) || f).split(sep).join('/');
+        };
+        const results = files.map((f) => ({ file: shownName(f), problems: lintTestFile(readFileSync(f, 'utf8'), { file: f, suite: isSuiteFile(f) }) })).filter((x) => x.problems.length);
         const errors = results.reduce((n, x) => n + x.problems.filter((p) => p.severity === 'error').length, 0);
         const total = results.reduce((n, x) => n + x.problems.length, 0);
         if (o.json) printJson({ files: files.length, problems: total, errors, results });

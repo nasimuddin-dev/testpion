@@ -9,7 +9,7 @@
  *   version and sent to the download page.
  */
 import { app } from 'electron';
-import { autoUpdater, type UpdateInfo } from 'electron-updater';
+import type { AppUpdater, UpdateInfo } from 'electron-updater';
 import { compareVersions } from './semver.js';
 
 export { compareVersions };
@@ -44,10 +44,17 @@ function notesText(notes: UpdateInfo['releaseNotes'] | string | null | undefined
 
 export type UpdateLog = (level: 'info' | 'warn' | 'error', message: string) => void;
 
-let configured = false;
-function configure(onProgress: (downloaded: number, total: number | null) => void, log: UpdateLog): void {
-  if (configured) return;
-  configured = true;
+let configured: Promise<AppUpdater> | undefined;
+/** electron-updater, loaded with the first check (not at startup) and configured once. */
+function configure(onProgress: (downloaded: number, total: number | null) => void, log: UpdateLog): Promise<AppUpdater> {
+  return (configured ??= import('electron-updater').then((m) => {
+    const autoUpdater = (m.autoUpdater ?? (m as unknown as { default: { autoUpdater: AppUpdater } }).default.autoUpdater) as AppUpdater;
+    setUp(autoUpdater, onProgress, log);
+    return autoUpdater;
+  }));
+}
+
+function setUp(autoUpdater: AppUpdater, onProgress: (downloaded: number, total: number | null) => void, log: UpdateLog): void {
   // electron-updater's own messages (feed URL, download, signature checks) go to the app log
   autoUpdater.logger = {
     info: (m?: unknown) => log('info', `updater: ${String(m)}`),
@@ -81,7 +88,7 @@ export function createUpdater(emit: (channel: string, payload: unknown) => void,
     async check(): Promise<UpdateCheckResult> {
       const current = app.getVersion();
       if (canInstallInPlace()) {
-        configure(progress, log);
+        const autoUpdater = await configure(progress, log);
         const r = await autoUpdater.checkForUpdates();
         const info = r?.updateInfo;
         const newer = info && compareVersions(info.version, current) > 0;
@@ -95,7 +102,7 @@ export function createUpdater(emit: (channel: string, payload: unknown) => void,
     /** Download (with progress events), verify and install; the app quits and restarts into the new version. */
     async install(): Promise<void> {
       if (!canInstallInPlace()) throw new Error('This installation can’t be updated in place; download the new version instead.');
-      configure(progress, log);
+      const autoUpdater = await configure(progress, log);
       // a dropped connection is retried twice before giving up
       for (let attempt = 0; ; attempt++) {
         try {

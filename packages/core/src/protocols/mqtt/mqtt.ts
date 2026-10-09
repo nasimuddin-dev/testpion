@@ -1,4 +1,4 @@
-import mqtt, { type IClientOptions, type MqttClient } from 'mqtt';
+import type { IClientOptions, MqttClient } from 'mqtt';
 import { ApsError } from '../../errors.js';
 import { assertUrlAllowed } from '../../net/policy.js';
 import { shortId } from '../../util/ids.js';
@@ -39,6 +39,10 @@ export type MqttQos = 0 | 1 | 2;
 
 const SCHEMES = /^(mqtt|mqtts|tcp|tls|ws|wss):\/\//i;
 const MAX_TEXT = 256 * 1024;
+
+// the client library loads on the first connection (not at startup)
+let mqttMod: Promise<typeof import('mqtt')> | undefined;
+const mqttLib = () => (mqttMod ??= import('mqtt'));
 
 export class MqttSession {
   readonly id = shortId('mqtt-');
@@ -91,7 +95,8 @@ export class MqttSession {
       reconnectPeriod: 0,
       rejectUnauthorized: !this.opts.insecure,
     };
-    const client = mqtt.connect(target.toString(), o);
+    const mqtt = await mqttLib();
+    const client = (mqtt.default ?? mqtt).connect(target.toString(), o);
     this.client = client;
     client.on('message', (topic, payload, packet) => this.emitMessage('received', payload.toString('utf8'), { topic, qos: packet.qos, ...(packet.retain ? { retain: true } : {}) }));
     await new Promise<void>((resolve, reject) => {

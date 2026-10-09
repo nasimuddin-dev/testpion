@@ -17,7 +17,7 @@ import { DebuggerSession } from './session.js';
 export { applicationOfPort, ownerOfProcess, type ProgramInfo };
 import type { Duplex } from 'node:stream';
 import { ApsError } from '../errors.js';
-import { shortId } from '../util/ids.js';
+import { randomBytes } from 'node:crypto';
 import { sleep } from '../util/concurrency.js';
 import { flattenHeaders } from '../util/headers.js';
 import { BoundedMap } from '../util/collections.js';
@@ -26,6 +26,14 @@ import { applyHeaderEdits, decideRequest, highlightRuleForResponse, type Debugge
 import { sseParser, webSocketFrameParser, type DebuggerSseEvent, type WebSocketFrame } from './frames.js';
 import type { LeafCertificate } from './certificate.js';
 import { GRPC_STATUS, grpcDecoder, grpcDecompress, grpcMessageReader, grpcMethodOf, type GrpcCapture } from './grpc.js';
+
+/**
+ * Exchange and connection ids: a random prefix per process and a counter (a flood makes thousands a second; a random
+ * id each cost a call into the system's random source). Unique within the app's run and across saved sessions.
+ */
+const ID_RUN = `${Date.now().toString(36)}${randomBytes(3).toString('hex')}`;
+let idSeq = 0;
+const shortId = (prefix: string) => `${prefix}${ID_RUN}-${(++idSeq).toString(36)}`;
 
 /**
  * The HTTP Debugger's proxy (planning/http-debugger.md): a forward proxy other programs point at (HTTP_PROXY, a

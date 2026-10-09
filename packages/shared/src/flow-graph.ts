@@ -11,8 +11,16 @@ export interface FlowStep {
   /** HTTP: the method and the URL (as written, variables unresolved). */
   method?: string;
   url?: string;
+  /** A delay step: the milliseconds it waits. */
+  ms?: number;
   /** The names the step extracts for the steps after it. */
   extract?: string[];
+  /** The {{variables}} the step reads (its request, checks and scripts). */
+  uses?: string[];
+  /** Variables it reads that no earlier step extracts and the environment does not define (likely a mistake). */
+  unresolved?: string[];
+  /** Where the flow designer put the step (the file's `layout:`); without it the step is laid out in its column. */
+  position?: [number, number];
   dependsOn?: string[];
   /** The 1-based line of the step in its file, when known. */
   line?: number;
@@ -37,6 +45,8 @@ export interface FlowNode {
 export interface FlowEdge {
   from: string;
   to: string;
+  /** The variables the source extracts and the target reads: what flows along the edge (only when there are some). */
+  vars?: string[];
 }
 
 /** Something the layout could not honour: a dependency nobody defines, a cycle. The diagram still draws. */
@@ -87,7 +97,9 @@ export function flowGraph(steps: FlowStep[], opts: FlowLayoutOptions = {}): Flow
       else if (d === id) problems.push({ step: id, message: `"${id}" depends on itself` });
       else if (!deps.get(id)!.includes(d)) {
         deps.get(id)!.push(d);
-        edges.push({ from: d, to: id });
+        const src = byId.get(d)!;
+        const vars = (src.extract ?? []).filter((v) => byId.get(id)!.uses?.includes(v));
+        edges.push(vars.length ? { from: d, to: id, vars } : { from: d, to: id });
       }
     }
   }
@@ -147,6 +159,18 @@ export function flowGraph(steps: FlowStep[], opts: FlowLayoutOptions = {}): Flow
     l.forEach((id, ri) => nodes.push({ id, step: byId.get(id)!, layer: li, row: ri, x: li * (o.nodeWidth + o.gapX), y: top + ri * (o.nodeHeight + o.gapY), w: o.nodeWidth, h: o.nodeHeight }));
   });
   nodes.sort((a, b) => order.get(a.id)! - order.get(b.id)!);
+  // steps placed by hand (the designer's layout:) keep their place; the others go below them, in their columns
+  const placed = nodes.filter((n) => n.step.position);
+  if (placed.length) {
+    const below = Math.max(...placed.map((n) => Math.max(0, n.step.position![1]) + o.nodeHeight)) + o.gapY * 2;
+    for (const n of nodes) {
+      if (n.step.position) {
+        n.x = Math.max(0, n.step.position[0]);
+        n.y = Math.max(0, n.step.position[1]);
+      } else n.y += below;
+    }
+    return { nodes, edges, problems, width: Math.max(...nodes.map((n) => n.x + n.w)), height: Math.max(...nodes.map((n) => n.y + n.h)) };
+  }
   return { nodes, edges, problems, width: layers.length ? layers.length * o.nodeWidth + (layers.length - 1) * o.gapX : 0, height: layers.length ? height : 0 };
 }
 
@@ -168,14 +192,14 @@ export function toDot(steps: FlowStep[], name = 'flow'): string {
   for (const n of g.nodes) {
     const s = n.step;
     const detail = [
-      s.method && s.url ? `${s.method} ${s.url}` : s.type,
+      s.method && s.url ? `${s.method} ${s.url}` : s.type === 'delay' && s.ms !== undefined ? `wait ${s.ms} ms` : s.type,
       s.extract?.length ? `→ ${s.extract.join(', ')}` : '',
       s.status ? `${s.status}${s.durationMs !== undefined ? ` · ${s.durationMs} ms` : ''}` : '',
     ].filter(Boolean);
     const colour = s.status === 'passed' ? ', color="#2e8b57"' : s.status === 'failed' || s.status === 'error' ? ', color="#c0392b"' : s.status === 'skipped' ? ', color="#999999", style=dashed' : '';
     lines.push(`  ${dotId(s.id)} [label="${dotText([s.name, ...detail].join('\n'))}"${colour}];`);
   }
-  for (const e of g.edges) lines.push(`  ${dotId(e.from)} -> ${dotId(e.to)};`);
+  for (const e of g.edges) lines.push(`  ${dotId(e.from)} -> ${dotId(e.to)}${e.vars?.length ? ` [label="${dotText(e.vars.join(', '))}"]` : ''};`);
   for (const p of g.problems) lines.push(`  // ${dotText(p.message)}`);
   lines.push('}');
   return lines.join('\n') + '\n';

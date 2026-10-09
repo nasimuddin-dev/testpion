@@ -25,7 +25,7 @@ window.__t = (() => {
     waitFor,
     esc,
     view: async (label) => { await esc(); document.querySelector(`nav [aria-label="${label}"]`)?.click(); await sleep(1200); return !!document.querySelector(`nav [aria-label="${label}"][aria-current="page"]`); },
-    requests: async () => { await esc(); window.dispatchEvent(new KeyboardEvent('keydown', { key: '2', ctrlKey: true, altKey: true, bubbles: true })); await sleep(1200); return !!aside(); },
+    requests: async () => { await esc(); window.dispatchEvent(new KeyboardEvent('keydown', { key: '2', ctrlKey: true, altKey: true, bubbles: true })); await waitFor(() => aside() && rows().length, 3000); await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))); return !!aside(); },
     expand: async (text) => { const r = row(text); if (!r) return `NO ROW ${text}`; if (r.getAttribute('aria-expanded') === 'false') r.click(); await sleep(500); return 'ok'; },
     open: async (text) => { const r = row(text); if (!r) return `NO ROW ${text}`; r.click(); await sleep(1800); return 'ok'; },
     // a new tab of a kind (WebSocket, GraphQL, gRPC …) from the tab strip's + menu (a request opens first, so the strip is there)

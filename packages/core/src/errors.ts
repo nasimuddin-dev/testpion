@@ -46,6 +46,7 @@ const defaultWhy: Record<ErrorKind, string> = {
   ConfigurationError: 'The configuration is incomplete or invalid.',
   CancelledError: 'The operation was cancelled.',
   ScriptError: 'A user script threw an exception.',
+  InternalError: 'Something went wrong inside TestPion.',
 };
 
 const defaultSuggestions: Record<ErrorKind, string[]> = {
@@ -61,7 +62,7 @@ const defaultSuggestions: Record<ErrorKind, string[]> = {
     'Tokens may have expired — refresh them.',
   ],
   AuthorizationError: ['Check the scopes/roles granted to the credentials.', 'Confirm you are targeting the right tenant.'],
-  ValidationError: ['Inspect the response body for field-level error messages.', 'Compare the payload against the API schema.'],
+  ValidationError: ['Check the value the message names.', 'Compare it with what is expected (the schema or the documentation).'],
   RateLimitError: [
     'Lower concurrency or configure a rate limit for this provider.',
     'Respect the Retry-After header if present.',
@@ -73,6 +74,7 @@ const defaultSuggestions: Record<ErrorKind, string[]> = {
   ConfigurationError: ['Review the configuration referenced in the message.'],
   CancelledError: [],
   ScriptError: ['Check the script for exceptions; scripts run in a sandbox without filesystem or process access.'],
+  InternalError: ['Report the problem (Help ▸ Report a problem) with the steps that led to it.'],
 };
 
 /** Map an HTTP status code to a normalised error kind (or undefined for success codes). */
@@ -104,8 +106,12 @@ export function normalizeError(err: unknown): NormalizedError {
   const looksNetwork = (code && (NETWORK_CODES.test(code) || /CERT|SSL|TLS/i.test(code))) || (e?.name === 'TypeError' && /fetch failed/i.test(message));
   let kind: ErrorKind = looksNetwork ? 'NetworkError' : 'ProtocolError';
   let why: string | undefined;
-  if (e?.name === 'AbortError' || code === 'ABORT_ERR') kind = 'CancelledError';
-  else if (e?.name === 'TimeoutError' || code === 'UND_ERR_CONNECT_TIMEOUT' || code === 'UND_ERR_HEADERS_TIMEOUT' || code === 'UND_ERR_BODY_TIMEOUT' || code === 'ETIMEDOUT')
+  let text: string | undefined;
+  if (e?.name === 'AbortError' || code === 'ABORT_ERR') {
+    kind = 'CancelledError';
+    // the DOMException's own text ("This operation was aborted") and code (20) say nothing to a user
+    text = !message || /operation was aborted/i.test(message) ? 'Request cancelled' : message;
+  } else if (e?.name === 'TimeoutError' || code === 'UND_ERR_CONNECT_TIMEOUT' || code === 'UND_ERR_HEADERS_TIMEOUT' || code === 'UND_ERR_BODY_TIMEOUT' || code === 'ETIMEDOUT')
     kind = 'TimeoutError';
   else if (code === 'ECONNREFUSED') {
     kind = 'NetworkError';
@@ -119,19 +125,45 @@ export function normalizeError(err: unknown): NormalizedError {
   } else if (code && /CERT|SSL|TLS/i.test(code)) {
     kind = 'NetworkError';
     why = `TLS handshake failed (${code}). The certificate may be self-signed or invalid.`;
+  } else if (code && /^Z_/.test(code)) {
+    // zlib: a Content-Encoding (gzip, deflate, br) body that does not decode
+    kind = 'ProtocolError';
+    text = "The server's compressed response body is invalid";
+    why = `The body could not be decoded with its Content-Encoding (${e?.cause?.message || message}).`;
+  } else if (e?.name === 'TypeError' && /^terminated$/i.test(message)) {
+    kind = 'NetworkError';
+    text = 'The connection closed before the response was complete';
+    why = 'The server (or something in between) closed the connection while the body was being received.';
   } else if (err instanceof SyntaxError) kind = 'ValidationError';
-  else if (code?.startsWith('ERR_INVALID') || code === 'ENOENT' || code === 'EACCES') {
+  else if (code === 'ERR_INVALID_URL' || code === 'ENOENT' || code === 'EACCES' || code === 'EPERM' || (code?.startsWith('ERR_INVALID') && code !== 'ERR_INVALID_ARG_TYPE' && code !== 'ERR_INVALID_ARG_VALUE')) {
     kind = 'ConfigurationError';
-    why = code === 'ENOENT' ? 'A referenced file or command does not exist.' : code === 'EACCES' ? 'Permission denied.' : 'An invalid argument or configuration value was supplied.';
-  } else if (!looksNetwork) why = 'An unexpected error occurred while executing the operation.';
+    why =
+      code === 'ENOENT' ? 'A referenced file or command does not exist.' : code === 'EACCES' || code === 'EPERM' ? 'Permission denied.' : code === 'ERR_INVALID_URL' ? 'The URL is not valid.' : 'An invalid argument or configuration value was supplied.';
+  } else if (!looksNetwork && isInternal(err, e, code, message)) kind = 'InternalError';
+  else if (!looksNetwork) why = 'An unexpected error occurred while executing the operation.';
 
-  const causeMsg = e?.cause?.message || (code ? code : '');
-  const base = new ApsError(kind, causeMsg && !message.includes(causeMsg) ? `${message}: ${causeMsg}` : message, why ? { why } : {});
+  const causeMsg = kind === 'CancelledError' ? '' : e?.cause?.message || (code ? code : '');
+  const msg = text ?? message;
+  const base = new ApsError(kind, causeMsg && !msg.includes(causeMsg) && !(why ?? '').includes(causeMsg) ? `${msg}: ${causeMsg}` : msg, why ? { why } : {});
   const out = base.toJSON();
-  if (code) out.details = { code };
+  if (code && kind !== 'CancelledError') out.details = { code };
   if (kind === 'NetworkError' && code && /CERT|SSL|TLS/i.test(code))
     out.suggestions = ['Provide the CA certificate in request settings.', 'For local development only, enable "Disable TLS verification".'];
   return out;
+}
+
+/**
+ * A bug rather than a failure of the request, the server or the user's input: JavaScript's own errors (TypeError,
+ * RangeError, ReferenceError), Node's wrong-argument errors, and plain Errors without a code that do not read like a
+ * protocol failure. Errors with a code (a protocol's, a JSON-RPC number) and named errors of libraries stay ProtocolError.
+ */
+function isInternal(err: unknown, e: { name?: string } | undefined, code: string | undefined, message: string): boolean {
+  if (!(err instanceof Error)) return typeof err !== 'object' || err === null;
+  if (code === 'ERR_INVALID_ARG_TYPE' || code === 'ERR_INVALID_ARG_VALUE') return true;
+  if (code) return false;
+  if (err instanceof TypeError || err instanceof RangeError || err instanceof ReferenceError) return true;
+  if (e?.name !== 'Error') return false;
+  return !/protocol|handshake|frame|unexpected server response|status code|stream|socket|connection|closed|grpc|websocket|server/i.test(message);
 }
 
 export function isAbortError(err: unknown): boolean {

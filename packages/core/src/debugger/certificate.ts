@@ -1,10 +1,14 @@
-import forge from 'node-forge';
+import { nodeRequire } from '../util/lazy-require.js';
 import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { ApsError } from '../errors.js';
+
+// node-forge (800 KB) loads with the first certificate made or read, not at startup (see util/lazy-require.ts)
+let forgeMod: typeof import('node-forge') | undefined;
+const forge = (): typeof import('node-forge') => (forgeMod ??= typeof require === 'function' ? require('node-forge') : nodeRequire('node-forge'));
 
 /**
  * The HTTP Debugger's root certificate (planning/http-debugger.md, DBG-4): created on this computer, kept in the data
@@ -37,7 +41,7 @@ const SUBJECT = [
 ];
 
 const fingerprintOf = (certPem: string) => {
-  const der = forge.asn1.toDer(forge.pki.certificateToAsn1(forge.pki.certificateFromPem(certPem))).getBytes();
+  const der = forge().asn1.toDer(forge().pki.certificateToAsn1(forge().pki.certificateFromPem(certPem))).getBytes();
   return createHash('sha256')
     .update(Buffer.from(der, 'binary'))
     .digest('hex')
@@ -52,12 +56,12 @@ export function ensureRootCertificate(dir: string): RootCertificate {
   const keyPath = join(dir, KEY_FILE);
   if (existsSync(path) && existsSync(keyPath)) {
     const certPem = readFileSync(path, 'utf8');
-    const cert = forge.pki.certificateFromPem(certPem);
+    const cert = forge().pki.certificateFromPem(certPem);
     if (cert.validity.notAfter.getTime() > Date.now() + 24 * 3600_000)
       return { certPem, keyPem: readFileSync(keyPath, 'utf8'), fingerprint: fingerprintOf(certPem), notAfter: cert.validity.notAfter.toISOString(), path };
   }
-  const keys = forge.pki.rsa.generateKeyPair({ bits: 2048 });
-  const cert = forge.pki.createCertificate();
+  const keys = forge().pki.rsa.generateKeyPair({ bits: 2048 });
+  const cert = forge().pki.createCertificate();
   cert.publicKey = keys.publicKey;
   cert.serialNumber = '01' + createHash('sha1').update(String(Date.now())).digest('hex').slice(0, 30);
   cert.validity.notBefore = new Date(Date.now() - 24 * 3600_000);
@@ -69,9 +73,9 @@ export function ensureRootCertificate(dir: string): RootCertificate {
     { name: 'keyUsage', keyCertSign: true, cRLSign: true, digitalSignature: true, critical: true },
     { name: 'subjectKeyIdentifier' },
   ]);
-  cert.sign(keys.privateKey, forge.md.sha256.create());
-  const certPem = forge.pki.certificateToPem(cert);
-  const keyPem = forge.pki.privateKeyToPem(keys.privateKey);
+  cert.sign(keys.privateKey, forge().md.sha256.create());
+  const certPem = forge().pki.certificateToPem(cert);
+  const keyPem = forge().pki.privateKeyToPem(keys.privateKey);
   writeFileSync(path, certPem);
   writeFileSync(keyPath, keyPem, { mode: 0o600 });
   return { certPem, keyPem, fingerprint: fingerprintOf(certPem), notAfter: cert.validity.notAfter.toISOString(), path };
@@ -88,16 +92,16 @@ export function regenerateRootCertificate(dir: string): RootCertificate {
 
 /** Certificates for hosts, signed by the root; one key pair for all of them (fast), one certificate per host (cached). */
 export function leafSigner(root: RootCertificate): (host: string) => LeafCertificate {
-  const rootCert = forge.pki.certificateFromPem(root.certPem);
-  const rootKey = forge.pki.privateKeyFromPem(root.keyPem);
-  const keys = forge.pki.rsa.generateKeyPair({ bits: 2048 });
-  const keyPem = forge.pki.privateKeyToPem(keys.privateKey);
+  const rootCert = forge().pki.certificateFromPem(root.certPem);
+  const rootKey = forge().pki.privateKeyFromPem(root.keyPem);
+  const keys = forge().pki.rsa.generateKeyPair({ bits: 2048 });
+  const keyPem = forge().pki.privateKeyToPem(keys.privateKey);
   const cache = new Map<string, LeafCertificate>();
   return (host: string) => {
     const name = host.replace(/:\d+$/, '').toLowerCase();
     const hit = cache.get(name);
     if (hit) return hit;
-    const cert = forge.pki.createCertificate();
+    const cert = forge().pki.createCertificate();
     cert.publicKey = keys.publicKey;
     cert.serialNumber =
       '02' +
@@ -118,8 +122,8 @@ export function leafSigner(root: RootCertificate): (host: string) => LeafCertifi
       // the root's key identifier, so verifiers match the chain (forge's `true` would use the leaf's own key)
       { name: 'authorityKeyIdentifier', keyIdentifier: rootCert.generateSubjectKeyIdentifier().getBytes() },
     ]);
-    cert.sign(rootKey, forge.md.sha256.create());
-    const leaf = { cert: forge.pki.certificateToPem(cert), key: keyPem };
+    cert.sign(rootKey, forge().md.sha256.create());
+    const leaf = { cert: forge().pki.certificateToPem(cert), key: keyPem };
     cache.set(name, leaf);
     if (cache.size > 2000) cache.clear();
     return leaf;

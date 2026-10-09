@@ -8,7 +8,7 @@ import { addToFolder, CollectionTree, mapNodes, type ExtraGroup } from './Collec
 import type { RequestCategory } from '../lib/collection-filter';
 import { closeTabsFor, newRequestItems, useEditorTabsStore } from './EditorTabs';
 import { ExportDialog } from './ExportDialog';
-import { refreshCollections, useCollections } from '../lib/collections-store';
+import { fullCollection, refreshCollections, useCollectionTree } from '../lib/collections-store';
 import { ImportModal } from '../views/rest/dialogs';
 import { isDocView, useDocs } from '../lib/docs';
 import { Button, cx, IconButton, Input, Menu, menuKeys, type MenuItem } from './ui';
@@ -17,6 +17,7 @@ import { usePersisted } from '../lib/sticky';
 import { copyText } from '../lib/clipboard';
 import { datasetBadge } from '../lib/datasets';
 import { GenerateDataDialog } from './GenerateDataDialog';
+import { useStableCallbacks } from '../hooks';
 
 /**
  * The Collections explorer: the one sidebar of the request editors. The workspace lists its collections;
@@ -157,6 +158,8 @@ function EmptyHint({ text, action, onAction }: { text: string; action: string; o
 }
 
 const NONE: SavedItem[] = [];
+/** The reveal key of an intent: its nonce, unless it asks not to unfold the tree (opened from the explorer itself). */
+const revealKeyOf = (i: { nonce: number; payload?: unknown } | undefined) => (i && !(i.payload as { noReveal?: boolean } | undefined)?.noReveal ? i.nonce : undefined);
 
 /** A file of the workspace's datasets/ folder, as datasets.list answers. */
 interface DatasetRow {
@@ -260,7 +263,8 @@ export function Explorer() {
   const [filter, setFilter] = useState('');
   // the box shows each keystroke at once; the lists follow as a lower-priority render (big workspaces stay smooth)
   const shownFilter = useDeferredValue(filter);
-  const allCollections = useCollections();
+  // the outline (no bodies or scripts): what the tree shows; a change reads the whole collection first
+  const allCollections = useCollectionTree();
   const collections = useMemo(() => allCollections.filter((x) => !x.problem), [allCollections]);
   // requests starred with ⋯ ▸ Add to favorites, in every collection
   const favorites = useMemo(() => {
@@ -342,7 +346,15 @@ export function Explorer() {
   const saveCollection = async (c: Collection) => {
     try {
       await call('col.save', c);
-      await load();
+      // the saved collection is read back by the shared list (its data.changed); the explorer's other lists did not change
+    } catch (e) {
+      toastError(e);
+    }
+  };
+  /** Change a collection the tree shows (an outline): the change applies to the whole collection. */
+  const editCollection = async (c: Collection, f: (whole: Collection) => Collection) => {
+    try {
+      await saveCollection(f(await fullCollection(c)));
     } catch (e) {
       toastError(e);
     }
@@ -356,10 +368,16 @@ export function Explorer() {
   const [collapseAll, setCollapseAll] = useState(0);
   // reveal the opened request in the tree when it was opened from elsewhere (search, history, a link): not when it was
   // opened from the explorer itself (e.g. Favorites), which would unfold its collection under the user's hand
-  const lastIntent = useApp((s) => s.intent);
-  const revealRef = useRef<number | undefined>(undefined);
-  if (lastIntent && !(lastIntent.payload as { noReveal?: boolean } | undefined)?.noReveal) revealRef.current = lastIntent.nonce;
-  const revealKey = revealRef.current;
+  // (watched, not subscribed to: the explorer keeps only this key, so an intent that reveals nothing re-renders nothing)
+  const [revealKey, setRevealKey] = useState(() => revealKeyOf(useApp.getState().intent));
+  useEffect(
+    () =>
+      useApp.subscribe((s, prev) => {
+        const k = s.intent !== prev.intent ? revealKeyOf(s.intent) : undefined;
+        if (k !== undefined) setRevealKey(k);
+      }),
+    [],
+  );
   const [exporting, setExporting] = useState(false);
   const importDefinition = () => setImporting(true);
   /** The datasets: a new empty one, generated test data, and a row's rename, duplicate and delete (the file goes to Recently deleted). */
@@ -405,7 +423,7 @@ export function Explorer() {
     try {
       const lib = await call<Library<unknown>>('lib.get', { kind });
       await call('lib.save', { kind, library: { folders: lib.folders, items: fn(lib.items) } });
-      await load();
+      await load(false);
     } catch (e) {
       toastError(e);
     }
@@ -484,7 +502,7 @@ export function Explorer() {
   const editServers = async (fn: (list: McpServerConfig[]) => McpServerConfig[]) => {
     try {
       await call('mcp.saveServers', { servers: fn(servers.map(({ connected: _c, ...s }) => s as McpServerConfig)) });
-      await load();
+      await load(false);
     } catch (e) {
       toastError(e);
     }
@@ -493,7 +511,7 @@ export function Explorer() {
   const serverMenu = (s: McpServerConfig & { connected?: boolean }): MenuItem[] => [
     { label: 'Open in tab', icon: <ExternalLink size={14} />, onSelect: () => intent('mcp', { serverId: s.id }) },
     s.connected
-      ? { label: 'Disconnect', icon: <Unplug size={14} />, onSelect: () => void call('mcp.disconnect', { serverId: s.id }).then(load) }
+      ? { label: 'Disconnect', icon: <Unplug size={14} />, onSelect: () => void call('mcp.disconnect', { serverId: s.id }).then(load, toastError) }
       : { label: 'Connect', icon: <Plug size={14} />, onSelect: () => intent('mcp', { serverId: s.id, connect: true }) },
     { label: 'Settings', icon: <Pencil size={14} />, onSelect: () => intent('mcp', { serverId: s.id, tab: 'settings' }) },
     {
@@ -521,7 +539,7 @@ export function Explorer() {
     try {
       const lib = await call<Library<unknown>>('lib.get', { kind });
       await call('lib.save', { kind, library: fn(lib) });
-      await load();
+      await load(false);
     } catch (e) {
       toastError(e);
     }
@@ -600,15 +618,47 @@ export function Explorer() {
   /** An item's menu with "Move to folder" before Delete / Remove (or at the end). */
   const withMove = (menu: MenuItem[], move: MenuItem) => (menu[menu.length - 1]?.danger ? [...menu.slice(0, -1), move, menu[menu.length - 1]!] : [...menu, move]);
 
-  const extraGroups = (c: Collection): ExtraGroup[] => [
-    { cat: 'grpc', items: grpcByCollection.get(c.id) ?? NONE, onOpen: (id) => intent('grpc', { savedId: id }), menu: (id) => moveMenu('grpc', grpc.find((i) => i.id === id)!), rename: (id) => renameSaved('grpc', id) },
-    { cat: 'websocket', items: socketsByCollection.get(c.id) ?? NONE, onOpen: (id) => intent('websocket', { savedId: id }), menu: (id) => moveMenu('websocket', sockets.find((i) => i.id === id)!), rename: (id) => renameSaved('websocket', id) },
-  ];
+  // the tree is memoized: its saved items change only with these lists (or a rename in place); menus read the latest
+  const savedLatest = useRef({ moveMenu, renameSaved });
+  savedLatest.current = { moveMenu, renameSaved };
+  const extraGroups = useCallback(
+    (c: Collection): ExtraGroup[] => [
+      {
+        cat: 'grpc',
+        items: grpcByCollection.get(c.id) ?? NONE,
+        onOpen: (id) => intent('grpc', { savedId: id }),
+        menu: (id) => savedLatest.current.moveMenu('grpc', grpc.find((i) => i.id === id)!),
+        rename: (id) => savedLatest.current.renameSaved('grpc', id),
+      },
+      {
+        cat: 'websocket',
+        items: socketsByCollection.get(c.id) ?? NONE,
+        onOpen: (id) => intent('websocket', { savedId: id }),
+        menu: (id) => savedLatest.current.moveMenu('websocket', sockets.find((i) => i.id === id)!),
+        rename: (id) => savedLatest.current.renameSaved('websocket', id),
+      },
+    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [grpcByCollection, socketsByCollection, grpc, sockets, renaming],
+  );
   const newOfCategory = (c: Collection, cat: RequestCategory) => {
     if (cat === 'grpc' || cat === 'websocket') return intent(cat, { newDoc: true, collectionId: c.id });
     const node = newNode(cat)!;
-    void saveCollection({ ...c, items: addToFolder(c.items, undefined, node) }).then(() => intent(cat === 'graphql' ? 'graphql' : 'rest', { collectionId: c.id, requestId: node.id }));
+    void editCollection(c, (c) => ({ ...c, items: addToFolder(c.items, undefined, node) })).then(() => intent(cat === 'graphql' ? 'graphql' : 'rest', { collectionId: c.id, requestId: node.id }));
   };
+  // the same functions on every render, so the memoized tree re-renders only when what it shows changed
+  const treeCallbacks = useStableCallbacks({
+    onNewOfCategory: newOfCategory,
+    onDropSaved: (kind: 'grpc' | 'websocket', id: string, to: string) => void moveItem(kind, id, to),
+    onOpen: (c: Collection, n: CollectionNode) => intent(n.kind === 'graphql' ? 'graphql' : 'rest', { collectionId: c.id, requestId: n.id }),
+    onChange: (c: Collection) => void saveCollection(c),
+    onRun: (c: Collection, folderId?: string) => intent('collections', { collectionId: c.id, run: true, folderId }),
+    onNewRequest: (c: Collection, folderId?: string) => {
+      const node = newNode('rest')!;
+      void saveCollection({ ...c, items: addToFolder(c.items, folderId, node) }).then(() => intent('rest', { collectionId: c.id, requestId: node.id }));
+    },
+    onSettings: (c: Collection) => intent('collections', { collectionId: c.id }),
+  });
 
   return (
     <aside aria-label="Collections explorer" style={{ width }} className="relative shrink-0 border-r border-line bg-panel flex flex-col min-h-0">
@@ -672,33 +722,25 @@ export function Explorer() {
                     label: 'Remove from favorites',
                     icon: <Star size={14} />,
                     separator: true,
-                    onSelect: () => void saveCollection({ ...c, items: mapNodes(c.items, (x) => (x.id === n.id && x.kind !== 'folder' ? { ...x, favorite: false } : x)) }),
+                    onSelect: () => void editCollection(c, (c) => ({ ...c, items: mapNodes(c.items, (x) => (x.id === n.id && x.kind !== 'folder' ? { ...x, favorite: false } : x)) })),
                   },
                 ]}
               />
             ))}
           </Section>
         )}
-        {collections.length ? (
+        {allCollections.length ? (
           <div className="pb-2 border-b border-line/60">
             <CollectionTree
-              collections={collections}
+              // a collection whose file cannot be read stays listed (in red, with why), never silently gone
+              collections={allCollections}
               filter={shownFilter}
               categorize
               extraGroups={extraGroups}
-              onNewOfCategory={newOfCategory}
-              onDropSaved={(kind, id, to) => void moveItem(kind, id, to)}
               collapseAll={collapseAll}
               revealKey={revealKey}
               activeRequestId={openRequestId}
-              onOpen={(c, n) => intent(n.kind === 'graphql' ? 'graphql' : 'rest', { collectionId: c.id, requestId: n.id })}
-              onChange={(c) => void saveCollection(c)}
-              onRun={(c, folderId) => intent('collections', { collectionId: c.id, run: true, folderId })}
-              onNewRequest={(c, folderId) => {
-                const node = newNode('rest')!;
-                void saveCollection({ ...c, items: addToFolder(c.items, folderId, node) }).then(() => intent('rest', { collectionId: c.id, requestId: node.id }));
-              }}
-              onSettings={(c) => intent('collections', { collectionId: c.id })}
+              {...treeCallbacks}
             />
           </div>
         ) : (

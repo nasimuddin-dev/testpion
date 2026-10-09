@@ -6,17 +6,19 @@ import { useIntent, useSaveShortcut } from '../hooks';
 import { timeAgo } from '../lib/format';
 import { StatusIcon } from '../components/Results';
 import { CodeEditor } from '../components/CodeEditor';
+import type { OnMount } from '@monaco-editor/react';
 import { RunMiniBar, RunsOverview, type RunRow } from '../components/RunsOverview';
 import { RunPanel } from '../components/RunPanel';
 import { ExposeFlowDialog } from '../components/ExposeFlowDialog';
 import { SidebarShell } from '../components/SidebarShell';
 import { KindBadge, RowMenu, TEST_KINDS, TreeHeader, treeKeys } from '../components/TreeParts';
 import { FlowDiagram } from '../components/FlowDiagram';
+import { FlowDesigner, type DesignerFlow, type FlowEditAnswer } from '../components/FlowDesigner';
 import { stepLine, type FlowStep } from '@testpion/shared';
 import { EnvironmentsPane } from '../components/SidebarPanes';
 import { finishSave, type SaveResult } from '../lib/files';
 import { dataLanguageOf } from '../data-languages';
-import { Badge, Button, cx, Empty, IconButton, Input, rowActionClass, SectionTitle, Spinner, Split, type MenuItem } from '../components/ui';
+import { Badge, Button, cx, Empty, IconButton, Input, rowActionClass, SectionTitle, Spinner, Split, VirtualList, type MenuItem } from '../components/ui';
 import { DocTabStrip } from '../components/DocTabStrip';
 
 interface Node {
@@ -131,6 +133,9 @@ evaluators:
 limits:
   latency_ms: 3000
 `,
+  flow: `name: New flow
+tests: []
+`,
   suite: `name: Regression
 tests:
   - rest
@@ -195,14 +200,17 @@ export function TestsView() {
   const fileRef = useRef(file);
   fileRef.current = file;
   // the file as a flow (the Flow tab): its steps with the latest run's result of each; a run that finishes recolours it
-  const [flow, setFlow] = useState<{ steps: FlowStep[]; run?: { runId: string } } | { error: string }>();
+  const [flow, setFlow] = useState<DesignerFlow | { error: string }>();
+  const envRef = useRef<string | undefined>(undefined);
+  envRef.current = env;
   const [flowSel, setFlowSel] = useState<string>();
   // the result the run panel selects (a node of the flow)
   const [focusResult, setFocusResult] = useState<string>();
   const flowSeq = useRef(0);
   const loadFlow = useCallback((path: string) => {
     const n = ++flowSeq.current;
-    call<{ steps: FlowStep[]; run?: { runId: string } }>('tests.flow', { file: path }).then(
+    // with each step as written (the designer's inspector) and the variables the environment defines (unresolved marks)
+    call<DesignerFlow>('tests.flow', { file: path, raw: true, environment: envRef.current }).then(
       (f) => n === flowSeq.current && setFlow(f),
       (e) => n === flowSeq.current && setFlow({ error: asError(e).message }),
     );
@@ -215,6 +223,46 @@ export function TestsView() {
   useEffect(() => on<{ runId: string }>('run.finished', () => void (fileRef.current && loadFlow(fileRef.current))), [loadFlow]);
   /** A node of the flow: the editor at the step's `name:` line; its result is selected in the run panel when a run exists. */
   const revealLine = useRef<number | undefined>(undefined);
+  // the one editor of the view (and Monaco, for the open files' models): set when it mounts
+  const editorRef = useRef<Parameters<OnMount>[0]>(undefined);
+  const monacoRef = useRef<Parameters<OnMount>[1]>(undefined);
+  /** The model of an open file (the editor keeps one per file, by its path), if it was shown. */
+  const modelOf = (path: string) => {
+    const m = monacoRef.current;
+    const model = m?.editor.getModel(m.Uri.parse(`tests/${path}`));
+    return model && !model.isDisposed() ? model : undefined;
+  };
+  /** The editor at the line a flow node asked for (openStep), once the Editor tab shows. */
+  const reveal = () => {
+    const ed = editorRef.current;
+    const l = revealLine.current;
+    if (!ed || !l) return;
+    revealLine.current = undefined;
+    ed.revealLineInCenter(l);
+    ed.setPosition({ lineNumber: l, column: 1 });
+    ed.focus();
+  };
+  // back on the Editor tab (the editor stayed mounted, hidden): its size again, then the line asked for. A child's
+  // effects run first, so the editor already shows this file's model (with its cursor, scroll and folding)
+  useEffect(() => {
+    // every tab closed: the editor went with the last one (a new one mounts for the next file)
+    if (!file) editorRef.current = undefined;
+    if (tab !== 'editor' || !editorRef.current) return;
+    editorRef.current.layout();
+    reveal();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, file]);
+  // a closed (or renamed) file's model goes: the editor keeps one per open file
+  const modelPaths = useRef<string[]>([]);
+  useEffect(() => {
+    for (const p of modelPaths.current) {
+      if (openFiles.includes(p)) continue;
+      const model = modelOf(p);
+      if (model && model !== editorRef.current?.getModel()) model.dispose();
+    }
+    modelPaths.current = openFiles;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openFiles]);
   const openStep = (s: FlowStep) => {
     setFlowSel(s.id);
     revealLine.current = stepLine(content, s.name) ?? s.line;
@@ -278,7 +326,8 @@ export function TestsView() {
     call('tests.preview', { path: file }).then(setPreview, (e) => setPreview({ error: asError(e).message }));
     void loadTree();
   };
-  const run = async (paths: string[], name?: string) => {
+  /** Run files; the flow designer runs its file (or some steps of it, `ids`) and stays on the Flow tab (`stay`). */
+  const run = async (paths: string[], name?: string, o: { ids?: string[]; stay?: boolean } = {}): Promise<string | undefined> => {
     if (file && content !== saved) await save();
     try {
       const r = await call<{ runId: string }>('tests.run', {
@@ -287,22 +336,43 @@ export function TestsView() {
         environment: env,
         concurrency: opts.concurrency,
         retries: opts.retries,
-        grep: opts.grep || undefined,
-        tags: opts.tags ? opts.tags.split(',').map((s) => s.trim()) : undefined,
+        // the designer runs what it shows: the sidebar's name and tag filters are for the tree's runs
+        grep: o.stay ? undefined : opts.grep || undefined,
+        tags: o.stay ? undefined : opts.tags ? opts.tags.split(',').map((s) => s.trim()) : undefined,
+        ids: o.ids,
       });
       setRunId(r.runId);
-      setTab('run');
+      if (!o.stay) setTab('run');
       setTimeout(loadRuns, 500);
+      return r.runId;
     } catch (e) {
       toastError(e);
+      return undefined;
+    }
+  };
+  /** The flow designer saved an edit: the editor, the parsed tests and the flow show the new text. */
+  const flowEdited = (r: FlowEditAnswer) => {
+    // the tab's buffer too: showing the file's tab again reads it
+    if (buffers.current[r.file]) buffers.current[r.file] = { content: r.text, saved: r.text };
+    // a file not on screen keeps its model (and its undo) for when it comes back: the edit goes into it as one undo step
+    // (the file on screen gets it through its value, the same way)
+    const model = fileRef.current === r.file ? undefined : modelOf(r.file);
+    if (model && model.getValue() !== r.text) model.pushEditOperations([], [{ range: model.getFullModelRange(), text: r.text }], () => null);
+    if (fileRef.current === r.file) {
+      setContent(r.text);
+      setSaved(r.text);
+      setFlow(r.flow);
+      call('tests.preview', { path: r.file }).then(setPreview, (e) => setPreview({ error: asError(e).message }));
     }
   };
   const newFile = async (kind: string) => {
-    const name = await promptText('New test file', { message: 'File path inside tests/ (e.g. rest/health.yaml)', okLabel: 'Create', value: kind === 'suite' ? 'regression.suite.yaml' : `${kind === 'http' ? 'rest' : kind === 'llm' ? 'ai' : kind === 'mqtt' || kind === 'kafka' ? 'websocket' : kind}/new-test.yaml` });
+    const name = await promptText('New test file', { message: 'File path inside tests/ (e.g. rest/health.yaml)', okLabel: 'Create', value: kind === 'suite' ? 'regression.suite.yaml' : kind === 'flow' ? 'rest/new-flow.yaml' : `${kind === 'http' ? 'rest' : kind === 'llm' ? 'ai' : kind === 'mqtt' || kind === 'kafka' ? 'websocket' : kind}/new-test.yaml` });
     if (!name) return;
     await call('tests.write', { path: name, content: TEMPLATES[kind] });
     await loadTree();
     await openFile(name);
+    // a new flow opens in the designer
+    if (kind === 'flow') setTab('flow');
   };
 
   useIntent('tests', async (p) => {
@@ -430,9 +500,10 @@ export function TestsView() {
                       ['kafka', 'New Kafka test'],
                       ['mcp', 'New MCP test'],
                       ['llm', 'New AI test'],
+                      ['flow', 'New flow (designer)'],
                       ['suite', 'New suite'],
                     ] as const
-                  ).map(([kind, label], i) => ({ label, icon: kind === 'suite' ? <Layers size={14} /> : <FilePlus2 size={14} />, separator: i === 7, onSelect: () => void newFile(kind) }))}
+                  ).map(([kind, label], i) => ({ label, icon: kind === 'suite' ? <Layers size={14} /> : kind === 'flow' ? <Workflow size={14} /> : <FilePlus2 size={14} />, separator: i === 7 || i === 8, onSelect: () => void newFile(kind) }))}
                   menu={[{ label: 'Run in CI…', icon: <Workflow size={14} />, onSelect: () => useApp.getState().set({ ci: {} }) }]}
                 />
                 {tree.length > 0 && (
@@ -536,68 +607,76 @@ export function TestsView() {
           }
         />
         <div className="flex-1 min-h-0">
-          {tab === 'editor' ? (
-            file ? (
-              <Split id="tests-editor" initial={65}>
-                <CodeEditor
-                  language={dataLanguageOf(file)}
-                  path={`tests/${file}`}
-                  value={content}
-                  onChange={setContent}
-                  onMount={(ed) => {
-                    const l = revealLine.current;
-                    if (!l) return;
-                    revealLine.current = undefined;
-                    ed.revealLineInCenter(l);
-                    ed.setPosition({ lineNumber: l, column: 1 });
-                    ed.focus();
-                  }}
-                />
-                <div className="h-full overflow-auto text-sm">
-                  <SectionTitle>Parsed tests</SectionTitle>
-                  {preview && 'error' in preview ? (
-                    <div className="px-3 text-bad text-xs">{preview.error}</div>
-                  ) : preview?.suite ? (
-                    <div className="px-3">
-                      <Badge tone="judge">suite</Badge> <b>{preview.suite.name}</b>
-                      <ul className="mt-2 list-disc ml-5 text-xs mono">
-                        {preview.suite.tests.map((t) => (
-                          <li key={t}>{t}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  ) : (
-                    preview?.tests.map((t, i) => (
-                      <div key={i} className="px-3 py-1 flex items-center gap-2 border-b border-line/50">
-                        <Badge>{t.type}</Badge>
-                        <span className="truncate">{t.name}</span>
-                        {t.tags?.map((g) => (
-                          <Badge key={g} tone="accent">
-                            {g}
-                          </Badge>
-                        ))}
-                        {latest[t.name] && (
-                          <button
-                            className="ml-auto flex items-center gap-1.5 text-xs text-muted hover:text-fg shrink-0"
-                            title={`Latest result: ${latest[t.name]!.status} · ${new Date(latest[t.name]!.startedAt).toLocaleString()} (open the run)`}
-                            onClick={() => {
-                              setRunId(latest[t.name]!.runId);
-                              setTab('run');
-                            }}
-                          >
-                            <StatusIcon status={latest[t.name]!.status} />
-                            {timeAgo(latest[t.name]!.startedAt)}
-                          </button>
-                        )}
+          {/* ONE editor for every open file (a model each, the editor swaps them): it stays mounted, hidden, while the
+              Flow or Runs tab shows — creating a Monaco editor on every open and every return to the Editor tab took 200-400 ms */}
+          {file && (
+            <div className="h-full" style={tab === 'editor' ? undefined : { display: 'none' }}>
+                <Split id="tests-editor" initial={65}>
+                  <CodeEditor
+                    language={dataLanguageOf(file)}
+                    path={`tests/${file}`}
+                    value={content}
+                    onChange={setContent}
+                    onMount={(ed, monaco) => {
+                      editorRef.current = ed;
+                      monacoRef.current = monaco;
+                      reveal();
+                    }}
+                  />
+                  <div className="h-full overflow-auto text-sm">
+                    <SectionTitle>Parsed tests</SectionTitle>
+                    {preview && 'error' in preview ? (
+                      <div className="px-3 text-bad text-xs">{preview.error}</div>
+                    ) : preview?.suite ? (
+                      <div className="px-3">
+                        <Badge tone="judge">suite</Badge> <b>{preview.suite.name}</b>
+                        <ul className="mt-2 list-disc ml-5 text-xs mono">
+                          {preview.suite.tests.map((t) => (
+                            <li key={t}>{t}</li>
+                          ))}
+                        </ul>
                       </div>
-                    ))
-                  )}
-                  <p className="p-3 text-xs text-muted">
-                    Test files are plain YAML/JSON in the workspace <span className="mono">tests/</span> folder — commit them to git and run them in CI with <span className="mono">testpion test</span>.
-                  </p>
-                </div>
-              </Split>
-            ) : (
+                    ) : (
+                      // only the rows on screen (a 500-step file had 500 rows to lay out on every return to the Editor tab)
+                      <VirtualList
+                        scrollParent
+                        items={preview?.tests ?? []}
+                        rowHeight={29}
+                        render={(t) => (
+                          <div className="h-full px-3 flex items-center gap-2 border-b border-line/50">
+                            <Badge>{t.type}</Badge>
+                            <span className="truncate">{t.name}</span>
+                            {t.tags?.map((g) => (
+                              <Badge key={g} tone="accent">
+                                {g}
+                              </Badge>
+                            ))}
+                            {latest[t.name] && (
+                              <button
+                                className="ml-auto flex items-center gap-1.5 text-xs text-muted hover:text-fg shrink-0"
+                                title={`Latest result: ${latest[t.name]!.status} · ${new Date(latest[t.name]!.startedAt).toLocaleString()} (open the run)`}
+                                onClick={() => {
+                                  setRunId(latest[t.name]!.runId);
+                                  setTab('run');
+                                }}
+                              >
+                                <StatusIcon status={latest[t.name]!.status} />
+                                {timeAgo(latest[t.name]!.startedAt)}
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      />
+                    )}
+                    <p className="p-3 text-xs text-muted">
+                      Test files are plain YAML/JSON in the workspace <span className="mono">tests/</span> folder — commit them to git and run them in CI with <span className="mono">testpion test</span>.
+                    </p>
+                  </div>
+                </Split>
+            </div>
+          )}
+          {tab === 'editor' ? (
+            !file && (
               <Empty
                 icon={<FileCode2 size={28} />}
                 title="Select a test file"
@@ -619,6 +698,24 @@ export function TestsView() {
               <Empty icon={<Workflow size={28} />} title="This file cannot be read as a flow">
                 {flow.error}
               </Empty>
+            ) : /\.(ya?ml|json)$/i.test(file) && !/\.suite\.(ya?ml|json)$/i.test(file) ? (
+              // a test file: the flow designer (a suite names other files: it stays a read-only diagram)
+              <FlowDesigner
+                key={file}
+                file={file}
+                flow={flow}
+                onEdited={flowEdited}
+                beforeEdit={async () => {
+                  if (content !== saved) await save();
+                }}
+                onRun={(ids) => run([file], ids ? `${file} (${ids.length} step${ids.length === 1 ? '' : 's'})` : file, { ids, stay: true })}
+                onOpenStep={openStep}
+                onOpenResult={(s, id) => {
+                  setRunId(id);
+                  setFocusResult(s.name);
+                  setTab('run');
+                }}
+              />
             ) : !flow.steps.length ? (
               <Empty icon={<Workflow size={28} />} title="No steps in this file">
                 A flow is a test file whose tests chain with <span className="mono">dependsOn</span> and <span className="mono">extract</span>; a suite names other files — open one of them to see its flow.

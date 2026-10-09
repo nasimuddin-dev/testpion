@@ -1,7 +1,7 @@
 import { openDocs } from '../lib/docs-link';
 import { Activity as ActivityIcon, AlarmClock, BookOpen, Bug, Gauge, FileDown, Bot, LockKeyhole, ShieldCheck, FolderPlus, FolderTree, GitBranch, History, KeyRound, Network, Play, Plug, Sparkles, Upload, ArrowRight } from 'lucide-react';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { asError, call, modKey } from '../api';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { asError, call, modKey, on } from '../api';
 import { finishSave, type SaveResult } from '../lib/files';
 import { promptText, toastError, useApp } from '../store';
 import { runMenuCommand } from '../menu-commands';
@@ -12,7 +12,10 @@ import { CheckCircle2, Circle } from 'lucide-react';
 import { ActivityCharts, type Activity } from '../components/ActivityCharts';
 import { AttentionCard } from '../components/AttentionCard';
 import { RecentRuns } from '../components/charts';
-import { refreshCollections, useCollections } from '../lib/collections-store';
+import { refreshCollections, useCollectionTree } from '../lib/collections-store';
+
+/** The newest history entry and the count: whether requests were sent since Home last loaded. */
+const historyMark = (r: { items: Array<{ id: string }>; total: number }) => `${r.total}|${r.items[0]?.id ?? ''}`;
 
 interface HistoryItem {
   id: string;
@@ -132,7 +135,9 @@ interface HomeRun {
 export function HomeView() {
   const ws = useApp((s) => s.workspace);
   const env = useApp((s) => s.environment);
-  const cols = useCollections();
+  // names and request counts: the outline is enough (the whole collections are never read here)
+  const cols = useCollectionTree();
+  const requestCounts = useMemo(() => new Map(cols.map((c) => [c.id, count(c.items)])), [cols]);
   // saved gRPC calls and connections belong to collections too (they are kept in the library)
   const [saved, setSaved] = useState<Record<string, number>>({});
   const [recent, setRecent] = useState<HistoryItem[]>([]);
@@ -175,7 +180,10 @@ export function HomeView() {
   const showGetStarted = !getStartedHidden && !allDone && ws?.id !== EXAMPLES_ID;
   const setView = useApp((s) => s.setView);
 
+  const stale = useRef(false);
+  const seen = useRef('');
   const load = () => {
+    stale.current = false;
     void refreshCollections();
     void Promise.all(['grpc', 'websocket'].map((kind) => call<{ items: Array<{ collectionId?: string }> }>('lib.get', { kind }).catch(() => ({ items: [] }))))
       .then((libs) => {
@@ -183,16 +191,28 @@ export function HomeView() {
         for (const i of libs.flatMap((l) => l.items)) if (i.collectionId) n[i.collectionId] = (n[i.collectionId] ?? 0) + 1;
         setSaved(n);
       });
-    void call<{ items: HistoryItem[] }>('history.list', { limit: 8 }).then((r) => setRecent(r.items));
+    void call<{ items: HistoryItem[]; total: number }>('history.list', { limit: 8 }).then((r) => ((seen.current = historyMark(r)), setRecent(r.items)));
     void call<HomeMonitor[]>('monitor.list').then(setMonitors, () => setMonitors([]));
     void call<{ items: HomeRun[] }>('runs.list', { limit: 6 }).then((r) => setRuns(r.items), () => setRuns([]));
     void call<typeof certs>('certificates.list').then(setCerts, () => setCerts([]));
     void call<typeof health>('stats.collectionsHealth').then(setHealth, () => setHealth({}));
     loadActivity();
   };
+  // Home stays mounted: coming back to it reloads only when something it shows has changed (a save, a workspace
+  // opened, a run or a monitor check finished, a request sent), not on every visit (8 calls each time)
   useEffect(() => {
     load();
-    return useApp.subscribe((s, p) => s.view === 'home' && p.view !== 'home' && load());
+    const offs = [on('data.changed', () => void (stale.current = true)), on('run.finished', () => void (stale.current = true)), on('monitor.result', () => void (stale.current = true))];
+    const unsub = useApp.subscribe((s, p) => {
+      if (s.view !== 'home' || p.view === 'home') return;
+      if (stale.current) return load();
+      // requests sent elsewhere change Recent and the activity: one small call tells
+      void call<{ items: HistoryItem[]; total: number }>('history.list', { limit: 1, brief: true }).then(
+        (r) => historyMark(r) !== seen.current && load(),
+        () => undefined,
+      );
+    });
+    return () => (offs.forEach((off) => off()), unsub());
   }, []);
 
   const newCollection = async () => {
@@ -318,7 +338,7 @@ export function HomeView() {
                   <button className="flex-1 flex items-center gap-2 text-left min-w-0" onClick={() => open('collections', { collectionId: c.id })}>
                     <FolderTree size={13} className="text-muted shrink-0" />
                     <span className="truncate">{c.name}</span>
-                    <span className="text-xs text-muted ml-2">{plural(count(c.items) + (saved[c.id] ?? 0), 'request')}</span>
+                    <span className="text-xs text-muted ml-2">{plural((requestCounts.get(c.id) ?? 0) + (saved[c.id] ?? 0), 'request')}</span>
                   </button>
                   {health[c.id]?.failing ? (
                     <Badge tone="bad" title={`${health[c.id]!.failing} of ${health[c.id]!.sent} sent requests: the latest response failed`}>
@@ -339,7 +359,13 @@ export function HomeView() {
           <Card title="Environments" icon={<KeyRound size={15} />} action={<LinkButton className="text-xs" icon={<ArrowRight size={12} />} onClick={() => setView('environments')}>Manage</LinkButton>}>
             {ws?.environments.length ? (
               ws.environments.map((e) => (
-                <button key={e.id} className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-left hover:bg-hover" onClick={() => useApp.getState().setEnvironment(e.name)} title="Make this the active environment">
+                <button
+                  key={e.id}
+                  className={cx('w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-left hover:bg-hover', e.problem && 'text-bad cursor-not-allowed')}
+                  disabled={!!e.problem}
+                  onClick={() => useApp.getState().setEnvironment(e.name)}
+                  title={e.problem ? `This environment's file cannot be read: ${e.problem}` : 'Make this the active environment'}
+                >
                   <span className="w-2 h-2 rounded-full shrink-0" style={{ background: e.color ?? (e.isProduction ? 'var(--bad)' : 'var(--ok)') }} />
                   <span className="truncate flex-1">{e.name}</span>
                   {e.isProduction && <Badge tone="bad">prod</Badge>}

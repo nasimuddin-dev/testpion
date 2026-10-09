@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, wri
 import { dirname, join, resolve } from 'node:path';
 import { Command, Option } from 'commander';
 import { WorkspaceManager, formatDuration, importRequestSnippet, ciConfig, compareEnvironments, environmentMatrix, compareRequestAcrossEnvironments, collectionRequests, type CiProvider, convertCollectionScripts, isRequestSnippet, Redactor, collectionMarkdown, collectionHtml, exportPostmanCollection, exportPostmanEnvironment, fetchImportText, readBrunoFolder, collectionToBru, type Environment, bundleWsdl, isWsdl, importIntoWorkspace, diffOpenApi, lintOpenApi, OPENAPI_LINT_RULES, type OpenApiLintSeverity, type OpenApiLintResult, workspaceApiCoverage, apiCoverageMarkdown, securityLint, collectionSecurityFindings, type SecurityFinding, listSpecs, unusedVariables, definedVariableNames, findEnvironment, setEnvironmentVariables, unsetEnvironmentVariables, variableFlow, collectionToOpenApiText, variableUsages, renameVariable, collectionSavedItems, listWorkspaceDatasets, appendDatasetRow, readWorkspaceDataset, workspaceReportHtml, collectionVariableFlow, loadHistory, workspaceStorage, deleteRunsBefore, listCertificates, workspaceAttention, decodeJwt, describeExpiry, recordCertificate, checkCertificate } from '@testpion/core';
-import { EXIT, green, red, yellow, dim, bold, CliError, printJson, findWorkspaceUp, withWorkspace, cliSecrets, cliContext, requireCollection, requireEnvironment, loadCollectionRef, readDefinition } from '../shared.js';
+import { EXIT, green, red, yellow, dim, bold, CliError, printJson, findWorkspaceUp, withWorkspace, warnProblems, cliSecrets, cliContext, requireCollection, requireEnvironment, loadCollectionRef, readDefinition } from '../shared.js';
 
 export function registerDataCommands(program: Command): void {
   program
@@ -238,14 +238,15 @@ export function registerDataCommands(program: Command): void {
     .option('--json', 'print as JSON')
     .action((o: { workspace?: string; json?: boolean }) => {
       return withWorkspace(o.workspace, (store) => {
-        const rows = store
-          .listCollections()
+        const all = store.listCollections();
+        if (!o.json) warnProblems(all, 'collection');
+        const rows = all
           .filter((c) => !c.problem)
           .map((c) => {
             const saved = collectionSavedItems(store, c.id);
             return { id: c.id, name: c.name, requests: collectionRequests(c).length, grpcCalls: saved?.grpc?.length ?? 0, connections: saved?.websocket?.length ?? 0 };
           });
-        if (o.json) return printJson(rows);
+        if (o.json) return printJson([...rows, ...all.filter((c) => c.problem).map((c) => ({ id: c.id, name: c.name, problem: c.problem }))]);
         if (!rows.length) return console.log(dim('No collections. Create one in the app, or import one: testpion import <file>'));
         for (const r of rows) console.log(`${r.name}  ${dim(r.id)}  ${[`${r.requests} request${r.requests === 1 ? '' : 's'}`, r.grpcCalls ? `${r.grpcCalls} gRPC` : '', r.connections ? `${r.connections} connection${r.connections === 1 ? '' : 's'}` : ''].filter(Boolean).join(', ')}`);
       });
@@ -837,9 +838,11 @@ export function registerDataCommands(program: Command): void {
     .option('--json', 'print as JSON')
     .action((o) => {
       return withWorkspace(o.workspace, (store) => {
-        const envs = store.listEnvironments().map((e) => ({ id: e.id, name: e.name, production: !!e.isProduction, isProduction: !!e.isProduction, variables: e.variables.filter((v) => v.enabled !== false).map((v) => (v.secret ? `${v.key} (secret)` : v.key)) }));
+        const all = store.listEnvironments();
+        const envs = all.map((e) => ({ id: e.id, name: e.name, production: !!e.isProduction, isProduction: !!e.isProduction, variables: e.variables.filter((v) => v.enabled !== false).map((v) => (v.secret ? `${v.key} (secret)` : v.key)), ...(e.problem ? { problem: e.problem } : {}) }));
         if (o.json) printJson(envs);
-        else for (const e of envs) console.log(`${e.name}${e.production ? red(' (production)') : ''}\t${dim(e.variables.join(', '))}`);
+        else for (const e of envs.filter((x) => !x.problem)) console.log(`${e.name}${e.production ? red(' (production)') : ''}\t${dim(e.variables.join(', '))}`);
+        if (!o.json) warnProblems(all, 'environment');
       });
     });
   envCmd

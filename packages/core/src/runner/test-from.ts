@@ -1,4 +1,4 @@
-import { stringify } from 'yaml';
+import { stringifyYaml as stringify } from '../util/lazy-yaml.js';
 import type { AuthConfig, BodyConfig, CheckConfig, KeyValue } from '../model/types.js';
 import { slugify } from '../util/ids.js';
 
@@ -19,6 +19,13 @@ const kv = (list?: KeyValue[]) => {
 const clean = <T extends Record<string, unknown>>(o: T): T => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined && v !== '' && !(Array.isArray(v) && !v.length))) as T;
 
 export function testFromRequest(name: string, src: TestSource, assertions?: CheckConfig[]): { path: string; yaml: string } {
+  const { test, folder } = testObjectFromRequest(name, src, assertions);
+  const header = '# Saved from TestPion. Run it with: testpion test <this file>\n';
+  return { path: `${folder}/${slugify(name) || 'test'}.yaml`, yaml: header + stringify(test, { lineWidth: 0 }) };
+}
+
+/** The test as an object (what testFromRequest writes as YAML; the flow designer adds it as a step) and the tests/ folder it belongs in. */
+export function testObjectFromRequest(name: string, src: TestSource, assertions?: CheckConfig[]): { test: Record<string, unknown>; folder: string } {
   let test: Record<string, unknown>;
   let folder: string;
   switch (src.kind) {
@@ -89,6 +96,5 @@ export function testFromRequest(name: string, src: TestSource, assertions?: Chec
       });
       folder = 'websocket';
   }
-  const header = '# Saved from TestPion. Run it with: testpion test <this file>\n';
-  return { path: `${folder}/${slugify(name) || 'test'}.yaml`, yaml: header + stringify(test, { lineWidth: 0 }) };
+  return { test, folder };
 }

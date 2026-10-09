@@ -54,7 +54,7 @@ export async function doFetch(
     }
     const err = new ApsError(kind, `${opts.provider} returned HTTP ${res.status}: ${(opts.redactor?.redactString(msg) ?? msg).slice(0, 500)}`, {
       details: { status: res.status },
-      ...(providerAdvice(opts.provider, res.status, msg) ?? {}),
+      ...(providerAdvice(opts.provider, res.status, msg) ?? (kind === 'ValidationError' ? { suggestions: ['Read the provider\'s message above for the field it rejected.', 'Compare the request with the provider\'s API documentation.'] } : {})),
     });
     const ra = res.headers.get('retry-after');
     if (ra) (err as ApsError & { retryAfterMs?: number }).retryAfterMs = Number.isFinite(Number(ra)) ? Number(ra) * 1000 : undefined;

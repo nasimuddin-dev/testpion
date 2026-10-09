@@ -1,9 +1,9 @@
-import { ArchiveRestore, ArrowLeftRight, Check, Copy, Grid3x3, Download, FileJson, FileText, History, KeyRound, Pencil, Save, ScanSearch, Trash2 } from 'lucide-react';
+import { ArchiveRestore, ArrowLeftRight, Check, Copy, Grid3x3, Download, FileJson, FileText, History, KeyRound, Pencil, Save, ScanSearch, Trash2, TriangleAlert } from 'lucide-react';
 import { SecretRefsLine } from '../components/SecretRefsLine';
 import { useGit } from '../lib/git';
 import { GitItemHistory } from '../components/GitItemHistory';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useCollections } from '../lib/collections-store';
+import { useCollectionTree } from '../lib/collections-store';
 import { call } from '../api';
 import { confirmAction, promptText, toastError, useApp } from '../store';
 import { useIntent } from '../hooks';
@@ -14,7 +14,7 @@ import { KeyValueEditor } from '../components/KeyValueEditor';
 import { EnvCompare } from '../components/EnvCompare';
 import { EnvMatrix } from '../components/EnvMatrix';
 import { TrashDialog } from '../components/TrashDialog';
-import { Badge, Button, cx, Empty, Field, Input, Menu, MoreMenu, Split, Tabs, Toggle } from '../components/ui';
+import { Badge, Button, Callout, cx, Empty, Field, Input, Menu, MoreMenu, Split, Tabs, Toggle } from '../components/ui';
 import { CountPill, focusRow, InlineRename, RowMenu, TreeHeader, treeKeys } from '../components/TreeParts';
 import { refreshEnvironments, useEnvironments } from '../lib/environments-store';
 import { downloadContent } from '../lib/files';
@@ -93,8 +93,9 @@ export function EnvironmentsView() {
   const [secretStatus, setSecretStatus] = useState<Record<string, boolean>>({});
   const [scope, setScope] = useState<'environment' | 'collection' | 'workspace' | 'global'>('environment');
   const [colVarsFor, setColVarsFor] = useState<string>();
-  const allCollections = useCollections();
-  const colVarCount = useMemo(() => allCollections.reduce((n, c) => n + (c.variables?.length ?? 0), 0), [allCollections]);
+  // only how many collection variables there are: the outline counts them
+  const allCollections = useCollectionTree();
+  const colVarCount = useMemo(() => allCollections.reduce((n, c) => n + (c.variableCount ?? c.variables?.length ?? 0), 0), [allCollections]);
   const [wsVars, setWsVars] = useState<KeyValue[]>(ws?.variables ?? []);
   const [globals, setGlobals] = useState<KeyValue[]>(settings?.globalVariables ?? []);
   const load = async () => {
@@ -146,7 +147,7 @@ export function EnvironmentsView() {
     } else setDraft(e);
     refreshUnused(e?.name);
     setSecretValues({});
-    if (e) void call('env.secretStatus', { envId: e.id, keys: e.variables.filter((v) => v.secret).map((v) => v.key) }).then(setSecretStatus);
+    if (e && !e.problem) void call('env.secretStatus', { envId: e.id, keys: (e.variables ?? []).filter((v) => v.secret).map((v) => v.key) }).then(setSecretStatus, toastError);
   }, [sel, envs]);
   // a variable to add (from the variables overview: "{{name}} is not defined anywhere ▸ Add"): a row ready for its value
   const pendingAdd = useRef<{ envId: string; key: string } | undefined>(undefined);
@@ -270,9 +271,15 @@ export function EnvironmentsView() {
                     }}
                   >
                     <span className="w-2 h-2 rounded-full shrink-0" style={{ background: e.color ?? (e.isProduction ? 'var(--bad)' : 'var(--ok)') }} />
-                    <span className="truncate">{e.name}</span>
+                    <span className="truncate">{String(e.name)}</span>
                     {e.isProduction && <Badge tone="bad">prod</Badge>}
-                    <span className="ml-auto"><CountPill n={e.variables.length} /></span>
+                    {e.problem ? (
+                      <span className="ml-auto text-warn" title={`This environment's file cannot be read: ${e.problem}`}>
+                        <TriangleAlert size={13} aria-label="Cannot be read" />
+                      </span>
+                    ) : (
+                      <span className="ml-auto"><CountPill n={e.variables?.length ?? 0} /></span>
+                    )}
                   </button>
                   )}
                   <RowMenu
@@ -327,7 +334,7 @@ export function EnvironmentsView() {
                         { label: '.env file', icon: <FileText size={14} />, onSelect: () => void exportEnv('dotenv') },
                       ]}
                     />
-                    <Button variant="primary" icon={<Save size={13} />} onClick={save}>
+                    <Button variant="primary" icon={<Save size={13} />} onClick={save} disabled={!!draft.problem} title={draft.problem ? 'Fix the file first: saving now would replace it with what is shown here' : undefined}>
                       Save
                     </Button>
                     <MoreMenu
@@ -340,6 +347,11 @@ export function EnvironmentsView() {
                     />
                   </div>
                 </div>
+                {draft.problem && (
+                  <Callout tone="warn">
+                    The file of this environment cannot be read, so its variables are not shown and it cannot be saved here: {draft.problem}. Fix the file (or restore it from git), or delete the environment.
+                  </Callout>
+                )}
                 <KeyValueEditor
                   rows={rows}
                   allowSecret

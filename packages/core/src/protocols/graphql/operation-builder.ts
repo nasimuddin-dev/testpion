@@ -1,19 +1,9 @@
-import {
-  getNamedType,
-  isEnumType,
-  isInputObjectType,
-  isInterfaceType,
-  isLeafType,
-  isListType,
-  isNonNullType,
-  isObjectType,
-  isScalarType,
-  isUnionType,
-  type GraphQLField,
-  type GraphQLInputType,
-  type GraphQLOutputType,
-  type GraphQLSchema,
-} from 'graphql';
+import type { GraphQLField, GraphQLInputType, GraphQLOutputType, GraphQLSchema } from 'graphql';
+import { nodeRequire } from '../../util/lazy-require.js';
+
+// graphql loads at first use, not at startup (see util/lazy-require.ts)
+let graphqlMod: typeof import('graphql') | undefined;
+const gql = (): typeof import('graphql') => (graphqlMod ??= typeof require === 'function' ? require('graphql') : nodeRequire('graphql'));
 import { ApsError } from '../../errors.js';
 import { formatQuery } from './graphql.js';
 
@@ -46,7 +36,7 @@ export function buildGraphQLOperation(schema: GraphQLSchema, field: string, opts
   }
   const [operation, rootField] = hit as readonly ['query' | 'mutation' | 'subscription', GraphQLField<unknown, unknown>];
   const depth = Math.min(Math.max(opts.depth ?? 2, 0), 6);
-  const args = rootField.args.filter((a) => opts.includeOptionalArgs !== false || isNonNullType(a.type));
+  const args = rootField.args.filter((a) => opts.includeOptionalArgs !== false || gql().isNonNullType(a.type));
   const variables: Record<string, unknown> = {};
   for (const a of args) variables[a.name] = placeholder(a.type, 0);
   const operationName = `${fieldPart.charAt(0).toUpperCase()}${fieldPart.slice(1)}`;
@@ -59,20 +49,20 @@ export function buildGraphQLOperation(schema: GraphQLSchema, field: string, opts
 
 /** ` { a b c { d } }` for an object type, '' for a leaf. */
 function selectionOf(type: GraphQLOutputType, depth: number, seen: Set<string>): string {
-  const named = getNamedType(type);
-  if (isLeafType(named)) return '';
-  if (isUnionType(named)) {
+  const named = gql().getNamedType(type);
+  if (gql().isLeafType(named)) return '';
+  if (gql().isUnionType(named)) {
     const parts = named.getTypes().map((t) => `... on ${t.name}${selectionOf(t, depth, seen) || ' { __typename }'}`);
     return ` { __typename ${parts.join(' ')} }`;
   }
-  if (!isObjectType(named) && !isInterfaceType(named)) return '';
+  if (!gql().isObjectType(named) && !gql().isInterfaceType(named)) return '';
   const fields = Object.values(named.getFields());
   // leaves first; objects only while there is depth left, skipping types already on the path (cycles)
-  const leaves = fields.filter((f) => isLeafType(getNamedType(f.type)) && !f.args.some((a) => isNonNullType(a.type)) && !f.deprecationReason).map((f) => f.name);
+  const leaves = fields.filter((f) => gql().isLeafType(gql().getNamedType(f.type)) && !f.args.some((a) => gql().isNonNullType(a.type)) && !f.deprecationReason).map((f) => f.name);
   const nested =
     depth > 0
       ? fields
-          .filter((f) => !isLeafType(getNamedType(f.type)) && !f.args.some((a) => isNonNullType(a.type)) && !f.deprecationReason && !seen.has(getNamedType(f.type).name))
+          .filter((f) => !gql().isLeafType(gql().getNamedType(f.type)) && !f.args.some((a) => gql().isNonNullType(a.type)) && !f.deprecationReason && !seen.has(gql().getNamedType(f.type).name))
           .map((f) => {
             const inner = selectionOf(f.type, depth - 1, new Set([...seen, named.name]));
             return inner ? `${f.name}${inner}` : '';
@@ -85,16 +75,16 @@ function selectionOf(type: GraphQLOutputType, depth: number, seen: Set<string>):
 
 /** A placeholder value of an input type: 0, "", false, the first enum value, an input object with its required fields. */
 function placeholder(type: GraphQLInputType, level: number): unknown {
-  if (isNonNullType(type)) return placeholder(type.ofType, level);
-  if (isListType(type)) return [placeholder(type.ofType, level)];
-  if (isEnumType(type)) return type.getValues()[0]?.value ?? null;
-  if (isInputObjectType(type)) {
+  if (gql().isNonNullType(type)) return placeholder(type.ofType, level);
+  if (gql().isListType(type)) return [placeholder(type.ofType, level)];
+  if (gql().isEnumType(type)) return type.getValues()[0]?.value ?? null;
+  if (gql().isInputObjectType(type)) {
     if (level > 4) return {};
     const out: Record<string, unknown> = {};
-    for (const f of Object.values(type.getFields())) if (isNonNullType(f.type) && f.defaultValue === undefined) out[f.name] = placeholder(f.type, level + 1);
+    for (const f of Object.values(type.getFields())) if (gql().isNonNullType(f.type) && f.defaultValue === undefined) out[f.name] = placeholder(f.type, level + 1);
     return out;
   }
-  if (isScalarType(type)) {
+  if (gql().isScalarType(type)) {
     switch (type.name) {
       case 'Int':
       case 'Float':

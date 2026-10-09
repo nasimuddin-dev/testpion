@@ -1,4 +1,4 @@
-import { closeSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, statSync, writeSync } from 'node:fs';
+import { closeSync, copyFileSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, statSync, writeFileSync, writeSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { ApsError } from '../errors.js';
@@ -41,13 +41,56 @@ export function atomicWrite(path: string, data: string | Buffer): void {
     closeSync(fd);
   }
   try {
-    renameSync(tmp, path);
+    renameWithRetry(tmp, path);
   } catch (e) {
     rmSync(tmp, { force: true });
     throw e;
   } finally {
     forgetText(path);
   }
+}
+
+/** Waits between rename attempts: Windows refuses a rename while another program (antivirus, an indexer, an editor) has the file open. */
+const RENAME_RETRY_MS = [50, 100, 200];
+const sleepBuf = new Int32Array(new SharedArrayBuffer(4));
+
+function renameWithRetry(from: string, to: string): void {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      renameSync(from, to);
+      return;
+    } catch (e) {
+      const code = (e as NodeJS.ErrnoException).code;
+      const wait = RENAME_RETRY_MS[attempt];
+      if (wait === undefined || (code !== 'EPERM' && code !== 'EBUSY' && code !== 'EACCES')) throw e;
+      Atomics.wait(sleepBuf, 0, 0, wait); // a synchronous pause: the callers write synchronously
+    }
+  }
+}
+
+/**
+ * Plain write for derived files (traces, caches) that can be produced again: no fsync, no temp file and rename,
+ * and each folder is created once per process. Several times cheaper than `atomicWrite` on Windows.
+ */
+const madeDirs = new Set<string>();
+export function writeDerived(path: string, data: string | Buffer): void {
+  const dir = dirname(path);
+  if (!madeDirs.has(dir)) {
+    mkdirSync(dir, { recursive: true });
+    if (madeDirs.size > 1000) madeDirs.clear();
+    madeDirs.add(dir);
+  }
+  try {
+    writeFileSync(path, data);
+  } catch (e) {
+    // the folder went away (deleted while the app runs): make it again once
+    if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(path, data);
+  }
+  recentWrites.set(resolve(path), Date.now());
+  if (recentWrites.size > 2000) for (const [k, t] of recentWrites) if (Date.now() - t > 10_000) recentWrites.delete(k);
+  forgetText(path);
 }
 
 /*
@@ -84,12 +127,48 @@ function cachedText(path: string, mtimeMs: number, size: number): string {
 }
 
 export function writeJson(path: string, value: unknown): void {
+  keepBrokenFile(path);
   atomicWrite(path, JSON.stringify(value, null, 2) + '\n');
 }
 
 /**
- * Read a JSON file. A file that fails to parse is treated as corrupted: it is preserved
- * as `<file>.corrupt-<timestamp>` for recovery and a descriptive error is thrown.
+ * Saving over a file that is not valid JSON (a hand edit gone wrong, git conflict markers) first copies it to
+ * `<file>.broken-<timestamp>`: the user chose to replace it, and what was in it can still be recovered.
+ * A file whose text this process read and parsed (the cache) is known to be fine and costs only a stat.
+ */
+function keepBrokenFile(path: string): void {
+  const stat = statSync(path, { throwIfNoEntry: false });
+  if (!stat?.isFile()) return;
+  const hit = textCache.get(path);
+  if (hit && hit.mtimeMs === stat.mtimeMs && hit.size === stat.size) return;
+  let text: string;
+  try {
+    text = readFileSync(path, 'utf8');
+  } catch {
+    return;
+  }
+  if (!text.trim()) return;
+  try {
+    JSON.parse(text.replace(/^﻿/, ''));
+  } catch {
+    try {
+      copyFileSync(path, `${path}.broken-${Date.now()}`);
+    } catch {
+      /* best effort: the save goes ahead */
+    }
+  }
+}
+
+/** Why a JSON file's text does not parse, in words (git conflict markers are named as such). */
+export function jsonProblem(text: string, error: unknown): string {
+  if (/^(<{7}|={7}|>{7})( |$)/m.test(text)) return 'it has unresolved git merge conflict markers (<<<<<<< ======= >>>>>>>)';
+  if (!text.trim()) return 'the file is empty';
+  return `it is not valid JSON (${(error as Error).message})`;
+}
+
+/**
+ * Read a JSON file. A file that does not parse is left exactly where it is (it may be mid-merge in git, or
+ * being fixed by hand) and a ValidationError says why; nothing is renamed or rewritten by reading.
  */
 export function readJson<T>(path: string, fallback?: T): T {
   const stat = statSync(path, { throwIfNoEntry: false });
@@ -103,15 +182,27 @@ export function readJson<T>(path: string, fallback?: T): T {
     return JSON.parse(text.replace(/^﻿/, '')) as T;
   } catch (e) {
     forgetText(path);
-    const backup = `${path}.corrupt-${Date.now()}`;
-    try {
-      renameSync(path, backup);
-    } catch {
-      /* ignore */
-    }
-    throw new ApsError('ValidationError', `Corrupted data detected in ${path}`, {
-      why: `The file is not valid JSON (${(e as Error).message}).`,
-      suggestions: [`The original was preserved at ${backup}.`, 'Restore it from version control or fix the JSON by hand.'],
+    const why = jsonProblem(text, e);
+    throw new ApsError('ValidationError', `${path} cannot be read: ${why}`, {
+      why: `The file is broken: ${why}.`,
+      suggestions: ['Fix the file by hand, or restore it from version control (git checkout -- <file>, or resolve the merge).', 'Saving over it in TestPion keeps a copy of it as <file>.broken-<time>.'],
+      details: { path, problem: why },
     });
+  }
+}
+
+/**
+ * The text of a file for a cheap scan (no parsing): from readJson's cache when it is current, else read from disk.
+ * It is not added to the cache, which holds only text that parsed (see keepBrokenFile).
+ */
+export function readTextCached(path: string): string | undefined {
+  const stat = statSync(path, { throwIfNoEntry: false });
+  if (!stat?.isFile()) return undefined;
+  const hit = textCache.get(path);
+  if (hit && hit.mtimeMs === stat.mtimeMs && hit.size === stat.size) return hit.text;
+  try {
+    return readFileSync(path, 'utf8');
+  } catch {
+    return undefined;
   }
 }

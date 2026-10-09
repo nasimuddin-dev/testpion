@@ -36,7 +36,8 @@ import { incomingAsExchange, toRequest, type Exchange, type Stats } from '../com
 import { ExchangePanes } from '../components/debugger/ExchangePanes';
 import { useExchangeList, type ListFilter } from '../components/debugger/useExchangeList';
 import { BreakpointDialog, CompareExchangesDialog, RuleDialog, RulesPanel, type Rule, type RulesState } from '../components/DebuggerRules';
-import { DebuggerGrid, GridTotals, IncomingList, TrafficSide, useIncoming } from '../components/debugger/DebuggerGrid';
+import { DebuggerGrid, GridTotals, IncomingList, TrafficSide, useIncoming, type GridActions } from '../components/debugger/DebuggerGrid';
+import { useStableCallbacks } from '../hooks';
 import { Dock } from '../components/debugger/Dock';
 import { ToolRail, type DockPanel } from '../components/debugger/ToolRail';
 import { copyText } from '../lib/clipboard';
@@ -276,6 +277,31 @@ export function DebuggerView() {
       toastError,
     );
   const sel = detail;
+  // the grid is memoised: the same callbacks on every render, so a keystroke in the filter or the selected exchange
+  // arriving doesn't re-render thousands of rows through new props
+  const gridSelect = useStableCallbacks({
+    onSelect: (id: string, ids: string[]) => {
+      if (compareA && compareA.id !== id) {
+        setComparePair({ a: compareA.id, b: id });
+        setCompareA(undefined);
+        return;
+      }
+      setSelected(id);
+      setSelectedIds(ids);
+    },
+  });
+  const gridActions = useStableCallbacks<GridActions>({
+    onOpen: openInTab,
+    onResend: (e) => void resend(e),
+    onBookmark: async (e) => (await call('debug.bookmark', { id: e.id, on: !e.bookmarked }), void load()),
+    onCompare: setCompareA,
+    onDelete: (ids) => void remove(ids),
+    onClear: () => void clear(),
+    onQuickRule: quickRule,
+    onNewRule: setRuleDraft,
+    onConnections: () => setTab('connections'),
+    onRulesPanel: (k) => openDock(k === 'ignore' || k === 'only' ? 'filter' : k === 'highlight' ? 'highlight' : k === 'reply' ? 'auto-reply' : 'modify'),
+  });
 
   // What to capture: one program (a browser or a terminal opened through the proxy), or everything on this computer
   // (the system proxy, an explicit choice, restored on stop). Each starts the proxy when it is not running yet.
@@ -608,27 +634,8 @@ export function DebuggerView() {
                           selected={selected}
                           selectedIds={selectedIds}
                           onOrder={onOrder}
-                          onSelect={(id, ids) => {
-                            if (compareA && compareA.id !== id) {
-                              setComparePair({ a: compareA.id, b: id });
-                              setCompareA(undefined);
-                              return;
-                            }
-                            setSelected(id);
-                            setSelectedIds(ids);
-                          }}
-                          actions={{
-                            onOpen: openInTab,
-                            onResend: (e) => void resend(e),
-                            onBookmark: async (e) => (await call('debug.bookmark', { id: e.id, on: !e.bookmarked }), void load()),
-                            onCompare: setCompareA,
-                            onDelete: (ids) => void remove(ids),
-                            onClear: () => void clear(),
-                            onQuickRule: quickRule,
-                            onNewRule: setRuleDraft,
-                            onConnections: () => setTab('connections'),
-                            onRulesPanel: (k) => openDock(k === 'ignore' || k === 'only' ? 'filter' : k === 'highlight' ? 'highlight' : k === 'reply' ? 'auto-reply' : 'modify'),
-                          }}
+                          onSelect={gridSelect.onSelect}
+                          actions={gridActions}
                         />
                       )}
                       <TrafficSide side={side} onSide={setSide} incoming={incoming.list.length} />

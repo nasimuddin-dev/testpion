@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { call } from '../api';
 import { toastError, useApp } from '../store';
 import type { Collection } from '../types';
-import { Badge, Button, Modal } from './ui';
+import { Badge, Button, cx, Modal } from './ui';
 import { useEnvironments } from '../lib/environments-store';
 import { plural } from '../lib/format';
 
@@ -20,7 +20,7 @@ interface Preview {
 export function MoveVariablesDialog({ collection, initial, onClose, onDone }: { collection: Collection; initial?: string[]; onClose(): void; onDone(): void }) {
   const envs = useEnvironments();
   const [keys, setKeys] = useState<Set<string>>(new Set(initial ?? []));
-  const [targets, setTargets] = useState<Set<string>>(() => new Set(envs.map((x) => x.id)));
+  const [targets, setTargets] = useState<Set<string>>(() => new Set(envs.filter((x) => !x.problem).map((x) => x.id)));
   const [preview, setPreview] = useState<Preview>();
   const [filter, setFilter] = useState('');
   const [busy, setBusy] = useState(false);
@@ -29,7 +29,7 @@ export function MoveVariablesDialog({ collection, initial, onClose, onDone }: { 
   useEffect(() => {
     if (seeded.current || !envs.length) return;
     seeded.current = true;
-    setTargets(new Set(envs.map((x) => x.id)));
+    setTargets(new Set(envs.filter((x) => !x.problem).map((x) => x.id)));
   }, [envs]);
   const opts = useMemo(() => ({ collectionId: collection.id, keys: [...keys], environments: [...targets] }), [collection.id, keys, targets]);
   useEffect(() => {
@@ -101,9 +101,9 @@ export function MoveVariablesDialog({ collection, initial, onClose, onDone }: { 
             <div className="text-xs text-muted">To these environments</div>
             <div className="border border-line rounded-md">
               {envs.map((e) => (
-                <label key={e.id} className="flex items-center gap-2 px-2 h-7 text-xs cursor-pointer hover:bg-hover">
-                  <input type="checkbox" checked={targets.has(e.id)} onChange={() => toggle(targets, e.id, setTargets)} />
-                  <span className="truncate">{e.name}</span>
+                <label key={e.id} className={cx('flex items-center gap-2 px-2 h-7 text-xs hover:bg-hover', e.problem ? 'text-bad' : 'cursor-pointer')} title={e.problem}>
+                  <input type="checkbox" disabled={!!e.problem} checked={!e.problem && targets.has(e.id)} onChange={() => toggle(targets, e.id, setTargets)} />
+                  <span className="truncate">{e.name}{e.problem ? '  (cannot be read)' : ''}</span>
                   {e.isProduction && <Badge tone="bad">prod</Badge>}
                 </label>
               ))}

@@ -4,7 +4,7 @@ import { call, on } from '../api';
 import { persisted, toastError, useApp } from '../store';
 import { KeyValueEditor } from '../components/KeyValueEditor';
 import type { KeyValue } from '../types';
-import { useIntent } from '../hooks';
+import { useFilteredLoad, useIntent } from '../hooks';
 import type { Trace } from '../types';
 import { formatMs, plural, timeAgo } from '../lib/format';
 import { TraceView } from '../components/TraceView';
@@ -87,11 +87,7 @@ export function TracesView() {
     },
     [query, kind, errorsOnly, items.length],
   );
-  useEffect(() => {
-    const t = setTimeout(() => void load(true), 200);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, kind, errorsOnly]);
+  useFilteredLoad(() => void load(true), query, [kind, errorsOnly], true);
   // the view stays mounted: coming back to it, or a run that finishes, brings the newest traces in
   const active = useApp((st) => st.view === 'traces');
   useEffect(() => {

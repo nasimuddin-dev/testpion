@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { parse as parseYaml } from 'yaml';
+import { parseYaml } from '../util/lazy-yaml.js';
 import { ApsError } from '../errors.js';
 import { generateRows, operationBodySchema, rowsToCsv, type DatasetRow } from '../runner/generate-dataset.js';
 import type { WorkspaceStore } from './workspace.js';

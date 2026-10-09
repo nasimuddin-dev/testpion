@@ -3,8 +3,8 @@ import { request as httpsRequest } from 'node:https';
 import { lookup } from 'node:dns/promises';
 import { connect } from 'node:net';
 import { assertUrlAllowed } from '../../net/policy.js';
-import { websocketDispatcher } from '../../net/proxy.js';
-import { WebSocket as UndiciWebSocket } from 'undici';
+import { ensureProxyApplied, websocketDispatcher } from '../../net/proxy.js';
+import type { WebSocket as UndiciWebSocket } from 'undici';
 import { ApsError } from '../../errors.js';
 import { shortId } from '../../util/ids.js';
 import type { KeyValue } from '../../model/types.js';
@@ -21,6 +21,8 @@ export interface WsMessage {
 }
 
 /** Interactive WebSocket session with a bounded in-memory message log. */
+let undiciMod: Promise<typeof import('undici')> | undefined;
+
 export class WebSocketSession {
   private ws?: InstanceType<typeof UndiciWebSocket>;
   readonly id = shortId('ws-');
@@ -88,7 +90,10 @@ export class WebSocketSession {
     } catch {
       /* an invalid URL is reported below */
     }
-    return new Promise((resolve, reject) => {
+    // undici loads on the first connection (not at startup)
+    return ensureProxyApplied()
+      .then(() => (undiciMod ??= import('undici')))
+      .then(({ WebSocket: UndiciWebSocket }) => new Promise<void>((resolve, reject) => {
       let ws: InstanceType<typeof UndiciWebSocket>;
       try {
         // the proxy settings (Settings ▸ Proxy / HTTP(S)_PROXY) apply to the handshake too
@@ -151,7 +156,7 @@ export class WebSocketSession {
         this.emit('system', `Closed (code ${ev.code}${ev.reason ? `: ${ev.reason}` : ''})`);
         this.setStatus('closed');
       });
-    });
+    }));
   }
 
   /** The subprotocol the server picked ('' when none). */

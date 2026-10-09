@@ -45,6 +45,8 @@ export interface SendResult {
   visualizer?: { html?: string; error?: string; vizId?: string };
   historyId?: string;
   unresolved?: string[];
+  /** Variables that refer to each other in a loop ("a → b → a"): why some stayed unresolved. */
+  cycles?: string[];
   /** `{{$env.NAME}}` the app's allow-list kept out (Settings ▸ Privacy). */
   blockedEnv?: string[];
   curl?: string;

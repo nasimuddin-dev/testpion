@@ -70,6 +70,11 @@ Not sure which tool? **`search_tools`** takes what you want to do ("capture traf
 | `flaky_tests` | Tests whose result keeps changing across the latest runs, or that passed only after a retry. |
 | `test_history` | One test across the latest runs (status, latency, failed checks) with how often its result flipped. |
 | `flow_graph` | A test file as a [flow](/test-runner/integration-testing#see-a-flow): steps (type, method and URL, extracted names, `dependsOn`), edges, the steps in columns, problems (a missing dependency, a cycle), the latest run's status and duration per step, and the diagram as Graphviz DOT. |
+| `flow_add_step` | Add a step to a flow ([the designer's edits](/test-runner/integration-testing#design-a-flow)): one `step` as a test is written, several `steps` (`chain`), or saved requests of a `collection` (`items`: requests or folders, chained, with extracts suggested from saved examples); `after` makes it wait for a step. Comments and line endings of the file stay. |
+| `flow_connect` | Make step `to` wait for step `from` (its `dependsOn`); refused when it would make a cycle. |
+| `flow_disconnect` | Step `to` no longer waits for step `from`. |
+| `flow_update_step` | Set keys of a step (`set`: url, headers, body, extract, assertions …; `null` removes one); `name` and `id` rename it and every `dependsOn` follows; `dependsOn` replaces what it waits for. |
+| `flow_remove_step` | Remove steps; the steps that waited for them no longer do. |
 | `recent_failures` | The latest failed responses across the workspace (4xx/5xx, transport errors, non-OK gRPC codes, MCP tool errors): time, kind, name, URL, status and duration. |
 | `response_time_stats` | Response-time summary of a saved request's recent responses: count, failed, fastest, mean, median (p50), p95 and slowest (ms). |
 | `collection_timing` | Where a collection's request time went (DNS, TCP, TLS, server, download; new vs reused connections). |

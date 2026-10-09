@@ -4,7 +4,7 @@ import { mergeWorkspaceTexts, requestParts, type MergeConflict, type MergeResolu
 
 /** The files TestPion merges by meaning (collections, environments, library), not by lines. */
 const MERGED_BY_MEANING = /^(collections|environments|library)\/[^/]+\.json$/;
-import { relative, resolve, sep } from 'node:path';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 import { ApsError } from '../errors.js';
 
 /**
@@ -113,23 +113,28 @@ function gitHints(stderr: string): string[] {
   return [];
 }
 
-export async function gitVersion(): Promise<string | undefined> {
-  try {
-    return (await runGit(process.cwd(), ['--version'])).trim().replace(/^git version /, '');
-  } catch {
-    return undefined;
-  }
+/** Git's version, asked once per process (git is not installed or upgraded while the app runs; a miss is asked again). */
+let knownVersion: Promise<string | undefined> | undefined;
+export function gitVersion(): Promise<string | undefined> {
+  knownVersion ??= runGit(process.cwd(), ['--version'])
+    .then((out) => out.trim().replace(/^git version /, ''))
+    .catch(() => {
+      knownVersion = undefined;
+      return undefined;
+    });
+  return knownVersion;
 }
 
 /**
  * The repository root that holds `dir`, or undefined. Remembered for a few seconds: every operation asks, and
  * spawning git for it each time cost more than the operation itself. A `git init` (or deleting .git) is seen on
- * the next ask after that.
+ * the next ask after that. A folder that is not in a repository stays known as such (no git spawned on every
+ * status) until a `.git` appears in it or above it, or `gitInit` / a clone forgets the roots.
  */
 const roots = new Map<string, { root: string | undefined; at: number }>();
 export async function repoRoot(dir: string): Promise<string | undefined> {
   const known = roots.get(dir);
-  if (known && Date.now() - known.at < 3000) return known.root;
+  if (known && (known.root ? Date.now() - known.at < 3000 : !gitDirNear(dir))) return known.root;
   let root: string | undefined;
   try {
     root = resolve((await runGit(dir, ['rev-parse', '--show-toplevel'])).trim());
@@ -138,6 +143,18 @@ export async function repoRoot(dir: string): Promise<string | undefined> {
   }
   roots.set(dir, { root, at: Date.now() });
   return root;
+}
+
+/** Whether `dir` or a folder above it has a `.git` (a repository, or a worktree's file). */
+function gitDirNear(dir: string): boolean {
+  let d = resolve(dir);
+  for (let i = 0; i < 64; i++) {
+    if (existsSync(join(d, '.git'))) return true;
+    const up = dirname(d);
+    if (up === d) return false;
+    d = up;
+  }
+  return false;
 }
 
 /** Forget the remembered repository roots (after `git init`, a clone into the folder …). */

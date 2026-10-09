@@ -1,6 +1,10 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
 type Listener = (payload: unknown) => void;
+
+// main.ts passes whether it draws the title bar as an argument (a synchronous call would wait for the main process,
+// which is busy constructing the backend while the page loads)
+const titleBarArg = process.argv?.find((a) => a.startsWith('--tp-titlebar='));
 const listeners = new Map<string, Set<Listener>>();
 
 ipcRenderer.on('aps:event', (_e, channel: string, payload: unknown) => {
@@ -26,7 +30,7 @@ contextBridge.exposeInMainWorld('aps', {
   },
   startup: () => ipcRenderer.invoke('aps:startup'),
   /** The app draws the title bar (Windows, Linux): the top bar leaves room for the window buttons and has a ☰ menu. */
-  titleBar: ipcRenderer.sendSync('aps:titlebar') === true,
+  titleBar: titleBarArg ? titleBarArg.endsWith('=1') : ipcRenderer.sendSync('aps:titlebar') === true,
   titleBarColors: (color: string, symbolColor: string, height?: number) => ipcRenderer.send('aps:titlebar-colors', { color, symbolColor, height }),
   appMenu: (x: number, y: number) => ipcRenderer.send('aps:app-menu', { x, y }),
 });

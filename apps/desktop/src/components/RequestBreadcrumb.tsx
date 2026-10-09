@@ -1,6 +1,6 @@
 import { LinkButton } from './ui';
 import { ChevronRight } from 'lucide-react';
-import { useCollections } from '../lib/collections-store';
+import { useCollectionTree } from '../lib/collections-store';
 import { useApp } from '../store';
 import type { CollectionNode } from '../types';
 
@@ -22,7 +22,7 @@ function folderPath(nodes: CollectionNode[], id: string): string[] | undefined {
  * A collection request is found by `requestId`; a gRPC call or connection gives its `folder`.
  */
 export function RequestBreadcrumb({ collectionId, requestId, folder, name, dirty, onSave }: { collectionId?: string; requestId?: string; folder?: string; name: string; dirty?: boolean; onSave?(): void }) {
-  const collections = useCollections();
+  const collections = useCollectionTree();
   const c = collectionId ? collections.find((x) => x.id === collectionId) : undefined;
   const path = c ? (requestId ? folderPath(c.items, requestId) : undefined) ?? (folder ? [folder] : requestId ? undefined : []) : undefined;
   if (!c || !path)

@@ -1,6 +1,8 @@
-import { LineCounter, isMap, isSeq, isScalar, parseDocument, type Node, type Pair } from 'yaml';
+import type { Node, Pair } from 'yaml';
+import { isMap, isSeq, isScalar, lineCounter, parseDocument } from '../util/lazy-yaml.js';
 import { checkTypes } from '../eval/checks.js';
-import { normalizeTest } from './loader.js';
+import { delayMsOf, loopOf, normalizeTest, whenOf } from './loader.js';
+import { slugify } from '../util/ids.js';
 import { parseExpose } from './exposed-flows.js';
 
 /**
@@ -23,7 +25,7 @@ const COMMON: TestKeyDoc[] = [
   {
     key: 'type',
     description: 'The kind of test; left out, it is guessed: url → http, query → graphql, proto → grpc, tool → mcp, prompt → llm.',
-    values: ['http', 'graphql', 'grpc', 'websocket', 'mcp', 'llm', 'rag', 'agent'],
+    values: ['http', 'graphql', 'grpc', 'websocket', 'mcp', 'llm', 'rag', 'agent', 'delay', 'condition', 'script', 'flow', 'log'],
     shape: 'text',
   },
   { key: 'description', description: 'Notes for the reader (Markdown).', shape: 'text' },
@@ -38,6 +40,18 @@ const COMMON: TestKeyDoc[] = [
   { key: 'evaluators', description: 'For AI tests: scorers such as similarity, groundedness, llm-judge: a list of { type, … }.', shape: 'list' },
   { key: 'preRequestScript', description: 'A tp.* script that runs before the request (pre_request_script works too).', shape: 'text' },
   { key: 'testScript', description: 'A tp.* script that runs after the response: tp.test(…), tp.expect(…) (script works too).', shape: 'text' },
+  {
+    key: 'if',
+    description: "Run the step only when this is true: comparisons and && || ! over status, $.json.path of the previous step's response and {{variables}} (status == 200 && $.role == 'admin'). Else it is skipped with the reason.",
+    shape: 'text',
+  },
+  { key: 'when', description: 'A branch of a condition step this one depends on: true runs it when the condition came out true, false when it came out false; else it is skipped.', shape: 'boolean' },
+  { key: 'repeat', description: 'Run the step this many times (at most 10000); {{$index}} is 0, 1, … Results list each iteration; what the last one extracts flows on.', shape: 'number' },
+  {
+    key: 'forEach',
+    description: 'Run the step once per row: a list ([{ id: 1 }, { id: 2 }]) or { dataset: datasets/users.csv } (CSV, JSON, JSONL, Markdown). The row\'s fields, {{$index}} and {{$item}} are its variables; at most 10000 rows.',
+    shape: 'map',
+  },
 ];
 
 const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
@@ -134,11 +148,19 @@ const BY_TYPE: Record<string, TestKeyDoc[]> = {
     { key: 'expected', description: 'The expected outcome, for the judge.', shape: 'text' },
     { key: 'dataset', description: 'One test per record of a data file: { file, inputField, expectedField, idField }.', shape: 'map' },
   ],
+  condition: [],
+  script: [{ key: 'script', description: 'The tp.* code to run (no request): compute or reshape values; tp.variables.set(…) passes them to the steps after it, tp.test(…) checks.', shape: 'text' }],
+  flow: [
+    { key: 'file', description: 'The test file to run as one step (relative to this file, or inside tests/). Its output: (or the values it extracts) come back as variables.', shape: 'text' },
+    { key: 'inputs', description: "The sub-flow's variables: { name: value } (with {{variables}} of this flow).", shape: 'map' },
+  ],
+  log: [{ key: 'message', description: 'The text to show in the run results, with {{variables}}.', shape: 'text' }],
+  delay: [{ key: 'ms', description: 'A pause in the flow: the milliseconds to wait (0 to 600000, ten minutes; duration: 2s works too). Never longer than the timeout; a cancelled run stops it at once.', shape: 'number' }],
 };
 
 /** Keys the loader also accepts (older names and shorthands), per type, never offered but never flagged either. */
 const ALIASES: Record<string, string[]> = {
-  '*': ['timeoutMs', 'timeout_ms', 'pre_request_script', 'test_script', 'script', 'variables', 'metadata', 'checks', 'expose'],
+  '*': ['timeoutMs', 'timeout_ms', 'pre_request_script', 'test_script', 'script', 'variables', 'metadata', 'checks', 'expose', 'for_each'],
   http: ['query'],
   graphql: ['url', 'graphqlVariables', 'waitMs'],
   grpc: ['address', 'url', 'request', 'proto'],
@@ -147,6 +169,11 @@ const ALIASES: Record<string, string[]> = {
   llm: ['response_format', 'question', 'messages', 'answer'],
   rag: ['query', 'documents', 'retrieved'],
   agent: ['prompt', 'mcp_servers', 'max_steps'],
+  delay: ['duration'],
+  condition: ['condition'],
+  script: ['code'],
+  flow: ['flow'],
+  log: ['log'],
 };
 
 const FILE_KEYS: TestKeyDoc[] = [
@@ -155,6 +182,12 @@ const FILE_KEYS: TestKeyDoc[] = [
   { key: 'defaults', description: 'Keys every test of the file starts with (type, dependsOn, headers …).', shape: 'map' },
   { key: 'tests', description: 'The tests, in order.', shape: 'list' },
   { key: 'expose', description: 'Offer the file to AI agents as an MCP tool: { tool: checkout_flow, description, inputs: [{ name, description, default, required }] }.', shape: 'map' },
+  { key: 'layout', description: "Where the flow designer draws each step: { step id: [x, y] }. Only the Flow tab reads it; the runner ignores it.", shape: 'map' },
+  {
+    key: 'output',
+    description: 'What the flow returns: { name: "{{template}}" }, resolved after the run. A sub-flow step gets these values; a flow exposed as an MCP tool returns them in its result.',
+    shape: 'map',
+  },
 ];
 
 const SUITE_KEYS: TestKeyDoc[] = [
@@ -281,7 +314,7 @@ export interface TestLintProblem {
  */
 export function lintTestFile(text: string, opts: { file?: string; suite?: boolean } = {}): TestLintProblem[] {
   const out: TestLintProblem[] = [];
-  const lc = new LineCounter();
+  const lc = lineCounter();
   const doc = parseDocument(text, { lineCounter: lc, keepSourceTokens: true });
   const pos = (node: Node | Pair | undefined | null, fallback = 0): [number, number, number, number] => {
     const own = node && 'range' in node ? (node.range as [number, number, number] | null | undefined) : undefined;
@@ -327,7 +360,7 @@ export function lintTestFile(text: string, opts: { file?: string; suite?: boolea
   const items: Array<{ node: Node; raw: Record<string, unknown> }> = [];
   if (testsPair) {
     const ok = known(FILE_KEYS);
-    for (const p of root.items) if (!ok.has(keyOf(p))) add('warning', `"${keyOf(p)}" is not read at the top of a test file (name, description, defaults, tests, expose)`, p);
+    for (const p of root.items) if (!ok.has(keyOf(p))) add('warning', `"${keyOf(p)}" is not read at the top of a test file (name, description, defaults, tests, expose, layout, output)`, p);
     if (!isSeq(testsPair.value)) add('error', 'tests: must be a list of tests', testsPair);
     else
       for (const n of testsPair.value.items)
@@ -336,6 +369,20 @@ export function lintTestFile(text: string, opts: { file?: string; suite?: boolea
   } else items.push({ node: root, raw: root.toJSON() as Record<string, unknown> });
 
   for (const it of items) if (typeof it.raw.id === 'string') ids.add(it.raw.id);
+  // output: { name: template } is what the flow returns
+  const outputPair = root.items.find((p) => keyOf(p) === 'output');
+  if (outputPair && !isMap(outputPair.value)) add('error', 'output: is a map of what the flow returns: { token: "{{token}}" }', outputPair);
+  // the condition steps of the file, by every name dependsOn may use for them (id, name, the runner's file:name id)
+  const conditionRefs = new Set<string>();
+  for (const it of items)
+    if ((it.raw.type ?? defaults.type) === 'condition') {
+      if (typeof it.raw.id === 'string') conditionRefs.add(it.raw.id);
+      if (typeof it.raw.name === 'string') {
+        conditionRefs.add(it.raw.name);
+        conditionRefs.add(slugify(it.raw.name));
+        if (opts.file) conditionRefs.add(`${slugify(opts.file.replace(/\\/g, '/').split('/').pop()!.replace(/\.[^.]+$/, ''))}:${slugify(it.raw.name)}`);
+      }
+    }
   const typeOf = (raw: Record<string, unknown>): string | undefined => {
     const t = raw.type ?? defaults.type;
     if (typeof t === 'string') return t === 'rest' ? 'http' : t === 'prompt' ? 'llm' : ['ws', 'socketio', 'mqtt', 'kafka'].includes(t) ? 'websocket' : t;
@@ -352,7 +399,7 @@ export function lintTestFile(text: string, opts: { file?: string; suite?: boolea
     // an unknown type is one problem, not one per key: the keys are then checked against every type
     const type = typeKnown ? typeOf({ ...defaults, ...it.raw }) : undefined;
     if (!typeKnown) add('error', `Unknown test type "${String(it.raw.type)}": ${[...types].join(', ')}`, typePair);
-    else if (!type) add('warning', 'Which kind of test is this? Add type: http | graphql | grpc | websocket | mcp | llm | rag | agent (or a url, query, proto, tool or prompt)', it.node);
+    else if (!type) add('warning', 'Which kind of test is this? Add type: http | graphql | grpc | websocket | mcp | llm | rag | agent | delay | condition | script | flow | log (or a url, query, proto, tool or prompt)', it.node);
     const ok = known([...COMMON, ...(type ? (BY_TYPE[type] ?? []) : Object.values(BY_TYPE).flat())], [...ALIASES['*']!, ...(type ? (ALIASES[type] ?? []) : Object.values(ALIASES).flat())]);
     for (const p of pairs) {
       const k = keyOf(p);
@@ -385,8 +432,35 @@ export function lintTestFile(text: string, opts: { file?: string; suite?: boolea
           else if (isScalar(tp.value) && !checks.has(String(tp.value.value))) add('error', `Unknown check type "${String(tp.value.value)}": ${[...checks].join(', ')}`, tp);
         }
     }
+    // the flow blocks' keys: what is wrong is said at the key (and not again for the whole step)
+    const merged = { ...defaults, ...it.raw };
+    let keyProblem = false;
+    const loop = loopOf(merged);
+    if (typeof loop === 'string') {
+      add('error', loop, pairOf('repeat') ?? pairOf('forEach') ?? pairOf('for_each') ?? it.node);
+      keyProblem = true;
+    }
+    const when = whenOf(merged);
+    const whenPair = pairOf('when');
+    if (typeof when === 'string') {
+      add('error', when, whenPair ?? it.node);
+      keyProblem = true;
+    } else if (when !== undefined && whenPair) {
+      const deps = merged.dependsOn === undefined || merged.dependsOn === null ? [] : (Array.isArray(merged.dependsOn) ? merged.dependsOn : [merged.dependsOn]).map(String);
+      if (!deps.some((d) => conditionRefs.has(d))) add('warning', 'when: picks a branch of a condition step: add the condition to dependsOn (or remove when:)', whenPair);
+    }
+    const ifPair = pairOf('if');
+    if (ifPair && (merged.if === null || String(merged.if ?? '').trim() === '')) {
+      add('error', type === 'condition' ? 'A condition needs if: the expression to test (e.g. if: status == 200)' : 'if: is an expression (e.g. if: status == 200); leave it out to always run the step', ifPair);
+      keyProblem = true;
+    }
+    // a delay waits a number of milliseconds from 0 to ten minutes: said at the ms (or duration) key
+    const delayPair = type === 'delay' ? (pairOf('ms') ?? pairOf('duration')) : undefined;
+    const delay = type === 'delay' ? delayMsOf({ ...defaults, ...it.raw }) : undefined;
+    if (keyProblem) return;
+    if (typeof delay === 'string') add('error', delay, delayPair ?? typePair ?? it.node);
     // what the loader itself refuses (a missing URL, a bad body …); an unknown type was reported already
-    if (typeKnown && type)
+    else if (typeKnown && type)
       try {
         normalizeTest({ ...defaults, ...it.raw }, opts.file, index);
       } catch (e) {

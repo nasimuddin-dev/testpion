@@ -1,4 +1,4 @@
-import { parse as parseYaml } from 'yaml';
+import { parseYaml } from '../util/lazy-yaml.js';
 import { registerCheck, type CheckContext } from '../eval/checks.js';
 import type { CheckConfig, CheckResult } from '../model/types.js';
 import { schemaProblems, type OpenApiDoc } from '../openapi/contract.js';

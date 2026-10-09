@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronRight, Folder, FolderInput, FolderOpen, FolderPlus, MoreHorizontal, Pencil, Plus, Trash2 } from 'lucide-react';
-import { useEffect, useRef, useState, type HTMLAttributes, type ReactNode } from 'react';
+import { memo, useEffect, useRef, useState, type HTMLAttributes, type ReactNode } from 'react';
 import { confirmAction, promptText } from '../store';
 import { cx, Menu, rowActionClass, type MenuItem } from './ui';
 
@@ -7,6 +7,12 @@ import { cx, Menu, rowActionClass, type MenuItem } from './ui';
  * The parts every sidebar tree is made of (the explorer, monitors, load tests, saved prompts …), so they all look
  * and behave the same: a header with + and ⋯, folder rows, the ⋯ and + buttons of a row, and the folder menus.
  */
+
+// the icons every row draws, made once: a tree of thousands of rows re-renders the same elements, which React skips
+export const MORE_ICON = <MoreHorizontal size={14} />;
+export const OPEN_ICON = <ChevronDown size={13} className="text-muted shrink-0" />;
+export const CLOSED_ICON = <ChevronRight size={13} className="text-muted shrink-0" />;
+export const FOLDER_ICON = <Folder size={13} className="text-muted shrink-0" />;
 
 /** The ⋯ button of a row: opens its menu (a right-click on the row opens the same one). */
 export function RowMenu({ label, items, open, onOpenChange, header }: { label: string; items: MenuItem[]; open?: boolean; onOpenChange?(open: boolean): void; header?: boolean }) {
@@ -18,7 +24,7 @@ export function RowMenu({ label, items, open, onOpenChange, header }: { label: s
       items={items}
       trigger={
         <button aria-label={`More actions for ${label}`} className={rowActionClass(header)} onClick={(e) => e.stopPropagation()}>
-          <MoreHorizontal size={14} />
+          {MORE_ICON}
         </button>
       }
     />
@@ -26,9 +32,9 @@ export function RowMenu({ label, items, open, onOpenChange, header }: { label: s
 }
 
 /** A count beside a title or folder name. */
-export function CountPill({ n }: { n: number }) {
+export const CountPill = memo(function CountPill({ n }: { n: number }) {
   return <span className="text-[0.7rem] px-1.5 rounded-full bg-panel2 text-muted tabular-nums shrink-0">{n}</span>;
-}
+});
 
 /** The header of a sidebar list: title, count, + (new) and ⋯ (also on right-click). */
 export function TreeHeader({
@@ -106,8 +112,8 @@ export function TreeFolderRow({
     >
       {editing ? (
         <div className="flex items-center gap-1 flex-1 min-w-0">
-          {open ? <ChevronDown size={13} className="text-muted shrink-0" /> : <ChevronRight size={13} className="text-muted shrink-0" />}
-          <Folder size={13} className="text-muted shrink-0" />
+          {open ? OPEN_ICON : CLOSED_ICON}
+          {FOLDER_ICON}
           <InlineRename
             value={name}
             label="Folder name"
@@ -137,8 +143,8 @@ export function TreeFolderRow({
           data-rename-id={key}
           title={onRename ? 'F2 renames' : undefined}
         >
-          {open ? <ChevronDown size={13} className="text-muted shrink-0" /> : <ChevronRight size={13} className="text-muted shrink-0" />}
-          <Folder size={13} className="text-muted shrink-0" />
+          {open ? OPEN_ICON : CLOSED_ICON}
+          {FOLDER_ICON}
           <span className="truncate flex-1">{name}</span>
           <CountPill n={count} />
         </button>
@@ -310,7 +316,9 @@ export const focusRow = (id: string) => requestAnimationFrame(() => document.que
 export function treeKeys(e: React.KeyboardEvent<HTMLElement>): void {
   const row = (e.target as HTMLElement).closest<HTMLElement>('[data-tree-row]');
   if (!row || (e.target as HTMLElement).tagName === 'INPUT') return;
-  const rows = () => [...e.currentTarget.querySelectorAll<HTMLElement>('[data-tree-row]')].filter((r) => r.offsetParent);
+  // kept: React clears the event's currentTarget once the handler returns (Home / End look again a little later)
+  const container = e.currentTarget;
+  const rows = () => [...container.querySelectorAll<HTMLElement>('[data-tree-row]')].filter((r) => r.offsetParent);
   const go = (next?: HTMLElement) => {
     if (!next) return;
     e.preventDefault();
@@ -320,8 +328,24 @@ export function treeKeys(e: React.KeyboardEvent<HTMLElement>): void {
   if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
     const all = rows();
     go(all[all.indexOf(row) + (e.key === 'ArrowDown' ? 1 : -1)]);
-  } else if (e.key === 'Home') go(rows()[0]);
-  else if (e.key === 'End') go(rows().at(-1));
+  } else if (e.key === 'Home' || e.key === 'End') {
+    const pick = () => (e.key === 'Home' ? rows()[0] : rows().at(-1));
+    const target = pick();
+    go(target);
+    // a long list draws only the rows on screen (VirtualList): scroll to its start or end, and once the rows there
+    // are drawn, move to the first or last of them
+    let box: HTMLElement | null = row.parentElement;
+    while (box && box !== container.parentElement && !/(auto|scroll)/.test(getComputedStyle(box).overflowY)) box = box.parentElement;
+    if (!box || box === container.parentElement) return;
+    box.scrollTop = e.key === 'Home' ? 0 : box.scrollHeight;
+    setTimeout(() => {
+      const now = document.activeElement;
+      if (now !== target && now !== document.body && target?.isConnected) return;
+      const next = pick();
+      next?.focus();
+      next?.scrollIntoView({ block: 'nearest' });
+    }, 80);
+  }
   else if ((e.key === 'ArrowRight' && row.getAttribute('aria-expanded') === 'false') || (e.key === 'ArrowLeft' && row.getAttribute('aria-expanded') === 'true')) {
     e.preventDefault();
     row.click();
@@ -329,9 +353,9 @@ export function treeKeys(e: React.KeyboardEvent<HTMLElement>): void {
 }
 
 /** The kind of a row (gRPC, WS, MQTT, MCP, API …), in the same small badge as a request's method; colours match the editor tabs. */
-export function KindBadge({ text, cls }: { text: string; cls: string }) {
+export const KindBadge = memo(function KindBadge({ text, cls }: { text: string; cls: string }) {
   return <span className={cx('mono text-[0.6rem] font-bold w-8 inline-block', cls)}>{text}</span>;
-}
+});
 
 /** What a test (or a test file, by its folder: rest/ → HTTP …) is, as KindBadge text and colour: the Tests tree, its tabs and the flow diagram share it. */
 export const TEST_KINDS: Record<string, [string, string]> = {
@@ -348,4 +372,5 @@ export const TEST_KINDS: Record<string, [string, string]> = {
   llm: ['AI', 'text-judge'],
   rag: ['RAG', 'text-judge'],
   agent: ['AGT', 'text-judge'],
+  delay: ['WAIT', 'text-muted'],
 };

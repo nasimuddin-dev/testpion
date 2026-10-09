@@ -1,8 +1,6 @@
 /** RPC handlers: MCP servers: connect, discover, call tools, read resources, prompts, tests and mocks. */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
-import { stringify as toYaml } from 'yaml';
 import {
   ApsError,
   McpSession,
@@ -20,6 +18,7 @@ import {
   type CheckConfig,
   type McpServerConfig,
   mcpToolUsage,
+  atomicWrite,
 } from '@testpion/core';
 import type { Backend, Handlers } from '../backend.js';
 import { commandLine, forgetTrustedCommands, isCommandTrusted, trustCommand, trustedCommands } from '@testpion/core';
@@ -161,7 +160,7 @@ export function mcpHandlers(be: Backend): Handlers {
       const def = mockFromDiscovery(name, discovery, calls, texts);
       const rel = `mocks/${s.config.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.mcp-mock.yaml`;
       mkdirSync(be.ws.path('mocks'), { recursive: true });
-      writeFileSync(be.ws.path(rel), dumpMcpMock(def));
+      atomicWrite(be.ws.path(rel), dumpMcpMock(def));
       if (addServer) {
         const servers = be.ws.getMcpServers().filter((x) => !(x.transport === 'mock' && x.mockFile === rel));
         be.ws.saveMcpServers([...servers, { id: shortId('mcp-'), name: `${s.config.name} (mock)`, transport: 'mock', mockFile: rel }]);
@@ -187,8 +186,7 @@ export function mcpHandlers(be: Backend): Handlers {
     'mcp.mock.write': ({ file, definition, text }: { file: string; definition?: McpMockDefinition; text?: string }) => {
       const abs = be.ws.safePath(file);
       const out = text !== undefined ? (loadMcpMock(text), text) : dumpMcpMock(loadMcpMock(dumpMcpMock(definition!)));
-      mkdirSync(dirname(abs), { recursive: true });
-      writeFileSync(abs, out);
+      atomicWrite(abs, out);
       return { text: out, definition: loadMcpMock(out) };
     },
     /** Try a tool of a toolset as edited (unsaved): the mock's answer in-process, shaped like mcp.call's result. */
@@ -247,7 +245,9 @@ export function mcpHandlers(be: Backend): Handlers {
       be.session(serverId).complete(ref, argument, context),
     'mcp.subscribe': ({ serverId, uri }: { serverId: string; uri: string }) => be.session(serverId).subscribeResource(uri),
     'mcp.unsubscribe': ({ serverId, uri }: { serverId: string; uri: string }) => be.session(serverId).unsubscribeResource(uri),
-    'mcp.saveTest': ({ serverId, tool, args, assertions, name }: { serverId: string; tool: string; args: Record<string, unknown>; assertions: CheckConfig[]; name: string }) => {
+    'mcp.saveTest': async ({ serverId, tool, args, assertions, name }: { serverId: string; tool: string; args: Record<string, unknown>; assertions: CheckConfig[]; name: string }) => {
+      // yaml loads with the first test saved here, not at startup
+      const { stringify: toYaml } = await import('yaml');
       const cfg = be.ws.getMcpServers().find((s) => s.id === serverId);
       const rel = `mcp/${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.yaml`;
       be.ws.writeTestFile(rel, toYaml({ name, type: 'mcp', server: cfg?.name ?? serverId, tool, arguments: args, assertions: assertions.length ? assertions : [{ type: 'status', expected: 'success' }] }));

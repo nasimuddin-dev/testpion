@@ -56,10 +56,12 @@ const steps = [
       const item = [...document.querySelectorAll('[role=menuitem]')].find((m) => m.textContent.trim() === 'Expand all');
       const t1 = performance.now();
       item?.click();
-      await __t.waitFor(() => document.querySelectorAll('aside [data-tree-row]').length > 400, 10000);
+      // the tree draws only the rows on screen: data-tree-rows counts every row it shows
+      const treeRows = () => Number(document.querySelector('aside [data-tree-rows]')?.getAttribute('data-tree-rows') ?? 0);
+      // checked every frame (waitFor's 50 ms steps would round the time up)
+      for (const end = performance.now() + 10000; treeRows() <= 400 && performance.now() < end; ) await new Promise((r) => requestAnimationFrame(r));
       await ${painted}();
-      const rows = document.querySelectorAll('aside [data-tree-row]').length;
-      return 'rows: ' + rows + ' | open ms: ' + opened + ' | expand ms: ' + ${ms('t1')};
+      return 'rows: ' + treeRows() + ' | open ms: ' + opened + ' | expand ms: ' + ${ms('t1')} + ' | drawn: ' + document.querySelectorAll('aside [data-tree-row]').length + ' | dom nodes: ' + document.getElementsByTagName('*').length;
     })()`,
   ],
   [

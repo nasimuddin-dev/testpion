@@ -73,6 +73,8 @@ const METER = `
   loafList.splice(0);
   const loaf = () => { const es = loafList.splice(0); const sum = (f) => Math.round(es.reduce((n, e) => n + f(e), 0)); return ' | loaf: n=' + es.length + ' total ' + sum((e) => e.duration) + 'ms script ' + sum((e) => (e.scripts ?? []).reduce((n, s) => n + s.duration, 0)) + 'ms style+layout ' + sum((e) => (e.styleAndLayoutStart ? e.startTime + e.duration - e.styleAndLayoutStart : 0)) + 'ms | dom nodes ' + document.getElementsByTagName('*').length; };
   const rows = () => document.querySelectorAll('aside [data-tree-row]');
+  // the tree draws only the rows on screen: data-tree-rows counts every row it shows
+  const treeRows = () => Number(document.querySelector('aside [data-tree-rows]')?.getAttribute('data-tree-rows') ?? 0);
 `;
 const steps = [
   ['meter', `(async () => { ${METER} return 'ok'; })()`, false],
@@ -113,8 +115,10 @@ const steps = [
       const item = [...document.querySelectorAll('[role=menuitem]')].find((m) => m.textContent.trim() === 'Expand all');
       if (!item) return 'NO MENU Expand all';
       const t0 = performance.now(); item.click();
-      await __t.waitFor(() => rows().length > 3000, 20000); await ${painted}();
-      return 'expand ms: ' + Math.round(performance.now() - t0) + ' | rows: ' + rows().length + ipc() + loaf();
+      // checked every frame (waitFor's 50 ms steps would round the time up)
+      for (const end = performance.now() + 20000; treeRows() <= 3000 && performance.now() < end; ) await new Promise((r) => requestAnimationFrame(r));
+      await ${painted}();
+      return 'expand ms: ' + Math.round(performance.now() - t0) + ' | rows: ' + treeRows() + ' | drawn: ' + rows().length + ipc() + loaf();
     })()`,
     false,
   ],
@@ -172,7 +176,11 @@ const steps = [
     'save-to-tree',
     `profile:(async () => { ${METER}
       const c = (await window.aps.invoke('col.list')).find((x) => x.id === 'big1');
-          const t0 = performance.now();
+      // its row is after the 3,000 open rows of big0: scroll there so it is drawn
+      const box = document.querySelector('aside [data-tree-rows]')?.closest('.overflow-auto');
+      if (box) box.scrollTop = box.scrollHeight;
+      await __t.sleep(300);
+      const t0 = performance.now();
       await window.aps.invoke('col.save', { ...c, name: 'Big collection 1 (saved)' });
       await __t.waitFor(() => [...rows()].some((b) => b.textContent.includes('(saved)')), 20000); await ${painted}();
       return 'save to tree ms: ' + Math.round(performance.now() - t0) + ipc() + loaf();

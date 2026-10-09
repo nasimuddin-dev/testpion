@@ -1,5 +1,5 @@
 // The Flow tab of a test file: one node per step and an arrow per dependsOn, the nodes coloured by the latest run,
-// a click on a node moves the editor to the step. The wheel zooms and Fit shows the whole flow again.
+// a double-click on a node moves the editor to the step (a click selects it in the designer). The wheel zooms and Fit shows the whole flow again.
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
 const { withExpect } = require('../lib.cjs');
 
@@ -46,7 +46,8 @@ const steps = [
   step(
     'click-moves-the-editor',
     `const n = nodes().find((x) => x.dataset.flowNode === 'httpbin-chained'); if (!n) return 'NO NODE';
-     n.dispatchEvent(new MouseEvent('click', { bubbles: true })); await __t.sleep(1500);
+     // the Flow tab is the designer: a click selects the step, a double-click opens it in the editor
+     n.dispatchEvent(new MouseEvent('click', { bubbles: true })); n.dispatchEvent(new MouseEvent('dblclick', { bubbles: true })); await __t.sleep(1500);
      const ed = editor(); if (!ed) return 'NO EDITOR';
      const line = ed.getPosition().lineNumber;
      const text = ed.getModel().getLineContent(line).trim();

@@ -1,4 +1,5 @@
-import { parse, type HTMLElement, type Node } from 'node-html-parser';
+import type { HTMLElement, Node } from 'node-html-parser';
+import { nodeRequire } from '../util/lazy-require.js';
 import { BoundedMap } from '../util/collections.js';
 
 /**
@@ -14,11 +15,15 @@ export interface HtmlNode {
   outer: string;
 }
 
+// node-html-parser loads with the first HTML a script parses, not at startup (see util/lazy-require.ts)
+let parserMod: typeof import('node-html-parser') | undefined;
+const htmlParser = (): typeof import('node-html-parser') => (parserMod ??= typeof require === 'function' ? require('node-html-parser') : nodeRequire('node-html-parser'));
+
 const cache = new BoundedMap<string, HTMLElement>(4);
 function rootOf(html: string): HTMLElement {
   let r = cache.get(html);
   if (!r) {
-    r = parse(html, { comment: false, blockTextElements: { script: true, style: true, pre: true, noscript: true } });
+    r = htmlParser().parse(html, { comment: false, blockTextElements: { script: true, style: true, pre: true, noscript: true } });
     cache.set(html, r);
   }
   return r;

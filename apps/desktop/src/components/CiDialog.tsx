@@ -5,7 +5,7 @@ import { asError, call } from '../api';
 import { toastError, useApp } from '../store';
 import { finishSave, type SaveResult } from '../lib/files';
 import { Button, Field, Input, Modal, Select, Tabs } from './ui';
-import { useCollections } from '../lib/collections-store';
+import { useCollectionTree } from '../lib/collections-store';
 import { usePersisted } from '../lib/sticky';
 import { useCopied } from '../lib/clipboard';
 
@@ -46,7 +46,7 @@ export function CiDialog() {
   const [workspaceDir, setWorkspaceDir] = useState('.');
   const [openapi, setOpenapi] = useState('');
   const [suites, setSuites] = useState<string[]>([]);
-  const collections = useCollections();
+  const collections = useCollectionTree();
   const [cfg, setCfg] = useState<CiConfig>();
   const [error, setError] = useState<string>();
   const { copied, copy: copyToClipboard } = useCopied();
@@ -129,8 +129,9 @@ export function CiDialog() {
             <Select value={environment} onChange={(e) => setEnvironment(e.target.value)}>
               <option value="">None</option>
               {environments.map((e) => (
-                <option key={e.id} value={e.name}>
+                <option key={e.id} value={e.name} disabled={!!e.problem} title={e.problem}>
                   {e.name}
+                  {e.problem ? '  (cannot be read)' : ''}
                 </option>
               ))}
             </Select>

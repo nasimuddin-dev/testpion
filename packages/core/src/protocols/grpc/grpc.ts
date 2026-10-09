@@ -1,8 +1,17 @@
-import * as grpc from '@grpc/grpc-js';
+import type * as grpc from '@grpc/grpc-js';
 import { isIP } from 'node:net';
 import { checkServerIdentity } from 'node:tls';
-import * as protoLoader from '@grpc/proto-loader';
-import protobuf from 'protobufjs';
+import type * as protoLoader from '@grpc/proto-loader';
+import type * as protobuf from 'protobufjs';
+import { nodeRequire } from '../../util/lazy-require.js';
+
+// the gRPC libraries load at first use, not at startup (see util/lazy-require.ts)
+let grpcMod: typeof import('@grpc/grpc-js') | undefined;
+let loaderMod: typeof import('@grpc/proto-loader') | undefined;
+let protobufMod: typeof import('protobufjs') | undefined;
+export const grpcJs = (): typeof import('@grpc/grpc-js') => (grpcMod ??= typeof require === 'function' ? require('@grpc/grpc-js') : nodeRequire('@grpc/grpc-js'));
+export const protoLoaderLib = (): typeof import('@grpc/proto-loader') => (loaderMod ??= typeof require === 'function' ? require('@grpc/proto-loader') : nodeRequire('@grpc/proto-loader'));
+export const protobufLib = (): typeof import('protobufjs') => (protobufMod ??= typeof require === 'function' ? require('protobufjs') : nodeRequire('protobufjs'));
 import { ApsError } from '../../errors.js';
 import type { KeyValue } from '../../model/types.js';
 import { assertUrlAllowed } from '../../net/policy.js';
@@ -41,13 +50,13 @@ const LOADER_OPTIONS: protoLoader.Options = { keepCase: true, longs: String, enu
 /** Parse .proto files (imports between them and Google's well-known types are resolved). */
 export function parseProtos(files: ProtoFile[]): protobuf.Root {
   if (!files.length) throw new ApsError('ValidationError', 'Add a .proto file describing the service');
-  const root = new protobuf.Root();
+  const root = new (protobufLib().Root)();
   const byName = new Map(files.map((f) => [normalize(f.name), f]));
   // each file (and well-known type) is parsed once, however it is referred to (`shop/v1/a.proto` or `protos/shop/v1/a.proto`)
   const done = new Set<ProtoFile | string>();
   const load = (name: string, from?: string) => {
     const key = normalize(name);
-    const common = (protobuf.common as unknown as Record<string, { nested?: protobuf.INamespace['nested'] }>)[key];
+    const common = (protobufLib().common as unknown as Record<string, { nested?: protobuf.INamespace['nested'] }>)[key];
     if (common) {
       if (!done.has(key)) root.addJSON(common.nested ?? {});
       done.add(key);
@@ -59,7 +68,7 @@ export function parseProtos(files: ProtoFile[]): protobuf.Root {
     done.add(file);
     let parsed: protobuf.IParserResult;
     try {
-      parsed = protobuf.parse(file.text, root, { keepCase: true, alternateCommentMode: true });
+      parsed = protobufLib().parse(file.text, root, { keepCase: true, alternateCommentMode: true });
     } catch (e) {
       throw new ApsError('ValidationError', `${file.name}: ${(e as Error).message}`);
     }
@@ -92,7 +101,7 @@ export function describeRoot(root: protobuf.Root): GrpcMethodInfo[] {
   const out: GrpcMethodInfo[] = [];
   const walk = (ns: protobuf.NamespaceBase) => {
     for (const obj of ns.nestedArray) {
-      if (obj instanceof protobuf.Service) {
+      if (obj instanceof protobufLib().Service) {
         const service = obj.fullName.replace(/^\./, '');
         for (const m of obj.methodsArray) {
           m.resolve();
@@ -108,7 +117,7 @@ export function describeRoot(root: protobuf.Root): GrpcMethodInfo[] {
             requestSchema: m.requestStream ? { type: 'array', items: messageSchema(m.resolvedRequestType!) } : messageSchema(m.resolvedRequestType!),
           });
         }
-      } else if (obj instanceof protobuf.Namespace) walk(obj);
+      } else if (obj instanceof protobufLib().Namespace) walk(obj);
     }
   };
   walk(root);
@@ -144,8 +153,8 @@ function messageSchema(type: protobuf.Type, depth = 0): Record<string, unknown> 
 }
 
 function fieldSchema(f: protobuf.Field, depth: number): Record<string, unknown> {
-  if (f.resolvedType instanceof protobuf.Enum) return { enum: [...Object.keys(f.resolvedType.values), ...Object.values(f.resolvedType.values)] };
-  if (f.resolvedType instanceof protobuf.Type) {
+  if (f.resolvedType instanceof protobufLib().Enum) return { enum: [...Object.keys(f.resolvedType.values), ...Object.values(f.resolvedType.values)] };
+  if (f.resolvedType instanceof protobufLib().Type) {
     const t = f.resolvedType.fullName;
     if (t === '.google.protobuf.Timestamp' || t === '.google.protobuf.Duration') return { type: 'object', properties: { seconds: { type: ['string', 'number'] }, nanos: { type: 'integer' } } };
     if (t === '.google.protobuf.Struct' || t === '.google.protobuf.Value' || t === '.google.protobuf.Any') return {};
@@ -160,8 +169,8 @@ function fieldSchema(f: protobuf.Field, depth: number): Record<string, unknown> 
 }
 
 function exampleValue(f: protobuf.Field, depth: number): unknown {
-  if (f.resolvedType instanceof protobuf.Enum) return Object.keys(f.resolvedType.values)[0];
-  if (f.resolvedType instanceof protobuf.Type) {
+  if (f.resolvedType instanceof protobufLib().Enum) return Object.keys(f.resolvedType.values)[0];
+  if (f.resolvedType instanceof protobufLib().Type) {
     const t = f.resolvedType.fullName;
     if (t === '.google.protobuf.Timestamp') return { seconds: String(Math.floor(Date.now() / 1000)), nanos: 0 };
     if (t === '.google.protobuf.Duration') return { seconds: '1', nanos: 0 };
@@ -210,13 +219,13 @@ export interface GrpcTlsOptions {
 
 /** Channel credentials: plaintext, TLS with the system CAs, or TLS with a custom CA and/or a client certificate. */
 export function grpcCredentials(tls: boolean, o?: GrpcTlsOptions, host?: string): grpc.ChannelCredentials {
-  if (!tls && !o?.ca && !o?.cert) return grpc.credentials.createInsecure();
+  if (!tls && !o?.ca && !o?.cert) return grpcJs().credentials.createInsecure();
   if (!!o?.cert !== !!o?.key) throw new ApsError('ValidationError', 'Mutual TLS needs both the client certificate and its private key');
   const pem = (s?: string) => (s?.trim() ? Buffer.from(s) : null);
   // an IP address can't be the TLS server name (SNI): the certificate is still checked against the IP itself
   const ip = host && isIP(host.replace(/^\[|\]$/g, '')) ? host.replace(/^\[|\]$/g, '') : undefined;
   try {
-    return grpc.credentials.createSsl(pem(o?.ca), pem(o?.key), pem(o?.cert), ip ? { checkServerIdentity: (_name, cert) => checkServerIdentity(ip, cert) } : undefined);
+    return grpcJs().credentials.createSsl(pem(o?.ca), pem(o?.key), pem(o?.cert), ip ? { checkServerIdentity: (_name, cert) => checkServerIdentity(ip, cert) } : undefined);
   } catch (e) {
     throw new ApsError('ValidationError', `The TLS certificates can't be used: ${(e as Error).message}`, { suggestions: ['Use PEM text (-----BEGIN CERTIFICATE----- …).'] });
   }
@@ -248,7 +257,9 @@ export interface GrpcResponseData {
   streamStopped?: boolean;
 }
 
-const CODE_NAMES = Object.fromEntries(Object.entries(grpc.status).filter(([, v]) => typeof v === 'number').map(([k, v]) => [v as number, k]));
+let codeNames: Record<number, string> | undefined;
+/** A gRPC status's name (OK, CANCELLED …). */
+const codeName = (code: number): string | undefined => (codeNames ??= Object.fromEntries(Object.entries(grpcJs().status).filter(([, v]) => typeof v === 'number').map(([k, v]) => [v as number, k])))[code];
 
 /** Address and TLS of a target (`host:port`, `grpcs://host:port`, `grpc://…`, `https://…`). */
 export function parseGrpcTarget(target: string, tls?: boolean): { address: string; tls: boolean } {
@@ -293,29 +304,29 @@ export async function prepareGrpcCall(spec: GrpcRequestSpec): Promise<{ method: 
   const info = describeRoot(root).find((m) => m.name === name || `${m.service.split('.').pop()}/${m.method}` === name);
   if (!info) throw new ApsError('ValidationError', `Method "${spec.method}" is not in the proto files`);
   if (info.clientStreaming) throw new ApsError('ValidationError', 'Load tests call unary and server-streaming methods');
-  const pkg = grpc.loadPackageDefinition(protoLoader.fromJSON(root.toJSON(), LOADER_OPTIONS));
+  const pkg = grpcJs().loadPackageDefinition(protoLoaderLib().fromJSON(root.toJSON(), LOADER_OPTIONS));
   const Ctor = info.service.split('.').reduce<unknown>((o, k) => (o as Record<string, unknown>)?.[k], pkg) as grpc.ServiceClientConstructor | undefined;
   if (!Ctor) throw new ApsError('ValidationError', `Service ${info.service} could not be loaded`);
   const channel = grpcChannel(address, tls, spec.tlsOptions);
   const client = new Ctor(address, channel.credentials, channel.options);
   const fn = (client as unknown as Record<string, (...a: unknown[]) => unknown>)[info.method]!.bind(client);
   const input = parseMessage(spec.message, 'request message');
-  const md = new grpc.Metadata();
+  const md = new (grpcJs().Metadata)();
   for (const h of spec.metadata ?? []) if (h.enabled !== false && h.key) md.add(h.key.toLowerCase(), h.value);
   return {
     method: info.name,
     call: (signal) =>
       new Promise((resolve, reject) => {
         const callOpts: grpc.CallOptions = { deadline: new Date(Date.now() + (spec.timeoutMs ?? 30_000)) };
-        const done = (code: number) => resolve({ code, codeName: CODE_NAMES[code] ?? String(code) });
+        const done = (code: number) => resolve({ code, codeName: codeName(code) ?? String(code) });
         let c: grpc.ClientUnaryCall | grpc.ClientReadableStream<unknown>;
         if (info.serverStreaming) {
           const r = fn(input, md, callOpts) as grpc.ClientReadableStream<unknown>;
           r.on('data', () => undefined);
-          r.on('error', (e: grpc.ServiceError) => done(e.code ?? grpc.status.UNKNOWN));
-          r.on('status', (s: grpc.StatusObject) => s.code === grpc.status.OK && done(s.code));
+          r.on('error', (e: grpc.ServiceError) => done(e.code ?? grpcJs().status.UNKNOWN));
+          r.on('status', (s: grpc.StatusObject) => s.code === grpcJs().status.OK && done(s.code));
           c = r;
-        } else c = fn(input, md, callOpts, (err: grpc.ServiceError | null) => done(err ? (err.code ?? grpc.status.UNKNOWN) : grpc.status.OK)) as grpc.ClientUnaryCall;
+        } else c = fn(input, md, callOpts, (err: grpc.ServiceError | null) => done(err ? (err.code ?? grpcJs().status.UNKNOWN) : grpcJs().status.OK)) as grpc.ClientUnaryCall;
         signal?.addEventListener('abort', () => (c.cancel(), reject(new ApsError('CancelledError', 'cancelled'))), { once: true });
       }),
     close: () => client.close(),
@@ -335,13 +346,13 @@ export async function executeGrpc(spec: GrpcRequestSpec, opts: { signal?: AbortS
   const info = methods.find((m) => m.name === name || `${m.service.split('.').pop()}/${m.method}` === name);
   if (!info) throw new ApsError('ValidationError', `Method "${spec.method}" is not in the proto files`, { suggestions: [`Available: ${methods.map((m) => m.name).slice(0, 10).join(', ') || 'none'}`] });
 
-  const pkg = grpc.loadPackageDefinition(protoLoader.fromJSON(root.toJSON(), LOADER_OPTIONS));
+  const pkg = grpcJs().loadPackageDefinition(protoLoaderLib().fromJSON(root.toJSON(), LOADER_OPTIONS));
   const Ctor = info.service.split('.').reduce<unknown>((o, k) => (o as Record<string, unknown>)?.[k], pkg) as grpc.ServiceClientConstructor | undefined;
   if (!Ctor) throw new ApsError('ValidationError', `Service ${info.service} could not be loaded`);
   const channel = grpcChannel(address, tls, spec.tlsOptions);
   const client = new Ctor(address, channel.credentials, channel.options);
 
-  const md = new grpc.Metadata();
+  const md = new (grpcJs().Metadata)();
   for (const h of spec.metadata ?? []) if (h.enabled !== false && h.key) md.add(h.key.toLowerCase(), h.value);
   const callOpts: grpc.CallOptions = { deadline: new Date(Date.now() + (spec.timeoutMs ?? 30_000)) };
   const input = parseMessage(spec.message, info.clientStreaming ? 'list of messages' : 'request message');
@@ -358,26 +369,26 @@ export async function executeGrpc(spec: GrpcRequestSpec, opts: { signal?: AbortS
     const finish = (err: grpc.ServiceError | null, response?: unknown, status?: grpc.StatusObject) => {
       opts.signal?.removeEventListener('abort', onAbort);
       client.close();
-      const code = err?.code ?? status?.code ?? grpc.status.OK;
-      if (stopped && code === grpc.status.CANCELLED) {
-        resolve(result(grpc.status.CANCELLED, 'Stopped by the user', undefined, true));
+      const code = err?.code ?? status?.code ?? grpcJs().status.OK;
+      if (stopped && code === grpcJs().status.CANCELLED) {
+        resolve(result(grpcJs().status.CANCELLED, 'Stopped by the user', undefined, true));
         return;
       }
-      if (err && (err.code === grpc.status.UNAVAILABLE || err.code === grpc.status.DEADLINE_EXCEEDED) && !messages.length && !headers) {
+      if (err && (err.code === grpcJs().status.UNAVAILABLE || err.code === grpcJs().status.DEADLINE_EXCEEDED) && !messages.length && !headers) {
         reject(
-          new ApsError(err.code === grpc.status.DEADLINE_EXCEEDED ? 'TimeoutError' : 'NetworkError', `${CODE_NAMES[err.code]}: ${err.details || err.message}`, {
-            suggestions: err.code === grpc.status.UNAVAILABLE ? ['Check the address and port, and whether the server uses TLS (grpcs://) or plaintext.'] : ['Raise the deadline or check the server.'],
+          new ApsError(err.code === grpcJs().status.DEADLINE_EXCEEDED ? 'TimeoutError' : 'NetworkError', `${codeName(err.code)}: ${err.details || err.message}`, {
+            suggestions: err.code === grpcJs().status.UNAVAILABLE ? ['Check the address and port, and whether the server uses TLS (grpcs://) or plaintext.'] : ['Raise the deadline or check the server.'],
           }),
         );
         return;
       }
       const details = err?.details ?? status?.details ?? '';
       // a successful call's details just repeat "OK"
-      resolve(result(code, code === grpc.status.OK && details === 'OK' ? '' : details, response, false, err?.metadata ?? status?.metadata));
+      resolve(result(code, code === grpcJs().status.OK && details === 'OK' ? '' : details, response, false, err?.metadata ?? status?.metadata));
     };
     const result = (code: number, details: string, response: unknown, streamStopped: boolean, trailerMd?: grpc.Metadata): GrpcResponseData => ({
       code,
-      codeName: CODE_NAMES[code] ?? String(code),
+      codeName: codeName(code) ?? String(code),
       details,
       ...(response !== undefined ? { response } : {}),
       ...(info.serverStreaming ? { messages } : {}),
@@ -411,7 +422,7 @@ export async function executeGrpc(spec: GrpcRequestSpec, opts: { signal?: AbortS
       r.on('error', (e: grpc.ServiceError) => finish(e));
       r.on('status', (s: grpc.StatusObject) => {
         trailers = s.metadata;
-        if (s.code === grpc.status.OK) finish(null, undefined, s);
+        if (s.code === grpcJs().status.OK) finish(null, undefined, s);
       });
       if ('write' in r) {
         for (const m of outgoing) r.write(m);

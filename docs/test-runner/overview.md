@@ -7,7 +7,7 @@ description: "Run test suites in parallel with bounded concurrency, retries, tim
 
 # Test runner
 
-Tests are YAML or JSON files under `tests/`, of type `http`, `graphql`, `grpc`, `websocket` (or `socketio`, `mqtt`), `mcp`, `llm`, `rag` or `agent`. A file can hold one test, a `tests:` list (with `defaults:`), or a dataset template. You don't have to write them by hand: **Save as test** in the REST tab menu and **Test** in the GraphQL, gRPC and WebSocket views save the current request as a test file (the MCP view has **Save as test** too). Suites are `*.suite.yaml` files:
+Tests are YAML or JSON files under `tests/`, of type `http`, `graphql`, `grpc`, `websocket` (or `socketio`, `mqtt`), `mcp`, `llm`, `rag` or `agent`, and `delay`, a pause between the steps of a flow. A file can hold one test, a `tests:` list (with `defaults:`), or a dataset template. You don't have to write them by hand: **Save as test** in the REST tab menu and **Test** in the GraphQL, gRPC and WebSocket views save the current request as a test file (the MCP view has **Save as test** too). Suites are `*.suite.yaml` files:
 
 ```yaml
 name: Regression
@@ -48,6 +48,7 @@ An AsyncAPI document (kept in `specs/asyncapi/` by its import) gets realtime tes
 - **Timeout** per test and **cancellation** (Ctrl+C in the CLI, *Cancel* in the UI).
 - **Dependencies:** `dependsOn: [id]` waits for other tests. If a dependency does not pass, the dependent test is skipped with a reason.
 - **Extraction:** `extract: { token: $.access_token }` sets runtime variables for later tests.
+- **Delay:** `- { name: Wait for the index, type: delay, ms: 2000 }` pauses a flow (for a search index, a queue, an eventually consistent read). `ms` is 0 to 600000 (ten minutes); it honours `dependsOn` like any test, never waits longer than its timeout, stops at once when the run is cancelled, and passes with its duration and no request or trace payload.
 - Results are appended to `results.jsonl` as they finish, which also acts as a checkpoint: `--resume <runId>` continues an interrupted run.
 - Only aggregates (counts, percentiles, tokens, cost, mean scores) are kept in memory, so runs with a million tests are fine.
 

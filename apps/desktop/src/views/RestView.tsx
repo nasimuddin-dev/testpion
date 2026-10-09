@@ -50,7 +50,7 @@ import { RequestEditor } from './rest/RequestEditor';
 import { SaveModal, ImportModal } from './rest/dialogs';
 import { saveAsTestFile } from '../lib/save-test';
 import { RequestBreadcrumb } from '../components/RequestBreadcrumb';
-import { currentCollections, refreshCollection, refreshCollections, useCollections } from '../lib/collections-store';
+import { currentCollections, fullCollection, refreshCollection, refreshCollections, useCollectionTree } from '../lib/collections-store';
 
 
 /** Production environments where the user chose "don't ask again" (this session only). */
@@ -107,7 +107,8 @@ export function RestView() {
   const [active, setActive] = useState<string>(() => drafts.load().active ?? tabs[0]?.id ?? '');
   const [results, setResults] = useState<Record<string, SendResult>>({});
   const [sending, setSending] = useState<Record<string, string>>({});
-  const collections = useCollections();
+  // the outline (names, methods, folders): the sidebar and the save dialog; a request opens from its whole collection
+  const collections = useCollectionTree();
   const [filter, setFilter] = useState('');
   const [favoritesOnly, setFavoritesOnly] = useState(() => localStorage.getItem('aps.rest.favoritesOnly') === 'true');
   const [saving, setSaving] = useState(false);
@@ -171,7 +172,10 @@ export function RestView() {
     () =>
       on<{ kinds: string[] }>('workspace.changedOnDisk', (p) => {
         if (!p.kinds.includes('collections')) return;
-        void refreshCollections().then(async (cols) => {
+        // the open requests' collections, read whole (the shared list refreshes itself from the same event)
+        const ids = [...new Set(tabsRef.current.map((t) => t.collectionId).filter((x): x is string => !!x))];
+        void Promise.all(ids.map((id) => call<Collection>('col.get', { id }).catch(() => undefined))).then(async (got) => {
+          const cols = got.filter((c): c is Collection => !!c);
           for (const t of tabsRef.current) {
             if (!t.collectionId || !t.requestId || t.base === undefined) continue;
             const n = findNode(cols.find((c) => c.id === t.collectionId)?.items ?? [], t.requestId);
@@ -306,7 +310,8 @@ export function RestView() {
           label: 'Open Settings',
           onClick: () => useApp.getState().openIntent('settings', { tab: 'privacy' }),
         });
-      else if (r.unresolved?.length && !r.error) useApp.getState().toast(`Unresolved variables: ${r.unresolved.join(', ')}`, 'error');
+      else if (r.unresolved?.length && !r.error)
+        useApp.getState().toast(`Unresolved variables: ${r.unresolved.join(', ')}${r.cycles?.length ? `. They refer to each other in a loop: ${r.cycles.join('; ')}` : ''}`, 'error');
     } catch (e) {
       setResults((rs) => ({ ...rs, [tabId]: { error: asError(e) } }));
     } finally {
@@ -382,6 +387,9 @@ export function RestView() {
     // closing the last tab leaves none (Postman-style), not a new blank request
     const rest = tabs.filter((x) => !ids.includes(x.id));
     setTabs(rest);
+    // a closed tab's response goes with it (kept, every response ever received stayed in memory: soak test)
+    const drop = <T,>(m: Record<string, T>) => (ids.some((id) => id in m) ? Object.fromEntries(Object.entries(m).filter(([k]) => !ids.includes(k))) : m);
+    setResults(drop);
     if (ids.includes(active)) {
       const i = ordered.findIndex((x) => x.id === active);
       const after = ordered.slice(i + 1).find((x) => !ids.includes(x.id)) ?? [...ordered.slice(0, i)].reverse().find((x) => !ids.includes(x.id));
@@ -646,7 +654,7 @@ export function RestView() {
                         filter={filter}
                         favoritesOnly={favoritesOnly}
                         activeRequestId={tab.requestId}
-                        onOpen={openRequest}
+                        onOpen={(c, n) => void fullCollection(c).then((w) => openRequest(w, findNode(w.items, n.id) ?? n), toastError)}
                         onChange={saveCollection}
                         onMoved={(ids, from, to) => setTabs((ts) => ts.map((t) => (t.requestId && ids.includes(t.requestId) && t.collectionId === from ? { ...t, collectionId: to } : t)))}
                         onRun={(c, folderId) => useApp.getState().openIntent('collections', { collectionId: c.id, run: true, folderId })}

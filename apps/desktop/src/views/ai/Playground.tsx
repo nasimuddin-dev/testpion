@@ -185,7 +185,7 @@ export function Playground({ providers, onSetUp }: { providers: ProviderConfig[]
             Save as test
           </Button>
           {running ? (
-            <Button variant="danger" icon={<Square size={12} />} onClick={() => call('ai.cancel', { id: running })}>
+            <Button variant="danger" icon={<Square size={12} />} onClick={() => void call('ai.cancel', { id: running }).catch(toastError)}>
               Stop
             </Button>
           ) : (

@@ -1,7 +1,7 @@
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
-import { parse as parseYaml } from 'yaml';
-import type { AuthConfig, BodyConfig, HttpRequestSpec, KeyValue, McpTest, ModelRef, SuiteConfig, TestCase } from '../model/types.js';
+import { parseYaml } from '../util/lazy-yaml.js';
+import type { AuthConfig, BodyConfig, ForEachSpec, HttpRequestSpec, KeyValue, McpTest, ModelRef, SuiteConfig, TestCase } from '../model/types.js';
 import { ApsError } from '../errors.js';
 import { slugify } from '../util/ids.js';
 import { globToRegex } from '../util/glob.js';
@@ -62,11 +62,78 @@ function modelOf(v: unknown): ModelRef {
   };
 }
 
+/** The longest a delay step may wait: ten minutes. */
+export const MAX_DELAY_MS = 600_000;
+
+/**
+ * A delay step's wait in milliseconds, from `ms: 2000` (the canonical form) or `duration: 2s` / `500ms` / `1.5m`;
+ * a text when it is not a number of milliseconds from 0 to ten minutes.
+ */
+export function delayMsOf(raw: Record<string, unknown>): number | string {
+  const v = raw.ms ?? raw.duration;
+  if (v === undefined || v === null || v === '') return 'A delay needs ms: the milliseconds to wait (e.g. ms: 2000)';
+  let ms: number;
+  if (typeof v === 'number') ms = v;
+  else {
+    const m = /^\s*(\d+(?:\.\d+)?)\s*(ms|s|m)?\s*$/i.exec(String(v));
+    if (!m) return `"${String(v)}" is not a wait: write ms: 2000 (or duration: 2s, 500ms)`;
+    const unit = (m[2] ?? (raw.ms !== undefined ? 'ms' : 's')).toLowerCase();
+    ms = Number(m[1]) * (unit === 'm' ? 60_000 : unit === 's' ? 1000 : 1);
+  }
+  if (!Number.isFinite(ms) || ms < 0) return `A delay waits 0 ms or more (ms: ${String(v)})`;
+  if (ms > MAX_DELAY_MS) return `A delay waits at most 10 minutes (600000 ms), not ${String(v)}`;
+  return Math.round(ms);
+}
+
+/** The most iterations a `repeat:` / `forEach:` step runs. */
+export const MAX_ITERATIONS = 10_000;
+
+/** A step's loop (`repeat: N`, `forEach: [ … ]` or `forEach: { dataset: path }`): undefined without one, a text when it is not one. */
+export function loopOf(raw: Record<string, unknown>): { repeat?: number; forEach?: ForEachSpec } | string | undefined {
+  const fe = raw.forEach ?? raw.for_each;
+  const hasRepeat = raw.repeat !== undefined && raw.repeat !== null;
+  if (hasRepeat && fe !== undefined && fe !== null) return 'A step has repeat: or forEach:, not both';
+  if (hasRepeat) {
+    const n = typeof raw.repeat === 'number' ? raw.repeat : /^\s*\d+\s*$/.test(String(raw.repeat)) ? Number(raw.repeat) : NaN;
+    if (!Number.isInteger(n) || n < 0) return `repeat: is a whole number of times (e.g. repeat: 3), not ${JSON.stringify(raw.repeat)}`;
+    if (n > MAX_ITERATIONS) return `repeat: runs a step at most ${MAX_ITERATIONS} times, not ${n}`;
+    return { repeat: n };
+  }
+  if (fe === undefined || fe === null) return undefined;
+  if (Array.isArray(fe)) return fe.length > MAX_ITERATIONS ? `forEach: runs a step at most ${MAX_ITERATIONS} times, not ${fe.length}` : { forEach: fe };
+  if (typeof fe === 'string' && fe.trim()) return { forEach: { dataset: fe.trim() } };
+  if (typeof fe === 'object') {
+    const d = fe as Record<string, unknown>;
+    const path = d.dataset ?? d.file ?? d.path;
+    if (typeof path === 'string' && path.trim()) {
+      const limit = d.limit === undefined ? undefined : Number(d.limit);
+      if (limit !== undefined && (!Number.isInteger(limit) || limit < 0)) return `forEach.limit is a whole number of rows, not ${JSON.stringify(d.limit)}`;
+      return { forEach: { dataset: path.trim(), ...(limit !== undefined ? { limit } : {}) } };
+    }
+  }
+  return 'forEach: is a list of rows ([{ id: 1 }, { id: 2 }]) or { dataset: datasets/users.csv }';
+}
+
+/** A step's `when:` (the branch of the condition it depends on): true, false, or a text when it is neither. */
+export function whenOf(raw: Record<string, unknown>): boolean | string | undefined {
+  const w = raw.when;
+  if (w === undefined || w === null) return undefined;
+  if (w === true || w === 'true') return true;
+  if (w === false || w === 'false') return false;
+  return `when: is true or false (the branch of the condition this step depends on), not ${JSON.stringify(w)}`;
+}
+
 /** Convert a loosely-written YAML/JSON test into a canonical TestCase. */
 export function normalizeTest(raw: Record<string, unknown>, file?: string, index = 0): TestCase {
   if (!raw || typeof raw !== 'object') throw new ApsError('ConfigurationError', `Invalid test definition in ${file}`);
   const type = String(raw.type ?? (raw.request || raw.url ? 'http' : raw.query ? 'graphql' : raw.protos || raw.proto ? 'grpc' : raw.tool ? 'mcp' : raw.prompt ? 'llm' : ''));
   const name = String(raw.name ?? `${file ? basename(file) : 'test'} #${index + 1}`);
+  const where = `in ${file ?? 'test'} (${name})`;
+  const loop = loopOf(raw);
+  if (typeof loop === 'string') throw new ApsError('ConfigurationError', `${loop} ${where}`);
+  const when = whenOf(raw);
+  if (typeof when === 'string') throw new ApsError('ConfigurationError', `${when} ${where}`);
+  const cond = raw.if === undefined || raw.if === null ? undefined : String(raw.if);
   const base = {
     id: String(raw.id ?? `${file ? slugify(basename(file).replace(/\.[^.]+$/, '')) + ':' : ''}${slugify(name)}`),
     name,
@@ -83,6 +150,9 @@ export function normalizeTest(raw: Record<string, unknown>, file?: string, index
     assertions: (raw.assertions ?? raw.checks) as TestCase['assertions'],
     evaluators: raw.evaluators as TestCase['evaluators'],
     file,
+    ...(cond !== undefined ? { if: cond } : {}),
+    ...(when !== undefined ? { when } : {}),
+    ...(loop ?? {}),
   };
   const vars = (raw.vars ?? (type === 'graphql' ? undefined : type === 'llm' ? undefined : raw.variables)) as Record<string, unknown> | undefined;
 
@@ -217,9 +287,36 @@ export function normalizeTest(raw: Record<string, unknown>, file?: string, index
         maxSteps: (raw.maxSteps ?? raw.max_steps) as number | undefined,
         variables: vars,
       } as TestCase;
+    case 'delay': {
+      const ms = delayMsOf(raw);
+      if (typeof ms === 'string') throw new ApsError('ConfigurationError', `${ms} in ${file ?? 'test'} (${name})`);
+      return { ...base, type: 'delay', ms };
+    }
+    case 'condition': {
+      const expr = raw.if ?? raw.condition;
+      if (expr === undefined || expr === null || String(expr).trim() === '') throw new ApsError('ConfigurationError', `A condition needs if: the expression to test (e.g. if: status == 200) ${where}`);
+      return { ...base, type: 'condition', if: String(expr) };
+    }
+    case 'script': {
+      const code = raw.script ?? raw.code;
+      if (typeof code !== 'string' || !code.trim()) throw new ApsError('ConfigurationError', `A script step needs script: the tp.* code to run ${where}`);
+      return { ...base, type: 'script', script: code, testScript: (raw.testScript ?? raw.test_script) as string | undefined, variables: vars };
+    }
+    case 'flow': {
+      const target = raw.file ?? raw.flow;
+      if (typeof target !== 'string' || !target.trim()) throw new ApsError('ConfigurationError', `A sub-flow needs file: the test file to run (e.g. file: auth/login.yaml) ${where}`);
+      const inputs = raw.inputs;
+      if (inputs !== undefined && inputs !== null && (typeof inputs !== 'object' || Array.isArray(inputs))) throw new ApsError('ConfigurationError', `inputs: is a map { name: value } of the sub-flow's variables ${where}`);
+      return { ...base, type: 'flow', flowFile: target.trim(), ...(inputs ? { inputs: inputs as Record<string, unknown> } : {}), variables: vars };
+    }
+    case 'log': {
+      const message = raw.message ?? raw.log;
+      if (message === undefined || message === null || message === '') throw new ApsError('ConfigurationError', `A log step needs message: the text to show (with {{variables}}) ${where}`);
+      return { ...base, type: 'log', message: typeof message === 'string' ? message : JSON.stringify(message), variables: vars };
+    }
     default:
       throw new ApsError('ConfigurationError', `Unknown or missing test type "${type}" in ${file ?? 'test'} (${name})`, {
-        suggestions: ['Set `type:` to one of http, graphql, grpc, mcp, llm, rag, agent.'],
+        suggestions: ['Set `type:` to one of http, graphql, grpc, websocket, mcp, llm, rag, agent, delay, condition, script, flow, log.'],
       });
   }
 }

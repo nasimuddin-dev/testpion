@@ -9,6 +9,7 @@ import {
   WorkspaceManager,
   WorkspaceStore,
   createEngineContext,
+  isWorkspaceDir,
   formatBytes,
   importAny,
   fetchImportText,
@@ -23,6 +24,11 @@ import {
   type Collection,
   type TestResult,
 } from '@testpion/core';
+
+/** One warning line per collection or environment whose file cannot be read (they are listed, never dropped silently). */
+export function warnProblems(items: Array<{ name: string; problem?: string }>, what: 'collection' | 'environment'): void {
+  for (const i of items) if (i.problem) console.error(yellow(`warning: ${what} "${i.name}" is broken and was skipped: ${i.problem}`));
+}
 
 /** Exit codes (spec §37). */
 export const EXIT = { SUCCESS: 0, TEST_FAILURE: 1, CONFIG_ERROR: 2, EXECUTION_ERROR: 3 } as const;
@@ -63,10 +69,11 @@ export function collectVar(v: string, prev: Record<string, string> = {}): Record
   return { ...prev, [v.slice(0, i)]: v.slice(i + 1) };
 }
 
+/** The nearest folder up from `start` with a TestPion workspace.json (another tool's workspace.json, e.g. Nx's, is passed by). */
 export function findWorkspaceUp(start: string): string | undefined {
   let dir = resolve(start);
   for (;;) {
-    if (existsSync(join(dir, 'workspace.json'))) return dir;
+    if (isWorkspaceDir(dir)) return dir;
     const up = dirname(dir);
     if (up === dir) return undefined;
     dir = up;

@@ -18,6 +18,8 @@ export type RequestCategory = 'rest' | 'soap' | 'graphql' | 'grpc' | 'websocket'
 export function requestCategory(node: CollectionNode): 'rest' | 'soap' | 'graphql' | undefined {
   if (node.kind === 'folder') return undefined;
   if (node.kind === 'graphql') return 'graphql';
+  // an outline (col.tree) says so itself: it has no headers or body to look at
+  if ((node as { soap?: true }).soap) return 'soap';
   const r = node.request;
   const soapHeader = r.headers?.some((h) => h.key.toLowerCase() === 'soapaction' || (h.key.toLowerCase() === 'content-type' && /application\/soap\+xml/i.test(h.value)));
   const soapBody = r.body && 'content' in r.body && /<(\w+:)?Envelope[\s>]/.test(r.body.content);

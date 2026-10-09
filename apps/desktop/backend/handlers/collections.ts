@@ -1,7 +1,7 @@
 /** RPC handlers: Collections (requests, folders, examples, import/export) and their mock servers. */
 import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, relative, sep } from 'node:path';
-import { ApsError, dbKindOf, redactDbUrl, isSqliteDataset, collectionVariableFlow, listWorkspaceDatasets, appendDatasetRow, readDataset, readWorkspaceDataset, moveToTrash, sqliteTables, fetchImportText, bruFilesToBrunoExport, collectionToBru, importIntoWorkspace, diffOpenApi, lintOpenApi, openApiOutline, asyncApiOutline, workspaceApiCoverage, apiCoverageMarkdown, collectionSecurityFindings, definedVariableNames, listSpecs, findBodySchema, readSpecRef, type SpecRef, startRecorder, recordingToCollection, type RecordedExchange, collectionToOpenApiText, collectionToHttpFile, collectionToAsyncApi, generateWorkspaceDataset, replaceInCollection, moveCollectionVariablesToEnvironments, tidyCollection, applyTidy, type ReplaceField, writeTestsFromSpec, writeFlows, exampleFromResponse, startMockServer, collectionMarkdown, collectionHtml, exportPostmanCollection, withRequestExamples, type SavedExample, convertCollectionScripts, importRequestSnippet, isRequestSnippet, type Collection, collectionSavedItems, duplicateCollection, shortId } from '@testpion/core';
+import { atomicWrite, ApsError, dbKindOf, redactDbUrl, isSqliteDataset, collectionVariableFlow, listWorkspaceDatasets, appendDatasetRow, readDataset, readWorkspaceDataset, moveToTrash, sqliteTables, fetchImportText, bruFilesToBrunoExport, collectionToBru, importIntoWorkspace, diffOpenApi, lintOpenApi, openApiOutline, asyncApiOutline, workspaceApiCoverage, apiCoverageMarkdown, collectionSecurityFindings, definedVariableNames, listSpecs, findBodySchema, readSpecRef, type SpecRef, startRecorder, recordingToCollection, type RecordedExchange, collectionToOpenApiText, collectionToHttpFile, collectionToAsyncApi, generateWorkspaceDataset, replaceInCollection, moveCollectionVariablesToEnvironments, tidyCollection, applyTidy, type ReplaceField, writeTestsFromSpec, writeFlows, exampleFromResponse, startMockServer, collectionMarkdown, collectionHtml, exportPostmanCollection, withRequestExamples, type SavedExample, convertCollectionScripts, importRequestSnippet, isRequestSnippet, type Collection, collectionSavedItems, duplicateCollection, shortId, collectionTreeOf } from '@testpion/core';
 import type { Backend, Handlers, CollectionRunParams } from '../backend.js';
 import { countDatasetRecords, datasetFormatOfName } from '@testpion/shared';
 import { recordIncoming } from './debugger.js';
@@ -22,9 +22,22 @@ export function collectionsHandlers(be: Backend): Handlers {
   const datasetName = (file: string) => relative(be.ws.path('datasets'), file).split(sep).join('/');
   return {
     'col.list': () => be.ws.listCollections(),
+    /** Every collection as a tree (ids, names, methods, folders; no bodies, headers or scripts): what the explorer lists. */
+    'col.tree': ({ ids }: { ids?: string[] } = {}) =>
+      ids
+        ? ids.map((id) => {
+            try {
+              return collectionTreeOf(be.ws.getCollection(id));
+            } catch {
+              return undefined; // gone (deleted, renamed on disk): the window then reads the whole list
+            }
+          })
+        : be.ws.listCollections().map(collectionTreeOf),
     /** One collection (a view that needs one does not read them all). */
     'col.get': ({ id }: { id: string }) => be.ws.getCollection(id),
     'col.save': (c: Collection) => {
+      // a tree (col.tree) saved as a collection would drop every body and script: never
+      if ((c as { slim?: boolean }).slim) throw new ApsError('ValidationError', 'That is the outline of the collection, not the collection: read it (col.get) before saving it');
       const r = be.ws.saveCollection(c);
       be.refreshMock(c.id);
       return r;
@@ -190,7 +203,7 @@ export function collectionsHandlers(be: Backend): Handlers {
     /** Save an OpenAPI document edited in its tab (only files in specs/). */
     'openapi.spec.save': ({ path, text }: { path: string; text: string }) => {
       if (!SPEC_PATH.test(path)) throw new ApsError('ValidationError', `Not an API definition in specs/: ${path}`);
-      writeFileSync(be.ws.safePath(path), text);
+      atomicWrite(be.ws.safePath(path), text);
       return { path };
     },
     /** An OpenAPI document as a reader sees it: operations by tag, parameters, bodies, responses, a request per operation. */
@@ -287,8 +300,7 @@ export function collectionsHandlers(be: Backend): Handlers {
       const file = datasetFile(name);
       if (!datasetFormatOfName(file)) throw new ApsError('ValidationError', 'Only CSV, JSON, JSONL and Markdown datasets are edited as text');
       if (text.length > 50 * 1024 * 1024) throw new ApsError('ValidationError', 'The dataset is larger than 50 MB');
-      mkdirSync(dirname(file), { recursive: true });
-      writeFileSync(file, text);
+      atomicWrite(file, text);
       be.host.emit('data.changed', { kind: 'datasets' });
       return { name: datasetName(file), path: file };
     },

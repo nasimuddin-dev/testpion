@@ -67,8 +67,9 @@ export function EnvCompareDialog({ tab, onClose }: { tab: RestTab; onClose(): vo
   const picker = (value: string, set: (v: string) => void, label: string) => (
     <Select aria-label={label} className="flex-1" value={value} onChange={(e) => (set(e.target.value), setResult(undefined))}>
       {envs.map((e) => (
-        <option key={e.id} value={e.name}>
+        <option key={e.id} value={e.name} disabled={!!e.problem} title={e.problem}>
           {e.name}
+          {e.problem ? '  (cannot be read)' : ''}
           {e.isProduction ? ' (production)' : ''}
         </option>
       ))}

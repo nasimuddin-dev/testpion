@@ -5,7 +5,8 @@
  */
 import { readdirSync, readFileSync } from 'node:fs';
 import { extname, join, relative, sep } from 'node:path';
-import { isMap, isPair, isScalar, isSeq, parse as parseYaml, parseDocument, type Node, type Pair } from 'yaml';
+import type { Node, Pair } from 'yaml';
+import { isMap, isPair, isScalar, isSeq, parseDocument, parseYaml } from '../util/lazy-yaml.js';
 import { ApsError } from '../errors.js';
 import { isSuiteFile } from './loader.js';
 

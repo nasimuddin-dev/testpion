@@ -5,7 +5,10 @@ import type { AppSettings, Collection, Environment, Library, McpServerConfig, Pr
 import { SCHEMA_VERSION, defaultSettings } from '../model/types.js';
 import { ApsError } from '../errors.js';
 import { shortId, slugify } from '../util/ids.js';
-import { atomicWrite, readJson, writeJson } from './fsutil.js';
+import { atomicWrite, readJson, readTextCached, writeDerived, writeJson } from './fsutil.js';
+import { looksLikeWorkspace, normalizeCollection, normalizeEnvironment, scanString } from './normalize.js';
+
+export { isWorkspaceDir, looksLikeWorkspace, normalizeCollection, normalizeEnvironment } from './normalize.js';
 import { openMetaStore, type MetaStore } from './metastore.js';
 import type { Baseline } from '../report/regression.js';
 import { moveToTrash } from './trash.js';
@@ -118,6 +121,12 @@ export class WorkspaceStore {
     const file = join(root, 'workspace.json');
     if (!existsSync(file)) throw new ApsError('ConfigurationError', `No workspace found at ${root}`, { suggestions: ['Create a workspace first, or pass the correct --workspace path.'] });
     const raw = readJson<Record<string, unknown>>(file);
+    // another tool's workspace.json (Nx, Angular, a VS Code workspace …): refuse before migrating or creating anything
+    if (!looksLikeWorkspace(raw))
+      throw new ApsError('ConfigurationError', `${root} is not a TestPion workspace`, {
+        why: 'Its workspace.json belongs to another tool (it has no TestPion id, name or schemaVersion).',
+        suggestions: ['Open the folder that holds your TestPion workspace, or create a new workspace in another folder.'],
+      });
     const original = structuredClone(raw);
     const { ws, applied } = migrateWorkspace(raw, root);
     if (applied.length) {
@@ -189,17 +198,20 @@ export class WorkspaceStore {
     const dir = this.path('collections');
     const out: Array<Collection & { problem?: string }> = [];
     const seen = new Set<string>();
+    const meta = this.readLocalMeta(); // once for the whole list, not once per collection
     for (const f of readdirSync(dir).filter((f) => f.endsWith('.json')).sort()) {
       try {
-        const c = readJson<Collection>(join(dir, f));
+        const c = normalizeCollection(readJson<Collection>(join(dir, f)));
         // two files with the same id (a copied file, an older import): the second gets its file name as id,
         // so each one opens, saves and expands on its own (see collectionFile)
         const base = f.slice(0, -'.json'.length);
         if (!c.id || seen.has(c.id)) c.id = base;
         seen.add(c.id);
-        out.push(this.withLocalMeta(c));
+        out.push(this.withLocalMeta(c, meta));
       } catch (e) {
-        out.push({ schemaVersion: SCHEMA_VERSION, id: f.replace(/\.json$/, ''), name: `${f} (corrupted)`, version: 0, variables: [], items: [], updatedAt: '', problem: (e as Error).message });
+        // listed every time, with why, and left where it is: the user fixes it (or saves over it, which keeps a copy)
+        const named = scanString(readTextCached(join(dir, f)), 'name');
+        out.push({ schemaVersion: SCHEMA_VERSION, id: f.replace(/\.json$/, ''), name: named ?? f, version: 0, variables: [], items: [], updatedAt: '', problem: (e as Error).message });
       }
     }
     return out;
@@ -214,7 +226,10 @@ export class WorkspaceStore {
     const named = this.path('collections', `${slugify(id)}.json`);
     if (existsSync(named)) return named;
     const dir = this.path('collections');
+    // a cheap scan: only files whose text holds the id are parsed; a broken file is skipped and left untouched
+    const quoted = JSON.stringify(id);
     for (const f of readdirSync(dir).filter((f) => f.endsWith('.json')).sort()) {
+      if (!readTextCached(join(dir, f))?.includes(quoted)) continue;
       try {
         if (readJson<Collection>(join(dir, f)).id === id) return join(dir, f);
       } catch {
@@ -230,7 +245,8 @@ export class WorkspaceStore {
   }
 
   getCollection(id: string): Collection {
-    const c = readJson<Collection>(this.collectionFile(id));
+    if (typeof id !== 'string' || !id) throw new ApsError('ValidationError', 'A collection id is required');
+    const c = normalizeCollection(readJson<Collection>(this.collectionFile(id)));
     // a de-duplicated id (see listCollections) is the file name: the copy says so too
     return this.withLocalMeta(c.id === id ? c : { ...c, id });
   }
@@ -251,8 +267,8 @@ export class WorkspaceStore {
       return { collections: {} };
     }
   }
-  private withLocalMeta(c: Collection): Collection {
-    const m = this.readLocalMeta().collections[c.id];
+  private withLocalMeta(c: Collection, meta = this.readLocalMeta()): Collection {
+    const m = meta.collections[c.id];
     return { ...c, version: m?.version ?? c.version ?? 0, updatedAt: m?.updatedAt ?? c.updatedAt ?? '' };
   }
 
@@ -287,9 +303,12 @@ export class WorkspaceStore {
   }
 
   saveCollection(c: Collection): Collection {
+    if (!c || typeof c !== 'object' || typeof c.id !== 'string' || !c.id) throw new ApsError('ValidationError', 'A collection to save needs an id');
     const meta = this.readLocalMeta();
     const before = meta.collections[c.id];
-    const next: Collection = { ...c, schemaVersion: SCHEMA_VERSION, version: Math.max(before?.version ?? 0, c.version ?? 0) + 1, updatedAt: new Date().toISOString() };
+    const { problem: _problem, ...rest } = c as Collection & { problem?: string };
+    void _problem;
+    const next: Collection = { ...rest, schemaVersion: SCHEMA_VERSION, version: Math.max(before?.version ?? 0, c.version ?? 0) + 1, updatedAt: new Date().toISOString() };
     writeJson(this.collectionFile(c.id), collectionFileContent(next));
     meta.collections[c.id] = { version: next.version, updatedAt: next.updatedAt };
     mkdirSync(join(this.root, '.local'), { recursive: true });
@@ -319,16 +338,19 @@ export class WorkspaceStore {
     throw new ApsError('ValidationError', `No environment "${idOrName}"`);
   }
 
+  /** Every environment; one whose file cannot be read is listed too, with `problem` saying why (and no variables). */
   listEnvironments(): Environment[] {
     const dir = this.path('environments');
     const envs = readdirSync(dir)
       .filter((f) => f.endsWith('.json'))
       .sort()
-      .flatMap((f) => {
+      .map((f): Environment => {
+        const base = f.slice(0, -'.json'.length);
         try {
-          return [readJson<Environment>(join(dir, f))];
-        } catch {
-          return [];
+          return normalizeEnvironment(readJson<Environment>(join(dir, f)), base);
+        } catch (e) {
+          const text = readTextCached(join(dir, f));
+          return { id: scanString(text, 'id') ?? base, name: scanString(text, 'name') ?? base, variables: [], problem: (e as Error).message };
         }
       });
     // stable sort: explicit order first, the rest keep file-name order
@@ -344,18 +366,22 @@ export class WorkspaceStore {
     };
     const sorted = [...envs].sort((a, b) => rank(a) - rank(b));
     sorted.forEach((e, order) => {
-      if (e.order !== order) writeJson(this.path('environments', `${slugify(e.id)}.json`), { ...e, order });
+      if (e.order !== order && !e.problem) writeJson(this.path('environments', `${slugify(e.id)}.json`), { ...e, order });
     });
     return this.listEnvironments();
   }
 
   getEnvironment(idOrName: string): Environment | undefined {
+    if (typeof idOrName !== 'string') return undefined;
     return this.listEnvironments().find((e) => e.id === idOrName || e.name.toLowerCase() === idOrName.toLowerCase());
   }
 
   /** Secret variable values must already have been moved to the secret store — they are stripped here. */
   saveEnvironment(env: Environment): Environment {
-    const clean: Environment = { ...env, variables: env.variables.map((v) => (v.secret ? { ...v, value: '' } : v)) };
+    if (!env || typeof env !== 'object' || typeof env.id !== 'string' || !env.id) throw new ApsError('ValidationError', 'An environment to save needs an id');
+    const { problem: _problem, ...rest } = env;
+    void _problem;
+    const clean: Environment = { ...rest, name: typeof env.name === 'string' ? env.name : env.id, variables: (Array.isArray(env.variables) ? env.variables : []).map((v) => (v.secret ? { ...v, value: '' } : v)) };
     // the position is owned by reorderEnvironments; a save from a stale editor copy must not move it
     const file = this.path('environments', `${slugify(env.id)}.json`);
     if (existsSync(file)) {
@@ -460,7 +486,8 @@ export class WorkspaceStore {
   saveTrace(trace: Trace, kind: string, runId?: string): string {
     const day = new Date(trace.startTime).toISOString().slice(0, 10);
     const rel = join('traces', day, `${trace.traceId}.json`);
-    atomicWrite(this.path(rel), JSON.stringify(trace));
+    // derived data: no fsync / rename (collections, environments and the workspace stay atomic)
+    writeDerived(this.path(rel), JSON.stringify(trace));
     this.meta.addTrace({
       id: trace.traceId,
       name: trace.name,
@@ -551,7 +578,9 @@ export class WorkspaceStore {
       exportedAt: new Date().toISOString(),
       workspace: { ...this.ws, variables: this.ws.variables.map((v) => ((v as { secret?: boolean }).secret ? { ...v, value: '' } : v)) },
       collections: this.listCollections().filter((c) => !c.problem),
-      environments: this.listEnvironments().map((e) => ({ ...e, variables: e.variables.map((v) => (v.secret ? { ...v, value: '' } : v)) })),
+      environments: this.listEnvironments()
+        .filter((e) => !e.problem)
+        .map((e) => ({ ...e, variables: e.variables.map((v) => (v.secret ? { ...v, value: '' } : v)) })),
       providers: this.getProviders(),
       mcpServers: this.getMcpServers(),
       tests,
@@ -566,7 +595,11 @@ export class WorkspaceStore {
     return existsSync(dir) ? readdirSync(dir).filter((f) => /^[a-z][a-z0-9-]{0,40}\.json$/.test(f)).map((f) => f.slice(0, -5)) : [];
   }
 
+  private closed = false;
+  /** Close the history database; closing again does nothing. */
   close(): void {
+    if (this.closed) return;
+    this.closed = true;
     this.meta.close();
   }
 }
@@ -627,7 +660,7 @@ export class WorkspaceManager {
     return join(this.appDir, 'settings.json');
   }
 
-  /** Problem found while loading settings (e.g. a corrupted file that was backed up and reset). */
+  /** Problem found while loading settings (e.g. a broken file: defaults are used until settings are saved). */
   settingsProblem?: string;
 
   loadSettings(): AppSettings {
@@ -635,7 +668,7 @@ export class WorkspaceManager {
     try {
       s = readJson<Partial<AppSettings>>(this.settingsPath, {});
     } catch (e) {
-      // readJson preserved the corrupted file as settings.json.corrupt-<ts>; start from defaults
+      // a broken settings.json stays as it is; start from defaults (saving settings keeps a copy, settings.json.broken-<ts>)
       this.settingsProblem = (e as Error).message;
     }
     // revision 2 (redesigned UI): the default font size went from 13 to 14px — move people still on the old default
@@ -663,6 +696,7 @@ export class WorkspaceManager {
     for (const p of [...dirs, ...extra]) {
       try {
         const w = readJson<Workspace>(join(p, 'workspace.json'));
+        if (!looksLikeWorkspace(w)) continue;
         out.push({ id: w.id, name: w.name, path: p, updatedAt: w.updatedAt });
       } catch {
         /* skip invalid */

@@ -6,6 +6,10 @@ import * as TooltipPrimitive from '@radix-ui/react-tooltip';
 import { ChevronRight, ChevronsRight, Loader2, MoreHorizontal, X } from 'lucide-react';
 import { iconForLabel, textOf } from './action-icons';
 
+// icons drawn in every tab and menu row, made once (React skips an element it has already rendered)
+const TAB_CLOSE_ICON = <X size={12} />;
+const SUBMENU_ICON = <ChevronRight size={13} className="text-muted shrink-0" />;
+
 export function cx(...c: Array<string | false | null | undefined>): string {
   return c.filter(Boolean).join(' ');
 }
@@ -194,10 +198,13 @@ export function Tabs<T extends string>({ tabs, value, onChange, className, right
     const el = listRef.current;
     if (!el) return;
     const measure = () => {
+      // the usual case, every tab fits: one comparison, no rectangle per tab (and no re-render)
+      if (el.scrollWidth <= el.clientWidth + 1) return setHiddenTabs((cur) => (cur.length ? [] : cur));
       const box = el.getBoundingClientRect();
-      setHiddenTabs([...el.querySelectorAll<HTMLElement>('[role=tab]')].filter((b) => { const r = b.getBoundingClientRect(); return r.right > box.right + 1 || r.left < box.left - 1; }).map((b) => b.dataset.tabId ?? ''));
+      const next = [...el.querySelectorAll<HTMLElement>('[role=tab]')].filter((b) => { const r = b.getBoundingClientRect(); return r.right > box.right + 1 || r.left < box.left - 1; }).map((b) => b.dataset.tabId ?? '');
+      setHiddenTabs((cur) => (cur.length === next.length && cur.every((x, i) => x === next[i]) ? cur : next));
     };
-    measure();
+    // the observer measures once as it starts, and again whenever the strip's size changes
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     el.addEventListener('scroll', measure, { passive: true });
@@ -244,7 +251,7 @@ export function Tabs<T extends string>({ tabs, value, onChange, className, right
               className={cx('shrink-0 rounded p-0.5 -mr-1 hover:text-fg hover:bg-hover', value === t.id ? 'opacity-60' : 'opacity-0 group-hover:opacity-100')}
               onClick={(e) => (e.stopPropagation(), t.onClose!())}
             >
-              <X size={12} />
+              {TAB_CLOSE_ICON}
             </span>
           )}
         </button>
@@ -429,6 +436,8 @@ export interface MenuItem {
   disabled?: boolean;
   /** Draw a separator above this item. */
   separator?: boolean;
+  /** A tooltip (why the item is disabled, e.g. an environment whose file cannot be read). */
+  title?: string;
   /** A submenu (e.g. Move to ▸ each collection); `onSelect` is then unused. */
   items?: MenuItem[];
 }
@@ -552,6 +561,15 @@ export function Menu({
   );
 }
 
+/**
+ * Run a menu item's action once the menu has closed. Radix calls `onSelect` inside `flushSync`, so a heavy action
+ * (Expand all over thousands of rows) rendered synchronously while the menu was still open and blocked the click;
+ * after a macrotask the menu is gone, its focus handled, and the action renders like any other click.
+ */
+function runSelected(onSelect: (() => void) | undefined) {
+  if (onSelect) setTimeout(onSelect, 0);
+}
+
 const MENU_ROW = cx('flex items-center gap-2.5 rounded-md px-2 h-8 text-sm cursor-default select-none outline-none transition-colors', 'data-[highlighted]:bg-hover data-[state=open]:bg-hover data-[disabled]:opacity-50 data-[disabled]:pointer-events-none');
 
 /** A menu's rows (and submenus, opened on hover or →). */
@@ -571,13 +589,13 @@ function MenuItems({ items: given }: { items: MenuItem[] }) {
           </>
         );
         return (
-          <div key={`${i}-${it.label}`}>
+          <div key={`${i}-${it.label}`} title={it.title}>
             {it.separator && i > 0 && <MenuPrimitive.Separator className="my-1 h-px bg-line" />}
             {it.items ? (
               <MenuPrimitive.Sub>
                 <MenuPrimitive.SubTrigger disabled={it.disabled || !it.items.length} className={cx(MENU_ROW, 'text-fg')}>
                   {content}
-                  <ChevronRight size={13} className="text-muted shrink-0" />
+                  {SUBMENU_ICON}
                 </MenuPrimitive.SubTrigger>
                 <MenuPrimitive.Portal>
                   <MenuPrimitive.SubContent sideOffset={6} className="z-[71] min-w-[200px] max-w-[320px] max-h-[60vh] overflow-auto rounded-xl border border-line bg-popover p-1 shadow-lg animate-in fade-in-0 zoom-in-95 duration-150">
@@ -586,7 +604,7 @@ function MenuItems({ items: given }: { items: MenuItem[] }) {
                 </MenuPrimitive.Portal>
               </MenuPrimitive.Sub>
             ) : (
-              <MenuPrimitive.Item disabled={it.disabled} onSelect={it.onSelect} className={cx(MENU_ROW, it.danger ? 'text-bad data-[highlighted]:bg-bad/10' : 'text-fg')}>
+              <MenuPrimitive.Item disabled={it.disabled} onSelect={() => runSelected(it.onSelect)} className={cx(MENU_ROW, it.danger ? 'text-bad data-[highlighted]:bg-bad/10' : 'text-fg')}>
                 {content}
               </MenuPrimitive.Item>
             )}
@@ -658,7 +676,18 @@ export function Split({ id, direction = 'horizontal', initial = 50, min = 15, si
   );
 }
 
-/** Fixed-row-height virtual list: renders only visible rows, so 1M rows cost the same as 50. */
+/** The element that scrolls `el` (its nearest ancestor with overflow auto or scroll). */
+function scrollingAncestor(el: HTMLElement | null): HTMLElement | null {
+  for (let p = el?.parentElement; p; p = p.parentElement) if (/(auto|scroll|overlay)/.test(getComputedStyle(p).overflowY)) return p;
+  return null;
+}
+
+/**
+ * Fixed-row-height virtual list: renders only visible rows, so 1M rows cost the same as 50. With `scrollParent` it has
+ * no scroll box of its own: it scrolls with the element around it (a tree in a sidebar with other sections above and
+ * below it). `keyOf` keeps a row's component when rows above it come and go; `scrollKey` scrolls to `scrollToIndex`
+ * again even when the index is the same.
+ */
 export function VirtualList<T>({
   items,
   rowHeight,
@@ -666,7 +695,10 @@ export function VirtualList<T>({
   className,
   overscan = 8,
   scrollToIndex,
+  scrollKey,
   onEndReached,
+  keyOf,
+  scrollParent = false,
 }: {
   items: T[];
   rowHeight: number;
@@ -674,42 +706,83 @@ export function VirtualList<T>({
   className?: string;
   overscan?: number;
   scrollToIndex?: number;
+  scrollKey?: unknown;
   onEndReached?(): void;
+  keyOf?(item: T, index: number): string | number;
+  scrollParent?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [scrollTop, setScrollTop] = useState(0);
   const [height, setHeight] = useState(400);
   const scrollFrame = useRef<number | undefined>(undefined);
   const pendingScrollTop = useRef(0);
+  /** With scrollParent: the element that scrolls, and where the list starts in it. */
+  const outer = useRef<{ box: HTMLElement; measure(): void } | undefined>(undefined);
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => setHeight(el.clientHeight));
-    ro.observe(el);
-    setHeight(el.clientHeight);
-    return () => ro.disconnect();
-  }, []);
+    if (!scrollParent) {
+      const ro = new ResizeObserver(() => setHeight(el.clientHeight));
+      ro.observe(el);
+      setHeight(el.clientHeight);
+      return () => ro.disconnect();
+    }
+    const box = scrollingAncestor(el);
+    if (!box) return;
+    // the part of the list on screen: from where the box's view starts (relative to the list's top) for the box's height
+    const measure = () => {
+      const top = el.getBoundingClientRect().top - box.getBoundingClientRect().top;
+      setScrollTop(-top);
+      setHeight(box.clientHeight);
+    };
+    outer.current = { box, measure };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(box);
+    const onScroll = () => {
+      if (scrollFrame.current !== undefined) return;
+      scrollFrame.current = requestAnimationFrame(() => {
+        scrollFrame.current = undefined;
+        measure();
+      });
+    };
+    box.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      ro.disconnect();
+      box.removeEventListener('scroll', onScroll);
+      outer.current = undefined;
+    };
+  }, [scrollParent]);
+  // what is above the list may have grown or shrunk with it (a section opened): measure again when the rows change
+  useEffect(() => outer.current?.measure(), [items]);
   useEffect(() => {
     if (scrollToIndex === undefined || !ref.current) return;
     const el = ref.current;
+    if (outer.current) {
+      const { box } = outer.current;
+      const top = el.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop + scrollToIndex * rowHeight;
+      if (top < box.scrollTop || top > box.scrollTop + box.clientHeight - rowHeight) box.scrollTop = Math.max(0, top - box.clientHeight / 3);
+      return;
+    }
     const top = scrollToIndex * rowHeight;
     if (top < el.scrollTop || top > el.scrollTop + el.clientHeight - rowHeight) el.scrollTop = Math.max(0, top - el.clientHeight / 3);
-  }, [scrollToIndex, rowHeight]);
+  }, [scrollToIndex, rowHeight, scrollKey]);
   useEffect(() => () => {
     if (scrollFrame.current !== undefined) cancelAnimationFrame(scrollFrame.current);
   }, []);
-  const start = Math.max(0, Math.floor(scrollTop / rowHeight) - overscan);
-  const end = Math.min(items.length, Math.ceil((scrollTop + height) / rowHeight) + overscan);
+  const start = Math.min(items.length, Math.max(0, Math.floor(scrollTop / rowHeight) - overscan));
+  const end = Math.max(start, Math.min(items.length, Math.ceil((scrollTop + height) / rowHeight) + overscan));
   useEffect(() => {
     if (onEndReached && end >= items.length - 5 && items.length) onEndReached();
   }, [end, items.length, onEndReached]);
   const rows: ReactNode[] = [];
   for (let i = start; i < end; i++)
     rows.push(
-      <div key={i} style={{ position: 'absolute', top: i * rowHeight, height: rowHeight, left: 0, right: 0 }}>
+      <div key={keyOf ? keyOf(items[i]!, i) : i} style={{ position: 'absolute', top: i * rowHeight, height: rowHeight, left: 0, right: 0 }}>
         {render(items[i]!, i)}
       </div>,
     );
+  if (scrollParent) return <div ref={ref} className={cx('relative', className)} style={{ height: items.length * rowHeight }}>{rows}</div>;
   return (
     <div
       ref={ref}

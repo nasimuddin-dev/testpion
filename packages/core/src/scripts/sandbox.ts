@@ -1,6 +1,5 @@
 import { createHash, createHmac, randomUUID } from 'node:crypto';
-import { newQuickJSWASMModuleFromVariant, shouldInterruptAfterDeadline, type QuickJSHandle, type QuickJSWASMModule } from 'quickjs-emscripten-core';
-import variant from '@jitl/quickjs-singlefile-mjs-release-sync';
+import type { QuickJSContext, QuickJSHandle, QuickJSRuntime, QuickJSWASMModule } from 'quickjs-emscripten-core';
 import { EPILOGUE, PRELUDE } from './prelude.js';
 import { dynamicValue } from '../vars/dynamic.js';
 import { validateSchema } from '../eval/checks.js';
@@ -101,9 +100,202 @@ const emptyScopes = () => ({
   scopeUnsets: { environment: [], globals: [], collectionVariables: [] } as ScriptOutput['scopeUnsets'],
 });
 
+// QuickJS (an 800 KB wasm blob) loads on the first script, not at startup.
 let modulePromise: Promise<QuickJSWASMModule> | undefined;
 function getModule(): Promise<QuickJSWASMModule> {
-  return (modulePromise ??= newQuickJSWASMModuleFromVariant(variant as never));
+  return (modulePromise ??= (async () => {
+    const [core, variant] = await Promise.all([import('quickjs-emscripten-core'), import('@jitl/quickjs-singlefile-mjs-release-sync')]);
+    return core.newQuickJSWASMModuleFromVariant(variant.default as never);
+  })());
+}
+
+/*
+ * One runtime per process and one long-lived context: parsing the 44 KB prelude costs ~4.5 ms and lodash
+ * ~13 ms, so they are evaluated once per context. The prelude is wrapped in a factory that rebuilds every
+ * per-run object (tp, pm, tests, the scopes …) and assigns them to global `let` bindings before each script,
+ * so no script sees another's variables, tests or logs. After a script the guard deletes globals it added and
+ * verifies that the intrinsics (and the shared libraries) are untouched; a script that changed them, timed
+ * out, ran out of memory or failed in the engine spends the context and the next script gets a fresh one.
+ */
+const PRELUDE_NAMES = [...new Set([...PRELUDE.matchAll(/^(?:const|let|var|function|class)\s+([A-Za-z_$][\w$]*)/gm)].map((m) => m[1]))];
+const PRELUDE_SCRIPT = `let ${PRELUDE_NAMES.join(', ')};
+(function () {
+  const setup = function (__input_json) {
+${PRELUDE}
+return { ${PRELUDE_NAMES.join(', ')} };
+  };
+  return function (json) { ({ ${PRELUDE_NAMES.join(', ')} } = setup(json)); };
+})();`;
+const GUARD_SCRIPT = String.raw`(function () {
+  const baseRoots = () => [globalThis, Object, Object.prototype, Function, Function.prototype, Array, Array.prototype, String, String.prototype, Number, Number.prototype, Boolean, Boolean.prototype, Symbol, Symbol.prototype, Date, Date.prototype, RegExp, RegExp.prototype, Error, Error.prototype, EvalError.prototype, RangeError.prototype, ReferenceError.prototype, SyntaxError.prototype, TypeError.prototype, URIError.prototype, Map, Map.prototype, Set, Set.prototype, WeakMap.prototype, WeakSet.prototype, Promise, Promise.prototype, Reflect, JSON, Math, BigInt, BigInt.prototype, ArrayBuffer, ArrayBuffer.prototype, DataView.prototype, Object.getPrototypeOf(Uint8Array), Object.getPrototypeOf(Uint8Array.prototype), Object.getPrototypeOf(Object.getPrototypeOf([][Symbol.iterator]())), Object.getPrototypeOf([][Symbol.iterator]()), Object.getPrototypeOf(new Map()[Symbol.iterator]()), Object.getPrototypeOf(new Set()[Symbol.iterator]()), Object.getPrototypeOf(''[Symbol.iterator]()), Object.getPrototypeOf(function* () {}), Object.getPrototypeOf(function* () {}).prototype, Object.getPrototypeOf(async function () {}), Object.getPrototypeOf(async function* () {}), Object.getPrototypeOf(async function* () {}).prototype];
+  // a library's shared objects: the global, its prototype, and what scripts conventionally mutate
+  const libRoots = (name) => {
+    const v = globalThis[name];
+    if (!v || (typeof v !== 'object' && typeof v !== 'function')) return [];
+    const r = [v];
+    if (v.prototype) r.push(v.prototype);
+    if (name === '_' && v.templateSettings) r.push(v.templateSettings, v.templateSettings.imports);
+    if (name === 'moment') r.push(Object.getPrototypeOf(v(0)));
+    return r;
+  };
+  const snapOf = (roots) => {
+    const snap = [];
+    for (const o of roots) { const keys = Reflect.ownKeys(o); snap.push(keys.length); for (const k of keys) { const d = Object.getOwnPropertyDescriptor(o, k); snap.push(k, d.value, d.get, d.set); } }
+    return snap;
+  };
+  const same = (roots, snap) => {
+    let i = 0;
+    for (const o of roots) {
+      const keys = Reflect.ownKeys(o);
+      if (keys.length !== snap[i++]) return false;
+      for (const k of keys) { const d = Object.getOwnPropertyDescriptor(o, k); if (k !== snap[i++] || !Object.is(d.value, snap[i++]) || d.get !== snap[i++] || d.set !== snap[i++]) return false; }
+    }
+    return i === snap.length;
+  };
+  let base = [];
+  let globalKeys = new Set();
+  const libs = {};
+  const take = () => { base = snapOf(baseRoots()); globalKeys = new Set(Reflect.ownKeys(globalThis)); };
+  const takeLib = (name) => { libs[name] = snapOf(libRoots(name)); };
+  const check = () => {
+    for (const name of Object.keys(libs)) if (globalThis[name] !== undefined && !same(libRoots(name), libs[name])) return false;
+    for (const k of Reflect.ownKeys(globalThis)) if (!globalKeys.has(k)) { try { delete globalThis[k]; } catch (e) {} if (Object.prototype.hasOwnProperty.call(globalThis, k)) return false; }
+    return same(baseRoots(), base);
+  };
+  return { take, takeLib, check };
+})()`;
+
+interface Slot {
+  vm: QuickJSContext;
+  /** `reset(inputJson)`: rebuilds the per-run API objects. */
+  reset: QuickJSHandle;
+  /** Guard: `take()` snapshots the shared state, `check()` verifies it and removes added globals. */
+  take: QuickJSHandle;
+  takeLib: QuickJSHandle;
+  check: QuickJSHandle;
+  /** Loaded libraries' globals, held by the host and installed only for the scripts that use them. */
+  libs: Map<string, Array<[name: string, handle: QuickJSHandle]>>;
+  /** Scripts run in this context; it is replaced after MAX_SLOT_USES to bound what unreachable leftovers it can hold. */
+  uses: number;
+}
+const MAX_SLOT_USES = 2000;
+let runtime: QuickJSRuntime | undefined;
+let pooled: Slot | undefined;
+/** Options of the script running now, read by the host functions. */
+let current: ScriptOptions = {};
+
+function getRuntime(mod: QuickJSWASMModule): QuickJSRuntime {
+  if (!runtime) {
+    runtime = mod.newRuntime();
+    runtime.setMaxStackSize(1024 * 1024);
+  }
+  return runtime;
+}
+
+function unwrap(vm: QuickJSContext, r: { error: QuickJSHandle } | { value: QuickJSHandle }, what: string): QuickJSHandle {
+  if ('error' in r) {
+    const err = vm.dump(r.error);
+    r.error.dispose();
+    throw new Error(`${what}: ${typeof err === 'object' && err ? `${(err as { name?: string }).name}: ${(err as { message?: string }).message}` : String(err)}`);
+  }
+  return r.value;
+}
+
+function newSlot(rt: QuickJSRuntime): Slot {
+  const vm = rt.newContext();
+  try {
+    const fn = (name: string, impl: (...args: string[]) => string) => {
+      const h = vm.newFunction(name, (...args) => vm.newString(impl(...args.map((a) => String(vm.dump(a))))));
+      vm.setProp(vm.global, name, h);
+      h.dispose();
+    };
+    const alg = (a: string) => (HASHES.has(a) ? a : 'sha256');
+    fn('__host_uuid', () => randomUUID());
+    fn('__host_bytelen', (s) => String(Buffer.byteLength(s ?? '', 'utf8')));
+    fn('__host_schema', (schema, data) => {
+      try {
+        const r = validateSchema(JSON.parse(schema ?? '{}'), JSON.parse(data ?? 'null'));
+        return JSON.stringify({ valid: r.valid, errors: r.errors.slice(0, 5) });
+      } catch (e) {
+        return JSON.stringify({ valid: false, errors: [`invalid schema: ${(e as Error).message}`] });
+      }
+    });
+    fn('__host_dynamic', (name) => JSON.stringify(dynamicValue(name ?? '') ?? null));
+    // cheerio: CSS selectors over HTML, parsed on the host
+    fn('__host_html', (html, path, op, selector) => {
+      try {
+        return JSON.stringify(queryHtml(html ?? '', JSON.parse(path || '[]') as number[], op ?? 'find', selector ?? ''));
+      } catch (e) {
+        return JSON.stringify({ error: (e as Error).message });
+      }
+    });
+    fn('__host_package', (name) => {
+      try {
+        return JSON.stringify(current.requirePackage?.(name ?? '') ?? null);
+      } catch {
+        return 'null';
+      }
+    });
+    fn('__host_hash', (a, s) => createHash(alg(a)).update(s ?? '').digest('hex'));
+    fn('__host_hmac', (a, key, s) => createHmac(alg(a), key ?? '').update(s ?? '').digest('hex'));
+    fn('__host_b64', (s) => Buffer.from(s ?? '', 'utf8').toString('base64'));
+    fn('__host_unb64', (s) => Buffer.from(s ?? '', 'base64').toString('utf8'));
+    fn('__host_hex2b64', (h) => Buffer.from(h ?? '', 'hex').toString('base64'));
+    fn('__host_b642hex', (s) => Buffer.from(s ?? '', 'base64').toString('hex'));
+    fn('__host_hex2utf8', (h) => Buffer.from(h ?? '', 'hex').toString('utf8'));
+    const reset = unwrap(vm, vm.evalCode(PRELUDE_SCRIPT, 'prelude.js'), 'script prelude');
+    const guard = unwrap(vm, vm.evalCode(GUARD_SCRIPT, 'guard.js'), 'script guard');
+    const take = vm.getProp(guard, 'take');
+    const takeLib = vm.getProp(guard, 'takeLib');
+    const check = vm.getProp(guard, 'check');
+    guard.dispose();
+    const slot: Slot = { vm, reset, take, takeLib, check, libs: new Map(), uses: 0 };
+    snapshot(slot);
+    return slot;
+  } catch (e) {
+    vm.dispose();
+    throw e;
+  }
+}
+
+function snapshot(slot: Slot) {
+  const r = slot.vm.callFunction(slot.take, slot.vm.undefined);
+  if (r.error) r.error.dispose();
+  else r.value.dispose();
+}
+
+function disposeSlot(slot: Slot) {
+  for (const h of [slot.reset, slot.take, slot.takeLib, slot.check]) if (h.alive) h.dispose();
+  for (const lib of slot.libs.values()) for (const [, h] of lib) if (h.alive) h.dispose();
+  slot.vm.dispose();
+}
+
+/** Lodash, moment and Bruno's API: parsed once per context, present only in scripts that use them. */
+const LIBS = [
+  [USES_LODASH, LODASH_SOURCE, 'lodash.js', ['_']],
+  [USES_MOMENT, MOMENT_SOURCE, 'moment.js', ['moment']],
+  [USES_BRUNO, BRUNO_SOURCE, 'bruno.js', ['bru', 'req', 'res', 'test']],
+] as const;
+
+/** Loads a library once: evaluates it, snapshots its objects for the guard, then takes its globals off the global object. */
+function loadLib(slot: Slot, source: string, file: string, names: readonly string[]) {
+  const vm = slot.vm;
+  const lib = vm.evalCode(source, file);
+  if (lib.error) lib.error.dispose();
+  else lib.value.dispose();
+  const handles: Array<[string, QuickJSHandle]> = [];
+  for (const name of names) {
+    const n = vm.newString(name);
+    const r = vm.callFunction(slot.takeLib, vm.undefined, n);
+    n.dispose();
+    if (r.error) r.error.dispose();
+    else r.value.dispose();
+    handles.push([name, vm.getProp(vm.global, name)]);
+  }
+  slot.libs.set(file, handles);
+  const del = vm.evalCode(`for (const n of ${JSON.stringify(names)}) delete globalThis[n];`);
+  if (del.error) del.error.dispose();
+  else del.value.dispose();
 }
 
 const HASHES = new Set(['md5', 'sha1', 'sha256', 'sha512']);
@@ -146,8 +338,8 @@ export async function runScript(code: string, input: ScriptInput, opts: ScriptOp
   }
 }
 
-/** Lines before the user's code in the evaluated source (the prelude plus the wrapper's first line). */
-const USER_LINE_OFFSET = PRELUDE.split('\n').length + 1;
+/** Lines before the user's code in the evaluated source: the wrapper's first line (the prelude is a separate script). */
+const USER_LINE_OFFSET = 1;
 
 /**
  * Stack frames point into the evaluated source (prelude + wrapper + script). Keep the message and the
@@ -166,87 +358,49 @@ async function runScriptOnce(code: string, input: ScriptInput, opts: ScriptOptio
   const t0 = performance.now();
   if (!code?.trim()) return { vars: {}, unset: [], ...emptyScopes(), tests: [], logs: [], request: input.request, durationMs: 0 };
   const mod = await getModule();
-  const runtime = mod.newRuntime();
-  runtime.setMemoryLimit((opts.memoryMb ?? 32) * 1024 * 1024);
-  runtime.setMaxStackSize(1024 * 1024);
-  runtime.setInterruptHandler(shouldInterruptAfterDeadline(Date.now() + (opts.timeoutMs ?? 2000)));
-  const vm = runtime.newContext();
+  const rt = getRuntime(mod);
+  rt.setMemoryLimit((opts.memoryMb ?? 32) * 1024 * 1024);
+  const deadline = Date.now() + (opts.timeoutMs ?? 2000);
+  rt.setInterruptHandler(() => Date.now() > deadline);
+  // A pass runs synchronously once the module is loaded, so one pooled context serves every script in turn.
+  const slot = pooled ?? newSlot(rt);
+  pooled = undefined;
+  slot.uses++;
+  let keep = false;
   try {
-    const fn = (name: string, impl: (...args: string[]) => string) => {
-      const h = vm.newFunction(name, (...args) => vm.newString(impl(...args.map((a) => String(vm.dump(a))))));
-      vm.setProp(vm.global, name, h);
-      h.dispose();
-    };
-    const alg = (a: string) => (HASHES.has(a) ? a : 'sha256');
-    fn('__host_uuid', () => randomUUID());
-    fn('__host_bytelen', (s) => String(Buffer.byteLength(s ?? '', 'utf8')));
-    fn('__host_schema', (schema, data) => {
-      try {
-        const r = validateSchema(JSON.parse(schema ?? '{}'), JSON.parse(data ?? 'null'));
-        return JSON.stringify({ valid: r.valid, errors: r.errors.slice(0, 5) });
-      } catch (e) {
-        return JSON.stringify({ valid: false, errors: [`invalid schema: ${(e as Error).message}`] });
-      }
-    });
-    fn('__host_dynamic', (name) => JSON.stringify(dynamicValue(name ?? '') ?? null));
-    // cheerio: CSS selectors over HTML, parsed on the host
-    fn('__host_html', (html, path, op, selector) => {
-      try {
-        return JSON.stringify(queryHtml(html ?? '', JSON.parse(path || '[]') as number[], op ?? 'find', selector ?? ''));
-      } catch (e) {
-        return JSON.stringify({ error: (e as Error).message });
-      }
-    });
-    fn('__host_package', (name) => {
-      try {
-        return JSON.stringify(opts.requirePackage?.(name ?? '') ?? null);
-      } catch {
-        return 'null';
-      }
-    });
-    fn('__host_hash', (a, s) => createHash(alg(a)).update(s ?? '').digest('hex'));
-    fn('__host_hmac', (a, key, s) => createHmac(alg(a), key ?? '').update(s ?? '').digest('hex'));
-    fn('__host_b64', (s) => Buffer.from(s ?? '', 'utf8').toString('base64'));
-    fn('__host_unb64', (s) => Buffer.from(s ?? '', 'base64').toString('utf8'));
-    fn('__host_hex2b64', (h) => Buffer.from(h ?? '', 'hex').toString('base64'));
-    fn('__host_b642hex', (s) => Buffer.from(s ?? '', 'base64').toString('hex'));
-    fn('__host_hex2utf8', (h) => Buffer.from(h ?? '', 'hex').toString('utf8'));
-    const inputHandle = vm.newString(JSON.stringify(input));
-    vm.setProp(vm.global, '__input_json', inputHandle);
-    inputHandle.dispose();
-
-    // lodash, like Postman's sandbox: `_` and require('lodash'). Parsed only for scripts that use it.
-    // … and moment (a UTC subset, see moment.ts)
-    for (const [uses, source, file] of [
-      [USES_LODASH, LODASH_SOURCE, 'lodash.js'],
-      [USES_MOMENT, MOMENT_SOURCE, 'moment.js'],
-      // … and Bruno's bru / req / res API for scripts imported from Bruno
-      [USES_BRUNO, BRUNO_SOURCE, 'bruno.js'],
-    ] as const) {
+    current = opts;
+    const vm = slot.vm;
+    for (const [uses, source, file, names] of LIBS) {
       if (!uses.test(code)) continue;
-      const lib = vm.evalCode(source, file);
-      if (lib.error) lib.error.dispose();
-      else lib.value.dispose();
+      if (!slot.libs.has(file)) loadLib(slot, source, file, names);
+      for (const [name, h] of slot.libs.get(file)!) vm.setProp(vm.global, name, h);
     }
+    let failure: QuickJSHandle | undefined;
+    let json = '';
+    const inputHandle = vm.newString(JSON.stringify(input));
+    const reset = vm.callFunction(slot.reset, vm.undefined, inputHandle);
+    inputHandle.dispose();
+    if (reset.error) failure = reset.error;
+    else reset.value.dispose();
 
     // The script is the body of an async function, so `await tp.sendRequest(…)` and `await tp.vault.get(…)`
     // work. A request that hasn't been sent yet leaves its promise pending: the run stops there, the host
     // sends it, and the next pass (a replay) goes on with the response.
-    const wrapped = `${PRELUDE}\n(async function(){\n${code}\n})().then(() => { __runTimers(); }, (e) => { __out.error = e && e.stack ? String(e) + '\\n' + e.stack : String(e); });`;
-    let failure: QuickJSHandle | undefined;
-    let json = '';
-    const started = vm.evalCode(wrapped, 'user-script.js');
-    if (started.error) failure = started.error;
-    else {
-      started.value.dispose();
-      const jobs = runtime.executePendingJobs();
-      if (jobs.error) failure = jobs.error;
+    const wrapped = `(async function(){\n${code}\n})().then(() => { __runTimers(); }, (e) => { __out.error = e && e.stack ? String(e) + '\\n' + e.stack : String(e); });`;
+    if (!failure) {
+      const started = vm.evalCode(wrapped, 'user-script.js');
+      if (started.error) failure = started.error;
       else {
-        const finished = vm.evalCode(`${EPILOGUE}\nJSON.stringify(__out);`, 'epilogue.js');
-        if (finished.error) failure = finished.error;
+        started.value.dispose();
+        const jobs = rt.executePendingJobs();
+        if (jobs.error) failure = jobs.error;
         else {
-          json = vm.getString(finished.value);
-          finished.value.dispose();
+          const finished = vm.evalCode(`${EPILOGUE}\nJSON.stringify(__out);`, 'epilogue.js');
+          if (finished.error) failure = finished.error;
+          else {
+            json = vm.getString(finished.value);
+            finished.value.dispose();
+          }
         }
       }
     }
@@ -265,10 +419,29 @@ async function runScriptOnce(code: string, input: ScriptInput, opts: ScriptOptio
         durationMs: Math.round(performance.now() - t0),
       };
     }
+    // the context is reused only when the script left the shared state as it found it
+    const checked = vm.callFunction(slot.check, vm.undefined);
+    if (checked.error) checked.error.dispose();
+    else {
+      keep = vm.dump(checked.value) === true;
+      checked.value.dispose();
+    }
+    if (Date.now() > deadline) keep = false;
     const out = JSON.parse(json) as Omit<ScriptOutput, 'durationMs'> & { error: string | null };
+    // an interrupt inside the async body is caught by its rejection handler
+    if (out.error && /^InternalError: interrupted/.test(out.error)) out.error = `Script timed out after ${opts.timeoutMs ?? 2000} ms`;
     return { ...out, error: out.error ? userErrorLines(out.error, USER_LINE_OFFSET, code.split('\n').length) : undefined, request: out.request ?? undefined, durationMs: Math.round(performance.now() - t0) };
   } finally {
-    vm.dispose();
-    runtime.dispose();
+    rt.removeInterruptHandler();
+    current = {};
+    if (keep && !pooled && slot.uses < MAX_SLOT_USES) pooled = slot;
+    else {
+      disposeSlot(slot);
+      // jobs an interrupted script left queued would run in the next script: start a clean runtime
+      if (rt.hasPendingJob()) {
+        rt.dispose();
+        runtime = undefined;
+      }
+    }
   }
 }

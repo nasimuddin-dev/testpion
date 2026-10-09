@@ -128,10 +128,11 @@ export async function runCollection(opts: CollectionRunOptions): Promise<RunSumm
     }
     opts.onEvent?.(e);
   };
-  opts.signal?.addEventListener('abort', () => {
+  const onAbort = () => {
     for (const w of waiters.values()) w(undefined);
     waiters.clear();
-  }, { once: true });
+  };
+  opts.signal?.addEventListener('abort', onAbort, { once: true });
   const waitFor = (id: string) => new Promise<TestResult | undefined>((resolve) => (opts.signal?.aborted ? resolve(undefined) : waiters.set(id, resolve)));
   // setNextRequest takes a request id or name
   const find = (target: string) => {
@@ -180,5 +181,10 @@ export async function runCollection(opts: CollectionRunOptions): Promise<RunSumm
     }
   };
 
-  return runTests({ ...opts, name: opts.name, tests: tests(), concurrency: 1, onEvent });
+  try {
+    return await runTests({ ...opts, name: opts.name, tests: tests(), concurrency: 1, onEvent });
+  } finally {
+    // the caller's signal (the app's AbortController) must not keep a finished run reachable
+    opts.signal?.removeEventListener('abort', onAbort);
+  }
 }

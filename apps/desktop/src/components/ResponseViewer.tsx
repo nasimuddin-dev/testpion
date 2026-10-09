@@ -12,7 +12,7 @@ import { JsonTree, RawView, type TreeAssertion, type TreeVariable } from './Json
 import { TraceView } from './TraceView';
 import { finishSave, type SaveResult } from '../lib/files';
 import { Badge, Button, cx, Empty, MoreMenu, statusTone, Tabs, type MenuItem } from './ui';
-import { useApp } from '../store';
+import { useApp, toastError } from '../store';
 import { JsonTable, tableRowsOf } from './JsonTable';
 import { JwtView } from './JwtView';
 import { findDecodedJwts } from '@testpion/shared';
@@ -110,7 +110,7 @@ export function ResponseViewer({
           {
             label: 'Save response',
             icon: <Download size={12} />,
-            onSelect: () => void call<SaveResult>('http.saveBody', { payloadPath: response.payloadPath, name: 'response' + (isJson ? '.json' : '.txt') }).then((r) => finishSave(r, 'Response')),
+            onSelect: () => void call<SaveResult>('http.saveBody', { payloadPath: response.payloadPath, name: 'response' + (isJson ? '.json' : '.txt') }).then((r) => finishSave(r, 'Response'), toastError),
           },
         ]
       : []),

@@ -1,33 +1,46 @@
 import { Copy, ExternalLink, Save } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useCollections } from '../lib/collections-store';
+import { useCollectionTree, type CollectionOutline } from '../lib/collections-store';
 import { call } from '../api';
 import { confirmAction, toastError, useApp } from '../store';
-import type { KeyValue } from '../types';
+import type { Collection, KeyValue } from '../types';
 import { KeyValueEditor } from './KeyValueEditor';
 import { CountPill, TreeHeader, treeKeys } from './TreeParts';
 import { Button, cx, Empty, Split } from './ui';
 import { refreshEnvironments } from '../lib/environments-store';
 import { plural } from '../lib/format';
 
+/** How many variables a collection has (the outline counts them). */
+const varCount = (c: CollectionOutline) => c.variableCount ?? c.variables?.length ?? 0;
+
 /**
  * Environments ▸ Collection variables: every collection's variables in one place (they are also in each collection's
  * settings). Pick a collection on the left, edit its variables on the right, Save.
  */
 export function CollectionVariablesPane({ initial }: { initial?: string }) {
-  // the shared list: a save elsewhere replaces only that collection, so unsaved edits here stay
-  const all = useCollections();
+  // the outline lists the collections (names, variable counts); the picked one is read whole. A save elsewhere
+  // refreshes only that collection, so unsaved edits here stay
+  const all = useCollectionTree();
   const cols = useMemo(() => all.filter((c) => !c.problem), [all]);
   const [sel, setSel] = useState<string | undefined>(initial);
+  const selOutline = cols.find((c) => c.id === sel);
+  const [loaded, setLoaded] = useState<Collection>();
+  useEffect(() => {
+    if (!selOutline) return;
+    let live = true;
+    // read again whenever its outline changed (saved here or elsewhere)
+    call<Collection>('col.get', { id: selOutline.id }).then((c) => live && setLoaded(c), toastError);
+    return () => void (live = false);
+  }, [selOutline]);
   const [rows, setRows] = useState<KeyValue[]>([]);
   const [saved, setSaved] = useState<string>('[]');
   const rowsRef = useRef(rows);
   rowsRef.current = rows;
   const savedRef = useRef(saved);
   savedRef.current = saved;
-  useEffect(() => setSel((s) => (s && cols.some((c) => c.id === s) ? s : (cols.find((c) => c.variables?.length)?.id ?? cols[0]?.id))), [cols]);
+  useEffect(() => setSel((s) => (s && cols.some((c) => c.id === s) ? s : (cols.find((c) => varCount(c) > 0)?.id ?? cols[0]?.id))), [cols]);
   useEffect(() => setSel((s) => initial ?? s), [initial]);
-  const current = cols.find((c) => c.id === sel);
+  const current = loaded && loaded.id === sel ? loaded : undefined;
   // the stored variables come in when another collection is picked, or when they change and nothing here is unsaved
   // (a refresh or a save elsewhere must not drop what is being typed)
   const shownId = useRef<string | undefined>(undefined);
@@ -104,7 +117,7 @@ export function CollectionVariablesPane({ initial }: { initial?: string }) {
               className={cx('w-[calc(100%-0.5rem)] mx-1 flex items-center gap-2 h-8 px-3 rounded-md text-sm text-left transition-colors', c.id === sel ? 'bg-accent-soft' : 'hover:bg-hover')}
             >
               <span className="truncate flex-1">{c.name}</span>
-              <CountPill n={c.variables?.length ?? 0} />
+              <CountPill n={varCount(c)} />
             </button>
           ))}
         </div>

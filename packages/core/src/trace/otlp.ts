@@ -1,8 +1,8 @@
-import { fetch as undiciFetch } from 'undici';
 import type { Span, Trace } from '../model/types.js';
 import { ApsError } from '../errors.js';
 import type { Redactor } from '../util/redact.js';
 import { ENGINE_VERSION } from '../version.js';
+import { ensureProxyApplied } from '../net/proxy.js';
 
 /**
  * OpenTelemetry export: TestPion traces as OTLP/HTTP JSON, sent to a collector (Jaeger, Grafana Tempo,
@@ -97,6 +97,8 @@ export async function exportOtlp(traces: Trace[], target: OtlpTarget, opts: { se
   let spans = 0;
   for (let i = 0; i < traces.length; i += 100) {
     const batch = traces.slice(i, i + 100);
+    await ensureProxyApplied();
+    const { fetch: undiciFetch } = await import('undici');
     const res = await undiciFetch(url, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(target.headers ?? {}) },

@@ -1,16 +1,27 @@
-import AjvModule, { type ValidateFunction } from 'ajv';
-import addFormatsModule from 'ajv-formats';
+import type AjvModule from 'ajv';
+import type { ValidateFunction } from 'ajv';
 import { BoundedMap } from './collections.js';
+import { nodeRequire } from './lazy-require.js';
 
-// ajv ships CJS; normalise default export under NodeNext/ESM
-const Ajv = ((AjvModule as unknown as { default?: unknown }).default ?? AjvModule) as typeof AjvModule.default;
-const addFormats = ((addFormatsModule as unknown as { default?: unknown }).default ?? addFormatsModule) as unknown as (a: unknown) => void;
-
-/** One validator for every JSON Schema check: lenient (strict: false), every error reported, warnings silent. */
-const ajv = new Ajv({ allErrors: true, strict: false, logger: false });
-addFormats(ajv);
-// OpenAPI's own formats (numbers and strings of any content): accepted, like most validators do
-for (const f of ['int32', 'int64', 'float', 'double', 'byte', 'binary', 'password']) ajv.addFormat(f, true);
+type Ajv = InstanceType<typeof AjvModule.default>;
+let instance: Ajv | undefined;
+/**
+ * One validator for every JSON Schema check: lenient (strict: false), every error reported, warnings silent. Built at
+ * the first check (ajv is not loaded at startup; see lazy-require.ts).
+ */
+function ajv(): Ajv {
+  if (instance) return instance;
+  const ajvModule = typeof require === 'function' ? require('ajv') : nodeRequire('ajv');
+  const formatsModule = typeof require === 'function' ? require('ajv-formats') : nodeRequire('ajv-formats');
+  // ajv ships CJS; normalise its default export
+  const Ctor = (ajvModule.default ?? ajvModule) as typeof AjvModule.default;
+  const addFormats = (formatsModule.default ?? formatsModule) as (a: unknown) => void;
+  const a = new Ctor({ allErrors: true, strict: false, logger: false });
+  addFormats(a);
+  // OpenAPI's own formats (numbers and strings of any content): accepted, like most validators do
+  for (const f of ['int32', 'int64', 'float', 'double', 'byte', 'binary', 'password']) a.addFormat(f, true);
+  return (instance = a);
+}
 
 /** Compiled schemas by key (the schema's JSON, a hash …): a schema is compiled once however often it is checked. */
 const byKey = new BoundedMap<string, ValidateFunction>(500);
@@ -28,7 +39,7 @@ export function compileSchema(schema: unknown | (() => object), key?: string): V
     const k = key ?? JSON.stringify(schema);
     v = byKey.get(k);
     if (!v) {
-      v = ajv.compile(typeof schema === 'function' ? (schema as () => object)() : (schema as object));
+      v = ajv().compile(typeof schema === 'function' ? (schema as () => object)() : (schema as object));
       byKey.set(k, v);
     }
     if (obj) byObject.set(obj, v);

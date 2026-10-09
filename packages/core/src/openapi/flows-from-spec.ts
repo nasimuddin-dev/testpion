@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { stringify } from 'yaml';
+import { stringifyYaml as stringify } from '../util/lazy-yaml.js';
 import type { Collection, HttpRequestSpec } from '../model/types.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { slugify } from '../util/ids.js';

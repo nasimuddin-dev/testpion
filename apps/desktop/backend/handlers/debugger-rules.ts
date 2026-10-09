@@ -16,9 +16,10 @@ import {
   type DebuggerExchange,
   type DebuggerRule,
   type DebuggerRulesFile,
+  atomicWrite,
 } from '@testpion/core';
 import type { Backend, Handlers } from '../backend.js';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { newDebuggerState, type DebuggerState } from './debugger.js';
 
 export interface PendingBreakpoint {
@@ -60,7 +61,7 @@ function save(be: Backend, state: DebuggerState) {
   const f = rulesOf(be, state);
   mkdirSync(be.ws.path('debugger'), { recursive: true });
   be.lastOwnChange = Date.now(); // our own write: not news for the "changed outside TestPion" notice
-  writeFileSync(be.ws.path(RULES_FILE), JSON.stringify(f, null, 2) + '\n');
+  atomicWrite(be.ws.path(RULES_FILE), JSON.stringify(f, null, 2) + '\n');
   be.host.emit('debug.rules', { active: f.active, count: (f.profiles[f.active] ?? []).filter((r) => r.enabled).length });
 }
 

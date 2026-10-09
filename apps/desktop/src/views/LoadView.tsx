@@ -17,7 +17,7 @@ import { ErrorPanel } from '../components/Results';
 import { LoadTimeline, StatusCodes } from '../components/LoadCharts';
 import { LoadHistory } from '../components/LoadHistory';
 import type { NormalizedError } from '../api';
-import { useCollections } from '../lib/collections-store';
+import { useCollectionTree } from '../lib/collections-store';
 
 interface Snapshot {
   elapsedSec: number;
@@ -82,7 +82,8 @@ export function LoadView() {
   const [snap, setSnap] = useState<Snapshot>();
   const [error, setError] = useState<NormalizedError>();
   const [tab, setTab] = useState<'headers' | 'body'>('headers');
-  const allCollections = useCollections();
+  // the target picker needs names and folders: the outline (the backend reads the collection itself)
+  const allCollections = useCollectionTree();
   const collections = useMemo(() => allCollections.filter((c) => !(c as { problem?: string }).problem), [allCollections]);
   const [preparing, setPreparing] = useState(false);
   const [prep, setPrep] = useState<{ requests: string[]; unresolved: string[]; warmUp?: { passed: number; failed: number } }>();
@@ -390,7 +391,7 @@ export function LoadView() {
           {isProd && <Badge tone="bad">Active environment is marked PRODUCTION</Badge>}
         </Callout>
         {id ? (
-          <Button variant="danger" icon={<Square size={12} />} onClick={() => call('load.stop', { id })}>
+          <Button variant="danger" icon={<Square size={12} />} onClick={() => void call('load.stop', { id }).catch(toastError)}>
             Stop
           </Button>
         ) : (

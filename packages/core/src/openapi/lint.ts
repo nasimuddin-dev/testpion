@@ -1,4 +1,5 @@
-import { LineCounter, isMap, isScalar, isSeq, parseDocument, type Node } from 'yaml';
+import type { Node } from 'yaml';
+import { isMap, isScalar, isSeq, lineCounter, parseDocument } from '../util/lazy-yaml.js';
 import { schemaProblems, type OpenApiDoc } from './contract.js';
 import { jsonPointerGet } from '../util/json-ref.js';
 
@@ -72,7 +73,7 @@ export function lintOpenApi(text: string, opts: { disable?: string[]; minSeverit
   const off = new Set(opts.disable ?? []);
   const min = RANK[opts.minSeverity ?? 'info'];
   const problems: OpenApiLintProblem[] = [];
-  const lc = new LineCounter();
+  const lc = lineCounter();
   const yd = parseDocument(text, { lineCounter: lc, prettyErrors: false, uniqueKeys: false });
 
   const pos = (offset: number) => lc.linePos(Math.max(0, Math.min(offset, text.length)));

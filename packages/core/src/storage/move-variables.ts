@@ -37,6 +37,7 @@ export async function moveCollectionVariablesToEnvironments(
     const r = ref.toLowerCase();
     const e = store.listEnvironments().find((x) => x.id.toLowerCase() === r) ?? store.listEnvironments().find((x) => x.name.toLowerCase() === r);
     if (!e) throw new ApsError('ValidationError', `No environment "${ref}"`);
+    if (e.problem) throw new ApsError('ConfigurationError', `Environment "${e.name}" is broken: ${e.problem}`);
     return store.getEnvironment(e.id)!;
   });
   const result: MoveVariablesResult = { moved: keys, notMoved, environments: [] };

@@ -2,6 +2,16 @@ import { useEffect } from 'react';
 import { create } from 'zustand';
 import { call, on } from '../api';
 import type { Environment } from '../types';
+import { displayName } from './format';
+
+/**
+ * An environment as the window shows it: a text name and a list of variables, whatever a hand edit or a merge left in
+ * its file (the window never renders an object as a name, never reads .length of nothing).
+ */
+export function normalizeEnvironment<E extends Partial<Environment>>(e: E): E & Environment {
+  const id = typeof e?.id === 'string' && e.id ? e.id : displayName(e?.id, 'environment');
+  return { ...e, id, name: displayName(e?.name, id), variables: Array.isArray(e?.variables) ? e.variables.filter((v) => !!v && typeof v === 'object') : [] } as E & Environment;
+}
 
 /**
  * The workspace's environments, fetched once for the whole app (like lib/collections-store): the Environments
@@ -17,6 +27,7 @@ export function refreshEnvironments(): Promise<Environment[]> {
   pending ??= call<Environment[]>('env.list')
     .then((list) => {
       // an unchanged list is not a new one: views keep their unsaved edits when a refresh brings the same environments
+      list = (Array.isArray(list) ? list : []).map(normalizeEnvironment);
       const same = useStore.getState().loaded && JSON.stringify(list) === JSON.stringify(useStore.getState().list);
       useStore.setState({ list: same ? useStore.getState().list : list, loaded: true });
       return useStore.getState().list;

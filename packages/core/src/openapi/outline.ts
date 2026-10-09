@@ -1,4 +1,4 @@
-import { parse as parseYaml } from 'yaml';
+import { parseYaml } from '../util/lazy-yaml.js';
 import { ApsError } from '../errors.js';
 import { importOpenApi } from '../import/importers.js';
 import type { CollectionNode, HttpRequestSpec } from '../model/types.js';

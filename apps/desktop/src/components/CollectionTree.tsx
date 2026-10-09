@@ -14,7 +14,6 @@ import {
   CopyPlus,
   ExternalLink,
   FilePlus2,
-  Folder,
   FolderCog,
   FolderPlus,
   Link2,
@@ -29,11 +28,11 @@ import {
   Settings2,
   History,
 } from 'lucide-react';
-import { memo, useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import type { Collection, CollectionFolder, CollectionNode, SavedHttpRequest } from '../types';
 import { asError, call, on } from '../api';
-import { Button, cx, Menu, menuKeys, rowActionClass, type MenuItem } from './ui';
-import { CountPill, focusRow, InlineRename } from './TreeParts';
+import { Button, cx, Menu, menuKeys, rowActionClass, VirtualList, type MenuItem } from './ui';
+import { CLOSED_ICON, CountPill, focusRow, FOLDER_ICON, InlineRename, MORE_ICON, OPEN_ICON } from './TreeParts';
 import { confirmAction, promptText, toastError, useApp } from '../store';
 import { MoveDialog, subtreeIds } from './MoveDialog';
 import { closeTabsFor } from './EditorTabs';
@@ -42,17 +41,13 @@ import { FolderEditor } from './FolderEditor';
 import { ChangeMark } from './ChangeMark';
 import { GitItemHistory } from './GitItemHistory';
 import { useGit } from '../lib/git';
+import { fullCollection } from '../lib/collections-store';
 import { countCategory, hasCategory, isEmptyFolder, matchesCollectionNode, requestCategory, type RequestCategory } from '../lib/collection-filter';
 
 // the tree's data operations live in lib/collection-nodes (re-exported: views import them from here)
 export { mapNodes, findNode, addToFolder, insertBefore, folderIdsTo, withNewIds, duplicateNode } from '../lib/collection-nodes';
 import { mapNodes, findNode, addToFolder, insertBefore, folderIdsTo, withNewIds, duplicateNode } from '../lib/collection-nodes';
 import { usePersisted } from '../lib/sticky';
-
-/** Rows of one list (a collection's or folder's direct items) shown at first, and added by "Show more". */
-const LIST_PAGE = 300;
-/** While filtering every folder opens: draw at most this many rows in all (more on request), so each keystroke stays quick. */
-const FILTER_BUDGET = 300;
 
 /** How each category of request looks in the tree. */
 export const CATEGORY_META: Record<RequestCategory, { label: string; badge: string; cls: string }> = {
@@ -129,7 +124,23 @@ export function TreeBadge({ label, className }: { label: string; className?: str
   );
 }
 
-export function CollectionTree({
+/** One row of the tree as drawn: the open part of every collection, flattened, so only the rows on screen are rendered. */
+type TreeRow =
+  | { t: 'col'; key: string; c: Collection; open: boolean }
+  | { t: 'cat'; key: string; c: Collection; cat: RequestCategory; count: number; open: boolean }
+  | { t: 'folder'; key: string; c: Collection; n: CollectionFolder; depth: number; open: boolean }
+  | { t: 'req'; key: string; c: Collection; n: Exclude<CollectionNode, CollectionFolder>; depth: number }
+  | { t: 'example'; key: string; c: Collection; n: SavedHttpRequest; ex: { id: string; name: string; status: number }; depth: number }
+  | { t: 'xfolder'; key: string; folder: string; count: number; open: boolean; depth: number }
+  | { t: 'xitem'; key: string; g: ExtraGroup; i: ExtraGroup['items'][number]; depth: number; from?: string }
+  | { t: 'empty'; key: string; c: Collection };
+
+/** Below this many rows every row is drawn (a small tree); above it only the rows on screen and a margin. */
+const DRAW_ALL = 300;
+/** Rows drawn above and below the visible ones in a big tree. */
+const OVERSCAN = 25;
+
+export const CollectionTree = memo(function CollectionTree({
   collections,
   activeRequestId,
   onOpen,
@@ -178,18 +189,30 @@ export function CollectionTree({
   revealKey?: number;
 }) {
   const [menuFor, setMenuFor] = useState<string>();
+  /**
+   * Change a collection: the list may be outlines (col.tree, no bodies or scripts), so the change is applied to the
+   * whole collection, read first; `onChange` always gets a whole collection.
+   */
+  const change = (c: Collection, f: (whole: Collection) => Collection | undefined) =>
+    void fullCollection(c).then((whole) => {
+      const next = f(whole);
+      if (next) onChange(next);
+    }, toastError);
+  /** "New request": the callback builds on the collection's items, so it gets the whole collection. */
+  const newRequest = (c: Collection, folderId?: string) => void fullCollection(c).then((whole) => onNewRequest(whole, folderId), toastError);
+  /** The node as the whole collection has it (with its body, headers and scripts). */
+  const wholeNode = <T extends CollectionNode>(whole: Collection, n: T): T => (findNode(whole.items, n.id) as T | undefined) ?? n;
   /** The collection, folder or request being renamed in place (F2, or Rename in its menu). */
   const [renaming, setRenaming] = useState<string>();
   const finishRename = (c: Collection, id: string, name?: string) => {
     setRenaming(undefined);
-    if (name) onChange(id === c.id ? { ...c, name } : { ...c, items: mapNodes(c.items, (x) => (x.id === id ? { ...x, name } : x)) });
+    if (name) change(c, (c) => (id === c.id ? { ...c, name } : { ...c, items: mapNodes(c.items, (x) => (x.id === id ? { ...x, name } : x)) }));
     focusRow(id);
   };
   const health = useCollectionsHealth();
   const [moving, setMoving] = useState<{ c: Collection; n: CollectionNode }>();
   const [historyFor, setHistoryFor] = useState<{ c: Collection; n?: CollectionNode }>();
   const git = useGit();
-  /** Delete a request or folder, with Undo in the toast (puts the collection back as it was). */
   /** A copy of the collection with everything it holds (its gRPC calls and connections too). */
   const duplicateCollection = async (c: Collection) => {
     try {
@@ -220,6 +243,7 @@ export function CollectionTree({
     }
   };
   const renameNode = (_c: Collection, n: CollectionNode) => setRenaming(n.id);
+  /** Delete a request or folder, with Undo in the toast (puts the collection back as it was). */
   const deleteNode = async (c: Collection, n: CollectionNode) => {
     const ok =
       n.kind === 'folder'
@@ -237,12 +261,13 @@ export function CollectionTree({
       void deleteNode(c, n);
     }
   };
-  const removeWithUndo = (c: Collection, n: CollectionNode) => {
-    onChange({ ...c, items: mapNodes(c.items, (x) => (x.id === n.id ? null : x)) });
-    // its tabs (and those of everything in a deleted folder) close too
-    closeTabsFor(subtreeIds(n));
-    useApp.getState().toast(`Deleted "${n.name}"`, 'info', { label: 'Undo', onClick: () => onChange(c) });
-  };
+  const removeWithUndo = (c: Collection, n: CollectionNode) =>
+    change(c, (c) => {
+      // its tabs (and those of everything in a deleted folder) close too
+      closeTabsFor(subtreeIds(n));
+      useApp.getState().toast(`Deleted "${n.name}"`, 'info', { label: 'Undo', onClick: () => onChange(c) });
+      return { ...c, items: mapNodes(c.items, (x) => (x.id === n.id ? null : x)) };
+    });
   // drag and drop: a request or folder onto a request (before it), a folder (into it) or a collection (top level)
   const [drag, setDrag] = useState<{ c: Collection; n: CollectionNode }>();
   const [dropAt, setDropAt] = useState<{ id: string; mode: 'before' | 'into' }>();
@@ -256,14 +281,17 @@ export function CollectionTree({
     setDrag(undefined);
     setDropAt(undefined);
     if (!d || !canDrop(place)) return;
-    const insert = (items: CollectionNode[]) => (place.beforeId ? insertBefore(items, place.beforeId, d.n) : addToFolder(items, place.folderId, d.n));
-    const without = mapNodes(d.c.items, (x) => (x.id === d.n.id ? null : x));
-    if (to.id === d.c.id) onChange({ ...d.c, items: insert(without) });
-    else {
-      onChange({ ...to, items: insert(to.items) });
-      onChange({ ...d.c, items: without });
-      onMoved?.(subtreeIds(d.n), d.c.id, to.id);
-    }
+    void Promise.all([fullCollection(d.c), to.id === d.c.id ? undefined : fullCollection(to)]).then(([from, other]) => {
+      const n = wholeNode(from, d.n);
+      const insert = (items: CollectionNode[]) => (place.beforeId ? insertBefore(items, place.beforeId, n) : addToFolder(items, place.folderId, n));
+      const without = mapNodes(from.items, (x) => (x.id === n.id ? null : x));
+      if (!other) onChange({ ...from, items: insert(without) });
+      else {
+        onChange({ ...other, items: insert(other.items) });
+        onChange({ ...from, items: without });
+        onMoved?.(subtreeIds(n), from.id, other.id);
+      }
+    }, toastError);
   };
   const dragProps = (c: Collection, n: CollectionNode) => ({
     draggable: true,
@@ -316,23 +344,27 @@ export function CollectionTree({
     },
   });
   const dropClass = (id: string) => (dropAt?.id !== id ? undefined : dropAt.mode === 'into' ? 'ring-1 ring-inset ring-accent bg-accent/10' : 'shadow-[inset_0_2px_0_var(--accent)]');
-  const move = (from: Collection, n: CollectionNode, to: Collection, folderId: string | undefined) => {
-    const without = { ...from, items: mapNodes(from.items, (x) => (x.id === n.id ? null : x)) };
-    if (to.id === from.id) onChange({ ...without, items: addToFolder(without.items, folderId, n) });
-    else {
-      // add to the new collection first: a failed save then leaves a copy rather than losing the request
-      onChange({ ...to, items: addToFolder(to.items, folderId, n) });
-      onChange(without);
-    }
-    onMoved?.(subtreeIds(n), from.id, to.id);
+  const move = (fromShown: Collection, shown: CollectionNode, toShown: Collection, folderId: string | undefined) => {
     setMoving(undefined);
-    useApp.getState().toast(`Moved "${n.name}" to ${to.name}${folderId ? ` › ${findNode(to.items, folderId)?.name ?? ''}` : ''}`, 'success');
+    void Promise.all([fullCollection(fromShown), toShown.id === fromShown.id ? undefined : fullCollection(toShown)]).then(([from, other]) => {
+      const n = wholeNode(from, shown);
+      const to = other ?? from;
+      const without = { ...from, items: mapNodes(from.items, (x) => (x.id === n.id ? null : x)) };
+      if (!other) onChange({ ...without, items: addToFolder(without.items, folderId, n) });
+      else {
+        // add to the new collection first: a failed save then leaves a copy rather than losing the request
+        onChange({ ...other, items: addToFolder(other.items, folderId, n) });
+        onChange(without);
+      }
+      onMoved?.(subtreeIds(n), from.id, to.id);
+      useApp.getState().toast(`Moved "${n.name}" to ${to.name}${folderId ? ` › ${findNode(to.items, folderId)?.name ?? ''}` : ''}`, 'success');
+    }, toastError);
   };
-  const environment = useApp((s) => s.environment);
   /** Copy a saved request as its URL or as code, with variables resolved from the active environment. */
-  const copyAs = async (c: Collection, n: SavedHttpRequest, language: string, what: string) => {
+  const copyAs = async (c: Collection, shown: SavedHttpRequest, language: string, what: string) => {
     try {
-      const r = await call<{ text: string; containsSecrets: boolean }>('http.copyCode', { request: n.request, environment, collectionId: c.id, requestId: n.id, language });
+      const n = wholeNode(await fullCollection(c), shown);
+      const r = await call<{ text: string; containsSecrets: boolean }>('http.copyCode', { request: n.request, environment: useApp.getState().environment, collectionId: c.id, requestId: n.id, language });
       await navigator.clipboard.writeText(r.text);
       useApp.getState().toast(`Copied ${what}${r.containsSecrets ? ' (it includes secret values such as tokens)' : ''}`, 'success');
     } catch (e) {
@@ -383,7 +415,7 @@ export function CollectionTree({
   const [open, setOpen] = usePersisted<Record<string, boolean>>('aps.tree.open', {});
   // flips what is shown: an item open by default (a category, the collection of the open request) closes on the first click
   const toggle = (id: string, shown: boolean) => {
-    setOpen({ ...open, [id]: !shown });
+    setOpen((o) => ({ ...o, [id]: !shown }));
   };
   useEffect(() => {
     if (!collapseAll) return;
@@ -412,48 +444,123 @@ export function CollectionTree({
       return { ...o, ...Object.fromEntries(keys.map((k) => [k, shown])), [folder?.id ?? c.id]: shown };
     });
   };
-  // reveal the open request: scroll its row into view when it changes (a tab, search or history opened it)
-  const treeRef = useRef<HTMLDivElement>(null);
-  const lastReveal = useRef(revealKey);
-  useEffect(() => {
-    if (!activeRequestId) return;
-    // something was opened (search, history, a link): open its collection, category and folders, even ones folded
-    // by hand. Switching or closing tabs only scrolls to the row when it shows: what the user folded stays folded.
-    const opened = revealKey !== lastReveal.current;
-    lastReveal.current = revealKey;
-    if (opened)
-      for (const c of collections) {
-        const folders = folderIdsTo(c.items, activeRequestId);
-        if (!folders) continue;
-        const node = findNode(c.items, activeRequestId);
-        const cat = node ? requestCategory(node) : undefined;
-        const keys = [c.id, ...(cat && categorize ? [`${c.id}:cat:${cat}`] : []), ...folders];
-        setOpen((o) => (keys.every((k) => o[k] !== false) ? o : { ...o, ...Object.fromEntries(keys.map((k) => [k, true])) }));
-        break;
-      }
-    // the tree moves only for an explicit reveal: opening from Favorites, a tab or the tree itself leaves it where it is
-    if (!opened) return;
-    const t = setTimeout(() => treeRef.current?.querySelector(`[data-node-id="${CSS.escape(activeRequestId)}"]`)?.scrollIntoView({ block: 'nearest' }), 80);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeRequestId, revealKey]);
   const [editing, setEditing] = useState<{ c: Collection; folder: CollectionFolder }>();
   const f = filter?.toLowerCase();
-  const matches = (n: CollectionNode) => matchesCollectionNode(n, filter, favoritesOnly);
 
-  // in a category, a folder shows when it holds requests of that category (empty folders: the first category)
-  const inScope = (n: CollectionNode, scope?: { cat: RequestCategory; first: boolean }) =>
-    !scope || (n.kind === 'folder' ? hasCategory(n.items, scope.cat) || (scope.first && isEmptyFolder(n)) : requestCategory(n) === scope.cat);
-  // a very long list (thousands of requests in one folder) is shown a page at a time, so the sidebar stays fast
-  const [limits, setLimits] = useState<Record<string, number>>({});
-  const [filterBudget, setFilterBudget] = useState(FILTER_BUDGET);
-  useEffect(() => setFilterBudget(FILTER_BUDGET), [f]);
-  // What a row needs from here, through one ref that is always current: rows are memoized (a tree can have
-  // hundreds), and their handlers read these at event time, so they are never stale
+  // every row that shows (the open collections, categories and folders), in order: a list of thousands is cheap to
+  // build; only the rows on screen are drawn
+  const rows = useMemo(() => {
+    const out: TreeRow[] = [];
+    const matches = (n: CollectionNode) => matchesCollectionNode(n, filter, favoritesOnly);
+    // in a category, a folder shows when it holds requests of that category (empty folders: the first category)
+    const inScope = (n: CollectionNode, scope?: { cat: RequestCategory; first: boolean }) =>
+      !scope || (n.kind === 'folder' ? hasCategory(n.items, scope.cat) || (scope.first && isEmptyFolder(n)) : requestCategory(n) === scope.cat);
+    const extraShown = (i: ExtraGroup['items'][number]) => !f || i.name.toLowerCase().includes(f) || !!i.folder?.toLowerCase().includes(f);
+    const addNodes = (c: Collection, nodes: CollectionNode[], depth: number, scope?: { cat: RequestCategory; first: boolean }) => {
+      for (const n of nodes) {
+        if (!matches(n) || !inScope(n, scope)) continue;
+        if (n.kind === 'folder') {
+          const isOpen = open[n.id] ?? !!f;
+          out.push({ t: 'folder', key: n.id, c, n, depth, open: isOpen });
+          if (isOpen) addNodes(c, n.items, depth + 1, scope);
+          continue;
+        }
+        out.push({ t: 'req', key: n.id, c, n, depth });
+        if (n.kind === 'http' && n.examples?.length && open[`${n.id}:examples`]) for (const ex of n.examples) out.push({ t: 'example', key: `${n.id}:ex:${ex.id}`, c, n, ex, depth });
+      }
+    };
+    const addExtra = (g: ExtraGroup, depth: number, from?: string) => {
+      const shown = g.items.filter(extraShown);
+      const folders = [...new Set(shown.map((i) => i.folder ?? ''))].sort((a, b) => (a === '' ? -1 : b === '' ? 1 : a.localeCompare(b)));
+      for (const folder of folders) {
+        // a folder of saved gRPC calls / connections: the same row as a collection's folders
+        const key = `${from ?? ''}:${g.cat}:folder:${folder}`;
+        const isOpen = !!f || (open[key] ?? true);
+        const inside = shown.filter((i) => (i.folder ?? '') === folder);
+        if (folder) out.push({ t: 'xfolder', key, folder, count: inside.length, open: isOpen, depth });
+        if (isOpen || !folder) for (const i of inside) out.push({ t: 'xitem', key: `${from ?? ''}:${g.cat}:${i.id}`, g, i, depth: depth + (folder ? 1 : 0), from });
+      }
+    };
+    /** A collection's contents: grouped by category when it holds more than one kind of request. */
+    const addContents = (c: Collection, extras: ExtraGroup[]) => {
+      if (!categorize) return addNodes(c, c.items, 1);
+      const cats = (['rest', 'soap', 'graphql'] as const).filter((k) => hasCategory(c.items, k));
+      if (!cats.length && c.items.some(isEmptyFolder)) cats.push('rest');
+      // the category level shows even for one kind, so every collection reads the same way
+      if (!cats.length && !extras.length) {
+        addNodes(c, c.items, 1);
+        return;
+      }
+      cats.forEach((cat, i) => {
+        const key = `${c.id}:cat:${cat}`;
+        const isOpen = !!f || (open[key] ?? true);
+        const scope = { cat, first: i === 0 };
+        if (f && !c.items.some((n) => matches(n) && inScope(n, scope))) return;
+        out.push({ t: 'cat', key, c, cat, count: countCategory(c.items, cat), open: isOpen });
+        if (isOpen) addNodes(c, c.items, 2, scope);
+      });
+      for (const g of extras) {
+        const key = `${c.id}:cat:${g.cat}`;
+        const isOpen = !!f || (open[key] ?? true);
+        if (f && !g.items.some(extraShown)) continue;
+        out.push({ t: 'cat', key, c, cat: g.cat, count: g.items.length, open: isOpen });
+        if (isOpen) addExtra(g, 2, c.id);
+      }
+    };
+    for (const c of collections) {
+      const extras = (extraGroups?.(c) ?? []).filter((g) => g.items.length);
+      // grouped by category, collections start folded: the workspace lists them, expanding shows the categories
+      // a collection opens when the user opens it (or something is revealed in it), not because its request is open
+      const isOpen = categorize && f ? true : (open[c.id] ?? !categorize);
+      if (categorize && f && !c.items.some(matches) && !extras.some((g) => g.items.some(extraShown))) continue;
+      out.push({ t: 'col', key: c.id, c, open: isOpen });
+      if (!isOpen) continue;
+      addContents(c, extras);
+      if (!f && !favoritesOnly && !c.problem && !c.items.length && !extras.length) out.push({ t: 'empty', key: `${c.id}:empty`, c });
+    }
+    return out;
+  }, [collections, open, filter, f, favoritesOnly, categorize, extraGroups]);
+  // nothing to show for the filter (or no favourites): say so
+  const nothingMatches = useMemo(() => {
+    if (!f && !favoritesOnly) return false;
+    const extraShown = (i: ExtraGroup['items'][number]) => !f || i.name.toLowerCase().includes(f) || !!i.folder?.toLowerCase().includes(f);
+    return !collections.some((c) => c.items.some((n) => matchesCollectionNode(n, filter, favoritesOnly)) || (categorize && (extraGroups?.(c) ?? []).some((g) => g.items.some(extraShown))));
+  }, [collections, filter, f, favoritesOnly, categorize, extraGroups]);
+
+  // reveal the open request: when something was opened (search, history, a link), open its collection, category and
+  // folders, even ones folded by hand, and scroll its row into view. Switching or closing tabs leaves the tree as it is.
+  const lastReveal = useRef(revealKey);
+  const [reveal, setReveal] = useState<{ id: string; nonce: number }>();
+  useEffect(() => {
+    if (!activeRequestId) return;
+    const opened = revealKey !== lastReveal.current;
+    lastReveal.current = revealKey;
+    if (!opened) return;
+    for (const c of collections) {
+      const folders = folderIdsTo(c.items, activeRequestId);
+      if (!folders) continue;
+      const node = findNode(c.items, activeRequestId);
+      const cat = node ? requestCategory(node) : undefined;
+      const keys = [c.id, ...(cat && categorize ? [`${c.id}:cat:${cat}`] : []), ...folders];
+      setOpen((o) => (keys.every((k) => o[k] !== false) ? o : { ...o, ...Object.fromEntries(keys.map((k) => [k, true])) }));
+      break;
+    }
+    setReveal({ id: activeRequestId, nonce: revealKey ?? 0 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeRequestId, revealKey]);
+  // the row to scroll to, once the folders on its way are open
+  const revealIndex = useMemo(() => (reveal ? rows.findIndex((r) => r.t === 'req' && r.n.id === reveal.id) : -1), [reveal, rows]);
+  // done once it scrolled (the list scrolls in its own effect, which runs first): later changes leave the scroll alone
+  useEffect(() => {
+    if (revealIndex >= 0) setReveal(undefined);
+  }, [revealIndex]);
+
+  // What a request row needs from here, through one ref that is always current: rows are memoized, and their
+  // handlers read these at event time, so they are never stale
   const ctx = useRef<RowContext>(null!);
   ctx.current = {
     onOpen,
-    onChange,
+    change,
     toggle,
     rowKeys,
     dragProps,
@@ -466,128 +573,73 @@ export function CollectionTree({
     setMoving,
     setHistoryFor,
   };
-  // counted down as rows are drawn in this render; what doesn't fit is offered as "Show more"
-  const budget = { left: f ? filterBudget : Infinity, hidden: 0 };
-  const renderNodes = (c: Collection, nodes: CollectionNode[], depth: number, scope?: { cat: RequestCategory; first: boolean }, listId: string = c.id): React.ReactNode => {
-    const list = nodes.filter((n) => matches(n) && inScope(n, scope));
-    const listKey = `${listId}:${scope?.cat ?? ''}`;
-    let limit = limits[listKey] ?? LIST_PAGE;
-    if (list.length > limit && activeRequestId) {
-      // the open request is always in view
-      const at = list.findIndex((n) => n.id === activeRequestId);
-      if (at >= limit) limit = at + 20;
-    }
-    let shown = list.length > limit ? list.slice(0, limit) : list;
-    if (budget.left !== Infinity) {
-      const fits = Math.max(0, budget.left);
-      budget.hidden += Math.max(0, shown.length - fits);
-      shown = shown.slice(0, fits);
-      budget.left -= shown.length;
-    }
-    const rows = shown.map((n) => {
-      const pad = { paddingLeft: 8 + depth * 12 };
-      if (n.kind === 'folder') {
-        // the folders on the way to the open request start open, so it's always in sight
-        const isOpen = open[n.id] ?? !!f;
-        return (
-          <div key={n.id}>
-            <div
-              className={cx('group flex items-center h-8 text-sm rounded-md mx-1 hover:bg-hover pr-1 transition-colors', menuFor === n.id && 'bg-hover', dropClass(n.id))}
-              style={pad}
-              {...dragProps(c, n)}
-              {...dropProps(c, n.id, 'into', { folderId: n.id })}
-              draggable={renaming === n.id ? false : undefined}
-              onContextMenu={(e) => (e.preventDefault(), setMenuFor(n.id))}
-            >
-              {renaming === n.id ? (
-                <div className="flex items-center gap-1 flex-1 min-w-0">
-                  {isOpen ? <ChevronDown size={13} className="text-muted shrink-0" /> : <ChevronRight size={13} className="text-muted shrink-0" />}
-                  <Folder size={13} className="text-muted shrink-0" />
-                  <InlineRename value={n.name} label="Folder name" onCommit={(name) => finishRename(c, n.id, name)} onCancel={() => finishRename(c, n.id)} />
-                </div>
-              ) : (
-                <button
-                  className="flex items-center gap-1 flex-1 min-w-0 text-left"
-                  onClick={() => toggle(n.id, isOpen)}
-                  onKeyDown={rowKeys(c, n)}
-                  data-tree-row
-                  data-rename-id={n.id}
-                  aria-expanded={isOpen}
-                  title="F2 renames · Delete deletes"
-                >
-                  {isOpen ? <ChevronDown size={13} className="text-muted shrink-0" /> : <ChevronRight size={13} className="text-muted shrink-0" />}
-                  <Folder size={13} className="text-muted shrink-0" />
-                  <span className="truncate">{n.name}</span>
-                  {(n.preRequestScript || n.testScript || n.variables?.length) && <span className="w-1.5 h-1.5 rounded-full bg-accent/70 shrink-0" title="Has folder scripts or variables" />}
-                  <span className="ml-auto pl-1">
-                    <CountPill n={requestCount(n.items)} />
-                  </span>
-                </button>
-              )}
-              <NodeMenu
-                open={menuFor === n.id}
-                onOpenChange={(o) => setMenuFor(o ? n.id : undefined)}
-                onEdit={() => setEditing({ c, folder: n })}
-                onExpandAll={() => setSubtree(c, n, true)}
-                onCollapseAll={() => setSubtree(c, n, false)}
-                onMove={() => setMoving({ c, n })}
-                onRename={() => void renameNode(c, n)}
-                onDuplicate={() => onChange({ ...c, items: duplicateNode(c.items, n.id, (x) => ({ ...withNewIds(x), name: `${x.name} copy` })) })}
-                onDelete={() => void deleteNode(c, n)}
-                onNewRequest={() => onNewRequest(c, n.id)}
-                newRequestLabel={newRequestLabel}
-                onRun={onRun && (() => onRun(c, n.id))}
-                runLabel="Run folder"
-                onMonitor={() => useApp.getState().openIntent('monitors', { create: { collectionId: c.id, selection: [n.id] } })}
-                onNewFolder={async () => {
-                  const name = await promptText('New folder', { message: 'Folder name', okLabel: 'Create' });
-                  if (name) onChange({ ...c, items: addToFolder(c.items, n.id, { kind: 'folder', id: uid('fld-'), name, items: [] } as CollectionFolder) });
-                }}
-              />
-            </div>
-            {isOpen && renderNodes(c, n.items, depth + 1, scope, n.id)}
-          </div>
-        );
-      }
-      const exKey = `${n.id}:examples`;
-      return (
-        <RequestRow
-          key={n.id}
-          c={c}
-          n={n}
-          depth={depth}
-          active={activeRequestId === n.id}
-          menuOpen={menuFor === n.id}
-          renaming={renaming === n.id}
-          examplesOpen={!!open[exKey]}
-          dropMode={dropAt?.id === n.id ? dropAt.mode : undefined}
-          gitMark={git.items.get(n.id)}
-          canHistory={!!git.status?.repository}
-          ctx={ctx}
-        />
-      );
-    });
-    const hidden = Math.max(0, Math.min(list.length, limit) - shown.length) ? 0 : list.length - shown.length;
+  const canHistory = !!git.status?.repository;
+  const rowHeight = 2 * useApp((s) => s.settings?.fontSize ?? 14);
+
+  const folderRow = (r: Extract<TreeRow, { t: 'folder' }>) => {
+    const { c, n, depth, open: isOpen } = r;
     return (
-      <>
-        {rows}
-        {hidden > 0 && (
+      <div
+        className={cx('group flex items-center h-8 text-sm rounded-md mx-1 hover:bg-hover pr-1 transition-colors', menuFor === n.id && 'bg-hover', dropClass(n.id))}
+        style={{ paddingLeft: 8 + depth * 12 }}
+        {...dragProps(c, n)}
+        {...dropProps(c, n.id, 'into', { folderId: n.id })}
+        draggable={renaming === n.id ? false : undefined}
+        onContextMenu={(e) => (e.preventDefault(), setMenuFor(n.id))}
+      >
+        {renaming === n.id ? (
+          <div className="flex items-center gap-1 flex-1 min-w-0">
+            {isOpen ? OPEN_ICON : CLOSED_ICON}
+            {FOLDER_ICON}
+            <InlineRename value={n.name} label="Folder name" onCommit={(name) => finishRename(c, n.id, name)} onCancel={() => finishRename(c, n.id)} />
+          </div>
+        ) : (
           <button
-            className="mx-1 h-7 w-[calc(100%-0.5rem)] rounded-md text-xs text-accent text-left hover:bg-hover"
-            style={{ paddingLeft: 8 + depth * 12 + 16 }}
-            onClick={() => setLimits((l) => ({ ...l, [listKey]: limit + LIST_PAGE }))}
+            className="flex items-center gap-1 flex-1 min-w-0 text-left"
+            onClick={() => toggle(n.id, isOpen)}
+            onKeyDown={rowKeys(c, n)}
+            data-tree-row
+            data-rename-id={n.id}
+            aria-expanded={isOpen}
+            title="F2 renames · Delete deletes"
           >
-            Show {Math.min(hidden, LIST_PAGE)} more ({hidden} not shown; the filter searches all of them)
+            {isOpen ? OPEN_ICON : CLOSED_ICON}
+            {FOLDER_ICON}
+            <span className="truncate">{n.name}</span>
+            {(n.preRequestScript || n.testScript || n.variables?.length || (n as { logic?: true }).logic) && <span className="w-1.5 h-1.5 rounded-full bg-accent/70 shrink-0" title="Has folder scripts or variables" />}
+            <span className="ml-auto pl-1">
+              <CountPill n={requestCount(n.items)} />
+            </span>
           </button>
         )}
-      </>
+        <NodeMenu
+          open={menuFor === n.id}
+          onOpenChange={(o) => setMenuFor(o ? n.id : undefined)}
+          onEdit={() => void fullCollection(c).then((whole) => setEditing({ c: whole, folder: wholeNode(whole, n) }), toastError)}
+          onExpandAll={() => setSubtree(c, n, true)}
+          onCollapseAll={() => setSubtree(c, n, false)}
+          onMove={() => setMoving({ c, n })}
+          onRename={() => void renameNode(c, n)}
+          onDuplicate={() => change(c, (c) => ({ ...c, items: duplicateNode(c.items, n.id, (x) => ({ ...withNewIds(x), name: `${x.name} copy` })) }))}
+          onDelete={() => void deleteNode(c, n)}
+          onNewRequest={() => newRequest(c, n.id)}
+          newRequestLabel={newRequestLabel}
+          onRun={onRun && (() => onRun(c, n.id))}
+          runLabel="Run folder"
+          onMonitor={() => useApp.getState().openIntent('monitors', { create: { collectionId: c.id, selection: [n.id] } })}
+          onNewFolder={async () => {
+            const name = await promptText('New folder', { message: 'Folder name', okLabel: 'Create' });
+            if (name) change(c, (c) => ({ ...c, items: addToFolder(c.items, n.id, { kind: 'folder', id: uid('fld-'), name, items: [] } as CollectionFolder) }));
+          }}
+        />
+      </div>
     );
   };
 
-  const categoryRow = (c: Collection, cat: RequestCategory, count: number, isOpen: boolean) => {
-    const key = `${c.id}:cat:${cat}`;
+  const categoryRow = (r: Extract<TreeRow, { t: 'cat' }>) => {
+    const { c, cat, count, key, open: isOpen } = r;
     // the same menu as every other row (right-click or ⋯): create here, run the collection, fold
-    const items: MenuItem[] = [
+    const items = (): MenuItem[] => [
       ...(onNewOfCategory ? [{ label: newRequestOf(cat), icon: <FilePlus2 size={14} />, onSelect: () => onNewOfCategory(c, cat) }] : []),
       ...(onRun ? [{ label: 'Run collection', icon: <Play size={14} />, onSelect: () => onRun(c) }] : []),
       { label: isOpen ? 'Collapse' : 'Expand', icon: isOpen ? <ChevronRight size={14} /> : <ChevronDown size={14} />, separator: true, onSelect: () => toggle(key, isOpen) },
@@ -603,7 +655,7 @@ export function CollectionTree({
         {...(cat === 'rest' || cat === 'soap' || cat === 'graphql' ? dropProps(c, `${c.id}:${cat}`, 'into', {}) : {})}
       >
         <button className="flex items-center gap-1.5 flex-1 min-w-0 text-left" onClick={() => toggle(key, isOpen)} aria-expanded={isOpen} data-tree-row>
-          {isOpen ? <ChevronDown size={13} className="text-muted shrink-0" /> : <ChevronRight size={13} className="text-muted shrink-0" />}
+          {isOpen ? OPEN_ICON : CLOSED_ICON}
           <TreeBadge label={CATEGORY_META[cat].badge} className={CATEGORY_META[cat].cls} />
           <span className="truncate font-medium">{CATEGORY_META[cat].label}</span>
           <span className="text-[0.7rem] px-1.5 rounded-full bg-panel2 text-muted tabular-nums">{count}</span>
@@ -612,147 +664,226 @@ export function CollectionTree({
           width={230}
           open={menuFor === key}
           onOpenChange={(o) => setMenuFor(o ? key : undefined)}
-          items={items}
+          items={menuFor === key ? items() : []}
           trigger={
             <button aria-label={`More actions for ${CATEGORY_META[cat].label}`} className={rowActionClass()}>
-              <MoreHorizontal size={14} />
+              {MORE_ICON}
             </button>
           }
         />
       </div>
     );
   };
-  const renderExtra = (g: ExtraGroup, depth: number, from?: string) => {
-    const shown = g.items.filter((i) => !f || i.name.toLowerCase().includes(f) || i.folder?.toLowerCase().includes(f));
-    const folders = [...new Set(shown.map((i) => i.folder ?? ''))].sort((a, b) => (a === '' ? -1 : b === '' ? 1 : a.localeCompare(b)));
-    return folders.map((folder) => {
-      // a folder of saved gRPC calls / connections: the same row as a collection's folders
-      const key = `${from ?? ''}:${g.cat}:folder:${folder}`;
-      const isOpen = !!f || (open[key] ?? true);
-      const inside = shown.filter((i) => (i.folder ?? '') === folder);
-      return (
-        <div key={folder}>
-          {folder && (
-            <div className="group flex items-center h-8 text-sm rounded-md mx-1 hover:bg-hover pr-1 transition-colors" style={{ paddingLeft: 8 + depth * 12 }}>
-              <button className="flex items-center gap-1 flex-1 min-w-0 text-left" onClick={() => toggle(key, isOpen)} aria-expanded={isOpen} data-tree-row>
-                {isOpen ? <ChevronDown size={13} className="text-muted shrink-0" /> : <ChevronRight size={13} className="text-muted shrink-0" />}
-                <Folder size={13} className="text-muted shrink-0" />
-                <span className="truncate">{folder}</span>
-                <span className="ml-auto pl-1">
-                  <CountPill n={inside.length} />
-                </span>
-              </button>
-            </div>
-          )}
-          {(isOpen || !folder) &&
-            inside.map((i) => {
-              const rn = g.rename?.(i.id);
-              return (
-                <div
-                  key={i.id}
-                  {...(onDropSaved && !rn?.editing ? savedItemDragProps(g.cat, i.id, i.name, from) : {})}
-                  onDragEnd={() => setDropAt(undefined)}
-                  className={cx(
-                    'group flex items-center h-8 text-sm pr-1 rounded-md mx-1 transition-colors',
-                    activeRequestId === i.id ? 'bg-accent-soft text-fg' : menuFor === i.id ? 'bg-hover' : 'hover:bg-hover',
-                  )}
-                  style={{ paddingLeft: 8 + (depth + (folder ? 1 : 0)) * 12 }}
-                  onContextMenu={(e) => {
-                    if (!g.menu) return;
-                    e.preventDefault();
-                    setMenuFor(i.id);
-                  }}
-                >
-                  {rn?.editing ? (
-                    <div className="flex items-center gap-1.5 flex-1 min-w-0 pl-4">
-                      <TreeBadge label={i.badge ?? CATEGORY_META[g.cat].badge} className={CATEGORY_META[g.cat].cls} />
-                      <InlineRename value={i.name} onCommit={(name) => rn.done(name)} onCancel={() => rn.done()} />
-                    </div>
-                  ) : (
-                    <button
-                      className="flex items-center gap-1.5 flex-1 min-w-0 text-left pl-4"
-                      onClick={() => g.onOpen(i.id)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'F2' && rn) {
-                          e.preventDefault();
-                          return rn.start();
-                        }
-                        if (g.menu) menuKeys(g.menu(i.id))?.(e);
-                      }}
-                      title={i.name}
-                      data-tree-row
-                      data-rename-id={i.id}
-                    >
-                      <TreeBadge label={i.badge ?? CATEGORY_META[g.cat].badge} className={CATEGORY_META[g.cat].cls} />
-                      <span className="truncate">{i.name}</span>
-                    </button>
-                  )}
-                  {g.menu && (
-                    <Menu
-                      width={230}
-                      open={menuFor === i.id}
-                      onOpenChange={(o) => setMenuFor(o ? i.id : undefined)}
-                      trigger={
-                        <button aria-label={`More actions for ${i.name}`} className={rowActionClass()}>
-                          <MoreHorizontal size={14} />
-                        </button>
-                      }
-                      items={g.menu(i.id)}
-                    />
-                  )}
-                </div>
-              );
-            })}
-        </div>
-      );
-    });
-  };
-  /** A collection's contents: grouped by category when it holds more than one kind of request. */
-  const renderContents = (c: Collection) => {
-    if (!categorize) return renderNodes(c, c.items, 1);
-    const extras = (extraGroups?.(c) ?? []).filter((g) => g.items.length);
-    const cats = (['rest', 'soap', 'graphql'] as const).filter((k) => hasCategory(c.items, k));
-    const hasEmptyFolders = c.items.some(isEmptyFolder);
-    if (!cats.length && hasEmptyFolders) cats.push('rest');
-    // the category level shows even for one kind, so every collection reads the same way
-    if (!cats.length && !extras.length)
-      return (
-        <>
-          {renderNodes(c, c.items, 1)}
-          {extras.map((g) => (
-            <div key={g.cat}>{renderExtra(g, 1, c.id)}</div>
-          ))}
-        </>
-      );
+
+  /** A folder of saved gRPC calls / connections: the same row as a collection's folders. */
+  const extraFolderRow = (r: Extract<TreeRow, { t: 'xfolder' }>) => (
+    <div className="group flex items-center h-8 text-sm rounded-md mx-1 hover:bg-hover pr-1 transition-colors" style={{ paddingLeft: 8 + r.depth * 12 }}>
+      <button className="flex items-center gap-1 flex-1 min-w-0 text-left" onClick={() => toggle(r.key, r.open)} aria-expanded={r.open} data-tree-row>
+        {r.open ? OPEN_ICON : CLOSED_ICON}
+        {FOLDER_ICON}
+        <span className="truncate">{r.folder}</span>
+        <span className="ml-auto pl-1">
+          <CountPill n={r.count} />
+        </span>
+      </button>
+    </div>
+  );
+
+  /** A saved gRPC call or connection. */
+  const extraItemRow = (r: Extract<TreeRow, { t: 'xitem' }>) => {
+    const { g, i, depth, from } = r;
+    const rn = g.rename?.(i.id);
     return (
-      <>
-        {cats.map((cat, i) => {
-          const isOpen = !!f || (open[`${c.id}:cat:${cat}`] ?? true);
-          if (f && !c.items.some((n) => matches(n) && inScope(n, { cat, first: i === 0 }))) return null;
-          return (
-            <div key={cat}>
-              {categoryRow(c, cat, countCategory(c.items, cat), isOpen)}
-              {isOpen && renderNodes(c, c.items, 2, { cat, first: i === 0 })}
-            </div>
-          );
-        })}
-        {extras.map((g) => {
-          const isOpen = !!f || (open[`${c.id}:cat:${g.cat}`] ?? true);
-          if (f && !g.items.some((i) => i.name.toLowerCase().includes(f) || i.folder?.toLowerCase().includes(f))) return null;
-          return (
-            <div key={g.cat}>
-              {categoryRow(c, g.cat, g.items.length, isOpen)}
-              {isOpen && renderExtra(g, 2, c.id)}
-            </div>
-          );
-        })}
-      </>
+      <div
+        {...(onDropSaved && !rn?.editing ? savedItemDragProps(g.cat, i.id, i.name, from) : {})}
+        onDragEnd={() => setDropAt(undefined)}
+        className={cx('group flex items-center h-8 text-sm pr-1 rounded-md mx-1 transition-colors', activeRequestId === i.id ? 'bg-accent-soft text-fg' : menuFor === i.id ? 'bg-hover' : 'hover:bg-hover')}
+        style={{ paddingLeft: 8 + depth * 12 }}
+        onContextMenu={(e) => {
+          if (!g.menu) return;
+          e.preventDefault();
+          setMenuFor(i.id);
+        }}
+      >
+        {rn?.editing ? (
+          <div className="flex items-center gap-1.5 flex-1 min-w-0 pl-4">
+            <TreeBadge label={i.badge ?? CATEGORY_META[g.cat].badge} className={CATEGORY_META[g.cat].cls} />
+            <InlineRename value={i.name} onCommit={(name) => rn.done(name)} onCancel={() => rn.done()} />
+          </div>
+        ) : (
+          <button
+            className="flex items-center gap-1.5 flex-1 min-w-0 text-left pl-4"
+            onClick={() => g.onOpen(i.id)}
+            onKeyDown={(e) => {
+              if (e.key === 'F2' && rn) {
+                e.preventDefault();
+                return rn.start();
+              }
+              if (g.menu) menuKeys(g.menu(i.id))?.(e);
+            }}
+            title={i.name}
+            data-tree-row
+            data-rename-id={i.id}
+          >
+            <TreeBadge label={i.badge ?? CATEGORY_META[g.cat].badge} className={CATEGORY_META[g.cat].cls} />
+            <span className="truncate">{i.name}</span>
+          </button>
+        )}
+        {g.menu && (
+          <Menu
+            width={230}
+            open={menuFor === i.id}
+            onOpenChange={(o) => setMenuFor(o ? i.id : undefined)}
+            trigger={
+              <button aria-label={`More actions for ${i.name}`} className={rowActionClass()}>
+                {MORE_ICON}
+              </button>
+            }
+            items={menuFor === i.id ? g.menu(i.id) : []}
+          />
+        )}
+      </div>
     );
   };
-  const extraMatches = (c: Collection) => (extraGroups?.(c) ?? []).some((g) => g.items.some((i) => !f || i.name.toLowerCase().includes(f) || i.folder?.toLowerCase().includes(f)));
+
+  const collectionRow = (r: Extract<TreeRow, { t: 'col' }>) => {
+    const { c, open: isOpen } = r;
+    return (
+      <div
+        className={cx('group flex items-center gap-0.5 h-8 rounded-md mx-1 hover:bg-hover pr-1 pl-1.5 transition-colors', menuFor === c.id && 'bg-hover', dropClass(c.id))}
+        {...collectionDropProps(c)}
+        onContextMenu={(e) => {
+          if (c.problem) return;
+          e.preventDefault();
+          setMenuFor(c.id);
+        }}
+      >
+        {renaming === c.id ? (
+          <div className="flex items-center gap-1 flex-1 min-w-0 font-medium">
+            {isOpen ? OPEN_ICON : CLOSED_ICON}
+            <InlineRename value={c.name} label="Collection name" onCommit={(name) => finishRename(c, c.id, name)} onCancel={() => finishRename(c, c.id)} />
+          </div>
+        ) : (
+          <button
+            className="flex items-center gap-1 flex-1 min-w-0 text-left font-medium"
+            onClick={() => toggle(c.id, isOpen)}
+            onKeyDown={(e) => {
+              if (e.key === 'F2' && !c.problem) {
+                e.preventDefault();
+                setRenaming(c.id);
+              }
+            }}
+            aria-expanded={isOpen}
+            data-tree-row
+            data-rename-id={c.id}
+            title={c.problem ? undefined : 'F2 renames'}
+          >
+            {isOpen ? OPEN_ICON : CLOSED_ICON}
+            <span className={cx('truncate', c.problem && 'text-bad')} title={c.problem}>
+              {c.name}
+            </span>
+            {health[c.id]?.failing ? (
+              <span className="shrink-0 text-[0.65rem] font-semibold px-1 rounded bg-bad/15 text-bad" title={`${health[c.id]!.failing} of ${health[c.id]!.sent} sent requests: the latest response failed`}>
+                {health[c.id]!.failing}
+              </span>
+            ) : null}
+            {/* two collections with one name (an import done twice): their ids tell them apart */}
+            {collections.some((x) => x !== c && x.name === c.name) && (
+              <span className="text-[0.7rem] text-muted font-normal mono truncate shrink-0 max-w-[40%]" title="Another collection has this name; this is its id">
+                {c.id}
+              </span>
+            )}
+          </button>
+        )}
+        {!c.problem && (
+          <NodeMenu
+            label={c.name}
+            open={menuFor === c.id}
+            onOpenChange={(o) => setMenuFor(o ? c.id : undefined)}
+            onRename={() => setRenaming(c.id)}
+            onExpandAll={() => setSubtree(c, undefined, true)}
+            onCollapseAll={() => setSubtree(c, undefined, false)}
+            onDuplicate={() => void duplicateCollection(c)}
+            onDelete={() => void deleteCollection(c)}
+            onHistory={canHistory ? () => setHistoryFor({ c }) : undefined}
+            otherNew={
+              onNewOfCategory ? (['graphql', 'soap', 'grpc', 'websocket'] as const).map((cat) => ({ label: newRequestOf(cat), icon: <FilePlus2 size={14} />, onSelect: () => onNewOfCategory(c, cat) })) : undefined
+            }
+            runItems={[{ label: 'Run in CI…', icon: <Workflow size={14} />, onSelect: () => useApp.getState().set({ ci: { collection: c.id } }) }]}
+            configItems={[
+              ...(onSettings ? [{ label: 'Settings, runner & docs', icon: <Settings2 size={14} />, onSelect: () => onSettings(c) }] : []),
+              { label: 'Convert scripts to tp.*', icon: <Wand2 size={14} />, onSelect: () => void convertScripts(c, 'tp') },
+              { label: 'Convert scripts to pm.*', icon: <Undo2 size={14} />, onSelect: () => void convertScripts(c, 'pm') },
+            ]}
+            onNewRequest={() => newRequest(c)}
+            newRequestLabel={newRequestLabel}
+            onRun={onRun && (() => onRun(c))}
+            runLabel="Run collection"
+            onMonitor={() => useApp.getState().openIntent('monitors', { create: { collectionId: c.id } })}
+            onNewFolder={async () => {
+              const name = await promptText('New folder', { message: 'Folder name', okLabel: 'Create' });
+              if (name) change(c, (c) => ({ ...c, items: [...c.items, { kind: 'folder', id: uid('fld-'), name, items: [] }] }));
+            }}
+          />
+        )}
+      </div>
+    );
+  };
+
+  const renderRow = (r: TreeRow) => {
+    switch (r.t) {
+      case 'col':
+        return collectionRow(r);
+      case 'cat':
+        return categoryRow(r);
+      case 'folder':
+        return folderRow(r);
+      case 'xfolder':
+        return extraFolderRow(r);
+      case 'xitem':
+        return extraItemRow(r);
+      case 'req':
+        return (
+          <RequestRow
+            c={r.c}
+            n={r.n}
+            depth={r.depth}
+            active={activeRequestId === r.n.id}
+            menuOpen={menuFor === r.n.id}
+            renaming={renaming === r.n.id}
+            examplesOpen={!!open[`${r.n.id}:examples`]}
+            dropMode={dropAt?.id === r.n.id ? dropAt.mode : undefined}
+            gitMark={git.items.get(r.n.id)}
+            canHistory={canHistory}
+            ctx={ctx}
+          />
+        );
+      case 'example':
+        return (
+          <button
+            className="w-full flex items-center gap-2 h-8 text-xs rounded-md mx-1 pr-2 hover:bg-hover text-left text-muted hover:text-fg"
+            style={{ paddingLeft: 8 + r.depth * 12 + 28 }}
+            title="Saved example: opens the request (see its Examples tab)"
+            onClick={() => onOpen(r.c, r.n)}
+          >
+            <span className={cx('mono font-bold w-9 shrink-0', r.ex.status < 300 ? 'text-ok' : r.ex.status < 400 ? 'text-warn' : 'text-bad')}>{r.ex.status}</span>
+            <span className="truncate">{r.ex.name}</span>
+          </button>
+        );
+      case 'empty':
+        return (
+          <div className="pl-7 pr-3 h-8 flex items-center gap-2">
+            <p className="text-xs text-muted truncate">No requests yet.</p>
+            <Button size="sm" icon={<Plus size={12} />} onClick={() => newRequest(r.c)}>
+              {newRequestLabel ?? 'New HTTP request'}
+            </Button>
+          </div>
+        );
+    }
+  };
 
   return (
-    <div className="text-sm" ref={treeRef}>
+    <div className="text-sm" data-tree-rows={rows.length}>
       {editing && (
         <FolderEditor
           folder={editing.folder}
@@ -762,129 +893,30 @@ export function CollectionTree({
       )}
       {historyFor && <GitItemHistory target={{ collectionId: historyFor.c.id, itemId: historyFor.n?.id }} name={historyFor.n?.name ?? historyFor.c.name} onClose={() => setHistoryFor(undefined)} />}
       {moving && <MoveDialog node={moving.n} from={moving.c} collections={collections} onClose={() => setMoving(undefined)} onMove={(to, folderId) => move(moving.c, moving.n, to, folderId)} />}
-      {collections.map((c) => {
-        // grouped by category, collections start folded: the workspace lists them, expanding shows the categories
-        // a collection opens when the user opens it (or something is revealed in it), not because its request is open
-        const isOpen = categorize && f ? true : (open[c.id] ?? !categorize);
-        if (categorize && f && !c.items.some(matches) && !extraMatches(c)) return null;
-        return (
-          <div key={c.id}>
-            <div
-              className={cx('group flex items-center gap-0.5 h-8 rounded-md mx-1 hover:bg-hover pr-1 pl-1.5 transition-colors', menuFor === c.id && 'bg-hover', dropClass(c.id))}
-              {...collectionDropProps(c)}
-              onContextMenu={(e) => {
-                if (c.problem) return;
-                e.preventDefault();
-                setMenuFor(c.id);
-              }}
-            >
-              {renaming === c.id ? (
-                <div className="flex items-center gap-1 flex-1 min-w-0 font-medium">
-                  {isOpen ? <ChevronDown size={13} className="text-muted" /> : <ChevronRight size={13} className="text-muted" />}
-                  <InlineRename value={c.name} label="Collection name" onCommit={(name) => finishRename(c, c.id, name)} onCancel={() => finishRename(c, c.id)} />
-                </div>
-              ) : (
-                <button
-                  className="flex items-center gap-1 flex-1 min-w-0 text-left font-medium"
-                  onClick={() => toggle(c.id, isOpen)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'F2' && !c.problem) {
-                      e.preventDefault();
-                      setRenaming(c.id);
-                    }
-                  }}
-                  aria-expanded={isOpen}
-                  data-tree-row
-                  data-rename-id={c.id}
-                  title={c.problem ? undefined : 'F2 renames'}
-                >
-                  {isOpen ? <ChevronDown size={13} className="text-muted" /> : <ChevronRight size={13} className="text-muted" />}
-                  <span className={cx('truncate', c.problem && 'text-bad')} title={c.problem}>
-                    {c.name}
-                  </span>
-                  {health[c.id]?.failing ? (
-                    <span
-                      className="shrink-0 text-[0.65rem] font-semibold px-1 rounded bg-bad/15 text-bad"
-                      title={`${health[c.id]!.failing} of ${health[c.id]!.sent} sent requests: the latest response failed`}
-                    >
-                      {health[c.id]!.failing}
-                    </span>
-                  ) : null}
-                  {/* two collections with one name (an import done twice): their ids tell them apart */}
-                  {collections.some((x) => x !== c && x.name === c.name) && (
-                    <span className="text-[0.7rem] text-muted font-normal mono truncate shrink-0 max-w-[40%]" title="Another collection has this name; this is its id">
-                      {c.id}
-                    </span>
-                  )}
-                </button>
-              )}
-              {!c.problem && (
-                <NodeMenu
-                  label={c.name}
-                  open={menuFor === c.id}
-                  onOpenChange={(o) => setMenuFor(o ? c.id : undefined)}
-                  onRename={() => setRenaming(c.id)}
-                  onExpandAll={() => setSubtree(c, undefined, true)}
-                  onCollapseAll={() => setSubtree(c, undefined, false)}
-                  onDuplicate={() => void duplicateCollection(c)}
-                  onDelete={() => void deleteCollection(c)}
-                  onHistory={git.status?.repository ? () => setHistoryFor({ c }) : undefined}
-                  otherNew={
-                    onNewOfCategory
-                      ? (['graphql', 'soap', 'grpc', 'websocket'] as const).map((cat) => ({ label: newRequestOf(cat), icon: <FilePlus2 size={14} />, onSelect: () => onNewOfCategory(c, cat) }))
-                      : undefined
-                  }
-                  runItems={[{ label: 'Run in CI…', icon: <Workflow size={14} />, onSelect: () => useApp.getState().set({ ci: { collection: c.id } }) }]}
-                  configItems={[
-                    ...(onSettings ? [{ label: 'Settings, runner & docs', icon: <Settings2 size={14} />, onSelect: () => onSettings(c) }] : []),
-                    { label: 'Convert scripts to tp.*', icon: <Wand2 size={14} />, onSelect: () => void convertScripts(c, 'tp') },
-                    { label: 'Convert scripts to pm.*', icon: <Undo2 size={14} />, onSelect: () => void convertScripts(c, 'pm') },
-                  ]}
-                  onNewRequest={() => onNewRequest(c)}
-                  newRequestLabel={newRequestLabel}
-                  onRun={onRun && (() => onRun(c))}
-                  runLabel="Run collection"
-                  onMonitor={() => useApp.getState().openIntent('monitors', { create: { collectionId: c.id } })}
-                  onNewFolder={async () => {
-                    const name = await promptText('New folder', { message: 'Folder name', okLabel: 'Create' });
-                    if (name) onChange({ ...c, items: [...c.items, { kind: 'folder', id: uid('fld-'), name, items: [] }] });
-                  }}
-                />
-              )}
-            </div>
-            {isOpen && renderContents(c)}
-            {isOpen && !f && !favoritesOnly && !c.problem && !c.items.length && !(extraGroups?.(c) ?? []).some((g) => g.items.length) && (
-              <div className="pl-7 pr-3 py-1.5 flex flex-col items-start gap-1.5">
-                <p className="text-xs text-muted leading-snug">No requests yet.</p>
-                <Button size="sm" icon={<Plus size={12} />} onClick={() => onNewRequest(c)}>
-                  {newRequestLabel ?? 'New HTTP request'}
-                </Button>
-              </div>
-            )}
-          </div>
-        );
-      })}
-      {budget.hidden > 0 && (
-        <button
-          className="mx-1 my-1 h-8 w-[calc(100%-0.5rem)] rounded-md text-xs text-accent text-left px-3 hover:bg-hover"
-          onClick={() => setFilterBudget((b) => b + FILTER_BUDGET)}
-          title="Showing the first matches; keep typing to narrow them down"
-        >
-          Show more matches ({budget.hidden}+ not shown; keep typing to narrow them down)
-        </button>
-      )}
-      {(f || favoritesOnly) && !collections.some((c) => c.items.some(matches) || (categorize && extraMatches(c))) && (
+      <VirtualList
+        items={rows}
+        rowHeight={rowHeight}
+        keyOf={rowKey}
+        render={renderRow}
+        scrollParent
+        overscan={rows.length <= DRAW_ALL ? DRAW_ALL : OVERSCAN}
+        scrollToIndex={revealIndex >= 0 ? revealIndex : undefined}
+        scrollKey={reveal?.nonce}
+      />
+      {nothingMatches && (
         <p className="px-3 py-4 text-sm text-muted text-center">
           {favoritesOnly ? 'No favorite requests yet. Use a request’s menu to add one.' : f ? 'No requests match this filter.' : 'No requests in these collections yet.'}
         </p>
       )}
     </div>
   );
-}
+});
+
+const rowKey = (r: TreeRow) => `${r.t}:${r.key}`;
 
 interface RowContext {
   onOpen(c: Collection, n: CollectionNode): void;
-  onChange(c: Collection): void;
+  change(c: Collection, f: (whole: Collection) => Collection | undefined): void;
   toggle(id: string, shown: boolean): void;
   rowKeys(c: Collection, n: CollectionNode): (e: React.KeyboardEvent) => void;
   dragProps(c: Collection, n: CollectionNode): Record<string, unknown>;
@@ -904,9 +936,9 @@ interface RowContext {
 }
 
 /**
- * One request of the tree. Memoized: of hundreds of rows, a tab switch or a keystroke in the filter re-renders
- * only the rows whose own state changed (active, menu, rename, drop target, git mark). Everything it calls comes
- * through `ctx`, which the tree keeps current.
+ * One request of the tree. Memoized: a tab switch or a keystroke in the filter re-renders only the rows whose own
+ * state changed (active, menu, rename, drop target, git mark). Everything it calls comes through `ctx`, which the
+ * tree keeps current. Its saved examples are rows of their own (under it, while open).
  */
 const RequestRow = memo(function RequestRow({
   c,
@@ -940,84 +972,69 @@ const RequestRow = memo(function RequestRow({
   const dragOf = () => x().dragProps(c, n) as { onDragStart(e: React.DragEvent): void; onDragEnd(): void };
   const dropOf = () => x().dropProps(c, n.id, 'before', { beforeId: n.id });
   return (
-    <div>
-      <div
-        data-node-id={n.id}
-        className={cx(
-          'group flex items-center h-8 text-sm pr-1 rounded-md mx-1 transition-colors [content-visibility:auto] [contain-intrinsic-size:auto_2rem]',
-          active ? 'bg-accent-soft text-fg' : 'hover:bg-hover',
-          menuOpen && 'bg-hover',
-          dropMode === 'into' ? 'ring-1 ring-inset ring-accent bg-accent/10' : dropMode === 'before' ? 'shadow-[inset_0_2px_0_var(--accent)]' : undefined,
-        )}
-        style={{ paddingLeft: 8 + depth * 12 }}
-        draggable={renaming ? false : true}
-        onDragStart={(e) => dragOf().onDragStart(e)}
-        onDragEnd={() => dragOf().onDragEnd()}
-        onDragOver={(e) => dropOf().onDragOver(e)}
-        onDragLeave={() => dropOf().onDragLeave()}
-        onDrop={(e) => dropOf().onDrop(e)}
-        onContextMenu={(e) => {
-          e.preventDefault();
-          x().setMenuFor(n.id);
-        }}
-      >
-        {examples.length > 0 && (
-          <button
-            className="shrink-0 -mr-3.5 w-3.5 text-muted hover:text-fg"
-            aria-label={examplesOpen ? 'Hide examples' : `Show ${examples.length} examples`}
-            aria-expanded={examplesOpen}
-            onClick={() => x().toggle(exKey, examplesOpen)}
-          >
-            {examplesOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-          </button>
-        )}
-        {renaming ? (
-          <div className="flex items-center gap-1.5 flex-1 min-w-0 pl-4">
-            <TreeBadge label={method} className={n.kind === 'http' ? `method-${method}` : 'text-[#e535ab]'} />
-            <InlineRename value={n.name} label="Request name" onCommit={(name) => x().finishRename(c, n.id, name)} onCancel={() => x().finishRename(c, n.id)} />
-          </div>
-        ) : (
-          <button
-            className="flex items-center gap-1.5 flex-1 min-w-0 text-left pl-4"
-            onClick={() => x().onOpen(c, n)}
-            onKeyDown={(e) => x().rowKeys(c, n)(e)}
-            data-tree-row
-            data-rename-id={n.id}
-            title="Enter opens · F2 renames · Delete deletes"
-          >
-            <TreeBadge label={method} className={n.kind === 'http' ? `method-${method}` : 'text-[#e535ab]'} />
-            <span className="truncate">{n.name}</span>
-            {n.favorite && <Star size={11} className="shrink-0 text-warn fill-current" aria-label="Favorite" data-favorite />}
-            {gitMark && <ChangeMark change={gitMark} className="ml-auto" />}
-          </button>
-        )}
-        <NodeMenu
-          open={menuOpen}
-          onOpenChange={(o) => x().setMenuFor(o ? n.id : undefined)}
-          onOpen={() => x().onOpen(c, n)}
-          copyItems={menuOpen && n.kind === 'http' ? x().copyMenu(c, n) : undefined}
-          onRename={() => void x().renameNode(c, n)}
-          onDelete={() => void x().deleteNode(c, n)}
-          onDuplicate={() => x().onChange({ ...c, items: duplicateNode(c.items, n.id, (y) => ({ ...y, id: uid('req-'), name: `${y.name} copy` })) })}
-          onMove={() => x().setMoving({ c, n })}
-          onToggleFavorite={() => x().onChange({ ...c, items: mapNodes(c.items, (y) => (y.id === n.id && y.kind !== 'folder' ? { ...y, favorite: !y.favorite } : y)) })}
-          favorite={!!n.favorite}
-          onHistory={canHistory ? () => x().setHistoryFor({ c, n }) : undefined}
-        />
-      </div>
-      {examplesOpen &&
-        examples.map((ex) => (
-          <button
-            key={ex.id}
-            className="w-full flex items-center gap-2 h-7 text-xs rounded-md mx-1 pr-2 hover:bg-hover text-left text-muted hover:text-fg"
-            style={{ paddingLeft: 8 + depth * 12 + 28 }}
-            title="Saved example: opens the request (see its Examples tab)"
-            onClick={() => x().onOpen(c, n)}
-          >
-            <span className={cx('mono font-bold w-9 shrink-0', ex.status < 300 ? 'text-ok' : ex.status < 400 ? 'text-warn' : 'text-bad')}>{ex.status}</span>
-            <span className="truncate">{ex.name}</span>
-          </button>
-        ))}
+    <div
+      data-node-id={n.id}
+      className={cx(
+        'group flex items-center h-8 text-sm pr-1 rounded-md mx-1 transition-colors',
+        active ? 'bg-accent-soft text-fg' : 'hover:bg-hover',
+        menuOpen && 'bg-hover',
+        dropMode === 'into' ? 'ring-1 ring-inset ring-accent bg-accent/10' : dropMode === 'before' ? 'shadow-[inset_0_2px_0_var(--accent)]' : undefined,
+      )}
+      style={{ paddingLeft: 8 + depth * 12 }}
+      draggable={renaming ? false : true}
+      onDragStart={(e) => dragOf().onDragStart(e)}
+      onDragEnd={() => dragOf().onDragEnd()}
+      onDragOver={(e) => dropOf().onDragOver(e)}
+      onDragLeave={() => dropOf().onDragLeave()}
+      onDrop={(e) => dropOf().onDrop(e)}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        x().setMenuFor(n.id);
+      }}
+    >
+      {examples.length > 0 && (
+        <button
+          className="shrink-0 -mr-3.5 w-3.5 text-muted hover:text-fg"
+          aria-label={examplesOpen ? 'Hide examples' : `Show ${examples.length} examples`}
+          aria-expanded={examplesOpen}
+          onClick={() => x().toggle(exKey, examplesOpen)}
+        >
+          {examplesOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+        </button>
+      )}
+      {renaming ? (
+        <div className="flex items-center gap-1.5 flex-1 min-w-0 pl-4">
+          <TreeBadge label={method} className={n.kind === 'http' ? `method-${method}` : 'text-[#e535ab]'} />
+          <InlineRename value={n.name} label="Request name" onCommit={(name) => x().finishRename(c, n.id, name)} onCancel={() => x().finishRename(c, n.id)} />
+        </div>
+      ) : (
+        <button
+          className="flex items-center gap-1.5 flex-1 min-w-0 text-left pl-4"
+          onClick={() => x().onOpen(c, n)}
+          onKeyDown={(e) => x().rowKeys(c, n)(e)}
+          data-tree-row
+          data-rename-id={n.id}
+          title="Enter opens · F2 renames · Delete deletes"
+        >
+          <TreeBadge label={method} className={n.kind === 'http' ? `method-${method}` : 'text-[#e535ab]'} />
+          <span className="truncate">{n.name}</span>
+          {n.favorite && <Star size={11} className="shrink-0 text-warn fill-current" aria-label="Favorite" data-favorite />}
+          {gitMark && <ChangeMark change={gitMark} className="ml-auto" />}
+        </button>
+      )}
+      <NodeMenu
+        open={menuOpen}
+        onOpenChange={(o) => x().setMenuFor(o ? n.id : undefined)}
+        onOpen={() => x().onOpen(c, n)}
+        copyItems={menuOpen && n.kind === 'http' ? x().copyMenu(c, n) : undefined}
+        onRename={() => void x().renameNode(c, n)}
+        onDelete={() => void x().deleteNode(c, n)}
+        onDuplicate={() => x().change(c, (c) => ({ ...c, items: duplicateNode(c.items, n.id, (y) => ({ ...y, id: uid('req-'), name: `${y.name} copy` })) }))}
+        onMove={() => x().setMoving({ c, n })}
+        onToggleFavorite={() => x().change(c, (c) => ({ ...c, items: mapNodes(c.items, (y) => (y.id === n.id && y.kind !== 'folder' ? { ...y, favorite: !y.favorite } : y)) }))}
+        favorite={!!n.favorite}
+        onHistory={canHistory ? () => x().setHistoryFor({ c, n }) : undefined}
+      />
     </div>
   );
 });

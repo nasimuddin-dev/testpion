@@ -35,6 +35,7 @@ import {
   MessageSquare,
   FolderGit2,
   Bug,
+  TriangleAlert,
 } from 'lucide-react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { call, modKey, on } from '../api';
@@ -166,11 +167,17 @@ function EnvironmentPicker() {
   const Dot = ({ color, ring }: { color: string; ring?: boolean }) => <span className={cx('inline-block w-2.5 h-2.5 rounded-full shrink-0', ring && 'ring-2 ring-bad/40')} style={{ background: color }} aria-hidden />;
   const items: MenuItem[] = [
     { label: 'No environment', icon: <Dot color="var(--line-strong)" />, onSelect: () => useApp.getState().setEnvironment(undefined) },
-    ...(ws?.environments ?? []).map((e) => ({
-      label: e.isProduction ? `${e.name}  (production)` : e.name,
-      icon: <Dot color={colorOf(e)} ring={e.isProduction} />,
-      onSelect: () => useApp.getState().setEnvironment(e.name),
-    })),
+    ...(ws?.environments ?? []).map((e) =>
+      // an environment whose file cannot be read is listed (in red, why as the tooltip) but cannot be chosen
+      e.problem
+        ? { label: `${String(e.name)}  (cannot be read)`, icon: <TriangleAlert size={13} className="text-bad" />, danger: true, disabled: true, title: e.problem, onSelect: () => undefined }
+        : {
+            // a name from a hand-edited file is text here whatever it holds (an object would blank the window)
+            label: e.isProduction ? `${String(e.name)}  (production)` : String(e.name),
+            icon: <Dot color={colorOf(e)} ring={e.isProduction} />,
+            onSelect: () => useApp.getState().setEnvironment(e.name),
+          },
+    ),
     { label: 'Manage environments…', icon: <KeyRound size={14} />, separator: true, onSelect: () => useApp.getState().openIntent('environments', {}) },
   ];
   return (
@@ -184,7 +191,7 @@ function EnvironmentPicker() {
           className={cx('flex items-center gap-2 h-8 pl-2.5 pr-2 rounded-full border bg-field shadow-sm text-sm max-w-56 transition-colors data-[state=open]:bg-hover', envObj?.isProduction ? 'border-bad/50' : 'border-line-strong hover:border-muted/50')}
         >
           <Dot color={colorOf(envObj)} />
-          <span className="truncate">{env ?? 'No environment'}</span>
+          <span className="truncate">{env === undefined || env === null ? 'No environment' : String(env)}</span>
           <NavChevron size={13} className="text-muted shrink-0" />
         </button>
       }
@@ -338,7 +345,7 @@ export function StatusBar() {
     <footer className="h-7 shrink-0 border-t border-line bg-chrome flex items-center gap-4 px-3 text-[0.75rem] text-muted">
       <span className="flex items-center gap-1.5">
         <span className="w-2 h-2 rounded-full" style={{ background: envObj ? (envObj.color ?? (envObj.isProduction ? 'var(--bad)' : 'var(--ok)')) : 'var(--line-strong)' }} />
-        {env ?? 'No environment'}
+        {env === undefined || env === null ? 'No environment' : String(env)}
         {envObj?.isProduction && <Badge tone="bad">PRODUCTION</Badge>}
       </span>
       <span className="flex items-center gap-1" title="Connected MCP servers">

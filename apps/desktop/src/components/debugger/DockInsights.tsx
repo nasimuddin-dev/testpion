@@ -299,8 +299,55 @@ export function StructurePanel({ rows, onPick }: { rows: Exchange[]; onPick(id: 
 }
 
 /** Performance: where the time and the bytes go: the slowest, the largest, the slowest transfers, and by domain. */
+/** The `k` entries with the largest `key`, largest first, without sorting the whole list (thousands of rows, eight shown). */
+function topBy<T>(list: T[], k: number, key: (x: T) => number): T[] {
+  const top: Array<{ x: T; v: number }> = [];
+  for (const x of list) {
+    const v = key(x);
+    if (top.length === k && v <= top[k - 1]!.v) continue;
+    let i = top.length;
+    while (i > 0 && top[i - 1]!.v < v) i--;
+    top.splice(i, 0, { x, v });
+    if (top.length > k) top.pop();
+  }
+  return top.map((t) => t.x);
+}
+
+/** Performance: where the time and the bytes go: the slowest, the largest, the slowest transfers, and by domain. */
 export function PerformancePanel({ rows, onPick }: { rows: Exchange[]; onPick(id: string): void }) {
-  const done = rows.filter((e) => e.durationMs !== undefined && e.kind !== 'tunnel');
+  // computed once per change of the rows (a selection or a re-render of the dock doesn't redo it); each speed once
+  const stats = useMemo(() => {
+    const done = rows.filter((e) => e.durationMs !== undefined && e.kind !== 'tunnel');
+    const byHost = new Map<string, { n: number; ms: number; max: number; bytes: number }>();
+    let waiting = 0;
+    let total = 0;
+    const speeds: Array<{ e: Exchange; speed: string; v: number }> = [];
+    for (const e of done) {
+      const h = byHost.get(e.host) ?? { n: 0, ms: 0, max: 0, bytes: 0 };
+      h.n++;
+      h.ms += e.durationMs!;
+      h.max = Math.max(h.max, e.durationMs!);
+      h.bytes += e.responseBodyBytes;
+      byHost.set(e.host, h);
+      waiting += phasesOf(e).waiting;
+      total += e.durationMs ?? 0;
+      if (e.responseBodyBytes > 0) {
+        const speed = speedOf(e);
+        speeds.push({ e, speed, v: Number(speed) });
+      }
+    }
+    const slowTransfers = topBy(speeds, 8, (s) => -s.v);
+    return {
+      done,
+      waitShare: waiting / Math.max(1, total),
+      slowest: topBy(done, 8, (e) => e.durationMs!),
+      largest: topBy(done, 8, (e) => e.responseBodyBytes),
+      slowTransfers: slowTransfers.map((s) => s.e),
+      speedOf: new Map(slowTransfers.map((s) => [s.e.id, s.speed])),
+      hosts: [...byHost.entries()].sort((a, b) => b[1].ms / b[1].n - a[1].ms / a[1].n),
+    };
+  }, [rows]);
+  const { done, waitShare } = stats;
   if (!done.length) return <Empty title="Nothing finished yet">Response times and sizes show here once requests complete.</Empty>;
   const top = (list: Exchange[], value: (e: Exchange) => string) => (
     <table className="w-full text-xs border-collapse mb-2">
@@ -318,21 +365,6 @@ export function PerformancePanel({ rows, onPick }: { rows: Exchange[]; onPick(id
       </tbody>
     </table>
   );
-  const byHost = new Map<string, { n: number; ms: number; max: number; bytes: number }>();
-  for (const e of done) {
-    const h = byHost.get(e.host) ?? { n: 0, ms: 0, max: 0, bytes: 0 };
-    h.n++;
-    h.ms += e.durationMs!;
-    h.max = Math.max(h.max, e.durationMs!);
-    h.bytes += e.responseBodyBytes;
-    byHost.set(e.host, h);
-  }
-  const waitShare =
-    done.reduce((n, e) => n + phasesOf(e).waiting, 0) /
-    Math.max(
-      1,
-      done.reduce((n, e) => n + (e.durationMs ?? 0), 0),
-    );
   const title = (t: string) => <div className="px-2 pt-2 pb-1 text-[11px] font-semibold text-muted uppercase tracking-wide">{t}</div>;
   return (
     <div className="flex-1 min-h-0 overflow-auto" data-performance>
@@ -341,20 +373,11 @@ export function PerformancePanel({ rows, onPick }: { rows: Exchange[]; onPick(id
         {waitShare > 0.7 ? ' (the servers are the bottleneck)' : waitShare < 0.3 ? ' (transfers are the bottleneck)' : ''}.
       </p>
       {title('Slowest responses')}
-      {top(
-        [...done].sort((a, b) => b.durationMs! - a.durationMs!),
-        (e) => formatMs(e.durationMs),
-      )}
+      {top(stats.slowest, (e) => formatMs(e.durationMs))}
       {title('Largest payloads')}
-      {top(
-        [...done].sort((a, b) => b.responseBodyBytes - a.responseBodyBytes),
-        (e) => formatBytes(e.responseBodyBytes),
-      )}
+      {top(stats.largest, (e) => formatBytes(e.responseBodyBytes))}
       {title('Slowest transfers (KB/s)')}
-      {top(
-        done.filter((e) => e.responseBodyBytes > 0).sort((a, b) => Number(speedOf(a)) - Number(speedOf(b))),
-        (e) => speedOf(e),
-      )}
+      {top(stats.slowTransfers, (e) => stats.speedOf.get(e.id) ?? '')}
       {title('By domain')}
       <table className="w-full text-xs border-collapse mb-2">
         <thead className="text-muted">
@@ -366,16 +389,14 @@ export function PerformancePanel({ rows, onPick }: { rows: Exchange[]; onPick(id
           </tr>
         </thead>
         <tbody>
-          {[...byHost.entries()]
-            .sort((a, b) => b[1].ms / b[1].n - a[1].ms / a[1].n)
-            .map(([h, v]) => (
-              <tr key={h} className="border-t border-line/60">
-                <td className="px-2 py-1 truncate max-w-0">{h}</td>
-                <td className="px-2 py-1 text-right tabular-nums">{v.n}</td>
-                <td className="px-2 py-1 text-right tabular-nums">{formatMs(v.ms / v.n)}</td>
-                <td className="px-2 py-1 text-right tabular-nums">{formatMs(v.max)}</td>
-              </tr>
-            ))}
+          {stats.hosts.map(([h, v]) => (
+            <tr key={h} className="border-t border-line/60">
+              <td className="px-2 py-1 truncate max-w-0">{h}</td>
+              <td className="px-2 py-1 text-right tabular-nums">{v.n}</td>
+              <td className="px-2 py-1 text-right tabular-nums">{formatMs(v.ms / v.n)}</td>
+              <td className="px-2 py-1 text-right tabular-nums">{formatMs(v.max)}</td>
+            </tr>
+          ))}
         </tbody>
       </table>
     </div>

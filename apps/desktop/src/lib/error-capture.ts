@@ -34,8 +34,15 @@ export function installErrorCapture(): void {
   });
   addEventListener('unhandledrejection', (ev) => {
     const r = (ev as PromiseRejectionEvent).reason;
-    // a refused RPC (validation, a server that answered with an error) is shown to the user already
-    if (r && typeof r === 'object' && 'kind' in r && 'suggestions' in r) return;
+    // a refused RPC that nothing caught (a `void call(...)` without .catch): the user is told here, never left with a
+    // button that silently did nothing; a cancel is not news, and a bug (InternalError) also goes to the app log
+    if (r && typeof r === 'object' && 'kind' in r && 'suggestions' in r) {
+      const kind = (r as { kind?: string }).kind;
+      if (kind === 'CancelledError') return;
+      void import('../store').then((m) => m.toastError(r)).catch(() => undefined);
+      if (kind === 'InternalError') reportClientError(r, 'promise');
+      return;
+    }
     reportClientError(r, 'promise');
   });
 }

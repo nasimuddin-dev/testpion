@@ -45,7 +45,7 @@ import { closeTabsFor } from '../components/EditorTabs';
 import { subtreeIds } from '../components/MoveDialog';
 import { ImportModal } from './rest/dialogs';
 import { SecurityReviewDialog } from '../components/SecurityReviewDialog';
-import { refreshCollections, useCollections } from '../lib/collections-store';
+import { refreshCollections, useCollectionTree } from '../lib/collections-store';
 
 export function CollectionsView() {
   const [trashOpen, setTrashOpen] = useState(false);
@@ -54,8 +54,21 @@ export function CollectionsView() {
   const [tidyOpen, setTidyOpen] = useState(false);
   const [moveVarsOpen, setMoveVarsOpen] = useState(false);
   const [moveVarsInitial, setMoveVarsInitial] = useState<string[]>();
-  const cols = useCollections();
+  // the list shows the outline (names, counts); the selected collection is read whole on its own
+  const cols = useCollectionTree();
   const [sel, setSel] = useState<string>();
+  const selOutline = cols.find((c) => c.id === sel);
+  const [stored, setStored] = useState<Collection>();
+  useEffect(() => {
+    if (!selOutline) return setStored(undefined);
+    let live = true;
+    // read again whenever its outline changed (a save here or elsewhere, a change on disk)
+    call<Collection>('col.get', { id: selOutline.id }).then(
+      (c) => live && setStored(c),
+      () => live && setStored(selOutline),
+    );
+    return () => void (live = false);
+  }, [selOutline]);
   const [draft, setDraft] = useState<Collection>();
   const [tab, setTab] = useState<'overview' | 'requests' | 'variables' | 'auth' | 'scripts' | 'docs' | 'run' | 'mock'>('requests');
   const [runFolder, setRunFolder] = useState<string>();
@@ -77,7 +90,7 @@ export function CollectionsView() {
   useEffect(() => {
     void load();
   }, [load]);
-  useEffect(() => setDraft(cols.find((c) => c.id === sel)), [sel, cols]);
+  useEffect(() => setDraft(stored && stored.id === sel ? stored : undefined), [sel, stored]);
   useIntent('collections', (p) => {
     if (p?.collectionId) setSel(p.collectionId);
     // straight to a part of the collection's settings (e.g. its variables, from the variable popover or the quick look)
@@ -109,8 +122,7 @@ export function CollectionsView() {
     setRenamingName(false);
     if (!draft || name === draft.name) return;
     try {
-      const stored = cols.find((x) => x.id === draft.id) ?? draft;
-      await call('col.save', { ...stored, name });
+      await call('col.save', { ...(stored?.id === draft.id ? stored : draft), name });
       setDraft({ ...draft, name });
       await load();
     } catch (e) {
@@ -404,7 +416,7 @@ export function CollectionsView() {
       {/* outside the Split: its first pane (the old collection list) is collapsed, which leaves it out of the page */}
       {moveVarsOpen && draft && (
         <MoveVariablesDialog
-          collection={cols.find((x) => x.id === draft.id) ?? draft}
+          collection={stored?.id === draft.id ? stored : draft}
           initial={moveVarsInitial}
           onClose={() => (setMoveVarsOpen(false), setMoveVarsInitial(undefined))}
           onDone={() => void load().then(() => useApp.getState().set({ envsVersion: (useApp.getState().envsVersion ?? 0) + 1 }))}
@@ -412,7 +424,7 @@ export function CollectionsView() {
       )}
       {tidyOpen && draft && (
         <TidyDialog
-          collection={cols.find((x) => x.id === draft.id) ?? draft}
+          collection={stored?.id === draft.id ? stored : draft}
           onClose={() => setTidyOpen(false)}
           onDone={() => void load().then(() => setSel(draft.id))}
           onReplace={(host) => (setTidyOpen(false), setReplaceOpen({ find: host, replace: '{{baseUrl}}' }))}
@@ -422,7 +434,7 @@ export function CollectionsView() {
         <ReplaceDialog
           initialFind={typeof replaceOpen === 'object' ? replaceOpen.find : undefined}
           initialReplace={typeof replaceOpen === 'object' ? replaceOpen.replace : undefined}
-          collection={cols.find((x) => x.id === draft.id) ?? draft}
+          collection={stored?.id === draft.id ? stored : draft}
           onClose={() => setReplaceOpen(false)}
           onDone={() => void load().then(() => setSel(draft.id))}
         />

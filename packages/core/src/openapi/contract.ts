@@ -1,10 +1,11 @@
 import { createHash } from 'node:crypto';
 import type { ValidateFunction } from 'ajv';
-import { parse as parseYaml } from 'yaml';
+import { parseYaml } from '../util/lazy-yaml.js';
 import { ApsError } from '../errors.js';
 import { registerCheck, type CheckContext } from '../eval/checks.js';
 import type { CheckConfig, CheckResult } from '../model/types.js';
 import { compileSchema } from '../util/json-schema.js';
+import { BoundedMap } from '../util/collections.js';
 
 /**
  * Contract testing against an OpenAPI 3.x (or Swagger 2.0) document: the response of a request must
@@ -20,7 +21,8 @@ export interface OpenApiDoc extends Json {
 }
 
 const METHODS = ['get', 'put', 'post', 'delete', 'options', 'head', 'patch', 'trace'];
-const docs = new Map<string, OpenApiDoc>();
+/** Parsed documents by content hash: the newest 20 (a spec can be megabytes). */
+const docs = new BoundedMap<string, OpenApiDoc>(20);
 
 /** Parse an OpenAPI / Swagger document (YAML or JSON), cached by content. */
 export function loadOpenApi(text: string): OpenApiDoc {

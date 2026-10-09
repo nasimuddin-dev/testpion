@@ -113,6 +113,8 @@ YAML tests in your repository, with parallel workers, backpressure, retries, tim
 
 A test file's **Flow** tab draws its steps as a diagram (an arrow per `dependsOn`, the names each step extracts, the latest result on every node); `testpion flow <file> --json|--dot` and the `flow_graph` MCP tool give the same graph.
 
+The **flow designer** builds a flow on that canvas: add steps (blank, from a collection's requests, or generated with AI), connect them by dragging port to port, edit each step in an inspector (request, extracts, checks, what it waits for), see which variables flow along each connection, run the flow or one step and watch the steps light up, with undo and redo; every change is written to the YAML (comments and line endings kept). `testpion flow edit <file> --op '<json>'` and the `flow_add_step`, `flow_connect`, `flow_disconnect`, `flow_update_step` and `flow_remove_step` MCP tools make the same edits. [Design a flow](/test-runner/integration-testing#design-a-flow)
+
 [Test runner](/test-runner/overview) · [CI/CD](/test-runner/ci-cd)
 
 ## Load testing

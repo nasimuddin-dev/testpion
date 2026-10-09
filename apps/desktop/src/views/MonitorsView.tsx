@@ -14,7 +14,7 @@ import { confirmAction, toastError, useApp } from '../store';
 import type { Collection, CollectionNode, Library } from '../types';
 import { formatMs, timeAgo } from '../lib/format';
 import { Badge, Button, cx, Empty, Field, Input, Metric, MetricGrid, ModalOrPanel, PageHeader, Select, Split, Toggle, Tooltip } from '../components/ui';
-import { useCollections } from '../lib/collections-store';
+import { useCollectionTree } from '../lib/collections-store';
 
 /** The tab of a monitor being created (not saved yet, so no id). */
 const NEW_TAB = 'new';
@@ -63,7 +63,7 @@ export function MonitorsView() {
   const [loaded, setLoaded] = useState(false);
   const [sel, setSel] = useState<string>();
   const [resultsById, setResultsById] = useState<Record<string, MonitorResult[]>>({});
-  const collections = useCollections();
+  const collections = useCollectionTree();
   const [editing, setEditing] = useState<MonitorDraft>();
   const [busy, setBusy] = useState<string[]>([]);
   // monitors open in tabs, like requests (several can be open and running at once); remembered
@@ -604,8 +604,9 @@ function MonitorEditor({ draft, collections, onCancel, onSave }: { draft: Monito
             <Select value={d.environment ?? ''} onChange={(e) => setD({ ...d, environment: e.target.value || undefined })}>
               <option value="">No environment</option>
               {environments.map((e) => (
-                <option key={e.id} value={e.name}>
+                <option key={e.id} value={e.name} disabled={!!e.problem} title={e.problem}>
                   {e.name}
+                  {e.problem ? '  (cannot be read)' : ''}
                 </option>
               ))}
             </Select>

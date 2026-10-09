@@ -1,5 +1,5 @@
 import { CodeBlock } from './CodeBlock';
-import { AlertTriangle, BookOpen, Bot, CheckCircle2, CircleHelp, CircleSlash, KeyRound, Lightbulb, Plus, Sparkles, XCircle } from 'lucide-react';
+import { AlertTriangle, BookOpen, Bot, CheckCircle2, CircleHelp, CircleSlash, KeyRound, Lightbulb, MessageSquareWarning, Plus, Sparkles, XCircle } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { NormalizedError } from '../api';
 import type { CheckResult } from '../types';
@@ -53,7 +53,37 @@ export function AddVariableButton({ variable, className }: { variable: string; c
   );
 }
 
+/**
+ * A bug in TestPion itself (InternalError: a TypeError deep inside, never the user's request or server): said calmly,
+ * with where it happened and Report a problem, instead of a red wall the user could not do anything about.
+ */
+function InternalErrorPanel({ error }: { error: NormalizedError }) {
+  const where = (error.details as { method?: string } | undefined)?.method;
+  const message = where && error.message.startsWith(`${where}: `) ? error.message.slice(where.length + 2) : error.message;
+  return (
+    <Callout tone="warn" block role="alert" className="m-3 rounded-lg p-4 text-sm">
+      <div className="flex items-start gap-2">
+        <AlertTriangle size={18} className="text-warn shrink-0 mt-0.5" />
+        <div className="flex-1 min-w-0">
+          <div className="font-semibold">Something went wrong in {where ? <span className="mono">{where}</span> : 'TestPion'}</div>
+          <p className="mt-1 text-muted">This is a problem in TestPion, not in your request or the server. Your saved work is not affected; trying again may work.</p>
+          <p className="mt-2 mono text-xs text-muted break-all">{message}</p>
+          <Button
+            size="sm"
+            className="mt-3"
+            icon={<MessageSquareWarning size={12} />}
+            onClick={() => useApp.getState().set({ feedback: { kind: 'bug', title: `Something went wrong in ${where ?? 'TestPion'}`, where, error: error.message } })}
+          >
+            Report a problem
+          </Button>
+        </div>
+      </div>
+    </Callout>
+  );
+}
+
 export function ErrorPanel({ error, context, raw = true }: { error: NormalizedError; context?: unknown; raw?: boolean }) {
+  if (error.kind === ('InternalError' as NormalizedError['kind'])) return <InternalErrorPanel error={error} />;
   // an AI provider without its key: the way to fix it is one click away (the assistant can't explain it without a key)
   const setup = setupProviderOf(error);
   const missing = missingVariableOf(error);

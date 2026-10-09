@@ -36,7 +36,12 @@ export function EnvironmentsPane() {
         </button>
         {envs.map((e) => (
           <div key={e.id} className={cx('group flex items-center gap-2 mx-1 rounded-md px-3 h-8 text-sm transition-colors', e.name === env ? 'bg-accent-soft text-accent' : 'hover:bg-hover')}>
-            <button className="flex-1 flex items-center gap-2 text-left min-w-0" onClick={() => useApp.getState().setEnvironment(e.name)} title="Make this the active environment">
+            <button
+              className={cx('flex-1 flex items-center gap-2 text-left min-w-0', e.problem && 'text-bad cursor-not-allowed')}
+              disabled={!!e.problem}
+              onClick={() => useApp.getState().setEnvironment(e.name)}
+              title={e.problem ? `This environment's file cannot be read: ${e.problem}` : 'Make this the active environment'}
+            >
               <span className="w-2 h-2 rounded-full shrink-0" style={{ background: e.color ?? (e.isProduction ? 'var(--bad)' : 'var(--ok)') }} />
               <span className="truncate">{e.name}</span>
               {e.isProduction && <Badge tone="bad">prod</Badge>}

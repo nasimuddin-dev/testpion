@@ -11,7 +11,7 @@ import { RequestBreadcrumb } from '../components/RequestBreadcrumb';
 import { EnvironmentsPane, HistoryPane } from '../components/SidebarPanes';
 import { useLibrary } from '../lib/library';
 import { useSaveInCollection } from '../lib/save-in-collection';
-import { useCollections } from '../lib/collections-store';
+import { useCollectionTree } from '../lib/collections-store';
 import { useIntent, useSaveShortcut } from '../hooks';
 import type { KeyValue } from '../types';
 import { CodeEditor } from '../components/CodeEditor';
@@ -106,7 +106,7 @@ export function GrpcView() {
   const comparable = (x: Partial<typeof d>) => JSON.stringify({ ...x, descriptorSet: undefined, reflectedFrom: undefined });
   const saveDialog = useSaveInCollection(saved.lib.items, 'Save gRPC call');
   // the calls of a collection in the trash are hidden (they come back with it)
-  const liveCollections = new Set(useCollections().map((c) => c.id));
+  const liveCollections = new Set(useCollectionTree().map((c) => c.id));
   const savedDirty = !!currentSaved && comparable(currentSaved.data) !== comparable(d);
   const openSaved = async (id: string) => {
     const it = await saved.find(id);

@@ -1,7 +1,7 @@
 /** RPC handlers: connecting AI agents (Claude, Cursor, VS Code, Codex …) to the open workspace over MCP. */
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { agentsMarkdown, ApsError, checkTypes, exposedFlows, McpSession, upsertAgentsMarkdown } from '@testpion/core';
+import { atomicWrite, agentsMarkdown, ApsError, checkTypes, exposedFlows, McpSession, upsertAgentsMarkdown } from '@testpion/core';
 import type { Backend, Handlers } from '../backend.js';
 
 export interface AgentConnectOptions {
@@ -52,7 +52,7 @@ export function agentHandlers(be: Backend): Handlers {
       const path = join(be.ws.root, 'AGENTS.md');
       const before = existsSync(path) ? readFileSync(path, 'utf8') : undefined;
       // the file may be committed with the workspace: no paths of this machine in it
-      writeFileSync(path, upsertAgentsMarkdown(before, agentsMarkdown({ workspace: be.ws.workspace.name, checkTypes: checkTypes() })));
+      atomicWrite(path, upsertAgentsMarkdown(before, agentsMarkdown({ workspace: be.ws.workspace.name, checkTypes: checkTypes() })));
       return { path, updated: before !== undefined };
     },
   };

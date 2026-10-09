@@ -1,4 +1,5 @@
-import { Agent, EnvHttpProxyAgent, ProxyAgent, setGlobalDispatcher, type Dispatcher } from 'undici';
+import type { Dispatcher } from 'undici';
+import { EventEmitter } from 'node:events';
 import { Agent as HttpAgent, request as httpRequest, type AgentOptions, type IncomingMessage } from 'node:http';
 import { Agent as HttpsAgent, request as httpsRequest } from 'node:https';
 import * as tls from 'node:tls';
@@ -32,6 +33,55 @@ let generation = 0;
 let base: Dispatcher | undefined;
 let wsBase: Dispatcher | undefined;
 
+/*
+ * undici loads with the first request, not at start-up (its module body is a noticeable part of starting the app):
+ * the settings are kept, and applied (the global dispatcher, which global `fetch` uses too) once it has loaded, a
+ * moment after start or at the first request, whichever comes first. `ensureProxyApplied` waits for that.
+ */
+type Undici = typeof import('undici');
+let undici: Undici | undefined;
+let loading: Promise<Undici> | undefined;
+/** How long after the settings are first set undici loads by itself (when no request asked for it before). */
+const LOAD_DELAY_MS = 1500;
+let loadTimer: ReturnType<typeof setTimeout> | undefined;
+
+function loadUndici(): Promise<Undici> {
+  clearTimeout(loadTimer);
+  return (loading ??= import('undici').then((m) => {
+    undici = m;
+    m.setGlobalDispatcher(baseDispatcher());
+    return m;
+  }));
+}
+
+/** Load undici and apply the proxy and certificate settings (global `fetch` follows them from then on). */
+export async function ensureProxyApplied(): Promise<void> {
+  await loadUndici();
+}
+
+/**
+ * A dispatcher made once undici has loaded: right away when it has, else one that passes every request on to it as
+ * soon as it is there (a request asks for its dispatcher before it is sent; this costs it a microtask, once).
+ */
+function whenLoaded(make: (u: Undici) => Dispatcher): Dispatcher {
+  if (undici) return make(undici);
+  let real: Dispatcher | undefined;
+  const ready = loadUndici().then((u) => (real = make(u)));
+  const lazy = Object.assign(new EventEmitter(), {
+    dispatch(opts: Dispatcher.DispatchOptions, handler: Dispatcher.DispatchHandler): boolean {
+      if (real) return real.dispatch(opts, handler);
+      void ready.then(
+        (d) => d.dispatch(opts, handler),
+        (e: Error) => (handler as { onError?(e: Error): void }).onError?.(e),
+      );
+      return true;
+    },
+    close: () => ready.then((d) => d.close()),
+    destroy: (err?: Error) => ready.then((d) => d.destroy(err ?? null)),
+  });
+  return lazy as unknown as Dispatcher;
+}
+
 const withAuth = (url: string, username?: string, password?: string) => {
   if (!username) return url;
   const u = new URL(url);
@@ -56,9 +106,13 @@ export function makeDispatcher(connect: Record<string, unknown> = {}, requestPro
   const ca = trustedCa();
   // a request's own CA (client certificate settings) wins over the trusted set
   const c = { lookup: policyLookup, ...(ca ? { ca } : {}), ...connect };
-  if (requestProxy) return new ProxyAgent({ uri: requestProxy, connect: c, requestTls: c as never, ...pool });
-  if (settings.mode === 'off') return new Agent({ connect: c as never, ...pool });
-  return new EnvHttpProxyAgent({ ...proxyOptions(), connect: c as never, requestTls: c as never, ...pool } as never);
+  const mode = settings.mode;
+  const options = proxyOptions();
+  return whenLoaded(({ Agent, EnvHttpProxyAgent, ProxyAgent }) => {
+    if (requestProxy) return new ProxyAgent({ uri: requestProxy, connect: c, requestTls: c as never, ...pool });
+    if (mode === 'off') return new Agent({ connect: c as never, ...pool });
+    return new EnvHttpProxyAgent({ ...options, connect: c as never, requestTls: c as never, ...pool } as never);
+  });
 }
 
 /** The shared dispatcher for requests with default TLS settings (also used by global `fetch`). */
@@ -95,7 +149,12 @@ function rebuild(): void {
   generation++;
   const old = [base, wsBase];
   base = wsBase = undefined;
-  setGlobalDispatcher(baseDispatcher());
+  if (undici) undici.setGlobalDispatcher(baseDispatcher());
+  else if (!loading && !loadTimer) {
+    // not loaded yet: a moment after start (a request before that loads it itself)
+    loadTimer = setTimeout(() => void loadUndici().catch(() => undefined), LOAD_DELAY_MS);
+    (loadTimer as { unref?(): void }).unref?.();
+  }
   for (const d of old) void d?.close().catch(() => undefined);
 }
 

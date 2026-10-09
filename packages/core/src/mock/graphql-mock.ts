@@ -1,21 +1,11 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import {
-  execute,
-  getNamedType,
-  getNullableType,
-  isAbstractType,
-  isEnumType,
-  isListType,
-  isObjectType,
-  isScalarType,
-  parse,
-  validate,
-  type GraphQLFieldResolver,
-  type GraphQLOutputType,
-  type GraphQLSchema,
-  type GraphQLTypeResolver,
-} from 'graphql';
+import type { GraphQLFieldResolver, GraphQLOutputType, GraphQLSchema, GraphQLTypeResolver } from 'graphql';
+import { nodeRequire } from '../util/lazy-require.js';
+
+// graphql loads at first use, not at startup (see util/lazy-require.ts)
+let graphqlMod: typeof import('graphql') | undefined;
+const gql = (): typeof import('graphql') => (graphqlMod ??= typeof require === 'function' ? require('graphql') : nodeRequire('graphql'));
 import { ApsError } from '../errors.js';
 
 /**
@@ -87,21 +77,21 @@ export function createGraphQLMock(schema: GraphQLSchema, opts: GraphQLMockOption
   const overrides = opts.overrides ?? {};
 
   const valueFor = (type: GraphQLOutputType, field: string, path: string): unknown => {
-    const t = getNullableType(type);
-    if (isListType(t)) return Array.from({ length: listLength }, (_, i) => valueFor(t.ofType, field, `${path}.${i}`));
-    const named = getNamedType(t);
+    const t = gql().getNullableType(type);
+    if (gql().isListType(t)) return Array.from({ length: listLength }, (_, i) => valueFor(t.ofType, field, `${path}.${i}`));
+    const named = gql().getNamedType(t);
     const n = hash(path);
-    if (isScalarType(named)) return fakeScalar(named.name, field, n);
-    if (isEnumType(named)) {
+    if (gql().isScalarType(named)) return fakeScalar(named.name, field, n);
+    if (gql().isEnumType(named)) {
       const vals = named.getValues();
       return vals.length ? vals[n % vals.length]!.value : null;
     }
-    if (isAbstractType(named)) {
+    if (gql().isAbstractType(named)) {
       const possible = schema.getPossibleTypes(named);
       const pick = possible[n % Math.max(possible.length, 1)];
       return pick ? { __typename: pick.name, __path: path, ...(overrides[pick.name] ?? {}) } : null;
     }
-    if (isObjectType(named)) return { __path: path, ...(overrides[named.name] ?? {}) };
+    if (gql().isObjectType(named)) return { __path: path, ...(overrides[named.name] ?? {}) };
     return null;
   };
 
@@ -110,7 +100,7 @@ export function createGraphQLMock(schema: GraphQLSchema, opts: GraphQLMockOption
     if (Object.prototype.hasOwnProperty.call(src, info.fieldName) && info.fieldName !== '__path') {
       const v = src[info.fieldName];
       // an override for an object field: keep it, filling missing fields with fake values
-      return typeof v === 'object' && v !== null && !Array.isArray(v) && isObjectType(getNamedType(info.returnType)) ? { __path: `${src.__path ?? info.parentType.name}.${info.fieldName}`, ...v } : v;
+      return typeof v === 'object' && v !== null && !Array.isArray(v) && gql().isObjectType(gql().getNamedType(info.returnType)) ? { __path: `${src.__path ?? info.parentType.name}.${info.fieldName}`, ...v } : v;
     }
     const base = (src.__path as string | undefined) ?? info.parentType.name;
     const path = `${base}.${info.fieldName}`;
@@ -129,13 +119,13 @@ export function createGraphQLMock(schema: GraphQLSchema, opts: GraphQLMockOption
     run(query: string, variables?: Record<string, unknown>, operationName?: string): GraphQLMockResult {
       let document;
       try {
-        document = parse(query);
+        document = gql().parse(query);
       } catch (e) {
         return { errors: [{ message: (e as Error).message }] };
       }
-      const errors = validate(schema, document);
+      const errors = gql().validate(schema, document);
       if (errors.length) return { errors: errors.map((e) => ({ message: e.message, locations: e.locations })) };
-      const r = execute({ schema, document, variableValues: variables, operationName, rootValue: {}, fieldResolver, typeResolver });
+      const r = gql().execute({ schema, document, variableValues: variables, operationName, rootValue: {}, fieldResolver, typeResolver });
       if (r instanceof Promise) throw new ApsError('ConfigurationError', 'Unexpected async resolver in the GraphQL mock');
       return { data: r.data ?? null, ...(r.errors?.length ? { errors: r.errors.map((e) => ({ message: e.message, path: e.path })) } : {}) };
     },

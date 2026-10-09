@@ -30,6 +30,12 @@ export class VariableScope {
   private scopes = new Map<ScopeName, Map<string, unknown>>();
   private secretKeys = new Set<string>();
   readonly unresolved = new Set<string>();
+  /**
+   * Variables whose values refer back to themselves ({{a}} = "{{b}}", {{b}} = "{{a}}"), as "a → b → a". Their names
+   * are in `unresolved` too: the placeholder is left as it is rather than sent half-resolved.
+   */
+  readonly cycles = new Set<string>();
+  private cycleHits = 0;
   /** `{{$env.NAME}}` references that the env allow-list kept out (the UI says how to allow them). */
   readonly blockedEnv = new Set<string>();
 
@@ -163,11 +169,31 @@ export class VariableScope {
     return undefined;
   }
 
-  /** Replace `{{var}}` placeholders in a string. Unknown placeholders are left intact and recorded. */
-  resolve(input: string): string {
+  /**
+   * A variable's value with the placeholders in it resolved too ({{baseUrl}} = "{{host}}/api"), as Postman does.
+   * `stack` holds the names being resolved: meeting one again is a cycle, reported instead of looping.
+   */
+  private lookupNested(expr: string, stack: string[]): unknown {
+    const name = expr.trim();
+    if (stack.includes(name)) {
+      const from = stack.indexOf(name);
+      this.cycleHits++;
+      this.cycles.add([...stack.slice(from), name].join(' → '));
+      for (const n of stack.slice(from)) this.unresolved.add(n);
+      return undefined;
+    }
+    const v = this.lookup(expr);
+    if (typeof v !== 'string' || v.indexOf('{{') < 0 || name.startsWith('$')) return v;
+    const before = this.cycleHits;
+    const out = this.resolveIn(v, [...stack, name]);
+    // part of a cycle: the placeholder stays as it is
+    return this.cycleHits > before ? undefined : out;
+  }
+
+  private resolveIn(input: string, stack: string[]): string {
     if (!input || input.indexOf('{{') < 0) return input;
     return input.replace(TEMPLATE, (whole, expr: string) => {
-      const v = this.lookup(expr);
+      const v = this.lookupNested(expr, stack);
       if (v === undefined) {
         this.unresolved.add(expr.trim());
         return whole;
@@ -175,6 +201,11 @@ export class VariableScope {
       if (this.secretKeys.has(expr.trim()) && typeof v === 'string') this.redactor?.addSecret(v);
       return typeof v === 'object' ? JSON.stringify(v) : String(v);
     });
+  }
+
+  /** Replace `{{var}}` placeholders in a string. Unknown placeholders (and cycles) are left intact and recorded. */
+  resolve(input: string): string {
+    return this.resolveIn(input, []);
   }
 
   /**
@@ -185,7 +216,7 @@ export class VariableScope {
     if (typeof value === 'string') {
       const m = /^\{\{\s*([^{}]+?)\s*\}\}$/.exec(value);
       if (m) {
-        const v = this.lookup(m[1]!);
+        const v = this.lookupNested(m[1]!, []);
         if (v !== undefined) {
           if (this.secretKeys.has(m[1]!.trim()) && typeof v === 'string') this.redactor?.addSecret(v);
           return v as T;

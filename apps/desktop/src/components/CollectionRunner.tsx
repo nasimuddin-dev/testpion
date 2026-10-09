@@ -233,8 +233,9 @@ export function CollectionRunner({ collection, folderId, onFolderChange, dataPat
                 <Select value={environment} onChange={(e) => setEnvironment(e.target.value)}>
                   <option value="">No environment</option>
                   {envs.map((e) => (
-                    <option key={e.name} value={e.name}>
+                    <option key={e.name} value={e.name} disabled={!!e.problem} title={e.problem}>
                       {e.name}
+                      {e.problem ? '  (cannot be read)' : ''}
                     </option>
                   ))}
                 </Select>

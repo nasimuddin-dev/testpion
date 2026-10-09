@@ -35,7 +35,10 @@ export interface RunOptions {
   resume?: boolean;
   /** Persist traces: all, only failing tests, or none. */
   traceMode?: 'all' | 'failures' | 'none';
+  /** Persist a trace. Called in batches off the test path (about every 100 ms and at the end of the run), never per test. */
   onTrace?: (trace: Trace, result: TestResult) => void | Promise<void>;
+  /** Wraps each batch of `onTrace` calls, e.g. `(fn) => store.meta.batch(fn)` for one database transaction per batch. */
+  traceBatch?: (fn: () => void) => void;
   onEvent?: (e: RunEvent) => void;
   environment?: string;
   bail?: boolean;
@@ -133,7 +136,6 @@ export async function runTests(opts: RunOptions): Promise<RunSummary> {
   const sem = new Semaphore(concurrency);
   const ctrl = new AbortController();
   const onAbort = () => ctrl.abort();
-  opts.signal?.addEventListener('abort', onAbort, { once: true });
   const signal = ctrl.signal;
   const emit = (e: RunEvent) => {
     try {
@@ -180,19 +182,55 @@ export async function runTests(opts: RunOptions): Promise<RunSummary> {
   const seen = new Set<string>();
   const dep = (id: string) => deferreds.get(id) ?? deferreds.set(id, deferred()).get(id)!;
 
+  // traces are derived data: queued and written in batches so a test never waits for a file write
+  const traceQueue: Array<[Trace, TestResult]> = [];
+  let traceTimer: ReturnType<typeof setTimeout> | undefined;
+  let traceWrites: Promise<void> = Promise.resolve();
+  const flushTraces = (): Promise<void> => {
+    if (traceTimer) clearTimeout(traceTimer);
+    traceTimer = undefined;
+    const batch = traceQueue.splice(0);
+    if (!batch.length || !opts.onTrace) return traceWrites;
+    const onTrace = opts.onTrace;
+    traceWrites = traceWrites.then(async () => {
+      const pending: Array<Promise<void>> = [];
+      const all = () => {
+        for (const [t, r] of batch) {
+          try {
+            const p = onTrace(t, r);
+            if (p) pending.push(p.catch(() => undefined));
+          } catch {
+            /* trace persistence is best-effort */
+          }
+        }
+      };
+      try {
+        if (opts.traceBatch) opts.traceBatch(all);
+        else all();
+      } catch {
+        /* a failed batch loses its traces, not the run */
+      }
+      await Promise.all(pending);
+    });
+    return traceWrites;
+  };
+  const queueTrace = (t: Trace, r: TestResult) => {
+    traceQueue.push([t, r]);
+    if (traceQueue.length >= 500) void flushTraces();
+    else
+      traceTimer ??= setTimeout(() => {
+        traceTimer = undefined;
+        void flushTraces();
+      }, 100);
+  };
+
   const record = async (r: TestResult, trace?: Trace) => {
     const redacted = opts.services.redactor.redact(r);
     agg.add(redacted);
     statusById.set(r.id, r.status);
     dep(r.id).resolve(r.status);
     await write(redacted);
-    if (trace && opts.onTrace && (opts.traceMode === 'all' || (opts.traceMode !== 'none' && r.status !== 'passed'))) {
-      try {
-        await opts.onTrace(trace, redacted);
-      } catch {
-        /* trace persistence is best-effort */
-      }
-    }
+    if (trace && opts.onTrace && (opts.traceMode === 'all' || (opts.traceMode !== 'none' && r.status !== 'passed'))) queueTrace(trace, redacted);
     emit({ type: 'test-end', runId, result: redacted });
     progress();
     if (opts.bail && (r.status === 'failed' || r.status === 'error')) ctrl.abort();
@@ -275,6 +313,9 @@ export async function runTests(opts: RunOptions): Promise<RunSummary> {
   };
 
   let cancelled = false;
+  // added right before the try whose finally removes it: a finished run is never kept alive by the caller's signal
+  if (opts.signal?.aborted) ctrl.abort();
+  else opts.signal?.addEventListener('abort', onAbort, { once: true });
   try {
     // setup (sequential). Failures skip the whole run.
     let setupFailed = false;
@@ -313,6 +354,7 @@ export async function runTests(opts: RunOptions): Promise<RunSummary> {
       await exec({ ...t, name: `[teardown] ${t.name}` }).catch(() => undefined);
     }
     opts.signal?.removeEventListener('abort', onAbort);
+    await flushTraces();
     if (out) await endAndClose(out);
   }
 

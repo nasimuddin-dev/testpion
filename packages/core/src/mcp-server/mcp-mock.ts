@@ -1,19 +1,8 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import {
-  CallToolRequestSchema,
-  ErrorCode,
-  GetPromptRequestSchema,
-  ListPromptsRequestSchema,
-  ListResourcesRequestSchema,
-  ListToolsRequestSchema,
-  McpError,
-  ReadResourceRequestSchema,
-} from '@modelcontextprotocol/sdk/types.js';
-import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
+import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { mcpServer, mcpServerHttp, mcpServerStdio, mcpTypes } from './sdk.js';
+import { parseYaml, stringifyYaml } from '../util/lazy-yaml.js';
 import { ApsError } from '../errors.js';
 import { dynamicValue } from '../vars/dynamic.js';
 import { runScript } from '../scripts/sandbox.js';
@@ -194,24 +183,24 @@ export function createMcpMockServer(d: McpMockDefinition): Server {
   const caps: Record<string, object> = { tools: {} };
   if (d.resources?.length) caps.resources = {};
   if (d.prompts?.length) caps.prompts = {};
-  const server = new Server({ name: d.name, version: d.version ?? '1.0.0-mock' }, { capabilities: caps, instructions: d.instructions });
-  server.setRequestHandler(ListToolsRequestSchema, async () => ({
+  const server = new (mcpServer().Server)({ name: d.name, version: d.version ?? '1.0.0-mock' }, { capabilities: caps, instructions: d.instructions });
+  server.setRequestHandler(mcpTypes().ListToolsRequestSchema, async () => ({
     tools: (d.tools ?? []).map((t) => ({ name: t.name, title: t.title, description: t.description, inputSchema: { type: 'object', properties: {}, ...(t.inputSchema ?? {}) }, annotations: t.annotations })),
   }));
-  server.setRequestHandler(CallToolRequestSchema, async (req) => (await mockToolResult(d, req.params.name, (req.params.arguments ?? {}) as Record<string, unknown>)) as never);
+  server.setRequestHandler(mcpTypes().CallToolRequestSchema, async (req) => (await mockToolResult(d, req.params.name, (req.params.arguments ?? {}) as Record<string, unknown>)) as never);
   if (d.resources?.length) {
-    server.setRequestHandler(ListResourcesRequestSchema, async () => ({ resources: d.resources!.map(({ uri, name, description, mimeType }) => ({ uri, name, description, mimeType })) }));
-    server.setRequestHandler(ReadResourceRequestSchema, async (req) => {
+    server.setRequestHandler(mcpTypes().ListResourcesRequestSchema, async () => ({ resources: d.resources!.map(({ uri, name, description, mimeType }) => ({ uri, name, description, mimeType })) }));
+    server.setRequestHandler(mcpTypes().ReadResourceRequestSchema, async (req) => {
       const r = d.resources!.find((x) => x.uri === req.params.uri);
-      if (!r) throw new McpError(ErrorCode.InvalidParams, `Unknown resource ${req.params.uri}`);
+      if (!r) throw new (mcpTypes().McpError)(mcpTypes().ErrorCode.InvalidParams, `Unknown resource ${req.params.uri}`);
       return { contents: [{ uri: r.uri, mimeType: r.mimeType ?? 'text/plain', text: r.text ?? '' }] };
     });
   }
   if (d.prompts?.length) {
-    server.setRequestHandler(ListPromptsRequestSchema, async () => ({ prompts: d.prompts!.map(({ name, description, arguments: a }) => ({ name, description, arguments: a })) }));
-    server.setRequestHandler(GetPromptRequestSchema, async (req) => {
+    server.setRequestHandler(mcpTypes().ListPromptsRequestSchema, async () => ({ prompts: d.prompts!.map(({ name, description, arguments: a }) => ({ name, description, arguments: a })) }));
+    server.setRequestHandler(mcpTypes().GetPromptRequestSchema, async (req) => {
       const p = d.prompts!.find((x) => x.name === req.params.name);
-      if (!p) throw new McpError(ErrorCode.InvalidParams, `Unknown prompt ${req.params.name}`);
+      if (!p) throw new (mcpTypes().McpError)(mcpTypes().ErrorCode.InvalidParams, `Unknown prompt ${req.params.name}`);
       const args = (req.params.arguments ?? {}) as Record<string, unknown>;
       return { description: p.description, messages: (p.messages ?? []).map((m) => ({ role: m.role, content: { type: 'text', text: fill(m.text, args) } })) };
     });
@@ -221,7 +210,7 @@ export function createMcpMockServer(d: McpMockDefinition): Server {
 
 /** Serve the mock over stdio (for AI agents that start MCP servers as commands). */
 export async function serveMcpMockStdio(d: McpMockDefinition): Promise<void> {
-  await createMcpMockServer(d).connect(new StdioServerTransport());
+  await createMcpMockServer(d).connect(new (mcpServerStdio().StdioServerTransport)());
 }
 
 export interface McpMockHttpServer {
@@ -240,7 +229,7 @@ export async function startMcpMockHttp(d: McpMockDefinition, opts: { port?: numb
     for await (const c of req) chunks.push(c as Buffer);
     const body = JSON.parse(Buffer.concat(chunks).toString('utf8') || 'null');
     const server = createMcpMockServer(d);
-    const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+    const transport = new (mcpServerHttp().StreamableHTTPServerTransport)({ sessionIdGenerator: undefined });
     res.on('close', () => {
       void transport.close();
       void server.close();

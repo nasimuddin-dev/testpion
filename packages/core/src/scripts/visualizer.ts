@@ -1,4 +1,8 @@
-import Handlebars from 'handlebars';
+import { nodeRequire } from '../util/lazy-require.js';
+
+// handlebars (and its source-map) loads with the first visualizer rendered, not at startup (see util/lazy-require.ts)
+let handlebarsMod: typeof import('handlebars') | undefined;
+const handlebars = (): typeof import('handlebars') => (handlebarsMod ??= typeof require === 'function' ? require('handlebars') : nodeRequire('handlebars'));
 
 /** What `tp.visualizer.set(template, data)` left behind, rendered for the Visualize tab. */
 export interface VisualizerResult {
@@ -17,7 +21,7 @@ const MAX_HTML = 2_000_000;
  */
 export function renderVisualizer(template: string, data: unknown): VisualizerResult {
   try {
-    const hb = Handlebars.create();
+    const hb = handlebars().create();
     // Postman's visualizer offers no helpers beyond Handlebars' built-ins; add a JSON one for debugging
     hb.registerHelper('json', (v: unknown) => JSON.stringify(v, null, 2));
     const html = hb.compile(template, { strict: false })(data ?? {});

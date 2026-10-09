@@ -114,11 +114,16 @@ export function iconForLabel(label: string, variant?: string, opts: { size?: num
   const size = opts.size ?? 13;
   const l = label.trim().toLowerCase();
   if (!l) return undefined;
-  for (const [re, icon] of RULES) if (re.test(l)) return icon(size);
-  if (opts.fallback === false) return undefined;
-  if (variant === 'danger') return <AlertOctagon size={size} />;
-  return <Check size={size} />;
+  // every button and menu row asks on every render: the same element each time (React skips it), the rules run once
+  const key = `${size}|${variant ?? ''}|${opts.fallback === false ? 0 : 1}|${l}`;
+  if (ICONS.has(key)) return ICONS.get(key);
+  if (ICONS.size > 1000) ICONS.clear();
+  const found = RULES.find(([re]) => re.test(l));
+  const icon = found ? found[1](size) : opts.fallback === false ? undefined : variant === 'danger' ? <AlertOctagon size={size} /> : <Check size={size} />;
+  ICONS.set(key, icon);
+  return icon;
 }
+const ICONS = new Map<string, ReactNode>();
 
 /** The plain text of a button's children ("Save", ["Run ", count]); empty when it is only an icon or markup. */
 export function textOf(children: ReactNode): string {

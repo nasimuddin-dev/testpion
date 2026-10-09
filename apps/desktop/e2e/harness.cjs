@@ -18,12 +18,15 @@ module.exports = async function run(win) {
   if (process.env.E2E_STUB_SAVE)
     dialog.showSaveDialog = async () => (process.env.E2E_STUB_SAVE === 'CANCEL' ? { canceled: true, filePath: '' } : { canceled: false, filePath: process.env.E2E_STUB_SAVE });
   const errors = [];
+  // console warnings: kept per step and in the report (they never fail a step), so a run shows them
+  const warnings = [];
   const steps = [];
   win.webContents.on('console-message', (e, level, message) => {
     const lvl = typeof level === 'number' ? level : e?.level;
     const msg = typeof message === 'string' ? message : e?.message;
     // "ResizeObserver loop completed with undelivered notifications" is the browser saying a layout settled a frame late (Monaco in a resized pane); not an app error
     if ((lvl === 3 || lvl === 'error') && !/ResizeObserver loop/.test(String(msg))) errors.push(String(msg).slice(0, 400));
+    else if ((lvl === 2 || lvl === 'warning') && !/Electron Security Warning|ResizeObserver loop/.test(String(msg))) warnings.push(String(msg).slice(0, 400));
   });
   // the window's life, written as it happens (report.json comes only at the end, and a hung run never gets there)
   const life = (what) => require('node:fs').appendFileSync(join(OUT, 'events.log'), `${new Date().toISOString()} ${what}
@@ -108,6 +111,7 @@ module.exports = async function run(win) {
     const [name, code, shot = true] = step;
     life(`step ${name}`);
     const errorsBefore = errors.length;
+    const warningsBefore = warnings.length;
     const started = Date.now();
     // "main:" steps run here, in the main process, outside the app's own code: like another editor or `git pull`
     // changing files (they get `require` and `home`, the test's TESTPION_HOME)
@@ -122,7 +126,7 @@ module.exports = async function run(win) {
         ? await profile(name, code.slice(8))
         : await within(js(`(async () => ${code})()`), 180_000, 'ERR the step did not finish in 3 minutes');
     life(`  -> ${String(typeof result === 'string' ? result : JSON.stringify(result)).slice(0, 160)}`);
-    const entry = { name, result: typeof result === 'string' ? result : JSON.stringify(result), ms: Date.now() - started, errors: errors.slice(errorsBefore) };
+    const entry = { name, result: typeof result === 'string' ? result : JSON.stringify(result), ms: Date.now() - started, errors: errors.slice(errorsBefore), ...(warnings.length > warningsBefore ? { warnings: warnings.slice(warningsBefore) } : {}) };
     if (shot !== false) {
       await sleep(700);
       const png = await shoot();
@@ -134,5 +138,5 @@ module.exports = async function run(win) {
     }
     steps.push(entry);
   }
-  writeFileSync(join(OUT, 'report.json'), JSON.stringify({ steps, errors }, null, 2));
+  writeFileSync(join(OUT, 'report.json'), JSON.stringify({ steps, errors, warnings }, null, 2));
 };

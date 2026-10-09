@@ -1,8 +1,8 @@
 import { ArrowDown, ArrowUp, Columns3, Copy, Download, ExternalLink, Filter, Highlighter, Lock, Network, Play, Reply, Shuffle, Star, Trash2, Wrench } from 'lucide-react';
-import { useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from 'react';
+import { memo, useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { formatBytes } from '@testpion/shared';
 import { call } from '../../api';
-import { useApp } from '../../store';
+import { useApp, toastError } from '../../store';
 import { Badge, cx, Empty, Menu, Tabs, VirtualList, type MenuItem } from '../ui';
 import { HIGHLIGHT_CLASS, type Rule, type RuleKind } from '../DebuggerRules';
 import { curlOf, kb, speedOf, versionOf, type Exchange, type IncomingRequest } from './model';
@@ -47,6 +47,10 @@ const headerLines = (h?: Record<string, string>) =>
   Object.entries(h ?? {})
     .map(([k, v]) => `${k}: ${v}`)
     .join('\n');
+
+// drawn in thousands of rows: made once, so a re-rendered row reuses them
+const BOOKMARK_ICON = <Star size={10} className="fill-current text-warn" />;
+const TLS_ICON = <Lock size={10} className="inline mr-1 text-ok" aria-label="decrypted HTTPS" />;
 
 type ColumnId = 'seq' | 'offset' | 'duration' | 'method' | 'version' | 'url' | 'status' | 'type' | 'size' | 'speed' | 'application' | 'domain' | 'ip' | 'user' | 'pid';
 interface Column {
@@ -127,7 +131,7 @@ export interface GridActions {
  * selected with Ctrl / Shift, a right-click menu that turns a row's values into rules. Highlights colour the text
  * (per theme), bold it, or fill the whole row.
  */
-export function DebuggerGrid({
+export const DebuggerGrid = memo(function DebuggerGrid({
   rows,
   selected,
   selectedIds,
@@ -185,7 +189,7 @@ export function DebuggerGrid({
       case 'seq':
         return (
           <span className="flex items-center justify-end gap-1">
-            {e.bookmarked && <Star size={10} className="fill-current text-warn" />}
+            {e.bookmarked && BOOKMARK_ICON}
             {e.seq}
           </span>
         );
@@ -200,7 +204,7 @@ export function DebuggerGrid({
       case 'url':
         return (
           <span className="truncate">
-            {e.tls && <Lock size={10} className="inline mr-1 text-ok" aria-label="decrypted HTTPS" />}
+            {e.tls && TLS_ICON}
             {e.kind === 'tunnel' ? `${e.host}  (HTTPS tunnel)` : e.url}
             {e.grpc && <span className="ml-1 text-[10px] font-bold text-[#e535ab]">gRPC</span>}
             {!!e.frameCount && (
@@ -425,13 +429,23 @@ export function DebuggerGrid({
       )}
     </div>
   );
-}
+});
 
 /** The footer: how many requests are listed (or selected), their size and their time. */
-export function GridTotals({ rows, selectedIds, total }: { rows: Exchange[]; selectedIds: string[]; total?: number }) {
-  const pick = selectedIds.length > 1 ? rows.filter((r) => selectedIds.includes(r.id)) : rows;
-  const bytes = pick.reduce((n, r) => n + r.responseBodyBytes + r.requestBodyBytes, 0);
-  const secs = pick.reduce((n, r) => n + (r.durationMs ?? 0), 0) / 1000;
+export const GridTotals = memo(function GridTotals({ rows, selectedIds, total }: { rows: Exchange[]; selectedIds: string[]; total?: number }) {
+  // one selected row (a click, ↑ ↓) totals the whole list: only a multi-selection changes the sums
+  const several = selectedIds.length > 1 ? selectedIds : undefined;
+  const { pick, bytes, secs } = useMemo(() => {
+    const ids = several && new Set(several);
+    const pick = ids ? rows.filter((r) => ids.has(r.id)) : rows;
+    let bytes = 0;
+    let ms = 0;
+    for (const r of pick) {
+      bytes += r.responseBodyBytes + r.requestBodyBytes;
+      ms += r.durationMs ?? 0;
+    }
+    return { pick, bytes, secs: ms / 1000 };
+  }, [rows, several]);
   return (
     <div className="px-2 py-1 border-t border-line text-[11px] text-muted flex gap-4 shrink-0 tabular-nums" data-grid-totals>
       <span>
@@ -443,7 +457,7 @@ export function GridTotals({ rows, selectedIds, total }: { rows: Exchange[]; sel
       <span className="ml-auto hidden @lg:inline">↑ ↓ select · Ctrl/Shift+click several · Enter opens · Delete removes · Ctrl+F finds · Ctrl+E clears</span>
     </div>
   );
-}
+});
 
 /** Outgoing (programs through the proxy) or Incoming (requests TestPion's mock servers received). */
 export function TrafficSide({ side, onSide, incoming }: { side: 'outgoing' | 'incoming'; onSide(s: 'outgoing' | 'incoming'): void; incoming: number }) {
@@ -462,7 +476,7 @@ export function TrafficSide({ side, onSide, incoming }: { side: 'outgoing' | 'in
 /** Requests the workspace's mock servers received, as they come. */
 export function useIncoming() {
   const [list, setList] = useEventLog<IncomingRequest>('debug.incoming', 2000, 'debug.incoming');
-  return { list, clear: () => void call('debug.clearIncoming').then(() => setList([])) };
+  return { list, clear: () => void call('debug.clearIncoming').then(() => setList([]), toastError) };
 }
 
 export function IncomingList({ list, onClear, selected, onSelect }: { list: IncomingRequest[]; onClear(): void; selected?: string; onSelect(id: string): void }) {

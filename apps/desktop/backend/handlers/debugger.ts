@@ -32,13 +32,18 @@ import {
   grpcMethodIndex,
   workspaceProtoRoots,
   DebuggerSession,
+  batcher,
 } from '@testpion/core';
-import QRCode from 'qrcode';
 import { networkInterfaces } from 'node:os';
 import { activeRules, holdBreakpoint, type PendingBreakpoint } from './debugger-rules.js';
 import type { Backend, Handlers } from '../backend.js';
+
+/** qrcode (with pngjs) loads when the phone-setup page first asks for its QR code, not at startup. */
+let qrcodeMod: Promise<typeof import('qrcode')> | undefined;
+const qrcode = () => (qrcodeMod ??= import('qrcode').then((m) => ((m as { default?: typeof import('qrcode') }).default ?? m) as typeof import('qrcode')));
 import { request as httpRequest } from 'node:http';
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { rename, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { request as httpsRequest } from 'node:https';
 import { connect as h2connect } from 'node:http2';
@@ -189,6 +194,8 @@ export interface DebuggerState {
 
 const SESSIONS_DIR = 'debugger';
 const AUTOSAVE = 'autosave';
+/** The longest AutoSave works without letting the proxy serve what waits. */
+const AUTOSAVE_SLICE_MS = 10;
 
 /** The root certificate of this computer (in the data folder, never in a workspace) and the signer of host certificates. */
 function certificateOf(be: Backend, state: DebuggerState): RootCertificate {
@@ -331,22 +338,55 @@ export function debuggerHandlers(be: Backend): Handlers {
   const touch = () => {
     state.dirty = true;
   };
+  /**
+   * AutoSave writes the session without holding up the proxy: the HAR is made a few exchanges at a time (each slice
+   * at most ~10 ms, then the event loop serves what waits), not pretty-printed, and written in the background
+   * (to a temporary file first, so a crash never leaves half a session).
+   */
+  let autosaving = false;
+  const autosaveNow = async () => {
+    if (autosaving || !state.dirty || !state.exchanges.length) return;
+    autosaving = true;
+    // changes from here on make it dirty again
+    state.dirty = false;
+    try {
+      const items = state.exchanges.slice();
+      const shell = JSON.stringify(exchangesToHar([], be.logger.redactor, ENGINE_VERSION));
+      const at = shell.indexOf('"entries":[]') + '"entries":['.length;
+      const parts: string[] = [];
+      let slice = performance.now();
+      for (const e of items) {
+        parts.push(JSON.stringify(exchangesToHar([e], be.logger.redactor, ENGINE_VERSION).log.entries[0]));
+        if (performance.now() - slice > AUTOSAVE_SLICE_MS) {
+          await new Promise((r) => setImmediate(r));
+          slice = performance.now();
+        }
+      }
+      mkdirSync(sessionsDir(), { recursive: true });
+      const file = sessionFile(AUTOSAVE);
+      be.lastOwnChange = Date.now();
+      await writeFile(`${file}.tmp`, shell.slice(0, at) + parts.join(',') + shell.slice(at));
+      await rename(`${file}.tmp`, file);
+      be.lastOwnChange = Date.now();
+    } catch (e) {
+      state.dirty = true;
+      be.logger.warn(`Debugger autosave failed: ${(e as Error).message}`);
+    } finally {
+      autosaving = false;
+    }
+  };
   const stopAutosave = () => {
     clearInterval(state.autosave);
     state.autosave = undefined;
   };
   const startAutosave = () => {
     stopAutosave();
-    state.autosave = setInterval(() => {
-      if (!state.dirty || !state.exchanges.length) return;
-      try {
-        writeSession(AUTOSAVE);
-        state.dirty = false;
-      } catch (e) {
-        be.logger.warn(`Debugger autosave failed: ${(e as Error).message}`);
-      }
-    }, 60_000);
+    state.autosave = setInterval(() => void autosaveNow(), 60_000);
+    (state.autosave as { unref?(): void }).unref?.();
   };
+  // the window learns of new and changed exchanges at most once per 50 ms (a flood is thousands a second); it reads
+  // the changes itself (debug.changes), so the signal carries only how many and the latest ids
+  const signals = batcher<string>((ids) => be.host.emit('debug.exchange', { phase: 'batch', count: ids.length, ids: [...new Set(ids.slice(-20))] }), 50);
   const restoreSystem = async () => {
     const s = state.systemProxy;
     if (!s) return;
@@ -485,10 +525,10 @@ export function debuggerHandlers(be: Backend): Handlers {
           leafFor: (host) => (certificateOf(be, state), state.leafFor!(host)),
           enabled: (host) => !!state.decrypt && !hostMatches(state.noDecrypt, host),
         },
-        onExchange: (e, phase) => {
+        onExchange: (e) => {
           changed(state, e);
           touch();
-          be.host.emit('debug.exchange', { id: e.id, phase });
+          signals.push(e.id);
         },
       });
       startAutosave();
@@ -508,7 +548,7 @@ export function debuggerHandlers(be: Backend): Handlers {
       const addresses = await Promise.all(
         lanAddresses().map(async (ip) => {
           const page = port ? `http://${ip}:${port}/` : undefined;
-          return { ip, proxy: port ? `${ip}:${port}` : undefined, page, qrSvg: page ? await QRCode.toString(page, { type: 'svg', margin: 1, errorCorrectionLevel: 'M' }) : undefined };
+          return { ip, proxy: port ? `${ip}:${port}` : undefined, page, qrSvg: page ? await (await qrcode()).toString(page, { type: 'svg', margin: 1, errorCorrectionLevel: 'M' }) : undefined };
         }),
       );
       return { running: !!state.proxy, lan: !!state.lan, port, decrypt: !!state.decrypt, addresses };
@@ -600,7 +640,8 @@ export function debuggerHandlers(be: Backend): Handlers {
       application,
       type,
       idsOnly,
-      limit = 5000,
+      limit,
+      offset = 0,
     }: {
       /** Only the ids of the matches (a search in headers and bodies, the rest is filtered in the window). */
       idsOnly?: boolean;
@@ -616,7 +657,10 @@ export function debuggerHandlers(be: Backend): Handlers {
       deep?: boolean;
       kind?: 'http' | 'tunnel';
       bookmarked?: boolean;
+      /** How many, newest first in what is cut (the list stays oldest first): 200 rows / 5000 ids by default; 0 is all. */
       limit?: number;
+      /** Skip this many of the newest (paging back through the session). */
+      offset?: number;
     } = {}) => {
       const needle = text?.toLowerCase();
       const out = state.exchanges.filter((e) => {
@@ -640,8 +684,11 @@ export function debuggerHandlers(be: Backend): Handlers {
         }
         return true;
       });
-      if (idsOnly) return out.slice(-limit).map((e) => e.id);
-      return out.slice(-limit).map((e) => leanRow(be, state, e));
+      const n = limit ?? (idsOnly ? 5000 : 200);
+      const end = Math.max(0, out.length - Math.max(0, offset));
+      const page = n > 0 ? out.slice(Math.max(0, end - n), end) : out.slice(0, end);
+      if (idsOnly) return page.map((e) => e.id);
+      return page.map((e) => leanRow(be, state, e));
     },
     /**
      * The grid's changes since the window last asked: the rows added or changed after revision `since`, or every row

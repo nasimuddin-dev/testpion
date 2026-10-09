@@ -1,4 +1,4 @@
-import { Kafka, logLevel, type Admin, type Consumer, type Producer, type SASLOptions } from 'kafkajs';
+import type { Admin, Consumer, Kafka, Producer, SASLOptions } from 'kafkajs';
 import { ApsError } from '../../errors.js';
 import { assertUrlAllowed } from '../../net/policy.js';
 import { shortId } from '../../util/ids.js';
@@ -54,6 +54,10 @@ export function parseKafkaUrl(url: string): { brokers: string[]; tls: boolean } 
   return { brokers, tls };
 }
 
+// the client library loads on the first connection (not at startup)
+let kafkaMod: Promise<typeof import('kafkajs')> | undefined;
+const kafkajs = () => (kafkaMod ??= import('kafkajs'));
+
 export class KafkaSession {
   readonly id = shortId('kafka-');
   private kafka?: Kafka;
@@ -104,6 +108,7 @@ export class KafkaSession {
     const sasl: SASLOptions | undefined = this.opts.username
       ? ({ mechanism: this.opts.mechanism ?? 'plain', username: this.opts.username, password: this.opts.password ?? '' } as SASLOptions)
       : undefined;
+    const { Kafka, logLevel } = await kafkajs();
     this.kafka = new Kafka({
       clientId: this.opts.clientId || 'testpion',
       brokers,

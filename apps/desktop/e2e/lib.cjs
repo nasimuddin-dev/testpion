@@ -46,7 +46,8 @@ const step = (name, body, shot, { extra = '', ...opts } = {}) => [name, `(async 
 const stepWith = (opts) => (name, body, shot) => step(name, body, shot, opts);
 
 /** The Debugger's captured exchanges, oldest first (the list call answers an array). */
-const EXCHANGES = `await window.aps.invoke('debug.exchanges', {})`;
+// every exchange of the session (the RPC pages to the newest 200 by default)
+const EXCHANGES = `await window.aps.invoke('debug.exchanges', { limit: 0 })`;
 /** Waits until the Debugger is running (`true`) or stopped (`false`) and returns its status. */
 const waitRunning = (running, timeoutMs = 10000) => `await __t.waitFor(async () => { const s = await window.aps.invoke('debug.status'); return !!s.running === ${running} ? s : null; }, ${timeoutMs})`;
 

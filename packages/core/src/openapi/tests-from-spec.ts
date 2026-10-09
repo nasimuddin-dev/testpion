@@ -1,11 +1,10 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { stringify } from 'yaml';
+import { parseYaml, stringifyYaml as stringify } from '../util/lazy-yaml.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { slugify } from '../util/ids.js';
 import { fuzzCases, fuzzFindingsToTests, type FuzzCase, type FuzzReport } from './fuzz.js';
 import { openApiOutline, successCode } from './outline.js';
-import { parse as parseYaml } from 'yaml';
 import { importAsyncApi } from '../import/asyncapi.js';
 
 /**

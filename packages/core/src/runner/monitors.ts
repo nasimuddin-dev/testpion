@@ -300,6 +300,7 @@ export async function executeMonitor(o: ExecuteMonitorOptions): Promise<MonitorR
         resultsFile: join(dir, 'results.jsonl'),
         traceMode: 'failures',
         onTrace: (t) => (o.onTrace ? o.onTrace(t, runId) : void store.saveTrace(t, 'test', runId)),
+        traceBatch: o.onTrace ? undefined : (fn) => store.meta.batch(fn),
         environment: monitor.environment,
         onEvent: o.onEvent,
       });

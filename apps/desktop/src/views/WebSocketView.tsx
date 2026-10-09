@@ -11,7 +11,7 @@ import { RequestBreadcrumb } from '../components/RequestBreadcrumb';
 import { EnvironmentsPane, HistoryPane } from '../components/SidebarPanes';
 import { useLibrary } from '../lib/library';
 import { useSaveInCollection } from '../lib/save-in-collection';
-import { useCollections } from '../lib/collections-store';
+import { useCollectionTree } from '../lib/collections-store';
 import { useSticky } from '../lib/sticky';
 import { useDoc } from '../lib/docs';
 import { useIntent, useSaveShortcut } from '../hooks';
@@ -132,7 +132,7 @@ export function WebSocketView() {
   const [collectionId, setCollectionId] = useSticky<string | undefined>(`ws:collection:${docId ?? 'main'}`, undefined);
   const saveDialog = useSaveInCollection(saved.lib.items, 'Save connection');
   // the connections of a collection in the trash are hidden (they come back with it)
-  const liveCollections = new Set(useCollections().map((c) => c.id));
+  const liveCollections = new Set(useCollectionTree().map((c) => c.id));
   const dirty = !!current && JSON.stringify(current.data) !== JSON.stringify(persistable(d));
   const open = async (id: string) => {
     const it = await saved.find(id);

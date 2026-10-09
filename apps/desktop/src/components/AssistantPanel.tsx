@@ -3,7 +3,7 @@ import { memo, useEffect, useRef, useState } from 'react';
 import { extractCodeBlock } from '@testpion/shared';
 import { asError, call, on } from '../api';
 import { currentViewContext, type ViewContext } from '../lib/assistant-context';
-import { useApp, type AssistantRequest } from '../store';
+import { useApp, type AssistantRequest, toastError } from '../store';
 import { Markdown } from './Markdown';
 import { AiGeneratedNotice, ErrorPanel } from './Results';
 import { Badge, Button, cx, IconButton, Input, Spinner } from './ui';
@@ -90,7 +90,7 @@ export function AssistantPanel() {
     end.current?.scrollIntoView({ block: 'end' });
   }, [turns.length, streaming]);
 
-  const stop = () => busy && void call('ai.cancel', { id: busy });
+  const stop = () => busy && void call('ai.cancel', { id: busy }).catch(toastError);
   const restart = () => {
     stop();
     conversation.current++;

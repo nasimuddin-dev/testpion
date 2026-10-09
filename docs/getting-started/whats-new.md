@@ -17,6 +17,16 @@ Saved requests of every kind belong to a collection: saving a gRPC call or a con
 
 The same tab bar and right-click menu everywhere: request tabs, test files in **Tests** and open monitors share one strip, so right-clicking any tab offers **Rename**, **Close tab**, **Close other tabs**, **Close tabs to the right** and **Close all tabs** (plus what the view adds: Pin, Run, Expose as MCP tool…), and middle-click, double-click and <kbd>F2</kbd> do the same in each.
 
+## Design a flow on a canvas
+
+1. In **Tests**, pick **+ ▸ New flow (designer)**: the file opens in its **Flow** tab with **Add a step**, **Create from a collection** and **Generate with AI**.
+2. **Create from a collection** adds a request, or a folder's requests in order, each waiting for the one before it, with ids and tokens of their saved examples extracted.
+3. Drag the dot on a step's right edge onto another step to connect them (`dependsOn`); the connection shows the variables that flow along it, and a step reading a variable nothing provides is marked **!**.
+4. Select a step to edit it on the right: URL, headers, body, auth, **Extract**, **Checks**, **Waits for**. **Run flow** (or **Run step**) lights the steps up; **Undo** takes back any change.
+5. The file stays plain YAML (the Editor tab shows every change); `testpion flow edit <file> --op '<json>'` and the `flow_add_step`, `flow_connect`, `flow_update_step`, `flow_remove_step` MCP tools make the same edits.
+
+[Design a flow](/test-runner/integration-testing#design-a-flow)
+
 ## An AI provider that says what is missing
 
 1. Open **AI Lab ▸ Providers**: cloud providers without a saved key are marked **needs an API key**.

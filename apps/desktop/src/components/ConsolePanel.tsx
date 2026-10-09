@@ -1,3 +1,4 @@
+import { toastError } from '../store';
 import { CodeBlock } from './CodeBlock';
 import { ChevronRight, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -84,7 +85,7 @@ export function ConsolePanel() {
           label="Clear console"
           className="ml-auto"
           onClick={() => {
-            void call('console.clear');
+            void call('console.clear').catch(toastError);
             setEntries([]);
             setOpen(new Set());
           }}
