@@ -36,20 +36,20 @@ prompts:
 `);
 
 describe('MCP mock server', () => {
-  it('picks responses by arguments and fills templates', () => {
-    expect(mockToolResult(def, 'search_customer', { customer_id: '999' })).toEqual({ content: [{ type: 'text', text: 'No customer 999' }], isError: true });
-    expect(mockToolResult(def, 'search_customer', { customer_id: '1' }).structuredContent).toEqual({ id: '123', name: 'Ada Lovelace', tier: 'gold' });
-    expect(mockToolResult(def, 'echo', { message: 'hi' }).content).toEqual([{ type: 'text', text: 'you said hi' }]);
+  it('picks responses by arguments and fills templates', async () => {
+    expect(await mockToolResult(def, 'search_customer', { customer_id: '999' })).toEqual({ content: [{ type: 'text', text: 'No customer 999' }], isError: true });
+    expect((await mockToolResult(def, 'search_customer', { customer_id: '1' })).structuredContent).toEqual({ id: '123', name: 'Ada Lovelace', tier: 'gold' });
+    expect((await mockToolResult(def, 'echo', { message: 'hi' })).content).toEqual([{ type: 'text', text: 'you said hi' }]);
     // dynamic variables: a fresh value per call; a whole-string placeholder keeps its type
     const dyn = { name: 'dyn', tools: [{ name: 'new_order', responses: [{ json: { id: '{{$guid}}', qty: '{{$randomInt(3,3)}}', note: 'by {{$randomFirstName}} for {{args.who}}' } }] }] };
-    const o = mockToolResult(dyn as never, 'new_order', { who: 'Ada' }).structuredContent as { id: string; qty: number; note: string };
+    const o = (await mockToolResult(dyn as never, 'new_order', { who: 'Ada' })).structuredContent as { id: string; qty: number; note: string };
     expect(o.id).toMatch(/^[0-9a-f-]{36}$/);
     expect(o.qty).toBe(3);
     expect(o.note).toMatch(/^by [A-Z]\w+ for Ada$/);
-    expect(mockToolResult(def, 'nope').isError).toBe(true);
+    expect((await mockToolResult(def, 'nope')).isError).toBe(true);
     // placeholders in JSON responses: a whole-string placeholder keeps the argument's type
     const templ = { name: 't', tools: [{ name: 'forecast', responses: [{ json: { city: '{{args.city}}', days: '{{args.days}}', note: 'for {{args.city}}', list: ['{{args.city}}'] } }] }] };
-    expect(mockToolResult(templ as never, 'forecast', { city: 'Paris', days: 3 }).structuredContent).toEqual({ city: 'Paris', days: 3, note: 'for Paris', list: ['Paris'] });
+    expect((await mockToolResult(templ as never, 'forecast', { city: 'Paris', days: 3 })).structuredContent).toEqual({ city: 'Paris', days: 3, note: 'for Paris', list: ['Paris'] });
   });
 
   it('serves tools, resources and prompts over Streamable HTTP to a real MCP client', async () => {
@@ -72,7 +72,7 @@ describe('MCP mock server', () => {
     }
   });
 
-  it('records a mock from a server discovery and round-trips as YAML', () => {
+  it('records a mock from a server discovery and round-trips as YAML', async () => {
     const rec = mockFromDiscovery(
       'recorded',
       { tools: [{ name: 't', inputSchema: { type: 'object' } }], resources: [{ uri: 'a://b', name: 'B' }], resourceTemplates: [], prompts: [] },
@@ -82,7 +82,7 @@ describe('MCP mock server', () => {
     const back = loadMcpMock(dumpMcpMock(rec));
     expect(back.tools![0]!.responses).toEqual([{ when: { x: 1 }, content: [{ type: 'text', text: 'one' }] }]);
     expect(back.resources![0]!.text).toBe('hello');
-    expect(mockToolResult(back, 't', { x: 1 }).content).toEqual([{ type: 'text', text: 'one' }]);
+    expect((await mockToolResult(back, 't', { x: 1 })).content).toEqual([{ type: 'text', text: 'one' }]);
     expect(() => loadMcpMock('tools: []')).toThrow(/name/);
   });
 

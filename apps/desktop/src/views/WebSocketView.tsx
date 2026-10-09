@@ -10,6 +10,8 @@ import { NEW_TAB_TITLE, useSingleEditorTab } from '../components/EditorTabs';
 import { RequestBreadcrumb } from '../components/RequestBreadcrumb';
 import { EnvironmentsPane, HistoryPane } from '../components/SidebarPanes';
 import { useLibrary } from '../lib/library';
+import { useSaveInCollection } from '../lib/save-in-collection';
+import { useCollections } from '../lib/collections-store';
 import { useSticky } from '../lib/sticky';
 import { useDoc } from '../lib/docs';
 import { useIntent, useSaveShortcut } from '../hooks';
@@ -128,6 +130,9 @@ export function WebSocketView() {
   const current = saved.lib.items.find((i) => i.id === savedId);
   // New ▸ WebSocket in a collection: the connection is saved into that collection
   const [collectionId, setCollectionId] = useSticky<string | undefined>(`ws:collection:${docId ?? 'main'}`, undefined);
+  const saveDialog = useSaveInCollection(saved.lib.items, 'Save connection');
+  // the connections of a collection in the trash are hidden (they come back with it)
+  const liveCollections = new Set(useCollections().map((c) => c.id));
   const dirty = !!current && JSON.stringify(current.data) !== JSON.stringify(persistable(d));
   const open = async (id: string) => {
     const it = await saved.find(id);
@@ -146,9 +151,11 @@ export function WebSocketView() {
       useApp.getState().toast(`Saved "${current.name}"`, 'success');
       return;
     }
-    const name = await promptText('Save connection', { message: 'Name', value: tabTitle || hostOf(d.url), okLabel: 'Save' });
-    if (!name) return;
-    setSavedId(await saved.put({ name, folder, collectionId, data: persistable(d) }));
+    // every saved request belongs to a collection: the same dialog as a REST request's asks which (and its folder)
+    const to = await saveDialog.ask({ name: tabTitle || hostOf(d.url), collectionId, folder });
+    if (!to) return;
+    setCollectionId(to.collectionId);
+    setSavedId(await saved.put({ name: to.name, folder: to.folder, collectionId: to.collectionId, data: persistable(d) }));
   };
   // Ctrl+S saves this tab's connection (asks for a name the first time)
   useSaveShortcut('websocket', () => void save());
@@ -320,7 +327,7 @@ export function WebSocketView() {
               onSelect={open}
               onAdd={(folder) => void save(true, folder)}
               ops={saved.ops}
-              items={saved.lib.items.map((i) => ({ id: i.id, name: i.name, folder: i.folder, subtitle: i.data.url, icon: <Radio size={12} className="text-muted" /> }))}
+              items={saved.lib.items.filter((i) => !i.collectionId || liveCollections.has(i.collectionId)).map((i) => ({ id: i.id, name: i.name, folder: i.folder, subtitle: i.data.url, icon: <Radio size={12} className="text-muted" /> }))}
               empty={
                 <Empty title="No saved connections">
                   Save a connection (URL, subprotocols, headers and message) to open it again later, and group them in folders.
@@ -660,6 +667,7 @@ export function WebSocketView() {
           </Split>
         </Split>
       </div>
+      {saveDialog.modal}
     </div>
     </Split>
   );

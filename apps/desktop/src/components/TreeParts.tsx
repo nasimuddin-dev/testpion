@@ -332,3 +332,20 @@ export function treeKeys(e: React.KeyboardEvent<HTMLElement>): void {
 export function KindBadge({ text, cls }: { text: string; cls: string }) {
   return <span className={cx('mono text-[0.6rem] font-bold w-8 inline-block', cls)}>{text}</span>;
 }
+
+/** What a test (or a test file, by its folder: rest/ → HTTP …) is, as KindBadge text and colour: the Tests tree, its tabs and the flow diagram share it. */
+export const TEST_KINDS: Record<string, [string, string]> = {
+  rest: ['HTTP', 'text-ok'],
+  http: ['HTTP', 'text-ok'],
+  soap: ['SOAP', 'text-[#0ea5e9]'],
+  graphql: ['GQL', 'text-[#e535ab]'],
+  grpc: ['gRPC', 'text-[#2ea99e]'],
+  websocket: ['WS', 'text-[#d97706]'],
+  mqtt: ['MQTT', 'text-[#d97706]'],
+  kafka: ['KFK', 'text-[#d97706]'],
+  mcp: ['MCP', 'text-accent'],
+  ai: ['AI', 'text-judge'],
+  llm: ['AI', 'text-judge'],
+  rag: ['RAG', 'text-judge'],
+  agent: ['AGT', 'text-judge'],
+};

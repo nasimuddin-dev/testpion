@@ -10,7 +10,7 @@ import type { AppSettings, PriceEntry, ProviderConfig } from '../types';
 import { checkForUpdates } from '../updates';
 import { Badge, Button, Field, IconButton, Input, Select, Tabs, Toggle } from '../components/ui';
 
-type Tab = 'appearance' | 'requests' | 'proxy' | 'certificates' | 'privacy' | 'pricing' | 'load' | 'storage' | 'assistant' | 'about' | 'agents';
+type Tab = 'appearance' | 'requests' | 'git' | 'proxy' | 'certificates' | 'privacy' | 'pricing' | 'load' | 'storage' | 'assistant' | 'about' | 'agents';
 
 export function SettingsView() {
   const settings = useApp((s) => s.settings);
@@ -57,6 +57,7 @@ export function SettingsView() {
         tabs={[
           { id: 'appearance', label: 'Appearance' },
           { id: 'requests', label: 'Requests' },
+          { id: 'git', label: 'Git' },
           { id: 'proxy', label: 'Proxy' },
           { id: 'certificates', label: 'Certificates' },
           { id: 'privacy', label: 'Privacy & security' },
@@ -119,6 +120,11 @@ export function SettingsView() {
                 </Select>
               </Field>
             </>
+          )}
+          {tab === 'git' && (
+            <Field label="Fetch in the background every (minutes)" hint="While a workspace in git with a remote is open, TestPion fetches quietly (it never asks you to sign in) and the Git view shows when your team pushed commits, so you pull before pushing. 0 turns it off.">
+              <Input type="number" min={0} max={1440} aria-label="Background fetch minutes" value={s.git?.autoFetchMinutes ?? 5} onChange={(e) => set({ git: { ...s.git, autoFetchMinutes: Math.max(0, Math.round(Number(e.target.value) || 0)) } })} />
+            </Field>
           )}
           {tab === 'proxy' && <ProxySettings value={s.proxy ?? { mode: 'env' }} onChange={(proxy) => set({ proxy })} />}
           {tab === 'certificates' && <CertificateSettings value={s.tls ?? {}} onChange={(tls) => set({ tls })} />}

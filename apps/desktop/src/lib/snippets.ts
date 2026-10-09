@@ -43,7 +43,7 @@ export const SNIPPETS: Snippet[] = [
 tp.visualizer.set(template, { response: tp.response.json() });` },
 ];
 
-/** Type declarations for Monaco so the script editor autocompletes the pm API. */
+/** Type declarations for Monaco so the script editor autocompletes the tp API. */
 /** Bruno's script API (bru, req, res, test, expect), for scripts imported from Bruno. */
 export const BRUNO_TYPES = `
 declare const bru: {
@@ -98,17 +98,18 @@ interface PmCookieJar {
   unset(url: string, name: string, cb?: (err: null) => void): void;
   clear(url: string, cb?: (err: null) => void): void;
 }
-/** Postman's Url object; {{variables}} stay as written. Assigning a string to pm.request.url replaces it. */
+/** Postman's Url object; {{variables}} stay as written. Assigning a string to tp.request.url replaces it. */
 interface PmUrl {
   toString(): string; update(url: string): void; getHost(): string; getRemote(): string; getPath(): string; getQueryString(): string; getPathWithQuery(): string;
   readonly protocol: string; readonly host: string[]; readonly port: string | undefined; readonly path: string[];
   query: { get(key: string): string | null | undefined; has(key: string): boolean; add(p: { key: string; value?: any }): void; upsert(p: { key: string; value?: any }): void; remove(key: string): void; clear(): void; all(): Array<{ key: string; value: string | null }>; count(): number; toObject(): Record<string, string | null> };
   addQueryParams(params: Array<{ key: string; value?: any }> | { key: string; value?: any }): void; removeQueryParams(keys: string[] | string): void;
 }
-declare const pm: {
+/** TestPion's script API: tests, assertions, variables, the request and the response. */
+declare const tp: {
   /** Define a named test; it passes unless the function throws. */
   test(name: string, fn: () => void): void;
-  /** Chai-style assertion: pm.expect(value).to.equal(expected) */
+  /** Chai-style assertion: tp.expect(value).to.equal(expected) */
   expect: { (value: any): PmExpect; fail(message?: string): never };
   variables: PmVariableScope; environment: PmVariableScope; globals: PmVariableScope; collectionVariables: PmVariableScope;
   iterationData: { get(key: string): any; has(key: string): boolean; toObject(): Record<string, any> };
@@ -124,7 +125,7 @@ declare const pm: {
     request: string | { url: string; method?: string; header?: Array<{ key: string; value: string }> | Record<string, string>; body?: { mode: 'raw'; raw: string } | { mode: 'urlencoded'; urlencoded: Array<{ key: string; value: string }> } },
     callback: (err: Error | null, res: { code: number; status: string; responseTime: number; headers: PmHeaderList; json(): any; text(): string } | null) => void,
   ): void;
-  /** Without a callback: a promise of the response, for const res = await pm.sendRequest(…). */
+  /** Without a callback: a promise of the response, for const res = await tp.sendRequest(…). */
   sendRequest(request: string | { url: string; method?: string; header?: any; body?: any }): Promise<{ code: number; status: string; responseTime: number; headers: PmHeaderList; json(): any; text(): string }>;
   /** Postman Vault: TestPion keeps secrets in (secret) variables; the vault reads and writes those. */
   vault: { get(key: string): Promise<any>; set(key: string, value: any): Promise<void>; unset(key: string): Promise<void> };
@@ -152,16 +153,16 @@ declare const moment: { (input?: any, format?: string): PmMoment; utc(input?: an
 /** tv4-compatible JSON Schema validation (older Postman scripts). */
 declare const tv4: { validate(data: any, schema: object): boolean; error: { message: string } | null; validateResult(data: any, schema: object): { valid: boolean; error: { message: string } | null }; validateMultiple(data: any, schema: object): { valid: boolean; errors: Array<{ message: string }> } };
 declare function require(name: 'ajv' | 'atob' | 'btoa' | 'chai' | 'cheerio' | 'crypto-js' | 'csv-parse/lib/sync' | 'lodash' | 'moment' | 'tv4' | 'uuid' | 'xml2js'): any;
-/** HTML with CSS selectors, as in Postman: const $ = cheerio.load(pm.response.text()); $('title').text() */
+/** HTML with CSS selectors, as in Postman: const $ = cheerio.load(tp.response.text()); $('title').text() */
 declare const cheerio: { load(html: string): any };
 declare const CryptoJS: any;
 declare const tests: Record<string, boolean>;
 declare function btoa(s: string): string;
 declare function atob(s: string): string;
-/** TestPion's name for the script API: the same object as pm. */
-declare const tp: typeof pm;
-/** An older alias of tp. */
-declare const aps: typeof pm;
+/** @deprecated Postman compatibility; use tp. Scripts written for Postman run unchanged. */
+declare const pm: typeof tp;
+/** @deprecated An older alias of tp. */
+declare const aps: typeof tp;
 /** Lines go to the Console panel (and to the test's logs in reports); every level writes the same way. */
 declare const console: { log(...args: any[]): void; info(...args: any[]): void; warn(...args: any[]): void; error(...args: any[]): void; debug(...args: any[]): void };
 /** Timers run after the script's own code, before the sandbox returns (there is no real clock to wait on). */
@@ -179,6 +180,6 @@ declare const environment: Record<string, any>;
 declare const globals: Record<string, any>;
 /** The current data-file row (collection runner with a dataset). */
 declare const data: Record<string, any>;
-/** In a script package: what it offers to pm.require. */
+/** In a script package: what it offers to tp.require. */
 declare const module: { exports: any };
 `;

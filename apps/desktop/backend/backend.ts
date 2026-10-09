@@ -126,6 +126,7 @@ import { grpcHandlers } from './handlers/grpc.js';
 import { agentHandlers } from './handlers/agents.js';
 import { feedbackHandlers } from './handlers/feedback.js';
 import { gitHandlers } from './handlers/git.js';
+import { GitAutoFetch } from './git-autofetch.js';
 import { debuggerHandlers, type DebuggerState } from './handlers/debugger.js';
 import { debuggerRulesHandlers } from './handlers/debugger-rules.js';
 import { externalSecretsHandlers, prefetchSecretsFor } from './handlers/external-secrets.js';
@@ -217,7 +218,7 @@ export class Backend {
   kafkaSessions = new Map<string, KafkaSession>();
   /** Running mock servers by collection id. */
   mocks = new Map<string, MockServer>();
-  /** Rendered pm.visualizer pages by id (served on an isolated origin: tpviz:// or /__aps/viz/). */
+  /** Rendered tp.visualizer pages by id (served on an isolated origin: tpviz:// or /__aps/viz/). */
   private vizPages = new Map<string, string>();
   /** The GraphQL mock started from the GraphQL view (one at a time). */
   gqlMock?: GraphQLMockServer;
@@ -231,6 +232,8 @@ export class Backend {
   runningMonitors = new Set<string>();
   /** Runs monitors of the open workspace when they are due, while this backend runs. */
   monitorScheduler: MonitorScheduler;
+  /** Fetches the open workspace's remote in the background and says when it has new commits (git-autofetch.ts). */
+  gitAutoFetch = new GitAutoFetch(this);
   readonly handlers: Handlers;
 
   constructor(host: BackendHost) {
@@ -271,6 +274,7 @@ export class Backend {
       onError: (m, e) => this.logger.error(`Monitor ${m.name} could not run: ${(e as Error).message}`),
     });
     if (!host.noMonitors) this.monitorScheduler.start();
+    if (!host.noMonitors) this.gitAutoFetch.start();
   }
 
   /** Apply the proxy and certificate settings (the proxy password comes from the secret store and is redacted from logs). */
@@ -492,8 +496,8 @@ export class Backend {
   }
 
   /**
-   * Keep a rendered visualization for its isolated page: the template's HTML plus `pm.getData()`
-   * (Postman's API for visualizer scripts; also `tp.getData()`). Returns a random id that acts as the
+   * Keep a rendered visualization for its isolated page: the template's HTML plus `tp.getData()`
+   * (and `pm.getData()` for templates written for Postman). Returns a random id that acts as the
    * page's access key.
    */
   private publishVisualization(html: string, data: unknown): string {
@@ -549,7 +553,7 @@ export class Backend {
       logs: [
         ...(m.preRequestLogs ?? []).map((message) => ({ phase: 'pre-request' as const, message: redactor.redactString(message) })),
         ...(m.scriptLogs ?? []).map((message) => ({ phase: 'test' as const, message: redactor.redactString(message) })),
-        ...(m.sentRequests ?? []).map((s) => ({ phase: 'test' as const, message: `pm.sendRequest ${s.method} ${s.url} → ${s.error ? `error: ${s.error}` : `${s.status} (${s.durationMs} ms)`}` })),
+        ...(m.sentRequests ?? []).map((s) => ({ phase: 'test' as const, message: `tp.sendRequest ${s.method} ${s.url} → ${s.error ? `error: ${s.error}` : `${s.status} (${s.durationMs} ms)`}` })),
       ],
       error: r.error?.message,
       failedChecks: r.checks.filter((c) => !c.passed).length,
@@ -674,7 +678,7 @@ export class Backend {
     let preLogCount: number | undefined;
     const scriptSender = scriptRequestSender({ redactor: ctx.redactor, cookieJar: ctx.services.cookieJar, signal: ctrl.signal, timeoutMs: this.settings.defaultTimeoutMs });
     const sentLogs = (o: { sentRequests?: Array<{ method: string; url: string; status?: number; error?: string; durationMs?: number }> }) =>
-      (o.sentRequests ?? []).map((r) => `pm.sendRequest ${r.method} ${ctx.redactor.redactUrl(r.url)} → ${r.error ? `error: ${r.error}` : `${r.status} (${r.durationMs} ms)`}`);
+      (o.sentRequests ?? []).map((r) => `tp.sendRequest ${r.method} ${ctx.redactor.redactUrl(r.url)} → ${r.error ? `error: ${r.error}` : `${r.status} (${r.durationMs} ms)`}`);
     const logsOf = () => scriptLogs.map((message, i) => ({ phase: i < (preLogCount ?? scriptLogs.length) ? ('pre-request' as const) : ('test' as const), message: ctx.redactor.redactString(message) }));
     try {
       let request = p.request;
@@ -749,7 +753,7 @@ export class Backend {
         readFile: ctx.services.readFile,
       };
       const checks = await runChecks(ctx.vars.resolveDeep(p.assertions ?? []), cctx);
-      // pm.visualizer.set in any test script (collection, folders, request); the last call wins
+      // tp.visualizer.set in any test script (collection, folders, request); the last call wins
       let visual: { template: string; data: unknown } | null | undefined;
       for (const script of [ctx.collection?.testScript, ...folders.map((f) => f.testScript), p.testScript]) {
         if (!script?.trim()) continue;
@@ -1343,6 +1347,7 @@ export class Backend {
   async dispose(): Promise<void> {
     this.stopWatching?.();
     this.monitorScheduler.stop();
+    this.gitAutoFetch.stop();
     for (const c of this.controllers.values()) c.abort();
     for (const r of this.runs.values()) r.ctrl.abort();
     for (const s of this.mcpSessions.values()) await s.close();

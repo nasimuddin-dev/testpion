@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### `tp.*` everywhere
+The script API is `tp.*` wherever TestPion shows or writes it: the script editor's completions, hovers and snippets (typing `pm.` offers the same `tp.*` snippets), **Save to variable…**, AI-generated tests, the Script packages dialog (`tp.require('name')`), hints, error messages (`tp.sendRequest …`, `tp.require(…)`), MCP tool descriptions, CLI help, the docs and the example workspace. Scripts written for Postman (`pm.*`) also run unchanged, and a script package can use `tp` too. Variable flow now also follows `tp.*` (and `aps.*`) variable sets and reads.
+
 ## 0.45.0 — 2026-10-07
 
 ### AI testing, friendlier

@@ -50,21 +50,21 @@ Cookie values are often session tokens, so the jar is treated like a secret:
 
 ## In scripts
 
-`pm.cookies` holds the cookies for the current response: the jar's cookies for the response URL plus whatever the response set.
+`tp.cookies` holds the cookies for the current response: the jar's cookies for the response URL plus whatever the response set.
 
 ```js
-pm.test("Session cookie is set", () => {
-  pm.expect(pm.cookies.has("vet_session")).to.be.true;
+tp.test("Session cookie is set", () => {
+  tp.expect(tp.cookies.has("vet_session")).to.be.true;
 });
 ```
 
-`pm.cookies.jar()` reads and changes the workspace jar, with Postman's method names. The callbacks run immediately, and each method also returns its value:
+`tp.cookies.jar()` reads and changes the workspace jar, with Postman's method names. The callbacks run immediately, and each method also returns its value:
 
 ```js
-const jar = pm.cookies.jar();
-const url = pm.request.url.toString();
+const jar = tp.cookies.jar();
+const url = tp.request.url.toString();
 
-jar.get(url, "vet_session", (error, value) => pm.variables.set("session", value));
+jar.get(url, "vet_session", (error, value) => tp.variables.set("session", value));
 jar.getAll(url, (error, cookies) => console.log(cookies.length));
 jar.set(url, "feature_flag", "beta");  // host-only cookie on the URL's host, path /
 jar.unset(url, "feature_flag");

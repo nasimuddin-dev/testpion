@@ -50,10 +50,10 @@ function findName(nodes: CollectionNode[], id: string): string | undefined {
 
 /**
  * Postman-style Collection Runner: pick requests, iterations, a CSV/JSON data file and a delay, then run
- * them in order. Variables set by scripts carry over between requests; `pm.execution.setNextRequest`
+ * them in order. Variables set by scripts carry over between requests; `tp.execution.setNextRequest`
  * changes the order.
  */
-export function CollectionRunner({ collection, folderId, onFolderChange }: { collection: Collection; folderId?: string; onFolderChange(id?: string): void }) {
+export function CollectionRunner({ collection, folderId, onFolderChange, dataPath }: { collection: Collection; folderId?: string; onFolderChange(id?: string): void; /** A workspace dataset (its path) chosen before the runner opened: it is the run's data. */ dataPath?: string }) {
   const envs = useApp((s) => s.workspace?.environments ?? []);
   const activeEnv = useApp((s) => s.environment);
   const [environment, setEnvironment] = useState(activeEnv ?? '');
@@ -127,6 +127,22 @@ export function CollectionRunner({ collection, folderId, onFolderChange }: { col
     setUnchecked(new Set());
   }, [collection.id, loadRuns]);
   useEffect(() => setUnchecked(new Set()), [folderId]);
+  // a dataset picked in the sidebar or its tab: previewed and set as the run's data, whichever collection is chosen
+  useEffect(() => {
+    if (!dataPath) return;
+    let live = true;
+    call<DataFile>('col.previewDataFile', { path: dataPath }).then(
+      (d) => {
+        if (!live) return;
+        setData(d);
+        setIterations('');
+      },
+      (e) => live && useApp.getState().toast(`Could not read the data file: ${asError(e).message}`, 'error'),
+    );
+    return () => {
+      live = false;
+    };
+  }, [dataPath]);
   useEffect(() => setEnvironment((e) => e || activeEnv || ''), [activeEnv]);
 
   const selected = requests.filter((r) => !unchecked.has(r.id));
@@ -233,7 +249,7 @@ export function CollectionRunner({ collection, folderId, onFolderChange }: { col
 
             <Field
               label="Data"
-              hint="CSV, JSON, a SQLite database or a PostgreSQL / MySQL database (with a query). Each row becomes one iteration: use {{column}} in requests or pm.iterationData.get('column') in scripts."
+              hint="CSV, JSON, a SQLite database or a PostgreSQL / MySQL database (with a query). Each row becomes one iteration: use {{column}} in requests or tp.iterationData.get('column') in scripts."
             >
               {data ? (
                 <div className="flex items-center gap-2 rounded-md border border-line px-2 py-1.5 text-sm">
@@ -353,7 +369,7 @@ export function CollectionRunner({ collection, folderId, onFolderChange }: { col
 
             <div className="flex flex-col gap-2">
               <Toggle checked={keepValues} onChange={setKeepValues} label="Keep variable values" />
-              <p className="text-xs text-muted -mt-1 pl-9">Values set with pm.environment.set() etc. are saved as current values after the run.</p>
+              <p className="text-xs text-muted -mt-1 pl-9">Values set with tp.environment.set() etc. are saved as current values after the run.</p>
               <Toggle checked={bail} onChange={setBail} label="Stop on first failure" />
             </div>
 
@@ -473,7 +489,7 @@ export function CollectionRunner({ collection, folderId, onFolderChange }: { col
               <RunsOverview runs={runs} onSelect={setRunId} hint="Click a bar or point, or pick a run above, to see its results. Run the collection again with the button on the left." />
             ) : (
               <Empty icon={<Play size={26} />} title="Run this collection">
-                Requests run one at a time, in order. Variables set by scripts carry over to later requests, and <span className="mono">pm.execution.setNextRequest()</span> changes the order. Results,
+                Requests run one at a time, in order. Variables set by scripts carry over to later requests, and <span className="mono">tp.execution.setNextRequest()</span> changes the order. Results,
                 traces and reports are saved with the run.
               </Empty>
             )}

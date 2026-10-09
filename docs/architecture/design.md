@@ -16,7 +16,7 @@ This page shows how TestPion is designed, from the brand and the interface down 
   <div class="ds-card"><div class="ds-card-title">Safe by default</div>Secrets live in the OS credential store, are redacted from logs, traces, the console and exports, and are never written to workspace files.</div>
   <div class="ds-card"><div class="ds-card-title">Friendly</div>Clear surfaces, colour that carries meaning (methods, status), plain-language messages, and a next step in every empty state and error.</div>
   <div class="ds-card"><div class="ds-card-title">Cloud-ready</div>A hosted, multi-user version is planned. The UI only talks to the engine through RPC, the engine is host-agnostic behind storage and secret interfaces, and anything that sends requests or runs code must be safe on a shared server.</div>
-  <div class="ds-card"><div class="ds-card-title">Postman-familiar</div>Collections, environments, <code>pm.*</code> scripts, the runner and the console work the way Postman users expect, and import and export losslessly.</div>
+  <div class="ds-card"><div class="ds-card-title">Postman-familiar</div>Collections, environments, <code>tp.*</code> scripts, the runner and the console work the way Postman users expect, and import and export losslessly.</div>
 </div>
 
 ## Brand
@@ -199,7 +199,7 @@ The app is built from layered surfaces, so it is clear at a glance where you are
   <div><span class="ds-type-meta">Section · Inter 600 · 15px</span><div style="font-size:15px;font-weight:600">Recent requests</div></div>
   <div><span class="ds-type-meta">Body · Inter 400 · 14px (0.9rem)</span><div style="font-size:14px">Build, test and debug REST, GraphQL, MCP and AI APIs. Everything stays on this computer.</div></div>
   <div><span class="ds-type-meta">Small · Inter 400 · 12.8px (0.8rem), muted</span><div style="font-size:12.8px;opacity:.7">Requests you send appear here.</div></div>
-  <div><span class="ds-type-meta">Code · JetBrains Mono · 13px</span><div style="font-family:'JetBrains Mono',monospace;font-size:13px">pm.expect(pm.response.code).to.equal(200);</div></div>
+  <div><span class="ds-type-meta">Code · JetBrains Mono · 13px</span><div style="font-family:'JetBrains Mono',monospace;font-size:13px">tp.expect(tp.response.code).to.equal(200);</div></div>
 </div>
 
 Interface text is **Inter**; code, URLs, JSON and methods are **JetBrains Mono**. The small text sizes are slightly larger than Tailwind's defaults, because a dense tool is read for hours.
@@ -262,7 +262,7 @@ Shared primitives live in `apps/desktop/src/components/ui.tsx` (Radix UI + Tailw
   <text x="60" y="198" fill="#eef2fa" font-size="14" font-weight="700">@testpion/core: the single execution engine</text>
   <g font-size="12" fill="#eef2fa">
     <rect x="60" y="212" width="200" height="54" rx="10" fill="#101629"/><text x="74" y="234" font-weight="600">Protocols</text><text x="74" y="253" fill="#9ba4be" font-size="11">HTTP · GraphQL · WebSocket · MCP</text>
-    <rect x="272" y="212" width="200" height="54" rx="10" fill="#101629"/><text x="286" y="234" font-weight="600">Scripts (sandbox)</text><text x="286" y="253" fill="#9ba4be" font-size="11">pm.* in QuickJS/WASM</text>
+    <rect x="272" y="212" width="200" height="54" rx="10" fill="#101629"/><text x="286" y="234" font-weight="600">Scripts (sandbox)</text><text x="286" y="253" fill="#9ba4be" font-size="11">tp.* in QuickJS/WASM</text>
     <rect x="484" y="212" width="200" height="54" rx="10" fill="#101629"/><text x="498" y="234" font-weight="600">Variables &amp; auth</text><text x="498" y="253" fill="#9ba4be" font-size="11">scopes · secrets · OAuth · JWT</text>
     <rect x="696" y="212" width="204" height="54" rx="10" fill="#101629"/><text x="710" y="234" font-weight="600">AI providers</text><text x="710" y="253" fill="#9ba4be" font-size="11">LLMs · agent loop · RAG</text>
     <rect x="60" y="276" width="200" height="54" rx="10" fill="#101629"/><text x="74" y="298" font-weight="600">Runner</text><text x="74" y="317" fill="#9ba4be" font-size="11">collections · suites · retries</text>
@@ -295,7 +295,7 @@ More detail: [Architecture overview](./overview.md) and [Execution engine](./exe
     <rect x="156" y="40" width="120" height="84" rx="12" fill="#101629" stroke="#333c58"/><text x="216" y="72" font-weight="700">2 Pre-request</text><text x="216" y="92" fill="#9ba4be" font-size="10.5">collection → folder</text><text x="216" y="108" fill="#9ba4be" font-size="10.5">→ request scripts</text>
     <rect x="292" y="40" width="120" height="84" rx="12" fill="#101629" stroke="#333c58"/><text x="352" y="72" font-weight="700">3 Auth</text><text x="352" y="92" fill="#9ba4be" font-size="10.5">inherited auth</text><text x="352" y="108" fill="#9ba4be" font-size="10.5">cookie jar</text>
     <rect x="428" y="40" width="120" height="84" rx="12" fill="url(#b)"/><text x="488" y="72" font-weight="700">4 Send</text><text x="488" y="92" font-size="10.5">stream body to disk</text><text x="488" y="108" font-size="10.5">timings</text>
-    <rect x="564" y="40" width="120" height="84" rx="12" fill="#101629" stroke="#333c58"/><text x="624" y="72" font-weight="700">5 Post-response</text><text x="624" y="92" fill="#9ba4be" font-size="10.5">pm.test · visualizer</text><text x="624" y="108" fill="#9ba4be" font-size="10.5">set variables</text>
+    <rect x="564" y="40" width="120" height="84" rx="12" fill="#101629" stroke="#333c58"/><text x="624" y="72" font-weight="700">5 Post-response</text><text x="624" y="92" fill="#9ba4be" font-size="10.5">tp.test · visualizer</text><text x="624" y="108" fill="#9ba4be" font-size="10.5">set variables</text>
     <rect x="700" y="40" width="110" height="84" rx="12" fill="#101629" stroke="#333c58"/><text x="755" y="72" font-weight="700">6 Checks</text><text x="755" y="92" fill="#9ba4be" font-size="10.5">assertions</text><text x="755" y="108" fill="#9ba4be" font-size="10.5">evaluators</text>
     <rect x="826" y="40" width="114" height="84" rx="12" fill="#101629" stroke="#333c58"/><text x="883" y="72" font-weight="700">7 Record</text><text x="883" y="92" fill="#9ba4be" font-size="10.5">trace · history</text><text x="883" y="108" fill="#9ba4be" font-size="10.5">console</text>
   </g>

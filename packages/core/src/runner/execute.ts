@@ -45,7 +45,7 @@ import { applyCookieJarOps, type CookieJar } from '../cookies/cookie-jar.js';
 import { realtimeModeFor, runRealtimeExchange } from '../protocols/realtime.js';
 
 export interface ExecServices {
-  /** Source of a workspace script package (pm.require), when there is one. */
+  /** Source of a workspace script package (tp.require), when there is one. */
   scriptPackage?: (name: string) => string | undefined;
   vars: VariableScope;
   providers: ProviderRegistry;
@@ -59,7 +59,7 @@ export interface ExecServices {
   /** Auth inherited from the collection/folder for requests with `auth: inherit`. */
   inheritedAuth?: AuthConfig;
   openExternal?: (url: string) => void | Promise<void>;
-  /** Persist values set by scripts via pm.environment/globals/collectionVariables (desktop "current values"). */
+  /** Persist values set by scripts via tp.environment/globals/collectionVariables (desktop "current values"). */
   persistVariable?: PersistVariable;
   /** Cookie jar shared by the HTTP/GraphQL requests of a run (Postman's cookie jar). */
   cookieJar?: CookieJar;
@@ -67,7 +67,7 @@ export interface ExecServices {
   onHttpResponse?: (r: { testId: string; status: number; statusText: string; headers: Array<[string, string]>; body: string; durationMs: number; url: string; timing?: ReturnType<typeof timingSummary> }) => void;
   /** HTTPS: the server certificate a response came with (recorded per host for the workspace's certificate list). */
   onCertificate?: (url: string, certificate: NonNullable<NonNullable<HttpResponseData['connection']>['certificate']>) => void;
-  /** The active environment's name (pm.environment.name). */
+  /** The active environment's name (tp.environment.name). */
   environmentName?: string;
   /** Reads a workspace file by relative path (OpenAPI documents for contract checks); never outside the workspace. */
   readFile?: (path: string) => string;
@@ -136,7 +136,7 @@ export async function executeTest(testIn: TestCase, svc: ExecServices, opts: { t
       if (s.nextRequest !== undefined) metadata.nextRequest = s.nextRequest;
       if (s.skipRequest) {
         root.end({ status: 'ok' });
-        return { status: 'skipped', checks: [], metadata: { ...metadata, reason: 'skipped by pm.execution.skipRequest()' } };
+        return { status: 'skipped', checks: [], metadata: { ...metadata, reason: 'skipped by tp.execution.skipRequest()' } };
       }
     }
 
@@ -200,7 +200,7 @@ export async function executeTest(testIn: TestCase, svc: ExecServices, opts: { t
     if (s.error) scriptChecks.push({ type: 'script', name: 'test script', passed: false, source: 'deterministic', message: s.error });
     if (s.logs.length) metadata.scriptLogs = s.logs.slice(0, 100);
     if (s.visualizer) {
-      // pm.visualizer output (redacted HTML) for reports, the MCP server and the CLI's --json output
+      // tp.visualizer output (redacted HTML) for reports, the MCP server and the CLI's --json output
       const v = renderVisualizer(s.visualizer.template, s.visualizer.data);
       metadata.visualizer = { html: v.html === undefined ? undefined : svc.redactor.redactString(v.html.slice(0, 200_000)), error: v.error };
     }
@@ -277,7 +277,7 @@ function implicitChecks(test: TestCase, ctx: CheckContext): CheckConfig[] {
   return out;
 }
 
-/** `pm.cookies`: the jar's cookies for the response URL, overlaid with the response's own Set-Cookie values. */
+/** `tp.cookies`: the jar's cookies for the response URL, overlaid with the response's own Set-Cookie values. */
 export function responseCookies(set: Array<{ name: string; value: string }>, jar: CookieJar | undefined, url: string): Record<string, string> {
   const out: Record<string, string> = {};
   if (jar) for (const c of jar.cookiesFor(url).reverse()) out[c.name] = c.value;
@@ -509,7 +509,7 @@ async function runWebSocket(test: WebSocketTest, scope: VariableScope, svc: Exec
   };
 }
 
-/** pm.info for scripts: the request's own name (not its folder path), its location and the environment. */
+/** tp.info for scripts: the request's own name (not its folder path), its location and the environment. */
 function scriptInfo(test: TestCase, svc: ExecServices) {
   return { requestName: test.location?.at(-1) ?? test.name, requestId: test.id, environmentName: svc.environmentName, location: test.location ?? [test.name] };
 }

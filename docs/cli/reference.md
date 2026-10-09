@@ -48,12 +48,14 @@ testpion env list|order|diff -w  List environments; set their order; compare two
 testpion monitor list|add|remove|run|results|uptime|start -w  Collections on a schedule (monitors)
 testpion ci <github|gitlab|azure|jenkins> -w  A CI pipeline file for a suite, collection or tests (--start, --wait-for: start the system under test first)
 testpion lint-tests [paths] -w   Check test files before running them: unknown types, check types, misspelt keys, dependsOn ids (--json; exit 1 on errors)
+testpion flow <file> -w       A test file as a flow: the steps in columns with the latest run's results (--json for steps, edges, layers and problems; --dot for Graphviz)
+testpion flows -w             The flows exposed as MCP tools (test files and suites with an expose: block): tool, file, inputs (--json)
 testpion wait-for <url>       Wait until a URL answers (the health check before integration tests); exit 3 when it never does
 testpion trash list|restore|empty -w  Recently deleted collections and environments (30 days)
 testpion history list|stats|diff|test|export-har -w  Response history of saved requests; response times; compare two responses; a test across runs; HAR export
 testpion workspace list|create|rename|delete|export   Manage workspaces (see Workspaces)
 testpion git setup|check|hook install -w   Make a workspace git-ready; find secrets before a commit; a pre-commit hook
-testpion git status|changes|diff|commit|log|branch|switch|pull|push|resolve -w   Git for the workspace (see Keep your workspace in git)
+testpion git status|changes|diff|commit|log|branch|switch|pull|push|sync|resolve -w   Git for the workspace (sync: pull & push in one step) (see Keep your workspace in git)
 testpion diff <from> [to] -w  What changed between two commits, by meaning (--markdown for a pull-request comment)
 testpion mcp [--url|--sse|--server <name> -w] [--call <tool> --args <json>] [--json]   Inspect an MCP server (a saved one with --server), or call one of its tools
 testpion ws <url> [-m msg] [-e event=json]    Talk to a WebSocket or Socket.IO server and print the replies
@@ -127,7 +129,7 @@ testpion requests "Veterinary API" --health   # plus latest status, median time 
 
 ## `run-collection`
 
-Runs a collection one request at a time, in order, with its `pm.*` scripts, like Postman's Collection Runner or Newman. `<collection>` is a collection name or id in the workspace, a collection file (TestPion or Postman v2.1 JSON), or an http(s) link to one (e.g. a collection published in a repository). A collection file runs in a temporary workspace, so your own workspace isn't changed.
+Runs a collection one request at a time, in order, with its `tp.*` scripts, like Postman's Collection Runner or Newman. `<collection>` is a collection name or id in the workspace, a collection file (TestPion or Postman v2.1 JSON), or an http(s) link to one (e.g. a collection published in a repository). A collection file runs in a temporary workspace, so your own workspace isn't changed.
 
 ```bash
 # a collection in the workspace
@@ -140,7 +142,7 @@ testpion run-collection api.postman_collection.json -e staging.postman_environme
 | Option | Description |
 |---|---|
 | `-e, --environment` | Environment name, or a Postman environment file. |
-| `-d, --iteration-data` | CSV, JSON or JSONL data file, or a SQLite database: one row per iteration (`pm.iterationData`, `{{column}}`). |
+| `-d, --iteration-data` | CSV, JSON or JSONL data file, or a SQLite database: one row per iteration (`tp.iterationData`, `{{column}}`). |
 | `--iteration-query` | With a SQLite database as `-d`: the read-only `SELECT` whose rows are the iterations. |
 | `-n, --iteration-count` | Number of iterations (default: the number of data rows, or 1). |
 | `--delay-request <ms>` | Pause between requests. |
@@ -165,7 +167,7 @@ testpion run-collection api.postman_collection.json -e staging.postman_environme
 testpion run-collection api.json -e staging.json -g globals.json --env-var token=$TOKEN --reporters console junit --reporter-junit-export out.xml
 ```
 
-Variables set by scripts carry over to later requests and iterations, and so do cookies (see [Cookies](/api-testing/cookies)). `pm.execution.setNextRequest()` changes the order. Outside a workspace, reports go to `./testpion-results/<runId>` unless you pass `-o`.
+Variables set by scripts carry over to later requests and iterations, and so do cookies (see [Cookies](/api-testing/cookies)). `tp.execution.setNextRequest()` changes the order. Outside a workspace, reports go to `./testpion-results/<runId>` unless you pass `-o`.
 
 Exit codes: `0` success, `1` test failure, `2` configuration error, `3` execution error.
 
@@ -435,7 +437,7 @@ testpion scripts convert --to tp -w my-workspace --dry-run --json   # what would
 testpion scripts convert --to tp -w my-workspace --collection "Checkout API"
 ```
 
-Rewrites collection, folder and request scripts from Postman's `pm.*` to TestPion's `tp.*` (or back with `--to pm`). Both names always run in TestPion; only code changes, not strings or comments, and scripts that declare their own `tp` are skipped and listed.
+Rewrites collection, folder and request scripts written for Postman to TestPion's `tp.*` (or back to Postman's name with `--to pm`). Both names always run in TestPion; only code changes, not strings or comments, and scripts that declare their own `tp` are skipped and listed.
 
 ## `history`
 
@@ -505,5 +507,7 @@ testpion mcp-server --read-only
 | `--allow-production` | Allow sending to environments marked as production. |
 | `--block-private-networks` | Refuse requests to localhost, private networks and cloud metadata addresses, and don't start local (stdio) MCP servers. For shared or hosted use; see [Network policy](/security/privacy#network-policy-shared-and-hosted-servers). |
 | `--allow-host <host...>` | With `--block-private-networks`: hosts that stay reachable. |
+
+A test file or suite with an `expose:` block is served as a tool of its own, named after `expose.tool`, with its `inputs` as arguments; `testpion flows` lists them (see [Your flows as tools](/ai-testing/mcp-server#your-flows-as-tools)).
 
 :::

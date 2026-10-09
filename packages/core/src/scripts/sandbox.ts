@@ -19,13 +19,13 @@ import type { CookieJarOp, StoredCookie } from '../cookies/cookie-jar.js';
  * host realm. Data is passed in and out as JSON only; the only host functions exposed are
  * pure crypto/encoding/uuid helpers. CPU time and memory are bounded.
  *
- * The API is Postman-compatible (`pm.*`, `postman.*`, `tests[...]`, CryptoJS); `aps` is an alias.
+ * The API is Postman-compatible (`tp.*`, with `pm.*` and `postman.*` for Postman scripts, `tests[...]`, CryptoJS); `aps` is an alias.
  */
 
 export type ScriptScope = 'environment' | 'globals' | 'collectionVariables';
 
 export interface ScriptInput {
-  /** Merged variables (all scopes) — `pm.variables`. */
+  /** Merged variables (all scopes) — `tp.variables`. */
   variables: Record<string, unknown>;
   environment?: Record<string, unknown>;
   globals?: Record<string, unknown>;
@@ -34,20 +34,20 @@ export interface ScriptInput {
   request?: { method: string; url: string; headers: Array<{ key: string; value: string; enabled?: boolean }>; body?: string };
   response?: { status?: number; headers?: Array<[string, string]>; body?: string; time?: number };
   cookies?: Record<string, string>;
-  /** Snapshot of the workspace cookie jar for `pm.cookies.jar()`. */
+  /** Snapshot of the workspace cookie jar for `tp.cookies.jar()`. */
   jar?: StoredCookie[];
-  /** Responses to `pm.sendRequest` calls from earlier passes (set by the host). */
+  /** Responses to `tp.sendRequest` calls from earlier passes (set by the host). */
   sent?: Array<{ key: string; response?: ScriptHttpResponse; error?: string }>;
   info?: { requestName?: string; requestId?: string; iteration?: number; iterationCount?: number; environmentName?: string };
-  /** Arbitrary extra data exposed as `pm.data` (e.g. LLM output, MCP result). */
+  /** Arbitrary extra data exposed as `tp.data` (e.g. LLM output, MCP result). */
   data?: unknown;
 }
 
 export interface ScriptOutput {
-  /** Local variables set via `pm.variables.set` (runtime scope). */
+  /** Local variables set via `tp.variables.set` (runtime scope). */
   vars: Record<string, unknown>;
   unset: string[];
-  /** Values set via pm.environment / pm.globals / pm.collectionVariables. */
+  /** Values set via tp.environment / tp.globals / tp.collectionVariables. */
   scopeSets: Record<ScriptScope, Record<string, unknown>>;
   scopeUnsets: Record<ScriptScope, string[]>;
   tests: Array<{ name: string; passed: boolean; message?: string; skipped?: boolean }>;
@@ -56,19 +56,19 @@ export interface ScriptOutput {
   /** `postman.setNextRequest(name)`: undefined = not called, null = stop the run. */
   nextRequest?: string | null;
   skipRequest?: boolean;
-  /** Changes made through `pm.cookies.jar()` (apply with `applyCookieJarOps`). */
+  /** Changes made through `tp.cookies.jar()` (apply with `applyCookieJarOps`). */
   jarOps?: CookieJarOp[];
-  /** `pm.sendRequest` calls the host has not answered yet (internal to the replay loop). */
+  /** `tp.sendRequest` calls the host has not answered yet (internal to the replay loop). */
   pendingRequests?: Array<{ key: string; request: ScriptHttpRequest }>;
-  /** `pm.visualizer.set(template, data)`: undefined = not called, null = `pm.visualizer.clear()`. */
+  /** `tp.visualizer.set(template, data)`: undefined = not called, null = `tp.visualizer.clear()`. */
   visualizer?: { template: string; data: unknown; options?: unknown } | null;
-  /** Requests sent through `pm.sendRequest`, for logs and the console. */
+  /** Requests sent through `tp.sendRequest`, for logs and the console. */
   sentRequests?: Array<{ method: string; url: string; status?: number; error?: string; durationMs?: number }>;
   error?: string;
   durationMs: number;
 }
 
-/** A request made with `pm.sendRequest` (Postman request object or URL, normalised in the sandbox). */
+/** A request made with `tp.sendRequest` (Postman request object or URL, normalised in the sandbox). */
 export interface ScriptHttpRequest {
   method: string;
   url: string;
@@ -82,17 +82,17 @@ export interface ScriptHttpResponse {
   body: string;
   time?: number;
 }
-/** Sends `pm.sendRequest` requests for the host (network, auth-free, with its own timeout). */
+/** Sends `tp.sendRequest` requests for the host (network, auth-free, with its own timeout). */
 export type ScriptRequestSender = (req: ScriptHttpRequest) => Promise<ScriptHttpResponse>;
 
 export interface ScriptOptions {
   timeoutMs?: number;
   memoryMb?: number;
-  /** Enables `pm.sendRequest`. Without it, calls are reported as unavailable. */
+  /** Enables `tp.sendRequest`. Without it, calls are reported as unavailable. */
   sendRequest?: ScriptRequestSender;
-  /** Most `pm.sendRequest` calls per script run (default 20). */
+  /** Most `tp.sendRequest` calls per script run (default 20). */
   maxRequests?: number;
-  /** Source of a workspace script package, for `pm.require(name)`. */
+  /** Source of a workspace script package, for `tp.require(name)`. */
   requirePackage?: (name: string) => string | undefined;
 }
 
@@ -109,7 +109,7 @@ function getModule(): Promise<QuickJSWASMModule> {
 const HASHES = new Set(['md5', 'sha1', 'sha256', 'sha512']);
 
 /**
- * Run a script. `pm.sendRequest` is supported by replaying: when a pass records requests the host
+ * Run a script. `tp.sendRequest` is supported by replaying: when a pass records requests the host
  * hasn't answered, they are sent and the script runs again from the start with the responses, so
  * callbacks run synchronously with real data. Only the last pass's results are kept.
  */
@@ -124,11 +124,11 @@ export async function runScript(code: string, input: ScriptInput, opts: ScriptOp
     delete out.pendingRequests;
     if (!pending.length) return { ...out, ...(log.length ? { sentRequests: log } : {}), durationMs: Math.round(performance.now() - t0) };
     if (!opts.sendRequest) {
-      out.logs.push('pm.sendRequest is not available here: the callback did not run.');
+      out.logs.push('tp.sendRequest is not available here: the callback did not run.');
       return out;
     }
     if (sent.length + pending.length > max || pass >= max) {
-      out.error ??= `pm.sendRequest: more than ${max} requests in one script`;
+      out.error ??= `tp.sendRequest: more than ${max} requests in one script`;
       return { ...out, sentRequests: log };
     }
     for (const p of pending) {
@@ -229,7 +229,7 @@ async function runScriptOnce(code: string, input: ScriptInput, opts: ScriptOptio
       else lib.value.dispose();
     }
 
-    // The script is the body of an async function, so `await pm.sendRequest(…)` and `await pm.vault.get(…)`
+    // The script is the body of an async function, so `await tp.sendRequest(…)` and `await tp.vault.get(…)`
     // work. A request that hasn't been sent yet leaves its promise pending: the run stops there, the host
     // sends it, and the next pass (a replay) goes on with the response.
     const wrapped = `${PRELUDE}\n(async function(){\n${code}\n})().then(() => { __runTimers(); }, (e) => { __out.error = e && e.stack ? String(e) + '\\n' + e.stack : String(e); });`;

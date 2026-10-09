@@ -36,7 +36,7 @@ const steps = [
      const res = document.querySelector('main [data-details-pane=response]')?.textContent ?? '';
      const buttons = vis('main button').map((b) => b.textContent.trim()).filter((t) => ['Open', 'Resend', 'Ask AI', 'Compare', 'Bookmark', 'Delete'].includes(t));
      [...document.querySelectorAll('main [data-details-pane=response] [role=tab]')].find((t) => t.textContent.trim().startsWith('Content'))?.click(); await __t.sleep(300);
-     const body = document.querySelector('main [data-details-pane=response] pre')?.textContent ?? '';
+     await __t.sleep(300); const body = [...document.querySelectorAll('main [data-details-pane=response] [data-raw-view] .leading-5 > span:last-child')].map((x) => x.textContent).join('').replace(/\\s+/g, '');
      await window.aps.invoke('mock.stop', { collectionId: 'e2e-mocked' });
      await window.aps.invoke('col.delete', { id: 'e2e-mocked' }).catch(() => undefined);
      tab('Outgoing requests')?.click();

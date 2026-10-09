@@ -337,7 +337,7 @@ export function RawView({ text, language }: { text: string; language?: string })
     return parts;
   };
   return (
-    <div className="h-full flex flex-col min-h-0">
+    <div className="h-full flex flex-col min-h-0" data-raw-view>
       <div className="flex items-center gap-1 px-2 py-1 shrink-0 border-b border-line">
         <Search size={13} className="text-muted" />
         <Input

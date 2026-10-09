@@ -77,7 +77,7 @@
           "spec": "specs/petstore.json"
         }
       ],
-      "testScript": "pm.collectionVariables.set('newPetId', pm.response.json().id);"
+      "testScript": "tp.collectionVariables.set('newPetId', tp.response.json().id);"
     },
     {
       "kind": "http",

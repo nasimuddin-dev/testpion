@@ -30,7 +30,7 @@ Scripts run in **QuickJS compiled to WebAssembly**, a separate JavaScript engine
 
 On your desktop TestPion can call anything, including `localhost` and your private network, because testing those APIs is the point. When TestPion runs for other people, such as an MCP server that agents use or the planned online version, turn on the network policy:
 
-- **Private networks blocked:** requests, redirects, `pm.sendRequest`, GraphQL, WebSocket handshakes, MCP servers over HTTP, AI providers and remote datasets refuse loopback, private (10/8, 172.16/12, 192.168/16, fc00::/7), link-local (including the cloud metadata address 169.254.169.254), carrier-grade NAT and similar addresses. Host names are checked after DNS resolution and again when the connection opens, and every redirect is checked, so a public URL can't redirect or re-resolve into your network.
+- **Private networks blocked:** requests, redirects, `tp.sendRequest`, GraphQL, WebSocket handshakes, MCP servers over HTTP, AI providers and remote datasets refuse loopback, private (10/8, 172.16/12, 192.168/16, fc00::/7), link-local (including the cloud metadata address 169.254.169.254), carrier-grade NAT and similar addresses. Host names are checked after DNS resolution and again when the connection opens, and every redirect is checked, so a public URL can't redirect or re-resolve into your network.
 - **Local programs blocked:** MCP servers that run as local commands (stdio) can't be started.
 - **Allow list:** specific internal hosts can stay reachable.
 

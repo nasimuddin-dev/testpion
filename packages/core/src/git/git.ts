@@ -58,12 +58,12 @@ export interface GitBranches {
 const MAX_BUFFER = 64 * 1024 * 1024;
 
 /** Run git in `cwd`; resolves stdout, rejects with git's own message (stderr) as an ApsError. */
-export function runGit(cwd: string, args: string[], opts: { input?: string; timeoutMs?: number } = {}): Promise<string> {
+export function runGit(cwd: string, args: string[], opts: { input?: string; timeoutMs?: number; env?: Record<string, string> } = {}): Promise<string> {
   return new Promise((done, fail) => {
     const child = execFile(
       'git',
       args,
-      { cwd, maxBuffer: MAX_BUFFER, timeout: opts.timeoutMs ?? 120_000, windowsHide: true, env: { ...process.env, GIT_TERMINAL_PROMPT: '0', LC_ALL: 'C' } },
+      { cwd, maxBuffer: MAX_BUFFER, timeout: opts.timeoutMs ?? 120_000, windowsHide: true, env: { ...process.env, GIT_TERMINAL_PROMPT: '0', LC_ALL: 'C', ...opts.env } },
       (err, stdout, stderr) => {
         if (!err) return done(stdout);
         const missing = (err as NodeJS.ErrnoException).code === 'ENOENT';
@@ -105,7 +105,7 @@ export function assertRemoteUrl(url: string): string {
 /** Plain-words next steps for git's usual complaints. */
 function gitHints(stderr: string): string[] {
   const s = stderr.toLowerCase();
-  if (/rejected|non-fast-forward|fetch first/.test(s)) return ['The remote has commits you don\'t have: pull first, then push again.'];
+  if (/rejected|non-fast-forward|fetch first/.test(s)) return ['The remote has commits you don\'t have: pull first, then push again (Pull & push, or `testpion git sync`, does both).'];
   if (/authentication|could not read username|permission denied|403/.test(s)) return ['Git could not sign in to the remote: sign in once with git in a terminal (or set up an SSH key), then try again.'];
   if (/not a git repository/.test(s)) return ['This workspace is not in a git repository yet: use Initialize, or clone one.'];
   if (/conflict/.test(s)) return ['Resolve the conflicts (Git panel), then commit.'];
@@ -346,26 +346,177 @@ export async function gitRenameBranch(ws: string, from: string, to: string): Pro
   await runGit(ws, ['branch', '-m', assertGitRef(from), assertGitRef(to)]);
 }
 
-export async function gitFetch(ws: string): Promise<void> {
-  await runGit(ws, ['fetch', '--prune'], { timeoutMs: 300_000 });
+/**
+ * See what the remote has. `quiet` is the background fetch: it never asks for a sign-in (no terminal prompt, no
+ * credential manager window) and gives up sooner; a remote that needs one simply fails.
+ */
+export async function gitFetch(ws: string, opts: { quiet?: boolean } = {}): Promise<void> {
+  await runGit(ws, ['fetch', '--prune'], opts.quiet ? { timeoutMs: 60_000, env: { GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'never', GIT_ASKPASS: '', SSH_ASKPASS: '' } } : { timeoutMs: 300_000 });
 }
 
-export async function gitPull(ws: string, opts: { rebase?: boolean } = {}): Promise<{ conflicted: boolean }> {
+/** What a pull did: stopped on conflicts or not, and whether uncommitted changes had to be set aside for it. */
+export interface GitPullResult {
+  conflicted: boolean;
+  /** Uncommitted changes were set aside (git stash) for the pull and put back. */
+  setAside?: boolean;
+  /** They are still in the git stash: the pull stopped on conflicts before they could be put back. */
+  stillStashed?: boolean;
+  /** In plain words, for the user. */
+  message?: string;
+}
+
+const STASH_MESSAGE = 'TestPion: uncommitted changes set aside for a pull';
+/** git refuses a pull that would overwrite uncommitted changes. */
+const REFUSED_FOR_LOCAL_CHANGES = /would be overwritten|commit your changes or stash them|discard your changes first|unstaged changes|uncommitted changes|local changes/i;
+
+/**
+ * Pull (merge by default, the merge driver merging collections request by request). When git refuses because of
+ * uncommitted changes, they are set aside (`git stash push --include-untracked`), the pull runs, and they are put back
+ * (`git stash pop`, which merges with the same driver): a put-back that conflicts leaves the files in the Conflicts list.
+ */
+export async function gitPull(ws: string, opts: { rebase?: boolean } = {}): Promise<GitPullResult> {
+  const pull = () => runGit(ws, ['pull', opts.rebase ? '--rebase' : '--no-rebase'], { timeoutMs: 300_000 });
   try {
-    await runGit(ws, ['pull', opts.rebase ? '--rebase' : '--no-rebase'], { timeoutMs: 300_000 });
+    await pull();
     return { conflicted: false };
   } catch (e) {
-    const st = await gitStatus(ws);
-    if (st.conflicted) return { conflicted: true };
+    if ((await gitStatus(ws)).conflicted) return { conflicted: true };
+    if (!REFUSED_FOR_LOCAL_CHANGES.test(errorText(e))) throw e;
+  }
+  // set the uncommitted work aside, pull, put it back
+  await runGit(ws, ['stash', 'push', '--include-untracked', '-m', STASH_MESSAGE]);
+  try {
+    await pull();
+  } catch (e) {
+    if ((await gitStatus(ws)).conflicted)
+      return {
+        conflicted: true,
+        setAside: true,
+        stillStashed: true,
+        message: 'Your uncommitted changes were set aside (git stash) and the pull stopped on conflicts: resolve them and commit, then put your changes back with `git stash pop`.',
+      };
+    // the pull failed (offline, sign-in …): everything goes back as it was
+    await runGit(ws, ['stash', 'pop']).catch(() => undefined);
     throw e;
   }
+  try {
+    await runGit(ws, ['stash', 'pop']);
+  } catch (e) {
+    if ((await gitStatus(ws)).conflicted)
+      return {
+        conflicted: true,
+        setAside: true,
+        message: 'Your uncommitted changes were set aside and put back, and some conflict with the pull: resolve them below (here "mine" is the pulled version and "theirs" your uncommitted change). Git keeps a copy in its stash until you drop it.',
+      };
+    throw e;
+  }
+  return { conflicted: false, setAside: true, message: 'Your uncommitted changes were set aside and put back.' };
 }
+
+const errorText = (e: unknown) => {
+  const err = e as { message?: string; suggestions?: string[] };
+  return `${err?.message ?? String(e)} ${(err?.suggestions ?? []).join(' ')}`;
+};
+
+/** A push the remote refused because it has commits this branch does not (someone pushed first). */
+const isBehindRejection = (e: unknown) => /rejected|non-fast-forward|fetch first|pull first/i.test(errorText(e));
 
 export async function gitPush(ws: string): Promise<void> {
   const st = await gitStatus(ws);
   // the first push of a branch sets where it goes
   await runGit(ws, ['push', ...(st.upstream ? [] : ['--set-upstream', 'origin', st.branch ?? 'HEAD'])], { timeoutMs: 300_000 });
 }
+
+/** What a sync did (`gitSync`). */
+export interface GitSyncResult {
+  state: 'pushed' | 'up-to-date' | 'pulled-nothing-to-push' | 'conflicts';
+  /** Commits brought in from the remote. */
+  pulled: number;
+  /** Commits sent to the remote. */
+  pushed: number;
+  /** With `conflicts`: the conflicted files (workspace paths). */
+  files?: string[];
+  /** Uncommitted changes were set aside for the pull and put back. */
+  setAside?: boolean;
+  /** In plain words, for the user. */
+  message: string;
+}
+
+/** Commits on this branch the remote does not have (all of them before the first push). */
+async function commitsToPush(ws: string, upstream?: string): Promise<number> {
+  try {
+    return Number((await runGit(ws, ['rev-list', '--count', 'HEAD', ...(upstream ? ['--not', upstream] : ['--not', '--remotes'])])).trim()) || 0;
+  } catch {
+    return 0; // no commits yet
+  }
+}
+
+/**
+ * Pull & push in one step, so two people changing the same collection never get stuck at push: fetch; when the
+ * remote has new commits, pull them with a merge (collections merge request by request); when that leaves conflicts,
+ * stop and return them; otherwise push (setting the upstream on a first push). A push refused because someone pushed
+ * in the meantime is retried once, after another pull.
+ */
+export async function gitSync(ws: string): Promise<GitSyncResult> {
+  let st = await gitStatus(ws);
+  if (!st.repository) throw new ApsError('ConfigurationError', 'The workspace is not in a git repository', { suggestions: ['Initialize it in the Git view, or run git init in the workspace folder.'] });
+  const conflicts = (setAside?: boolean, extra?: string): GitSyncResult => ({
+    state: 'conflicts',
+    pulled,
+    pushed: 0,
+    files: st.files.filter((f) => f.state === 'conflicted').map((f) => f.path),
+    ...(setAside ? { setAside } : {}),
+    message: `Resolve the conflicts, commit, then Push.${extra ? ` ${extra}` : ''}`,
+  });
+  let pulled = 0;
+  let setAside = false;
+  let pullNote: string | undefined;
+  if (st.conflicted) return conflicts();
+  if (!(await gitRemoteUrl(ws))) throw new ApsError('ConfigurationError', 'The workspace has no remote to pull from or push to', { suggestions: ['Connect a remote in the Git view (or git remote add origin <url>), then sync again.'] });
+
+  /** Pull what the remote has; false when it stopped on conflicts. */
+  const pull = async (): Promise<boolean> => {
+    const behind = st.behind;
+    const r = await gitPull(ws);
+    if (r.setAside) setAside = true;
+    if (r.stillStashed) pullNote = r.message;
+    st = await gitStatus(ws);
+    if (r.conflicted) return false;
+    pulled += behind;
+    return true;
+  };
+
+  if (st.upstream) {
+    await gitFetch(ws);
+    st = await gitStatus(ws);
+    if (st.behind > 0 && !(await pull())) return conflicts(setAside, pullNote);
+  }
+  const done = (state: GitSyncResult['state'], pushed: number): GitSyncResult => {
+    const words =
+      state === 'pushed'
+        ? `${pulled ? `Pulled ${plural(pulled, 'commit')}, merged, and pushed` : 'Pushed'} ${plural(pushed, 'commit')}.`
+        : state === 'pulled-nothing-to-push'
+          ? `Pulled ${plural(pulled, 'commit')}; nothing to push.`
+          : 'Up to date with the remote.';
+    return { state, pulled, pushed, ...(setAside ? { setAside } : {}), message: setAside ? `${words} Your uncommitted changes were set aside and put back.` : words };
+  };
+  let ahead = await commitsToPush(ws, st.upstream);
+  if (!ahead) return done(pulled ? 'pulled-nothing-to-push' : 'up-to-date', 0);
+  try {
+    await gitPush(ws);
+  } catch (e) {
+    // someone pushed between the fetch and the push: pull once more, then push again
+    if (!isBehindRejection(e)) throw e;
+    await gitFetch(ws);
+    st = await gitStatus(ws);
+    if (!(await pull())) return conflicts(setAside, pullNote);
+    ahead = await commitsToPush(ws, st.upstream);
+    await gitPush(ws);
+  }
+  return done('pushed', ahead);
+}
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
 /** Make the workspace folder a repository (with a first branch name), optionally with a remote. */
 export async function gitInit(ws: string, opts: { remote?: string; branch?: string } = {}): Promise<void> {

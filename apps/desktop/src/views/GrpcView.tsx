@@ -3,13 +3,15 @@ import { FileCode2, Plus, RefreshCw, Save, ScanSearch, Send, Sparkles, Square, T
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAssistantContext } from '../lib/assistant-context';
 import { asError, call, on } from '../api';
-import { persisted, promptText, toastError, useApp } from '../store';
+import { persisted, toastError, useApp } from '../store';
 import { FolderList } from '../components/FolderList';
 import { SidebarShell } from '../components/SidebarShell';
 import { NEW_TAB_TITLE, useSingleEditorTab } from '../components/EditorTabs';
 import { RequestBreadcrumb } from '../components/RequestBreadcrumb';
 import { EnvironmentsPane, HistoryPane } from '../components/SidebarPanes';
 import { useLibrary } from '../lib/library';
+import { useSaveInCollection } from '../lib/save-in-collection';
+import { useCollections } from '../lib/collections-store';
 import { useIntent, useSaveShortcut } from '../hooks';
 import type { KeyValue } from '../types';
 import { CodeEditor } from '../components/CodeEditor';
@@ -102,6 +104,9 @@ export function GrpcView() {
   const [collectionId, setCollectionId] = useSticky<string | undefined>(`grpc:collection:${docId ?? 'main'}`, undefined);
   // descriptors fetched by reflection aren't an edit (a saved request without protos reflects when opened)
   const comparable = (x: Partial<typeof d>) => JSON.stringify({ ...x, descriptorSet: undefined, reflectedFrom: undefined });
+  const saveDialog = useSaveInCollection(saved.lib.items, 'Save gRPC call');
+  // the calls of a collection in the trash are hidden (they come back with it)
+  const liveCollections = new Set(useCollections().map((c) => c.id));
   const savedDirty = !!currentSaved && comparable(currentSaved.data) !== comparable(d);
   const openSaved = async (id: string) => {
     const it = await saved.find(id);
@@ -122,9 +127,11 @@ export function GrpcView() {
       useApp.getState().toast(`Saved "${currentSaved.name}"`, 'success');
       return;
     }
-    const name = await promptText('Save gRPC request', { message: 'Name', value: tabTitle || d.method.split('/').pop() || 'gRPC request', okLabel: 'Save' });
-    if (!name) return;
-    setSavedId(await saved.put({ name, folder, collectionId, data: d }));
+    // every saved request belongs to a collection: the same dialog as a REST request's asks which (and its folder)
+    const to = await saveDialog.ask({ name: tabTitle || d.method.split('/').pop() || 'gRPC request', collectionId, folder });
+    if (!to) return;
+    setCollectionId(to.collectionId);
+    setSavedId(await saved.put({ name: to.name, folder: to.folder, collectionId: to.collectionId, data: d }));
   };
   // Ctrl+S saves this tab's call (asks for a name the first time)
   useSaveShortcut('grpc', () => void saveRequest());
@@ -280,7 +287,7 @@ export function GrpcView() {
               onSelect={openSaved}
               onAdd={(folder) => void saveRequest(true, folder)}
               ops={saved.ops}
-              items={saved.lib.items.map((i) => ({ id: i.id, name: i.name, folder: i.folder, subtitle: i.data.method || i.data.target, icon: <Waypoints size={12} className="text-muted" /> }))}
+              items={saved.lib.items.filter((i) => !i.collectionId || liveCollections.has(i.collectionId)).map((i) => ({ id: i.id, name: i.name, folder: i.folder, subtitle: i.data.method || i.data.target, icon: <Waypoints size={12} className="text-muted" /> }))}
               empty={
                 <Empty title="No saved requests">
                   Save a request (address, method, message, metadata and its .proto files or reflection) to call it again later, and group requests in folders.
@@ -592,6 +599,7 @@ export function GrpcView() {
           </div>
         </ResponseSplit>
       </div>
+      {saveDialog.modal}
     </div>
     </Split>
   );

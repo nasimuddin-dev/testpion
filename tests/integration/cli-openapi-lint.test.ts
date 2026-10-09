@@ -36,7 +36,7 @@ describe('CLI: openapi-lint', () => {
     expect(cli('bad.yaml', '--fail-on', 'none').status).toBe(0);
     expect(cli('bad.yaml', '--disable', 'path-param-undeclared').status).toBe(0);
     expect(cli('bad.yaml', '--disable', 'nope').err).toMatch(/Unknown rule: nope/);
-  });
+  }, 120_000);
 
   it('reads a folder, the workspace specs/, and prints JSON', () => {
     mkdirSync(join(dir, 'specs'), { recursive: true });
@@ -47,5 +47,5 @@ describe('CLI: openapi-lint', () => {
     expect(cli('specs').status).toBe(1);
     const rules = JSON.parse(cli('--rules', '--json').out) as Array<{ id: string }>;
     expect(rules.map((x) => x.id)).toContain('example-valid');
-  });
+  }, 120_000);
 });

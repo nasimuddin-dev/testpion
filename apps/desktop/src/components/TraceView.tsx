@@ -1,10 +1,10 @@
-import { CodeBlock } from './CodeBlock';
+import { prettyBody } from '../lib/pretty';
 import { useMemo, useState } from 'react';
 import { Check, Copy } from 'lucide-react';
 import type { Span, Trace } from '../types';
 import { formatMs } from '../lib/format';
 import { Badge, cx, Split, Tabs } from './ui';
-import { JsonTree } from './JsonView';
+import { JsonTree, RawView } from './JsonView';
 import { useCopied } from '../lib/clipboard';
 
 const KIND_COLORS: Record<string, string> = {
@@ -161,10 +161,11 @@ function payloadOf(v: unknown): { body: unknown; contentType?: string; status?: 
   return { body: v };
 }
 
-/** JSON text becomes a value to show as a tree; anything else stays text. */
-function parsed(body: unknown): { json?: unknown; text: string } {
+/** JSON text becomes a value to show as a tree; HTML and XML can be shown pretty; anything else stays text. */
+function parsed(body: unknown): { json?: unknown; text: string; markup?: boolean } {
   if (typeof body !== 'string') return { json: body, text: JSON.stringify(body, null, 2) };
   const t = body.trim();
+  if (t.startsWith('<')) return { text: body, markup: true };
   if (/^[[{]/.test(t)) {
     try {
       return { json: JSON.parse(t), text: body };
@@ -196,7 +197,7 @@ function PayloadBox({ title, payload, emptyText }: { title: string; payload?: { 
         {p && <span className="text-muted">{sizeOf(p.text)}{typeof body === 'string' && body.endsWith('…') ? ' · preview' : ''}</span>}
         {p && (
           <div className="ml-auto flex items-center gap-1">
-            {p.json !== undefined && (
+            {(p.json !== undefined || p.markup) && (
               <div className="flex rounded-md border border-line overflow-hidden">
                 {(['Pretty', 'Raw'] as const).map((m) => (
                   <button key={m} className={cx('px-2 h-6', (m === 'Raw') === raw ? 'bg-accent-soft text-accent' : 'text-muted hover:text-fg')} onClick={() => setRaw(m === 'Raw')}>
@@ -217,7 +218,8 @@ function PayloadBox({ title, payload, emptyText }: { title: string; payload?: { 
         ) : p.json !== undefined && !raw ? (
           <JsonTree data={p.json} />
         ) : (
-          <CodeBlock className="p-3 text-xs mono whitespace-pre-wrap break-words" text={p.text} />
+          // the response viewer's: line numbers, search, colours; Pretty lays HTML and XML out by nesting
+          <RawView text={raw ? p.text : prettyBody(p.text, payload?.contentType)} language={payload?.contentType} />
         )}
       </div>
     </div>

@@ -22,7 +22,7 @@ The other way round works too: paste a `grpcurl` command into the server field a
 
 ## Saved requests and history
 
-**Save** keeps the request (address, method, message, metadata, its `.proto` files or reflected definition, and settings) in the **Saved requests** list, in folders like the REST collections (new folder, move by menu or drag and drop, rename, duplicate, delete). The client private key is never saved with a request. Every call also appears in **History** (with the method, address, status and time); double-click an entry to open it in the gRPC view again.
+**Save** keeps the request (address, method, message, metadata, its `.proto` files or reflected definition, and settings) in a [collection](./collections.md): a new one asks for its name, collection (or a new one) and folder, in the same dialog as a REST request. It is listed under the collection's **gRPC** category and in the **Saved requests** list, in folders like the REST collections (new folder, move by menu or drag and drop, rename, duplicate, delete). The client private key is never saved with a request. An unsaved tab calls all the same. Every call also appears in **History** (with the method, address, status and time); double-click an entry to open it in the gRPC view again.
 
 ## Server reflection
 

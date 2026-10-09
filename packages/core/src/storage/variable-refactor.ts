@@ -6,7 +6,7 @@ import { escapeRegex } from '../util/redact.js';
 
 /**
  * Where a variable is used in a workspace, and renaming it everywhere: `{{name}}` in requests (URL,
- * params, headers, bodies, auth, assertions, examples), `pm.environment.get('name')` & co. in scripts,
+ * params, headers, bodies, auth, assertions, examples), `tp.environment.get('name')` & co. in scripts,
  * the variable's own definitions (environments, collection, folder and workspace variables) and test
  * files. Renaming moves secret values in the secret store too, so secrets are never lost or exposed.
  */
@@ -22,7 +22,7 @@ export interface VariableUsage {
 
 const esc = escapeRegex;
 const tokenRe = (name: string) => new RegExp(`\\{\\{\\s*${esc(name)}\\s*\\}\\}`, 'g');
-/** pm.environment.get('x'), pm.variables.set("x", …), tp.globals.has(`x`) … */
+/** tp.environment.get('x'), tp.variables.set("x", …), tp.globals.has(`x`) … */
 const scriptRe = (name: string) => new RegExp(`((?:pm|tp|aps)\\.(?:environment|globals|collectionVariables|variables|iterationData)\\.(?:get|set|has|unset)\\(\\s*)(['"\`])${esc(name)}\\2`, 'g');
 const SCRIPT_KEYS = new Set(['preRequestScript', 'testScript']);
 

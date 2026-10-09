@@ -8,7 +8,7 @@ import type { Duplex } from 'node:stream';
 import { policyLookup } from './policy.js';
 
 /**
- * Outbound proxy for everything the engine sends over HTTP (requests, pm.sendRequest, OAuth token
+ * Outbound proxy for everything the engine sends over HTTP (requests, tp.sendRequest, OAuth token
  * calls, AI providers, MCP over HTTP, remote datasets, WebSocket and Socket.IO handshakes):
  * - `env` (default): the standard HTTP_PROXY / HTTPS_PROXY / NO_PROXY variables, as curl and most CLIs do;
  * - `custom`: one proxy URL (optionally with a user name and password) and a bypass list;

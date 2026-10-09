@@ -93,7 +93,7 @@ export interface CollectionRunOptions extends Omit<RunOptions, 'tests' | 'concur
   selection?: string[];
   /** Defaults to the number of data rows, or 1. */
   iterations?: number;
-  /** One row per iteration (`pm.iterationData`, and `{{column}}` in requests). Rows repeat when there are more iterations. */
+  /** One row per iteration (`tp.iterationData`, and `{{column}}` in requests). Rows repeat when there are more iterations. */
   data?: DatasetRecord[];
   /** Pause between requests. */
   delayMs?: number;
@@ -108,7 +108,7 @@ export interface CollectionRunOptions extends Omit<RunOptions, 'tests' | 'concur
 
 /**
  * Run a collection like Postman's Collection Runner: requests run one at a time in order, variables set by
- * scripts carry over to later requests, `pm.execution.setNextRequest(name|id|null)` changes the order, and
+ * scripts carry over to later requests, `tp.execution.setNextRequest(name|id|null)` changes the order, and
  * each iteration gets one data row.
  */
 export async function runCollection(opts: CollectionRunOptions): Promise<RunSummary> {

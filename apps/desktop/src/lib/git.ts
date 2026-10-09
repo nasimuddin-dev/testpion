@@ -46,7 +46,7 @@ export function useGit(): GitState {
   useEffect(() => {
     if (users++ === 0) {
       void refresh();
-      offs = ['git.changed', 'data.changed', 'workspace.changedOnDisk'].map((ch) => on(ch, soon));
+      offs = ['git.changed', 'git.remoteChanged', 'data.changed', 'workspace.changedOnDisk'].map((ch) => on(ch, soon));
     }
     return () => {
       if (--users === 0) offs.forEach((o) => o());

@@ -41,7 +41,7 @@ function lowestScore(r: TestResult): number | undefined {
   return low;
 }
 
-export function RunPanel({ runId, expectedTotal, onRerunFailed }: { runId: string; expectedTotal?: number; onRerunFailed?(runId: string): void }) {
+export function RunPanel({ runId, expectedTotal, onRerunFailed, focusName }: { runId: string; expectedTotal?: number; onRerunFailed?(runId: string): void; /** A result to select once the run is read (by the test's name): the flow diagram's node, a preview row. */ focusName?: string }) {
   const [progress, setProgress] = useState<Progress>({ completed: 0, passed: 0, failed: 0, skipped: 0, errors: 0, running: 0 });
   const [summary, setSummary] = useState<RunSummary | null>(null);
   const [done, setDone] = useState(false);
@@ -123,6 +123,15 @@ export function RunPanel({ runId, expectedTotal, onRerunFailed }: { runId: strin
     if (failed || summary.total === 1)
       void call<{ items: TestResult[] }>('runs.results', { runId, offset: 0, limit: 1, ...(failed ? { status: 'failed' } : {}) }).then((r) => r.items[0] && setSel((cur) => cur ?? r.items[0]), () => undefined);
   }, [done, summary, runId]);
+
+  // a result asked for from outside (the Flow tab's node) is selected once the run is readable
+  useEffect(() => {
+    if (!done || !focusName) return;
+    void call<{ items: TestResult[] }>('runs.results', { runId, offset: 0, limit: 50, query: focusName }).then((r) => {
+      const hit = r.items.find((x) => x.name === focusName) ?? r.items[0];
+      if (hit) setSel(hit);
+    }, () => undefined);
+  }, [done, focusName, runId]);
 
   const liveList = useMemo(() => {
     const q = query.toLowerCase();

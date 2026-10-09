@@ -1,5 +1,6 @@
 /** RPC handlers: MCP servers: connect, discover, call tools, read resources, prompts, tests and mocks. */
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { stringify as toYaml } from 'yaml';
 import {
@@ -10,7 +11,12 @@ import {
   runChecks,
   shortId,
   dumpMcpMock,
+  loadMcpMock,
+  mcpResultBody,
   mockFromDiscovery,
+  mockServeCommands,
+  mockToolResult,
+  type McpMockDefinition,
   type CheckConfig,
   type McpServerConfig,
   mcpToolUsage,
@@ -161,6 +167,36 @@ export function mcpHandlers(be: Backend): Handlers {
         be.ws.saveMcpServers([...servers, { id: shortId('mcp-'), name: `${s.config.name} (mock)`, transport: 'mock', mockFile: rel }]);
       }
       return { path: rel, tools: def.tools?.length ?? 0, calls: calls.length, resources: Object.keys(texts).length };
+    },
+    /**
+     * A mock definition file as the Tools tab edits it (a toolset): the parsed definition and the raw text. A file that
+     * does not exist yet answers `exists: false` with a starter definition, so the tab can create it on Save.
+     */
+    'mcp.mock.read': ({ file, name }: { file: string; name?: string }) => {
+      const abs = be.ws.safePath(file);
+      if (!existsSync(abs)) {
+        const def: McpMockDefinition = { name: name ?? file.replace(/^.*[\\/]/, '').replace(/\.mcp-mock\.(ya?ml|json)$/, ''), tools: [] };
+        return { exists: false, definition: def, text: dumpMcpMock(def), serve: mockServeCommands(file) };
+      }
+      const text = readFileSync(abs, 'utf8');
+      return { exists: true, definition: loadMcpMock(text), text, serve: mockServeCommands(file) };
+    },
+    /** Parse a definition typed or generated as YAML (the YAML editor, Generate with AI) without saving it. */
+    'mcp.mock.parse': ({ text }: { text: string }) => loadMcpMock(text),
+    /** Save a toolset: the definition (from the form) or the raw text (from the YAML editor, checked first). */
+    'mcp.mock.write': ({ file, definition, text }: { file: string; definition?: McpMockDefinition; text?: string }) => {
+      const abs = be.ws.safePath(file);
+      const out = text !== undefined ? (loadMcpMock(text), text) : dumpMcpMock(loadMcpMock(dumpMcpMock(definition!)));
+      mkdirSync(dirname(abs), { recursive: true });
+      writeFileSync(abs, out);
+      return { text: out, definition: loadMcpMock(out) };
+    },
+    /** Try a tool of a toolset as edited (unsaved): the mock's answer in-process, shaped like mcp.call's result. */
+    'mcp.mock.call': async ({ definition, tool, args }: { definition: McpMockDefinition; tool: string; args: Record<string, unknown> }) => {
+      const started = performance.now();
+      const r = await mockToolResult(definition, tool, args ?? {});
+      const { body } = mcpResultBody(r);
+      return { ...r, isError: !!r.isError, durationMs: Math.round(performance.now() - started), body, checks: [] };
     },
     'mcp.disconnect': async ({ serverId }: { serverId: string }) => {
       cancelPending(serverId);

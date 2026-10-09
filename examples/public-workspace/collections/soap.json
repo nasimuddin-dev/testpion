@@ -51,7 +51,7 @@
               "expected": 200
             }
           ],
-          "testScript": "// the reply is XML: xml2Json turns it into an object\nconst reply = xml2Json(pm.response.text());\nconst body = reply['soap:Envelope']['soap:Body'];\nconst words = body['m:NumberToWordsResponse']['m:NumberToWordsResult'];\npm.test('42 in words', () => pm.expect(words.trim()).to.equal('forty two'));"
+          "testScript": "// the reply is XML: xml2Json turns it into an object\nconst reply = xml2Json(tp.response.text());\nconst body = reply['soap:Envelope']['soap:Body'];\nconst words = body['m:NumberToWordsResponse']['m:NumberToWordsResult'];\ntp.test('42 in words', () => tp.expect(words.trim()).to.equal('forty two'));"
         },
         {
           "kind": "http",
@@ -88,7 +88,7 @@
               "expected": 200
             }
           ],
-          "testScript": "pm.test('dollars and cents', () => pm.expect(pm.response.text()).to.include('twelve dollars and fifty cents'));"
+          "testScript": "tp.test('dollars and cents', () => tp.expect(tp.response.text()).to.include('twelve dollars and fifty cents'));"
         }
       ]
     },
@@ -127,7 +127,7 @@
               "expected": 200
             }
           ],
-          "testScript": "// the reply is XML: xml2Json turns it into an object\nconst reply = xml2Json(pm.response.text());\nconst body = reply['soap:Envelope']['soap:Body'];\nconst words = body['m:NumberToWordsResponse']['m:NumberToWordsResult'];\npm.test('42 in words', () => pm.expect(words.trim()).to.equal('forty two'));"
+          "testScript": "// the reply is XML: xml2Json turns it into an object\nconst reply = xml2Json(tp.response.text());\nconst body = reply['soap:Envelope']['soap:Body'];\nconst words = body['m:NumberToWordsResponse']['m:NumberToWordsResult'];\ntp.test('42 in words', () => tp.expect(words.trim()).to.equal('forty two'));"
         },
         {
           "kind": "http",
@@ -159,7 +159,7 @@
               "expected": 200
             }
           ],
-          "testScript": "pm.test('dollars and cents', () => pm.expect(pm.response.text()).to.include('twelve dollars and fifty cents'));"
+          "testScript": "tp.test('dollars and cents', () => tp.expect(tp.response.text()).to.include('twelve dollars and fifty cents'));"
         }
       ]
     },

@@ -39,7 +39,7 @@
               "expected": "emilys"
             }
           ],
-          "testScript": "// keep the token for the next requests\npm.collectionVariables.set('dummyToken', pm.response.json().accessToken);"
+          "testScript": "// keep the token for the next requests\ntp.collectionVariables.set('dummyToken', tp.response.json().accessToken);"
         },
         {
           "kind": "http",
@@ -230,7 +230,7 @@
               "path": "$.token"
             }
           ],
-          "testScript": "pm.collectionVariables.set('bookerToken', pm.response.json().token);"
+          "testScript": "tp.collectionVariables.set('bookerToken', tp.response.json().token);"
         },
         {
           "kind": "http",
@@ -266,7 +266,7 @@
               "expected": "Test"
             }
           ],
-          "testScript": "pm.collectionVariables.set('bookingId', pm.response.json().bookingid);"
+          "testScript": "tp.collectionVariables.set('bookingId', tp.response.json().bookingid);"
         },
         {
           "kind": "http",
@@ -1051,7 +1051,7 @@
               "expected": "success"
             }
           ],
-          "testScript": "// the response is a link to an image: open it in the next request\npm.collectionVariables.set('dogImage', pm.response.json().message);"
+          "testScript": "// the response is a link to an image: open it in the next request\ntp.collectionVariables.set('dogImage', tp.response.json().message);"
         },
         {
           "kind": "http",

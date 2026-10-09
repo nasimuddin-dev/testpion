@@ -1,7 +1,7 @@
 /** RPC handlers: connecting AI agents (Claude, Cursor, VS Code, Codex …) to the open workspace over MCP. */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { agentsMarkdown, ApsError, checkTypes, McpSession, upsertAgentsMarkdown } from '@testpion/core';
+import { agentsMarkdown, ApsError, checkTypes, exposedFlows, McpSession, upsertAgentsMarkdown } from '@testpion/core';
 import type { Backend, Handlers } from '../backend.js';
 
 export interface AgentConnectOptions {
@@ -45,6 +45,8 @@ export function agentHandlers(be: Backend): Handlers {
         await s.close().catch(() => undefined);
       }
     },
+    /** The flows (test files and suites with an expose: block) the server offers to agents as tools of their own. */
+    'agents.flows': () => exposedFlows(be.ws),
     /** Write (or refresh) the TestPion part of AGENTS.md in the workspace folder, for coding agents that open it. */
     'agents.writeAgentsMd': () => {
       const path = join(be.ws.root, 'AGENTS.md');

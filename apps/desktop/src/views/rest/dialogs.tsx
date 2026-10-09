@@ -9,10 +9,35 @@ import { uid } from '../../lib/format';
 import { pickTextFile, pickFolderFiles } from '../../lib/files';
 import { Button, Field, Input, Modal, Select } from '../../components/ui';
 
-export function SaveModal({ collections, defaultName, onClose, onSave, onCreate }: { collections: Collection[]; defaultName: string; onClose(): void; onSave(collectionId: string, name: string, folderId?: string): void; onCreate(c: Collection): Promise<void> }) {
+/**
+ * The one "save into a collection" dialog: name, collection (or a new one) and folder. Every saved request
+ * belongs to a collection. A request's folders are the collection's folders (the folder's id is passed back);
+ * gRPC calls and connections pass `folderNames`, their folders in that collection (the name is passed back).
+ */
+export function SaveModal({
+  collections,
+  defaultName,
+  title = 'Save request',
+  defaultCollectionId,
+  defaultFolder,
+  folderNames,
+  onClose,
+  onSave,
+  onCreate,
+}: {
+  collections: Collection[];
+  defaultName: string;
+  title?: string;
+  defaultCollectionId?: string;
+  defaultFolder?: string;
+  folderNames?(collectionId: string): string[];
+  onClose(): void;
+  onSave(collectionId: string, name: string, folder?: string): void;
+  onCreate(c: Collection): Promise<void>;
+}) {
   const [name, setName] = useState(defaultName);
-  const [cid, setCid] = useState(collections[0]?.id ?? '');
-  const [folder, setFolder] = useState('');
+  const [cid, setCid] = useState((defaultCollectionId && collections.some((x) => x.id === defaultCollectionId) ? defaultCollectionId : collections[0]?.id) ?? '');
+  const [folder, setFolder] = useState(defaultFolder ?? '');
   // a name here means "create this collection and save into it" (the default when there are none yet)
   const [newCollection, setNewCollection] = useState<string | null>(collections.length ? null : 'My collection');
   const [busy, setBusy] = useState(false);
@@ -32,16 +57,17 @@ export function SaveModal({ collections, defaultName, onClose, onSave, onCreate 
   };
   const c = collections.find((x) => x.id === cid);
   const folders = useMemo(() => {
+    if (folderNames) return c ? folderNames(c.id).map((f) => ({ id: f, name: f })) : [];
     const out: Array<{ id: string; name: string }> = [];
     const walk = (nodes: CollectionNode[], prefix: string) => {
       for (const n of nodes) if (n.kind === 'folder') (out.push({ id: n.id, name: prefix + n.name }), walk(n.items, `${prefix}${n.name} / `));
     };
     if (c) walk(c.items, '');
     return out;
-  }, [c]);
+  }, [c, folderNames]);
   return (
     <Modal
-      title="Save request"
+      title={title}
       onClose={onClose}
       width={460}
       footer={

@@ -1,4 +1,4 @@
-/** `testpion git status|changes|diff|commit|log|branch|switch|pull|push` and `testpion merge-driver` (GIT-401, GIT-301). */
+/** `testpion git status|changes|diff|commit|log|branch|switch|pull|push|sync` and `testpion merge-driver` (GIT-401, GIT-301). */
 import { Command } from 'commander';
 import {
   changesMarkdown,
@@ -14,6 +14,8 @@ import {
   gitResolve,
   gitStatus,
   gitSwitch,
+  gitSync,
+  type GitSyncResult,
   runMergeDriver,
   gitConflictDetail, gitDeleteBranch, gitRenameBranch } from '@testpion/core';
 import { EXIT, green, red, yellow, dim, bold, CliError, printJson, withWorkspace } from '../shared.js';
@@ -139,6 +141,32 @@ export function registerGitCommands(git: Command, program: Command): void {
       const r = await gitPull(s.root, { rebase: !!o.rebase });
       out(o.json, r, () => console.log(r.conflicted ? red('Conflicts: settle them in TestPion (Git view) or with  testpion git resolve <file> --ours|--theirs, then commit.') : green('Pulled: up to date with the remote.')));
       if (r.conflicted) process.exitCode = EXIT.TEST_FAILURE;
+    }),
+  );
+
+  wsOpt(
+    git
+      .command('sync')
+      .description('pull & push in one step: fetch, pull with a merge when the remote has new commits (collections merge request by request; uncommitted changes are set aside and put back), then push. Exit 0 pushed or up to date, 1 conflicts (listed), 2 errors'),
+  ).action((o) =>
+    withWorkspace(o.workspace, async (s) => {
+      let r: GitSyncResult;
+      try {
+        r = await gitSync(s.root);
+      } catch (e) {
+        const err = e as { message?: string; suggestions?: string[] };
+        if (!o.json) throw new CliError([err.message ?? String(e), ...(err.suggestions ?? [])].join('\n  '), EXIT.CONFIG_ERROR);
+        printJson({ state: 'error', error: err.message ?? String(e), suggestions: err.suggestions ?? [] });
+        process.exitCode = EXIT.CONFIG_ERROR;
+        return;
+      }
+      out(o.json, r, () => {
+        if (r.state !== 'conflicts') return console.log(green(r.message));
+        console.log(red(r.message));
+        for (const f of r.files ?? []) console.log(`  ! ${f}`);
+        console.log(dim('Settle them in TestPion (Git view) or with  testpion git resolve <file> --ours|--theirs, commit, then  testpion git sync  again.'));
+      });
+      if (r.state === 'conflicts') process.exitCode = EXIT.TEST_FAILURE;
     }),
   );
 

@@ -3,7 +3,7 @@ import { isIP } from 'node:net';
 import { ApsError } from '../errors.js';
 
 /**
- * Network policy for outbound connections (requests, pm.sendRequest, GraphQL, WebSocket, MCP over
+ * Network policy for outbound connections (requests, tp.sendRequest, GraphQL, WebSocket, MCP over
  * HTTP, AI providers, remote datasets) and for starting local processes (MCP stdio servers).
  *
  * On the desktop everything is allowed: testing APIs on localhost and the private network is the

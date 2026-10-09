@@ -59,7 +59,7 @@ Not sure which tool? **`search_tools`** takes what you want to do ("capture traf
 | `get_request` | One saved request (headers, body, auth type, scripts, docs, example names), or one of the collection's gRPC calls (target, method, message, metadata) or connections (url, mode, message). Sensitive values are masked. |
 | `list_environments` | Environments and their variable **names** (values are not returned). |
 | `collection_docs` | The collection's [Markdown documentation](/api-testing/collections#documentation). |
-| `send_request` | Send a saved request (its scripts and assertions run too) or an ad-hoc request: `method` + `url` (+ `headers`, `body`), or a copied cURL / fetch / PowerShell `snippet`. `{{variables}}` resolve from the chosen environment. Returns status, headers, body (up to 20,000 characters) and timing; for a saved request also the scripts' `console.log` output (`scriptLogs`) and the [`pm.visualizer`](/api-testing/rest#visualize-responses-pm-visualizer) rendering (`visualization.html`). |
+| `send_request` | Send a saved request (its scripts and assertions run too) or an ad-hoc request: `method` + `url` (+ `headers`, `body`), or a copied cURL / fetch / PowerShell `snippet`. `{{variables}}` resolve from the chosen environment. Returns status, headers, body (up to 20,000 characters) and timing; for a saved request also the scripts' `console.log` output (`scriptLogs`) and the [`tp.visualizer`](/api-testing/rest#visualize-responses-tp-visualizer) rendering (`visualization.html`). |
 | `grpc_call` | Call a [gRPC](/api-testing/grpc) method described by `.proto` files in the workspace (`protos`: paths, with the files they import; leave out to use server reflection), or list the methods with example requests when `method` is left out. Returns the gRPC status, the response (or the streamed messages), metadata and trailers. |
 | `realtime_exchange` | Talk to a [WebSocket, Socket.IO, MQTT or Kafka](/api-testing/websocket) server: connect, send messages, emit events (optionally waiting for acknowledgements), subscribe and publish (MQTT), or read topics and produce (Kafka, in a consumer group of its own), collect what arrives for `waitMs`, close. Returns the messages with direction, time, event name or topic (Kafka: key, partition, offset, headers). |
 | `run_collection` | Run a collection or one folder like the [Collection Runner](/api-testing/collections#collection-runner) and return totals and per-request results with failure messages, script logs and visualizations. With `data` (a CSV, JSON, JSONL or SQLite file inside the workspace, or a PostgreSQL / MySQL database as `env:NAME` naming an environment variable that holds its URL; plus `query` for databases) each row is one iteration; `iterations` repeats the run. |
@@ -69,6 +69,7 @@ Not sure which tool? **`search_tools`** takes what you want to do ("capture traf
 | `score_trend` | Each evaluator's mean score run by run (evaluations, AI and RAG tests). |
 | `flaky_tests` | Tests whose result keeps changing across the latest runs, or that passed only after a retry. |
 | `test_history` | One test across the latest runs (status, latency, failed checks) with how often its result flipped. |
+| `flow_graph` | A test file as a [flow](/test-runner/integration-testing#see-a-flow): steps (type, method and URL, extracted names, `dependsOn`), edges, the steps in columns, problems (a missing dependency, a cycle), the latest run's status and duration per step, and the diagram as Graphviz DOT. |
 | `recent_failures` | The latest failed responses across the workspace (4xx/5xx, transport errors, non-OK gRPC codes, MCP tool errors): time, kind, name, URL, status and duration. |
 | `response_time_stats` | Response-time summary of a saved request's recent responses: count, failed, fastest, mean, median (p50), p95 and slowest (ms). |
 | `collection_timing` | Where a collection's request time went (DNS, TCP, TLS, server, download; new vs reused connections). |
@@ -77,6 +78,7 @@ Not sure which tool? **`search_tools`** takes what you want to do ("capture traf
 | `decode_jwt` | Decode a JSON Web Token (header, claims, issued / expires / not before, seconds left, expired); the signature is not verified. |
 | `compare_runs` | What changed between two runs: new failures, fixed tests, slower tests, new and removed tests and the change of totals; `passed` is false when something regressed. |
 | `list_datasets` | Data files in the workspace's `datasets/` folder (path, format, size; tables of SQLite databases), to pass to `run_collection` as `data`. |
+| `list_flows` | The flows (test files and suites with an `expose:` block) this server offers as tools of their own, with their inputs; see [Your flows as tools](#your-flows-as-tools). |
 | `load_history` | Earlier load tests (from the app and `load_test`), newest first: target, virtual users, throughput, error rate, p50 / p95 / p99 and pass rules. |
 | `update_request` | Change a saved REST request: name, method, URL, headers, body, description, scripts. Secrets typed in become `{{variables}}` (listed in `placeholders`), never written. |
 | `move_request` | Move a request or folder to a folder (created when missing) of the same or another collection. |
@@ -86,11 +88,13 @@ Not sure which tool? **`search_tools`** takes what you want to do ("capture traf
 | `list_mcp_servers` | The workspace's MCP servers (id, name, transport, target; whether a stdio command was allowed). |
 | `mcp_server_tools` | Connect to one of them and list its tools (with schemas), resources and prompts. |
 | `mcp_call_tool` | Call a tool of one of the workspace's MCP servers and return the result: the way to test an MCP server. A stdio server runs only after the user allowed its command in the app (Connect ▸ Always for this workspace). |
+| `mock_tools` | The tools of an MCP mock file (`mocks/*.mcp-mock.yaml`): a toolset designed before the real server exists, with each tool's arguments, how it answers (text, JSON, a script) and the commands that serve it to an agent. See [Design a toolset](/mcp/mocking#design-a-toolset). |
 | `debugger_capture`, `debugger_exchanges`, `debugger_exchange`, `debugger_session`, `debugger_rules`, `debugger_stats` | The HTTP Debugger: start a proxy, run a program with `HTTP_PROXY` set to it, read what it sent and got (redacted, `deep` searches bodies), save the session as HAR or open one, rules that capture only, filter out, highlight (also by a condition on one column, with colours), modify, answer or redirect matching traffic (presets: offline, slow, CORS…), each with its hits, the session in numbers. Exchanges carry the program, its process id and account, the server address and the send / wait / receive times. |
 | `git_status` | Git state of the workspace: branch, ahead / behind the remote, changed files. |
 | `git_conflicts`, `git_resolve` | After a pull that stopped on conflicts: each conflict of a collection file with its parts side by side (base, ours, theirs; redacted), and settling a file with one side or a choice per conflict. `git_resolve` is not on a read-only server. |
 | `git_diff` | The workspace's changes by meaning (requests, folders, environment variables, test files); with `from` / `to`, between two commits; `markdown: true` for a pull-request comment. |
 | `git_log` | Commits of the workspace, of a file or of a collection. |
+| `git_sync` | Pull & push in one step: fetch, pull with a merge when the remote has new commits (collections merge request by request; uncommitted changes are set aside and put back), then push. Returns `pushed`, `up-to-date`, `pulled-nothing-to-push`, or `conflicts` with the files (nothing is pushed then). Not on a read-only server. |
 | `git_propose_commit` | Stage the changes and propose a commit message (after the secret check). It does not commit: the message appears in the app's Git view for a person to commit. Not on a read-only server. See [Keep your workspace in git](/getting-started/git). |
 | `what_needs_attention` | Failing monitors, expiring certificates, the latest failed run, failing requests and flaky tests, most severe first. A good first call. |
 | `workspace_activity` | Per-day activity of the workspace (`days`, default 14): requests and failed requests, median response time, test runs and failed tests, requests per type and the slowest requests. |
@@ -141,6 +145,51 @@ Not sure which tool? **`search_tools`** takes what you want to do ("capture traf
 `save_request`, `import_definition`, `rename_variable`, `reorder_environments`, `set_request_checks` and `write_test_file` change workspace files, `load_test` generates load, and `--read-only` hides them together with the tools that send requests.
 
 Every tool has a **title** and **annotations** (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`), so agents can run the read-only ones without asking and ask before the ones that send requests or change files. Results come as JSON text and as **structured content** (a list is wrapped as `{ "items": [...] }`).
+
+## Your flows as tools
+
+A test file or suite can be a tool of its own, the way Postman deploys a flow as an MCP server: add an `expose:` block and the server registers a tool under that name. Its `inputs` are variables the flow reads as `{{name}}`; each becomes an argument of the tool, with its description and default (an input without a default is required). In the app, a file's menu in the Tests view has **Expose as MCP tool…** (a dialog that writes the block; *Stop exposing* removes it), and Settings ▸ AI agents lists the exposed flows.
+
+```yaml
+name: Order round trip
+expose:
+  tool: order_flow
+  description: Create an order for a customer and check it can be fetched back.
+  inputs:
+    - { name: customerId, description: The customer to order for }
+    - { name: qty, description: How many, default: "1" }
+defaults:
+  # the values the inputs have when the file runs on its own; the tool's arguments replace them
+  vars: { customerId: "42", qty: "1" }
+tests:
+  - id: create
+    name: Create the order
+    method: POST
+    url: "{{baseUrl}}/orders"
+    json: { customer: "{{customerId}}", quantity: "{{qty}}" }
+    extract: { orderId: $.id }
+    assertions: [{ type: status, expected: 201 }]
+  - name: Read it back
+    dependsOn: create
+    url: "{{baseUrl}}/orders/{{orderId}}"
+    assertions: [{ type: equals, path: $.customer, expected: "{{customerId}}" }]
+```
+
+An agent then calls `order_flow` with `{ "customerId": "42", "environment": "Staging" }` (`environment` is added to every flow tool; a suite's own `environment` is the default). The flow runs like `testpion test` with the arguments as runtime variables, the run is recorded in the workspace history, and the result is:
+
+```json
+{
+  "runId": "run-…", "tool": "order_flow", "file": "flows/order.yaml", "environment": "Staging",
+  "passed": 2, "failed": 0, "errors": 0, "skipped": 0, "durationMs": 412,
+  "steps": [
+    { "name": "Create the order", "status": "passed", "durationMs": 230 },
+    { "name": "Read it back", "status": "passed", "durationMs": 180 }
+  ],
+  "extracted": { "orderId": "o-1001" }
+}
+```
+
+A step that failed or errored lists its `error` or `failedChecks`, and the result is marked `isError` so the agent treats it as a failure. Values the flow extracted come back in `extracted` (a sensitive name such as `token` is masked). `list_flows` lists the exposed flows and `testpion flows --json` prints them in a terminal; a flow added or changed while an agent is connected appears after it reconnects, since the tools are read when the server starts. `--read-only` hides them with the other tools that send requests.
 
 ## Resources
 

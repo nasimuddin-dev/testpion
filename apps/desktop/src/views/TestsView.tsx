@@ -1,4 +1,4 @@
-import { BarChart3, ChevronDown, ChevronRight, CopyPlus, FileCode2, FilePlus2, Folder, History, KeyRound, Layers, Pencil, Play, Save, ShieldCheck, Trash2, Workflow } from 'lucide-react';
+import { BarChart3, Bot, ChevronDown, ChevronRight, CopyPlus, FileCode2, FilePlus2, Folder, History, KeyRound, Layers, Pencil, Play, Save, ShieldCheck, Trash2, Workflow } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { asError, call, on } from '../api';
 import { confirmAction, promptText, toastError, useApp } from '../store';
@@ -8,12 +8,15 @@ import { StatusIcon } from '../components/Results';
 import { CodeEditor } from '../components/CodeEditor';
 import { RunMiniBar, RunsOverview, type RunRow } from '../components/RunsOverview';
 import { RunPanel } from '../components/RunPanel';
+import { ExposeFlowDialog } from '../components/ExposeFlowDialog';
 import { SidebarShell } from '../components/SidebarShell';
-import { KindBadge, RowMenu, TreeHeader, treeKeys } from '../components/TreeParts';
+import { KindBadge, RowMenu, TEST_KINDS, TreeHeader, treeKeys } from '../components/TreeParts';
+import { FlowDiagram } from '../components/FlowDiagram';
+import { stepLine, type FlowStep } from '@testpion/shared';
 import { EnvironmentsPane } from '../components/SidebarPanes';
 import { finishSave, type SaveResult } from '../lib/files';
 import { dataLanguageOf } from '../data-languages';
-import { Badge, Button, cx, Empty, IconButton, Input, rowActionClass, SectionTitle, Split, Tabs, type MenuItem } from '../components/ui';
+import { Badge, Button, cx, Empty, IconButton, Input, rowActionClass, SectionTitle, Spinner, Split, Tabs, type MenuItem } from '../components/ui';
 
 interface Node {
   name: string;
@@ -153,7 +156,9 @@ export function TestsView() {
   const [preview, setPreview] = useState<{ tests: Array<{ id?: string; name: string; type: string; tags?: string[] }>; suite?: { name: string; tests: string[] } } | { error: string }>();
   const [runId, setRunId] = useState<string>();
   const [runs, setRuns] = useState<RunRow[]>([]);
-  const [tab, setTab] = useState<'editor' | 'run'>('editor');
+  const [tab, setTab] = useState<'editor' | 'run' | 'flow'>('editor');
+  // the file whose expose: block (the flow as an MCP tool) is being edited
+  const [exposing, setExposing] = useState<string>();
   // the latest result of each test in the previewed file
   const [latest, setLatest] = useState<Record<string, { status: string; runId: string; startedAt: string }>>({});
   useEffect(() => {
@@ -188,6 +193,42 @@ export function TestsView() {
   openFilesRef.current = openFiles;
   const fileRef = useRef(file);
   fileRef.current = file;
+  // the file as a flow (the Flow tab): its steps with the latest run's result of each; a run that finishes recolours it
+  const [flow, setFlow] = useState<{ steps: FlowStep[]; run?: { runId: string } } | { error: string }>();
+  const [flowSel, setFlowSel] = useState<string>();
+  // the result the run panel selects (a node of the flow)
+  const [focusResult, setFocusResult] = useState<string>();
+  const flowSeq = useRef(0);
+  const loadFlow = useCallback((path: string) => {
+    const n = ++flowSeq.current;
+    call<{ steps: FlowStep[]; run?: { runId: string } }>('tests.flow', { file: path }).then(
+      (f) => n === flowSeq.current && setFlow(f),
+      (e) => n === flowSeq.current && setFlow({ error: asError(e).message }),
+    );
+  }, []);
+  useEffect(() => {
+    setFlow(undefined);
+    setFlowSel(undefined);
+    if (tab === 'flow' && file) loadFlow(file);
+  }, [tab, file, loadFlow]);
+  useEffect(() => on<{ runId: string }>('run.finished', () => void (fileRef.current && loadFlow(fileRef.current))), [loadFlow]);
+  /** A node of the flow: the editor at the step's `name:` line; its result is selected in the run panel when a run exists. */
+  const revealLine = useRef<number | undefined>(undefined);
+  const openStep = (s: FlowStep) => {
+    setFlowSel(s.id);
+    revealLine.current = stepLine(content, s.name) ?? s.line;
+    if (flow && !('error' in flow) && flow.run) {
+      setRunId(flow.run.runId);
+      setFocusResult(s.name);
+    }
+    setTab('editor');
+  };
+  const openStepResult = (s: FlowStep) => {
+    if (!flow || 'error' in flow || !flow.run) return;
+    setRunId(flow.run.runId);
+    setFocusResult(s.name);
+    setTab('run');
+  };
   const openFile = async (path: string) => {
     if (openFilesRef.current.includes(path)) return path === file ? setTab('editor') : show(path);
     const text = await call<string>('tests.read', { path });
@@ -305,6 +346,19 @@ export function TestsView() {
     for (const p of openFilesRef.current.filter((p) => p === n.path || p.startsWith(`${n.path}/`))) await closeFile(p, false);
     await loadTree();
   };
+  /** Expose as MCP tool…: the dialog writes the file, so the editor's pending edits go first; afterwards the editor shows the file as written. */
+  const exposeFile = async (path: string) => {
+    if (file === path && content !== saved) await save();
+    setExposing(path);
+  };
+  const exposed = async (path: string) => {
+    const text = await call<string>('tests.read', { path });
+    if (file === path) {
+      setContent(text);
+      setSaved(text);
+    } else if (buffers.current[path] && buffers.current[path]!.content === buffers.current[path]!.saved) buffers.current[path] = { content: text, saved: text };
+    if (file === path) call('tests.preview', { path }).then(setPreview, (e) => setPreview({ error: asError(e).message }));
+  };
   const nodeMenu = (n: Node): MenuItem[] =>
     n.kind === 'dir'
       ? [
@@ -314,6 +368,7 @@ export function TestsView() {
       : [
           { label: 'Open', icon: <FileCode2 size={14} />, onSelect: () => void openFile(n.path) },
           ...(/\.(ya?ml|json)$/.test(n.name) ? [{ label: 'Run', icon: <Play size={14} />, onSelect: () => void run([n.path], n.path) }] : []),
+          ...(/\.(ya?ml|json)$/.test(n.name) ? [{ label: 'Expose as MCP tool…', icon: <Bot size={14} />, onSelect: () => void exposeFile(n.path) }] : []),
           { label: 'Rename', icon: <Pencil size={14} />, separator: true, onSelect: () => void renameFile(n.path) },
           { label: 'Duplicate', icon: <CopyPlus size={14} />, onSelect: () => void duplicateFile(n.path) },
           { label: 'Delete', icon: <Trash2 size={14} />, danger: true, separator: true, onSelect: () => void deletePath(n) },
@@ -350,6 +405,7 @@ export function TestsView() {
     );
 
   return (
+    <>
     <Split id="tests-main" initial={22} min={14}>
       <SidebarShell
         id="tests"
@@ -426,8 +482,8 @@ export function TestsView() {
       />
       <div className="h-full flex flex-col min-w-0">
         <Tabs<string>
-          value={tab === 'run' ? 'run' : file ? `file:${file}` : 'editor'}
-          onChange={(id) => (id === 'run' ? setTab('run') : id === 'editor' ? setTab('editor') : show(id.slice(5)))}
+          value={tab === 'run' ? 'run' : tab === 'flow' ? 'flow' : file ? `file:${file}` : 'editor'}
+          onChange={(id) => (id === 'run' ? setTab('run') : id === 'flow' ? setTab('flow') : id === 'editor' ? setTab('editor') : show(id.slice(5)))}
           tabs={[
             ...(openFiles.length
               ? openFiles.map((p) => {
@@ -446,10 +502,11 @@ export function TestsView() {
                   };
                 })
               : [{ id: 'editor', label: 'Editor' }]),
+            ...(file ? [{ id: 'flow', label: 'Flow' }] : []),
             { id: 'run', label: 'Runs', badge: runs.length },
           ]}
           right={
-            tab === 'editor' &&
+            tab !== 'run' &&
             file && (
               <>
                 <Button size="sm" icon={<Save size={12} />} onClick={save} disabled={content === saved}>
@@ -477,7 +534,20 @@ export function TestsView() {
           {tab === 'editor' ? (
             file ? (
               <Split id="tests-editor" initial={65}>
-                <CodeEditor language={dataLanguageOf(file)} path={`tests/${file}`} value={content} onChange={setContent} />
+                <CodeEditor
+                  language={dataLanguageOf(file)}
+                  path={`tests/${file}`}
+                  value={content}
+                  onChange={setContent}
+                  onMount={(ed) => {
+                    const l = revealLine.current;
+                    if (!l) return;
+                    revealLine.current = undefined;
+                    ed.revealLineInCenter(l);
+                    ed.setPosition({ lineNumber: l, column: 1 });
+                    ed.focus();
+                  }}
+                />
                 <div className="h-full overflow-auto text-sm">
                   <SectionTitle>Parsed tests</SectionTitle>
                   {preview && 'error' in preview ? (
@@ -531,12 +601,33 @@ export function TestsView() {
                 Pick a file on the left to edit it and preview its tests; <b>Run all tests</b> below the list runs every file with the active environment.
               </Empty>
             )
+          ) : tab === 'flow' ? (
+            !file ? (
+              <Empty icon={<Workflow size={28} />} title="Select a test file">
+                Open a test file to see its steps as a flow.
+              </Empty>
+            ) : !flow ? (
+              <div className="p-4">
+                <Spinner />
+              </div>
+            ) : 'error' in flow ? (
+              <Empty icon={<Workflow size={28} />} title="This file cannot be read as a flow">
+                {flow.error}
+              </Empty>
+            ) : !flow.steps.length ? (
+              <Empty icon={<Workflow size={28} />} title="No steps in this file">
+                A flow is a test file whose tests chain with <span className="mono">dependsOn</span> and <span className="mono">extract</span>; a suite names other files — open one of them to see its flow.
+              </Empty>
+            ) : (
+              <FlowDiagram steps={flow.steps} selected={flowSel} onSelect={openStep} onOpenResult={flow.run ? openStepResult : undefined} />
+            )
           ) : runId ? (
             <Split id="tests-runs" initial={22} min={12}>
               <RunList runs={runs} active={runId} onSelect={setRunId} onOverview={() => setRunId(undefined)} />
               <RunPanel
                 key={runId}
                 runId={runId}
+                focusName={focusResult}
                 onRerunFailed={(id) =>
                   void call<{ runId: string }>('tests.rerunFailed', { runId: id, environment: env, concurrency: opts.concurrency, retries: opts.retries }).then(
                     (r) => {
@@ -557,6 +648,8 @@ export function TestsView() {
         </div>
       </div>
     </Split>
+    {exposing && <ExposeFlowDialog path={exposing} onClose={() => setExposing(undefined)} onChanged={() => void exposed(exposing).catch(toastError)} />}
+    </>
   );
 }
 
@@ -602,21 +695,6 @@ function RunList({ runs, active, onSelect, onOverview }: { runs: RunRow[]; activ
   );
 }
 
-/** What a test file holds, in the same badge as the explorer's rows: from its folder (rest/ → HTTP …), else its format. */
-const TEST_KINDS: Record<string, [string, string]> = {
-  rest: ['HTTP', 'text-ok'],
-  http: ['HTTP', 'text-ok'],
-  soap: ['SOAP', 'text-[#0ea5e9]'],
-  graphql: ['GQL', 'text-[#e535ab]'],
-  grpc: ['gRPC', 'text-[#2ea99e]'],
-  websocket: ['WS', 'text-[#d97706]'],
-  mqtt: ['MQTT', 'text-[#d97706]'],
-  kafka: ['KFK', 'text-[#d97706]'],
-  mcp: ['MCP', 'text-accent'],
-  ai: ['AI', 'text-judge'],
-  llm: ['AI', 'text-judge'],
-  agent: ['AGT', 'text-judge'],
-};
 function TestFileBadge({ path }: { path: string }) {
   if (/\.suite\.ya?ml$/i.test(path)) return <KindBadge text="SUITE" cls="text-judge" />;
   const kind = TEST_KINDS[path.split('/')[0]!.toLowerCase()];

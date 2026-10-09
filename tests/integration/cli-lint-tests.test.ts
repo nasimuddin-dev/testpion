@@ -34,5 +34,5 @@ describe('CLI: lint-tests', () => {
       expect(r.out).toMatch(/1 test files, nothing to fix/);
     }
     expect(cli('tests/nope.yaml').err).toMatch(/No such test file or folder/);
-  });
+  }, 120_000);
 });

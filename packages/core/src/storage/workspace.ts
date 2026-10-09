@@ -11,6 +11,7 @@ import type { Baseline } from '../report/regression.js';
 import { moveToTrash } from './trash.js';
 import { markTemplateInstalled } from './template-update.js';
 import { writeGitFiles } from './git-files.js';
+import { adoptLooseRequests, describeAdoption, type AdoptedRequests } from './loose-requests.js';
 
 /* ------------------------------------------------------------------ migrations */
 
@@ -81,13 +82,15 @@ export interface TestFileNode {
  *   workspace.json  database.sqlite  collections/  environments/  tests/  datasets/
  *   traces/  payloads/  reports/  runs/  baselines/  providers.json  mcp-servers.json
  */
-/** Script package names for pm.require: utils, or @team/utils. */
+/** Script package names for tp.require: utils, or @team/utils. */
 export const SCRIPT_PACKAGE_NAME = /^(@[A-Za-z0-9][\w.-]*\/)?[A-Za-z0-9][\w.-]*$/;
 
 export class WorkspaceStore {
   readonly meta: MetaStore;
   private ws: Workspace;
   readonly migrationsApplied: string[] = [];
+  /** gRPC calls and connections that were in no collection, moved into one when the workspace was opened. */
+  adoptedRequests?: AdoptedRequests;
 
   private constructor(
     readonly root: string,
@@ -124,6 +127,16 @@ export class WorkspaceStore {
     }
     const store = new WorkspaceStore(root, ws as unknown as Workspace);
     store.migrationsApplied.push(...applied);
+    // every saved request belongs to a collection: older versions saved gRPC calls and connections outside one
+    try {
+      const adopted = adoptLooseRequests(store);
+      if (adopted.moved) {
+        store.adoptedRequests = adopted;
+        store.migrationsApplied.push(describeAdoption(adopted));
+      }
+    } catch {
+      /* an unreadable library file: the workspace still opens; the next open tries again */
+    }
     return store;
   }
 
@@ -243,7 +256,7 @@ export class WorkspaceStore {
     return { ...c, version: m?.version ?? c.version ?? 0, updatedAt: m?.updatedAt ?? c.updatedAt ?? '' };
   }
 
-  /* Script packages (pm.require): packages/<name>.js, e.g. packages/@clinic/auth.js for "@clinic/auth". */
+  /* Script packages (tp.require): packages/<name>.js, e.g. packages/@clinic/auth.js for "@clinic/auth". */
   private packagePath(name: string): string {
     if (!SCRIPT_PACKAGE_NAME.test(name)) throw new ApsError('ValidationError', `"${name}" is not a package name`, { suggestions: ['Use a name like utils, or @team/utils (letters, digits, . _ -).'] });
     return this.safePath(`${name}.js`, this.path('packages'));
@@ -571,7 +584,7 @@ export interface WorkspaceBundle {
   tests: Record<string, string>;
   /** Saved items with folders by kind (WebSocket connections, AI prompts …); absent in older exports. */
   library?: Record<string, Pick<Library, 'folders' | 'items'>>;
-  /** Script packages for pm.require, by name; absent in older exports. */
+  /** Script packages for tp.require, by name; absent in older exports. */
   packages?: Record<string, string>;
 }
 
@@ -799,6 +812,8 @@ export class WorkspaceManager {
     store.saveProviders(bundle.providers ?? []);
     store.saveMcpServers(bundle.mcpServers ?? []);
     for (const [kind, lib] of Object.entries(bundle.library ?? {})) store.saveLibrary(kind, { folders: lib.folders ?? [], items: lib.items ?? [] });
+    // an export from an older version may hold gRPC calls and connections outside a collection
+    adoptLooseRequests(store);
     for (const [name, code] of Object.entries(bundle.packages ?? {})) if (SCRIPT_PACKAGE_NAME.test(name) && typeof code === 'string') store.saveScriptPackage(name, code);
     for (const [rel, content] of Object.entries(bundle.tests ?? {})) {
       const p = store.safePath(rel, store.path('tests'));

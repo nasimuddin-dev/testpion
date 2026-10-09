@@ -1,7 +1,9 @@
-import { ArrowDown, ArrowUp, Check, Columns2, ExternalLink, FolderGit2, GitBranch, GitCommitHorizontal, GitPullRequest, KeyRound, Pencil, Minus, Plus, RefreshCw, RotateCcw, ShieldAlert, Sparkles, Trash2, Undo2, X } from 'lucide-react';
+import { ArrowDown, ArrowDownUp, ArrowUp, Check, Columns2, ExternalLink, FolderGit2, GitBranch, GitCommitHorizontal, GitPullRequest, KeyRound, Pencil, Minus, Plus, RefreshCw, RotateCcw, ShieldAlert, Sparkles, Trash2, Undo2, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { asError, call, on } from '../api';
-import { confirmAction, promptText, toastError, useApp } from '../store';
+import { confirmAction, isPushRejected, promptText, toastError, useApp } from '../store';
+import { useIntent } from '../hooks';
+import { useEditorTabsStore } from '../components/EditorTabs';
 import { Badge, Button, Callout, cx, Empty, LinkButton, Menu, MoreMenu, PageHeader, SectionTitle, Spinner, Split } from '../components/ui';
 import { DiffText, GitCommitPanel } from '../components/GitCommitPanel';
 import { plural } from '../lib/format';
@@ -59,6 +61,34 @@ interface SecretFinding {
 }
 
 
+/** What Pull & push did (git.sync). */
+interface GitSyncResult {
+  state: 'pushed' | 'up-to-date' | 'pulled-nothing-to-push' | 'conflicts';
+  pulled: number;
+  pushed: number;
+  files?: string[];
+  setAside?: boolean;
+  message: string;
+}
+
+/**
+ * Before a pull: open requests with unsaved edits are named, and the user chooses to go on (their edits stay in the
+ * tabs; a request the pull changes then asks which version to keep) or to save them first.
+ */
+async function okToPull(): Promise<boolean> {
+  const dirty = Object.values(useEditorTabsStore.getState().byView)
+    .flat()
+    .filter((t) => t.dirty);
+  if (!dirty.length) return true;
+  return confirmAction({
+    title: 'Unsaved changes',
+    message: dirty.length === 1 ? `"${dirty[0]!.title}" has unsaved changes.` : `${dirty.length} open requests have unsaved changes.`,
+    detail: 'Pull anyway? Your edits stay in their tabs; if the pull changes one of those requests, TestPion asks which version to keep. Or cancel and save them first (Ctrl+S).',
+    confirmLabel: 'Pull anyway',
+    tone: 'warning',
+  });
+}
+
 /** Open a changed request in its editor. */
 function openItem(c: SemanticChange) {
   if (!c.collectionId || !c.itemId) return;
@@ -108,9 +138,16 @@ export function GitView() {
 
   useEffect(() => {
     void load();
-    const offs = [on('git.changed', () => void load()), on('data.changed', () => void load())];
+    // a quiet fetch as the view opens: the team's new commits show at once (git.remoteChanged reloads)
+    void call('git.autoFetch').catch(() => undefined);
+    const offs = [on('git.changed', () => void load()), on('git.remoteChanged', () => void load()), on('data.changed', () => void load())];
     return () => offs.forEach((o) => o());
   }, [load]);
+  // what a sync that stopped on conflicts said, shown with the Conflicts list
+  const [syncNote, setSyncNote] = useState<string>();
+  useEffect(() => {
+    if (status && !status.conflicted) setSyncNote(undefined);
+  }, [status]);
 
   const run = async (label: string, op: () => Promise<unknown>, done?: string) => {
     setBusy(label);
@@ -124,6 +161,39 @@ export function GitView() {
       void load();
     }
   };
+
+  /** Pull & push: pull the team's commits (merging collections request by request), then push; stops on conflicts. */
+  const sync = async () => {
+    if (!(await okToPull())) return;
+    await run('sync', async () => {
+      const r = await call<GitSyncResult>('git.sync');
+      setSyncNote(r.state === 'conflicts' ? r.message : undefined);
+      useApp.getState().toast(r.message, r.state === 'conflicts' ? 'warning' : 'success');
+    });
+  };
+  const pull = async () => {
+    if (!(await okToPull())) return;
+    await run('pull', async () => {
+      const r = await call<{ conflicted: boolean; setAside?: boolean; message?: string }>('git.pull', {});
+      const words = r.conflicted ? 'Pulled with conflicts: resolve them below' : 'Up to date with the remote';
+      useApp.getState().toast(r.message ? (r.conflicted ? r.message : `${words}. ${r.message}`) : words, r.conflicted ? 'warning' : 'success');
+    });
+  };
+  const push = () =>
+    void run('push', async () => {
+      try {
+        await call('git.push');
+        useApp.getState().toast('Pushed', 'success');
+      } catch (e) {
+        // refused because the team pushed first: the toast offers Pull & push, and a fetch shows how many commits
+        if (isPushRejected(e)) void call('git.autoFetch').then(() => load(), () => undefined);
+        throw e;
+      }
+    });
+  // "Pull & push" from a rejected push's toast (anywhere in the app)
+  useIntent('git', (p?: { sync?: boolean }) => {
+    if (p?.sync) void sync();
+  });
 
   const files = status?.files ?? [];
   const byFile = useMemo(() => {
@@ -246,7 +316,8 @@ export function GitView() {
     });
     if (remote) await run('remote', () => call('git.init', { remote }), status.ahead ? 'Connected: now Push sends your commits' : 'Connected: commit, then Push');
   };
-  const push = () => void run('push', () => call('git.push'), 'Pushed');
+  // the team pushed while there is work of yours to push: Push would be refused, so it becomes Pull & push
+  const pullFirst = !!status.remote && status.behind > 0 && status.ahead > 0;
   const connectButton = (size?: 'sm') => (
     <Button size={size} variant="primary" icon={<ExternalLink size={size ? 12 : 13} />} loading={busy === 'remote'} onClick={() => void connectRemote()} title="Commits stay on this computer until the workspace has a remote: a repository on GitHub, GitLab, Bitbucket or Azure DevOps">
       Connect to a remote…
@@ -276,22 +347,18 @@ export function GitView() {
                 <Button icon={<RefreshCw size={13} />} loading={busy === 'fetch'} onClick={() => void run('fetch', () => call('git.fetch'))} title="Fetch: see what the remote has">
                   Fetch
                 </Button>
-                <Button
-                  icon={<ArrowDown size={13} />}
-                  loading={busy === 'pull'}
-                  onClick={() =>
-                    void run('pull', async () => {
-                      const r = await call<{ conflicted: boolean }>('git.pull', {});
-                      useApp.getState().toast(r.conflicted ? 'Pulled with conflicts: resolve them below' : 'Up to date with the remote', r.conflicted ? 'warning' : 'success');
-                    })
-                  }
-                  title="Pull: bring in your team's commits"
-                >
+                <Button icon={<ArrowDown size={13} />} loading={busy === 'pull'} onClick={() => void pull()} title="Pull: bring in your team's commits">
                   Pull{status.behind ? ` ${status.behind}` : ''}
                 </Button>
-                <Button icon={<ArrowUp size={13} />} variant={status.ahead ? 'primary' : undefined} loading={busy === 'push'} onClick={push} title={status.ahead ? `Push: send your ${plural(status.ahead, 'commit')} to ${status.remote}` : 'Push: send your commits'}>
-                  Push{status.ahead ? ` ${status.ahead}` : ''}
-                </Button>
+                {pullFirst ? (
+                  <Button icon={<ArrowDownUp size={13} />} variant="primary" loading={busy === 'sync'} onClick={() => void sync()} title={`Pull & push: bring in your team's ${plural(status.behind, 'commit')} (requests merge one by one), then send your ${plural(status.ahead, 'commit')}`}>
+                    Pull & push
+                  </Button>
+                ) : (
+                  <Button icon={<ArrowUp size={13} />} variant={status.ahead ? 'primary' : undefined} loading={busy === 'push'} onClick={push} title={status.ahead ? `Push: send your ${plural(status.ahead, 'commit')} to ${status.remote}` : 'Push: send your commits'}>
+                    Push{status.ahead ? ` ${status.ahead}` : ''}
+                  </Button>
+                )}
               </>
             ) : (
               connectButton()
@@ -314,7 +381,7 @@ export function GitView() {
       />
       <Split id="git-main" initial={58} min={30} collapsedSecond={!selectedCommit}>
       <div className="h-full min-h-0 overflow-auto p-4 grid gap-5 content-start max-w-5xl w-full">
-        {status.conflicted && <ConflictPanel files={files.filter((f) => f.state === 'conflicted')} onDone={() => void load()} />}
+        {status.conflicted && <ConflictPanel files={files.filter((f) => f.state === 'conflicted')} note={syncNote} onDone={() => void load()} />}
 
         <section>
           <SectionTitle
@@ -418,7 +485,27 @@ export function GitView() {
           {secrets && secrets.length > 0 && <SecretsPanel findings={secrets} onChange={setSecrets} onCommitAnyway={() => void commit(true)} />}
         </section>
 
-        {log.length > 0 && (!status.remote || status.ahead > 0) && (
+        {status.remote && status.behind > 0 && (status.ahead > 0 || files.length > 0) ? (
+          // the team pushed: pull first (Pull & push does both), before a push is refused
+          <Callout
+            data-pull-first=""
+            tone="warn"
+            action={
+              <span className="flex gap-1">
+                {status.ahead > 0 && (
+                  <Button size="sm" variant="primary" icon={<ArrowDownUp size={12} />} loading={busy === 'sync'} onClick={() => void sync()}>
+                    Pull & push
+                  </Button>
+                )}
+                <Button size="sm" icon={<ArrowDown size={12} />} loading={busy === 'pull'} onClick={() => void pull()}>
+                  Pull
+                </Button>
+              </span>
+            }
+          >
+            Your team pushed {plural(status.behind, 'commit')}. Pull before pushing.
+          </Callout>
+        ) : log.length > 0 && (!status.remote || status.ahead > 0) && (
           // a commit is on this computer only until it is pushed: the next step, where the commit was made
           <Callout
             data-push-next=""
@@ -620,7 +707,7 @@ function SecretsPanel({ findings, onChange, onCommitAnyway }: { findings: Secret
 }
 
 /** Files changed on both sides after a pull (GIT-302): keep yours, take theirs, or open the file to merge by hand. */
-function ConflictPanel({ files, onDone }: { files: GitFile[]; onDone(): void }) {
+function ConflictPanel({ files, note, onDone }: { files: GitFile[]; /** What a Pull & push that stopped here said. */ note?: string; onDone(): void }) {
   const [busy, setBusy] = useState<string>();
   const [comparing, setComparing] = useState<string>();
   const pick = async (path: string, side: 'ours' | 'theirs') => {
@@ -637,6 +724,11 @@ function ConflictPanel({ files, onDone }: { files: GitFile[]; onDone(): void }) 
   return (
     <Callout tone="warn" block as="section" role="alert" className="rounded-md p-3 grid gap-2">
       <SectionTitle>Conflicts · changed by you and by someone else</SectionTitle>
+      {note && (
+        <div className="text-sm" data-sync-note="">
+          {note}
+        </div>
+      )}
       <ul className="grid gap-1">
         {files.map((f) => (
           <li key={f.path} className="flex items-center gap-2 text-sm">

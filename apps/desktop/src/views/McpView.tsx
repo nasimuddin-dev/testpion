@@ -21,6 +21,7 @@ import { Button, cx, Empty, Field, IconButton, Input, Menu, SectionTitle, Select
 import { PromptsPanel, ResourcesPanel, type Discovery } from '../components/mcp/McpPanels';
 import { splitCommandLine, joinCommandLine } from '../lib/command-line';
 import { ToolsPanel } from '../components/mcp/ToolsPanel';
+import { ToolsetEditor, type ToolsetEditorHandle } from '../components/mcp/ToolsetEditor';
 
 interface McpEvent {
   id: string;
@@ -36,7 +37,7 @@ interface McpEvent {
   metadata?: Record<string, unknown>;
 }
 
-type Tab = 'tools' | 'resources' | 'prompts' | 'usage' | 'trace' | 'info' | 'settings';
+type Tab = 'tools' | 'calls' | 'resources' | 'prompts' | 'usage' | 'trace' | 'info' | 'settings';
 
 /** Merge event lists by id — the connect snapshot and the live stream overlap. */
 function mergeEvents(a: McpEvent[], b: McpEvent[]): McpEvent[] {
@@ -254,7 +255,9 @@ It runs with your permissions. Allow it only if you know where this workspace co
     await saveServers(servers.filter((s) => s.id !== current.id));
     setSelected(undefined);
   };
-  useSaveShortcut('mcp', () => void saveForm());
+  // a mock server's Tools tab edits its toolset file: Ctrl+S saves that when it has changes, else the server
+  const toolset = useRef<ToolsetEditorHandle>(null);
+  useSaveShortcut('mcp', () => (tab === 'tools' && toolset.current?.dirty ? void toolset.current.save() : void saveForm()));
 
   // this editor's tab in the shared tab strip (while a server is selected)
   useSingleEditorTab(
@@ -364,7 +367,8 @@ It runs with your permissions. Allow it only if you know where this workspace co
               value={tab}
               onChange={setTab}
               tabs={[
-                { id: 'tools', label: 'Tools', badge: disc?.tools.length },
+                // a mock server designs its tools (the toolset); calling them with the inspector is a second tab once connected
+                ...(form.transport === 'mock' ? [{ id: 'tools' as const, label: 'Tools', badge: undefined }, ...(disc ? [{ id: 'calls' as const, label: 'Call tools', badge: disc.tools.length }] : [])] : [{ id: 'tools' as const, label: 'Tools', badge: disc?.tools.length }]),
                 { id: 'resources', label: 'Resources', badge: disc ? disc.resources.length + disc.resourceTemplates.length : undefined },
                 { id: 'prompts', label: 'Prompts', badge: disc?.prompts.length },
                 ...(draft ? [] : [{ id: 'usage' as const, label: 'Usage' }]),
@@ -381,6 +385,8 @@ It runs with your permissions. Allow it only if you know where this workspace co
                 <McpUsage serverId={current.id} />
               ) : tab === 'trace' ? (
                 <McpTrace events={draft ? [] : events[current.id] ?? []} error={connError} />
+              ) : tab === 'tools' && form.transport === 'mock' ? (
+                <ToolsetEditor ref={toolset} key={form.mockFile} file={form.mockFile} serverName={form.name} connected={!!server?.connected && !draft} />
               ) : !disc ? (
                 !connError && (
                   <Empty
@@ -391,7 +397,7 @@ It runs with your permissions. Allow it only if you know where this workspace co
                     Connect to discover the server's tools, resources and prompts. Every JSON-RPC message is kept in the protocol trace.
                   </Empty>
                 )
-              ) : tab === 'tools' ? (
+              ) : tab === 'tools' || tab === 'calls' ? (
                 <ToolsPanel serverId={current.id} tools={disc.tools} />
               ) : tab === 'resources' ? (
                 <ResourcesPanel serverId={current.id} disc={disc} />

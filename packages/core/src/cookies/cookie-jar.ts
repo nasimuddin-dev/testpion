@@ -165,7 +165,7 @@ export class CookieJar {
     return [...new Set(this.list().map((c) => c.domain))];
   }
 
-  /** Add or replace a cookie (Cookies dialog, `pm.cookies.jar().set`). */
+  /** Add or replace a cookie (Cookies dialog, `tp.cookies.jar().set`). */
   set(input: CookieInput): StoredCookie {
     const domain = (input.domain ?? '').replace(/^\./, '').trim().toLowerCase();
     if (!domain) throw new Error('A cookie needs a domain');
@@ -243,7 +243,7 @@ export function cookiesFromJson(data: unknown): StoredCookie[] {
   return out;
 }
 
-/** A change a script made through `pm.cookies.jar()`, applied by the host after the script ends. */
+/** A change a script made through `tp.cookies.jar()`, applied by the host after the script ends. */
 export type CookieJarOp = { op: 'set'; url: string; name: string; value: string; path?: string } | { op: 'unset'; url: string; name: string } | { op: 'clear'; url: string };
 
 /** Apply the jar changes a script recorded. The domain is the host of the URL the script passed. */

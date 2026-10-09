@@ -69,9 +69,9 @@ tests:
       - { type: status, expected: 404 }
 ```
 
-Dynamic values (`{{$randomFirstName}}`, `{{$randomInt}}`, `{{$guid}}`) keep records unique when flows run in parallel or again. A `testScript` with `pm.test` covers what assertions can't say in one line (see [Assertions](/test-runner/assertions)). GraphQL, gRPC, WebSocket and MCP steps mix into the same file (`type: graphql` …).
+Dynamic values (`{{$randomFirstName}}`, `{{$randomInt}}`, `{{$guid}}`) keep records unique when flows run in parallel or again. A `testScript` with `tp.test` covers what assertions can't say in one line (see [Assertions](/test-runner/assertions)). GraphQL, gRPC, WebSocket and MCP steps mix into the same file (`type: graphql` …).
 
-The same flow can live in a **collection** (requests with pre-request and post-response scripts, `pm.variables.set` to pass values along) and run with `testpion run-collection`; the collection runner in the app runs it with a data file for many iterations.
+The same flow can live in a **collection** (requests with pre-request and post-response scripts, `tp.variables.set` to pass values along) and run with `testpion run-collection`; the collection runner in the app runs it with a data file for many iterations.
 
 ## Group flows into a suite
 
@@ -99,6 +99,20 @@ testpion run -w examples/veterinary-workspace --suite integration -r console jun
 ```
 
 In the app: **Tests ▸ Runs ▸ Run suite**, or open the file and **Run**. A failed step shows its request, response and the check that failed; **Explain with AI** says why.
+
+## See a flow
+
+Open the file in **Tests** and pick the **Flow** tab: one node per step with its type, method and URL and the names it extracts, an arrow for every `dependsOn`, laid out left to right (a step sits one column after the last step it waits for; steps that depend on nothing share the first column). Drag the background to pan, the wheel zooms, **Fit** shows the whole flow. After a run the nodes carry the latest result (passed, failed, error, skipped) with the step's duration; click a node to jump to the step in the editor, click its result to open it in the run. A dependency nobody defines, or two steps that wait for each other, is listed under the diagram.
+
+The same from the command line and for agents:
+
+```bash
+testpion flow rest/patient-lifecycle.yaml            # the steps in columns, with the latest run's results
+testpion flow rest/patient-lifecycle.yaml --json     # steps, edges, layers, problems, the run
+testpion flow rest/patient-lifecycle.yaml --dot | dot -Tsvg > flow.svg
+```
+
+The `flow_graph` MCP tool answers the same JSON (with the DOT) for a file, so an agent can read a flow before it changes one with `write_test_file`.
 
 ## Run it in CI/CD
 

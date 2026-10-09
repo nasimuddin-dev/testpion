@@ -24,6 +24,8 @@ import { registerGenerateCommands } from './commands/generate.js';
 import { registerReplaceCommands } from './commands/replace.js';
 import { registerVarsMoveCommand } from './commands/vars-move.js';
 import { registerTidyCommand } from './commands/tidy.js';
+import { registerFlowsCommand } from './commands/flows.js';
+import { registerFlowCommand } from './commands/flow.js';
 
 /** The testpion command line: one module per area of commands (commands/*.ts). */
 function buildProgram(): Command {
@@ -48,6 +50,8 @@ function buildProgram(): Command {
   registerReplaceCommands(program);
   registerVarsMoveCommand(program);
   registerTidyCommand(program);
+  registerFlowsCommand(program);
+  registerFlowCommand(program);
 
   // an environment's secret manager references (op://, vault://, aws-sm:// …) are read before the command runs
   program.hook('preAction', async (_cmd, action) => {

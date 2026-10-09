@@ -24,7 +24,7 @@ packages/core        the engine, host-agnostic (Node): the same code runs in the
   runner/            test files, suites, the run loop, results, breakdowns, baselines, CI config
   eval/, ai/, load/  checks and evaluators, providers and the assistant's helpers, load tests
   import/            Postman, Insomnia, Bruno, OpenAPI, HAR, cURL/fetch snippets, save-request (secrets to variables)
-  scripts/           the pm.* sandbox (QuickJS in WebAssembly): scripts never reach Node
+  scripts/           the tp.* sandbox (QuickJS in WebAssembly): scripts never reach Node
   git/               git through the system git, changes by meaning, the merge driver
   mcp-server/        the workspace as MCP tools for agents: tool.ts (the contract), one module per subject, testpion-mcp.ts composes them
   index.ts           the public surface: everything the CLI and the app may use

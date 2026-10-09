@@ -48,12 +48,16 @@ import { gitTools } from './git-tools.js';
 import { openApiTools } from './openapi-tools.js';
 import { debuggerTools } from './debugger-tools.js';
 import { historyTools } from './history-tools.js';
+import { flowGraphTools } from './flow-graph-tools.js';
+import { flowTools } from './flow-tools.js';
+import { mockTools } from './mock-tools.js';
+import { datasetTools } from './dataset-tools.js';
 import { str, withEnvironmentSecrets, type Tool } from './tool.js';
 import { MINIMAL_TOOLS, searchTool } from './search-tools.js';
 import { commandLine, isCommandTrusted } from '../storage/trust.js';
 import { McpSession } from '../protocols/mcp/client.js';
 import { runCollection } from '../runner/collection-run.js';
-import { appendDatasetRow, listWorkspaceDatasets, readDataset, type DatasetRecord } from '../runner/datasets.js';
+import { readDataset, type DatasetRecord } from '../runner/datasets.js';
 import { dbKindOf } from '../runner/db-datasets.js';
 import { collectionVariableFlow, definedVariableNames, unusedVariables } from '../runner/variable-flow.js';
 import { collectionRealtimeTests, collectionSavedItems } from '../runner/collection-realtime.js';
@@ -170,7 +174,7 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
     error: r.error?.message,
     failedChecks: r.checks.filter((c) => !c.passed).map((c) => `${c.name ?? c.type}: ${c.message ?? 'failed'}`),
     passedChecks: r.checks.filter((c) => c.passed).length,
-    // console.log output of the scripts and the pm.visualizer rendering, when there is one
+    // console.log output of the scripts and the tp.visualizer rendering, when there is one
     scriptLogs: (r.metadata as { scriptLogs?: string[] } | undefined)?.scriptLogs?.map((l) => redactor.redactString(l)),
     visualization: (r.metadata as { visualizer?: { html?: string; error?: string } } | undefined)?.visualizer,
   });
@@ -683,7 +687,7 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
     },
     {
       name: 'variable_usages',
-      description: 'Where a variable is used or defined in the workspace: {{name}} in requests (URL, headers, bodies, auth …), pm.environment.get("name") & co. in scripts, environments, collection / folder / workspace variables and test files.',
+      description: 'Where a variable is used or defined in the workspace: {{name}} in requests (URL, headers, bodies, auth …), tp.environment.get("name") & co. in scripts, environments, collection / folder / workspace variables and test files.',
       inputSchema: { type: 'object', properties: { name: str('Variable name, without {{ }}') }, required: ['name'] },
       run: (a) => variableUsages(store, String(a.name ?? '')),
     },
@@ -927,7 +931,7 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
       name: 'run_collection',
       write: true,
       description:
-        'Run a collection (or one folder) like the Collection Runner: requests in order with their scripts and assertions. Returns totals and per-request results. With `data` (a CSV / JSON / JSONL file or a SQLite database inside the workspace, plus `query` for SQLite) each row is one iteration ({{column}} in requests, pm.iterationData in scripts).',
+        'Run a collection (or one folder) like the Collection Runner: requests in order with their scripts and assertions. Returns totals and per-request results. With `data` (a CSV / JSON / JSONL file or a SQLite database inside the workspace, plus `query` for SQLite) each row is one iteration ({{column}} in requests, tp.iterationData in scripts).',
       inputSchema: {
         type: 'object',
         properties: {
@@ -1129,31 +1133,12 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
     {
       name: 'variable_flow',
       description:
-        'How variables flow through a collection run: for each variable, the requests (or collection / folder scripts) that set it with pm.environment.set etc., and the requests that use it ({{name}} or a script get), in run order. Flags used-before-set (a request uses it before any script sets it and no environment defines it), never-set and unused. Use it to debug request chaining.',
+        'How variables flow through a collection run: for each variable, the requests (or collection / folder scripts) that set it with tp.environment.set etc., and the requests that use it ({{name}} or a script get), in run order. Flags used-before-set (a request uses it before any script sets it and no environment defines it), never-set and unused. Use it to debug request chaining.',
       inputSchema: { type: 'object', properties: { collection: str('Collection name or id') }, required: ['collection'] },
       run: (a) => {
         const c = findCollection(a.collection);
         return collectionVariableFlow(c, definedVariableNames(store, settings));
       },
-    },
-    {
-      name: 'list_datasets',
-      description:
-        'Data files in the workspace datasets/ folder, newest first: path (give it to run_collection as `data`), size, format (csv, json, jsonl, markdown, sqlite) and, for SQLite databases, their tables (run_collection then needs a `query`). A response saved with the app\'s Table ▸ Save as dataset lands here too.',
-      inputSchema: { type: 'object', properties: {} },
-      run: () => listWorkspaceDatasets(store),
-    },
-    {
-      name: 'add_dataset_row',
-      write: true,
-      description:
-        'Add one record to a JSONL dataset in datasets/ (made when missing), e.g. an input and the answer it should get, as an evaluation case: { "message": "Cancel my booking", "expected": "cancellation" }. Each field is a {{variable}} of the evaluation prompt; `expected` is what evaluators compare with.',
-      inputSchema: {
-        type: 'object',
-        properties: { dataset: str('File under datasets/ (".jsonl" is added when there is no extension), e.g. intent-cases'), row: { type: 'object', description: 'The record: field → value' } },
-        required: ['dataset', 'row'],
-      },
-      run: (a) => appendDatasetRow(store, String(a.dataset), a.row as Record<string, unknown>),
     },
     {
       name: 'testpion_guide',
@@ -1317,9 +1302,12 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
       },
     },
     ...historyTools({ store, redactor, findCollection, findRequest }),
+    ...mockTools({ store }),
+    ...datasetTools({ store }),
     ...gitTools({ store, findCollection, redactor }),
     ...openApiTools({ store, readSpecRef: readSpec, context: (environment) => createEngineContext({ store, secrets, settings, environment }) }),
     ...debuggerTools({ redactor, store }),
+    ...flowGraphTools({ store }),
     ...workspaceEditTools({
       store,
       redactor,
@@ -1352,6 +1340,8 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
       },
     }),
   ];
+  // list_flows and one tool per flow with an expose: block (flow-tools.ts); a flow never shadows a built-in tool
+  all.push(...flowTools({ store, secrets, settings, redactor, checkEnvironment }).filter((t) => !all.some((x) => x.name === t.name)));
   const tools = withEnvironmentSecrets(store, all.filter((t) => !(opts.readOnly && t.write)));
   tools.push(searchTool(tools, (name, write) => toolAnnotations(name, write).title));
   const listed = opts.profile === 'minimal' ? tools.filter((t) => MINIMAL_TOOLS.has(t.name)) : tools;
@@ -1419,7 +1409,8 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
       if (typeof out === 'string') return { content: [{ type: 'text', text: out }] };
       // the JSON as text for every client, and as structured content for clients that read it (a list is wrapped: structured content is an object)
       const structured = Array.isArray(out) ? { items: out } : out && typeof out === 'object' ? (out as Record<string, unknown>) : { value: out };
-      return { content: [{ type: 'text', text: JSON.stringify(out, null, 2) }], structuredContent: structured };
+      // a result that says so (a flow with a failed step) is an error result for the client, with the details kept
+      return { ...(structured.isError === true ? { isError: true } : {}), content: [{ type: 'text', text: JSON.stringify(out, null, 2) }], structuredContent: structured };
     } catch (e) {
       const err = normalizeError(e);
       return { isError: true, content: [{ type: 'text', text: `${err.kind}: ${err.message}${err.suggestions.length ? `\n${err.suggestions.join('\n')}` : ''}` }] };

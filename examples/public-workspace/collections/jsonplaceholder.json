@@ -2,7 +2,7 @@
   "schemaVersion": "1.0",
   "id": "jsonplaceholder",
   "name": "Scripts & chaining (JSONPlaceholder)",
-  "description": "A fake blog API from [JSONPlaceholder](https://jsonplaceholder.typicode.com). Writes are simulated: the server answers as if it saved them.\n\nThe requests pass data along with scripts: **List posts** saves the first post's id in `postId`, and the next requests use `{{postId}}`. Run the collection in order to see it (right-click ▸ **Run collection**). **Posts as a table** draws the response with `pm.visualizer` (open the **Visualize** tab of the response).",
+  "description": "A fake blog API from [JSONPlaceholder](https://jsonplaceholder.typicode.com). Writes are simulated: the server answers as if it saved them.\n\nThe requests pass data along with scripts: **List posts** saves the first post's id in `postId`, and the next requests use `{{postId}}`. Run the collection in order to see it (right-click ▸ **Run collection**). **Posts as a table** draws the response with `tp.visualizer` (open the **Visualize** tab of the response).",
   "variables": [
     {
       "key": "userId",
@@ -10,7 +10,7 @@
       "enabled": true
     }
   ],
-  "preRequestScript": "// runs before every request in this collection\npm.variables.set('requestedAt', new Date().toISOString());",
+  "preRequestScript": "// runs before every request in this collection\ntp.variables.set('requestedAt', new Date().toISOString());",
   "items": [
     {
       "kind": "http",
@@ -38,7 +38,7 @@
           "expected": 0
         }
       ],
-      "testScript": "const posts = pm.response.json();\npm.test('every post belongs to the user', () => {\n  for (const p of posts) pm.expect(p.userId).to.eql(Number(pm.collectionVariables.get('userId')));\n});\n// pass the first post's id to the next requests\npm.collectionVariables.set('postId', posts[0].id);\nconsole.log('Saved postId', posts[0].id);"
+      "testScript": "const posts = tp.response.json();\ntp.test('every post belongs to the user', () => {\n  for (const p of posts) tp.expect(p.userId).to.eql(Number(tp.collectionVariables.get('userId')));\n});\n// pass the first post's id to the next requests\ntp.collectionVariables.set('postId', posts[0].id);\nconsole.log('Saved postId', posts[0].id);"
     },
     {
       "kind": "http",
@@ -58,7 +58,7 @@
           "path": "$.title"
         }
       ],
-      "testScript": "pm.test('it is the post we asked for', () => pm.expect(pm.response.json().id).to.eql(Number(pm.collectionVariables.get('postId'))));"
+      "testScript": "tp.test('it is the post we asked for', () => tp.expect(tp.response.json().id).to.eql(Number(tp.collectionVariables.get('postId'))));"
     },
     {
       "kind": "http",
@@ -189,7 +189,7 @@
           "expected": 200
         }
       ],
-      "testScript": "const template = `\n<style>table{border-collapse:collapse;font:13px system-ui}td,th{border:1px solid #ccc;padding:4px 8px;text-align:left}</style>\n<table>\n  <tr><th>#</th><th>Title</th></tr>\n  {{#each posts}}<tr><td>{{id}}</td><td>{{title}}</td></tr>{{/each}}\n</table>`;\npm.visualizer.set(template, { posts: pm.response.json() });"
+      "testScript": "const template = `\n<style>table{border-collapse:collapse;font:13px system-ui}td,th{border:1px solid #ccc;padding:4px 8px;text-align:left}</style>\n<table>\n  <tr><th>#</th><th>Title</th></tr>\n  {{#each posts}}<tr><td>{{id}}</td><td>{{title}}</td></tr>{{/each}}\n</table>`;\ntp.visualizer.set(template, { posts: tp.response.json() });"
     },
     {
       "kind": "folder",
@@ -216,7 +216,7 @@
               "content": "{\n  \"name\": \"{{$randomFullName}}\",\n  \"email\": \"{{$randomEmail}}\",\n  \"address\": { \"city\": \"{{$randomCity}}\" },\n  \"externalId\": \"{{$guid}}\",\n  \"joined\": \"{{$isoTimestamp}}\"\n}"
             }
           },
-          "testScript": "const user = pm.response.json();\npm.test('the server echoes the fake user', () => {\n  pm.expect(user.email).to.match(/@example\\.test$/);\n  pm.expect(user.externalId).to.match(/^[0-9a-f-]{36}$/);\n  pm.expect(user.address.city).to.not.include('{{');\n});\nconsole.log('created', user.name, 'from', user.address.city);",
+          "testScript": "// Postman compatibility: this script uses Postman's pm.* API on purpose; TestPion runs it unchanged (write tp.* in your own scripts).\nconst user = pm.response.json();\npm.test('the server echoes the fake user', () => {\n  pm.expect(user.email).to.match(/@example\\.test$/);\n  pm.expect(user.externalId).to.match(/^[0-9a-f-]{36}$/);\n  pm.expect(user.address.city).to.not.include('{{');\n});\nconsole.log('created', user.name, 'from', user.address.city);",
           "assertions": [
             {
               "type": "status",
@@ -234,7 +234,7 @@
             "url": "{{jsonplaceholder}}/posts?userId={{userId}}"
           },
           "preRequestScript": "// moment: a date for the request (times are UTC)\npm.variables.set('since', moment().subtract(30, 'days').format('YYYY-MM-DD'));",
-          "testScript": "const posts = pm.response.json();\npm.test('every post has a title (lodash)', () => pm.expect(_.every(posts, 'title')).to.be.true);\npm.test('all from the same user (lodash)', () => pm.expect(_.uniq(_.map(posts, 'userId'))).to.eql([Number(pm.variables.get('userId'))]));\npm.test('matches the schema', () => pm.response.to.have.jsonSchema({\n  type: 'array',\n  items: { type: 'object', required: ['id', 'title', 'body', 'userId'], properties: { id: { type: 'integer' }, title: { type: 'string' } } },\n}));\nconsole.log('since', pm.variables.get('since'), '→', posts.length, 'posts');",
+          "testScript": "// Postman compatibility: this script uses Postman's pm.* API on purpose; TestPion runs it unchanged (write tp.* in your own scripts).\nconst posts = pm.response.json();\npm.test('every post has a title (lodash)', () => pm.expect(_.every(posts, 'title')).to.be.true);\npm.test('all from the same user (lodash)', () => pm.expect(_.uniq(_.map(posts, 'userId'))).to.eql([Number(pm.variables.get('userId'))]));\npm.test('matches the schema', () => pm.response.to.have.jsonSchema({\n  type: 'array',\n  items: { type: 'object', required: ['id', 'title', 'body', 'userId'], properties: { id: { type: 'integer' }, title: { type: 'string' } } },\n}));\nconsole.log('since', pm.variables.get('since'), '→', posts.length, 'posts');",
           "assertions": [
             {
               "type": "status",

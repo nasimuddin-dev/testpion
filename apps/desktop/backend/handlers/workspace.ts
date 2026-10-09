@@ -26,6 +26,7 @@ import {
   findEnvironment,
   setEnvironmentVariables,
   makeGitReady,
+  requireCollectionFor,
 } from '@testpion/core';
 import type { Backend, Handlers } from '../backend.js';
 
@@ -182,14 +183,18 @@ export function workspaceHandlers(be: Backend): Handlers {
     'ws.search': ({ query }: { query: string }) => be.search?.search(query, 60) ?? [],
 
     /** Saved items with folders of one kind (websocket, ai-prompts, mcp …), stored in library/<kind>.json. */
-    /* Script packages (pm.require): packages/<name>.js in the workspace */
+    /* Script packages (tp.require): packages/<name>.js in the workspace */
     'packages.list': () => be.ws.listScriptPackages(),
     'packages.get': ({ name }: { name: string }) => be.ws.readScriptPackage(name) ?? null,
     'packages.save': ({ name, code }: { name: string; code: string }) => be.ws.saveScriptPackage(name, code),
     'packages.delete': ({ name }: { name: string }) => be.ws.deleteScriptPackage(name),
     'lib.get': ({ kind }: { kind: string }) => be.ws.getLibrary(kind),
-    'lib.save': ({ kind, library }: { kind: string; library: { folders: string[]; items: Array<{ id: string; name: string; folder?: string; data: unknown }> } }) => {
-      const before = new Map(be.ws.getLibrary(kind).items.map((i) => [i.id, JSON.stringify(i.data)]));
+    'lib.save': ({ kind, library }: { kind: string; library: { folders: string[]; items: Array<{ id: string; name: string; folder?: string; collectionId?: string; data: unknown }> } }) => {
+      const current = be.ws.getLibrary(kind).items;
+      const before = new Map(current.map((i) => [i.id, JSON.stringify(i.data)]));
+      // a gRPC call or connection is saved in a collection (new ones, and ones moved: never out of one)
+      const had = new Map(current.map((i) => [i.id, i.collectionId]));
+      requireCollectionFor(be.ws, kind, library.items.filter((i) => !had.has(i.id) || (had.get(i.id) && !i.collectionId)));
       const saved = be.ws.saveLibrary(kind, library);
       // workspace files are shared (git, exports): point out credentials typed in instead of {{variables}}
       // (only for new or changed items, so renaming or moving doesn't repeat the warning)

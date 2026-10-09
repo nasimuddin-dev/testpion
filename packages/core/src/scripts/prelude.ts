@@ -1,7 +1,7 @@
 /**
  * JavaScript that runs inside the QuickJS sandbox before every user script. It implements the
- * scripting API: Postman-compatible `pm.*` (chai-style `pm.expect`, `pm.response.to.have.status`,
- * variable scopes, `pm.request`, `pm.info`, `postman.setNextRequest`, `CryptoJS`) plus the older
+ * scripting API: `tp.*` (chai-style `tp.expect`, `tp.response.to.have.status`,
+ * variable scopes, `tp.request`, `tp.info`, `postman.setNextRequest`, `CryptoJS`; Postman scripts use it as `pm.*`) plus the older
  * `aps.*` alias with jest-style `expect(x).toBe(y)`.
  *
  * Only JSON crosses the sandbox boundary: `__input_json` in, `JSON.stringify(__out)` out. The host
@@ -381,7 +381,7 @@ if (__in.response) {
 }
 
 /* ---------------- cookie jar ---------------- */
-// pm.cookies.jar(): a copy of the workspace jar; changes are recorded in __out.jarOps and applied by the host.
+// tp.cookies.jar(): a copy of the workspace jar; changes are recorded in __out.jarOps and applied by the host.
 // Postman's jar methods are callback based; the callback runs synchronously here and the value is also returned.
 const __jar = (__in.jar || []).map((c) => Object.assign({}, c));
 const __hostOf = (u) => { const m = /^(?:[a-z][a-z0-9+.-]*:\/\/)?([^/:?#]+)/i.exec(String(u)); return m ? m[1].toLowerCase() : ''; };
@@ -417,7 +417,7 @@ function __cookieJar() {
   };
 }
 
-/* ---------------- pm.sendRequest ---------------- */
+/* ---------------- tp.sendRequest ---------------- */
 // The sandbox is synchronous, so requests are replayed: on the first pass a call is recorded in
 // __out.pendingRequests and its callback does not run; the host sends it and runs the script again
 // with the response in __in.sent, and this time the callback runs straight away with it.
@@ -460,7 +460,7 @@ function __sendRequest(req, cb) {
       else cb(null, __responseObject(done.response));
       return;
     }
-    // without a callback: a promise, for "const res = await pm.sendRequest(…)"
+    // without a callback: a promise, for "const res = await tp.sendRequest(…)"
     return done.error ? Promise.reject(new Error(done.error)) : Promise.resolve(__responseObject(done.response));
   }
   __out.pendingRequests.push({ key: key, request: n });
@@ -490,11 +490,11 @@ const __packages = {};
 function __requirePackage(name) {
   if (__packages[name]) return __packages[name].exports;
   const src = JSON.parse(__host_package(name));
-  if (src === null) throw new Error('pm.require("' + name + '"): there is no package with that name in this workspace (packages/' + name + '.js)');
+  if (src === null) throw new Error('tp.require("' + name + '"): there is no package with that name in this workspace (packages/' + name + '.js)');
   const module = { exports: {} };
   __packages[name] = module;
-  const run = new Function('module', 'exports', 'pm', 'require', src + '\n//# sourceURL=package:' + name);
-  run(module, module.exports, pm, (n) => (['ajv', 'atob', 'btoa', 'chai', 'cheerio', 'crypto-js', 'csv-parse/lib/sync', 'csv-parse/sync', 'lodash', 'moment', 'tv4', 'uuid', 'xml2js'].includes(n) ? require(n) : __requirePackage(n)));
+  const run = new Function('module', 'exports', 'tp', 'pm', 'require', src + '\n//# sourceURL=package:' + name);
+  run(module, module.exports, pm, pm, (n) => (['ajv', 'atob', 'btoa', 'chai', 'cheerio', 'crypto-js', 'csv-parse/lib/sync', 'csv-parse/sync', 'lodash', 'moment', 'tv4', 'uuid', 'xml2js'].includes(n) ? require(n) : __requirePackage(n)));
   return module.exports;
 }
 // cheerio (as in Postman): $ = cheerio.load(html); $('title').text(), $('a').attr('href'), $('li').each(…)
@@ -613,13 +613,13 @@ const require = (name) => {
   throw new Error('require("' + name + '") is not available in the sandbox (supported: ajv, atob, btoa, chai, cheerio, crypto-js, csv-parse/lib/sync, lodash, moment, tv4, uuid, xml2js)');
 };
 
-/* ---------------- pm / aps ---------------- */
+/* ---------------- tp (pm, aps) ---------------- */
 // tests with a done callback that is never called fail at the end
 const __pendingDone = [];
 function __pmTest(name, fn) {
   const rec = (err) => __out.tests.push(err ? { name: String(name), passed: false, message: String((err && err.message) || err) } : { name: String(name), passed: true });
   try {
-    if (typeof fn !== 'function') return rec(new Error('pm.test needs a function'));
+    if (typeof fn !== 'function') return rec(new Error('tp.test needs a function'));
     // function (done) { … done(); } as in Postman
     if (fn.length > 0) {
       let settled = false;
@@ -634,13 +634,13 @@ function __pmTest(name, fn) {
     rec();
   } catch (e) { rec(e); }
 }
-// pm.test.skip: listed as skipped, not run
+// tp.test.skip: listed as skipped, not run
 __pmTest.skip = (name) => { __out.tests.push({ name: String(name), passed: true, skipped: true, message: 'skipped' }); };
 const pm = {
   test: __pmTest,
   expect,
   variables: __variables,
-  // pm.environment.name is the active environment's name, as in Postman
+  // tp.environment.name is the active environment's name, as in Postman
   environment: Object.assign(__scope('environment'), { name: (__in.info && __in.info.environmentName) || undefined }),
   globals: __scope('globals'),
   collectionVariables: __scope('collectionVariables'),
@@ -668,7 +668,7 @@ const pm = {
   visualizer: {
     set: (template, data, options) => {
       let d = data === undefined ? {} : data;
-      try { d = JSON.parse(JSON.stringify(d)); } catch (e) { throw new Error('pm.visualizer.set: data must be JSON-serialisable'); }
+      try { d = JSON.parse(JSON.stringify(d)); } catch (e) { throw new Error('tp.visualizer.set: data must be JSON-serialisable'); }
       __out.visualizer = { template: String(template), data: d, options: options === undefined ? undefined : options };
     },
     clear: () => { __out.visualizer = null; },

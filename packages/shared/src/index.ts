@@ -11,3 +11,4 @@ export * from './csv.js';
 export * from './template.js';
 export * from './datasets.js';
 export * from './providers.js';
+export * from './flow-graph.js';

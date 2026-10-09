@@ -9,6 +9,8 @@ description: "Step by step: AI providers that say what is missing, RAG checks ju
 
 The options added in 0.45, each with the steps to use it and a link to the full reference. Every one also works from the terminal (`testpion …`, with `--json`) and for AI agents (an MCP tool of `testpion mcp-server`). The 0.44 additions (the HTTP Debugger, Git compare and conflicts, the API definition tabs, test data, secrets from a secret manager) are in the [changelog](/changelog) and their reference pages.
 
+Saved requests of every kind belong to a collection: saving a gRPC call or a connection asks for its collection like a REST request, and loose gRPC calls and connections were moved into collections named after their folders ("gRPC calls" or "Connections" without one) when the workspace was opened. [Collections](/api-testing/collections)
+
 ## An AI provider that says what is missing
 
 1. Open **AI Lab ▸ Providers**: cloud providers without a saved key are marked **needs an API key**.
@@ -53,6 +55,15 @@ The options added in 0.45, each with the steps to use it and a link to the full 
 3. Nothing is captured until you choose, and other programs are not affected. The filters fit one row with the search box first; the number columns say their unit; the **HTTPS** menu's lock says whether HTTPS is decrypted; the button at the foot of the tool rail shows each tool's name.
 
 [HTTP Debugger](/api-testing/http-debugger)
+
+## Git: Pull & push
+
+1. Commit, then open **Git**. When your team pushed first, the **Pull** button shows how many commits, the rail's Git icon has a count, and a strip says *Your team pushed 2 commits. Pull before pushing.*: TestPion fetches quietly in the background every 5 minutes (**Settings ▸ Git**, 0 turns it off).
+2. Click **Pull & push**: the team's commits are merged (collections request by request) and yours are pushed in one step. If the same request was changed on both sides, the **Conflicts** list opens instead and nothing is pushed: resolve, commit, then Push.
+3. Uncommitted changes no longer block a pull: they are set aside, the pull runs, and they are put back.
+4. In a terminal `testpion git sync` (exit 1 lists the conflicts); for AI agents the MCP tool `git_sync`.
+
+[Keep your workspace in git](/getting-started/git#step-4-branches-pull-and-push)
 
 ## First steps
 

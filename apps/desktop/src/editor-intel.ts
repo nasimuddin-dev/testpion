@@ -5,7 +5,7 @@ import { inspectVariables, type VarInfo } from './lib/vars-cache';
 
 /**
  * Editor intelligence for every code editor (Monaco): {{variable}} completion, hover and highlighting in
- * all languages, pm / tp script snippets, and JSON Schema completion + validation for JSON editors
+ * all languages, tp script snippets, and JSON Schema completion + validation for JSON editors
  * (MCP tool arguments, gRPC messages …). Installed once, when Monaco loads.
  */
 
@@ -59,7 +59,7 @@ function varAt(line: string, column: number): { name: string; start: number; end
 
 const LANGUAGES = ['json', 'jsonl', 'csv', 'javascript', 'typescript', 'plaintext', 'yaml', 'xml', 'html', 'graphql', 'markdown', 'proto', 'shell'];
 
-/* ------------------------------------------------------------------ tp.* snippets (pm.* is the same API) */
+/* ------------------------------------------------------------------ tp.* snippets */
 
 const SNIPPETS: Array<{ label: string; detail: string; body: string }> = [
   { label: 'tp.test', detail: 'Test with an assertion', body: "tp.test('${1:status is 200}', () => {\n\ttp.response.to.have.status(${2:200});\n});" },
@@ -396,7 +396,7 @@ export function installEditorIntel(monaco: typeof Monaco): void {
     schedule();
   });
 
-  // variable names inside pm.environment.get('…') / pm.variables.set("…") / pm.globals.has(`…`) …
+  // variable names inside tp.environment.get('…') / tp.variables.set("…") / tp.globals.has(`…`) … (pm.* too)
   const SCOPE_OF: Record<string, string | undefined> = { environment: 'environment', globals: 'global', collectionVariables: 'collection', variables: undefined, iterationData: undefined };
   monaco.languages.registerCompletionItemProvider('javascript', {
     triggerCharacters: ["'", '"', '`'],
@@ -420,28 +420,29 @@ export function installEditorIntel(monaco: typeof Monaco): void {
     },
   });
 
-  // pm / tp snippets in scripts
+  // tp snippets in scripts (also offered after pm.)
   monaco.languages.registerCompletionItemProvider('javascript', {
-    // after "pm." only providers registered for '.' are asked
+    // after "tp." only providers registered for '.' are asked
     triggerCharacters: ['.'],
     provideCompletionItems: (model, position) => {
       const lineBefore = model.getLineContent(position.lineNumber).slice(0, position.column - 1);
-      // "pm.te" / "tp.environment.s": the snippet replaces the whole expression typed so far
+      // "tp.te" / "tp.environment.s" (or pm.…): the snippet replaces the whole expression typed so far
       const expr = /(?:^|[^\w.$])((?:pm|tp)(?:\.\w*)*)$/.exec(lineBefore);
       if (!expr && /\.\s*\w*$/.test(lineBefore)) return { suggestions: [] }; // other member access: the type information handles it
       const word = model.getWordUntilPosition(position);
       const startColumn = expr ? position.column - expr[1]!.length : word.startColumn;
       const range = new monaco.Range(position.lineNumber, startColumn, position.lineNumber, position.column);
       return {
-        // tp.* is the app's name for the API; someone typing pm. (Postman habits) gets the same snippets under pm.
-        suggestions: (expr?.[1]?.startsWith('pm') ? SNIPPETS.map((s) => ({ ...s, label: s.label.replace(/^tp\./, 'pm.'), body: s.body.replace(/\btp\./g, 'pm.') })) : SNIPPETS).map((s) => ({
+        // tp.* is the app's name for the API. Someone typing pm. (Postman habits) is offered the same tp.* snippets:
+        // they match what was typed and replace it with tp.*, so pm never ends up in inserted code.
+        suggestions: SNIPPETS.map((s) => ({
           label: s.label,
           kind: monaco.languages.CompletionItemKind.Snippet,
           detail: s.detail,
           documentation: { value: '```js\n' + s.body.replace(/\$\{\d+:([^}]*)\}/g, '$1').replace(/\$\{\d+\}/g, '') + '\n```' },
           insertText: s.body,
           insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-          filterText: s.label,
+          filterText: expr?.[1]?.startsWith('pm') ? s.label.replace(/^tp\./, 'pm.') : s.label,
           sortText: `~${s.label}`,
           range,
         })),

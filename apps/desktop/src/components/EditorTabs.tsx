@@ -323,7 +323,7 @@ function defaultTabMenu(t: EditorTab, all: EditorTab[], startRename: (t: EditorT
 /** Every tab's menu, the same for every kind of request. */
 const tabMenu = defaultTabMenu;
 
-const ORDER: ViewId[] = ['rest', 'graphql', 'grpc', 'websocket', 'mcp', 'apidef'];
+const ORDER: ViewId[] = ['rest', 'graphql', 'grpc', 'websocket', 'mcp', 'apidef', 'dataset'];
 const TAB_W = 190;
 
 export function EditorTabStrip() {

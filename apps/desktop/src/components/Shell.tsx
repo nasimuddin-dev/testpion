@@ -71,14 +71,26 @@ export const NAV: Array<{ id: ViewId; label: string; icon: ReactNode; group: str
   { id: 'git', label: 'Git', icon: <FolderGit2 size={18} />, group: 'Workspace', hint: 'Git: changes, commit, branches, pull and push' },
 ];
 
+/** A small count on a rail icon (the Git view's commits to pull): one look for every rail item that needs one. */
+function RailCount({ n }: { n: number }) {
+  return (
+    <span data-rail-count="" className="absolute top-0 right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-accent text-white text-[0.6rem] font-bold leading-4 text-center pointer-events-none">
+      {n > 99 ? '99+' : n}
+    </span>
+  );
+}
+
 /** The rail: the request editors are reached through Collections (explorer, New menu), not listed one by one. */
 const RAIL = NAV.filter((n) => n.group !== 'Requests');
 
 export function Sidebar() {
   const view = useApp((s) => s.view);
   const setView = useApp((s) => s.setView);
+  // the team pushed commits this branch does not have yet (the backend fetches in the background): a count on Git
+  const behind = useGit().status?.behind ?? 0;
+  const counts: Partial<Record<ViewId, { n: number; title: string }>> = behind > 0 ? { git: { n: behind, title: `${behind} new commit${behind === 1 ? '' : 's'} on the remote to pull` } } : {};
   const item = (id: ViewId, label: string, icon: ReactNode, shortcut?: string, hint?: string) => (
-    <Tooltip content={shortcut ? `${hint ?? label}  ·  ${shortcut}` : (hint ?? label)} side="right">
+    <Tooltip content={[shortcut ? `${hint ?? label}  ·  ${shortcut}` : (hint ?? label), counts[id]?.title].filter(Boolean).join('  ·  ')} side="right">
       <button
         onClick={() => setView(id)}
         aria-current={view === id ? 'page' : undefined}
@@ -97,6 +109,7 @@ export function Sidebar() {
           )}
         >
           {icon}
+          {counts[id] && <RailCount n={counts[id]!.n} />}
         </span>
         <span className="w-full truncate px-0.5 text-center leading-tight [@media(max-height:680px)]:hidden">{label}</span>
       </button>

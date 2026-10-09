@@ -4,7 +4,7 @@ import type { ScriptInput, ScriptOutput, ScriptRequestSender, ScriptScope } from
 import type { CookieJar } from '../cookies/cookie-jar.js';
 import { executeHttp } from '../protocols/http/client.js';
 
-/** Where `pm.environment` / `pm.globals` / `pm.collectionVariables` map to in the engine's scopes. */
+/** Where `tp.environment` / `tp.globals` / `tp.collectionVariables` map to in the engine's scopes. */
 const SCOPE_MAP: Record<ScriptScope, ScopeName> = { environment: 'environment', globals: 'global', collectionVariables: 'collection' };
 
 /** Called when a script sets or unsets a scoped variable (the desktop app keeps these as local "current values"). */
@@ -22,7 +22,7 @@ export function scriptScopes(vars: VariableScope, iterationData?: Record<string,
 }
 
 /**
- * Apply what a script changed: `pm.variables.set` → runtime scope; `pm.environment.set` etc. → that
+ * Apply what a script changed: `tp.variables.set` → runtime scope; `tp.environment.set` etc. → that
  * scope (in every given VariableScope, e.g. the test's own and the run's shared one), plus persistence.
  */
 export function applyScriptOutput(out: Pick<ScriptOutput, 'vars' | 'unset' | 'scopeSets' | 'scopeUnsets'>, targets: VariableScope[], opts: { redactor?: Redactor; persist?: PersistVariable } = {}): void {
@@ -42,13 +42,13 @@ export function applyScriptOutput(out: Pick<ScriptOutput, 'vars' | 'unset' | 'sc
 }
 
 /**
- * The host side of `pm.sendRequest`: sends with the engine's HTTP client (shared cookie jar, redaction,
+ * The host side of `tp.sendRequest`: sends with the engine's HTTP client (shared cookie jar, redaction,
  * cancellation) and a per-request timeout. `{{variables}}` are not resolved, as in Postman; scripts use
- * `pm.variables.replaceIn()` for that.
+ * `tp.variables.replaceIn()` for that.
  */
 export function scriptRequestSender(o: { redactor?: Redactor; cookieJar?: CookieJar; signal?: AbortSignal; timeoutMs?: number }): ScriptRequestSender {
   return async (req) => {
-    if (!/^https?:\/\//i.test(req.url)) throw new Error(`pm.sendRequest: "${req.url}" is not an http(s) URL`);
+    if (!/^https?:\/\//i.test(req.url)) throw new Error(`tp.sendRequest: "${req.url}" is not an http(s) URL`);
     const timeoutMs = o.timeoutMs ?? 30_000;
     const signal = o.signal ? AbortSignal.any([o.signal, AbortSignal.timeout(timeoutMs)]) : AbortSignal.timeout(timeoutMs);
     const body = typeof req.body === 'string' ? { type: 'text' as const, content: req.body } : req.body ? { type: 'form-urlencoded' as const, fields: req.body.urlencoded } : undefined;

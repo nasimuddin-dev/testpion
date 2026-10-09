@@ -15,6 +15,7 @@ export type ViewId =
   | 'grpc'
   | 'mcp'
   | 'apidef'
+  | 'dataset'
   | 'ai'
   | 'evaluations'
   | 'tests'
@@ -154,7 +155,7 @@ interface AppState {
 let toastId = 0;
 
 /** The request editors: they use the Collections explorer as their (only) sidebar and aren't on the rail. */
-export const REQUEST_VIEWS: ViewId[] = ['rest', 'graphql', 'grpc', 'websocket', 'mcp', 'apidef', 'collections'];
+export const REQUEST_VIEWS: ViewId[] = ['rest', 'graphql', 'grpc', 'websocket', 'mcp', 'apidef', 'dataset', 'collections'];
 export const isRequestView = (v: ViewId) => REQUEST_VIEWS.includes(v);
 
 /** A place in the app: a view, and the item opened in it when there is one. */
@@ -285,14 +286,32 @@ export const useApp = create<AppState>((set, get) => ({
   },
 }));
 
-/** Show an error (anything thrown) as an error toast; a missing AI key offers "Add the key" (AI Lab ▸ Providers, its key field). */
+/**
+ * Show an error (anything thrown) as an error toast; a missing AI key offers "Add the key" (AI Lab ▸ Providers, its key
+ * field), and a push the remote refused (someone pushed first) offers "Pull & push" (the Git view syncs).
+ */
 export function toastError(e: unknown): void {
   const err = asError(e);
   const provider = (err.details as { setup?: { provider?: string } } | undefined)?.setup?.provider;
+  const behind = isPushRejected(err);
   useApp
     .getState()
-    .toast(err.message, 'error', provider ? { label: 'Add the key', onClick: () => useApp.getState().openIntent('ai', { providerId: provider, tab: 'providers' }) } : undefined);
+    .toast(
+      err.message,
+      'error',
+      provider
+        ? { label: 'Add the key', onClick: () => useApp.getState().openIntent('ai', { providerId: provider, tab: 'providers' }) }
+        : behind
+          ? { label: 'Pull & push', onClick: () => useApp.getState().openIntent('git', { sync: true }) }
+          : undefined,
+    );
 }
+
+/** A push the remote refused because it has commits this branch does not (the core's hint says "pull first"). */
+export const isPushRejected = (e: unknown): boolean => {
+  const err = asError(e);
+  return [err.message, ...err.suggestions].some((t) => /pull first|non-fast-forward|\[rejected\]|fetch first/i.test(t));
+};
 
 /** Persist per-view drafts in localStorage (UI state only — never secrets or responses). */
 export function persisted<T>(key: string, fallback: T): { load(): T; save(v: T): void; forDoc(docId?: string): { load(): T; save(v: T): void } } {

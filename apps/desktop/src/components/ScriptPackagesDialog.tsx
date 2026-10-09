@@ -6,7 +6,7 @@ import { CodeEditor } from './CodeEditor';
 import { Button, cx, Empty, Modal } from './ui';
 
 const NAME = /^(@[A-Za-z0-9][\w.-]*\/)?[A-Za-z0-9][\w.-]*$/;
-const TEMPLATE = `// Shared code for scripts. Use it with: const utils = pm.require('NAME');
+const TEMPLATE = `// Shared code for scripts. Use it with: const utils = tp.require('NAME');
 // Packages are CommonJS modules: put what they offer on module.exports.
 module.exports = {
   bearer(token) {
@@ -16,7 +16,7 @@ module.exports = {
 `;
 
 /**
- * Script packages: shared modules that scripts load with pm.require('name'), like Postman's package
+ * Script packages: shared modules that scripts load with tp.require('name'), like Postman's package
  * library. They are files in the workspace (packages/<name>.js), so they travel with it in git.
  */
 export function ScriptPackagesDialog({ onClose }: { onClose(): void }) {
@@ -55,7 +55,7 @@ export function ScriptPackagesDialog({ onClose }: { onClose(): void }) {
     setSel(name);
   };
   const remove = async () => {
-    if (!sel || !(await confirmAction({ title: `Delete ${sel}?`, message: 'Scripts that pm.require it will fail.', danger: true, confirmLabel: 'Delete' }))) return;
+    if (!sel || !(await confirmAction({ title: `Delete ${sel}?`, message: 'Scripts that tp.require it will fail.', danger: true, confirmLabel: 'Delete' }))) return;
     await call('packages.delete', { name: sel });
     setSel(undefined);
     setCode('');
@@ -69,7 +69,7 @@ export function ScriptPackagesDialog({ onClose }: { onClose(): void }) {
       footer={
         <>
           <span className="mr-auto text-xs text-muted">
-            In a script: <code>const auth = pm.require('{sel ?? 'name'}');</code> Packages are files in the workspace (<code>packages/</code>).
+            In a script: <code>const auth = tp.require('{sel ?? 'name'}');</code> Packages are files in the workspace (<code>packages/</code>).
           </span>
           {sel && (
             <Button variant="ghost" icon={<Trash2 size={13} />} onClick={() => void remove()}>
@@ -103,7 +103,7 @@ export function ScriptPackagesDialog({ onClose }: { onClose(): void }) {
             <CodeEditor key={sel} language="javascript" value={code} onChange={setCode} />
           ) : (
             <Empty icon={<Package size={24} />} title={list.length ? 'Select a package' : 'No packages yet'}>
-              Shared code for pre-request and test scripts, loaded with <code>pm.require('name')</code> as in Postman's package library. Scripts imported from Postman that use packages work once the packages are here.
+              Shared code for pre-request and test scripts, loaded with <code>tp.require('name')</code> as in Postman's package library. Scripts imported from Postman that use packages work once the packages are here.
             </Empty>
           )}
         </div>

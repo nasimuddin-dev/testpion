@@ -346,3 +346,82 @@ export function listWorkspaceDatasets(store: { root: string; path(...p: string[]
   walk(root, 0);
   return out.sort((a, b) => (a.modified < b.modified ? 1 : -1)).slice(0, 500);
 }
+
+/** A column of a dataset and the kind of value it holds (a hint from the rows read: CSV cells that are all numbers count as numbers). */
+export interface DatasetColumn {
+  name: string;
+  type: 'string' | 'number' | 'boolean' | 'object' | 'array' | 'null' | 'mixed';
+}
+
+/** The columns of records in first-seen order, each with the kind of value it holds across the rows. */
+export function datasetColumns(rows: DatasetRecord[]): DatasetColumn[] {
+  const seen = new Map<string, Set<string>>();
+  for (const r of rows)
+    for (const [k, v] of Object.entries(r)) {
+      const kinds = seen.get(k) ?? new Set<string>();
+      seen.set(k, kinds);
+      if (v === null || v === undefined || v === '') continue;
+      kinds.add(Array.isArray(v) ? 'array' : typeof v === 'object' ? 'object' : typeof v === 'string' ? (/^-?\d+(\.\d+)?([eE][-+]?\d+)?$/.test(v.trim()) ? 'numeric-text' : /^(true|false)$/i.test(v.trim()) ? 'boolean-text' : 'string') : typeof v);
+    }
+  return [...seen].map(([name, kinds]) => {
+    if (!kinds.size) return { name, type: 'null' };
+    // text that always looks like a number (or true/false) is a number (CSV cells are text)
+    const all = [...kinds];
+    if (all.every((k) => k === 'numeric-text' || k === 'number')) return { name, type: 'number' };
+    if (all.every((k) => k === 'boolean-text' || k === 'boolean')) return { name, type: 'boolean' };
+    const plain = new Set(all.map((k) => (k === 'numeric-text' || k === 'boolean-text' ? 'string' : k)));
+    return { name, type: plain.size === 1 ? ([...plain][0] as DatasetColumn['type']) : 'mixed' };
+  });
+}
+
+export interface WorkspaceDatasetPreview {
+  /** Path inside the workspace (datasets/users.csv). */
+  path: string;
+  /** The file under datasets/ (users.csv). */
+  name: string;
+  format: WorkspaceDataset['format'];
+  size: number;
+  modified: string;
+  /** Records in the whole dataset (the rows of the query, for a database). */
+  count: number;
+  columns: DatasetColumn[];
+  /** The first `limit` records. */
+  rows: DatasetRecord[];
+  /** SQLite: its tables (rows need a `query`). */
+  tables?: string[];
+  query?: string;
+}
+
+/**
+ * The first rows of a dataset in the workspace's datasets/ folder with its columns (and their kinds of value) and how
+ * many records it holds: what the app's dataset tab, `testpion datasets show` and the read_dataset MCP tool show.
+ * `name` is the file under datasets/ (with or without the folder). A SQLite database lists its tables and reads
+ * rows only with `query`.
+ */
+export async function readWorkspaceDataset(store: { root: string; path(...p: string[]): string; safePath(rel: string, base?: string): string }, name: string, opts: { limit?: number; query?: string } = {}): Promise<WorkspaceDatasetPreview> {
+  const clean = String(name ?? '')
+    .trim()
+    .replace(/^datasets[\/]/, '');
+  if (!clean) throw new ApsError('ValidationError', 'A dataset name is needed', { suggestions: ['Name a file of the datasets/ folder, e.g. users.csv (list_datasets / `testpion datasets` show them).'] });
+  const file = store.safePath(clean, store.path('datasets'));
+  if (!existsSync(file)) throw new ApsError('ValidationError', `No dataset datasets/${clean}`, { suggestions: ['`testpion datasets` (or the list_datasets tool) lists the datasets of the workspace.'] });
+  const st = statSync(file);
+  const format = formatOf({ path: file });
+  const limit = Math.max(0, Math.min(Number(opts.limit ?? 200) || 200, 10_000));
+  const base = { path: relative(store.root, file).split(sep).join('/'), name: clean.split('\\').join('/'), format: format === 'markdown' ? ('markdown' as const) : format, size: st.size, modified: st.mtime.toISOString() };
+  if (format === 'sqlite') {
+    let tables: string[] = [];
+    try {
+      tables = sqliteTables(file);
+    } catch {
+      /* unreadable database: no tables */
+    }
+    if (!opts.query) return { ...base, count: 0, columns: [], rows: [], tables, query: '' };
+  }
+  const rows: DatasetRecord[] = [];
+  let count = 0;
+  for await (const r of readDataset({ path: file, query: opts.query })) {
+    if (count++ < limit) rows.push(r);
+  }
+  return { ...base, count, columns: datasetColumns(rows), rows, ...(format === 'sqlite' ? { tables: sqliteTables(file), query: opts.query } : {}) };
+}

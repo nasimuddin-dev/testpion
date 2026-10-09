@@ -1,6 +1,7 @@
 import { LineCounter, isMap, isSeq, isScalar, parseDocument, type Node, type Pair } from 'yaml';
 import { checkTypes } from '../eval/checks.js';
 import { normalizeTest } from './loader.js';
+import { parseExpose } from './exposed-flows.js';
 
 /**
  * What a test file may say, as the loader reads it (loader.ts): the keys of a test, by type, with a line of help for
@@ -137,7 +138,7 @@ const BY_TYPE: Record<string, TestKeyDoc[]> = {
 
 /** Keys the loader also accepts (older names and shorthands), per type, never offered but never flagged either. */
 const ALIASES: Record<string, string[]> = {
-  '*': ['timeoutMs', 'timeout_ms', 'pre_request_script', 'test_script', 'script', 'variables', 'metadata', 'checks'],
+  '*': ['timeoutMs', 'timeout_ms', 'pre_request_script', 'test_script', 'script', 'variables', 'metadata', 'checks', 'expose'],
   http: ['query'],
   graphql: ['url', 'graphqlVariables', 'waitMs'],
   grpc: ['address', 'url', 'request', 'proto'],
@@ -153,6 +154,7 @@ const FILE_KEYS: TestKeyDoc[] = [
   { key: 'description', description: 'Notes for the reader.', shape: 'text' },
   { key: 'defaults', description: 'Keys every test of the file starts with (type, dependsOn, headers …).', shape: 'map' },
   { key: 'tests', description: 'The tests, in order.', shape: 'list' },
+  { key: 'expose', description: 'Offer the file to AI agents as an MCP tool: { tool: checkout_flow, description, inputs: [{ name, description, default, required }] }.', shape: 'map' },
 ];
 
 const SUITE_KEYS: TestKeyDoc[] = [
@@ -163,6 +165,7 @@ const SUITE_KEYS: TestKeyDoc[] = [
   { key: 'retries', description: 'Retries per failing test.', shape: 'number' },
   { key: 'environment', description: 'The environment the suite runs with.', shape: 'text' },
   { key: 'tags', description: 'Only tests with these tags.', shape: 'list' },
+  { key: 'expose', description: 'Offer the suite to AI agents as an MCP tool: { tool: checkout_flow, description, inputs: [{ name, description, default, required }] }.', shape: 'map' },
 ];
 
 const ASSERTION_KEYS: TestKeyDoc[] = [
@@ -302,10 +305,18 @@ export function lintTestFile(text: string, opts: { file?: string; suite?: boolea
   }
   const keyOf = (p: Pair) => (isScalar(p.key) ? String(p.key.value) : String(p.key));
   const known = (docs: TestKeyDoc[], extra: string[] = []) => new Set([...docs.map((k) => k.key), ...extra]);
+  // expose: { tool, description, inputs } offers the file or suite to agents as an MCP tool; what the loader refuses is an error here
+  const exposePair = root.items.find((p) => keyOf(p) === 'expose');
+  if (exposePair)
+    try {
+      parseExpose(exposePair.value && 'toJSON' in (exposePair.value as object) ? (exposePair.value as Node).toJSON() : exposePair.value);
+    } catch (e) {
+      add('error', (e as Error).message, exposePair);
+    }
 
   if (opts.suite) {
     const ok = known(SUITE_KEYS);
-    for (const p of root.items) if (!ok.has(keyOf(p))) add('warning', `"${keyOf(p)}" is not a suite key (name, description, tests, concurrency, retries, environment, tags)`, p);
+    for (const p of root.items) if (!ok.has(keyOf(p))) add('warning', `"${keyOf(p)}" is not a suite key (name, description, tests, concurrency, retries, environment, tags, expose)`, p);
     return out;
   }
 
@@ -316,7 +327,7 @@ export function lintTestFile(text: string, opts: { file?: string; suite?: boolea
   const items: Array<{ node: Node; raw: Record<string, unknown> }> = [];
   if (testsPair) {
     const ok = known(FILE_KEYS);
-    for (const p of root.items) if (!ok.has(keyOf(p))) add('warning', `"${keyOf(p)}" is not read at the top of a test file (name, description, defaults, tests)`, p);
+    for (const p of root.items) if (!ok.has(keyOf(p))) add('warning', `"${keyOf(p)}" is not read at the top of a test file (name, description, defaults, tests, expose)`, p);
     if (!isSeq(testsPair.value)) add('error', 'tests: must be a list of tests', testsPair);
     else
       for (const n of testsPair.value.items)

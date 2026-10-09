@@ -1,15 +1,25 @@
 # The same kind of MCP tests against an offline mock server (mocks/weather.mcp-mock.yaml): no network needed.
+# expose: offers this flow to AI agents as an MCP tool of the TestPion server (`testpion flows`, Settings ▸ AI agents).
+expose:
+  tool: weather_forecast_check
+  description: Check the offline weather mock answers a forecast for a city and rejects an unknown one.
+  inputs:
+    - { name: city, description: The city to ask a forecast for, default: Paris }
+
 defaults:
   type: mcp
   server: { name: Weather (offline mock) }
   tags: [mcp, offline]
+  # the value {{city}} has when the file runs on its own; the tool's argument replaces it
+  vars: { city: Paris }
 tests:
   - name: Mock MCP tool returns a forecast
     tool: { name: get_forecast }
-    arguments: { city: Paris }
+    arguments: { city: '{{city}}' }
+    extract: { forecastCity: $.city }
     assertions:
       - { type: status, expected: success }
-      - { type: equals, path: $.city, expected: Paris }
+      - { type: equals, path: $.city, expected: '{{city}}' }
       - { type: equals, path: "$.days[0].sky", expected: sunny }
 
   - name: Mock MCP tool reports an error

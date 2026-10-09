@@ -1,5 +1,5 @@
 import { CodeBlock } from './CodeBlock';
-import { Bot, Check, Copy, FileText, PlugZap } from 'lucide-react';
+import { Bot, Check, Copy, FileText, PlugZap, Workflow } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { asError, call } from '../api';
 import { toastError, useApp } from '../store';
@@ -25,6 +25,16 @@ interface TestResult {
 }
 
 type Client = 'claude-code' | 'claude-desktop' | 'cursor' | 'vscode' | 'codex';
+
+/** A test file or suite with an expose: block: a tool of its own on the server. */
+interface ExposedFlow {
+  tool: string;
+  description?: string;
+  file: string;
+  kind: 'file' | 'suite';
+  inputs: Array<{ name: string; description?: string; default?: string; required?: boolean }>;
+  problem?: string;
+}
 
 /** Where each agent keeps its MCP servers, and the text to put there. */
 function snippet(client: Client, i: AgentInfo): { where: string; text: string } {
@@ -55,10 +65,14 @@ export function AgentsPanel() {
   const [client, setClient] = useState<Client>('claude-code');
   const { copied, copy: copyToClipboard } = useCopied();
   const [test, setTest] = useState<{ busy?: boolean; result?: TestResult; error?: string }>({});
+  const [flows, setFlows] = useState<ExposedFlow[]>([]);
   useEffect(() => {
     void call<AgentInfo>('agents.info', opts).then(setInfo, (e) => toastError(e));
     setTest({});
   }, [opts.readOnly, opts.allowProduction, ws?.id]);
+  useEffect(() => {
+    void call<ExposedFlow[]>('agents.flows').then(setFlows, () => setFlows([]));
+  }, [ws?.id]);
   if (!info) return null;
   const s = snippet(client, info);
   const copy = () => copyToClipboard(s.text);
@@ -146,6 +160,30 @@ export function AgentsPanel() {
         <p className="text-xs text-muted leading-relaxed">
           Agents ask before running tools that send requests or change files (their annotations say which ones). Try the prompts <span className="mono">investigate_failures</span>, <span className="mono">write_tests</span> and{' '}
           <span className="mono">debug_request</span> (in Claude Code: type <span className="mono">/</span>). <b>AGENTS.md</b> tells coding agents that open this folder how to use it.
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-2" data-exposed-flows>
+        <div className="flex items-center gap-2 text-sm font-semibold">
+          <Workflow size={14} className="text-accent" /> Flows exposed as tools
+        </div>
+        {flows.length ? (
+          <ul className="flex flex-col gap-1.5 text-sm">
+            {flows.map((f) => (
+              <li key={f.file} className="flex items-start gap-2 flex-wrap">
+                <span className="mono">{f.tool || '(invalid)'}</span>
+                {f.problem ? <Badge tone="bad">{f.problem}</Badge> : f.inputs.length ? <span className="text-muted text-xs">({f.inputs.map((i) => i.name).join(', ')})</span> : null}
+                <span className="text-muted text-xs mono">tests/{f.file}</span>
+                {f.description && <span className="text-muted text-xs basis-full">{f.description}</span>}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div className="text-sm text-muted">None yet.</div>
+        )}
+        <p className="text-xs text-muted leading-relaxed">
+          A test file or suite with an <span className="mono">expose:</span> block (Tests ▸ a file's menu ▸ <b>Expose as MCP tool…</b>, or <span className="mono">testpion flows</span>) is a tool of its own: an agent calls it by name with the inputs as arguments and gets each step's result and the values
+          the flow extracted. Agents already connected see a new or changed flow after they reconnect; <span className="mono">list_flows</span> lists them.
         </p>
       </div>
     </div>

@@ -3,7 +3,7 @@ import { exportTextFormat } from './export-formats.js';
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { Command, Option } from 'commander';
-import { WorkspaceManager, formatDuration, importRequestSnippet, ciConfig, compareEnvironments, environmentMatrix, compareRequestAcrossEnvironments, collectionRequests, type CiProvider, convertCollectionScripts, isRequestSnippet, Redactor, collectionMarkdown, collectionHtml, exportPostmanCollection, exportPostmanEnvironment, fetchImportText, readBrunoFolder, collectionToBru, type Environment, bundleWsdl, isWsdl, importIntoWorkspace, diffOpenApi, lintOpenApi, OPENAPI_LINT_RULES, type OpenApiLintSeverity, type OpenApiLintResult, workspaceApiCoverage, apiCoverageMarkdown, securityLint, collectionSecurityFindings, type SecurityFinding, listSpecs, unusedVariables, definedVariableNames, findEnvironment, setEnvironmentVariables, unsetEnvironmentVariables, variableFlow, collectionToOpenApiText, variableUsages, renameVariable, collectionSavedItems, listWorkspaceDatasets, appendDatasetRow, workspaceReportHtml, collectionVariableFlow, loadHistory, workspaceStorage, deleteRunsBefore, listCertificates, workspaceAttention, decodeJwt, describeExpiry, recordCertificate, checkCertificate } from '@testpion/core';
+import { WorkspaceManager, formatDuration, importRequestSnippet, ciConfig, compareEnvironments, environmentMatrix, compareRequestAcrossEnvironments, collectionRequests, type CiProvider, convertCollectionScripts, isRequestSnippet, Redactor, collectionMarkdown, collectionHtml, exportPostmanCollection, exportPostmanEnvironment, fetchImportText, readBrunoFolder, collectionToBru, type Environment, bundleWsdl, isWsdl, importIntoWorkspace, diffOpenApi, lintOpenApi, OPENAPI_LINT_RULES, type OpenApiLintSeverity, type OpenApiLintResult, workspaceApiCoverage, apiCoverageMarkdown, securityLint, collectionSecurityFindings, type SecurityFinding, listSpecs, unusedVariables, definedVariableNames, findEnvironment, setEnvironmentVariables, unsetEnvironmentVariables, variableFlow, collectionToOpenApiText, variableUsages, renameVariable, collectionSavedItems, listWorkspaceDatasets, appendDatasetRow, readWorkspaceDataset, workspaceReportHtml, collectionVariableFlow, loadHistory, workspaceStorage, deleteRunsBefore, listCertificates, workspaceAttention, decodeJwt, describeExpiry, recordCertificate, checkCertificate } from '@testpion/core';
 import { EXIT, green, red, yellow, dim, bold, CliError, printJson, findWorkspaceUp, withWorkspace, cliSecrets, cliContext, requireCollection, requireEnvironment, loadCollectionRef, readDefinition } from '../shared.js';
 
 export function registerDataCommands(program: Command): void {
@@ -434,9 +434,9 @@ export function registerDataCommands(program: Command): void {
         console.log(green(`Wrote ${out}`));
       });
     });
-  program
+  const datasets = program
     .command('datasets')
-    .description('data files in the workspace datasets/ folder (for run-collection -d and test datasets), newest first; SQLite databases with their tables')
+    .description('data files in the workspace datasets/ folder (for run-collection -d and test datasets), newest first; SQLite databases with their tables. `datasets show <name>` prints the rows of one')
     .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
     .option('--json', 'print as JSON')
     .option('--add <dataset>', 'add a record to this JSONL dataset (made when missing; ".jsonl" is added without an extension), e.g. an evaluation case')
@@ -457,6 +457,32 @@ export function registerDataCommands(program: Command): void {
         if (o.json) return printJson(rows);
         if (!rows.length) return console.log(dim('No datasets. Put CSV, JSON, JSONL or SQLite files in the workspace datasets/ folder.'));
         for (const r of rows) console.log(`${r.path}  ${dim(`${r.format}, ${(r.size / 1024).toFixed(1)} KB${r.tables ? `, tables: ${r.tables.join(', ') || 'none'}` : ''}`)}`);
+      });
+    });
+  datasets
+    .command('show')
+    .description('the first rows of a dataset with its columns (and the kind of value each holds) and how many records it has; a SQLite database needs --query')
+    .argument('<name>', 'the file under datasets/, e.g. users.csv or intents.jsonl')
+    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
+    .option('-n, --limit <n>', 'how many rows (default 20, up to 10000)', '20')
+    .option('-q, --query <sql>', 'SQLite: the SELECT whose rows are the records')
+    .option('--json', 'print as JSON: path, format, count, columns [{ name, type }], rows')
+    .action(async (name: string, o: { workspace?: string; limit: string; query?: string; json?: boolean }) => {
+      // `datasets` takes --json and -w too: given after `show`, Commander hands them to the parent
+      const parent = datasets.opts() as { workspace?: string; json?: boolean };
+      return withWorkspace(o.workspace ?? parent.workspace, async (store) => {
+        const d = await readWorkspaceDataset(store, name, { limit: Number(o.limit) || 20, query: o.query });
+        if (o.json || parent.json) return printJson(d);
+        console.log(`${d.path}  ${dim(`${d.format}, ${(d.size / 1024).toFixed(1)} KB, ${d.count} record${d.count === 1 ? '' : 's'}, ${d.columns.length} column${d.columns.length === 1 ? '' : 's'}`)}`);
+        if (d.tables && !d.query) return console.log(d.tables.length ? `Tables: ${d.tables.join(', ')}  ${dim('(add --query "SELECT * FROM <table>" to read rows)')}` : dim('No tables'));
+        if (!d.columns.length) return console.log(dim('No records'));
+        const cell = (v: unknown) => (v === null || v === undefined ? '' : typeof v === 'object' ? JSON.stringify(v) : String(v)).replace(/\s+/g, ' ').slice(0, 40);
+        const widths = d.columns.map((c) => Math.min(40, Math.max(c.name.length, c.type.length, ...d.rows.map((r) => cell(r[c.name]).length))));
+        const line = (cells: string[]) => cells.map((c, i) => c.padEnd(widths[i]!)).join('  ');
+        console.log(bold(line(d.columns.map((c) => c.name))));
+        console.log(dim(line(d.columns.map((c) => c.type))));
+        for (const r of d.rows) console.log(line(d.columns.map((c) => cell(r[c.name]))));
+        if (d.count > d.rows.length) console.log(dim(`… ${d.count - d.rows.length} more (--limit ${d.count} shows them all)`));
       });
     });
   program

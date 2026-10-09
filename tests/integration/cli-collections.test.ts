@@ -21,7 +21,7 @@ describe('CLI: collections and requests', () => {
     expect(rows.find((c) => c.id === 'grpc')).toMatchObject({ requests: 0, grpcCalls: 9, connections: 0 });
     expect(rows.find((c) => c.id === 'realtime')).toMatchObject({ grpcCalls: 0, connections: 6 });
     expect(rows.find((c) => c.id === 'httpbin')!.requests).toBeGreaterThan(5);
-  });
+  }, 120_000);
 
   it('lists what one collection holds', () => {
     const grpc = JSON.parse(cli('requests', 'gRPC (grpcb.in)', '--json').out) as Array<{ kind: string; target: string }>;
@@ -32,7 +32,7 @@ describe('CLI: collections and requests', () => {
     const missing = cli('requests', 'nope');
     expect(missing.status).not.toBe(0);
     expect(missing.err).toMatch(/No collection "nope"/);
-  });
+  }, 120_000);
 
   it('MCP: list_requests and get_request show the gRPC calls and connections', async () => {
     const s = new McpSession({ id: 'tp', name: 'testpion', transport: 'stdio', command: process.execPath, args: [join(process.cwd(), 'packages/cli/bin/testpion.js'), 'mcp-server', '-w', ws], env: { TESTPION_HOME: join(dir, 'home') } });

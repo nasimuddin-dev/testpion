@@ -156,7 +156,7 @@ describe('.http files', () => {
     const { text, notes } = collectionToHttpFile(collection);
     expect(text).toMatch(/^# HTTP requests\n\n@baseUrl = http:\/\/127\.0\.0\.1:PORT\n/);
     expect(text).toMatch(/### Create a patient\n# @name create_a_patient\nPOST \{\{baseUrl\}\}\/patients\nContent-Type: \{\{contentType\}\}\nAuthorization: Basic vet paws\n\n\{/);
-    expect(notes).toEqual(["login: scripts aren't written (they use tp.* / pm.*)"]);
+    expect(notes).toEqual(["login: scripts aren't written (they use tp.*)"]);
     const again = flat(importHttpFile(text).collection.items);
     expect(again.map((r) => `${r.request.method} ${r.request.url}`)).toEqual(['POST {{baseUrl}}/auth/token', 'GET {{baseUrl}}/patients?limit=2', 'POST {{baseUrl}}/patients']);
     expect(importAny(text, { name: 'api.http' }).collection!.name).toBe('api');

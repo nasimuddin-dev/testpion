@@ -44,8 +44,8 @@ function rowsToCsv(rows: Row[], columns: string[]): string {
 
 const cell = (v: unknown) => (v === null ? 'null' : v === undefined ? '' : typeof v === 'object' ? JSON.stringify(v) : String(v));
 
-/** A JSON array of objects as a table: a column per key, click a header to sort, filter any cell. */
-export function JsonTable({ rows, path }: { rows: Row[]; path: string }) {
+/** A JSON array of objects as a table: a column per key, click a header to sort, filter any cell. `columnTypes` adds the kind of value under each column name. */
+export function JsonTable({ rows, path, columnTypes }: { rows: Row[]; path: string; columnTypes?: Record<string, string> }) {
   const [sort, setSort] = useState<{ key: string; dir: 1 | -1 }>();
   const [filter, setFilter] = useState('');
   // columns in first-seen order across the first 200 rows
@@ -152,8 +152,9 @@ export function JsonTable({ rows, path }: { rows: Row[]; path: string }) {
             <tr>
               {columns.map((c) => (
                 <th key={c} className="text-left font-medium text-muted border-b border-r border-line px-2 py-1 whitespace-nowrap">
-                  <button className="inline-flex items-center gap-1 hover:text-fg" onClick={() => toggle(c)} aria-label={`Sort by ${c}`}>
+                  <button className="inline-flex items-center gap-1 hover:text-fg" onClick={() => toggle(c)} aria-label={`Sort by ${c}`} data-column={c} data-column-type={columnTypes?.[c]}>
                     {c}
+                    {columnTypes?.[c] && <span className="font-normal text-[0.68rem] text-muted/80">{columnTypes[c]}</span>}
                     {sort?.key === c && (sort.dir === 1 ? <ArrowUp size={11} /> : <ArrowDown size={11} />)}
                   </button>
                 </th>

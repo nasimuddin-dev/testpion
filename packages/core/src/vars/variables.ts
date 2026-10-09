@@ -96,7 +96,7 @@ export class VariableScope {
   }
 
   /** Merged view of all scopes (for display / scripts). Secret values are included — callers must redact. */
-  /** Values defined in one scope only (e.g. the environment), for Postman-style pm.environment access. */
+  /** Values defined in one scope only (e.g. the environment), for Postman-style tp.environment access. */
   scopeValues(scope: ScopeName): Record<string, unknown> {
     return Object.fromEntries(this.scopes.get(scope)!);
   }

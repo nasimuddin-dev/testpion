@@ -71,13 +71,13 @@ Each received message is `{ topic, key, partition, offset, headers, data }`, wit
 
 The **Saved connections** list keeps connections (URL, subprotocols, handshake headers and the message) in folders:
 
-- **Save** stores the current connection, or saves the changes to the one you opened (*Save\**).
+- **Save** stores the current connection, or saves the changes to the one you opened (*Save\**). A new connection asks for its name, [collection](./collections.md) (or a new one) and folder: every saved connection is in a collection. An unsaved tab connects and sends all the same.
 - Create folders with the folder button above the list. Move a connection with its `⋯` / right-click menu (*Move to folder…*) or by dragging it onto a folder.
 - Rename, duplicate and delete from the same menu.
 
 **Saved messages:** above the message editor, **Save message** keeps the current message under a name (for Socket.IO, with its event), and the list next to it puts one back in the editor to send again. They are saved with the connection, so a connection can carry the handful of messages you send to it (subscribe, ping, unsubscribe …).
 
-Saved connections live in the workspace (`library/websocket.json`). Use `{{variables}}` for tokens in headers, and keep the values in [secret variables](./environments.md#secrets).
+Saved connections live in the workspace (`library/websocket.json`, each with its collection's id). Use `{{variables}}` for tokens in headers, and keep the values in [secret variables](./environments.md#secrets).
 
 ## WebSocket tests
 

@@ -74,7 +74,7 @@ const electronBridge = (aps: Bridge & { rpc?(method: string, params?: unknown): 
 
 export const bridge: Bridge = window.aps ? electronBridge(window.aps) : webBridge();
 
-/** URL of an isolated pm.visualizer page (its own origin and security policy; see the backend). */
+/** URL of an isolated tp.visualizer page (its own origin and security policy; see the backend). */
 export function visualizationUrl(id: string): string {
   return bridge.kind === 'electron' ? `tpviz://${id}/` : `/__aps/viz/${id}`;
 }

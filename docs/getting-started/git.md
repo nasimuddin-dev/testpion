@@ -70,6 +70,9 @@ The same check runs in the terminal: `testpion git check` (exit code 1 when some
 
 - **Branch button** (top of the Git view): switch to another branch (a remote branch becomes a local one that tracks it), **New branch…** (your uncommitted changes come along), **Rename** the current branch, or **Delete a branch** (a branch with commits no other branch has asks once more).
 - **Fetch** sees what the remote has; **Pull** brings in your team's commits; **Push** sends yours (the first push of a branch sets where it goes).
+- **Pull & push.** When your team pushed commits you don't have and you have commits to push, **Push** becomes **Pull & push** and a strip says *Your team pushed 2 commits. Pull before pushing.* (with **Pull & push** and **Pull**). Pull & push pulls with a merge (collections merge request by request, see [Merging](#merging-collections-request-by-request)) and then pushes, so two people changing the same collection never get stuck at a refused push. If someone pushes in between, it pulls once more and pushes again. When the same request was changed on both sides it stops before pushing: the **Conflicts** list opens with *Resolve the conflicts, commit, then Push*. A push the remote refused anyway says so in a message with **Pull & push** as its button.
+- **Background fetch.** While a workspace in git with a remote is open, TestPion fetches quietly every 5 minutes (and when you open the Git view), so the **Pull** count, the strip and a small count on the rail's **Git** icon show your team's new commits before you push. It never asks you to sign in (a remote that needs it is skipped and noted in the log) and never runs during a pull or push. Change the interval, or turn it off with 0, in **Settings ▸ Git**.
+- **Uncommitted work during a pull.** When git would refuse to pull because of changes you have not committed, TestPion sets them aside (`git stash`), pulls, and puts them back; the message says *Your uncommitted changes were set aside and put back*. Putting them back merges collections request by request too, so an unsaved-to-git edit of one request survives a pull that changed another request of the same collection. If your change and the pulled one touch the same request, the file is listed under **Conflicts**. Open request tabs with unsaved edits are named before a pull: pull anyway (a request the pull changes then asks which version to keep) or save them first.
 - **Pull request:** on a branch other than the default, the Git view shows **Pull request**. It opens GitHub, GitLab, Bitbucket or Azure DevOps with the branch selected and, on GitHub and GitLab, the description filled with the branch's changes by meaning.
 
 After a pull or a branch switch the app reloads the changed collections, environments and tests by itself. A change made outside TestPion (a `git pull` in a terminal, another editor) shows up the same way, with a message saying what changed.
@@ -108,6 +111,7 @@ testpion git log --file collections/payments.json
 testpion git branch                         # -m new-name renames this branch; -d / -D deletes one
 testpion git switch -c feature/payments
 testpion git pull               # exit 1 when it stopped on conflicts
+testpion git sync               # pull & push: exit 0 pushed or up to date, 1 conflicts (listed), 2 errors
 testpion git conflicts                      # each conflict, part by part, with its key
 testpion git resolve collections/payments.json --theirs   # settle a conflict (or --ours)
 testpion git resolve collections/payments.json --pick item:req-12=theirs   # a choice per conflict
@@ -124,6 +128,7 @@ The workspace's MCP server (see [Use from AI agents](/ai-testing/mcp-server)) ha
 | `git_status` | Branch, ahead / behind, changed files. |
 | `git_diff` | The changes by meaning; with `from` / `to`, between two commits (`markdown: true` for a pull-request comment). |
 | `git_log` | Commits of the workspace, a file or a collection. |
+| `git_sync` | Pull & push in one step; returns `pushed`, `up-to-date`, `pulled-nothing-to-push`, or `conflicts` with the files (nothing is pushed then). Not available on a read-only server. |
 | `git_propose_commit` | Stages the changes and saves the agent's commit message as a proposal (after the secret check). It does **not** commit: the message appears in the Git view's commit box for you to review and commit. Not available on a read-only server. |
 
 ## In CI: test every pull request
@@ -196,8 +201,8 @@ Requests themselves can call any URL, as in any API client: review a pull reques
 
 1. One person makes the workspace ready for git, commits and pushes.
 2. Everyone else clones it (**Clone** in the workspace switcher) and signs in to the remote once with git.
-3. Work on a branch, commit with the secret guard on, push, open a pull request (the button fills in the changes).
+3. Work on a branch, commit with the secret guard on, push (**Pull & push** when the team pushed first; `testpion git sync` in a terminal), open a pull request (the button fills in the changes).
 4. CI runs the tests and comments with the changes; reviewers read requests, not JSON.
-5. Pull often. Different requests merge by themselves; the same request changed twice asks you to keep one side.
+5. Pull often: the Git view tells you when the team pushed (it fetches in the background). Different requests merge by themselves, uncommitted work is set aside and put back; the same request changed twice asks you to keep one side.
 
 :::

@@ -36,7 +36,7 @@ export interface GqlSendParams {
   request: GraphQLRequestSpec;
   environment?: string;
   collectionId?: string;
-  /** The saved request, for folder scripts and pm.info. */
+  /** The saved request, for folder scripts and tp.info. */
   requestId?: string;
   name?: string;
   operationName?: string;

@@ -78,7 +78,7 @@ export function aiHandlers(be: Backend): Handlers {
       const r = await be.assistant({ task: 'generate-request', context: {}, question: description, environment });
       return { ...parseGeneratedRequest(r.text), model: `${r.provider}/${r.model}` };
     },
-    /** pm tests for a response, labelled as AI-generated. */
+    /** tp tests for a response, labelled as AI-generated. */
     'ai.generateTests': async ({ request, response, environment }: { request: unknown; response: unknown; environment?: string }) => {
       const r = await be.assistant({ task: 'generate-pm-tests', context: { request, response }, environment });
       return { script: generatedTestScript(r.text, `${r.provider}/${r.model}`), model: `${r.provider}/${r.model}` };

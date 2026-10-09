@@ -284,7 +284,7 @@ export interface TestBase {
   variables?: Record<string, unknown>;
   preRequestScript?: string;
   testScript?: string;
-  /** For requests run from a collection: collection, folder and request names (pm.execution.location). */
+  /** For requests run from a collection: collection, folder and request names (tp.execution.location). */
   location?: string[];
   /** Extract values from the result body into runtime variables: `{ token: "$.access_token" }`. */
   extract?: Record<string, string>;
@@ -447,6 +447,8 @@ export interface SuiteConfig {
   environment?: string;
   tags?: string[];
   file?: string;
+  /** The suite offered to AI agents as an MCP tool (expose: { tool, description, inputs }). */
+  expose?: { tool: string; description?: string; inputs?: Array<{ name: string; description?: string; default?: string; required?: boolean }> };
 }
 
 /* ------------------------------------------------------------------ results */
@@ -650,9 +652,9 @@ export interface SavedGraphQLRequest {
   favorite?: boolean;
   request: GraphQLRequestSpec;
   assertions?: CheckConfig[];
-  /** Run before the request (after the collection's and folders'); pm.request.url is the endpoint, headers can be changed. */
+  /** Run before the request (after the collection's and folders'); tp.request.url is the endpoint, headers can be changed. */
   preRequestScript?: string;
-  /** Run after the response (pm.response is the GraphQL HTTP response). */
+  /** Run after the response (tp.response is the GraphQL HTTP response). */
   testScript?: string;
 }
 
@@ -739,6 +741,8 @@ export interface AppSettings {
   proxy?: { mode: 'env' | 'custom' | 'off'; url?: string; bypass?: string; username?: string };
   /** Certificate authorities HTTPS trusts besides the built-in list: the OS store and/or extra PEM certificates. */
   tls?: { systemCa?: boolean; extraCa?: string };
+  /** Git: how often the app fetches in the background (minutes; 0 = off, default 5) while a workspace in git with a remote is open. */
+  git?: { autoFetchMinutes?: number };
   /** Settings layout revision, used for one-time migrations of defaults. */
   settingsRevision?: number;
 }

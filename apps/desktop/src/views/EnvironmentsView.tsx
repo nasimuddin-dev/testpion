@@ -406,7 +406,7 @@ export function EnvironmentsView() {
           <div className="p-3 flex flex-col gap-3 overflow-auto h-full">
             <ScopeHint
               empty={!globals.length}
-              text="Global variables are available in every workspace on this computer (Postman's globals; scripts set them with pm.globals.set). Every other scope wins over them."
+              text="Global variables are available in every workspace on this computer (Postman's globals; scripts set them with tp.globals.set). Every other scope wins over them."
               collections={colVarCount}
               onCollections={() => setScope('collection')}
             />
@@ -427,7 +427,7 @@ export function EnvironmentsView() {
   );
 }
 
-/** Values set by scripts (pm.environment.set) for this environment — local to this machine, like Postman's current values. */
+/** Values set by scripts (tp.environment.set) for this environment — local to this machine, like Postman's current values. */
 function CurrentValues({ envName }: { envName: string }) {
   const [values, setValues] = useState<Record<string, unknown>>({});
   const load = () => void call<Record<string, unknown>>('currentValues.get', { scope: 'environment', owner: envName }).then(setValues);
@@ -465,7 +465,7 @@ function CurrentValues({ envName }: { envName: string }) {
           </tbody>
         </table>
       ) : (
-        <div className="px-3 py-2 text-xs text-muted">None yet. Scripts can set them with pm.environment.set("key", value).</div>
+        <div className="px-3 py-2 text-xs text-muted">None yet. Scripts can set them with tp.environment.set("key", value).</div>
       )}
     </div>
   );

@@ -59,6 +59,8 @@ export function CollectionsView() {
   const [draft, setDraft] = useState<Collection>();
   const [tab, setTab] = useState<'overview' | 'requests' | 'variables' | 'auth' | 'scripts' | 'docs' | 'run' | 'mock'>('requests');
   const [runFolder, setRunFolder] = useState<string>();
+  // a dataset chosen before the collection (the sidebar's "Run a collection with it"): the runner starts with it
+  const [runData, setRunData] = useState<string>();
   const [importing, setImporting] = useState(false);
   const newCollection = async () => {
     const name = await promptText('New collection', { message: 'Collection name', placeholder: 'My API', okLabel: 'Create' });
@@ -83,6 +85,7 @@ export function CollectionsView() {
     if (p?.run) {
       setTab('run');
       setRunFolder(p.folderId);
+      setRunData(typeof p.dataPath === 'string' ? p.dataPath : undefined);
     }
     if (p?.mock) setTab('mock');
     // from a variable's Where it's set: move it (pre-selected) to the environments
@@ -340,7 +343,7 @@ export function CollectionsView() {
                     }}
                   />
                 )}
-                {tab === 'run' && <CollectionRunner collection={draft} folderId={runFolder} onFolderChange={setRunFolder} />}
+                {tab === 'run' && <CollectionRunner collection={draft} folderId={runFolder} onFolderChange={setRunFolder} dataPath={runData} />}
                 {tab === 'requests' && (
                   <div className="p-2">
                     <CollectionTree

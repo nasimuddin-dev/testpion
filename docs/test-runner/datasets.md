@@ -21,6 +21,26 @@ dataset:
 - **RAG tests:** records provide `question`, `contexts`, `answer` and `expected`.
 - **Other types:** record fields become variables.
 
+## In the app
+
+The Collections sidebar has a **Datasets** section after API definitions: every file in the workspace's `datasets/` folder with its format (CSV, JSONL, JSON, MD, DB) and how many rows it holds. Its menu makes a **New CSV** or **New JSONL** (empty, named by you) or opens **Generate test data…**; a row's menu has **Run a collection with it** (the Collection Runner opens with the file as its data; pick the collection there), **Rename**, **Duplicate** and **Delete** (the file goes to *Recently deleted* for 30 days, like a collection).
+
+A dataset opens in a tab of its own:
+
+- **Preview**: the first 200 rows as a table, each column with the kind of value it holds (string, number, boolean, object, array), sort and filter; the row and column counts are in the header. A SQLite database lists its tables and takes a query.
+- **File**: the file itself in the editor (JSON Lines and CSV are coloured by column), saved with **Save** or <kbd>Ctrl</kbd>+<kbd>S</kbd>; the preview follows.
+- **Run a collection with this dataset** opens the Collection Runner with the file chosen; **Use in a test** copies the `dataset:` block above, ready to paste into a test file.
+
+The same from a terminal or an agent:
+
+```bash
+testpion datasets                          # every dataset: path, format, size (SQLite: its tables)
+testpion datasets show users.csv           # the first 20 rows with the columns and their kinds of value
+testpion datasets show app.db --query "SELECT * FROM users" --limit 5 --json
+```
+
+Agents use `list_datasets` and `read_dataset` (`name`, `limit`, and `query` for a database): the columns tell them which `{{variables}}` a test or a collection run can use.
+
 ## Generate test data
 
 When there is no data file yet, generate one. In the Collection Runner, **Generate…** makes rows from an API definition operation's request body (`POST /patients` in `specs/clinic.yaml`) or from a JSON schema you write, saves them in `datasets/` and uses them for the run. Each field gets a value that fits it:

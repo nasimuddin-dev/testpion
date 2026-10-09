@@ -79,7 +79,7 @@ export interface ExtraGroup {
   rename?(id: string): { editing: boolean; start(): void; done(name?: string): void };
 }
 
-/** Drag data of a saved gRPC call or connection (from the tree or "Not in a collection"): `{ kind, id, from? }`. */
+/** Drag data of a saved gRPC call or connection in the tree: `{ kind, id, from? }`. */
 export const SAVED_ITEM_MIME = 'application/x-testpion-saved-item';
 export function savedItemDragProps(kind: 'grpc' | 'websocket', id: string, name: string, from?: string) {
   return {
@@ -204,8 +204,8 @@ export function CollectionTree({
     if (
       !(await confirmAction({
         title: 'Delete collection',
-        message: `Delete the collection "${c.name}" and all its requests?`,
-        detail: 'You can restore it from Recently deleted for 30 days. Its gRPC calls and connections stay, under Not in a collection.',
+        message: `Delete the collection "${c.name}" and all its requests, gRPC calls and connections?`,
+        detail: 'You can restore it, with everything in it, from Recently deleted for 30 days.',
         confirmLabel: 'Delete collection',
         danger: true,
       }))
@@ -275,7 +275,7 @@ export function CollectionTree({
     },
     onDragEnd: () => (setDrag(undefined), setDropAt(undefined)),
   });
-  // a gRPC call or connection (from the tree or "Not in a collection") dropped on a collection moves there
+  // a gRPC call or connection dragged from another collection and dropped on this one moves there
   const collectionDropProps = (c: Collection) => {
     const nodes = dropProps(c, c.id, 'into', {});
     const saved = (e: React.DragEvent) => !!onDropSaved && e.dataTransfer.types.includes(SAVED_ITEM_MIME);

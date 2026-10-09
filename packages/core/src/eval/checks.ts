@@ -26,7 +26,7 @@ export interface CheckContext {
   error?: NormalizedError;
   /** MCP tool result `isError`. */
   isError?: boolean;
-  /** HTTP: cookies for `pm.cookies` (name → value). */
+  /** HTTP: cookies for `tp.cookies` (name → value). */
   cookies?: Record<string, string>;
   /** HTTPS: the server's certificate (for the `certificate` check). */
   certificate?: { subject?: string; issuer?: string; validTo?: string; daysLeft?: number; altNames?: string[] };

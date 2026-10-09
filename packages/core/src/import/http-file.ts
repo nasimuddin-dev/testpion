@@ -252,7 +252,7 @@ export function collectionToHttpFile(c: Collection): { text: string; notes: stri
         else if (b.type === 'binary') out.push(`< ${b.filePath}`);
         else notes.push(`${n.name}: a multipart body isn't written`);
       }
-      if (n.testScript || n.preRequestScript) notes.push(`${n.name}: scripts aren't written (they use tp.* / pm.*)`);
+      if (n.testScript || n.preRequestScript) notes.push(`${n.name}: scripts aren't written (they use tp.*)`);
       out.push('');
     }
   };

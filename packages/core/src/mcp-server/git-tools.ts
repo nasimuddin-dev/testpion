@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { ApsError } from '../errors.js';
 import type { Collection } from '../model/types.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
-import { gitConflictDetail, gitLog, gitResolve, gitStage, gitStatus } from '../git/git.js';
+import { gitConflictDetail, gitLog, gitResolve, gitStage, gitStatus, gitSync } from '../git/git.js';
 import type { Redactor } from '../util/redact.js';
 import { changesMarkdown, describeGitChanges, describeItemDiff, describeRevChanges } from '../git/semantic.js';
 import { findCommittableSecrets } from '../storage/git-guard.js';
@@ -56,6 +56,14 @@ export function gitTools(d: { store: WorkspaceStore; findCollection(ref: unknown
         'Git state of the workspace: whether it is in a repository, the branch, commits ahead / behind the remote, and each changed file (modified, added, deleted, renamed, untracked, conflicted; staged or not).',
       inputSchema: { type: 'object', properties: {} },
       run: () => gitStatus(store.root),
+    },
+    {
+      name: 'git_sync',
+      write: true,
+      description:
+        'Pull & push in one step: fetch; when the remote has new commits, pull them with a merge (collections merge request by request; uncommitted changes are set aside and put back); then push the committed work (setting the upstream on a first push). A push refused because someone pushed meanwhile is retried once after another pull. Returns state "pushed", "up-to-date", "pulled-nothing-to-push" or "conflicts" (with the files: settle them with git_conflicts / git_resolve, commit, then sync again). Commit first (a person commits a git_propose_commit proposal).',
+      inputSchema: { type: 'object', properties: {} },
+      run: () => gitSync(store.root),
     },
     {
       name: 'git_diff',

@@ -26,9 +26,9 @@ export interface VariableFlow {
   issue?: 'used-before-set' | 'never-set' | 'unused';
 }
 
-// pm.environment.set('x', …), pm.collectionVariables.set("x"), pm.globals.set(`x`), pm.variables.set, bru.setVar / setEnvVar
-const SET_RE = /\b(?:pm\.(?:environment|collectionVariables|globals|variables)\.set|bru\.set(?:Env)?Var)\(\s*(['"`])([^'"`]+)\1/g;
-const GET_RE = /\b(?:pm\.(?:environment|collectionVariables|globals|variables)\.(?:get|replaceIn)|bru\.get(?:Env)?Var)\(\s*(['"`])([^'"`]+)\1/g;
+// tp.environment.set('x', …), tp.collectionVariables.set("x"), tp.globals.set(`x`), tp.variables.set, bru.setVar / setEnvVar (pm.* too)
+const SET_RE = /\b(?:(?:tp|pm|aps)\.(?:environment|collectionVariables|globals|variables)\.set|bru\.set(?:Env)?Var)\(\s*(['"`])([^'"`]+)\1/g;
+const GET_RE = /\b(?:(?:tp|pm|aps)\.(?:environment|collectionVariables|globals|variables)\.(?:get|replaceIn)|bru\.get(?:Env)?Var)\(\s*(['"`])([^'"`]+)\1/g;
 // {{name}}, not dynamic variables ({{$guid}}) or secret references ({{$secret.x}})
 const TOKEN_RE = /\{\{\s*([^{}$\s][^{}]*?)\s*\}\}/g;
 
@@ -96,7 +96,7 @@ export function collectionVariableFlow(collection: Collection, definedElsewhere:
 /**
  * Every variable name the workspace reads: `{{name}}` anywhere in collections, saved gRPC calls, connections,
  * prompts, monitors and other library items, MCP server settings, test files and variable values, plus
- * script reads (`pm.environment.get('name')` …). What is not in it is defined but never used.
+ * script reads (`tp.environment.get('name')` …). What is not in it is defined but never used.
  */
 export function referencedVariableNames(store: Pick<WorkspaceStore, 'listCollections' | 'libraryKinds' | 'getLibrary' | 'getMcpServers' | 'testTree' | 'readTestFile' | 'listEnvironments' | 'workspace'>): Set<string> {
   const found = new Set<string>();

@@ -33,7 +33,10 @@ describe('workspace library (saved items with folders)', () => {
       expect(Object.keys(bundle.library ?? {})).toEqual(['websocket']);
       const imported = new WorkspaceManager(join(dir, 'app')).importBundle(bundle, 'copy');
       try {
-        expect(imported.getLibrary('websocket')).toMatchObject({ folders: ['Empty folder', 'Local'], items: [{ id: 'a', name: 'Echo', folder: 'Local' }, { name: 'Untitled' }] });
+        // saved outside a collection (an older export): each goes into one, named after its folder or "Connections"
+        const col = (name: string) => imported.listCollections().find((c) => c.name === name)?.id;
+        expect(imported.getLibrary('websocket')).toMatchObject({ folders: ['Empty folder'], items: [{ id: 'a', name: 'Echo', collectionId: col('Local') }, { name: 'Untitled', collectionId: col('Connections') }] });
+        expect(imported.getLibrary('websocket').items[0]!.folder).toBeUndefined();
       } finally {
         imported.close();
       }

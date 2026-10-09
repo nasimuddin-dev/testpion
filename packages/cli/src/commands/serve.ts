@@ -10,6 +10,8 @@ import {
   collectSubscriptionEvents,
   WorkspaceManager,
   loadMcpMock,
+  mockServeCommands,
+  mockToolsList,
   serveMcpMockStdio,
   startMcpMockHttp,
   startGraphQLMockServer,
@@ -186,8 +188,23 @@ ${cyan(r.url)}`);
     .argument('<file>', 'mock definition (YAML or JSON)')
     .option('--http', 'serve Streamable HTTP on localhost instead of stdio')
     .option('-p, --port <port>', 'port for --http (default: any free port)')
-    .action(async (file: string, o: { http?: boolean; port?: string }) => {
+    .option('--list', 'list the tools of the definition instead of serving it (its toolset)')
+    .option('--json', 'with --list: print the tools as JSON')
+    .action(async (file: string, o: { http?: boolean; port?: string; list?: boolean; json?: boolean }) => {
       const def = loadMcpMock(readFileSync(file, 'utf8'));
+      if (o.list) {
+        const tools = mockToolsList(def);
+        const serve = mockServeCommands(file, o.port ? Number(o.port) : undefined);
+        if (o.json) return printJson({ file, name: def.name, instructions: def.instructions, tools, resources: (def.resources ?? []).map((r) => r.uri), prompts: (def.prompts ?? []).map((p) => p.name), serve });
+        console.log(bold(`MCP mock "${def.name}"`) + dim(` (${file}): ${tools.length} tools`));
+        for (const t of tools) {
+          const how = t.responses.count ? `${t.responses.count} ${t.responses.kinds.join('/')} response${t.responses.count === 1 ? '' : 's'}${t.responses.when ? `, ${t.responses.when} conditional` : ''}` : 'no response (echoes the call)';
+          console.log(`  ${cyan(t.name)}(${t.arguments.join(', ')})${t.description ? `  ${t.description}` : ''}`);
+          console.log(dim(`    ${how}`));
+        }
+        console.log(dim(`Serve it: ${serve.stdio}   or   ${serve.http}`));
+        return;
+      }
       if (!o.http) {
         // stdout carries the MCP protocol: messages go to stderr
         console.error(dim(`MCP mock "${def.name}" on stdio: ${(def.tools ?? []).length} tools`));

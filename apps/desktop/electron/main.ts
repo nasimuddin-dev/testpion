@@ -23,7 +23,7 @@ if (mergeAt >= 0) {
   app.exit(code);
 }
 
-// pm.visualizer pages run on their own origin (tpviz://<id>/) with their own security policy, so their
+// tp.visualizer pages run on their own origin (tpviz://<id>/) with their own security policy, so their
 // scripts (charts) never share the app's origin, storage or IPC bridge
 protocol.registerSchemesAsPrivileged([{ scheme: 'tpviz', privileges: { standard: true, secure: true } }]);
 let win: BrowserWindow | null = null;
@@ -103,9 +103,8 @@ const overlayTitleBar = process.platform !== 'darwin';
 const TITLE_BAR_HEIGHT = 48;
 
 function createWindow(): void {
-  // fit the screen: a smaller screen (a laptop at 125 %) opens the window maximised instead of past its edges
+  // the window opens maximised; this size (fitted to the screen) is what it restores down to
   const area = screen.getPrimaryDisplay().workAreaSize;
-  const small = !capture && (area.width < 1440 || area.height < 900);
   win = new BrowserWindow({
     width: capture ? 1440 : Math.min(1440, area.width),
     // capture mode renders at an exact size even on small screens
@@ -135,7 +134,7 @@ function createWindow(): void {
   }
   win.once('ready-to-show', () => {
     if (capture) return;
-    if (small) win?.maximize();
+    win?.maximize();
     win?.show();
   });
   installTextContextMenu(win);

@@ -1,3 +1,4 @@
+import { prettyBody } from '../lib/pretty';
 import { BookmarkPlus, Camera, Download, ExternalLink, Sparkles } from 'lucide-react';
 import DOMPurify from 'dompurify';
 import { useEffect, useMemo, useState } from 'react';
@@ -42,7 +43,7 @@ export function ResponseViewer({
   curl?: string;
   stream?: string;
   scriptLogs?: string[];
-  /** Output of `pm.visualizer.set(template, data)`, rendered by the backend. */
+  /** Output of `tp.visualizer.set(template, data)`, rendered by the backend. */
   visualizer?: { html?: string; error?: string; vizId?: string };
   /** Saved request: enables the History tab (earlier responses, compare). */
   requestId?: string;
@@ -77,7 +78,8 @@ export function ResponseViewer({
   // JWTs in the body (e.g. an access_token) or the headers: decoded in their own tab
   const jwts = useMemo(() => findDecodedJwts([response.bodyPreview.slice(0, 200_000), ...response.headers.map(([, v]) => v)]), [response]);
   const isHtml = /html/i.test(response.contentType);
-  const prettyText = useMemo(() => (isJson ? JSON.stringify(response.json, null, 2) : response.bodyPreview), [response, isJson]);
+  // Pretty: JSON indented, HTML and XML laid out by nesting (the one formatter, lib/pretty)
+  const prettyText = useMemo(() => (isJson ? JSON.stringify(response.json, null, 2) : prettyBody(response.bodyPreview, response.contentType)), [response, isJson]);
   useEffect(() => {
     if (tab === 'trace' && traceId && trace?.traceId !== traceId) void call<Trace>('traces.get', { id: traceId }).then(setTrace);
   }, [tab, traceId, trace]);

@@ -11,7 +11,7 @@ const syn = (root) =>
 const steps = [
   [
     'serve',
-    `main: const http = require('http'); await new Promise((r) => http.createServer((q, res) => { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify({ name: 'Rex', age: 3, tags: ['a', 'b'] })); }).listen(${PORT}, '127.0.0.1', r)); return 'serving';`,
+    `main: const http = require('http'); await new Promise((r) => http.createServer((q, res) => { if (q.url === '/page') { res.setHeader('content-type', 'text/html'); return res.end('<!doctype html><html><head><title>Page</title></head><body><div><p>Hi</p></div></body></html>'); } res.setHeader('content-type', 'application/json'); res.end(JSON.stringify({ name: 'Rex', age: 3, tags: ['a', 'b'] })); }).listen(${PORT}, '127.0.0.1', r)); return 'serving';`,
     false,
   ],
   step(
@@ -41,7 +41,19 @@ const steps = [
      row.click(); await __t.sleep(800);
      tab('Payload')?.click(); await __t.sleep(600);
      const raws = vis('main button').filter((b) => b.textContent.trim() === 'Raw'); raws[raws.length - 1]?.click(); await __t.sleep(500);
-     return 'trace raw: ' + ${syn("vis('main pre').find((p) => /Rex/.test(p.textContent))")};`,
+     return 'trace raw: ' + ${syn("vis('main [data-raw-view]').find((p) => /Rex/.test(p.textContent))")};`,
+  ),
+  step(
+    'a-minified-page-is-pretty-in-its-trace',
+    `const sent = await window.aps.invoke('http.send', { request: { method: 'GET', url: 'http://127.0.0.1:${PORT}/page', headers: [], body: { type: 'none' } } }).catch((e) => ({ error: e }));
+     if (sent?.error) return 'SEND FAILED ' + JSON.stringify(sent.error).slice(0, 200);
+     const tl = await window.aps.invoke('traces.list', {}); const names = (tl.items ?? tl.rows ?? tl.traces ?? []).map((t) => t.name ?? t.title); if (!names.some((n) => String(n).includes('/page'))) return 'NO TRACE: ' + JSON.stringify(names) + ' | sent: ' + JSON.stringify(sent).slice(0, 300);
+     await __t.view('Home'); await __t.view('Traces');
+     const row = await __t.waitFor(() => vis('main *').filter((x) => x.textContent.includes('${PORT}/page')).sort((a, b) => a.textContent.length - b.textContent.length)[0], 10000);
+     row.click(); await __t.sleep(800);
+     tab('Payload')?.click(); await __t.sleep(800);
+     const lines = vis('main .mono .leading-5').map((x) => x.textContent).filter((t) => /<|Hi/.test(t));
+     return 'lines: ' + lines.length + ' | indented: ' + lines.some((t) => t.includes('      <p>Hi</p>')) + ' | title: ' + lines.some((t) => t.includes('<title>Page</title>'));`,
   ),
 ];
 
@@ -49,4 +61,5 @@ module.exports = withExpect(steps, {
   'send-and-read-it-raw': /^raw view: keys [1-9]\d* strings [1-9]\d* numbers [1-9]/,
   'editor-languages': /^languages: jsonl,csv,http \| http: .*keyword.*string\.key\.json/,
   'a-trace-payload-raw': /^trace raw: keys [1-9]\d* strings [1-9]\d* numbers [1-9]/,
+  'a-minified-page-is-pretty-in-its-trace': /^lines: (1[0-9]|[2-9]\d) \| indented: true \| title: true$/,
 });

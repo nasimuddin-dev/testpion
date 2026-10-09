@@ -1,6 +1,6 @@
 import Handlebars from 'handlebars';
 
-/** What `pm.visualizer.set(template, data)` left behind, rendered for the Visualize tab. */
+/** What `tp.visualizer.set(template, data)` left behind, rendered for the Visualize tab. */
 export interface VisualizerResult {
   /** The rendered HTML (the renderer still sanitises it and shows it in a sandboxed frame). */
   html?: string;

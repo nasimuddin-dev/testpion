@@ -46,7 +46,7 @@ const steps = [
       const text = row.textContent;
       const detail = !!document.querySelector('main [data-details-pane=request]') && !!document.querySelector('main [data-details-pane=response]');
       [...document.querySelectorAll('main [data-details-pane=response] [role=tab]')].find((t) => t.textContent.trim().startsWith('Content'))?.click(); await __t.sleep(300);
-      const body = await __t.waitFor(() => [...document.querySelectorAll('main [data-details-pane=response] pre')].some((x) => /"status"|ok/.test(x.textContent ?? '')), 3000);
+      const body = await __t.waitFor(() => /"status"|ok/.test([...document.querySelectorAll('main [data-details-pane=response] [data-raw-view] .leading-5 > span:last-child')].map((x) => x.textContent).join('\\n')), 3000);
       ${button('Open')}?.click(); await __t.sleep(1500);
       const url = [...document.querySelectorAll('main input')].find((i) => i.offsetParent && /127\\.0\\.0\\.1:4010\\/health/.test(i.value));
       return 'row: GET ' + /GET/.test(text) + ' 200 ' + /200/.test(text) + ' | detail tabs: ' + detail + ' | body shown: ' + !!body + ' | opened as request: ' + !!url;

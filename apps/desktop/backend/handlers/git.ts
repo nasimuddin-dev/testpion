@@ -35,6 +35,7 @@ import {
   gitStage,
   gitStatus,
   gitSwitch,
+  gitSync,
   gitUnstage,
   gitVersion,
   makeGitReady,
@@ -207,10 +208,23 @@ export function gitHandlers(be: Backend): Handlers {
     'git.switch': ({ branch, create, from }: { branch: string; create?: boolean; from?: string }) => rewritten(() => gitSwitch(ws(), branch, { create, from })),
     'git.deleteBranch': async ({ branch, force }: { branch: string; force?: boolean }) => changed(await gitDeleteBranch(ws(), branch, force)),
     'git.renameBranch': async ({ from, to }: { from: string; to: string }) => changed(await gitRenameBranch(ws(), from, to)),
-    'git.fetch': async () => changed(await gitFetch(ws())),
-    /** Pull (GIT-208): `conflicted` when it stopped on conflicts (then the conflict screen). */
-    'git.pull': ({ rebase }: { rebase?: boolean }) => rewritten(() => gitPull(ws(), { rebase })),
-    'git.push': async () => changed(await gitPush(ws())),
+    'git.fetch': async () => changed(await be.gitAutoFetch.exclusive(() => gitFetch(ws()))),
+    /**
+     * A quiet fetch now (the Git view calls it when it opens; the backend also does it every few minutes): never asks
+     * for a sign-in, skipped while a pull or push runs; `git.remoteChanged` tells the views when `behind` changed.
+     */
+    'git.autoFetch': () => be.gitAutoFetch.fetchNow(),
+    /**
+     * Pull (GIT-208): `conflicted` when it stopped on conflicts (then the conflict screen). Uncommitted changes git
+     * would refuse to pull over are set aside and put back (`setAside`, `message`).
+     */
+    'git.pull': ({ rebase }: { rebase?: boolean }) => be.gitAutoFetch.exclusive(() => rewritten(() => gitPull(ws(), { rebase }))),
+    'git.push': async () => changed(await be.gitAutoFetch.exclusive(() => gitPush(ws()))),
+    /**
+     * Pull & push in one step: fetch, pull with a merge when the remote has new commits, push; stops on conflicts
+     * (`state: 'conflicts'`, the files) without pushing. A push refused meanwhile is retried once after another pull.
+     */
+    'git.sync': () => be.gitAutoFetch.exclusive(() => rewritten(() => gitSync(ws()))),
     /** Put the workspace under git: init (when not in a repository), the git files, the merge driver, optionally a remote. */
     'git.init': async ({ remote }: { remote?: string }) => {
       await gitInit(ws(), { remote });

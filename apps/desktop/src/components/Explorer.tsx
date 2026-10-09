@@ -1,10 +1,10 @@
-import { ChevronDown, ChevronRight, ChevronsDownUp, Copy, CopyPlus, Download, ExternalLink, FileCode2, FolderInput, FolderPlus, FolderX, GitCompare, Inbox, Layers, PanelLeftClose, Pencil, Plug, Plus, RefreshCw, ScanSearch, Star, Trash2, Unplug, Upload } from 'lucide-react';
+import { ChevronDown, ChevronRight, ChevronsDownUp, Copy, CopyPlus, Database, Download, ExternalLink, FileCode2, FolderInput, FolderPlus, GitCompare, Layers, PanelLeftClose, Pencil, Play, Plug, Plus, RefreshCw, ScanSearch, Star, Trash2, Unplug, Upload, Wand2 } from 'lucide-react';
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { call, on } from '../api';
 import { confirmAction, promptText, toastError, useApp } from '../store';
 import type { Collection, CollectionNode, Library, LibraryItem, McpServerConfig } from '../types';
 import { plural, uid } from '../lib/format';
-import { addToFolder, CATEGORY_META, CollectionTree, mapNodes, savedItemDragProps, type ExtraGroup } from './CollectionTree';
+import { addToFolder, CollectionTree, mapNodes, type ExtraGroup } from './CollectionTree';
 import type { RequestCategory } from '../lib/collection-filter';
 import { closeTabsFor, newRequestItems, useEditorTabsStore } from './EditorTabs';
 import { ExportDialog } from './ExportDialog';
@@ -15,11 +15,13 @@ import { Button, cx, IconButton, Input, Menu, menuKeys, type MenuItem } from './
 import { askFolderName, focusRow, folderMenuItems, InlineRename, KindBadge, moveToFolderItem, RowMenu, TreeFolderRow, treeKeys } from './TreeParts';
 import { usePersisted } from '../lib/sticky';
 import { copyText } from '../lib/clipboard';
+import { datasetBadge } from '../lib/datasets';
+import { GenerateDataDialog } from './GenerateDataDialog';
 
 /**
  * The Collections explorer: the one sidebar of the request editors. The workspace lists its collections;
- * expanding one shows what it holds by category (REST, SOAP, GraphQL, gRPC, WebSocket & MQTT). MCP servers
- * and API definitions belong to the whole workspace and follow the collections. Environments, monitors,
+ * expanding one shows what it holds by category (REST, SOAP, GraphQL, gRPC, WebSocket & MQTT). MCP servers,
+ * API definitions and datasets belong to the whole workspace and follow the collections. Environments, monitors,
  * AI prompts, evaluations and load tests live in their own views.
  */
 
@@ -64,7 +66,7 @@ function Section({
     { label: open ? 'Collapse' : 'Expand', icon: open ? <ChevronRight size={14} /> : <ChevronDown size={14} />, onSelect: () => sections.toggle(id, def), separator: true },
   ];
   return (
-    <div className="border-b border-line/60">
+    <div className="border-b border-line/60" data-tree-section={id}>
       <div
         className={cx('group flex items-center gap-0.5 h-9 pl-1.5 pr-1 sticky top-0 bg-panel z-10', menuOpen && 'bg-hover')}
         onContextMenu={(e) => {
@@ -92,12 +94,10 @@ interface RowRename {
   done(name?: string): void;
 }
 
-function Row({ id, icon, label, sub, onClick, title, active, menu, drag, indent, rename }: { id?: string; icon?: ReactNode; label: string; sub?: ReactNode; onClick(): void; title?: string; active?: boolean; menu?: MenuItem[]; drag?: ReturnType<typeof savedItemDragProps>; indent?: boolean; rename?: RowRename }) {
+function Row({ id, icon, label, sub, onClick, title, active, menu, indent, rename }: { id?: string; icon?: ReactNode; label: string; sub?: ReactNode; onClick(): void; title?: string; active?: boolean; menu?: MenuItem[]; indent?: boolean; rename?: RowRename }) {
   const [menuOpen, setMenuOpen] = useState(false);
   return (
     <div
-      {...drag}
-      draggable={rename?.editing ? false : drag?.draggable}
       className={cx('group mx-1 flex items-center rounded-md pr-1 transition-colors', active ? 'bg-accent-soft' : menuOpen ? 'bg-hover' : 'hover:bg-hover')}
       onContextMenu={(e) => {
         if (!menu) return;
@@ -156,18 +156,17 @@ function EmptyHint({ text, action, onAction }: { text: string; action: string; o
   );
 }
 
-/** Saved items grouped by their folder (items without one first). */
-function byFolder<T extends { folder?: string }>(items: T[]): Array<{ folder?: string; items: T[] }> {
-  const groups = new Map<string, T[]>();
-  for (const i of items) groups.set(i.folder ?? '', [...(groups.get(i.folder ?? '') ?? []), i]);
-  return [...groups.entries()].sort(([a], [b]) => (a === '' ? -1 : b === '' ? 1 : a.localeCompare(b))).map(([folder, list]) => ({ folder: folder || undefined, items: list }));
-}
-
-function FolderLabel({ name }: { name: string }) {
-  return <div className="pl-6 pr-3 pt-1.5 pb-0.5 text-[0.7rem] font-medium text-muted truncate">{name}</div>;
-}
-
 const NONE: SavedItem[] = [];
+
+/** A file of the workspace's datasets/ folder, as datasets.list answers. */
+interface DatasetRow {
+  path: string;
+  name: string;
+  size: number;
+  format: string;
+  rows?: number;
+  tables?: string[];
+}
 /** Saved items by the collection they're shown in. */
 function groupByCollection(items: SavedItem[]): Map<string, SavedItem[]> {
   const map = new Map<string, SavedItem[]>();
@@ -179,7 +178,7 @@ interface SavedItem {
   id: string;
   name: string;
   folder?: string;
-  /** The collection it's shown in (gRPC calls and WebSocket connections are saved outside collections). */
+  /** The collection it's in (gRPC calls and connections are kept in the workspace library, each in a collection). */
   collectionId?: string;
   badge?: string;
 }
@@ -271,10 +270,10 @@ export function Explorer() {
     return out;
   }, [collections]);
   const [grpc, setGrpc] = useState<SavedItem[]>([]);
-  const [looseOpen, setLooseOpen] = useState(true);
   const [sockets, setSockets] = useState<SavedItem[]>([]);
   const [servers, setServers] = useState<Array<McpServerConfig & { connected?: boolean }>>([]);
   const [specs, setSpecs] = useState<string[]>([]);
+  const [datasets, setDatasets] = useState<DatasetRow[]>([]);
   // folders of the MCP servers (a server keeps its own folder; empty folders are kept here) and of the API definitions (path → folder)
   const [mcpFolders, setMcpFolders] = useState<string[]>([]);
   const [specFolders, setSpecFolders] = useState<Library<unknown>>({ folders: [], items: [] });
@@ -294,7 +293,7 @@ export function Explorer() {
   const load = useCallback(async (withCollections = true) => {
     const quiet = <T,>(p: Promise<T>, fallback: T) => p.catch(() => fallback);
     const empty: Library<unknown> = { folders: [], items: [] };
-    const [, g, w, s, sp, mf, sf] = await Promise.all([
+    const [, g, w, s, sp, mf, sf, ds] = await Promise.all([
       withCollections ? refreshCollections() : undefined,
       quiet(call<Library<unknown>>('lib.get', { kind: 'grpc' }), empty),
       quiet(call<Library<unknown>>('lib.get', { kind: 'websocket' }), empty),
@@ -302,6 +301,7 @@ export function Explorer() {
       quiet(call<string[]>('openapi.specs', { includeAsync: true }), []),
       quiet(call<Library<unknown>>('lib.get', { kind: 'mcp-folders' }), empty),
       quiet(call<Library<unknown>>('lib.get', { kind: 'spec-folders' }), empty),
+      quiet(call<DatasetRow[]>('datasets.list'), []),
     ]);
     setGrpc(g.items.map(({ data: _, ...i }) => i));
     const wsBadge = (d: unknown) => ((d as { mode?: string })?.mode === 'kafka' ? 'KAFKA' : (d as { mode?: string })?.mode === 'mqtt' ? 'MQTT' : (d as { mode?: string })?.mode === 'socketio' ? 'SIO' : 'WS');
@@ -310,6 +310,7 @@ export function Explorer() {
     setSpecs(sp);
     setMcpFolders(mf.folders);
     setSpecFolders(sf);
+    setDatasets([...ds].sort((a, b) => a.name.localeCompare(b.name)));
   }, []);
   useEffect(() => {
     void load();
@@ -332,14 +333,10 @@ export function Explorer() {
   const socketsByCollection = useMemo(() => groupByCollection(sockets), [sockets]);
   const f = shownFilter.trim().toLowerCase();
   const match = (...t: Array<string | undefined>) => !f || t.some((x) => x?.toLowerCase().includes(f));
-  // gRPC calls and connections not (or no longer) in a collection
-  const colIds = new Set(collections.map((c) => c.id));
-  const loose = (items: SavedItem[]) => items.filter((i) => !i.collectionId || !colIds.has(i.collectionId));
-  const looseGrpc = loose(grpc).filter((i) => match(i.name, i.folder));
-  const looseSockets = loose(sockets).filter((i) => match(i.name, i.folder));
   const shownServers = servers.filter((s) => match(s.name, s.transport));
   const shownFavorites = favorites.filter(({ c, n }) => match(n.name, c.name));
   const shownSpecs = specs.filter((s) => match(s));
+  const shownDatasets = datasets.filter((d) => match(d.name, d.format));
 
   const intent = useApp.getState().openIntent;
   const saveCollection = async (c: Collection) => {
@@ -365,7 +362,44 @@ export function Explorer() {
   const revealKey = revealRef.current;
   const [exporting, setExporting] = useState(false);
   const importDefinition = () => setImporting(true);
-  /** Show a saved gRPC call / connection in another collection (or in none). */
+  /** The datasets: a new empty one, generated test data, and a row's rename, duplicate and delete (the file goes to Recently deleted). */
+  const [generatingData, setGeneratingData] = useState(false);
+  const datasetAction = async (fn: () => Promise<unknown>) => {
+    try {
+      await fn();
+      await load(false);
+    } catch (e) {
+      toastError(e);
+    }
+  };
+  const newDataset = async (format: 'csv' | 'jsonl') => {
+    const name = await promptText(`New ${format.toUpperCase()} dataset`, { message: 'File name in the datasets folder', placeholder: format === 'csv' ? 'users' : 'cases', okLabel: 'Create' });
+    if (!name) return;
+    await datasetAction(async () => {
+      const r = await call<{ name: string }>('datasets.create', { name, format });
+      intent('dataset', { dataset: r.name, tab: 'file' });
+    });
+  };
+  const deleteDataset = async (d: DatasetRow) => {
+    if (!(await confirmAction({ title: 'Delete dataset', message: `Delete datasets/${d.name}?`, detail: 'It goes to Recently deleted (Collections ▸ Recently deleted) for 30 days.', confirmLabel: 'Delete', danger: true }))) return;
+    await datasetAction(() => call('datasets.delete', { name: d.name }));
+  };
+  const datasetMenu = (d: DatasetRow): MenuItem[] => [
+    { label: 'Open in tab', icon: <ExternalLink size={14} />, onSelect: () => intent('dataset', { dataset: d.name }) },
+    { label: 'Run a collection with it', icon: <Play size={14} />, onSelect: () => intent('collections', { run: true, dataPath: d.path }) },
+    { label: 'Rename', icon: <Pencil size={14} />, separator: true, onSelect: () => setRenaming(d.name) },
+    { label: 'Duplicate', icon: <CopyPlus size={14} />, onSelect: () => void datasetAction(() => call('datasets.duplicate', { name: d.name })) },
+    { label: 'Delete', icon: <Trash2 size={14} />, danger: true, separator: true, onSelect: () => void deleteDataset(d) },
+  ];
+  const renameDataset = (name: string): RowRename => ({
+    editing: renaming === name,
+    start: () => setRenaming(name),
+    done: (to) => {
+      setRenaming(undefined);
+      if (to && to !== name) void datasetAction(() => call('datasets.rename', { name, to }));
+      focusRow(name);
+    },
+  });
   /** Change a saved gRPC call / connection list (move, rename, duplicate, delete): the one place that loads, edits and saves it. */
   const editLibrary = async (kind: 'grpc' | 'websocket', fn: (items: Array<LibraryItem<unknown>>) => Array<LibraryItem<unknown>>) => {
     try {
@@ -376,7 +410,8 @@ export function Explorer() {
       toastError(e);
     }
   };
-  const moveItem = (kind: 'grpc' | 'websocket', id: string, collectionId: string | undefined) => editLibrary(kind, (items) => items.map((i) => (i.id === id ? { ...i, collectionId } : i)));
+  /** Move a saved gRPC call / connection to another collection. */
+  const moveItem = (kind: 'grpc' | 'websocket', id: string, collectionId: string) => editLibrary(kind, (items) => items.map((i) => (i.id === id ? { ...i, collectionId } : i)));
   /** The menu of a gRPC call or connection: the same actions as a request's (open, rename, duplicate, move, delete). */
   /** Copy a saved gRPC call as a grpcurl command, or a connection's URL ({{variables}} resolved). */
   const copySaved = async (kind: 'grpc' | 'websocket', id: string) => {
@@ -433,7 +468,6 @@ export function Explorer() {
       onSelect: () => undefined,
       items: collections.filter((c) => c.id !== item.collectionId).map((c) => ({ label: c.name, onSelect: () => void moveItem(kind, item.id, c.id) })),
     },
-    ...(item.collectionId && colIds.has(item.collectionId) ? [{ label: 'Remove from the collection', icon: <FolderX size={14} />, onSelect: () => void moveItem(kind, item.id, undefined) }] : []),
     {
       label: 'Delete',
       icon: <Trash2 size={14} />,
@@ -566,31 +600,6 @@ export function Explorer() {
   /** An item's menu with "Move to folder" before Delete / Remove (or at the end). */
   const withMove = (menu: MenuItem[], move: MenuItem) => (menu[menu.length - 1]?.danger ? [...menu.slice(0, -1), move, menu[menu.length - 1]!] : [...menu, move]);
 
-  /** Saved before items could belong to a collection: put gRPC calls and connections in a collection each. */
-  const organizeLoose = async () => {
-    try {
-      let moved = 0;
-      for (const [kind, name] of [
-        ['grpc', 'gRPC'],
-        ['websocket', 'WebSocket & MQTT'],
-      ] as const) {
-        const items = loose(kind === 'grpc' ? grpc : sockets);
-        if (!items.length) continue;
-        let col = collections.find((c) => c.name === name);
-        if (!col) {
-          col = { schemaVersion: '1.0', id: uid('col-'), name, version: 0, variables: [], items: [], updatedAt: '' };
-          await call('col.save', col);
-        }
-        const ids = new Set(items.map((i) => i.id));
-        const colId = col.id;
-        await editLibrary(kind, (list) => list.map((i) => (ids.has(i.id) ? { ...i, collectionId: colId } : i)));
-        moved += items.length;
-      }
-      useApp.getState().toast(`Moved ${plural(moved, 'item')} into collections`, 'success');
-    } catch (e) {
-      toastError(e);
-    }
-  };
   const extraGroups = (c: Collection): ExtraGroup[] => [
     { cat: 'grpc', items: grpcByCollection.get(c.id) ?? NONE, onOpen: (id) => intent('grpc', { savedId: id }), menu: (id) => moveMenu('grpc', grpc.find((i) => i.id === id)!), rename: (id) => renameSaved('grpc', id) },
     { cat: 'websocket', items: socketsByCollection.get(c.id) ?? NONE, onOpen: (id) => intent('websocket', { savedId: id }), menu: (id) => moveMenu('websocket', sockets.find((i) => i.id === id)!), rename: (id) => renameSaved('websocket', id) },
@@ -698,41 +707,6 @@ export function Explorer() {
           </div>
         )}
 
-        {(looseGrpc.length > 0 || looseSockets.length > 0) && (
-          <div className="border-b border-line/60">
-            <div className="group flex items-center h-9 pl-1.5 pr-1">
-              <button className="flex items-center gap-1.5 flex-1 min-w-0 text-left" onClick={() => setLooseOpen((o) => !o)} aria-expanded={looseOpen || !!f} title="gRPC calls and connections saved outside a collection: use Move to collection in their menu">
-                {looseOpen || f ? <ChevronDown size={13} className="text-muted shrink-0" /> : <ChevronRight size={13} className="text-muted shrink-0" />}
-                <Inbox size={14} className="text-muted shrink-0" />
-                <span className="text-[0.82rem] font-semibold truncate flex-1">Not in a collection</span>
-                <span className="text-[0.7rem] px-1.5 rounded-full bg-panel2 text-muted tabular-nums">{looseGrpc.length + looseSockets.length}</span>
-              </button>
-              <IconButton label="Put them in collections (gRPC, WebSocket & MQTT)" className="h-6 w-6 ml-1" onClick={() => void organizeLoose()}>
-                <FolderInput size={13} />
-              </IconButton>
-            </div>
-            {(looseOpen || !!f) && (
-              <div className="pb-2">
-                {(
-                  [
-                    ['grpc', looseGrpc],
-                    ['websocket', looseSockets],
-                  ] as const
-                ).map(([kind, items]) =>
-                  byFolder(items).map((g) => (
-                    <div key={`${kind}:${g.folder ?? ''}`}>
-                      {g.folder && <FolderLabel name={g.folder} />}
-                      {g.items.map((i) => (
-                        <Row key={i.id} icon={<KindBadge text={i.badge ?? CATEGORY_META[kind].badge} cls={CATEGORY_META[kind].cls} />} label={i.name} active={openRequestId === i.id} onClick={() => intent(kind, { savedId: i.id })} menu={moveMenu(kind, i)} drag={savedItemDragProps(kind, i.id, i.name)} id={i.id} rename={renameSaved(kind, i.id)} />
-                      ))}
-                    </div>
-                  )),
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
         <Section id="mcp" title="MCP servers" icon={<Plug size={14} />} count={servers.length} sections={sections} def={servers.length > 0} forceOpen={!!f && shownServers.length > 0} addLabel="Add an MCP server" onAdd={() => intent('mcp', { addServer: true })} menu={[{ label: 'New folder', icon: <FolderPlus size={14} />, onSelect: () => void newFolder(mcpOps) }, { label: 'Open MCP inspector', icon: <ExternalLink size={14} />, onSelect: () => intent('mcp', {}) }]}>
           {servers.length || mcpFolders.length ? (
             renderFoldered('mcp', shownServers, mcpOps, (name) => folderMenu(mcpOps, name, 'server', 'Add an MCP server', () => intent('mcp', { addServer: true })), (s, inFolder) => (
@@ -778,7 +752,52 @@ export function Explorer() {
             <EmptyHint text="OpenAPI documents: importing one keeps it here for contract checks, API coverage and comparing versions." action="Import OpenAPI" onAction={importDefinition} />
           )}
         </Section>
+
+        <Section
+          id="datasets"
+          title="Datasets"
+          icon={<Database size={14} />}
+          count={datasets.length}
+          sections={sections}
+          def={datasets.length > 0}
+          forceOpen={!!f && shownDatasets.length > 0}
+          addLabel="New CSV"
+          onAdd={() => void newDataset('csv')}
+          menu={[
+            { label: 'New JSONL', icon: <Plus size={14} />, onSelect: () => void newDataset('jsonl') },
+            { label: 'Generate test data…', icon: <Wand2 size={14} />, onSelect: () => setGeneratingData(true) },
+          ]}
+        >
+          {datasets.length ? (
+            shownDatasets.map((d) => (
+              <Row
+                key={d.name}
+                icon={<KindBadge text={datasetBadge(d.format).text} cls={datasetBadge(d.format).cls} />}
+                label={d.name}
+                sub={d.rows !== undefined ? plural(d.rows, 'row') : d.tables ? plural(d.tables.length, 'table') : undefined}
+                title={`datasets/${d.name} (${d.format}${d.rows !== undefined ? `, ${plural(d.rows, 'row')}` : ''})`}
+                active={openRequestId === d.name}
+                onClick={() => intent('dataset', { dataset: d.name })}
+                menu={datasetMenu(d)}
+                id={d.name}
+                rename={renameDataset(d.name)}
+              />
+            ))
+          ) : (
+            <EmptyHint text="Data files (CSV, JSONL, JSON, Markdown tables, SQLite) that drive collection runs and tests, in the workspace's datasets folder." action="New CSV" onAction={() => void newDataset('csv')} />
+          )}
+        </Section>
       </div>
+      {generatingData && (
+        <GenerateDataDialog
+          onClose={() => setGeneratingData(false)}
+          onDone={(g) => {
+            setGeneratingData(false);
+            void load(false);
+            intent('dataset', { dataset: g.path.replace(/^datasets\//, '') });
+          }}
+        />
+      )}
       {importing && <ImportModal onClose={() => setImporting(false)} onDone={() => void load()} />}
       {exporting && <ExportDialog collections={collections.map((c) => ({ id: c.id, name: c.name }))} onClose={() => setExporting(false)} />}
     </aside>

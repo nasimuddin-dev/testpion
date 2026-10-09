@@ -61,7 +61,7 @@ describe('test files: lint and keys', () => {
 
   it('suites have their own keys', () => {
     expect(lintTestFile('name: Smoke\ntests: [rest]\nconcurency: 2\n', { suite: true }).map((p) => p.message)).toEqual([
-      '"concurency" is not a suite key (name, description, tests, concurrency, retries, environment, tags)',
+      '"concurency" is not a suite key (name, description, tests, concurrency, retries, environment, tags, expose)',
     ]);
   });
 

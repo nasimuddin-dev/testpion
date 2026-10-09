@@ -7,6 +7,7 @@ import { slugify } from '../util/ids.js';
 import { globToRegex } from '../util/glob.js';
 import { readDataset, type DatasetSource } from './datasets.js';
 import { dbKindOf } from './db-datasets.js';
+import { parseExpose } from './exposed-flows.js';
 
 const TEST_EXT = new Set(['.yaml', '.yml', '.json']);
 
@@ -335,6 +336,7 @@ export async function loadSuite(path: string): Promise<SuiteConfig> {
     environment: d.environment as string | undefined,
     tags: d.tags as string[] | undefined,
     file: path,
+    ...(d.expose !== undefined ? { expose: parseExpose(d.expose, path) } : {}),
   };
 }
 

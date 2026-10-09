@@ -36,7 +36,7 @@
               "expected": "Tokyo"
             }
           ],
-          "testScript": "const c = pm.response.json().data.country;\npm.test('speaks Japanese', () => pm.expect(c.languages.map((l) => l.name)).to.include('Japanese'));\npm.environment.set('currency', c.currency);"
+          "testScript": "const c = tp.response.json().data.country;\ntp.test('speaks Japanese', () => tp.expect(c.languages.map((l) => l.name)).to.include('Japanese'));\ntp.environment.set('currency', c.currency);"
         },
         {
           "kind": "graphql",

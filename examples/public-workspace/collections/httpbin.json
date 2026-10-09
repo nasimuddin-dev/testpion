@@ -53,7 +53,7 @@
               "max": 5000
             }
           ],
-          "testScript": "pm.test('echoes the page parameter', () => {\n  pm.expect(pm.response.json().args.page).to.eql('1');\n});"
+          "testScript": "tp.test('echoes the page parameter', () => {\n  tp.expect(tp.response.json().args.page).to.eql('1');\n});"
         },
         {
           "kind": "http",
@@ -197,7 +197,7 @@
               "max": 8000
             }
           ],
-          "testScript": "pm.test('took at least a second', () => pm.expect(pm.response.responseTime).to.be.above(900));"
+          "testScript": "tp.test('took at least a second', () => tp.expect(tp.response.responseTime).to.be.above(900));"
         },
         {
           "kind": "http",
@@ -242,7 +242,7 @@
               "expected": "slideshow"
             }
           ],
-          "testScript": "// xml2Json turns XML (SOAP too) into an object: attributes under \"$\"\nconst doc = xml2Json(pm.response.text());\npm.test('slideshow title', () => pm.expect(doc.slideshow.$.title).to.equal('Sample Slide Show'));\npm.test('two slides', () => pm.expect(doc.slideshow.slide).to.have.lengthOf(2));"
+          "testScript": "// xml2Json turns XML (SOAP too) into an object: attributes under \"$\"\nconst doc = xml2Json(tp.response.text());\ntp.test('slideshow title', () => tp.expect(doc.slideshow.$.title).to.equal('Sample Slide Show'));\ntp.test('two slides', () => tp.expect(doc.slideshow.slide).to.have.lengthOf(2));"
         },
         {
           "kind": "http",

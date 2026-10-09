@@ -12,6 +12,6 @@ description: "How secrets are stored and supplied, and how they are redacted."
 - **Workspace files** only reference secrets (`{{$secret.provider.openai.apiKey}}`). Saving a provider with a literal API key is rejected.
 - **Exports** never contain secret values.
 - **Cookies:** the workspace [cookie jar](/api-testing/cookies) is stored as one encrypted value in the same store, never in workspace files. The CLI keeps cookies in memory unless you pass `--export-cookie-jar`, which writes a plain-text JSON file you choose.
-- **Current values** set by scripts (`pm.environment.set` …) stay on this machine. Sensitive ones are encrypted the same way.
+- **Current values** set by scripts (`tp.environment.set` …) stay on this machine. Sensitive ones are encrypted the same way.
 
 :::

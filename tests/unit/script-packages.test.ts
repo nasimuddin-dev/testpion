@@ -38,9 +38,19 @@ describe('script packages (pm.require)', () => {
     expect(out.tests.every((t) => t.passed)).toBe(true);
   });
 
+  it('a package can use tp (the TestPion name) as well as pm', async () => {
+    const out = await runScript(
+      "const p = tp.require('tp-pkg'); tp.test('both names', () => tp.expect(p.same).to.equal(true));",
+      { request: { method: 'GET', url: 'http://x', headers: [] }, vars: {} } as never,
+      { requirePackage: (n) => (n === 'tp-pkg' ? 'module.exports = { same: tp === pm && typeof tp.test === "function" };' : undefined) },
+    );
+    expect(out.error).toBeUndefined();
+    expect(out.tests).toEqual([{ name: 'both names', passed: true }]);
+  });
+
   it('says which package is missing', async () => {
     const out = await runScript("pm.require('@team/missing');", { request: { method: 'GET', url: 'http://x', headers: [] }, vars: {} } as never, { requirePackage: () => undefined });
-    expect(out.error).toMatch(/pm\.require\("@team\/missing"\): there is no package with that name in this workspace \(packages\/@team\/missing\.js\)/);
+    expect(out.error).toMatch(/tp\.require\("@team\/missing"\): there is no package with that name in this workspace \(packages\/@team\/missing\.js\)/);
   });
 
   it('an import warns only about packages the workspace does not have', () => {

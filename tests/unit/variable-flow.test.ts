@@ -11,7 +11,7 @@ const col = {
   updatedAt: '',
   items: [
     { kind: 'http', id: 'r1', name: 'Get cart', request: { method: 'GET', url: '{{baseUrl}}/carts/{{cartId}}', headers: [{ key: 'x-region', value: '{{region}}' }] } },
-    { kind: 'http', id: 'r2', name: 'Log in', request: { method: 'POST', url: '{{baseUrl}}/login' }, testScript: "pm.environment.set('token', pm.response.json().token); pm.environment.set(\"cartId\", 7); pm.variables.set(`leftover`, 1)" },
+    { kind: 'http', id: 'r2', name: 'Log in', request: { method: 'POST', url: '{{baseUrl}}/login' }, testScript: "pm.environment.set('token', pm.response.json().token); tp.environment.set(\"cartId\", 7); pm.variables.set(`leftover`, 1)" },
     {
       kind: 'folder',
       id: 'f',

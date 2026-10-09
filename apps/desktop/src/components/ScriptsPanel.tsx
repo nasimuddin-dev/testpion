@@ -8,7 +8,7 @@ const ScriptPackagesDialog = lazy(() => import('./ScriptPackagesDialog').then((m
 
 /**
  * Pre-request / Post-response scripts with a snippet list (Postman layout). Scripts use the
- * Postman-compatible `pm` API and run in a WebAssembly sandbox.
+ * `tp` script API (Postman-compatible) and run in a WebAssembly sandbox.
  */
 export function ScriptsPanel({ pre, post, onPre, onPost }: { pre: string; post: string; onPre(v: string): void; onPost(v: string): void }) {
   const [which, setWhich] = useState<'pre' | 'post'>(() => (pre && !post ? 'pre' : 'post'));
@@ -30,7 +30,7 @@ export function ScriptsPanel({ pre, post, onPre, onPost }: { pre: string; post: 
             {code.trim() && <span className="w-1.5 h-1.5 rounded-full bg-ok ml-auto" title="Has a script" />}
           </button>
         ))}
-        <button className="w-full text-left px-3 py-1.5 mt-2 flex items-center gap-2 text-muted hover:text-fg hover:bg-hover border-t border-line" title="Shared code that scripts load with pm.require('name')" onClick={() => setPackagesOpen(true)}>
+        <button className="w-full text-left px-3 py-1.5 mt-2 flex items-center gap-2 text-muted hover:text-fg hover:bg-hover border-t border-line" title="Shared code that scripts load with tp.require('name')" onClick={() => setPackagesOpen(true)}>
           <Package size={13} /> Packages…
         </button>
         {packagesOpen && (
@@ -42,7 +42,7 @@ export function ScriptsPanel({ pre, post, onPre, onPost }: { pre: string; post: 
       <div className="flex-1 min-w-0 flex flex-col">
         <div className="text-xs text-muted px-3 py-1.5 border-b border-line">
           {which === 'pre' ? 'Runs before the request is sent — set variables or change tp.request.' : 'Runs after the response — write tp.test(...) checks and save values with tp.environment.set(...).'} Write{' '}
-          <code>tp.*</code> or Postman's <code>pm.*</code>: both work (they are the same). Scripts run in a sandbox without file or network access.
+          <code>tp.*</code> scripts; scripts written for Postman (<code>pm.*</code>) also run unchanged. Scripts run in a sandbox without file or network access.
         </div>
         <div className="flex-1 min-h-0">
           <CodeEditor

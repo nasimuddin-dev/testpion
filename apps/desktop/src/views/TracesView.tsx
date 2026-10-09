@@ -1,6 +1,6 @@
 import { Activity, RefreshCw, Send } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
-import { call } from '../api';
+import { call, on } from '../api';
 import { persisted, toastError, useApp } from '../store';
 import { KeyValueEditor } from '../components/KeyValueEditor';
 import type { KeyValue } from '../types';
@@ -92,6 +92,13 @@ export function TracesView() {
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query, kind, errorsOnly]);
+  // the view stays mounted: coming back to it, or a run that finishes, brings the newest traces in
+  const active = useApp((st) => st.view === 'traces');
+  useEffect(() => {
+    if (active) void load(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active]);
+  useEffect(() => on('run.finished', () => void load(true)), [load]);
   useEffect(() => {
     if (!sel) return;
     setTrace(undefined);

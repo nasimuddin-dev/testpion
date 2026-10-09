@@ -1,8 +1,9 @@
 /** RPC handlers: Collections (requests, folders, examples, import/export) and their mock servers. */
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, relative, sep } from 'node:path';
-import { ApsError, dbKindOf, redactDbUrl, isSqliteDataset, collectionVariableFlow, listWorkspaceDatasets, appendDatasetRow, readDataset, sqliteTables, fetchImportText, bruFilesToBrunoExport, collectionToBru, importIntoWorkspace, diffOpenApi, lintOpenApi, openApiOutline, asyncApiOutline, workspaceApiCoverage, apiCoverageMarkdown, collectionSecurityFindings, definedVariableNames, listSpecs, findBodySchema, readSpecRef, type SpecRef, startRecorder, recordingToCollection, type RecordedExchange, collectionToOpenApiText, collectionToHttpFile, collectionToAsyncApi, generateWorkspaceDataset, replaceInCollection, moveCollectionVariablesToEnvironments, tidyCollection, applyTidy, type ReplaceField, writeTestsFromSpec, writeFlows, exampleFromResponse, startMockServer, collectionMarkdown, collectionHtml, exportPostmanCollection, withRequestExamples, type SavedExample, convertCollectionScripts, importRequestSnippet, isRequestSnippet, type Collection, collectionSavedItems, duplicateCollection, shortId } from '@testpion/core';
+import { ApsError, dbKindOf, redactDbUrl, isSqliteDataset, collectionVariableFlow, listWorkspaceDatasets, appendDatasetRow, readDataset, readWorkspaceDataset, moveToTrash, sqliteTables, fetchImportText, bruFilesToBrunoExport, collectionToBru, importIntoWorkspace, diffOpenApi, lintOpenApi, openApiOutline, asyncApiOutline, workspaceApiCoverage, apiCoverageMarkdown, collectionSecurityFindings, definedVariableNames, listSpecs, findBodySchema, readSpecRef, type SpecRef, startRecorder, recordingToCollection, type RecordedExchange, collectionToOpenApiText, collectionToHttpFile, collectionToAsyncApi, generateWorkspaceDataset, replaceInCollection, moveCollectionVariablesToEnvironments, tidyCollection, applyTidy, type ReplaceField, writeTestsFromSpec, writeFlows, exampleFromResponse, startMockServer, collectionMarkdown, collectionHtml, exportPostmanCollection, withRequestExamples, type SavedExample, convertCollectionScripts, importRequestSnippet, isRequestSnippet, type Collection, collectionSavedItems, duplicateCollection, shortId } from '@testpion/core';
 import type { Backend, Handlers, CollectionRunParams } from '../backend.js';
+import { countDatasetRecords, datasetFormatOfName } from '@testpion/shared';
 import { recordIncoming } from './debugger.js';
 
 /** An API definition's workspace path: a JSON or YAML file directly in specs/. */
@@ -10,6 +11,15 @@ import { recordIncoming } from './debugger.js';
 const SPEC_PATH = /^specs\/(asyncapi\/)?[^/\\]+\.(json|ya?ml)$/i;
 
 export function collectionsHandlers(be: Backend): Handlers {
+  /** A dataset's file from its name under datasets/ (datasets/users.csv or users.csv), inside that folder only. */
+  const datasetFile = (name: string) => {
+    const clean = String(name ?? '')
+      .trim()
+      .replace(/^datasets[\\/]/, '');
+    if (!clean) throw new ApsError('ValidationError', 'A dataset name is needed');
+    return be.ws.safePath(clean, be.ws.path('datasets'));
+  };
+  const datasetName = (file: string) => relative(be.ws.path('datasets'), file).split(sep).join('/');
   return {
     'col.list': () => be.ws.listCollections(),
     /** One collection (a view that needs one does not read them all). */
@@ -248,9 +258,85 @@ export function collectionsHandlers(be: Backend): Handlers {
     'col.variableFlow': ({ collectionId }: { collectionId: string }) => {
       return collectionVariableFlow(be.ws.getCollection(collectionId), definedVariableNames(be.ws, be.settings));
     },
-    /** Data files in the workspace's datasets/ folder (for the Collection Runner and tests), newest first. */
+    /** Data files in the workspace's datasets/ folder (for the Collection Runner and tests), newest first; `rows` for text files up to 5 MB (the sidebar's count). */
     'datasets.list': () =>
-      listWorkspaceDatasets(be.ws).map((d) => ({ path: join(be.ws.root, d.path), name: d.path.replace(/^datasets\//, ''), size: d.size, modified: d.modified, format: d.format, tables: d.tables })),
+      listWorkspaceDatasets(be.ws).map((d) => {
+        const fmt = datasetFormatOfName(d.path);
+        let rows: number | undefined;
+        if (fmt && d.size <= 5 * 1024 * 1024)
+          try {
+            rows = countDatasetRecords(readFileSync(join(be.ws.root, d.path), 'utf8'), fmt);
+          } catch {
+            /* unreadable: no count */
+          }
+        return { path: join(be.ws.root, d.path), name: d.path.replace(/^datasets\//, ''), size: d.size, modified: d.modified, format: d.format, tables: d.tables, rows };
+      }),
+    /** A dataset by its name under datasets/ (the tab): its text (CSV, JSON, JSONL, Markdown; up to 20 MB) and what it is. */
+    'datasets.open': ({ name }: { name: string }) => {
+      const file = datasetFile(name);
+      if (!existsSync(file)) throw new ApsError('ValidationError', `No dataset datasets/${name}`);
+      if (!datasetFormatOfName(file)) return { name: datasetName(file), path: file, text: '', format: 'sqlite', size: statSync(file).size, binary: true };
+      if (statSync(file).size > 20 * 1024 * 1024) throw new ApsError('ValidationError', 'The dataset is larger than 20 MB');
+      return { name: datasetName(file), path: file, text: readFileSync(file, 'utf8'), format: datasetFormatOfName(file), size: statSync(file).size, binary: false };
+    },
+    /** The first rows of a dataset with its columns (and their kinds of value) and its record count (the tab's preview). */
+    'datasets.preview': ({ name, limit, query }: { name: string; limit?: number; query?: string }) => readWorkspaceDataset(be.ws, name, { limit: limit ?? 200, query }),
+    /** Save a dataset's text (the tab's editor). */
+    'datasets.write': ({ name, text }: { name: string; text: string }) => {
+      const file = datasetFile(name);
+      if (!datasetFormatOfName(file)) throw new ApsError('ValidationError', 'Only CSV, JSON, JSONL and Markdown datasets are edited as text');
+      if (text.length > 50 * 1024 * 1024) throw new ApsError('ValidationError', 'The dataset is larger than 50 MB');
+      mkdirSync(dirname(file), { recursive: true });
+      writeFileSync(file, text);
+      be.host.emit('data.changed', { kind: 'datasets' });
+      return { name: datasetName(file), path: file };
+    },
+    /** A new, empty dataset in datasets/ (a CSV starts with a header line); never overwrites: name-2.csv etc. */
+    'datasets.create': ({ name, format }: { name: string; format: 'csv' | 'jsonl' }) => {
+      const ext = format === 'csv' ? 'csv' : 'jsonl';
+      const base = basename(name.trim()).replace(/\.(csv|jsonl)$/i, '').replace(/[^\w.-]+/g, '_').slice(0, 100) || 'data';
+      const dir = be.ws.path('datasets');
+      mkdirSync(dir, { recursive: true });
+      let dest = join(dir, `${base}.${ext}`);
+      for (let i = 2; existsSync(dest); i++) dest = join(dir, `${base}-${i}.${ext}`);
+      writeFileSync(dest, format === 'csv' ? 'id,name\n' : '');
+      be.host.emit('data.changed', { kind: 'datasets' });
+      return { name: datasetName(dest), path: dest };
+    },
+    /** Rename a dataset (the extension is kept when the new name has none). */
+    'datasets.rename': ({ name, to }: { name: string; to: string }) => {
+      const file = datasetFile(name);
+      if (!existsSync(file)) throw new ApsError('ValidationError', `No dataset datasets/${name}`);
+      const clean = to.trim().replace(/[\\/]+/g, '/').replace(/^\/+|\/+$/g, '');
+      if (!clean) throw new ApsError('ValidationError', 'A name is required');
+      const ext = /\.[^./]+$/.exec(file)?.[0] ?? '';
+      const dest = datasetFile(/\.[^./]+$/.test(clean) ? clean : clean + ext);
+      if (dest === file) return { name: datasetName(file), path: file };
+      if (existsSync(dest)) throw new ApsError('ValidationError', `datasets/${datasetName(dest)} exists already`);
+      mkdirSync(dirname(dest), { recursive: true });
+      renameSync(file, dest);
+      be.host.emit('data.changed', { kind: 'datasets' });
+      return { name: datasetName(dest), path: dest };
+    },
+    /** A copy of a dataset beside it: name-copy.csv (name-copy-2.csv …). */
+    'datasets.duplicate': ({ name }: { name: string }) => {
+      const file = datasetFile(name);
+      if (!existsSync(file)) throw new ApsError('ValidationError', `No dataset datasets/${name}`);
+      const m = /^(.*?)(\.[^./]+)?$/.exec(file)!;
+      let dest = `${m[1]}-copy${m[2] ?? ''}`;
+      for (let i = 2; existsSync(dest); i++) dest = `${m[1]}-copy-${i}${m[2] ?? ''}`;
+      copyFileSync(file, dest);
+      be.host.emit('data.changed', { kind: 'datasets' });
+      return { name: datasetName(dest), path: dest };
+    },
+    /** Delete a dataset: it goes to the workspace's trash (Recently deleted) for 30 days. */
+    'datasets.delete': ({ name }: { name: string }) => {
+      const file = datasetFile(name);
+      if (!existsSync(file)) throw new ApsError('ValidationError', `No dataset datasets/${name}`);
+      moveToTrash(be.ws, 'dataset', file);
+      be.host.emit('data.changed', { kind: 'datasets' });
+      return { name: datasetName(file) };
+    },
     /** The text of a dataset file in the workspace's datasets/ folder (CSV, JSON, JSONL, Markdown; up to 20 MB). */
     'datasets.read': ({ path }: { path: string }) => {
       const root = be.ws.path('datasets');

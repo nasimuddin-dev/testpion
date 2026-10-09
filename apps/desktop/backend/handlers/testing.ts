@@ -33,6 +33,10 @@ import {
   workspaceAttention,
   readRunSummary,
   compareRuns,
+  flowOfFile,
+  readExposure,
+  setExposure,
+  type FlowExposure,
 } from '@testpion/core';
 import type { Backend, Handlers, EvalRunParams } from '../backend.js';
 
@@ -54,6 +58,23 @@ export function testingHandlers(be: Backend): Handlers {
       return { path };
     },
     'tests.delete': ({ path }: { path: string }) => be.ws.deleteTestFile(path),
+    /** The expose: block of a test file or suite (the flow as an MCP tool), if any; a proposed tool name otherwise. */
+    'tests.exposure': ({ path }: { path: string }) => {
+      const text = be.ws.readTestFile(path);
+      const suggested = path
+        .replace(/\.suite\.(ya?ml|json)$|\.(ya?ml|json)$/i, '')
+        .replace(/[^A-Za-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .toLowerCase()
+        .replace(/^[^a-z]+/, '');
+      return { expose: readExposure(text, path), suggested: suggested || 'flow' };
+    },
+    /** Write (or, with expose: null, remove) the expose: block of a test file or suite; the rest of the file stays as it is. */
+    'tests.expose': ({ path, expose }: { path: string; expose: FlowExposure | null }) => {
+      const next = setExposure(be.ws.readTestFile(path), expose ?? undefined);
+      be.ws.writeTestFile(path, next);
+      return { path, expose: readExposure(next, path) };
+    },
     'tests.preview': async ({ path }: { path: string }) => {
       const out: Array<{ id?: string; name: string; type: string; tags?: string[] }> = [];
       const abs = join(be.ws.path('tests'), path);
@@ -64,6 +85,8 @@ export function testingHandlers(be: Backend): Handlers {
       }
       return { tests: out };
     },
+    /** A test file as a flow: its steps (name, type, request line, extracted names, dependsOn) with the latest run's result of each. */
+    'tests.flow': ({ file }: { file: string }) => flowOfFile(be.ws, file),
     /** A CI pipeline (GitHub Actions, GitLab CI, Azure Pipelines, Jenkins) for a suite, collection or test files. */
     'ci.config': (o: CiConfigOptions) => ciConfig(be.ws, o),
     'ci.save': (o: CiConfigOptions) => {

@@ -28,8 +28,8 @@ function bigCollection(ws) {
           headers: [{ key: 'Accept', value: 'application/json', enabled: true }, { key: 'X-Trace', value: '{{$guid}}', enabled: true }],
           body: n % 2 ? { type: 'json', content: JSON.stringify({ id: n, name: `item ${n}`, tags: ['a', 'b', 'c'], nested: { deep: { value: n } } }, null, 2) } : undefined,
         },
-        preRequestScript: n % 3 ? 'pm.variables.set("page", "1");' : undefined,
-        testScript: 'pm.test("ok", () => pm.response.to.have.status(200));',
+        preRequestScript: n % 3 ? 'tp.variables.set("page", "1");' : undefined,
+        testScript: 'tp.test("ok", () => tp.response.to.have.status(200));',
         assertions: [{ type: 'status', equals: 200 }],
       });
     }

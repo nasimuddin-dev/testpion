@@ -172,7 +172,8 @@ export function ToolsPanel({ serverId, tools }: { serverId: string; tools: Tool[
   );
 }
 
-type ToolRun = { isError: boolean; content: unknown[]; structuredContent?: unknown; durationMs: number; checks: CheckResult[]; body: unknown } | { error: NormalizedError };
+/** A tool call's outcome: the MCP result with its checks and timing, or the error that stopped it. */
+export type ToolRun = { isError: boolean; content: unknown[]; structuredContent?: unknown; durationMs: number; checks: CheckResult[]; body: unknown } | { error: NormalizedError };
 type ContentItem = { type: string; text?: string; data?: string; mimeType?: string };
 type ViewMode = 'pretty' | 'raw' | 'markdown';
 
@@ -185,7 +186,8 @@ const jsonOf = (text: string | undefined): unknown => {
   }
 };
 
-function ToolResult({ r, name }: { r: Extract<ToolRun, { content: unknown[] }>; name: string }) {
+/** The result of one tool call: content (pretty, raw or Markdown), structured content and the assertions. Shared by the inspector and a toolset's Try. */
+export function ToolResult({ r, name }: { r: Extract<ToolRun, { content: unknown[] }>; name: string }) {
   const [tab, setTab] = useState<'content' | 'structured' | 'tests'>(r.checks.some((c) => !c.passed) ? 'tests' : 'content');
   const items = r.content as ContentItem[];
   const text = items.filter((c) => c.type === 'text').map((c) => c.text ?? '').join('\n\n');

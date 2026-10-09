@@ -9,13 +9,17 @@ description: "Organise requests in collections and folders with variables, inher
 
 Collections hold folders and requests (REST and GraphQL), plus collection-level variables, auth (inherited by requests set to *Inherit*), and pre-request and test scripts.
 
+Every saved request belongs to a collection, whatever its kind. A collection's gRPC calls and WebSocket / Socket.IO / MQTT / Kafka connections are kept in the workspace library (`library/grpc.json`, `library/websocket.json`, each item with the `collectionId` of its collection) and shown under the collection's **gRPC** and **WebSocket & MQTT** categories. Saving a new one asks for its collection and folder, in the same **Save** dialog as a REST request (with **New** for a new collection); the app's `lib.save` refuses one without a collection. Deleting a collection moves its gRPC calls and connections to **Recently deleted** with it (hidden until it is restored); emptying the trash, or 30 days later, deletes them for good. Unsaved tabs still send and connect without saving.
+
+Workspaces from older versions could hold gRPC calls and connections outside a collection. Opening such a workspace moves them in once: grouped by their folder, into a collection named after the folder (an existing collection with exactly that name, or a new one), and those without a folder into **gRPC calls** or **Connections**. Settings ▸ Workspace lists it under the migrations applied on open; scripts call `adoptLooseRequests(store)` from `@testpion/core`.
+
 Each collection is a versioned JSON file under `collections/` in the workspace, and its `version` increments on every save. Commit it to git for review and history.
 
 ## Overview
 
 A collection's **Overview** tab shows it at a glance: how many requests and folders it has, how many have checks (assertions or a test script), how many REST requests are documented, and how many are failing now (their latest response failed its checks, or, without checks, had an error status). *By method* counts the requests per HTTP method. *Request health* lists the requests sent from the app with their latest status, median response time (of the latest 50), how many of their responses failed and when they were last sent: failing requests first, then the slowest, each with its latest results as a strip. The chips above it switch to the requests **Not sent yet** or **Without checks**, with their counts (long lists show 100 at a time, **Show all** the rest). When nothing has been sent yet, it says so once and offers **Run the collection**. Click a request to open it. *Where the time went* adds up the DNS lookup, TCP connect, TLS handshake, server wait and download of the responses sent from the app (also the `collection_timing` MCP tool).
 
-*Recent runs* shows the pass / fail of the collection's latest runs (Collection Runner and `run-collection`) with a link to the last one. *Variable flow* shows how requests chain: each variable a script sets (`pm.environment.set`, `pm.collectionVariables.set` …), which request or collection / folder script sets it and how many requests use it (`{{name}}` or a script `get`), in run order. It flags variables *used before they are set* (a request uses one before any earlier script sets it and no environment defines it), *never set* and *set, never used*. The `variable_flow` MCP tool returns the same.
+*Recent runs* shows the pass / fail of the collection's latest runs (Collection Runner and `run-collection`) with a link to the last one. *Variable flow* shows how requests chain: each variable a script sets (`tp.environment.set`, `tp.collectionVariables.set` …), which request or collection / folder script sets it and how many requests use it (`{{name}}` or a script `get`), in run order. It flags variables *used before they are set* (a request uses one before any earlier script sets it and no environment defines it), *never set* and *set, never used*. The `variable_flow` MCP tool returns the same.
 
 For scripts and agents: `testpion requests "My API" --health --json` in the CLI and the `collection_health` MCP tool return the same numbers.
 
@@ -76,11 +80,11 @@ From the terminal, `testpion replace "Master Collections" "http://localhost:5002
 - `.http` / `.rest` files of VS Code's REST Client and the JetBrains HTTP Client. See [.http files](#http-files) below.
 - HAR files.
 
-From Insomnia, Bruno and Hoppscotch, TestPion takes folders, requests, bodies, headers, parameters, auth and variables. `{{ _.name }}` and `<<name>>` become `{{name}}`. Insomnia's pre-request and after-response scripts run: its `insomnia.*` script API follows Postman's, so `insomnia.test`, `insomnia.expect`, `insomnia.environment` and `insomnia.response` become their `pm.*` twins. Bruno scripts and tests run as they are (`bru`, `req`, `res`). Hoppscotch scripts use their own API (`pw.*`), so they come over as comments to rewrite with `pm.*` / `tp.*`. An imported environment never replaces one you already have: a name that's taken gets *(imported)* added.
+From Insomnia, Bruno and Hoppscotch, TestPion takes folders, requests, bodies, headers, parameters, auth and variables. `{{ _.name }}` and `<<name>>` become `{{name}}`. Insomnia's pre-request and after-response scripts run: its `insomnia.*` script API follows Postman's, so `insomnia.test`, `insomnia.expect`, `insomnia.environment` and `insomnia.response` become their `tp.*` twins. Bruno scripts and tests run as they are (`bru`, `req`, `res`). Hoppscotch scripts use their own API (`pw.*`), so they come over as comments to rewrite with `tp.*`. An imported environment never replaces one you already have: a name that's taken gets *(imported)* added.
 - TestPion collections and workspace exports.
 - A single request copied as cURL (bash or cmd), fetch or PowerShell. It is saved to the **Imported** collection, named after its method and path. Secrets in it (tokens, API keys, cookies, passwords) are replaced by `{{variables}}`, and a message lists the ones to add as secret environment variables. To just try the request without saving it, paste it into the REST view instead (see [paste a request](/api-testing/rest#paste-a-request-from-the-browser)).
 
-If a Postman collection's scripts use something TestPion's script sandbox doesn't have (a `pm.require` package the workspace doesn't have yet, or a `require()` of a module the sandbox doesn't have: it has ajv, atob, btoa, chai, cheerio, crypto-js, csv-parse, lodash, moment, tv4, uuid and xml2js), the import says which requests and what to use instead (`scriptWarnings` in `testpion import --json` and the MCP tool).
+If a Postman collection's scripts use something TestPion's script sandbox doesn't have (a `tp.require` package the workspace doesn't have yet, or a `require()` of a module the sandbox doesn't have: it has ajv, atob, btoa, chai, cheerio, crypto-js, csv-parse, lodash, moment, tv4, uuid and xml2js), the import says which requests and what to use instead (`scriptWarnings` in `testpion import --json` and the MCP tool).
 
 A Postman import keeps collection-level and request scripts, path variables, OAuth 2.0 settings, GraphQL bodies (as GraphQL requests), descriptions and saved responses.
 
@@ -92,7 +96,7 @@ A WSDL 1.1 or 2.0 document becomes a collection of SOAP requests, one folder per
 - a sample envelope built from the XML Schema in the WSDL's `<types>`: every element of the input message with a placeholder value (`?` for text, `0` for numbers, `false`, the first value of an enumeration, dates), including the fields of base types (`extension`), with document/literal and RPC styles;
 - a status 200 check (a SOAP Fault comes back as 500 in SOAP 1.1).
 
-Replace the placeholders and send. The response is XML: `xml2Json(pm.response.text())` turns it into an object for tests. Schemas and WSDLs it imports (`xsd:import`, `xsd:include`, `wsdl:import`, like the `?xsd=xsd0` and `?wsdl=wsdl0` documents of JAX-WS and WCF services) are fetched from the same site for a link, or read from next to the file for a file.
+Replace the placeholders and send. The response is XML: `xml2Json(tp.response.text())` turns it into an object for tests. Schemas and WSDLs it imports (`xsd:import`, `xsd:include`, `wsdl:import`, like the `?xsd=xsd0` and `?wsdl=wsdl0` documents of JAX-WS and WCF services) are fetched from the same site for a link, or read from next to the file for a file.
 
 To try it, run the [demo servers](/getting-started/installation#try-it-with-the-demo-servers) and import the link `http://127.0.0.1:4010/soap/patients?wsdl` (`GetPatient` with id `1` or `2`, `RegisterPatient`).
 
@@ -136,7 +140,7 @@ Bruno scripts **run as they are**: TestPion's script sandbox has Bruno's API nex
 
 From the terminal, give the folder: `testpion import ./my-bruno-collection -w my-workspace`.
 
-The other way works too: **Export ▸ Bruno collection folder…** (or `testpion export "My API" --format bruno --out ./bruno/my-api`) writes the collection as a Bruno folder, with the workspace's environments (secret variables by name only). Status and JSONPath `equals` / `exists` checks become Bruno assertions; scripts that came from Bruno go back as they were, and TestPion (`pm.*`) scripts are marked, since Bruno runs its own script API.
+The other way works too: **Export ▸ Bruno collection folder…** (or `testpion export "My API" --format bruno --out ./bruno/my-api`) writes the collection as a Bruno folder, with the workspace's environments (secret variables by name only). Status and JSONPath `equals` / `exists` checks become Bruno assertions; scripts that came from Bruno go back as they were, and TestPion (`tp.*`) scripts are marked, since Bruno runs its own script API.
 
 **Import…** in the workspace menu (top bar) accepts the same files. A TestPion workspace export opens as a new workspace, and anything else (a Postman, Insomnia, Bruno or Hoppscotch file, OpenAPI, HAR) is added to the open workspace.
 
@@ -154,7 +158,7 @@ The CLI can import too, from a file or a link: `testpion import openapi.yaml -w 
 
 Postman has no place for some TestPion features. When they are left out, a message lists them:
 
-- Assertions: a `status` check becomes a `pm.test(...)` in the request's test script, and other assertion types are skipped.
+- Assertions: a `status` check becomes a `tp.test(...)` in the request's test script, and other assertion types are skipped.
 - JWT auth and the per-request Cookies table (its cookies are sent as a `Cookie` header instead).
 
 Importing an exported file back into TestPion gives the same collection, and the round trip is tested. A collection exported in **TestPion's format** also carries its gRPC calls and WebSocket / Socket.IO / MQTT connections (`savedItems`); importing the file puts them back in the imported collection (an id the workspace already uses gets a new one, so nothing is replaced). Postman's format has no place for them, so a Postman export says how many it left out. **Environments → Export** writes an environment in Postman's environment format. Secret variables are exported with an empty value and type `secret`, because their values stay in your OS credential store.
@@ -225,8 +229,8 @@ The Collection Runner works like Postman's. It runs a whole collection or one fo
 | Environment | Variables used for the run |
 | Iterations | How many times to run the requests (defaults to the number of data rows, or 1) |
 | Delay | Pause between requests, in milliseconds |
-| Data | A CSV or JSON file, a SQLite database with a query, or a PostgreSQL / MySQL database (**Database…**: its URL, `{{variables}}` allowed, and a query); files in the workspace's `datasets/` folder are listed next to *Select file* (its tables are listed; click one to use it). Each row becomes one iteration. Use `{{column}}` in requests, or `pm.iterationData.get('column')` in scripts. Click the file name to preview its rows |
-| Keep variable values | Values set with `pm.environment.set()` and similar are saved as [current values](./rest.md#scripts) after the run. Turn this off to throw them away |
+| Data | A CSV or JSON file, a SQLite database with a query, or a PostgreSQL / MySQL database (**Database…**: its URL, `{{variables}}` allowed, and a query); files in the workspace's `datasets/` folder are listed next to *Select file* (its tables are listed; click one to use it). Each row becomes one iteration. Use `{{column}}` in requests, or `tp.iterationData.get('column')` in scripts. Click the file name to preview its rows |
+| Keep variable values | Values set with `tp.environment.set()` and similar are saved as [current values](./rest.md#scripts) after the run. Turn this off to throw them away |
 | Stop on first failure | End the run when a request fails or errors |
 
 **gRPC calls and WebSocket / Socket.IO / MQTT connections** saved in the collection run too, after its requests in every iteration, and they're listed (and can be unticked) with the requests. A gRPC call passes when the server answers OK (code 0), with the call's saved `.proto` files or its server-reflection descriptor; a connection passes when the server accepts it, and its saved message (event, or publish) is sent. A folder run includes only the folder's requests. The same applies to `testpion run-collection`, monitors and the `run_collection` MCP tool.
@@ -237,11 +241,11 @@ To control the order from scripts:
 
 ```js
 // jump to a request by name or id
-pm.execution.setNextRequest('List patients');
+tp.execution.setNextRequest('List patients');
 // end the current iteration
-pm.execution.setNextRequest(null);
+tp.execution.setNextRequest(null);
 // in a pre-request script: skip this request (reported as skipped)
-pm.execution.skipRequest();
+tp.execution.skipRequest();
 ```
 
 `postman.setNextRequest()` works too. An iteration stops after 1,000 requests, so a `setNextRequest` loop can't run forever.

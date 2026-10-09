@@ -14,8 +14,8 @@ interface CurrentValuesFile {
 }
 
 /**
- * Postman-style "current values": values set by scripts (pm.environment.set, pm.globals.set,
- * pm.collectionVariables.set) that persist on this machine only — never in workspace files, so
+ * Postman-style "current values": values set by scripts (tp.environment.set, tp.globals.set,
+ * tp.collectionVariables.set) that persist on this machine only — never in workspace files, so
  * they are not committed to git. Sensitive values (token, password, …, or variables marked secret)
  * are kept in the encrypted secret store.
  */

@@ -1,9 +1,10 @@
+import { prettyBody } from '../../lib/pretty';
 import { CodeBlock } from '../CodeBlock';
 import { Bot, ChevronDown, Copy, ExternalLink, Pause, Play, Scale, Star, X } from 'lucide-react';
 import { useMemo, useState, type ReactNode } from 'react';
 import { formatBytes } from '@testpion/shared';
 import { Badge, Button, Empty, Input, Menu, Split, statusTone, Tabs } from '../ui';
-import { JsonTree } from '../JsonView';
+import { JsonTree, RawView } from '../JsonView';
 import { JwtView } from '../JwtView';
 import { EventsView, FramesView, GrpcView } from '../DebuggerTools';
 import { bodyNote, curlOf, hexDump, rawOf, versionOf, type Exchange } from './model';
@@ -267,7 +268,7 @@ function DetailsPane({
             </tbody>
           </table>
         )}
-        {tab === 'content' && <CodeBlock className="p-3 text-xs mono whitespace-pre-wrap break-all" text={body ?? bodyNote} />}
+        {tab === 'content' && (body ? <RawView text={prettyBody(body)} /> : <CodeBlock className="p-3 text-xs mono whitespace-pre-wrap break-all" text={bodyNote} />)}
         {tab === 'raw' && <CodeBlock className="p-3 text-xs mono whitespace-pre-wrap break-all" language={'http'} text={raw} />}
         {tab === 'json' && (json !== undefined ? <JsonTree data={json} /> : <Empty title="Not JSON">{body ? 'The body is not JSON: see Content.' : bodyNote}</Empty>)}
         {current?.render()}

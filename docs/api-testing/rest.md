@@ -44,7 +44,7 @@ When the workspace holds an API definition (**Import** an OpenAPI / Swagger docu
 - **Use this proxy**: a proxy URL, an optional user name and password, and a list of hosts that bypass it. The bypass list uses `NO_PROXY` rules: host names (subdomains included), `.domain` suffixes, `host:port`, IP addresses, or `*`. The password is kept in the OS secret store, never in the settings file.
 - **Don't use a proxy.**
 
-The proxy applies to requests, `pm.sendRequest`, OAuth token calls, AI providers, MCP over HTTP, remote datasets, and WebSocket and Socket.IO connections (tunnelled with CONNECT). A request's own proxy (its **Settings** tab) wins. gRPC reads the environment variables itself.
+The proxy applies to requests, `tp.sendRequest`, OAuth token calls, AI providers, MCP over HTTP, remote datasets, and WebSocket and Socket.IO connections (tunnelled with CONNECT). A request's own proxy (its **Settings** tab) wins. gRPC reads the environment variables itself.
 
 The CLI always uses the environment variables. Set `TESTPION_NO_PROXY=1` to connect directly instead.
 
@@ -144,7 +144,7 @@ To find something in a big response, type a JSONPath in **Filter with JSONPath**
 In the **Pretty** view of a JSON response, click a key to open its menu:
 
 - **Copy JSONPath** copies the key's path (like `$.items[0].id`).
-- **Save to variable…** keeps the field in a variable for later requests (a token from a login, an id from a create). It adds a line such as `pm.environment.set('accessToken', pm.response.json().access_token);` to the request's test script, so the value is updated after every send, and sets it right away in the active environment (the globals when no environment is selected). Use it as `{{accessToken}}`.
+- **Save to variable…** keeps the field in a variable for later requests (a token from a login, an id from a create). It adds a line such as `tp.environment.set('accessToken', tp.response.json().access_token);` to the request's test script, so the value is updated after every send, and sets it right away in the active environment (the globals when no environment is selected). Use it as `{{accessToken}}`.
 - **Equals** checks the field has its current value.
 - **Exists** checks the field is there.
 - **Is a …** checks the field's type (string, number, array …).
@@ -178,10 +178,10 @@ Response bodies come from the payload files in the workspace (up to 2 MB each ar
 
 ## Scripts
 
-Pre-request and post-response scripts use the Postman script API under two names: **`tp`** (TestPion's name) and **`pm`** (Postman's). They are the same object, so write whichever you prefer, or mix them: `tp.test(...)`, `pm.test(...)`, `tp.environment.set(...)` all work. Scripts from imported Postman collections run unchanged. They run in a [sandbox](../security/privacy.md#script-sandbox) without file or network access. The **Snippets** list next to the editor inserts common scripts (written with `tp`), and the editor autocompletes both `tp.` and `pm.`.
+Pre-request and post-response scripts use TestPion's script API, **`tp`**: `tp.test(...)`, `tp.expect(...)`, `tp.environment.set(...)` and the rest below. Scripts written for Postman (`pm.*`) also run unchanged. Scripts run in a [sandbox](../security/privacy.md#script-sandbox) without file or network access. The **Snippets** list next to the editor inserts common scripts, and the editor autocompletes `tp.`.
 
-- **Import from Postman:** scripts are kept as they are (`pm.*`). To switch a whole collection to `tp.*`, right-click it (or use its **⋯**) and choose **Convert scripts to tp.\***; **Convert scripts to pm.\*** goes back. You see how many scripts change before anything is saved. The CLI equivalent is `testpion scripts convert --to tp -w <workspace> [--collection <name>] [--dry-run] --json`.
-- **Export to Postman** (and `testpion export`): `tp.*` is converted to `pm.*`, because Postman only knows `pm`. Only code changes; text in strings and comments, regular expressions and properties such as `obj.tp` are left alone. A script that declares its own `tp` variable is exported unchanged.
+- **Import from Postman:** scripts are kept as they are. To switch a whole collection to `tp.*`, right-click it (or use its **⋯**) and choose **Convert scripts to tp.\***; **Convert scripts to pm.\*** goes back. You see how many scripts change before anything is saved. The CLI equivalent is `testpion scripts convert --to tp -w <workspace> [--collection <name>] [--dry-run] --json`.
+- **Export to Postman** (and `testpion export`): `tp.*` is converted to Postman's name for the API, the only one Postman knows. Only code changes; text in strings and comments, regular expressions and properties such as `obj.tp` are left alone. A script that declares its own `tp` variable is exported unchanged.
 
 Pre-request:
 
@@ -207,14 +207,14 @@ tp.environment.set('patientId', tp.response.json().items[0].id);
 
 | Area | API |
 |---|---|
-| Tests | `pm.test`, chai-style `pm.expect(…).to.…` (`equal`, `eql`, `deep`, `a`/`an`, `include`, `property`, `lengthOf`, `above`/`below`, `oneOf`, `keys`, `match`, `jsonSchema`, `not`, `true`/`false`/`null`/`ok`/`empty` …), JSON Schema checks with `pm.response.to.have.jsonSchema(schema)` or `tv4.validate(data, schema)` (validated with Ajv: draft-07 keywords and formats), legacy `tests["name"] = bool` |
-| Response | `pm.response.code`, `.status`, `.responseTime`, `.headers.get()`, `.json()`, `.text()`, `pm.response.to.have.status/header/body/jsonBody`, `pm.response.to.be.ok/success/error/json`, legacy `responseCode`, `responseBody` |
-| Request | `pm.request.method`, `pm.request.url` (`toString()`, `update()`, `getHost()`, `getPath()`, `getQueryString()`, `query.get/has/add/upsert/remove`, … or assign a string), `.headers.add/upsert/remove/get`, `.body.toString()/update()` |
-| Variables | `pm.variables`, `pm.environment`, `pm.collectionVariables`, `pm.globals` (`get/set/unset/has/clear/toObject/replaceIn`; `replaceIn` also fills dynamic variables such as `{{$randomFirstName}}`), `pm.iterationData` |
-| Other | `pm.info`, `pm.cookies`, `pm.cookies.jar()` (`get`, `getAll`, `set`, `unset`, `clear`), `pm.execution.setNextRequest`, `pm.execution.location` (collection, folders and request; `.current` is the request), `pm.sendRequest`, `pm.visualizer.set/clear`, `postman.setNextRequest`, `postman.setEnvironmentVariable` / `clearEnvironmentVariable` / `getResponseHeader` / `getResponseCookie` (and the globals versions), `xml2Json` (XML and SOAP responses, as in Postman), `setTimeout` / `setInterval` (the callbacks run after the script, in delay order, without waiting), `pm.response.size()`, `pm.expect.fail()`, `CryptoJS` (hashes, HMAC, Base64/Hex/Utf8), `btoa`/`atob`, `require('crypto-js')`, `require('tv4')`, `require('ajv')` (`new Ajv().compile(schema)`), `require('chai')`, `require('xml2js')`, `require('csv-parse/lib/sync')`, lodash as `_` or `require('lodash')`, `cheerio` (HTML with CSS selectors: `const $ = cheerio.load(pm.response.text()); $('title').text()`, `.find`, `.attr`, `.each`, `.map` …), `moment` (formatting, `add`/`subtract`, `startOf`/`endOf`, `diff`, comparisons; times are UTC), `console.log` |
+| Tests | `tp.test`, chai-style `tp.expect(…).to.…` (`equal`, `eql`, `deep`, `a`/`an`, `include`, `property`, `lengthOf`, `above`/`below`, `oneOf`, `keys`, `match`, `jsonSchema`, `not`, `true`/`false`/`null`/`ok`/`empty` …), JSON Schema checks with `tp.response.to.have.jsonSchema(schema)` or `tv4.validate(data, schema)` (validated with Ajv: draft-07 keywords and formats), legacy `tests["name"] = bool` |
+| Response | `tp.response.code`, `.status`, `.responseTime`, `.headers.get()`, `.json()`, `.text()`, `tp.response.to.have.status/header/body/jsonBody`, `tp.response.to.be.ok/success/error/json`, legacy `responseCode`, `responseBody` |
+| Request | `tp.request.method`, `tp.request.url` (`toString()`, `update()`, `getHost()`, `getPath()`, `getQueryString()`, `query.get/has/add/upsert/remove`, … or assign a string), `.headers.add/upsert/remove/get`, `.body.toString()/update()` |
+| Variables | `tp.variables`, `tp.environment`, `tp.collectionVariables`, `tp.globals` (`get/set/unset/has/clear/toObject/replaceIn`; `replaceIn` also fills dynamic variables such as `{{$randomFirstName}}`), `tp.iterationData` |
+| Other | `tp.info`, `tp.cookies`, `tp.cookies.jar()` (`get`, `getAll`, `set`, `unset`, `clear`), `tp.execution.setNextRequest`, `tp.execution.location` (collection, folders and request; `.current` is the request), `tp.sendRequest`, `tp.visualizer.set/clear`, `postman.setNextRequest`, `postman.setEnvironmentVariable` / `clearEnvironmentVariable` / `getResponseHeader` / `getResponseCookie` (and the globals versions), `xml2Json` (XML and SOAP responses, as in Postman), `setTimeout` / `setInterval` (the callbacks run after the script, in delay order, without waiting), `tp.response.size()`, `tp.expect.fail()`, `CryptoJS` (hashes, HMAC, Base64/Hex/Utf8), `btoa`/`atob`, `require('crypto-js')`, `require('tv4')`, `require('ajv')` (`new Ajv().compile(schema)`), `require('chai')`, `require('xml2js')`, `require('csv-parse/lib/sync')`, lodash as `_` or `require('lodash')`, `cheerio` (HTML with CSS selectors: `const $ = cheerio.load(tp.response.text()); $('title').text()`, `.find`, `.attr`, `.each`, `.map` …), `moment` (formatting, `add`/`subtract`, `startOf`/`endOf`, `diff`, comparisons; times are UTC), `console.log` |
 | Bruno | Scripts imported from [Bruno](/api-testing/collections#bruno) run with Bruno's API: `bru.getEnvVar` / `setEnvVar` / `getVar` / `setVar` / `interpolate` / `setNextRequest` / `runner.skipRequest`, `req.getUrl` / `setHeader` / `getBody` / `setBody` …, `res.status` / `res.body` / `res.getBody()` / `res.getHeader()` / `res('path')`, `test()` and `expect()` |
 
-**Script packages** (`pm.require`) are shared modules for scripts, like Postman's package library: code you'd otherwise copy into many requests (signing, token handling, common checks). Open **Scripts ▸ Packages…** to create and edit them; each is a CommonJS module in the workspace's `packages/` folder (`packages/@clinic/auth.js` for `@clinic/auth`), so they're versioned with the workspace and run the same in the app, the CLI and monitors.
+**Script packages** (`tp.require`) are shared modules for scripts, like Postman's package library: code you'd otherwise copy into many requests (signing, token handling, common checks). Open **Scripts ▸ Packages…** to create and edit them; each is a CommonJS module in the workspace's `packages/` folder (`packages/@clinic/auth.js` for `@clinic/auth`), so they're versioned with the workspace and run the same in the app, the CLI and monitors.
 
 ```js
 // packages/@clinic/auth.js
@@ -229,9 +229,9 @@ const auth = tp.require('@clinic/auth');
 tp.request.headers.upsert({ key: 'Authorization', value: auth.bearer(tp.environment.get('token')) });
 ```
 
-A package can `pm.require` other packages and `require()` the built-in modules; each is loaded once per script run. Postman collections that use packages work once the packages are added with the same names.
+A package can `tp.require` other packages and `require()` the built-in modules; each is loaded once per script run. Postman collections that use packages work once the packages are added with the same names.
 
-**`pm.sendRequest`** sends another HTTP request from a pre-request or test script, for example to fetch a token first:
+**`tp.sendRequest`** sends another HTTP request from a pre-request or test script, for example to fetch a token first:
 
 ```js
 tp.sendRequest({
@@ -246,9 +246,9 @@ tp.sendRequest({
 });
 ```
 
-- The request is a URL string or a Postman request object (`url`, `method`, `header` as a list or map, `body` with `mode: "raw"` or `"urlencoded"`). As in Postman, `{{variables}}` are not resolved automatically: use `pm.variables.replaceIn()`.
+- The request is a URL string or a Postman request object (`url`, `method`, `header` as a list or map, `body` with `mode: "raw"` or `"urlencoded"`). As in Postman, `{{variables}}` are not resolved automatically: use `tp.variables.replaceIn()`.
 - The response has `code`, `status`, `responseTime`, `headers`, `json()` and `text()`. On a network error, the callback gets `err` and `null`.
-- Without a callback, `pm.sendRequest` returns a promise, and scripts may use `await` at the top level, as in newer Postman scripts:
+- Without a callback, `tp.sendRequest` returns a promise, and scripts may use `await` at the top level, as in newer Postman scripts:
 
   ```js
   const res = await tp.sendRequest(tp.variables.replaceIn("{{baseUrl}}/auth/token"));
@@ -256,13 +256,13 @@ tp.sendRequest({
   ```
 
   A failed request rejects the promise (use `try` / `catch`).
-- `pm.test` takes async functions (`pm.test('name', async () => { … await … })`) and Postman's `function (done) { … done(); }` style (a `done` that is never called fails the test); `pm.test.skip(name, fn)` lists a test as skipped without running it.
+- `tp.test` takes async functions (`tp.test('name', async () => { … await … })`) and Postman's `function (done) { … done(); }` style (a `done` that is never called fails the test); `tp.test.skip(name, fn)` lists a test as skipped without running it.
 - Requests share the run's cookie jar, time out like other requests, and appear in the [Console](#console) under the script's request, whether the request was sent from a tab or by a run (they are also recorded as `sentRequests` in the run's results).
-- **How it works:** the sandbox is synchronous, so the script runs, its requests are sent, then the script runs again from the start with the responses, and callbacks run immediately (an `await` on a request that hasn't been sent yet waits for the next run). Only the last run's variables, tests and logs count. So a request made inside a callback also has its callback run inside, before later callbacks. Keep scripts deterministic around `pm.sendRequest` (avoid a random URL per run). A script may send at most 20 requests.
+- **How it works:** the sandbox is synchronous, so the script runs, its requests are sent, then the script runs again from the start with the responses, and callbacks run immediately (an `await` on a request that hasn't been sent yet waits for the next run). Only the last run's variables, tests and logs count. So a request made inside a callback also has its callback run inside, before later callbacks. Keep scripts deterministic around `tp.sendRequest` (avoid a random URL per run). A script may send at most 20 requests.
 
-**`pm.vault`** (Postman Vault) works with TestPion's secret variables: `await pm.vault.get("apiKey")` reads the variable `apiKey` (keep it a [secret variable](./environments.md#secrets)), `pm.vault.set` / `unset` change the environment, and `{{vault:apiKey}}` in a request resolves like `{{apiKey}}`.
+**`tp.vault`** (Postman Vault) works with TestPion's secret variables: `await tp.vault.get("apiKey")` reads the variable `apiKey` (keep it a [secret variable](./environments.md#secrets)), `tp.vault.set` / `unset` change the environment, and `{{vault:apiKey}}` in a request resolves like `{{apiKey}}`.
 
-### Visualize responses (`pm.visualizer`)
+### Visualize responses (`tp.visualizer`)
 
 As in Postman, a test (post-response) script can turn a response into an HTML view with a [Handlebars](https://handlebarsjs.com/guide/) template:
 
@@ -279,9 +279,9 @@ tp.visualizer.set(template, tp.response.json());
 
 After you send, the response body opens on **Visualize** (next to Pretty and Raw). The example workspace's **List patients** request has one; the **Snippets** list has *Visualize the response as a table*.
 
-- `pm.visualizer.set(template, data)` renders `template` with `data` (anything JSON-serialisable). If several scripts (collection, folder, request) call it, the last call wins. `pm.visualizer.clear()` removes it.
+- `tp.visualizer.set(template, data)` renders `template` with `data` (anything JSON-serialisable). If several scripts (collection, folder, request) call it, the last call wins. `tp.visualizer.clear()` removes it.
 - Handlebars' built-in helpers work (`#each`, `#if`, `#with`, `lookup`, …), plus `{{json value}}` to print a value as JSON. `{{…}}` output is HTML-escaped. Use `{{{…}}}` only for HTML you trust.
-- **Scripts and charts work**, like in Postman: a template can load a chart library from a CDN (`https://cdn.jsdelivr.net`, `https://cdnjs.cloudflare.com` or `https://unpkg.com`) and read its data with `pm.getData((err, data) => …)` (or `tp.getData`). For example:
+- **Scripts and charts work**, like in Postman: a template can load a chart library from a CDN (`https://cdn.jsdelivr.net`, `https://cdnjs.cloudflare.com` or `https://unpkg.com`) and read its data with `tp.getData((err, data) => …)`. For example:
 
   ```js
   const template = `
@@ -299,14 +299,14 @@ After you send, the response body opens on **Visualize** (next to Pretty and Raw
   ```
 - **Security:** the visualization runs on its own isolated origin (`tpviz://` in the desktop app), in a sandboxed frame that can't reach the app, its storage or your data. It can't make network requests, so nothing leaves your machine; only scripts from those CDNs (and inline scripts) load, and images and fonts must be inline. Hosts that can't serve the isolated page fall back to a sanitised, script-free view.
 
-**Current values:** values set with `pm.environment.set`, `pm.collectionVariables.set` or `pm.globals.set` are kept on this machine as *current values* and override the stored values. They're never written to workspace files. Sensitive ones (tokens, passwords, secret variables) are encrypted. You can see and reset them under **Environments**.
+**Current values:** values set with `tp.environment.set`, `tp.collectionVariables.set` or `tp.globals.set` are kept on this machine as *current values* and override the stored values. They're never written to workspace files. Sensitive ones (tokens, passwords, secret variables) are encrypted. You can see and reset them under **Environments**.
 
 ## AI help
 
 With an assistant model set in **Settings → AI Assistant** (a local model works offline), the request builder can draft work for you. Everything the AI produces is labelled and shown to you first. Nothing is sent or run on its own.
 
 - **Describe a request** (sparkles button next to Send): write what you want in plain words, for example *create a patient named Biscuit, a dog, owned by customer 123*. A new tab opens with the method, URL, headers and body filled in. The assistant only sees the **names** of your variables, so it writes `{{baseUrl}}` and `{{accessToken}}` instead of real values.
-- **Generate tests** (above a response): the assistant writes `pm.test(...)` checks for the response's status, fields, types and timing and appends them to the Post-response script, headed by an *AI-generated* comment. Send again to run them. Imports the sandbox doesn't support are removed.
+- **Generate tests** (above a response): the assistant writes `tp.test(...)` checks for the response's status, fields, types and timing and appends them to the Post-response script, headed by an *AI-generated* comment. Send again to run them. Imports the sandbox doesn't support are removed.
 - **Explain** (above a 4xx or 5xx response): opens the assistant with what the error means, the likely cause and how to fix the request.
 - **Suggest assertions** proposes TestPion checks (YAML) for the response.
 
@@ -314,7 +314,7 @@ Context sent to the model is redacted first (sensitive headers, fields and secre
 
 ## Editor help
 
-The code editors (bodies, scripts, GraphQL, messages, prompts) complete `{{variables}}` and highlight unknown ones in red (see [Typing variables](./environments.md#typing-variables)). In scripts, type `pm.` or `tp.` for the API with its documentation, and pick a ready-made snippet (`pm.test` status, JSON field, header, body text, JSON Schema, response time; `pm.environment.set`; `pm.sendRequest` …). JSON editors that have a schema, such as MCP tool arguments in raw JSON and gRPC messages, complete field names and values and flag mistakes as you type.
+The code editors (bodies, scripts, GraphQL, messages, prompts) complete `{{variables}}` and highlight unknown ones in red (see [Typing variables](./environments.md#typing-variables)). In scripts, type `tp.` for the API with its documentation, and pick a ready-made snippet (`tp.test` status, JSON field, header, body text, JSON Schema, response time; `tp.environment.set`; `tp.sendRequest` …). JSON editors that have a schema, such as MCP tool arguments in raw JSON and gRPC messages, complete field names and values and flag mistakes as you type.
 
 ## Console
 

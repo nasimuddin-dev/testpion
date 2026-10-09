@@ -22,7 +22,7 @@ Everywhere you can write a value, `{{variables}}` help you:
 - **Autocomplete:** type `{{` in the URL bar, a header, param or form value, a body, a script, a message or a prompt to pick a variable. The list shows each one's value and where it comes from (environment, collection, workspace, global); secret values stay hidden.
 - **Colour:** a variable that resolves is **blue**; one that isn't defined anywhere is **red** (with a wavy underline in code editors), so a typo shows before you send.
 - **Hover** a variable to see its value and scope, or that it isn't defined.
-- In scripts, `pm.environment.get('`, `pm.variables.set('`, `pm.globals.has('` and the like suggest the names of that scope's variables.
+- In scripts, `tp.environment.get('`, `tp.variables.set('`, `tp.globals.has('` and the like suggest the names of that scope's variables.
 - Header values also suggest common values (e.g. `Content-Type: application/json`, `Authorization: Bearer {{accessToken}}`).
 
 Dynamic values (`{{$uuid}}`, `{{$timestamp}}` …) and `{{$env.NAME}}` count as defined.
@@ -31,7 +31,7 @@ A request whose host is a variable without a value (`{{baseurl}}/users` when no 
 
 ## Find usages and rename
 
-**Usages** in an environment's toolbar (or **Find variable usages** in the command palette, Ctrl+K) shows where a variable is used and defined: `{{name}}` in URLs, parameters, headers, bodies, auth and assertions, `pm.environment.get('name')` and the like in scripts, environments, collection, folder and workspace variables, and test files. Click a request to open it.
+**Usages** in an environment's toolbar (or **Find variable usages** in the command palette, Ctrl+K) shows where a variable is used and defined: `{{name}}` in URLs, parameters, headers, bodies, auth and assertions, `tp.environment.get('name')` and the like in scripts, environments, collection, folder and workspace variables, and test files. Click a request to open it.
 
 **Rename everywhere** changes all of them at once and refuses a name that's already defined. A secret variable keeps its value: it moves to the new name in the OS secret store. Open request tabs with unsaved edits keep the old name until you reload them.
 
