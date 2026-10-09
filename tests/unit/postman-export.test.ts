@@ -120,7 +120,8 @@ describe('Postman v2.1 export', () => {
   });
 
   it('round-trips through the Postman importer', () => {
-    const back = importPostman(json).collection;
+    // the source scripts use pm.*: keep them so the round trip is exact (the default import converts to tp.*)
+    const back = importPostman(json, { scripts: 'keep' }).collection;
     expect(back).toMatchObject({ name: 'Pets', description: 'Pet store', auth: collection.auth, preRequestScript: collection.preRequestScript, testScript: collection.testScript });
     expect(back.variables).toEqual([
       { key: 'baseUrl', value: 'https://api.example.com', enabled: true },

@@ -1,8 +1,9 @@
-import { AlarmClock, BarChart3, Bot, Keyboard, Columns2, CopyX, Disc, GitCompare, ScanSearch, TerminalSquare, Variable, Download, FileDown, FlaskConical, FolderOpen, FolderPlus, FolderTree, Gauge, GitBranch, History, KeyRound, Layers, ListChecks, ListX, Network, Play, Plug, Radio, RefreshCw, ScrollText, Search, Settings, Sparkles, SquareTerminal, Upload, Waypoints, Workflow, X, type LucideIcon } from 'lucide-react';
+import { AlarmClock, BarChart3, Bot, Code2, Keyboard, Columns2, CopyX, Disc, GitCompare, ScanSearch, TerminalSquare, Variable, Download, FileDown, FlaskConical, FolderOpen, FolderPlus, FolderTree, Gauge, GitBranch, History, KeyRound, Layers, ListChecks, ListX, Network, Play, Plug, Radio, RefreshCw, ScrollText, Search, Settings, Sparkles, SquareTerminal, Upload, Waypoints, Workflow, X, type LucideIcon } from 'lucide-react';
 import { createElement, lazy, Suspense, useEffect, useMemo, useRef, useState, type ComponentType, type LazyExoticComponent } from 'react';
 import { call, on } from './api';
 import { useApp, type ViewId } from './store';
 import { watchSecretRefs } from './lib/secret-refs';
+import { focusedScriptEditor } from './lib/script-editor';
 import { AssistantPanel } from './components/AssistantPanel';
 import { VarPopoverHost } from './components/VarPopoverHost';
 import { CommandPalette, DialogHost, LogsPanel, ProgressHost, SearchDialog, Sidebar, StatusBar, Toaster, TopBar, NAV, type PaletteCommand } from './components/Shell';
@@ -368,6 +369,11 @@ export default function App() {
       cmds.push({ id: `env-${e.id}`, label: `Switch Environment: ${e.name}`, icon: <span className="block w-2.5 h-2.5 rounded-full" style={{ background: e.color ?? 'var(--ok)' }} />, run: () => s.setEnvironment(e.name) });
     return cmds;
   }, [workspace]);
+  // the focus in a request's script editor: the palette offers its own command first (Ctrl+Shift+I in the editor)
+  const paletteCommands = useMemo<PaletteCommand[]>(() => {
+    const ed = paletteOpen ? focusedScriptEditor() : undefined;
+    return ed ? [{ id: 'insert-snippet', label: 'Insert Snippet…', hint: 'Ctrl+Shift+I', icon: <Code2 size={16} />, run: () => ed.insertSnippet() }, ...commands] : commands;
+  }, [paletteOpen, commands]);
 
   if (!ready)
     return (
@@ -430,7 +436,7 @@ export default function App() {
         {assistant && <AssistantPanel key={JSON.stringify(assistant).slice(0, 200)} />}
       </div>
       <StatusBar />
-      {paletteOpen && <CommandPalette commands={commands} />}
+      {paletteOpen && <CommandPalette commands={paletteCommands} />}
       {searchOpen && <SearchDialog />}
       {shortcutsOpen && (
         <Suspense fallback={null}>

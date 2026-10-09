@@ -4,6 +4,7 @@ import { SCHEMA_VERSION } from '../model/types.js';
 import { shortId, slugify } from '../util/ids.js';
 import { bruFilesToBrunoExport, looksLikeBru } from './bru.js';
 import { brunoAssertionScript } from '../scripts/bruno.js';
+import { importScriptsToTp, type ImportScriptsMode, type ImportScriptsSummary } from './import-scripts.js';
 
 /**
  * Importers for other API clients' exports: Insomnia (v4 JSON export, v5 YAML), Bruno (collection
@@ -53,14 +54,15 @@ function commented(tool: string, script: unknown): string | undefined {
 
 /**
  * An Insomnia script, kept runnable: Insomnia's scripting API (`insomnia.test`, `insomnia.expect`,
- * `insomnia.environment`, `insomnia.response` …) follows Postman's, so `insomnia.` becomes `pm.`.
+ * `insomnia.environment`, `insomnia.response` …) follows Postman's, so `insomnia.` becomes `pm.`
+ * (and then `tp.`, TestPion's own name, when the import converts scripts: the default, see `importInsomnia`).
  * A script that uses nothing of it stays as comments.
  */
-export function insomniaScript(script: unknown): string | undefined {
+export function insomniaScript(script: unknown, alias: 'pm' | 'tp' = 'pm'): string | undefined {
   const s = String(script ?? '').trim();
   if (!s) return undefined;
   if (!/\binsomnia\./.test(s)) return commented('Insomnia', s);
-  return `// Insomnia script: insomnia.* runs as pm.* (the same API)\n${s.replace(/\binsomnia\./g, 'pm.')}`;
+  return `// Insomnia script: insomnia.* runs as ${alias}.* (the same API)\n${s.replace(/\binsomnia\./g, 'pm.')}`;
 }
 
 function bodyFromMime(mime: string, text: string | undefined, params: Any[] | undefined): BodyConfig | undefined {
@@ -111,7 +113,7 @@ function insomniaAuth(a: Any | undefined): AuthConfig | undefined {
   }
 }
 
-function insomniaRequest(r: Any): SavedHttpRequest | SavedGraphQLRequest {
+function insomniaRequest(r: Any, alias: 'pm' | 'tp' = 'pm'): SavedHttpRequest | SavedGraphQLRequest {
   const url = normalizeTemplate(r.url);
   const headers = kv(r.headers);
   const auth = insomniaAuth(r.authentication) ?? { type: 'inherit' as const };
@@ -126,8 +128,8 @@ function insomniaRequest(r: Any): SavedHttpRequest | SavedGraphQLRequest {
     return { kind: 'graphql', id: shortId('gql-'), name: r.name || url, request: { endpoint: url, query: normalizeTemplate(g.query ?? ''), variables: g.variables && Object.keys(g.variables).length ? g.variables : undefined, operationName: g.operationName || undefined, headers, auth } };
   }
   const pathParams = kv(r.pathParameters);
-  const testScript = insomniaScript(r.afterResponseScript);
-  const preRequestScript = insomniaScript(r.preRequestScript);
+  const testScript = insomniaScript(r.afterResponseScript, alias);
+  const preRequestScript = insomniaScript(r.preRequestScript, alias);
   return {
     kind: 'http',
     id: shortId('req-'),
@@ -192,7 +194,15 @@ function insomniaSavedItems(res: Any[]): { grpc?: LibraryItem[]; websocket?: Lib
   return grpc.length || websocket.length ? { ...(grpc.length ? { grpc } : {}), ...(websocket.length ? { websocket } : {}) } : undefined;
 }
 
-export function importInsomnia(text: string): { collection: Collection; environments: Environment[]; savedItems?: { grpc?: LibraryItem[]; websocket?: LibraryItem[] } } {
+/**
+ * An Insomnia v4 / v5 export. `insomnia.*` scripts become `tp.*` (via `pm.*`, then the same conversion
+ * as a Postman import), or stay `pm.*` with `scripts: 'keep'`; both run.
+ */
+export function importInsomnia(
+  text: string,
+  opts: { scripts?: ImportScriptsMode } = {},
+): { collection: Collection; environments: Environment[]; savedItems?: { grpc?: LibraryItem[]; websocket?: LibraryItem[] }; scripts: ImportScriptsSummary } {
+  const alias = opts.scripts === 'keep' ? 'pm' : 'tp';
   const t = text.trim();
   const d: Any = t.startsWith('{') ? JSON.parse(t) : parseYaml(t);
   if (String(d.type ?? '').startsWith('collection.insomnia.rest/5')) {
@@ -201,11 +211,12 @@ export function importInsomnia(text: string): { collection: Collection; environm
       (items ?? []).map((it: Any): CollectionNode =>
         Array.isArray(it.children)
           ? ({ kind: 'folder', id: shortId('fld-'), name: it.name ?? 'Folder', items: convert(it.children), auth: insomniaAuth(it.authentication), ...(flattenVars(it.environment).length ? { variables: flattenVars(it.environment) } : {}) } as CollectionFolder)
-          : insomniaRequest(it),
+          : insomniaRequest(it, alias),
       );
     const name = d.name ?? 'Insomnia import';
     const env = d.environments ?? {};
-    return { collection: collectionOf(name, convert(d.collection ?? []), { description: d.meta?.description }), environments: insomniaEnvironments(name, env, env.subEnvironments ?? []) };
+    const v5 = importScriptsToTp(collectionOf(name, convert(d.collection ?? []), { description: d.meta?.description }), opts.scripts);
+    return { collection: v5.collection, environments: insomniaEnvironments(name, env, env.subEnvironments ?? []), scripts: v5.scripts };
   }
   // Insomnia 4 export: flat resources linked by parentId
   const res: Any[] = d.resources ?? [];
@@ -218,7 +229,7 @@ export function importInsomnia(text: string): { collection: Collection; environm
         const variables = flattenVars(r.environment);
         return [{ kind: 'folder', id: shortId('fld-'), name: r.name ?? 'Folder', items: build(r._id), ...(insomniaAuth(r.authentication) ? { auth: insomniaAuth(r.authentication) } : {}), ...(variables.length ? { variables } : {}) } as CollectionFolder];
       }
-      if (r._type === 'request') return [insomniaRequest(r)];
+      if (r._type === 'request') return [insomniaRequest(r, alias)];
       return [];
     });
   const workspaces = res.filter((r) => r._type === 'workspace');
@@ -226,7 +237,8 @@ export function importInsomnia(text: string): { collection: Collection; environm
   const items = workspaces.length === 1 ? build(workspaces[0]._id) : workspaces.length ? workspaces.map((w) => ({ kind: 'folder', id: shortId('fld-'), name: w.name, items: build(w._id) }) as CollectionFolder) : build(res.find((r) => r._type === 'request' || r._type === 'request_group')?.parentId);
   const base = res.find((r) => r._type === 'environment' && workspaces.some((w) => w._id === r.parentId)) ?? res.find((r) => r._type === 'environment' && !res.some((p) => p._id === r.parentId && p._type === 'environment'));
   const subs = base ? res.filter((r) => r._type === 'environment' && r.parentId === base._id) : [];
-  return { collection: collectionOf(name, items, { description: workspaces[0]?.description || undefined }), environments: insomniaEnvironments(name, base, subs), savedItems: insomniaSavedItems(res) };
+  const v4 = importScriptsToTp(collectionOf(name, items, { description: workspaces[0]?.description || undefined }), opts.scripts);
+  return { collection: v4.collection, environments: insomniaEnvironments(name, base, subs), savedItems: insomniaSavedItems(res), scripts: v4.scripts };
 }
 
 /* ------------------------------------------------------------------ Bruno */

@@ -158,12 +158,13 @@ export function workspaceHandlers(be: Backend): Handlers {
      * collection importer understands (Postman, OpenAPI, HAR, TestPion collections) is added to the open one.
      */
     /** Import… with the native file dialog: a workspace export, or a collection / definition / .env added to this workspace. */
-    'ws.importPick': async () => {
+    'ws.importPick': async ({ keepPm }: { keepPm?: boolean } = {}) => {
       const f = await be.host.openDialog?.({ filters: [{ name: 'Workspace exports, collections, API definitions, .env, .http', extensions: ['json', 'yaml', 'yml', 'har', 'env', 'wsdl', 'xml', 'http', 'rest', 'bru'] }, { name: 'All files', extensions: ['*'] }] });
       if (!f) return null;
-      return be.handlers['ws.importFile']!({ text: readFileSync(f, 'utf8'), fileName: basename(f) });
+      return be.handlers['ws.importFile']!({ text: readFileSync(f, 'utf8'), fileName: basename(f), keepPm });
     },
-    'ws.importFile': ({ text, fileName }: { text: string; fileName?: string }) => {
+    /** A workspace export opens as a workspace; anything else is imported into this one (Postman / Insomnia scripts become `tp.*` unless `keepPm`). */
+    'ws.importFile': ({ text, fileName, keepPm }: { text: string; fileName?: string; keepPm?: boolean }) => {
       let data: { format?: string } | undefined;
       try {
         data = JSON.parse(text);
@@ -177,7 +178,7 @@ export function workspaceHandlers(be: Backend): Handlers {
         be.openStore(root);
         return { kind: 'workspace', name: be.ws.workspace.name };
       }
-      const r = be.handlers['col.import']!({ text, fileName }) as { format: string; collection?: string; environment?: string };
+      const r = be.handlers['col.import']!({ text, fileName, keepPm }) as { format: string; collection?: string; environment?: string };
       return { kind: 'collection', ...r, workspace: be.ws.workspace.name };
     },
     'ws.search': ({ query }: { query: string }) => be.search?.search(query, 60) ?? [],

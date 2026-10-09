@@ -105,7 +105,8 @@ function build(a: AppMenuActions): Menu {
       label: 'View',
       submenu: [
         item({ role: 'reload', i: 'reload' }),
-        item({ role: 'toggleDevTools', i: 'devtools' }),
+        // F12 on Windows and Linux: Ctrl+Shift+I belongs to the script editor (Insert snippet…)
+        item({ role: 'toggleDevTools', i: 'devtools', ...(mac ? {} : { accelerator: 'F12' }) }),
         sep,
         item({ role: 'resetZoom', i: 'resetZoom' }),
         item({ role: 'zoomIn', i: 'zoomIn' }),

@@ -617,6 +617,7 @@ export function registerDataCommands(program: Command): void {
     .option('--folder <path>', 'for a request: folder path inside the collection, e.g. "Auth / Tokens"')
     .option('--name <name>', 'for a request: its name (default: method and path)')
     .option('--no-contract-checks', 'for an OpenAPI document: do not add openapi contract checks to the requests')
+    .option('--keep-pm', "for Postman / Insomnia: keep pm.* in scripts (default: they are converted to TestPion's tp.*; pm.* runs either way)")
     .option('--json', 'print the result as JSON (for scripts and AI agents)')
     .action((file: string, o) =>
       withWorkspace(o.workspace, async (store) => {
@@ -639,11 +640,13 @@ export function registerDataCommands(program: Command): void {
           }
           return;
         }
-        const r = importIntoWorkspace(store, text, { contractChecks: o.contractChecks !== false, name: dotenvName(source) ?? httpFileName(source) });
-        if (o.json) printJson({ format: r.format, collection: r.collection?.name, collectionId: r.collection?.id, environment: r.environment?.name, environments: r.environments?.map((e) => e.name), secretsToSet: r.secretsToSet, specPath: r.specPath, contractChecks: r.contractChecks, scriptWarnings: r.scriptWarnings, notes: r.notes });
+        const r = importIntoWorkspace(store, text, { contractChecks: o.contractChecks !== false, name: dotenvName(source) ?? httpFileName(source), scripts: o.keepPm ? 'keep' : 'tp' });
+        if (o.json) printJson({ format: r.format, collection: r.collection?.name, collectionId: r.collection?.id, environment: r.environment?.name, environments: r.environments?.map((e) => e.name), secretsToSet: r.secretsToSet, specPath: r.specPath, contractChecks: r.contractChecks, scriptWarnings: r.scriptWarnings, notes: r.notes, scripts: r.scripts });
         else {
           console.log(green(`Imported ${r.format}: ${r.collection ? `collection "${r.collection.name}"` : ''}${r.environments?.length ? ` ${r.environments.length > 1 ? 'environments' : 'environment'} ${r.environments.map((e) => `"${e.name}"`).join(', ')}` : ''}`));
           if (r.specPath) console.log(dim(`Kept the document as ${r.specPath}${r.contractChecks ? `; ${r.contractChecks} requests check the OpenAPI contract` : ''}`));
+          if (r.scripts?.converted) console.log(dim(`Converted ${r.scripts.converted} script${r.scripts.converted === 1 ? '' : 's'} to tp.* (--keep-pm keeps pm.*)`));
+          for (const u of r.scripts?.unchanged ?? []) console.log(yellow(`  Kept pm.* in ${u.where}: ${u.reason}`));
           if (r.scriptWarnings?.length) {
             console.log(yellow(`${r.scriptWarnings.length} script${r.scriptWarnings.length > 1 ? 's use' : ' uses'} something TestPion's sandbox doesn't have:`));
             for (const w of r.scriptWarnings) console.log(yellow(`  ${w.where} (${w.script} script): ${w.api}; ${w.hint}`));

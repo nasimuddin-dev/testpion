@@ -6,6 +6,7 @@ import { promptText, toastError, useApp } from '../store';
 import { downloadContent, hasNativeDialogs, pickTextFile } from '../lib/files';
 import { Badge, Button, cx, IconButton, Input, Menu, Modal, Spinner, type MenuItem } from './ui';
 import { plural } from '../lib/format';
+import { convertedScriptsText, toastUnchangedScripts, type ImportScriptsSummary } from '../lib/import-scripts';
 
 interface WorkspaceInfo {
   id: string;
@@ -66,12 +67,13 @@ export function WorkspaceMenu() {
     setOpen(false);
     if (!isCurrent(w)) void act(() => call('ws.open', { ref: w.path }), `Switched to "${w.name}"`);
   };
-  type ImportResult = { kind: string; name?: string; format?: string; collection?: string; environment?: string; workspace?: string } | null;
+  type ImportResult = { kind: string; name?: string; format?: string; collection?: string; environment?: string; workspace?: string; scripts?: ImportScriptsSummary } | null;
   const imported = (r: ImportResult) => {
     if (r?.kind === 'workspace') toast(`Workspace "${r.name}" imported and opened`, 'success');
     else if (r) {
       const what = [r.collection && `collection "${r.collection}"`, r.environment && `environment "${r.environment}"`].filter(Boolean).join(' and ');
-      toast(`Imported ${what || r.format} (${r.format}) into "${r.workspace}"`, 'success');
+      toast(`Imported ${what || r.format} (${r.format}) into "${r.workspace}"${convertedScriptsText(r.scripts) ? `. ${convertedScriptsText(r.scripts)}` : ''}`, 'success');
+      toastUnchangedScripts(r.scripts);
       useApp.getState().openIntent('collections', {});
     }
   };

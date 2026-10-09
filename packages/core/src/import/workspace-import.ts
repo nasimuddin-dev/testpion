@@ -7,6 +7,7 @@ import { shortId, slugify } from '../util/ids.js';
 import { secretKeys, type SecretStore } from '../storage/secrets.js';
 import { importAny } from './importers.js';
 import { scriptCompatibility, type ScriptWarning } from '../scripts/compat.js';
+import type { ImportScriptsMode, ImportScriptsSummary } from './import-scripts.js';
 
 export interface WorkspaceImportResult {
   format: string;
@@ -24,6 +25,8 @@ export interface WorkspaceImportResult {
   scriptWarnings?: ScriptWarning[];
   /** What did not come over (an .http file's response handler in a file, a {{$dotenv}} reference …). */
   notes?: string[];
+  /** Postman / Insomnia scripts: how many became `tp.*`, and which still use `pm.*` (and why). Absent for formats without such scripts. */
+  scripts?: ImportScriptsSummary;
   /** gRPC calls and connections restored from a TestPion collection file, by kind. */
   savedItems?: Record<string, number>;
 }
@@ -68,9 +71,14 @@ function restoreSavedItems(store: WorkspaceStore, saved: unknown, collectionId: 
  * `testpion import`). An OpenAPI / Swagger document is also kept in `specs/`, and every request made
  * from it gets an `openapi` check, so the new collection tests its own contract.
  */
-export function importIntoWorkspace(store: WorkspaceStore, text: string, opts: { contractChecks?: boolean; name?: string; secrets?: SecretStore } = {}): WorkspaceImportResult {
-  const r = importAny(text, { name: opts.name });
-  const out: WorkspaceImportResult = { format: r.format };
+export function importIntoWorkspace(
+  store: WorkspaceStore,
+  text: string,
+  /** `scripts: 'keep'` leaves Postman's `pm.*` in imported scripts; the default rewrites them to `tp.*`. */
+  opts: { contractChecks?: boolean; name?: string; secrets?: SecretStore; scripts?: ImportScriptsMode } = {},
+): WorkspaceImportResult {
+  const r = importAny(text, { name: opts.name, scripts: opts.scripts });
+  const out: WorkspaceImportResult = { format: r.format, ...(r.scripts ? { scripts: r.scripts } : {}) };
   let collection = r.collection;
   if (collection && (r.format === 'openapi' || r.format === 'swagger')) {
     const ext = text.trimStart().startsWith('{') ? 'json' : 'yaml';

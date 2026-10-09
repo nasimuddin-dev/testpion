@@ -88,6 +88,8 @@ If a Postman collection's scripts use something TestPion's script sandbox doesn'
 
 A Postman import keeps collection-level and request scripts, path variables, OAuth 2.0 settings, GraphQL bodies (as GraphQL requests), descriptions and saved responses.
 
+**Scripts come over as `tp.*`.** Postman's `pm.*` (and Insomnia's `insomnia.*`) in collection, folder and request scripts is rewritten to TestPion's `tp.*`; text in strings and comments is left alone. The import says how many scripts were converted, and lists any it left as they were (a script that declares its own `pm` variable, for example): those still run, because `pm.*` works as an alias of `tp.*`. For a collection you also keep using in Postman, tick **Keep pm.\* in scripts (for collections you also use in Postman)** in the Import dialog (`testpion import --keep-pm`, `keep_pm: true` for the MCP tool `import_definition`). Exporting to Postman turns `tp.*` back into `pm.*`, so a round trip gives the original scripts.
+
 ### SOAP (WSDL)
 
 A WSDL 1.1 or 2.0 document becomes a collection of SOAP requests, one folder per SOAP port or endpoint (SOAP 1.1 and SOAP 1.2 are both kept; WSDL 2.0 endpoints are SOAP 1.2 unless the binding says `wsoap:version="1.1"`, operations inherited through `extends` are included, and HTTP bindings are skipped; with a single port there is no folder level). Each operation is a `POST` to `{{baseUrl}}` (the service address, set as a collection variable) with:

@@ -453,7 +453,11 @@ export interface PaletteCommand {
   run(): void;
 }
 
-export function CommandPalette({ commands }: { commands: PaletteCommand[] }) {
+/**
+ * The command palette, and every quick pick built on it (Insert snippet…): a searchable list, Enter runs, Esc closes.
+ * `onClose` replaces closing the app's palette (a quick pick closes itself and puts the focus back where it was).
+ */
+export function CommandPalette({ commands, onClose, placeholder = 'Type a command…', label = 'Command palette', empty = 'No matching commands' }: { commands: PaletteCommand[]; onClose?(): void; placeholder?: string; label?: string; empty?: string }) {
   const set = useApp((s) => s.set);
   const [q, setQ] = useState('');
   const [idx, setIdx] = useState(0);
@@ -462,7 +466,7 @@ export function CommandPalette({ commands }: { commands: PaletteCommand[] }) {
     return commands.filter((c) => t.every((w) => c.label.toLowerCase().includes(w) || c.hint?.toLowerCase().includes(w)));
   }, [q, commands]);
   useEffect(() => setIdx(0), [q]);
-  const close = () => set({ paletteOpen: false });
+  const close = () => (onClose ? onClose() : set({ paletteOpen: false }));
   const run = (c?: PaletteCommand) => {
     if (!c) return;
     close();
@@ -470,15 +474,15 @@ export function CommandPalette({ commands }: { commands: PaletteCommand[] }) {
   };
   return (
     <div className="fixed inset-0 z-50 bg-black/30 flex items-start justify-center pt-[12vh]" onMouseDown={(e) => e.target === e.currentTarget && close()}>
-      <div role="dialog" aria-label="Command palette" className="w-[560px] max-w-[92vw] rounded-lg border border-line bg-bg shadow-2xl overflow-hidden">
+      <div role="dialog" aria-label={label} className="w-[560px] max-w-[92vw] rounded-lg border border-line bg-bg shadow-2xl overflow-hidden">
         <input
           autoFocus
           className="w-full h-11 px-4 bg-transparent outline-none border-b border-line"
-          placeholder="Type a command…"
+          placeholder={placeholder}
           value={q}
           onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Escape') close();
+            if (e.key === 'Escape') (e.preventDefault(), e.stopPropagation(), close());
             if (e.key === 'ArrowDown') (e.preventDefault(), setIdx((i) => Math.min(filtered.length - 1, i + 1)));
             if (e.key === 'ArrowUp') (e.preventDefault(), setIdx((i) => Math.max(0, i - 1)));
             if (e.key === 'Enter') run(filtered[idx]);
@@ -501,7 +505,7 @@ export function CommandPalette({ commands }: { commands: PaletteCommand[] }) {
               {c.hint && <span className="ml-auto text-xs text-muted">{c.hint}</span>}
             </button>
           ))}
-          {!filtered.length && <div className="px-4 py-6 text-sm text-muted">No matching commands</div>}
+          {!filtered.length && <div className="px-4 py-6 text-sm text-muted">{empty}</div>}
         </div>
       </div>
     </div>

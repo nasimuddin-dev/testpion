@@ -1,6 +1,7 @@
 // Importing other tools' collections the way a user does (Import ▸ Choose file… / Bruno folder…), then running them:
 // a Postman, an Insomnia and a Bruno sample (e2e/fixtures), each with pre-request and post-response scripts and a
 // token passed between requests, against the local demo server. Every request and every script test must pass.
+// Postman's pm.* scripts come over as TestPion's tp.* (the toast says how many), and the script editor shows tp.test.
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
 const { readdirSync, readFileSync, statSync } = require('node:fs');
 const { join, relative } = require('node:path');
@@ -69,13 +70,28 @@ const runIt = `
 
 const step = (name, body) => [name, `(async () => { ${body} })()`];
 const steps = [
-  step('postman-file', importVia('Choose file…', fixtureFiles('postman')) + runIt),
+  step('postman-file', importVia('Choose file…', fixtureFiles('postman')) + 'window.__importToast = toast;' + runIt),
+  // the import converted the scripts to tp.* and said so; the request's post-response script reads tp.test, not pm.test
+  step(
+    'postman-scripts-tp',
+    `const converted = /Converted \\d+ scripts? to tp\\.\\*/.exec(window.__importToast ?? '')?.[0] ?? 'no conversion in: ' + window.__importToast;
+     await __t.requests(); await __t.expand('Vet clinic (Postman sample)');
+     const opened = await __t.open('List patients (uses the token)'); if (opened !== 'ok') return opened;
+     await __t.tab('Scripts');
+     [...document.querySelectorAll('main [role=tab]')].find((t) => t.offsetParent && t.textContent.trim().startsWith('Post-response'))?.click();
+     await __t.sleep(900);
+     const ed = (window.__monaco?.editor.getEditors() ?? []).find((e) => e.getDomNode()?.offsetParent && e.getDomNode().closest('[data-script-editor]'));
+     if (!ed) return converted + ' | NO EDITOR';
+     const code = ed.getValue();
+     return converted + ' | editor has tp.test: ' + code.includes('tp.test(') + ' | pm.: ' + /\\bpm\\./.test(code);`,
+  ),
   step('insomnia-file', importVia('Choose file…', fixtureFiles('insomnia')) + runIt),
   step('bruno-folder', importVia('Bruno folder…', brunoFiles, 'vet-clinic') + runIt),
 ];
 
 module.exports = withExpect(steps, {
   'postman-file': /^collection: Vet clinic \(Postman sample\) \| requests: 3 \| with scripts: 3 \| run: 3 passed, 0 failed, 0 errors \| script tests: ✓a list of patients, ✓logged in, ✓the pre-request value was sent$/,
+  'postman-scripts-tp': /^Converted [1-9]\d* scripts? to tp\.\* \| editor has tp\.test: true \| pm\.: false$/,
   'insomnia-file': /^collection: Vet clinic \(Insomnia sample\) \| requests: 3 \| with scripts: 3 \| run: 3 passed, 0 failed, 0 errors \| script tests: ✓a list of patients, ✓logged in, ✓the pre-request value was sent$/,
   'bruno-folder': /^collection: Vet clinic \(Bruno sample\) \| requests: 3 \| with scripts: 3 \| run: 3 passed, 0 failed, 0 errors \| script tests: ✓a list of patients, ✓logged in, ✓the pre-request value was sent$/,
 });

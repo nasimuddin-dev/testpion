@@ -391,7 +391,9 @@ describe('importers', () => {
     expect(req.request.url).toBe('https://x.test/login');
     expect(req.request.params).toEqual([{ key: 'a', value: '1', enabled: true }]);
     expect(req.request.body.type).toBe('json');
-    expect(req.testScript).toContain('pm.test');
+    // pm.* scripts come over as tp.* by default
+    expect(req.testScript).toContain('tp.test');
+    expect(r.scripts).toMatchObject({ converted: 1, unchanged: [] });
     const har = { log: { entries: [{ request: { method: 'GET', url: 'https://x.test/a?b=2', headers: [{ name: 'Accept', value: '*/*' }] }, response: { status: 200 } }] } };
     expect(importAny(JSON.stringify(har)).collection!.items).toHaveLength(1);
   });

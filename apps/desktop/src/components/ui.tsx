@@ -559,6 +559,9 @@ function MenuItems({ items: given }: { items: MenuItem[] }) {
   );
 }
 
+/** A side panel that can be pinned (docked) or unpinned (a tab on the edge that slides the panel over the content): one for every docked side panel. */
+export { PinnablePanel, usePinnablePanel, type PinnablePanelApi } from './PinnablePanel';
+
 /** Resizable two-pane split. Size is persisted per `id`. `sidebar` gives the first pane the sidebar surface. */
 export function Split({ id, direction = 'horizontal', initial = 50, min = 15, sidebar, collapsed, collapsedSecond, children }: { id: string; direction?: 'horizontal' | 'vertical'; initial?: number; min?: number; sidebar?: boolean; /** Leave the first pane out (the request editors' old sidebars, replaced by the Collections sidebar): it isn't rendered at all. */ collapsed?: boolean; /** Hide the second pane (the first takes the room). */ collapsedSecond?: boolean; children: [ReactNode, ReactNode] }) {
   const [pct, setPct] = useState(() => Number(localStorage.getItem(`aps.split.${id}`)) || initial);

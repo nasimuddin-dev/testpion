@@ -5,7 +5,7 @@ import { call } from '../api';
 import { confirmAction, toastError } from '../store';
 import type { SavedExample } from '../types';
 import { CodeEditor } from './CodeEditor';
-import { Badge, cx, Empty, IconButton, statusTone } from './ui';
+import { Badge, cx, Empty, IconButton, PinnablePanel, statusTone } from './ui';
 import { focusRow, InlineRename } from './TreeParts';
 
 const languageOf = (ex: SavedExample) => {
@@ -50,29 +50,34 @@ export function ExamplesPanel({ collectionId, requestId, examples, onChange }: {
 
   return (
     <div className="h-full flex min-h-0">
-      <div role="listbox" aria-label="Examples" className="w-56 shrink-0 border-r border-line overflow-auto py-1">
-        {examples.map((ex) => (
-          <button
-            key={ex.id}
-            role="option"
-            aria-selected={ex.id === current?.id}
-            onClick={() => setSelected(ex.id)}
-            onKeyDown={(e) => {
-              if (e.key === 'F2') {
-                e.preventDefault();
-                setSelected(ex.id);
-                setRenaming(ex.id);
-              }
-            }}
-            data-rename-id={ex.id}
-            title="F2 renames"
-            className={cx('w-full flex items-center gap-2 text-left px-3 py-1.5 text-sm', ex.id === current?.id ? 'bg-accent/10 text-accent font-medium' : 'hover:bg-hover')}
-          >
-            <Badge tone={statusTone(ex.status)}>{ex.status}</Badge>
-            <span className="truncate">{ex.name}</span>
-          </button>
-        ))}
-      </div>
+      {/* the list is a pinnable panel: unpinned, the example takes the whole width and the list slides over it */}
+      <PinnablePanel id="request.examples" title="Examples" side="left" defaultWidth={224} autoUnpinBelow={480}>
+        {({ close }) => (
+          <div role="listbox" aria-label="Examples" className="flex-1 overflow-auto py-1">
+            {examples.map((ex) => (
+              <button
+                key={ex.id}
+                role="option"
+                aria-selected={ex.id === current?.id}
+                onClick={() => (setSelected(ex.id), close())}
+                onKeyDown={(e) => {
+                  if (e.key === 'F2') {
+                    e.preventDefault();
+                    setSelected(ex.id);
+                    setRenaming(ex.id);
+                  }
+                }}
+                data-rename-id={ex.id}
+                title="F2 renames"
+                className={cx('w-full flex items-center gap-2 text-left px-3 py-1.5 text-sm', ex.id === current?.id ? 'bg-accent/10 text-accent font-medium' : 'hover:bg-hover')}
+              >
+                <Badge tone={statusTone(ex.status)}>{ex.status}</Badge>
+                <span className="truncate">{ex.name}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </PinnablePanel>
       {current && (
         <div className="flex-1 min-w-0 flex flex-col min-h-0">
           <div className="flex items-center gap-2 px-3 h-9 border-b border-line text-sm shrink-0">

@@ -737,7 +737,7 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
       name: 'import_definition',
       write: true,
       description:
-        'Import an API definition or collection into the workspace from a public http(s) link (`url`: OpenAPI/Swagger URL, a GitHub/GitLab/Bitbucket file page, a Postman collection API link) or from `text` (OpenAPI, AsyncAPI, Postman collection or environment, Insomnia, Bruno, Hoppscotch, WSDL, HAR, .env). OpenAPI imports keep the document in specs/ and add contract checks to each request. Returns what was created; secret values from a .env are never written to files (listed in `secretsToSet`).',
+        'Import an API definition or collection into the workspace from a public http(s) link (`url`: OpenAPI/Swagger URL, a GitHub/GitLab/Bitbucket file page, a Postman collection API link) or from `text` (OpenAPI, AsyncAPI, Postman collection or environment, Insomnia, Bruno, Hoppscotch, WSDL, HAR, .env). OpenAPI imports keep the document in specs/ and add contract checks to each request. Postman / Insomnia scripts are converted to TestPion\'s tp.* (pm.* still runs; `keep_pm: true` leaves pm.*); `scripts` reports how many were converted and which were left. Returns what was created; secret values from a .env are never written to files (listed in `secretsToSet`).',
       inputSchema: {
         type: 'object',
         properties: {
@@ -745,13 +745,14 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
           text: str('Document text to import (when no url)'),
           name: str('Name for an imported .env environment'),
           contractChecks: { type: 'boolean', description: 'For OpenAPI: add a contract check to each request (default true)' },
+          keep_pm: { type: 'boolean', description: 'For Postman / Insomnia: keep pm.* in scripts instead of converting them to tp.* (default false)' },
         },
       },
       run: async (a) => {
         const f = typeof a.url === 'string' && a.url ? await fetchImportText(a.url) : undefined;
         const text = f?.text ?? (typeof a.text === 'string' ? a.text : '');
         if (!text.trim()) throw new ApsError('ValidationError', 'Give a url or text to import');
-        const r = importIntoWorkspace(store, text, { contractChecks: a.contractChecks !== false, name: typeof a.name === 'string' ? a.name : undefined });
+        const r = importIntoWorkspace(store, text, { contractChecks: a.contractChecks !== false, name: typeof a.name === 'string' ? a.name : undefined, scripts: a.keep_pm === true ? 'keep' : 'tp' });
         return {
           format: r.format,
           source: f?.url,
@@ -761,6 +762,7 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
           contractChecks: r.contractChecks,
           secretsToSet: r.secretsToSet?.length ? r.secretsToSet : undefined,
           scriptWarnings: r.scriptWarnings,
+          scripts: r.scripts,
         };
       },
     },

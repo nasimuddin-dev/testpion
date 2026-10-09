@@ -12,6 +12,7 @@ import { detectOtherTool, importBruno, importHoppscotch, importInsomnia } from '
 import { importDotenv, isDotenv } from './dotenv.js';
 import { importAsyncApi, isAsyncApi } from './asyncapi.js';
 import { importHttpFile, isHttpFile } from './http-file.js';
+import { importScriptsToTp, type ImportScriptsMode, type ImportScriptsSummary } from './import-scripts.js';
 
 function newCollection(name: string, items: CollectionNode[], extra: Partial<Collection> = {}): Collection {
   return { schemaVersion: SCHEMA_VERSION, id: slugify(name) + '-' + shortId().slice(-4), name, version: 0, variables: [], items, updatedAt: new Date().toISOString(), ...extra };
@@ -301,7 +302,11 @@ function pmExamples(responses: any, parent?: { method?: string; url?: string }):
   });
 }
 
-export function importPostman(text: string): { collection: Collection } {
+/**
+ * A Postman v2 / v2.1 collection. Its `pm.*` scripts become `tp.*` unless `scripts` is `'keep'`
+ * (`pm.*` still runs: it is an alias of `tp`).
+ */
+export function importPostman(text: string, opts: { scripts?: ImportScriptsMode } = {}): { collection: Collection; scripts: ImportScriptsSummary } {
   const d = JSON.parse(text);
   const convert = (items: any[]): CollectionNode[] =>
     (items ?? []).map((it: any): CollectionNode => {
@@ -375,7 +380,7 @@ export function importPostman(text: string): { collection: Collection } {
     preRequestScript: pmScript(d.event, 'prerequest'),
     testScript: pmScript(d.event, 'test'),
   });
-  return { collection };
+  return importScriptsToTp(collection, opts.scripts);
 }
 
 export function importPostmanEnvironment(text: string): Environment {
@@ -417,22 +422,28 @@ export function importHar(text: string): { collection: Collection } {
 }
 
 /** Import any supported document into a collection (and optionally an environment). */
-export function importAny(text: string, opts: { name?: string } = {}): { format: string; collection?: Collection; environment?: Environment; environments?: Environment[]; secretValues?: Record<string, Record<string, string>>; savedItems?: unknown; notes?: string[] } {
+export function importAny(
+  text: string,
+  opts: { name?: string; scripts?: ImportScriptsMode } = {},
+): { format: string; collection?: Collection; environment?: Environment; environments?: Environment[]; secretValues?: Record<string, Record<string, string>>; savedItems?: unknown; notes?: string[]; scripts?: ImportScriptsSummary } {
   const format = detectFormat(text);
   switch (format) {
     case 'openapi':
     case 'swagger':
       return { format, ...importOpenApi(text) };
     case 'postman':
-      return { format, ...importPostman(text) };
+      return { format, ...importPostman(text, { scripts: opts.scripts }) };
     case 'postman-env':
       return { format, environment: importPostmanEnvironment(text) };
     case 'har':
       return { format, ...importHar(text) };
-    case 'insomnia':
+    case 'insomnia': {
+      const r = importInsomnia(text, { scripts: opts.scripts });
+      return { format, collection: r.collection, environment: r.environments[0], environments: r.environments, savedItems: r.savedItems, scripts: r.scripts };
+    }
     case 'bruno': {
-      const r = format === 'insomnia' ? importInsomnia(text) : importBruno(text);
-      return { format, collection: r.collection, environment: r.environments[0], environments: r.environments, savedItems: 'savedItems' in r ? r.savedItems : undefined };
+      const r = importBruno(text);
+      return { format, collection: r.collection, environment: r.environments[0], environments: r.environments };
     }
     case 'hoppscotch':
       return { format, ...importHoppscotch(text) };

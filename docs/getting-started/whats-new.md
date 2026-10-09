@@ -9,6 +9,10 @@ description: "Step by step: AI providers that say what is missing, RAG checks ju
 
 The options added in 0.45, each with the steps to use it and a link to the full reference. Every one also works from the terminal (`testpion …`, with `--json`) and for AI agents (an MCP tool of `testpion mcp-server`). The 0.44 additions (the HTTP Debugger, Git compare and conflicts, the API definition tabs, test data, secrets from a secret manager) are in the [changelog](/changelog) and their reference pages.
 
+Side panels can be unpinned, as in Visual Studio: the request **Scripts** tab's **Snippets**, the **Examples** list and the Debugger's dock fold into a tab on the edge and slide over the content on hover, so a small screen keeps room to write. In a script, <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>I</kbd> inserts a snippet by name. [Scripts](/api-testing/rest#scripts)
+
+Importing from Postman or Insomnia converts scripts to TestPion's `tp.*` (the import says how many); tick **Keep pm.\* in scripts** in the Import dialog (`testpion import --keep-pm`) for a collection you also use in Postman. `pm.*` still runs, and exporting to Postman turns `tp.*` back into `pm.*`. [Import](/api-testing/collections#import)
+
 Saved requests of every kind belong to a collection: saving a gRPC call or a connection asks for its collection like a REST request, and loose gRPC calls and connections were moved into collections named after their folders ("gRPC calls" or "Connections" without one) when the workspace was opened. [Collections](/api-testing/collections)
 
 ## An AI provider that says what is missing

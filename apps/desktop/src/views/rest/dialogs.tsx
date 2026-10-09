@@ -7,6 +7,7 @@ import type { Collection, CollectionNode } from '../../types';
 import { uid } from '../../lib/format';
 
 import { pickTextFile, pickFolderFiles } from '../../lib/files';
+import { convertedScriptsText, toastUnchangedScripts, type ImportScriptsSummary } from '../../lib/import-scripts';
 import { Button, Field, Input, Modal, Select } from '../../components/ui';
 
 /**
@@ -125,7 +126,23 @@ export function ImportModal({ onClose, onDone }: { onClose(): void; onDone(): vo
   const [link, setLink] = useState('');
   const linkOk = /^https?:\/\/\S+$/i.test(link.trim());
   const [busy, setBusy] = useState(false);
-  const run = async (fn: () => Promise<{ format: string; collection?: string; environment?: string; request?: string; placeholders?: Array<{ variable: string }>; specPath?: string; contractChecks?: number; savedItems?: Record<string, number>; notes?: string[]; scriptWarnings?: Array<{ where: string; script: string; api: string; hint: string }> } | null>) => {
+  // Postman / Insomnia scripts come over as tp.* unless this is ticked (pm.* runs either way)
+  const [keepPm, setKeepPm] = useState(false);
+  const run = async (
+    fn: () => Promise<{
+      format: string;
+      collection?: string;
+      environment?: string;
+      request?: string;
+      placeholders?: Array<{ variable: string }>;
+      specPath?: string;
+      contractChecks?: number;
+      savedItems?: Record<string, number>;
+      notes?: string[];
+      scriptWarnings?: Array<{ where: string; script: string; api: string; hint: string }>;
+      scripts?: ImportScriptsSummary;
+    } | null>,
+  ) => {
     setBusy(true);
     try {
       const r = await fn();
@@ -137,9 +154,10 @@ export function ImportModal({ onClose, onDone }: { onClose(): void; onDone(): vo
           );
         else
           useApp.getState().toast(
-            `Imported ${r.format}${r.collection ? `: ${r.collection}` : ''}${r.environment ? ` (${r.environment.includes(', ') ? 'environments' : 'environment'} ${r.environment})` : ''}${r.contractChecks ? `. Each request checks the OpenAPI contract (${r.specPath})` : ''}${r.savedItems ? `, with ${[r.savedItems.grpc ? `${r.savedItems.grpc} gRPC call${r.savedItems.grpc > 1 ? 's' : ''}` : '', r.savedItems.websocket ? `${r.savedItems.websocket} connection${r.savedItems.websocket > 1 ? 's' : ''}` : ''].filter(Boolean).join(' and ')}` : ''}`,
+            `Imported ${r.format}${r.collection ? `: ${r.collection}` : ''}${r.environment ? ` (${r.environment.includes(', ') ? 'environments' : 'environment'} ${r.environment})` : ''}${r.contractChecks ? `. Each request checks the OpenAPI contract (${r.specPath})` : ''}${r.savedItems ? `, with ${[r.savedItems.grpc ? `${r.savedItems.grpc} gRPC call${r.savedItems.grpc > 1 ? 's' : ''}` : '', r.savedItems.websocket ? `${r.savedItems.websocket} connection${r.savedItems.websocket > 1 ? 's' : ''}` : ''].filter(Boolean).join(' and ')}` : ''}${convertedScriptsText(r.scripts) ? `. ${convertedScriptsText(r.scripts)}` : ''}`,
             'success',
           );
+        toastUnchangedScripts(r.scripts);
         if (r.notes?.length) useApp.getState().toast(`Not imported: ${r.notes.slice(0, 3).join('; ')}${r.notes.length > 3 ? ` (+${r.notes.length - 3} more)` : ''}`, 'warning');
         const w = r.scriptWarnings ?? [];
         if (w.length) {
@@ -170,7 +188,7 @@ export function ImportModal({ onClose, onDone }: { onClose(): void; onDone(): vo
               run(async () => {
                 // the browser picker works in the desktop app and in the browser / cloud alike
                 const f = await pickTextFile('.json,.yaml,.yml,.har,.env,.wsdl,.xml,.bru,.txt,.sh,.ps1');
-                return f ? call('col.import', { text: f.text, fileName: f.name }) : null;
+                return f ? call('col.import', { text: f.text, fileName: f.name, keepPm }) : null;
               })
             }
           >
@@ -188,7 +206,7 @@ export function ImportModal({ onClose, onDone }: { onClose(): void; onDone(): vo
           >
             Bruno folder…
           </Button>
-          <Button variant="primary" loading={busy} disabled={!text.trim()} onClick={() => run(() => call('col.import', { text }))}>
+          <Button variant="primary" loading={busy} disabled={!text.trim()} onClick={() => run(() => call('col.import', { text, keepPm }))}>
             Import pasted content
           </Button>
         </>
@@ -199,7 +217,7 @@ export function ImportModal({ onClose, onDone }: { onClose(): void; onDone(): vo
         className="flex gap-2 mb-2"
         onSubmit={(e) => {
           e.preventDefault();
-          if (linkOk && !busy) void run(() => call('col.importUrl', { url: link.trim() }));
+          if (linkOk && !busy) void run(() => call('col.importUrl', { url: link.trim(), keepPm }));
         }}
       >
         <Input className="flex-1" aria-label="Link to import" placeholder="Or a link: https://…/openapi.json, a GitHub file, a Postman API link" value={link} onChange={(e) => setLink(e.target.value)} />
@@ -208,6 +226,9 @@ export function ImportModal({ onClose, onDone }: { onClose(): void; onDone(): vo
         </Button>
       </form>
       <textarea className="field mono w-full h-64 text-xs" placeholder="Paste a document here…" value={text} onChange={(e) => setText(e.target.value)} />
+      <label className="flex items-center gap-2 mt-2 text-sm" title="Postman and Insomnia scripts are converted to TestPion's tp.* (pm.* still runs). Exporting to Postman turns tp.* back into pm.*.">
+        <input type="checkbox" checked={keepPm} onChange={(e) => setKeepPm(e.target.checked)} /> Keep pm.* in scripts (for collections you also use in Postman)
+      </label>
     </Modal>
   );
 }

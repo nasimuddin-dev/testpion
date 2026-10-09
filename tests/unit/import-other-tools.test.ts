@@ -87,8 +87,9 @@ describe('importing other API clients', () => {
     expect(create.request).toMatchObject({ method: 'POST', url: '{{baseUrl}}/{{api.version}}/orders', body: { type: 'json', content: '{"sku":"{{sku}}"}' }, auth: { type: 'bearer', token: '{{token}}' }, params: [{ key: 'dryRun', value: 'true', enabled: true }] });
     expect(create.request.headers).toEqual([{ key: 'X-Trace', value: '1', enabled: true }, { key: 'X-Off', value: '1', enabled: false }]);
     expect(create.testScript).toMatch(/^\/\/ Insomnia script/);
-    // Insomnia's script API follows Postman's: the script stays runnable as pm.*
-    expect(create.testScript).toContain("pm.test('ok', () => pm.expect(pm.response.code).to.eql(201));");
+    // Insomnia's script API follows Postman's: the script stays runnable, as TestPion's tp.* (the default)
+    expect(create.testScript).toContain("tp.test('ok', () => tp.expect(tp.response.code).to.eql(201));");
+    expect(r.scripts?.converted).toBeGreaterThan(0);
     expect(create.testScript!.split('\n').slice(1).join('\n')).not.toContain('insomnia.');
     expect(req(c.items, 'Login form').request).toMatchObject({ body: { type: 'form-urlencoded', fields: [{ key: 'user', value: 'ada', enabled: true }] }, auth: { type: 'basic', username: 'ada', password: '{{pw}}' } });
     expect(flat(c.items).find((n) => n.name === 'Products (GraphQL)')).toMatchObject({ kind: 'graphql', request: { endpoint: '{{baseUrl}}/graphql', query: '{ products { id } }', variables: { first: 5 } } });

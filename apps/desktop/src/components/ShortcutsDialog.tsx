@@ -50,6 +50,7 @@ const GROUPS: Array<{ title: string; items: Array<{ keys: string[][]; text: stri
       { keys: [[modKey, 'F']], text: 'Find' },
       { keys: [[modKey, 'H']], text: 'Replace' },
       { keys: [[modKey, '/']], text: 'Comment or uncomment lines' },
+      { keys: [[modKey, shift, 'I']], text: 'Insert a snippet (request scripts): type to filter, Enter inserts at the cursor' },
       { keys: [[alt, '↑'], [alt, '↓']], text: 'Move lines (and environment variables, in the Envs table)' },
     ],
   },

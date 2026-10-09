@@ -114,7 +114,8 @@ export function collectionsHandlers(be: Backend): Handlers {
       if (!dryRun && r.changed) be.ws.saveCollection(r.collection);
       return { changed: r.changed, replacements: r.replacements, skipped: r.skipped, collection: dryRun ? r.collection : undefined };
     },
-    'col.import': ({ text, fileName }: { text: string; fileName?: string }) => {
+    /** Import a file's text. Postman / Insomnia scripts become `tp.*` unless `keepPm` (the result's `scripts` says how many, and which were left). */
+    'col.import': ({ text, fileName, keepPm }: { text: string; fileName?: string; keepPm?: boolean }) => {
       // ".env.staging" / "staging.env" → "staging"; a bare ".env" keeps the default name
       const envName = fileName ? fileName.replace(/^\.env\.?/, '').replace(/\.env$/, '') || undefined : undefined;
       if (isRequestSnippet(text)) {
@@ -125,8 +126,8 @@ export function collectionsHandlers(be: Backend): Handlers {
       }
       // an OpenAPI document is kept in specs/ and its requests get an openapi contract check
       // .env imports: secret-looking values go to the OS secret store, never into workspace files
-      const r = importIntoWorkspace(be.ws, text, { name: envName, secrets: be.secrets });
-      return { format: r.format, collection: r.collection?.name, environment: r.environments?.map((e) => e.name).join(', ') || r.environment?.name, specPath: r.specPath, contractChecks: r.contractChecks, scriptWarnings: r.scriptWarnings, savedItems: r.savedItems, notes: r.notes };
+      const r = importIntoWorkspace(be.ws, text, { name: envName, secrets: be.secrets, scripts: keepPm ? 'keep' : 'tp' });
+      return { format: r.format, collection: r.collection?.name, environment: r.environments?.map((e) => e.name).join(', ') || r.environment?.name, specPath: r.specPath, contractChecks: r.contractChecks, scriptWarnings: r.scriptWarnings, savedItems: r.savedItems, notes: r.notes, scripts: r.scripts };
     },
     /** Record traffic: a reverse proxy on 127.0.0.1 in front of `target`; every exchange is sent as a `record.exchange` event. */
     'record.start': async ({ target, port }: { target: string; port?: number }) => {
@@ -231,9 +232,9 @@ export function collectionsHandlers(be: Backend): Handlers {
       return { report, sources, markdown: apiCoverageMarkdown(report) };
     },
     /** Import from a link: an OpenAPI URL, a raw GitHub file, a Postman API link … (downloaded, then imported as text). */
-    'col.importUrl': async ({ url }: { url: string }) => {
+    'col.importUrl': async ({ url, keepPm }: { url: string; keepPm?: boolean }) => {
       const f = await fetchImportText(url);
-      return { ...((await be.handlers['col.import']!({ text: f.text, fileName: f.fileName })) as object), url: f.url };
+      return { ...((await be.handlers['col.import']!({ text: f.text, fileName: f.fileName, keepPm })) as object), url: f.url };
     },
     /** A Bruno collection folder, as the picked files (path inside the folder + text): bruno.json and .bru files. */
     'col.importBrunoFolder': ({ name, files }: { name?: string; files: Array<{ path: string; text: string }> }) => {
@@ -241,10 +242,10 @@ export function collectionsHandlers(be: Backend): Handlers {
       const exported = bruFilesToBrunoExport(files, files.some((f) => f.path === 'bruno.json') ? undefined : name);
       return be.handlers['col.import']!({ text: JSON.stringify(exported), fileName: name });
     },
-    'col.importFile': async () => {
+    'col.importFile': async ({ keepPm }: { keepPm?: boolean } = {}) => {
       const f = await be.host.openDialog?.({ filters: [{ name: 'API definitions, collections, .env and .http files', extensions: ['json', 'yaml', 'yml', 'har', 'env', 'wsdl', 'xml', 'bru', 'http', 'rest'] }, { name: 'All files', extensions: ['*'] }] });
       if (!f) return null;
-      return be.handlers['col.import']!({ text: readFileSync(f, 'utf8'), fileName: basename(f) });
+      return be.handlers['col.import']!({ text: readFileSync(f, 'utf8'), fileName: basename(f), keepPm });
     },
     'col.run': (p: CollectionRunParams) => be.startCollectionRun(p),
     /** Run again only the requests that failed in a collection run (one iteration). */

@@ -256,8 +256,12 @@ export function DebuggerView() {
     if (ev.key === 'Delete' && i >= 0) return (ev.preventDefault(), void remove(selectedIds.length > 1 ? selectedIds : [shown[i]!.id]));
   };
 
+  // an unpinned dock is a tab at the edge: the rail's button for its panel shows it (rather than closing it)
+  const [dockShown, setDockShown] = useState(true);
+  const [dockReveal, setDockReveal] = useState(0);
   const openDock = (p: DockPanel | undefined) => {
     setDock(p);
+    if (p) setDockReveal((n) => n + 1);
     try {
       if (p) localStorage.setItem('testpion.debugger.dock', p);
       else localStorage.removeItem('testpion.debugger.dock');
@@ -430,13 +434,14 @@ export function DebuggerView() {
         <div className="flex-1 min-h-0 flex">
           <ToolRail
             active={dock}
-            onPanel={(p) => openDock(dock === p ? undefined : p)}
+            onPanel={(p) => (dock === p && dockShown ? openDock(undefined) : openDock(p))}
             onSubmit={() => (sel ? openInTab(sel) : useApp.getState().openIntent('rest', {}))}
             exportItems={sessionItems}
           />
           <div className="flex-1 min-w-0">
-            <Split id="debugger-dock" initial={74} collapsedSecond={!dock}>
-              <div className="h-full flex flex-col min-h-0 outline-none" tabIndex={0} onKeyDown={onKey} aria-label="Captured exchanges">
+            {/* the dock is a pinnable panel: pinned beside the grid, or a tab on the right edge that slides it over */}
+            <div className="h-full flex min-h-0 min-w-0">
+              <div className="h-full flex-1 min-w-0 flex flex-col min-h-0 outline-none" tabIndex={0} onKeyDown={onKey} aria-label="Captured exchanges">
                 {status?.running && !status.decrypt && httpsBanner && rows.some((r) => r.kind === 'tunnel') && (
                   <div className="flex items-center gap-2 px-3 py-1 border-b border-line text-xs bg-accent-soft" data-https-banner>
                     <Lock size={12} className="text-accent" />
@@ -676,7 +681,7 @@ export function DebuggerView() {
                 </div>
                 {rows.length > 0 && <GridTotals rows={rows} selectedIds={selectedIds} total={list.all.length} />}
               </div>
-              {dock ? (
+              {dock && (
                 <Dock
                   panel={dock}
                   onPanel={openDock}
@@ -689,11 +694,11 @@ export function DebuggerView() {
                   picked={picked}
                   current={sel}
                   onPick={(id) => (setSelected(id), setSelectedIds([id]))}
+                  reveal={dockReveal}
+                  onShownChange={setDockShown}
                 />
-              ) : (
-                <div />
               )}
-            </Split>
+            </div>
           </div>
         </div>
       )}
