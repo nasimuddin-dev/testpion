@@ -10,7 +10,7 @@ import { TraceView } from './TraceView';
 import { RunCharts } from './RunCharts';
 import { TestHistory } from './TestHistory';
 import { finishSave, viewContent, type SaveResult } from '../lib/files';
-import { Badge, Button, cx, Empty, Field, Input, Metric, Modal, Segmented, Select, Split, Tabs, VirtualList, Menu, MetricGrid } from './ui';
+import { Badge, Button, cx, Empty, Field, Input, Metric, Modal, Segmented, Select, Split, Tabs, VirtualList, Menu, MetricGrid, Textarea } from './ui';
 import { usePersisted } from '../lib/sticky';
 
 interface Progress {
@@ -363,7 +363,7 @@ function ReviewButtons({ r, runId, onReviewed }: { r: TestResult; runId: string;
             </>
           }
         >
-          <textarea aria-label="Review note" className="field min-h-28 w-full text-sm" value={note} placeholder="Why it is good or bad (people and agents read it)" onChange={(e) => setNote(e.target.value)} autoFocus />
+          <Textarea aria-label="Review note" className="field min-h-28 w-full text-sm" value={note} placeholder="Why it is good or bad (people and agents read it)" onChange={(e) => setNote(e.target.value)} autoFocus />
         </Modal>
       )}
     </div>

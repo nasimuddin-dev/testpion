@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { call } from '../api';
 import { finishSave, type SaveResult } from '../lib/files';
 import { toastError, useApp } from '../store';
-import { LinkButton, Button, cx, Field, Input, Modal, Toggle } from './ui';
+import { LinkButton, Button, cx, Field, Input, Modal, Toggle, Textarea } from './ui';
 
 export type FeedbackKind = 'bug' | 'idea' | 'ui' | 'question';
 
@@ -164,15 +164,15 @@ export function FeedbackDialog({ request, onClose }: { request: FeedbackRequest;
           <Input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} placeholder={kind === 'bug' ? 'Sending a request with a large body freezes the window' : kind === 'ui' ? 'The Load view is hard to read on a small screen' : 'Import from Swagger 2 with examples'} />
         </Field>
         <Field label={kind === 'bug' ? 'What happened' : kind === 'question' ? 'Your question' : 'Tell us more'}>
-          <textarea className="field min-h-24" value={description} onChange={(e) => setDescription(e.target.value)} placeholder={kind === 'bug' ? 'What you saw, and anything that seems related' : 'What you would like, and why it would help'} />
+          <Textarea className="field min-h-24" value={description} onChange={(e) => setDescription(e.target.value)} placeholder={kind === 'bug' ? 'What you saw, and anything that seems related' : 'What you would like, and why it would help'} />
         </Field>
         {kind === 'bug' && (
           <div className="grid grid-cols-2 gap-3">
             <Field label="Steps to reproduce (optional)">
-              <textarea className="field min-h-20" value={steps} onChange={(e) => setSteps(e.target.value)} placeholder={'1. Open …\n2. Click …'} />
+              <Textarea className="field min-h-20" value={steps} onChange={(e) => setSteps(e.target.value)} placeholder={'1. Open …\n2. Click …'} />
             </Field>
             <Field label="What you expected (optional)">
-              <textarea className="field min-h-20" value={expected} onChange={(e) => setExpected(e.target.value)} />
+              <Textarea className="field min-h-20" value={expected} onChange={(e) => setExpected(e.target.value)} />
             </Field>
           </div>
         )}

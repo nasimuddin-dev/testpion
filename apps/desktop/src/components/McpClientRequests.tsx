@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { call, on } from '../api';
 import { toastError, useApp } from '../store';
 import { JsonSchemaForm } from './JsonSchemaForm';
-import { Badge, Button, Modal } from './ui';
+import { Badge, Button, Modal, Textarea } from './ui';
 
 interface ClientRequest {
   id: string;
@@ -135,7 +135,7 @@ export function McpClientRequests() {
         ))}
       </div>
       <div className="text-xs text-muted mb-0.5">Reply{model ? ` (drafted by ${model})` : ''}</div>
-      <textarea className="field w-full h-32 mono text-xs" aria-label="Reply" value={reply} onChange={(e) => setReply(e.target.value)} placeholder="Write the model's reply, or draft it with AI" />
+      <Textarea autoGrow={false} className="field w-full h-32 mono text-xs" aria-label="Reply" value={reply} onChange={(e) => setReply(e.target.value)} placeholder="Write the model's reply, or draft it with AI" />
     </Modal>
   );
 }

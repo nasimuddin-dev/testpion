@@ -4,7 +4,7 @@ import { asError, call, on } from '../api';
 import { confirmAction, isPushRejected, promptText, toastError, useApp } from '../store';
 import { useIntent } from '../hooks';
 import { useEditorTabsStore } from '../components/EditorTabs';
-import { Badge, Button, Callout, cx, Empty, LinkButton, Menu, MoreMenu, PageHeader, SectionTitle, Spinner, Split } from '../components/ui';
+import { Badge, Button, Callout, cx, Empty, LinkButton, Menu, MoreMenu, PageHeader, SectionTitle, Spinner, Split, Textarea } from '../components/ui';
 import { DiffText, GitCommitPanel } from '../components/GitCommitPanel';
 import { plural } from '../lib/format';
 import { GitItemDiffDialog } from '../components/GitItemDiffDialog';
@@ -467,7 +467,7 @@ export function GitView() {
 
         <section className="grid gap-2">
           <SectionTitle>Commit {staged.length ? <span className="text-muted font-normal">· {staged.length} staged</span> : files.length ? <span className="text-muted font-normal">· all changes</span> : null}</SectionTitle>
-          <textarea className="field min-h-20 font-mono text-xs" aria-label="Commit message" placeholder="What changed and why (e.g. Add payment tests)" value={message} onChange={(e) => setMessage(e.target.value)} />
+          <Textarea className="field min-h-20 font-mono text-xs" aria-label="Commit message" placeholder="What changed and why (e.g. Add payment tests)" value={message} onChange={(e) => setMessage(e.target.value)} />
           <div className="flex gap-2">
             <Button variant="primary" icon={<GitCommitHorizontal size={13} />} loading={busy === 'commit'} disabled={!files.length} onClick={() => void commit()}>
               Commit

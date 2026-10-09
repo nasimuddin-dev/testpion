@@ -18,7 +18,7 @@ import { CodeEditor } from '../components/CodeEditor';
 import { KeyValueEditor } from '../components/KeyValueEditor';
 import { JsonTree } from '../components/JsonView';
 import { VarInput } from '../components/VarInput';
-import { Badge, Button, cx, Empty, Field, IconButton, Input, Split, Tabs, VirtualList } from '../components/ui';
+import { Badge, Button, cx, Empty, Field, IconButton, Input, Split, Tabs, VirtualList, Textarea } from '../components/ui';
 import { ResponseSplit } from '../components/ResponseSplit';
 import { pickTextFile } from '../lib/files';
 import { useSticky } from '../lib/sticky';
@@ -496,7 +496,7 @@ export function GrpcView() {
                 ).map(([k, label, hint]) => (
                   <Field key={k} label={label} hint={hint}>
                     <div className="flex gap-2">
-                      <textarea className="field mono text-xs min-h-16 flex-1" placeholder="-----BEGIN CERTIFICATE-----" value={d[k] ?? ''} onChange={(e) => set({ [k]: e.target.value } as Partial<typeof d>)} />
+                      <Textarea className="field mono text-xs min-h-16 flex-1" placeholder="-----BEGIN CERTIFICATE-----" value={d[k] ?? ''} onChange={(e) => set({ [k]: e.target.value } as Partial<typeof d>)} />
                       <Button size="sm" onClick={() => void pickTextFile('.pem,.crt,.cer').then((f) => f && set({ [k]: f.text } as Partial<typeof d>))}>
                         Load…
                       </Button>
@@ -505,7 +505,7 @@ export function GrpcView() {
                 ))}
                 <Field label="Client private key" hint="Not saved with the draft (it's a secret): keep it in a secret environment variable and enter {{clientKey}}, or paste it for this session only.">
                   <div className="flex gap-2">
-                    <textarea className="field mono text-xs min-h-16 flex-1" placeholder="{{clientKey}} or -----BEGIN PRIVATE KEY-----" value={keyText} onChange={(e) => setKeyText(e.target.value)} />
+                    <Textarea className="field mono text-xs min-h-16 flex-1" placeholder="{{clientKey}} or -----BEGIN PRIVATE KEY-----" value={keyText} onChange={(e) => setKeyText(e.target.value)} />
                     <Button size="sm" onClick={() => void pickTextFile('.pem,.key').then((f) => f && setKeyText(f.text))}>
                       Load…
                     </Button>

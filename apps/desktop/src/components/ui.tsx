@@ -1,4 +1,4 @@
-import { cloneElement, forwardRef, isValidElement, useCallback, useEffect, useLayoutEffect, useRef, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type MouseEvent as ReactMouseEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactElement, type ReactNode, type SelectHTMLAttributes } from 'react';
+import { cloneElement, forwardRef, isValidElement, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type TextareaHTMLAttributes, type MouseEvent as ReactMouseEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactElement, type ReactNode, type SelectHTMLAttributes } from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import * as MenuPrimitive from '@radix-ui/react-dropdown-menu';
 import * as SwitchPrimitive from '@radix-ui/react-switch';
@@ -112,6 +112,44 @@ export const rowActionClass = (header = false) =>
 
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(({ className, ...p }, ref) => <input ref={ref} className={cx('field', className)} {...p} />);
 Input.displayName = 'Input';
+
+/**
+ * The one multi-line text field: it grows with its text, from `rows` (or its min-height) up to `maxRows` lines, then
+ * scrolls, so nothing typed or pasted is hidden; it measures again when its width changes (a resized panel wraps the
+ * text differently). `autoGrow={false}` keeps a fixed size (a box that fills its area, like a paste box).
+ */
+export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<HTMLTextAreaElement> & { autoGrow?: boolean; maxRows?: number }>(
+  ({ className, autoGrow = true, maxRows = 16, rows, ...p }, fwd) => {
+    const ref = useRef<HTMLTextAreaElement>(null);
+    useImperativeHandle(fwd, () => ref.current!);
+    const fit = useCallback(() => {
+      const el = ref.current;
+      if (!el || !autoGrow) return;
+      const cs = getComputedStyle(el);
+      const line = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.4 || 20;
+      const chrome = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom) + parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth);
+      el.style.height = 'auto';
+      const want = el.scrollHeight + parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth);
+      const max = line * maxRows + chrome;
+      const min = line * (rows ?? 1) + chrome;
+      el.style.height = `${Math.max(min, Math.min(want, max))}px`;
+      el.style.overflowY = want > max ? 'auto' : 'hidden';
+    }, [autoGrow, maxRows, rows]);
+    useLayoutEffect(fit, [fit, p.value]);
+    useEffect(() => {
+      const el = ref.current;
+      if (!el || !autoGrow) return;
+      let width = el.clientWidth;
+      const ro = new ResizeObserver(() => {
+        if (el.clientWidth !== width) (width = el.clientWidth), fit();
+      });
+      ro.observe(el);
+      return () => ro.disconnect();
+    }, [autoGrow, fit]);
+    return <textarea ref={ref} rows={rows} className={cx('field', autoGrow && 'resize-none', className)} onInput={autoGrow ? fit : undefined} {...p} />;
+  },
+);
+Textarea.displayName = 'Textarea';
 
 /** Native select (keyboard- and screen-reader-friendly), styled to match the inputs. */
 export function Select({ className, children, ...p }: SelectHTMLAttributes<HTMLSelectElement>) {

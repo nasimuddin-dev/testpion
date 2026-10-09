@@ -36,7 +36,10 @@ export function ResponseViewer({
   onSaveExample,
   onGenerateTests,
   onExplain,
+  eventsKey,
 }: {
+  /** Keeps the selected server-sent event when a live stream's list gives way to this response (the request tab's id). */
+  eventsKey?: string;
   response: HttpResponseData;
   checks?: CheckResult[];
   traceId?: string;
@@ -257,7 +260,7 @@ export function ResponseViewer({
           </div>
         )}
         {tab === 'stream' && <RawView text={stream ?? ''} />}
-        {tab === 'events' && response.events && <SseEvents events={response.events} stopped={response.streamStopped} dropped={response.eventsDropped} />}
+        {tab === 'events' && response.events && <SseEvents events={response.events} stopped={response.streamStopped} dropped={response.eventsDropped} stateKey={eventsKey} />}
         {tab === 'trace' && (trace ? <TraceView trace={trace} /> : <Empty title="Loading trace…" />)}
         {tab === 'code' && <RawView text={curl ?? ''} />}
       </div>

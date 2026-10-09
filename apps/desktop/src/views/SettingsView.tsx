@@ -8,7 +8,7 @@ import { toastError, useApp } from '../store';
 import { useIntent } from '../hooks';
 import type { AppSettings, PriceEntry, ProviderConfig } from '../types';
 import { checkForUpdates } from '../updates';
-import { Badge, Button, Field, IconButton, Input, Select, Tabs, Toggle } from '../components/ui';
+import { Badge, Button, Field, IconButton, Input, Select, Tabs, Toggle, Textarea } from '../components/ui';
 
 type Tab = 'appearance' | 'requests' | 'git' | 'proxy' | 'certificates' | 'privacy' | 'pricing' | 'load' | 'storage' | 'assistant' | 'about' | 'agents';
 
@@ -131,13 +131,13 @@ export function SettingsView() {
           {tab === 'privacy' && (
             <>
               <Field label="Always-redacted field names" hint="Matched case-insensitively (and as suffixes, e.g. accessToken) in logs, traces, history, reports and exports.">
-                <textarea className="field mono min-h-28" value={s.redactFields.join('\n')} onChange={(e) => set({ redactFields: e.target.value.split('\n').map((x) => x.trim()).filter(Boolean) })} />
+                <Textarea className="field mono min-h-28" value={s.redactFields.join('\n')} onChange={(e) => set({ redactFields: e.target.value.split('\n').map((x) => x.trim()).filter(Boolean) })} />
               </Field>
               <Field
                 label="OS environment variables requests may read"
                 hint="One name per line. {{$env.NAME}} works only for these: a collection someone shares with you, or one you import, could otherwise read any variable of this computer (cloud keys, tokens) and send it anywhere when run. The CLI reads all of them, as CI pipelines expect."
               >
-                <textarea className="field mono min-h-20" placeholder={'e.g.\nAPI_BASE_URL\nSTAGING_TOKEN'} value={(s.envVariables ?? []).join('\n')} onChange={(e) => set({ envVariables: e.target.value.split('\n').map((x) => x.trim()).filter(Boolean) })} />
+                <Textarea className="field mono min-h-20" placeholder={'e.g.\nAPI_BASE_URL\nSTAGING_TOKEN'} value={(s.envVariables ?? []).join('\n')} onChange={(e) => set({ envVariables: e.target.value.split('\n').map((x) => x.trim()).filter(Boolean) })} />
               </Field>
               <div className="rounded-md border border-line p-3 text-sm flex flex-col gap-1">
                 <div className="font-medium">Telemetry</div>
@@ -380,7 +380,7 @@ function CertificateSettings({ value, onChange }: { value: NonNullable<AppSettin
       </p>
       <Toggle checked={!!value.systemCa} onChange={(systemCa) => onChange({ ...value, systemCa })} label="Trust the certificates installed in the operating system (Windows certificate store, macOS keychain, Linux CA bundle)" />
       <Field label="Extra CA certificates (PEM)" hint="One or more -----BEGIN CERTIFICATE----- blocks. Public certificates only: never paste a private key here.">
-        <textarea className="field mono text-xs min-h-36" spellCheck={false} placeholder={'-----BEGIN CERTIFICATE-----\nMIID…\n-----END CERTIFICATE-----'} value={value.extraCa ?? ''} onChange={(e) => onChange({ ...value, extraCa: e.target.value || undefined })} />
+        <Textarea className="field mono text-xs min-h-36" spellCheck={false} placeholder={'-----BEGIN CERTIFICATE-----\nMIID…\n-----END CERTIFICATE-----'} value={value.extraCa ?? ''} onChange={(e) => onChange({ ...value, extraCa: e.target.value || undefined })} />
       </Field>
       <div className="flex gap-2">
         <Button size="sm" onClick={() => void load()}>

@@ -765,7 +765,7 @@ export function RestView() {
           <RequestEditor tab={tab} update={update} setReq={setReq} setParams={setParams} setExamples={setExamples} />
           <div className="h-full min-h-0 flex flex-col">
             {sending[tab.id] && liveEvents[sending[tab.id]!] ? (
-              <SseEvents events={liveEvents[sending[tab.id]!]!} live onStop={cancel} />
+              <SseEvents events={liveEvents[sending[tab.id]!]!} live onStop={cancel} stateKey={tab.id} />
             ) : sending[tab.id] ? (
               <div className="h-full grid place-items-center text-muted text-sm">
                 <div className="flex flex-col items-center gap-2">
@@ -778,7 +778,7 @@ export function RestView() {
                 <ErrorPanel error={result.error} context={{ request: { method: tab.request.method, url: tab.request.url } }} />
               </div>
             ) : result?.response ? (
-              <ResponseViewer response={result.response} checks={result.checks} traceId={result.traceId} curl={result.curl} stream={result.stream} scriptLogs={result.scriptLogs} visualizer={result.visualizer} requestId={tab.requestId} historyId={result.historyId} onSuggestAssertions={suggest} onAddAssertion={addAssertion} onUpdateSnapshot={updateSnapshot} onSaveVariable={(v) => void saveVariable(v)} onSaveExample={() => void saveExample()} onGenerateTests={generateTests && (() => void generateTests())} onExplain={explain} />
+              <ResponseViewer eventsKey={tab.id} response={result.response} checks={result.checks} traceId={result.traceId} curl={result.curl} stream={result.stream} scriptLogs={result.scriptLogs} visualizer={result.visualizer} requestId={tab.requestId} historyId={result.historyId} onSuggestAssertions={suggest} onAddAssertion={addAssertion} onUpdateSnapshot={updateSnapshot} onSaveVariable={(v) => void saveVariable(v)} onSaveExample={() => void saveExample()} onGenerateTests={generateTests && (() => void generateTests())} onExplain={explain} />
             ) : (
               <Empty icon={<Send size={28} />} title="Send a request to see the response">
                 Press <b>Ctrl+Enter</b> to send. Variables like <span className="var-token mono">{'{{baseUrl}}'}</span> resolve from the active environment.

@@ -1,5 +1,5 @@
 import type { AuthConfig } from '../types';
-import { Button, Field, Input, Select } from './ui';
+import { Button, Field, Input, Select, Textarea } from './ui';
 import { call } from '../api';
 import { useApp } from '../store';
 import { KeyValueEditor } from './KeyValueEditor';
@@ -113,7 +113,7 @@ export function AuthEditor({ auth, onChange, allowInherit = true }: { auth?: Aut
             </Field>
           </div>
           <Field label="Payload (JSON)">
-            <textarea className="field mono min-h-24" value={a.payload} onChange={(e) => set({ payload: e.target.value })} />
+            <Textarea className="field mono min-h-24" value={a.payload} onChange={(e) => set({ payload: e.target.value })} />
           </Field>
         </>
       )}

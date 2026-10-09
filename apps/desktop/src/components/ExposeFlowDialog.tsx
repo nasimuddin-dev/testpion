@@ -2,7 +2,7 @@ import { Bot, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { call } from '../api';
 import { confirmAction, toastError, useApp } from '../store';
-import { Button, Field, IconButton, Input, Modal } from './ui';
+import { Button, Field, IconButton, Input, Modal, Textarea } from './ui';
 
 interface FlowInput {
   name: string;
@@ -135,7 +135,7 @@ export function ExposeFlowDialog({ path, onClose, onChanged }: { path: string; o
           <Input aria-label="Tool name" value={tool} onChange={(e) => setTool(e.target.value)} placeholder="checkout_flow" spellCheck={false} autoFocus />
         </Field>
         <Field label="Description" hint="What the flow checks and when an agent should run it">
-          <textarea
+          <Textarea
             aria-label="Description"
             className="field min-h-16"
             value={description}

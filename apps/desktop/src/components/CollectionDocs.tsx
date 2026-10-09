@@ -5,7 +5,7 @@ import { toastError, useApp } from '../store';
 import type { Collection } from '../types';
 import { downloadContent, finishSave, type SaveResult } from '../lib/files';
 import { Markdown } from './Markdown';
-import { Button, cx, useDebounced } from './ui';
+import { Button, cx, useDebounced, Textarea } from './ui';
 
 /**
  * Postman-style collection documentation: the collection description plus every folder and request
@@ -55,7 +55,7 @@ export function CollectionDocs({ collection, onDescription }: { collection: Coll
       </div>
       {mode === 'edit' ? (
         <div className="flex-1 min-h-0 grid grid-cols-2 gap-3 p-3">
-          <textarea
+          <Textarea autoGrow={false}
             className="field h-full resize-none mono text-sm"
             placeholder={'Describe the collection in Markdown: what the API does, how to authenticate, where to get keys…'}
             value={collection.description ?? ''}

@@ -8,7 +8,7 @@ import { uid } from '../../lib/format';
 
 import { pickTextFile, pickFolderFiles } from '../../lib/files';
 import { convertedScriptsText, toastUnchangedScripts, type ImportScriptsSummary } from '../../lib/import-scripts';
-import { Button, Field, Input, Modal, Select } from '../../components/ui';
+import { Button, Field, Input, Modal, Select, Textarea } from '../../components/ui';
 
 /**
  * The one "save into a collection" dialog: name, collection (or a new one) and folder. Every saved request
@@ -225,7 +225,7 @@ export function ImportModal({ onClose, onDone }: { onClose(): void; onDone(): vo
           Import link
         </Button>
       </form>
-      <textarea className="field mono w-full h-64 text-xs" placeholder="Paste a document here…" value={text} onChange={(e) => setText(e.target.value)} />
+      <Textarea autoGrow={false} className="field mono w-full h-64 text-xs" placeholder="Paste a document here…" value={text} onChange={(e) => setText(e.target.value)} />
       <label className="flex items-center gap-2 mt-2 text-sm" title="Postman and Insomnia scripts are converted to TestPion's tp.* (pm.* still runs). Exporting to Postman turns tp.* back into pm.*.">
         <input type="checkbox" checked={keepPm} onChange={(e) => setKeepPm(e.target.checked)} /> Keep pm.* in scripts (for collections you also use in Postman)
       </label>

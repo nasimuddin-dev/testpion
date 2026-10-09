@@ -8,7 +8,7 @@ import { RunPanel } from './RunPanel';
 import { GenerateDataDialog } from './GenerateDataDialog';
 import { RunsOverview, type RunRow } from './RunsOverview';
 import { hasNativeDialogs, pickTextFile } from '../lib/files';
-import { LinkButton, Badge, Button, cx, Empty, Field, Input, Modal, Select, Split, Toggle } from './ui';
+import { LinkButton, Badge, Button, cx, Empty, Field, Input, Modal, Select, Split, Toggle, Textarea } from './ui';
 
 interface RunnableRequest {
   id: string;
@@ -332,7 +332,7 @@ export function CollectionRunner({ collection, folderId, onFolderChange, dataPat
               )}
               {data?.tables && (
                 <div className="mt-2 flex flex-col gap-1.5">
-                  <textarea
+                  <Textarea
                     aria-label="SQL query for the data"
                     className="w-full min-h-16 rounded-md border border-line bg-bg px-2 py-1.5 mono text-xs outline-none focus:border-accent"
                     placeholder="SELECT * FROM users"

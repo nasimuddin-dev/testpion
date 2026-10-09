@@ -1,7 +1,7 @@
 import { Eye, EyeOff, Lock, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import type { KeyValue } from '../types';
-import { LinkButton, cx } from './ui';
+import { LinkButton, cx, Textarea } from './ui';
 import { VarInput } from './VarInput';
 
 /**
@@ -172,7 +172,7 @@ function BulkEditor({ rows, onChange, onDone }: { rows: KeyValue[]; onChange(row
   };
   return (
     <div className="flex flex-col gap-1">
-      <textarea
+      <Textarea
         autoFocus
         aria-label="Bulk edit"
         className="field mono text-xs min-h-40 w-full"

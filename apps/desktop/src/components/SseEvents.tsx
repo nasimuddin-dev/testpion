@@ -1,9 +1,11 @@
+import { useSticky } from '../lib/sticky';
 import { ArrivalSpark } from './charts';
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { Radio, Square } from 'lucide-react';
 import type { SseEvent } from '../types';
-import { Badge, Button, cx, Empty, Input, VirtualList } from './ui';
-import { JsonTree } from './JsonView';
+import { Badge, Button, cx, Empty, Input, Split, VirtualList } from './ui';
+import { JsonTree, RawView } from './JsonView';
+import { prettyBody } from '../lib/pretty';
 import { plural } from '../lib/format';
 
 const ROW = 30;
@@ -12,9 +14,10 @@ const ROW = 30;
  * Server-Sent Events, one row per event (time, type, id, data), like Postman's event stream view.
  * Live while the stream is open (with Stop); a selected event shows its data in full (JSON as a tree).
  */
-export function SseEvents({ events, live, onStop, stopped, dropped }: { events: SseEvent[]; live?: boolean; onStop?(): void; stopped?: boolean; dropped?: number }) {
+export function SseEvents({ events, live, onStop, stopped, dropped, stateKey }: { events: SseEvent[]; live?: boolean; onStop?(): void; stopped?: boolean; dropped?: number; /** Keeps the selected event when the live list gives way to the finished response (the request tab's id). */ stateKey?: string }) {
   const [filter, setFilter] = useState('');
-  const [selected, setSelected] = useState<number>();
+  const own = useId();
+  const [selected, setSelected] = useSticky<number | undefined>(`sse.selected.${stateKey ?? own}`, undefined);
   const shown = useMemo(() => {
     const f = filter.trim().toLowerCase();
     const all = events.map((e, i) => ({ e, i }));
@@ -58,46 +61,51 @@ export function SseEvents({ events, live, onStop, stopped, dropped }: { events: 
           {live ? 'Events appear here as the server sends them.' : 'The stream closed without a complete event.'}
         </Empty>
       ) : (
-        <div className="flex-1 min-h-0 grid grid-rows-[minmax(0,1fr)_auto]">
-          <div className="min-h-0 flex flex-col">
-            <div className="grid grid-cols-[80px_120px_90px_1fr] gap-2 px-3 py-1 text-[11px] uppercase tracking-wide text-muted border-b border-line shrink-0">
-              <span>Time</span>
-              <span>Event</span>
-              <span>Id</span>
-              <span>Data</span>
-            </div>
-            <VirtualList
-              className="flex-1"
-              items={shown}
-              rowHeight={ROW}
-              scrollToIndex={live && !filter ? shown.length - 1 : undefined}
-              render={({ e, i }) => (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => setSelected(i === selected ? undefined : i)}
-                  className={cx('w-full grid grid-cols-[80px_120px_90px_1fr] gap-2 px-3 items-center text-left text-xs border-b border-line/60 hover:bg-hover', i === selected && 'bg-accent-soft')}
-                  style={{ height: ROW }}
-                >
-                  <span className="tabular-nums text-muted">{(e.atMs / 1000).toFixed(2)} s</span>
-                  <span className="truncate font-medium">{e.event}</span>
-                  <span className="truncate mono text-muted">{e.id ?? ''}</span>
-                  <span className="truncate mono">{e.data}</span>
-                </button>
-              )}
-            />
-          </div>
-          {sel && (
-            <div className="border-t border-line max-h-[45%] min-h-24 overflow-auto">
-              <div className="flex items-center gap-2 px-3 py-1.5 text-xs text-muted border-b border-line sticky top-0 bg-bg">
-                <b className="text-fg">{sel.event}</b>
-                {sel.id && <span className="mono">id {sel.id}</span>}
-                {sel.retry !== undefined && <span>retry {sel.retry} ms</span>}
-                <span>at {(sel.atMs / 1000).toFixed(3)} s</span>
+        <div className="flex-1 min-h-0">
+          {/* the list and the selected event, with the divider between them dragged like every other split */}
+          <Split id="sse-events" direction="vertical" initial={55} collapsedSecond={!sel}>
+            <div className="h-full min-h-0 flex flex-col">
+              <div className="grid grid-cols-[80px_120px_90px_1fr] gap-2 px-3 py-1 text-[11px] uppercase tracking-wide text-muted border-b border-line shrink-0">
+                <span>Time</span>
+                <span>Event</span>
+                <span>Id</span>
+                <span>Data</span>
               </div>
-              {selJson !== undefined ? <JsonTree data={selJson} /> : <pre className="p-3 text-xs mono whitespace-pre-wrap break-all">{sel.data}</pre>}
+              <VirtualList
+                className="flex-1"
+                items={shown}
+                rowHeight={ROW}
+                scrollToIndex={live && !filter ? shown.length - 1 : undefined}
+                render={({ e, i }) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => setSelected(i === selected ? undefined : i)}
+                    className={cx('w-full grid grid-cols-[80px_120px_90px_1fr] gap-2 px-3 items-center text-left text-xs border-b border-line/60 hover:bg-hover', i === selected && 'bg-accent-soft')}
+                    style={{ height: ROW }}
+                  >
+                    <span className="tabular-nums text-muted">{(e.atMs / 1000).toFixed(2)} s</span>
+                    <span className="truncate font-medium">{e.event}</span>
+                    <span className="truncate mono text-muted">{e.id ?? ''}</span>
+                    <span className="truncate mono">{e.data}</span>
+                  </button>
+                )}
+              />
             </div>
-          )}
+            {sel ? (
+              <div className="h-full min-h-0 flex flex-col" data-sse-event>
+                <div className="flex items-center gap-2 px-3 py-1.5 text-xs text-muted border-b border-line shrink-0">
+                  <b className="text-fg">{sel.event}</b>
+                  {sel.id && <span className="mono">id {sel.id}</span>}
+                  {sel.retry !== undefined && <span>retry {sel.retry} ms</span>}
+                  <span>at {(sel.atMs / 1000).toFixed(3)} s</span>
+                </div>
+                <div className="flex-1 min-h-0">{selJson !== undefined ? <JsonTree data={selJson} /> : <RawView text={prettyBody(sel.data)} />}</div>
+              </div>
+            ) : (
+              <div />
+            )}
+          </Split>
         </div>
       )}
     </div>

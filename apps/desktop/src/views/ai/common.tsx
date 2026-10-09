@@ -8,7 +8,7 @@ import { templateVars } from '../../lib/format';
 import { AssertionEditor } from '../../components/AssertionEditor';
 import { CodeEditor } from '../../components/CodeEditor';
 import { AddKeyButton, setupProviderOf } from '../../components/Results';
-import { Badge, Empty, Field, IconButton, Input, Select, Split, Tabs } from '../../components/ui';
+import { Badge, Empty, Field, IconButton, Input, Select, Split, Tabs, Textarea } from '../../components/ui';
 
 /** What the AI Lab tabs share: the prompt draft and its editors, the model picker, the pieces that say a provider is not ready. */
 export interface ChatResult {
@@ -170,7 +170,7 @@ export function PromptEditor({ d, set }: { d: Draft; set(p: Partial<Draft>): voi
               <div className="flex flex-col gap-2">
                 {vars.map((v) => (
                   <Field key={v} label={v}>
-                    <textarea className="field text-sm min-h-9" rows={1} value={d.input[v] ?? ''} onChange={(e) => set({ input: { ...d.input, [v]: e.target.value } })} />
+                    <Textarea className="field text-sm min-h-9" rows={1} value={d.input[v] ?? ''} onChange={(e) => set({ input: { ...d.input, [v]: e.target.value } })} />
                   </Field>
                 ))}
               </div>

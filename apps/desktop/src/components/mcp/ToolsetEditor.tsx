@@ -10,7 +10,7 @@ import { CodeEditor } from '../CodeEditor';
 import { JsonSchemaForm } from '../JsonSchemaForm';
 import { ErrorPanel } from '../Results';
 import { ResponseSplit } from '../ResponseSplit';
-import { Badge, Button, Callout, cx, Empty, Field, IconButton, Input, Menu, Segmented, Select, Split, Toggle } from '../ui';
+import { Badge, Button, Callout, cx, Empty, Field, IconButton, Input, Menu, Segmented, Select, Split, Toggle, Textarea } from '../ui';
 import { ToolResult, type ToolRun } from './ToolsPanel';
 
 /**
@@ -363,7 +363,7 @@ function ToolForm({ tool, index, definition, onChange }: { tool: MockTool; index
             </Field>
           </div>
           <Field label="Description" hint="What it does and when an agent should call it: this is what the agent reads to choose a tool.">
-            <textarea className="field min-h-16" value={tool.description ?? ''} onChange={(e) => onChange({ description: e.target.value || undefined })} data-toolset-description="" />
+            <Textarea className="field min-h-16" value={tool.description ?? ''} onChange={(e) => onChange({ description: e.target.value || undefined })} data-toolset-description="" />
           </Field>
           <div className="flex items-center gap-4 text-xs">
             <Toggle label="Read-only hint" checked={annotations.readOnlyHint === true} onChange={(v) => setAnnotation('readOnlyHint', v)} />
@@ -482,7 +482,7 @@ function ResponseCard({ r, index, path, onChange, onDelete }: { r: McpMockRespon
       )}
       <Field label={kind === 'text' ? 'Text' : kind === 'json' ? 'JSON' : kind === 'script' ? 'Script' : 'Content items'} hint={KIND_HINT[kind]}>
         {kind === 'text' ? (
-          <textarea className="field mono min-h-16" value={r.text ?? ''} onChange={(e) => onChange({ ...r, text: e.target.value })} data-toolset-text="" />
+          <Textarea className="field mono min-h-16" value={r.text ?? ''} onChange={(e) => onChange({ ...r, text: e.target.value })} data-toolset-text="" />
         ) : kind === 'script' ? (
           <div className="border border-line rounded-lg overflow-hidden" style={{ height: 140 }}>
             <CodeEditor language="javascript" value={r.script ?? ''} onChange={(script) => onChange({ ...r, script })} path={`${path}/script.js`} />

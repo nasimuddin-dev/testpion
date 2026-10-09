@@ -17,7 +17,7 @@ import { SidebarShell } from '../components/SidebarShell';
 import { closeTabsFor, NEW_TAB_TITLE, useSingleEditorTab } from '../components/EditorTabs';
 import { EnvironmentsPane, HistoryPane } from '../components/SidebarPanes';
 import { McpUsage } from '../components/McpUsage';
-import { Button, cx, Empty, Field, IconButton, Input, Menu, SectionTitle, Select, Split, Tabs, VirtualList } from '../components/ui';
+import { Button, cx, Empty, Field, IconButton, Input, Menu, SectionTitle, Select, Split, Tabs, VirtualList, Textarea } from '../components/ui';
 import { PromptsPanel, ResourcesPanel, type Discovery } from '../components/mcp/McpPanels';
 import { splitCommandLine, joinCommandLine } from '../lib/command-line';
 import { ToolsPanel } from '../components/mcp/ToolsPanel';
@@ -560,7 +560,7 @@ function ServerSettings({ s, onChange, folders = [] }: { s: McpServerConfig; onC
                   </Field>
                 </div>
                 <Field label="Arguments (one per line)">
-                  <textarea className="field mono min-h-20" value={(s.args ?? []).join('\n')} onChange={(e) => onChange({ ...s, args: e.target.value.split('\n').filter((x) => x !== '') })} />
+                  <Textarea className="field mono min-h-20" value={(s.args ?? []).join('\n')} onChange={(e) => onChange({ ...s, args: e.target.value.split('\n').filter((x) => x !== '') })} />
                 </Field>
                 <Field label="Environment variables" hint="Use {{variables}} to reference secrets instead of pasting them here.">
                   <KeyValueEditor rows={envRows} onChange={changeEnv} />

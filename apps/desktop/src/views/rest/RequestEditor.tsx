@@ -12,7 +12,7 @@ import { AuthEditor } from '../../components/AuthEditor';
 import { CodeEditor } from '../../components/CodeEditor';
 import { call } from '../../api';
 import { COMMON_HEADERS, HEADER_VALUES, KeyValueEditor } from '../../components/KeyValueEditor';
-import { LinkButton, Field, Input, Select, Tabs, Toggle } from '../../components/ui';
+import { LinkButton, Field, Input, Select, Tabs, Toggle, Textarea } from '../../components/ui';
 import { RestTab } from './types';
 import { switchBodyType, type BodyStash } from '../../lib/body';
 
@@ -239,7 +239,7 @@ function BodyEditor({ body, onChange, stashKey = 'default', method, url }: { bod
 function DocsEditor({ value, onChange }: { value: string; onChange(v: string): void }) {
   return (
     <div className="h-full grid grid-cols-2 gap-3 p-2 min-h-0">
-      <textarea
+      <Textarea autoGrow={false}
         className="field h-full resize-none mono text-sm"
         placeholder={'Document this request in Markdown: what it does, required parameters, error cases…'}
         value={value}
@@ -322,7 +322,7 @@ function RequestSettings({ settings: st, onChange }: { settings: NonNullable<Htt
           Oldest and newest protocol versions allowed in the handshake; versions outside the range are disabled.
         </SettingRow>
         <SettingRow title="Cipher suites" isDefault={!st.ciphers?.trim()} control={
-          <textarea className="field w-64 h-20 mono text-xs" placeholder="Default (Node.js / OpenSSL)" value={st.ciphers ?? ''} onChange={(e) => set({ ciphers: e.target.value || undefined })} aria-label="Cipher suites" />
+          <Textarea autoGrow={false} className="field w-64 h-20 mono text-xs" placeholder="Default (Node.js / OpenSSL)" value={st.ciphers ?? ''} onChange={(e) => set({ ciphers: e.target.value || undefined })} aria-label="Cipher suites" />
         }>
           OpenSSL cipher names in order of preference, separated by colons, e.g. <span className="mono">ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384</span>.
         </SettingRow>

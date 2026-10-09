@@ -2,7 +2,7 @@ import { Sparkles, Wand2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { call } from '../api';
 import { toastError, useApp } from '../store';
-import { Button, Field, Input, Modal, Select, Toggle } from './ui';
+import { Button, Field, Input, Modal, Select, Toggle, Textarea } from './ui';
 
 interface Outline {
   tags: Array<{ operations: Array<{ method: string; path: string; operationId?: string; summary?: string; requestBody?: { contentType: string } }> }>;
@@ -127,7 +127,7 @@ export function GenerateDataDialog({ onClose, onDone }: { onClose(): void; onDon
           </div>
         ) : (
           <Field label="JSON schema of one row (YAML or JSON)">
-            <textarea className="field mono text-xs h-40" value={schema} onChange={(e) => setSchema(e.target.value)} aria-label="JSON schema" spellCheck={false} />
+            <Textarea autoGrow={false} className="field mono text-xs h-40" value={schema} onChange={(e) => setSchema(e.target.value)} aria-label="JSON schema" spellCheck={false} />
           </Field>
         )}
         <div className="flex items-end gap-3 flex-wrap">

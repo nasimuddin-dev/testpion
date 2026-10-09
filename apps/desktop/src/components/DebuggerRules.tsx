@@ -2,7 +2,7 @@ import { ArrowDown, ArrowUp, Check, Pencil, Plus, Play, Scale, Trash2, X, Zap } 
 import { useEffect, useState } from 'react';
 import { asError, call } from '../api';
 import { confirmAction, promptText, toastError } from '../store';
-import { Badge, Button, cx, Empty, Field, Input, Menu, Modal, Select, Toggle, type MenuItem } from './ui';
+import { Badge, Button, cx, Empty, Field, Input, Menu, Modal, Select, Toggle, type MenuItem, Textarea } from './ui';
 import { CompareView, type Compared } from './ResponseHistory';
 
 /**
@@ -293,7 +293,7 @@ export function RuleDialog({ rule, onClose, onSave }: { rule: Partial<Rule>; onC
       color: kind === 'highlight' ? (r.color ?? 'yellow') : undefined,
     });
   const area = (value: string, onChange: (v: string) => void, placeholder: string, rows = 3) => (
-    <textarea className="field mono text-xs w-full" rows={rows} value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} />
+    <Textarea className="field mono text-xs w-full" rows={rows} value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} />
   );
   return (
     <Modal
@@ -496,10 +496,10 @@ export function BreakpointDialog({ bp, onDone }: { bp: HeldBreakpoint; onDone():
           </Field>
         )}
         <Field label="Headers" hint="Name: value per line">
-          <textarea className="field mono text-xs w-full" rows={6} value={headers} onChange={(ev) => setHeaders(ev.target.value)} />
+          <Textarea className="field mono text-xs w-full" rows={6} value={headers} onChange={(ev) => setHeaders(ev.target.value)} />
         </Field>
         <Field label="Body">
-          <textarea className="field mono text-xs w-full" rows={8} value={body} onChange={(ev) => setBody(ev.target.value)} />
+          <Textarea className="field mono text-xs w-full" rows={8} value={body} onChange={(ev) => setBody(ev.target.value)} />
         </Field>
       </div>
     </Modal>

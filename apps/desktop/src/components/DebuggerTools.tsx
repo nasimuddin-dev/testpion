@@ -3,7 +3,7 @@ import { ChevronDown, Copy, Download, RefreshCw, ShieldCheck, ShieldOff } from '
 import { useEffect, useMemo, useState } from 'react';
 import { call } from '../api';
 import { confirmAction, toastError, useApp } from '../store';
-import { Badge, Button, Empty, Menu, Modal, Select } from './ui';
+import { Badge, Button, Empty, Menu, Modal, Select, Textarea } from './ui';
 import { finishSave, type SaveResult } from '../lib/files';
 import { tryDecodeJwt } from '@testpion/shared';
 import { copyText } from '../lib/clipboard';
@@ -218,7 +218,7 @@ export function ConvertTool({ initial = '' }: { initial?: string }) {
         {split(DECODERS, decoder, setDecoder, 'Choose a decoder')}
         {split(ENCODERS, encoder, setEncoder, 'Choose an encoder')}
       </div>
-      <textarea
+      <Textarea autoGrow={false}
         className="field mono text-xs w-full flex-1 min-h-24"
         value={text}
         onChange={(e) => (setText(e.target.value), setOut(undefined))}
@@ -229,7 +229,7 @@ export function ConvertTool({ initial = '' }: { initial?: string }) {
         <span className="text-xs font-semibold text-muted uppercase tracking-wide">{out?.label ?? 'Result'}</span>
         {out?.value !== undefined && <Button size="sm" variant="ghost" icon={<Copy size={12} />} onClick={() => void copyText(out.value!, out.label.toLowerCase())} title="Copy" />}
       </div>
-      <textarea className="field mono text-xs w-full flex-1 min-h-24" readOnly value={out ? (out.value ?? `This text does not ${out.label.toLowerCase()}.`) : ''} aria-label="Converted text" data-convert-result />
+      <Textarea autoGrow={false} className="field mono text-xs w-full flex-1 min-h-24" readOnly value={out ? (out.value ?? `This text does not ${out.label.toLowerCase()}.`) : ''} aria-label="Converted text" data-convert-result />
       {readings.length > 0 && (
         <details className="text-xs" open={!out}>
           <summary className="cursor-pointer text-muted">Other readings ({readings.length})</summary>

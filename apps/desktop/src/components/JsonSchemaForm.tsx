@@ -1,5 +1,5 @@
 import { Plus, Trash2 } from 'lucide-react';
-import { Button, IconButton } from './ui';
+import { Button, IconButton, Textarea } from './ui';
 
 type Schema = {
   type?: string | string[];
@@ -94,7 +94,7 @@ function SchemaField({ name, schema, required, value, onChange }: { name: string
     );
   } else if (t === 'object' || t === 'array')
     input = (
-      <textarea
+      <Textarea
         className="field mono min-h-20 text-xs"
         placeholder={t === 'object' ? '{ }' : '[ ]'}
         defaultValue={value === undefined ? '' : JSON.stringify(value, null, 2)}

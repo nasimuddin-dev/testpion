@@ -12,7 +12,7 @@ import { EnvironmentsPane } from '../components/SidebarPanes';
 import { useLibrary } from '../lib/library';
 import { useSticky } from '../lib/sticky';
 import { useIntent } from '../hooks';
-import { Badge, Button, Callout, cx, Empty, Field, Input, Metric, MetricGrid, PageHeader, Select, Split, Tabs, Toggle } from '../components/ui';
+import { Badge, Button, Callout, cx, Empty, Field, Input, Metric, MetricGrid, PageHeader, Select, Split, Tabs, Toggle, Textarea } from '../components/ui';
 import { ErrorPanel } from '../components/Results';
 import { LoadTimeline, StatusCodes } from '../components/LoadCharts';
 import { LoadHistory } from '../components/LoadHistory';
@@ -352,7 +352,7 @@ export function LoadView() {
               </Field>
             </div>
             <Field label="Prompt">
-              <textarea className="field min-h-20" value={d.prompt} onChange={(e) => set({ prompt: e.target.value })} />
+              <Textarea className="field min-h-20" value={d.prompt} onChange={(e) => set({ prompt: e.target.value })} />
             </Field>
             <p className="text-xs text-warn">LLM load tests consume real tokens and may incur provider costs.</p>
           </>
