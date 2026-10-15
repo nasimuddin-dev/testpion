@@ -61,7 +61,8 @@ export function runAgainPlan(summary: RunSummary, resultIds?: string[]): RunAgai
   return {
     kind: 'tests',
     paths,
-    ids: only,
+    // only some results again; else the tests it picked (a run of some results, run again as it ran), or all
+    ids: only ?? (origin?.kind === 'tests' && origin.ids?.length ? origin.ids : undefined),
     grep: only ? undefined : origin?.kind === 'tests' ? origin.grep : undefined,
     tags: only ? undefined : origin?.kind === 'tests' ? origin.tags : undefined,
     environment: summary.environment,
@@ -82,7 +83,9 @@ export function ciTargetOfRun(store: Pick<WorkspaceStore, 'path'>, summary: RunS
   }
   // paths under tests/ as the pipeline names them (a run kept absolute paths before it kept its origin)
   const tests = plan.paths.map((p) => testsPathOf(store, p) ?? p);
-  return { target: { tests, ...(plan.grep ? { grep: plan.grep } : {}), ...(plan.tags?.length ? { tags: plan.tags } : {}) }, environment: plan.environment };
+  // a run of some of the files' tests: the pipeline picks the same ones by id (`-g` matches a test's name or id)
+  const grep = plan.ids?.length ? `^(?:${plan.ids.map((id) => id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})$` : plan.grep;
+  return { target: { tests, ...(grep ? { grep } : {}), ...(plan.tags?.length ? { tags: plan.tags } : {}) }, environment: plan.environment };
 }
 
 /** Monitors name their runs `Monitor · <name>`: scheduled checks, not a run someone started. */

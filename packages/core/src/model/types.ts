@@ -557,7 +557,10 @@ export interface RunSummary {
 }
 
 /** What a run ran: test files (under tests/, with their filters) or a collection (some of its folders and requests). */
-export type RunOrigin = { kind: 'tests'; paths: string[]; grep?: string; tags?: string[] } | { kind: 'collection'; collectionId: string; selection?: string[]; iterations?: number };
+export type RunOrigin =
+  /** `ids`: only these tests of the files ran (Run again on some results); running it again runs only them again. */
+  | { kind: 'tests'; paths: string[]; ids?: string[]; grep?: string; tags?: string[] }
+  | { kind: 'collection'; collectionId: string; selection?: string[]; iterations?: number };
 
 /* ------------------------------------------------------------------ errors */
 

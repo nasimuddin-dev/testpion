@@ -5,7 +5,7 @@ import type { AppSettings, Collection, Environment, Library, McpServerConfig, Pr
 import { SCHEMA_VERSION, defaultSettings } from '../model/types.js';
 import { ApsError } from '../errors.js';
 import { shortId, slugify } from '../util/ids.js';
-import { atomicWrite, readJson, readTextCached, writeDerived, writeJson } from './fsutil.js';
+import { atomicWrite, readJson, relativeInside, readTextCached, writeDerived, writeJson } from './fsutil.js';
 import { looksLikeWorkspace, normalizeCollection, normalizeEnvironment, scanString } from './normalize.js';
 
 export { isWorkspaceDir, looksLikeWorkspace, normalizeCollection, normalizeEnvironment } from './normalize.js';
@@ -179,12 +179,18 @@ export class WorkspaceStore {
     return join(this.root, ...p);
   }
 
-  /** Guard against path traversal for user-supplied relative paths. */
+  /**
+   * Guard against path traversal for user-supplied relative paths. An absolute path is fine when it is inside `base`
+   * as given or really (a workspace opened through a link, named by the other path: see `relativeInside`); the answer
+   * is then named under `base` as the workspace names it, so paths made relative to the workspace stay right.
+   */
   safePath(rel: string, base = this.root): string {
     const root = resolve(base);
     const p = resolve(root, rel);
-    if (p !== root && !p.startsWith(root + sep)) throw new ApsError('ValidationError', `Path escapes the workspace: ${rel}`);
-    return p;
+    if (p === root || p.startsWith(root + sep)) return p;
+    const inside = relativeInside(root, p, { orSame: true });
+    if (inside === undefined) throw new ApsError('ValidationError', `Path escapes the workspace: ${rel}`);
+    return join(root, inside);
   }
 
   /** Whether an absolute path is inside one of the workspace's folders (e.g. `payloads`). */

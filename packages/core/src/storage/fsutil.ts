@@ -1,5 +1,5 @@
-import { closeSync, copyFileSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, statSync, writeFileSync, writeSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { closeSync, copyFileSync, fsyncSync, mkdirSync, openSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync, writeSync } from 'node:fs';
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { createHash, randomBytes } from 'node:crypto';
 import { ApsError } from '../errors.js';
 
@@ -16,6 +16,44 @@ export function endAndClose(stream: NodeJS.WritableStream & { closed?: boolean; 
     stream.end();
   });
 }
+
+/**
+ * `p` (absolute, or from the current folder) with every link on the way resolved: the real path of its nearest folder
+ * that exists, with the rest appended (a file about to be written is where its folder really is).
+ */
+export function realPathOf(p: string): string {
+  let dir = resolve(p);
+  const rest: string[] = [];
+  for (;;) {
+    try {
+      return join(realpathSync(dir), ...rest.reverse());
+    } catch {
+      const up = dirname(dir);
+      if (up === dir) return resolve(p); // nothing of it exists (another drive that is gone): as given
+      rest.push(basename(dir));
+      dir = up;
+    }
+  }
+}
+
+/**
+ * `child` relative to `parent` when it is inside it (`''` when it is `parent` itself and `orSame`), else undefined.
+ * Paths that name it as given count, and so do their real paths (BOTH sides resolved): a workspace reached through a
+ * link (macOS /var → /private/var and /tmp → /private/tmp, a junction, a linked home folder) is still itself, whichever
+ * way each path names it. Windows paths ignore case (path.relative does). The one containment check for paths a write
+ * is guarded by.
+ */
+export function relativeInside(parent: string, child: string, o: { orSame?: boolean } = {}): string | undefined {
+  const within = (a: string, b: string) => {
+    const rel = relative(a, b);
+    if (rel === '') return o.orSame ? '' : undefined;
+    return rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel) ? undefined : rel;
+  };
+  const as = within(resolve(parent), resolve(child));
+  return as !== undefined ? as : within(realPathOf(parent), realPathOf(child));
+}
+
+export const isInside = (parent: string, child: string, o: { orSame?: boolean } = {}): boolean => relativeInside(parent, child, o) !== undefined;
 
 /** Atomic write: write a temp file, fsync, then rename over the target. A crash never leaves a half-written file. */
 /**
@@ -37,26 +75,50 @@ export function ownWrite(path: string, withinMs = 2000): string | undefined {
 }
 
 export function atomicWrite(path: string, data: string | Buffer): void {
+  stageAtomicWrite(path, data).commit();
+}
+
+/**
+ * An atomic write in two steps: the bytes are written to a temp file (and synced) now; `commit()` renames it over
+ * `path`, `discard()` drops it. In between, something else can be made to appear with the file: whatever is done just
+ * before `commit()` (synchronously) is seen by anyone who sees the file, and the slow part (the write) is done before it.
+ */
+export function stageAtomicWrite(path: string, data: string | Buffer): { commit(): void; discard(): void } {
   const bytes = typeof data === 'string' ? Buffer.from(data, 'utf8') : data;
-  recentWrites.set(resolve(path), { at: Date.now(), fingerprint: `hash:${bytes.length}:${createHash('sha1').update(bytes).digest('hex')}` });
-  if (recentWrites.size > 2000) for (const [k, w] of recentWrites) if (Date.now() - w.at > 10_000) recentWrites.delete(k);
   mkdirSync(dirname(path), { recursive: true });
   const tmp = `${path}.tmp-${process.pid}-${randomBytes(4).toString('hex')}`;
   const fd = openSync(tmp, 'w');
   try {
     writeSync(fd, bytes);
     fsyncSync(fd);
-  } finally {
-    closeSync(fd);
-  }
-  try {
-    renameWithRetry(tmp, path);
   } catch (e) {
+    closeSync(fd);
     rmSync(tmp, { force: true });
     throw e;
-  } finally {
-    forgetText(path);
   }
+  closeSync(fd);
+  let done = false;
+  return {
+    commit() {
+      if (done) return;
+      done = true;
+      recentWrites.set(resolve(path), { at: Date.now(), fingerprint: `hash:${bytes.length}:${createHash('sha1').update(bytes).digest('hex')}` });
+      if (recentWrites.size > 2000) for (const [k, w] of recentWrites) if (Date.now() - w.at > 10_000) recentWrites.delete(k);
+      try {
+        renameWithRetry(tmp, path);
+      } catch (e) {
+        rmSync(tmp, { force: true });
+        throw e;
+      } finally {
+        forgetText(path);
+      }
+    },
+    discard() {
+      if (done) return;
+      done = true;
+      rmSync(tmp, { force: true });
+    },
+  };
 }
 
 /**

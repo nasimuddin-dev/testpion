@@ -1207,7 +1207,7 @@ export class Backend {
         yield* streamTests(suite.tests, dirname(suitePath), { grep: p.grep, tags: p.tags, ids: p.ids });
       } else yield* streamTests(p.paths.length ? p.paths : ['.'], store.path('tests'), { grep: p.grep, tags: p.tags, ids: p.ids });
     })();
-    return this.startRun(p.name ?? (p.paths.join(', ') || 'All tests'), tests, { ...p, origin: { kind: 'tests', paths: p.paths.length ? p.paths : ['.'], grep: p.grep, tags: p.tags } });
+    return this.startRun(p.name ?? (p.paths.join(', ') || 'All tests'), tests, { ...p, origin: { kind: 'tests', paths: p.paths.length ? p.paths : ['.'], ...(p.ids?.length ? { ids: p.ids } : {}), grep: p.grep, tags: p.tags } });
   }
 
   readRunData(path: string, query?: string, environment?: string): Promise<DatasetRecord[]> {

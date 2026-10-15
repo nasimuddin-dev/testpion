@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, it } from 'vitest';
-import { existsSync, mkdirSync, readFileSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, realpathSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   AGENT_BEGIN,
@@ -26,8 +26,19 @@ const SECRET = 'sk-live-THIS-MUST-NOT-LEAK-1234567890';
 const PLAIN = 'https://plain-value.example.com/THIS-MUST-NOT-LEAK';
 
 let n = 0;
-function workspace(): WorkspaceStore {
-  const s = WorkspaceStore.create(join(tmp.dir, `ws${++n}`), 'Pets <API>');
+/**
+ * A workspace; `viaLink`: opened through a linked folder (as macOS names its temp folders: /var → /private/var), so
+ * the workspace's own path and the real paths of its files differ. A junction needs no privilege on Windows.
+ */
+function workspace(o: { viaLink?: boolean } = {}): WorkspaceStore {
+  let root = join(tmp.dir, `ws${++n}`);
+  if (o.viaLink) {
+    const real = join(tmp.dir, `real${n}`);
+    mkdirSync(real);
+    symlinkSync(real, root, process.platform === 'win32' ? 'junction' : 'dir');
+    root = join(root, 'ws');
+  }
+  const s = WorkspaceStore.create(root, 'Pets <API>');
   s.saveCollection({
     id: 'pets',
     name: 'Pets',
@@ -295,8 +306,35 @@ describe('initAgentFiles', () => {
     }
   });
 
+  it('a workspace opened through a linked folder is itself: its files are written, once, and a link out is still refused', () => {
+    const s = workspace({ viaLink: true });
+    try {
+      // .cursor → a folder of the workspace named by its REAL path (the other way round from the workspace's own path)
+      mkdirSync(join(realpathSync(s.root), 'agent-rules', 'rules'), { recursive: true });
+      symlinkSync(join(realpathSync(s.root), 'agent-rules'), join(s.root, '.cursor'), process.platform === 'win32' ? 'junction' : 'dir');
+      const r = initAgentFiles(s, { targets: ['agents', 'claude', 'cursor'] });
+      expect(r.files.map((f) => f.status)).toEqual(['created', 'created', 'created']);
+      expect(existsSync(join(realpathSync(s.root), 'agent-rules', 'rules', 'testpion.mdc'))).toBe(true);
+      expect(initAgentFiles(s, { targets: ['agents', 'claude', 'cursor'] }).files.map((f) => f.status)).toEqual(['unchanged', 'unchanged', 'unchanged']);
+      const outside = join(tmp.dir, `outside-linked-${n}`);
+      mkdirSync(join(outside, 'rules'), { recursive: true });
+      const s2 = workspace({ viaLink: true });
+      try {
+        symlinkSync(outside, join(s2.root, '.cursor'), process.platform === 'win32' ? 'junction' : 'dir');
+        expect(initAgentFiles(s2, { targets: ['cursor'] }).files[1]).toMatchObject({ status: 'skipped', reason: 'its folder is a link to a folder outside the workspace' });
+        expect(existsSync(join(outside, 'rules', 'testpion.mdc'))).toBe(false);
+      } finally {
+        s2.close();
+      }
+    } finally {
+      s.close();
+    }
+  });
+
   it('a link: followed inside the workspace (CLAUDE.md → AGENTS.md is written once), refused outside it', () => {
-    const s = workspace();
+    // opened through a linked folder, as on macOS (/var → /private/var): the link's target is a real path, the
+    // workspace's own paths are not, and both name the same AGENTS.md
+    const s = workspace({ viaLink: true });
     try {
       try {
         symlinkSync(join(s.root, 'AGENTS.md'), join(s.root, 'CLAUDE.md'), 'file');

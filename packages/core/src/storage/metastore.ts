@@ -506,7 +506,8 @@ class SqliteMetaStore implements MetaStore {
 
   listRuns(q: ListQuery = {}): Page<RunMeta> {
     const w = this.where({ query: q.query }, ['name']);
-    const rows = this.db.prepare(`SELECT * FROM runs ${w.sql} ORDER BY started DESC LIMIT ? OFFSET ?`).all(...w.args, q.limit ?? 100, q.offset ?? 0) as Array<Record<string, unknown>>;
+    // two runs started in the same millisecond: the one recorded later first (rowid), never an arbitrary order
+    const rows = this.db.prepare(`SELECT * FROM runs ${w.sql} ORDER BY started DESC, rowid DESC LIMIT ? OFFSET ?`).all(...w.args, q.limit ?? 100, q.offset ?? 0) as Array<Record<string, unknown>>;
     return {
       total: this.total('runs', w, q, rows.length),
       items: rows.map((r) => ({
@@ -673,7 +674,13 @@ class JsonlMetaStore implements MetaStore {
   private page<T>(arr: T[], q: ListQuery, match: (x: T, s: string) => boolean, sortKey: (x: T) => string | number): Page<T> {
     let items = q.query ? arr.filter((x) => match(x, q.query!.toLowerCase())) : arr;
     if (q.kind) items = items.filter((x) => (x as { kind?: string }).kind === q.kind);
-    items = [...items].sort((a, b) => (sortKey(a) < sortKey(b) ? 1 : -1));
+    // newest first; equal keys (two in the same millisecond) the later added first, as the database does (rowid)
+    const at = new Map(items.map((x, i) => [x, i]));
+    items = [...items].sort((a, b) => {
+      const ka = sortKey(a);
+      const kb = sortKey(b);
+      return ka < kb ? 1 : ka > kb ? -1 : at.get(b)! - at.get(a)!;
+    });
     return { total: items.length, items: items.slice(q.offset ?? 0, (q.offset ?? 0) + (q.limit ?? 100)) };
   }
 

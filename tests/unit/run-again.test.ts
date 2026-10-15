@@ -1,9 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createServer, type Server } from 'node:http';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Backend } from '../../apps/desktop/backend/backend.js';
-import { monitorRequestStats, executeMonitor, readRunSummary, requestIdOfResult, resultSourceRefs, runAgainPlan, saveMonitor, WorkspaceStore, type RunSummary } from '../../packages/core/src/index.js';
+import { ciTargetOfRun, monitorRequestStats, executeMonitor, finishedRun, readRunSummary, recordRun, requestIdOfResult, stageAtomicWrite, resultSourceRefs, runAgainPlan, saveMonitor, WorkspaceStore, type RunSummary } from '../../packages/core/src/index.js';
 import { tempDir, waitFor } from '../helpers.js';
 
 // WF-08: a result names its source (the test file at its step, or the saved request), and a run (or some of its
@@ -88,14 +88,88 @@ describe('run again', () => {
     const one = (await be.invoke('runs.runAgain', { runId, resultIds: ['two'] })) as { runId: string };
     expect((await finished(one.runId)).total).toBe(1);
     expect(hits).toEqual(['GET /t2']);
+    // the one-step run says which of the file's tests it ran, so "as it ran" is that one step again
+    expect(readRunSummary(be.ws, one.runId)!.origin).toEqual({ kind: 'tests', paths: ['smoke/two.yaml'], ids: ['two'] });
+    expect(finishedRun(be.ws, 'last').runId).toBe(one.runId);
+    hits.length = 0;
     const last = (await be.invoke('runs.runAgain', { runId: 'last' })) as { runId: string };
     expect((await finished(last.runId)).total).toBe(1); // the last run was the one-step run: as it ran
+    expect(hits).toEqual(['GET /t2']);
+    // and in CI it is the same one test (picked by id)
+    expect(ciTargetOfRun(be.ws, readRunSummary(be.ws, one.runId)!).target).toEqual({ tests: ['smoke/two.yaml'], grep: '^(?:two)$' });
+  });
+
+  it('a finished run is in the history the moment its summary says it finished (so "last" is that run)', async () => {
+    const s = WorkspaceStore.create(join(tmp.dir, 'ws-record'), 'Record');
+    try {
+      const summaryOf = (runId: string, startedAt: string): RunSummary => ({
+        runId,
+        name: runId,
+        startedAt,
+        finishedAt: startedAt,
+        durationMs: 1,
+        total: 1,
+        passed: 1,
+        failed: 0,
+        skipped: 0,
+        errors: 0,
+        latency: { p50: 1, p95: 1, p99: 1, min: 1, max: 1, mean: 1 } as RunSummary['latency'],
+        tokens: { inputTokens: 0, outputTokens: 0, totalTokens: 0 } as RunSummary['tokens'],
+        costUsd: 0,
+        cancelled: false,
+        scores: {},
+        reproducibility: {},
+        files: ['/w/a.yaml'],
+      });
+      const record = async (sum: RunSummary) => {
+        const dir = s.runDir(sum.runId);
+        mkdirSync(dir, { recursive: true });
+        writeFileSync(join(dir, 'results.jsonl'), '');
+        const done = recordRun(s, sum, dir, { reports: ['json', 'junit', 'html', 'markdown'] });
+        // what a watcher sees at every turn while the reports are written: the summary and the history row appear
+        // together (a run waited for by its summary is listed; a listed run has its summary)
+        let settled = false;
+        void done.finally(() => (settled = true));
+        while (!settled) {
+          const listed = s.meta.listRuns({ limit: 1 }).items[0]?.id === sum.runId;
+          expect(listed).toBe(!!readRunSummary(s, sum.runId));
+          await new Promise((r) => setImmediate(r));
+        }
+        await done;
+        expect(readRunSummary(s, sum.runId)?.runId).toBe(sum.runId);
+      };
+      const at = new Date().toISOString();
+      await record(summaryOf('first', at));
+      // a second run started in the same millisecond: the one recorded later is the newest, every time
+      await record(summaryOf('second', at));
+      expect(s.meta.listRuns({ limit: 2 }).items.map((r) => r.id)).toEqual(['second', 'first']);
+      expect(finishedRun(s, 'last').runId).toBe('second');
+    } finally {
+      s.close();
+    }
+  });
+
+  it('a staged write is not there until committed, and leaves nothing when discarded', () => {
+    const dir = join(tmp.dir, 'staged');
+    const f = join(dir, 'summary.json');
+    const a = stageAtomicWrite(f, '{"a":1}');
+    expect(existsSync(f)).toBe(false);
+    a.commit();
+    expect(readFileSync(f, 'utf8')).toBe('{"a":1}');
+    const b = stageAtomicWrite(f, '{"b":2}');
+    b.discard();
+    expect(readFileSync(f, 'utf8')).toBe('{"a":1}');
+    expect(readdirSync(dir)).toEqual(['summary.json']);
   });
 
   it('a run that does not say what it ran is refused with why', () => {
     const s = { runId: 'r', name: 'old' } as RunSummary;
     expect(() => runAgainPlan(s)).toThrow(/does not say what it ran/);
     expect(runAgainPlan({ ...s, files: ['/w/tests/a.yaml'] })).toMatchObject({ kind: 'tests', paths: ['/w/tests/a.yaml'] });
+    // a run of some tests runs those again; some of its results, only those
+    const some = { ...s, origin: { kind: 'tests' as const, paths: ['a.yaml'], ids: ['x', 'y'] } };
+    expect(runAgainPlan(some)).toMatchObject({ kind: 'tests', ids: ['x', 'y'] });
+    expect(runAgainPlan(some, ['y'])).toMatchObject({ kind: 'tests', ids: ['y'] });
   });
 });
 

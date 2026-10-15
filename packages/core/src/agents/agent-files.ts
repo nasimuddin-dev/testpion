@@ -9,9 +9,9 @@
  * `force`. One mechanism for the CLI, the MCP tool and the app (agents.init).
  */
 import { existsSync, lstatSync, readFileSync, realpathSync } from 'node:fs';
-import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { ApsError } from '../errors.js';
-import { atomicWrite } from '../storage/fsutil.js';
+import { atomicWrite, isInside, realPathOf } from '../storage/fsutil.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { agentGuide } from '../mcp-server/agent-kit.js';
 import { checkTypes } from '../eval/checks.js';
@@ -327,32 +327,30 @@ export interface AgentsInitResult {
   files: AgentFileResult[];
 }
 
-/** The real file a workspace path writes to: itself, or what a link inside the workspace points to; never outside it. */
-function realTarget(root: string, abs: string): { path: string } | { reason: string } {
-  const base = realpathSync(root);
-  const inside = (p: string) => {
-    const rel = relative(base, p);
-    return !!rel && !rel.startsWith('..') && !isAbsolute(rel);
-  };
+/**
+ * The real file a workspace path writes to: itself, or what a link inside the workspace points to; never outside it.
+ * `path` is where to write (a link is written through, not replaced); `real` is the file it really is, with every link
+ * resolved, the same for every path to it (CLAUDE.md → AGENTS.md is AGENTS.md). Both sides of "inside" are real paths:
+ * a workspace reached through a link (macOS /var → /private/var, a junction, a linked home folder) is still itself.
+ */
+function realTarget(root: string, abs: string): { path: string; real: string } | { reason: string } {
   if (!existsSync(abs)) {
     // a folder on the way may be a link (.cursor → elsewhere): the file is written where the nearest existing folder really is
-    let dir = dirname(abs);
-    while (!existsSync(dir) && dirname(dir) !== dir) dir = dirname(dir);
-    const realDir = realpathSync(dir);
-    if (realDir !== base && !inside(realDir)) return { reason: 'its folder is a link to a folder outside the workspace' };
+    const real = realPathOf(abs);
+    if (!isInside(root, dirname(real), { orSame: true })) return { reason: 'its folder is a link to a folder outside the workspace' };
     // a dangling link would be replaced by a file: say so instead
     try {
       if (lstatSync(abs).isSymbolicLink()) return { reason: 'it is a link to a file that does not exist' };
     } catch {
       /* not there at all */
     }
-    return { path: abs };
+    return { path: abs, real };
   }
   const st = lstatSync(abs);
   const real = realpathSync(abs);
-  if (!inside(real)) return { reason: st.isSymbolicLink() ? 'it is a link to a file outside the workspace' : 'its folder is a link to a folder outside the workspace' };
-  if (!st.isSymbolicLink()) return st.isFile() ? { path: abs } : { reason: 'it is not a file' };
-  return lstatSync(real).isFile() ? { path: real } : { reason: 'it is a link to something that is not a file' };
+  if (!isInside(root, real)) return { reason: st.isSymbolicLink() ? 'it is a link to a file outside the workspace' : 'its folder is a link to a folder outside the workspace' };
+  if (!st.isSymbolicLink()) return st.isFile() ? { path: abs, real } : { reason: 'it is not a file' };
+  return lstatSync(real).isFile() ? { path: real, real } : { reason: 'it is a link to something that is not a file' };
 }
 
 /**
@@ -376,7 +374,8 @@ export function initAgentFiles(store: WorkspaceStore, o: { targets?: AgentTarget
         res('skipped', real.reason);
         continue;
       }
-      const key = process.platform === 'win32' ? real.path.toLowerCase() : real.path;
+      // one file, however it is reached: by its real path (links resolved; Windows paths ignore case)
+      const key = process.platform === 'win32' ? real.real.toLowerCase() : real.real;
       const same = written.get(key);
       // CLAUDE.md as a link to AGENTS.md (a common setup): AGENTS.md is already it
       if (same) {

@@ -1,6 +1,7 @@
 /** A finished run on disk: its summary.json next to results.jsonl, the reports, and its row in the run history. */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { stageAtomicWrite } from '../storage/fsutil.js';
 import type { RunSummary, TestResult } from '../model/types.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { ApsError } from '../errors.js';
@@ -14,15 +15,35 @@ async function* resultsIn(dir: string): AsyncGenerator<TestResult> {
 }
 
 /**
- * Record a finished run in `dir` (where its results.jsonl is): summary.json, the `reports` asked for, and a row in
- * the workspace's run history (`history: false` leaves the history alone, e.g. for an ephemeral workspace).
+ * Record a finished run in `dir` (where its results.jsonl is): the `reports` asked for, a row in the workspace's run
+ * history (`history: false` leaves the history alone, e.g. for an ephemeral workspace), and summary.json.
  * Returns the report paths by format.
+ *
+ * A run's summary.json and its history row appear TOGETHER, after its reports: some wait for the summary
+ * (`readRunSummary`: the window, the CLI, agents) and then look the run up in the history ('last': run again, compare,
+ * CI); others list the history (`runs.list`) and then read the summary (Copy CLI command, Run in CI, results). So the
+ * summary is written to a temp file first (the slow part), then the row is added and the file renamed into place in
+ * the same synchronous step: nothing else in this process runs in between, and either both are there or neither is.
+ * (Summary first left a gap while the reports were written in which a finished run was not in the history yet; the
+ * row first, one in which a listed run had no summary.)
  */
 export async function recordRun(store: Pick<WorkspaceStore, 'meta'>, summary: RunSummary, dir: string, opts: { reports?: ReportFormat[]; history?: boolean } = {}): Promise<Partial<Record<ReportFormat, string>>> {
   mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, 'summary.json'), JSON.stringify(summary, null, 2));
   const paths = opts.reports?.length ? await writeReports(dir, summary, () => resultsIn(dir), opts.reports) : {};
-  if (opts.history !== false) store.meta.addRun(summary, dir);
+  const file = stageAtomicWrite(join(dir, 'summary.json'), JSON.stringify(summary, null, 2));
+  try {
+    if (opts.history !== false) store.meta.addRun(summary, dir);
+  } catch (e) {
+    file.discard();
+    throw e;
+  }
+  try {
+    file.commit();
+  } catch (e) {
+    // no summary, so no row: a listed run always has its summary
+    if (opts.history !== false) store.meta.deleteRun(summary.runId);
+    throw e;
+  }
   return paths;
 }
 

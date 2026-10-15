@@ -3,13 +3,14 @@
  * latest run's result of each step. The layout itself is @testpion/shared's flowGraph (the window draws it too).
  */
 import { existsSync, readFileSync } from 'node:fs';
-import { isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { join, relative, resolve, sep } from 'node:path';
 import { extname } from 'node:path';
 import { parseYaml } from '../util/lazy-yaml.js';
 import { flowChecks, flowGraph, layoutExtras, stepLine, templateVariables, toDot, type FlowCheck, type FlowFrameDef, type FlowGraph, type FlowNote, type FlowStep } from '@testpion/shared';
 import { ApsError } from '../errors.js';
 import type { TestCase } from '../model/types.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
+import { relativeInside } from '../storage/fsutil.js';
 import { isSuiteFile, loadTestsFromFile } from './loader.js';
 import { readResultsFile } from './runner.js';
 import { loopLabel } from './flow-blocks.js';
@@ -117,11 +118,10 @@ export function flowStepOf(t: TestCase): FlowStep {
 
 /** `file` as given to `testpion flow` (from the current folder, e.g. tests/rest/auth.yaml, or inside tests/): the path inside tests/. */
 export function testFileRef(store: WorkspaceStore, file: string): string {
-  const tests = store.path('tests');
   const fromCwd = resolve(file);
-  const rel = relative(tests, fromCwd);
-  const inside = existsSync(fromCwd) && !rel.startsWith('..') && !isAbsolute(rel) ? rel : file;
-  return inside.split(sep).join('/');
+  // the current folder is a real path; the workspace may be named through a link (-w /tmp/ws on macOS)
+  const rel = existsSync(fromCwd) ? relativeInside(store.path('tests'), fromCwd) : undefined;
+  return (rel ?? file).split(sep).join('/');
 }
 
 /** The steps of a test file (inside tests/) with the latest run's result of each, when a run included the file. */

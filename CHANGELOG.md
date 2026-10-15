@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.46.1 — 2026-10-15
+
+Fixes for 0.46.0, found by the macOS and Linux test runs.
+
+- **Run again keeps what you picked.** "Run again" and "Rerun failed" on a run that covered only some tests of a file now run only those tests; before, they re-ran every test of the file. "Run in CI" from such a run now names the same tests.
+- **"Last run" is always a finished run.** A run now appears in the history together with its summary, so a script, agent or `--run last` that asks for the latest run right after one finishes can no longer get the one before it. Runs that share a start time are ordered by when they were recorded.
+- **Workspaces opened through a link.** A workspace whose folder is reached through a symbolic link or junction (for example under `/tmp` or `/var` on macOS) is handled correctly: `testpion agents init` no longer writes the same file twice (which replaced the generated block of AGENTS.md with the one-line CLAUDE.md pointer), and paths named by their real location are no longer refused.
+
 ## 0.46.0 — 2026-10-14
 
 ### Behaviour change: writes to production need consent (CI pipelines, read this)

@@ -4,9 +4,10 @@
  * step as a request of its own (per step: requests, errors, latency) and every run of the flow as an iteration (how
  * many, how many failed, how long they took). The steps' hosts go through the load safeguards before the test starts.
  */
-import { isAbsolute, relative, resolve } from 'node:path';
+import { isAbsolute, resolve } from 'node:path';
 import type { TestCase } from '../model/types.js';
 import { ApsError } from '../errors.js';
+import { isInside } from '../storage/fsutil.js';
 import type { ExecServices } from '../runner/execute.js';
 import { loadFlowSteps, runFlowOnce } from '../runner/flow-data-run.js';
 import { CookieJar } from '../cookies/cookie-jar.js';
@@ -31,8 +32,7 @@ export interface FlowLoadScenario {
 /** The flow file of a load target: inside `testsDir` (relative paths; absolute ones must be inside it too). */
 export function flowLoadFile(file: string, testsDir: string): string {
   const abs = isAbsolute(file) ? file : resolve(testsDir, file.replace(/^tests[\\/]/, ''));
-  const rel = relative(testsDir, abs);
-  if (rel.startsWith('..') || isAbsolute(rel)) throw new ApsError('ValidationError', `The load test's flow file must be inside tests/: ${file}`);
+  if (!isInside(testsDir, abs)) throw new ApsError('ValidationError', `The load test's flow file must be inside tests/: ${file}`);
   return abs;
 }
 
