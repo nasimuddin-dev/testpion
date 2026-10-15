@@ -1,8 +1,8 @@
 import { CodeBlock } from '../CodeBlock';
-import { Copy, Download, Play, Save, Sparkles, Wrench } from 'lucide-react';
-import { useState } from 'react';
+import { Copy, Download, FileCheck2, Play, Sparkles, Wrench } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { asError, call, type NormalizedError } from '../../api';
-import { confirmAction, promptText, useApp } from '../../store';
+import { confirmAction, toastError, useApp } from '../../store';
 import { useSendShortcut } from '../../hooks';
 import type { CheckConfig, CheckResult } from '../../types';
 import { formatMs } from '../../lib/format';
@@ -18,8 +18,12 @@ import { Badge, Button, cx, Empty, IconButton, Input, Split, Tabs } from '../ui'
 import { ResponseSplit } from '../ResponseSplit';
 import { type Tool } from './McpPanels';
 import { copyText } from '../../lib/clipboard';
+import { saveAsTest, saveAsTestLabel } from '../../lib/save-test';
 
-export function ToolsPanel({ serverId, tools }: { serverId: string; tools: Tool[] }) {
+/** Tool calls already put on screen (each `focus` once, also when the panel mounts later, after Connect). */
+const shownFocus = new Set<number>();
+
+export function ToolsPanel({ serverId, tools, focus }: { serverId: string; tools: Tool[]; /** A call to show (History ▸ Open): its tool picked, its arguments filled in. */ focus?: { tool: string; args: Record<string, unknown>; at: number } }) {
   // kept while the app runs: switching tabs, servers or views doesn't lose arguments or results
   const k = `mcp:${serverId}:`;
   const [sel, setSel] = useSticky<string | undefined>(`${k}tool`, tools[0]?.name);
@@ -34,6 +38,14 @@ export function ToolsPanel({ serverId, tools }: { serverId: string; tools: Tool[
   const setResult = (r: ToolRun | undefined) => sel && setResults((all) => ({ ...all, [sel]: r! }));
   const [running, setRunning] = useState(false);
   const [sub, setSub] = useSticky<'form' | 'schema' | 'tests'>(`${k}sub`, 'form');
+  useEffect(() => {
+    if (!focus || shownFocus.has(focus.at)) return;
+    shownFocus.add(focus.at);
+    if (!tools.some((t) => t.name === focus.tool)) return void useApp.getState().toast(`The server no longer has the tool "${focus.tool}"`, 'warning');
+    setSel(focus.tool);
+    setArgs((all) => ({ ...all, [focus.tool]: focus.args }));
+    setRaw(false);
+  }, [focus, tools, setSel, setArgs, setRaw]);
   const tool = tools.find((t) => t.name === sel);
   const value = (sel && args[sel]) || {};
   const exec = async () => {
@@ -69,12 +81,16 @@ export function ToolsPanel({ serverId, tools }: { serverId: string; tools: Tool[
     }
   };
   useSendShortcut('mcp', () => !running && void exec());
-  const saveTest = async () => {
+  // the one Save as test (lib/save-test): the call as it is set up here, with its checks
+  const saveTest = () => {
     if (!tool) return;
-    const name = await promptText('Save as test', { message: 'Test name', value: `${tool.name} works`, okLabel: 'Save' });
-    if (!name) return;
-    const rel = await call<string>('mcp.saveTest', { serverId, tool: tool.name, args: raw ? JSON.parse(rawText || '{}') : value, assertions, name });
-    useApp.getState().toast(`Saved test tests/${rel}`, 'success');
+    let args: Record<string, unknown>;
+    try {
+      args = raw ? JSON.parse(rawText || '{}') : value;
+    } catch (e) {
+      return toastError(e);
+    }
+    void saveAsTest({ source: { kind: 'mcp', server: serverId, tool: tool.name, arguments: args }, name: `${tool.name} works`, assertions });
   };
   const destructive = tool?.annotations?.destructiveHint === true;
   return (
@@ -133,8 +149,8 @@ export function ToolsPanel({ serverId, tools }: { serverId: string; tools: Tool[
               >
                 Generate args
               </Button>
-              <Button size="sm" icon={<Save size={12} />} onClick={saveTest}>
-                Save as test
+              <Button size="sm" icon={<FileCheck2 size={12} />} onClick={saveTest}>
+                {saveAsTestLabel({})}
               </Button>
               <Button size="sm" variant="primary" icon={<Play size={12} />} loading={running} onClick={async () => (destructive && !(await confirmAction({ title: 'Run a destructive tool', message: 'This tool is marked destructive by the server.', detail: 'It may change or delete data. Run it only if you mean to.', confirmLabel: 'Execute anyway', tone: 'warning' })) ? undefined : exec())}>
                 Execute

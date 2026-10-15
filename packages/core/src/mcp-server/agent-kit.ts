@@ -59,6 +59,8 @@ const DESTRUCTIVE = new Set([
   'run_monitor',
   'load_test',
   'compare_request_across_environments',
+  'flow_data_run',
+  'flow_env_matrix',
 ]);
 
 /** Write tools that give the same result when called again with the same arguments. */
@@ -107,6 +109,8 @@ Workspace: **${o.workspace}**. TestPion is an API client and test runner (REST, 
 | Understand the API | \`list_collections\` → \`list_requests\` → \`get_request\` / \`collection_docs\`; \`list_environments\` |
 | Call an endpoint | \`send_request\` (a saved request, or method + url, or a cURL / fetch snippet) |
 | Run tests | \`run_collection\` (a collection or folder), \`run_tests\` (test files), then \`run_breakdown\`, \`compare_runs\` |
+| A flow at scale | \`flow_data_run\` (once per data row), \`flow_env_matrix\` (dev vs staging …), \`flow_scale_result\` (their rows), \`load_test\` with \`test_file\`, \`flow_timeline\` (critical path of a run) |
+| Evaluations | \`list_evaluations\`, \`run_evaluation\`, then \`eval_compare\` (a run against a baseline run, case by case) and \`eval_matrix\` (runs side by side) |
 | Write tests | \`set_request_checks\` (checks on a saved request), \`write_test_file\` (a YAML file under tests/), \`save_test\` (a saved request as a test) |
 | Save what the user pasted | \`parse_request_snippet\`, \`save_request\` (secrets become {{variables}}) |
 | Performance | \`response_time_stats\`, \`collection_timing\`, \`load_test\` (local APIs only), \`load_history\` |
@@ -115,7 +119,7 @@ Workspace: **${o.workspace}**. TestPion is an API client and test runner (REST, 
 | Change the workspace | \`update_request\` (URL, headers, body, scripts of a saved request), \`move_request\`, \`delete_request\`, \`create_collection\`, \`create_folder\`, \`set_collection_variable\` |
 | Test an MCP server | \`list_mcp_servers\`, \`mcp_server_tools\` (what it offers), \`mcp_call_tool\` (call a tool and read the result), \`mock_tools\` (the tools of a mock file: a toolset designed before the server exists) |
 
-Names or ids work wherever a collection, request, environment or monitor is asked for. Errors say what is available, so read them and retry.
+Names or ids work wherever a collection, request, environment or monitor is asked for. Errors say what is available, so read them and retry. Lists come a page at a time (\`limit\`, then \`cursor\` = the \`nextCursor\` given); big results are concise unless you pass \`response_format: "detailed"\`; a tool that deletes or overwrites does nothing without \`confirm: true\` (ask the user first).
 
 ## Variables
 
@@ -256,35 +260,3 @@ ${a.source}
 If it is an OpenAPI link or document, use import_definition and then api_coverage. If it is a command, use parse_request_snippet, then save_request into "${a.collection || 'Imported'}" (create it if needed; secrets become {{variables}}: tell the user which ones to set). Send it with send_request, then add checks with set_request_checks and confirm they pass.`,
   },
 ];
-
-const AGENTS_START = '<!-- testpion:start (written by TestPion; edit outside these markers) -->';
-const AGENTS_END = '<!-- testpion:end -->';
-
-/**
- * The TestPion part of a workspace's AGENTS.md (the file coding agents such as Claude Code, Codex, Cursor and
- * Copilot read first in a folder): how to reach the workspace (MCP, CLI) and the guide. `connect` is the command
- * that serves the workspace over MCP, as the app shows it.
- */
-export function agentsMarkdown(o: { workspace: string; checkTypes: string[]; connect?: string }): string {
-  const guide = agentGuide({ workspace: o.workspace, checkTypes: o.checkTypes }).replace(/^# TestPion for AI agents\n/, '');
-  return `${AGENTS_START}
-# TestPion workspace
-
-This folder is a TestPion workspace: collections/ (saved requests), environments/ (variables; secret values are not in these files), tests/ (YAML test files), specs/ (OpenAPI), mocks/, datasets/. Prefer the TestPion tools to editing these JSON files by hand: they keep ids, secrets and references right.
-
-## Use it
-
-- **MCP** (best for agents): \`${o.connect ?? 'testpion mcp-server -w .'}\` serves this workspace as MCP tools, resources and prompts (in the TestPion app: Settings ▸ AI agents has the setup for Claude, Cursor, VS Code and Codex). Start with \`what_needs_attention\` or the \`testpion_guide\` tool.
-- **CLI**: \`testpion test tests/\` runs the test files and \`testpion run-collection "<name>"\` a collection (\`-r json\` writes report.json); \`testpion send <url> --json\` sends one request; listing commands (\`collections\`, \`requests\`, \`history\` …) take \`--json\`.
-${guide}${AGENTS_END}
-`;
-}
-
-/** AGENTS.md with the TestPion part added or replaced; what the user wrote around it stays as it is. */
-export function upsertAgentsMarkdown(existing: string | undefined, block: string): string {
-  if (!existing?.trim()) return block;
-  const a = existing.indexOf(AGENTS_START);
-  const b = existing.indexOf(AGENTS_END);
-  if (a >= 0 && b > a) return existing.slice(0, a) + block.trimEnd() + existing.slice(b + AGENTS_END.length);
-  return `${existing.trimEnd()}\n\n${block}`;
-}

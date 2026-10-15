@@ -16,6 +16,7 @@ import { isSuiteFile, loadTestsFromFile } from './loader.js';
 import { readResultsFile } from './runner.js';
 import { readRunSummary } from './run-records.js';
 import type { StepResponse } from './flow-blocks.js';
+import { flowRunStatus, type FlowRunStatus } from './flow-data-run.js';
 import { PIN_BODY_LIMIT, isPartialValue, type PinnedResponse, type RunSeed } from './debug-hooks.js';
 
 /** One run of a flow, as its history lists it. */
@@ -24,8 +25,8 @@ export interface FlowRunRow {
   name: string;
   startedAt: string;
   durationMs: number;
-  /** failed: a step of this file failed or errored; cancelled: the run was stopped; else passed. */
-  status: 'passed' | 'failed' | 'cancelled';
+  /** failed: a step of this file failed or errored; cancelled: the run was stopped; skipped: none of its steps ran; else passed. */
+  status: FlowRunStatus;
   environment?: string;
   /** The steps of this file the run included, and how they went. */
   steps: number;
@@ -109,7 +110,7 @@ export async function flowRuns(store: WorkspaceStore, file: string, opts: { limi
       name: run.name,
       startedAt: run.startedAt,
       durationMs: run.durationMs,
-      status: summary?.cancelled ? 'cancelled' : bad ? 'failed' : 'passed',
+      status: flowRunStatus(results, summary?.cancelled),
       ...(run.environment ? { environment: run.environment } : {}),
       steps: results.length,
       passed: count('passed'),

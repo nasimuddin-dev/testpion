@@ -322,4 +322,18 @@ describe('load testing', () => {
   });
 });
 
+describe('demo servers', () => {
+  // a flow run without its data row sent /status?code={{code}}: writeHead(NaN) threw inside the async handler, the
+  // unhandled rejection ended the process and every later e2e plan lost the demo servers
+  it('answer a bad request with an error and keep running', async () => {
+    for (const code of ['{{code}}', 'abc', '42', '600']) {
+      const { response } = await executeHttp({ method: 'GET', url: `${rest}/status?code=${encodeURIComponent(code)}` });
+      expect(response.status).toBe(400);
+      expect(String((response.json as { error: string }).error)).toContain('100 and 599');
+    }
+    expect((await executeHttp({ method: 'GET', url: `${rest}/status?code=503` })).response.status).toBe(503);
+    expect((await executeHttp({ method: 'GET', url: `${rest}/health` })).response.status).toBe(200);
+  });
+});
+
 void DEMO_TOKEN;

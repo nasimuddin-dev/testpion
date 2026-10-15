@@ -63,7 +63,8 @@ const steps = [
     'breakpoint-pauses-the-debug-run',
     `let e = await stepMenu('second', 'Add breakpoint'); if (e) return e;
      if (!(await until(() => byId('second')?.dataset.breakpoint === 'true', 3000))) return 'NO BREAKPOINT MARK';
-     const d = vis('[data-flow-debug]')[0]; if (!d) return 'NO DEBUG BUTTON'; d.click();
+     const rm = vis('[data-flow-run-menu]')[0]; if (!rm) return 'NO RUN MENU'; rm.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, pointerType: 'mouse' })); rm.click();
+     const d = await __t.waitFor(() => vis('[role=menuitem]').find((m) => m.textContent.trim() === 'Run with breakpoints'), 2000); if (!d) return 'NO RUN WITH BREAKPOINTS'; d.click();
      const panel = await __t.waitFor(() => vis('[data-flow-paused-panel="second"]')[0], 15000);
      if (!panel) return 'NOT PAUSED: ' + statuses();
      await until(() => byId('first')?.dataset.status === 'passed', 3000);

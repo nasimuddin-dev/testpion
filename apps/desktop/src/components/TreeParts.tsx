@@ -1,7 +1,8 @@
-import { ChevronDown, ChevronRight, Folder, FolderInput, FolderOpen, FolderPlus, MoreHorizontal, Pencil, Plus, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Folder, FolderInput, FolderOpen, FolderPlus, MoreHorizontal, Pencil, Plus, Trash2, AlarmClock, ChevronsDownUp, ChevronsUpDown, CopyPlus, ExternalLink, FilePlus2, FolderCog, History, Play, Star, SquareArrowOutUpRight } from 'lucide-react';
 import { memo, useEffect, useRef, useState, type HTMLAttributes, type ReactNode } from 'react';
 import { confirmAction, promptText } from '../store';
 import { cx, Menu, rowActionClass, type MenuItem } from './ui';
+import { LABEL } from '../lib/vocabulary';
 
 /*
  * The parts every sidebar tree is made of (the explorer, monitors, load tests, saved prompts …), so they all look
@@ -377,4 +378,123 @@ export const TEST_KINDS: Record<string, [string, string]> = {
   script: ['JS', 'text-[#ca8a04]'],
   flow: ['FLOW', 'text-accent'],
   log: ['LOG', 'text-muted'],
+  set: ['SET', 'text-[#0891b2]'],
+  assert: ['CHK', 'text-ok'],
 };
+
+/**
+ * The item menu of every tree and list row (WF-13): groups in one order, create · open · run · test · configure · copy ·
+ * organize · delete (lib/vocabulary.ts MENU_GROUPS), each after a separator, with one word per action (LABEL). A row's
+ * right-click opens the same menu (controlled `open`).
+ */
+export function NodeMenu({
+  onEdit,
+  onRename,
+  onDelete,
+  onNewRequest,
+  onNewFolder,
+  onDuplicate,
+  onMove,
+  onToggleFavorite,
+  favorite,
+  onHistory,
+  onRun,
+  runLabel = 'Run',
+  onMonitor,
+  onExpandAll,
+  onCollapseAll,
+  onOpen,
+  onOpenNewTab,
+  copyItems,
+  otherNew,
+  runItems,
+  testItems,
+  configItems,
+  open,
+  onOpenChange,
+  newRequestLabel = 'New HTTP request',
+  header,
+  label,
+}: {
+  newRequestLabel?: string;
+  /** On a header row (a collection): the button stays faintly visible, like the + beside it. */
+  header?: boolean;
+  /** What the menu is for (named on the button). */
+  label?: string;
+  onEdit?(): void;
+  onRename?(): void;
+  onDelete?(): void;
+  onNewRequest?(): void;
+  onNewFolder?(): void;
+  onDuplicate?(): void;
+  /** Move to another folder or collection. */
+  onMove?(): void;
+  onToggleFavorite?(): void;
+  favorite?: boolean;
+  /** Its versions in git (when the workspace is in git). */
+  onHistory?(): void;
+  onRun?(): void;
+  runLabel?: string;
+  /** Expand / collapse everything inside it (collections and folders). */
+  onExpandAll?(): void;
+  onCollapseAll?(): void;
+  /** Run it on a schedule (opens Monitors with a new monitor). */
+  onMonitor?(): void;
+  /** Open the request (in a tab). */
+  onOpen?(): void;
+  /** Open it in a tab of its own. */
+  onOpenNewTab?(): void;
+  /** Copy URL / Copy as cURL … (requests only). */
+  copyItems?: MenuItem[];
+  /** The other kinds of request it can create (after the first New item). */
+  otherNew?: MenuItem[];
+  /** More ways to run it (after Run and Monitor). */
+  runItems?: MenuItem[];
+  /** Save it as a test (WF-07): its own group, after run. */
+  testItems?: MenuItem[];
+  /** Its settings and tools (after Edit folder). */
+  configItems?: MenuItem[];
+  /** Controlled open state, so a right-click on the row can open the menu. */
+  open?: boolean;
+  onOpenChange?(open: boolean): void;
+}) {
+  // a row's menu is built only while it is open: a tree of hundreds of rows renders hundreds of these
+  const [own, setOwn] = useState(false);
+  const isOpen = open ?? own;
+  const setOpen = (v: boolean) => (open === undefined ? setOwn(v) : onOpenChange?.(v));
+  const build = (): MenuItem[] => {
+    // groups, each after a separator, in one order for every row: create (first: this menu is also the row's only
+    // button) · open · run · test · configure · copy · organize · delete
+    const groups: MenuItem[][] = [];
+    const group = (...g: Array<MenuItem | undefined>) => groups.push(g.filter((x): x is MenuItem => !!x));
+    const item = (label: string, icon: React.ReactNode, fn?: () => void, extra: Partial<MenuItem> = {}): MenuItem | undefined => (fn ? { label, icon, onSelect: fn, ...extra } : undefined);
+    group(item(newRequestLabel, <FilePlus2 size={14} />, onNewRequest), ...(otherNew ?? []), item('New folder', <FolderPlus size={14} />, onNewFolder));
+    group(item(LABEL.open, <ExternalLink size={14} />, onOpen), item(LABEL.openNewTab, <SquareArrowOutUpRight size={14} />, onOpenNewTab), item('History in git…', <History size={14} />, onHistory));
+    group(item('Expand all', <ChevronsUpDown size={14} />, onExpandAll), item('Collapse all', <ChevronsDownUp size={14} />, onCollapseAll));
+    group(item(runLabel, <Play size={14} />, onRun), item('Monitor on a schedule…', <AlarmClock size={14} />, onMonitor), ...(runItems ?? []));
+    group(...(testItems ?? []));
+    group(item('Edit folder (scripts, variables, auth)', <FolderCog size={14} />, onEdit), ...(configItems ?? []));
+    group(...(copyItems ?? []));
+    group(
+      item('Rename', <Pencil size={14} />, onRename),
+      item('Duplicate', <CopyPlus size={14} />, onDuplicate),
+      item('Move to…', <FolderInput size={14} />, onMove),
+      item(favorite ? 'Remove from favorites' : 'Add to favorites', <Star size={14} />, onToggleFavorite),
+    );
+    group(item(LABEL.delete, <Trash2 size={14} />, onDelete, { danger: true }));
+    return groups.filter((g) => g.length).flatMap((g, i) => g.map((it, j) => (i > 0 && j === 0 ? { ...it, separator: true } : it)));
+  };
+  return (
+    <Menu
+      items={isOpen ? build() : []}
+      width={230}
+      open={isOpen}
+      onOpenChange={setOpen}
+      trigger={
+        <button aria-label={label ? `More actions for ${label}` : 'More actions'} className={rowActionClass(header)}>
+          <MoreHorizontal size={14} />
+        </button>
+      }
+    />
+  );
+}

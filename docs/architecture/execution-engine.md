@@ -11,7 +11,7 @@ For each test, `executeTest` runs these steps:
 
 1. Clone the variable scope and add request variables.
 2. Run the pre-request script in the sandbox.
-3. Run the protocol call (HTTP, GraphQL, MCP, LLM, RAG or agent) under a timeout and abort signal, recording spans.
+3. Run the protocol call (HTTP, GraphQL, gRPC, WebSocket, MCP, LLM, RAG or agent) under a timeout and abort signal, recording spans; a flow block (delay, condition, script, sub-flow, log, set, assert) runs its own step instead. A data-changing call to an environment marked as production without the caller's consent is refused here, before anything is sent.
 4. Run the test script.
 5. Run checks (assertions, evaluators and implicit limits) against a normalised check context.
 6. Extract values into runtime variables.

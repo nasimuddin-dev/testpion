@@ -35,6 +35,16 @@ function runner(store: WorkspaceStore) {
   return (m: Monitor, trigger: MonitorResult['trigger']) => executeMonitor({ store, monitor: m, trigger, context: (o) => cliContext(store, o.environment, { collectionId: o.collectionId }) });
 }
 
+/** What a monitor runs, for lists: the collection's name or tests/<file>. */
+function target(store: WorkspaceStore, m: Monitor): string {
+  if (m.testFile) return `tests/${m.testFile}`;
+  try {
+    return store.getCollection(m.collectionId ?? '').name;
+  } catch {
+    return m.collectionId ?? '?';
+  }
+}
+
 /** A monitor's webhook URL with the {{variables}} of its environment resolved. */
 function webhookUrl(store: WorkspaceStore, m: Monitor): string {
   const ctx = cliContext(store, m.environment);
@@ -46,7 +56,7 @@ function webhookUrl(store: WorkspaceStore, m: Monitor): string {
 }
 
 export function registerMonitorCommands(program: Command): void {
-  const mon = program.command('monitor').description('collections that run on a schedule (monitors): list, add, remove, run, results, start the scheduler');
+  const mon = program.command('monitor').description('collections or test files (flows) that run on a schedule (monitors): list, add, remove, run, results, start the scheduler');
 
   mon
     .command('list')
@@ -57,8 +67,8 @@ export function registerMonitorCommands(program: Command): void {
       withWorkspace(o.workspace, (store) => {
         const rows = listMonitors(store).map((m) => monitorStatus(store, m));
         if (o.json) return printJson(rows);
-        if (!rows.length) return console.log(dim('No monitors. Add one with: testpion monitor add <name> --collection <name> --every 15m -w <workspace>'));
-        for (const r of rows) console.log(`${bold(r.name)}  ${dim(r.enabled ? r.schedule : 'paused')}  ${statusText(r.lastResult)}${r.nextRunAt ? dim(`  next ${r.nextRunAt}`) : ''}`);
+        if (!rows.length) return console.log(dim('No monitors. Add one with: testpion monitor add <name> --collection <name> (or --test-file <path>) --every 15m -w <workspace>'));
+        for (const r of rows) console.log(`${bold(r.name)}  ${dim(target(store, r))}  ${dim(r.enabled ? r.schedule : 'paused')}  ${statusText(r.lastResult)}${r.nextRunAt ? dim(`  next ${r.nextRunAt}`) : ''}`);
       }),
     );
 
@@ -67,7 +77,8 @@ export function registerMonitorCommands(program: Command): void {
     .description('add a monitor (or replace one with the same name)')
     .argument('<name>')
     .requiredOption('-w, --workspace <nameOrPath>')
-    .requiredOption('--collection <nameOrId>', 'collection to run')
+    .option('--collection <nameOrId>', 'collection to run')
+    .option('--test-file <path>', 'or a test file / flow under tests/ to run (e.g. orders/new-order.yaml), with the test runner')
     .requiredOption('--every <interval>', 'how often: minutes, or e.g. 15m, 1h, 1d (1 minute to 7 days)')
     .option('--folder <nameOrId>', 'run only this folder or request (repeatable)', collect)
     .option('-e, --environment <name>', 'environment to run with')
@@ -80,13 +91,14 @@ export function registerMonitorCommands(program: Command): void {
     .option('--json', 'print the monitor as JSON')
     .action((name: string, o) =>
       withWorkspace(o.workspace, (store) => {
-        const collection = requireCollection(store, String(o.collection), { loadable: true });
+        if (!o.collection === !o.testFile) throw new CliError('Give --collection <name> or --test-file <path> (one of them)', EXIT.CONFIG_ERROR);
+        if (o.testFile && o.folder?.length) throw new CliError('--folder picks folders of a collection; a --test-file runs as a whole', EXIT.CONFIG_ERROR);
+        const collection = o.collection ? requireCollection(store, String(o.collection), { loadable: true }) : undefined;
         const existing = listMonitors(store).find((m) => m.name.toLowerCase() === name.toLowerCase());
         const m = saveMonitor(store, {
           id: existing?.id ?? shortId('mon-'),
           name,
-          collectionId: collection.id,
-          selection: resolveSelection(collection, o.folder),
+          ...(collection ? { collectionId: collection.id, selection: resolveSelection(collection, o.folder) } : { testFile: String(o.testFile) }),
           environment: o.environment,
           everyMinutes: parseEvery(o.every),
           enabled: !o.paused,
@@ -95,8 +107,11 @@ export function registerMonitorCommands(program: Command): void {
           webhook: o.webhook || existing?.webhook,
           maxP95Ms: o.maxP95 !== undefined ? Number(o.maxP95) : existing?.maxP95Ms,
           minCertDays: o.minCertDays !== undefined ? Number(o.minCertDays) : existing?.minCertDays,
+          // a production environment: data changes on its schedule only with --allow-production (kept while the environment is)
+          allowProduction: (!!o.environment && !!store.getEnvironment(String(o.environment))?.isProduction && (o.allowProduction === true || (!!existing?.allowProduction && existing.environment === o.environment))) || undefined,
         });
-        console.log(o.json ? JSON.stringify(m, null, 2) : green(`${existing ? 'Updated' : 'Added'} monitor "${m.name}": ${collection.name}, ${m.enabled ? formatEvery(m.everyMinutes) : 'paused'}`));
+        if (o.json) printJson(m);
+        else console.log(green(`${existing ? 'Updated' : 'Added'} monitor "${m.name}": ${target(store, m)}, ${m.enabled ? formatEvery(m.everyMinutes) : 'paused'}`));
       }),
     );
 
@@ -127,7 +142,7 @@ export function registerMonitorCommands(program: Command): void {
         const chosen = ref ? [findMonitor(store, ref)] : o.all ? all.filter((m) => m.enabled) : o.due ? all.filter((m) => isDue(m, lastMonitorResult(store, m.id))) : undefined;
         if (!chosen) throw new CliError('Name a monitor, or pass --all or --due', EXIT.CONFIG_ERROR);
         const run = runner(store);
-        const results: Array<MonitorResult & { name: string }> = [];
+        const results: Array<MonitorResult & { name: string; environment: string | null }> = [];
         for (const m of chosen) {
           if (!o.json) process.stdout.write(`${m.name} … `);
           const previous = lastMonitorResult(store, m.id);
@@ -137,7 +152,7 @@ export function registerMonitorCommands(program: Command): void {
             const sent = await notifyMonitorWebhook(webhookUrl(store, m), m, r);
             if (!sent.ok && !o.json) console.error(yellow(`webhook for ${m.name} failed: ${sent.error ?? `HTTP ${sent.status}`}`));
           }
-          results.push({ ...r, name: m.name });
+          results.push({ ...r, name: m.name, environment: m.environment ?? null });
           if (!o.json) console.log(`${statusText(r)} ${dim(`${formatDuration(r.durationMs)} · run ${r.runId}`)}`);
         }
         if (o.json) printJson(results);

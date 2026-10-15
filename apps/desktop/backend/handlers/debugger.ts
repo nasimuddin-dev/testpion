@@ -418,8 +418,8 @@ export function debuggerHandlers(be: Backend): Handlers {
   const handlers: Handlers = {
     'debug.status': () => status(),
     /** Send one request through the proxy from this process (the e2e suite's "program"; also a quick check that the proxy works). */
-    'debug.selfTest': ({ url }: { url: string }) =>
-      new Promise<{ status: number }>((resolve, reject) => {
+    'debug.selfTest': ({ url, method, headers, body }: { url: string; /** Plain http only: the request to send (a flow to record in the e2e suite). */ method?: string; headers?: Record<string, string>; body?: string }) =>
+      new Promise<{ status: number; body?: string }>((resolve, reject) => {
         if (!state.proxy) return reject(new ApsError('ConfigurationError', 'The debugger is not capturing'));
         const target = new URL(url);
         if (target.protocol === 'grpc:') {
@@ -501,12 +501,13 @@ export function debuggerHandlers(be: Backend): Handlers {
           connectReq.end();
           return;
         }
-        const req = httpRequest({ host: '127.0.0.1', port: state.proxy.port, method: 'GET', path: target.href, headers: { host: target.host, 'user-agent': 'TestPion self-test' } }, (res) => {
-          res.resume();
-          res.on('end', () => resolve({ status: res.statusCode ?? 0 }));
+        const req = httpRequest({ host: '127.0.0.1', port: state.proxy.port, method: method ?? 'GET', path: target.href, headers: { host: target.host, 'user-agent': 'TestPion self-test', ...headers } }, (res) => {
+          const chunks: Buffer[] = [];
+          res.on('data', (c: Buffer) => chunks.length < 64 && chunks.push(c));
+          res.on('end', () => resolve({ status: res.statusCode ?? 0, ...(method ? { body: Buffer.concat(chunks).toString('utf8') } : {}) }));
         });
         req.on('error', reject);
-        req.end();
+        req.end(body);
       }),
     /** Start the proxy; programs point at its URL (HTTP_PROXY=…, a browser's proxy setting, --proxy-server=…). */
     'debug.start': async ({ port, lan }: { port?: number; lan?: boolean } = {}) => {

@@ -1,5 +1,5 @@
 import { on } from '../api';
-import { useApp } from '../store';
+import { notifySystem, useApp } from '../store';
 import { formatMs } from './format';
 
 interface RunFinished {
@@ -21,16 +21,10 @@ export function watchRunNotifications(): () => void {
   return on<RunFinished>('run.finished', (p) => {
     if (useApp.getState().settings?.notifyRunFinished === false) return;
     if (p.cancelled || !p.total || document.hasFocus()) return;
-    if (!('Notification' in window) || Notification.permission !== 'granted') return;
     const bad = (p.failed ?? 0) + (p.errors ?? 0);
-    const n = new Notification(bad ? `${p.name}: ${bad} of ${p.total} failed` : `${p.name}: all ${p.total} passed`, {
-      body: `${p.passed ?? 0} passed${p.failed ? ` · ${p.failed} failed` : ''}${p.errors ? ` · ${p.errors} errors` : ''} · ${formatMs(p.durationMs)}`,
+    notifySystem(bad ? `${p.name}: ${bad} of ${p.total} failed` : `${p.name}: all ${p.total} passed`, `${p.passed ?? 0} passed${p.failed ? ` · ${p.failed} failed` : ''}${p.errors ? ` · ${p.errors} errors` : ''} · ${formatMs(p.durationMs)}`, {
+      ref: { kind: 'run', runId: p.runId },
       tag: p.runId,
     });
-    n.onclick = () => {
-      window.focus();
-      useApp.getState().openIntent('tests', { runId: p.runId });
-      n.close();
-    };
   });
 }

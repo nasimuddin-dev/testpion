@@ -64,6 +64,8 @@ function build(a: AppMenuActions): Menu {
           ],
         }),
         item({ label: 'Open Workspace Folder…', i: 'openFolder', click: () => a.menu('open-workspace') }),
+        // the items opened lately in this workspace (Quick Open with nothing typed, Ctrl+P)
+        item({ label: 'Open Recent…', i: 'openFolder', click: () => a.menu('open-recent') }),
         sep,
         item({ label: 'Import…', i: 'import', accelerator: 'CmdOrCtrl+O', click: () => a.menu('import') }),
         item({
@@ -81,6 +83,8 @@ function build(a: AppMenuActions): Menu {
         item({ label: 'Close Tab', i: 'closeTab', accelerator: 'CmdOrCtrl+W', click: () => a.tabs('close') }),
         item({ label: 'Close Other Tabs', i: 'closeOthers', click: () => a.tabs('closeOthers') }),
         item({ label: 'Close All Tabs', i: 'closeAll', accelerator: 'CmdOrCtrl+Shift+W', click: () => a.tabs('closeAll') }),
+        // the window handles the key itself (also without this menu: the browser version); the menu only shows it
+        item({ label: 'Reopen Closed Tab', i: 'newTab', accelerator: 'CmdOrCtrl+Shift+T', registerAccelerator: false, click: () => a.menu('reopen-closed-tab') }),
         sep,
         item({ label: 'Settings…', i: 'settings', accelerator: 'CmdOrCtrl+,', click: () => a.menu('settings') }),
         sep,

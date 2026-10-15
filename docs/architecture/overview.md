@@ -8,17 +8,19 @@ description: "How TestPion is structured: core engine, desktop app, CLI, storage
 # Architecture
 
 ```text
-apps/desktop  (Electron + React + Monaco)      packages/cli  (testpion)
-      │  IPC (contextIsolation, sandboxed renderer)     │
-      ▼                                                 ▼
+apps/desktop  (Electron + React + Monaco)   packages/cli  (testpion)   testpion mcp-server
+      │  IPC → backend (production guard)            │                          │
+      ▼                                              ▼                          ▼
              packages/core — the single execution engine
-  protocols (HTTP · GraphQL · MCP · WebSocket) │ AI providers · agent loop
+  protocols (HTTP · GraphQL · gRPC · WebSocket · Socket.IO · MQTT · Kafka · MCP) │ AI providers · agent loop
   variables · scripts (QuickJS/WASM) · checks & evaluators · tracer
-  runner (streaming, bounded concurrency, retries, checkpoints) · reports
+  runner (streaming, bounded concurrency, retries, checkpoints, flows) · reports
   storage (workspace files · SQLite metadata · secret stores) · importers
 ```
 
-- The desktop main process and the CLI call the **same** engine, so test execution logic is not duplicated (§38).
+- The desktop backend, the CLI and the MCP server (`testpion mcp-server`, or the installed app with `--mcp-server`) call the **same** engine, so test execution logic is not duplicated.
+- An environment marked as **production** is guarded in one place per host: the desktop backend checks every RPC call that sends or runs before its handler runs and the window asks once; the CLI takes `--allow-production`; the MCP server needs `--allow-production` and `allowProduction: true` per call. The engine refuses data-changing steps without that consent ([Production](/api-testing/environments#production), [Design](./design.md#cloud-ready-design)).
+- Every CLI `--json` output is one envelope, `{ schema_version, command, status, data, errors, warnings, metrics }`, written by `packages/cli/src/output.ts`; `--jsonl` streams events as `{ type, data }` lines ([JSON output](/cli/reference#json-output-dry-runs-and-scripts)).
 - The React renderer never performs network or test execution. It sends RPC calls to the backend and receives batched events, throttled to about 50–100 ms, so high-frequency streams don't cause excessive renders.
 - Electron uses `contextIsolation`, a sandboxed renderer and a strict CSP. The preload exposes only an RPC bridge.
 - The UI is React 19 with Tailwind CSS v4 and Radix UI primitives, in the shadcn/ui style. Colours are OKLCH design tokens in `apps/desktop/src/styles.css`, with the TestPion blue → violet brand as the accent, and surfaces layered as chrome (top bar, navigation rail, status bar) → sidebars → work area → popovers. Dark and light themes share the same tokens. New UI reuses the primitives in `apps/desktop/src/components/ui.tsx` (`Button`, `Tabs`, `Badge`, `Modal`, `Menu`, `Empty`, `Split` with `sidebar` …).

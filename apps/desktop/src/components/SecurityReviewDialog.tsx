@@ -2,6 +2,7 @@ import { ShieldAlert, ShieldCheck, Sparkles } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { call } from '../api';
 import { useApp } from '../store';
+import { openRef } from '../lib/open-ref';
 import { plural } from '../lib/format';
 import { Badge, Button, Empty, Modal } from './ui';
 
@@ -20,7 +21,7 @@ export function SecurityReviewDialog({ collectionId, name, onClose }: { collecti
   useEffect(() => void call<SecurityFinding[]>('col.securityLint', { id: collectionId, environment: env }).then(setFindings), [collectionId, env]);
   const open = (f: SecurityFinding) => {
     if (!f.requestId) return;
-    useApp.getState().openIntent('rest', { collectionId, requestId: f.requestId });
+    void openRef({ kind: 'request', collectionId, requestId: f.requestId });
     onClose();
   };
   return (

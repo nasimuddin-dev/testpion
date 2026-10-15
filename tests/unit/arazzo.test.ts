@@ -344,6 +344,34 @@ output: { first: "{{firstId}}" }
     expect(r.text).toMatch(/^arazzo: 1\.0\.1/);
   });
 
+  it('dynamic values ({{$randomFirstName}}) stay runtime expressions, never workflow inputs, and import back as they were', () => {
+    const flow = [
+      'name: Signup',
+      'tests:',
+      '  - id: create',
+      '    method: POST',
+      '    url: "https://pets.example.com/v1/pets"',
+      '    headers: { X-Request-Id: "{{$guid}}", X-User: "{{user}}" }',
+      '    json: { first: "{{$randomFirstName}}", note: "made {{$timestamp}} for {{user}}" }',
+      '',
+    ].join('\n');
+    const r = exportArazzo(flow, { file: 'tests/signup.yaml', sources: [source] });
+    const wf = r.document.workflows[0];
+    // only the real variable is an input
+    expect(wf.inputs).toEqual({ type: 'object', properties: { user: { type: 'string' } } });
+    const step = wf.steps[0];
+    expect(step.operationId).toBe('addPet');
+    expect(step.parameters).toEqual(expect.arrayContaining([{ name: 'X-Request-Id', in: 'header', value: '{{$guid}}' }, { name: 'X-User', in: 'header', value: '$inputs.user' }]));
+    expect(step.requestBody.payload).toEqual({ first: '{{$randomFirstName}}', note: 'made {{$timestamp}} for {$inputs.user}' });
+    expect(r.text).not.toMatch(/\$inputs\.\$/);
+    expect(r.notes.some((n) => /\{\{\$randomFirstName\}\} is a dynamic value/.test(n))).toBe(true);
+    // back into a flow file: still dynamic, with no "no equivalent" note
+    const back = importArazzo(r.text, { sources: { pets: openapi } });
+    expect(back.flows[0]!.text).toContain('{{$randomFirstName}}');
+    expect(back.flows[0]!.text).toContain('{{$guid}}');
+    expect(back.notes.join('\n')).not.toMatch(/\$randomFirstName.*no equivalent/);
+  });
+
   it('round trip: an imported Arazzo document exports to an equivalent one', () => {
     const imported = importArazzo(arazzo, { sources: { pets: openapi } });
     const back = exportArazzo(imported.flows[0]!.text, { sources: [{ ...source, url: './pets.openapi.json' }] }).document;

@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import type { ViewId } from '../store';
 import { dropDraft } from './draft-store';
 import { forgetStickyKeys } from './sticky';
+import { afterScopeChange, scopedKey } from './ws-scope';
 
 /**
  * Multi-document editors (Postman-style tabs for GraphQL, gRPC, WebSocket and MCP servers): each open document is its
@@ -29,19 +30,31 @@ interface DocsState {
   ensure(view: ViewId): string;
 }
 
+// one list per workspace (lib/ws-scope): another workspace's documents point at items that are not in this one
 const KEY = 'aps.docs';
+const empty = (): Pick<DocsState, 'docs' | 'active'> => ({ docs: {}, active: {} });
 const load = (): Pick<DocsState, 'docs' | 'active'> => {
+  const key = scopedKey(KEY);
+  if (!key) return empty();
   try {
-    const v = JSON.parse(localStorage.getItem(KEY) ?? 'null');
+    let raw = localStorage.getItem(key);
+    // the list from before it was kept per workspace goes to the first workspace opened (the last one used)
+    if (raw === null && (raw = localStorage.getItem(KEY)) !== null) {
+      localStorage.setItem(key, raw);
+      localStorage.removeItem(KEY);
+    }
+    const v = JSON.parse(raw ?? 'null');
     if (v && typeof v === 'object') return { docs: v.docs ?? {}, active: v.active ?? {} };
   } catch {
     /* start fresh */
   }
-  return { docs: {}, active: {} };
+  return empty();
 };
 const persist = (s: Pick<DocsState, 'docs' | 'active'>) => {
+  const key = scopedKey(KEY);
+  if (!key) return;
   try {
-    localStorage.setItem(KEY, JSON.stringify({ docs: s.docs, active: s.active }));
+    localStorage.setItem(key, JSON.stringify({ docs: s.docs, active: s.active }));
   } catch {
     /* storage unavailable */
   }
@@ -116,3 +129,6 @@ export function routeDoc(view: ViewId, payload: Record<string, unknown> | undefi
 
 /** The storage key suffix of a document's draft (`main` keeps the pre-tabs key). */
 export const docKey = (docId?: string) => (docId && docId !== 'main' ? `:${docId}` : '');
+
+// another workspace was opened: its own documents (persist writes synchronously, so nothing of the old one is pending)
+afterScopeChange(() => useDocs.setState({ ...load(), items: {} }));

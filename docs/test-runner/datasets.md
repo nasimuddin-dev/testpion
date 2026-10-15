@@ -23,7 +23,7 @@ dataset:
 
 ## In the app
 
-The Collections sidebar has a **Datasets** section after API definitions: every file in the workspace's `datasets/` folder with its format (CSV, JSONL, JSON, MD, DB) and how many rows it holds. Its menu makes a **New CSV** or **New JSONL** (empty, named by you) or opens **Generate test data…**; a row's menu has **Run a collection with it** (the Collection Runner opens with the file as its data; pick the collection there), **Rename**, **Duplicate** and **Delete** (the file goes to *Recently deleted* for 30 days, like a collection).
+The Collections explorer has a **Datasets** section after API definitions: every file in the workspace's `datasets/` folder with its format (CSV, JSONL, JSON, MD, DB) and how many rows it holds. Its menu makes a **New CSV** or **New JSONL** (empty, named by you) or opens **Generate test data…**; a row's menu has **Run a collection with it** (the Collection Runner opens with the file as its data; pick the collection there), **Rename**, **Duplicate** and **Delete** (the file goes to *Recently deleted* for 30 days, like a collection).
 
 A dataset opens in a tab of its own:
 
@@ -40,6 +40,17 @@ testpion datasets show app.db --query "SELECT * FROM users" --limit 5 --json
 ```
 
 Agents use `list_datasets` and `read_dataset` (`name`, `limit`, and `query` for a database): the columns tell them which `{{variables}}` a test or a collection run can use.
+
+## Data rows for a flow
+
+A dataset can also drive a whole flow: each row is one run of the flow file, with the row's columns as variables (`{{email}}`), the row as `{{$row.email}}` and its number as `{{$index}}`. In **Tests**, right-click the flow's tab ▸ **Run with data…** (or **Run flow ▾ ▸ Run with data…** in the designer), pick a dataset, a file, a SQLite database or a database URL with a query, and **Run per row**; the **Runs** tab shows a grid of rows, live. A flow can name its own rows in its header (`data: datasets/users.csv`), and one step can loop over a dataset with `forEach: { dataset: datasets/users.csv }`.
+
+```bash
+testpion test tests/signup.yaml --data datasets/users.csv -e Staging
+testpion test tests/signup.yaml --data app.db --data-query "SELECT email, plan FROM users" --data-limit 500 --json
+```
+
+See [Once per data row](/test-runner/integration-testing#once-per-data-row); `testpion ci … --tests <flow> --data <dataset>` does the same in a pipeline ([CI/CD](/test-runner/ci-cd)).
 
 ## Generate test data
 

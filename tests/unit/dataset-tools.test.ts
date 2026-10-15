@@ -14,7 +14,7 @@ import {
   WorkspaceManager,
   type WorkspaceStore,
 } from '../../packages/core/src/index.js';
-import { copyExample, runCliSync, tempDir } from '../helpers.js';
+import { cliData, copyExample, runCliSync, tempDir } from '../helpers.js';
 
 // Datasets as the app's sidebar, `testpion datasets show` and the read_dataset MCP tool read them: the first rows with
 // the columns and their kinds of value, the record count, and a deleted dataset in the workspace's trash.
@@ -136,7 +136,7 @@ describe('CLI: datasets show', () => {
     expect(r.out).toMatch(/… 1 more/);
     const j = runCliSync(['datasets', 'show', 'intents.jsonl', '--json', '-n', '1'], { cwd: ws, home: join(tmp.dir, 'home') });
     expect(j.status, j.err).toBe(0);
-    const d = JSON.parse(j.out);
+    const d = cliData(j.out);
     expect(d).toMatchObject({ path: 'datasets/intents.jsonl', format: 'jsonl', count: 7 });
     expect(d.rows).toHaveLength(1);
     expect(d.columns).toEqual([

@@ -3,6 +3,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { asError, call, on } from '../api';
 import { confirmAction, isPushRejected, promptText, toastError, useApp } from '../store';
 import { useIntent } from '../hooks';
+import { openRef } from '../lib/open-ref';
+import { RefLink } from '../components/RefLink';
+import type { ItemRef } from '@testpion/shared';
 import { useEditorTabsStore } from '../components/EditorTabs';
 import { Badge, Button, Callout, cx, Empty, LinkButton, Menu, MoreMenu, PageHeader, SectionTitle, Spinner, Split, Textarea } from '../components/ui';
 import { DiffText, GitCommitPanel } from '../components/GitCommitPanel';
@@ -10,6 +13,9 @@ import { plural } from '../lib/format';
 import { GitItemDiffDialog } from '../components/GitItemDiffDialog';
 import { GitConflictDialog } from '../components/GitConflictDialog';
 import { ChangeMark } from '../components/ChangeMark';
+import { RowMenu } from '../components/TreeParts';
+import { LABEL } from '../lib/vocabulary';
+import { refOfWorkspacePath } from '@testpion/shared';
 
 export interface GitFile {
   path: string;
@@ -43,6 +49,8 @@ export interface SemanticChange {
   collectionId?: string;
   itemId?: string;
   itemKind?: string;
+  /** What to open for it (core's refOfChange): the request, folder, environment, saved item, test or flow file … */
+  ref?: ItemRef;
 }
 
 interface SecretFinding {
@@ -89,13 +97,6 @@ async function okToPull(): Promise<boolean> {
   });
 }
 
-/** Open a changed request in its editor. */
-function openItem(c: SemanticChange) {
-  if (!c.collectionId || !c.itemId) return;
-  const view = c.itemKind === 'graphql' ? 'graphql' : c.itemKind === 'http' ? 'rest' : undefined;
-  if (view) useApp.getState().openIntent(view, { collectionId: c.collectionId, requestId: c.itemId });
-}
-
 /**
  * Git for the workspace (GIT-204 … GIT-209, GIT-304): what changed by meaning, commit (secrets checked first, an AI
  * written message on request), branches, pull and push, and a link to open a pull request.
@@ -111,7 +112,9 @@ export function GitView() {
   const [log, setLog] = useState<Array<{ hash: string; short: string; author: string; date: string; subject: string }>>([]);
   // the commit picked in the history: what it changed shows on the right
   const [selectedCommit, setSelectedCommit] = useState<string>();
-  const [diff, setDiff] = useState<{ path: string; text: string }>();
+  const [diff, setDiff] = useState<{ path: string; text: string; line?: number }>();
+  // a changed file's menu (right-click or ⋯): open · show the diff · stage · discard
+  const [fileMenu, setFileMenu] = useState<string>();
   const [prUrl, setPrUrl] = useState<string>();
 
   const load = useCallback(async () => {
@@ -191,8 +194,18 @@ export function GitView() {
       }
     });
   // "Pull & push" from a rejected push's toast (anywhere in the app)
-  useIntent('git', (p?: { sync?: boolean }) => {
+  useIntent('git', (p?: { sync?: boolean; file?: string; line?: number }) => {
     if (p?.sync) void sync();
+    // a changed file named elsewhere (an agent's git_status ref, a link): its line diff, open (at `line` when given)
+    if (p?.file) {
+      const path = p.file;
+      const line = Number.isInteger(p.line) && p.line! > 0 ? p.line : undefined;
+      void call<GitStatusInfo>('git.status').then((st) => {
+        const f = st.files.find((x) => x.path === path);
+        if (!f) return useApp.getState().toast(`${path} has no uncommitted changes`, 'info');
+        return call<string>('git.diff', { path, staged: f.staged }).then((text) => setDiff({ path, text, line }));
+      }, toastError);
+    }
   });
 
   const files = status?.files ?? [];
@@ -413,8 +426,14 @@ export function GitView() {
           ) : (
             <ul className="grid gap-1" aria-label="Changes">
               {files.map((f) => (
-                <li key={f.path} className="rounded-md border border-line bg-panel">
-                  <div className="flex items-center gap-2 px-2 py-1.5 text-sm">
+                <li key={f.path} className={cx('rounded-md border border-line bg-panel', fileMenu === f.path && 'bg-hover')}>
+                  <div
+                    className="flex items-center gap-2 px-2 py-1.5 text-sm"
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      setFileMenu(f.path);
+                    }}
+                  >
                     <ChangeMark change={f.state} />
                     <button className="font-mono text-xs truncate text-left hover:underline" title="Show the line diff" onClick={() => void call<string>('git.diff', { path: f.path, staged: f.staged }).then((text) => setDiff(diff?.path === f.path ? undefined : { path: f.path, text }), toastError)}>
                       {f.path}
@@ -434,6 +453,32 @@ export function GitView() {
                       >
                         Discard
                       </Button>
+                      <RowMenu
+                        label={f.path}
+                        open={fileMenu === f.path}
+                        onOpenChange={(o) => setFileMenu(o ? f.path : undefined)}
+                        items={
+                          fileMenu === f.path
+                            ? [
+                                ...(() => {
+                                  const ref = (byFile.get(f.path) ?? []).find((c) => c.ref && c.change !== 'removed' && c.change !== 'conflicted')?.ref ?? refOfWorkspacePath(f.path);
+                                  return ref && f.state !== 'deleted' ? [{ label: LABEL.open, icon: <ExternalLink size={14} />, onSelect: () => void openRef(ref) }] : [];
+                                })(),
+                                { label: 'Show the line diff', icon: <Columns2 size={14} />, onSelect: () => void call<string>('git.diff', { path: f.path, staged: f.staged }).then((text) => setDiff({ path: f.path, text }), toastError) },
+                                { label: f.staged ? 'Unstage' : 'Stage', icon: f.staged ? <Minus size={14} /> : <Plus size={14} />, separator: true, onSelect: () => void run('stage', () => call(f.staged ? 'git.unstage' : 'git.stage', { paths: [f.path] })) },
+                                {
+                                  label: 'Discard…',
+                                  icon: <RotateCcw size={14} />,
+                                  danger: true,
+                                  separator: true,
+                                  onSelect: async () => {
+                                    if (await confirmAction({ title: 'Discard changes', message: `Throw away the changes to ${f.path}?`, confirmLabel: 'Discard', danger: true })) await run('discard', () => call('git.discard', { files: [f] }));
+                                  },
+                                },
+                              ]
+                            : []
+                        }
+                      />
                     </span>
                   </div>
                   {(byFile.get(f.path) ?? []).filter((c) => c.title !== f.path).length > 0 && (
@@ -441,9 +486,13 @@ export function GitView() {
                       {(byFile.get(f.path) ?? []).map((c, i) => (
                         <li key={i} className="flex items-center gap-2 text-xs">
                           <ChangeMark change={c.change} />
-                          <button className={cx('truncate text-left', c.itemKind === 'http' || c.itemKind === 'graphql' ? 'hover:underline' : 'cursor-default')} onClick={() => openItem(c)}>
-                            {c.title}
-                          </button>
+                          {c.ref && c.change !== 'removed' && c.change !== 'conflicted' ? (
+                            <RefLink to={c.ref} icon={false} className="text-fg">
+                              {c.title}
+                            </RefLink>
+                          ) : (
+                            <span className="truncate">{c.title}</span>
+                          )}
                           {c.details.length > 0 && <span className="text-muted truncate">{c.details.join(', ')}</span>}
                           {(c.kind === 'collection' || c.kind === 'environment' || c.kind === 'test') && c.change !== 'conflicted' && (
                             <LinkButton className="ml-auto shrink-0" icon={<Columns2 size={12} />} title="Side by side: the last commit and now, part by part" onClick={() => setItemDiff({ file: c.file, itemId: c.itemId })}>
@@ -456,7 +505,7 @@ export function GitView() {
                   )}
                   {diff?.path === f.path && (
                     <div className="border-t border-line max-h-80 overflow-auto text-[0.9em]">
-                      <DiffText text={diff.text} />
+                      <DiffText text={diff.text} line={diff.line} />
                     </div>
                   )}
                 </li>
@@ -573,16 +622,22 @@ function whatOf(f: SecretFinding): string {
   return `variable ${f.field}`;
 }
 
-/** Open what a finding points at: the request in its editor, the environment, the collection's variables … */
+/** What a finding points at, as an ItemRef: the request, the collection's auth or variables, the environment … */
+function refOfFinding(f: SecretFinding): ItemRef | undefined {
+  if (f.kind === 'request' && f.collectionId && f.itemId) return { kind: 'request', collectionId: f.collectionId, requestId: f.itemId };
+  if (f.kind === 'collection-auth' && f.collectionId) return { kind: 'collection', collectionId: f.collectionId, tab: 'auth' };
+  if (f.kind === 'collection-variable' && f.collectionId) return { kind: 'collection', collectionId: f.collectionId, tab: 'variables' };
+  if (f.kind === 'environment-variable' && f.environmentId) return { kind: 'environment', environmentId: f.environmentId };
+  if (f.kind === 'workspace-variable') return { kind: 'environment', scope: 'workspace' };
+  if (f.kind === 'mcp-server' && f.serverId) return { kind: 'mcp-server', serverId: f.serverId };
+  if (f.kind === 'provider' && f.providerId) return { kind: 'provider', providerId: f.providerId };
+  return undefined;
+}
+
+/** Open what a finding points at (in its own editor: a GraphQL request in GraphQL). */
 function openFinding(f: SecretFinding) {
-  const go = useApp.getState().openIntent;
-  if (f.kind === 'request' && f.collectionId && f.itemId) return go('rest', { collectionId: f.collectionId, requestId: f.itemId });
-  if (f.kind === 'collection-auth' && f.collectionId) return go('collections', { collectionId: f.collectionId, tab: 'auth' });
-  if (f.kind === 'collection-variable' && f.collectionId) return go('collections', { collectionId: f.collectionId, tab: 'variables' });
-  if (f.kind === 'environment-variable') return go('environments', { environmentId: f.environmentId });
-  if (f.kind === 'workspace-variable') return go('environments', { tab: 'workspace' });
-  if (f.kind === 'mcp-server') return go('mcp', { serverId: f.serverId });
-  if (f.kind === 'provider') return go('ai', { tab: 'providers', providerId: f.providerId });
+  const ref = refOfFinding(f);
+  if (ref) void openRef(ref);
 }
 
 /**

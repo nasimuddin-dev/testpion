@@ -45,7 +45,9 @@ import { sleep, withTimeout } from '../util/concurrency.js';
 import { applyCookieJarOps, type CookieJar } from '../cookies/cookie-jar.js';
 import { realtimeModeFor, runRealtimeExchange } from '../protocols/realtime.js';
 import { runCondition, runLog, runScriptStep, runSubFlow, type StepResponse } from './flow-blocks.js';
+import { runAssert, runSet } from './flow-control.js';
 import type { PinnedResponse } from './debug-hooks.js';
+import { assertProductionStep, isDataChangingMethod, isGraphQLMutation, isGrpcReadMethod, type ProductionGate } from '../net/production-guard.js';
 
 export interface ExecServices {
   /** Source of a workspace script package (tp.require), when there is one. */
@@ -78,6 +80,8 @@ export interface ExecServices {
   flowStack?: string[];
   /** A step's pinned response (the flow designer's pins, set by runTests' `pins`): the step is answered with it, the API is not called. */
   pinned?: (testId: string) => PinnedResponse | undefined;
+  /** A production environment's gate: data-changing steps run only with consent (net/production-guard.ts). */
+  production?: ProductionGate;
 }
 
 export interface ExecutionOutcome {
@@ -106,6 +110,26 @@ function sha(s: string): string {
   return createHash('sha256').update(s).digest('hex').slice(0, 12);
 }
 
+/** What a step does to the API it calls, for the production guard: whether it may change data, and how to name it. */
+export function productionStep(test: TestCase, scope: VariableScope): { action: string; changesData: boolean } {
+  switch (test.type) {
+    case 'http': {
+      const method = scope.resolve(test.request.method || 'GET').toUpperCase();
+      return { action: `${method} "${test.name}"`, changesData: isDataChangingMethod(method) };
+    }
+    case 'graphql':
+      return { action: `GraphQL mutation "${test.name}"`, changesData: isGraphQLMutation(detectOperation(test.query, test.operationName).type, test.query) };
+    case 'grpc':
+      return { action: `gRPC ${test.method}`, changesData: !isGrpcReadMethod(test.method) };
+    case 'websocket':
+      return { action: `messages sent by "${test.name}"`, changesData: !!test.send?.length };
+    case 'mcp':
+      return { action: `MCP tool ${test.tool ?? ''} "${test.name}"`, changesData: !!test.tool };
+    default:
+      return { action: test.name, changesData: false };
+  }
+}
+
 /** Execute one test case: scripts → protocol call → checks → extraction. Never throws (except cancellation). */
 export async function executeTest(testIn: TestCase, svc: ExecServices, opts: { tracer: Tracer; signal?: AbortSignal; parentSpan?: SpanHandle; prev?: StepResponse }): Promise<ExecutionOutcome> {
   let test = testIn;
@@ -116,7 +140,7 @@ export async function executeTest(testIn: TestCase, svc: ExecServices, opts: { t
   const scriptChecks: CheckResult[] = [];
   let ctx: CheckContext = { testType: test.type, body: undefined, text: '' };
   let partial: Partial<ExecutionOutcome> = {};
-  const sendRequest = scriptRequestSender({ redactor: svc.redactor, cookieJar: svc.cookieJar, signal: opts.signal, timeoutMs: svc.defaultTimeoutMs });
+  const sendRequest = scriptRequestSender({ redactor: svc.redactor, cookieJar: svc.cookieJar, signal: opts.signal, timeoutMs: svc.defaultTimeoutMs, production: svc.production });
 
   try {
     // pre-request script (Postman-compatible: can read/modify the request and set variables)
@@ -150,6 +174,8 @@ export async function executeTest(testIn: TestCase, svc: ExecServices, opts: { t
     const pin = svc.pinned?.(test.id ?? test.name);
     const run = async (signal: AbortSignal) => {
       if (pin) return pinnedAnswer(test, pin, svc);
+      // a production environment: a data-changing step runs only with consent (the step fails, the run goes on)
+      if (svc.production) assertProductionStep(svc.production, productionStep(test, scope));
       switch (test.type) {
         case 'http':
           return runHttp(test, scope, svc, root, signal);
@@ -177,6 +203,10 @@ export async function executeTest(testIn: TestCase, svc: ExecServices, opts: { t
           return runSubFlow(test, scope, svc, root, signal);
         case 'log':
           return runLog(test, scope, svc);
+        case 'set':
+          return runSet(test, scope, svc);
+        case 'assert':
+          return runAssert(test, scope, opts.prev);
         default:
           throw new ApsError('ConfigurationError', `Unknown test type "${(test as TestCase).type}"`);
       }

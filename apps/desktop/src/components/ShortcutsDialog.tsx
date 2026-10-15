@@ -1,68 +1,18 @@
 import { isMac, modKey } from '../api';
 import { useApp } from '../store';
 import { Kbd, Modal } from './ui';
+import { railOrder } from '../lib/rail';
+import { NAV } from './Shell';
+import { shortcutGroups } from '../lib/shortcuts';
 
-const alt = isMac ? '⌥' : 'Alt';
-const shift = isMac ? '⇧' : 'Shift';
-
-/** Every keyboard shortcut, grouped (Help ▸ Keyboard Shortcuts, the command palette, or ?). */
-const GROUPS: Array<{ title: string; items: Array<{ keys: string[][]; text: string }> }> = [
-  {
-    title: 'Anywhere',
-    items: [
-      { keys: [[modKey, 'K']], text: 'Command palette' },
-      { keys: [[modKey, shift, 'F']], text: 'Search the workspace' },
-      { keys: [[alt, '←'], [alt, '→']], text: 'Back / forward to where you were (also the mouse back and forward buttons)' },
-      { keys: [[modKey, 'B']], text: 'Show or hide the Collections explorer' },
-      { keys: [[modKey, ',']], text: 'Settings' },
-      { keys: [[modKey, 'J']], text: 'Ask the AI assistant about what is on screen (again: close it)' },
-      { keys: [[modKey, alt, 'C']], text: 'Show or hide the console' },
-      { keys: [[modKey, alt, '1…9']], text: 'Go to a view (REST, GraphQL, WebSocket …)' },
-      { keys: [['?']], text: 'This list (outside a text field)' },
-    ],
-  },
-  {
-    title: 'Requests and tabs',
-    items: [
-      { keys: [[modKey, 'Enter']], text: 'Send the request (also runs AI prompts and gRPC calls)' },
-      { keys: [[modKey, 'S']], text: 'Save' },
-      { keys: [[modKey, 'T']], text: 'New request tab' },
-      { keys: [[modKey, 'W']], text: 'Close the tab' },
-      { keys: [[modKey, shift, 'W']], text: 'Close all tabs' },
-      { keys: [[modKey, 'O']], text: 'Import (Postman, Insomnia, Bruno, OpenAPI, cURL …)' },
-    ],
-  },
-  {
-    title: 'Collections sidebar',
-    items: [
-      { keys: [['↑'], ['↓']], text: 'Move between rows' },
-      { keys: [['→'], ['←']], text: 'Expand or collapse a collection, category or folder' },
-      { keys: [['F2']], text: 'Rename the focused item in place (request, folder, collection, tab, environment, monitor …); Enter saves, Esc cancels' },
-      { keys: [['Delete']], text: 'Delete the focused request or folder (Undo in the message)' },
-      { keys: [['Enter']], text: 'Open the focused request' },
-    ],
-  },
-  {
-    title: 'Code editors',
-    items: [
-      { keys: [['{{']], text: 'Suggest variables' },
-      { keys: [[modKey, 'Space']], text: 'Suggestions (variables, tp.* snippets, JSON Schema fields)' },
-      { keys: [[modKey, 'F']], text: 'Find' },
-      { keys: [[modKey, 'H']], text: 'Replace' },
-      { keys: [[modKey, '/']], text: 'Comment or uncomment lines' },
-      { keys: [[modKey, shift, 'I']], text: 'Insert a snippet (request scripts): type to filter, Enter inserts at the cursor' },
-      { keys: [[alt, '↑'], [alt, '↓']], text: 'Move lines (and environment variables, in the Envs table)' },
-    ],
-  },
-  {
-    title: 'Lists, menus and dialogs',
-    items: [
-      { keys: [['↑'], ['↓']], text: 'Move through results' },
-      { keys: [['Enter']], text: 'Open or run the selected item' },
-      { keys: [['Esc']], text: 'Close' },
-    ],
-  },
-];
+/** Every keyboard shortcut, grouped (Help ▸ Keyboard Shortcuts, the command palette, or ?): lib/shortcuts.ts, the list the docs page follows. */
+const GROUPS = shortcutGroups({
+  mod: modKey,
+  alt: isMac ? '⌥' : 'Alt',
+  shift: isMac ? '⇧' : 'Shift',
+  mac: isMac,
+  views: railOrder(NAV).map((id) => (id === 'collections' ? 'Collections' : (NAV.find((n) => n.id === id)?.label ?? id))),
+});
 
 export function ShortcutsDialog() {
   const close = () => useApp.getState().set({ shortcutsOpen: false });

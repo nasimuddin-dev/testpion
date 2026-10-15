@@ -124,7 +124,7 @@ The palette comes from the logo: neutrals are tinted with its navy, the accent i
 The app is built from layered surfaces, so it is clear at a glance where you are: the **chrome** frames the window, **sidebars** hold navigation, the **work area** is brightest, and **popovers** float above everything.
 
 <figure class="ds-figure">
-<svg viewBox="0 0 960 520" role="img" aria-label="Diagram of the TestPion window: top bar, navigation rail, sidebar, tab bar, work area split into request and response, bottom console and status bar, with a popover" xmlns="http://www.w3.org/2000/svg" font-family="Inter, system-ui, sans-serif">
+<svg viewBox="0 0 960 520" role="img" aria-label="Diagram of the TestPion window: top bar, navigation rail, Collections explorer, tab bar, work area split into request and response, the Info and Assistant panel on the right edge, the bottom panel (Console, Logs, Terminal, Problems) and the status bar, with a popover" xmlns="http://www.w3.org/2000/svg" font-family="Inter, system-ui, sans-serif">
   <rect x="0" y="0" width="960" height="520" rx="14" fill="#060a1a"/>
   <!-- top bar -->
   <rect x="0" y="0" width="960" height="44" rx="14" fill="#060a1a"/>
@@ -135,16 +135,22 @@ The app is built from layered surfaces, so it is clear at a glance where you are
   <text x="880" y="26" fill="#9ba4be" font-size="11">⌘K · AI</text>
   <!-- rail -->
   <rect x="0" y="44" width="72" height="448" fill="#060a1a"/>
-  <rect x="14" y="60" width="44" height="30" rx="8" fill="#222a51"/><rect x="4" y="66" width="3" height="18" rx="2" fill="url(#g)"/>
-  <text x="36" y="80" fill="#4697ff" font-size="10" text-anchor="middle">REST</text>
-  <text x="36" y="120" fill="#9ba4be" font-size="10" text-anchor="middle">GraphQL</text>
-  <text x="36" y="150" fill="#9ba4be" font-size="10" text-anchor="middle">MCP</text>
-  <text x="36" y="180" fill="#9ba4be" font-size="10" text-anchor="middle">AI Lab</text>
-  <text x="36" y="210" fill="#9ba4be" font-size="10" text-anchor="middle">Tests</text>
-  <text x="36" y="240" fill="#9ba4be" font-size="10" text-anchor="middle">Traces</text>
+  <rect x="6" y="94" width="60" height="24" rx="8" fill="#222a51"/><rect x="2" y="97" width="3" height="18" rx="2" fill="url(#g)"/>
+  <text x="36" y="80" fill="#9ba4be" font-size="9" text-anchor="middle">Home</text>
+  <text x="36" y="110" fill="#4697ff" font-size="9" text-anchor="middle">Collections</text>
+  <text x="36" y="140" fill="#9ba4be" font-size="9" text-anchor="middle">Debugger</text>
+  <text x="36" y="170" fill="#9ba4be" font-size="9" text-anchor="middle">Tests</text>
+  <text x="36" y="200" fill="#9ba4be" font-size="9" text-anchor="middle">Monitors</text>
+  <text x="36" y="230" fill="#9ba4be" font-size="9" text-anchor="middle">Load</text>
+  <text x="36" y="260" fill="#9ba4be" font-size="9" text-anchor="middle">AI Lab</text>
+  <text x="36" y="290" fill="#9ba4be" font-size="9" text-anchor="middle">Evaluations</text>
+  <text x="36" y="320" fill="#9ba4be" font-size="9" text-anchor="middle">Environments</text>
+  <text x="36" y="350" fill="#9ba4be" font-size="9" text-anchor="middle">History</text>
+  <text x="36" y="380" fill="#9ba4be" font-size="9" text-anchor="middle">Traces</text>
+  <text x="36" y="410" fill="#9ba4be" font-size="9" text-anchor="middle">Git</text>
   <!-- sidebar -->
   <rect x="72" y="44" width="200" height="448" fill="#090f20"/>
-  <text x="86" y="68" fill="#eef2fa" font-size="11" font-weight="600">Collections · Envs · History</text>
+  <text x="86" y="68" fill="#eef2fa" font-size="11" font-weight="600">Collections explorer</text>
   <text x="90" y="96" fill="#eef2fa" font-size="11">▾ Veterinary API</text>
   <text x="104" y="118" fill="#66da85" font-size="9" font-weight="700">GET</text><text x="130" y="118" fill="#eef2fa" font-size="11">List patients</text>
   <text x="104" y="140" fill="#ffa659" font-size="9" font-weight="700">POST</text><text x="134" y="140" fill="#eef2fa" font-size="11">Create patient</text>
@@ -164,14 +170,17 @@ The app is built from layered surfaces, so it is clear at a glance where you are
   <rect x="288" y="244" width="54" height="18" rx="9" fill="#123a2a"/><text x="315" y="257" fill="#4ad496" font-size="10" text-anchor="middle">200 OK</text>
   <text x="352" y="257" fill="#9ba4be" font-size="11">65 ms · 138 B · 3 passed</text>
   <text x="290" y="290" fill="#eef2fa" font-size="11" font-family="JetBrains Mono, monospace">{ "items": [ … ], "total": 2 }</text>
+  <!-- right edge: Info and Assistant (pinnable) -->
+  <rect x="946" y="140" width="14" height="150" rx="4" fill="#090f20" stroke="#333c58"/>
+  <text x="956" y="215" fill="#9ba4be" font-size="9" text-anchor="middle" transform="rotate(90 956 215)">Info · Assistant</text>
   <!-- console -->
   <rect x="72" y="404" width="888" height="88" fill="#090f20"/>
-  <text x="86" y="424" fill="#eef2fa" font-size="11" font-weight="600">Console</text>
+  <text x="86" y="424" fill="#eef2fa" font-size="11" font-weight="600">Console</text><text x="146" y="424" fill="#9ba4be" font-size="11">Logs   Terminal   Problems</text>
   <text x="86" y="446" fill="#9ba4be" font-size="10" font-family="JetBrains Mono, monospace">12:03  GET  http://127.0.0.1:4010/patients  200  65 ms   (secrets redacted)</text>
   <!-- status bar -->
   <rect x="0" y="492" width="960" height="28" rx="0" fill="#060a1a"/>
-  <text x="14" y="510" fill="#9ba4be" font-size="10">● Development   0 connected   Idle</text>
-  <text x="946" y="510" fill="#9ba4be" font-size="10" text-anchor="end">secrets: OS store · Console · Logs</text>
+  <text x="14" y="510" fill="#9ba4be" font-size="10">● Development   0 MCP connected   Idle</text>
+  <text x="946" y="510" fill="#9ba4be" font-size="10" text-anchor="end">⊗ 0 problems · Tools · Terminal · Console · Logs</text>
   <!-- popover -->
   <rect x="600" y="150" width="230" height="110" rx="12" fill="#141a2f" stroke="#333c58"/>
   <text x="616" y="174" fill="#eef2fa" font-size="11" font-weight="600">Popover / menu / dialog</text>
@@ -182,15 +191,18 @@ The app is built from layered surfaces, so it is clear at a glance where you are
 </svg>
 <figcaption>
   <span class="ds-key" style="background:#060a1a"></span> chrome: top bar, navigation rail, status bar ·
-  <span class="ds-key" style="background:#090f20"></span> panel: sidebars, tab bar, console ·
+  <span class="ds-key" style="background:#090f20"></span> panel: sidebars, tab bar, bottom panel, right-edge panel ·
   <span class="ds-key" style="background:#101629"></span> bg: the work area ·
   <span class="ds-key" style="background:#141a2f"></span> popover: menus and dialogs
 </figcaption>
 </figure>
 
-- The **navigation rail** switches tools (REST, GraphQL, WebSocket, MCP, AI Lab, Evaluations, Tests, Load, Traces …). The active tool gets an accent tile and a gradient indicator.
-- **Tabs** have a fixed width. When there are more than fit, the most recently used stay visible and the rest go into the **+N** list; nothing scrolls sideways.
-- **Right-click works everywhere it helps**: tabs, workspaces, collection items. The same actions are in the **⋯** menu for keyboard and touch users.
+- The **navigation rail** switches views: Home, Collections, Debugger, Tests, Monitors, Load, AI Lab, Evaluations, Environments, then History, Traces and Git. <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Alt</kbd>+<kbd>1</kbd>…<kbd>9</kbd> follow its order. The request editors (REST, GraphQL, gRPC, WebSocket, MCP) are not on the rail: they open from **Collections**, whose explorer is their one sidebar. The active view gets an accent tile and a gradient indicator; a count (commits to pull) sits on its icon.
+- **Tabs** are one shared strip (`DocTabStrip`) in every view that opens items: requests, test files, monitors, load tests, evaluations. Tabs have a fixed width; when there are more than fit, the strip scrolls with **‹ ›** buttons and the count opens **All open tabs**. A single click in a list opens a preview tab in italics. The right-click menu is the same everywhere (Rename, Close tab, Close other tabs, Close tabs to the right, Close all tabs, plus what the view adds).
+- **The right edge** holds one pinnable panel with **Info** (the item on screen: its variables and their sources, its file and git state, its runs) and the **Assistant**; unpinned, it is a tab that slides over the content.
+- **The bottom panel** has **Console**, **Logs**, **Terminal** and **Problems**. The **status bar** is the tool hub: the environment (the same picker as the top bar), the Problems count, Git and Debugger state, **Tools**, Terminal, Console and Logs.
+- **Production is visible**: while an environment marked as production is active, a thin frame in its colour runs around the window, and every run shows its environment as a badge.
+- **Right-click works everywhere it helps**: tabs, workspaces, collection items, History, Traces, the Git view's changes. The same actions are in the **⋯** menu for keyboard and touch users, with one word per action (**Open**, **Open in new tab**, **Open as request**, **Save as test…**, **Delete…**) and the groups in one order: create · open · run · test · configure · copy · organize · delete.
 
 ## Typography
 
@@ -221,7 +233,7 @@ Shared primitives live in `apps/desktop/src/components/ui.tsx` (Radix UI + Tailw
 | `Button` (primary, default, soft, ghost, danger) | Primary uses the brand gradient; one per area. Danger is only for destructive confirmations. |
 | `Badge` | Status and counts: `ok`, `warn`, `bad`, `accent`, `judge` (AI evaluations). |
 | `Tabs` | Sections of a view; the active tab has the gradient underline and counts in a pill. |
-| `Menu` | Dropdown and right-click menus. Every item has an icon; destructive items are red and last, after a separator. The same menu opens from **⋯** and from a right-click. |
+| `Menu` | Dropdown and right-click menus. Every item has an icon and one word per action from `src/lib/vocabulary.ts` (**Open**, **Open in new tab**, **Delete…** …); groups follow one order (create · open · run · test · configure · copy · organize · delete), and destructive items are red and last, after a separator. The same menu opens from **⋯** and from a right-click. |
 | Application menu | The native File / Edit / View / Window / Help menus and the text-field right-click menu use the same lucide icons, prerendered to PNG (`npm run menu-icons -w @testpion/desktop` after changing `scripts/make-menu-icons.cjs`): template images on macOS, a light or dark ink on Windows and Linux that follows the system theme. |
 | Command palette | Every command shows its icon; *Go to* commands use the navigation icons, environments their colour. |
 | `Modal` | Forms and custom dialogs. Say what will happen, and use a danger button for irreversible actions. |
@@ -248,11 +260,11 @@ Shared primitives live in `apps/desktop/src/components/ui.tsx` (Radix UI + Tailw
     <rect x="350" y="30" width="260" height="92" rx="12" fill="#101629" stroke="#333c58"/>
     <text x="370" y="58" font-weight="700">testpion CLI</text>
     <text x="370" y="80" fill="#9ba4be" font-size="11.5">test · run-collection · import · env …</text>
-    <text x="370" y="100" fill="#9ba4be" font-size="11.5">--json output · CI exit codes</text>
+    <text x="370" y="100" fill="#9ba4be" font-size="11.5">--json envelope · --jsonl · CI exit codes</text>
     <rect x="660" y="30" width="260" height="92" rx="12" fill="#101629" stroke="#333c58"/>
     <text x="680" y="58" font-weight="700">MCP server → AI agents</text>
     <text x="680" y="80" fill="#9ba4be" font-size="11.5">send_request · run_collection</text>
-    <text x="680" y="100" fill="#9ba4be" font-size="11.5">save_request · parse_request_snippet</text>
+    <text x="680" y="100" fill="#9ba4be" font-size="11.5">run_tests · search_workspace · flow_*</text>
   </g>
   <line x1="170" y1="122" x2="400" y2="168" stroke="#8b5cff" stroke-width="2" marker-end="url(#arr)"/>
   <line x1="480" y1="122" x2="480" y2="166" stroke="#8b5cff" stroke-width="2" marker-end="url(#arr)"/>
@@ -261,11 +273,11 @@ Shared primitives live in `apps/desktop/src/components/ui.tsx` (Radix UI + Tailw
   <rect x="40" y="170" width="880" height="170" rx="14" fill="#101a4a" stroke="url(#a)" stroke-width="2"/>
   <text x="60" y="198" fill="#eef2fa" font-size="14" font-weight="700">@testpion/core: the single execution engine</text>
   <g font-size="12" fill="#eef2fa">
-    <rect x="60" y="212" width="200" height="54" rx="10" fill="#101629"/><text x="74" y="234" font-weight="600">Protocols</text><text x="74" y="253" fill="#9ba4be" font-size="11">HTTP · GraphQL · WebSocket · MCP</text>
+    <rect x="60" y="212" width="200" height="54" rx="10" fill="#101629"/><text x="74" y="234" font-weight="600">Protocols</text><text x="74" y="253" fill="#9ba4be" font-size="10">HTTP · GraphQL · gRPC · realtime · MCP</text>
     <rect x="272" y="212" width="200" height="54" rx="10" fill="#101629"/><text x="286" y="234" font-weight="600">Scripts (sandbox)</text><text x="286" y="253" fill="#9ba4be" font-size="11">tp.* in QuickJS/WASM</text>
     <rect x="484" y="212" width="200" height="54" rx="10" fill="#101629"/><text x="498" y="234" font-weight="600">Variables &amp; auth</text><text x="498" y="253" fill="#9ba4be" font-size="11">scopes · secrets · OAuth · JWT</text>
     <rect x="696" y="212" width="204" height="54" rx="10" fill="#101629"/><text x="710" y="234" font-weight="600">AI providers</text><text x="710" y="253" fill="#9ba4be" font-size="11">LLMs · agent loop · RAG</text>
-    <rect x="60" y="276" width="200" height="54" rx="10" fill="#101629"/><text x="74" y="298" font-weight="600">Runner</text><text x="74" y="317" fill="#9ba4be" font-size="11">collections · suites · retries</text>
+    <rect x="60" y="276" width="200" height="54" rx="10" fill="#101629"/><text x="74" y="298" font-weight="600">Runner</text><text x="74" y="317" fill="#9ba4be" font-size="11">collections · flows · retries</text>
     <rect x="272" y="276" width="200" height="54" rx="10" fill="#101629"/><text x="286" y="298" font-weight="600">Checks &amp; evaluators</text><text x="286" y="317" fill="#9ba4be" font-size="11">assertions · LLM-as-judge</text>
     <rect x="484" y="276" width="200" height="54" rx="10" fill="#101629"/><text x="498" y="298" font-weight="600">Tracer &amp; redactor</text><text x="498" y="317" fill="#9ba4be" font-size="11">spans · secrets never leak</text>
     <rect x="696" y="276" width="204" height="54" rx="10" fill="#101629"/><text x="710" y="298" font-weight="600">Import / export</text><text x="710" y="317" fill="#9ba4be" font-size="11">Postman · OpenAPI · HAR · cURL</text>
@@ -315,12 +327,13 @@ The same steps run for a request sent from a tab, by the Collection Runner, by `
 TestPion runs on your desktop today, and the same code is meant to run as an online, multi-user service later. Rules for new features:
 
 - **The UI talks to the engine only through RPC** (`call(...)`). No Node or Electron APIs in `apps/desktop/src`. Desktop-only features (menus, native dialogs, the updater) sit behind backend handlers and have a browser fallback, such as upload and download instead of file dialogs. The browser build (`dev.mjs --web`) must keep working.
-- **RPC methods are grouped by domain.** Each domain has its own module in `apps/desktop/backend/handlers/` (`app`, `workspace`, `collections`, `requests`, `mcp`, `ai`, `testing`), named `<domain>.<action>` (`col.list`, `mcp.connect` …). The `Backend` class holds the shared state and services (workspace, secrets, logger, sessions) that the handlers use, and it refuses a method name defined twice. A new feature adds its methods to the right module, or a new one, so the RPC surface can be served by any host (Electron IPC, the web bridge, a future server).
+- **RPC methods are grouped by domain.** Each domain has its own module in `apps/desktop/backend/handlers/` (`app`, `workspace`, `collections`, `requests`, `grpc`, `mcp`, `ai`, `agents`, `testing`, `monitors`, `debugger`, `git`, `terminal`, the flow modules …), named `<domain>.<action>` (`col.list`, `mcp.connect` …). The `Backend` class holds the shared state and services (workspace, secrets, logger, sessions) that the handlers use, and it refuses a method name defined twice. A new feature adds its methods to the right module, or a new one, so the RPC surface can be served by any host (Electron IPC, the web bridge, a future server).
 - **The engine is host-agnostic.** Files, metadata and secrets go through the `WorkspaceStore`, `MetaStore` and `SecretStore` interfaces, so a server can plug in a database and object storage. Context such as the workspace and user is passed explicitly, not held in process-wide globals.
 - **Data is multi-user ready:** stable ids, a `schemaVersion` on every file, and no assumption of one user per machine. Per-user secrets, sharing and permissions are considered when data is added.
 - **Untrusted content gets its own origin.** Visualizations run on an isolated origin (`tpviz://` on the desktop, `/viz/<id>` on the bridge; a separate user-content domain in a hosted version) with its own strict security policy, never inside the app's origin.
 - **Files go through RPC, not paths.** Picking a file sends its content; saving either uses the native dialog (desktop) or returns a download (`saveOrDownload` in the backend, `finishSave` / `pickTextFile` in `src/lib/files.ts`). `app.info.nativeDialogs` tells the UI which one applies.
 - **Safe on a shared server.** Anything that sends requests, runs scripts or starts processes has limits, a sandbox, and guards for private networks and local processes that a hosted version can switch on.
+- **Production consent is a backend boundary.** `apps/desktop/backend/production-guard.ts` lists every RPC method that sends or runs, and `Backend.invoke` passes every call through it: a data-changing send or any run against an environment marked as production is refused unless the call carries `allowProduction: true`, which the window's one shared dialog adds after asking. The consent travels with the call into the engine (`allowProductionFor` in `packages/core/src/net/production-guard.ts`), which refuses data-changing steps everywhere else. The CLI's `--allow-production` and the MCP server's `--allow-production` plus `allowProduction: true` per call are the same rule for the other hosts, so no window, web bridge, agent or future cloud client can skip it.
 
 ## AI-first design
 
@@ -328,15 +341,16 @@ Every feature is designed for three audiences: the person using the app, the AI 
 
 | Surface | What it gives agents | Examples |
 |---|---|---|
-| **CLI** | Every workspace action, with `--json` output and CI exit codes | `testpion import - --json`, `testpion env list --json`, `testpion workspace delete --yes` |
-| **MCP server** | The workspace as tools, redacted | `list_requests`, `send_request`, `run_collection`, `save_request` |
+| **CLI** | Every workspace action, with `--json` output (one envelope: `{ schema_version, command, status, data, errors, warnings, metrics }`), `--jsonl` events, `--dry-run`, `--non-interactive` and CI exit codes | `testpion import - --json`, `testpion env list --json \| jq .data`, `testpion workspace delete --yes` |
+| **MCP server** | The workspace as tools, redacted, with one contract: paged lists, concise results unless asked, `confirm: true` to delete or overwrite | `list_requests`, `send_request`, `run_tests`, `search_workspace`, `save_test` |
+| **AGENTS.md** | What a coding agent needs about this workspace, written from the live workspace | `testpion agents init`, `agents_init` |
 | **llms.txt** | A map of the docs and key facts, written for models | [/llms.txt](/llms.txt) |
 | **Files** | Diff-friendly JSON and YAML to edit and review in git | `collections/*.json`, `tests/**/*.yaml` |
 | **In the app** | AI actions that are labelled and shown before they run | Describe with AI, Generate tests, Explain an error |
 
 Rules for new features:
 
-- Add a CLI command (with `--json`) and, when it is safe, an MCP tool. Destructive actions stay with people (they need `--yes`, and are not exposed over MCP).
+- Add a CLI command (with `--json`, printed through the envelope in `packages/cli/src/output.ts`) and, when it is safe, an MCP tool that follows [the tool contract](/ai-testing/mcp-server#how-every-tool-behaves). Destructive actions need consent: `--yes` in the CLI, `confirm: true` (or the user's yes through MCP elicitation) for a tool; deleting a workspace stays with people.
 - Keep secrets out of everything an agent can read, and out of files.
 - Label AI output, show it for review, and never run or save it on its own.
 - Document the feature in these docs and, when agents need it, in `llms.txt`.

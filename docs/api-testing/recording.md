@@ -11,14 +11,16 @@ TestPion can sit between your app and an API as a small reverse proxy on your co
 
 It's a quick way to document an API you only know through a front end, to reproduce what a browser app sends, or to build a mock from real traffic.
 
+To capture a program that can use an HTTP proxy (a browser, a terminal, a whole computer, a phone) instead, use the [HTTP Debugger](/api-testing/http-debugger): it also turns what it captured into a collection (**Save to collection…**) or a test flow ([Record a flow](/test-runner/integration-testing#record-a-flow)).
+
 ## In the app
 
-Open **Collections** and click the **Record traffic** icon (or **Record traffic** in the command palette, Ctrl+K).
+In the app, the reverse proxy is a capture mode of the [HTTP Debugger](/api-testing/http-debugger#reverse-proxy-for-one-api): open **Debugger** (<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>3</kbd>) and choose **Capture ▸ Reverse proxy for one API…**. The status bar's **Tools ▸ Reverse proxy for one API…**, the command palette (*Capture: Reverse Proxy for One API…*) and the **Capture traffic into a collection** button in the Collections view's header open the same dialog.
 
 1. Enter the API's base URL, for example `https://api.example.com`, and optionally a local port. Click **Start recording**.
 2. TestPion shows (and copies) the local address, such as `http://127.0.0.1:52308`. Use it in your app instead of the API's base URL.
 3. Requests appear as they happen: method, path, status and time.
-4. Enter a name under **Save as collection** and click **Save**.
+4. Enter a name under **Save as collection** and click **Save**. **Stop** ends the recording; **Clear** empties the list.
 
 The saved collection has a `baseUrl` variable set to the API. Requests are named after their method and path and grouped by the first path segment; a repeated request keeps its other responses as more examples. Browser noise (cookies, `sec-*` headers, `accept-language` …) is left out.
 
@@ -34,7 +36,7 @@ testpion record https://api.example.com --port 8080 -w my-workspace --collection
 # 201 POST   /v1/pets  120 ms
 ```
 
-Without `-w` the exchanges are only printed.
+Without `-w` the exchanges are only printed. `--jsonl` prints a JSON line per event as it happens, then the result envelope, for scripts and AI agents; `-q` prints nothing per exchange.
 
 ## Good to know
 

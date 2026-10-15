@@ -1,8 +1,10 @@
 /** Servers and inspectors: the workspace MCP server, mock servers (REST, MCP, GraphQL) and the MCP inspector. */
 import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { Command } from 'commander';
+import { Command, Option } from 'commander';
 import {
+  collectionFromExchanges,
+  type CaptureGrouping,
   debuggerCertDir, ensureRootCertificate, exchangesToHar, grpcDecoder, grpcMethodIndex, leafSigner, startDebuggerProxy, workspaceProtoRoots, type DebuggerRule, type DebuggerRulesFile,
   McpSession,
   recordingToCollection,
@@ -29,16 +31,72 @@ import {
   reflectServer,
   runRealtimeExchange,
   Redactor,
-  agentsMarkdown,
   composeFeedback,
   type FeedbackKind,
-  upsertAgentsMarkdown,
-  checkTypes,
+  startFlowWebhookServer,
 } from '@testpion/core';
 import { EXIT, green, red, yellow, dim, bold, cyan, CliError, printJson, withWorkspace, cliSecrets, cliContext } from '../shared.js';
+import { emitEvent, machine } from '../output.js';
 import { executeMock } from '../run.js';
 
 export function registerServeCommands(program: Command): void {
+  const serve = program.command('serve').description('serve the workspace: `serve flows` runs flows behind their webhooks (webhook: blocks) until Ctrl+C');
+  serve
+    .command('flows')
+    .description(
+      'serve every flow with a webhook: block (tests/…): POST a JSON body to its path and the flow runs with the fields as inputs; the answer is { ok, output, steps, runId } (422 when a step failed). New and changed flows are picked up without a restart. Ctrl+C stops.',
+    )
+    .option('-p, --port <port>', 'port to listen on (0: any free port)', '4020')
+    .option('--host <host>', 'address to listen on (0.0.0.0 serves the network; default only this machine)', '127.0.0.1')
+    .option('-e, --environment <name>', 'environment every run uses')
+    .option('--max-concurrent <n>', 'runs at once before callers get 429', '4')
+    .option('--timeout <sec>', 'a run longer than this is cancelled (504)', '120')
+    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
+    .option('--json', 'JSON lines (the same as --jsonl): { type: "listening", data: { url, port, hooks } }, then { type: "call", data } per call, and the envelope when it stops')
+    .action(async (o: { port: string; host: string; environment?: string; maxConcurrent: string; timeout: string; workspace?: string; json?: boolean }) => {
+      const port = Number(o.port);
+      if (!Number.isInteger(port) || port < 0 || port > 65535) throw new CliError(`--port must be 0 to 65535, not ${o.port}`, EXIT.CONFIG_ERROR);
+      await withWorkspace(o.workspace, async (store, ephemeral) => {
+        if (ephemeral) throw new CliError('No workspace found: run inside a workspace folder or pass -w <name|path>', EXIT.CONFIG_ERROR);
+        if (o.environment && !store.getEnvironment(o.environment)) throw new CliError(`No environment "${o.environment}"`, EXIT.CONFIG_ERROR);
+        const server = await startFlowWebhookServer({
+          store,
+          context: (c) => cliContext(store, c.environment),
+          environment: o.environment,
+          host: o.host,
+          port,
+          maxConcurrent: Number(o.maxConcurrent) || 4,
+          timeoutMs: (Number(o.timeout) || 120) * 1000,
+          onRun: (e) => {
+            if (machine()) return emitEvent('call', e);
+            const code = e.status < 300 ? green(String(e.status)) : e.status < 500 && e.status !== 422 ? yellow(String(e.status)) : red(String(e.status));
+            console.log(`${code} ${e.method.padEnd(4)} ${e.path}${e.file ? dim(`  tests/${e.file}`) : ''}  ${dim(`${e.durationMs} ms`)}${e.runId ? dim(`  ${e.runId}`) : ''}${e.error ? red(`  ${e.error}`) : ''}`);
+          },
+        }).catch((e: NodeJS.ErrnoException) => {
+          throw new CliError(e.code === 'EADDRINUSE' ? `Port ${port} is in use: pass --port <another> (or 0 for any free port)` : e.message, EXIT.CONFIG_ERROR);
+        });
+        const hooks = server.hooks();
+        if (machine()) emitEvent('listening', { url: server.url, port: server.port, hooks });
+        else {
+          const served = hooks.filter((h) => !h.problem).length;
+          console.log(bold(`Serving ${served} flow webhook${served === 1 ? '' : 's'} of "${store.workspace.name}" on ${server.url}`));
+          for (const h of hooks)
+            console.log(h.problem ? `  ${yellow('skipped')}  tests/${h.file}  ${dim(h.problem)}` : `  ${cyan(h.url)}  ${dim(`tests/${h.file}${h.secret ? ' · needs its secret' : ''}${h.inputs ? ` · inputs: ${h.inputs.join(', ')}` : ''}`)}`);
+          if (!hooks.length) console.log(dim('  No flow has a webhook yet: add one with testpion flow edit <file> --webhook (or webhook: { path: /hooks/x } in the file).'));
+          console.log(dim(`curl -X POST ${server.url}${hooks[0]?.path ?? '/hooks/<flow>'} -H 'content-type: application/json' -d '{"name":"value"}'   ·   Ctrl+C stops`));
+        }
+        await new Promise<void>((done) => {
+          const stop = () => {
+            process.off('SIGINT', stop);
+            process.off('SIGTERM', stop);
+            done();
+          };
+          process.on('SIGINT', stop);
+          process.on('SIGTERM', stop);
+        });
+        await server.close();
+      });
+    });
   program
     .command('mcp-server')
     .description('serve a workspace to AI agents over MCP (stdio): list and read collections, send requests, run collections')
@@ -86,22 +144,6 @@ ${r.body}
 
 ${dim('Open this link to review and post it on GitHub:')}
 ${cyan(r.url)}`);
-    });
-  program
-    .command('agents-md')
-    .description('write (or refresh) the TestPion part of AGENTS.md in the workspace folder: how coding agents (Claude Code, Codex, Cursor, Copilot) use it over MCP and the CLI, the check types and the test file format')
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
-    .option('--stdout', 'print it instead of writing the file')
-    .action((o: { workspace?: string; stdout?: boolean }) => {
-      return withWorkspace(o.workspace, (store, ephemeral) => {
-        if (ephemeral) throw new CliError('No workspace found: run inside a workspace folder or pass -w <name|path>', EXIT.CONFIG_ERROR);
-        const block = agentsMarkdown({ workspace: store.workspace.name, checkTypes: checkTypes() });
-        if (o.stdout) return void process.stdout.write(block);
-        const path = join(store.root, 'AGENTS.md');
-        const before = existsSync(path) ? readFileSync(path, 'utf8') : undefined;
-        writeFileSync(path, upsertAgentsMarkdown(before, block));
-        console.log(`${before === undefined ? 'Wrote' : 'Updated the TestPion part of'} ${path}`);
-      });
     });
   program
     .command('graphql-subscribe')
@@ -348,7 +390,10 @@ ${cyan(r.url)}`);
     .option('--decrypt', 'decrypt HTTPS with the TestPion root certificate (~/.testpion/debugger; the program must trust it)')
     .option('-w, --workspace <nameOrPath>', "decode gRPC messages with the .proto files of this workspace's gRPC calls (default: the nearest workspace.json, if any)")
     .option('--json', 'print each exchange as one JSON line (for scripts and AI agents)')
-    .action(async (o: { port: string; lan?: boolean; out?: string; rules?: string; decrypt?: boolean; workspace?: string; json?: boolean }) => {
+    .option('--save-collection [name]', 'when stopped, save the exchanges as requests in a new collection of the workspace (secrets become variables, never saved)')
+    .option('--to <collection>', 'with --save-collection: add them to this collection instead (in a folder [name] when given)')
+    .addOption(new Option('--group <how>', 'with --save-collection: a folder per host, per first path segment, or none').choices(['host', 'path', 'none']).default('host'))
+    .action(async (o: { port: string; lan?: boolean; out?: string; rules?: string; decrypt?: boolean; workspace?: string; json?: boolean; saveCollection?: string | boolean; to?: string; group: CaptureGrouping }) => {
       const redactor = new Redactor();
       // the rules file as the app writes it (profiles) or a plain list; re-read when it changes so edits apply at once
       let rulesCache: { mtime: number; rules: DebuggerRule[] } | undefined;
@@ -385,7 +430,7 @@ ${cyan(r.url)}`);
         ...(leaf ? { decrypt: { leafFor: leaf, enabled: () => true } } : {}),
         onExchange: (e, phase) => {
           if (phase !== 'response') return;
-          if (o.json) console.log(JSON.stringify({ ...e, url: redactor.redactUrl(e.url), requestBody: undefined, responseBody: undefined }));
+          if (machine()) emitEvent('exchange', { ...e, url: redactor.redactUrl(e.url), requestBody: undefined, responseBody: undefined });
           else {
             const code = e.grpc?.statusName && e.grpc.status !== 0 ? red(`gRPC ${e.grpc.statusName}`) : e.error ? red('ERR') : (e.status ?? 0) >= 400 ? red(String(e.status)) : green(String(e.status ?? '-'));
             console.log(`${code}  ${bold(e.method.padEnd(7))} ${redactor.redactUrl(e.url)}${e.httpVersion === '2' ? dim(' h2') : ''}  ${dim(`${e.application ?? ''}${e.pid ? ` (${e.pid})` : ''}${e.serverAddress ? ` → ${e.serverAddress}` : ''} ${e.responseBodyBytes} B ${e.durationMs ?? 0} ms`)}`);
@@ -398,6 +443,22 @@ ${cyan(r.url)}`);
         const entries = proxy.exchanges.filter((e) => e.kind === 'http');
         writeFileSync(o.out, JSON.stringify(exchangesToHar(entries, redactor, ENGINE_VERSION), null, 2));
         console.error(`Saved ${entries.length} exchanges to ${o.out}`);
+      }
+      // WF-12: the same Save to collection as the app's Debugger and debugger_save_to_collection
+      if (o.saveCollection || o.to) {
+        const entries = proxy.exchanges.filter((e) => e.kind === 'http');
+        await withWorkspace(o.workspace, (store) => {
+          const name = typeof o.saveCollection === 'string' ? o.saveCollection : undefined;
+          const existing = o.to ? store.listCollections().find((c) => c.id === o.to || c.name.toLowerCase() === o.to!.toLowerCase()) : undefined;
+          if (o.to && !existing) throw new CliError(`No collection "${o.to}"`, EXIT.CONFIG_ERROR);
+          const r = collectionFromExchanges(entries, { collection: existing && store.getCollection(existing.id), name, group: o.group, redactor });
+          const saved = store.saveCollection(r.collection);
+          if (o.json) emitEvent('saved', { collectionId: saved.id, collection: saved.name, created: r.created, requests: r.requests.length, secrets: r.secrets, dropped: r.dropped.length });
+          else {
+            console.error(green(`Saved ${r.requests.length} requests to ${r.created ? 'the new collection' : 'collection'} "${saved.name}"`) + dim(r.dropped.length ? ` (${r.dropped.length} left out as noise)` : ''));
+            if (r.secrets.length) console.error(dim(`Set ${r.secrets.map((x) => `{{${x}}}`).join(', ')} in an environment: secrets are never saved.`));
+          }
+        });
       }
       await proxy.close();
     });

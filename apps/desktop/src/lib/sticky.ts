@@ -1,15 +1,27 @@
 import { useCallback, useRef, useState, type SetStateAction } from 'react';
+import { afterScopeChange, scopedKey } from './ws-scope';
 
 /**
  * Component state that survives unmounting (switching tabs, servers or views) for the rest of the
- * session. Kept in memory only, never written to disk: it may hold responses with secrets.
+ * session. Kept in memory only, never written to disk: it may hold responses with secrets. Kept per workspace
+ * (lib/ws-scope): what a tab showed in one workspace means nothing in another.
  */
 const memory = new Map<string, unknown>();
+// another workspace: the old one's values are not shown again (its views are gone) and must not be held on to
+afterScopeChange(() => memory.clear());
+
+/** The key inside the open workspace (as it is while none is open). */
+const scoped = (key: string): string => scopedKey(key) ?? key;
 
 const STORE = 'aps.sticky.';
-const stored = <T,>(key: string): T | undefined => {
+const stored = <T,>(key: string, legacy: string): T | undefined => {
   try {
-    const v = localStorage.getItem(STORE + key);
+    let v = localStorage.getItem(STORE + key);
+    // kept before values were per workspace: it moves into the first workspace that asks (the last one used)
+    if (v === null && key !== legacy && (v = localStorage.getItem(STORE + legacy)) !== null) {
+      localStorage.setItem(STORE + key, v);
+      localStorage.removeItem(STORE + legacy);
+    }
     return v === null ? undefined : (JSON.parse(v) as T);
   } catch {
     return undefined;
@@ -18,7 +30,8 @@ const stored = <T,>(key: string): T | undefined => {
 
 /** Forget kept values (memory and disk), e.g. those of a tab that was closed. */
 export function forgetStickyKeys(keys: string[]): void {
-  for (const k of keys) {
+  for (const key of keys) {
+    const k = scoped(key);
     memory.delete(k);
     try {
       localStorage.removeItem(STORE + k);
@@ -32,9 +45,10 @@ export function forgetStickyKeys(keys: string[]): void {
  * `persist`: also keep it across restarts (on disk, in the window's storage). Only for small values that hold no
  * secrets, such as which saved item a tab shows, or a tab's own title.
  */
-export function useSticky<T>(key: string, initial: T | (() => T), opts: { persist?: boolean } = {}): [T, (v: SetStateAction<T>) => void] {
+export function useSticky<T>(name: string, initial: T | (() => T), opts: { persist?: boolean } = {}): [T, (v: SetStateAction<T>) => void] {
+  const key = scoped(name);
   if (opts.persist && !memory.has(key)) {
-    const v = stored<T>(key);
+    const v = stored<T>(key, name);
     if (v !== undefined) memory.set(key, v);
   }
   const [value, setValue] = useState<T>(() => (memory.has(key) ? (memory.get(key) as T) : typeof initial === 'function' ? (initial as () => T)() : initial));

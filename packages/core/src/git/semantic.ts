@@ -4,6 +4,7 @@ import type { Collection, CollectionNode, Environment } from '../model/types.js'
 import { assertGitRev, gitLog, gitShow, realFolder, runGit, type GitCommit, type GitFile } from './git.js';
 import { requestParts } from './merge.js';
 import { flowChanges, flowItemParts, isFlowFile } from './flow-diff.js';
+import { LIBRARY_LABEL, savedItemRef, type ItemRef } from '@testpion/shared';
 
 /**
  * Changes said by what they mean (GIT-205): "Payments ▸ Create invoice: URL and 2 headers changed" rather than
@@ -23,6 +24,53 @@ export interface SemanticChange {
   itemId?: string;
   /** The item's kind (http, graphql, folder …). */
   itemKind?: string;
+  /** What to open for it (an ItemRef): the request, folder, collection, environment, saved item, test or flow file, else the file. */
+  ref?: ItemRef;
+}
+
+/** The ItemRef of a change: the most precise thing it is about. */
+export function refOfChange(c: SemanticChange): ItemRef {
+  if (c.ref) return c.ref;
+  if (c.kind === 'collection' && c.collectionId) {
+    if (!c.itemId) return { kind: 'collection', collectionId: c.collectionId };
+    if (c.itemKind === 'folder') return { kind: 'folder', collectionId: c.collectionId, folderId: c.itemId };
+    return { kind: 'request', collectionId: c.collectionId, requestId: c.itemId, ...(c.itemKind === 'graphql' ? { protocol: 'graphql' as const } : {}) };
+  }
+  if (c.file.startsWith('tests/') && /\.(ya?ml|json)$/i.test(c.file)) {
+    const path = c.file.slice('tests/'.length);
+    return isFlowFile(c.file) ? { kind: 'flow', path, ...(c.itemId ? { step: c.itemId } : {}) } : { kind: 'test', path };
+  }
+  return { kind: 'git-file', path: c.file };
+}
+
+const withRefs = (changes: SemanticChange[]): SemanticChange[] => changes.map((c) => (c.ref ? c : { ...c, ref: refOfChange(c) }));
+
+interface LibraryFile {
+  items?: Array<{ id: string; name?: string; folder?: string; collectionId?: string; data?: unknown }>;
+}
+
+/** A library file (library/<kind>.json: saved gRPC calls, connections, prompts, monitors …) item by item. */
+function libraryChanges(file: string, beforeText: string | undefined, afterText: string | undefined): SemanticChange[] | undefined {
+  const kind = /^library\/([a-z0-9-]+)\.json$/.exec(file)?.[1];
+  if (!kind) return undefined;
+  const before = beforeText === undefined ? { items: [] } : parse<LibraryFile>(beforeText);
+  const after = afterText === undefined ? { items: [] } : parse<LibraryFile>(afterText);
+  if (!before || !after || !Array.isArray(before.items ?? []) || !Array.isArray(after.items ?? [])) return undefined;
+  const what = LIBRARY_LABEL[kind] ?? 'Saved item';
+  const a = new Map((before.items ?? []).map((i) => [i.id, i]));
+  const b = new Map((after.items ?? []).map((i) => [i.id, i]));
+  const out: SemanticChange[] = [];
+  const title = (i: { name?: string; id: string }) => `${what} ${i.name ?? i.id}`;
+  for (const [id, i] of b) {
+    const was = a.get(id);
+    if (!was) out.push({ file, kind: 'library', change: 'added', title: title(i), details: [], itemId: id, itemKind: kind, ref: savedItemRef(kind, id) });
+    else if (!same(was, i)) {
+      const details = [was.name !== i.name ? `renamed from ${was.name}` : '', was.folder !== i.folder ? 'moved' : '', !same(was.data, i.data) ? 'settings' : '', was.collectionId !== i.collectionId ? 'collection' : ''].filter(Boolean);
+      out.push({ file, kind: 'library', change: was.name !== i.name ? 'renamed' : 'changed', title: title(i), details: details.length ? details : ['order'], itemId: id, itemKind: kind, ref: savedItemRef(kind, id) });
+    }
+  }
+  for (const [id, i] of a) if (!b.has(id)) out.push({ file, kind: 'library', change: 'removed', title: title(i), details: [], itemId: id, itemKind: kind, ref: savedItemRef(kind, id) });
+  return out.length ? out : [{ file, kind: 'library', change: 'changed', title: file, details: ['order or formatting'] }];
 }
 
 type Node = CollectionNode & { name?: string; items?: Node[] };
@@ -99,7 +147,9 @@ function collectionChanges(file: string, before: Collection | undefined, after: 
 
 function environmentChanges(file: string, before: Environment | undefined, after: Environment | undefined): SemanticChange[] {
   const name = after?.name ?? before?.name ?? file;
-  if (!before || !after) return [{ file, kind: 'environment', change: after ? 'added' : 'removed', title: `environment ${name}`, details: after ? [`${after.variables.length} variables`] : [] }];
+  const envId = after?.id ?? before?.id;
+  const ref: ItemRef | undefined = envId ? { kind: 'environment', environmentId: envId } : undefined;
+  if (!before || !after) return [{ file, kind: 'environment', change: after ? 'added' : 'removed', title: `environment ${name}`, details: after ? [`${after.variables.length} variables`] : [], ...(ref ? { ref } : {}) }];
   const details: string[] = [];
   const av = new Map(before.variables.map((v) => [v.key, v]));
   const bv = new Map(after.variables.map((v) => [v.key, v]));
@@ -110,7 +160,7 @@ function environmentChanges(file: string, before: Environment | undefined, after
   if (added.length) details.push(`added ${added.join(', ')}`);
   if (removed.length) details.push(`removed ${removed.join(', ')}`);
   if (changed.length) details.push(`changed ${changed.join(', ')}`);
-  return [{ file, kind: 'environment', change: 'changed', title: `environment ${name}`, details: details.length ? details : ['settings'] }];
+  return [{ file, kind: 'environment', change: 'changed', title: `environment ${name}`, details: details.length ? details : ['settings'], ...(ref ? { ref } : {}) }];
 }
 
 /** The meaning of each changed file (working folder against the last commit). */
@@ -132,13 +182,14 @@ export async function describeGitChanges(ws: string, files: GitFile[]): Promise<
     if (/^collections\/[^/]+\.json$/.test(f.path)) out.push(...collectionChanges(f.path, parse<Collection>(head), parse<Collection>(read())));
     else if (/^environments\/[^/]+\.json$/.test(f.path)) out.push(...environmentChanges(f.path, parse<Environment>(head), parse<Environment>(read())));
     else if (isFlowFile(f.path) && f.state !== 'renamed' && flowChanges(f.path, head, read())) out.push(...flowChanges(f.path, head, read())!);
+    else if (f.state !== 'renamed' && libraryChanges(f.path, head, read())) out.push(...libraryChanges(f.path, head, read())!);
     else {
       const kind = f.path.startsWith('tests/') ? 'test' : f.path.startsWith('library/') ? 'library' : 'other';
       const change = f.state === 'untracked' || f.state === 'added' ? 'added' : f.state === 'deleted' ? 'removed' : f.state === 'renamed' ? 'renamed' : 'changed';
       out.push({ file: f.path, kind, change, title: f.path, details: f.state === 'renamed' && f.from ? [`was ${f.from}`] : [] });
     }
   }
-  return out;
+  return withRefs(out);
 }
 
 /** One item (request or folder) of a collection by id, anywhere in its folders. */
@@ -182,12 +233,13 @@ export async function describeRevChanges(ws: string, from: string, to?: string):
     if (/^collections\/[^/]+\.json$/.test(f.path)) result.push(...collectionChanges(f.path, parse<Collection>(before), parse<Collection>(after)));
     else if (/^environments\/[^/]+\.json$/.test(f.path)) result.push(...environmentChanges(f.path, parse<Environment>(before), parse<Environment>(after)));
     else if (isFlowFile(f.path) && f.status !== 'R' && flowChanges(f.path, before, after)) result.push(...flowChanges(f.path, before, after)!);
+    else if (f.status !== 'R' && libraryChanges(f.path, before, after)) result.push(...libraryChanges(f.path, before, after)!);
     else {
       const kind = f.path.startsWith('tests/') ? 'test' : f.path.startsWith('library/') ? 'library' : 'other';
       result.push({ file: f.path, kind, change: f.status === 'A' ? 'added' : f.status === 'D' ? 'removed' : f.status === 'R' ? 'renamed' : 'changed', title: f.path, details: f.from ? [`was ${f.from}`] : [] });
     }
   }
-  return result;
+  return withRefs(result);
 }
 
 function readOrUndefined(p: string): string | undefined {

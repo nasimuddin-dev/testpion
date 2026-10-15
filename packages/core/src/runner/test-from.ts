@@ -10,7 +10,11 @@ export type TestSource =
   | { kind: 'http'; request: { method: string; url: string; params?: KeyValue[]; headers?: KeyValue[]; body?: BodyConfig; auth?: AuthConfig }; preRequestScript?: string; testScript?: string; status?: number }
   | { kind: 'graphql'; endpoint: string; query: string; variables?: Record<string, unknown>; operationName?: string; headers?: KeyValue[]; auth?: AuthConfig }
   | { kind: 'grpc'; target: string; method: string; message?: unknown; metadata?: KeyValue[]; tls?: boolean }
-  | { kind: 'websocket'; mode?: 'websocket' | 'socketio' | 'mqtt' | 'kafka'; url: string; send?: unknown[]; subscribe?: Array<string | { topic: string; fromBeginning?: boolean }>; headers?: KeyValue[]; waitMs?: number; username?: string; password?: string };
+  | { kind: 'websocket'; mode?: 'websocket' | 'socketio' | 'mqtt' | 'kafka'; url: string; send?: unknown[]; subscribe?: Array<string | { topic: string; fromBeginning?: boolean }>; headers?: KeyValue[]; waitMs?: number; username?: string; password?: string }
+  /** An MCP tool call: the server by its name in the workspace. */
+  | { kind: 'mcp'; server: string; tool: string; arguments?: Record<string, unknown> }
+  /** A prompt (the AI Playground): the model, the prompt and its inputs, what is expected, the evaluators. */
+  | { kind: 'llm'; model: { provider: string; name?: string; temperature?: number; topP?: number; maxTokens?: number; seed?: number }; system?: string; prompt: string; input?: Record<string, unknown>; responseFormat?: unknown; expected?: unknown };
 
 const kv = (list?: KeyValue[]) => {
   const on = (list ?? []).filter((h) => h.key && h.enabled !== false);
@@ -79,6 +83,25 @@ export function testObjectFromRequest(name: string, src: TestSource, assertions?
       // protos: [] asks the server (reflection)
       test.protos = [];
       folder = 'grpc';
+      break;
+    case 'mcp':
+      test = clean({ name, type: 'mcp', server: src.server, tool: src.tool, arguments: src.arguments ?? {}, assertions: assertions?.length ? assertions : [{ type: 'status', expected: 'success' }] });
+      folder = 'mcp';
+      break;
+    case 'llm':
+      test = clean({
+        name,
+        type: 'llm',
+        model: clean({ ...src.model }),
+        system: src.system || undefined,
+        prompt: src.prompt,
+        input: src.input && Object.keys(src.input).length ? src.input : undefined,
+        responseFormat: src.responseFormat,
+        expected: src.expected,
+        // an LLM test's checks are its evaluators
+        evaluators: assertions?.length ? assertions : undefined,
+      });
+      folder = 'ai';
       break;
     default:
       test = clean({

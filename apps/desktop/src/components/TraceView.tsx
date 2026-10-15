@@ -6,6 +6,8 @@ import { formatMs } from '../lib/format';
 import { Badge, cx, Split, Tabs } from './ui';
 import { JsonTree, RawView } from './JsonView';
 import { useCopied } from '../lib/clipboard';
+import { RelatedRefs } from './RefLink';
+import type { ItemRef } from '@testpion/shared';
 
 const KIND_COLORS: Record<string, string> = {
   http: '#0969da',
@@ -46,7 +48,7 @@ export function spanRows(trace: Trace): Array<{ span: Span; depth: number }> {
 }
 
 /** Waterfall view of a normalised trace (spans for HTTP, GraphQL, LLM, tool, MCP and evaluation). */
-export function TraceView({ trace }: { trace: Trace }) {
+export function TraceView({ trace }: { trace: Trace & { refs?: ItemRef[] } }) {
   const rows = useMemo(() => spanRows(trace), [trace]);
   const [sel, setSel] = useState<string | undefined>(rows[0]?.span.spanId);
   const [tab, setTab] = useState<'payload' | 'attributes' | 'input' | 'output' | 'events'>('payload');
@@ -56,13 +58,14 @@ export function TraceView({ trace }: { trace: Trace }) {
   const span = trace.spans.find((s) => s.spanId === sel);
   const tokens = trace.spans.reduce((a, s) => a + (Number(s.attributes.inputTokens) || 0) + (Number(s.attributes.outputTokens) || 0), 0);
   return (
-    <div className="h-full flex flex-col min-h-0">
+    <div className="h-full flex flex-col min-h-0" data-trace-view={trace.traceId}>
       <div className="flex items-center gap-3 px-3 h-9 border-b border-line text-sm shrink-0">
         <span className="font-medium truncate min-w-0">{trace.name}</span>
         <Badge tone={trace.status === 'ok' ? 'ok' : trace.status === 'error' ? 'bad' : 'default'}>{trace.status}</Badge>
         <span className="text-muted whitespace-nowrap tabular-nums shrink-0">
           {formatMs(total)} · {trace.spans.length} spans{tokens > 0 ? ` · ${tokens.toLocaleString()} tokens` : ''}
         </span>
+        <RelatedRefs refs={trace.refs} className="min-w-0 flex-nowrap overflow-hidden" />
         <span className="text-muted mono text-xs ml-auto truncate min-w-0 hidden xl:inline" title="Trace ID (OpenTelemetry-compatible)">
           {trace.traceId}
         </span>

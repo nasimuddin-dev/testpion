@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { runCli, cliPath, copyExample } from '../helpers.js';
+import { runCli, cliPath, copyExample, cliData } from '../helpers.js';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -292,7 +292,7 @@ describe('example workspace (end-to-end)', () => {
     try {
       // the fixed tools, plus one tool per flow with an expose: block under tests/ (none in this workspace; flow-tools.test.ts covers them)
       const names = (await s.listTools()).map((t) => t.name).sort();
-      expect(names).toEqual(['add_dataset_row', 'api_coverage', 'api_fuzz', 'check_certificate', 'ci_config', 'collection_docs', 'collection_health', 'collection_openapi', 'collection_tidy', 'collection_timing', 'compare_environments', 'compare_request_across_environments', 'compare_responses', 'compare_runs', 'create_collection', 'create_folder', 'debugger_capture', 'debugger_exchange', 'debugger_exchanges', 'debugger_rules', 'debugger_session', 'debugger_stats', 'decode_jwt', 'delete_request', 'environment_matrix', 'export_arazzo', 'export_traces', 'flaky_tests', 'flow_add_step', 'flow_connect', 'flow_disconnect', 'flow_graph', 'flow_remove_step', 'flow_runs', 'flow_set_output', 'flow_update_step', 'generate_dataset', 'generate_flows', 'generate_tests', 'get_request', 'git_conflicts', 'git_diff', 'git_log', 'git_propose_commit', 'git_resolve', 'git_status', 'git_sync', 'graphql_operation', 'graphql_subscribe', 'grpc_call', 'import_arazzo', 'import_definition', 'lint_tests', 'list_certificates', 'list_collections', 'list_datasets', 'list_environments', 'list_evaluations', 'list_flows', 'list_mcp_servers', 'list_monitors', 'list_requests', 'list_tests', 'llm_usage', 'load_history', 'load_test', 'mcp_call_tool', 'mcp_server_tools', 'mcp_tool_usage', 'mock_tools', 'monitor_requests', 'monitor_results', 'monitor_uptime', 'move_request', 'move_variables_to_environments', 'openapi_diff', 'openapi_lint', 'openapi_outline', 'parse_request_snippet', 'read_dataset', 'realtime_exchange', 'recent_failures', 'rename_variable', 'reorder_environments', 'replace_in_collection', 'request_history', 'response_time_stats', 'review_result', 'run_breakdown', 'run_collection', 'run_evaluation', 'run_monitor', 'run_reviews', 'run_tests', 'save_request', 'save_test', 'score_trend', 'search_tools', 'security_review', 'send_request', 'set_collection_variable', 'set_environment_variable', 'set_request_checks', 'test_history', 'testpion_guide', 'unused_variables', 'update_request', 'variable_flow', 'variable_usages', 'what_needs_attention', 'workspace_activity', 'write_test_file']);
+      expect(names).toEqual(['add_dataset_row', 'agents_init', 'api_coverage', 'api_fuzz', 'check_certificate', 'ci_config', 'collection_docs', 'collection_health', 'collection_openapi', 'collection_tidy', 'collection_timing', 'compare_environments', 'compare_request_across_environments', 'compare_responses', 'compare_runs', 'create_collection', 'create_folder', 'debugger_capture', 'debugger_exchange', 'debugger_exchanges', 'debugger_rules', 'debugger_save_to_collection', 'debugger_session', 'debugger_stats', 'decode_jwt', 'delete_request', 'environment_matrix', 'eval_compare', 'eval_matrix', 'export_arazzo', 'export_traces', 'flaky_tests', 'flow_add_step', 'flow_annotate', 'flow_connect', 'flow_data_run', 'flow_deploy_status', 'flow_disconnect', 'flow_env_matrix', 'flow_from_exchanges', 'flow_graph', 'flow_remove_step', 'flow_runs', 'flow_scale_result', 'flow_set_output', 'flow_timeline', 'flow_update_step', 'flow_webhook_set', 'generate_dataset', 'generate_flows', 'generate_tests', 'get_request', 'git_conflicts', 'git_diff', 'git_log', 'git_propose_commit', 'git_resolve', 'git_status', 'git_sync', 'graphql_operation', 'graphql_subscribe', 'grpc_call', 'import_arazzo', 'import_definition', 'item_info', 'lint_tests', 'list_certificates', 'list_collections', 'list_datasets', 'list_environments', 'list_evaluations', 'list_flows', 'list_mcp_servers', 'list_monitors', 'list_requests', 'list_tests', 'llm_usage', 'load_history', 'load_test', 'mcp_call_tool', 'mcp_server_tools', 'mcp_tool_usage', 'mock_tools', 'monitor_requests', 'monitor_results', 'monitor_uptime', 'move_request', 'move_variables_to_environments', 'openapi_diff', 'openapi_lint', 'openapi_outline', 'parse_request_snippet', 'read_dataset', 'realtime_exchange', 'recent_failures', 'rename_variable', 'reorder_environments', 'replace_in_collection', 'request_history', 'resolve_ref', 'response_time_stats', 'review_result', 'run_breakdown', 'run_collection', 'run_evaluation', 'run_monitor', 'run_reviews', 'run_tests', 'save_monitor', 'save_request', 'save_test', 'score_trend', 'search_tools', 'search_workspace', 'security_review', 'send_request', 'set_collection_variable', 'set_environment_variable', 'set_request_checks', 'test_history', 'testpion_guide', 'unused_variables', 'update_request', 'variable_flow', 'variable_usages', 'what_needs_attention', 'workspace_activity', 'write_test_file']);
       const text = async (tool: string, args: Record<string, unknown> = {}) => {
         const r = await s.callTool(tool, args);
         return { isError: r.isError, text: mcpResultBody(r).text };
@@ -404,7 +404,7 @@ describe('example workspace (end-to-end)', () => {
       expect(JSON.parse((await text('move_request', { collection: 'Agent sandbox', request: 'Ping', folder: 'Health / Deep' })).text)).toMatchObject({ folder: 'Health / Deep' });
       expect((await text('set_collection_variable', { collection: 'Agent sandbox', name: 'apiKey', value: 'k' })).isError).toBe(true); // a secret: refused
       expect(JSON.parse((await text('set_collection_variable', { collection: 'Agent sandbox', name: 'page', value: 2 })).text).variables).toEqual(['base', 'page']);
-      expect(JSON.parse((await text('delete_request', { collection: 'Agent sandbox', request: 'Ping' })).text)).toMatchObject({ deleted: 'Ping', kind: 'http' });
+      expect(JSON.parse((await text('delete_request', { collection: 'Agent sandbox', request: 'Ping', confirm: true })).text)).toMatchObject({ deleted: 'Ping', kind: 'http' });
       expect((await text('list_requests', { collection: 'Agent sandbox' })).text).not.toContain('Ping');
       // the workspace's MCP servers: a mock one works from here; a stdio one only after the user allowed it in the app
       mkdirSync(join(ws.root, 'mocks'), { recursive: true });
@@ -448,11 +448,15 @@ describe('example workspace (end-to-end)', () => {
     const env = { ...process.env, TESTPION_HOME: join(dir, 'home') };
     const saved = await run([cli, 'send', 'Veterinary API/Authentication/Get access token', '-w', ws.root, '-e', 'Development', '--json'], env);
     expect(saved.status).toBe(0);
-    const out = JSON.parse(saved.stdout);
+    const out = cliData(saved.stdout);
     expect(out).toMatchObject({ status: 200, body: { token_type: 'Bearer' } });
     expect(out.checks.every((c: { passed: boolean }) => c.passed)).toBe(true);
     const url = await run([cli, 'send', '{{baseUrl}}/health', '-w', ws.root, '-e', 'Development', '--json'], env);
-    expect(JSON.parse(url.stdout)).toMatchObject({ status: 200, body: { status: 'ok' } });
+    expect(cliData(url.stdout)).toMatchObject({ status: 200, body: { status: 'ok' } });
+    // without -w a URL target uses the workspace the current folder is in (searched upward), like every command
+    const here = await runCli(['send', '{{baseUrl}}/health', '-e', 'Development', '--json'], { env, cwd: join(ws.root, 'collections') });
+    expect(here.status, here.err).toBe(0);
+    expect(cliData(here.out)).toMatchObject({ status: 200, body: { status: 'ok' } });
     // an unknown name is a configuration error; --fail turns an HTTP error into exit 1
     expect((await run([cli, 'send', 'No such request', '-w', ws.root], env)).status).toBe(2);
     expect((await run([cli, 'send', '{{baseUrl}}/nope', '-w', ws.root, '-e', 'Development', '--fail'], env)).status).toBe(1);
@@ -466,7 +470,7 @@ describe('example workspace (end-to-end)', () => {
     const r = await run([cli, 'import', file, '-w', ws.root, '--collection', 'From CLI', '--folder', 'Owners', '--json'], env);
     expect(r.stderr).toBe('');
     expect(r.status).toBe(0);
-    const out = JSON.parse(r.stdout);
+    const out = cliData(r.stdout);
     expect(out).toMatchObject({ format: 'powershell', collection: 'From CLI', createdCollection: true, request: 'POST /v1/owners', method: 'POST' });
     expect(out.placeholders.map((p: { variable: string }) => p.variable).sort()).toEqual(['password', 'xApiKey']);
     const saved = readFileSync(join(ws.root, 'collections', `${out.collectionId}.json`), 'utf8');
@@ -475,15 +479,15 @@ describe('example workspace (end-to-end)', () => {
 
     const order = await run([cli, 'env', 'order', 'Development', 'Production', '-w', ws.root, '--json'], env);
     expect(order.status).toBe(0);
-    expect(JSON.parse(order.stdout).slice(0, 2)).toEqual(['Development', 'Production']);
+    expect(cliData(order.stdout).slice(0, 2)).toEqual(['Development', 'Production']);
     const list = await run([cli, 'env', 'list', '-w', ws.root, '--json'], env);
-    const envs = JSON.parse(list.stdout) as Array<{ name: string; variables: string[] }>;
+    const envs = cliData(list.stdout) as Array<{ name: string; variables: string[] }>;
     expect(envs[0]!.name).toBe('Development');
     expect(list.stdout).not.toContain('demo-secret');
     expect((await run([cli, 'env', 'order', 'Nope', '-w', ws.root], env)).status).not.toBe(0);
     const diff = await run([cli, 'env', 'diff', 'Development', 'Production', '-w', ws.root, '--json'], env);
     expect(diff.status).toBe(1); // they differ
-    const d = JSON.parse(diff.stdout);
+    const d = cliData(diff.stdout);
     expect(d.rows.find((r: { key: string }) => r.key === 'baseUrl').status).toBe('different');
     expect(diff.stdout).not.toContain('demo-secret');
   });
@@ -505,11 +509,11 @@ describe('example workspace (end-to-end)', () => {
 
     const list = await run([cli, 'history', 'list', '-w', ws.root, '--request', 'List patients', '--json'], env);
     expect(list.stderr).toBe('');
-    expect(JSON.parse(list.stdout).map((h: { id: string }) => h.id)).toEqual(['h-new', 'h-old']);
+    expect(cliData(list.stdout).map((h: { id: string }) => h.id)).toEqual(['h-new', 'h-old']);
     const stats = await run([cli, 'history', 'stats', '-w', ws.root, '--request', 'List patients', '--json'], env);
-    expect(JSON.parse(stats.stdout)).toMatchObject({ count: 2, p50Ms: 40, maxMs: 50, failed: 0 });
+    expect(cliData(stats.stdout)).toMatchObject({ count: 2, p50Ms: 40, maxMs: 50, failed: 0 });
     const diff = await run([cli, 'history', 'diff', 'h-old', 'h-new', '-w', ws.root, '--json'], env);
-    const d = JSON.parse(diff.stdout);
+    const d = cliData(diff.stdout);
     expect(d.diff.body.changes.map((c: { path: string }) => c.path)).toEqual(['$.total', '$.items[0].token', '$.items[1]']);
     expect(d.diff.headers).toEqual([{ name: 'date', kind: 'changed', before: 'Mon', after: 'Tue', volatile: true }]);
 
@@ -533,14 +537,14 @@ describe('example workspace (end-to-end)', () => {
     const env = { ...process.env, TESTPION_HOME: join(dir, 'home') };
     const add = await run([cli, 'monitor', 'add', 'Diagnostics check', '--collection', 'Veterinary API', '--folder', 'Diagnostics', '--every', '10m', '-e', 'Development', '-w', ws.root, '--json'], env);
     expect(add.stderr).toBe('');
-    expect(JSON.parse(add.stdout)).toMatchObject({ name: 'Diagnostics check', everyMinutes: 10, enabled: true });
+    expect(cliData(add.stdout)).toMatchObject({ name: 'Diagnostics check', everyMinutes: 10, enabled: true });
     expect((await run([cli, 'monitor', 'add', 'Bad', '--collection', 'Veterinary API', '--every', '9d', '-w', ws.root], env)).status).toBe(2);
     const due = await run([cli, 'monitor', 'run', '--due', '-w', ws.root, '--json'], env);
     expect(due.status).toBe(0);
-    expect(JSON.parse(due.stdout)).toEqual([expect.objectContaining({ name: 'Diagnostics check', status: 'passed', trigger: 'schedule' })]);
+    expect(cliData(due.stdout)).toEqual([expect.objectContaining({ name: 'Diagnostics check', status: 'passed', trigger: 'schedule' })]);
     // it just ran, so nothing is due
-    expect(JSON.parse((await run([cli, 'monitor', 'run', '--due', '-w', ws.root, '--json'], env)).stdout)).toEqual([]);
-    const list = JSON.parse((await run([cli, 'monitor', 'list', '-w', ws.root, '--json'], env)).stdout);
+    expect(cliData((await run([cli, 'monitor', 'run', '--due', '-w', ws.root, '--json'], env)).stdout)).toEqual([]);
+    const list = cliData((await run([cli, 'monitor', 'list', '-w', ws.root, '--json'], env)).stdout);
     expect(list[0]).toMatchObject({ schedule: 'every 10 minutes', due: false, lastResult: { status: 'passed' } });
 
     const s = new McpSession({ id: 'mon', name: 'testpion', transport: 'stdio', command: process.execPath, args: [cli, 'mcp-server', '-w', ws.root], env: { TESTPION_HOME: join(dir, 'home') } });
@@ -552,6 +556,10 @@ describe('example workspace (end-to-end)', () => {
       expect(ran).toMatchObject({ status: 'passed', trigger: 'manual', failures: [] });
       expect(JSON.parse(await text('monitor_results', { monitor: 'Diagnostics check' })).map((r: { trigger: string }) => r.trigger)).toEqual(['manual', 'schedule']);
       expect(JSON.parse(await text('monitor_uptime', { monitor: 'Diagnostics check', days: 7 }))).toMatchObject({ uptime: 100, runs: 2, passed: 2 });
+      // a flow on a schedule: save_monitor with testFile, then flow_deploy_status names it
+      expect(JSON.parse(await text('save_monitor', { name: 'Auth flow (MCP)', testFile: 'rest/auth.yaml', every: '1h', environment: 'Development' }))).toMatchObject({ testFile: 'rest/auth.yaml', schedule: 'hourly' });
+      expect(JSON.parse(await text('flow_deploy_status', { file: 'rest/auth.yaml' })).schedule).toMatchObject({ name: 'Auth flow (MCP)', every: 'hourly' });
+      expect(mcpResultBody(await s.callTool('save_monitor', { name: 'Both', testFile: 'rest/auth.yaml', collection: 'Veterinary API', every: 5 })).text).toMatch(/one of them/);
     } finally {
       await s.close();
     }
@@ -559,6 +567,15 @@ describe('example workspace (end-to-end)', () => {
     expect(results.stdout).toContain('2/2 passed');
     expect((await run([cli, 'monitor', 'uptime', 'Diagnostics check', '-w', ws.root], env)).stdout).toContain('100% of 2 runs over 30 days');
     expect((await run([cli, 'monitor', 'remove', 'Diagnostics check', '-w', ws.root], env)).status).toBe(0);
+    // a test file (flow) on a schedule: --test-file, run with the test runner
+    const flowMon = await run([cli, 'monitor', 'add', 'Auth flow', '--test-file', 'tests/rest/auth.yaml', '--every', '15m', '-e', 'Development', '-w', ws.root, '--json'], env);
+    expect(flowMon.stderr).toBe('');
+    expect(cliData(flowMon.stdout)).toMatchObject({ name: 'Auth flow', testFile: 'rest/auth.yaml' });
+    expect((await run([cli, 'monitor', 'add', 'Both', '--test-file', 'rest/auth.yaml', '--collection', 'Veterinary API', '--every', '15m', '-w', ws.root], env)).status).toBe(2);
+    const flowRun = await run([cli, 'monitor', 'run', 'Auth flow', '-w', ws.root, '--json'], env);
+    expect(cliData(flowRun.stdout)).toEqual([expect.objectContaining({ name: 'Auth flow', status: 'passed', trigger: 'manual' })]);
+    expect((await run([cli, 'monitor', 'list', '-w', ws.root], env)).stdout).toContain('tests/rest/auth.yaml');
+    for (const name of ['Auth flow', 'Auth flow (MCP)']) expect((await run([cli, 'monitor', 'remove', name, '-w', ws.root], env)).status).toBe(0);
     // nine CLI processes: slow on a loaded CI machine
   }, 90_000);
 
@@ -570,7 +587,7 @@ describe('example workspace (end-to-end)', () => {
     store.saveEnvironment({ ...dev, id: 'dev-copy', name: 'Dev copy' });
     store.close();
     const r = await run([cli, 'env', 'diff', 'Development', 'Dev copy', '--request', 'Health', '-w', ws.root, '--json'], env);
-    const d = JSON.parse(r.stdout);
+    const d = cliData(r.stdout);
     expect(d).toMatchObject({ request: 'Health', left: { environment: 'Development', status: 200 }, right: { environment: 'Dev copy', status: 200 } });
     // the only body difference is the server's clock
     expect(d.diff.body.changes.map((c: { path: string }) => c.path)).toEqual(['$.time']);
@@ -622,6 +639,58 @@ describe('example workspace (end-to-end)', () => {
       p.kill();
     }
   });
+  it('CLI: `testpion serve flows` runs a flow behind its webhook against the demo API', async () => {
+    mkdirSync(join(ws.root, 'tests', 'hooks'), { recursive: true });
+    writeFileSync(
+      join(ws.root, 'tests', 'hooks', 'echo-pet.yaml'),
+      [
+        'name: Echo pet',
+        'webhook: { path: /hooks/echo-pet, secret: "{{$env.TP_HOOK_SECRET}}" }',
+        'expose:',
+        '  tool: echo_pet',
+        '  inputs: [{ name: pet }]',
+        'output: { pet: "{{petBack}}" }',
+        'tests:',
+        '  - id: echo',
+        '    name: Echo',
+        '    type: http',
+        '    method: GET',
+        '    url: "{{baseUrl}}/echo?pet={{pet}}"',
+        '    extract: { petBack: $.query.pet }',
+        '    assertions: [{ type: status, expected: 200 }]',
+        '',
+      ].join('\n'),
+    );
+    const p = spawn(process.execPath, [cliPath, 'serve', 'flows', '-w', ws.root, '-e', 'Development', '--port', '0', '--json'], {
+      env: { ...process.env, NO_COLOR: '1', TESTPION_HOME: join(dir, 'home'), TP_HOOK_SECRET: 'hush' },
+    });
+    try {
+      const listening = await new Promise<{ url: string; hooks: Array<{ path: string; url: string; secret: boolean }> }>((ok, fail) => {
+        let out = '';
+        let err = '';
+        const t = setTimeout(() => fail(new Error(`serve flows did not start: ${out} ${err}`)), 20_000);
+        p.stderr.on('data', (d) => (err += d));
+        p.stdout.on('data', (d) => {
+          out += d;
+          const line = out.split('\n').find((l) => l.includes('"listening"'));
+          if (line) {
+            clearTimeout(t);
+            ok(JSON.parse(line).data); // a --jsonl event line: { schema_version, command, type: 'listening', data }
+          }
+        });
+      });
+      const hook = listening.hooks.find((h) => h.path === '/hooks/echo-pet');
+      expect(hook).toMatchObject({ secret: true, url: `${listening.url}/hooks/echo-pet` });
+      expect((await fetch(hook!.url, { method: 'POST', body: '{"pet":"Rex"}' })).status).toBe(401);
+      const r = await fetch(hook!.url, { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer hush' }, body: '{"pet":"Rex"}' });
+      const b = (await r.json()) as { ok: boolean; output: Record<string, unknown>; steps: Array<{ name: string; status: string }>; runId: string };
+      expect(r.status, JSON.stringify(b)).toBe(200);
+      expect(b).toMatchObject({ ok: true, output: { pet: 'Rex' }, steps: [{ name: 'Echo', status: 'passed' }] });
+      expect(b.runId).toMatch(/^run-/);
+    } finally {
+      p.kill();
+    }
+  });
   it('API coverage: CLI `testpion coverage` and the api_coverage MCP tool', async () => {
     const cli = cliPath;
     const env = { ...process.env, TESTPION_HOME: join(dir, 'home') };
@@ -631,7 +700,7 @@ describe('example workspace (end-to-end)', () => {
     const spec = join(ws.root, 'specs', 'veterinary-api.yaml');
     const r = await run([cli, 'coverage', spec, '-w', ws.root, '--json'], env);
     expect(r.status).toBe(0);
-    const report = JSON.parse(r.stdout);
+    const report = cliData(r.stdout);
     const op = (k: string) => report.operations.find((o: { method: string; path: string }) => `${o.method} ${o.path}` === k);
     expect(op('GET /patients').covered).toBe(true);
     expect(op('POST /patients').testedStatuses).toContain('201');
@@ -683,7 +752,7 @@ describe('example workspace (end-to-end)', () => {
       ],
     });
     const list = await run([cli, 'eval', 'list', '-w', ws.root, '--json'], env);
-    expect(JSON.parse(list.stdout)).toEqual([expect.objectContaining({ name: 'Intent check', folder: 'Intents', cases: 2, evaluators: ['exact-match'] })]);
+    expect(cliData(list.stdout)).toEqual([expect.objectContaining({ name: 'Intent check', folder: 'Intents', cases: 2, evaluators: ['exact-match'] })]);
 
     const out = join(dir, 'eval-out');
     const r = await run([cli, 'eval', 'run', 'intent check', '-w', ws.root, '-o', out, '-q'], env);

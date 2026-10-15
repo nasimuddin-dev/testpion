@@ -1,5 +1,7 @@
 import { call } from './api';
 import { promptText, toastError, useApp } from './store';
+import { openRef } from './lib/open-ref';
+import { reopenClosedTab } from './lib/closed-tabs';
 import { downloadContent, hasNativeDialogs } from './lib/files';
 import { plural, uid } from './lib/format';
 
@@ -29,7 +31,9 @@ export type MenuCommand =
   | 'export-workspace'
   | 'save'
   | 'settings'
-  | 'feedback';
+  | 'feedback'
+  | 'open-recent'
+  | 'reopen-closed-tab';
 
 
 export async function runMenuCommand(cmd: MenuCommand): Promise<void> {
@@ -40,6 +44,11 @@ export async function runMenuCommand(cmd: MenuCommand): Promise<void> {
         return s.openIntent('rest', { newTab: true });
       case 'feedback':
         return s.set({ feedback: {} });
+      // WF-10: the items opened lately (Quick Open with nothing typed), and the tab closed last
+      case 'open-recent':
+        return s.set({ paletteOpen: true, paletteQuery: '' });
+      case 'reopen-closed-tab':
+        return void reopenClosedTab();
       case 'new-graphql':
         return s.setView('graphql');
       case 'new-grpc':
@@ -53,7 +62,7 @@ export async function runMenuCommand(cmd: MenuCommand): Promise<void> {
         if (!name) return;
         const id = uid('col-');
         await call('col.save', { schemaVersion: '1.0', id, name, version: 0, variables: [], items: [], updatedAt: '' });
-        return s.openIntent('collections', { collectionId: id });
+        return void openRef({ kind: 'collection', collectionId: id });
       }
       case 'new-monitor':
         return s.openIntent('monitors', { create: { collectionId: '' } });
@@ -63,7 +72,7 @@ export async function runMenuCommand(cmd: MenuCommand): Promise<void> {
         const env = { id: uid('env-'), name, variables: [{ key: 'baseUrl', value: '', enabled: true }] };
         await call('env.save', { env });
         await s.refreshWorkspace();
-        return s.openIntent('environments', { environmentId: env.id });
+        return void openRef({ kind: 'environment', environmentId: env.id });
       }
       case 'new-workspace': {
         const name = await promptText('New workspace', { message: 'Workspace name', placeholder: 'My API tests', okLabel: 'Create' });

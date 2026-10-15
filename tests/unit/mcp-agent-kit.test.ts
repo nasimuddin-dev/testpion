@@ -75,7 +75,7 @@ describe('MCP server for agents', () => {
     const bad = await client.callTool({ name: 'set_request_checks', arguments: { collection: 'httpbin', request: first.id, checks: [{ type: 'statuss', expected: 200 }] } });
     expect(bad.isError).toBe(true);
     expect((bad.content as Array<{ text: string }>)[0]!.text).toMatch(/Unknown check type: statuss/);
-    const ok = await client.callTool({ name: 'set_request_checks', arguments: { collection: 'httpbin', request: first.id, checks: [{ type: 'latency', max: 9000 }], mode: 'replace' } });
+    const ok = await client.callTool({ name: 'set_request_checks', arguments: { collection: 'httpbin', request: first.id, checks: [{ type: 'latency', max: 9000 }], mode: 'replace', confirm: true } });
     expect(ok.isError).toBeFalsy();
     const saved = store.listCollections().find((c) => c.id === 'httpbin')!;
     const again = JSON.stringify(saved);

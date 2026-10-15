@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync, statSync, watch, type FSWatcher } from 'node:fs';
 import { join, relative, sep } from 'node:path';
-import { writtenByUs } from './fsutil.js';
+import { ownWrite } from './fsutil.js';
 
 /**
  * Watch a workspace folder for changes made outside the app (GIT-103): `git pull`, a branch switch, another editor.
@@ -111,9 +111,11 @@ export function watchWorkspace(root: string, onChange: (changes: WorkspaceChange
       const path = String(name).split(sep).join('/');
       const kind = changeKind(path);
       if (!kind) return;
-      if (writtenByUs(join(root, path)) || opts.isOwnChange?.()) {
-        // the app's own write: the file's new state is the known one
-        const f = fingerprint(path, 'hash');
+      const own = ownWrite(join(root, path));
+      const f = own !== undefined || opts.isOwnChange?.() ? fingerprint(path, 'hash') : undefined;
+      // the app's own write (the file holds exactly what it wrote): the file's new state is the known one. Other bytes
+      // right after a save are someone else's (an editor, git): they are reported like any outside change.
+      if (f !== undefined && (opts.isOwnChange?.() || f === own || f === 'gone')) {
         if (f === 'gone') seen.delete(path);
         else seen.set(path, f);
         return;

@@ -45,8 +45,19 @@ For Claude Code: `claude mcp add testpion -- testpion mcp-server -w /path/to/my-
 | `-w, --workspace` | Workspace name or directory (default: the nearest `workspace.json` above the current directory). |
 | `--read-only` | Only the browsing tools. The agent can read collections and docs but not send requests. |
 | `--profile minimal` | List only the tools of the common jobs (find, send, run, check, import, generate, watch: about 25). For agents that load every listed tool into their context (Cursor, Copilot, Cline); Claude Code loads tools on demand and does well with the full list. `search_tools` finds the others and any tool it names can be called. |
-| `--allow-production` | Allow sending to environments marked as **production**. They are refused by default. |
+| `--allow-production` | Allow sending to environments marked as **production**. They are refused by default. With it, a tool that sends with an `environment` (`send_request`, `run_tests`, `run_collection`, `grpc_call`, `run_monitor` …) takes `allowProduction`: data-changing requests to a production environment go out only when the call passes `allowProduction: true` (ask the user first); reads go out without it. |
 | `--block-private-networks` | Refuse requests to localhost, private networks and cloud metadata addresses (and local stdio MCP servers). Use it when agents you don't fully control get the server. `--allow-host` keeps chosen hosts reachable. |
+
+## How every tool behaves
+
+Every tool keeps the same contract, so an agent learns it once:
+
+- **Descriptions** say what the tool does, then `When to use:`, `When not:` (and which tool instead) and one `Example:` call.
+- **Id parameters are snake_case**: `run_id`, `result_id`, `seed_run_id`, `item_id`, `operation_id`. The older names (`runId` …) are still accepted.
+- **Lists page**: every list tool (`list_*`, `recent_failures`, `request_history`, `git_log`, `debugger_exchanges` …) takes `limit` (default 100, at most 500) and `cursor`. The text result is the page itself (a JSON list, as before); when there is more, a second text block says so and the structured result has `nextCursor` (and `total` when known). Pass `nextCursor` back as `cursor` for the next page.
+- **Big results** (`send_request`, `get_request`, `collection_docs`, the run tools, `run_breakdown`, `git_diff`, `openapi_outline`, `debugger_exchange` …) take `response_format`: `"concise"` (the default) cuts texts over 2,000 characters and lists over 50 items; `"detailed"` keeps up to 20,000 characters and 500 items. Every result is capped (60 KB concise, 400 KB detailed); a cut result has a `truncated` list (what was cut: path, shown, total) and a note `Truncated — … To see more or less: …` naming how to narrow it.
+- **Deleting or overwriting needs consent**: `delete_request`, `flow_remove_step`, `git_resolve`, `git_sync`, `collection_tidy`, `rename_variable`, and `replace_in_collection` with `apply`, `move_variables_to_environments` without `dryRun`, `write_test_file` / `generate_*` with `overwrite`, `set_request_checks` with `mode: "replace"`, `flow_webhook_set` with `remove`, `debugger_rules` remove / clear, `debugger_session` open (replacing), `agents_init` with `force`. Without `confirm: true` nothing changes: the result (an error result, so the agent does not take it for done) has `confirmationRequired: true`, `wouldDo` and, for tools with a dry run, a `preview`. A client that supports MCP **elicitation** is asked instead ("delete_request will delete the request … Go ahead?"): yes goes ahead, no changes nothing.
+- **Output schemas**: `send_request`, `run_tests`, `run_collection`, `run_evaluation`, `run_monitor`, `compare_runs`, `eval_compare`, `lint_tests` and `set_request_checks` declare an `outputSchema`, so clients can read their structured results as data.
 
 ## Tools
 
@@ -66,17 +77,31 @@ Not sure which tool? **`search_tools`** takes what you want to do ("capture traf
 | `parse_request_snippet` | Turn a request copied from browser devtools or docs (cURL for bash or cmd, fetch, fetch (Node.js), PowerShell `Invoke-WebRequest` / `Invoke-RestMethod`) into a structured request: method, URL, params, headers, cookies, body and auth. Nothing is sent or saved. Tokens, keys, cookies and passwords come back as `{{variables}}`, listed in `placeholders`. |
 | `save_request` | Save a request into a collection and folder path (`"Auth / Tokens"`, created as needed; `create: true` makes a new collection). Give a `snippet` or `method` + `url` (+ `headers`, `body`). Secret values are **not** written to the workspace: they become `{{variables}}`, and the result's `placeholders` lists them so the user can add them as secret environment variables. |
 | `request_history` | Earlier responses of a saved request (sent in the app), newest first: id, time, status, duration, size. |
+| `list_evaluations` | [Evaluations](/ai-testing/evaluations) saved in the app (dataset × prompt × model × evaluators): id, name, folder, model, number of cases and evaluator types. |
+| `run_evaluation` | Run a saved evaluation by name or id, like `testpion eval run`: totals, mean scores and per-case results with failed checks; the run is recorded in the workspace history. `limit` runs only the first records (at most 500). |
+| `run_reviews`, `review_result` | A person's verdicts on a finished run's results (good / bad with a note), and rating a result as an agent (marked as an agent's; `rating: null` clears it). A bad rating on a passing result means the checks missed something. |
 | `score_trend` | Each evaluator's mean score run by run (evaluations, AI and RAG tests). |
+| `eval_matrix` | Evaluation runs side by side: cases × variants (a run each, or a column per model), each cell's status and mean score, and with `baseline` regressed / improved / unchanged / new / missing with the score change. One page of rows with per-variant stats and counts per filter; `filter`, `tag`, `search`, `sort` narrow it; `run` + `result` returns one cell's full result. |
+| `eval_compare` | An evaluation run against a baseline run, case by case (like `testpion eval compare`): regressions (stopped passing, or the score dropped by more than `threshold`, default 0.05), improvements, missing and new cases, per-variant pass rate and mean score change; `passed` is false beyond `maxRegressions` (default 0). |
+| `agents_init` | Write (or refresh) [AGENTS.md](#agents-md) in the workspace root from the live workspace (`targets`: also `claude` for a CLAUDE.md pointer, `cursor` for a Cursor rule); only the part between the testpion markers is replaced; returns each file's status (created, updated, unchanged, skipped and why). `dryRun` writes nothing. |
 | `flaky_tests` | Tests whose result keeps changing across the latest runs, or that passed only after a retry. |
 | `test_history` | One test across the latest runs (status, latency, failed checks) with how often its result flipped. |
-| `flow_graph` | A test file as a [flow](/test-runner/integration-testing#see-a-flow): steps (type, method and URL, extracted names, `dependsOn`), edges, the steps in columns, problems (a missing dependency, a cycle), the latest run's status and duration per step, and the diagram as Graphviz DOT. |
-| `flow_add_step` | Add a step to a flow ([the designer's edits](/test-runner/integration-testing#design-a-flow)): one `step` as a test is written, several `steps` (`chain`), or saved requests of a `collection` (`items`: requests or folders, chained, with extracts suggested from saved examples); `after` makes it wait for a step. Comments and line endings of the file stay. |
+| `flow_graph` | A test file as a [flow](/test-runner/integration-testing#see-a-flow): steps (type, method and URL, extracted names, `dependsOn`), edges, the steps in columns, problems (a missing dependency, a cycle), the designer's checks (steps that can never run, cycles, `when:` without a condition, steps waiting for a finally step), the canvas's notes and frames, the latest run's status and duration per step, and the diagram as Graphviz DOT. |
+| `flow_add_step` | Add a step to a flow ([the designer's edits](/test-runner/integration-testing#design-a-flow)): one `step` as a test is written, several `steps` (`chain`), or saved requests of a `collection` (`items`: requests or folders, chained, with extracts suggested from saved examples); `after` makes it wait for a step. Blocks: `delay`, `condition`, `script`, `flow`, `log`, `set` (`set`, `scope`), `assert` (`assertions`, `subject`), `wait` (a request with `until`); any step `if`, `when`, `repeat`, `forEach`, `until`, `finally`, `parallel`. Comments and line endings of the file stay. |
 | `flow_connect` | Make step `to` wait for step `from` (its `dependsOn`); from a condition step, `when` (true or false) puts it on that branch. Refused when it would make a cycle. |
 | `flow_disconnect` | Step `to` no longer waits for step `from`. |
-| `flow_update_step` | Set keys of a step (`set`: url, headers, body, extract, assertions …; `null` removes one); `name` and `id` rename it and every `dependsOn` follows; `dependsOn` replaces what it waits for. |
+| `flow_update_step` | Set keys of a step (`set`: url, headers, body, extract, assertions …; `null` removes one); `name` and `id` rename it and every `dependsOn` follows; `dependsOn` replaces what it waits for. With `id` a list and `set: { parallel: <group> }` (or `null`) or `set: { finally: true }` (or `false`): puts several steps in a parallel group or the Finally lane. |
 | `flow_remove_step` | Remove steps; the steps that waited for them no longer do. |
 | `flow_runs` | A flow file's run history, newest first (status, when, how long, the first failing step); with `runId`, that run's steps in file order with input, output, failed checks and the variables after each step ([Debug a flow](/test-runner/integration-testing#debug-a-flow)). |
+| `flow_data_run` | Run a flow file once per data row ([Run a flow at scale](/test-runner/integration-testing#run-a-flow-at-scale)): `data` a workspace data file (CSV, JSON, JSONL, SQLite with `query`), a `postgres://` / `mysql://` URL or `env:NAME` with `query`, or the file's own `data:`; each row's columns are variables, with `{{$row.column}}` and `{{$index}}`; `concurrency` rows at once, `bail`, `limit`, `environment`. Returns the counts, the first failing rows (values, failing step, error) and an `id` for `flow_scale_result`. |
+| `flow_env_matrix` | Run a flow file in each of `environments` and compare: per environment status, time and failing step; per step status and ms in each (`differingSteps`); per extracted or returned value, its value in each with `differs`. Production environments are refused unless the server allows them. |
+| `flow_scale_result` | A data run or matrix by `id`: a data run's rows in row order a page at a time (`offset`, `limit` up to 500, `status` all / failed / passed / cancelled), one row's step results (`row`), or a matrix (with `environment`: that environment's step results). |
+| `flow_timeline` | A run of a flow file as a timeline (the latest, or `run_id`; or `run_id` alone for a whole run): each step's start, end, wait and the step it waited for, lanes, the critical path, total and waiting time, the slowest steps; `html` writes the self-contained HTML report into the workspace. |
 | `flow_set_output` | Set what a flow returns (`output:` { name: template }); sub-flows get it and exposed flows return it as `output`. |
+| `flow_webhook_set` | Put a flow behind a webhook: its `webhook:` block (`path`, default `/hooks/<file>`; `secret`, best a `{{VARIABLE}}`; `remove: true` takes it away). `testpion serve flows` then runs the flow when its path is called and answers its `output` ([Deploy a flow](/test-runner/integration-testing#deploy-a-flow)). |
+| `save_monitor` | Add or change a [monitor](/test-runner/monitors): a `collection` (and `selection`) or a `testFile` (a flow under `tests/`) run `every` minutes / `15m` / `1h`, with an `environment` and an alert `webhook`. A monitor with the same name is replaced. |
+| `flow_deploy_status` | Where a flow is deployed: `schedule` (a monitor that runs it), `webhook` (path, whether it needs a secret), `mcp` (the tool its `expose:` offers) and `ci` (a pipeline file of the repository runs it; `ciFiles`). |
+| `flow_annotate` | Sticky notes (Markdown) and coloured frames around steps on a flow's canvas (`layout.notes`, `layout.frames`): `add_note`, `update_note`, `remove_note`, `add_frame`, `update_frame`, `remove_frame`; the runner ignores them. |
 | `recent_failures` | The latest failed responses across the workspace (4xx/5xx, transport errors, non-OK gRPC codes, MCP tool errors): time, kind, name, URL, status and duration. |
 | `response_time_stats` | Response-time summary of a saved request's recent responses: count, failed, fastest, mean, median (p50), p95 and slowest (ms). |
 | `collection_timing` | Where a collection's request time went (DNS, TCP, TLS, server, download; new vs reused connections). |
@@ -85,6 +110,8 @@ Not sure which tool? **`search_tools`** takes what you want to do ("capture traf
 | `decode_jwt` | Decode a JSON Web Token (header, claims, issued / expires / not before, seconds left, expired); the signature is not verified. |
 | `compare_runs` | What changed between two runs: new failures, fixed tests, slower tests, new and removed tests and the change of totals; `passed` is false when something regressed. |
 | `list_datasets` | Data files in the workspace's `datasets/` folder (path, format, size; tables of SQLite databases), to pass to `run_collection` as `data`. |
+| `read_dataset` | The first rows of a dataset with its columns and kinds of value and how many records it holds (`limit`; `query` for a SQLite database), so an agent knows which `{{variables}}` a run can use. |
+| `add_dataset_row` | Add one record to a JSONL dataset in `datasets/` (made when missing), e.g. an evaluation case with its `expected` answer. |
 | `list_flows` | The flows (test files and suites with an `expose:` block) this server offers as tools of their own, with their inputs; see [Your flows as tools](#your-flows-as-tools). |
 | `load_history` | Earlier load tests (from the app and `load_test`), newest first: target, virtual users, throughput, error rate, p50 / p95 / p99 and pass rules. |
 | `update_request` | Change a saved REST request: name, method, URL, headers, body, description, scripts. Secrets typed in become `{{variables}}` (listed in `placeholders`), never written. |
@@ -103,13 +130,14 @@ Not sure which tool? **`search_tools`** takes what you want to do ("capture traf
 | `git_log` | Commits of the workspace, of a file or of a collection. |
 | `git_sync` | Pull & push in one step: fetch, pull with a merge when the remote has new commits (collections merge request by request; uncommitted changes are set aside and put back), then push. Returns `pushed`, `up-to-date`, `pulled-nothing-to-push`, or `conflicts` with the files (nothing is pushed then). Not on a read-only server. |
 | `git_propose_commit` | Stage the changes and propose a commit message (after the secret check). It does not commit: the message appears in the app's Git view for a person to commit. Not on a read-only server. See [Keep your workspace in git](/getting-started/git). |
-| `what_needs_attention` | Failing monitors, expiring certificates, the latest failed run, failing requests and flaky tests, most severe first. A good first call. |
+| `what_needs_attention` | Failing monitors, expiring certificates, the latest failed run, failing requests and flaky tests, most severe first, each with a `ref`. A good first call. |
+| `resolve_ref` | Look up a `ref` (below): whether it still exists, its name, and the `testpion://open` link that opens it in the app; when it is gone, why and the nearest thing still there (`next`). |
 | `workspace_activity` | Per-day activity of the workspace (`days`, default 14): requests and failed requests, median response time, test runs and failed tests, requests per type and the slowest requests. |
 | `environment_matrix` | Every variable across every environment: set, empty, missing or disabled in each (statuses only). |
 | `compare_environments` | Differences between two environments: missing keys, different values, disabled variables, secrets set on one side only. Statuses only, never values. |
 | `compare_request_across_environments` | Send a saved request with two environments and diff the responses (status, time, headers, JSON fields); masked; production refused unless allowed. |
-| `ci_config` | A CI pipeline file (GitHub Actions, GitLab CI, Azure Pipelines, Jenkins) that runs a suite, collection or tests, with the CI secrets to create. |
-| `list_monitors` | Monitors (collections on a schedule) with their schedule, last result and next run. |
+| `ci_config` | A CI pipeline file (GitHub Actions, GitLab CI, Azure Pipelines, Jenkins) that runs a suite, collection or tests, with the CI secrets to create. `runId` (or `"last"`: the newest finished run of test files or a collection) runs what that run ran, in its environment. |
+| `list_monitors` | Monitors (collections, test files or flows on a schedule) with their schedule, last result and next run. |
 | `monitor_requests` | Each request of a monitor over its latest runs: median / p95 time, failures and the latest failure. |
 | `monitor_results` | A monitor's recent results, newest first. |
 | `check_certificate` | Connect to a host and read its TLS certificate now: subject, issuer, days left, trusted or why not, protocol. |
@@ -119,14 +147,16 @@ Not sure which tool? **`search_tools`** takes what you want to do ("capture traf
 | `monitor_uptime` | A monitor's uptime per day over the last N days (runs, passed, uptime, slowest p95). |
 | `run_monitor` | Run a monitor now; returns the result and the failed requests. |
 | `compare_responses` | Compare two responses by history id: status, timing, header changes and a field-by-field JSON body diff (`$.path` added / removed / changed). Sensitive values are masked. |
-| `set_environment_variable` | Set plain variables of an environment (optionally creating it). Secret variables are refused. |
+| `set_environment_variable` | Set plain variables of an environment (optionally creating it); `alsoIn` adds them to other environments where they are missing (empty, or the same values with `copyValues`). Secret variables are refused. |
 | `reorder_environments` | Set the order of environments in the environment picker (names or ids, first to last). |
-| `load_test` | Load-test a local URL, a collection or a gRPC method (`grpc: { target, method, message }`) (localhost and private networks only, at most 50 virtual users for 60 seconds; optional warm-up). Returns throughput, latency percentiles, error rate and per-request numbers; `thresholds` (e.g. `["p95<500", "errors<1%"]`) adds pass/fail per rule. |
+| `load_test` | Load-test a local URL, a collection, a flow file (`test_file`: every virtual user runs the whole flow; per-step numbers and `iteration`: runs, failed, p50 / p95) or a gRPC method (`grpc: { target, method, message }`) (localhost and private networks only, at most 50 virtual users for 60 seconds; optional warm-up). Returns throughput, latency percentiles, error rate and per-request numbers; `thresholds` (e.g. `["p95<500", "errors<1%"]`) adds pass/fail per rule. |
 | `export_traces` | Send the newest traces (optionally of one kind) to an OpenTelemetry collector as OTLP, redacted; header values may be `{{variables}}`. |
 | `lint_tests` | What is wrong in test files before they run: unknown test or check types, keys the runner does not read (with the likely key), `dependsOn` ids nobody defines; each with a line. Files, or the text of one file. |
 | `list_tests` | The test files under `tests/` with their tests (id, name, type, tags). |
 | `run_tests` | Run test files (all, or files / folders, filtered by name or tags) like `testpion test`; `rerunFailed` runs only the failures of the last run (or a run id). With one flow file in `paths`, `from` runs from that step on and `seedRunId` seeds the steps before it from that run (alone: replays it from its first failing step). The run is recorded in the workspace history. |
-| `save_test` | Save a collection's REST or GraphQL request as a YAML test file under `tests/`, with its checks. |
+| `run_tests` (results) | Each result has a `ref` to its source (`{ kind: "test", path, step }`); pass `step` (with `paths`) to run one test or step again. |
+| `search_workspace` | Find items by name or content (Quick Open): requests, collections, test files, environments and variables, monitors, history, traces, runs …; each hit has a `ref`. |
+| `save_test` | Save as a YAML test file under `tests/`, with its checks: a saved request (`collection` + `request`), or any item by its `ref` (a folder or a whole collection becomes one file with a test per request, a saved gRPC call or connection, a History entry). Returns `path`, `tests` and the file's `ref`. |
 | `graphql_operation` | Build a valid, ready-to-run operation for a root field of a GraphQL endpoint (introspected): variables with placeholder values and a selection of fields, so agents don't guess field names. |
 | `graphql_subscribe` | Run a GraphQL subscription over WebSocket and return the events received (up to a count or 60 seconds). |
 | `security_review` | Security findings in a collection's requests (typed-in secrets, secrets in URLs, plain http, turned-off TLS checks). |
@@ -140,6 +170,8 @@ Not sure which tool? **`search_tools`** takes what you want to do ("capture traf
 | `collection_tidy` | Duplicate requests, hosts typed into URLs, empty folders and unused variables of a collection; `removeDuplicates`, `removeEmptyFolders`, `removeUnusedVariables` fix them. |
 | `replace_in_collection` | Find and replace across a collection's requests (URLs, params, headers, bodies, auth, scripts, names): a preview, then `apply: true`. |
 | `generate_tests` | A first test suite from an API definition in the workspace: each operation's example and one invalid request, per tag, with a suite. |
+| `generate_flows` | An [integration suite](/test-runner/integration-testing) from an API definition (`spec`) or a collection (`collection`): a flow per resource under `tests/<api>/flows/` (create, read back, update, list, delete, see it gone) with the created id flowing between the steps and the login first, plus a suite file; the result names the environment variables to set. |
+| `api_coverage` | Which operations and documented response codes of an OpenAPI document the workspace's runs (default: the latest) and optionally its history exercised, which were never called, and codes or paths the document doesn't describe. |
 | `generate_dataset` | Rows of test data into `datasets/` from a JSON schema or an API definition operation's request body. |
 | `api_fuzz` | Fuzz an API from its OpenAPI document (local hosts only, DELETE left out unless asked): server errors, invalid input accepted, undocumented statuses. |
 | `openapi_outline` | An OpenAPI document's operations by tag, with parameters, request body, responses (schemas as short type outlines) and the request an import would make; narrow it with `tag` or `operationId`. |
@@ -147,11 +179,16 @@ Not sure which tool? **`search_tools`** takes what you want to do ("capture traf
 | `import_definition` | Import an OpenAPI document, Postman / Insomnia / Bruno / Hoppscotch collection, HAR or .env, from a public link (`url`) or `text`. OpenAPI imports get contract checks. |
 | `import_arazzo` | Import an [Arazzo 1.0](/test-runner/integration-testing#arazzo-workflows-import-and-export) document (`text`, a workspace `file` or a `url`) as flow files under `tests/arazzo/`, one per workflow; its OpenAPI sources are found in the workspace (`fetch_sources: true` downloads http(s) ones). Returns the files and `notes` (what did not come over); `dry_run: true` writes nothing. |
 | `export_arazzo` | A flow file as an Arazzo 1.0 document (`text` as YAML, `document`, `notes`), matched against an OpenAPI `spec` (default: the sources an import noted, else the best-matching spec in `specs/`). |
+| `item_info` | One item's context, as the app's Info panel shows it: the file that holds it, the `{{variables}}` it uses and the latest runs that included it. Takes a ref like `resolve_ref`. |
+| `debugger_save_to_collection` | Captured traffic (`ids`, `since`) or a HAR file (`har`) as saved requests: a new collection (`name`) or added to one (`collection`), a folder per host, path or none (`group`); origins become collection variables, secrets variables listed in `secrets` (never saved). |
+| `flow_from_exchanges` | A flow file from recorded traffic: exchanges `debugger_capture` captured (`ids`, or `since` a time) or a HAR file (`har`); values that flow between requests become extracts and `{{variables}}`, noise is left out, secrets become variables listed in `secrets`. Writes `tests/recorded/<name>.yaml` unless `dry_run` ([Record a flow](/test-runner/integration-testing#record-a-flow)). |
 | `testpion_guide` | How to use the workspace: which tool for which job, how variables resolve, every check type this engine knows (with examples) and the YAML test file format. Agents read it before writing tests. |
 | `set_request_checks` | Add (`mode: append`) or replace the checks of a saved REST or GraphQL request; they then run whenever it is sent, in `run_collection` and in CI. Unknown check types are refused with the list of known ones. |
 | `write_test_file` | Write a YAML or JSON test file under `tests/`. The content is checked first (it must parse as tests or a suite and use known check types), so a broken file never lands in the workspace; an existing file is replaced only with `overwrite: true`. |
 
 `save_request`, `import_definition`, `import_arazzo`, `rename_variable`, `reorder_environments`, `set_request_checks` and `write_test_file` change workspace files, `load_test` generates load, and `--read-only` hides them together with the tools that send requests.
+
+Results that name an item carry a `ref`, the same object as in the app and in CLI `--json` output: `{ "kind": "run", "runId": "run-8f2c1a" }`, `{ "kind": "request", "collectionId": …, "requestId": … }`, `{ "kind": "history", "historyId": … }` … (`run_tests`, `recent_failures`, `what_needs_attention`, `git_status`, `git_diff`, `debugger_exchanges`). Hand one to `resolve_ref`, or to `testpion open <ref>` to bring the app to it; the kinds are listed in [Finding your way around](/getting-started/finding-your-way#for-ai-agents-ref).
 
 Every tool has a **title** and **annotations** (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`), so agents can run the read-only ones without asking and ask before the ones that send requests or change files. Results come as JSON text and as **structured content** (a list is wrapped as `{ "items": [...] }`).
 
@@ -232,13 +269,20 @@ The read-only server offers `investigate_failures` and `api_health_report`.
 
 ## AGENTS.md
 
-Coding agents (Claude Code, Codex, Cursor, Copilot) read `AGENTS.md` first when they open a folder. **Write AGENTS.md** in Settings ▸ AI agents, or `testpion agents-md -w <workspace>`, adds a section to the workspace's `AGENTS.md` (or creates it): how to reach the workspace over MCP and the CLI, the check types and the test file format. What you wrote around it stays; writing it again refreshes only the TestPion part. It holds no paths of your machine, so it can be committed with the workspace.
+Coding agents (Claude Code, Codex, Cursor, Copilot) read `AGENTS.md` first when they open a folder. **Write AGENTS.md** (**Update AGENTS.md** once there is one) in **Settings ▸ AI agents (MCP)**, `testpion agents init -w <workspace>`, or the `agents_init` tool writes it into the workspace root from the live workspace:
+
+- what the folders hold, the collections (with their request counts), the environments **by name only** (which are production), the test files, suites and flows exposed as tools, saved evaluations, datasets and API definitions;
+- the CLI commands to run tests, suites, collections, flows and evaluations, with the exit codes (the same list `testpion agent-info` prints);
+- the MCP server command and client config, how to add a request, a test and a flow, the secrets rules (never commit or write a secret: secret values live in the app's secret store or `TESTPION_SECRET_<NAME>`) and the production rules (`--allow-production`);
+- the check types and the test file format.
+
+Tick **Also CLAUDE.md** (a one-line pointer: `See @AGENTS.md …`) and **Also a Cursor rule** (`.cursor/rules/testpion.mdc`) for those agents; `--targets agents,claude,cursor` on the command line. Only the part between `<!-- testpion:begin -->` and `<!-- testpion:end -->` is TestPion's: what you wrote around it stays, and writing it again refreshes only that part (the result says per file: created, updated, unchanged or skipped and why). A file with broken markers is left alone unless `--force` (the tool: `force` with `confirm: true`); `--dry-run` (the tool: `dryRun`) reports what would be written and writes nothing. No variable value and no path of your machine is written, so the files can be committed with the workspace.
 
 ## What agents can and can't see
 
 - Output uses the workspace's redaction rules. Sensitive headers, JSON fields and known secret values are masked, and environment values are never listed.
 - Secrets resolve inside TestPion when a request is sent. The agent sees `{{accessToken}}`, never the token. In the CLI, secrets come from `TESTPION_SECRET_*` environment variables (see [Secrets](/security/secrets)).
-- Requests go only where your collections and environments point. Production environments need `--allow-production`, and `--read-only` removes sending altogether.
+- Requests go only where your collections and environments point. Production environments need `--allow-production` on the server, and a data-changing request to one also needs `allowProduction: true` on the call; `--read-only` removes sending altogether.
 
 ## llms.txt
 

@@ -19,7 +19,7 @@ For CI servers and scripts, install the [`testpion` CLI](/installation/cli).
 
 ## Try it with the demo servers
 
-The repository includes local demo servers (REST, a SOAP service, GraphQL, an OpenAI-compatible mock LLM, WebSocket, Socket.IO, gRPC, an MQTT broker and an MCP server) and an example workspace with 22 tests:
+The repository includes local demo servers (REST, a SOAP service, GraphQL, an OpenAI-compatible mock LLM, WebSocket, Socket.IO, gRPC, an MQTT broker, a Kafka broker and an MCP server) and an example workspace whose regression suite runs 29 tests:
 
 ```bash
 git clone https://github.com/nasimuddin-dev/testpion.git
@@ -27,7 +27,7 @@ cd testpion && npm ci && npm run build
 node examples/servers/demo-servers.mjs
 ```
 
-Open the `examples/veterinary-workspace` folder from the workspace menu (**Open folder…**), then continue with [your first request](/getting-started/first-request).
+Open the `examples/veterinary-workspace` folder from the workspace menu (**Open folder**, or **File ▸ Open Workspace Folder…**), then continue with [your first request](/getting-started/first-request).
 
 ## Where data lives
 

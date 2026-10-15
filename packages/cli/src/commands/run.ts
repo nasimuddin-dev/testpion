@@ -1,10 +1,11 @@
 /** Commands that run things: test files, suites, collections and load tests; re-generating reports. */
-import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { Command, Option } from 'commander';
 import {
   isSuiteFile,
   lintTestFile,
+  webhookFlows,
   WorkspaceManager,
   collectionLoadTarget,
   parseGrpcTarget,
@@ -16,18 +17,30 @@ import {
   loadRunRecord,
   Redactor,
   writeReports,
+  testFileRef,
+  productionAllowed,
   type LoadTarget,
 } from '@testpion/core';
 import { hasTemplate } from '@testpion/shared';
-import { EXIT, green, red, yellow, dim, bold, CliError, printJson, collectVar, withWorkspace, cliContext, requireCollection, readResults, printLoad } from '../shared.js';
+import { EXIT, green, red, yellow, dim, bold, CliError, printJson, collectVar, withWorkspace, cliContext, requireCollection, readResults, printLoad, openWorkspace } from '../shared.js';
 import { runWatching, watchTargets } from '../watch.js';
+import { executeScaleRun, isScaleRun, type ScaleCliOptions } from './flow-scale.js';
 import { type RunCliOptions, executeRun, type CollectionCliOptions, executeCollectionRun, executeSend, resolveSelection, runOptions } from '../run.js';
 
 export function registerRunCommands(program: Command): void {
 
-  runOptions(program.command('test').description('run tests from files, directories, globs or a *.suite.yaml').argument('[paths...]', 'test files/dirs/globs')).action(async (paths: string[], o: RunCliOptions & { watch?: boolean }) => {
-    process.exitCode = o.watch ? await runWatching(watchTargets(o.workspace, paths), () => executeRun(paths, o)) : await executeRun(paths, o);
-  });
+  runOptions(program.command('test').description('run tests from files, directories, globs or a *.suite.yaml; one flow file once per data row (--data) or in several environments (--env-matrix)').argument('[paths...]', 'test files/dirs/globs'))
+    .option('--data [file]', "one flow file: run it once per row of this data (CSV, JSON, JSONL, a SQLite database, postgres://… / mysql://… or env:NAME with --data-query), each row's fields as variables with $row and $index; without a value, the file's own data:")
+    .option('--data-query <sql>', 'with a database as --data: the SELECT whose rows are the runs (read-only)')
+    .option('--data-limit <n>', 'with --data: at most this many rows')
+    .option('--data-concurrency <n>', 'with --data: rows run at once (default 1; --bail stops at the first failing row)')
+    .option('--env-matrix <names...>', 'one flow file: run it in each of these environments (dev,staging,prod, or -e repeated) and compare step by step')
+    .option('--json', 'with --data or --env-matrix: print the rows / the matrix as JSON (for scripts and AI agents)')
+    .option('--allow-skipped', 'with --data or --env-matrix: a run where nothing ran (every step skipped) exits 0 instead of 1')
+    .action(async (paths: string[], o: RunCliOptions & ScaleCliOptions & { watch?: boolean }) => {
+      if (isScaleRun(o)) return void (process.exitCode = await executeScaleRun(paths, o));
+      process.exitCode = o.watch ? await runWatching(watchTargets(o.workspace, paths), () => executeRun(paths, o)) : await executeRun(paths, o);
+    });
   program
     .command('lint-tests')
     .description('check test files before running them: unknown test or check types, keys the runner does not read (typos), dependsOn ids nobody defines; exit 1 when there are errors')
@@ -56,7 +69,9 @@ export function registerRunCommands(program: Command): void {
           const rel = relative(tests, f);
           return (!rel.startsWith('..') && !isAbsolute(rel) ? rel : relative(process.cwd(), f) || f).split(sep).join('/');
         };
-        const results = files.map((f) => ({ file: shownName(f), problems: lintTestFile(readFileSync(f, 'utf8'), { file: f, suite: isSuiteFile(f) }) })).filter((x) => x.problems.length);
+        // webhook paths are checked across the workspace (two flows on one path)
+        const webhooks = webhookFlows(tests);
+        const results = files.map((f) => ({ file: shownName(f), problems: lintTestFile(readFileSync(f, 'utf8'), { file: f, suite: isSuiteFile(f), webhooks }) })).filter((x) => x.problems.length);
         const errors = results.reduce((n, x) => n + x.problems.filter((p) => p.severity === 'error').length, 0);
         const total = results.reduce((n, x) => n + x.problems.length, 0);
         if (o.json) printJson({ files: files.length, problems: total, errors, results });
@@ -127,11 +142,13 @@ export function registerRunCommands(program: Command): void {
     });
   program
     .command('load')
-    .description('run a load test against a URL or a collection (safeguarded: local hosts only unless --allow-remote)')
+    .description('run a load test against a URL, a collection or a flow file (safeguarded: local hosts only unless --allow-remote)')
     .argument('[url]', 'target URL (or use --collection); with --grpc, the gRPC server address (host:port, grpcs://host:port for TLS)')
     .option('--collection <nameOrId>', 'load-test a collection: every virtual user sends its requests in order, again and again')
-    .option('-w, --workspace <nameOrPath>', 'workspace (for --collection, --saved and {{variables}})')
-    .option('-e, --environment <name>', 'environment (for --collection, --saved and {{variables}})')
+    .option('--test-file <file>', 'load-test a flow (a test file): every virtual user runs the whole flow again and again, its own variables and cookies; numbers per step and per run of the flow')
+    .option('--think <ms>', 'pause of each virtual user between passes / runs of the flow (think time)')
+    .option('-w, --workspace <nameOrPath>', 'workspace (for --collection, --test-file, --saved and {{variables}})')
+    .option('-e, --environment <name>', 'environment (for --collection, --test-file, --saved and {{variables}})')
     .option('--folder <nameOrId...>', 'with --collection: only these folders or requests')
     .option('--warm-up', 'with --collection: run it once first with scripts (e.g. to log in), then use the variables they set')
     .option('--grpc <method>', 'load-test a gRPC method (package.Service/Method) on the server given as [url]; -d is the request message as JSON, -H metadata')
@@ -151,7 +168,7 @@ export function registerRunCommands(program: Command): void {
     .action(async (urlArg: string | undefined, o, cmd: Command) => {
       let url = urlArg;
       if (o.saved) url = await applySavedLoadTest(o, cmd, url);
-      if (!url && !o.collection) throw new CliError('Give a URL, --collection or --saved <name>', EXIT.CONFIG_ERROR);
+      if (!url && !o.collection && !o.testFile) throw new CliError('Give a URL, --collection, --test-file or --saved <name>', EXIT.CONFIG_ERROR);
       // thresholds are checked before the test runs, so a typo doesn't waste a run
       const rules = ((o.threshold as string[] | undefined) ?? []).map((r) => {
         try {
@@ -205,37 +222,46 @@ export function registerRunCommands(program: Command): void {
           }
         }));
       }
+      // a flow: the engine services stay open while the load runs (each virtual user's runs start from their variables)
+      const flowRun = o.testFile ? await openFlowLoad(String(o.testFile), o.workspace, o.environment) : undefined;
+      if (flowRun) {
+        target = flowRun.target;
+        isProduction = flowRun.isProduction;
+      }
       let last = 0;
       const startedAt = new Date().toISOString();
       const snap = await runLoadTest(
         {
           target,
           environmentIsProduction: isProduction,
+          allowProduction: productionAllowed(), // --allow-production
           virtualUsers: Number(o.vus),
           durationSec: Number(o.duration),
           rampUpSec: Number(o.rampUp),
           rampDownSec: Number(o.rampDown),
           requestsPerSecond: o.rps ? Number(o.rps) : undefined,
+          thinkTimeMs: o.think ? Number(o.think) : undefined,
           allowRemoteHosts: !!o.allowRemote,
           maxVirtualUsers: settings.loadTesting.maxVirtualUsers,
         },
         {
+          ...(flowRun ? { services: flowRun.services, testsDir: flowRun.testsDir } : {}),
           onSnapshot: (s) => {
             if (s.done || Date.now() - last < 1000) return;
             last = Date.now();
             console.log(dim(`[${s.elapsedSec}s] vus=${s.activeVUs} rps=${s.currentRps} total=${s.requests} errors=${s.errors} p95=${s.latency.p95}ms`));
           },
         },
-      );
+      ).finally(() => flowRun?.dispose());
       printLoad(snap);
       const checked = rules.length ? evaluateThresholds(rules, snap) : undefined;
       if (checked) {
         console.log(bold('\nThresholds'));
         for (const t of checked) console.log(`  ${t.passed ? green('✓') : red('✗')} ${t.expr} ${dim(`(actual ${t.actual ?? 'n/a'}${t.percent ? '%' : ''})`)}`);
       }
-      if (o.json) writeFileSync(o.json, JSON.stringify({ ...snap, ...(checked ? { thresholds: checked } : {}) }, null, 2));
+      if (o.json) writeFileSync(o.json, JSON.stringify({ environment: o.environment ?? null, ...snap, ...(checked ? { thresholds: checked } : {}) }, null, 2));
       // in a workspace, the run joins its load test history (the app's Load view and the load_history MCP tool)
-      if ((o.workspace || o.saved || o.collection) && snap.requests) {
+      if ((o.workspace || o.saved || o.collection || o.testFile) && snap.requests) {
         try {
           await withWorkspace(o.workspace, (store, ephemeral) => {
             if (ephemeral) return;
@@ -246,7 +272,9 @@ export function registerRunCommands(program: Command): void {
                     ? `gRPC ${target.request.target} ${target.request.method}`
                     : target.kind === 'sequence'
                       ? `collection ${String(o.collection)}${o.folder ? ` / ${String(o.folder)}` : ''}`
-                      : 'load test';
+                      : target.kind === 'flow'
+                        ? `test file ${target.file}`
+                        : 'load test';
               recordLoadRun(
                 store,
                 loadRunRecord(snap, {
@@ -362,4 +390,31 @@ async function applySavedLoadTest(o: Record<string, unknown>, cmd: Command, url:
   if (!fromCli('threshold') && d.thresholds?.trim()) o.threshold = d.thresholds.split(/[,\n]/).map((r) => r.trim()).filter(Boolean);
   console.log(dim(`Saved load test "${item.name}"`));
   return url;
+}
+
+/** A flow as a load target: the file inside tests/, and the engine context its runs use (closed after the test). */
+async function openFlowLoad(file: string, workspace: string | undefined, environment: string | undefined) {
+  const { store, ephemeral } = openWorkspace(workspace, existsSync(resolve(file)) ? dirname(resolve(file)) : undefined, new WorkspaceManager());
+  try {
+    const rel = testFileRef(store, file);
+    const abs = store.safePath(rel, store.path('tests'));
+    if (!existsSync(abs)) throw new CliError(`No such test file in tests/: ${file}`, EXIT.CONFIG_ERROR);
+    const ctx = cliContext(store, environment);
+    console.log(dim(`Each virtual user runs tests/${rel} again and again`));
+    return {
+      target: { kind: 'flow', file: rel } as LoadTarget,
+      isProduction: !!ctx.environment?.isProduction,
+      services: ctx.services,
+      testsDir: store.path('tests'),
+      dispose: async () => {
+        await ctx.dispose();
+        store.close();
+        if (ephemeral) rmSync(ephemeral, { recursive: true, force: true });
+      },
+    };
+  } catch (e) {
+    store.close();
+    if (ephemeral) rmSync(ephemeral, { recursive: true, force: true });
+    throw e;
+  }
 }

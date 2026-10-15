@@ -50,6 +50,23 @@ describe('workspace watcher', () => {
     }
   });
 
+  it('reports a change another program makes right after the app saved the same file', async () => {
+    mkdirSync(join(root, 'tests'), { recursive: true });
+    const batches: WorkspaceChange[][] = [];
+    const stop = watchWorkspace(root, (b) => batches.push(b), { debounceMs: 150 });
+    try {
+      await sleep(200);
+      atomicWrite(join(root, 'tests', 'flow.yaml'), 'name: Flow\ntests: []\n'); // the app's save
+      await sleep(300);
+      expect(batches.flat().map((c) => c.path)).not.toContain('tests/flow.yaml');
+      writeFileSync(join(root, 'tests', 'flow.yaml'), 'name: Flow\ntests: [ { name: x, url: http://x } ]\n'); // an editor, within the 2 s
+      await sleep(800);
+      expect(batches.flat().map((c) => c.path)).toContain('tests/flow.yaml');
+    } finally {
+      stop();
+    }
+  });
+
   it('does not report a file that was only read (Windows reports the access time as a change)', async () => {
     mkdirSync(join(root, 'tests'), { recursive: true });
     const file = join(root, 'tests', 'rag.yaml');

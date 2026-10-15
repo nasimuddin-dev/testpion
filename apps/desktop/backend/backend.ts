@@ -4,7 +4,6 @@
  * behind a local HTTP bridge. All protocol execution happens in @testpion/core — the same
  * engine the CLI uses — so the UI thread never performs network or test execution.
  */
-import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import {
@@ -83,7 +82,6 @@ import {
   DEFAULT_BASE_URLS,
   type AppSettings,
   type CheckContext,
-  type CollectionNode,
   type HttpRequestSpec,
   type LoadTestConfig,
   type LogRecord,
@@ -91,6 +89,7 @@ import {
   type RunEvent,
   type RunOptions,
   type RunSummary,
+  type RunOrigin,
   type DatasetRecord,
   type SecretCipher,
   type SecretStore,
@@ -115,6 +114,8 @@ import {
   describeChanges,
   watchWorkspace,
   requireEnvironment,
+  assertProductionStep,
+  isDataChangingMethod,
 } from '@testpion/core';
 import { appHandlers } from './handlers/app.js';
 import { workspaceHandlers } from './handlers/workspace.js';
@@ -134,17 +135,25 @@ import { debuggerRulesHandlers } from './handlers/debugger-rules.js';
 import { externalSecretsHandlers, prefetchSecretsFor } from './handlers/external-secrets.js';
 import { fuzzHandlers } from './handlers/fuzz.js';
 import { flowDebugHandlers } from './handlers/flow-debug.js';
+import { debuggerFlowHandlers } from './handlers/debugger-flow.js';
+import { terminalHandlers, createTerminals, type TerminalHost, type TerminalManager } from './handlers/terminal.js';
+import { flowDeployHandlers, stopFlowWebhooks } from './handlers/flow-deploy.js';
+import { flowScaleHandlers, cancelScaleRuns } from './handlers/flow-scale.js';
+import { evalMatrixHandlers } from './handlers/eval-matrix.js';
 import { checkRpcParams, guardHandler } from './rpc-params.js';
+import { forgetProductionSessions, guardProduction } from './production-guard.js';
+import { VizPages } from './viz-pages.js';
+import { clipConsole, consoleFromResult, consoleProtocol, consoleRefs, pushConsole, type ConsoleEntry } from './console-log.js';
 import { hasTemplate } from '@testpion/shared';
 import { assistantInstruction } from './assistant-tasks.js';
-import { readRunData } from './run-data.js';
+import { findNodeName, readRunData } from './run-data.js';
 
 /** How long after start the monitor scheduler and the background git fetch begin (the window's first paint comes first). */
 const SCHEDULERS_DELAY_MS = 3000;
 /** What the window reads at start-up: nothing of it goes over the network, so it never waits for the HTTP stack to load. */
-const LOCAL_READS = /^(app\.info|settings\.get|ws\.(current|list|examplesAdded)|col\.(list|tree|get)|env\.list|lib\.get|mcp\.servers|openapi\.specs|datasets\.list|stats\.\w+|debug\.status|git\.(status|changes|log)|monitor\.list|history\.list|runs\.list|traces\.list)$/;
+const LOCAL_READS = /^(app\.info|settings\.get|ws\.(current|list|examplesAdded)|col\.(list|tree|get)|env\.list|lib\.get|mcp\.servers|openapi\.specs|datasets\.list|stats\.\w+|debug\.status|git\.(status|changes|log)|monitor\.list|history\.list|runs\.list|traces\.list|terminal\.\w+)$/;
 /** RPC methods that change what the workspace lists (collections, saved items, environments, monitors, MCP servers). */
-const DATA_CHANGING = /^(col\.(save|delete|import\w*|move\w*|duplicate\w*)|lib\.save|env\.(save|delete|reorder|import\w*)|vars\.setInEnvironment|monitor\.(save|delete)|mcp\.(saveServers|connect|disconnect)|trash\.restore|ws\.(open|import\w*|openExamples))$/;
+const DATA_CHANGING = /^(col\.(save|delete|import\w*|move\w*|duplicate\w*)|lib\.save|env\.(save|delete|reorder|import\w*)|vars\.setInEnvironment|monitor\.(save|delete)|mcp\.(saveServers|connect|disconnect)|trash\.restore|debug\.saveToCollection|ws\.(open|import\w*|openExamples))$/;
 
 export interface BackendHost {
   appDir: string;
@@ -160,6 +169,8 @@ export interface BackendHost {
   noMonitors?: boolean;
   /** How to start this app as an MCP server (`<command> <args> --mcp-server -w …`); without it agents use the CLI. */
   mcpCommand?: { command: string; args: string[] };
+  /** Real shells for the Terminal panel (desktop only: node-pty); its presence is `capabilities.shell` (terminal.ts). */
+  terminal?: TerminalHost;
 }
 
 export type Handler = (params: any) => Promise<unknown> | unknown;
@@ -171,29 +182,7 @@ interface RunState {
   done: boolean;
 }
 
-const CONSOLE_MAX = 500;
-const CONSOLE_BODY_CHARS = 16_000;
-
-/** One line of the Postman-style console. Values are redacted before they are stored. */
-export interface ConsoleEntry {
-  id: string;
-  time: string;
-  source: 'request' | 'run';
-  /** Protocol; absent means HTTP. */
-  kind?: 'graphql' | 'mcp' | 'websocket';
-  run?: string;
-  name: string;
-  method: string;
-  url: string;
-  status?: number | string;
-  durationMs?: number;
-  size?: number;
-  request?: { headers: Array<[string, string]>; body?: string };
-  response?: { headers: Array<[string, string]>; body?: string };
-  logs: Array<{ phase: 'pre-request' | 'test'; message: string }>;
-  error?: string;
-  failedChecks?: number;
-}
+export type { ConsoleEntry } from './console-log.js';
 
 export type { AiChatParams, CollectionRunParams, EvalRunParams, GqlSendParams, HttpSendParams } from './params.js';
 import type { AiChatParams, CollectionRunParams, EvalRunParams, GqlSendParams, HttpSendParams } from './params.js';
@@ -227,7 +216,7 @@ export class Backend {
   /** Running mock servers by collection id. */
   mocks = new Map<string, MockServer>();
   /** Rendered tp.visualizer pages by id (served on an isolated origin: tpviz:// or /__aps/viz/). */
-  private vizPages = new Map<string, string>();
+  private vizPages = new VizPages();
   /** The GraphQL mock started from the GraphQL view (one at a time). */
   gqlMock?: GraphQLMockServer;
   /** Running GraphQL subscriptions by id. */
@@ -242,6 +231,7 @@ export class Backend {
   monitorScheduler: MonitorScheduler;
   /** Fetches the open workspace's remote in the background and says when it has new commits (git-autofetch.ts). */
   gitAutoFetch = new GitAutoFetch(this);
+  terminals: TerminalManager;
   readonly handlers: Handlers;
 
   /** Counts the `data.changed` events (anything saved, imported, deleted, changed on disk): caches key on it. */
@@ -270,6 +260,7 @@ export class Backend {
       if (this.logBuffer.length > 500) this.logBuffer.shift();
       this.host.emit('log', rec);
     });
+    this.terminals = createTerminals(this);
     this.handlers = this.buildHandlers();
     this.applyProxy();
     if (this.manager.settingsProblem) this.logger.warn(`Settings were reset to defaults: ${this.manager.settingsProblem}`);
@@ -418,13 +409,17 @@ export class Backend {
   openStore(path: string): void {
     // the new workspace opens first: when it is refused (not a TestPion folder) the open one stays as it was
     const next = WorkspaceStore.open(path);
+    if (this.store && this.store.root !== next.root) this.terminals?.dispose('workspace');
     this.store?.close();
     for (const s of this.mcpSessions.values()) void s.close();
     this.mcpSessions.clear();
+    forgetProductionSessions(this);
     for (const m of this.mocks.values()) void m.close();
     this.mocks.clear();
     void this.gqlMock?.close();
     this.gqlMock = undefined;
+    void stopFlowWebhooks(this); // it served the old workspace's flows
+    cancelScaleRuns(this); // data runs and matrices of the old workspace
     this.store = next;
     this.watchStore(this.store.root);
     this.currentValues = new CurrentValues(join(this.host.appDir, 'current-values', `${this.store.id}.json`), this.secrets, this.store.id);
@@ -465,33 +460,9 @@ export class Backend {
     return { running: false, routes: view(routes) };
   }
 
-  /** Console entry for an MCP or WebSocket action; bodies are redacted and clipped. */
-  consoleProtocol(
-    kind: 'mcp' | 'websocket',
-    redactor: Redactor,
-    e: { name: string; method: string; url: string; status?: string; durationMs?: number; request?: unknown; response?: unknown; error?: string; failedChecks?: number; logs?: string[] },
-  ): void {
-    const body = (v: unknown) => {
-      if (v === undefined) return undefined;
-      const t = typeof v === 'string' ? redactor.redactString(v) : JSON.stringify(redactor.redact(v), null, 2);
-      return t.length > CONSOLE_BODY_CHARS ? `${t.slice(0, CONSOLE_BODY_CHARS)}… [${t.length - CONSOLE_BODY_CHARS} more characters]` : t;
-    };
-    this.consoleEntry({
-      id: shortId('c-'),
-      time: new Date().toISOString(),
-      source: 'request',
-      kind,
-      name: e.name,
-      method: e.method,
-      url: e.url,
-      status: e.status,
-      durationMs: e.durationMs,
-      request: e.request !== undefined ? { headers: [], body: body(e.request) } : undefined,
-      response: e.response !== undefined ? { headers: [], body: body(e.response) } : undefined,
-      logs: (e.logs ?? []).map((message) => ({ phase: 'test' as const, message: redactor.redactString(message) })),
-      error: e.error && redactor.redactString(e.error),
-      failedChecks: e.failedChecks,
-    });
+  /** Console entry for an MCP or WebSocket action (console-log.ts). */
+  consoleProtocol(kind: 'mcp' | 'websocket', redactor: Redactor, e: Parameters<typeof consoleProtocol>[3]): void {
+    consoleProtocol(this, kind, redactor, e);
   }
 
   /** Where an MCP server runs, for the console: the URL or the command line, redacted. */
@@ -547,69 +518,16 @@ export class Backend {
     return { download: { name, content: data.toString('base64'), encoding: 'base64', type: 'application/octet-stream' } };
   }
 
-  /**
-   * Keep a rendered visualization for its isolated page: the template's HTML plus `tp.getData()`
-   * (and `pm.getData()` for templates written for Postman). Returns a random id that acts as the
-   * page's access key.
-   */
-  private publishVisualization(html: string, data: unknown): string {
-    const id = randomBytes(16).toString('hex');
-    const json = JSON.stringify(data ?? {}).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
-    const page = `<!doctype html><html><head><meta charset="utf-8"><style>body{font:14px/1.5 system-ui,-apple-system,'Segoe UI',sans-serif;color:#1f2230;margin:16px}table{border-collapse:collapse}th,td{border:1px solid #d9dbe3;padding:4px 10px;text-align:left}th{background:#f3f4f8}</style><script>(function(){var d=${json};var api={getData:function(cb){cb(null,d)}};window.pm=api;window.tp=api;})();</script></head><body>${html}</body></html>`;
-    this.vizPages.set(id, page);
-    while (this.vizPages.size > 30) this.vizPages.delete(this.vizPages.keys().next().value!);
-    return id;
-  }
-
   /** A visualization page (for the host's isolated origin), or undefined. */
   visualizationPage(id: string): string | undefined {
-    return /^[0-9a-f]{32}$/.test(id) ? this.vizPages.get(id) : undefined;
+    return this.vizPages.page(id);
   }
 
-  /**
-   * Security policy of visualization pages: scripts inline or from well-known CDNs (Chart.js …), no
-   * network access (nothing can leave), images and fonts only inline. The page is also sandboxed.
-   */
-  static readonly VIZ_CSP =
-    "default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://unpkg.com; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none'; form-action 'none'; base-uri 'none'";
+  /** Security policy of visualization pages (viz-pages.ts). */
+  static readonly VIZ_CSP = VizPages.CSP;
 
   private consoleEntry(e: ConsoleEntry): void {
-    this.consoleBuffer.push(e);
-    if (this.consoleBuffer.length > CONSOLE_MAX) this.consoleBuffer.splice(0, this.consoleBuffer.length - CONSOLE_MAX);
-    this.host.emit('console', e);
-  }
-
-  /** Requests made by runs (test runner, Collection Runner) appear in the console too, without bodies. */
-  private consoleFromResult(r: TestResult, runName: string, redactor: Redactor): void {
-    if (r.type !== 'http' && r.type !== 'graphql') return;
-    const m = (r.metadata ?? {}) as {
-      url?: string;
-      method?: string;
-      size?: number;
-      preRequestLogs?: string[];
-      scriptLogs?: string[];
-      sentRequests?: Array<{ method: string; url: string; status?: number; error?: string; durationMs?: number }>;
-    };
-    const status = r.checks.find((c) => c.type === 'status')?.actual;
-    this.consoleEntry({
-      id: r.id,
-      time: new Date().toISOString(),
-      source: 'run',
-      run: runName,
-      name: r.name,
-      method: m.method ?? (r.type === 'graphql' ? 'POST' : 'GET'),
-      url: m.url ?? r.input ?? '',
-      status: typeof status === 'number' ? status : r.error ? r.error.kind : r.status,
-      durationMs: r.latencyMs,
-      size: m.size,
-      logs: [
-        ...(m.preRequestLogs ?? []).map((message) => ({ phase: 'pre-request' as const, message: redactor.redactString(message) })),
-        ...(m.scriptLogs ?? []).map((message) => ({ phase: 'test' as const, message: redactor.redactString(message) })),
-        ...(m.sentRequests ?? []).map((s) => ({ phase: 'test' as const, message: `tp.sendRequest ${s.method} ${s.url} → ${s.error ? `error: ${s.error}` : `${s.status} (${s.durationMs} ms)`}` })),
-      ],
-      error: r.error?.message,
-      failedChecks: r.checks.filter((c) => !c.passed).length,
-    });
+    pushConsole(this, e);
   }
 
   get ws(): WorkspaceStore {
@@ -629,7 +547,7 @@ export class Backend {
       await prefetchSecretsFor(this, params); // the environment's secret manager references, before they're needed
       // the proxy settings apply from the first method that may go over the network (start-up's reads don't wait)
       if (!LOCAL_READS.test(method)) await ensureProxyApplied();
-      const r = await h(params ?? {});
+      const r = await guardProduction(this, method, params, async () => h(params ?? {})); // WF-06: production needs consent
       if (own) this.lastOwnChange = Date.now();
       this.logger.trace(`rpc ${method}`, { ms: Math.round(performance.now() - t0) });
       // the Collections explorer (and anything else listing workspace items) refreshes on this
@@ -652,7 +570,8 @@ export class Backend {
     return this.settings.assistantProvider === APP_CLAUDE_ID && this.settings.assistantModel ? this.settings.assistantModel : DEFAULT_CLAUDE_MODEL;
   }
 
-  context(opts: { environment?: string; collectionId?: string }) {
+  /** Engine services for an environment; `allowProduction` overrides the consent of the call (production-guard.ts). */
+  context(opts: { environment?: string; collectionId?: string; allowProduction?: boolean }) {
     const ctx = createEngineContext({
       extraProviders: this.appClaudeKey() ? [appClaudeProvider(this.claudeModel())] : [],
       store: this.ws,
@@ -664,6 +583,7 @@ export class Backend {
       logger: this.logger,
       openExternal: this.host.openExternal?.bind(this.host),
       cookieJar: this.cookieStore?.jar,
+      allowProduction: opts.allowProduction,
     });
     // Postman-style current values: set by scripts, kept on this machine, override stored values
     const cv = this.currentValues;
@@ -704,7 +624,7 @@ export class Backend {
    */
   private buildHandlers(): Handlers {
     const all: Handlers = {};
-    for (const group of [appHandlers, workspaceHandlers, collectionsHandlers, requestsHandlers, grpcHandlers, mcpHandlers, aiHandlers, testingHandlers, monitorHandlers, agentHandlers, feedbackHandlers, gitHandlers, debuggerHandlers, debuggerRulesHandlers, externalSecretsHandlers, fuzzHandlers, flowDebugHandlers]) {
+    for (const group of [appHandlers, workspaceHandlers, collectionsHandlers, requestsHandlers, grpcHandlers, mcpHandlers, aiHandlers, testingHandlers, monitorHandlers, agentHandlers, feedbackHandlers, gitHandlers, debuggerHandlers, debuggerRulesHandlers, externalSecretsHandlers, fuzzHandlers, flowDebugHandlers, debuggerFlowHandlers, flowDeployHandlers, terminalHandlers, flowScaleHandlers, evalMatrixHandlers]) {
       for (const [name, fn] of Object.entries(group(this))) {
         if (name in all) throw new Error(`RPC method ${name} is defined twice`);
         // the parameters are checked first; a TypeError from inside becomes an InternalError naming the method
@@ -741,7 +661,7 @@ export class Backend {
     const sseEvents = this.batched<unknown>('http.sse', 100);
     let scriptLogs: string[] = [];
     let preLogCount: number | undefined;
-    const scriptSender = scriptRequestSender({ redactor: ctx.redactor, cookieJar: ctx.services.cookieJar, signal: ctrl.signal, timeoutMs: this.settings.defaultTimeoutMs });
+    const scriptSender = scriptRequestSender({ redactor: ctx.redactor, cookieJar: ctx.services.cookieJar, signal: ctrl.signal, timeoutMs: this.settings.defaultTimeoutMs, production: ctx.services.production });
     const sentLogs = (o: { sentRequests?: Array<{ method: string; url: string; status?: number; error?: string; durationMs?: number }> }) =>
       (o.sentRequests ?? []).map((r) => `tp.sendRequest ${r.method} ${ctx.redactor.redactUrl(r.url)} → ${r.error ? `error: ${r.error}` : `${r.status} (${r.durationMs} ms)`}`);
     const logsOf = () => scriptLogs.map((message, i) => ({ phase: i < (preLogCount ?? scriptLogs.length) ? ('pre-request' as const) : ('test' as const), message: ctx.redactor.redactString(message) }));
@@ -774,6 +694,8 @@ export class Backend {
       preLogCount = scriptLogs.length;
       const spec = ctx.vars.resolveDeep(request);
       spec.settings = { timeoutMs: this.settings.defaultTimeoutMs, ...spec.settings };
+      // a pre-request script may turn a read into a write: the engine's own production check on what is really sent
+      assertProductionStep(ctx.services.production, { action: `${spec.method} ${p.name ?? spec.url}`, changesData: isDataChangingMethod(spec.method) });
       // executeHttp applies spec.settings.timeoutMs itself (and stops the timer once an event stream starts); ctrl is the cancel
       let result;
       const sentAt = Date.now();
@@ -853,7 +775,7 @@ export class Backend {
         responseMeta: { headers: ctx.redactor.redact(response.headers), contentType: response.contentType, truncated: response.truncated, timing: timingSummary(response), ...(checks.length ? { checksOk: checks.every((c) => c.passed) } : {}) },
       });
       recordCertificate(this.ws, prepared.url, response.connection?.certificate);
-      const clip = (t: string | undefined) => (t && t.length > CONSOLE_BODY_CHARS ? t.slice(0, CONSOLE_BODY_CHARS) + `… [${t.length - CONSOLE_BODY_CHARS} more characters]` : t);
+      const clip = clipConsole;
       // values typed into sensitive headers are secrets too (e.g. echoed back in a response body)
       for (const h of spec.headers ?? [])
         if (h.enabled !== false && ctx.redactor.isSensitiveKey(h.key) && h.value.length >= 6) {
@@ -898,17 +820,19 @@ export class Backend {
         response: { headers: ctx.redactor.redact(response.headers), body: clip(safeBody(response.bodyPreview)) },
         logs: logsOf(),
         failedChecks: checks.filter((c) => !c.passed).length,
+        refs: consoleRefs({ collectionId: p.collectionId, requestId: p.requestId, historyId, traceId: trace.traceId }),
       });
       const rendered = visual ? renderVisualizer(visual.template, visual.data) : undefined;
       // scripts (charts) run only on the isolated visualization origin; the id is its access key
-      const visualizer = rendered && { ...rendered, vizId: rendered.html !== undefined ? this.publishVisualization(rendered.html, visual!.data) : undefined };
+      const visualizer = rendered && { ...rendered, vizId: rendered.html !== undefined ? this.vizPages.publish(rendered.html, visual!.data) : undefined };
       return { id, response, prepared, checks, scriptLogs, visualizer, unresolved: [...ctx.vars.unresolved], cycles: [...ctx.vars.cycles], blockedEnv: [...ctx.vars.blockedEnv], traceId: trace.traceId, historyId };
     } catch (e) {
       const err = normalizeError(ctrl.signal.reason instanceof ApsError ? ctrl.signal.reason : e);
       root.fail(e);
       const trace = tracer.finish('error');
       this.ws.saveTrace(trace, 'http');
-      this.ws.meta.addHistory({ id: shortId('h-'), timestamp: new Date().toISOString(), kind: 'http', name: p.name ?? `${p.request.method} ${p.request.url}`, method: p.request.method, url: ctx.redactor.redactUrl(ctx.vars.resolve(p.request.url)), status: err.kind, request: ctx.redactor.redact(p.request), traceId: trace.traceId });
+      const failedHistoryId = shortId('h-');
+      this.ws.meta.addHistory({ id: failedHistoryId, timestamp: new Date().toISOString(), kind: 'http', name: p.name ?? `${p.request.method} ${p.request.url}`, method: p.request.method, url: ctx.redactor.redactUrl(ctx.vars.resolve(p.request.url)), status: err.kind, request: ctx.redactor.redact(p.request), traceId: trace.traceId });
       this.consoleEntry({
         id,
         time: new Date().toISOString(),
@@ -919,6 +843,7 @@ export class Backend {
         status: err.kind,
         logs: logsOf(),
         error: err.message,
+        refs: consoleRefs({ collectionId: p.collectionId, requestId: p.requestId, historyId: failedHistoryId, traceId: trace.traceId }),
       });
       // variables that refer to each other ({{a}} -> {{b}} -> {{a}}) are why a value is missing: say so with the error
       const cycles = [...ctx.vars.cycles];
@@ -967,7 +892,7 @@ export class Backend {
     const ctx = this.context({ environment: p.environment, collectionId: p.collectionId });
     const tracer = new Tracer(p.operationName ?? 'GraphQL', ctx.redactor);
     const span = tracer.start('graphql', 'graphql', { input: { query: p.request.query, variables: p.request.variables } });
-    const scriptSender = scriptRequestSender({ redactor: ctx.redactor, cookieJar: ctx.services.cookieJar, signal: ctrl.signal, timeoutMs: this.settings.defaultTimeoutMs });
+    const scriptSender = scriptRequestSender({ redactor: ctx.redactor, cookieJar: ctx.services.cookieJar, signal: ctrl.signal, timeoutMs: this.settings.defaultTimeoutMs, production: ctx.services.production });
     const scriptLogs: Array<{ phase: 'pre-request' | 'test'; message: string }> = [];
     const folders = ctx.collection && p.requestId ? folderChain(ctx.collection, p.requestId) : [];
     const info = { requestName: p.name ?? p.operationName, requestId: p.requestId, environmentName: ctx.environment?.name };
@@ -1022,8 +947,9 @@ export class Backend {
       const trace = tracer.finish();
       this.ws.saveTrace(trace, 'graphql');
       recordCertificate(this.ws, r.prepared.url, r.response.connection?.certificate);
-      this.ws.meta.addHistory({ id: shortId('h-'), timestamp: new Date().toISOString(), kind: 'graphql', name: p.name ?? p.operationName ?? 'GraphQL query', method: 'POST', url: r.prepared.url, status: r.response.status, durationMs: r.response.durationMs, size: r.response.size, request: ctx.redactor.redact(p.request), responseMeta: { timing: timingSummary(r.response), ...(checks.length ? { checksOk: checks.every((c) => c.passed) } : {}) }, traceId: trace.traceId, collectionId: p.collectionId, requestId: p.requestId });
-      const clip = (t: string) => (t.length > CONSOLE_BODY_CHARS ? `${t.slice(0, CONSOLE_BODY_CHARS)}… [${t.length - CONSOLE_BODY_CHARS} more characters]` : t);
+      const historyId = shortId('h-');
+      this.ws.meta.addHistory({ id: historyId, timestamp: new Date().toISOString(), kind: 'graphql', name: p.name ?? p.operationName ?? 'GraphQL query', method: 'POST', url: r.prepared.url, status: r.response.status, durationMs: r.response.durationMs, size: r.response.size, request: ctx.redactor.redact(p.request), responseMeta: { timing: timingSummary(r.response), ...(checks.length ? { checksOk: checks.every((c) => c.passed) } : {}) }, traceId: trace.traceId, collectionId: p.collectionId, requestId: p.requestId });
+      const clip = (t: string) => clipConsole(t)!;
       this.consoleEntry({
         id,
         time: new Date().toISOString(),
@@ -1039,6 +965,7 @@ export class Backend {
         response: { headers: ctx.redactor.redact(r.response.headers), body: clip(r.response.json !== undefined ? JSON.stringify(ctx.redactor.redact(r.response.json), null, 2) : ctx.redactor.redactString(r.response.bodyPreview)) },
         logs: scriptLogs,
         failedChecks: checks.filter((c) => !c.passed).length + (r.errors?.length ? 1 : 0),
+        refs: consoleRefs({ collectionId: p.collectionId, requestId: p.requestId, historyId, traceId: trace.traceId }),
       });
       return { id, ...r, checks, traceId: trace.traceId, scriptLogs };
     } catch (e) {
@@ -1213,7 +1140,7 @@ export class Backend {
   startRun(
     name: string,
     tests: AsyncIterable<TestCase>,
-    opts: { environment?: string; collectionId?: string; concurrency?: number; retries?: number; bail?: boolean; keepVariableValues?: boolean; traceMode?: 'all' | 'failures' | 'none' },
+    opts: { environment?: string; collectionId?: string; concurrency?: number; retries?: number; bail?: boolean; keepVariableValues?: boolean; traceMode?: 'all' | 'failures' | 'none'; origin?: RunOrigin },
     exec: (o: RunOptions) => Promise<RunSummary> = runTests,
   ) {
     const runId = shortId('run-');
@@ -1246,11 +1173,12 @@ export class Backend {
           environment: opts.environment,
           // test-end events carry results; forward only compact info — the UI pages full results from disk
           onEvent: (e) => {
-            if (e.type === 'test-end') this.consoleFromResult(e.result, name, ctx.redactor);
+            if (e.type === 'test-end') consoleFromResult(this, e.result, { name, runId, collectionId: opts.collectionId }, ctx.redactor);
             if (e.type === 'test-end') events.push({ ...e, result: { ...e.result, output: e.result.output?.slice(0, 500), input: e.result.input?.slice(0, 300), metadata: undefined } });
             else if (e.type !== 'test-start') events.push(e);
           },
         });
+        if (opts.origin) summary.origin = opts.origin; // what it ran, to run it again (WF-08)
         await recordRun(store, summary, dir, { reports: ['json', 'junit', 'html', 'markdown'] });
         this.logger.info(`Run ${name} finished`, { runId, total: summary.total, passed: summary.passed, ms: Date.now() - started });
       } catch (e) {
@@ -1279,7 +1207,7 @@ export class Backend {
         yield* streamTests(suite.tests, dirname(suitePath), { grep: p.grep, tags: p.tags, ids: p.ids });
       } else yield* streamTests(p.paths.length ? p.paths : ['.'], store.path('tests'), { grep: p.grep, tags: p.tags, ids: p.ids });
     })();
-    return this.startRun(p.name ?? (p.paths.join(', ') || 'All tests'), tests, p);
+    return this.startRun(p.name ?? (p.paths.join(', ') || 'All tests'), tests, { ...p, origin: { kind: 'tests', paths: p.paths.length ? p.paths : ['.'], grep: p.grep, tags: p.tags } });
   }
 
   readRunData(path: string, query?: string, environment?: string): Promise<DatasetRecord[]> {
@@ -1294,7 +1222,7 @@ export class Backend {
     if (!count) throw new ApsError('ValidationError', 'Nothing to run: the selection has no requests');
     const folder = p.selection?.length === 1 ? findNodeName(collection.items, p.selection[0]!) : undefined;
     const name = p.name ?? (folder ? `${collection.name} / ${folder}` : collection.name);
-    return this.startRun(name, (async function* () {})(), { ...p, concurrency: 1, retries: 0 }, async (o) =>
+    return this.startRun(name, (async function* () {})(), { ...p, concurrency: 1, retries: 0, origin: { kind: 'collection', collectionId: p.collectionId, selection: p.selection, iterations: p.iterations } }, async (o) =>
       runCollection({
         ...o,
         collection,
@@ -1369,13 +1297,21 @@ export class Backend {
     const cfg: LoadTestConfig = {
       ...p.config,
       target: p.collection ? target : ctx.vars.resolveDeep(target),
-      environmentIsProduction: ctx.environment?.isProduction,
+      environmentIsProduction: ctx.environment?.isProduction, allowProduction: ctx.services.production?.allowed, // the guard's consent (production-guard.ts), never the caller's config
       allowRemoteHosts: p.config.allowRemoteHosts || this.settings.loadTesting.allowRemoteHosts,
       maxVirtualUsers: this.settings.loadTesting.maxVirtualUsers,
     };
-    // validate safeguards synchronously so the UI gets an immediate error
-    const { checkLoadSafeguards } = await import('@testpion/core');
-    checkLoadSafeguards(cfg, cfg.target.kind === 'http' ? buildUrl(cfg.target.request.url, cfg.target.request.params).toString() : undefined);
+    // every check (each host's safeguards, the target ready) before Start answers: a refused test is an error here
+    const { prepareLoadTest } = await import('@testpion/core');
+    const loadDeps = { providers: ctx.services.providers, services: ctx.services, testsDir: this.ws.path('tests') };
+    let prepared;
+    try {
+      prepared = await prepareLoadTest(cfg, loadDeps);
+    } catch (e) {
+      this.controllers.delete(id);
+      void ctx.dispose();
+      throw e;
+    }
     // what was tested, for the history (URLs with secrets masked)
     const t = cfg.target;
     const targetText =
@@ -1385,10 +1321,10 @@ export class Backend {
           ? `gRPC ${t.request.target} ${t.request.method}`
           : t.kind === 'llm'
             ? `LLM ${t.model.provider}${t.model.name ? `/${t.model.name}` : ''}`
-            : `collection ${this.ws.getCollection(p.collection!.collectionId).name}${info ? ` (${info.requests.length} requests)` : ''}`;
+            : t.kind === 'flow' ? `test file ${t.file}` : `collection ${this.ws.getCollection(p.collection!.collectionId).name}${info ? ` (${info.requests.length} requests)` : ''}`;
     const startedAt = new Date().toISOString();
     const ws = this.ws;
-    void runLoadTest(cfg, { providers: ctx.services.providers, pricing: this.settings.pricing, redactor: ctx.redactor, signal: ctrl.signal, onSnapshot: (s) => this.host.emit('load.snapshot', { id, snapshot: s }) })
+    void runLoadTest(cfg, { ...loadDeps, prepared, pricing: this.settings.pricing, redactor: ctx.redactor, signal: ctrl.signal, onSnapshot: (s) => this.host.emit('load.snapshot', { id, snapshot: s }) })
       .then((snap) => {
         // every finished load test is kept in the workspace history (runs/load/history.jsonl)
         if (!snap.requests) return;
@@ -1412,6 +1348,7 @@ export class Backend {
 
   async dispose(): Promise<void> {
     for (const t of this.deferred) clearTimeout(t);
+    this.terminals.dispose('quit');
     this.stopWatching?.();
     this.monitorScheduler.stop();
     this.gitAutoFetch.stop();
@@ -1424,6 +1361,7 @@ export class Backend {
     for (const s of this.kafkaSessions.values()) await s.closeAndWait();
     for (const m of this.mocks.values()) await m.close();
     await this.gqlMock?.close();
+    await stopFlowWebhooks(this);
     await this.recorder?.close();
     await this.debugger?.proxy?.close();
     await this.debugger?.release?.();
@@ -1431,15 +1369,4 @@ export class Backend {
     await this.cookieStore?.flush().catch(() => undefined);
     this.store?.close();
   }
-}
-
-function findNodeName(nodes: CollectionNode[], id: string): string | undefined {
-  for (const n of nodes) {
-    if (n.id === id) return n.name;
-    if (n.kind === 'folder') {
-      const r = findNodeName(n.items, id);
-      if (r) return r;
-    }
-  }
-  return undefined;
 }

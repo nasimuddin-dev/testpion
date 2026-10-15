@@ -33,6 +33,6 @@ registerCheck('is-uuid', (cfg, ctx) => ({
 }));
 ```
 
-Built-in adapters include HTTP, GraphQL, gRPC, WebSocket, Socket.IO, MQTT, Kafka and MCP.
+Besides the registered adapters, the engine has built-in clients for gRPC, Socket.IO, MQTT and Kafka.
 
 :::

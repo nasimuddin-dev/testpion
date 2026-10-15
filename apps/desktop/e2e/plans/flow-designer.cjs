@@ -40,7 +40,7 @@ const steps = [
   ),
   step(
     'add-from-a-collection',
-    `if (!(await __t.button('Create from a collection'))) return 'NO BUTTON';
+    `if (!(await __t.button('Create from collection'))) return 'NO BUTTON';
      const sel = await __t.waitFor(() => document.querySelector('[data-collection-picker] select'), 3000); if (!sel) return 'NO PICKER';
      const opt = [...sel.options].find((o) => o.textContent.startsWith('Public REST')); if (!opt) return 'NO COLLECTION';
      setInput(sel, opt.value); await __t.sleep(400);
@@ -53,7 +53,7 @@ const steps = [
     'add-a-blank-http-step',
     `clickBackground(); await __t.sleep(300);
      const add = vis('[data-flow-add]')[0]; if (!add) return 'NO ADD BUTTON'; add.click();
-     const item = await __t.waitFor(() => vis('[role=menuitem]').find((m) => m.textContent.trim() === 'HTTP request'), 2000); if (!item) return 'NO MENU ITEM';
+     const item = await __t.waitFor(() => vis('[data-palette="blocks"] [role=option]').find((m) => m.querySelector('[data-command-label]')?.textContent.trim() === 'HTTP request'), 2000); if (!item) return 'NO MENU ITEM';
      item.click();
      if (!(await __t.waitFor(() => nodes().length === 2, 6000))) return 'NO SECOND NODE';
      return 'nodes: ' + nodes().map((n) => n.dataset.flowNode).join(',') + ' | edges: ' + document.querySelectorAll('[data-flow-designer] [data-flow-edge]').length;`,
@@ -130,7 +130,7 @@ const steps = [
      // a Delay after the first step (it waits for it)
      if (!(await selectId('a-user-s-carts'))) return 'NO FIRST INSPECTOR';
      const add = vis('[data-flow-add]')[0]; if (!add) return 'NO ADD BUTTON'; add.click();
-     const item = await __t.waitFor(() => vis('[role=menuitem]').find((m) => m.textContent.trim() === 'Delay'), 2000); if (!item) return 'NO DELAY ITEM';
+     const item = await __t.waitFor(() => vis('[data-palette="blocks"] [role=option]').find((m) => m.querySelector('[data-command-label]')?.textContent.trim() === 'Delay'), 2000); if (!item) return 'NO DELAY ITEM';
      item.click();
      if (!(await __t.waitFor(() => byId('wait'), 6000))) return 'NO DELAY NODE: ' + nodes().map((n) => n.dataset.flowNode).join(',');
      if (!(await selectId('wait'))) return 'NO DELAY INSPECTOR';
@@ -150,7 +150,7 @@ const steps = [
 ];
 
 module.exports = withExpect(steps, {
-  'empty-flow-starts-the-designer': /Add a step \| Create from a collection \| Generate with AI/,
+  'empty-flow-starts-the-designer': /Add blocks \| API example \| Create from collection \| Record from the Debugger \| Generate with AI/,
   'add-from-a-collection': /^nodes: a-user-s-carts \| dialog closed: true$/,
   'add-a-blank-http-step': /^nodes: a-user-s-carts,http-request \| edges: 0$/,
   'connect-port-to-port': /^edge: true \| yaml dependsOn: true$/,

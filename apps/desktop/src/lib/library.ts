@@ -12,7 +12,8 @@ import { uid } from './format';
 export function useLibrary<T>(kind: string) {
   const [lib, setLib] = useState<Library<T>>({ folders: [], items: [] });
   const workspace = useApp((s) => s.workspace?.id);
-  const reload = useCallback(() => call<Library<T>>('lib.get', { kind }).then(setLib, () => undefined), [kind]);
+  // resolves to the library read (undefined when it could not be read): an editor following its item on disk compares it
+  const reload = useCallback(() => call<Library<T>>('lib.get', { kind }).then((l) => (setLib(l), l), () => undefined), [kind]);
   useEffect(() => {
     void reload();
   }, [reload, workspace]);

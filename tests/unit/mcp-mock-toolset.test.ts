@@ -3,7 +3,7 @@ import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { loadMcpMock, mockServeCommands, mockToolResult, mockToolsList, runMockScript } from '../../packages/core/src/index.js';
 import { mockTools } from '../../packages/core/src/mcp-server/mock-tools.js';
-import { runCliSync, tempDir } from '../helpers.js';
+import { runCliSync, tempDir, cliData } from '../helpers.js';
 
 // A toolset: the tools of an MCP mock as an agent will see them, with script responses computed from the arguments.
 const def = loadMcpMock(`
@@ -136,7 +136,7 @@ describe('MCP mock toolset', () => {
       expect(text.out).toMatch(/Serve it: testpion mock-mcp/);
       const json = runCliSync(['mock-mcp', file, '--list', '--json'], { cwd: t.dir });
       expect(json.status, json.err).toBe(0);
-      const out = JSON.parse(json.out) as { name: string; tools: Array<{ name: string; arguments: string[]; responses: { kinds: string[] } }>; serve: { stdio: string } };
+      const out = cliData(json.out) as { name: string; tools: Array<{ name: string; arguments: string[]; responses: { kinds: string[] } }>; serve: { stdio: string } };
       expect(out.name).toBe('orders-mock');
       expect(out.tools.map((x) => x.name)).toEqual(['get_order', 'ping']);
       expect(out.tools[0]).toMatchObject({ arguments: ['id*'], responses: { kinds: ['script'] } });

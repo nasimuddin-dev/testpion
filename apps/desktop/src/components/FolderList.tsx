@@ -5,6 +5,7 @@ import { Button, cx, Input, type MenuItem } from './ui';
 import { closeTabsFor } from './EditorTabs';
 import { askFolderName, focusRow, folderMenuItems, InlineRename, moveToFolderItem, RowMenu, TreeFolderRow, TreeHeader, treeKeys } from './TreeParts';
 import { usePersisted } from '../lib/sticky';
+import { LABEL } from '../lib/vocabulary';
 
 export interface FolderListItem {
   id: string;
@@ -40,6 +41,7 @@ export function FolderList({
   folders,
   selected,
   onSelect,
+  onOpen,
   onAdd,
   addLabel,
   ops,
@@ -54,6 +56,8 @@ export function FolderList({
   folders: string[];
   selected?: string;
   onSelect(id: string): void;
+  /** Open for good (double-click, Enter) where a click only previews (WF-19); without it they select too. */
+  onOpen?(id: string): void;
   /** Add an item (inside a folder when given). */
   onAdd(folder?: string): void;
   addLabel: string;
@@ -94,7 +98,7 @@ export function FolderList({
     ...(ops.duplicateItem ? [{ label: 'Duplicate', icon: <Copy size={14} />, onSelect: () => void ops.duplicateItem!(it.id) }] : []),
     moveToFolderItem({ folders: allFolders, current: it.folder, move: (f) => moveTo(it.id, f) }),
     {
-      label: 'Delete',
+      label: LABEL.delete,
       icon: <Trash2 size={14} />,
       danger: true,
       separator: true,
@@ -126,6 +130,7 @@ export function FolderList({
       onContextMenu={(e) => (e.preventDefault(), setMenuFor(it.id))}
       className={cx('group flex items-center gap-1 mx-1 pr-1 rounded-md cursor-pointer transition-colors outline-none focus-visible:ring-2 focus-visible:ring-accent/40', nested ? 'pl-9' : 'pl-3', selected === it.id ? 'bg-accent-soft' : 'hover:bg-hover', menuFor === it.id && selected !== it.id && 'bg-hover')}
       onClick={() => renaming !== it.id && onSelect(it.id)}
+      onDoubleClick={() => renaming !== it.id && onOpen?.(it.id)}
       // the keyboard works like in the explorer: Enter opens, F2 renames
       role="button"
       tabIndex={0}
@@ -137,7 +142,7 @@ export function FolderList({
         if (e.target !== e.currentTarget) return;
         if (e.key === 'Enter') {
           e.preventDefault();
-          onSelect(it.id);
+          (onOpen ?? onSelect)(it.id);
         } else if (e.key === 'F2') {
           e.preventDefault();
           setRenaming(it.id);

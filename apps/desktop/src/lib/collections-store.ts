@@ -186,6 +186,9 @@ export const currentCollections = () => (wholeStale ? [] : whole.store.getState(
 /** The outline as it is now, without subscribing. */
 export const currentCollectionTree = (): CollectionOutline[] => outline.store.getState().list;
 
+/** Whether the outline has been read (an empty one then means "no collections", not "not read yet"). */
+export const collectionTreeLoaded = (): boolean => outline.store.getState().loaded;
+
 /** Whether a collection is an outline (`col.tree`): read it whole before changing it. */
 export const isOutline = (c: Collection): boolean => !!(c as CollectionOutline).slim;
 

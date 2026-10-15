@@ -83,3 +83,14 @@ export async function waitFor(check: () => boolean | Promise<boolean>, ms = 10_0
     await new Promise((r) => setTimeout(r, 25));
   }
 }
+
+/**
+ * The data of a CLI `--json` result: the output must be one envelope ({ schema_version, command, status, data, errors,
+ * warnings, metrics }); its `data` is what the command printed before the envelope.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function cliData<T = any>(stdout: string): T {
+  const e = JSON.parse(stdout) as { schema_version?: unknown; status?: unknown; data?: unknown };
+  if (e.schema_version !== 1 || typeof e.status !== 'string' || !('data' in e)) throw new Error(`not a CLI JSON envelope: ${stdout.slice(0, 200)}`);
+  return e.data as T;
+}

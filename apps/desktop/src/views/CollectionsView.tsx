@@ -1,4 +1,5 @@
 import { CollectionOverview } from '../components/CollectionOverview';
+import { openReverseProxyCapture } from '../lib/capture';
 import { ReplaceDialog } from '../components/ReplaceDialog';
 import { MoveVariablesDialog } from '../components/MoveVariablesDialog';
 import { TidyDialog } from '../components/TidyDialog';
@@ -29,6 +30,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { call } from '../api';
 import { confirmAction, promptText, toastError, useApp } from '../store';
 import { useIntent } from '../hooks';
+import { openRef } from '../lib/open-ref';
 import type { Collection, CollectionNode } from '../types';
 import { timeAgo, uid, plural } from '../lib/format';
 import { AuthEditor } from '../components/AuthEditor';
@@ -107,6 +109,11 @@ export function CollectionsView() {
       setMoveVarsOpen(true);
     }
     if (p?.import) setImporting(true);
+    // status bar ▸ Tools ▸ Find & replace: in the selected collection (or the first)
+    if (p?.replace) {
+      if (!sel && cols[0]) setSel(cols[0].id);
+      setReplaceOpen(true);
+    }
     // File ▸ Export ▸ Collection: the selected collection (or the first one)
     if (p?.export) {
       const id = p.collectionId ?? sel ?? cols[0]?.id;
@@ -146,7 +153,7 @@ export function CollectionsView() {
       toastError(e);
     }
   };
-  const open = (c: Collection, n: CollectionNode) => useApp.getState().openIntent(n.kind === 'graphql' ? 'graphql' : 'rest', { collectionId: c.id, requestId: n.id });
+  const open = (c: Collection, n: CollectionNode) => void openRef({ kind: 'request', collectionId: c.id, requestId: n.id });
   const count = (nodes: CollectionNode[]): number => nodes.reduce((a, n) => a + (n.kind === 'folder' ? count(n.items) : 1), 0);
   return (
     <>
@@ -205,7 +212,7 @@ export function CollectionsView() {
                 <Button size="sm" variant="ghost" icon={<FolderPlus size={12} />} onClick={() => void newCollection()}>
                   New
                 </Button>
-                <IconButton label="Record traffic into a collection (reverse proxy)" onClick={() => useApp.getState().set({ recordOpen: true })}>
+                <IconButton label="Capture traffic into a collection (the Debugger's reverse proxy for one API)" onClick={() => openReverseProxyCapture()}>
                   <Radio size={13} />
                 </IconButton>
                 <IconButton label="Recently deleted" onClick={() => setTrashOpen(true)}>
@@ -344,7 +351,7 @@ export function CollectionsView() {
                 ]}
               />
               <div className={cx('flex-1 min-h-0', tab !== 'run' && tab !== 'docs' && 'overflow-auto')}>
-                {tab === 'mock' && <MockPanel collectionId={draft.id} onOpenRequest={(requestId) => useApp.getState().openIntent('rest', { collectionId: draft.id, requestId })} />}
+                {tab === 'mock' && <MockPanel collectionId={draft.id} onOpenRequest={(requestId) => void openRef({ kind: 'request', collectionId: draft.id, requestId })} />}
                 {tab === 'overview' && (
                   <CollectionOverview
                     collection={draft}

@@ -6,7 +6,7 @@ import { asError, call } from '../../api';
 import { confirmAction, toastError, useApp } from '../../store';
 import type { ProviderConfig } from '../../types';
 import { uid } from '../../lib/format';
-import { Badge, Button, cx, Empty, Field, Input, LinkButton, PageHeader, Select, Split, type MenuItem } from '../../components/ui';
+import { Badge, Button, cx, Empty, Field, Input, PageHeader, Select, Split, type MenuItem } from '../../components/ui';
 
 /** kind, label, default base URL: the shared table, in the shape this view reads. */
 const KINDS: Array<[ProviderConfig['kind'], string, string]> = PROVIDER_KINDS.map((k) => [k.kind, k.label, k.baseUrl]);
@@ -231,6 +231,10 @@ export function Providers({ providers, onSaved, focus }: { providers: ProviderCo
                 title: providerNeedsKey(x) ? `Adds ${x.name}; paste its API key, Save, then Test connection` : 'No key, no network: answers from rules, for trying things out',
               })),
               { label: 'Something else…', icon: <Plus size={12} />, primary: false, onClick: addProvider, title: 'Any OpenAI-compatible server (vLLM, LM Studio, OpenRouter), Azure OpenAI or Amazon Bedrock' },
+              // the assistant's Claude key (Settings) shows here in every workspace
+              ...(!list.some((x) => (x as { builtIn?: boolean }).builtIn)
+                ? [{ label: "Claude key in Settings…", icon: <Sparkles size={12} />, primary: false, onClick: () => useApp.getState().setView('settings'), title: "Save the assistant's Claude key in Settings: it then appears here in every workspace" }]
+                : []),
             ]}
             steps={[
               'Add a provider above (the offline demo works at once).',
@@ -244,13 +248,6 @@ export function Providers({ providers, onSaved, focus }: { providers: ProviderCo
                 Try it in the <b>Playground</b>, compare models, or use it in tests as <span className="mono">model: {'{'} provider: &lt;id&gt; {'}'}</span>.
               </>,
             ]}
-            action={
-              !list.some((x) => (x as { builtIn?: boolean }).builtIn) && (
-                <LinkButton className="text-xs" onClick={() => useApp.getState().setView('settings')}>
-                  Or save the assistant's Claude key in Settings: it then appears here in every workspace
-                </LinkButton>
-              )
-            }
           >
             {list.length
               ? 'Pick one on the left to see its settings, or add one of the usual ones.'

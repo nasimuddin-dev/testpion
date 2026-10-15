@@ -7,6 +7,8 @@ description: "Build and test HTTP requests: methods, bodies, cookies, streaming,
 
 # REST and HTTP
 
+Open the HTTP editor from the Collections explorer: click a saved request, or the explorer's **+** ▸ **HTTP request** (<kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>T</kbd>). The left rail has no entry per protocol: every request editor (HTTP, GraphQL, gRPC, WebSocket, MCP) is reached through **Collections**, **Quick Open** (<kbd>Ctrl</kbd>+<kbd>P</kbd>) or the **+** at the end of the tab bar. See [Finding your way around](/getting-started/finding-your-way).
+
 ## Body: completion from the API definition
 
 When the workspace holds an API definition (**Import** an OpenAPI / Swagger document, or save one under `specs/`), a JSON body is completed and checked against the operation the request maps to (its method and URL, `{{variables}}` resolved from the active environment): the editor offers the fields, says which are required, and marks a wrong type or an unknown field. A line above the body says which definition and operation the schema comes from. The same schemas drive the gRPC message editor (from the service's .proto) and the MCP tool arguments (from the tool's input schema).
@@ -14,8 +16,10 @@ When the workspace holds an API definition (**Import** an OpenAPI / Swagger docu
 ## Requests
 
 - Any method, including custom ones.
+- A request whose host is a `{{variable}}` without a value (`{{baseurl}}/users`) is not sent: the error names the variable and the one it most likely meant, with a button to add it to the environment ([Typing variables](/api-testing/environments#typing-variables)).
+- On an environment marked as **production**, a request that can change data (POST, PUT, PATCH, DELETE …) asks before it is sent ([Production](/api-testing/environments#production)).
 - **Params, headers and cookies** use key/value tables, each row with its own toggle.
-- **Cookie jar:** cookies set by responses are kept per workspace and sent with later matching requests. Open the **Cookies** dialog with the cookie button next to Send. See [Cookies](/api-testing/cookies).
+- **Cookie jar:** cookies set by responses are kept per workspace and sent with later matching requests. Open the **Cookies** dialog with the cookie button next to Send (or the status bar's **Tools ▸ Cookies…**). See [Cookies](/api-testing/cookies).
 - **Body types:** JSON, XML, text, HTML, form URL-encoded, multipart (text and file fields), and binary file. Files are streamed from disk.
 - **Settings:** timeout, **retries**, redirects, proxy, disabling TLS verification (development only), and client certificates (mTLS). Retries (up to 5) repeat a request after a network error, a timeout, `429` or a `5xx`, waiting 500 ms, then twice as long each time (at most 10 s, or what `Retry-After` says). POST and PATCH are repeated only when the connection failed, because the server may already have acted on them. They apply everywhere the request runs: sends, collection runs, monitors and the CLI; the response shows **N attempts** when it took more than one.
 - **Postman-style request settings** (the request's **Settings** tab), saved with the request so collection runs, monitors and the CLI use them too:
@@ -34,7 +38,7 @@ When the workspace holds an API definition (**Import** an OpenAPI / Swagger docu
   | Disable cookie jar | Neither send jar cookies nor store the response's cookies (the Cookies tab still applies) |
 
   Responses are always parsed strictly (invalid HTTP headers are rejected). Postman's "use server cipher suite order" is a server-side TLS option with no client equivalent.
-- **HTTP/2:** over `https://`, HTTP/2 is offered (ALPN) and used when the server supports it; the response shows an **HTTP/2** badge (and `httpVersion: "2"` in `--json` output). Turn on **HTTP/1.1 only** in the request's Settings for servers or proxies that misbehave with HTTP/2. Plain `http://` uses HTTP/1.1.
+- **HTTP/2:** over `https://`, HTTP/2 is offered (ALPN) and used when the server supports it; the response shows an **HTTP/2** badge (and `httpVersion: "2"` in the `.data` of `--json` output). Set **HTTP version** to **HTTP/1.1** in the request's Settings for servers or proxies that misbehave with HTTP/2. Plain `http://` uses HTTP/1.1.
 
 ## Proxy
 
@@ -70,60 +74,59 @@ An [HTTPie](https://httpie.io) or xh command works too, e.g. `http POST api.test
 Then paste it into TestPion:
 
 - **Into the URL bar:** the current tab is replaced with the pasted request.
-- **Anywhere else in the REST view** (with no text field focused), for example right after opening a new tab with **Ctrl/Cmd+V**: an unchanged new tab is filled, otherwise the request opens in a new tab named after its method and path, such as `POST /v1/pets`.
+- **Anywhere else in the HTTP editor** (with no text field focused), for example right after opening a new tab with **Ctrl/Cmd+V**: an unchanged new tab is filled, otherwise the request opens in a new tab named after its method and path, such as `POST /v1/pets`.
 
 The method, URL, query parameters, headers, cookies, body (JSON, form, multipart, XML or text), basic and bearer auth, and curl options such as `-k`, `-L`, `--proxy` and `--max-time` are all imported. HTTP/2 pseudo headers (`authority`, `method`, `path`, `scheme`) that PowerShell snippets include are dropped. Pasted secrets, such as an `Authorization` header or session cookie, are only in the unsaved tab: move them into a [secret variable](/api-testing/environments#secrets) before you save the request.
 
 ## Sidebar
 
-The left sidebar of the REST view has three panes, like Postman's:
+The request editors share one sidebar, the **Collections explorer** (<kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>B</kbd> hides or shows it). It lists the workspace's collections, each holding its requests by kind (**REST**, **SOAP**, **GraphQL**, **gRPC**, **WebSocket & MQTT**), and below them **MCP servers**, **API definitions** and **Datasets**; **Favorites** come first when you have some. Its header has **New** (a collection or any kind of request), **Import**, **Export** and a filter. Every row has a **⋯** menu, and a right-click opens the same menu: **Open**, **Open in new tab**, **Save as test…**, the copy commands, **Rename**, **Duplicate**, **Move to…**, **Delete…** (see [Request menu](/api-testing/collections#request-menu)). The sidebar follows the tab you switch to: the request's collection and folders open and its row scrolls into view.
 
-- **Collections:** the request tree, with a filter, **Import** and **New collection**. Every row has the same buttons: **+** (*New HTTP request*) and **⋯** on collections, **⋯** on folders and requests, and a right-click opens the same menu. An empty collection offers **New HTTP request**. Below the collections, **MCP servers** and **API definitions** have a **+** and a **⋯** too, and folders of their own: **⋯ ▸ New folder**, then **Move to folder** on a server or definition.
-- **Environments:** click an environment to make it active. **Edit** opens it, and **+** creates one.
-- **History:** your recent HTTP requests grouped by day, with a filter. Click one to open it in a new tab.
-
-The sidebar remembers the pane you last used.
+Environments have their own view (**Environments** in the rail) and the picker in the top bar; History has its own view too.
 
 ## Tabs and history
 
-Each request opens in a tab. A dot on a tab means it has unsaved changes.
+Each request opens in a tab. A dot on a tab means it has unsaved changes. The tab bar is shared by every request editor (HTTP, GraphQL, gRPC, WebSocket, MCP), and the **+** after the tabs opens a new request of any kind.
 
-When more tabs are open than fit, the tab bar doesn't scroll. It shows your pinned tabs and the tabs you used most recently, and a **+N** button on the right lists the others (as in Postman or VS Code). Pick one from the list to bring it into the tab bar; the least recently used tab moves into the list. The list also has **Close N hidden tabs**. Right-click a tab (or middle-click to close it) for:
+When more tabs are open than fit, the tab bar scrolls sideways (the mouse wheel, or the **‹** / **›** buttons at its ends), and the count button at its right end lists every open tab to jump to. Right-click a tab (or middle-click to close it) for:
 
 - **Pin tab:** pinned tabs move to the front, show a pin, have no close button, and are kept by the bulk close actions. Unpin from the same menu.
-- **Rename…** (or double-click the tab): renames the tab; a saved request is renamed in its collection too.
 - **Duplicate tab:** an unsaved copy of the request, opened next to it.
+- **Reveal in sidebar:** shows the request's row in the Collections explorer.
+- **Save as test…:** the request as a test file in **Tests**.
+- **Rename** (<kbd>F2</kbd>, or double-click the tab): renames the tab; a saved request is renamed in its collection too.
 - **Close tab**, **Close other tabs**, **Close tabs to the right**, **Close all tabs:** you are asked once if any of the closed tabs has unsaved changes.
+- **Reopen closed tab** (<kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Shift</kbd>+<kbd>T</kbd>): the tab you closed last.
 
-**Close several tabs at once** from any of these:
+The same commands are in the **File** menu: **New Request Tab** (<kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>T</kbd>), **Close Tab** (<kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>W</kbd>), **Close Other Tabs**, **Close All Tabs** (<kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Shift</kbd>+<kbd>W</kbd>) and **Reopen Closed Tab**, and in the command palette (<kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>K</kbd>). Pinned tabs are kept by the bulk close commands. On macOS, **Close Window** in the File menu is <kbd>⌘</kbd>+<kbd>⌥</kbd>+<kbd>W</kbd>.
 
-- **File** menu: **Close Tab** (<kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>W</kbd>), **Close Other Tabs**, **Close All Tabs** (<kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Shift</kbd>+<kbd>W</kbd>), and **New Request Tab** (<kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>T</kbd>).
-- The **⋯** button at the right end of the tab bar.
-- The command palette (<kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>K</kbd>): *Close Tab*, *Close Other Tabs*, *Close All Tabs*.
-
-Pinned tabs are kept by these commands; you are asked once if any closed tab has unsaved changes. On macOS, **Close Window** in the File menu is <kbd>⌘</kbd>+<kbd>⌥</kbd>+<kbd>W</kbd>.
+The first line of the editor says where the request is saved (*Collection › Folder › Request*); a folder shows it in the sidebar, and the **⋯** at its end has **Save as test…**.
 
 Open tabs, including pins, are restored when the app starts. You can close every tab: the editor then shows **New request** and **Describe with AI**, and stays empty after a restart until you open something.
 
-**History** lists every request you sent, newest first, grouped by day (*Today*, *Yesterday*, weekday, then date). Search by name, URL, method or status, filter by kind or to *Failed* responses, and double-click an entry (or click **Open**) to open it in a new tab. Select an entry and Ctrl/⌘+click another to compare the two responses (status, time, header changes and a field-by-field body diff). Each row has a small bar of its duration next to the others. History stores redacted request metadata only. **HAR** exports the HTTP and GraphQL entries shown (after your search and filter) as a HAR file that browser devtools, Charles, Fiddler and other API tools open; secret headers, parameters and known secret values are masked. From the terminal: `testpion history export-har -w my-workspace -o history.har`.
+**History** lists every request you sent, newest first, grouped by day (*Today*, *Yesterday*, weekday, then date). Search by name, URL, method or status, filter by kind or to *Failed* responses, and double-click an entry (or choose **Open**) to open it in the editor of its kind. Its right-click menu also has **Open request** (the saved request it was sent from), **Open trace** and **Save as test…** ([History: send it again](/getting-started/finding-your-way#history-send-it-again)). Select an entry and Ctrl/⌘+click another to compare the two responses (status, time, header changes and a field-by-field body diff). Each row has a small bar of its duration next to the others. History stores redacted request metadata only. **HAR** exports the HTTP and GraphQL entries shown (after your search and filter) as a HAR file that browser devtools, Charles, Fiddler and other API tools open; secret headers, parameters and known secret values are masked. From the terminal: `testpion history export-har -w my-workspace -o history.har`.
 
 ## Responses
 
 **Response layout.** The response goes beside the request when there is room, or below it on a narrower window (*Auto*). The layout button at the right of the tabs (also Settings ▸ Appearance and the command palette) sets *Side by side* or *Response below* for every editor: HTTP, GraphQL, gRPC and MCP tools. Each layout remembers its own size. When the request's tabs (Params, Headers, Body …) don't fit, **»** lists them all.
 
-The status, duration, size, headers, cookies and a timeline are always shown. The timeline is a waterfall of prepare, DNS lookup, TCP connect and TLS handshake (on a new connection), waiting for the first byte (TTFB) and download, with the server's address, the TLS version and cipher, the certificate (subject, issuer, valid until, days left), or *Reused connection* when the request went over an open one. The Trace tab (and OpenTelemetry export) shows the phases as spans of the request. `testpion send <url> -i` prints the same phases, `--json` and the `send_request` MCP tool return them as `timing` (`dnsMs`, `tcpMs`, `tlsMs`, `ttfbMs`, `downloadMs`, `reusedConnection`). **Save as example** keeps the response with the request (see [Examples](/api-testing/collections#examples)). For the body:
+The status, duration, size, headers, cookies and a timeline are always shown. The timeline is a waterfall of prepare, DNS lookup, TCP connect and TLS handshake (on a new connection), waiting for the first byte (TTFB) and download, with the server's address, the TLS version and cipher, the certificate (subject, issuer, valid until, days left), or *Reused connection* when the request went over an open one. The Trace tab (and OpenTelemetry export) shows the phases as spans of the request. `testpion send <url> -i` prints the same phases, `--json` (under `.data`) and the `send_request` MCP tool return them as `timing` (`dnsMs`, `tcpMs`, `tlsMs`, `ttfbMs`, `downloadMs`, `reusedConnection`). **Save as example** keeps the response with the request (see [Examples](/api-testing/collections#examples)). For the body:
 
 <figure class="aps-screenshot">
   <img src="/images/rest-timeline.jpg" alt="The Timeline of a response: a new connection, TCP connect, waiting for the first byte and download as a waterfall, with Explain with AI" width="1440" height="900" loading="lazy">
 </figure>
 
-- **Pretty** is a virtualised JSON tree. Click a key to copy its JSONPath.
+- **Pretty** is a virtualised JSON tree. Click a key to copy its JSONPath. HTML and XML bodies are laid out with indentation.
 - **Table** appears when the JSON is an array of objects, or holds one up to three levels deep (such as `items`, `data.users`; the largest is used; GraphQL responses have it too): a column per key, click a header to sort (again to reverse), and filter rows by any cell. The first 500 rows are shown; **Copy CSV** copies every matching row. **Chart** (when a column holds numbers) draws one bar per row: choose the number and the label column; sorting and filtering apply. **Save as dataset** writes the rows to `datasets/<name>.csv` in the workspace (never overwriting), where the Collection Runner lists them next to *Select file* (agents use the same file with `run_collection`'s `data`).
 - **Raw** is a virtualised text view with search.
 - **Preview** renders HTML in a sandboxed frame.
 - **JWT** appears when the body or a header holds a JSON Web Token (an `access_token`, `id_token` or `Authorization` value): its header and claims, when it was issued and when it expires (*expires in 58 min*, or *expired 2 h ago*). The signature is not verified. A `jwt` check (see [Assertions](/test-runner/assertions)) tests the same in a test; `testpion jwt <token>` and the `decode_jwt` MCP tool decode one outside the app.
 
 The full body is streamed to `payloads/` on disk. The viewer only holds a preview, 2 MB by default and configurable in Settings. Larger bodies show a *truncated* badge; **Save response** exports the complete file.
+
+<figure class="aps-screenshot">
+  <img src="/images/rest-jwt.jpg" alt="The JWT tab of a token response: the token's algorithm, when it expires, its header and claims, and when it was issued and expires" width="1440" height="900" loading="lazy">
+</figure>
 
 ## Compare across environments
 
@@ -133,7 +136,7 @@ The **Compare across environments** button (next to **Send**) sends the open req
 - every changed JSON field (added, removed, changed, or a different type), or a line diff for text;
 - header changes.
 
-Use it to check that Staging and Production answer the same way. Both are real requests: scripts, auth and checks run as usual, and a production environment gets a warning first.
+Use it to check that Staging and Production answer the same way. Both are real requests: scripts, auth and checks run as usual, and a request that changes data asks first when either environment is marked as production ([Production](/api-testing/environments#production)).
 
 From the terminal: `testpion env diff Staging Production --request "List patients" -w my-workspace [--json]` (exit 1 when the responses differ). AI agents: `compare_request_across_environments`.
 
@@ -183,7 +186,7 @@ Pre-request and post-response scripts use TestPion's script API, **`tp`**: `tp.t
 - **Room to write on a small screen:** the **Snippets** panel can be unpinned with the pin in its header. It then folds into a slim **Snippets** tab on the right edge and the editor takes the width; hover the tab (or click it) and the list slides over the editor, and it slides away when the pointer leaves it, on <kbd>Esc</kbd>, on a click elsewhere or once you insert a snippet. Pin it again to keep it docked. The choice is remembered; until you choose, it starts unpinned when the Scripts tab is narrower than 700 pixels. On a narrow tab, **Pre-request** and **Post-response** also become tabs above the editor, and the editor's help is behind the **ⓘ** icon.
 - **Insert a snippet from the keyboard:** in the script editor press <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>I</kbd> (<kbd>⌘</kbd>+<kbd>⇧</kbd>+<kbd>I</kbd> on macOS), or choose **Insert Snippet…** in the command palette or the editor's right-click menu. Type to filter (for example `status`), <kbd>Enter</kbd> inserts the snippet at the cursor, <kbd>Esc</kbd> goes back to the editor. (The developer tools moved to <kbd>F12</kbd> on Windows and Linux.)
 
-- **Import from Postman:** scripts are kept as they are. To switch a whole collection to `tp.*`, right-click it (or use its **⋯**) and choose **Convert scripts to tp.\***; **Convert scripts to pm.\*** goes back. You see how many scripts change before anything is saved. The CLI equivalent is `testpion scripts convert --to tp -w <workspace> [--collection <name>] [--dry-run] --json`.
+- **Import from Postman:** scripts are converted to `tp.*` on import, unless you tick **Keep pm.\* in scripts** in the Import dialog (`testpion import --keep-pm`; see [Import](/api-testing/collections#import)). To switch a whole collection later, right-click it (or use its **⋯**) and choose **Convert scripts to tp.\***; **Convert scripts to pm.\*** goes back. You see how many scripts change before anything is saved. The CLI equivalent is `testpion scripts convert --to tp -w <workspace> [--collection <name>] [--dry-run] --json`.
 - **Export to Postman** (and `testpion export`): `tp.*` is converted to Postman's name for the API, the only one Postman knows. Only code changes; text in strings and comments, regular expressions and properties such as `obj.tp` are left alone. A script that declares its own `tp` variable is exported unchanged.
 
 Pre-request:
@@ -306,7 +309,7 @@ After you send, the response body opens on **Visualize** (next to Pretty and Raw
 
 ## AI help
 
-With an assistant model set in **Settings → AI Assistant** (a local model works offline), the request builder can draft work for you. Everything the AI produces is labelled and shown to you first. Nothing is sent or run on its own.
+With an assistant model set in **Settings ▸ AI assistant** (a local model works offline), the request builder can draft work for you. Everything the AI produces is labelled and shown to you first. Nothing is sent or run on its own.
 
 - **Describe a request** (sparkles button next to Send): write what you want in plain words, for example *create a patient named Biscuit, a dog, owned by customer 123*. A new tab opens with the method, URL, headers and body filled in. The assistant only sees the **names** of your variables, so it writes `{{baseUrl}}` and `{{accessToken}}` instead of real values.
 - **Generate tests** (above a response): the assistant writes `tp.test(...)` checks for the response's status, fields, types and timing and appends them to the Post-response script, headed by an *AI-generated* comment. Send again to run them. Imports the sandbox doesn't support are removed.
@@ -321,13 +324,14 @@ The code editors (bodies, scripts, GraphQL, messages, prompts) complete `{{varia
 
 ## Console
 
-The **Console** is Postman's console: a log of every request with its script output. Open it with **Console** in the status bar or <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>C</kbd> (<kbd>⌘</kbd>+<kbd>⌥</kbd>+<kbd>C</kbd> on macOS). It shares the bottom panel with the application **Logs**.
+The **Console** is Postman's console: a log of every request with its script output. Open it with **Console** in the status bar or <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>C</kbd> (<kbd>⌘</kbd>+<kbd>⌥</kbd>+<kbd>C</kbd> on macOS). It shares the bottom panel with the application **Logs**, the [Terminal](/getting-started/terminal) and [Problems](/getting-started/finding-your-way#problems).
 
 - Each line shows the time, method, URL, status, duration and size. GraphQL operations sent from the GraphQL view are marked **GraphQL** (their request shows the query and variables). Requests from runs (the test runner and the Collection Runner) are marked **run**, and failed checks, including GraphQL `errors`, are counted.
 - **MCP** lines: connecting to a server (`CONNECT`, with its URL or command line), tool calls (`CALL`, with the arguments and the result), resource reads (`READ`) and prompts (`PROMPT`).
 - **WebSocket** lines: `CONNECT` (with the handshake headers and subprotocols), each message you send (`SEND`), and `CLOSE` with how long the connection was open and how many messages were sent and received. Received messages stay in the WebSocket view's message log, so a busy stream doesn't flood the console.
 - `console.log`, `console.info`, `console.warn` and `console.error` output from pre-request and test scripts appears under its request, marked `pre ›` or `test ›`.
 - Click a request sent from a tab to expand it and see the request and response headers and bodies (up to 16,000 characters each).
+- An expanded line links to what it belongs to: the saved request it was sent from, its **History entry**, its **Trace**, and for a run's request the **Run** (at that result). **Open as request** opens what was sent in its editor.
 - **All / Errors / With logs** and the filter box narrow the list. The trash button clears it. The console keeps the last 500 requests until the app closes and is never written to disk.
 - Everything is redacted before it reaches the console: sensitive headers, sensitive JSON fields, known secret values, and values you typed into sensitive headers or body fields, even when a server echoes them back.
 

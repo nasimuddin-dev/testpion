@@ -46,7 +46,7 @@ When git can't sign in, TestPion says so in plain words ("Git could not sign in 
 
 The **Git** view shows the branch and remote at the top, then:
 
-- **Changes, by meaning.** Each changed file, and under it what changed in words: *HTTP basics ▸ Requests & responses ▸ GET with query parameters: URL, headers (0 → 1)*, *environment Staging: added baseUrl*, *Checkout ▸ pay: body, if, checks (1 → 2)*. Click a request to open it; **Compare** shows a changed request, a flow step, the collection's settings or an environment side by side, part by part: the last commit and now. Click a file name for its line diff. **Stage** / **Unstage** per file, **Discard** (back to the last commit; new files are deleted, after a confirmation) per file or all.
+- **Changes, by meaning.** Each changed file, and under it what changed in words: *HTTP basics ▸ Requests & responses ▸ GET with query parameters: URL, headers (0 → 1)*, *environment Staging: added baseUrl*, *Checkout ▸ pay: body, if, checks (1 → 2)*, *Connection Echo socket: renamed from …* (saved gRPC calls, connections, prompts and monitors one by one). Click a change to open it where it is edited: a request in its own editor (REST, SOAP, GraphQL), a folder or collection's settings, an environment, a gRPC call or a connection, a test file or the flow step; right-click for **Open in new tab** and **Copy link** ([Finding your way around](/getting-started/finding-your-way)); **Compare** shows a changed request, a flow step, the collection's settings or an environment side by side, part by part: the last commit and now. Click a file name for its line diff. **Stage** / **Unstage** per file, **Discard** (back to the last commit; new files are deleted, after a confirmation) per file or all.
 - **Commit.** Write a message, or click **Write message** and the AI assistant writes one from the changes (it sees the changes' meaning, never secret values). With nothing staged, **Commit** commits every change of the workspace.
 - **History.** The latest commits of the workspace.
 
@@ -101,7 +101,7 @@ A **real conflict** is the same request (or the same collection setting) changed
 - **Cancel the pull** goes back to before the pull.
 - When every file is settled, **Commit** finishes the merge.
 
-**Requests open while files change.** When a pull, a branch switch or another editor changes a request you have open, the tab shows the new version by itself. If you have unsaved edits in that tab, TestPion asks first: **Keep mine** (saving then replaces the new version with yours) or **Take the new version**.
+**Items open while files change.** When a pull, a branch switch or another editor changes something you have open (a REST, SOAP or GraphQL request, a saved gRPC call or connection, an MCP server's settings, a monitor being edited), the editor shows the new version by itself. If you have unsaved edits there, TestPion asks first, the same question everywhere: **Keep mine** (saving then replaces the new version with yours) or **Take the new version**. Several changes at once ask one question at a time.
 
 ## History of a request, a collection or an environment
 
@@ -159,7 +159,7 @@ jobs:
         with: { fetch-depth: 0 }   # the base branch, for the diff
       - uses: actions/setup-node@v4
         with: { node-version: 24 }
-      - run: git clone --depth 1 --branch v0.42.0 https://github.com/nasimuddin-dev/testpion.git "$RUNNER_TEMP/testpion" && cd "$RUNNER_TEMP/testpion" && npm ci && npm run build -w @testpion/core -w @testpion/cli
+      - run: git clone --depth 1 --branch v0.46.0 https://github.com/nasimuddin-dev/testpion.git "$RUNNER_TEMP/testpion" && cd "$RUNNER_TEMP/testpion" && npm ci && npm run build -w @testpion/shared -w @testpion/core -w @testpion/cli
       - name: What the pull request changes
         run: |
           T="node $RUNNER_TEMP/testpion/packages/cli/bin/testpion.js"
@@ -187,7 +187,7 @@ api-tests:
   image: node:24
   rules: [{ if: $CI_PIPELINE_SOURCE == "merge_request_event" }]
   script:
-    - git clone --depth 1 --branch v0.42.0 https://github.com/nasimuddin-dev/testpion.git /tmp/testpion && (cd /tmp/testpion && npm ci && npm run build -w @testpion/core -w @testpion/cli)
+    - git clone --depth 1 --branch v0.46.0 https://github.com/nasimuddin-dev/testpion.git /tmp/testpion && (cd /tmp/testpion && npm ci && npm run build -w @testpion/shared -w @testpion/core -w @testpion/cli)
     - git fetch origin "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"
     - node /tmp/testpion/packages/cli/bin/testpion.js diff "origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME" HEAD --markdown -w api-tests | tee changes.md
     - node /tmp/testpion/packages/cli/bin/testpion.js run -w api-tests -e Staging -r console junit -o test-results

@@ -71,7 +71,7 @@ describe('flowGraph', () => {
   });
 
   it('nothing in, nothing out', () => {
-    expect(flowGraph([])).toEqual({ nodes: [], edges: [], problems: [], width: 0, height: 0 });
+    expect(flowGraph([])).toEqual({ nodes: [], edges: [], groups: [], problems: [], width: 0, height: 0 });
   });
 });
 
@@ -95,5 +95,12 @@ describe('stepLine', () => {
     expect(stepLine(text, 'Log in again')).toBe(6);
     expect(stepLine(text.replace(/\n/g, '\r\n'), 'Log in again')).toBe(6);
     expect(stepLine(text, 'Nothing')).toBeUndefined();
+  });
+
+  it('finds a step written on one line as a flow map, but not a name that only starts the same', () => {
+    const text = ['tests:', '  - { id: a, name: Echo who, url: "/a" }', '  - { name: "Pay", id: p }', '  - { id: c, name: Echo whoever }'].join('\n');
+    expect(stepLine(text, 'Echo who')).toBe(2);
+    expect(stepLine(text, 'Pay')).toBe(3);
+    expect(stepLine(text, 'Echo whoever')).toBe(4);
   });
 });

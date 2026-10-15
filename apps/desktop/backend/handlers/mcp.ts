@@ -19,6 +19,7 @@ import {
   type McpServerConfig,
   mcpToolUsage,
   atomicWrite,
+  saveTest,
 } from '@testpion/core';
 import type { Backend, Handlers } from '../backend.js';
 import { commandLine, forgetTrustedCommands, isCommandTrusted, trustCommand, trustedCommands } from '@testpion/core';
@@ -215,6 +216,7 @@ export function mcpHandlers(be: Backend): Handlers {
         const checks = await runChecks(assertions, { testType: 'mcp', body, text, isError: r.isError, latencyMs: r.durationMs });
         const trace = tracer.finish();
         be.ws.saveTrace(trace, 'mcp');
+        const historyId = shortId('h-');
         be.consoleProtocol('mcp', be.mcpRedactor(serverId), {
           name: `${s.config.name} · ${tool}`,
           method: 'CALL',
@@ -224,8 +226,12 @@ export function mcpHandlers(be: Backend): Handlers {
           request: args,
           response: r.raw,
           failedChecks: checks.filter((c) => !c.passed).length,
+          refs: [
+            { kind: 'history', historyId },
+            { kind: 'trace', traceId: trace.traceId },
+          ],
         });
-        be.ws.meta.addHistory({ id: shortId('h-'), timestamp: new Date().toISOString(), kind: 'mcp', name: `${s.config.name} · ${tool}`, status: r.isError ? 'error' : 'ok', durationMs: r.durationMs, request: { serverId, tool, args }, traceId: trace.traceId });
+        be.ws.meta.addHistory({ id: historyId, timestamp: new Date().toISOString(), kind: 'mcp', name: `${s.config.name} · ${tool}`, status: r.isError ? 'error' : 'ok', durationMs: r.durationMs, request: { serverId, tool, args }, traceId: trace.traceId });
         return { ...r, body, checks, traceId: trace.traceId };
       } catch (e) {
         span.fail(e);
@@ -245,13 +251,10 @@ export function mcpHandlers(be: Backend): Handlers {
       be.session(serverId).complete(ref, argument, context),
     'mcp.subscribe': ({ serverId, uri }: { serverId: string; uri: string }) => be.session(serverId).subscribeResource(uri),
     'mcp.unsubscribe': ({ serverId, uri }: { serverId: string; uri: string }) => be.session(serverId).unsubscribeResource(uri),
-    'mcp.saveTest': async ({ serverId, tool, args, assertions, name }: { serverId: string; tool: string; args: Record<string, unknown>; assertions: CheckConfig[]; name: string }) => {
-      // yaml loads with the first test saved here, not at startup
-      const { stringify: toYaml } = await import('yaml');
+    /** An MCP tool call as a test file: the one Save as test (core saveTest), kept under this name for older windows. */
+    'mcp.saveTest': ({ serverId, tool, args, assertions, name }: { serverId: string; tool: string; args: Record<string, unknown>; assertions: CheckConfig[]; name: string }) => {
       const cfg = be.ws.getMcpServers().find((s) => s.id === serverId);
-      const rel = `mcp/${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.yaml`;
-      be.ws.writeTestFile(rel, toYaml({ name, type: 'mcp', server: cfg?.name ?? serverId, tool, arguments: args, assertions: assertions.length ? assertions : [{ type: 'status', expected: 'success' }] }));
-      return rel;
+      return saveTest(be.ws, { name, source: { kind: 'mcp', server: cfg?.name ?? serverId, tool, arguments: args }, assertions }).path;
     },
   };
 }

@@ -27,11 +27,19 @@ stdio (a local command), Streamable HTTP and the legacy SSE transport. See [conn
 
 ## Can I run my tests in CI?
 
-Yes. Tests are YAML files in your repository, and the [`testpion` CLI](/installation/cli) runs them with JUnit, JSON, HTML and Markdown reports and standard exit codes. See [CI/CD](/test-runner/ci-cd).
+Yes. Tests are YAML files in your repository, and the [`testpion` CLI](/installation/cli) runs them with JUnit, JSON, HTML and Markdown reports and standard exit codes. A run's ⋯ ▸ **Run in CI…** (or `testpion ci github -w . --run last`) writes the pipeline for what you just ran. See [CI/CD](/test-runner/ci-cd).
+
+## Can tests change data in production by accident?
+
+Not without a yes. Mark an environment as **production** and every data-changing request (POST, PUT, PATCH, DELETE, GraphQL mutations, gRPC calls that are not reads, realtime messages, MCP tool calls) asks first in the app, once per run; reads run as usual. In the CLI, data-changing steps fail unless you add `--allow-production`, a monitor changes data only when saved with consent, and an AI agent needs a server started with `--allow-production` and `allowProduction: true` on the call. See [Production](/api-testing/environments#production).
+
+## Can AI coding agents work with my workspace?
+
+Yes. `testpion mcp-server` serves it as MCP tools (send requests, run tests, design flows, read failures), `testpion agents init` writes an AGENTS.md describing it, and every CLI command's `--json` prints one envelope whose `.data` is the result (`testpion collections --json | jq '.data'`). See [MCP server](/ai-testing/mcp-server).
 
 ## Can I import my Postman collections or OpenAPI specs?
 
-Yes: OpenAPI 3 and Swagger 2 (JSON or YAML, from a file or a link), Postman v2.0 and v2.1 collections and environments (their scripts run, and `testpion run-collection` accepts Newman's options), Insomnia, Bruno (a collection folder too), Hoppscotch, WSDL 1.1 and 2.0 (SOAP services) and HAR files, or a request copied as cURL, fetch, PowerShell or HTTPie. See [collections](/api-testing/collections).
+Yes: OpenAPI 3 and Swagger 2 (JSON or YAML, from a file or a link), Postman v2.0 and v2.1 collections and environments (their `pm.*` scripts are converted to `tp.*` and run, and `testpion run-collection` accepts Newman's options), Insomnia, Bruno (a collection folder too), Hoppscotch, WSDL 1.1 and 2.0 (SOAP services), AsyncAPI, `.http` files, Arazzo workflows and HAR files, or a request copied as cURL, fetch, PowerShell or HTTPie. See [collections](/api-testing/collections).
 
 ## Are LLM-as-judge scores reliable?
 

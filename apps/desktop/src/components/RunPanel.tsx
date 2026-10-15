@@ -1,17 +1,23 @@
+import { RefLink } from './RefLink';
+import { LABEL } from '../lib/vocabulary';
 import { CodeBlock } from './CodeBlock';
 import { Activity, Braces, Download, FileBarChart, FileCode2, FileText, GitCompare, Square, Target, RotateCcw, ScanSearch, Sparkles, ThumbsDown, ThumbsUp } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { call, on } from '../api';
 import { toastError, useApp } from '../store';
 import type { RunSummary, TestResult, Trace } from '../types';
+import { EnvBadge } from './EnvSelect';
+import { runCiMenuItems } from '../lib/run-ci';
 import { formatCost, formatMs, plural, timeAgo } from '../lib/format';
 import { CheckList, ErrorPanel, StatusIcon } from './Results';
 import { TraceView } from './TraceView';
 import { RunCharts } from './RunCharts';
+import { RunTimeline } from './RunTimeline';
+
 import { TestHistory } from './TestHistory';
 import { VariablesTable } from './VariablesTable';
 import { finishSave, viewContent, type SaveResult } from '../lib/files';
-import { Badge, Button, cx, Empty, Field, Input, Metric, Modal, Segmented, Select, Split, Tabs, VirtualList, Menu, MetricGrid, Textarea } from './ui';
+import { Badge, Button, cx, Empty, Field, Input, Metric, Modal, Segmented, Select, Split, Tabs, VirtualList, Menu, MetricGrid, MoreMenu, Textarea } from './ui';
 import { usePersisted } from '../lib/sticky';
 
 interface Progress {
@@ -64,7 +70,7 @@ export function RunPanel({ runId, expectedTotal, onRerunFailed, focusName }: { r
   }, [done, summary, runId, reviewed]);
   const [baselineOpen, setBaselineOpen] = useState(false);
   // results list or the run's charts (once it finished); remembered
-  const [pane, pickPane] = usePersisted<'results' | 'charts'>('aps.runPane', 'results', { text: true, parse: (v) => (v === 'charts' ? 'charts' : 'results') });
+  const [pane, pickPane] = usePersisted<'results' | 'charts' | 'timeline'>('aps.runPane', 'results', { text: true, parse: (v) => (v === 'charts' || v === 'timeline' ? v : 'results') });
   const loadingPage = useRef(false);
 
   useEffect(() => {
@@ -129,7 +135,7 @@ export function RunPanel({ runId, expectedTotal, onRerunFailed, focusName }: { r
   useEffect(() => {
     if (!done || !focusName) return;
     void call<{ items: TestResult[] }>('runs.results', { runId, offset: 0, limit: 50, query: focusName }).then((r) => {
-      const hit = r.items.find((x) => x.name === focusName) ?? r.items[0];
+      const hit = r.items.find((x) => x.name === focusName || x.id === focusName) ?? r.items[0];
       if (hit) setSel(hit);
     }, () => undefined);
   }, [done, focusName, runId]);
@@ -177,11 +183,12 @@ export function RunPanel({ runId, expectedTotal, onRerunFailed, focusName }: { r
           {(s?.skipped ?? progress.skipped) > 0 && <Badge tone="warn">{s?.skipped ?? progress.skipped} skipped</Badge>}
           {!done && progress.running > 0 && <span className="text-muted text-xs">{progress.running} running</span>}
         </span>
+        {s?.environment && <EnvBadge name={s.environment} className="text-xs max-w-48" />}
         {done && (
           <div className="ml-auto flex flex-wrap gap-1">
             {onRerunFailed && s && s.failed + s.errors > 0 && (
               <Button size="sm" icon={<RotateCcw size={12} />} title="Run only the tests that failed or errored" onClick={() => onRerunFailed(runId)}>
-                Re-run failed
+                {LABEL.rerunFailed}
               </Button>
             )}
             <Button size="sm" icon={<FileBarChart size={12} />} onClick={() =>
@@ -192,6 +199,7 @@ export function RunPanel({ runId, expectedTotal, onRerunFailed, focusName }: { r
               HTML report
             </Button>
             <ExportMenu runId={runId} />
+            <MoreMenu label="Run actions" items={runCiMenuItems(runId)} />
             <Button size="sm" icon={<ScanSearch size={12} />} title="Which OpenAPI operations and responses this run exercised" onClick={() => useApp.getState().set({ apiCoverage: { runId } })}>
               API coverage
             </Button>
@@ -223,12 +231,23 @@ export function RunPanel({ runId, expectedTotal, onRerunFailed, focusName }: { r
           tabs={[
             { id: 'results', label: 'Results', badge: total || undefined },
             { id: 'charts', label: 'Charts' },
+            { id: 'timeline', label: 'Timeline' },
           ]}
           value={pane}
           onChange={pickPane}
         />
       )}
-      {done && pane === 'charts' ? (
+      {done && pane === 'timeline' ? (
+        <div className="flex-1 min-h-0">
+          <RunTimeline
+            runId={runId}
+            onPickStep={(name) => {
+              setQuery(name);
+              pickPane('results');
+            }}
+          />
+        </div>
+      ) : done && pane === 'charts' ? (
         <div className="flex-1 min-h-0">
           <RunCharts
             runId={runId}
@@ -402,7 +421,15 @@ export function ResultDetail({ r, runId, onReviewed, initialTab = 'checks' }: { 
           {r.tokens && <span>{r.tokens.totalTokens} tokens</span>}
           {r.costUsd !== undefined && <span>{formatCost(r.costUsd)}</span>}
           {r.attempts > 1 && <span>{r.attempts} attempts</span>}
-          {r.file && <span className="mono truncate" title={r.file}>{displayPath(r.file)}</span>}
+          {r.file &&
+            (displayPath(r.file).startsWith('tests/') ? (
+              // the file, opened at this test (the one way to open a ref)
+              <RefLink to={{ kind: 'test', path: displayPath(r.file).slice('tests/'.length), step: r.id }} label={displayPath(r.file)} className="mono" icon={false} title={r.file} />
+            ) : (
+              <span className="mono truncate" title={r.file}>
+                {displayPath(r.file)}
+              </span>
+            ))}
         </div>
       </div>
       <Tabs

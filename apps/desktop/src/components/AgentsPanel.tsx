@@ -5,6 +5,7 @@ import { asError, call } from '../api';
 import { toastError, useApp } from '../store';
 import { Badge, Button, Tabs, Toggle } from './ui';
 import { useCopied } from '../lib/clipboard';
+import { RunInTerminalButton } from './RunInTerminal';
 
 interface AgentInfo {
   command: string;
@@ -13,6 +14,15 @@ interface AgentInfo {
   app: boolean;
   workspace: { name: string; path: string };
   agentsMd: boolean;
+  /** Which agent files the workspace has (agents: AGENTS.md, claude: CLAUDE.md, cursor: .cursor/rules/testpion.mdc). */
+  agentFiles?: Partial<Record<AgentTarget, boolean>>;
+}
+
+type AgentTarget = 'agents' | 'claude' | 'cursor';
+
+/** What `agents.init` did to each file (the same report as `testpion agents init --json`). */
+interface AgentsInitResult {
+  files: Array<{ target: AgentTarget; path: string; status: 'created' | 'updated' | 'unchanged' | 'skipped'; reason?: string }>;
 }
 
 interface TestResult {
@@ -66,12 +76,20 @@ export function AgentsPanel() {
   const { copied, copy: copyToClipboard } = useCopied();
   const [test, setTest] = useState<{ busy?: boolean; result?: TestResult; error?: string }>({});
   const [flows, setFlows] = useState<ExposedFlow[]>([]);
+  // the extra agent files to write beside AGENTS.md: those the workspace already has are ticked
+  const [also, setAlso] = useState<{ claude?: boolean; cursor?: boolean }>({});
+  const [written, setWritten] = useState<AgentsInitResult>();
   useEffect(() => {
-    void call<AgentInfo>('agents.info', opts).then(setInfo, (e) => toastError(e));
+    void call<AgentInfo>('agents.info', opts).then((i) => {
+      setInfo(i);
+      setAlso((a) => ({ claude: a.claude ?? !!i.agentFiles?.claude, cursor: a.cursor ?? !!i.agentFiles?.cursor }));
+    }, (e) => toastError(e));
     setTest({});
   }, [opts.readOnly, opts.allowProduction, ws?.id]);
   useEffect(() => {
     void call<ExposedFlow[]>('agents.flows').then(setFlows, () => setFlows([]));
+    setAlso({});
+    setWritten(undefined);
   }, [ws?.id]);
   if (!info) return null;
   const s = snippet(client, info);
@@ -84,11 +102,14 @@ export function AgentsPanel() {
       setTest({ error: asError(e).message });
     }
   };
+  const targets: AgentTarget[] = ['agents', ...(also.claude ? (['claude'] as const) : []), ...(also.cursor ? (['cursor'] as const) : [])];
   const writeAgentsMd = async () => {
     try {
-      const r = await call<{ path: string; updated: boolean }>('agents.writeAgentsMd', opts);
-      useApp.getState().toast(`${r.updated ? 'Updated the TestPion part of' : 'Wrote'} ${r.path}`, 'success');
-      setInfo({ ...info, agentsMd: true });
+      const r = await call<AgentsInitResult>('agents.init', { targets });
+      setWritten(r);
+      const skipped = r.files.filter((f) => f.status === 'skipped');
+      useApp.getState().toast(r.files.map((f) => `${f.path} ${f.status}`).join(' · '), skipped.length ? 'warning' : 'success');
+      setInfo({ ...info, agentsMd: true, agentFiles: { ...info.agentFiles, ...Object.fromEntries(r.files.filter((f) => f.status !== 'skipped').map((f) => [f.target, true])) } });
     } catch (e) {
       toastError(e);
     }
@@ -132,10 +153,13 @@ export function AgentsPanel() {
         <div className="p-3 flex flex-col gap-2">
           <div className="text-xs text-muted">{s.where}</div>
           <div className="relative">
-            <CodeBlock className="mono text-xs bg-bg border border-line rounded-lg p-3 pr-20 whitespace-pre-wrap break-all" text={s.text} />
-            <Button size="sm" className="absolute top-2 right-2" icon={copied ? <Check size={12} /> : <Copy size={12} />} onClick={() => void copy()}>
-              {copied ? 'Copied' : 'Copy'}
-            </Button>
+            <CodeBlock className="mono text-xs bg-bg border border-line rounded-lg p-3 pr-28 whitespace-pre-wrap break-all" text={s.text} />
+            <div className="absolute top-2 right-2 flex items-center gap-1">
+              {client === 'claude-code' && <RunInTerminalButton command={s.text} />}
+              <Button size="sm" icon={copied ? <Check size={12} /> : <Copy size={12} />} onClick={() => void copy()}>
+                {copied ? 'Copied' : 'Copy'}
+              </Button>
+            </div>
           </div>
         </div>
       </div>
@@ -157,9 +181,24 @@ export function AgentsPanel() {
           </div>
         )}
         {test.error && <div className="text-sm text-bad">{test.error}</div>}
+        <div className="flex items-center gap-4 flex-wrap" data-agent-targets>
+          <Toggle checked={!!also.claude} onChange={(claude) => setAlso({ ...also, claude })} label="Also CLAUDE.md (points Claude Code to AGENTS.md)" />
+          <Toggle checked={!!also.cursor} onChange={(cursor) => setAlso({ ...also, cursor })} label="Also a Cursor rule (.cursor/rules/testpion.mdc)" />
+        </div>
+        {written && (
+          <ul className="flex flex-col gap-1 text-sm" data-agent-files>
+            {written.files.map((f) => (
+              <li key={f.target} className="flex items-center gap-2 flex-wrap" data-agent-file={f.path} data-status={f.status}>
+                <Badge tone={f.status === 'skipped' ? 'bad' : f.status === 'unchanged' ? undefined : 'ok'}>{f.status}</Badge>
+                <span className="mono text-xs">{f.path}</span>
+                {f.reason && <span className="text-xs text-muted">{f.reason}</span>}
+              </li>
+            ))}
+          </ul>
+        )}
         <p className="text-xs text-muted leading-relaxed">
           Agents ask before running tools that send requests or change files (their annotations say which ones). Try the prompts <span className="mono">investigate_failures</span>, <span className="mono">write_tests</span> and{' '}
-          <span className="mono">debug_request</span> (in Claude Code: type <span className="mono">/</span>). <b>AGENTS.md</b> tells coding agents that open this folder how to use it.
+          <span className="mono">debug_request</span> (in Claude Code: type <span className="mono">/</span>). <b>AGENTS.md</b> tells coding agents that open this folder how to use it: its collections, environments (names only), tests and flows, the commands and the secrets and production rules. Only the part between the testpion markers is replaced when you write it again; your own text stays (<span className="mono">testpion agents init</span> does the same).
         </p>
       </div>
 

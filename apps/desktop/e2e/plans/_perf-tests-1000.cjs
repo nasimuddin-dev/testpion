@@ -64,7 +64,8 @@ const steps = [
     `profile:(async () => { ${METER}
       const tab = vis('main [role=tab]').find((t) => t.textContent.trim().startsWith('Flow')); if (!tab) return 'NO TAB Flow';
       const t0 = performance.now(); tab.click();
-      await __t.waitFor(() => (document.querySelectorAll('[data-flow-node]').length > 400 ? true : null), 20000); await ${painted}();
+      // the canvas draws only the steps on screen (the count says how many of the 500)
+      await __t.waitFor(() => (document.querySelectorAll('[data-flow-node]').length > 0 ? true : null), 20000); await ${painted}();
       const ms = Math.round(performance.now() - t0);
       const nodes = document.querySelectorAll('[data-flow-node]').length;
       const back = vis('main [role=tab]').find((t) => t.textContent.includes('big-500.yaml')); if (!back) return 'NO TAB big-500.yaml'; const t1 = performance.now(); back?.click(); await __t.waitFor(() => (vis('main .monaco-editor .view-lines')[0]?.textContent?.includes('step-') ? true : null), 20000); await ${painted}(); const backMs = Math.round(performance.now() - t1);
@@ -96,8 +97,10 @@ const steps = [
       const f = treeRow('big-1000.yaml'); if (!f) return 'NO ROW big-1000'; f.click(); await __t.sleep(1500);
       const workers = vis('main input[type=number]')[0]; if (workers) setInput(workers, '16'); await __t.sleep(200);
       const run = vis('main button').find((b) => b.textContent.trim() === 'Run'); if (!run) return 'NO BUTTON Run';
+      // done: the run's finished event, then its results painted (the panel's wording is not what is measured)
+      let finished = false; const off = window.aps.on('run.finished', () => (finished = true));
       const t0 = performance.now(); run.click();
-      const ok = await __t.waitFor(() => (/\\b1000\\/1000\\b/.test(document.querySelector('main')?.textContent ?? '') ? true : null), 170000);
+      const ok = await __t.waitFor(() => (finished && resultRows().length ? true : null), 170000); off?.(); await ${painted}();
       return 'run done: ' + !!ok + ' | ms: ' + Math.round(performance.now() - t0) + ' | result rows in dom: ' + resultRows().length + ipc() + loaf();
     })()`,
     false,

@@ -19,12 +19,15 @@ import {
   Terminal,
   Trash2,
   Upload,
+  Workflow,
+  Circle,
 } from 'lucide-react';
-import { Settings2 } from 'lucide-react';
+import { openReverseProxyCapture } from '../lib/capture';
+import { Disc, FolderPlus, Settings2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { call } from '../api';
 import { confirmAction, promptText, toastError, useApp } from '../store';
-import { Button, cx, Empty, Input, Menu, PageHeader, Select, Split, Tabs, type MenuItem } from '../components/ui';
+import { Badge, Button, cx, Empty, Input, Menu, PageHeader, Select, Split, Tabs, type MenuItem } from '../components/ui';
 import { formatBytes, formatMs } from '@testpion/shared';
 import { downloadContent, finishSave, pickBinaryFile, pickTextFile, type SaveResult } from '../lib/files';
 import {
@@ -37,7 +40,10 @@ import { ExchangePanes } from '../components/debugger/ExchangePanes';
 import { useExchangeList, type ListFilter } from '../components/debugger/useExchangeList';
 import { BreakpointDialog, CompareExchangesDialog, RuleDialog, RulesPanel, type Rule, type RulesState } from '../components/DebuggerRules';
 import { DebuggerGrid, GridTotals, IncomingList, TrafficSide, useIncoming, type GridActions } from '../components/debugger/DebuggerGrid';
-import { useStableCallbacks } from '../hooks';
+import { useIntent, useStableCallbacks } from '../hooks';
+import { reportUnopenable } from '../lib/open-ref';
+import { CreateFlowDialog } from '../components/debugger/CreateFlowDialog';
+import { SaveToCollectionDialog } from '../components/debugger/SaveToCollectionDialog';
 import { Dock } from '../components/debugger/Dock';
 import { ToolRail, type DockPanel } from '../components/debugger/ToolRail';
 import { copyText } from '../lib/clipboard';
@@ -94,6 +100,12 @@ export function DebuggerView() {
   const [compareA, setCompareA] = useState<Exchange>();
   const [comparePair, setComparePair] = useState<{ a: string; b: string }>();
   const [dialog, setDialog] = useState<'certificate' | 'lan'>();
+  /** Create a flow: from these exchanges, or from every one since a recording started. */
+  const [flowFrom, setFlowFrom] = useState<{ ids?: string[]; since?: string }>();
+  /** Save to collection (WF-12): these exchanges as saved requests. */
+  const [saveFrom, setSaveFrom] = useState<{ ids?: string[]; since?: string }>();
+  /** "Record a flow…" is on: since when, and how many exchanges so far. */
+  const [recording, setRecording] = useState<{ since: string; count: number }>();
   const filterBox = useRef<HTMLInputElement>(null);
 
   const list = useExchangeList(filter);
@@ -141,6 +153,49 @@ export function DebuggerView() {
     setPort(String(n));
   };
   const stop = async () => setStatus(await call<Status>('debug.stop'));
+  // Record a flow: capture starts (when it is not on yet), the person uses their program, Stop opens the dialog with
+  // every exchange since
+  const startRecording = () =>
+    startThen(async () => {
+      try {
+        const r = await call<{ since: string }>('debug.record', { on: true });
+        setRecording({ since: r.since, count: 0 });
+        toast('Recording a flow: use your program through the proxy, then Stop recording');
+      } catch (e) {
+        toastError(e);
+      }
+    });
+  const stopRecording = async () => {
+    try {
+      const r = await call<{ since?: string; count: number }>('debug.record', { on: false });
+      setRecording(undefined);
+      if (!r.since || !r.count) return void useApp.getState().toast('Nothing was captured while recording', 'error');
+      setFlowFrom({ since: r.since });
+    } catch (e) {
+      toastError(e);
+    }
+  };
+  useEffect(() => {
+    void call<{ recording: boolean; since?: string; count: number }>('debug.record').then((r) => setRecording(r.recording && r.since ? { since: r.since, count: r.count } : undefined), () => undefined);
+  }, []);
+  useEffect(() => {
+    if (recording) void call<{ recording: boolean; since?: string; count: number }>('debug.record').then((r) => r.recording && r.since && setRecording({ since: r.since, count: r.count }), () => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows.length]);
+  useIntent('debugger', (p) => {
+    if (p?.record && !recording) void startRecording();
+    // an exchange named elsewhere (a flow step, an agent's link): selected when the session still has it
+    if (typeof p?.exchangeId === 'string') {
+      const id = p.exchangeId;
+      void call('debug.exchange', { id }).then(
+        () => setSelected(id),
+        () => reportUnopenable({ ok: false, ref: { kind: 'exchange', exchangeId: id }, reason: 'missing', message: 'it is no longer in the Debugger session (cleared, or captured in another session).' }),
+      );
+    }
+  });
+  const createFlowFrom = (ids: string[]) => (ids.length ? setFlowFrom({ ids }) : useApp.getState().toast('Select the exchanges to make a flow of (Ctrl+click, Shift+click)', 'error'));
+  const saveToCollection = (ids: string[]) => (ids.length ? setSaveFrom({ ids }) : useApp.getState().toast('Select the exchanges to save (Ctrl+click, Shift+click)', 'error'));
+  const selection = () => (selectedIds.length > 1 ? selectedIds : selected ? [selected] : []);
   const openInTab = (e: Exchange) => useApp.getState().openIntent('rest', { request: toRequest(e), name: `${e.method} ${new URL(e.url).pathname}` });
   const resend = async (e: Exchange) => {
     try {
@@ -296,6 +351,8 @@ export function DebuggerView() {
     onBookmark: async (e) => (await call('debug.bookmark', { id: e.id, on: !e.bookmarked }), void load()),
     onCompare: setCompareA,
     onDelete: (ids) => void remove(ids),
+    onCreateFlow: createFlowFrom,
+    onSaveToCollection: saveToCollection,
     onClear: () => void clear(),
     onQuickRule: quickRule,
     onNewRule: setRuleDraft,
@@ -331,6 +388,8 @@ export function DebuggerView() {
       onSelect: () => void startThen(() => call<{ terminal: string }>('debug.openTerminal').then((r) => toast(`${r.terminal} opened with HTTP_PROXY set; only what runs in it is captured`), toastError)),
     },
     { label: 'A phone or another computer…', icon: <Smartphone size={14} />, onSelect: () => void startThen(() => setDialog('lan')) },
+    // WF-12: a client that can't use a proxy points at a local address that forwards to the API (no certificate needed)
+    { label: 'Reverse proxy for one API…', icon: <Disc size={14} />, onSelect: () => openReverseProxyCapture() },
     status?.systemProxy
       ? { label: 'Stop capturing everything (restore the system proxy)', icon: <Globe size={14} />, separator: true, onSelect: () => void systemProxy(false) }
       : { label: 'Everything on this computer (the system proxy, restored on stop)', icon: <Globe size={14} />, separator: true, onSelect: () => void startThen(() => systemProxy(true)) },
@@ -378,6 +437,32 @@ export function DebuggerView() {
               <Button variant="primary" icon={<Play size={13} />} onClick={() => void start()} title="Start the proxy; point a program at it yourself, or choose what to capture from the menu">
                 Start capturing
               </Button>
+            )}
+            {recording ? (
+              <>
+                <span data-recording-badge>
+                  <Badge tone="bad" title="Every exchange captured from now on becomes a step of the flow">
+                    <Circle size={8} className="fill-current animate-pulse" /> Recording · {plural(recording.count, 'exchange')}
+                  </Badge>
+                </span>
+                <Button variant="primary" icon={<Square size={13} />} onClick={() => void stopRecording()} title="Stop recording and create the flow from what was captured">
+                  Stop recording
+                </Button>
+              </>
+            ) : (
+              <Menu
+                width={300}
+                items={[
+                  { label: 'Create flow from selection…', icon: <Workflow size={14} />, disabled: !selection().length, onSelect: () => createFlowFrom(selection()) },
+                  { label: 'Save selection to collection…', icon: <FolderPlus size={14} />, disabled: !selection().length, onSelect: () => saveToCollection(selection()) },
+                  { label: 'Record a flow…', icon: <Circle size={14} />, onSelect: () => void startRecording() },
+                ]}
+                trigger={
+                  <Button icon={<Workflow size={13} />} title="Make a test flow of exchanges: the selected rows, or what you do next in your program">
+                    Flow <ChevronDown size={12} />
+                  </Button>
+                }
+              />
             )}
             <Menu
               width={360}
@@ -738,6 +823,8 @@ export function DebuggerView() {
           }}
         />
       )}
+      {flowFrom && <CreateFlowDialog ids={flowFrom.ids} since={flowFrom.since} onClose={() => setFlowFrom(undefined)} />}
+      {saveFrom && <SaveToCollectionDialog ids={saveFrom.ids} since={saveFrom.since} onClose={() => setSaveFrom(undefined)} />}
       {comparePair && <CompareExchangesDialog a={comparePair.a} b={comparePair.b} onClose={() => setComparePair(undefined)} />}
     </div>
   );

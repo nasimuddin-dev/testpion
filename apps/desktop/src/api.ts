@@ -82,8 +82,25 @@ export function visualizationUrl(id: string): string {
 // browser development mode only: expose the bridge for debugging from the devtools console
 if (bridge.kind === 'web' && import.meta.env.DEV) (window as unknown as { __aps: Bridge }).__aps = bridge;
 
-export function call<T = any>(method: string, params?: unknown): Promise<T> {
-  return bridge.invoke(method, params);
+/**
+ * What a call the backend refused can do instead of failing: given the error, the method and the parameters, the
+ * parameters to call again with (the production guard's confirmation adds allowProduction), or undefined to fail.
+ * One for the whole window (lib/production-guard.ts registers it), so every view's sends and runs get the same answer.
+ */
+type Recovery = (e: unknown, method: string, params: unknown) => Promise<unknown | undefined> | undefined;
+let recovery: Recovery | undefined;
+export function setCallRecovery(fn: Recovery | undefined): void {
+  recovery = fn;
+}
+
+export async function call<T = any>(method: string, params?: unknown): Promise<T> {
+  try {
+    return await bridge.invoke(method, params);
+  } catch (e) {
+    const again = recovery && (await recovery(e, method, params));
+    if (again === undefined) throw e;
+    return bridge.invoke(method, again);
+  }
 }
 
 export function on<T = any>(channel: string, cb: (payload: T) => void): () => void {

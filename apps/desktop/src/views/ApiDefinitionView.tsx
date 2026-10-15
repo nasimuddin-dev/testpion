@@ -1,3 +1,5 @@
+import { ItemBreadcrumb } from '../components/ItemBreadcrumb';
+import { refMenu } from '../components/RefLink';
 import { FileCode2, Save, Upload } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { OnMount } from '@monaco-editor/react';
@@ -153,6 +155,14 @@ export function ApiDefinitionView() {
     );
   return (
     <div className="h-full flex flex-col min-w-0">
+      {/* WF-11: API definitions › folder › file, like every item view */}
+      <ItemBreadcrumb
+        label="Where this API definition is"
+        crumbs={[{ label: 'API definitions' }, ...name!.split('/').slice(0, -1).map((f) => ({ label: f }))]}
+        name={name!.split('/').pop()!}
+        dirty={dirty}
+        actions={refMenu({ kind: 'spec', path: spec })}
+      />
       <div className="flex items-center gap-2 px-3 py-2 border-b border-line shrink-0 min-w-0">
         <FileCode2 size={16} className="text-muted shrink-0" />
         <span className="font-semibold truncate" title={spec}>

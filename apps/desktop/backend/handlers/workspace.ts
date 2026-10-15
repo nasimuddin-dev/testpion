@@ -18,6 +18,8 @@ import {
   type CookieInput,
   secretKeys,
   templateVariables,
+  itemInfo,
+  onboardingProgress,
   DEFAULT_BASE_URLS,
   type Environment,
   type WorkspaceBundle,
@@ -25,12 +27,17 @@ import {
   unusedVariables,
   findEnvironment,
   setEnvironmentVariables,
+  addVariablesToEnvironments,
   makeGitReady,
   requireCollectionFor,
   requireEnvironment,
   isWorkspaceDir,
+  resolveItemRef,
+  toItemRef,
+  type RefResolution,
 } from '@testpion/core';
 import type { Backend, Handlers } from '../backend.js';
+import { takeOpenLinks } from '../open-links.js';
 
 export function workspaceHandlers(be: Backend): Handlers {
   return {
@@ -192,6 +199,40 @@ export function workspaceHandlers(be: Backend): Handlers {
       return { kind: 'collection', ...r, workspace: be.ws.workspace.name };
     },
     'ws.search': ({ query }: { query: string }) => be.search?.search(query, 60) ?? [],
+    /**
+     * Whether an ItemRef still points at something in the open workspace, its name, and when it doesn't, why and the
+     * nearest thing still there (openRef in the window asks before it opens anything it can't check itself). Indexed
+     * lookups only: one answer per click, as fast with 9,000 requests as with 9. A Debugger exchange lives in the
+     * window's session list: the Debugger view checks that one.
+     */
+    'ref.resolve': ({ ref }: { ref: unknown }): RefResolution => {
+      const r = toItemRef(ref);
+      if (!be.store) return { ok: false, ref: (r ?? ref) as RefResolution['ref'], reason: 'unavailable', message: 'No workspace is open', next: { label: 'Open a workspace', view: 'home' } };
+      return resolveItemRef(be.store, ref);
+    },
+    /**
+     * WF-20 the context panel: one item's file, the runs that included it, and the {{variables}} it uses with where each
+     * comes from in this environment (secrets masked, never sent to the window).
+     */
+    'ref.info': ({ ref, environment }: { ref: unknown; environment?: string }) => {
+      const r = toItemRef(ref);
+      if (!r) throw new ApsError('ValidationError', 'That is not a link to something in TestPion');
+      const { text, ...info } = itemInfo(be.ws, r);
+      const ctx = be.context({ environment, collectionId: info.collectionId });
+      try {
+        const variables = (text ? templateVariables(text) : []).slice(0, 200).map((name) => {
+          const d = ctx.vars.describe(name);
+          return { name, scope: d?.scope, value: d ? (d.secret ? '••••••' : String(typeof d.value === 'object' ? JSON.stringify(d.value) : d.value).slice(0, 200)) : undefined, secret: d?.secret };
+        });
+        return { ...info, variables };
+      } finally {
+        void ctx.dispose();
+      }
+    },
+    /** WF-22 Home's Get started: the first loop's steps, done from what the workspace holds, each with what it opens. */
+    'ws.onboarding': () => onboardingProgress(be.ws),
+    /** testpion://open links that started the app before the window was ready (see open-links.ts). */
+    'app.takeOpenLinks': () => takeOpenLinks(),
 
     /** Saved items with folders of one kind (websocket, ai-prompts, mcp …), stored in library/<kind>.json. */
     /* Script packages (tp.require): packages/<name>.js in the workspace */
@@ -225,12 +266,16 @@ export function workspaceHandlers(be: Backend): Handlers {
       const scope = environment ? `environment ${be.ws.getEnvironment(environment)?.name ?? environment}` : 'workspace';
       return [...new Set(unusedVariables(be.ws).find((x) => x.scope === scope)?.unused ?? [])];
     },
-    'vars.setInEnvironment': async ({ environment, name, value }: { environment: string; name: string; value: string }) => {
+    /** Set (or add) a variable in an environment; `alsoIn` adds it to other environments where it is missing (WF-14), empty or `copy`. */
+    'vars.setInEnvironment': async ({ environment, name, value, alsoIn, copy }: { environment: string; name: string; value: string; alsoIn?: string[]; copy?: boolean }) => {
       const env = findEnvironment(be.ws, environment);
       if (!env) throw new ApsError('ConfigurationError', 'Choose an environment first (top bar), then add the variable to it');
       await setEnvironmentVariables(be.ws, env.id, { [name]: value }, { secrets: be.secrets });
-      return { environment: env.name, secret: !!env.variables.find((v) => v.key === name)?.secret };
+      const also = alsoIn?.length ? await addVariablesToEnvironments(be.ws, env.id, [name], alsoIn, { copy, secrets: be.secrets }) : [];
+      return { environment: env.name, secret: !!env.variables.find((v) => v.key === name)?.secret, also };
     },
+    /** Variables of one environment added to others where they are missing (after adding new ones in the Environments view). */
+    'vars.addToEnvironments': ({ from, keys, to, copy }: { from: string; keys: string[]; to: string[]; copy?: boolean }) => addVariablesToEnvironments(be.ws, from, keys, to, { copy, secrets: be.secrets }),
     'env.delete': ({ id }: { id: string }) => be.ws.deleteEnvironment(id),
     /** Recently deleted collections and environments (30 days). */
     'trash.list': () => listTrash(be.ws),

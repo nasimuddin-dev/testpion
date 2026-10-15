@@ -12,6 +12,7 @@ import type { WorkspaceStore } from './storage/workspace.js';
 import { recordCertificate } from './storage/certificates.js';
 import { secretKeys, type SecretStore } from './storage/secrets.js';
 import { CookieJar } from './cookies/cookie-jar.js';
+import { productionAllowed } from './net/production-guard.js';
 import { APP_CLAUDE_ID, APP_CLAUDE_SECRET, appClaudeProvider } from './ai/app-provider.js';
 
 export interface ContextOptions {
@@ -40,6 +41,11 @@ export interface ContextOptions {
   cookieJar?: CookieJar | false;
   /** Providers available besides the workspace's (the app's own Claude provider); a workspace provider with the same id wins. */
   extraProviders?: ProviderConfig[];
+  /**
+   * A production environment: whether data-changing steps may run (net/production-guard.ts). Unset: the consent of the
+   * call this context is created in (`allowProductionFor`, the CLI's --allow-production), else none.
+   */
+  allowProduction?: boolean;
 }
 
 export interface EngineContext {
@@ -124,6 +130,7 @@ export function createEngineContext(opts: ContextOptions): EngineContext {
     openExternal: opts.openExternal,
     cookieJar: opts.cookieJar === false ? undefined : (opts.cookieJar ?? new CookieJar()),
     environmentName: environment?.name,
+    production: environment?.isProduction ? { environment: environment.name, allowed: opts.allowProduction ?? productionAllowed() } : undefined,
     readFile: (path: string) => readFileSync(store.safePath(path, opts.fileRoot ?? store.root), 'utf8'),
     scriptPackage: (name: string) => store.readScriptPackage(name),
     onCertificate: (url, c) => recordCertificate(store, url, c),

@@ -35,9 +35,9 @@ The workspace is copied into your data folder once. You can change it freely: ap
 
 ## The offline demo model
 
-AI examples use **Offline demo model**, a deterministic stand-in that runs inside TestPion. It classifies the example intents, refuses the prompt injection, answers the RAG question and calls the Petstore MCP tool. It is set up in **Settings ▸ Providers**, with rules (regular expression → reply or tool call) in its `x-mock-rules` header. So evaluations, safety tests and the agent test run without an API key and give the same result every time.
+AI examples use **Offline demo model**, a deterministic stand-in that runs inside TestPion. It classifies the example intents, refuses the prompt injection, answers the RAG question and calls the Petstore MCP tool. It is set up in **AI Lab ▸ Providers**, with rules (regular expression → reply or tool call) in its `x-mock-rules` header. So evaluations, safety tests and the agent test run without an API key and give the same result every time.
 
-To try a real model, add an API key to **OpenAI**, **Anthropic** or **Google Gemini** under **Settings ▸ Providers**, or start Ollama locally. Then pick that provider in AI Lab, or change `provider:` in a test file.
+To try a real model, add an API key to **OpenAI**, **Anthropic** or **Google Gemini** under **AI Lab ▸ Providers**, or start Ollama locally. Then pick that provider in AI Lab, or change `provider:` in a test file.
 
 ## From the terminal
 

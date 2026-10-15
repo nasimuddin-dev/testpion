@@ -21,7 +21,7 @@
  */
 import { spawn } from 'node:child_process';
 import { connect } from 'node:net';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
@@ -120,11 +120,88 @@ const portOpen = (port) =>
   new Promise((ok) => {
     const s = connect(port, '127.0.0.1', () => (s.destroy(), ok(true))).on('error', () => ok(false));
   });
+/*
+ * Several runners may run at once (two agents, two terminals): the demo servers are shared, not owned. Each runner
+ * holds a lease (a file named after its pid in the OS temp folder); the servers are started detached by whoever finds
+ * none up, and stopped by the last runner to leave — never under a runner still using them. A directory made with
+ * mkdir is the lock around "lease + start" and "release + stop" (mkdir is atomic); a lock left by a crashed runner is
+ * taken over after 30 s, and the lease of a runner that died is ignored.
+ */
+const shared = join(tmpdir(), 'testpion-e2e-demo');
+const lockDir = join(shared, 'lock');
+const leases = join(shared, 'leases');
+const serverPidFile = join(shared, 'server.pid');
+const alive = (pid) => {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e) {
+    return e.code === 'EPERM';
+  }
+};
+async function withLock(fn) {
+  mkdirSync(shared, { recursive: true });
+  for (let i = 0; ; i++) {
+    try {
+      mkdirSync(lockDir);
+      break;
+    } catch {
+      let stale = false;
+      try {
+        stale = Date.now() - statSync(lockDir).mtimeMs > 30_000;
+      } catch {
+        // just released: try again
+      }
+      if (stale) rmSync(lockDir, { recursive: true, force: true });
+      else await new Promise((r) => setTimeout(r, 100 + (i % 5) * 20));
+    }
+  }
+  try {
+    return await fn();
+  } finally {
+    rmSync(lockDir, { recursive: true, force: true });
+  }
+}
+/** The runners that hold a lease and are still running (a dead runner's lease is removed). */
+function liveLeases() {
+  mkdirSync(leases, { recursive: true });
+  return readdirSync(leases).filter((f) => {
+    if (alive(Number(f))) return true;
+    rmSync(join(leases, f), { force: true });
+    return false;
+  });
+}
 async function demoServers() {
-  if (await portOpen(4010)) return undefined;
-  const child = spawn(process.execPath, [join(repo, 'examples', 'servers', 'demo-servers.mjs')], { stdio: 'ignore' });
-  for (let i = 0; i < 50 && !(await portOpen(4010)); i++) await new Promise((r) => setTimeout(r, 200));
-  return child;
+  return withLock(async () => {
+    liveLeases();
+    writeFileSync(join(leases, String(process.pid)), new Date().toISOString());
+    if (await portOpen(4010)) return;
+    const child = spawn(process.execPath, [join(repo, 'examples', 'servers', 'demo-servers.mjs')], { stdio: 'ignore', detached: true });
+    child.unref();
+    writeFileSync(serverPidFile, String(child.pid));
+    for (let i = 0; i < 50 && !(await portOpen(4010)); i++) await new Promise((r) => setTimeout(r, 200));
+  });
+}
+/** Give the lease back; the last runner out stops the servers a runner started (never a server someone else runs). */
+async function releaseDemoServers() {
+  await withLock(async () => {
+    rmSync(join(leases, String(process.pid)), { force: true });
+    if (liveLeases().length) return;
+    let pid;
+    try {
+      pid = Number(readFileSync(serverPidFile, 'utf8'));
+    } catch {
+      return;
+    }
+    rmSync(serverPidFile, { force: true });
+    if (pid && alive(pid)) {
+      try {
+        process.kill(pid);
+      } catch {
+        // already gone
+      }
+    }
+  });
 }
 
 const plans = readdirSync(join(here, 'plans'))
@@ -136,7 +213,9 @@ if (!plans.length) {
   process.exit(2);
 }
 console.log(`TestPion e2e: ${plans.length} plans against ${exe ? exe : 'the development build'}; output in ${out}\n`);
-const servers = await demoServers();
+await demoServers();
+// Ctrl+C still gives the lease back
+process.on('SIGINT', () => void releaseDemoServers().finally(() => process.exit(130)));
 const results = [];
 for (const file of plans) {
   let r = await runPlan(file, 1);
@@ -150,7 +229,7 @@ for (const file of plans) {
   for (const f of r.ok ? (r.flaky ?? []) : r.failures) console.log(`        ${r.ok ? '(first run) ' : ''}${f.step}: ${f.why}${f.result ? `\n          → ${f.result}` : ''}`);
   if (r.warnings?.length) console.log(`        ${r.warnings.length} console warning${r.warnings.length > 1 ? 's' : ''} (summary.json), first: ${r.warnings[0].slice(0, 160)}`);
 }
-servers?.kill();
+await releaseDemoServers();
 writeFileSync(join(out, 'summary.json'), JSON.stringify(results, null, 2));
 const failed = results.filter((r) => !r.ok);
 const flaky = results.filter((r) => r.flaky);

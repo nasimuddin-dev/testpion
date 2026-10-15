@@ -204,6 +204,8 @@ export interface MetaStore {
   addHistory(e: HistoryEntry): void;
   listHistory(q?: ListQuery): Page<HistoryEntry>;
   getHistory(id: string): HistoryEntry | undefined;
+  /** The History entry a trace belongs to (a request sent from an editor), if any. */
+  historyOfTrace(traceId: string): HistoryEntry | undefined;
   deleteHistory(id: string): void;
   clearHistory(): void;
   addRun(summary: RunSummary, dir: string): void;
@@ -330,6 +332,9 @@ class SqliteMetaStore implements MetaStore {
     mkdirSync(dirname(path), { recursive: true });
     this.root = dirname(path);
     this.db = new Db(path);
+    // another process may be writing (the app and a CLI run, CI jobs side by side): wait for its lock instead of failing
+    // at once — a failed open fell back to metadata.jsonl, and the runs recorded there were missing from the history
+    this.db.exec('PRAGMA busy_timeout=10000;');
     this.db.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA cache_size=-16000;');
     this.migrate();
   }
@@ -466,6 +471,17 @@ class SqliteMetaStore implements MetaStore {
 
   getHistory(id: string): HistoryEntry | undefined {
     const r = this.db.prepare('SELECT * FROM history WHERE id = ?').get(id) as Record<string, unknown> | undefined;
+    return r ? historyRow(r) : undefined;
+  }
+
+  private traceIndexed = false;
+  historyOfTrace(traceId: string): HistoryEntry | undefined {
+    // indexed the first time it is asked (a trace's links), never at start-up
+    if (!this.traceIndexed) {
+      this.db.exec('CREATE INDEX IF NOT EXISTS history_trace ON history(trace_id)');
+      this.traceIndexed = true;
+    }
+    const r = this.db.prepare('SELECT * FROM history WHERE trace_id = ? LIMIT 1').get(traceId) as Record<string, unknown> | undefined;
     return r ? historyRow(r) : undefined;
   }
 
@@ -673,6 +689,9 @@ class JsonlMetaStore implements MetaStore {
   }
   getHistory(id: string) {
     return this.data.history.find((h) => h.id === id);
+  }
+  historyOfTrace(traceId: string) {
+    return this.data.history.find((h) => h.traceId === traceId);
   }
   deleteHistory(id: string) {
     removeFiles(this.root, [this.data.history.find((h) => h.id === id)?.payloadPath]);

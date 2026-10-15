@@ -24,10 +24,17 @@ import {
   type Collection,
   type TestResult,
 } from '@testpion/core';
+import { noteWarning } from './output.js';
+import { dryRunWorkspace } from './dry-run.js';
 
 /** One warning line per collection or environment whose file cannot be read (they are listed, never dropped silently). */
 export function warnProblems(items: Array<{ name: string; problem?: string }>, what: 'collection' | 'environment'): void {
-  for (const i of items) if (i.problem) console.error(yellow(`warning: ${what} "${i.name}" is broken and was skipped: ${i.problem}`));
+  for (const i of items)
+    if (i.problem) {
+      const w = `${what} "${i.name}" is broken and was skipped: ${i.problem}`;
+      console.error(yellow(`warning: ${w}`));
+      noteWarning(w);
+    }
 }
 
 /** Exit codes (spec §37). */
@@ -58,10 +65,8 @@ export class CliError extends Error {
   }
 }
 
-/** `--json` output: one indented JSON document on stdout. */
-export function printJson(value: unknown): void {
-  console.log(JSON.stringify(value, null, 2));
-}
+/** `--json` output goes through the one writer of the envelope (output.ts). */
+export { printJson } from './output.js';
 
 export function collectVar(v: string, prev: Record<string, string> = {}): Record<string, string> {
   const i = v.indexOf('=');
@@ -84,10 +89,11 @@ export function openWorkspace(ref: string | undefined, hintPath: string | undefi
   if (ref) {
     const p = mgr.resolve(ref) ?? (existsSync(join(resolve(ref), 'workspace.json')) ? resolve(ref) : undefined);
     if (!p) throw new CliError(`Workspace "${ref}" not found. Known: ${mgr.list().map((w) => w.name).join(', ') || 'none'}`, EXIT.CONFIG_ERROR);
-    return { store: WorkspaceStore.open(p) };
+    // a dry run (dry-run.ts) works on a copy of the workspace
+    return { store: WorkspaceStore.open(dryRunWorkspace(p)) };
   }
   const found = findWorkspaceUp(hintPath ?? process.cwd());
-  if (found) return { store: WorkspaceStore.open(found) };
+  if (found) return { store: WorkspaceStore.open(dryRunWorkspace(found)) };
   // no workspace: run in an ephemeral one (providers resolve from OPENAI_API_KEY / ANTHROPIC_API_KEY / mock)
   const tmp = mkdtempSync(join(tmpdir(), 'aps-ephemeral-'));
   return { store: WorkspaceStore.create(tmp, 'ephemeral'), ephemeral: tmp };
@@ -203,8 +209,9 @@ export function printLoad(s: LoadSnapshot): void {
     console.log(`  server time   p50 ${s.http.ttfb.p50}ms · p95 ${s.http.ttfb.p95}ms (time to first byte)`);
     console.log(`  connections   ${s.http.newConnections} new${s.http.setupMs !== undefined ? ` (set-up ${s.http.setupMs}ms each)` : ''} · ${s.http.reused} reused`);
   }
+  if (s.iteration) console.log(`  flow runs     ${s.iteration.count} (${s.iteration.failed} failed) · p50 ${s.iteration.latency.p50}ms · p95 ${s.iteration.latency.p95}ms per run`);
   if (s.perRequest?.length) {
-    console.log(bold(`\nPer request (${s.iterations ?? 0} passes through the collection)`));
+    console.log(bold(s.iteration ? `\nPer step (${s.iteration.count} runs of the flow)` : `\nPer request (${s.iterations ?? 0} passes through the collection)`));
     const w = Math.min(48, Math.max(...s.perRequest.map((p) => p.name.length)));
     for (const p of s.perRequest)
       console.log(`  ${p.name.slice(0, w).padEnd(w)}  ${String(p.requests).padStart(6)} req  ${String(p.errors).padStart(4)} err  p50 ${p.latency.p50}ms · p95 ${p.latency.p95}ms`);

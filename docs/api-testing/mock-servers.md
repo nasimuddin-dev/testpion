@@ -13,7 +13,7 @@ Mock servers run on your computer only. They listen on `127.0.0.1` and are never
 
 ## Start one
 
-**In the app:** open **Collections**, select a collection and open the **Mock** tab. The tab lists the routes the collection's examples provide. Pick a port (or leave it empty for any free port), optionally a delay, and click **Start mock server**. Copy the URL and use it as `{{baseUrl}}`, for example in a new *Mock* environment. Requests to the server appear below the routes as they arrive. Click a route to open its request.
+**In the app:** open the collection's page (its **⋯ ▸ Settings, runner & docs** in the Collections explorer, or the collection's name at the start of a request's breadcrumb line) and open the **Mock** tab. The tab lists the routes the collection's examples provide. Pick a port (or leave it empty for any free port), optionally a delay, and click **Start mock server**. Copy the URL and use it as `{{baseUrl}}`, for example in a new *Mock* environment. Requests to the server appear below the routes as they arrive, and in the [HTTP Debugger](/api-testing/http-debugger)'s **Incoming requests** with the example that answered. Click a route to open its request.
 
 The server follows the collection: examples you save, rename or delete are served straight away. It stops when you click **Stop**, switch workspace or close the app.
 

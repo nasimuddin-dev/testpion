@@ -1,15 +1,43 @@
-import { statSync } from 'node:fs';
+import { readdirSync, statSync, type Dirent } from 'node:fs';
+import { join } from 'node:path';
+import type { ItemRef } from '@testpion/shared';
 import type { CollectionNode } from '../model/types.js';
 import type { TestFileNode, WorkspaceStore } from './workspace.js';
+import { listSpecs } from '../openapi/spec-files.js';
 
 export interface SearchHit {
-  kind: 'request' | 'graphql' | 'collection' | 'test' | 'environment-variable' | 'mcp-server' | 'provider' | 'history' | 'trace' | 'run' | 'saved';
+  kind: 'request' | 'graphql' | 'collection' | 'test' | 'environment' | 'environment-variable' | 'mcp-server' | 'provider' | 'history' | 'trace' | 'run' | 'saved' | 'spec' | 'dataset';
   id: string;
   title: string;
   subtitle?: string;
-  /** Where to navigate: collection id, test file path, etc. */
-  ref: Record<string, string>;
+  /**
+   * Where it is: an ItemRef (@testpion/shared; `openRef` in the app opens it), plus the older flat names some readers
+   * still use (`testPath` of a test file).
+   */
+  ref: ItemRef & Record<string, string>;
   score: number;
+}
+
+/** SOAP is an HTTP request with an XML envelope or a SOAPAction header (as the explorer files it). */
+const isSoap = (r: { headers?: Array<{ key: string; value: string }>; body?: unknown }) =>
+  !!r.headers?.some((h) => h.key.toLowerCase() === 'soapaction' || (h.key.toLowerCase() === 'content-type' && /application\/soap\+xml/i.test(h.value))) ||
+  /<(\w+:)?Envelope[\s>]/.test(String((r.body as { content?: unknown } | undefined)?.content ?? ''));
+
+/** Data files under datasets/ by name (no file is opened: a search must stay cheap). */
+function datasetNames(root: string, dir = '', depth = 0, out: string[] = []): string[] {
+  if (depth > 3) return out;
+  let entries: Dirent[];
+  try {
+    entries = readdirSync(join(root, dir), { withFileTypes: true });
+  } catch {
+    return out;
+  }
+  for (const e of entries) {
+    const rel = dir ? `${dir}/${e.name}` : e.name;
+    if (e.isDirectory()) datasetNames(root, rel, depth + 1, out);
+    else if (/\.(csv|tsv|json|jsonl|ndjson|md|db|db3|sqlite|sqlite3)$/i.test(e.name) && !e.name.startsWith('inline-')) out.push(rel);
+  }
+  return out;
 }
 
 interface IndexedDoc {
@@ -45,13 +73,18 @@ export class WorkspaceSearch {
     for (const c of this.store.listCollections()) {
       docs.push(
         ...this.cached(this.store.path('collections', `${c.id}.json`), () => {
-          const out: IndexedDoc[] = [{ hit: { kind: 'collection', id: c.id, title: c.name, subtitle: 'Collection', ref: { collectionId: c.id } }, text: `${c.name} ${c.description ?? ''}` }];
+          const out: IndexedDoc[] = [{ hit: { kind: 'collection', id: c.id, title: c.name, subtitle: 'Collection', ref: { kind: 'collection', collectionId: c.id } }, text: `${c.name} ${c.description ?? ''}` }];
           const walk = (nodes: CollectionNode[], path: string[]) => {
             for (const n of nodes) {
               if (n.kind === 'folder') walk(n.items, [...path, n.name]);
-              else if (n.kind === 'http')
-                out.push({ hit: { kind: 'request', id: n.id, title: n.name, subtitle: `${n.request.method} ${n.request.url} · ${[c.name, ...path].join(' / ')}`, ref: { collectionId: c.id, requestId: n.id } }, text: `${n.name} ${n.request.method} ${n.request.url}` });
-              else out.push({ hit: { kind: 'graphql', id: n.id, title: n.name, subtitle: `GraphQL · ${[c.name, ...path].join(' / ')}`, ref: { collectionId: c.id, requestId: n.id } }, text: `${n.name} ${n.request.query}` });
+              else if (n.kind === 'http') {
+                // every request under its own protocol: a SOAP call says so (it opens in the HTTP editor, as in the explorer)
+                const soap = isSoap(n.request);
+                const ref = { kind: 'request' as const, collectionId: c.id, requestId: n.id, protocol: soap ? ('soap' as const) : ('http' as const) };
+                out.push({ hit: { kind: 'request', id: n.id, title: n.name, subtitle: `${soap ? 'SOAP ' : ''}${n.request.method} ${n.request.url} · ${[c.name, ...path].join(' / ')}`, ref }, text: `${n.name} ${n.request.method} ${n.request.url}${soap ? ' soap' : ''}` });
+              } else if (n.kind === 'graphql')
+                out.push({ hit: { kind: 'graphql', id: n.id, title: n.name, subtitle: `GraphQL · ${[c.name, ...path].join(' / ')}`, ref: { kind: 'request', collectionId: c.id, requestId: n.id, protocol: 'graphql' } }, text: `${n.name} ${n.request.query}` });
+              // a node of a kind this version doesn't know (a newer app's, a hand edit) is not listed as something it isn't
             }
           };
           walk(c.items, []);
@@ -59,11 +92,16 @@ export class WorkspaceSearch {
         }),
       );
     }
-    for (const e of this.store.listEnvironments())
+    for (const e of this.store.listEnvironments()) {
+      docs.push({ hit: { kind: 'environment', id: e.id, title: e.name, subtitle: `Environment · ${e.variables.length} variable${e.variables.length === 1 ? '' : 's'}`, ref: { kind: 'environment', environmentId: e.id } }, text: `${e.name} environment` });
       for (const v of e.variables)
-        docs.push({ hit: { kind: 'environment-variable', id: `${e.id}:${v.key}`, title: v.key, subtitle: `Variable in ${e.name}${v.secret ? ' (secret)' : ''}`, ref: { environmentId: e.id } }, text: `${v.key} ${v.secret ? '' : v.value}` });
-    for (const s of this.store.getMcpServers()) docs.push({ hit: { kind: 'mcp-server', id: s.id, title: s.name, subtitle: `MCP · ${s.transport}`, ref: { serverId: s.id } }, text: `${s.name} ${'command' in s ? s.command : ''} ${'url' in s ? s.url : ''}` });
-    for (const p of this.store.getProviders()) docs.push({ hit: { kind: 'provider', id: p.id, title: p.name, subtitle: `AI provider · ${p.kind}`, ref: { providerId: p.id } }, text: `${p.name} ${p.kind} ${p.defaultModel ?? ''}` });
+        docs.push({ hit: { kind: 'environment-variable', id: `${e.id}:${v.key}`, title: v.key, subtitle: `Variable in ${e.name}${v.secret ? ' (secret)' : ''}`, ref: { kind: 'variable', key: v.key, environmentId: e.id } }, text: `${v.key} ${v.secret ? '' : v.value}` });
+    }
+    for (const s of this.store.getMcpServers()) docs.push({ hit: { kind: 'mcp-server', id: s.id, title: s.name, subtitle: `MCP · ${s.transport}`, ref: { kind: 'mcp-server', serverId: s.id } }, text: `${s.name} ${'command' in s ? s.command : ''} ${'url' in s ? s.url : ''}` });
+    for (const p of this.store.getProviders()) docs.push({ hit: { kind: 'provider', id: p.id, title: p.name, subtitle: `AI provider · ${p.kind}`, ref: { kind: 'provider', providerId: p.id } }, text: `${p.name} ${p.kind} ${p.defaultModel ?? ''}` });
+    // API definitions and datasets are things of their own (not only something a request or test mentions)
+    for (const path of listSpecs(this.store, { includeAsync: true })) docs.push({ hit: { kind: 'spec', id: path, title: path.replace(/^.*\//, ''), subtitle: `API definition · ${path}`, ref: { kind: 'spec', path } }, text: path });
+    for (const name of datasetNames(this.store.path('datasets'))) docs.push({ hit: { kind: 'dataset', id: name, title: name.replace(/^.*\//, ''), subtitle: `Dataset · datasets/${name}`, ref: { kind: 'dataset', name } }, text: `datasets/${name}` });
     const walkTests = (nodes: TestFileNode[]) => {
       for (const n of nodes) {
         if (n.kind === 'dir') walkTests(n.children ?? []);
@@ -77,7 +115,7 @@ export class WorkspaceSearch {
                 /* ignore */
               }
               const names = [...content.matchAll(/^\s*-?\s*name:\s*(.+)$/gm)].map((m) => m[1]!.trim().replace(/^["']|["']$/g, ''));
-              return [{ hit: { kind: 'test', id: n.path, title: names[0] ?? n.name, subtitle: `Test file · ${n.path}${names.length > 1 ? ` · ${names.length} tests` : ''}`, ref: { testPath: n.path } }, text: `${n.path} ${content}` }];
+              return [{ hit: { kind: 'test', id: n.path, title: names[0] ?? n.name, subtitle: `Test file · ${n.path}${names.length > 1 ? ` · ${names.length} tests` : ''}`, ref: { kind: 'test', path: n.path, testPath: n.path } }, text: `${n.path} ${content}` }];
             }),
           );
       }
@@ -93,7 +131,7 @@ export class WorkspaceSearch {
             const d = i.data ?? {};
             const detail = String(d.url ?? d.method ?? d.model ?? (kind === 'monitors' && typeof d.everyMinutes === 'number' ? `every ${d.everyMinutes} min` : ''));
             return {
-              hit: { kind: 'saved' as const, id: `${kind}:${i.id}`, title: i.name, subtitle: `${labels[kind]}${i.folder ? ` · ${i.folder}` : ''}${detail ? ` · ${detail}` : ''}`, ref: { library: kind, itemId: i.id } },
+              hit: { kind: 'saved' as const, id: `${kind}:${i.id}`, title: i.name, subtitle: `${labels[kind]}${i.folder ? ` · ${i.folder}` : ''}${detail ? ` · ${detail}` : ''}`, ref: { kind: 'saved', library: kind, itemId: i.id } },
               text: `${i.name} ${i.folder ?? ''} ${detail} ${String(d.target ?? '')} ${String(d.prompt ?? '').slice(0, 2000)} ${String(d.event ?? '')}`,
             };
           }),
@@ -116,11 +154,11 @@ export class WorkspaceSearch {
       hits.push({ ...d.hit, score });
     }
     for (const h of this.store.meta.listHistory({ query, limit: 20 }).items)
-      hits.push({ kind: 'history', id: h.id, title: h.name, subtitle: `History · ${h.method ?? h.kind} ${h.url ?? ''} · ${h.status ?? ''}`, ref: { historyId: h.id }, score: 0.5 });
+      hits.push({ kind: 'history', id: h.id, title: h.name, subtitle: `History · ${h.method ?? h.kind} ${h.url ?? ''} · ${h.status ?? ''}`, ref: { kind: 'history', historyId: h.id }, score: 0.5 });
     for (const t of this.store.meta.listTraces({ query, limit: 10 }).items)
-      hits.push({ kind: 'trace', id: t.id, title: t.name, subtitle: `Trace · ${t.kind} · ${t.status}`, ref: { traceId: t.id }, score: 0.4 });
+      hits.push({ kind: 'trace', id: t.id, title: t.name, subtitle: `Trace · ${t.kind} · ${t.status}`, ref: { kind: 'trace', traceId: t.id }, score: 0.4 });
     for (const r of this.store.meta.listRuns({ query, limit: 10 }).items)
-      hits.push({ kind: 'run', id: r.id, title: r.name, subtitle: `Run · ${r.passed}/${r.total} passed`, ref: { runId: r.id }, score: 0.3 });
+      hits.push({ kind: 'run', id: r.id, title: r.name, subtitle: `Run · ${r.passed}/${r.total} passed`, ref: { kind: 'run', runId: r.id }, score: 0.3 });
     return hits.sort((a, b) => b.score - a.score).slice(0, limit);
   }
 }

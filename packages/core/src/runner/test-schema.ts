@@ -4,6 +4,9 @@ import { checkTypes } from '../eval/checks.js';
 import { delayMsOf, loopOf, normalizeTest, whenOf } from './loader.js';
 import { slugify } from '../util/ids.js';
 import { parseExpose } from './exposed-flows.js';
+import { parseWebhook, testsRelative, webhookPathOf } from './flow-webhook-config.js';
+import { controlProblems } from './control-keys.js';
+import { FLOW_COLORS, flowChecks, type FlowStep } from '@testpion/shared';
 
 /**
  * What a test file may say, as the loader reads it (loader.ts): the keys of a test, by type, with a line of help for
@@ -24,8 +27,8 @@ const COMMON: TestKeyDoc[] = [
   { key: 'name', description: 'What the test checks, in words.', shape: 'text' },
   {
     key: 'type',
-    description: 'The kind of test; left out, it is guessed: url → http, query → graphql, proto → grpc, tool → mcp, prompt → llm.',
-    values: ['http', 'graphql', 'grpc', 'websocket', 'mcp', 'llm', 'rag', 'agent', 'delay', 'condition', 'script', 'flow', 'log'],
+    description: 'The kind of test; left out, it is guessed: url → http, query → graphql, proto → grpc, tool → mcp, prompt → llm. wait is a request polled with until:.',
+    values: ['http', 'graphql', 'grpc', 'websocket', 'mcp', 'llm', 'rag', 'agent', 'delay', 'condition', 'script', 'flow', 'log', 'set', 'assert', 'wait'],
     shape: 'text',
   },
   { key: 'description', description: 'Notes for the reader (Markdown).', shape: 'text' },
@@ -51,6 +54,18 @@ const COMMON: TestKeyDoc[] = [
     key: 'forEach',
     description: 'Run the step once per row: a list ([{ id: 1 }, { id: 2 }]) or { dataset: datasets/users.csv } (CSV, JSON, JSONL, Markdown). The row\'s fields, {{$index}} and {{$item}} are its variables; at most 10000 rows.',
     shape: 'map',
+  },
+  {
+    key: 'until',
+    description:
+      "Wait until: run the step again until this is true on its response: { if: \"$.status == 'done'\", every: 2s, timeout: 60s, backoff: 1.5, maxEvery: 30s } (or just the expression). It fails when the time is up; results show the tries.",
+    shape: 'map',
+  },
+  { key: 'finally', description: 'true: a clean-up step that runs after every other step of the file, whatever happened (failures, skips, a stop). Its result does not change the others.', shape: 'boolean' },
+  {
+    key: 'parallel',
+    description: 'A parallel group: steps of the file with the same group may run at the same time, even with --concurrency 1 (dependsOn still applies). Steps that wait for nothing already run side by side.',
+    shape: 'text',
   },
 ];
 
@@ -155,6 +170,16 @@ const BY_TYPE: Record<string, TestKeyDoc[]> = {
     { key: 'inputs', description: "The sub-flow's variables: { name: value } (with {{variables}} of this flow).", shape: 'map' },
   ],
   log: [{ key: 'message', description: 'The text to show in the run results, with {{variables}}.', shape: 'text' }],
+  set: [
+    { key: 'set', description: 'The variables to write: { name: "{{template}}" } (templates resolved; "{{x}}" alone keeps its type).', shape: 'map' },
+    {
+      key: 'scope',
+      description: 'Where they go: run (default: this run only), environment, collection or global (kept like tp.environment.set in a script: current values in the app, this run only in the CLI).',
+      values: ['run', 'environment', 'collection', 'global'],
+      shape: 'text',
+    },
+  ],
+  assert: [{ key: 'subject', description: "What the assertions check: response (default: the previous step's response) or variables (path: $.name reads a variable).", values: ['response', 'variables'], shape: 'text' }],
   delay: [{ key: 'ms', description: 'A pause in the flow: the milliseconds to wait (0 to 600000, ten minutes; duration: 2s works too). Never longer than the timeout; a cancelled run stops it at once.', shape: 'number' }],
 };
 
@@ -174,6 +199,7 @@ const ALIASES: Record<string, string[]> = {
   script: ['code'],
   flow: ['flow'],
   log: ['log'],
+  set: ['values'],
 };
 
 const FILE_KEYS: TestKeyDoc[] = [
@@ -182,11 +208,26 @@ const FILE_KEYS: TestKeyDoc[] = [
   { key: 'defaults', description: 'Keys every test of the file starts with (type, dependsOn, headers …).', shape: 'map' },
   { key: 'tests', description: 'The tests, in order.', shape: 'list' },
   { key: 'expose', description: 'Offer the file to AI agents as an MCP tool: { tool: checkout_flow, description, inputs: [{ name, description, default, required }] }.', shape: 'map' },
-  { key: 'layout', description: "Where the flow designer draws each step: { step id: [x, y] }. Only the Flow tab reads it; the runner ignores it.", shape: 'map' },
+  {
+    key: 'layout',
+    description:
+      "The flow designer's canvas: where each step is drawn ({ step id: [x, y] }), sticky notes (notes: [{ id, x, y, w, h, color, text }], Markdown) and coloured frames around steps (frames: [{ id, title, color, steps: [ids] }]). Only the Flow tab reads it; the runner ignores it.",
+    shape: 'map',
+  },
+  {
+    key: 'webhook',
+    description:
+      'Serve the flow behind a webhook (`testpion serve flows`, or the Deploy panel of the app): { path: /hooks/new-order, secret: "{{HOOK_SECRET}}" }. A POST with a JSON body runs it with the fields as inputs and answers its output:; path defaults to /hooks/<file>, secret is checked against X-TestPion-Secret or Authorization: Bearer.',
+    shape: 'map',
+  },
   {
     key: 'output',
     description: 'What the flow returns: { name: "{{template}}" }, resolved after the run. A sub-flow step gets these values; a flow exposed as an MCP tool returns them in its result.',
     shape: 'map',
+  },  {
+    key: 'data',
+    description:
+      'Rows for a data-driven run (`testpion test <file> --data`, Run with data… in the app): a data file (datasets/users.csv, JSON, JSONL, SQLite), a dataset block ({ path, query, connectionEnv, limit }) or the rows themselves; the flow runs once per row with its fields, $row and $index as variables. A plain run ignores it.',
   },
 ];
 
@@ -312,7 +353,7 @@ export interface TestLintProblem {
  * What is wrong or doubtful in a test file, with positions: an unknown type or check type, a key the loader does
  * not read (a typo), a dependsOn nobody defines in the file, a method that is not one, a test the loader refuses.
  */
-export function lintTestFile(text: string, opts: { file?: string; suite?: boolean } = {}): TestLintProblem[] {
+export function lintTestFile(text: string, opts: { file?: string; suite?: boolean; webhooks?: Array<{ file: string; path: string }> } = {}): TestLintProblem[] {
   const out: TestLintProblem[] = [];
   const lc = lineCounter();
   const doc = parseDocument(text, { lineCounter: lc, keepSourceTokens: true });
@@ -360,7 +401,7 @@ export function lintTestFile(text: string, opts: { file?: string; suite?: boolea
   const items: Array<{ node: Node; raw: Record<string, unknown> }> = [];
   if (testsPair) {
     const ok = known(FILE_KEYS);
-    for (const p of root.items) if (!ok.has(keyOf(p))) add('warning', `"${keyOf(p)}" is not read at the top of a test file (name, description, defaults, tests, expose, layout, output)`, p);
+    for (const p of root.items) if (!ok.has(keyOf(p))) add('warning', `"${keyOf(p)}" is not read at the top of a test file (name, description, defaults, tests, expose, layout, output, webhook, data)`, p);
     if (!isSeq(testsPair.value)) add('error', 'tests: must be a list of tests', testsPair);
     else
       for (const n of testsPair.value.items)
@@ -369,6 +410,20 @@ export function lintTestFile(text: string, opts: { file?: string; suite?: boolea
   } else items.push({ node: root, raw: root.toJSON() as Record<string, unknown> });
 
   for (const it of items) if (typeof it.raw.id === 'string') ids.add(it.raw.id);
+  // webhook: { path, secret } serves the flow behind a webhook; its path must be one and no other file's
+  const webhookPair = root.items.find((p) => keyOf(p) === 'webhook');
+  if (webhookPair)
+    try {
+      const w = parseWebhook(webhookPair.value && typeof webhookPair.value === 'object' && 'toJSON' in webhookPair.value ? (webhookPair.value as Node).toJSON() : webhookPair.value);
+      if (w && opts.webhooks?.length) {
+        const own = testsRelative(opts.file ?? '');
+        const path = own ? webhookPathOf(own, w) : w.path;
+        const other = path ? opts.webhooks.find((h) => h.path === path && testsRelative(h.file) !== own) : undefined;
+        if (other) add('error', `The webhook path ${path} is also used by tests/${testsRelative(other.file)}: give one of them another path`, webhookPair);
+      }
+    } catch (e) {
+      add('error', (e as Error).message, webhookPair);
+    }
   // output: { name: template } is what the flow returns
   const outputPair = root.items.find((p) => keyOf(p) === 'output');
   if (outputPair && !isMap(outputPair.value)) add('error', 'output: is a map of what the flow returns: { token: "{{token}}" }', outputPair);
@@ -383,9 +438,20 @@ export function lintTestFile(text: string, opts: { file?: string; suite?: boolea
         if (opts.file) conditionRefs.add(`${slugify(opts.file.replace(/\\/g, '/').split('/').pop()!.replace(/\.[^.]+$/, ''))}:${slugify(it.raw.name)}`);
       }
     }
+  // the finally steps (they run last: nothing else may wait for them)
+  const finallyRefs = new Set<string>();
+  for (const it of items)
+    if ({ ...defaults, ...it.raw }.finally === true) {
+      if (typeof it.raw.id === 'string') finallyRefs.add(it.raw.id);
+      if (typeof it.raw.name === 'string') {
+        finallyRefs.add(it.raw.name);
+        finallyRefs.add(slugify(it.raw.name));
+        if (opts.file) finallyRefs.add(`${slugify(opts.file.replace(/\\/g, '/').split('/').pop()!.replace(/\.[^.]+$/, ''))}:${slugify(it.raw.name)}`);
+      }
+    }
   const typeOf = (raw: Record<string, unknown>): string | undefined => {
     const t = raw.type ?? defaults.type;
-    if (typeof t === 'string') return t === 'rest' ? 'http' : t === 'prompt' ? 'llm' : ['ws', 'socketio', 'mqtt', 'kafka'].includes(t) ? 'websocket' : t;
+    if (typeof t === 'string') return t === 'rest' || t === 'wait' ? 'http' : t === 'prompt' ? 'llm' : ['ws', 'socketio', 'mqtt', 'kafka'].includes(t) ? 'websocket' : t;
     return raw.request || raw.url ? 'http' : raw.query ? 'graphql' : raw.protos || raw.proto ? 'grpc' : raw.tool ? 'mcp' : raw.prompt ? 'llm' : undefined;
   };
   const types = new Set(COMMON.find((k) => k.key === 'type')!.values!);
@@ -399,7 +465,7 @@ export function lintTestFile(text: string, opts: { file?: string; suite?: boolea
     // an unknown type is one problem, not one per key: the keys are then checked against every type
     const type = typeKnown ? typeOf({ ...defaults, ...it.raw }) : undefined;
     if (!typeKnown) add('error', `Unknown test type "${String(it.raw.type)}": ${[...types].join(', ')}`, typePair);
-    else if (!type) add('warning', 'Which kind of test is this? Add type: http | graphql | grpc | websocket | mcp | llm | rag | agent | delay | condition | script | flow | log (or a url, query, proto, tool or prompt)', it.node);
+    else if (!type) add('warning', 'Which kind of test is this? Add type: http | graphql | grpc | websocket | mcp | llm | rag | agent | delay | condition | script | flow | log | set | assert (or a url, query, proto, tool or prompt)', it.node);
     const ok = known([...COMMON, ...(type ? (BY_TYPE[type] ?? []) : Object.values(BY_TYPE).flat())], [...ALIASES['*']!, ...(type ? (ALIASES[type] ?? []) : Object.values(ALIASES).flat())]);
     for (const p of pairs) {
       const k = keyOf(p);
@@ -416,6 +482,9 @@ export function lintTestFile(text: string, opts: { file?: string; suite?: boolea
       const list = isSeq(deps.value) ? deps.value.items : [deps.value];
       for (const d of list)
         if (isScalar(d) && d.value !== undefined && !ids.has(String(d.value))) add('info', `No test with id "${String(d.value)}" in this file (fine when it is in another file of the run)`, d as Node);
+      if ({ ...defaults, ...it.raw }.finally !== true)
+        for (const d of list)
+          if (isScalar(d) && finallyRefs.has(String(d.value))) add('error', `"${String(d.value)}" is a finally step: it runs after every other step, so no other step can wait for it`, d as Node);
     }
     const assertions = pairOf('assertions') ?? pairOf('checks');
     if (pairOf('assertions') && pairOf('checks')) add('warning', 'Both assertions: and checks: — only assertions: is read; put every check in one list', pairOf('checks'));
@@ -449,6 +518,14 @@ export function lintTestFile(text: string, opts: { file?: string; suite?: boolea
       const deps = merged.dependsOn === undefined || merged.dependsOn === null ? [] : (Array.isArray(merged.dependsOn) ? merged.dependsOn : [merged.dependsOn]).map(String);
       if (!deps.some((d) => conditionRefs.has(d))) add('warning', 'when: picks a branch of a condition step: add the condition to dependsOn (or remove when:)', whenPair);
     }
+    for (const c of controlProblems(merged, type ?? '')) {
+      add('error', c.message, pairOf(c.key) ?? it.node);
+      keyProblem = true;
+    }
+    if (String(merged.type ?? '') === 'wait' && (merged.until === undefined || merged.until === null)) {
+      add('error', "A wait step needs until: the expression to wait for (e.g. until: { if: \"$.status == 'done'\", every: 2s, timeout: 60s })", typePair ?? it.node);
+      keyProblem = true;
+    }
     const ifPair = pairOf('if');
     if (ifPair && (merged.if === null || String(merged.if ?? '').trim() === '')) {
       add('error', type === 'condition' ? 'A condition needs if: the expression to test (e.g. if: status == 200)' : 'if: is an expression (e.g. if: status == 200); leave it out to always run the step', ifPair);
@@ -467,5 +544,84 @@ export function lintTestFile(text: string, opts: { file?: string; suite?: boolea
         add('error', (e as Error).message, it.node);
       }
   });
+
+  // every name dependsOn and a frame may use for a step (its id, its name, the runner's id) → the step's id
+  const prefix = opts.file ? `${slugify(opts.file.replace(/\\/g, '/').split('/').pop()!.replace(/\.[^.]+$/, ''))}:` : '';
+  const stepIds = items.map((it, i) => (typeof it.raw.id === 'string' && it.raw.id ? it.raw.id : `${prefix}${slugify(String(it.raw.name ?? `#${i + 1}`))}`));
+  const alias = new Map<string, string>();
+  items.forEach((it, i) => {
+    for (const a of [stepIds[i]!, typeof it.raw.name === 'string' ? it.raw.name : '', typeof it.raw.name === 'string' ? slugify(it.raw.name) : '']) if (a && !alias.has(a)) alias.set(a, stepIds[i]!);
+  });
+  // the designer's checks: cycles, steps that can never run (a dependsOn nobody in the file defines may be in another file of the run: not counted)
+  if (items.length > 1) {
+    const flowSteps: FlowStep[] = items.map((it, i) => {
+      const m = { ...defaults, ...it.raw };
+      const deps = (m.dependsOn === undefined || m.dependsOn === null ? [] : Array.isArray(m.dependsOn) ? m.dependsOn : [m.dependsOn]).map((d) => alias.get(String(d))).filter((d): d is string => !!d);
+      return {
+        id: stepIds[i]!,
+        name: String(m.name ?? stepIds[i]),
+        type: typeOf(m) ?? String(m.type ?? ''),
+        ...(deps.length ? { dependsOn: deps } : {}),
+        ...(typeof m.when === 'boolean' ? { when: m.when } : {}),
+        ...(typeof m.if === 'string' || typeof m.if === 'boolean' ? { if: String(m.if) } : {}),
+        ...(m.finally === true ? { finally: true } : {}),
+      };
+    });
+    const seen = new Set<string>();
+    for (const c of flowChecks(flowSteps)) {
+      if (c.kind !== 'cycle' && c.kind !== 'unreachable') continue;
+      if (seen.has(`${c.kind}:${c.step}`)) continue;
+      seen.add(`${c.kind}:${c.step}`);
+      const it = items[stepIds.indexOf(c.step)];
+      if (!it) continue;
+      const pairs = isMap(it.node) ? (it.node as unknown as { items: Pair[] }).items : [];
+      add(c.kind === 'cycle' ? 'error' : 'warning', c.message, pairs.find((p) => keyOf(p) === 'dependsOn') ?? it.node);
+    }
+  }
+
+  // layout: the designer's places ({ step: [x, y] }), sticky notes and frames
+  const layoutPair = root.items.find((p) => keyOf(p) === 'layout');
+  if (layoutPair && layoutPair.value !== null && layoutPair.value !== undefined) {
+    if (!isMap(layoutPair.value)) add('error', 'layout: is a map: { step id: [x, y], notes: [ … ], frames: [ … ] }', layoutPair);
+    else
+      for (const p of (layoutPair.value as unknown as { items: Pair[] }).items) {
+        const k = keyOf(p);
+        const v = p.value as Node | null;
+        if (k === 'notes' || k === 'frames') {
+          const what = k === 'notes' ? 'note' : 'frame';
+          const keys = k === 'notes' ? ['id', 'x', 'y', 'w', 'h', 'color', 'text'] : ['id', 'title', 'color', 'steps'];
+          if (!isSeq(v)) {
+            add('error', `layout.${k} is a list of ${what}s: [{ ${keys.join(', ')} }]`, p);
+            continue;
+          }
+          const ids = new Set<string>();
+          for (const n of v.items) {
+            if (!isMap(n)) {
+              add('error', `Each ${what} is a map: { ${keys.join(', ')} }`, n as Node);
+              continue;
+            }
+            const raw = n.toJSON() as Record<string, unknown>;
+            const pairs = (n as unknown as { items: Pair[] }).items;
+            const at = (key: string) => pairs.find((x) => keyOf(x) === key) ?? n;
+            if (raw.id === undefined || raw.id === null || raw.id === '') add('error', `A ${what} needs an id`, n);
+            else if (ids.has(String(raw.id))) add('warning', `Two ${what}s have the id "${String(raw.id)}"`, at('id'));
+            else ids.add(String(raw.id));
+            for (const x of pairs) if (!keys.includes(keyOf(x))) add('warning', `"${keyOf(x)}" is not a key of a ${what} (${keys.join(', ')})`, x);
+            if (raw.color !== undefined && !(FLOW_COLORS as readonly string[]).includes(String(raw.color)))
+              add('warning', `"${String(raw.color)}" is not a colour of the canvas: ${FLOW_COLORS.join(', ')}`, at('color'));
+            if (k === 'notes') {
+              for (const key of ['x', 'y', 'w', 'h']) if (raw[key] !== undefined && (typeof raw[key] !== 'number' || !Number.isFinite(raw[key]))) add('error', `A note's ${key} is a number`, at(key));
+            } else {
+              if (!Array.isArray(raw.steps) || !raw.steps.length) add('error', 'A frame needs steps: [the ids of the steps it goes around]', at('steps'));
+              else for (const s of raw.steps) if (!alias.has(String(s))) add('warning', `The frame "${String(raw.title ?? raw.id)}" names "${String(s)}", which is not a step of this file`, at('steps'));
+            }
+          }
+          continue;
+        }
+        const ok = isSeq(v) && v.items.length === 2 && v.items.every((x) => isScalar(x) && typeof x.value === 'number' && Number.isFinite(x.value));
+        if (!ok) add('warning', `layout: "${k}" is a step's place on the canvas: [x, y] in numbers`, p);
+        else if (!alias.has(k)) add('info', `layout: no step "${k}" in this file (its place is kept but not used)`, p);
+      }
+  }
   return out.sort((a, b) => a.line - b.line || a.column - b.column);
 }

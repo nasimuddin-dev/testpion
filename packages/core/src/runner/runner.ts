@@ -295,17 +295,17 @@ export async function runTests(opts: RunOptions): Promise<RunSummary> {
     return lastResponse;
   };
 
-  const runOne = async (t: TestCase): Promise<{ result: TestResult; trace?: Trace; response?: StepResponse }> => {
+  const runOne = async (t: TestCase, sig: AbortSignal = signal): Promise<{ result: TestResult; trace?: Trace; response?: StepResponse }> => {
     const retries = t.retries ?? opts.retries ?? 0;
     let last: { result: TestResult; trace?: Trace; response?: StepResponse } | undefined;
     for (let attempt = 1; attempt <= retries + 1; attempt++) {
-      if (signal.aborted) throw new ApsError('CancelledError', 'Run cancelled');
+      if (sig.aborted) throw new ApsError('CancelledError', 'Run cancelled');
       emit({ type: 'test-start', runId, id: t.id ?? t.name, name: t.name, attempt });
       const tracer = new Tracer(t.name, opts.services.redactor);
       const t0 = performance.now();
       const started = new Date().toISOString();
       const test = { ...t, timeoutMs: t.timeoutMs ?? opts.timeoutMs };
-      const o = await executeStep(test, services, { tracer, signal, prev: prevFor(t) });
+      const o = await executeStep(test, services, { tracer, signal: sig, prev: prevFor(t) });
       const trace = tracer.finish(o.status === 'passed' ? 'ok' : 'error');
       const result: TestResult = {
         id: t.id ?? t.name,
@@ -326,13 +326,111 @@ export async function runTests(opts: RunOptions): Promise<RunSummary> {
         output: o.output,
         input: o.input,
         metadata: Object.keys(o.metadata).length ? o.metadata : undefined,
+        // what the matrix of an evaluation filters cases by
+        ...(t.tags?.length ? { tags: t.tags } : {}),
       };
       const c = o.context;
       last = { result, trace, response: c && (c.status !== undefined || c.body !== undefined) ? { status: c.status, headers: c.headers, body: c.body, text: c.text } : undefined };
       if (o.status === 'passed' || o.status === 'skipped') break;
-      if (attempt <= retries) await sleep(Math.min(5000, (opts.retryDelayMs ?? 250) * 2 ** (attempt - 1)), signal).catch(() => undefined);
+      if (attempt <= retries) await sleep(Math.min(5000, (opts.retryDelayMs ?? 250) * 2 ** (attempt - 1)), sig).catch(() => undefined);
     }
     return last!;
+  };
+
+  /**
+   * A worker slot for a step. The steps of a parallel group share one: the first takes it, the others of the group that
+   * are ready while it is held run beside it (so a group runs together even at concurrency 1, in sub-flows and with
+   * --concurrency 1); a debugged run goes one step at a time.
+   */
+  const groups = new Map<string, { n: number; ready: Promise<() => void> }>();
+  const acquire = async (t: TestCase): Promise<() => void> => {
+    if (!t.parallel || opts.pauseBefore) return sem.acquire(signal);
+    const key = `${t.file ?? ''}|${t.parallel}`;
+    let g = groups.get(key);
+    if (!g) {
+      g = { n: 0, ready: sem.acquire(signal) };
+      groups.set(key, g);
+    }
+    const group = g;
+    group.n++;
+    let release: () => void;
+    try {
+      release = await group.ready;
+    } catch (e) {
+      if (--group.n === 0 && groups.get(key) === group) groups.delete(key);
+      throw e;
+    }
+    let done = false;
+    return () => {
+      if (done) return;
+      done = true;
+      if (--group.n === 0) {
+        if (groups.get(key) === group) groups.delete(key);
+        release();
+      }
+    };
+  };
+
+  /** The finally steps: held back while their file runs, then run one at a time, whatever happened (also after a stop). */
+  const finallyIds = new Set<string>();
+  const finallyByFile = new Map<string, TestCase[]>();
+  const fileInflight = new Map<string, Set<Promise<void>>>();
+  const finallyRuns: Array<Promise<void>> = [];
+  const runFinally = async (t: TestCase) => {
+    const id = t.id ?? t.name;
+    if (t.skip) return record(skippedResult(t, 'marked skip'));
+    if (t.if !== undefined) {
+      let ok: boolean;
+      try {
+        ok = await evaluateCondition(t.if, opts.services.vars, prevFor(t));
+      } catch (e) {
+        return record({ ...skippedResult(t, 'if: could not be evaluated'), status: 'error', error: normalizeError(e) });
+      }
+      if (!ok) return record(skippedResult(t, `if: ${t.if} is false`));
+    }
+    // its own signal: a stopped, cancelled or bailed run still cleans up (each step bounded by its timeout)
+    const own = new AbortController();
+    running++;
+    try {
+      if (opts.pauseBefore && !stopped && !opts.signal?.aborted) {
+        const answer = await opts.pauseBefore(id, opts.services.vars.toObject());
+        for (const [k, v] of Object.entries(answer?.vars ?? {})) opts.services.vars.set(k, v, 'runtime');
+        if (answer?.action === 'stop') {
+          stopped = true;
+          ctrl.abort();
+        }
+      }
+      const { result, trace, response } = await runOne(t, own.signal);
+      if (response) remember(id, response);
+      const raw = tracker.raw();
+      const vars = tracker.recorded(opts.services.redactor, raw);
+      if (vars) result.variables = vars;
+      if (opts.onStepEnd) {
+        try {
+          opts.onStepEnd(id, { vars: raw, response });
+        } catch {
+          /* listeners must not break the run */
+        }
+      }
+      result.metadata = { ...(result.metadata ?? {}), finally: true };
+      await record(result, trace);
+    } catch (e) {
+      await record({ ...skippedResult(t, 'internal error'), status: 'error', error: normalizeError(e), metadata: { finally: true } });
+    } finally {
+      running--;
+    }
+  };
+  /** Run a file's finally steps once every other step of the file has finished. */
+  const flushFinally = (file: string) => {
+    const list = finallyByFile.get(file);
+    if (!list) return;
+    finallyByFile.delete(file);
+    const waiting = [...(fileInflight.get(file) ?? [])];
+    finallyRuns.push(
+      Promise.allSettled(waiting).then(async () => {
+        for (const t of list) await runFinally(t);
+      }),
+    );
   };
 
   const exec = async (t: TestCase) => {
@@ -346,6 +444,8 @@ export async function runTests(opts: RunOptions): Promise<RunSummary> {
     if (t.dependsOn?.length) {
       const statuses = await Promise.all(t.dependsOn.map((d) => (statusById.has(d) ? statusById.get(d)! : dep(d).promise)));
       const all = t.dependsOn.map((d, i) => [d, statuses[i]] as const);
+      const late = t.dependsOn.filter((d) => finallyIds.has(d));
+      if (late.length) return record(skippedResult(t, `it waits for ${late.join(', ')}, a finally step (finally steps run after every other step)`));
       const bad = all.filter(([d, s]) => s !== 'passed' && !(s === 'skipped' && branchSkipped.has(d)));
       if (bad.length) return record(skippedResult(t, `dependency did not pass: ${bad.map(([d, s]) => `${d} (${s})`).join(', ')}`));
       if (all.every(([d]) => branchSkipped.has(d))) return notTaken(`its branch was not taken: ${t.dependsOn.join(', ')} skipped`);
@@ -363,7 +463,7 @@ export async function runTests(opts: RunOptions): Promise<RunSummary> {
       }
       if (!ok) return notTaken(`if: ${t.if} is false`);
     }
-    const release = await sem.acquire(signal);
+    const release = await acquire(t);
     running++;
     try {
       if (opts.pauseBefore) {
@@ -402,6 +502,7 @@ export async function runTests(opts: RunOptions): Promise<RunSummary> {
   };
 
   let cancelled = false;
+  const inflight = new Set<Promise<void>>();
   // added right before the try whose finally removes it: a finished run is never kept alive by the caller's signal
   if (opts.signal?.aborted) ctrl.abort();
   else opts.signal?.addEventListener('abort', onAbort, { once: true });
@@ -414,9 +515,23 @@ export async function runTests(opts: RunOptions): Promise<RunSummary> {
       if (statusById.get(t.id ?? t.name) !== 'passed') setupFailed = true;
     }
 
-    const inflight = new Set<Promise<void>>();
+    let currentFile: string | undefined;
     for await (const t of opts.tests as AsyncIterable<TestCase>) {
-      if (signal.aborted) break;
+      const fileKey = t.file ?? '';
+      if (signal.aborted) {
+        // stopped: only the finally steps of the file that was running are still to come
+        if (fileKey !== currentFile) break;
+        if (t.finally && !done.has(t.id ?? t.name) && (!only || only.has(t.id ?? t.name))) {
+          seen.add(t.id ?? t.name);
+          finallyIds.add(t.id ?? t.name);
+          finallyByFile.set(fileKey, [...(finallyByFile.get(fileKey) ?? []), t]);
+        }
+        continue;
+      }
+      if (fileKey !== currentFile) {
+        if (currentFile !== undefined) flushFinally(currentFile);
+        currentFile = fileKey;
+      }
       const id = t.id ?? t.name;
       seen.add(id);
       if (done.has(id)) {
@@ -434,15 +549,32 @@ export async function runTests(opts: RunOptions): Promise<RunSummary> {
         await record(skippedResult(t, 'setup failed'));
         continue;
       }
-      // backpressure: never pull more than 2×concurrency tests from the source ahead of the workers
-      while (inflight.size >= concurrency * 2 && !signal.aborted) await Promise.race(inflight);
-      const p: Promise<void> = exec(t).finally(() => inflight.delete(p));
+      if (t.finally) {
+        // a step that waits for it is told so (finally steps run last), never left waiting
+        finallyIds.add(id);
+        dep(id).resolve('skipped');
+        finallyByFile.set(fileKey, [...(finallyByFile.get(fileKey) ?? []), t]);
+        continue;
+      }
+      // backpressure: never pull more than 2×concurrency tests from the source ahead of the workers (a parallel group's steps may go a little further, to run together)
+      const limit = concurrency * 2 + (t.parallel ? 64 : 0);
+      while (inflight.size >= limit && !signal.aborted) await Promise.race(inflight);
+      const mine = fileInflight.get(fileKey) ?? fileInflight.set(fileKey, new Set()).get(fileKey)!;
+      const p: Promise<void> = exec(t).finally(() => {
+        inflight.delete(p);
+        mine.delete(p);
+      });
       inflight.add(p);
+      mine.add(p);
     }
     // dependencies that never appeared in the stream
     for (const [id, d] of deferreds) if (!seen.has(id)) d.resolve('missing');
     await Promise.all(inflight);
   } finally {
+    // the finally steps run whatever happened: after their file's other steps, also when the run failed, bailed or was stopped
+    for (const f of [...finallyByFile.keys()]) flushFinally(f);
+    await Promise.allSettled(inflight);
+    await Promise.allSettled(finallyRuns);
     cancelled = signal.aborted && (stopped || (opts.signal?.aborted ?? false));
     // teardown always runs (not cancellable by bail, but honours user cancellation)
     for (const t of opts.teardown ?? []) {

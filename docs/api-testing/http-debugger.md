@@ -7,7 +7,7 @@ description: "See the HTTP traffic of other programs: a browser, an app under te
 
 # HTTP Debugger
 
-The **HTTP Debugger** (**Debugger** in the rail, under Testing) shows the traffic of *other* programs. TestPion runs a local proxy; a program pointed at it sends every request through, and each exchange is listed as it happens with the program that sent it, the status, the size and the timing. A row opens whole: the request and response side by side, and a timing breakdown.
+The **HTTP Debugger** (**Debugger** in the rail, under Testing; <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>3</kbd>) shows the traffic of *other* programs. TestPion runs a local proxy; a program pointed at it sends every request through, and each exchange is listed as it happens with the program that sent it, the status, the size and the timing. A row opens whole: the request and response side by side, and a timing breakdown.
 
 ## The workbench
 
@@ -52,11 +52,13 @@ Once HTTPS traffic shows up as tunnels, a one-line notice offers **Decrypt HTTPS
 
 The **Capture** menu does the pointing for you:
 
-- **Open Chrome / Edge / Firefox / Brave through the proxy**: the browser starts with a profile of its own (your real profile, cookies and extensions stay out of it) and every page it loads goes through TestPion.
-- **Open Safari (macOS)**: Safari always follows the system proxy, so TestPion points the system proxy at itself and opens Safari; other programs that follow the system proxy are captured too until you stop, when the proxy is put back. For HTTPS, trust the root certificate (**HTTPS ▸ Root certificate…** adds it to the login keychain). Safari on an iPhone or iPad is **a phone or another computer**.
-- **Open a terminal through the proxy**: a new terminal window whose shell has `HTTP_PROXY` and `HTTPS_PROXY` set; anything you run in it is captured.
-- **Set the system proxy to TestPion**: every program that honours the operating system's proxy sends through (Windows: Internet Settings; macOS: `networksetup`; GNOME: `gsettings`). It is put back as it was when you **Restore** it, when you stop capturing and when TestPion quits.
-- **Copy for bash / PowerShell / cmd / curl / Chrome**: the lines for a shell that is already open.
+- **A browser: Chrome / Edge / Firefox / Brave (only that window)**: the browser starts with a profile of its own (your real profile, cookies and extensions stay out of it) and every page it loads goes through TestPion.
+- **A browser: Safari (through the system proxy, restored on stop)** (macOS): Safari always follows the system proxy, so TestPion points the system proxy at itself and opens Safari; other programs that follow the system proxy are captured too until you stop, when the proxy is put back. For HTTPS, trust the root certificate (**HTTPS ▸ Root certificate…** adds it to the login keychain). Safari on an iPhone or iPad is **A phone or another computer…**.
+- **A terminal: commands run in it (only those)**: a new terminal window whose shell has `HTTP_PROXY` and `HTTPS_PROXY` set; anything you run in it is captured.
+- **A phone or another computer…**: see [below](#a-phone-or-another-computer).
+- **Reverse proxy for one API…**: for a client that can't use a proxy; see [Reverse proxy for one API](#reverse-proxy-for-one-api).
+- **Everything on this computer (the system proxy, restored on stop)**: every program that honours the operating system's proxy sends through (Windows: Internet Settings; macOS: `networksetup`; GNOME: `gsettings`). It is put back as it was when you choose **Stop capturing everything (restore the system proxy)**, when you stop capturing and when TestPion quits.
+- **Copy the lines for bash / zsh, PowerShell, cmd, curl or Chrome / Edge**: the lines for a shell that is already open.
 
 Plain HTTP is captured whole. HTTPS shows as a **tunnel** by host, with bytes in and out, until you decrypt it.
 
@@ -80,7 +82,7 @@ A WebSocket through the proxy is one row (status 101, *live* while open) with a 
 
 ## What you can do with a row
 
-- **Open** (**Edit & Submit**, or the rail's **Submitter**): the exchange becomes a request in a tab, to change and send; double-click does the same.
+- **Open** (**Open as request** in the right-click menu, or the rail's **Submitter**): the exchange becomes a request in a tab, to change and send; double-click does the same. (Older versions called this *Edit & Submit*.)
 - **Resend**: send it again as it was (the response lands in History).
 - **cURL**: copy it as a cURL command.
 - **Ask AI**: the assistant explains what the exchange does, what the response means, why it failed and what to check (it gets the exchange redacted).
@@ -88,7 +90,7 @@ A WebSocket through the proxy is one row (status 101, *live* while open) with a 
 
 The panes' tabs are the inspectors: **Header**, **Content**, **JSON** (as a tree), **Raw** (the request and the response as they went over the wire, to copy), **Hex** (the bodies as bytes) and **Auth** (what the request authenticates with, without the secret: a Basic user, a Bearer JWT's claims and expiry, the cookie names). The timing is in the dock's **Timeline** and **Summary**.
 
-**Right-click a row** for the same and more: **Copy** (URL, as cURL, request or response headers), **Save content** (the request or response body to a file), **Bookmark**, **Edit & Submit**, **Resend**, **Compare with…**, and rules made from the row's values: **Capture only**, **Filter out** and **Highlight** with *Application = node.exe*, *URL starts with …*, *Domain = …*, *Method = POST*, *IP Address = …* (or a new rule to fill in), **Auto-reply** (*Reply with this response from now on*), **Modify headers…**, **Redirect connections…**, the **HTTP/2 connection tree**, **Delete** (the selected rows) and **Clear**. Every rule is one you make: TestPion has no built-in list of programs to hide.
+**Right-click a row** for the same and more: **Copy** (URL, as cURL, request or response headers), **Save content** (the request or response body to a file), **Bookmark**, **Open as request**, **Resend**, **Compare with…**, **Create flow from selection…**, **Save to collection…** (with several rows selected: *Create flow from 3 selected…*, *Save 3 selected to collection…*), **Save as test…**, and rules made from the row's values: **Capture only**, **Filter out** and **Highlight** with *Application = node.exe*, *URL starts with …*, *Domain = …*, *Method = POST*, *IP Address = …* (or a new rule to fill in), **Auto-reply** (*Reply with this response from now on*), **Modify headers…**, **Redirect connections…**, the **HTTP/2 connection tree**, **Delete** (the selected rows) and **Clear**. Every rule is one you make: TestPion has no built-in list of programs to hide.
 
 **Statistics** show the session: requests over time, the status mix, by host, content type and program, the largest and the slowest exchanges.
 
@@ -100,7 +102,7 @@ A long capture stays quick: the session keeps the last 5,000 exchanges, the list
 
 ### Sessions
 
-The **Session** menu keeps captures: **Save session…** writes the session as a HAR file in the workspace's `debugger/` folder (which `.gitignore` keeps out of git); a saved session opens from the same menu, replacing the current one or adding to it. **Import a HAR file…** opens a file from any tool (a browser's DevTools, Fiddler, Charles), and **Import a Fiddler session (.saz)…** opens Fiddler's own archives; **Export as HAR…** saves one anywhere. While capturing, **AutoSave** writes the live session to `debugger/autosave.har` every minute, so a crash loses at most a minute. **Clear** forgets the session. A session keeps about 5,000 exchanges (the oldest go in small blocks) and 200 MB of bodies: past that, the oldest exchanges lose their bodies first (their headers, sizes and timing stay, and the panes say so).
+The **Session** menu keeps captures: **Save session…** writes the session as a HAR file in the workspace's `debugger/` folder (which `.gitignore` keeps out of git); a saved session opens from the same menu, replacing the current one or adding to it. **Import a HAR file…** opens a file from any tool (a browser's DevTools, Fiddler, Charles), and **Import a Fiddler session (.saz)…** opens Fiddler's own archives; **Export as HAR…** saves one anywhere. While capturing, **AutoSave** writes the live session to `debugger/autosave.har` every minute, so a crash loses at most a minute. **Clear the session** (<kbd>Ctrl</kbd>+<kbd>E</kbd>) forgets it. A session keeps about 5,000 exchanges (the oldest go in small blocks) and 200 MB of bodies: past that, the oldest exchanges lose their bodies first (their headers, sizes and timing stay, and the panes say so).
 
 Secrets (Authorization headers, API keys, passwords in bodies) are masked wherever the session is shown or saved; the proxy listens on this computer only unless you ask for the LAN.
 
@@ -120,17 +122,30 @@ Hosts and URLs match by glob (`*.example.com`, `*/orders/*`) or by a /regular ex
 
 Rules live in **profiles** (Offline, Slow network, Mock payments…) switched as one; the profiles are saved in the workspace's `debugger/rules.json`, committed with it, so a team shares them. The **Presets** menu next to the filters saves and recalls filter presets. **Compare** on an exchange, then a click on another, shows the two side by side: status, headers, body.
 
+## Record a flow
+
+Select rows and pick **Create flow from selection…** (right-click, or the toolbar's **Flow** menu), or **Flow ▸ Record a flow…** to record what you do next until **Stop recording**: the exchanges become a test flow, with the tokens and ids that pass from one response into a later request extracted and passed as `{{variables}}`, static assets and analytics left out, and secrets turned into variables to set in an environment. The dialog shows the steps and the links it found before anything is written; **Create** opens the flow in the designer. See [Record a flow](/test-runner/integration-testing#record-a-flow).
+
+## Save to a collection
+
+**Save to collection…** (on the right-click menu, and **Flow ▸ Save selection to collection…**) keeps the selected exchanges as saved requests: in a new collection or added to one (in a folder), a folder per host, per first path segment, or none. Each address becomes a collection variable (`{{baseUrl}}`); tokens, cookies, API keys and passwords become variables to set in an environment (their values are never saved); a value a later request took from a response (a token, an id) is kept in a collection variable by the test script of the request that returned it, so sending them by hand in order works. From a terminal: `testpion debug --save-collection [name]` (or `--to <collection>`, `--group host|path|none`) saves what was captured when you stop; agents: `debugger_save_to_collection`.
+
+## Reverse proxy for one API
+
+A client that can't use a proxy (a front end with a configurable base URL, a mobile build, a test suite) can point at a local address instead: **Capture ▸ Reverse proxy for one API…** forwards to the API you give and lists what passes, and **Save** keeps it as a collection with the responses as examples. The status bar's **Tools ▸ Reverse proxy for one API…**, the command palette (*Capture: Reverse Proxy for One API…*) and the **Capture traffic into a collection** button in the Collections view's header open the same dialog in the Debugger. No certificate is needed, because the client talks plain HTTP to TestPion. See [Record traffic](/api-testing/recording) for the details and the `testpion record` command.
+
 ## From the terminal and for agents
 
 ```bash
 testpion debug                       # the proxy on 8899; every exchange printed as it happens
-testpion debug -p 9000 -o session.har --json
+testpion debug -p 9000 -o session.har --json   # a JSON line ({ type, data }) per exchange, for scripts
+testpion debug --save-collection "Captured"  # on Ctrl+C, the exchanges become requests in a new collection
 testpion debug --rules debugger/rules.json   # the workspace's rules (re-read when the file changes)
 testpion debug --decrypt                     # HTTPS too, for programs that trust ~/.testpion/debugger/testpion-root.pem
 testpion debug -w .                          # gRPC decoded with this workspace's .proto files
 ```
 
-AI agents have the same through the workspace's MCP server: `debugger_capture` (start / stop / status / clear; `decrypt` for HTTPS), `debugger_exchanges` (the list, with filters; `deep` searches bodies), `debugger_exchange` (one, with bodies), `debugger_session` (save the session as HAR, or open a HAR file), `debugger_rules` (list with each rule's hits, presets, add, enable, remove; kinds include `only` for Capture Only and a `where` condition on a column with a `style`: an agent can take an API offline, slow it down, redirect it or narrow the capture while it tests), `debugger_stats`. An agent can start the proxy, run a program against it and read what it did.
+AI agents have the same through the workspace's MCP server: `debugger_capture` (start / stop / status / clear; `decrypt` for HTTPS), `debugger_exchanges` (the list, with filters; `deep` searches bodies), `debugger_exchange` (one, with bodies), `debugger_session` (save the session as HAR, or open a HAR file), `debugger_rules` (list with each rule's hits, presets, add, enable, remove; kinds include `only` for Capture Only and a `where` condition on a column with a `style`: an agent can take an API offline, slow it down, redirect it or narrow the capture while it tests), `debugger_stats`. An agent can start the proxy, run a program against it and read what it did. `flow_from_exchanges` turns captured exchanges (or a HAR file) into a flow file; `testpion flow from-har <file.har>` does it from the terminal.
 
 ## Coming next
 

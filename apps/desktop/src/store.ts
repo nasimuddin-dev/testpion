@@ -6,7 +6,9 @@ import type { AppSettings, WorkspaceCurrent } from './types';
 import type { FeedbackRequest } from './components/FeedbackDialog';
 import { asError, call } from './api';
 import { loadDraft, saveDraft } from './lib/draft-store';
+import { setDraftScope } from './lib/ws-scope';
 import { normalizeEnvironment } from './lib/environments-store';
+import { refOpenLabel, type ItemRef } from '@testpion/shared';
 
 export type ViewId =
   | 'home'
@@ -36,10 +38,23 @@ export interface Toast {
   text: string;
 }
 
+/**
+ * A toast's button: something to do, or (WF-04) the item the toast is about, which the button opens through openRef
+ * ("Open run", "Open test file" … from its kind unless `label` says otherwise). Two at most: the first is the main one.
+ */
+export type ToastAction = { label: string; onClick(): void } | { ref: ItemRef; label?: string; newTab?: boolean };
+
 export interface CiRequest {
   suite?: string;
   collection?: string;
   folders?: string[];
+  /** Test files or folders inside tests/ (a flow's Deploy ▸ CI: that file). */
+  tests?: string[];
+  /** The environment to preselect (the flow canvas's, a run's). */
+  environment?: string;
+  /** With tests: the name / tag filter of the run it comes from (WF-09). */
+  grep?: string;
+  tags?: string[];
 }
 
 /** What an assistant answer's Apply did: nothing (done), a problem (a string), or a message with an action (Open …). */
@@ -105,15 +120,19 @@ interface AppState {
   workspace?: WorkspaceCurrent;
   environment?: string;
   settings?: AppSettings;
-  info?: { version: string; appVersion?: string; packaged?: boolean; canUpdateInPlace?: boolean; secretBackend: string; metaBackend?: string; platform: string; nativeDialogs?: boolean; checkTypes: string[]; electron?: string; node?: string };
+  info?: { version: string; appVersion?: string; packaged?: boolean; canUpdateInPlace?: boolean; secretBackend: string; metaBackend?: string; platform: string; nativeDialogs?: boolean; checkTypes: string[]; electron?: string; node?: string; capabilities?: { shell?: boolean } };
   paletteOpen: boolean;
+  /** What the palette opens with (Quick Open's mode prefix: '' items, '>' commands, '#' environments); unset: '>'. */
+  paletteQuery?: string;
   searchOpen: boolean;
   logsOpen: boolean;
   /** The Collections explorer panel next to the navigation rail (Ctrl+B). */
   explorerOpen: boolean;
+  /** The explorer beside the Tests view (requests dragged from it onto a flow's canvas): opened there on purpose only. */
+  explorerInTests?: boolean;
   toggleExplorer(open?: boolean): void;
   /** Which tab of the bottom panel is shown. */
-  bottomTab: 'console' | 'logs';
+  bottomTab: 'console' | 'logs' | 'terminal' | 'problems';
   assistant?: AssistantRequest;
   shortcutsOpen?: boolean;
   /** The "Run in CI" dialog, with what to run preselected. */
@@ -126,6 +145,8 @@ interface AppState {
   variableUsages?: string | true;
   /** The "Record traffic" dialog. */
   recordOpen?: boolean;
+  /** The cookie jar (status bar ▸ Tools ▸ Cookies…). */
+  cookiesOpen?: boolean;
   /** Help ▸ Send feedback, with what to start from (a crash's error, a kind). */
   feedback?: FeedbackRequest;
   /** Bumped when environments change outside the Environments view (e.g. a variable renamed everywhere). */
@@ -137,7 +158,7 @@ interface AppState {
   dialog?: DialogRequest;
   progress?: ProgressState | null;
   set(p: Partial<AppState>): void;
-  toast(text: string, kind?: Toast['kind'], action?: { label: string; onClick(): void }): void;
+  toast(text: string, kind?: Toast['kind'], action?: ToastAction | ToastAction[]): void;
   setActivity(key: string, label?: string): void;
   openIntent(view: ViewId, payload: any): void;
   /** Back / forward through the places visited (views and the items opened in them), like a browser. */
@@ -147,6 +168,10 @@ interface AppState {
   lastRequestView: ViewId;
   /** Record the item a view just opened by itself (e.g. a click in its own list), so Back returns to it. */
   markPlace(view: ViewId, payload: Record<string, unknown>): void;
+  /** Show an item in the Collections explorer now (WF-11): its collection and folders open and its row scrolls into view; no id: the open item. */
+  reveal?: { id?: string; nonce: number };
+  /** Name the place on screen (openRef knows the item's name once it resolved it). */
+  labelPlace(view: ViewId, label: string): void;
   goForward(): void;
   refreshWorkspace(): Promise<void>;
   saveSettings(s: AppSettings): Promise<void>;
@@ -154,6 +179,12 @@ interface AppState {
 }
 
 let toastId = 0;
+
+/** A toast action as a button; one about an item opens it through openRef (loaded on first use: open-ref imports this store). */
+function toastButton(a: ToastAction): { label: string; onClick(): void } {
+  if (!('ref' in a)) return { label: a.label, onClick: a.onClick };
+  return { label: a.label ?? refOpenLabel(a.ref), onClick: () => void import('./lib/open-ref').then((m) => m.openRef(a.ref, { newTab: a.newTab })) };
+}
 
 /** The request editors: they use the Collections explorer as their (only) sidebar and aren't on the rail. */
 export const REQUEST_VIEWS: ViewId[] = ['rest', 'graphql', 'grpc', 'websocket', 'mcp', 'apidef', 'dataset', 'collections'];
@@ -164,6 +195,23 @@ export interface NavLocation {
   view: ViewId;
   /** Intent payload that reopens the item (only "open this" keys, never actions like newTab or import). */
   payload?: Record<string, unknown>;
+  /** What Back / Forward and Recent places call it: "GET List patients · Veterinary API" (WF-10). */
+  label?: string;
+}
+
+/** Names a place when it is recorded, and notes the item it shows (lib/open-ref.ts sets it: the store knows no items). */
+let placeNamer: ((l: NavLocation) => string | undefined) | undefined;
+export function setPlaceNamer(f: (l: NavLocation) => string | undefined): void {
+  placeNamer = f;
+}
+function named(l: NavLocation): NavLocation {
+  if (l.label || !placeNamer) return l;
+  try {
+    const label = placeNamer(l);
+    return label ? { ...l, label } : l;
+  } catch {
+    return l;
+  }
 }
 
 /** Intent keys that identify an item to open; everything else (newTab, reset, import, run …) is an action, not a place. */
@@ -193,7 +241,7 @@ type Set = (p: Partial<AppState>) => void;
 function record(get: Get, set: Set, next: NavLocation) {
   const { back, current } = get().nav;
   if (sameLocation(current, next)) return;
-  set({ nav: { back: [...back, current].slice(-NAV_LIMIT), forward: [], current: next } });
+  set({ nav: { back: [...back, current].slice(-NAV_LIMIT), forward: [], current: named(next) } });
 }
 function travel(get: Get, set: Set, dir: 'back' | 'forward') {
   const { back, forward, current } = get().nav;
@@ -226,6 +274,11 @@ export const useApp = create<AppState>((set, get) => ({
   nav: { back: [], forward: [], current: { view: (localStorage.getItem('aps.view') as ViewId) || 'rest' } },
   goBack: () => travel(get, set, 'back'),
   markPlace: (view, payload) => record(get, set, { view, payload: replayable(payload) }),
+  labelPlace: (view, label) => {
+    const { nav } = get();
+    if (nav.current.view !== view || nav.current.label === label || !nav.current.payload) return;
+    set({ nav: { ...nav, current: { ...nav.current, label } } });
+  },
   goForward: () => travel(get, set, 'forward'),
   paletteOpen: false,
   searchOpen: false,
@@ -251,13 +304,14 @@ export const useApp = create<AppState>((set, get) => ({
   activity: {},
   mcpConnected: 0,
   set: (p) => set(p),
-  toast: (text, kind = 'info', action) => {
+  toast: (text, kind = 'info', actions) => {
     const id = ++toastId;
-    // a toast with an action (Undo) stays longer, so there is time to use it
-    const duration = action ? 8000 : kind === 'error' || kind === 'warning' ? 7000 : 3500;
+    const [main, second] = [actions ?? []].flat().map(toastButton);
+    // a toast with an action (Undo, Open run) stays longer, so there is time to use it
+    const duration = main ? 8000 : kind === 'error' || kind === 'warning' ? 7000 : 3500;
     set({ toasts: [...get().toasts, { id, kind, text }] });
     setTimeout(() => set({ toasts: get().toasts.filter((t) => t.id !== id) }), duration);
-    (kind === 'error' ? sonner.error : kind === 'success' ? sonner.success : kind === 'warning' ? sonner.warning : sonner)(text, { duration, ...(action ? { action: { label: action.label, onClick: action.onClick } } : {}) });
+    (kind === 'error' ? sonner.error : kind === 'success' ? sonner.success : kind === 'warning' ? sonner.warning : sonner)(text, { duration, ...(main ? { action: main } : {}), ...(second ? { cancel: second } : {}) });
   },
   setActivity: (key, label) => {
     const a = { ...get().activity };
@@ -278,6 +332,14 @@ export const useApp = create<AppState>((set, get) => ({
     // an environment whose file cannot be read is never the active one
     const usable = ws?.environments.filter((e) => !e.problem) ?? [];
     const env = usable.find((e) => e.name === (get().environment ?? stored)) ?? usable[0];
+    if (ws?.id !== get().workspace?.id) {
+      // another workspace: its own tabs, drafts and documents (lib/ws-scope), switched before its views mount; Back,
+      // Forward and a pending "open this" point at the old workspace's items
+      setDraftScope(ws?.id);
+      const view = get().view;
+      set({ workspace: ws, environment: env?.name, nav: { back: [], forward: [], current: { view } }, intent: undefined });
+      return;
+    }
     set({ workspace: ws, environment: env?.name });
   },
   saveSettings: async (s) => {
@@ -290,6 +352,22 @@ export const useApp = create<AppState>((set, get) => ({
     set({ environment: name });
   },
 }));
+
+/**
+ * A system notification (the window is in the background) about an item: clicking it brings the window up with the
+ * item open (WF-04). Nothing when the person has not allowed notifications. `tag` replaces an earlier one of the same.
+ */
+export function notifySystem(title: string, body: string, opts: { ref?: ItemRef; tag?: string } = {}): void {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  const n = new Notification(title, { body, ...(opts.tag ? { tag: opts.tag } : {}) });
+  const ref = opts.ref;
+  if (ref)
+    n.onclick = () => {
+      window.focus();
+      void import('./lib/open-ref').then((m) => m.openRef(ref));
+      n.close();
+    };
+}
 
 /**
  * Show an error (anything thrown) as an error toast; a missing AI key offers "Add the key" (AI Lab ▸ Providers, its key
@@ -319,8 +397,10 @@ export const isPushRejected = (e: unknown): boolean => {
 };
 
 /** Persist per-view drafts in localStorage (UI state only — never secrets or responses). */
-export function persisted<T>(key: string, fallback: T): { load(): T; save(v: T): void; forDoc(docId?: string): { load(): T; save(v: T): void } } {
+export function persisted<T>(key: string, fallback: T): { load(): T; save(v: T): void; forDoc(docId?: string): { load(): T; save(v: T): void }; defaults: T } {
   return {
+    /** What a new document starts from. */
+    defaults: fallback,
     /** The draft of one document of a multi-document editor (`main` is the plain key). */
     forDoc: (docId?: string) => persisted<T>(`${key}${docKey(docId)}`, fallback),
     load() {

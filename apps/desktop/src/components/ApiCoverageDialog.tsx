@@ -2,6 +2,7 @@ import { Download, ScanSearch, Sparkles } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { call } from '../api';
 import { type AssistantApplied, toastError, useApp } from '../store';
+import { openRef } from '../lib/open-ref';
 import { parseYaml } from '../lib/yaml';
 import { SidePicker, type Side } from './OpenApiDiffDialog';
 import { Badge, Button, cx, Field, Input, Metric, MetricGrid, ModalOrPanel, Select, Toggle } from './ui';
@@ -63,7 +64,7 @@ async function saveGapTests(api: string, code: string): Promise<AssistantApplied
     path = `coverage/${slug}-gaps-${i}.yaml`;
   }
   await call('tests.write', { path, content: code.endsWith('\n') ? code : `${code}\n` });
-  return { done: `Saved tests/${path}`, action: { label: 'Open', onClick: () => useApp.getState().openIntent('tests', { path }) } };
+  return { done: `Saved tests/${path}`, action: { label: 'Open', onClick: () => void openRef({ kind: 'test', path }) } };
 }
 
 export function ApiCoverageDialog({ runId, spec: initialSpec, onClose, inline }: { runId?: string; spec?: string; onClose(): void; /** In an API definition's tab: that document, no dialog. */ inline?: boolean }) {

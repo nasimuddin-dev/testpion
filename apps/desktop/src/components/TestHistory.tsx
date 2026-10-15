@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { call } from '../api';
 import { useApp } from '../store';
+import { openRef } from '../lib/open-ref';
 import { formatMs, plural, timeAgo } from '../lib/format';
 import { axisMs, ChartCard, PointLine, Swatch } from './charts';
 import { StatusIcon } from './Results';
@@ -44,7 +45,7 @@ export function TestHistory({ id, name, runId }: { id: string; name: string; run
   const timed = ordered.filter((p) => p.latencyMs !== undefined);
   const sorted = timed.map((p) => p.latencyMs!).sort((a, b) => a - b);
   const median = sorted.length ? sorted[Math.floor((sorted.length - 1) / 2)]! : 0;
-  const open = (rid: string) => rid !== runId && useApp.getState().openIntent('tests', { runId: rid });
+  const open = (rid: string) => rid !== runId && void openRef({ kind: 'run', runId: rid });
   return (
     <div className="p-3 flex flex-col gap-3">
       <div className="text-sm">

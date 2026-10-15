@@ -1,5 +1,5 @@
 import { Command } from 'commander';
-import { ENGINE_VERSION, MINIMAL_TOOLS } from '@testpion/core';
+import { AGENT_ENVIRONMENT, agentCommands, agentMcp, ENGINE_VERSION, EXIT_CODES } from '@testpion/core';
 import { withWorkspace } from '../shared.js';
 
 /**
@@ -32,29 +32,13 @@ export function registerAgentInfoCommand(program: Command): void {
             schemaVersion: 1,
             testpion: ENGINE_VERSION,
             workspace,
-            commands: {
-              test: `testpion test <paths…>${w} -e <environment> -r json -o <dir>`,
-              run: `testpion run${w} --suite <name> -e <environment> -r json -o <dir>`,
-              send: `testpion send <request or URL>${w} -e <environment> --json`,
-              lint: `testpion lint-tests${w} --json`,
-              generate: `testpion tests-from-spec specs/<api>.yaml${w} --json · testpion integration-suite <spec | collection>${w} --json`,
-              mcpServer: `testpion mcp-server${w} [--profile minimal] [--read-only]`,
-              doctor: 'testpion doctor --json',
-            },
-            exitCodes: { 0: 'success', 1: 'a test failed', 2: 'configuration error (a wrong argument, a missing file)', 3: 'execution error' },
-            output: { json: '--json on most commands prints one JSON object; -r json on runs writes results.jsonl, summary.json and report.json into -o', logs: 'stderr; results go to stdout' },
-            environment: {
-              TESTPION_HOME: 'the app folder (settings, secrets, workspaces list)',
-              'TESTPION_SECRET_<NAME>': 'a secret for {{$secret.<name>}} (dots become underscores: provider.openai.apiKey → TESTPION_SECRET_PROVIDER_OPENAI_APIKEY)',
-              NO_COLOR: 'plain output',
-            },
-            mcp: {
-              command: `testpion mcp-server${w}`,
-              claudeCode: `claude mcp add testpion -- testpion mcp-server${w}`,
-              profiles: { full: 'every tool (the default)', minimal: `${MINIMAL_TOOLS.size} tools of the common jobs; search_tools finds the rest` },
-              start: 'what_needs_attention, then testpion_guide (the check types and the test file format)',
-            },
-            docs: { agents: 'https://testpion.dev/ai-testing/mcp-server', llms: 'https://testpion.dev/llms.txt', agentsMd: `testpion agents-md${w} writes AGENTS.md into the workspace` },
+            // one source with AGENTS.md (testpion agents init): the same commands, exit codes and MCP setup
+            commands: agentCommands(w),
+            exitCodes: EXIT_CODES,
+            output: { json: '--json prints one envelope { schema_version, command, status: ok | failed | error, data, errors: [{ code, message, hint, retryable }], warnings, metrics }: read .data; --jsonl streams runs and servers a line per event; --dry-run on commands that write; -r json on runs writes results.jsonl, summary.json and report.json into -o', logs: 'stderr; results go to stdout' },
+            environment: AGENT_ENVIRONMENT,
+            mcp: agentMcp(`testpion mcp-server${w}`),
+            docs: { agents: 'https://testpion.dev/ai-testing/mcp-server', llms: 'https://testpion.dev/llms.txt', agentsMd: `testpion agents init${w} [--targets agents,claude,cursor] writes AGENTS.md (and CLAUDE.md, a Cursor rule) into the workspace` },
             secrets: 'Secret values never appear in tool results, exports or generated files: they are {{variables}}; set them in the environment or the app.',
           },
           null,

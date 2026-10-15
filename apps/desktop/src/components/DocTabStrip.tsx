@@ -1,4 +1,5 @@
-import { ArrowRightToLine, ChevronDown, ChevronLeft, ChevronRight, ListX, Pencil, Pin, SquareX, X } from 'lucide-react';
+import { ArrowRightToLine, ChevronDown, ChevronLeft, ChevronRight, ListX, Pencil, Pin, RotateCcw, SquareX, X } from 'lucide-react';
+import { reopenClosedTab, useClosedTabs } from '../lib/closed-tabs';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { cx, Menu, type MenuItem } from './ui';
 import { InlineRename } from './TreeParts';
@@ -21,6 +22,11 @@ export interface DocTab<D = unknown> {
   closable?: boolean;
   /** Pinned tabs come first, are narrower and stay open on "Close other / all". */
   pinned?: boolean;
+  /**
+   * A preview tab (WF-19, as VS Code and Postman): opened by a single click in a list, drawn in italics, replaced by the
+   * next item opened that way. Double-click (or editing it) keeps it: `onKeep`.
+   */
+  preview?: boolean;
   /** How the tab is renamed: in place (the strip edits the title, then onRename gets the name) or by the host's own dialog (onRename gets no name). */
   rename?: 'inline' | 'dialog';
   /** The tooltip; the title (plus "unsaved changes") without it. */
@@ -39,6 +45,8 @@ export interface DocTabStripProps<D = unknown> {
   onClose(ids: string[], tabs: DocTab<D>[]): void;
   /** Rename: with the new name after an in-place edit; without one when the tab renames in the host's dialog. */
   onRename?(tab: DocTab<D>, name?: string): unknown;
+  /** Keep a preview tab (double-click on it, Keep open in its menu). */
+  onKeep?(tab: DocTab<D>): void;
   /** The host's items at the top of a tab's right-click menu (Pin, Duplicate, Run now …). */
   extraItems?(tab: DocTab<D>): MenuItem[];
   /** Drawn right after the last tab (the "+" New tab menu). */
@@ -57,7 +65,7 @@ const TAB_W = 190;
  * middle-click, double-click or F2 to rename, and the same right-click menu everywhere (Rename, Close tab, Close
  * other tabs, Close tabs to the right, Close all tabs, plus what the host adds on top).
  */
-export function DocTabStrip<D = unknown>({ tabs: given, activeId, label, onSelect, onClose, onRename, extraItems, afterTabs, actions, countMenu = true, className }: DocTabStripProps<D>) {
+export function DocTabStrip<D = unknown>({ tabs: given, activeId, label, onSelect, onClose, onRename, onKeep, extraItems, afterTabs, actions, countMenu = true, className }: DocTabStripProps<D>) {
   const tabs = [...given.filter((t) => t.pinned), ...given.filter((t) => !t.pinned)];
   const [menuFor, setMenuFor] = useState<string>();
   /** The tab whose title is being edited in place (double-click, F2 or Rename in its menu). */
@@ -69,6 +77,7 @@ export function DocTabStrip<D = unknown>({ tabs: given, activeId, label, onSelec
       setEditingTab(t.id);
     } else void onRename(t);
   };
+  const closedLast = useClosedTabs((s) => s.last);
   const closable = (t: DocTab<D>) => t.closable !== false && !t.pinned;
   const close = (list: DocTab<D>[]) => {
     const open = list.filter(closable);
@@ -85,12 +94,23 @@ export function DocTabStrip<D = unknown>({ tabs: given, activeId, label, onSelec
     const right = tabs.slice(i + 1).filter(closable);
     const all = tabs.filter(closable);
     return [
+      ...(t.preview && onKeep ? [{ label: 'Keep open', icon: <Pin size={13} />, shortcut: 'Double-click', onSelect: () => onKeep(t) }] : []),
       ...(extraItems?.(t) ?? []),
       { label: 'Rename', icon: <Pencil size={13} />, shortcut: 'F2', disabled: !t.rename || !onRename, onSelect: () => startRename(t) },
       { label: 'Close tab', icon: <X size={13} />, separator: true, shortcut: 'Middle-click', disabled: !closable(t), onSelect: () => close([t]) },
       { label: 'Close other tabs', icon: <SquareX size={13} />, disabled: !others.length, onSelect: () => close(others) },
       { label: 'Close tabs to the right', icon: <ArrowRightToLine size={13} />, disabled: !right.length, onSelect: () => close(right) },
       { label: 'Close all tabs', icon: <ListX size={13} />, disabled: !all.length, onSelect: () => close(all) },
+      // the same in every strip: the tab closed last in this workspace (a request, a monitor …), whichever strip it was in
+      {
+        label: 'Reopen closed tab',
+        title: closedLast ? `Reopen ${closedLast.label}` : 'No closed tab to reopen',
+        separator: true,
+        icon: <RotateCcw size={13} />,
+        shortcut: 'Ctrl+Shift+T',
+        disabled: !closedLast,
+        onSelect: () => void reopenClosedTab(),
+      },
     ];
   };
   const stripRef = useRef<HTMLDivElement>(null);
@@ -206,9 +226,10 @@ export function DocTabStrip<D = unknown>({ tabs: given, activeId, label, onSelec
               role="tab"
               data-tab-id={t.id}
               aria-selected={active}
-              title={t.tooltip ?? (t.dirty ? `${t.title} (unsaved changes)` : t.title)}
+              title={t.tooltip ?? (t.dirty ? `${t.title} (unsaved changes)` : t.preview ? `${t.title} (preview: the next item you open replaces it; double-click to keep it)` : t.title)}
+              data-preview={t.preview || undefined}
               onClick={() => onSelect(t)}
-              onDoubleClick={() => startRename(t)}
+              onDoubleClick={() => (t.preview && onKeep ? onKeep(t) : startRename(t))}
               tabIndex={active ? 0 : -1}
               onKeyDown={(e) => {
                 if (e.target !== e.currentTarget) return;
@@ -245,7 +266,7 @@ export function DocTabStrip<D = unknown>({ tabs: given, activeId, label, onSelec
                   onCancel={() => setEditingTab(undefined)}
                 />
               ) : (
-                <span className="truncate flex-1 min-w-0">{t.title}</span>
+                <span className={cx('truncate flex-1 min-w-0', t.preview && 'italic')}>{t.title}</span>
               )}
               {t.count !== undefined && t.count !== null && t.count !== 0 && (
                 <span className={cx('text-[0.7rem] leading-4 px-1.5 rounded-full tabular-nums shrink-0', active ? 'bg-accent-soft text-accent' : 'bg-panel2 text-muted')}>{t.count}</span>

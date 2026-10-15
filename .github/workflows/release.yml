@@ -63,6 +63,14 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      # npm installs node-pty's package for this runner's CPU only; the macOS build also makes the Intel app
+      - name: node-pty for Intel macOS
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          v=$(node -p "require('./node_modules/@lydell/node-pty/package.json').version")
+          d=node_modules/@lydell/node-pty-darwin-x64
+          if [ ! -d "$d" ]; then mkdir -p "$d" && npm pack "@lydell/node-pty-darwin-x64@$v" --silent && tar -xzf lydell-node-pty-darwin-x64-*.tgz --strip-components=1 -C "$d" && rm lydell-node-pty-darwin-x64-*.tgz; fi
       - run: npm run build -w @testpion/shared
       - run: npm run build -w @testpion/core
       - run: npm run build -w @testpion/desktop

@@ -109,7 +109,8 @@ export async function pageRunResults(store: Pick<WorkspaceStore, 'runDir'>, q: {
     }
     const review = reviews[r.id];
     if (q.status === 'reviewed' ? !review?.rating : q.status === 'unreviewed' ? !!review?.rating : q.status && q.status !== 'all' && (q.status === 'failed' ? r.status !== 'failed' && r.status !== 'error' : r.status !== q.status)) continue;
-    if (needle && !r.name.toLowerCase().includes(needle)) continue;
+    // by name (a part of it), or by the test's id exactly (a link to one result)
+    if (needle && !r.name.toLowerCase().includes(needle) && r.id.toLowerCase() !== needle) continue;
     if (total >= offset && items.length < limit) items.push(review ? { ...r, review } : r);
     total++;
   }

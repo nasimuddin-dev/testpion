@@ -42,7 +42,17 @@ export function monitorHandlers(be: Backend): Handlers {
   };
   return {
     'monitor.list': () => listMonitors(be.ws).map(status),
-    'monitor.save': ({ monitor }: { monitor: Omit<Monitor, 'id'> & { id?: string } }) => status(saveMonitor(be.ws, { ...monitor, id: monitor.id || shortId('mon-') })),
+    /**
+     * A monitor on a production environment runs on its schedule only with consent: the production guard asked before
+     * this call (allowProduction), or it was given before for the same environment. Never taken from the monitor sent.
+     */
+    'monitor.save': ({ monitor, allowProduction }: { monitor: Omit<Monitor, 'id'> & { id?: string }; allowProduction?: boolean }) => {
+      const id = monitor.id || shortId('mon-');
+      const before = listMonitors(be.ws).find((m) => m.id === id);
+      const production = !!monitor.environment && !!be.ws.getEnvironment(monitor.environment)?.isProduction;
+      const consent = production && (allowProduction === true || (!!before?.allowProduction && before.environment === monitor.environment));
+      return status(saveMonitor(be.ws, { ...monitor, id, allowProduction: consent || undefined }));
+    },
     'monitor.delete': ({ id }: { id: string }) => deleteMonitor(be.ws, id),
     /** Post a sample "failed" alert to a webhook, to check it before relying on it. */
     'monitor.testWebhook': async ({ webhook, environment, name }: { webhook: string; environment?: string; name?: string }) => {

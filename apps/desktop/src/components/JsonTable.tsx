@@ -117,7 +117,7 @@ export function JsonTable({ rows, path, columnTypes }: { rows: Row[]; path: stri
             if (!name) return;
             try {
               const r = await call<{ name: string }>('datasets.saveCsv', { name, text: rowsToCsv(shown, columns) });
-              useApp.getState().toast(`Saved ${plural(shown.length, 'row')} to datasets/${r.name}. Pick it in the Collection Runner.`, 'success');
+              useApp.getState().toast(`Saved ${plural(shown.length, 'row')} to datasets/${r.name}. Pick it in the Collection Runner.`, 'success', { ref: { kind: 'dataset', name: r.name } });
             } catch (e) {
               toastError(e);
             }

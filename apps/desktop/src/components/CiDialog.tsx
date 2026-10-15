@@ -1,5 +1,5 @@
 import { CodeBlock } from './CodeBlock';
-import { Check, Copy, Download } from 'lucide-react';
+import { Check, Copy, Download, TerminalSquare } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { asError, call } from '../api';
 import { toastError, useApp } from '../store';
@@ -7,13 +7,16 @@ import { finishSave, type SaveResult } from '../lib/files';
 import { Button, Field, Input, Modal, Select, Tabs } from './ui';
 import { useCollectionTree } from '../lib/collections-store';
 import { usePersisted } from '../lib/sticky';
-import { useCopied } from '../lib/clipboard';
+import { copyText, useCopied } from '../lib/clipboard';
+import { runInTerminal, useShellCapable } from '../lib/terminal';
 
 interface CiConfig {
   path: string;
   content: string;
   secrets: Array<{ name: string; description: string }>;
   command: string;
+  /** The same run on this computer (to try before pushing). */
+  localCommand?: string;
 }
 
 type Provider = 'github' | 'gitlab' | 'azure' | 'jenkins';
@@ -30,10 +33,13 @@ interface TreeNode {
   kind: 'file' | 'dir';
   children?: TreeNode[];
 }
+/** The test files a pipeline can run on their own (not suites). */
+const filesOf = (nodes: TreeNode[]): string[] => nodes.flatMap((n) => (n.kind === 'dir' ? filesOf(n.children ?? []) : /\.(ya?ml|json)$/i.test(n.path) && !/\.suite\./i.test(n.path) ? [n.path] : []));
 const suitesOf = (nodes: TreeNode[]): string[] => nodes.flatMap((n) => (n.kind === 'dir' ? suitesOf(n.children ?? []) : n.path.endsWith('.suite.yaml') && !n.path.includes('/') ? [n.path.replace(/\.suite\.yaml$/, '')] : []));
 
 /**
- * "Run in CI": a pipeline file that runs a suite, a collection or all tests on every push. The config
+ * "Run in CI": a pipeline file that runs a suite, a collection, some test files (a flow's Deploy ▸ CI preselects
+ * it) or all tests on every push. The config
  * comes from the engine (ci.config), so the app, `testpion ci` and the ci_config MCP tool agree.
  */
 export function CiDialog() {
@@ -41,18 +47,31 @@ export function CiDialog() {
   const close = () => useApp.getState().set({ ci: undefined });
   const environments = useApp((s) => s.workspace?.environments ?? []);
   const [provider, setProvider] = usePersisted<Provider>('aps.ci.provider', 'github', { parse: (v) => (v as Provider) || undefined, text: true });
-  const [target, setTarget] = useState<string>(req.collection ? `collection:${req.collection}` : req.suite ? `suite:${req.suite}` : 'tests');
-  const [environment, setEnvironment] = useState(useApp.getState().environment ?? '');
+  const [target, setTarget] = useState<string>(
+    req.collection ? `collection:${req.collection}` : req.suite ? `suite:${req.suite}` : req.tests?.length === 1 ? `file:${req.tests[0]}` : req.tests?.length ? 'selected' : 'tests',
+  );
+  const [environment, setEnvironment] = useState(req.environment ?? useApp.getState().environment ?? '');
+  // one flow file: how the pipeline runs it (once, per data row, in several environments), and what it keeps
+  const [flowRun, setFlowRun] = useState<'once' | 'data' | 'matrix'>('once');
+  const [dataFile, setDataFile] = useState('');
+  const [matrix, setMatrix] = useState<string[]>([]);
+  const [allowProduction, setAllowProduction] = useState(false);
+  const [timeline, setTimeline] = useState(false);
+  const [datasets, setDatasets] = useState<string[]>([]);
+  useEffect(() => void call<Array<{ path: string }>>('datasets.list').then((d) => setDatasets(d.map((x) => x.path)), () => setDatasets([])), []);
+  const shellCapable = useShellCapable();
+  const production = !!environments.find((e) => e.name === environment)?.isProduction || (target.startsWith('file:') && flowRun === 'matrix' && environments.some((e) => matrix.includes(e.name) && e.isProduction));
   const [workspaceDir, setWorkspaceDir] = useState('.');
   const [openapi, setOpenapi] = useState('');
   const [suites, setSuites] = useState<string[]>([]);
+  const [files, setFiles] = useState<string[]>([]);
   const collections = useCollectionTree();
   const [cfg, setCfg] = useState<CiConfig>();
   const [error, setError] = useState<string>();
   const { copied, copy: copyToClipboard } = useCopied();
 
   useEffect(() => {
-    void call<TreeNode[]>('tests.tree').then((t) => setSuites(suitesOf(t)));
+    void call<TreeNode[]>('tests.tree').then((t) => (setSuites(suitesOf(t)), setFiles(filesOf(t))));
   }, []);
   const options = () => {
     const [kind, value] = target.includes(':') ? [target.slice(0, target.indexOf(':')), target.slice(target.indexOf(':') + 1)] : [target, ''];
@@ -61,7 +80,23 @@ export function CiDialog() {
       environment: environment || undefined,
       workspaceDir: workspaceDir.trim() || '.',
       openapi: openapi.trim() || undefined,
-      ...(kind === 'suite' ? { suite: value } : kind === 'collection' ? { collection: value, folders: value === req.collection ? req.folders : undefined } : {}),
+      // any target: data-changing requests may go to a production environment only when asked
+      ...(allowProduction && production ? { allowProduction: true } : {}),
+      ...(kind === 'suite'
+        ? { suite: value }
+        : kind === 'collection'
+          ? { collection: value, folders: value === req.collection ? req.folders : undefined }
+          : kind === 'file'
+            ? {
+                tests: [value],
+                // a run's name / tag filter (Run in CI from a run) stays with its file
+                ...(req.tests?.length === 1 && req.tests[0] === value ? { grep: req.grep, tags: req.tags } : {}),
+                ...(flowRun === 'data' ? { data: dataFile } : flowRun === 'matrix' && matrix.length ? { envMatrix: matrix } : {}),
+                ...(timeline ? { timelineHtml: true } : {}),
+              }
+            : kind === 'selected'
+              ? { tests: req.tests, grep: req.grep, tags: req.tags }
+              : {}),
     };
   };
   useEffect(() => {
@@ -70,7 +105,7 @@ export function CiDialog() {
       (e) => (setCfg(undefined), setError(asError(e).message)),
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [provider, target, environment, workspaceDir, openapi]);
+  }, [provider, target, environment, workspaceDir, openapi, flowRun, dataFile, matrix.join(','), allowProduction, timeline]);
 
   const copy = () => (cfg ? copyToClipboard(cfg.content) : undefined);
   const save = async () => {
@@ -104,6 +139,16 @@ export function CiDialog() {
           <Field label="Run">
             <Select value={target} onChange={(e) => setTarget(e.target.value)}>
               <option value="tests">All tests (tests/)</option>
+              {(req.tests?.length ?? 0) > 1 && <option value="selected">These tests: {req.tests!.join(', ')}</option>}
+              {(files.length > 0 || req.tests?.length === 1) && (
+                <optgroup label="One test file">
+                  {[...new Set([...(req.tests?.length === 1 ? req.tests : []), ...files])].map((f) => (
+                    <option key={f} value={`file:${f}`}>
+                      {f}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
               {suites.length > 0 && (
                 <optgroup label="Suites">
                   {suites.map((s) => (
@@ -143,6 +188,68 @@ export function CiDialog() {
             <Input className="mono" value={openapi} onChange={(e) => setOpenapi(e.target.value)} placeholder="openapi.yaml" />
           </Field>
         </div>
+        {target.startsWith('file:') && (
+          <div className="grid gap-2 rounded-lg border border-line p-3 text-sm" data-ci-flow-options>
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="text-xs font-medium text-muted">Run the flow</span>
+              {(['once', 'data', 'matrix'] as const).map((m) => (
+                <label key={m} className="flex items-center gap-1.5 text-xs">
+                  <input type="radio" name="ci-flow-run" checked={flowRun === m} onChange={() => setFlowRun(m)} data-ci-flow-run={m} />
+                  {m === 'once' ? 'once' : m === 'data' ? 'once per data row' : 'in several environments'}
+                </label>
+              ))}
+            </div>
+            {flowRun === 'data' && (
+              <Field label="Data">
+                <Select value={dataFile} onChange={(e) => setDataFile(e.target.value)} aria-label="Data file">
+                  <option value="">The flow file's own data:</option>
+                  {datasets.map((d) => (
+                    <option key={d} value={d}>
+                      {d}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            )}
+            {flowRun === 'matrix' && (
+              <div className="flex flex-wrap gap-3" data-ci-matrix>
+                {environments.map((e) => (
+                  <label key={e.id} className="flex items-center gap-1.5 text-xs">
+                    <input type="checkbox" checked={matrix.includes(e.name)} onChange={(ev) => setMatrix(ev.target.checked ? [...matrix, e.name] : matrix.filter((x) => x !== e.name))} />
+                    {e.name}
+                    {e.isProduction ? ' (production)' : ''}
+                  </label>
+                ))}
+              </div>
+            )}
+            <label className="flex items-center gap-1.5 text-xs">
+              <input type="checkbox" checked={timeline} onChange={(e) => setTimeline(e.target.checked)} data-ci-timeline />
+              Keep the run as an HTML timeline (test-results/timeline.html), also when it fails
+            </label>
+          </div>
+        )}
+        {production && (
+          <label className="flex items-center gap-1.5 text-xs text-bad">
+            <input type="checkbox" checked={allowProduction} onChange={(e) => setAllowProduction(e.target.checked)} data-ci-allow-production />
+            Allow data-changing requests to the production environment (--allow-production)
+          </label>
+        )}
+        {cfg?.localCommand && (
+          <div className="grid gap-1" data-ci-local-command>
+            <div className="flex items-center gap-2 text-xs">
+              <span className="font-medium flex-1">Try it here first (the same run, on this computer)</span>
+              <Button size="sm" icon={<Copy size={12} />} onClick={() => void copyText(cfg.localCommand!, 'Command')}>
+                Copy
+              </Button>
+              {shellCapable && (
+                <Button size="sm" icon={<TerminalSquare size={12} />} onClick={() => (runInTerminal(cfg.localCommand!), close())} data-ci-run-local>
+                  Run in terminal
+                </Button>
+              )}
+            </div>
+            <CodeBlock className="mono text-xs rounded-md border border-line bg-bg p-2 whitespace-pre-wrap break-all" text={cfg.localCommand} />
+          </div>
+        )}
         {error && <div className="text-sm text-bad">{error}</div>}
         {cfg && (
           <>

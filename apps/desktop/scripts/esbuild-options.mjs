@@ -6,8 +6,8 @@ export const nodeBundleOptions = {
   format: 'cjs',
   sourcemap: true,
   logLevel: 'warning',
-  // Node built-ins and electron are provided at runtime
-  external: ['electron'],
+  // Node built-ins and electron are provided at runtime; node-pty (native, loaded at the first terminal) is shipped as files
+  external: ['electron', '@lydell/node-pty'],
   // ESM dependencies (QuickJS loader, core) use import.meta.url; provide a real file URL in the CJS bundle
   define: { 'import.meta.url': '__aps_import_meta_url' },
   banner: { js: "const __aps_import_meta_url = require('node:url').pathToFileURL(__filename).href;" },

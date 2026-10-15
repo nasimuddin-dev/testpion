@@ -39,6 +39,13 @@ extraResources:
       - "!baselines/**"
       - "!database.sqlite*"
       - "!metadata.jsonl"
+  # node-pty for the Terminal panel (electron/pty-host.ts): this platform's prebuilt package (N-API, no rebuild), outside
+  # app.asar since its .node files, conpty.dll and OpenConsole.exe must be real files; debug symbols left out
+  - from: ../../node_modules/@lydell/node-pty-${platform}-${arch}
+    to: node-pty
+    filter:
+      - "**/*"
+      - "!**/*.pdb"
 npmRebuild: false
 # Electron fuses, set in the packaged binary: the installed app can't be turned into a general Node.js
 # runtime or a debug target by whoever can start it with an environment variable or a flag.
@@ -62,6 +69,11 @@ extraMetadata:
   # package / executable name on Linux (.deb, .rpm, binary); the display name stays "TestPion"
   name: testpion
 
+# testpion://open?... links (testpion open <ref>, links from agents and reports) open the item in the app
+protocols:
+  - name: TestPion link
+    schemes:
+      - testpion
 win:
   target:
     - target: nsis

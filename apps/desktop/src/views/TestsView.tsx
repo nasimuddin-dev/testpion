@@ -1,8 +1,15 @@
-import { BarChart3, Bot, ChevronDown, ChevronRight, CopyPlus, FileCode2, FilePlus2, Folder, History, KeyRound, Layers, Pencil, Play, Save, ShieldCheck, Trash2, Workflow } from 'lucide-react';
+import { BarChart3, Bot, ChevronDown, ChevronRight, Copy, CopyPlus, FileBarChart, RotateCcw, FileCode2, FilePlus2, FileSpreadsheet, Folder, History, KeyRound, Layers, Pencil, Play, Save, ShieldCheck, Trash2, Workflow } from 'lucide-react';
+
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { asError, call, on } from '../api';
 import { confirmAction, promptText, toastError, useApp } from '../store';
 import { useIntent, useSaveShortcut } from '../hooks';
+import { useExternalChange } from '../lib/external-change';
+import { LABEL } from '../lib/vocabulary';
+import { runCiMenuItems } from '../lib/run-ci';
+import { noteClosedTabs } from '../lib/closed-tabs';
+import { ItemBreadcrumb, type Crumb } from '../components/ItemBreadcrumb';
+import { setDragRefs } from '../lib/drag-ref';
 import { timeAgo } from '../lib/format';
 import { StatusIcon } from '../components/Results';
 import { CodeEditor } from '../components/CodeEditor';
@@ -10,15 +17,20 @@ import type { OnMount } from '@monaco-editor/react';
 import { RunMiniBar, RunsOverview, type RunRow } from '../components/RunsOverview';
 import { RunPanel } from '../components/RunPanel';
 import { ExposeFlowDialog } from '../components/ExposeFlowDialog';
+import { RunWithDataDialog } from '../components/RunWithDataDialog';
+import { ScaleRunPanel } from '../components/FlowScaleGrids';
 import { SidebarShell } from '../components/SidebarShell';
-import { KindBadge, RowMenu, TEST_KINDS, TreeHeader, treeKeys } from '../components/TreeParts';
+import { KindBadge, NodeMenu, RowMenu, TEST_KINDS, TreeHeader, treeKeys } from '../components/TreeParts';
+import { copyText } from '../lib/clipboard';
 import { FlowDiagram } from '../components/FlowDiagram';
 import { FlowDesigner, type DesignerFlow, type FlowEditAnswer, type FlowRunRequest } from '../components/FlowDesigner';
-import { stepLine, type FlowStep } from '@testpion/shared';
+import { stepLine, type FlowStep, type ItemRef } from '@testpion/shared';
 import { EnvironmentsPane } from '../components/SidebarPanes';
 import { finishSave, type SaveResult } from '../lib/files';
 import { dataLanguageOf } from '../data-languages';
 import { Badge, Button, cx, Empty, IconButton, Input, rowActionClass, SectionTitle, Spinner, Split, VirtualList, type MenuItem } from '../components/ui';
+import { EnvBadge } from '../components/EnvSelect';
+import { TYPE_ICON } from '../components/ProblemList';
 import { DocTabStrip } from '../components/DocTabStrip';
 
 interface Node {
@@ -165,6 +177,16 @@ export function TestsView() {
   const [tab, setTab] = useState<'editor' | 'run' | 'flow'>('editor');
   // the file whose expose: block (the flow as an MCP tool) is being edited
   const [exposing, setExposing] = useState<string>();
+  // Run with data… / in environments: the dialog's file, and the data run or matrix the Runs tab shows
+  const [scaling, setScaling] = useState<{ file: string; initial: 'data' | 'matrix' }>();
+  const [scaleId, setScaleId] = useState<string>();
+  // a test run picked anywhere replaces it
+  useEffect(() => setScaleId(undefined), [runId]);
+  /** The dialog runs the file as saved: pending edits are saved first. */
+  const openScaling = async (path: string, initial: 'data' | 'matrix') => {
+    if (file && content !== saved) await save();
+    setScaling({ file: path, initial });
+  };
   // the latest result of each test in the previewed file
   const [latest, setLatest] = useState<Record<string, { status: string; runId: string; startedAt: string }>>({});
   useEffect(() => {
@@ -186,7 +208,10 @@ export function TestsView() {
 
   /** Show an open file's tab (the one on screen keeps its edits for when it comes back). */
   const show = (path: string | undefined) => {
-    if (file && file !== path && openFilesRef.current.includes(file)) buffers.current[file] = { content, saved };
+    // the file on screen: only its Editor tab (reloading its buffer would drop what was typed since it was stored)
+    if (path && path === file) return setTab('editor');
+    // the live text of the file being left is kept, always
+    if (file && openFilesRef.current.includes(file)) buffers.current[file] = { content, saved };
     const b = path ? buffers.current[path] : undefined;
     setFile(path);
     setContent(b?.content ?? '');
@@ -199,6 +224,13 @@ export function TestsView() {
   openFilesRef.current = openFiles;
   const fileRef = useRef(file);
   fileRef.current = file;
+  // what the open file holds now, for the outside-change check (it runs outside a render)
+  const contentRef = useRef(content);
+  contentRef.current = content;
+  const savedRef = useRef(saved);
+  savedRef.current = saved;
+  const tabRef = useRef(tab);
+  tabRef.current = tab;
   // the file as a flow (the Flow tab): its steps with the latest run's result of each; a run that finishes recolours it
   const [flow, setFlow] = useState<DesignerFlow | { error: string }>();
   const envRef = useRef<string | undefined>(undefined);
@@ -206,18 +238,25 @@ export function TestsView() {
   const [flowSel, setFlowSel] = useState<string>();
   // the result the run panel selects (a node of the flow)
   const [focusResult, setFocusResult] = useState<string>();
+  // a step a link asked for, selected on the designer's canvas (n: each ask, even of the same step)
+  const [focusStep, setFocusStep] = useState<{ id: string; n: number }>();
   const flowSeq = useRef(0);
   const loadFlow = useCallback((path: string) => {
     const n = ++flowSeq.current;
     // with each step as written (the designer's inspector) and the variables the environment defines (unresolved marks)
-    call<DesignerFlow>('tests.flow', { file: path, raw: true, environment: envRef.current }).then(
+    // the editor's unsaved text, when it has some: the canvas shows what the editor shows (an edit saves it first)
+    const live = path === fileRef.current && contentRef.current !== savedRef.current ? { text: contentRef.current } : {};
+    call<DesignerFlow>('tests.flow', { file: path, raw: true, environment: envRef.current, ...live }).then(
       (f) => n === flowSeq.current && setFlow(f),
       (e) => n === flowSeq.current && setFlow({ error: asError(e).message }),
     );
   }, []);
+  // another file: its own flow (the designer of a file stays mounted across tab switches: view, selection, panels kept)
   useEffect(() => {
     setFlow(undefined);
     setFlowSel(undefined);
+  }, [file]);
+  useEffect(() => {
     if (tab === 'flow' && file) loadFlow(file);
   }, [tab, file, loadFlow]);
   useEffect(() => on<{ runId: string }>('run.finished', () => void (fileRef.current && loadFlow(fileRef.current))), [loadFlow]);
@@ -233,6 +272,8 @@ export function TestsView() {
     return model && !model.isDisposed() ? model : undefined;
   };
   /** The editor at the line a flow node asked for (openStep), once the Editor tab shows. */
+  // each line asked for (openStep): the editor moves there even when the Editor tab already shows the file
+  const [revealAsk, setRevealAsk] = useState(0);
   const reveal = () => {
     const ed = editorRef.current;
     const l = revealLine.current;
@@ -251,7 +292,7 @@ export function TestsView() {
     editorRef.current.layout();
     reveal();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, file]);
+  }, [tab, file, revealAsk]);
   // a closed (or renamed) file's model goes: the editor keeps one per open file
   const modelPaths = useRef<string[]>([]);
   useEffect(() => {
@@ -266,6 +307,7 @@ export function TestsView() {
   const openStep = (s: FlowStep) => {
     setFlowSel(s.id);
     revealLine.current = stepLine(content, s.name) ?? s.line;
+    setRevealAsk((n) => n + 1);
     if (flow && !('error' in flow) && flow.run) {
       setRunId(flow.run.runId);
       setFocusResult(s.name);
@@ -293,6 +335,8 @@ export function TestsView() {
     const active = fileRef.current;
     const b = path === active ? { content, saved } : buffers.current[path];
     if (ask && b && b.content !== b.saved && !(await confirmAction({ title: 'Unsaved changes', message: `tests/${path} has unsaved changes.`, detail: 'Close it and discard them? Save with Ctrl+S to keep them.', confirmLabel: 'Discard changes', danger: true }))) return;
+    // Ctrl+Shift+T opens it again
+    noteClosedTabs([{ ref: { kind: 'test', path }, label: path.split('/').pop() ?? path }]);
     const i = openFilesRef.current.indexOf(path);
     const rest = openFilesRef.current.filter((p) => p !== path);
     delete buffers.current[path];
@@ -381,9 +425,42 @@ export function TestsView() {
   };
 
   useIntent('tests', async (p) => {
-    if (p?.path) await openFile(p.path);
+    // a test named only by its id (a flaky test, an attention item, a test-case link): its file and step first
+    let path: string | undefined = p?.path;
+    let step: string | undefined = p?.step;
+    if (!path && p?.testId) {
+      const at = await call<{ path: string; id: string } | null>('tests.locate', { testId: p.testId }).catch(() => null);
+      if (at) ({ path, id: step } = at);
+      else useApp.getState().toast(`No test "${p.testId}" in tests/ any more (renamed or deleted)`, 'warning');
+    }
+    // a flow made elsewhere (recorded in the Debugger): the tree lists it, the designer opens it
+    if (path && p?.flow) await loadTree();
+    if (path) await openFile(path);
+    if (path && p?.flow) setTab('flow');
+    // a step of the file: selected on the canvas (a flow), else the editor at its line
+    if (path && step) {
+      const f = await call<{ steps: FlowStep[] }>('tests.flow', { file: path }).catch(() => undefined);
+      const s = f?.steps.find((x) => x.id === step || x.name === step);
+      if (s && p?.flow) setFocusStep({ id: s.id, n: Date.now() });
+      else if (s) openStep(s);
+    }
+    // a line of the file (a problem, a search hit): the editor at it; the step it is in is selected on the canvas too
+    const line = Number(p?.line);
+    if (path && !step && line > 0) {
+      revealLine.current = line;
+      setRevealAsk((n) => n + 1);
+      setTab('editor');
+      const f = await call<{ steps: FlowStep[] }>('tests.flow', { file: path }).catch(() => undefined);
+      const s = (f?.steps ?? []).filter((x) => x.line !== undefined && x.line <= line).sort((a, b) => b.line! - a.line!)[0];
+      if (s) {
+        setFlowSel(s.id);
+        setFocusStep({ id: s.id, n: Date.now() });
+      }
+    }
     if (p?.runId) {
       setRunId(p.runId);
+      // one result of the run (by its test's id)
+      if (p.resultId) setFocusResult(p.resultId);
       setTab('run');
     }
     if (p?.runAll) void run([], 'All tests');
@@ -396,6 +473,48 @@ export function TestsView() {
   });
 
   useSaveShortcut('tests', () => void save());
+
+  /** Rerun failed (the run panel's button, a run's menu): only the tests that failed or errored, as a new run. */
+  const rerunFailed = (id: string) =>
+    void call<{ runId: string }>('tests.rerunFailed', { runId: id, environment: env, concurrency: opts.concurrency, retries: opts.retries }).then(
+      (r) => {
+        setRunId(r.runId);
+        setTab('run');
+        setTimeout(loadRuns, 500);
+      },
+      (e) => toastError(e),
+    );
+
+  // open test files follow their file on disk (WF-15): a pull, a branch switch, another window or the CLI changed it.
+  // Without unsaved edits the editor (and the Flow tab) shows the new version; with them, Keep mine / Take the new version.
+  useExternalChange<string>({
+    kinds: ['tests'],
+    items: () =>
+      openFilesRef.current.map((p) => {
+        const b = p === fileRef.current ? { content: contentRef.current, saved: savedRef.current } : buffers.current[p];
+        return { key: p, label: `tests/${p}`, base: b?.saved, dirty: !!b && b.content !== b.saved };
+      }),
+    read: async (keys) => {
+      const out = new Map<string, { snapshot: string; value: string }>();
+      for (const k of keys) {
+        const text = await call<string>('tests.read', { path: k }).catch(() => undefined);
+        if (text !== undefined) out.set(k, { snapshot: text, value: text });
+      }
+      return out;
+    },
+    take: (key, text) => {
+      if (key === fileRef.current) {
+        setContent(text);
+        setSaved(text);
+        if (tabRef.current === 'flow') loadFlow(key);
+        call('tests.preview', { path: key }).then(setPreview, (e) => setPreview({ error: asError(e).message }));
+      } else buffers.current[key] = { content: text, saved: text };
+    },
+    keep: (key, snapshot) => {
+      if (key === fileRef.current) setSaved(snapshot);
+      else if (buffers.current[key]) buffers.current[key] = { ...buffers.current[key]!, saved: snapshot };
+    },
+  });
 
   /** Rename or move a test file (its path inside tests/). */
   const renameFile = async (path: string) => {
@@ -434,6 +553,8 @@ export function TestsView() {
       setSaved(text);
     } else if (buffers.current[path] && buffers.current[path]!.content === buffers.current[path]!.saved) buffers.current[path] = { content: text, saved: text };
     if (file === path) call('tests.preview', { path }).then(setPreview, (e) => setPreview({ error: asError(e).message }));
+    // the designer's Start node and Deploy panel show what the file is exposed as
+    if (file === path && tab === 'flow') loadFlow(path);
   };
   /** Export as Arazzo…: the flow as an Arazzo 1.0 workflow, saved with a dialog (or downloaded); what did not fit is said in a toast. */
   const exportArazzo = async (path: string) => {
@@ -458,7 +579,7 @@ export function TestsView() {
           ...(/\.(ya?ml|json)$/.test(n.name) && !/\.suite\./.test(n.name) ? [{ label: 'Export as Arazzo…', icon: <Workflow size={14} />, onSelect: () => void exportArazzo(n.path) }] : []),
           { label: 'Rename', icon: <Pencil size={14} />, separator: true, onSelect: () => void renameFile(n.path) },
           { label: 'Duplicate', icon: <CopyPlus size={14} />, onSelect: () => void duplicateFile(n.path) },
-          { label: 'Delete', icon: <Trash2 size={14} />, danger: true, separator: true, onSelect: () => void deletePath(n) },
+          { label: LABEL.delete, icon: <Trash2 size={14} />, danger: true, separator: true, onSelect: () => void deletePath(n) },
         ];
 
   const renderTree = (nodes: Node[], depth = 0): React.ReactNode =>
@@ -487,6 +608,7 @@ export function TestsView() {
           onRun={/\.(ya?ml|json)$/.test(n.name) ? () => void run([n.path], n.path) : undefined}
           menu={nodeMenu(n)}
           onRename={() => void renameFile(n.path)}
+          dragRef={/\.(ya?ml|json)$/.test(n.name) && !/\.suite\./.test(n.name) ? { kind: 'test', path: n.path } : undefined}
         />
       ),
     );
@@ -562,6 +684,7 @@ export function TestsView() {
                     setRunId(id);
                     setTab('run');
                   }}
+                  onRerunFailed={rerunFailed}
                 />
               </div>
             ),
@@ -581,6 +704,8 @@ export function TestsView() {
           extraItems={({ data: p }) => [
             { label: 'Run', icon: <Play size={13} />, onSelect: () => void run([p!], p!) },
             { label: 'Expose as MCP tool…', icon: <Bot size={13} />, disabled: !/\.(ya?ml|json)$/.test(p!), onSelect: () => void exposeFile(p!) },
+            { label: 'Run with data…', icon: <FileSpreadsheet size={13} />, disabled: !/\.(ya?ml|json)$/.test(p!) || /\.suite\./.test(p!), onSelect: () => void openScaling(p!, 'data') },
+            { label: LABEL.runInEnvironments, icon: <Layers size={13} />, disabled: !/\.(ya?ml|json)$/.test(p!) || /\.suite\./.test(p!), onSelect: () => void openScaling(p!, 'matrix') },
           ]}
           tabs={[
             ...(openFiles.length
@@ -607,6 +732,11 @@ export function TestsView() {
                 <Button size="sm" variant="primary" icon={<Play size={12} />} onClick={() => run([file], file)}>
                   Run
                 </Button>
+                {/\.(ya?ml|json)$/.test(file) && !/\.suite\./.test(file) && (
+                  <IconButton label="Run with data or in environments…" data-run-with-data-open onClick={() => void openScaling(file, 'data')}>
+                    <FileSpreadsheet size={13} />
+                  </IconButton>
+                )}
                 <IconButton
                   label="Delete file"
                   onClick={async () => {
@@ -622,6 +752,13 @@ export function TestsView() {
             )
           }
         />
+        {/* where the file lives: Tests › folder › file (› the step chosen on the canvas) */}
+        {file && tab !== 'run' && (() => {
+          const parts = file.split('/');
+          const step = tab === 'flow' && flowSel && flow && !('error' in flow) ? flow.steps.find((s) => s.id === flowSel) : undefined;
+          const crumbs: Crumb[] = [{ label: 'Tests', view: 'tests' }, ...parts.slice(0, -1).map((label) => ({ label })), ...(step ? [{ label: parts[parts.length - 1]!, ref: { kind: 'test' as const, path: file } }] : [])];
+          return <ItemBreadcrumb crumbs={crumbs} name={step ? step.name : parts[parts.length - 1]!} dirty={content !== saved} />;
+        })()}
         <div className="flex-1 min-h-0">
           {/* ONE editor for every open file (a model each, the editor swaps them): it stays mounted, hidden, while the
               Flow or Runs tab shows — creating a Monaco editor on every open and every return to the Editor tab took 200-400 ms */}
@@ -691,6 +828,32 @@ export function TestsView() {
                 </Split>
             </div>
           )}
+          {/* the flow designer of the open file, like the editor: mounted once, hidden while another tab shows, so its view,
+              selection, History panel and search survive a switch to the Editor and back */}
+          {file && flow && !('error' in flow) && /\.(ya?ml|json)$/i.test(file) && !/\.suite\.(ya?ml|json)$/i.test(file) && (
+            <div className="h-full" style={tab === 'flow' ? undefined : { display: 'none' }}>
+                <FlowDesigner
+                  key={file}
+                  file={file}
+                  flow={flow}
+                  onEdited={flowEdited}
+                  beforeEdit={async () => {
+                    if (content !== saved) await save();
+                  }}
+                  onRun={(o) => run([file], undefined, { stay: true, flow: o ?? {} })}
+                  onOpenStep={openStep}
+                  onExpose={() => void exposeFile(file)}
+                  focusStep={focusStep}
+                  savedText={saved}
+                  onStepChange={setFlowSel}
+                  onOpenResult={(s, id) => {
+                    setRunId(id);
+                    setFocusResult(s.name);
+                    setTab('run');
+                  }}
+                />
+            </div>
+          )}
           {tab === 'editor' ? (
             !file && (
               <Empty
@@ -716,22 +879,8 @@ export function TestsView() {
               </Empty>
             ) : /\.(ya?ml|json)$/i.test(file) && !/\.suite\.(ya?ml|json)$/i.test(file) ? (
               // a test file: the flow designer (a suite names other files: it stays a read-only diagram)
-              <FlowDesigner
-                key={file}
-                file={file}
-                flow={flow}
-                onEdited={flowEdited}
-                beforeEdit={async () => {
-                  if (content !== saved) await save();
-                }}
-                onRun={(o) => run([file], undefined, { stay: true, flow: o ?? {} })}
-                onOpenStep={openStep}
-                onOpenResult={(s, id) => {
-                  setRunId(id);
-                  setFocusResult(s.name);
-                  setTab('run');
-                }}
-              />
+              // drawn below, outside the tabs: it stays mounted (hidden) while the Editor or Runs tab shows
+              null
             ) : !flow.steps.length ? (
               <Empty icon={<Workflow size={28} />} title="No steps in this file">
                 A flow is a test file whose tests chain with <span className="mono">dependsOn</span> and <span className="mono">extract</span>; a suite names other files — open one of them to see its flow.
@@ -739,27 +888,31 @@ export function TestsView() {
             ) : (
               <FlowDiagram steps={flow.steps} selected={flowSel} onSelect={openStep} onOpenResult={flow.run ? openStepResult : undefined} />
             )
+          ) : scaleId ? (
+            <div className="h-full flex flex-col min-h-0">
+              <div className="flex items-center gap-2 px-3 h-8 border-b border-line text-xs">
+                <button className="text-accent hover:underline" onClick={() => setScaleId(undefined)}>
+                  ← Test runs
+                </button>
+                <span className="text-muted">Data runs and environment matrices</span>
+              </div>
+              <div className="flex-1 min-h-0">
+                <ScaleRunPanel id={scaleId} onSelect={setScaleId} />
+              </div>
+            </div>
           ) : runId ? (
             <Split id="tests-runs" initial={22} min={12}>
-              <RunList runs={runs} active={runId} onSelect={setRunId} onOverview={() => setRunId(undefined)} />
+              <RunList runs={runs} active={runId} onSelect={setRunId} onOverview={() => setRunId(undefined)} onRerunFailed={rerunFailed} />
               <RunPanel
                 key={runId}
                 runId={runId}
                 focusName={focusResult}
-                onRerunFailed={(id) =>
-                  void call<{ runId: string }>('tests.rerunFailed', { runId: id, environment: env, concurrency: opts.concurrency, retries: opts.retries }).then(
-                    (r) => {
-                      setRunId(r.runId);
-                      setTimeout(loadRuns, 500);
-                    },
-                    (e) => toastError(e),
-                  )
-                }
+                onRerunFailed={rerunFailed}
               />
             </Split>
           ) : (
             <Split id="tests-runs" initial={22} min={12}>
-              <RunList runs={runs} active={runId} onSelect={setRunId} />
+              <RunList runs={runs} active={runId} onSelect={setRunId} onRerunFailed={rerunFailed} />
               <RunsOverview flaky runs={runs} onSelect={setRunId} />
             </Split>
           )}
@@ -767,11 +920,24 @@ export function TestsView() {
       </div>
     </Split>
     {exposing && <ExposeFlowDialog path={exposing} onClose={() => setExposing(undefined)} onChanged={() => void exposed(exposing).catch(toastError)} />}
+    {scaling && (
+      <RunWithDataDialog
+        file={scaling.file}
+        initial={scaling.initial}
+        onClose={() => setScaling(undefined)}
+        onStarted={(s) => {
+          setScaleId(s.id);
+          setTab('run');
+        }}
+      />
+    )}
     </>
   );
 }
 
-function RunList({ runs, active, onSelect, onOverview }: { runs: RunRow[]; active?: string; onSelect(id: string): void; onOverview?(): void }) {
+function RunList({ runs, active, onSelect, onOverview, onRerunFailed }: { runs: RunRow[]; active?: string; onSelect(id: string): void; onOverview?(): void; onRerunFailed?(id: string): void }) {
+  // the row whose menu is open (its ⋯, or a right-click on the row): the shared item menu (TreeParts NodeMenu)
+  const [menuFor, setMenuFor] = useState<string>();
   // filter by name / environment, and only the runs where something failed
   const [query, setQuery] = useState('');
   const [failedOnly, setFailedOnly] = useState(false);
@@ -794,17 +960,57 @@ function RunList({ runs, active, onSelect, onOverview }: { runs: RunRow[]; activ
       )}
       <div className="flex-1 min-h-0 overflow-auto">
         {shown.map((r) => (
-          <button key={r.id} onClick={() => onSelect(r.id)} className={cx('w-full text-left px-3 py-2 border-b border-line/60', active === r.id ? 'bg-accent/10' : 'hover:bg-hover')}>
-            <div className="text-sm truncate">{r.name}</div>
-            <RunMiniBar r={r} />
-            <div className="text-xs text-muted flex gap-2">
-              <span className={r.failed + r.errors ? 'text-bad' : 'text-ok'}>
-                {r.passed}/{r.total}
-              </span>
-              {r.environment && <span>{r.environment}</span>}
-              <span className="ml-auto">{timeAgo(r.startedAt)}</span>
+          <div
+            key={r.id}
+            className={cx('group flex items-start border-b border-line/60', active === r.id ? 'bg-accent/10' : 'hover:bg-hover')}
+            data-run-row={r.id}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              setMenuFor(r.id);
+            }}
+          >
+            <button onClick={() => onSelect(r.id)} className="flex-1 min-w-0 text-left pl-3 py-2">
+              <div className="text-sm truncate">{r.name}</div>
+              <RunMiniBar r={r} />
+              <div className="text-xs text-muted flex gap-2">
+                <span className={r.failed + r.errors ? 'text-bad' : 'text-ok'}>
+                  {r.passed}/{r.total}
+                </span>
+                {/* failures (a check did not hold) apart from errors (it could not run), as the Problems panel tells them apart */}
+                {r.failed > 0 && (
+                  <span className="inline-flex items-center gap-0.5 text-bad" title="Failures: checks that did not hold" data-run-failures={r.failed}>
+                    {TYPE_ICON.failure}
+                    {r.failed} failed
+                  </span>
+                )}
+                {r.errors > 0 && (
+                  <span className="inline-flex items-center gap-0.5 text-bad" title="Errors: could not run (network, TLS, timeout or a script)" data-run-errors={r.errors}>
+                    {TYPE_ICON.error}
+                    {r.errors} error{r.errors === 1 ? '' : 's'}
+                  </span>
+                )}
+                {r.environment && <EnvBadge name={r.environment} className="max-w-32" />}
+                <span className="ml-auto">{timeAgo(r.startedAt)}</span>
+              </div>
+            </button>
+            <div className="pt-1.5 pr-1">
+              <NodeMenu
+                label={r.name}
+                open={menuFor === r.id}
+                onOpenChange={(o) => setMenuFor(o ? r.id : undefined)}
+                onOpen={() => onSelect(r.id)}
+                runItems={[...(onRerunFailed && r.failed + r.errors > 0 ? [{ label: LABEL.rerunFailed, icon: <RotateCcw size={14} />, onSelect: () => onRerunFailed(r.id) }] : []), ...runCiMenuItems(r.id)]}
+                configItems={[
+                  {
+                    label: 'Export report…',
+                    icon: <FileBarChart size={14} />,
+                    onSelect: () => void call<SaveResult>('runs.exportReport', { runId: r.id, format: 'html' }).then((x) => finishSave(x, 'Report'), toastError),
+                  },
+                ]}
+                copyItems={[{ label: 'Copy run id', icon: <Copy size={14} />, onSelect: () => void copyText(r.id, 'Run id') }]}
+              />
             </div>
-          </button>
+          </div>
         ))}
         {!runs.length && <div className="p-3 text-sm text-muted">No runs yet</div>}
         {runs.length > 0 && !shown.length && <div className="p-3 text-sm text-muted">No runs match</div>}
@@ -822,7 +1028,30 @@ function TestFileBadge({ path }: { path: string }) {
 
 /** A row of the test file tree, like the collection tree's: folder (chevron) or file, ▶ run and ⋯ (also on right-click). */
 /** F2 renames a file: its path, in a dialog (a path can move it to another folder, which an in-place name can't). */
-function TestTreeRow({ depth, label, icon, expanded, active, onClick, onRun, menu, onRename }: { depth: number; label: string; icon: React.ReactNode; expanded?: boolean; active?: boolean; onClick(): void; onRun?(): void; menu: MenuItem[]; onRename?(): void }) {
+function TestTreeRow({
+  depth,
+  label,
+  icon,
+  expanded,
+  active,
+  onClick,
+  onRun,
+  menu,
+  onRename,
+  dragRef,
+}: {
+  depth: number;
+  label: string;
+  icon: React.ReactNode;
+  expanded?: boolean;
+  active?: boolean;
+  onClick(): void;
+  onRun?(): void;
+  menu: MenuItem[];
+  onRename?(): void;
+  /** What a drag of the row carries (a test file: dropped on a flow canvas, it becomes a sub-flow step). */
+  dragRef?: ItemRef;
+}) {
   const [menuOpen, setMenuOpen] = useState(false);
   return (
     <div
@@ -843,6 +1072,8 @@ function TestTreeRow({ depth, label, icon, expanded, active, onClick, onRun, men
           }
         }}
         aria-expanded={expanded}
+        draggable={!!dragRef}
+        onDragStart={dragRef ? (e) => setDragRefs(e, [dragRef], label) : undefined}
         data-tree-row
         title={onRename ? 'F2 renames' : undefined}
       >

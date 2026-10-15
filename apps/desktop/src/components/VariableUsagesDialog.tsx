@@ -2,6 +2,7 @@ import { Code, FileText, KeyRound, Link2, PenLine } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { call } from '../api';
 import { confirmAction, toastError, useApp } from '../store';
+import { openRef } from '../lib/open-ref';
 import { plural } from '../lib/format';
 import { Button, Field, Input, Modal } from './ui';
 
@@ -28,7 +29,7 @@ export function VariableUsagesDialog({ names, initial, onClose, onRenamed }: { n
   }, [name]);
   const open = (u: VariableUsage) => {
     if (!u.requestId || !u.collectionId) return;
-    useApp.getState().openIntent('rest', { collectionId: u.collectionId, requestId: u.requestId });
+    void openRef({ kind: 'request', collectionId: u.collectionId, requestId: u.requestId });
     onClose();
   };
   const rename = async () => {

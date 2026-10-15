@@ -28,6 +28,8 @@ export function appHandlers(be: Backend): Handlers {
       checkTypes: checkTypes(),
       node: process.versions.node,
       electron: process.versions.electron,
+      /** What this host can do beyond the shared RPCs: `shell` (real shells in the Terminal panel) only in the desktop app. */
+      capabilities: { shell: be.terminals.available },
     }),
     'settings.get': () => be.settings,
     /** Forget cached OAuth 2.0 tokens (Auth tab ▸ Forget tokens); returns how many there were. */

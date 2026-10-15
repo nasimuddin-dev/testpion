@@ -1,9 +1,5 @@
 import {
   Plus,
-  AlarmClock,
-  ChevronsDownUp,
-  ChevronsUpDown,
-  FolderInput,
   Workflow,
   Braces,
   ChevronDown,
@@ -11,28 +7,20 @@ import {
   Wand2,
   ChevronRight,
   Code2,
-  CopyPlus,
-  ExternalLink,
   FilePlus2,
-  FolderCog,
-  FolderPlus,
   Link2,
-  MoreHorizontal,
-  Pencil,
   Play,
   SquareTerminal,
   Star,
   Terminal,
   TerminalSquare,
-  Trash2,
   Settings2,
-  History,
 } from 'lucide-react';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import type { Collection, CollectionFolder, CollectionNode, SavedHttpRequest } from '../types';
 import { asError, call, on } from '../api';
 import { Button, cx, Menu, menuKeys, rowActionClass, VirtualList, type MenuItem } from './ui';
-import { CLOSED_ICON, CountPill, focusRow, FOLDER_ICON, InlineRename, MORE_ICON, OPEN_ICON } from './TreeParts';
+import { CLOSED_ICON, CountPill, focusRow, FOLDER_ICON, InlineRename, MORE_ICON, OPEN_ICON, NodeMenu } from './TreeParts';
 import { confirmAction, promptText, toastError, useApp } from '../store';
 import { MoveDialog, subtreeIds } from './MoveDialog';
 import { closeTabsFor } from './EditorTabs';
@@ -48,6 +36,10 @@ import { countCategory, hasCategory, isEmptyFolder, matchesCollectionNode, reque
 export { mapNodes, findNode, addToFolder, insertBefore, folderIdsTo, withNewIds, duplicateNode } from '../lib/collection-nodes';
 import { mapNodes, findNode, addToFolder, insertBefore, folderIdsTo, withNewIds, duplicateNode } from '../lib/collection-nodes';
 import { usePersisted } from '../lib/sticky';
+import { saveAsTestItem } from '../lib/save-test';
+import { openRef } from '../lib/open-ref';
+import { setDragRefs } from '../lib/drag-ref';
+import { savedItemRef } from '@testpion/shared';
 
 /** How each category of request looks in the tree. */
 export const CATEGORY_META: Record<RequestCategory, { label: string; badge: string; cls: string }> = {
@@ -84,6 +76,7 @@ export function savedItemDragProps(kind: 'grpc' | 'websocket', id: string, name:
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('text/plain', name);
       e.dataTransfer.setData(SAVED_ITEM_MIME, JSON.stringify({ kind, id, from }));
+      setDragRefs(e, [savedItemRef(kind, id)], name);
     },
   };
 }
@@ -158,6 +151,7 @@ export const CollectionTree = memo(function CollectionTree({
   onDropSaved,
   collapseAll,
   revealKey,
+  revealId,
 }: {
   collections: Collection[];
   activeRequestId?: string;
@@ -187,6 +181,8 @@ export const CollectionTree = memo(function CollectionTree({
   collapseAll?: number;
   /** Changes whenever something is opened: the open request is revealed again (even if it was already open). */
   revealKey?: number;
+  /** With revealKey: reveal this collection, folder, request or saved item instead of the open request. */
+  revealId?: string;
 }) {
   const [menuFor, setMenuFor] = useState<string>();
   /**
@@ -217,7 +213,7 @@ export const CollectionTree = memo(function CollectionTree({
   const duplicateCollection = async (c: Collection) => {
     try {
       const copy = await call<Collection>('col.duplicate', { id: c.id });
-      useApp.getState().toast(`Duplicated as "${copy.name}"`, 'success');
+      useApp.getState().toast(`Duplicated as "${copy.name}"`, 'success', { ref: { kind: 'collection', collectionId: copy.id } });
     } catch (e) {
       toastError(e);
     }
@@ -299,6 +295,8 @@ export const CollectionTree = memo(function CollectionTree({
       e.stopPropagation();
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('text/plain', n.name);
+      // the same item for any other drop target (a flow canvas adds it as a step, a folder as a chain of steps)
+      setDragRefs(e, [n.kind === 'folder' ? { kind: 'folder', collectionId: c.id, folderId: n.id } : { kind: 'request', collectionId: c.id, requestId: n.id }], n.name);
       setDrag({ c, n });
     },
     onDragEnd: () => (setDrag(undefined), setDropAt(undefined)),
@@ -357,7 +355,7 @@ export const CollectionTree = memo(function CollectionTree({
         onChange(without);
       }
       onMoved?.(subtreeIds(n), from.id, to.id);
-      useApp.getState().toast(`Moved "${n.name}" to ${to.name}${folderId ? ` › ${findNode(to.items, folderId)?.name ?? ''}` : ''}`, 'success');
+      useApp.getState().toast(`Moved "${n.name}" to ${to.name}${folderId ? ` › ${findNode(to.items, folderId)?.name ?? ''}` : ''}`, 'success', { ref: n.kind === 'folder' ? { kind: 'folder', collectionId: to.id, folderId: n.id } : { kind: 'request', collectionId: to.id, requestId: n.id } });
     }, toastError);
   };
   /** Copy a saved request as its URL or as code, with variables resolved from the active environment. */
@@ -529,27 +527,33 @@ export const CollectionTree = memo(function CollectionTree({
 
   // reveal the open request: when something was opened (search, history, a link), open its collection, category and
   // folders, even ones folded by hand, and scroll its row into view. Switching or closing tabs leaves the tree as it is.
-  const lastReveal = useRef(revealKey);
+  // (a target named before the tree mounted — Reveal in sidebar from another view — is revealed at once)
+  const lastReveal = useRef(revealId ? undefined : revealKey);
   const [reveal, setReveal] = useState<{ id: string; nonce: number }>();
   useEffect(() => {
-    if (!activeRequestId) return;
+    const target = revealId ?? activeRequestId;
+    if (!target) return;
     const opened = revealKey !== lastReveal.current;
     lastReveal.current = revealKey;
     if (!opened) return;
     for (const c of collections) {
-      const folders = folderIdsTo(c.items, activeRequestId);
+      // the collection itself (a breadcrumb's first segment): open it
+      const folders = c.id === target ? [] : folderIdsTo(c.items, target);
       if (!folders) continue;
-      const node = findNode(c.items, activeRequestId);
-      const cat = node ? requestCategory(node) : undefined;
+      const node = c.id === target ? undefined : findNode(c.items, target);
+      const cat = node && node.kind !== 'folder' ? requestCategory(node) : undefined;
       const keys = [c.id, ...(cat && categorize ? [`${c.id}:cat:${cat}`] : []), ...folders];
       setOpen((o) => (keys.every((k) => o[k] !== false) ? o : { ...o, ...Object.fromEntries(keys.map((k) => [k, true])) }));
       break;
     }
-    setReveal({ id: activeRequestId, nonce: revealKey ?? 0 });
+    setReveal({ id: target, nonce: revealKey ?? 0 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeRequestId, revealKey]);
-  // the row to scroll to, once the folders on its way are open
-  const revealIndex = useMemo(() => (reveal ? rows.findIndex((r) => r.t === 'req' && r.n.id === reveal.id) : -1), [reveal, rows]);
+  }, [activeRequestId, revealKey, revealId]);
+  // the row to scroll to (a collection, folder, request or saved item), once the folders on its way are open
+  const revealIndex = useMemo(
+    () => (reveal ? rows.findIndex((r) => (r.t === 'col' ? r.c.id === reveal.id : r.t === 'req' || r.t === 'folder' ? r.n.id === reveal.id : r.t === 'xitem' ? r.i.id === reveal.id : false)) : -1),
+    [reveal, rows],
+  );
   // done once it scrolled (the list scrolls in its own effect, which runs first): later changes leave the scroll alone
   useEffect(() => {
     if (revealIndex >= 0) setReveal(undefined);
@@ -584,7 +588,8 @@ export const CollectionTree = memo(function CollectionTree({
         style={{ paddingLeft: 8 + depth * 12 }}
         {...dragProps(c, n)}
         {...dropProps(c, n.id, 'into', { folderId: n.id })}
-        draggable={renaming === n.id ? false : undefined}
+        // (after dragProps: undefined here would turn its draggable off, and a folder could not be dragged onto a flow)
+        draggable={renaming !== n.id}
         onContextMenu={(e) => (e.preventDefault(), setMenuFor(n.id))}
       >
         {renaming === n.id ? (
@@ -627,6 +632,7 @@ export const CollectionTree = memo(function CollectionTree({
           onRun={onRun && (() => onRun(c, n.id))}
           runLabel="Run folder"
           onMonitor={() => useApp.getState().openIntent('monitors', { create: { collectionId: c.id, selection: [n.id] } })}
+          testItems={[saveAsTestItem({ ref: { kind: 'folder', collectionId: c.id, folderId: n.id }, name: n.name })]}
           onNewFolder={async () => {
             const name = await promptText('New folder', { message: 'Folder name', okLabel: 'Create' });
             if (name) change(c, (c) => ({ ...c, items: addToFolder(c.items, n.id, { kind: 'folder', id: uid('fld-'), name, items: [] } as CollectionFolder) }));
@@ -820,6 +826,7 @@ export const CollectionTree = memo(function CollectionTree({
             onRun={onRun && (() => onRun(c))}
             runLabel="Run collection"
             onMonitor={() => useApp.getState().openIntent('monitors', { create: { collectionId: c.id } })}
+            testItems={[saveAsTestItem({ ref: { kind: 'collection', collectionId: c.id }, name: c.name })]}
             onNewFolder={async () => {
               const name = await promptText('New folder', { message: 'Folder name', okLabel: 'Create' });
               if (name) change(c, (c) => ({ ...c, items: [...c.items, { kind: 'folder', id: uid('fld-'), name, items: [] }] }));
@@ -1026,6 +1033,8 @@ const RequestRow = memo(function RequestRow({
         open={menuOpen}
         onOpenChange={(o) => x().setMenuFor(o ? n.id : undefined)}
         onOpen={() => x().onOpen(c, n)}
+        onOpenNewTab={() => void openRef({ kind: 'request', collectionId: c.id, requestId: n.id }, { newTab: true })}
+        testItems={menuOpen ? [saveAsTestItem({ ref: { kind: 'request', collectionId: c.id, requestId: n.id }, name: n.name })] : undefined}
         copyItems={menuOpen && n.kind === 'http' ? x().copyMenu(c, n) : undefined}
         onRename={() => void x().renameNode(c, n)}
         onDelete={() => void x().deleteNode(c, n)}
@@ -1039,107 +1048,3 @@ const RequestRow = memo(function RequestRow({
   );
 });
 
-function NodeMenu({
-  onEdit,
-  onRename,
-  onDelete,
-  onNewRequest,
-  onNewFolder,
-  onDuplicate,
-  onMove,
-  onToggleFavorite,
-  favorite,
-  onHistory,
-  onRun,
-  runLabel = 'Run',
-  onMonitor,
-  onExpandAll,
-  onCollapseAll,
-  onOpen,
-  copyItems,
-  otherNew,
-  runItems,
-  configItems,
-  open,
-  onOpenChange,
-  newRequestLabel = 'New HTTP request',
-  header,
-  label,
-}: {
-  newRequestLabel?: string;
-  /** On a header row (a collection): the button stays faintly visible, like the + beside it. */
-  header?: boolean;
-  /** What the menu is for (named on the button). */
-  label?: string;
-  onEdit?(): void;
-  onRename?(): void;
-  onDelete?(): void;
-  onNewRequest?(): void;
-  onNewFolder?(): void;
-  onDuplicate?(): void;
-  /** Move to another folder or collection. */
-  onMove?(): void;
-  onToggleFavorite?(): void;
-  favorite?: boolean;
-  /** Its versions in git (when the workspace is in git). */
-  onHistory?(): void;
-  onRun?(): void;
-  runLabel?: string;
-  /** Expand / collapse everything inside it (collections and folders). */
-  onExpandAll?(): void;
-  onCollapseAll?(): void;
-  /** Run it on a schedule (opens Monitors with a new monitor). */
-  onMonitor?(): void;
-  /** Open the request (in a tab). */
-  onOpen?(): void;
-  /** Copy URL / Copy as cURL … (requests only). */
-  copyItems?: MenuItem[];
-  /** The other kinds of request it can create (after the first New item). */
-  otherNew?: MenuItem[];
-  /** More ways to run it (after Run and Monitor). */
-  runItems?: MenuItem[];
-  /** Its settings and tools (after Edit folder). */
-  configItems?: MenuItem[];
-  /** Controlled open state, so a right-click on the row can open the menu. */
-  open?: boolean;
-  onOpenChange?(open: boolean): void;
-}) {
-  // a row's menu is built only while it is open: a tree of hundreds of rows renders hundreds of these
-  const [own, setOwn] = useState(false);
-  const isOpen = open ?? own;
-  const setOpen = (v: boolean) => (open === undefined ? setOwn(v) : onOpenChange?.(v));
-  const build = (): MenuItem[] => {
-    // groups, each after a separator, in one order for every row: create (first: this menu is also the row's only
-    // button) · open · run · configure · copy · organize · delete
-    const groups: MenuItem[][] = [];
-    const group = (...g: Array<MenuItem | undefined>) => groups.push(g.filter((x): x is MenuItem => !!x));
-    const item = (label: string, icon: React.ReactNode, fn?: () => void, extra: Partial<MenuItem> = {}): MenuItem | undefined => (fn ? { label, icon, onSelect: fn, ...extra } : undefined);
-    group(item(newRequestLabel, <FilePlus2 size={14} />, onNewRequest), ...(otherNew ?? []), item('New folder', <FolderPlus size={14} />, onNewFolder));
-    group(item('Open in tab', <ExternalLink size={14} />, onOpen), item('History in git…', <History size={14} />, onHistory));
-    group(item('Expand all', <ChevronsUpDown size={14} />, onExpandAll), item('Collapse all', <ChevronsDownUp size={14} />, onCollapseAll));
-    group(item(runLabel, <Play size={14} />, onRun), item('Monitor on a schedule…', <AlarmClock size={14} />, onMonitor), ...(runItems ?? []));
-    group(item('Edit folder (scripts, variables, auth)', <FolderCog size={14} />, onEdit), ...(configItems ?? []));
-    group(...(copyItems ?? []));
-    group(
-      item('Rename', <Pencil size={14} />, onRename),
-      item('Duplicate', <CopyPlus size={14} />, onDuplicate),
-      item('Move to…', <FolderInput size={14} />, onMove),
-      item(favorite ? 'Remove from favorites' : 'Add to favorites', <Star size={14} />, onToggleFavorite),
-    );
-    group(item('Delete', <Trash2 size={14} />, onDelete, { danger: true }));
-    return groups.filter((g) => g.length).flatMap((g, i) => g.map((it, j) => (i > 0 && j === 0 ? { ...it, separator: true } : it)));
-  };
-  return (
-    <Menu
-      items={isOpen ? build() : []}
-      width={230}
-      open={isOpen}
-      onOpenChange={setOpen}
-      trigger={
-        <button aria-label={label ? `More actions for ${label}` : 'More actions'} className={rowActionClass(header)}>
-          <MoreHorizontal size={14} />
-        </button>
-      }
-    />
-  );
-}

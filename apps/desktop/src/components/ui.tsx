@@ -3,7 +3,7 @@ import * as DialogPrimitive from '@radix-ui/react-dialog';
 import * as MenuPrimitive from '@radix-ui/react-dropdown-menu';
 import * as SwitchPrimitive from '@radix-ui/react-switch';
 import * as TooltipPrimitive from '@radix-ui/react-tooltip';
-import { ChevronRight, ChevronsRight, Loader2, MoreHorizontal, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, ChevronsRight, Loader2, MoreHorizontal, X } from 'lucide-react';
 import { iconForLabel, textOf } from './action-icons';
 
 // icons drawn in every tab and menu row, made once (React skips an element it has already rendered)
@@ -174,9 +174,9 @@ export function Field({ label, hint, children, className }: { label: string; hin
   );
 }
 
-export function Toggle({ checked, onChange, label }: { checked: boolean; onChange(v: boolean): void; label?: string }) {
+export function Toggle({ checked, onChange, label, title }: { checked: boolean; onChange(v: boolean): void; label?: string; title?: string }) {
   return (
-    <label className="inline-flex items-center gap-2.5 cursor-pointer select-none text-sm">
+    <label className="inline-flex items-center gap-2.5 cursor-pointer select-none text-sm" title={title}>
       <SwitchPrimitive.Root
         checked={checked}
         onCheckedChange={onChange}
@@ -305,7 +305,9 @@ export function statusTone(status?: number | string): 'ok' | 'bad' | 'warn' | 'd
 export interface EmptyAction {
   label: ReactNode;
   icon?: ReactNode;
-  onClick(): void;
+  /** What it does; or `items`: a menu of choices (New request ▸ HTTP, GraphQL …). */
+  onClick?(): void;
+  items?: MenuItem[];
   primary?: boolean;
   disabled?: boolean;
   loading?: boolean;
@@ -313,10 +315,10 @@ export interface EmptyAction {
 }
 
 /**
- * An empty view: what it is for, the first steps as buttons (`actions`, the first primary) or anything (`action`),
- * and `steps` (a numbered how-to) under them. One layout for every view.
+ * An empty view: what it is for, the next step as buttons (`actions`, the first primary; one with `items` opens a menu),
+ * and `steps` (a numbered how-to) under them. One layout and one API for every view (WF-18): no other kind of button.
  */
-export function Empty({ icon, title, children, action, actions, steps }: { icon?: ReactNode; title: string; children?: ReactNode; action?: ReactNode; actions?: EmptyAction[]; steps?: ReactNode[] }) {
+export function Empty({ icon, title, children, actions, steps }: { icon?: ReactNode; title: string; children?: ReactNode; actions?: EmptyAction[]; steps?: ReactNode[] }) {
   return (
     <div className="h-full w-full flex flex-col items-center justify-center text-center gap-2 p-8 text-muted fade-in">
       {icon && <div className="mb-2 grid place-items-center h-14 w-14 rounded-2xl bg-accent-soft text-accent ring-1 ring-accent/20 shadow-sm">{icon}</div>}
@@ -324,14 +326,17 @@ export function Empty({ icon, title, children, action, actions, steps }: { icon?
       {children && <div className="text-sm max-w-md leading-relaxed text-pretty">{children}</div>}
       {actions && actions.length > 0 && (
         <div className="mt-2 flex flex-wrap justify-center gap-2">
-          {actions.map((a, i) => (
-            <Button key={i} size="sm" variant={(a.primary ?? i === 0) ? 'primary' : undefined} icon={a.icon} onClick={a.onClick} disabled={a.disabled} loading={a.loading} title={a.title}>
-              {a.label}
-            </Button>
-          ))}
+          {actions.map((a, i) => {
+            const button = (
+              <Button key={i} size="sm" variant={(a.primary ?? i === 0) ? 'primary' : undefined} icon={a.icon} onClick={a.items ? undefined : a.onClick} disabled={a.disabled} loading={a.loading} title={a.title}>
+                {a.label}
+                {a.items && <ChevronDown size={13} />}
+              </Button>
+            );
+            return a.items ? <Menu key={i} width={240} align="center" items={a.items} trigger={button} /> : button;
+          })}
         </div>
       )}
-      {action && <div className="mt-2">{action}</div>}
       {steps && steps.length > 0 && (
         <ol className="mt-2 text-xs text-left list-decimal pl-5 space-y-0.5 max-w-md">
           {steps.map((s, i) => (
@@ -448,7 +453,7 @@ export function menuKeys(items: MenuItem[] | undefined) {
     if (!items || (e.key !== 'F2' && e.key !== 'Delete')) return;
     // Delete deletes (it asks first); "Remove …" only when a row has no Delete (never "Remove from the collection")
     const usable = items.filter((i) => !i.disabled);
-    const it = e.key === 'F2' ? usable.find((i) => /^Rename/.test(i.label)) : (usable.find((i) => i.label === 'Delete' || i.label.startsWith('Delete ')) ?? usable.find((i) => i.label.startsWith('Remove ') && !i.label.includes(' from ')));
+    const it = e.key === 'F2' ? usable.find((i) => /^Rename/.test(i.label)) : (usable.find((i) => /^Delete(…|$| )/.test(i.label)) ?? usable.find((i) => i.label.startsWith('Remove ') && !i.label.includes(' from ')));
     if (!it) return;
     e.preventDefault();
     it.onSelect();
@@ -865,6 +870,57 @@ export function MoreMenu({ label = 'More actions', items, width = 230 }: { label
         </IconButton>
       }
     />
+  );
+}
+
+/** An action of a toolbar that folds into the ⋯ menu when the toolbar is narrow (OverflowActions). */
+export interface OverflowAction extends MenuItem {
+  /** A toggle that is on (drawn pressed as a button). */
+  pressed?: boolean;
+  /** data-* attributes of its button (for tests and the docs' screenshots), e.g. { 'data-flow-minimap-toggle': '' }. */
+  data?: Record<string, string>;
+  /** The toolbar width (px) from which this action is a button (default: the component's `at`); narrower, it is a ⋯ menu item. */
+  minWidth?: number;
+}
+
+/**
+ * Toolbar actions that are buttons while the toolbar is wide and fold into one ⋯ menu as it narrows: the one overflow
+ * pattern of the app (the response bar, the flow designer's toolbar). The toolbar is the element it is put in: its
+ * width is measured, and each action is a button from its own `minWidth` (default `at`, in px) up.
+ */
+export function OverflowActions({ items, label = 'More actions', at = 768, variant, className }: { items: OverflowAction[]; label?: string; at?: number; variant?: Variant; className?: string }) {
+  const probe = useRef<HTMLSpanElement>(null);
+  const [width, setWidth] = useState<number>();
+  useLayoutEffect(() => {
+    const bar = probe.current?.parentElement;
+    if (!bar) return;
+    setWidth(bar.clientWidth);
+    const ro = new ResizeObserver(() => setWidth(bar.clientWidth));
+    ro.observe(bar);
+    return () => ro.disconnect();
+  }, []);
+  // before the first measure (and when hidden): everything in the menu, so nothing overflows for a frame
+  const fits = (a: OverflowAction) => width !== undefined && width >= (a.minWidth ?? at);
+  const shown = items.filter(fits);
+  const folded = items.filter((a) => !fits(a));
+  return (
+    <>
+      <span ref={probe} hidden />
+      {shown.length > 0 && (
+        <div className={cx('flex items-center gap-1', className)} data-overflow-buttons>
+          {shown.map((a) => (
+            <Button key={a.label} size="sm" variant={variant} icon={a.icon} onClick={a.onSelect} title={a.title} disabled={a.disabled} aria-pressed={a.pressed} {...a.data}>
+              {a.label}
+            </Button>
+          ))}
+        </div>
+      )}
+      {folded.length > 0 && (
+        <div className={cx(!shown.length && className)} data-overflow-menu>
+          <MoreMenu label={label} items={folded} />
+        </div>
+      )}
+    </>
   );
 }
 

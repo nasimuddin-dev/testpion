@@ -3,6 +3,7 @@ import { RowMenu } from './TreeParts';
 import { useEffect, useMemo, useState } from 'react';
 import { call } from '../api';
 import { promptText, useApp } from '../store';
+import { openRef } from '../lib/open-ref';
 import { groupByDay, uid } from '../lib/format';
 import { Badge, cx, Empty, IconButton, Input, statusTone } from './ui';
 
@@ -18,7 +19,7 @@ export function EnvironmentsPane() {
     const id = uid('env-');
     await call('env.save', { env: { id, name, variables: [{ key: 'baseUrl', value: '' }] } });
     await useApp.getState().refreshWorkspace();
-    useApp.getState().openIntent('environments', { environmentId: id });
+    void openRef({ kind: 'environment', environmentId: id });
   };
   return (
     <div className="flex-1 flex flex-col min-h-0">
@@ -51,7 +52,7 @@ export function EnvironmentsPane() {
               label={e.name}
               items={[
                 { label: 'Make active', icon: <Check size={14} />, disabled: e.name === env, onSelect: () => useApp.getState().setEnvironment(e.name) },
-                { label: 'Edit', icon: <Pencil size={14} />, onSelect: () => useApp.getState().openIntent('environments', { environmentId: e.id }) },
+                { label: 'Edit', icon: <Pencil size={14} />, onSelect: () => void openRef({ kind: 'environment', environmentId: e.id }) },
               ]}
             />
           </div>
@@ -107,7 +108,7 @@ export function HistoryPane({ kind = 'http', onOpen, noun = 'Requests you send' 
               key={r.item.id}
               className="w-[calc(100%-0.5rem)] mx-1 rounded-md flex items-center gap-2 px-2 h-8 text-sm text-left hover:bg-hover transition-colors"
               title={r.item.url}
-              onClick={() => (onOpen ? onOpen(r.item) : useApp.getState().openIntent('history', { historyId: r.item.id }))}
+              onClick={() => (onOpen ? onOpen(r.item) : void openRef({ kind: 'history', historyId: r.item.id }))}
             >
               {r.item.method && <span className={cx('mono method-badge text-[0.64rem] font-bold w-12 shrink-0', `method-${r.item.method}`)}>{r.item.method}</span>}
               <span className="truncate flex-1">{kind === 'http' ? (r.item.url ?? r.item.name) : r.item.name}</span>

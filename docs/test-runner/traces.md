@@ -9,6 +9,8 @@ description: "Every request, test, MCP call and LLM call becomes a trace. See it
 
 Every request, GraphQL operation, gRPC call, MCP call, LLM call, tool call, script and evaluation becomes a span in an OpenTelemetry-shaped trace (32-hex trace ids, 16-hex span ids, parent spans, attributes and status). The **Traces** view lists them, newest first, and shows the selected trace as a waterfall with each span's input, output and attributes. Secret values are redacted before a trace is written. Filter the list by text or kind, or tick **Errors** for the traces that ended in an error. An HTTP or GraphQL request's span has its phases as children: DNS lookup, TCP connect and TLS handshake (lighter, on a new connection), waiting for the first byte, and download (green).
 
+A trace's header names the request it came from and its **History** entry (or its run), and a click opens them; a trace's right-click menu (the same as its ⋯) has **Open**, the run it belongs to and **Copy link**. A Console line links to its trace the same way. See [Finding your way around](/getting-started/finding-your-way#console-traces-and-history).
+
 Test runs keep the traces of failing tests (`--trace failures`, the default); `--trace all` keeps every test's trace and `--trace none` none.
 
 ## Send traces to OpenTelemetry

@@ -7,7 +7,7 @@ description: "Run GraphQL subscriptions over WebSocket (graphql-transport-ws and
 
 # GraphQL subscriptions
 
-Write a `subscription` operation in the GraphQL view and **Run** becomes **Subscribe**. TestPion opens a WebSocket to the endpoint (`http://` and `https://` become `ws://` and `wss://`), subscribes, and lists every event as it arrives. Click one to see its data as a JSON tree. **Stop** ends the subscription; a server that completes it ends it too.
+Write a `subscription` operation in the GraphQL editor and **Run** becomes **Subscribe**. TestPion opens a WebSocket to the endpoint (`http://` and `https://` become `ws://` and `wss://`), subscribes, and lists every event as it arrives. Click one to see its data as a JSON tree. **Stop** ends the subscription; a server that completes it ends it too.
 
 ```graphql
 subscription OnPatientUpdated($id: ID!) {

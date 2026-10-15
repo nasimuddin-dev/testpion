@@ -1,18 +1,29 @@
-import { ArrowDown, ArrowUp, Columns3, Copy, Download, ExternalLink, Filter, Highlighter, Lock, Network, Play, Reply, Shuffle, Star, Trash2, Wrench } from 'lucide-react';
+import { ArrowDown, ArrowUp, Columns3, Copy, Download, ExternalLink, Filter, FolderPlus, Highlighter, Lock, Network, Play, Reply, Shuffle, Star, Trash2, Workflow, Wrench } from 'lucide-react';
 import { memo, useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { formatBytes } from '@testpion/shared';
 import { call } from '../../api';
 import { useApp, toastError } from '../../store';
 import { Badge, cx, Empty, Menu, Tabs, VirtualList, type MenuItem } from '../ui';
 import { HIGHLIGHT_CLASS, type Rule, type RuleKind } from '../DebuggerRules';
-import { curlOf, kb, speedOf, versionOf, type Exchange, type IncomingRequest } from './model';
+import { curlOf, kb, speedOf, toRequest, versionOf, type Exchange, type IncomingRequest } from './model';
+import { saveAsTest, saveAsTestMenuItem } from '../../lib/save-test';
 import { downloadContent } from '../../lib/files';
+import { setDragRefs } from '../../lib/drag-ref';
 import { useEventLog } from '../../lib/use-rpc';
 import { usePersisted } from '../../lib/sticky';
 import { copyText } from '../../lib/clipboard';
+import { LABEL } from '../../lib/vocabulary';
 
 /** The whole exchange: the grid's rows are lean (no headers, no bodies). */
 const whole = (e: Exchange) => call<Exchange>('debug.exchange', { id: e.id });
+/** A URL's path, for a name ("GET /patients"); the URL itself when it isn't one. */
+const pathOf = (url: string) => {
+  try {
+    return new URL(url).pathname;
+  } catch {
+    return url;
+  }
+};
 const copyWhole = (e: Exchange, what: string, pick: (x: Exchange) => string) =>
   void whole(e).then(
     (x) => void copyText(pick(x), what),
@@ -115,6 +126,10 @@ export interface GridActions {
   onBookmark(e: Exchange): void;
   onCompare(e: Exchange): void;
   onDelete(ids: string[]): void;
+  /** A test flow of these exchanges (the Create flow dialog). */
+  onCreateFlow(ids: string[]): void;
+  /** These exchanges as saved requests (the Save to collection dialog, WF-12). */
+  onSaveToCollection(ids: string[]): void;
   onClear(): void;
   /** Add a rule straight away (a quick rule from the row's values). */
   onQuickRule(kind: RuleKind, name: string, match: Rule['match'], extra?: Partial<Rule>): void;
@@ -284,9 +299,13 @@ export const DebuggerGrid = memo(function DebuggerGrid({
         ],
       },
       { label: e.bookmarked ? 'Remove the bookmark' : 'Bookmark', icon: <Star size={14} />, onSelect: () => actions.onBookmark(e) },
-      { label: 'Edit & Submit', icon: <ExternalLink size={14} />, onSelect: () => actions.onOpen(e) },
+      { label: LABEL.openAsRequest, icon: <ExternalLink size={14} />, onSelect: () => actions.onOpen(e) },
       { label: 'Resend', icon: <Play size={14} />, onSelect: () => actions.onResend(e) },
       { label: 'Compare with…', onSelect: () => actions.onCompare(e) },
+      { label: ids.length > 1 ? `Create flow from ${ids.length} selected…` : 'Create flow from selection…', icon: <Workflow size={14} />, onSelect: () => actions.onCreateFlow(ids) },
+      { label: ids.length > 1 ? `Save ${ids.length} selected to collection…` : 'Save to collection…', icon: <FolderPlus size={14} />, onSelect: () => actions.onSaveToCollection(ids) },
+      // the whole exchange (rows are lean), as the request it was: the one Save as test
+      saveAsTestMenuItem(() => void whole(e).then((x) => saveAsTest({ source: { kind: 'http', request: toRequest(x), status: x.status }, name: `${x.method} ${pathOf(x.url)}` }), toastError)),
       { label: 'Capture only', icon: <Filter size={14} />, separator: true, onSelect: () => undefined, items: rulesOf('only', 'Capture only') },
       { label: 'Filter out', icon: <Filter size={14} />, onSelect: () => undefined, items: rulesOf('ignore', 'Filter out') },
       {
@@ -387,6 +406,9 @@ export const DebuggerGrid = memo(function DebuggerGrid({
                 role="row"
                 aria-selected={e.id === selected}
                 data-exchange={e.id}
+                // dragged onto a flow canvas: this exchange, or the whole selection when it is part of it
+                draggable
+                onDragStart={(ev) => setDragRefs(ev, (isSel && selectedIds.length > 1 ? selectedIds : [e.id]).map((exchangeId) => ({ kind: 'exchange' as const, exchangeId })), `${e.method} ${e.url}`)}
                 className={cx(
                   'flex items-center h-[24px] text-xs cursor-default border-b border-line/40 tabular-nums',
                   isSel ? 'bg-accent-soft' : 'hover:bg-hover',

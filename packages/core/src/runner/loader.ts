@@ -1,13 +1,15 @@
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { parseYaml } from '../util/lazy-yaml.js';
-import type { AuthConfig, BodyConfig, ForEachSpec, HttpRequestSpec, KeyValue, McpTest, ModelRef, SuiteConfig, TestCase } from '../model/types.js';
+import type { AuthConfig, BodyConfig, ForEachSpec, HttpRequestSpec, KeyValue, McpTest, ModelRef, SuiteConfig, TestCase, UntilSpec } from '../model/types.js';
 import { ApsError } from '../errors.js';
 import { slugify } from '../util/ids.js';
 import { globToRegex } from '../util/glob.js';
 import { readDataset, type DatasetSource } from './datasets.js';
 import { dbKindOf } from './db-datasets.js';
 import { parseExpose } from './exposed-flows.js';
+import { parseWebhook } from './flow-webhook-config.js';
+import { controlProblems, finallyOf, parallelOf, setScopeOf, untilOf } from './control-keys.js';
 
 const TEST_EXT = new Set(['.yaml', '.yml', '.json']);
 
@@ -15,8 +17,8 @@ export function isSuiteFile(p: string): boolean {
   return /\.suite\.(ya?ml|json)$/i.test(p);
 }
 
-async function parseFile(path: string): Promise<unknown> {
-  const text = await readFile(path, 'utf8');
+async function parseFile(path: string, given?: string): Promise<unknown> {
+  const text = given ?? (await readFile(path, 'utf8'));
   try {
     return extname(path).toLowerCase() === '.json' ? JSON.parse(text) : parseYaml(text);
   } catch (e) {
@@ -126,9 +128,18 @@ export function whenOf(raw: Record<string, unknown>): boolean | string | undefin
 /** Convert a loosely-written YAML/JSON test into a canonical TestCase. */
 export function normalizeTest(raw: Record<string, unknown>, file?: string, index = 0): TestCase {
   if (!raw || typeof raw !== 'object') throw new ApsError('ConfigurationError', `Invalid test definition in ${file}`);
-  const type = String(raw.type ?? (raw.request || raw.url ? 'http' : raw.query ? 'graphql' : raw.protos || raw.proto ? 'grpc' : raw.tool ? 'mcp' : raw.prompt ? 'llm' : ''));
+  const written = String(raw.type ?? (raw.request || raw.url ? 'http' : raw.query ? 'graphql' : raw.protos || raw.proto ? 'grpc' : raw.tool ? 'mcp' : raw.prompt ? 'llm' : ''));
   const name = String(raw.name ?? `${file ? basename(file) : 'test'} #${index + 1}`);
   const where = `in ${file ?? 'test'} (${name})`;
+  // type: wait is a request polled until its until: holds (the Wait until block)
+  if (written === 'wait' && (raw.until === undefined || raw.until === null))
+    throw new ApsError('ConfigurationError', `A wait step needs until: the expression to wait for (e.g. until: { if: "$.status == 'done'", every: 2s, timeout: 60s }) ${where}`);
+  const type = written === 'wait' ? 'http' : written;
+  const control = controlProblems(raw, type);
+  if (control.length) throw new ApsError('ConfigurationError', `${control[0]!.message} ${where}`);
+  const until = untilOf(raw) as UntilSpec | undefined;
+  const fin = finallyOf(raw) === true;
+  const parallel = parallelOf(raw) as string | undefined;
   const loop = loopOf(raw);
   if (typeof loop === 'string') throw new ApsError('ConfigurationError', `${loop} ${where}`);
   const when = whenOf(raw);
@@ -153,6 +164,9 @@ export function normalizeTest(raw: Record<string, unknown>, file?: string, index
     ...(cond !== undefined ? { if: cond } : {}),
     ...(when !== undefined ? { when } : {}),
     ...(loop ?? {}),
+    ...(until ? { until } : {}),
+    ...(fin ? { finally: true } : {}),
+    ...(parallel ? { parallel } : {}),
   };
   const vars = (raw.vars ?? (type === 'graphql' ? undefined : type === 'llm' ? undefined : raw.variables)) as Record<string, unknown> | undefined;
 
@@ -314,9 +328,23 @@ export function normalizeTest(raw: Record<string, unknown>, file?: string, index
       if (message === undefined || message === null || message === '') throw new ApsError('ConfigurationError', `A log step needs message: the text to show (with {{variables}}) ${where}`);
       return { ...base, type: 'log', message: typeof message === 'string' ? message : JSON.stringify(message), variables: vars };
     }
+    case 'set': {
+      const values = raw.set ?? raw.values;
+      if (!values || typeof values !== 'object' || Array.isArray(values) || !Object.keys(values).length)
+        throw new ApsError('ConfigurationError', `A set step needs set: the variables to write ({ name: "{{template}}" }) ${where}`);
+      const scope = setScopeOf(raw);
+      if (typeof scope === 'object') throw new ApsError('ConfigurationError', `${scope.problem} ${where}`);
+      return { ...base, type: 'set', set: values as Record<string, unknown>, scope, variables: vars };
+    }
+    case 'assert': {
+      if (!Array.isArray(base.assertions) || !base.assertions.length) throw new ApsError('ConfigurationError', `An assert step needs assertions: the checks to make (e.g. - { type: status, expected: 200 }) ${where}`);
+      const subject = String(raw.subject ?? 'response').toLowerCase();
+      if (subject !== 'response' && subject !== 'variables') throw new ApsError('ConfigurationError', `subject: is response (the previous step's) or variables, not ${JSON.stringify(raw.subject)} ${where}`);
+      return { ...base, type: 'assert', subject, variables: vars };
+    }
     default:
       throw new ApsError('ConfigurationError', `Unknown or missing test type "${type}" in ${file ?? 'test'} (${name})`, {
-        suggestions: ['Set `type:` to one of http, graphql, grpc, websocket, mcp, llm, rag, agent, delay, condition, script, flow, log.'],
+        suggestions: ['Set `type:` to one of http, graphql, grpc, websocket, mcp, llm, rag, agent, delay, condition, script, flow, log, set, assert (or wait: a request polled with until:).'],
       });
   }
 }
@@ -361,8 +389,9 @@ async function* discoverFiles(pattern: string, cwd = process.cwd()): AsyncGenera
 }
 
 /** Load all tests defined in one file (single test, `tests:` list, or dataset-expanded template). */
-export async function* loadTestsFromFile(path: string): AsyncGenerator<TestCase> {
-  const data = (await parseFile(path)) as Record<string, unknown> | unknown[];
+/** The tests of a file; `text` reads that text instead of the file's (an editor's unsaved version of it). */
+export async function* loadTestsFromFile(path: string, text?: string): AsyncGenerator<TestCase> {
+  const data = (await parseFile(path, text)) as Record<string, unknown> | unknown[];
   if (!data) return;
   const rel = path;
   if (Array.isArray(data)) {
@@ -371,6 +400,8 @@ export async function* loadTestsFromFile(path: string): AsyncGenerator<TestCase>
     return;
   }
   if (Array.isArray(data.tests) && !isSuiteFile(path)) {
+    // webhook: { path, secret } is read by the webhook server; a bad block is refused here as it is there
+    if (data.webhook !== undefined) parseWebhook(data.webhook, path);
     const defaults = (data.defaults ?? {}) as Record<string, unknown>;
     let i = 0;
     for (const t of data.tests as Array<Record<string, unknown>>) yield normalizeTest({ ...defaults, ...t }, rel, i++);
@@ -387,6 +418,12 @@ export async function* loadTestsFromFile(path: string): AsyncGenerator<TestCase>
  * A test with a `dataset` becomes one test per record. Records are streamed, so datasets
  * with millions of rows never need to be held in memory.
  */
+/** A dataset record's `tags`: a list or a comma-separated text, as trimmed non-empty strings (at most 20, 64 characters each). */
+export function recordTags(v: unknown): string[] {
+  const raw = Array.isArray(v) ? v : typeof v === 'string' ? v.split(',') : [];
+  return [...new Set(raw.filter((x) => typeof x === 'string' || typeof x === 'number').map((x) => String(x).trim().slice(0, 64)).filter(Boolean))].slice(0, 20);
+}
+
 export async function* expandDataset(template: Record<string, unknown>, file: string): AsyncGenerator<TestCase> {
   const ds = template.dataset as DatasetSource & { expectedField?: string; inputField?: string; idField?: string };
   // a file is relative to the test file; a database URL (postgres://, mysql://) stays as it is
@@ -413,6 +450,9 @@ export async function* expandDataset(template: Record<string, unknown>, file: st
     } else t.vars = { ...((tpl.vars as object) ?? {}), ...vars };
     // allow evaluators to reference record fields: expected: "{{expected}}"
     t.vars = { ...((t.vars as object) ?? {}), ...vars };
+    // a record's own tags (["billing", "edge"] or "billing, edge") join the template's: an evaluation's cases filter by them
+    const own = recordTags(rec.tags);
+    if (own.length) t.tags = [...new Set([...(Array.isArray(tpl.tags) ? tpl.tags.map(String) : []), ...own])];
     yield normalizeTest(t, file, i);
     i++;
   }

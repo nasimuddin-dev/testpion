@@ -1,17 +1,16 @@
 import { JSONPath } from 'jsonpath-plus';
-import { ArrowLeftRight, ChevronDown, Code2, Pencil, Cookie, Download, FolderPlus, FolderTree, History, KeyRound, Sparkles, Save, Send, Square, Star, Upload } from 'lucide-react';
+import { ArrowLeftRight, ChevronDown, Code2, Pencil, Cookie, Sparkles, Save, Send, Square } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAssistantContext } from '../lib/assistant-context';
 import { asError, call, on } from '../api';
-import { ask, confirmAction, promptText, toastError, useApp } from '../store';
+import { confirmAction, promptText, toastError, useApp } from '../store';
 import { useIntent, useSendShortcut, useSaveShortcut } from '../hooks';
+import { openRef, reportIfGone } from '../lib/open-ref';
 import type { CheckConfig, Collection, CollectionNode, HttpRequestSpec, KeyValue, SavedExample, SavedHttpRequest, SseEvent } from '../types';
 import { parseYaml } from '../lib/yaml';
 import { fromEngineRequest, paramsFromUrl, syncPathVariables, toEngineRequest, urlFromParams } from '../lib/url';
 import { CodeModal } from '../components/CodeModal';
 import { CookiesModal, hostOf } from '../components/CookiesModal';
-import { EnvironmentsPane, HistoryPane } from '../components/SidebarPanes';
-import { SidebarShell } from '../components/SidebarShell';
 import { NEW_TAB_TITLE, NoOpenTabs, tabTitle, useEditorTabs } from '../components/EditorTabs';
 import { uid } from '../lib/format';
 
@@ -34,7 +33,7 @@ const snippetName = (r: HttpRequestSpec) => {
 };
 const isEditable = (el: EventTarget | null) =>
   el instanceof HTMLElement && (el.isContentEditable || el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || !!el.closest('.cm-editor'));
-import { addToFolder, CollectionTree, findNode, mapNodes } from '../components/CollectionTree';
+import { addToFolder, findNode, mapNodes } from '../components/CollectionTree';
 import { ResponseViewer } from '../components/ResponseViewer';
 import { EnvCompareDialog } from './rest/EnvCompareDialog';
 import { toastAiError } from '../lib/ai-errors';
@@ -43,41 +42,17 @@ import { saveResponseVariable } from '../lib/save-variable';
 import { SseEvents } from '../components/SseEvents';
 import { ErrorPanel } from '../components/Results';
 import { VarInput } from '../components/VarInput';
-import { Button, cx, Empty, IconButton, Input, Menu, Split } from '../components/ui';
+import { Button, cx, Empty, IconButton, Menu } from '../components/ui';
 import { ResponseSplit } from '../components/ResponseSplit';
 import { METHODS, RestTab, SendResult, blankRequest, drafts, savedSnapshot } from './rest/types';
 import { RequestEditor } from './rest/RequestEditor';
 import { SaveModal, ImportModal } from './rest/dialogs';
-import { saveAsTestFile } from '../lib/save-test';
+import { saveAsTestFile, saveAsTestMenuItem } from '../lib/save-test';
 import { RequestBreadcrumb } from '../components/RequestBreadcrumb';
-import { currentCollections, fullCollection, refreshCollection, refreshCollections, useCollectionTree } from '../lib/collections-store';
+import { currentCollections, refreshCollection, refreshCollections, useCollectionTree } from '../lib/collections-store';
+import { useExternalChange } from '../lib/external-change';
+import { noteClosedTabs } from '../lib/closed-tabs';
 
-
-/** Production environments where the user chose "don't ask again" (this session only). */
-const productionSendAllowed = new Set<string>();
-
-/**
- * A request that can change data (anything but GET, HEAD and OPTIONS) sent with a production
- * environment active asks first. "Send and don't ask again" lasts until the app restarts.
- */
-async function confirmProductionSend(method: string, environment: string | undefined): Promise<boolean> {
-  if (!environment || /^(GET|HEAD|OPTIONS)$/i.test(method)) return true;
-  const envObj = useApp.getState().workspace?.environments.find((e) => e.name === environment);
-  if (!envObj?.isProduction || productionSendAllowed.has(envObj.name)) return true;
-  const choice = await ask({
-    title: `Send ${method.toUpperCase()} to production?`,
-    message: `"${envObj.name}" is a production environment. This ${method.toUpperCase()} request may change real data.`,
-    tone: 'warning',
-    buttons: [
-      { id: 'cancel', label: 'Cancel' },
-      { id: 'always', label: "Send and don't ask again" },
-      { id: 'send', label: 'Send', variant: 'danger' },
-    ],
-    cancelId: 'cancel',
-  });
-  if (choice === 'always') productionSendAllowed.add(envObj.name);
-  return choice === 'send' || choice === 'always';
-}
 
 /** A tab's contents from a saved request (opening it, or taking the version on disk). */
 function tabFromSaved(n: SavedHttpRequest): RestTab {
@@ -109,28 +84,11 @@ export function RestView() {
   const [sending, setSending] = useState<Record<string, string>>({});
   // the outline (names, methods, folders): the sidebar and the save dialog; a request opens from its whole collection
   const collections = useCollectionTree();
-  const [filter, setFilter] = useState('');
-  const [favoritesOnly, setFavoritesOnly] = useState(() => localStorage.getItem('aps.rest.favoritesOnly') === 'true');
   const [saving, setSaving] = useState(false);
   const [importing, setImporting] = useState(false);
   const [showCode, setShowCode] = useState(false);
   const [comparingEnvs, setComparingEnvs] = useState(false);
   const [showCookies, setShowCookies] = useState(false);
-  const [side, setSideState] = useState<'collections' | 'environments' | 'history'>(() => {
-    try {
-      return (localStorage.getItem('aps.rest.sidebar') as 'collections') || 'collections';
-    } catch {
-      return 'collections';
-    }
-  });
-  const setSide = (v: typeof side) => {
-    setSideState(v);
-    try {
-      localStorage.setItem('aps.rest.sidebar', v);
-    } catch {
-      /* ignore */
-    }
-  };
   const env = useApp((s) => s.environment);
   // with every tab closed, a stable placeholder keeps the hooks below simple; the editor shows an empty state
   const placeholder = useMemo(() => blankRequest(), []);
@@ -164,47 +122,28 @@ export function RestView() {
 
   const update = (patch: Partial<RestTab>) => setTabs((ts) => ts.map((t) => (t.id === tab.id ? { ...t, ...patch, dirty: true } : t)));
 
-  // files changed outside the app (GIT-103 / GIT-302): open requests follow their saved version; a tab with unsaved
-  // edits asks first, and only when that very request changed on disk
+  // files changed outside the app (GIT-103 / GIT-302, WF-15): open requests follow their saved version; a tab with
+  // unsaved edits asks first, and only when that very request changed on disk (lib/external-change.ts)
   const tabsRef = useRef(tabs);
   tabsRef.current = tabs;
-  useEffect(
-    () =>
-      on<{ kinds: string[] }>('workspace.changedOnDisk', (p) => {
-        if (!p.kinds.includes('collections')) return;
-        // the open requests' collections, read whole (the shared list refreshes itself from the same event)
-        const ids = [...new Set(tabsRef.current.map((t) => t.collectionId).filter((x): x is string => !!x))];
-        void Promise.all(ids.map((id) => call<Collection>('col.get', { id }).catch(() => undefined))).then(async (got) => {
-          const cols = got.filter((c): c is Collection => !!c);
-          for (const t of tabsRef.current) {
-            if (!t.collectionId || !t.requestId || t.base === undefined) continue;
-            const n = findNode(cols.find((c) => c.id === t.collectionId)?.items ?? [], t.requestId);
-            if (!n || n.kind !== 'http') continue;
-            const now = savedSnapshot(n);
-            if (now === t.base) continue;
-            const take = () => setTabs((ts) => ts.map((x) => (x.id === t.id ? { ...x, ...tabFromSaved(n), id: x.id, collectionId: x.collectionId, pinned: x.pinned } : x)));
-            if (!t.dirty) {
-              take();
-              continue;
-            }
-            const choice = await ask({
-              title: `"${t.name}" changed on disk`,
-              message: 'A pull, a branch switch or another editor changed this request while you were editing it.',
-              detail: 'Keep mine: your edits stay, and saving replaces the new version with them. Take the new version: your unsaved edits are dropped.',
-              tone: 'warning',
-              buttons: [
-                { id: 'mine', label: 'Keep mine' },
-                { id: 'theirs', label: 'Take the new version', variant: 'primary' },
-              ],
-              cancelId: 'mine',
-            });
-            if (choice === 'theirs') take();
-            else setTabs((ts) => ts.map((x) => (x.id === t.id ? { ...x, base: now } : x)));
-          }
-        });
-      }),
-    [],
-  );
+  useExternalChange<SavedHttpRequest>({
+    kinds: ['collections'],
+    items: () => tabsRef.current.filter((t) => t.collectionId && t.requestId).map((t) => ({ key: t.id, label: t.name, base: t.base, dirty: !!t.dirty })),
+    read: async (keys) => {
+      const open = tabsRef.current.filter((t) => keys.includes(t.id));
+      // the open requests' collections, read whole (the shared list refreshes itself from the same event)
+      const ids = [...new Set(open.map((t) => t.collectionId!))];
+      const cols = (await Promise.all(ids.map((id) => call<Collection>('col.get', { id }).catch(() => undefined)))).filter((c): c is Collection => !!c);
+      const out = new Map<string, { snapshot: string; value: SavedHttpRequest }>();
+      for (const t of open) {
+        const n = findNode(cols.find((c) => c.id === t.collectionId)?.items ?? [], t.requestId!);
+        if (n?.kind === 'http') out.set(t.id, { snapshot: savedSnapshot(n), value: n });
+      }
+      return out;
+    },
+    take: (id, n) => setTabs((ts) => ts.map((x) => (x.id === id ? { ...x, ...tabFromSaved(n), id: x.id, collectionId: x.collectionId, pinned: x.pinned } : x))),
+    keep: (id, snapshot) => setTabs((ts) => ts.map((x) => (x.id === id ? { ...x, base: snapshot } : x))),
+  });
   const setReq = (patch: Partial<HttpRequestSpec>) => update({ request: { ...tab.request, ...patch } });
   const setExamples = (examples: SavedExample[]) => setTabs((ts) => ts.map((t) => (t.requestId && t.requestId === tab.requestId ? { ...t, examples } : t)));
   /** URL bar edits update the Params table and path variables (Postman behaviour). */
@@ -249,7 +188,7 @@ export function RestView() {
   }, []);
 
   const openRequest = (c: Collection, n: CollectionNode) => {
-    if (n.kind === 'graphql') return useApp.getState().openIntent('graphql', { collectionId: c.id, requestId: n.id });
+    if (n.kind === 'graphql') return void openRef({ kind: 'request', collectionId: c.id, requestId: n.id, protocol: 'graphql' });
     if (n.kind !== 'http') return;
     useApp.getState().markPlace('rest', { collectionId: c.id, requestId: n.id });
     const existing = tabs.find((t) => t.requestId === n.id);
@@ -274,6 +213,8 @@ export function RestView() {
       if (!c || !findNode(c.items, p.requestId)) c = await call<Collection>('col.get', { id: p.collectionId }).catch(() => undefined);
       const n = c && findNode(c.items, p.requestId);
       if (c && n) openRequest(c, n);
+      // gone (deleted, moved, another workspace): say so, with what to open instead, not a silently unchanged editor
+      else void reportIfGone({ kind: 'request', collectionId: String(p.collectionId), requestId: String(p.requestId) });
       // "More code snippets…" in the collection tree
       if (c && n && p.showCode) setShowCode(true);
     } else if (p?.request) {
@@ -284,7 +225,6 @@ export function RestView() {
   });
 
   const send = async () => {
-    if (!(await confirmProductionSend(tab.request.method, env))) return;
     const id = uid('send-');
     const tabId = tab.id;
     setSending((s) => ({ ...s, [tabId]: id }));
@@ -384,6 +324,8 @@ export function RestView() {
       }))
     )
       return;
+    // a saved request's tab can be reopened (Ctrl+Shift+T); a draft's cannot (its changes were discarded)
+    noteClosedTabs(closing.map((x) => (x.collectionId && x.requestId ? { ref: { kind: 'request', collectionId: x.collectionId, requestId: x.requestId }, label: x.name } : undefined)));
     // closing the last tab leaves none (Postman-style), not a new blank request
     const rest = tabs.filter((x) => !ids.includes(x.id));
     setTabs(rest);
@@ -598,206 +540,107 @@ export function RestView() {
   );
   return (
     <>
-    <Split id="rest-sidebar" sidebar collapsed initial={20} min={12}>
-      <SidebarShell
-        id="rest"
-        value={side}
-        onChange={(v) => setSide(v as typeof side)}
-        panes={[
-          {
-            id: 'collections',
-            label: 'Collections',
-            icon: <FolderTree size={13} />,
-            render: () => (
-              <>
-                  <div className="flex items-center gap-1 px-2 pb-2">
-                    <Input className="flex-1 h-7 min-h-7 text-sm" placeholder="Filter requests" value={filter} onChange={(e) => setFilter(e.target.value)} />
-                    <IconButton
-                      label={favoritesOnly ? 'Show all requests' : 'Show favorites only'}
-                      active={favoritesOnly}
-                      onClick={() => setFavoritesOnly((current) => {
-                        localStorage.setItem('aps.rest.favoritesOnly', String(!current));
-                        return !current;
-                      })}
-                    >
-                      <Star size={14} fill={favoritesOnly ? 'currentColor' : 'none'} />
-                    </IconButton>
-                    <IconButton label="Import (OpenAPI, Postman, Insomnia, Bruno, HAR …)" onClick={() => setImporting(true)}>
-                      <Upload size={14} />
-                    </IconButton>
-                    <Menu
-                      width={260}
-                      trigger={
-                        <IconButton label="Export a collection" disabled={!collections.length}>
-                          <Download size={14} />
-                        </IconButton>
-                      }
-                      items={[
-                        ...collections.slice(0, 12).map((c) => ({ label: `${c.name} (Postman v2.1)`, icon: <Download size={14} />, onSelect: () => useApp.getState().openIntent('collections', { collectionId: c.id, export: 'postman' }) })),
-                        { label: 'More formats (TestPion, OpenAPI, Bruno, workspace)…', icon: <FolderTree size={14} />, separator: true, onSelect: () => useApp.getState().setView('collections') },
-                      ]}
-                    />
-                    <IconButton
-                      label="New collection"
-                      onClick={async () => {
-                        const name = await promptText('New collection', { message: 'Collection name', placeholder: 'My API', okLabel: 'Create' });
-                        if (name) await saveCollection({ schemaVersion: '1.0', id: uid('col-'), name, version: 0, variables: [], items: [], updatedAt: '' });
-                      }}
-                    >
-                      <FolderPlus size={14} />
-                    </IconButton>
-                  </div>
-                  <div className="flex-1 overflow-auto">
-                    {collections.length ? (
-                      <CollectionTree
-                        collections={collections}
-                        filter={filter}
-                        favoritesOnly={favoritesOnly}
-                        activeRequestId={tab.requestId}
-                        onOpen={(c, n) => void fullCollection(c).then((w) => openRequest(w, findNode(w.items, n.id) ?? n), toastError)}
-                        onChange={saveCollection}
-                        onMoved={(ids, from, to) => setTabs((ts) => ts.map((t) => (t.requestId && ids.includes(t.requestId) && t.collectionId === from ? { ...t, collectionId: to } : t)))}
-                        onRun={(c, folderId) => useApp.getState().openIntent('collections', { collectionId: c.id, run: true, folderId })}
-                        onNewRequest={async (c, folderId) => {
-                          const t = blankRequest();
-                          const node: SavedHttpRequest = { kind: 'http', id: uid('req-'), name: 'New request', request: t.request, assertions: t.assertions };
-                          await saveCollection({ ...c, items: addToFolder(c.items, folderId, node) });
-                          openRequest(c, node);
-                        }}
-                      />
-                    ) : (
-                      <Empty
-                        icon={<FolderTree size={22} />}
-                        title="No collections yet"
-                        actions={[{ label: 'Import', icon: <Upload size={12} />, primary: false, onClick: () => setImporting(true) }]}
-                      >
-                        Save a request with Ctrl+S, create a collection, or import OpenAPI, Postman, Insomnia, Bruno or HAR.
-                      </Empty>
-                    )}
-                  </div>
-              </>
-            ),
-          },
-          { id: 'environments', label: 'Environments', icon: <KeyRound size={13} />, render: () => <EnvironmentsPane /> },
-          {
-            id: 'history',
-            label: 'History',
-            icon: <History size={13} />,
-            render: () => (
-              <HistoryPane
-                onOpen={(item) => {
-                  if (!item.request) return;
-                  const t: RestTab = { ...blankRequest(), name: item.name, request: fromEngineRequest(item.request as HttpRequestSpec) };
-                  setTabs((ts) => [...ts, t]);
-                  setActive(t.id);
-                }}
-              />
-            ),
-          },
-        ]}
-      />
-      <div className="h-full flex flex-col min-w-0" data-collection-id={tab.collectionId}>
-        {noTabs ? (
-          <NoOpenTabs onDescribe={() => void describeRequest()} />
-        ) : (
-        <>
-        <RequestBreadcrumb collectionId={tab.collectionId} requestId={tab.requestId} name={tab.name} dirty={tab.dirty} onSave={() => void quickSave()} />
-        <div className="flex items-center gap-2 p-2 border-b border-line shrink-0">
-          {/* the app's own menu instead of a native <select>: the desktop app's native popup didn't let people pick a method */}
-          <Menu
-            align="start"
-            width={150}
-            items={[
-              ...[...METHODS, ...(METHODS.includes(tab.request.method) ? [] : [tab.request.method])].map((m) => ({
-                label: m,
-                icon: <span aria-hidden className={cx('block w-2 h-2 rounded-full bg-current', `method-${m}`)} />,
-                onSelect: () => setReq({ method: m }),
-              })),
-              {
-                label: 'Custom…',
-                icon: <Pencil size={13} />,
-                separator: true,
-                onSelect: async () => {
-                  const m = await promptText('Custom HTTP method', { message: 'Any method name, e.g. PROPFIND, PURGE or LINK.', value: 'PROPFIND', okLabel: 'Use' });
-                  if (m) setReq({ method: m.toUpperCase() });
-                },
+    <div className="h-full flex flex-col min-w-0" data-collection-id={tab.collectionId}>
+      {noTabs ? (
+        <NoOpenTabs onDescribe={() => void describeRequest()} />
+      ) : (
+      <>
+      <RequestBreadcrumb collectionId={tab.collectionId} requestId={tab.requestId} name={tab.name} dirty={tab.dirty} onSave={() => void quickSave()} actions={[saveAsTestMenuItem(() => saveTabAsTest(tab))]} />
+      <div className="flex items-center gap-2 p-2 border-b border-line shrink-0">
+        {/* the app's own menu instead of a native <select>: the desktop app's native popup didn't let people pick a method */}
+        <Menu
+          align="start"
+          width={150}
+          items={[
+            ...[...METHODS, ...(METHODS.includes(tab.request.method) ? [] : [tab.request.method])].map((m) => ({
+              label: m,
+              icon: <span aria-hidden className={cx('block w-2 h-2 rounded-full bg-current', `method-${m}`)} />,
+              onSelect: () => setReq({ method: m }),
+            })),
+            {
+              label: 'Custom…',
+              icon: <Pencil size={13} />,
+              separator: true,
+              onSelect: async () => {
+                const m = await promptText('Custom HTTP method', { message: 'Any method name, e.g. PROPFIND, PURGE or LINK.', value: 'PROPFIND', okLabel: 'Use' });
+                if (m) setReq({ method: m.toUpperCase() });
               },
-            ]}
-            trigger={
-              <button
-                aria-label="Method"
-                aria-haspopup="menu"
-                className={cx('field mono font-bold w-28 inline-flex items-center justify-between gap-1 text-left', `method-${tab.request.method}`)}
-              >
-                <span className="truncate">{tab.request.method}</span>
-                <ChevronDown size={13} className="shrink-0 text-muted" />
-              </button>
-            }
-          />
-          <VarInput
-            ariaLabel="Request URL"
-            className="flex-1 h-8"
-            value={tab.request.url}
-            onChange={setUrl}
-            onPasteText={(text) => (isRequestSnippet(text) ? (void importSnippet(text), true) : false)}
-            placeholder="Enter a URL, paste cURL / fetch / PowerShell, or use {{baseUrl}}/path"
-            onEnter={send}
-            collectionId={tab.collectionId}
-          />
-          {sending[tab.id] ? (
-            <Button variant="danger" icon={<Square size={12} />} onClick={cancel}>
-              Cancel
-            </Button>
-          ) : (
-            <Button variant="primary" icon={<Send size={13} />} onClick={send} title="Send (Ctrl+Enter)">
-              Send
-            </Button>
-          )}
-          <IconButton label="Compare across environments" onClick={() => setComparingEnvs(true)}>
-            <ArrowLeftRight size={16} />
-          </IconButton>
-          <IconButton label="Code snippet" onClick={() => setShowCode(true)}>
-            <Code2 size={16} />
-          </IconButton>
-          <IconButton label="Describe a request with AI" onClick={() => void describeRequest()}>
-            <Sparkles size={16} />
-          </IconButton>
-          <IconButton label="Cookies" onClick={() => setShowCookies(true)}>
-            <Cookie size={16} />
-          </IconButton>
-          <Button icon={<Save size={13} />} onClick={quickSave} title="Save (Ctrl+S)">
-            Save
+            },
+          ]}
+          trigger={
+            <button
+              aria-label="Method"
+              aria-haspopup="menu"
+              className={cx('field mono font-bold w-28 inline-flex items-center justify-between gap-1 text-left', `method-${tab.request.method}`)}
+            >
+              <span className="truncate">{tab.request.method}</span>
+              <ChevronDown size={13} className="shrink-0 text-muted" />
+            </button>
+          }
+        />
+        <VarInput
+          ariaLabel="Request URL"
+          className="flex-1 h-8"
+          value={tab.request.url}
+          onChange={setUrl}
+          onPasteText={(text) => (isRequestSnippet(text) ? (void importSnippet(text), true) : false)}
+          placeholder="Enter a URL, paste cURL / fetch / PowerShell, or use {{baseUrl}}/path"
+          onEnter={send}
+          collectionId={tab.collectionId}
+        />
+        {sending[tab.id] ? (
+          <Button variant="danger" icon={<Square size={12} />} onClick={cancel}>
+            Cancel
           </Button>
-        </div>
-        <ResponseSplit id="rest-req-res" initialBelow={45}>
-          <RequestEditor tab={tab} update={update} setReq={setReq} setParams={setParams} setExamples={setExamples} />
-          <div className="h-full min-h-0 flex flex-col">
-            {sending[tab.id] && liveEvents[sending[tab.id]!] ? (
-              <SseEvents events={liveEvents[sending[tab.id]!]!} live onStop={cancel} stateKey={tab.id} />
-            ) : sending[tab.id] ? (
-              <div className="h-full grid place-items-center text-muted text-sm">
-                <div className="flex flex-col items-center gap-2">
-                  <div className="relative w-40 h-1 bg-panel2 overflow-hidden rounded indeterminate" />
-                  Sending request… <span className="text-xs">Ctrl+Enter again is disabled while sending</span>
-                </div>
-              </div>
-            ) : result?.error ? (
-              <div className="overflow-auto">
-                <ErrorPanel error={result.error} context={{ request: { method: tab.request.method, url: tab.request.url } }} />
-              </div>
-            ) : result?.response ? (
-              <ResponseViewer eventsKey={tab.id} response={result.response} checks={result.checks} traceId={result.traceId} curl={result.curl} stream={result.stream} scriptLogs={result.scriptLogs} visualizer={result.visualizer} requestId={tab.requestId} historyId={result.historyId} onSuggestAssertions={suggest} onAddAssertion={addAssertion} onUpdateSnapshot={updateSnapshot} onSaveVariable={(v) => void saveVariable(v)} onSaveExample={() => void saveExample()} onGenerateTests={generateTests && (() => void generateTests())} onExplain={explain} />
-            ) : (
-              <Empty icon={<Send size={28} />} title="Send a request to see the response">
-                Press <b>Ctrl+Enter</b> to send. Variables like <span className="var-token mono">{'{{baseUrl}}'}</span> resolve from the active environment.
-              </Empty>
-            )}
-          </div>
-        </ResponseSplit>
-        </>
+        ) : (
+          <Button variant="primary" icon={<Send size={13} />} onClick={send} title="Send (Ctrl+Enter)">
+            Send
+          </Button>
         )}
+        <IconButton label="Compare across environments" onClick={() => setComparingEnvs(true)}>
+          <ArrowLeftRight size={16} />
+        </IconButton>
+        <IconButton label="Code snippet" onClick={() => setShowCode(true)}>
+          <Code2 size={16} />
+        </IconButton>
+        <IconButton label="Describe a request with AI" onClick={() => void describeRequest()}>
+          <Sparkles size={16} />
+        </IconButton>
+        <IconButton label="Cookies" onClick={() => setShowCookies(true)}>
+          <Cookie size={16} />
+        </IconButton>
+        <Button icon={<Save size={13} />} onClick={quickSave} title="Save (Ctrl+S)">
+          Save
+        </Button>
       </div>
-    </Split>
+      <ResponseSplit id="rest-req-res" initialBelow={45}>
+        <RequestEditor tab={tab} update={update} setReq={setReq} setParams={setParams} setExamples={setExamples} />
+        <div className="h-full min-h-0 flex flex-col">
+          {sending[tab.id] && liveEvents[sending[tab.id]!] ? (
+            <SseEvents events={liveEvents[sending[tab.id]!]!} live onStop={cancel} stateKey={tab.id} />
+          ) : sending[tab.id] ? (
+            <div className="h-full grid place-items-center text-muted text-sm">
+              <div className="flex flex-col items-center gap-2">
+                <div className="relative w-40 h-1 bg-panel2 overflow-hidden rounded indeterminate" />
+                Sending request… <span className="text-xs">Ctrl+Enter again is disabled while sending</span>
+              </div>
+            </div>
+          ) : result?.error ? (
+            <div className="overflow-auto">
+              <ErrorPanel error={result.error} context={{ request: { method: tab.request.method, url: tab.request.url } }} />
+            </div>
+          ) : result?.response ? (
+            <ResponseViewer eventsKey={tab.id} response={result.response} checks={result.checks} traceId={result.traceId} curl={result.curl} stream={result.stream} scriptLogs={result.scriptLogs} visualizer={result.visualizer} requestId={tab.requestId} historyId={result.historyId} onSuggestAssertions={suggest} onAddAssertion={addAssertion} onUpdateSnapshot={updateSnapshot} onSaveVariable={(v) => void saveVariable(v)} onSaveExample={() => void saveExample()} onGenerateTests={generateTests && (() => void generateTests())} onExplain={explain} />
+          ) : (
+            <Empty icon={<Send size={28} />} title="Send a request to see the response">
+              Press <b>Ctrl+Enter</b> to send. Variables like <span className="var-token mono">{'{{baseUrl}}'}</span> resolve from the active environment.
+            </Empty>
+          )}
+        </div>
+      </ResponseSplit>
+      </>
+      )}
+    </div>
       {saving && <SaveModal collections={collections} defaultName={tab.name} onClose={() => setSaving(false)} onSave={(cid, name, folder) => (setSaving(false), void saveTab(cid, name, folder))} onCreate={saveCollection} />}
       {importing && <ImportModal onClose={() => setImporting(false)} onDone={loadCollections} />}
       {showCookies && <CookiesModal initialDomain={hostOf(tab.request.url) || undefined} onClose={() => setShowCookies(false)} />}

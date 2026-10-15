@@ -1,11 +1,10 @@
-import { CopyPlus, FlaskConical, KeyRound, Play, Save, Sparkles, Square, Bookmark, History } from 'lucide-react';
+import { CopyPlus, FileCheck2, KeyRound, Play, Save, Sparkles, Square, Bookmark, History } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSticky } from '../../lib/sticky';
 import { useLibrary } from '../../lib/library';
 import { FolderList } from '../../components/FolderList';
 import { SidebarShell } from '../../components/SidebarShell';
 import { EnvironmentsPane, HistoryPane } from '../../components/SidebarPanes';
-import { stringifyYaml } from '../../lib/yaml';
 import { asError, call, on, type NormalizedError } from '../../api';
 import { promptText, toastError, useApp } from '../../store';
 import { useIntent, useSendShortcut } from '../../hooks';
@@ -16,6 +15,8 @@ import { CheckList, ErrorPanel } from '../../components/Results';
 import { Button, Empty, LinkButton, Metric, Split, Tabs } from '../../components/ui';
 import { ChatResult, SavedPrompt, useDraft, ModelPicker, Params, responseFormat, parseExpected, PromptEditor, NoProviders } from './common';
 
+import { refOfWorkspacePath } from '@testpion/shared';
+import { saveAsTest as saveAsTestShared, saveAsTestLabel } from '../../lib/save-test';
 export function Playground({ providers, onSetUp }: { providers: ProviderConfig[]; onSetUp(): void }) {
   const [d, set] = useDraft();
   const [running, setRunning] = useState<string>();
@@ -41,7 +42,19 @@ export function Playground({ providers, onSetUp }: { providers: ProviderConfig[]
     setResult(undefined);
   };
   // global search → open a saved prompt (keyed: the Playground unmounts when another tab is shown)
-  useIntent('ai', (p) => p?.savedId && openSaved(p.savedId), 'ai-playground-saved');
+  // … or a prompt sent earlier (History ▸ Open): what was sent, not saved as a prompt
+  useIntent(
+    'ai',
+    (p) => {
+      if (p?.savedId) return void openSaved(p.savedId);
+      const r = p?.prompt as { provider?: string; model?: string; prompt?: string; system?: string; input?: unknown } | undefined;
+      if (!r || typeof r !== 'object') return;
+      setSavedId(undefined);
+      set({ ...(r.provider ? { provider: r.provider } : {}), ...(r.model ? { model: r.model } : {}), prompt: r.prompt ?? '', system: r.system ?? '', ...(r.input !== undefined ? { input: r.input as typeof d.input } : {}) });
+      setResult(undefined);
+    },
+    'ai-playground-saved',
+  );
   const savePrompt = async (asNew = false, folder?: string) => {
     if (current && !asNew) {
       await saved.put({ ...current, data: snapshot() });
@@ -96,25 +109,14 @@ export function Playground({ providers, onSetUp }: { providers: ProviderConfig[]
     }
   };
   useSendShortcut('ai', () => !running && void run());
-  const saveAsTest = async () => {
-    const name = await promptText('Save as test', { message: 'Test name', value: 'Prompt test', okLabel: 'Save' });
-    if (!name) return;
+  // the one Save as test (lib/save-test): the prompt as it is set up here, its evaluators as the checks
+  const saveAsTest = () => {
     const format = responseFormat(d);
-    const expected = parseExpected(d.expected);
-    const test: Record<string, unknown> = {
-      name,
-      type: 'llm',
-      model: { provider: d.provider, name: d.model || undefined, temperature: d.temperature, topP: d.topP, maxTokens: d.maxTokens, seed: d.seed },
-      ...(d.system ? { system: d.system } : {}),
-      prompt: d.prompt,
-      input: d.input,
-      ...(format ? { responseFormat: format } : {}),
-      ...(expected !== undefined ? { expected } : {}),
-      evaluators: d.evaluators,
-    };
-    const path = `ai/${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.yaml`;
-    await call('tests.write', { path, content: stringifyYaml(test) });
-    useApp.getState().toast(`Saved tests/${path}`, 'success');
+    void saveAsTestShared({
+      source: { kind: 'llm', model: { provider: d.provider, name: d.model || undefined, temperature: d.temperature, topP: d.topP, maxTokens: d.maxTokens, seed: d.seed }, system: d.system || undefined, prompt: d.prompt, input: d.input, responseFormat: format, expected: parseExpected(d.expected) },
+      name: current?.name ?? 'Prompt test',
+      assertions: d.evaluators,
+    });
   };
   // an answer worth keeping becomes an evaluation case: the inputs, and the answer as what is expected
   const addToDataset = async (r: ChatResult) => {
@@ -133,7 +135,7 @@ export function Playground({ providers, onSetUp }: { providers: ProviderConfig[]
     }
     try {
       const out = await call<{ path: string; rows: number }>('datasets.appendRow', { name, row: { ...d.input, expected: r.isJson ? r.json : r.text } });
-      useApp.getState().toast(`Added case ${out.rows} to ${out.path} (Evaluations ▸ Dataset ▸ workspace dataset)`, 'success');
+      useApp.getState().toast(`Added case ${out.rows} to ${out.path} (Evaluations ▸ Dataset ▸ workspace dataset)`, 'success', { ref: refOfWorkspacePath(out.path) ?? { kind: 'dataset', name: out.path.replace(/^.*\//, '') } });
     } catch (e) {
       toastError(e);
     }
@@ -162,7 +164,7 @@ export function Playground({ providers, onSetUp }: { providers: ProviderConfig[]
               ops={saved.ops}
               items={saved.lib.items.map((i) => ({ id: i.id, name: i.name, folder: i.folder, subtitle: `${i.data.model || i.data.provider}`, icon: <Sparkles size={12} className="text-muted" /> }))}
               empty={
-                <Empty title="No saved prompts">
+                <Empty title="No saved prompts" actions={[{ label: 'Save this prompt', icon: <Save size={13} />, onClick: () => void savePrompt(true) }]}>
                   Save a prompt with its model, variables, structured output and evaluators to run it again later, and group prompts in folders.
                 </Empty>
               }
@@ -181,8 +183,8 @@ export function Playground({ providers, onSetUp }: { providers: ProviderConfig[]
           <Button icon={<Save size={13} />} title={current ? `Save changes to "${current.name}"` : 'Save this prompt'} onClick={() => void savePrompt()}>
             {current && dirty ? 'Save*' : 'Save'}
           </Button>
-          <Button icon={<FlaskConical size={13} />} onClick={saveAsTest}>
-            Save as test
+          <Button icon={<FileCheck2 size={13} />} onClick={saveAsTest}>
+            {saveAsTestLabel({})}
           </Button>
           {running ? (
             <Button variant="danger" icon={<Square size={12} />} onClick={() => void call('ai.cancel', { id: running }).catch(toastError)}>

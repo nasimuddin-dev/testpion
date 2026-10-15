@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { ApsError, VariableScope, WorkspaceStore, executeHttp, normalizeError, readJson, requireCollection, requireEnvironment, writeJson } from '../../packages/core/src/index.js';
-import { runCli, tempDir } from '../helpers.js';
+import { runCli, tempDir, cliData } from '../helpers.js';
 
 /** Robustness audit fixes (2026-10-09) in the engine and the CLI: broken files, malformed files, timeouts, cycles, errors. */
 
@@ -215,7 +215,7 @@ describe('CLI', () => {
       writeFileSync(join(outside, 'a.yaml'), 'name: a\ntests:\n  - id: t1\n    type: http\n    request: { method: GET, url: http://x }\n');
       const l = await runCli(['lint-tests', join(outside, 'a.yaml'), '--json', '-w', join(t.dir, 'ws')], { home: join(t.dir, 'home') });
       expect(l.err).not.toMatch(/No such test file/);
-      expect(JSON.parse(l.out).files).toBe(1);
+      expect(cliData(l.out).files).toBe(1);
     } finally {
       t.cleanup();
     }

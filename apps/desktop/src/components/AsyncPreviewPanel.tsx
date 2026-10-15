@@ -5,6 +5,7 @@ import { call } from '../api';
 import { confirmAction, toastError, useApp } from '../store';
 import { Badge, Button, Empty } from './ui';
 
+import { refOfWorkspacePath } from '@testpion/shared';
 interface Message {
   name: string;
   summary?: string;
@@ -104,7 +105,7 @@ export function AsyncPreviewPanel({ outline, error, spec }: { outline?: AsyncOut
         .toast(
           r.written.length ? `${r.written.length} files, ${n} tests: review the example messages, then run the suite` : `Every file exists already: ${r.skipped.join(', ')}`,
           r.written.length ? 'success' : 'warning',
-          r.written.length ? { label: 'Open Tests', onClick: () => useApp.getState().setView('tests') } : undefined,
+          r.written.length ? { ref: refOfWorkspacePath(r.written[0]!.path) ?? { kind: 'test', path: r.written[0]!.path } } : undefined,
         );
     } catch (e) {
       toastError(e);

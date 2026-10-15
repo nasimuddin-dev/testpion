@@ -18,6 +18,8 @@ import { Badge, Button, Callout, cx, Empty, Field, Input, Menu, MoreMenu, Split,
 import { CountPill, focusRow, InlineRename, RowMenu, TreeHeader, treeKeys } from '../components/TreeParts';
 import { refreshEnvironments, useEnvironments } from '../lib/environments-store';
 import { downloadContent } from '../lib/files';
+import { AlsoAddDialog } from '../components/AlsoAddTo';
+import { LABEL } from '../lib/vocabulary';
 
 export function EnvironmentsView() {
   const git = useGit();
@@ -164,6 +166,8 @@ export function EnvironmentsView() {
     else if (p?.tab === 'collection') (setScope('collection'), setColVarsFor(p.collectionId));
   });
 
+  // new variables of a saved environment, offered to the others (AlsoAddDialog)
+  const [alsoFor, setAlsoFor] = useState<{ from: string; keys: string[] }>();
   const rows: KeyValue[] = (draft?.variables ?? []).map((v) => ({ ...v, value: v.secret ? secretValues[v.key] ?? '' : v.value }));
   const save = async () => {
     if (!draft) return;
@@ -176,16 +180,22 @@ export function EnvironmentsView() {
         const prev = envs.find((e) => e.id === draft.id)?.variables.find((v) => v.key === r.key);
         if (r.secret && !r.value && prev && !prev.secret && prev.value) secrets[r.key] = prev.value;
       }
+      // variables new in this environment that some other environment lacks: offer to add them there too (WF-14)
+      const before = new Set(envs.find((e) => e.id === draft.id)?.variables.map((v) => v.key) ?? []);
+      const added = variables.map((v) => v.key).filter((k) => k && !before.has(k));
+      const missingElsewhere = added.filter((k) => envs.some((e) => e.id !== draft.id && !e.problem && !e.variables.some((v) => v.key === k)));
       await call('env.save', { env: { ...draft, variables }, secrets });
       await load();
       await useApp.getState().refreshWorkspace();
       useApp.getState().toast('Environment saved', 'success');
+      if (missingElsewhere.length && envs.some((e) => e.id !== draft.id)) setAlsoFor({ from: draft.id, keys: missingElsewhere });
     } catch (e) {
       toastError(e);
     }
   };
   return (
     <div className="h-full flex flex-col">
+      {alsoFor && <AlsoAddDialog from={alsoFor.from} keys={alsoFor.keys} onClose={() => setAlsoFor(undefined)} />}
       <Tabs
         value={scope}
         onChange={setScope}
@@ -291,7 +301,7 @@ export function EnvironmentsView() {
                       { label: 'Rename', icon: <Pencil size={14} />, separator: true, onSelect: () => setRenamingEnv(e.id) },
                       { label: 'Duplicate', icon: <Copy size={14} />, onSelect: () => void duplicateEnv(e) },
                       ...(git.status?.repository ? [{ label: 'History in git…', icon: <History size={14} />, onSelect: () => setHistoryOf({ id: e.id, name: e.name }) }] : []),
-                      { label: 'Delete', icon: <Trash2 size={14} />, danger: true, separator: true, onSelect: () => void deleteEnv(e) },
+                      { label: LABEL.delete, icon: <Trash2 size={14} />, danger: true, separator: true, onSelect: () => void deleteEnv(e) },
                     ]}
                   />
                 </div>
@@ -306,7 +316,12 @@ export function EnvironmentsView() {
                   <Field label="Color">
                     <input type="color" aria-label="Environment color" className="field h-8 w-14 p-1 cursor-pointer" value={draft.color ?? '#1a7f37'} onChange={(e) => setDraft({ ...draft, color: e.target.value })} />
                   </Field>
-                  <Toggle checked={!!draft.isProduction} onChange={(isProduction) => setDraft({ ...draft, isProduction })} label="Production (blocks load tests, shows a warning)" />
+                  <Toggle
+                    checked={!!draft.isProduction}
+                    onChange={(isProduction) => setDraft({ ...draft, isProduction })}
+                    label="Production — asks before anything that changes data"
+                    title="Sending or running anything that can change data here asks first: POST, PUT, PATCH and DELETE, GraphQL mutations, gRPC calls that are not reads, messages, MCP tool calls, load tests. Reads go without asking. From the terminal: --allow-production."
+                  />
                   <div className="ml-auto flex gap-2">
                     {envs.length > 1 && (
                       <Button icon={<ArrowLeftRight size={13} />} onClick={() => setComparing(true)} title="Compare with another environment">

@@ -16,7 +16,7 @@ An MCP mock is a fake MCP server: tools with canned responses, resources and pro
 ## Record a mock from a real server
 
 1. In **MCP**, connect to the server and call the tools you want to capture.
-2. Click **Save as mock**.
+2. In the server's **⋯** menu (*More server actions*), choose **Save as mock**.
 
 TestPion writes `mocks/<server>.mcp-mock.yaml` in the workspace, with the server's tools (names, descriptions, input schemas, annotations), resources (and their text), prompts, and each tool call you made as a response matched on its arguments. Secrets in recorded content are redacted. A server entry `<server> (mock)` is added, so you can connect to the mock right away.
 
@@ -86,14 +86,14 @@ From the command line and for agents:
 
 ```bash
 testpion mock-mcp mocks/orders.mcp-mock.yaml --list          # the toolset: each tool, its arguments and how it answers
-testpion mock-mcp mocks/orders.mcp-mock.yaml --list --json   # the same as JSON (input schemas included)
+testpion mock-mcp mocks/orders.mcp-mock.yaml --list --json   # the same as JSON in .data (input schemas included)
 ```
 
 The [MCP server](/ai-testing/mcp-server) has the same as `mock_tools` (it takes the file's path in the workspace), so an agent can read a toolset you designed, and design one by writing the YAML file.
 
 ## Use it
 
-**In the app:** add an MCP server with the transport **Mock (definition file)** and the file's path in the workspace. The mock runs inside TestPion; saved MCP tests can use it like any other server.
+**In the app:** add an MCP server with the transport **Mock** and the file's path in the workspace. The mock runs inside TestPion; saved MCP tests can use it like any other server.
 
 **For AI agents and other clients:** serve it with the CLI.
 

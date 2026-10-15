@@ -1,16 +1,16 @@
-import { LinkButton } from './ui';
-import { ChevronRight } from 'lucide-react';
+import { LinkButton, type MenuItem } from './ui';
+import { RowMenu } from './TreeParts';
 import { useCollectionTree } from '../lib/collections-store';
-import { useApp } from '../store';
 import type { CollectionNode } from '../types';
+import { ItemBreadcrumb, type Crumb } from './ItemBreadcrumb';
 
-/** The folder names from a collection's top level down to a request (empty at the top level). */
-function folderPath(nodes: CollectionNode[], id: string): string[] | undefined {
+/** The folders from a collection's top level down to a request (empty at the top level). */
+function folderPath(nodes: CollectionNode[], id: string): Array<{ id: string; name: string }> | undefined {
   for (const n of nodes) {
     if (n.id === id) return [];
     if (n.kind === 'folder') {
       const inner = folderPath(n.items, id);
-      if (inner) return [n.name, ...inner];
+      if (inner) return [{ id: n.id, name: n.name }, ...inner];
     }
   }
   return undefined;
@@ -21,10 +21,20 @@ function folderPath(nodes: CollectionNode[], id: string): string[] | undefined {
  * editor (REST, GraphQL, gRPC, WebSocket); or that it isn't saved yet, with Save.
  * A collection request is found by `requestId`; a gRPC call or connection gives its `folder`.
  */
-export function RequestBreadcrumb({ collectionId, requestId, folder, name, dirty, onSave }: { collectionId?: string; requestId?: string; folder?: string; name: string; dirty?: boolean; onSave?(): void }) {
+export function RequestBreadcrumb({ collectionId, requestId, folder, name, dirty, onSave, actions }: { collectionId?: string; requestId?: string; folder?: string; name: string; dirty?: boolean; onSave?(): void; actions?: MenuItem[] }) {
   const collections = useCollectionTree();
   const c = collectionId ? collections.find((x) => x.id === collectionId) : undefined;
-  const path = c ? (requestId ? folderPath(c.items, requestId) : undefined) ?? (folder ? [folder] : requestId ? undefined : []) : undefined;
+  // a saved gRPC call or connection names its folder (no id: a segment that only says where)
+  const path: Crumb[] | undefined = c
+    ? (requestId ? folderPath(c.items, requestId)?.map((f) => ({ label: f.name, reveal: { kind: 'folder' as const, collectionId: c.id, folderId: f.id } })) : undefined) ??
+      (folder ? [{ label: folder }] : requestId ? undefined : [])
+    : undefined;
+  // the request's own actions (Save as test …), the same ⋯ as a row of the tree, at the line's end
+  const more = actions?.length ? (
+    <span className="ml-auto shrink-0">
+      <RowMenu label={name} items={actions} header />
+    </span>
+  ) : null;
   if (!c || !path)
     return (
       <div className="flex items-center gap-1.5 px-3 pt-1.5 text-xs text-muted min-w-0">
@@ -34,22 +44,16 @@ export function RequestBreadcrumb({ collectionId, requestId, folder, name, dirty
             Save (Ctrl+S)
           </LinkButton>
         )}
+        {more}
       </div>
     );
   return (
-    <nav aria-label="Where this request is saved" className="flex items-center gap-1 px-3 pt-1.5 text-xs text-muted min-w-0">
-      <button className="hover:text-fg hover:underline truncate shrink min-w-0" title="Collection settings, runner and docs" onClick={() => useApp.getState().openIntent('collections', { collectionId: c.id })}>
-        {c.name}
-      </button>
-      {path.map((f, i) => (
-        <span key={i} className="flex items-center gap-1 min-w-0 shrink">
-          <ChevronRight size={11} className="shrink-0" />
-          <span className="truncate">{f}</span>
-        </span>
-      ))}
-      <ChevronRight size={11} className="shrink-0" />
-      <span className="text-fg truncate">{name}</span>
-      {dirty && <span className="shrink-0">· unsaved changes</span>}
-    </nav>
+    <ItemBreadcrumb
+      label="Where this request is saved"
+      crumbs={[{ label: c.name, ref: { kind: 'collection', collectionId: c.id }, title: 'Collection settings, runner and docs' }, ...path]}
+      name={name}
+      dirty={dirty}
+      actions={actions}
+    />
   );
 }

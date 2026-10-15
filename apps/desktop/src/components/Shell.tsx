@@ -35,18 +35,23 @@ import {
   MessageSquare,
   FolderGit2,
   Bug,
-  TriangleAlert,
 } from 'lucide-react';
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Fragment, lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { call, modKey, on } from '../api';
 import { useGit } from '../lib/git';
 import wordmarkUrl from '../../build/wordmark-nav.png';
 import markUrl from '../../build/icons/64x64.png';
 import { ConsolePanel } from './ConsolePanel';
+import { refIcon } from './RefLink';
+import { openRef } from '../lib/open-ref';
+import { rankPalette } from '../lib/palette-rank';
+import { toItemRef } from '@testpion/shared';
+// xterm and the terminals load with the Terminal tab, the first time it opens
+const TerminalPanel = lazy(() => import('./TerminalPanel'));
 import { WorkspaceMenu } from './WorkspaceMenu';
 import { EnvQuickLook } from './EnvQuickLook';
 import { isRequestView, useApp, type ViewId, type DialogRequest, type DialogTone, type NavLocation } from '../store';
-import { Badge, Button, cx, IconButton, Input, Kbd, Menu, Modal, Spinner, Tooltip, type MenuItem } from './ui';
+import { Button, cx, IconButton, Input, Kbd, Menu, Modal, Spinner, Tooltip } from './ui';
 import { Toaster as SonnerToaster } from 'sonner';
 
 /**
@@ -83,6 +88,8 @@ function RailCount({ n }: { n: number }) {
 
 /** The rail: the request editors are reached through Collections (explorer, New menu), not listed one by one. */
 const RAIL = NAV.filter((n) => n.group !== 'Requests');
+/** The rail's order, Collections second: the Ctrl/Cmd+Alt+1…9 order (lib/rail.ts). */
+const RAIL_ORDER = railOrder(NAV);
 
 export function Sidebar() {
   const view = useApp((s) => s.view);
@@ -121,7 +128,7 @@ export function Sidebar() {
   // Collections: every request editor (REST, GraphQL, gRPC, WebSocket, MCP) with the explorer as its sidebar;
   // clicking it again while there shows or hides the explorer (like VS Code's activity bar)
   const explorerToggle = (
-    <Tooltip content={inRequests ? `${explorerOpen ? 'Hide' : 'Show'} the Collections sidebar  ·  ${modKey}+B` : 'Collections: requests of every kind (REST, GraphQL, gRPC, WebSocket, MCP)'} side="right">
+    <Tooltip content={inRequests ? `${explorerOpen ? 'Hide' : 'Show'} the Collections sidebar  ·  ${modKey}+B` : `Collections: requests of every kind (REST, GraphQL, gRPC, WebSocket, MCP)  ·  ${railShortcut(RAIL_ORDER, 'collections', modKey)}`} side="right">
       <button
         onClick={() => {
           const s = useApp.getState();
@@ -149,7 +156,7 @@ export function Sidebar() {
       {RAIL.map((n, i) => (
         <div key={n.id}>
           {i > 0 && RAIL[i - 1]!.group !== n.group && <div className="mx-3 my-1 [@media(max-height:680px)]:my-0.5 border-t border-line/70" />}
-          {item(n.id, n.label, n.icon, NAV.indexOf(n) < 9 ? `${modKey}+Alt+${NAV.indexOf(n) + 1}` : undefined, n.hint)}
+          {item(n.id, n.label, n.icon, railShortcut(RAIL_ORDER, n.id, modKey), n.hint)}
           {n.id === 'home' && <div className="mt-0.5">{explorerToggle}</div>}
         </div>
       ))}
@@ -159,44 +166,9 @@ export function Sidebar() {
 }
 
 /** The environment switcher: a colour dot on the left of every environment (red for production), the app's own menu. */
+/** The active environment (WF-05: the shared EnvSelect, the same menu as the status bar's). */
 function EnvironmentPicker() {
-  const ws = useApp((s) => s.workspace);
-  const env = useApp((s) => s.environment);
-  const envObj = ws?.environments.find((e) => e.name === env);
-  const colorOf = (e?: { color?: string; isProduction?: boolean }) => (e ? (e.color ?? (e.isProduction ? 'var(--bad)' : 'var(--ok)')) : 'var(--line-strong)');
-  const Dot = ({ color, ring }: { color: string; ring?: boolean }) => <span className={cx('inline-block w-2.5 h-2.5 rounded-full shrink-0', ring && 'ring-2 ring-bad/40')} style={{ background: color }} aria-hidden />;
-  const items: MenuItem[] = [
-    { label: 'No environment', icon: <Dot color="var(--line-strong)" />, onSelect: () => useApp.getState().setEnvironment(undefined) },
-    ...(ws?.environments ?? []).map((e) =>
-      // an environment whose file cannot be read is listed (in red, why as the tooltip) but cannot be chosen
-      e.problem
-        ? { label: `${String(e.name)}  (cannot be read)`, icon: <TriangleAlert size={13} className="text-bad" />, danger: true, disabled: true, title: e.problem, onSelect: () => undefined }
-        : {
-            // a name from a hand-edited file is text here whatever it holds (an object would blank the window)
-            label: e.isProduction ? `${String(e.name)}  (production)` : String(e.name),
-            icon: <Dot color={colorOf(e)} ring={e.isProduction} />,
-            onSelect: () => useApp.getState().setEnvironment(e.name),
-          },
-    ),
-    { label: 'Manage environments…', icon: <KeyRound size={14} />, separator: true, onSelect: () => useApp.getState().openIntent('environments', {}) },
-  ];
-  return (
-    <Menu
-      items={items}
-      width={240}
-      trigger={
-        <button
-          aria-label="Environment"
-          title={envObj ? `Active environment: ${envObj.name}${envObj.isProduction ? ' (production)' : ''}` : 'No environment: choose one'}
-          className={cx('flex items-center gap-2 h-8 pl-2.5 pr-2 rounded-full border bg-field shadow-sm text-sm max-w-56 transition-colors data-[state=open]:bg-hover', envObj?.isProduction ? 'border-bad/50' : 'border-line-strong hover:border-muted/50')}
-        >
-          <Dot color={colorOf(envObj)} />
-          <span className="truncate">{env === undefined || env === null ? 'No environment' : String(env)}</span>
-          <NavChevron size={13} className="text-muted shrink-0" />
-        </button>
-      }
-    />
-  );
+  return <EnvSelect variant="topbar" />;
 }
 
 /** Any CSS colour (oklch …) as #rrggbb, which Electron's title bar understands. */
@@ -332,22 +304,15 @@ function DebuggerSegment() {
 }
 
 export function StatusBar() {
-  const ws = useApp((s) => s.workspace);
-  const env = useApp((s) => s.environment);
   const activity = useApp((s) => s.activity);
   const info = useApp((s) => s.info);
   const mcp = useApp((s) => s.mcpConnected);
   const logsOpen = useApp((s) => s.logsOpen);
   const bottomTab = useApp((s) => s.bottomTab);
-  const envObj = ws?.environments.find((e) => e.name === env);
   const acts = Object.values(activity);
   return (
     <footer className="h-7 shrink-0 border-t border-line bg-chrome flex items-center gap-4 px-3 text-[0.75rem] text-muted">
-      <span className="flex items-center gap-1.5">
-        <span className="w-2 h-2 rounded-full" style={{ background: envObj ? (envObj.color ?? (envObj.isProduction ? 'var(--bad)' : 'var(--ok)')) : 'var(--line-strong)' }} />
-        {env === undefined || env === null ? 'No environment' : String(env)}
-        {envObj?.isProduction && <Badge tone="bad">PRODUCTION</Badge>}
-      </span>
+      <EnvSelect variant="status" />
       <span className="flex items-center gap-1" title="Connected MCP servers">
         <Plug size={12} /> {mcp} MCP connected
       </span>
@@ -369,6 +334,7 @@ export function StatusBar() {
         <KeyRound size={12} /> {info?.secretBackend}
       </span>
       <span title="Metadata storage">{info?.metaBackend === 'sqlite' ? 'SQLite' : info?.metaBackend}</span>
+      <StatusBarTools />
       {(['console', 'logs'] as const).map((t) => (
         <button
           key={t}
@@ -406,22 +372,34 @@ function GitSegment() {
   );
 }
 
-/** The bottom panel: Postman-style Console and the application logs. */
+const BOTTOM_TABS = { problems: 'Problems', console: 'Console', logs: 'Logs', terminal: 'Terminal' } as const;
+
+/** The bottom panel: Postman-style Console, the application logs and the Terminal (loaded the first time it opens). */
 export function LogsPanel() {
   const tab = useApp((s) => s.bottomTab);
   return (
-    <div className="h-60 border-t border-line bg-panel flex flex-col shrink-0">
+    <div className="h-60 border-t border-line bg-panel flex flex-col shrink-0" data-bottom-panel={tab}>
       <div className="flex items-center gap-1 px-2 h-8 border-b border-line text-xs shrink-0">
-        {(['console', 'logs'] as const).map((t) => (
-          <button key={t} role="tab" aria-selected={tab === t} className={cx('px-2 h-6 rounded-md font-medium', tab === t ? 'bg-hover text-fg' : 'text-muted hover:text-fg')} onClick={() => useApp.getState().set({ bottomTab: t })}>
-            {t === 'console' ? 'Console' : 'Logs'}
+        {(Object.keys(BOTTOM_TABS) as Array<keyof typeof BOTTOM_TABS>).map((t) => (
+          <button key={t} role="tab" aria-selected={tab === t} data-bottom-tab={t} className={cx('px-2 h-6 rounded-md font-medium', tab === t ? 'bg-hover text-fg' : 'text-muted hover:text-fg')} onClick={() => useApp.getState().set({ bottomTab: t })}>
+            {BOTTOM_TABS[t]}
           </button>
         ))}
         <IconButton label="Close panel" className="ml-auto" onClick={() => useApp.getState().set({ logsOpen: false })}>
           <X size={13} />
         </IconButton>
       </div>
-      {tab === 'console' ? <ConsolePanel /> : <AppLogs />}
+      {tab === 'problems' ? (
+        <ProblemsPanel />
+      ) : tab === 'console' ? (
+        <ConsolePanel />
+      ) : tab === 'terminal' ? (
+        <Suspense fallback={<div className="flex-1 grid place-items-center"><Spinner size={16} /></div>}>
+          <TerminalPanel />
+        </Suspense>
+      ) : (
+        <AppLogs />
+      )}
     </div>
   );
 }
@@ -457,21 +435,68 @@ export interface PaletteCommand {
   label: string;
   icon?: ReactNode;
   hint?: string;
+  /** A line under the label (what a block does, where a saved request is). */
+  detail?: string;
+  /** A heading the command is listed under (Requests, Logic …); commands of a group come together. */
+  group?: string;
   run(): void;
 }
 
 /**
- * The command palette, and every quick pick built on it (Insert snippet…): a searchable list, Enter runs, Esc closes.
- * `onClose` replaces closing the app's palette (a quick pick closes itself and puts the focus back where it was).
+ * The command palette, and every quick pick built on it (Insert snippet…, the flow designer's block picker): a
+ * searchable list, Enter runs, Esc closes. `onClose` replaces closing the app's palette (a quick pick closes itself and
+ * puts the focus back where it was); `anchor` opens it at a point (a port of the canvas) instead of the top middle.
  */
-export function CommandPalette({ commands, onClose, placeholder = 'Type a command…', label = 'Command palette', empty = 'No matching commands' }: { commands: PaletteCommand[]; onClose?(): void; placeholder?: string; label?: string; empty?: string }) {
+export function CommandPalette({
+  commands,
+  onClose,
+  placeholder = 'Type a command…',
+  label = 'Command palette',
+  empty = 'No matching commands',
+  anchor,
+  id,
+  initialQuery = '',
+  resolve,
+  onQueryChange,
+}: {
+  commands: PaletteCommand[];
+  /** What is typed when it opens (Quick Open: '' for items, '>' for commands, '#' for environments). */
+  initialQuery?: string;
+  /** The rows for what is typed (Quick Open's modes, lib/quick-open.ts): they replace `commands`, filtered by `text`. */
+  resolve?(q: string): { commands: PaletteCommand[]; text: string; placeholder?: string; empty?: string };
+  onQueryChange?(q: string): void;
+  onClose?(): void;
+  placeholder?: string;
+  label?: string;
+  empty?: string;
+  /** Where to open it (window coordinates): a small panel there, kept on screen. */
+  anchor?: { x: number; y: number };
+  /** data-palette on the panel (tests, styles). */
+  id?: string;
+}) {
   const set = useApp((s) => s.set);
-  const [q, setQ] = useState('');
+  const [q, setQ] = useState(initialQuery);
   const [idx, setIdx] = useState(0);
-  const filtered = useMemo(() => {
-    const t = q.toLowerCase().split(/\s+/).filter(Boolean);
-    return commands.filter((c) => t.every((w) => c.label.toLowerCase().includes(w) || c.hint?.toLowerCase().includes(w)));
-  }, [q, commands]);
+  const view = useMemo(() => (resolve ? resolve(q) : { commands, text: q }), [resolve, commands, q]);
+  useEffect(() => onQueryChange?.(q), [q, onQueryChange]);
+  // what matches, best first: the label itself, then a label starting with it … (lib/palette-rank.ts)
+  const filtered = useMemo(() => rankPalette(view.commands, view.text), [view]);
+  // the focus goes back where it was when the palette closes (a canvas, an editor): its keys keep working
+  // (read on the first render, before the input's autoFocus takes it; given back only when nothing else took it since)
+  const opener = useRef(typeof document === 'undefined' ? null : document.activeElement);
+  useEffect(() => {
+    const before = opener.current;
+    return () => {
+      const lost = !document.activeElement || document.activeElement === document.body;
+      if (lost && (before instanceof HTMLElement || before instanceof SVGElement) && before !== document.body && before.isConnected) before.focus({ preventScroll: true });
+    };
+  }, []);
+  const listRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    listRef.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' });
+  }, [idx]);
+  const width = anchor ? 380 : 560;
+  const place = anchor ? { left: Math.max(8, Math.min(anchor.x, window.innerWidth - width - 8)), top: Math.max(8, Math.min(anchor.y, window.innerHeight - 420)) } : undefined;
   useEffect(() => setIdx(0), [q]);
   const close = () => (onClose ? onClose() : set({ paletteOpen: false }));
   const run = (c?: PaletteCommand) => {
@@ -480,12 +505,18 @@ export function CommandPalette({ commands, onClose, placeholder = 'Type a comman
     c.run();
   };
   return (
-    <div className="fixed inset-0 z-50 bg-black/30 flex items-start justify-center pt-[12vh]" onMouseDown={(e) => e.target === e.currentTarget && close()}>
-      <div role="dialog" aria-label={label} className="w-[560px] max-w-[92vw] rounded-lg border border-line bg-bg shadow-2xl overflow-hidden">
+    <div className={cx('fixed inset-0 z-50', anchor ? '' : 'bg-black/30 flex items-start justify-center pt-[12vh]')} onMouseDown={(e) => e.target === e.currentTarget && close()}>
+      <div
+        role="dialog"
+        aria-label={label}
+        data-palette={id}
+        className={cx('max-w-[92vw] rounded-lg border border-line bg-bg shadow-2xl overflow-hidden', anchor ? 'fixed w-[380px]' : 'w-[560px]')}
+        style={place}
+      >
         <input
           autoFocus
           className="w-full h-11 px-4 bg-transparent outline-none border-b border-line"
-          placeholder={placeholder}
+          placeholder={(view as { placeholder?: string }).placeholder ?? placeholder}
           value={q}
           onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => {
@@ -495,24 +526,32 @@ export function CommandPalette({ commands, onClose, placeholder = 'Type a comman
             if (e.key === 'Enter') run(filtered[idx]);
           }}
         />
-        <div role="listbox" className="max-h-[50vh] overflow-auto py-1">
+        <div role="listbox" ref={listRef} className={cx('overflow-auto py-1', anchor ? 'max-h-[340px]' : 'max-h-[50vh]')}>
           {filtered.map((c, i) => (
-            <button
-              key={c.id}
-              role="option"
-              aria-selected={i === idx}
-              onMouseEnter={() => setIdx(i)}
-              onClick={() => run(c)}
-              className={cx('w-full text-left px-4 py-2 text-sm flex items-center gap-3', i === idx && 'bg-accent/10')}
-            >
-              <span aria-hidden className={cx('w-[18px] h-[18px] shrink-0 grid place-items-center [&_svg]:w-4 [&_svg]:h-4', i === idx ? 'text-accent' : 'text-muted')}>
-                {c.icon}
-              </span>
-              {c.label}
-              {c.hint && <span className="ml-auto text-xs text-muted">{c.hint}</span>}
-            </button>
+            <Fragment key={c.id}>
+              {c.group && c.group !== filtered[i - 1]?.group && <div className="px-4 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-muted">{c.group}</div>}
+              <button
+                role="option"
+                aria-selected={i === idx}
+                data-command={c.id}
+                onMouseEnter={() => setIdx(i)}
+                onClick={() => run(c)}
+                className={cx('w-full text-left px-4 text-sm flex items-center gap-3', c.detail ? 'py-1.5' : 'py-2', i === idx && 'bg-accent/10')}
+              >
+                <span aria-hidden className={cx('w-[18px] h-[18px] shrink-0 grid place-items-center [&_svg]:w-4 [&_svg]:h-4', i === idx ? 'text-accent' : 'text-muted')}>
+                  {c.icon}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate" data-command-label>
+                    {c.label}
+                  </span>
+                  {c.detail && <span className="block truncate text-xs text-muted">{c.detail}</span>}
+                </span>
+                {c.hint && <span className="ml-auto text-xs text-muted shrink-0">{c.hint}</span>}
+              </button>
+            </Fragment>
           ))}
-          {!filtered.length && <div className="px-4 py-6 text-sm text-muted">{empty}</div>}
+          {!filtered.length && ((view as { empty?: string }).empty ?? empty) && <div className="px-4 py-6 text-sm text-muted">{(view as { empty?: string }).empty ?? empty}</div>}
         </div>
       </div>
     </div>
@@ -559,25 +598,11 @@ export function SearchDialog() {
     return () => clearTimeout(t);
   }, [q]);
   const close = () => set({ searchOpen: false });
+  // every hit names its item with an ItemRef: it opens the one way everything opens (a hit of something deleted since says so)
   const open = (h?: SearchHit) => {
     if (!h) return;
     close();
-    const { openIntent } = useApp.getState();
-    if (h.kind === 'request') openIntent('rest', { collectionId: h.ref.collectionId, requestId: h.ref.requestId });
-    else if (h.kind === 'graphql') openIntent('graphql', { collectionId: h.ref.collectionId, requestId: h.ref.requestId });
-    else if (h.kind === 'collection') openIntent('collections', { collectionId: h.ref.collectionId });
-    else if (h.kind === 'test') openIntent('tests', { path: h.ref.testPath });
-    else if (h.kind === 'environment-variable') openIntent('environments', { environmentId: h.ref.environmentId });
-    else if (h.kind === 'mcp-server') openIntent('mcp', { serverId: h.ref.serverId });
-    else if (h.kind === 'provider') openIntent('ai', { providerId: h.ref.providerId });
-    else if (h.kind === 'history') openIntent('history', { historyId: h.ref.historyId });
-    else if (h.kind === 'trace') openIntent('traces', { traceId: h.ref.traceId });
-    else if (h.kind === 'run') openIntent('tests', { runId: h.ref.runId });
-    else if (h.kind === 'saved') {
-      const lib = h.ref.library;
-      if (lib === 'monitors') openIntent('monitors', { monitorId: h.ref.itemId });
-      else openIntent(lib === 'grpc' ? 'grpc' : lib === 'ai-prompts' ? 'ai' : lib === 'load-tests' ? 'load' : lib === 'evaluations' ? 'evaluations' : 'websocket', { savedId: h.ref.itemId });
-    }
+    void openRef(h.ref);
   };
   const icons: Record<string, ReactNode> = {
     request: <Network size={14} />,
@@ -592,6 +617,8 @@ export function SearchDialog() {
     trace: <Activity size={14} />,
     run: <Boxes size={14} />,
   };
+  // kinds without an icon of their own here (environments, API definitions, datasets …) take their kind's (RefLink)
+  const iconOf = (h: SearchHit) => icons[h.kind] ?? ((r) => (r ? refIcon(r, 14) : null))(toItemRef(h.ref));
   return (
     <div className={cx('fixed inset-0 z-50 bg-black/30', !anchor && 'flex items-start justify-center pt-[12vh]')} onMouseDown={(e) => e.target === e.currentTarget && close()}>
       <div
@@ -619,7 +646,7 @@ export function SearchDialog() {
         <div className="max-h-[55vh] overflow-auto py-1" role="listbox">
           {hits.map((h, i) => (
             <button key={`${h.kind}:${h.id}`} role="option" aria-selected={i === idx} onMouseEnter={() => setIdx(i)} onClick={() => open(h)} className={cx('w-full text-left px-4 py-2 flex items-center gap-3', i === idx && 'bg-accent/10')}>
-              <span className="text-muted">{icons[h.kind]}</span>
+              <span className="text-muted">{iconOf(h)}</span>
               <span className="min-w-0">
                 <div className="text-sm truncate">{h.title}</div>
                 {h.subtitle && <div className="text-xs text-muted truncate">{h.subtitle}</div>}
@@ -628,7 +655,7 @@ export function SearchDialog() {
             </button>
           ))}
           {q && !hits.length && <div className="px-4 py-6 text-sm text-muted">No results</div>}
-          {!q && <div className="px-4 py-6 text-sm text-muted">Searches requests, collections, tests, GraphQL operations, MCP servers, providers, environment variables, history, traces and runs.</div>}
+          {!q && <div className="px-4 py-6 text-sm text-muted">Searches requests, collections, tests, GraphQL operations, MCP servers, providers, environments and their variables, API definitions, datasets, history, traces and runs.</div>}
         </div>
       </div>
     </div>
@@ -668,6 +695,10 @@ const DIALOG_TONES: Record<DialogTone, { icon: ReactNode; className: string }> =
 import { iconForLabel } from './action-icons';
 import { useEventLog } from '../lib/use-rpc';
 import { plural } from '../lib/format';
+import { railOrder, railShortcut } from '../lib/rail';
+import { ProblemsPanel } from './ProblemsPanel';
+import { StatusBarTools } from './StatusBarTools';
+import { EnvSelect } from './EnvSelect';
 export { iconForLabel };
 
 function DialogView({ d }: { d: DialogRequest }) {
@@ -738,6 +769,8 @@ export function ProgressHost() {
 
 /** Where a place is, for tooltips and the recent-places list: "REST · request", "Environments · environment" … */
 function placeLabel(l: NavLocation): string {
+  // the item's name when the place was recorded (WF-10), else the view and what kind of item
+  if (l.label) return l.label;
   const view = l.view === 'settings' ? 'Settings' : l.view === 'collections' ? 'Collection settings' : (NAV.find((n) => n.id === l.view)?.label ?? l.view);
   const p = l.payload ?? {};
   const what = p.requestId ? 'request' : p.savedId ? 'saved item' : p.monitorId ? 'monitor' : p.environmentId ? 'environment' : p.serverId ? 'server' : p.historyId ? 'history entry' : p.runId ? 'run' : p.path ? String(p.path) : p.collectionId ? 'collection' : '';

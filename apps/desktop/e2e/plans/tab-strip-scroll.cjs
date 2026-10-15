@@ -1,4 +1,4 @@
-// With more tabs than fit, the active tab is always fully in view: after "Open in tab" from a row's menu, and after
+// With more tabs than fit, the active tab is always fully in view: after "Open" from a row's menu, and after
 // choosing another tab (the strip scrolls only as far as needed).
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
 const { withExpect } = require('../lib.cjs');
@@ -34,7 +34,7 @@ const steps = [
      const row = [...document.querySelectorAll('aside [data-tree-row]')].find((b) => b.offsetParent && b.textContent.trim().endsWith('Custom headers'));
      if (!row) return 'NO ROW';
      row.parentElement.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 200, clientY: 300 }));
-     const item = await __t.waitFor(() => [...document.querySelectorAll('[role=menuitem]')].find((m) => m.textContent.trim() === 'Open in tab'), 2000); if (!item) return 'NO MENU';
+     const item = await __t.waitFor(() => [...document.querySelectorAll('[role=menuitem]')].find((m) => m.textContent.trim() === 'Open'), 2000); if (!item) return 'NO MENU';
      item.click(); await __t.sleep(1200); await filter('');
      return view();`,
   ),

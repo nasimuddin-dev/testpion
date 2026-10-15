@@ -5,7 +5,7 @@ import type { Collection, CollectionNode } from '../types';
 import { formatMs, plural, timeAgo } from '../lib/format';
 import { BarRow, ChartCard, RecentRuns, StatTile } from './charts';
 import { TimeByPhase } from './RunCharts';
-import { useApp } from '../store';
+import { openRef } from '../lib/open-ref';
 import { LinkButton, Badge, cx, statusTone } from './ui';
 import { useRpc } from '../lib/use-rpc';
 
@@ -101,7 +101,7 @@ function RecentCollectionRuns({ name }: { name: string }) {
           · {timeAgo(last.startedAt)}
           {last.name !== name ? ` · ${last.name.slice(name.length + 3) || last.name}` : ''}
         </span>
-        <LinkButton className="ml-auto" icon={<ArrowRight size={12} />} onClick={() => useApp.getState().openIntent('tests', { runId: last.id })}>
+        <LinkButton className="ml-auto" icon={<ArrowRight size={12} />} onClick={() => void openRef({ kind: 'run', runId: last.id })}>
           Open run
         </LinkButton>
       </div>

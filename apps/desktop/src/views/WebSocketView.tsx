@@ -1,17 +1,13 @@
 import { CodeBlock } from '../components/CodeBlock';
-import { ArrowDownLeft, ArrowUpRight, BookmarkPlus, Info, ListTree, Plug, Plus, Radio, Save, Send, Trash2, Unplug, X, FileCheck2, Bookmark, History, KeyRound } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, BookmarkPlus, Info, ListTree, Plug, Plus, Save, Send, Trash2, Unplug, X, FileCheck2 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { useAssistantContext } from '../lib/assistant-context';
 import { asError, call, on } from '../api';
 import { persisted, promptText, toastError, useApp } from '../store';
-import { FolderList } from '../components/FolderList';
-import { SidebarShell } from '../components/SidebarShell';
 import { NEW_TAB_TITLE, useSingleEditorTab } from '../components/EditorTabs';
 import { RequestBreadcrumb } from '../components/RequestBreadcrumb';
-import { EnvironmentsPane, HistoryPane } from '../components/SidebarPanes';
 import { useLibrary } from '../lib/library';
 import { useSaveInCollection } from '../lib/save-in-collection';
-import { useCollectionTree } from '../lib/collections-store';
 import { useSticky } from '../lib/sticky';
 import { useDoc } from '../lib/docs';
 import { useIntent, useSaveShortcut } from '../hooks';
@@ -22,7 +18,8 @@ import { JsonTree } from '../components/JsonView';
 import { VarInput } from '../components/VarInput';
 import { Badge, Button, cx, Empty, Input, Select, Split, Tabs, VirtualList } from '../components/ui';
 import { MessageRate } from '../components/MessageRate';
-import { saveAsTestFile } from '../lib/save-test';
+import { saveAsTestFile, saveAsTestMenuItem } from '../lib/save-test';
+import { useExternalChange } from '../lib/external-change';
 
 interface WsMessage {
   id: string;
@@ -131,9 +128,19 @@ export function WebSocketView() {
   // New ▸ WebSocket in a collection: the connection is saved into that collection
   const [collectionId, setCollectionId] = useSticky<string | undefined>(`ws:collection:${docId ?? 'main'}`, undefined);
   const saveDialog = useSaveInCollection(saved.lib.items, 'Save connection');
-  // the connections of a collection in the trash are hidden (they come back with it)
-  const liveCollections = new Set(useCollectionTree().map((c) => c.id));
   const dirty = !!current && JSON.stringify(current.data) !== JSON.stringify(persistable(d));
+  // the saved connection changed on disk (a pull, another editor): follow it, or ask when it has unsaved edits (WF-15)
+  useExternalChange<Draft>({
+    kinds: ['library'],
+    items: () => (current ? [{ key: current.id, label: current.name, base: JSON.stringify(current.data), dirty }] : []),
+    read: async (keys) => {
+      const lib = await saved.reload();
+      const it = lib?.items.find((i) => i.id === keys[0]);
+      return new Map(it ? [[it.id, { snapshot: JSON.stringify(it.data), value: it.data }]] : []);
+    },
+    take: (_id, data) => setD((x) => ({ ...x, ...data })),
+    keep: () => undefined,
+  });
   const open = async (id: string) => {
     const it = await saved.find(id);
     if (!it) return;
@@ -144,6 +151,9 @@ export function WebSocketView() {
   useIntent('websocket', (p) => {
     if (p?.collectionId && !p.savedId) setCollectionId(p.collectionId as string);
     if (p?.savedId) void open(p.savedId);
+    // a connection from History: its address in a new tab
+    const r = p?.request as { url?: string } | undefined;
+    if (!p?.savedId && typeof r?.url === 'string') (setSavedId(undefined), setD({ ...docDrafts.load(), url: r.url }));
   });
   const save = async (asNew = false, folder?: string) => {
     if (current && !asNew) {
@@ -308,40 +318,8 @@ export function WebSocketView() {
   const renameTabTo = async (name: string) => (current ? saved.put({ ...current, name }) : setTabTitle(name));
   useSingleEditorTab('websocket', { title, badge: d.mode === 'kafka' ? 'KAFKA' : d.mode === 'mqtt' ? 'MQTT' : d.mode === 'socketio' ? 'SIO' : 'WS', badgeClass: 'text-[#d97706]', item: savedId, onRenameTo: renameTabTo, onSaveAsTest: saveTest });
   return (
-    <Split id="ws-saved" sidebar collapsed initial={18} min={12}>
-    <SidebarShell
-      id="websocket"
-      panes={[
-        {
-          id: 'saved',
-          label: 'Saved',
-          icon: <Bookmark size={13} />,
-          render: () => (
-            <FolderList
-              id="ws-saved"
-              title="Saved connections"
-              itemNoun="connection"
-              addLabel="Save current connection"
-              folders={saved.lib.folders}
-              selected={savedId}
-              onSelect={open}
-              onAdd={(folder) => void save(true, folder)}
-              ops={saved.ops}
-              items={saved.lib.items.filter((i) => !i.collectionId || liveCollections.has(i.collectionId)).map((i) => ({ id: i.id, name: i.name, folder: i.folder, subtitle: i.data.url, icon: <Radio size={12} className="text-muted" /> }))}
-              empty={
-                <Empty title="No saved connections">
-                  Save a connection (URL, subprotocols, headers and message) to open it again later, and group them in folders.
-                </Empty>
-              }
-            />
-          ),
-        },
-        { id: 'environments', label: 'Environments', icon: <KeyRound size={13} />, render: () => <EnvironmentsPane /> },
-        { id: 'history', label: 'History', icon: <History size={13} />, render: () => <HistoryPane kind="websocket" noun="Connections you open" /> },
-      ]}
-    />
     <div className="h-full flex flex-col min-w-0">
-      <RequestBreadcrumb collectionId={current?.collectionId ?? collectionId} folder={current?.folder} name={title} onSave={() => void save()} />
+      <RequestBreadcrumb collectionId={current?.collectionId ?? collectionId} folder={current?.folder} name={title} onSave={() => void save()} actions={[saveAsTestMenuItem(saveTest)]} />
       <div className="flex items-center gap-2 p-2 border-b border-line">
         <Badge tone={status === 'open' ? 'ok' : status === 'connecting' ? 'warn' : 'default'}>{status}</Badge>
         <div className="flex rounded-md border border-line overflow-hidden text-xs shrink-0" role="group" aria-label="Protocol">
@@ -669,6 +647,5 @@ export function WebSocketView() {
       </div>
       {saveDialog.modal}
     </div>
-    </Split>
   );
 }

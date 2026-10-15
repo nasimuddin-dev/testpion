@@ -7,7 +7,7 @@ description: "Call gRPC services from .proto files: unary, server-streaming, cli
 
 # gRPC
 
-The **gRPC** view calls any gRPC service described by `.proto` files, or by the server itself through [server reflection](#server-reflection).
+The **gRPC** editor calls any gRPC service described by `.proto` files, or by the server itself through [server reflection](#server-reflection). Open it from the Collections explorer (a saved call, or **+** ▸ **gRPC request**); it shares the tab bar with the other request editors.
 
 1. On **Proto files**, add the service's `.proto` file and the files it imports. Imports are matched by path, so give each file the path its import statement uses, such as `vet/v1/common.proto` (rename a file by editing its path). Google's well-known types (`google/protobuf/timestamp.proto` …) are built in.
 2. Enter the server address, `host:port` (plaintext) or `grpcs://host:port` (TLS), and pick a method. Methods are listed as `package.Service/Method` with their kind (unary, server stream, client stream, bidi stream).
@@ -16,13 +16,17 @@ The **gRPC** view calls any gRPC service described by `.proto` files, or by the 
 
 The response shows the gRPC status (`0 OK`, `5 NOT_FOUND` …) with its details, the time, the response message as a tree, the response **Metadata** and **Trailers**.
 
+On an environment marked as **production**, a call that is not a read by its method name (`Get…`, `List…`, `Search…`, `Watch…`, `Check…`, health checks and the like are reads) asks before it is sent ([Production](/api-testing/environments#production)).
+
 **grpcurl** copies the call as a [grpcurl](https://github.com/fullstorydev/grpcurl) command, with variables resolved: `-plaintext` unless TLS is on, `-proto` for each proto file (or server reflection when the definitions came from it), metadata as `-H`, the message as `-d`. Like **Copy as cURL**, it includes secret values, so paste it with care.
 
 The other way round works too: paste a `grpcurl` command into the server field and the call is filled in (server and TLS, method, message, metadata and time limit). If it names `-proto` files, load them; otherwise the methods come from server reflection.
 
 ## Saved requests and history
 
-**Save** keeps the request (address, method, message, metadata, its `.proto` files or reflected definition, and settings) in a [collection](./collections.md): a new one asks for its name, collection (or a new one) and folder, in the same dialog as a REST request. It is listed under the collection's **gRPC** category and in the **Saved requests** list, in folders like the REST collections (new folder, move by menu or drag and drop, rename, duplicate, delete). The client private key is never saved with a request. An unsaved tab calls all the same. Every call also appears in **History** (with the method, address, status and time); double-click an entry to open it in the gRPC view again.
+**Save** keeps the request (address, method, message, metadata, its `.proto` files or reflected definition, and settings) in a [collection](./collections.md): a new one asks for its name, collection (or a new one) and folder, in the same dialog as a REST request. It is listed in the Collections explorer under the collection's **gRPC** category, in its folder; click it to open it. Its `⋯` / right-click menu has **Open**, **Save as test…**, **Copy as grpcurl**, **Rename**, **Duplicate**, **Move to** (another collection) and **Delete…**, and you can drag it onto another collection. The client private key is never saved with a request. An unsaved tab calls all the same. Every call also appears in **History** (with the method, address, status and time); double-click an entry (or choose **Open**) to open it in the gRPC editor again.
+
+**Test** in the toolbar (or **Save as test…** in the **⋯** at the end of the breadcrumb line) writes the call as a test file under `tests/grpc`, using server reflection.
 
 ## Server reflection
 

@@ -39,11 +39,15 @@ features:
     link: /ai-testing/evaluations
     linkText: Evaluation guide
   - title: Test runner & CI
-    details: YAML test suites with parallel workers, retries, dependencies and resumable runs. JUnit, JSON, HTML and Markdown reports, and an testpion CLI for any CI system.
+    details: YAML test suites with parallel workers, retries, dependencies and resumable runs. Save any request as a test, run it in CI from the run itself. JUnit, JSON, HTML and Markdown reports, and the testpion CLI for any CI system.
     link: /test-runner/overview
     linkText: Test runner
+  - title: Visual flow designer
+    details: Build multi-step API flows on a canvas — requests, conditions, loops, polling, sub-flows — debug them with breakpoints, run them per data row, per environment or under load, and deploy them to a schedule, a webhook, an MCP tool or CI. The file stays plain YAML.
+    link: /test-runner/integration-testing#design-a-flow
+    linkText: Design a flow
   - title: Monitors & certificates
-    details: Run collections on a schedule with alerts, response-time limits, uptime by day and per-request numbers. Every HTTPS response records its certificate, so an expiring one never surprises you.
+    details: Run collections or flows on a schedule with alerts, response-time limits, uptime by day and per-request numbers. Every HTTPS response records its certificate, so an expiring one never surprises you.
     link: /test-runner/monitors
     linkText: Monitors
   - title: Charts that explain
@@ -51,7 +55,7 @@ features:
     link: /features
     linkText: All features
   - title: Built for AI agents
-    details: testpion mcp-server gives agents 59 tools, from sending requests and running tests to what needs attention, with secrets redacted. Every CLI command has --json and the docs publish llms.txt.
+    details: testpion mcp-server gives agents more than 120 tools, from sending requests and designing flows to what needs attention, with secrets redacted and production guarded. testpion agents init writes AGENTS.md, every CLI command's --json is one envelope, and the docs publish llms.txt.
     link: /ai-testing/mcp-server
     linkText: MCP server
   - title: Local-first and private

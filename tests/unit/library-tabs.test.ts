@@ -1,0 +1,37 @@
+import { describe, expect, it } from 'vitest';
+import { closeTabs, openTab, type TabsState } from '../../apps/desktop/src/lib/library-tabs';
+
+// WF-19: views whose items are saved in a library (Load tests, Evaluations) open them as tabs, with preview tabs.
+const start: TabsState = { tabs: [{ id: 'main' }], active: 'main' };
+
+describe('library tabs', () => {
+  it('the first open uses the empty unsaved tab; a preview is replaced by the next preview; opening for good keeps it', () => {
+    const a = openTab(start, 's1', false, 'n1');
+    expect(a.state).toEqual({ tabs: [{ id: 'main', savedId: 's1' }], active: 'main' });
+    const b = openTab(a.state, 's2', true, 'n2');
+    expect(b.state.tabs).toEqual([
+      { id: 'main', savedId: 's1' },
+      { id: 'n2', savedId: 's2', preview: true },
+    ]);
+    const c = openTab(b.state, 's3', true, 'n3');
+    expect(c).toMatchObject({ id: 'n2', fresh: true });
+    expect(c.state.tabs).toEqual([
+      { id: 'main', savedId: 's1' },
+      { id: 'n2', savedId: 's3', preview: true },
+    ]);
+    // the item already open: its tab, and opened for good it stops being a preview
+    const d = openTab(c.state, 's3', false, 'n4');
+    expect(d).toMatchObject({ id: 'n2', fresh: false });
+    expect(d.state.tabs[1]).toEqual({ id: 'n2', savedId: 's3', preview: false });
+    // a new preview now opens a new tab
+    expect(openTab(d.state, 's4', true, 'n5').state.tabs.map((t) => t.id)).toEqual(['main', 'n2', 'n5']);
+  });
+
+  it('closing activates the next tab to the right; closing all leaves one fresh tab', () => {
+    const s: TabsState = { tabs: [{ id: 'a' }, { id: 'b' }, { id: 'c' }], active: 'b' };
+    expect(closeTabs(s, ['b']).active).toBe('c');
+    expect(closeTabs(s, ['b', 'c']).active).toBe('a');
+    expect(closeTabs(s, ['a']).active).toBe('b');
+    expect(closeTabs(s, ['a', 'b', 'c'])).toEqual({ tabs: [{ id: 'main' }], active: 'main' });
+  });
+});

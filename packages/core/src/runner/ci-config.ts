@@ -22,6 +22,18 @@ export interface CiTarget {
   folders?: string[];
   /** Run test files or folders under tests/ (default: all tests). */
   tests?: string[];
+  /** With tests: only tests whose name or id matches this regular expression (`-g`). */
+  grep?: string;
+  /** With tests: only tests with one of these tags (`-t`). */
+  tags?: string[];
+  /** One flow file: run it once per row of this data file (a dataset path; '' for the file's own data:). */
+  data?: string;
+  /** One flow file: run it in each of these environments and compare step by step. */
+  envMatrix?: string[];
+  /** Data-changing requests may go to an environment marked as production. */
+  allowProduction?: boolean;
+  /** One flow file: keep its run as an HTML timeline (test-results/timeline.html), also when the run fails. */
+  timelineHtml?: boolean;
 }
 
 export interface CiConfigOptions extends CiTarget {
@@ -55,6 +67,8 @@ export interface CiConfig {
   /** CI secrets to create (values are never included). */
   secrets: CiSecret[];
   command: string;
+  /** The same run on this computer (the installed CLI, this workspace's folder): to try it before pushing. */
+  localCommand?: string;
 }
 
 const REPO = 'https://github.com/nasimuddin-dev/testpion.git';
@@ -78,10 +92,24 @@ export function ciCommand(o: CiConfigOptions, cli = 'testpion'): string {
   const env = o.environment ? ` -e ${q(o.environment)}` : '';
   const out = ' -r console junit html -o test-results';
   if ([o.suite, o.collection, o.tests?.length].filter(Boolean).length > 1) throw new ApsError('ValidationError', 'Choose one of a suite, a collection or test paths', { suggestions: [] });
-  if (o.collection) return `${cli} run-collection ${q(o.collection)} -w ${q(ws)}${env}${(o.folders ?? []).map((f) => ` --folder ${q(f)}`).join('')}${out}`;
-  if (o.suite) return `${cli} run -w ${q(ws)} --suite ${q(o.suite)}${env}${out}`;
-  const paths = (o.tests?.length ? o.tests : ['.']).map((p) => q(`${ws === '.' ? '' : `${ws}/`}tests/${p === '.' ? '' : p}`.replace(/\/$/, '') || 'tests'));
-  return `${cli} test ${paths.join(' ')} -w ${q(ws)}${env}${out}`;
+  const prod = o.allowProduction ? ' --allow-production' : '';
+  const flowOptions = o.data !== undefined || !!o.envMatrix?.length || !!o.timelineHtml;
+  if (flowOptions && (o.suite || o.collection || o.tests?.length !== 1)) throw new ApsError('ValidationError', 'Data, an environment matrix and a timeline run one flow file: give exactly one test file', { suggestions: [] });
+  if (o.data !== undefined && o.envMatrix?.length) throw new ApsError('ValidationError', 'Choose data rows or an environment matrix, not both', { suggestions: [] });
+  if (o.collection) return `${cli} run-collection ${q(o.collection)} -w ${q(ws)}${env}${(o.folders ?? []).map((f) => ` --folder ${q(f)}`).join('')}${out}${prod}`;
+  if (o.suite) return `${cli} run -w ${q(ws)} --suite ${q(o.suite)}${env}${out}${prod}`;
+  const rels = (o.tests?.length ? o.tests : ['.']).map((p) => p.replace(/\\/g, '/').replace(/^tests\//, ''));
+  const paths = rels.map((rel) => q(`${ws === '.' ? '' : `${ws}/`}tests/${rel === '.' ? '' : rel}`.replace(/\/$/, '') || 'tests'));
+  // a flow at scale prints its rows / matrix (kept as JSON with the results: the CLI's envelope, the rows / matrix in
+  // its `data`); a plain run writes the reports
+  const scale = o.data !== undefined ? ` --data${o.data ? ` ${q(o.data)}` : ''}${env}` : o.envMatrix?.length ? ` --env-matrix ${o.envMatrix.map(q).join(' ')}` : '';
+  const filter = `${o.grep ? ` -g ${q(o.grep)}` : ''}${o.tags?.length ? ` -t ${q(o.tags.join(','))}` : ''}`;
+  const run = scale
+    ? `${cli} test ${paths[0]} -w ${q(ws)}${scale}${prod} --json > test-results/${o.data !== undefined ? 'data-run' : 'env-matrix'}.json`
+    : `${cli} test ${paths.join(' ')} -w ${q(ws)}${env}${filter}${out}${prod}`;
+  if (!o.timelineHtml) return scale ? `mkdir -p test-results && ${run}` : run;
+  // the timeline is written whatever the run's result, and the run's exit code is the step's
+  return `${scale ? 'mkdir -p test-results && ' : ''}${run} || code=$?; ${cli} flow report ${q(rels[0]!)} -w ${q(ws)} --html test-results/timeline.html; exit \${code:-0}`;
 }
 
 export function ciConfig(store: WorkspaceStore, o: CiConfigOptions): CiConfig {
@@ -90,12 +118,22 @@ export function ciConfig(store: WorkspaceStore, o: CiConfigOptions): CiConfig {
   if (o.collection) {
     if (!findCollection(store, o.collection)) throw new ApsError('ValidationError', `No collection "${o.collection}"`, { suggestions: [] });
   }
+  // test files or folders (one flow, a few files): inside tests/, and there
+  for (const t of o.tests ?? []) {
+    const rel = t.replace(/\\/g, '/').replace(/^tests\//, '').replace(/\/+$/, '');
+    if (rel === '.' || rel === '') continue;
+    if (/^\/|^[A-Za-z]:|(^|\/)\.\.(\/|$)/.test(rel)) throw new ApsError('ValidationError', `"${t}" is not a path inside tests/`, { suggestions: [] });
+    if (!existsSync(store.path('tests', rel))) throw new ApsError('ValidationError', `No test file or folder "tests/${rel}"`, { suggestions: [] });
+  }
   const version = o.version ?? ENGINE_VERSION;
   const tag = version.startsWith('v') ? version : `v${version}`;
   const secrets = ciSecrets(store, o.environment, { providers: !o.collection });
   const command = ciCommand(o, 'node "$TESTPION_CLI"');
-  const install = `git clone --depth 1 --branch ${tag} ${REPO} "$TESTPION_HOME_DIR" && cd "$TESTPION_HOME_DIR" && npm ci --no-audit --no-fund && npm run build -w @testpion/core -w @testpion/cli`;
-  const name = o.suite ? `suite ${o.suite}` : o.collection ? `collection ${o.collection}` : 'tests';
+  // forward slashes: the same path works in bash, PowerShell and cmd
+  const localCommand = ciCommand({ ...o, workspaceDir: store.root.replace(/\\/g, '/') }, 'testpion');
+  const install = `git clone --depth 1 --branch ${tag} ${REPO} "$TESTPION_HOME_DIR" && cd "$TESTPION_HOME_DIR" && npm ci --no-audit --no-fund && npm run build -w @testpion/shared -w @testpion/core -w @testpion/cli`;
+  const files = (o.tests ?? []).map((t) => t.replace(/\\/g, '/').replace(/^tests\//, '')).filter((t) => t && t !== '.');
+  const name = o.suite ? `suite ${o.suite}` : o.collection ? `collection ${o.collection}` : files.length ? `tests ${files.slice(0, 3).join(', ')}${files.length > 3 ? ` and ${files.length - 3} more` : ''}` : 'tests';
   // integration tests: start the system under test, wait until it answers, then run; it is stopped when the job ends
   const start = o.start?.trim() ? `(${o.start.trim()}) &` : undefined;
   const wait = o.waitFor?.trim() ? `node "$TESTPION_CLI" wait-for ${q(o.waitFor.trim())} --timeout ${Math.max(5, Math.round(o.waitSeconds ?? 90))}` : undefined;
@@ -111,6 +149,7 @@ export function ciConfig(store: WorkspaceStore, o: CiConfigOptions): CiConfig {
         path: '.github/workflows/testpion.yml',
         secrets,
         command,
+        localCommand,
         content: `# Runs the TestPion ${name} on every push and pull request (generated by TestPion ${ENGINE_VERSION}).
 name: API tests
 
@@ -162,6 +201,7 @@ ${startLines.map((l) => `          ${l}`).join('\n')}
         path: '.gitlab-ci.yml',
         secrets,
         command,
+        localCommand,
         content: `# Runs the TestPion ${name} (generated by TestPion ${ENGINE_VERSION}).
 # Secrets: add ${secrets.length ? secrets.map((s) => s.name).join(', ') : 'none needed'} under Settings > CI/CD > Variables (masked).
 api-tests:
@@ -185,6 +225,7 @@ ${spec ? `    - if [ -n "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME" ]; then ${diffAga
         path: 'azure-pipelines.yml',
         secrets,
         command,
+        localCommand,
         content: `# Runs the TestPion ${name} (generated by TestPion ${ENGINE_VERSION}).
 # Secrets: add ${secrets.length ? secrets.map((s) => s.name).join(', ') : 'none needed'} as secret pipeline variables.
 trigger:
@@ -235,6 +276,7 @@ ${secrets.length ? `    env:\n${secrets.map((s) => `      ${s.name}: $(${s.name}
         path: 'Jenkinsfile',
         secrets,
         command,
+        localCommand,
         content: `// Runs the TestPion ${name} (generated by TestPion ${ENGINE_VERSION}). Needs Node.js 24 on the agent.
 pipeline {
   agent any

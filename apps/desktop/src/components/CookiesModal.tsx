@@ -136,7 +136,7 @@ export function CookiesModal({ initialDomain, onClose }: { initialDomain?: strin
 
         <div className="flex-1 min-w-0 flex flex-col">
           {!domain ? (
-            <Empty icon={<Cookie size={28} />} title="No cookies yet" action={<Button icon={<Plus size={13} />} onClick={() => void addDomain()}>Add domain</Button>}>
+            <Empty icon={<Cookie size={28} />} title="No cookies yet" actions={[{ label: 'Add domain', icon: <Plus size={13} />, onClick: () => void addDomain() }]}>
               Send a request whose response sets cookies, or add a domain to create cookies by hand.
             </Empty>
           ) : (

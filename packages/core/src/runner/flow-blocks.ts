@@ -19,6 +19,7 @@ import { dbKindOf } from './db-datasets.js';
 import { loadTestsFromFile, MAX_ITERATIONS } from './loader.js';
 import { executeTest, type ExecServices, type ExecutionOutcome } from './execute.js';
 import { runTests } from './runner.js';
+import { executeUntil } from './flow-control.js';
 
 /** How deep sub-flows may nest (a flow running a flow running a flow …). */
 export const MAX_FLOW_DEPTH = 5;
@@ -258,6 +259,7 @@ export function loopLabel(t: Pick<TestCase, 'repeat' | 'forEach'>): string | und
  * flows on; the result lists each iteration (metadata.iterationResults) and says how many passed.
  */
 export async function executeStep(test: TestCase, svc: ExecServices, opts: { tracer: Tracer; signal?: AbortSignal; prev?: StepResponse }): Promise<ExecutionOutcome> {
+  if (test.until) return executeUntil(test, svc, opts);
   if (test.repeat === undefined && test.forEach === undefined) return executeTest(test, svc, opts);
   const iterations: Array<{ index: number; status: TestStatus; durationMs: number; error?: string; failedChecks?: string[] }> = [];
   const failing: CheckResult[] = [];

@@ -7,13 +7,15 @@ description: "Connect to WebSocket, Socket.IO, MQTT and Kafka, send messages and
 
 # WebSocket
 
-The **WebSocket** view connects to a `ws://` or `wss://` server, sends messages and shows every message in both directions.
+The **WebSocket** editor connects to a `ws://` or `wss://` server, sends messages and shows every message in both directions. Open it from the Collections explorer (a saved connection, or **+** ▸ **WebSocket, Socket.IO, MQTT or Kafka**); it shares the tab bar with the other request editors.
 
 1. Enter the URL (variables such as `{{wsUrl}}` resolve from the active environment) and, if the server expects them, **Subprotocols** (comma separated) and **Handshake headers** (e.g. `Authorization`).
 2. Click **Connect**. Cookies from the [cookie jar](./cookies.md) for the URL's domain are sent with the handshake.
 3. Write a message (JSON or any text) and click **Send**.
 
 The message log lists sent (↗), received (↙) and connection (ⓘ) messages with their time. The *Connected* message says how long the connection took and where the time went: DNS lookup, TCP connect and TLS handshake (on a new connection) and the upgrade handshake. Its header counts the messages and bytes in each direction and draws a sparkline of messages per second over the last minute. Filter it by text or direction, and click a message to see it in full (JSON as a tree). Connecting, sending and closing also appear in the [console](./rest.md#console).
+
+On an environment marked as **production**, a message sent over an open WebSocket, Socket.IO, MQTT or Kafka connection asks first ([Production](/api-testing/environments#production)); from the CLI, a run that sends one needs `--allow-production`.
 
 ## Socket.IO
 
@@ -69,17 +71,19 @@ Each received message is `{ topic, key, partition, offset, headers, data }`, wit
 
 ## Saved connections
 
-The **Saved connections** list keeps connections (URL, subprotocols, handshake headers and the message) in folders:
+Saved connections (URL, subprotocols, handshake headers and the message) belong to a [collection](./collections.md) and are listed in the Collections explorer under the collection's **WebSocket & MQTT** category, in their folders:
 
-- **Save** stores the current connection, or saves the changes to the one you opened (*Save\**). A new connection asks for its name, [collection](./collections.md) (or a new one) and folder: every saved connection is in a collection. An unsaved tab connects and sends all the same.
-- Create folders with the folder button above the list. Move a connection with its `⋯` / right-click menu (*Move to folder…*) or by dragging it onto a folder.
-- Rename, duplicate and delete from the same menu.
+- **Save** stores the current connection, or saves the changes to the one you opened (*Save\**). A new connection asks for its name, collection (or a new one) and folder: every saved connection is in a collection. An unsaved tab connects and sends all the same.
+- Click a connection in the explorer to open it. Its `⋯` / right-click menu has **Open**, **Save as test…**, **Copy URL**, **Rename**, **Duplicate**, **Move to** (another collection) and **Delete…**; drag it onto another collection to move it there.
+- A new connection: the explorer's **+** ▸ **WebSocket, Socket.IO, MQTT or Kafka**, or **New WebSocket & MQTT request** in a collection's **⋯** menu (it is saved in that collection).
 
 **Saved messages:** above the message editor, **Save message** keeps the current message under a name (for Socket.IO, with its event), and the list next to it puts one back in the editor to send again. They are saved with the connection, so a connection can carry the handful of messages you send to it (subscribe, ping, unsubscribe …).
 
 Saved connections live in the workspace (`library/websocket.json`, each with its collection's id). Use `{{variables}}` for tokens in headers, and keep the values in [secret variables](./environments.md#secrets).
 
 ## WebSocket tests
+
+**Test** in the editor's toolbar (or **Save as test…** in the **⋯** at the end of its breadcrumb line) writes the connection as a test file under `tests/websocket`: connect, send the message, check that something comes back.
 
 A test file with `type: websocket` connects, sends messages in order, listens for `waitMs`, and closes. The assertions run on:
 

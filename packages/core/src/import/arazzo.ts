@@ -353,7 +353,9 @@ class Expressions {
         if (/^\$[a-zA-Z]/.test(v)) this.notes(`${where}: ${v} has no equivalent in a flow file; kept as text`);
         return v;
       }
-      return v.replace(/\{(\$[^{}]+)\}/g, (all, expr: string) => {
+      return v.replace(/\{(\$[^{}]+)\}/g, (all, expr: string, at: number) => {
+        // {{$randomFirstName}}: a dynamic value as TestPion exports it, resolved when the step runs
+        if (v[at - 1] === '{' && v[at + all.length] === '}') return all;
         const t = this.template(expr);
         if (t) return t;
         this.notes(`${where}: ${expr} has no equivalent in a flow file; kept as text`);

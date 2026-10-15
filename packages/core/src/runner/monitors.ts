@@ -3,12 +3,15 @@ import { dirname, join } from 'node:path';
 import type { LibraryItem, RunSummary } from '../model/types.js';
 import type { ExecServices } from './execute.js';
 import { ApsError } from '../errors.js';
+import { allowProductionFor, productionAllowed } from '../net/production-guard.js';
 import { shortId } from '../util/ids.js';
 import { recordRun } from './run-records.js';
+import { MONITOR_RUN_PREFIX } from './result-source.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { collectionRequests, runCollection } from './collection-run.js';
 import { collectionRealtimeTests } from './collection-realtime.js';
-import { readResultsFile, type RunEvent } from './runner.js';
+import { readResultsFile, runTests, type RunEvent } from './runner.js';
+import { isSuiteFile, loadSuite, loadTestsFromFile, streamTests } from './loader.js';
 
 /**
  * Monitors: a collection (or some of its folders / requests) run on a schedule, like Postman monitors.
@@ -18,9 +21,12 @@ import { readResultsFile, type RunEvent } from './runner.js';
  * `testpion monitor run --due`.
  */
 export interface MonitorData {
-  collectionId: string;
+  /** The collection it runs (or `testFile`: exactly one of the two). */
+  collectionId?: string;
   /** Folder and/or request ids; empty runs the whole collection. */
   selection?: string[];
+  /** A test file or flow (or a suite) under tests/, e.g. orders/new-order.yaml, run with the test runner instead of a collection. */
+  testFile?: string;
   environment?: string;
   /** Minutes between runs (1 minute to 1 week). */
   everyMinutes: number;
@@ -37,6 +43,11 @@ export interface MonitorData {
   maxP95Ms?: number;
   /** Fail a run when the TLS certificate of a host it calls expires in fewer than this many days. */
   minCertDays?: number;
+  /**
+   * Its environment is marked as production and the person allowed data-changing requests there when saving it (the
+   * app asked; the CLI took --allow-production). Hosts derive it when saving, never from what a caller sends.
+   */
+  allowProduction?: boolean;
 }
 
 /** Whether a result changes the monitor's state (first failure, or passing again after failing). */
@@ -142,16 +153,46 @@ export function findMonitor(store: WorkspaceStore, ref: string): Monitor {
 export function validateMonitor(store: WorkspaceStore, m: Pick<Monitor, 'name'> & MonitorData): void {
   if (!m.name?.trim()) throw invalid('A monitor needs a name');
   if (!(m.everyMinutes >= MIN_EVERY_MINUTES && m.everyMinutes <= MAX_EVERY_MINUTES)) throw invalid('A monitor runs every 1 minute to 7 days');
-  const collection = store.getCollection(m.collectionId);
-  if (!collectionRequests(collection, m.selection).length && !collectionRealtimeTests(store, collection, m.selection).length) throw invalid(`Nothing to run: the selection has no requests in "${collection.name}"`);
+  const file = m.testFile?.trim();
+  if (file && m.collectionId) throw invalid('A monitor runs a collection or a test file, not both: clear one of them');
+  if (!file && !m.collectionId) throw invalid('A monitor needs what to run: a collection, or a test file under tests/');
+  if (file) {
+    if (m.selection?.length) throw invalid('Folders and requests are picked in a collection; a test file runs as a whole');
+    monitorTestPath(store, file);
+  } else {
+    const collection = store.getCollection(m.collectionId!);
+    if (!collectionRequests(collection, m.selection).length && !collectionRealtimeTests(store, collection, m.selection).length) throw invalid(`Nothing to run: the selection has no requests in "${collection.name}"`);
+  }
   if (m.environment && !store.getEnvironment(m.environment)) throw invalid(`No environment "${m.environment}"`);
   if (m.webhook && !/^https?:\/\//i.test(m.webhook.trim()) && !/^\{\{[^}]+\}\}/.test(m.webhook.trim())) throw invalid('The alert webhook must be an http(s) URL or a {{variable}}');
   if (m.maxP95Ms !== undefined && !(m.maxP95Ms > 0)) throw invalid('The response time limit must be a positive number of milliseconds');
   if (m.minCertDays !== undefined && !(Number.isInteger(m.minCertDays) && m.minCertDays >= 1 && m.minCertDays <= 365)) throw invalid('The certificate warning must be 1 to 365 days');
 }
 
+/** The test file a monitor runs, inside tests/ with forward slashes (no tests/ prefix). */
+export function monitorTestFile(file: string): string {
+  return file.trim().replace(/\\/g, '/').replace(/^\.\//, '').replace(/^tests\//, '');
+}
+
+/** The absolute path of a monitor's test file; throws when it is outside tests/ or missing. */
+export function monitorTestPath(store: WorkspaceStore, file: string): string {
+  const rel = monitorTestFile(file);
+  if (!/\.(ya?ml|json)$/i.test(rel)) throw invalid(`"${file}" is not a test file (.yaml, .yml or .json under tests/)`);
+  let abs: string;
+  try {
+    abs = store.safePath(rel, store.path('tests'));
+  } catch {
+    throw invalid(`"${file}" is outside tests/`);
+  }
+  if (!existsSync(abs)) throw invalid(`No test file tests/${rel}`);
+  return abs;
+}
+
 /** Add or replace a monitor (by id). */
 export function saveMonitor(store: WorkspaceStore, m: Monitor): Monitor {
+  // one target: an empty collection or file is no target
+  if (m.testFile !== undefined) m = { ...m, testFile: m.testFile.trim() ? monitorTestFile(m.testFile) : undefined };
+  if (!m.collectionId) m = { ...m, collectionId: undefined };
   validateMonitor(store, m);
   const lib = store.getLibrary<MonitorData>(MONITORS_LIBRARY);
   const { id, name, folder, ...data } = m;
@@ -263,7 +304,7 @@ export interface ExecuteMonitorOptions {
   store: WorkspaceStore;
   monitor: Monitor;
   /** Engine services for the monitor's environment and collection (the host creates them, e.g. createEngineContext). */
-  context(opts: { environment?: string; collectionId: string }): { services: ExecServices; dispose(): Promise<void> };
+  context(opts: { environment?: string; collectionId?: string }): { services: ExecServices; dispose(): Promise<void> };
   trigger?: MonitorResult['trigger'];
   signal?: AbortSignal;
   onEvent?(e: RunEvent): void;
@@ -275,39 +316,47 @@ export interface ExecuteMonitorOptions {
  * is appended to the monitor's results. A run that can't start (missing collection …) is recorded as
  * status "error" instead of throwing, so a scheduler keeps going.
  */
-export async function executeMonitor(o: ExecuteMonitorOptions): Promise<MonitorResult> {
+export function executeMonitor(o: ExecuteMonitorOptions): Promise<MonitorResult> {
+  // saved with consent, it may change its production environment (on its schedule too); otherwise the caller's consent counts
+  return allowProductionFor(!!o.monitor.allowProduction || productionAllowed(), () => runMonitorOnce(o));
+}
+
+async function runMonitorOnce(o: ExecuteMonitorOptions): Promise<MonitorResult> {
   const { store, monitor } = o;
   const runId = shortId('run-');
   const startedAt = new Date().toISOString();
   const base = { monitorId: monitor.id, runId, startedAt, trigger: o.trigger ?? 'manual' } as const;
   let summary: RunSummary;
   try {
-    const collection = store.getCollection(monitor.collectionId);
-    const dir = store.runDir(runId);
-    mkdirSync(dir, { recursive: true });
-    const ctx = o.context({ environment: monitor.environment, collectionId: collection.id });
-    try {
-      summary = await runCollection({
-        name: `Monitor · ${monitor.name}`,
-        runId,
-        collection,
-        selection: monitor.selection,
-        realtime: collectionRealtimeTests(store, collection, monitor.selection),
-        iterations: monitor.iterations,
-        bail: monitor.bail,
-        services: ctx.services,
-        signal: o.signal,
-        resultsFile: join(dir, 'results.jsonl'),
-        traceMode: 'failures',
-        onTrace: (t) => (o.onTrace ? o.onTrace(t, runId) : void store.saveTrace(t, 'test', runId)),
-        traceBatch: o.onTrace ? undefined : (fn) => store.meta.batch(fn),
-        environment: monitor.environment,
-        onEvent: o.onEvent,
-      });
-    } finally {
-      await ctx.dispose();
+    if (monitor.testFile) summary = await runMonitorTestFile(o, runId);
+    else {
+      const collection = store.getCollection(monitor.collectionId ?? '');
+      const dir = store.runDir(runId);
+      mkdirSync(dir, { recursive: true });
+      const ctx = o.context({ environment: monitor.environment, collectionId: collection.id });
+      try {
+        summary = await runCollection({
+          name: `${MONITOR_RUN_PREFIX}${monitor.name}`,
+          runId,
+          collection,
+          selection: monitor.selection,
+          realtime: collectionRealtimeTests(store, collection, monitor.selection),
+          iterations: monitor.iterations,
+          bail: monitor.bail,
+          services: ctx.services,
+          signal: o.signal,
+          resultsFile: join(dir, 'results.jsonl'),
+          traceMode: 'failures',
+          onTrace: (t) => (o.onTrace ? o.onTrace(t, runId) : void store.saveTrace(t, 'test', runId)),
+          traceBatch: o.onTrace ? undefined : (fn) => store.meta.batch(fn),
+          environment: monitor.environment,
+          onEvent: o.onEvent,
+        });
+      } finally {
+        await ctx.dispose();
+      }
     }
-    await recordRun(store, summary, dir, { reports: ['json', 'html'] });
+    await recordRun(store, summary, store.runDir(runId), { reports: ['json', 'html'] });
   } catch (e) {
     const r: MonitorResult = { ...base, durationMs: Date.now() - Date.parse(startedAt), status: 'error', total: 0, passed: 0, failed: 0, errors: 0, error: e instanceof Error ? e.message : String(e) };
     recordResult(store, r);
@@ -338,6 +387,36 @@ export async function executeMonitor(o: ExecuteMonitorOptions): Promise<MonitorR
   };
   recordResult(store, r);
   return r;
+}
+
+/** A monitor's test file (or suite) run with the test runner, like `testpion test`: steps in order, traces of failures. */
+async function runMonitorTestFile(o: ExecuteMonitorOptions, runId: string): Promise<RunSummary> {
+  const { store, monitor } = o;
+  const abs = monitorTestPath(store, monitor.testFile!);
+  const suite = isSuiteFile(abs) ? await loadSuite(abs) : undefined;
+  const dir = store.runDir(runId);
+  mkdirSync(dir, { recursive: true });
+  const ctx = o.context({ environment: monitor.environment ?? suite?.environment });
+  try {
+    return await runTests({
+      name: `${MONITOR_RUN_PREFIX}${monitor.name}`,
+      runId,
+      tests: suite ? streamTests(suite.tests, dirname(abs), suite.tags?.length ? { tags: suite.tags } : undefined) : loadTestsFromFile(abs),
+      concurrency: suite?.concurrency ?? 1,
+      ...(suite?.retries !== undefined ? { retries: suite.retries } : {}),
+      services: ctx.services,
+      signal: o.signal,
+      bail: monitor.bail,
+      resultsFile: join(dir, 'results.jsonl'),
+      traceMode: 'failures',
+      onTrace: (t) => (o.onTrace ? o.onTrace(t, runId) : void store.saveTrace(t, 'test', runId)),
+      traceBatch: o.onTrace ? undefined : (fn) => store.meta.batch(fn),
+      environment: monitor.environment ?? suite?.environment,
+      onEvent: o.onEvent,
+    });
+  } finally {
+    await ctx.dispose();
+  }
 }
 
 /** The certificate that expires first among the HTTPS requests of a run (from each result's timing). */

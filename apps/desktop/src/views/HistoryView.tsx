@@ -1,15 +1,20 @@
 import { CompareView, type Compared } from '../components/ResponseHistory';
-import { Download, History, RotateCcw, Trash2 } from 'lucide-react';
+import { Download, FileText, History, RotateCcw, Trash2, Waypoints } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { asError, call } from '../api';
 import { confirmAction, useApp, toastError } from '../store';
 import { useFilteredLoad, useIntent } from '../hooks';
-import type { HttpRequestSpec } from '../types';
+import { openRef } from '../lib/open-ref';
 import { formatBytes, formatMs, groupByDay } from '../lib/format';
 import { DurationBar } from '../components/charts';
 import { finishSave, type SaveResult } from '../lib/files';
 import { JsonTree } from '../components/JsonView';
-import { Badge, Button, cx, Empty, Input, Select, Split, statusTone, VirtualList } from '../components/ui';
+import { Badge, Button, cx, Empty, Input, menuKeys, Select, Split, statusTone, VirtualList, type MenuItem } from '../components/ui';
+import { RowMenu } from '../components/TreeParts';
+import { saveAsTestItem } from '../lib/save-test';
+import { refOpenLabel } from '@testpion/shared';
+import { LABEL } from '../lib/vocabulary';
+import { setDragRefs } from '../lib/drag-ref';
 
 interface Entry {
   id: string;
@@ -24,6 +29,9 @@ interface Entry {
   request?: unknown;
   traceId?: string;
   responseMeta?: unknown;
+  /** Sent from a saved request. */
+  collectionId?: string;
+  requestId?: string;
 }
 
 const MIX = [
@@ -153,13 +161,22 @@ export function HistoryView() {
   const rows = useMemo(() => groupByDay(items, (e) => e.timestamp), [items]);
   // the slowest loaded entry sets the scale of the duration bars
   const maxMs = useMemo(() => Math.max(1, ...items.map((e) => e.durationMs ?? 0)), [items]);
-  const reopen = (e: Entry) => {
-    if (e.kind === 'http') useApp.getState().openIntent('rest', { request: e.request as HttpRequestSpec, name: e.name });
-    else if (e.kind === 'llm') useApp.getState().openIntent('ai', {});
-    else if (e.kind === 'mcp') useApp.getState().openIntent('mcp', {});
-    else if (e.kind === 'graphql') useApp.getState().openIntent('graphql', {});
-    else if (e.kind === 'grpc') useApp.getState().openIntent('grpc', { request: e.request });
+  // in the editor of its kind, with what was sent (the whole entry is read: the list holds previews)
+  const reopen = (e: Entry) => void openRef({ kind: 'history', historyId: e.id }, { edit: true });
+  const remove = async (e: Entry) => {
+    await call('history.delete', { id: e.id });
+    if (sel?.id === e.id) setSel(undefined);
+    void load(true);
   };
+  // one menu for an entry, on its row (right-click, ⋯) and above its details: open · related items · test · delete
+  const [menuFor, setMenuFor] = useState<string>();
+  const entryMenu = (e: Entry): MenuItem[] => [
+    { label: 'Open', icon: <RotateCcw size={14} />, onSelect: () => reopen(e) },
+    ...(e.collectionId && e.requestId ? [{ label: refOpenLabel({ kind: 'request' }), icon: <FileText size={14} />, onSelect: () => void openRef({ kind: 'request', collectionId: e.collectionId!, requestId: e.requestId! }) }] : []),
+    ...(e.traceId ? [{ label: refOpenLabel({ kind: 'trace' }), icon: <Waypoints size={14} />, onSelect: () => void openRef({ kind: 'trace', traceId: e.traceId! }) }] : []),
+    saveAsTestItem({ ref: { kind: 'history', historyId: e.id }, name: e.name }, { separator: true }),
+    { label: LABEL.delete, icon: <Trash2 size={14} />, danger: true, separator: true, onSelect: () => void remove(e) },
+  ];
   return (
     <Split id="history" initial={45}>
       <div className="h-full flex flex-col">
@@ -211,7 +228,19 @@ export function HistoryView() {
                 );
               const e = row.item;
               return (
-              <button onDoubleClick={() => reopen(e)} onClick={(ev) => pick(e, ev)} className={cx('w-full h-full text-left px-3 border-b border-line/60 flex flex-col justify-center', sel?.id === e.id || pair?.before.id === e.id || pair?.after.id === e.id ? 'bg-accent/10' : 'hover:bg-hover')}>
+              <div
+                className={cx('group relative w-full h-full border-b border-line/60', sel?.id === e.id || pair?.before.id === e.id || pair?.after.id === e.id ? 'bg-accent/10' : menuFor === e.id ? 'bg-hover' : 'hover:bg-hover')}
+                onContextMenu={(ev) => {
+                  ev.preventDefault();
+                  setMenuFor(e.id);
+                }}
+              >
+              <button
+                draggable
+                // dragged onto a flow canvas: this entry (with the one it is compared with)
+                onDragStart={(ev) => setDragRefs(ev, (pair && (pair.before.id === e.id || pair.after.id === e.id) ? [pair.before, pair.after] : [e]).map((x) => ({ kind: 'history' as const, historyId: x.id })), e.name)}
+                onDoubleClick={() => reopen(e)}
+                onClick={(ev) => pick(e, ev)} onKeyDown={menuKeys(menuFor === e.id ? entryMenu(e) : [{ label: LABEL.delete, onSelect: () => void remove(e) }])} className="w-full h-full text-left pl-3 pr-8 flex flex-col justify-center">
                 <div className="flex items-center gap-2 text-sm">
                   {e.method && <span className={cx('mono method-badge text-[0.64rem] font-bold w-14 shrink-0', `method-${e.method}`)}>{e.method}</span>}
                   {!e.method && <Badge>{e.kind}</Badge>}
@@ -233,6 +262,10 @@ export function HistoryView() {
                   {e.size !== undefined && <span>{formatBytes(e.size)}</span>}
                 </div>
               </button>
+              <span className="absolute right-1 top-1/2 -translate-y-1/2">
+                <RowMenu label={e.name} items={menuFor === e.id ? entryMenu(e) : []} open={menuFor === e.id} onOpenChange={(o) => setMenuFor(o ? e.id : undefined)} />
+              </span>
+              </div>
               );
             }}
           />
@@ -267,24 +300,10 @@ export function HistoryView() {
             <div className="flex items-center gap-2 px-3 h-10 border-b border-line">
               <span className="font-medium truncate">{sel.name}</span>
               <div className="ml-auto flex gap-2">
-                {sel.traceId && (
-                  <Button size="sm" onClick={() => useApp.getState().openIntent('traces', { traceId: sel.traceId })}>
-                    View trace
-                  </Button>
-                )}
                 <Button size="sm" variant="primary" icon={<RotateCcw size={12} />} onClick={() => reopen(sel)}>
                   Open
                 </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  icon={<Trash2 size={12} />}
-                  onClick={async () => {
-                    await call('history.delete', { id: sel.id });
-                    setSel(undefined);
-                    void load(true);
-                  }}
-                />
+                <RowMenu label={sel.name} items={entryMenu(sel).slice(1)} header />
               </div>
             </div>
             <TimingStrip timing={(sel.responseMeta as { timing?: Timing } | undefined)?.timing} />

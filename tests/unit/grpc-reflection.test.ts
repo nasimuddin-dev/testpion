@@ -7,6 +7,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
+import { cliData } from '../helpers.js';
 
 const cli = (args: string[], cwd: string, command: string) =>
   new Promise<{ status: number | null; stdout: string }>((ok) => {
@@ -50,9 +51,9 @@ describe('gRPC server reflection', () => {
     const dir = mkdtempSync(join(tmpdir(), 'tp-refl-'));
     try {
       const list = await cli([address, '--json'], dir, 'grpc');
-      expect((JSON.parse(list.stdout) as Array<{ name: string }>).map((m) => m.name)).toEqual(['zoo.v1.Zoo/FindAnimal']);
+      expect((cliData(list.stdout) as Array<{ name: string }>).map((m) => m.name)).toEqual(['zoo.v1.Zoo/FindAnimal']);
       const call = await cli([address, 'zoo.v1.Zoo/FindAnimal', '-d', '{"name":"lynx"}', '--json'], dir, 'grpc');
-      expect(JSON.parse(call.stdout)).toMatchObject({ code: 0, response: { name: 'found lynx' } });
+      expect(cliData(call.stdout)).toMatchObject({ code: 0, response: { name: 'found lynx' } });
       writeFileSync(join(dir, 'zoo.test.yaml'), ['name: reflected', 'type: grpc', `target: ${address}`, 'method: zoo.v1.Zoo/FindAnimal', 'message: { name: owl }', 'protos: []', 'assertions: [{ type: equals, path: $.name, expected: found owl }]'].join('\n'));
       const run = await cli(['zoo.test.yaml', '-r', 'json', '-o', join(dir, 'out')], dir, 'test');
       expect(run.status).toBe(0);

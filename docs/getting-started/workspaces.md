@@ -44,15 +44,17 @@ The **File** menu gathers what you create and move in and out of a workspace:
 | Item | What it does |
 |---|---|
 | **New Request Tab** (<kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>T</kbd>) | A new REST request tab. |
-| **New ▸** HTTP Request, GraphQL Query, gRPC Request, WebSocket / Socket.IO Connection, MCP Server…, Collection…, Environment…, Workspace… | Starts each kind of work in its view. |
+| **New ▸** HTTP Request, GraphQL Query, gRPC Request, WebSocket / Socket.IO Connection, MCP Server…, Collection…, Environment…, Monitor…, Workspace… | Starts each kind of work in its view. |
 | **Open Workspace Folder…** | Opens a folder that contains `workspace.json` (e.g. inside a git repository). |
+| **Open Recent…** | The items you opened lately in this workspace, of every kind ([Quick Open](/getting-started/finding-your-way#open-an-item) with nothing typed). |
 | **Import…** (<kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>O</kbd>) | Postman collections and environments, OpenAPI / Swagger (the document is kept and contract checks added), HAR, TestPion exports, or a copied cURL / fetch / PowerShell request. |
 | **Export ▸** Collection (Postman v2.1)…, Current Environment…, Workspace… | Exports the selected collection, the active environment or the whole workspace. Secret values are never exported. |
 | **Save** (<kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>S</kbd>) | Saves what you're editing (request, test file …). |
-| **Close Tab**, **Close Other Tabs**, **Close All Tabs** | Request tabs (see [REST](../api-testing/rest.md)). |
+| **Close Tab** (<kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>W</kbd>), **Close Other Tabs**, **Close All Tabs** | Tabs of the view on screen (see [REST](../api-testing/rest.md)). |
+| **Reopen Closed Tab** (<kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Shift</kbd>+<kbd>T</kbd>) | The tab you closed last, in any tab bar. |
 | **Settings…** (<kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>,</kbd>) | App settings. |
 
-The same commands are in the command palette (<kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>K</kbd>), which is also how to reach them in the browser version.
+The same commands are in the command palette (<kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>K</kbd>, or **>** in Quick Open, <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>P</kbd>), which is also how to reach them in the browser version.
 
 ## From the CLI and AI agents
 
@@ -60,7 +62,7 @@ The same commands are in the command palette (<kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kb
 testpion workspace list --json
 testpion workspace create "Checkout API" --path ./api-tests    # a workspace inside a repo
 testpion workspace rename "Checkout API" "Checkout API v2" --json
-testpion workspace export "Checkout API v2" -o checkout.apsworkspace.json
+testpion workspace export "Checkout API v2" -o checkout-workspace.json
 testpion workspace delete "Checkout API v2" --yes --json       # --yes is required
 ```
 

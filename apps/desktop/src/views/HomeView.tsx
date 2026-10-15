@@ -1,5 +1,5 @@
 import { openDocs } from '../lib/docs-link';
-import { Activity as ActivityIcon, AlarmClock, BookOpen, Bug, Gauge, FileDown, Bot, LockKeyhole, ShieldCheck, FolderPlus, FolderTree, GitBranch, History, KeyRound, Network, Play, Plug, Sparkles, Upload, ArrowRight } from 'lucide-react';
+import { Activity as ActivityIcon, AlarmClock, BookOpen, Bug, Gauge, FileDown, Bot, LockKeyhole, ShieldCheck, FolderPlus, FolderTree, GitBranch, History, KeyRound, Network, Play, Plug, Plus, Sparkles, Upload, ArrowRight } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { asError, call, modKey, on } from '../api';
 import { finishSave, type SaveResult } from '../lib/files';
@@ -13,6 +13,11 @@ import { ActivityCharts, type Activity } from '../components/ActivityCharts';
 import { AttentionCard } from '../components/AttentionCard';
 import { RecentRuns } from '../components/charts';
 import { refreshCollections, useCollectionTree } from '../lib/collections-store';
+import { useRecentItems } from '../lib/recent-items';
+import { LOOP_STEPS, runStep, WALKTHROUGHS, walkthroughDocs, type OnboardingStep } from '../lib/onboarding';
+import { openRef } from '../lib/open-ref';
+import { refIcon } from '../components/RefLink';
+import { ITEM_KIND_LABEL, itemRefKey } from '@testpion/shared';
 
 /** The newest history entry and the count: whether requests were sent since Home last loaded. */
 const historyMark = (r: { items: Array<{ id: string }>; total: number }) => `${r.total}|${r.items[0]?.id ?? ''}`;
@@ -59,6 +64,7 @@ const greeting = () => {
  * collection, an environment, a test run); gone once all are done, or hidden with "Hide".
  */
 function GetStarted({ steps, onHide }: { steps: Array<{ id: string; label: string; text: string; done: boolean; onClick(): void }>; onHide(): void }) {
+  const inExamples = useApp((s) => s.workspace?.id === EXAMPLES_ID);
   const done = steps.filter((s) => s.done).length;
   return (
     <Callout tone="accent" block as="section" className="rounded-2xl px-5 py-4" aria-label="Get started">
@@ -74,7 +80,7 @@ function GetStarted({ steps, onHide }: { steps: Array<{ id: string; label: strin
           Hide
         </LinkButton>
       </div>
-      <ol className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+      <ol className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-5" data-get-started>
         {steps.map((s, i) => (
           <li key={s.id}>
             <button
@@ -92,6 +98,20 @@ function GetStarted({ steps, onHide }: { steps: Array<{ id: string; label: strin
           </li>
         ))}
       </ol>
+      {/* WF-22: the other loops, as walk-throughs (in the Examples workspace, where there is something to try) */}
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs" data-walkthroughs>
+        <span className="text-muted">Then try:</span>
+        {WALKTHROUGHS.filter((w) => !inExamples || w.id !== 'git').map((w) => (
+          <span key={w.id} className="inline-flex items-center gap-1.5">
+            <LinkButton title={w.text} onClick={() => void w.start()}>
+              {w.title}
+            </LinkButton>
+            <LinkButton className="text-muted" title="The guide" onClick={() => void openRef(walkthroughDocs(w.docs))}>
+              (guide)
+            </LinkButton>
+          </span>
+        ))}
+      </div>
     </Callout>
   );
 }
@@ -141,6 +161,7 @@ export function HomeView() {
   // saved gRPC calls and connections belong to collections too (they are kept in the library)
   const [saved, setSaved] = useState<Record<string, number>>({});
   const [recent, setRecent] = useState<HistoryItem[]>([]);
+  const picked = useRecentItems((x) => x.items);
   const [monitors, setMonitors] = useState<HomeMonitor[]>([]);
   const [runs, setRuns] = useState<HomeRun[]>([]);
   const [health, setHealth] = useState<Record<string, { sent: number; failing: number }>>({});
@@ -176,8 +197,10 @@ export function HomeView() {
       return false;
     }
   });
-  const allDone = recent.length > 0 && cols.length > 0 && (ws?.environments.length ?? 0) > 0 && runs.length > 0;
-  const showGetStarted = !getStartedHidden && !allDone && ws?.id !== EXAMPLES_ID;
+  // the first loop's steps, done from what the workspace holds (ws.onboarding)
+  const [loop, setLoop] = useState<OnboardingStep[]>([]);
+  const allDone = loop.length > 0 && loop.every((s) => s.done);
+  const showGetStarted = !getStartedHidden && !allDone && loop.length > 0 && ws?.id !== EXAMPLES_ID;
   const setView = useApp((s) => s.setView);
 
   const stale = useRef(false);
@@ -194,6 +217,7 @@ export function HomeView() {
     void call<{ items: HistoryItem[]; total: number }>('history.list', { limit: 8 }).then((r) => ((seen.current = historyMark(r)), setRecent(r.items)));
     void call<HomeMonitor[]>('monitor.list').then(setMonitors, () => setMonitors([]));
     void call<{ items: HomeRun[] }>('runs.list', { limit: 6 }).then((r) => setRuns(r.items), () => setRuns([]));
+    void call<OnboardingStep[]>('ws.onboarding').then(setLoop, () => setLoop([]));
     void call<typeof certs>('certificates.list').then(setCerts, () => setCerts([]));
     void call<typeof health>('stats.collectionsHealth').then(setHealth, () => setHealth({}));
     loadActivity();
@@ -263,12 +287,7 @@ export function HomeView() {
                 /* storage unavailable */
               }
             }}
-            steps={[
-              { id: 'send', label: 'Send a request', text: 'A URL, or paste a cURL command.', done: recent.length > 0, onClick: () => open('rest', { newTab: true }) },
-              { id: 'collection', label: 'Create or import a collection', text: 'OpenAPI, Postman, Insomnia, Bruno, Hoppscotch or HAR.', done: cols.length > 0, onClick: () => open('collections', { import: true }) },
-              { id: 'environment', label: 'Add an environment', text: 'baseUrl, tokens and secrets, switched in the top bar.', done: (ws?.environments.length ?? 0) > 0, onClick: () => setView('environments') },
-              { id: 'run', label: 'Run a test', text: 'A collection, a YAML file or a generated suite.', done: runs.length > 0, onClick: () => setView('tests') },
-            ]}
+            steps={loop.map((s) => ({ id: s.id, ...LOOP_STEPS[s.id], done: s.done, onClick: () => runStep(s) }))}
           />
         )}
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3.5">
@@ -313,8 +332,24 @@ export function HomeView() {
         )}
 
         <div className="grid lg:grid-cols-3 gap-4">
-          <Card title="Recent requests" icon={<History size={15} />} action={<LinkButton className="text-xs" onClick={() => setView('history')}>All history</LinkButton>}>
-            {recent.length ? (
+          {/* WF-10: the items opened lately in this workspace (any kind), newest first; requests sent show until there are some */}
+          <Card title="Pick up where you left off" icon={<History size={15} />} action={<LinkButton className="text-xs" onClick={() => setView('history')}>All history</LinkButton>}>
+            {picked.length ? (
+              picked.slice(0, 8).map((r) => (
+                <button
+                  key={itemRefKey(r.ref)}
+                  data-recent-item={r.ref.kind}
+                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-left hover:bg-hover"
+                  title={`Open ${r.label}`}
+                  onClick={() => void openRef(r.ref)}
+                >
+                  <span className="text-muted shrink-0">{refIcon(r.ref, 13)}</span>
+                  <span className="truncate flex-1">{r.label}</span>
+                  <span className="text-xs text-muted shrink-0">{ITEM_KIND_LABEL[r.ref.kind]}</span>
+                  <span className="text-xs text-muted shrink-0 w-16 text-right">{timeAgo(r.at)}</span>
+                </button>
+              ))
+            ) : recent.length ? (
               recent.map((h) => (
                 <button
                   key={h.id}
@@ -328,7 +363,15 @@ export function HomeView() {
                 </button>
               ))
             ) : (
-              <Empty title="Nothing sent yet">Requests you send appear here.</Empty>
+              <Empty
+                title="Nothing sent yet"
+                actions={[
+                  { label: 'New request', icon: <Plus size={13} />, onClick: () => open('rest', { newTab: true }) },
+                  { label: 'Import', icon: <Upload size={13} />, onClick: () => open('collections', { import: true }) },
+                ]}
+              >
+                Requests you send appear here.
+              </Empty>
             )}
           </Card>
           <Card title="Collections" icon={<FolderTree size={15} />} action={<LinkButton className="text-xs" onClick={() => void newCollection()}>New</LinkButton>}>

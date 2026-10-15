@@ -9,15 +9,16 @@ description: "Set up a development environment, run tests and build the app."
 
 ```bash
 npm install
-npm run build          # core → cli → desktop
-npm test               # unit, integration and end-to-end tests (vitest)
+npm run build          # shared → core → cli → desktop
+npm test               # unit and integration tests (vitest)
 npm run typecheck
+npm run e2e -w @testpion/desktop   # the UI regression suite in the real Electron app (apps/desktop/e2e/plans)
 npm run dev            # Electron
 npm run dev:web        # browser + local bridge
 node examples/servers/demo-servers.mjs   # local REST/GraphQL/LLM/WebSocket demo servers
 ```
 
-Every feature ships with an implementation, unit tests, integration tests, documentation and an example (Appendix E).
+Every feature ships with an implementation, unit tests, integration tests, documentation and an example. A UI feature also gets a plan in `apps/desktop/e2e/plans/`; a CLI command prints its `--json` output through the envelope (`packages/cli/src/output.ts`); a new MCP tool follows the tool contract (`packages/core/src/mcp-server/tool-contract.ts`: paging, `response_format`, `confirm: true` for deleting or overwriting) and is added to the pinned tool list in `tests/integration/workspace-run.test.ts`.
 
 ## Hardening of the packaged app
 

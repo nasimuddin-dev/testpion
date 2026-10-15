@@ -1,8 +1,8 @@
 /** `testpion flow <file>`: a test file as a flow, in columns (what runs first, what waits), as JSON or as Graphviz DOT. */
 import { Command } from 'commander';
 import { ApsError, applyFlowEdit, editFlowFile, flowOfFile, flowReport, flowRunResults, flowRuns, flowStepsOfText, testFileRef, type FlowEditOp, type FlowFileEdit } from '@testpion/core';
-import { flowGraph, stepDetail, toDot } from '@testpion/shared';
-import { bold, dim, green, printJson, red, withWorkspace, yellow } from '../shared.js';
+import { flowChecks, flowGraph, stepDetail, toDot, untilLabel } from '@testpion/shared';
+import { bold, cliContext, dim, green, printJson, red, withWorkspace, yellow } from '../shared.js';
 
 export function registerFlowCommand(program: Command): void {
   const flow = program.command('flow');
@@ -12,9 +12,19 @@ export function registerFlowCommand(program: Command): void {
     .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
     .option('--json', 'print the steps, edges, layers, problems and the latest run as JSON (for scripts and AI agents)')
     .option('--dot', 'print the flow as Graphviz DOT (pipe into `dot -Tsvg`)')
-    .action(async (file: string, o: { workspace?: string; json?: boolean; dot?: boolean }) => {
+    .option('-e, --environment <name>', "check the steps' {{variables}} against this environment: a variable nothing sets and the environment does not define is reported")
+    .action(async (file: string, o: { workspace?: string; json?: boolean; dot?: boolean; environment?: string }) => {
       return withWorkspace(o.workspace, async (store) => {
-        const flow = await flowOfFile(store, testFileRef(store, file));
+        let known: string[] | undefined;
+        if (o.environment) {
+          const ctx = cliContext(store, o.environment);
+          try {
+            known = ctx.vars.names();
+          } finally {
+            await ctx.dispose();
+          }
+        }
+        const flow = await flowOfFile(store, testFileRef(store, file), { known });
         if (o.dot) {
           process.stdout.write(toDot(flow.steps, flow.file));
           return;
@@ -36,6 +46,9 @@ export function registerFlowCommand(program: Command): void {
               s.type !== 'condition' && s.if ? `if ${s.if}` : '',
               s.when !== undefined ? `on the ${s.when} branch` : '',
               s.loop ?? '',
+              untilLabel(s) ?? '',
+              s.parallel ? `parallel group ${s.parallel}` : '',
+              s.finally ? 'finally: runs last, whatever happened' : '',
               s.extract?.length ? `extracts ${s.extract.join(', ')}` : '',
               s.dependsOn?.length ? `after ${s.dependsOn.join(', ')}` : '',
             ]
@@ -46,6 +59,10 @@ export function registerFlowCommand(program: Command): void {
           }
         });
         for (const p of g.problems) console.log(`\n${yellow('problem')}  ${p.message}`);
+        // the designer's checks (what the problems above do not say already)
+        const said = new Set(g.problems.map((p) => p.step));
+        for (const c of flowChecks(flow.steps)) if (!(c.kind === 'cycle' && said.has(c.step)) && c.kind !== 'missing-step') console.log(`${c.severity === 'error' ? red('error') : yellow('check')}  ${c.message}`);
+        if (flow.notes?.length || flow.frames?.length) console.log(dim(`${flow.notes?.length ?? 0} note(s), ${flow.frames?.length ?? 0} frame(s) on the canvas`));
         console.log(dim(`\n${flow.steps.length} step${flow.steps.length === 1 ? '' : 's'}, ${g.edges.length} edge${g.edges.length === 1 ? '' : 's'}; --dot for Graphviz, --json for everything.`));
       });
     });
@@ -82,7 +99,7 @@ export function registerFlowCommand(program: Command): void {
         if (!h.runs.length) return console.log(dim(`tests/${h.file} has not been run yet.`));
         console.log(bold(`tests/${h.file}`) + dim(`  ${h.runs.length} run${h.runs.length === 1 ? '' : 's'}, newest first`));
         for (const r of h.runs) {
-          const status = r.status === 'passed' ? green('passed') : r.status === 'cancelled' ? yellow('cancelled') : red('failed');
+          const status = r.status === 'passed' ? green('passed') : r.status === 'cancelled' || r.status === 'skipped' ? yellow(r.status) : red('failed');
           console.log(
             `  ${r.runId}  ${status}  ${dim(new Date(r.startedAt).toLocaleString())}  ${dim(`${r.durationMs} ms`)}  ${r.passed}/${r.steps} passed${r.firstFailed ? red(`  first failing step: ${r.firstFailed}`) : ''}`,
           );
@@ -96,7 +113,7 @@ export function registerFlowCommand(program: Command): void {
   flow
     .command('edit')
     .description(
-      'edit a flow the way the app\'s flow designer does (comments, key order and line endings kept): --op \'{"op":"addStep","step":{"name":"Health","type":"http","url":"{{baseUrl}}/health"},"after":"login"}\'; ops: addStep, addSteps, updateStep, removeStep, renameStep, connect (with "when": true|false from a condition), disconnect, setLayout, duplicateStep, setOutput, addFromCollection, pasteSteps. Blocks: type condition (if:), script (script:), flow (file:, inputs:), log (message:); any step: if, when, repeat, forEach',
+      'edit a flow the way the app\'s flow designer does (comments, key order and line endings kept): --op \'{"op":"addStep","step":{"name":"Health","type":"http","url":"{{baseUrl}}/health"},"after":"login"}\'; ops: addStep, addSteps, updateStep, removeStep, renameStep, connect (with "when": true|false from a condition), disconnect, setLayout, duplicateStep, setOutput, setWebhook ({"op":"setWebhook","webhook":{"path":"/hooks/order","secret":"{{HOOK_SECRET}}"}}), group, addFromCollection, pasteSteps; the canvas: addNote ({"op":"addNote","note":{"x":0,"y":300,"text":"**Why** this flow"}}), updateNote, removeNote, addFrame ({"op":"addFrame","title":"Login","color":"blue","steps":["login","me"]}), updateFrame, removeFrame. Blocks: type condition (if:), script (script:), flow (file:, inputs:), log (message:), set (set:, scope:), assert (assertions:, subject:), wait (a request with until:); any step: if, when, repeat, forEach, until, finally, parallel',
     )
     .argument('<file>', 'a test file (inside tests/, or from the current folder); an empty flow is "name: X\\ntests: []"')
     .option('--op <json>', 'the edit as JSON, or several as a JSON list (applied in order)')
@@ -106,10 +123,16 @@ export function registerFlowCommand(program: Command): void {
     .option('--when <branch>', 'with --connect from a condition step: the branch the step runs on (true or false)')
     .option('--output <json>', 'shorthand: set what the flow returns, e.g. \'{"token":"{{token}}"}\' (null removes it)')
     .option('--remove <step>', 'shorthand: remove this step (and every dependsOn that names it)')
+    .option('--webhook [path]', 'shorthand: serve the flow behind a webhook (testpion serve flows) on this path (default /hooks/<file>)')
+    .option('--no-webhook', 'shorthand: remove the webhook of the flow')
+    .option('--webhook-secret <secret>', 'with --webhook: the secret callers send (best a {{VARIABLE}} kept as a secret); "" removes it')
+    .option('--parallel <group>', 'shorthand: put the --steps in this parallel group (they may run at the same time); "" takes them out')
+    .option('--finally <steps>', 'shorthand: make these steps (comma separated) finally steps: they run after every other step, whatever happened')
+    .option('--steps <ids>', 'with --parallel: the steps, comma separated')
     .option('--dry-run', 'print the new text (or, with --json, the result) without writing the file')
     .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
     .option('--json', 'print { file, written, added, steps, edges, problems } as JSON (for scripts and AI agents)')
-    .action(async (file: string, o: { op?: string; connect?: string; disconnect?: string; to?: string; when?: string; output?: string; remove?: string; dryRun?: boolean; workspace?: string; json?: boolean }) => {
+    .action(async (file: string, o: { op?: string; connect?: string; disconnect?: string; to?: string; when?: string; output?: string; remove?: string; webhook?: string | boolean; webhookSecret?: string; parallel?: string; finally?: string; steps?: string; dryRun?: boolean; workspace?: string; json?: boolean }) => {
       // the parent command reads -w and --json wherever they are written: take them from it too
       const parent = flow.opts() as { workspace?: string; json?: boolean };
       o.json ||= parent.json;
@@ -139,7 +162,17 @@ export function registerFlowCommand(program: Command): void {
           ops.push({ op: 'setOutput', output: output as Record<string, unknown> | null });
         }
         if (o.remove) ops.push({ op: 'removeStep', id: o.remove });
-        if (!ops.length) throw new ApsError('ValidationError', 'Nothing to do: give --op \'<json>\', --connect/--disconnect <from> --to <step> [--when true|false], --output \'<json>\', or --remove <step>');
+        if (o.webhook === false) ops.push({ op: 'setWebhook', webhook: null });
+        else if (o.webhook !== undefined || o.webhookSecret !== undefined)
+          ops.push({ op: 'setWebhook', webhook: { ...(typeof o.webhook === 'string' ? { path: o.webhook } : {}), ...(o.webhookSecret !== undefined ? { secret: o.webhookSecret || null } : {}) } });
+        const list = (v?: string) => (v ?? '').split(',').map((x) => x.trim()).filter(Boolean);
+        if (o.parallel !== undefined) {
+          if (!list(o.steps).length) throw new ApsError('ValidationError', '--parallel <group> needs --steps a,b: the steps to put in the group');
+          ops.push({ op: 'group', ids: list(o.steps), parallel: o.parallel.trim() || null });
+        }
+        if (o.finally !== undefined) ops.push({ op: 'group', ids: list(o.finally), finally: true });
+        if (!ops.length)
+          throw new ApsError('ValidationError', "Nothing to do: give --op '<json>', --connect/--disconnect <from> --to <step> [--when true|false], --output '<json>', --remove <step>, --webhook [path] / --no-webhook, --parallel <group> --steps a,b, or --finally <steps>");
         const ref = testFileRef(store, file);
         let r: FlowFileEdit | undefined;
         const added: string[] = [];
@@ -154,14 +187,14 @@ export function registerFlowCommand(program: Command): void {
           if (!o.json) return void process.stdout.write(text);
           const steps = flowStepsOfText(text, ref);
           const g = flowGraph(steps);
-          return printJson({ file: ref, written: false, added, steps, edges: g.edges, problems: g.problems, text });
+          return printJson({ file: ref, written: false, added, steps, edges: g.edges, groups: g.groups.map(({ kind, name, ids }) => ({ kind, name, ids })), problems: g.problems, text });
         }
         for (const op of ops) {
           r = editFlowFile(store, ref, op);
           added.push(...(r.added ?? []));
         }
         const g = flowGraph(r!.steps);
-        if (o.json) return printJson({ file: r!.file, written: true, added, steps: r!.steps, edges: g.edges, problems: g.problems });
+        if (o.json) return printJson({ file: r!.file, written: true, added, steps: r!.steps, edges: g.edges, groups: g.groups.map(({ kind, name, ids }) => ({ kind, name, ids })), problems: g.problems });
         console.log(`${green('saved')} tests/${r!.file}${added.length ? dim(`  added ${added.join(', ')}`) : ''}`);
         console.log(dim(`${r!.steps.length} step${r!.steps.length === 1 ? '' : 's'}, ${g.edges.length} edge${g.edges.length === 1 ? '' : 's'}; testpion flow ${ref} shows them in columns.`));
         for (const p of g.problems) console.log(`${yellow('problem')}  ${p.message}`);

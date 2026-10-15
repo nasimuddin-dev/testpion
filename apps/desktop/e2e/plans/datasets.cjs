@@ -114,7 +114,7 @@ const steps = [
      const renamed = await __t.waitFor(() => row('e2e-people.csv'), 4000);
      // delete: a confirmation, then the file is in Recently deleted
      await __t.menu('e2e-people.csv');
-     (await menuItem('Delete'))?.click();
+     (await menuItem('Delete…'))?.click();
      const d = await __t.waitFor(() => dialog(/Delete datasets\\/e2e-people\\.csv/), 3000);
      [...(d?.querySelectorAll('button') ?? [])].find((b) => b.textContent.trim() === 'Delete')?.click();
      const gone = await __t.waitFor(() => (row('e2e-people.csv') ? null : true), 4000);

@@ -1,14 +1,18 @@
-import { ChevronDown, Copy, FileCheck2, Pin, PinOff, Plug, Plus, Radio, Send, Sparkles, Waypoints } from 'lucide-react';
+import { Copy, PanelLeft, Pin, PinOff, Plug, Plus, Radio, Send, Sparkles, Waypoints } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { create } from 'zustand';
 import { useApp, type ViewId } from '../store';
 import { docKey, isDocView, useDoc, useDocs } from '../lib/docs';
 import { loadDraft, saveDraft } from '../lib/draft-store';
-import { Button, Empty, Menu, type MenuItem } from './ui';
+import { Empty, Menu, type MenuItem } from './ui';
 import { DocTabStrip, type DocTab } from './DocTabStrip';
 import { ResponseLayoutButton } from './ResponseSplit';
 import { readPersisted, writePersisted } from '../lib/sticky';
 import type { PersistFormat } from '../lib/sticky';
+import { saveAsTestMenuItem } from '../lib/save-test';
+import { noteClosedTabs } from '../lib/closed-tabs';
+import { refOfEditorItem, revealInSidebar } from '../lib/open-ref';
+import { LABEL } from '../lib/vocabulary';
 
 /**
  * One tab strip for every request editor (Postman-style): REST's tabs and a tab for each other editor that
@@ -125,6 +129,11 @@ export function useSingleEditorTab(view: ViewId, tab: (Omit<EditorTab, 'key' | '
   }, [current, view]);
   const key = `${view}:${docId ?? 'main'}`;
   const pinned = useEditorTabsStore((s) => !!s.pinned[key]);
+  // a closed tab that showed a saved item can be reopened (Ctrl+Shift+T)
+  const noteClosed = () => {
+    const ref = refOfEditorItem(view, item);
+    noteClosedTabs([ref && { ref, label: tab?.title ?? '' }]);
+  };
   const common = {
     pinned,
     onTogglePin: () => useEditorTabsStore.getState().togglePin(key),
@@ -162,6 +171,7 @@ export function useSingleEditorTab(view: ViewId, tab: (Omit<EditorTab, 'key' | '
             view,
             onSelect: () => useDocs.getState().select(view, docId),
             onClose: () => {
+              noteClosed();
               useDocs.getState().close(view, docId);
               // the last document of this editor: go to another open tab (or REST). Read the state after the close
               // (a snapshot from before it still lists the closed document, so the editor was never left)
@@ -177,6 +187,7 @@ export function useSingleEditorTab(view: ViewId, tab: (Omit<EditorTab, 'key' | '
             key,
             view,
             onClose: () => {
+              noteClosed();
               setHidden(true);
               // leave the editor for another open tab (or REST)
               leaveEditor(view);
@@ -225,24 +236,10 @@ export function NoOpenTabs({ onDescribe }: { onDescribe?(): void }) {
     <Empty
       icon={<Send size={28} />}
       title="No open requests"
-      action={
-        <div className="flex flex-wrap justify-center gap-2">
-          <Menu
-            width={240}
-            align="center"
-            items={newRequestItems()}
-            trigger={
-              <Button variant="primary" icon={<Plus size={13} />}>
-                New request
-                <ChevronDown size={13} />
-              </Button>
-            }
-          />
-          <Button icon={<Sparkles size={13} />} onClick={describe} title="Describe a request in plain words; the AI assistant drafts it and you review it before sending">
-            Describe with AI
-          </Button>
-        </div>
-      }
+      actions={[
+        { label: 'New request', icon: <Plus size={13} />, items: newRequestItems() },
+        { label: 'Describe with AI', icon: <Sparkles size={13} />, onClick: describe, title: 'Describe a request in plain words; the AI assistant drafts it and you review it before sending' },
+      ]}
     >
       Open a request from the sidebar, or start a new one.
     </Empty>
@@ -306,6 +303,9 @@ export function EditorTabStrip() {
   const select = (t: EditorTab) => {
     if (useApp.getState().view !== t.view) useApp.getState().setView(t.view);
     t.onSelect?.();
+    // the tree follows the tab (WF-11): its item's collection and folders open, its row scrolls into view
+    const ref = refOfEditorItem(t.view, t.item);
+    if (ref && useApp.getState().explorerOpen) revealInSidebar(ref);
   };
   /** Close several tabs at once (Close other / all / to the right): per editor one batch close where the editor offers it (REST), else tab by tab. */
   const close = (list: EditorTab[]) => {
@@ -341,7 +341,8 @@ export function EditorTabStrip() {
       extraItems={({ data: t }) => [
         { label: t!.pinned ? 'Unpin tab' : 'Pin tab', icon: t!.pinned ? <PinOff size={13} /> : <Pin size={13} />, disabled: !t!.onTogglePin, onSelect: () => t!.onTogglePin?.() },
         { label: 'Duplicate tab', icon: <Copy size={13} />, disabled: !t!.onDuplicate, onSelect: () => t!.onDuplicate?.() },
-        { label: 'Save as test file…', icon: <FileCheck2 size={13} />, disabled: !t!.onSaveAsTest, onSelect: () => t!.onSaveAsTest?.() },
+        ((ref) => ({ label: LABEL.revealInSidebar, icon: <PanelLeft size={13} />, disabled: !ref, onSelect: () => revealInSidebar(ref) }))(refOfEditorItem(t!.view, t!.item)),
+        saveAsTestMenuItem(t!.onSaveAsTest),
       ]}
       afterTabs={
         <Menu

@@ -17,8 +17,9 @@ const METER = `
   const loaf = () => { const es = loafList.splice(0); const sum = (f) => Math.round(es.reduce((n, e) => n + f(e), 0)); return ' | loaf: n=' + es.length + ' total ' + sum((e) => e.duration) + 'ms script ' + sum((e) => (e.scripts ?? []).reduce((n, s) => n + s.duration, 0)) + 'ms style+layout ' + sum((e) => (e.styleAndLayoutStart ? e.startTime + e.duration - e.styleAndLayoutStart : 0)) + 'ms | dom nodes ' + document.getElementsByTagName('*').length; };
   const vis = (sel) => [...document.querySelectorAll(sel)].filter((x) => x.getClientRects().length);
   const setInput = (el, v) => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, v); el.dispatchEvent(new Event('input', { bubbles: true })); };
-  // the rows of the view's list: the buttons the VirtualList renders (absolutely placed divs in its tall inner div)
-  const listRows = () => vis('main .overflow-auto.relative > div > div > button');
+  // the rows of the view's list: the first button of each row the VirtualList renders (absolutely placed divs in its tall
+  // inner div; a row's own wrapper and menu button may be around it, a day heading has none)
+  const listRows = () => vis('main .overflow-auto.relative > div > div').map((r) => r.querySelector('button')).filter(Boolean);
   const listEl = () => listRows()[0]?.closest('.overflow-auto');
 `;
 /** The view's list: keystrokes in its filter box, 20 scroll frames, 8 selections; one result line. */

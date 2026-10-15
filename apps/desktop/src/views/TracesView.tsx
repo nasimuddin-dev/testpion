@@ -1,4 +1,4 @@
-import { Activity, RefreshCw, Send } from 'lucide-react';
+import { Activity, RefreshCw, Send, Boxes, Copy } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { call, on } from '../api';
 import { persisted, toastError, useApp } from '../store';
@@ -9,7 +9,11 @@ import type { Trace } from '../types';
 import { formatMs, plural, timeAgo } from '../lib/format';
 import { TraceView } from '../components/TraceView';
 import { DurationBar } from '../components/charts';
-import { Badge, Button, cx, Empty, IconButton, Input, Modal, Select, Split, VirtualList } from '../components/ui';
+import { Badge, Button, cx, Empty, IconButton, Input, Modal, Select, Split, VirtualList, type MenuItem } from '../components/ui';
+import { RowMenu } from '../components/TreeParts';
+import { LABEL } from '../lib/vocabulary';
+import { refOpenLabel } from '@testpion/shared';
+import { openRef, copyRefLink } from '../lib/open-ref';
 
 interface TraceMeta {
   id: string;
@@ -19,6 +23,8 @@ interface TraceMeta {
   startTime: number;
   durationMs: number;
   spanCount: number;
+  /** The run it belongs to (a test's trace). */
+  runId?: string;
 }
 
 /** The collector (and its headers) are remembered; a header value only when it is a {{variable}} (never a typed-in key). */
@@ -79,6 +85,13 @@ export function TracesView() {
   const [errorsOnly, setErrorsOnly] = useState(false);
   const [sel, setSel] = useState<string>();
   const [trace, setTrace] = useState<Trace | null>();
+  // a trace's menu (right-click or ⋯): open · its run · copy link
+  const [menuFor, setMenuFor] = useState<string>();
+  const traceMenu = (t: TraceMeta): MenuItem[] => [
+    { label: LABEL.open, icon: <Activity size={14} />, onSelect: () => setSel(t.id) },
+    ...(t.runId ? [{ label: refOpenLabel({ kind: 'run' }), icon: <Boxes size={14} />, onSelect: () => void openRef({ kind: 'run', runId: t.runId! }) }] : []),
+    { label: 'Copy link', icon: <Copy size={14} />, separator: true, onSelect: () => void copyRefLink({ kind: 'trace', traceId: t.id }) },
+  ];
   const load = useCallback(
     async (reset = true) => {
       const r = await call<{ items: TraceMeta[]; total: number }>('traces.list', { query: query || undefined, kind: kind || undefined, failed: errorsOnly || undefined, limit: 200, offset: reset ? 0 : items.length });
@@ -131,7 +144,14 @@ export function TracesView() {
             rowHeight={44}
             onEndReached={items.length < total ? () => void load(false) : undefined}
             render={(t) => (
-              <button onClick={() => setSel(t.id)} className={cx('w-full h-full text-left px-3 border-b border-line/60 flex flex-col justify-center', sel === t.id ? 'bg-accent/10' : 'hover:bg-hover')}>
+              <div
+                className={cx('group relative w-full h-full border-b border-line/60', sel === t.id ? 'bg-accent/10' : menuFor === t.id ? 'bg-hover' : 'hover:bg-hover')}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  setMenuFor(t.id);
+                }}
+              >
+              <button onClick={() => setSel(t.id)} className="w-full h-full text-left pl-3 pr-8 flex flex-col justify-center">
                 <div className="flex items-center gap-2 text-sm">
                   <span className={cx('w-1.5 h-1.5 rounded-full', t.status === 'ok' ? 'bg-ok' : 'bg-bad')} />
                   <span className="truncate min-w-0" title={t.name}>{t.name}</span>
@@ -145,6 +165,10 @@ export function TracesView() {
                   {plural(t.spanCount, 'span')} · {timeAgo(t.startTime)}
                 </div>
               </button>
+              <span className="absolute right-1 top-1/2 -translate-y-1/2">
+                <RowMenu label={t.name} items={menuFor === t.id ? traceMenu(t) : []} open={menuFor === t.id} onOpenChange={(o) => setMenuFor(o ? t.id : undefined)} />
+              </span>
+              </div>
             )}
           />
         ) : (

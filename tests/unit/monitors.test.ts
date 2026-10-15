@@ -12,6 +12,7 @@ import {
   deleteMonitor,
   executeMonitor,
   findMonitor,
+  flowDeployStatus,
   formatEvery,
   isDue,
   listMonitors,
@@ -224,5 +225,49 @@ describe('monitor uptime by day', () => {
       ['2026-10-01', 2],
     ]);
     expect(east[1]!.uptime).toBeUndefined();
+  });
+});
+
+describe('a monitor that runs a test file (a flow on a schedule)', () => {
+  const flow = 'name: Health flow\ntests:\n  - id: health\n    name: Health\n    method: GET\n    url: "{{baseUrl}}/health"\n    assertions: [{ type: status, expected: 200 }]\n';
+  const fileMonitor: Monitor = { id: 'mon-flow', name: 'Health flow', testFile: 'flows/health.yaml', environment: 'Local', everyMinutes: 5, enabled: true };
+
+  it('validates exactly one target: a collection or an existing test file under tests/', () => {
+    mkdirSync(store.path('tests', 'flows'), { recursive: true });
+    writeFileSync(store.path('tests', 'flows', 'health.yaml'), flow);
+    expect(() => saveMonitor(store, { ...fileMonitor, collectionId: 'api' })).toThrow(/not both/);
+    expect(() => saveMonitor(store, { ...fileMonitor, testFile: undefined })).toThrow(/needs what to run/);
+    expect(() => saveMonitor(store, { ...fileMonitor, testFile: 'flows/missing.yaml' })).toThrow(/No test file tests\/flows\/missing\.yaml/);
+    expect(() => saveMonitor(store, { ...fileMonitor, testFile: '../workspace.json' })).toThrow(/outside tests|not a test file|No test file/);
+    expect(() => saveMonitor(store, { ...fileMonitor, testFile: 'flows/notes.md' })).toThrow(/not a test file/);
+    expect(() => saveMonitor(store, { ...fileMonitor, selection: ['x'] })).toThrow(/runs as a whole/);
+    // tests/ prefix and backslashes are taken; an empty collection is no target
+    const saved = saveMonitor(store, { ...fileMonitor, collectionId: '', testFile: 'tests\\flows\\health.yaml' });
+    expect(saved.testFile).toBe('flows/health.yaml');
+    expect(findMonitor(store, 'Health flow')).toMatchObject({ testFile: 'flows/health.yaml' });
+    expect(findMonitor(store, 'Health flow').collectionId).toBeUndefined();
+  });
+
+  it('runs it with the test runner: the same result shape, recorded with its history', async () => {
+    healthy = true;
+    const ok = await executeMonitor({ store, monitor: findMonitor(store, 'mon-flow'), context, trigger: 'schedule' });
+    expect(ok).toMatchObject({ monitorId: 'mon-flow', status: 'passed', total: 1, passed: 1, failed: 0, trigger: 'schedule' });
+    expect(ok.p50Ms).toBeGreaterThanOrEqual(0);
+    healthy = false;
+    const bad = await executeMonitor({ store, monitor: findMonitor(store, 'mon-flow'), context });
+    expect(bad).toMatchObject({ status: 'failed', failed: 1 });
+    healthy = true;
+    expect(monitorResults(store, 'mon-flow').map((r) => r.status)).toEqual(['failed', 'passed']);
+    // the run is a run like any other (Runs list, reports)
+    expect(readFileSync(join(store.runDir(ok.runId), 'results.jsonl'), 'utf8')).toContain('Health');
+    // a file removed since: an error result, not a throw
+    const gone = await executeMonitor({ store, monitor: { ...fileMonitor, id: 'mon-gone', testFile: 'flows/gone.yaml' }, context });
+    expect(gone).toMatchObject({ status: 'error', error: expect.stringMatching(/No test file/) });
+  });
+
+  it('is the schedule of the flow in its deploy status', () => {
+    expect(flowDeployStatus(store, 'flows/health.yaml').schedule).toMatchObject({ monitorId: 'mon-flow', name: 'Health flow', every: 'every 5 minutes', enabled: true, lastStatus: 'failed' });
+    deleteMonitor(store, 'mon-flow');
+    expect(flowDeployStatus(store, 'flows/health.yaml').schedule).toBeUndefined();
   });
 });

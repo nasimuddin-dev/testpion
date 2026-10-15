@@ -56,7 +56,7 @@ export function ExchangePanes({ e, ...a }: { e: Exchange } & ExchangeActions) {
           {e.method} {e.url}
         </span>
         <span className="ml-auto flex items-center gap-1 shrink-0">
-          <Button size="sm" variant="ghost" icon={<ExternalLink size={12} />} onClick={a.onOpen} title="Edit & Submit: open it as a request in a tab, to change and send">
+          <Button size="sm" variant="ghost" icon={<ExternalLink size={12} />} onClick={a.onOpen} title="Open as request: in a tab, to change and send">
             Open
           </Button>
           {a.onResend && (

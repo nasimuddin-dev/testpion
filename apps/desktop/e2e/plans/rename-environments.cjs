@@ -18,7 +18,7 @@ const steps = [
   step('f2-active', `const i = await f2('Public APIs'); if (!i) return 'NO INPUT'; setVal(i, 'Public APIs 2'); key(i, 'Enter'); await __t.sleep(1200); return names() + ' | active: ' + active() + ' | name field: ' + visible('main input')[0]?.value;`),
   step('duplicate-refused', `await menu('Public APIs 2', 'Duplicate'); const i = await f2('Public APIs 2 copy'); if (!i) return 'NO INPUT: ' + names(); setVal(i, 'public apis 2'); key(i, 'Enter'); await __t.sleep(400); const alert = document.querySelector('main [role=alert]')?.textContent; key(input(), 'Escape'); await __t.sleep(500); return 'alert: ' + alert + ' | ' + names();`),
   step('menu-rename-back', `await menu('Public APIs 2', 'Rename'); const i = input(); if (!i) return 'NO INPUT'; setVal(i, 'Public APIs'); key(i, 'Enter'); await __t.sleep(1200); return names() + ' | active: ' + active();`),
-  step('cleanup', `await menu('Public APIs 2 copy', 'Delete'); const ok = [...document.querySelectorAll('[role=dialog] button, [role=alertdialog] button')].find((b) => b.textContent.trim() === 'Delete environment'); ok?.click(); await __t.sleep(1200); return names() + ' | active: ' + active();`),
+  step('cleanup', `await menu('Public APIs 2 copy', 'Delete…'); const ok = [...document.querySelectorAll('[role=dialog] button, [role=alertdialog] button')].find((b) => b.textContent.trim() === 'Delete environment'); ok?.click(); await __t.sleep(1200); return names() + ' | active: ' + active();`),
 ];
 
 module.exports = withExpect(steps, {

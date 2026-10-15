@@ -1,6 +1,6 @@
 import { closeSync, copyFileSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, statSync, writeFileSync, writeSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { ApsError } from '../errors.js';
 
 /**
@@ -22,20 +22,29 @@ export function endAndClose(stream: NodeJS.WritableStream & { closed?: boolean; 
  * Files this process wrote, and when (absolute path → ms): a folder watcher tells its own saves from changes made
  * outside the app (git pull, another editor) with `writtenByUs`.
  */
-const recentWrites = new Map<string, number>();
+const recentWrites = new Map<string, { at: number; fingerprint: string }>();
 export function writtenByUs(path: string, withinMs = 2000): boolean {
-  const at = recentWrites.get(resolve(path));
-  return at !== undefined && Date.now() - at < withinMs;
+  return ownWrite(path, withinMs) !== undefined;
+}
+/**
+ * What this process wrote to `path` lately, as `hash:<size>:<sha1>` (the watcher's content fingerprint), when it was
+ * within `withinMs`. The watcher compares it with the file now: the same bytes are its own save; different bytes were
+ * written by someone else right after (another editor, git), which is an outside change even within the window.
+ */
+export function ownWrite(path: string, withinMs = 2000): string | undefined {
+  const w = recentWrites.get(resolve(path));
+  return w && Date.now() - w.at < withinMs ? w.fingerprint : undefined;
 }
 
 export function atomicWrite(path: string, data: string | Buffer): void {
-  recentWrites.set(resolve(path), Date.now());
-  if (recentWrites.size > 2000) for (const [k, t] of recentWrites) if (Date.now() - t > 10_000) recentWrites.delete(k);
+  const bytes = typeof data === 'string' ? Buffer.from(data, 'utf8') : data;
+  recentWrites.set(resolve(path), { at: Date.now(), fingerprint: `hash:${bytes.length}:${createHash('sha1').update(bytes).digest('hex')}` });
+  if (recentWrites.size > 2000) for (const [k, w] of recentWrites) if (Date.now() - w.at > 10_000) recentWrites.delete(k);
   mkdirSync(dirname(path), { recursive: true });
   const tmp = `${path}.tmp-${process.pid}-${randomBytes(4).toString('hex')}`;
   const fd = openSync(tmp, 'w');
   try {
-    writeSync(fd, typeof data === 'string' ? Buffer.from(data, 'utf8') : data);
+    writeSync(fd, bytes);
     fsyncSync(fd);
   } finally {
     closeSync(fd);
@@ -50,8 +59,12 @@ export function atomicWrite(path: string, data: string | Buffer): void {
   }
 }
 
-/** Waits between rename attempts: Windows refuses a rename while another program (antivirus, an indexer, an editor) has the file open. */
-const RENAME_RETRY_MS = [50, 100, 200];
+/**
+ * Waits between rename attempts: Windows refuses a rename while another program (antivirus, an indexer, an editor) has
+ * the file open. A scan of a just-written file can hold it for over a second (seen with several app instances writing
+ * at once), so the waits grow to about 1.5 s in all; then the bytes are copied over the target instead of renamed.
+ */
+const RENAME_RETRY_MS = [50, 100, 200, 400, 700];
 const sleepBuf = new Int32Array(new SharedArrayBuffer(4));
 
 function renameWithRetry(from: string, to: string): void {
@@ -62,7 +75,18 @@ function renameWithRetry(from: string, to: string): void {
     } catch (e) {
       const code = (e as NodeJS.ErrnoException).code;
       const wait = RENAME_RETRY_MS[attempt];
-      if (wait === undefined || (code !== 'EPERM' && code !== 'EBUSY' && code !== 'EACCES')) throw e;
+      if (code !== 'EPERM' && code !== 'EBUSY' && code !== 'EACCES') throw e;
+      if (wait === undefined) {
+        // still refused: a scanner keeps the new file (or the old one) open. Copy the bytes over instead (the target
+        // is replaced in place, which only needs it writable), then drop the temp file when it can be dropped.
+        copyFileSync(from, to);
+        try {
+          rmSync(from, { force: true });
+        } catch {
+          // left for the scanner to release; a .tmp- file is ignored by the watcher and the loaders
+        }
+        return;
+      }
       Atomics.wait(sleepBuf, 0, 0, wait); // a synchronous pause: the callers write synchronously
     }
   }
@@ -88,8 +112,9 @@ export function writeDerived(path: string, data: string | Buffer): void {
     mkdirSync(dir, { recursive: true });
     writeFileSync(path, data);
   }
-  recentWrites.set(resolve(path), Date.now());
-  if (recentWrites.size > 2000) for (const [k, t] of recentWrites) if (Date.now() - t > 10_000) recentWrites.delete(k);
+  const bytes = typeof data === 'string' ? Buffer.from(data, 'utf8') : data;
+  recentWrites.set(resolve(path), { at: Date.now(), fingerprint: `hash:${bytes.length}:${createHash('sha1').update(bytes).digest('hex')}` });
+  if (recentWrites.size > 2000) for (const [k, w] of recentWrites) if (Date.now() - w.at > 10_000) recentWrites.delete(k);
   forgetText(path);
 }
 

@@ -22,7 +22,7 @@ For the CLI and CI, set the key as the `TESTPION_SECRET_APP_ANTHROPIC_APIKEY` en
 
 ### Talking to the assistant
 
-Open it with <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>J</kbd> (press it again to close), the robot button in the top bar, **Ask AI Assistant** in the command palette, or one of the AI buttons in a view (Explain this response, Suggest assertions, …). Before you type, it suggests questions that fit what is on screen, such as *Why did this request fail?* after an error or *What can this server do?* on an MCP server.
+Open it with <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>J</kbd> (press it again to close), the robot button in the top bar, **Ask AI Assistant** in the command palette, or one of the AI buttons in a view (Explain this response, Suggest assertions, …). It opens in the panel on the right edge of the window, beside **Info** ([the Info panel](/getting-started/finding-your-way#the-info-panel)); pin it to keep it docked. Before you type, it suggests questions that fit what is on screen, such as *Why did this request fail?* after an error or *What can this server do?* on an MCP server.
 
 - **A conversation.** Follow-up questions remember what was asked and answered, so "and how do I fix it?" works. **New conversation** (↺) starts over; the task you opened it for runs again.
 - **What you are looking at goes with the question.** With a request open (HTTP, GraphQL, gRPC, WebSocket/MQTT or an MCP server), a free question carries it and its latest result, shown as *Context: GET …/pets · 404* above the field. Choose × to leave it out. Secret values (tokens, keys, passwords) are hidden before anything is sent.

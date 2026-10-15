@@ -49,7 +49,7 @@ export function MoveVariablesDialog({ collection, initial, onClose, onDone }: { 
       await call('vars.moveToEnvironments', opts);
       useApp
         .getState()
-        .toast(`${plural(keys.size, 'variable')} moved to ${plural(targets.size, 'environment')}: set their values per environment now`, 'success');
+        .toast(`${plural(keys.size, 'variable')} moved to ${plural(targets.size, 'environment')}: set their values per environment now`, 'success', { ref: { kind: 'environment', environmentId: [...targets][0] } });
       onDone();
       onClose();
     } catch (e) {

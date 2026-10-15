@@ -1,9 +1,10 @@
 import { CodeBlock } from './CodeBlock';
-import { AlertTriangle, BookOpen, Bot, CheckCircle2, CircleHelp, CircleSlash, KeyRound, Lightbulb, MessageSquareWarning, Plus, Sparkles, XCircle } from 'lucide-react';
+import { AlertTriangle, BookOpen, Bot, CheckCircle2, CircleHelp, CircleSlash, KeyRound, Lightbulb, Loader2, MessageSquareWarning, Plus, Sparkles, XCircle } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { NormalizedError } from '../api';
 import type { CheckResult } from '../types';
 import { useApp } from '../store';
+import { openRef } from '../lib/open-ref';
 import { refreshEnvironments } from '../lib/environments-store';
 import { openDocs } from '../lib/docs-link';
 import { Badge, Button, cx, LinkButton } from './ui';
@@ -17,7 +18,7 @@ export function setupProviderOf(error: NormalizedError | undefined): string | un
 
 /** Opens AI Lab ▸ Providers on the provider, its API key field focused: the one way to add a key from anywhere. */
 export function AddKeyButton({ provider, link, className }: { provider: string; link?: boolean; className?: string }) {
-  const go = () => useApp.getState().openIntent('ai', { providerId: provider, tab: 'providers' });
+  const go = () => void openRef({ kind: 'provider', providerId: provider });
   return link ? (
     <LinkButton icon={<KeyRound size={11} />} className={className} onClick={go}>
       Add the key
@@ -226,6 +227,9 @@ export function StatusIcon({ status }: { status: string }) {
   if (status === 'passed') return <CheckCircle2 size={14} className="text-ok" />;
   if (status === 'skipped') return <CircleSlash size={14} className="text-warn" />;
   if (status === 'error') return <AlertTriangle size={14} className="text-bad" />;
+  if (status === 'cancelled') return <CircleSlash size={14} className="text-muted" />;
+  if (status === 'running') return <Loader2 size={14} className="text-accent animate-spin" />;
+
   return <XCircle size={14} className="text-bad" />;
 }
 

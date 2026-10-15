@@ -141,7 +141,8 @@ describe('applyFlowEdit', () => {
 
   it('setLayout places steps; null removes the layout (auto-arrange); the runner ignores it and the lint accepts it', async () => {
     const r = edit(FLOW, { op: 'setLayout', positions: { login: [12.4, 40], 'login:orders': [-5, 100] } });
-    expect(doc(r.text).layout).toEqual({ login: [12, 40], 'login:orders': [0, 100] });
+    // the canvas has no edge: a step dragged above or left of the others keeps its place (rounded, never clamped)
+    expect(doc(r.text).layout).toEqual({ login: [12, 40], 'login:orders': [-5, 100] });
     expect(r.text).toMatch(/\nlayout:\n {2}login: \[ ?12, 40 ?\]\n/);
     expect(lintTestFile(r.text, { file: 'login.yaml' }).filter((p) => /layout/.test(p.message))).toEqual([]);
     const dir = mkdtempSync(join(tmpdir(), 'tp-flow-edit-'));

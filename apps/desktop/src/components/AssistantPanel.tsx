@@ -106,7 +106,8 @@ export function AssistantPanel() {
 
   return (
     <aside
-      className="w-[420px] shrink-0 border-l border-line bg-bg flex flex-col"
+      // its width is the side panel's (RightPanel: pinned and resizable, or sliding over the content)
+      className="flex-1 min-h-0 w-full min-w-0 bg-bg flex flex-col"
       aria-label="AI assistant"
       // Esc closes it like any panel (while an answer is being written, Esc stops it first)
       onKeyDown={(e) => {

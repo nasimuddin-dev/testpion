@@ -1,5 +1,5 @@
 import { describe, it, expect, afterAll } from 'vitest';
-import { runCliSync } from '../helpers.js';
+import { runCliSync, cliData } from '../helpers.js';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -42,10 +42,10 @@ describe('CLI: openapi-lint', () => {
     mkdirSync(join(dir, 'specs'), { recursive: true });
     writeFileSync(join(dir, 'workspace.json'), JSON.stringify({ name: 'lint' }));
     writeFileSync(join(dir, 'specs', 'pets.yaml'), bad);
-    const [json] = JSON.parse(cli('--json', '--fail-on', 'none').out) as Array<{ problems: Array<{ rule: string; line: number }> }>;
+    const [json] = cliData(cli('--json', '--fail-on', 'none').out) as Array<{ problems: Array<{ rule: string; line: number }> }>;
     expect(json.problems.map((p) => `${p.rule}@${p.line}`)).toEqual(['path-param-undeclared@6']);
     expect(cli('specs').status).toBe(1);
-    const rules = JSON.parse(cli('--rules', '--json').out) as Array<{ id: string }>;
+    const rules = cliData(cli('--rules', '--json').out) as Array<{ id: string }>;
     expect(rules.map((x) => x.id)).toContain('example-valid');
   }, 120_000);
 });

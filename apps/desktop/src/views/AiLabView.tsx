@@ -27,7 +27,7 @@ export function AiLabView() {
   /** A provider to show (a link such as an error's "Add the key"): selected, its key field focused. */
   const [focusProvider, setFocusProvider] = useState<{ id: string; at: number }>();
   useIntent('ai', (p) => {
-    if (p?.savedId) setTab('playground');
+    if (p?.savedId || p?.prompt) setTab('playground');
     if (p?.tab) setTab(p.tab);
     if (p?.providerId) {
       setTab('providers');

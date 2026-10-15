@@ -38,28 +38,41 @@ The other direction works too. If part of a team or pipeline stays on Newman, `t
 
 TestPion writes the pipeline file for you, like Postman's *Run in CI*. It works for **GitHub Actions**, **GitLab CI**, **Azure Pipelines** and **Jenkins**, and can run a suite, a collection (or some of its folders), or all tests.
 
-- **In the app:** click the pipeline icon at the top of the **Tests** view, right-click a collection and choose **Run in CI…**, or use the command palette (**Run in CI**). Choose the CI system, what to run, the environment, and where the workspace folder is in your repository. Then **Copy** the file or **Save** it.
+- **In the app:** choose **Run in CI…** in the ⋯ menu at the top of the **Tests** list, right-click a collection and choose **Run in CI…**, or use the command palette (**Run in CI (GitHub Actions, GitLab, Azure, Jenkins)…**). Choose the CI system, what to run, the environment, and where the workspace folder is in your repository. **Try it here first** shows the same run as a command on this computer, with **Copy** and **Run in terminal**. Then **Copy** the file or **Save** it.
+- **From a run:** a run's ⋯ (the results header in **Tests** or the Collection runner) has **Run in CI…**, the dialog preselected with what the run ran (its test files with their name and tag filter, or its collection and the folders and requests it picked) and its environment, and **Copy CLI command**, the `testpion` command that runs it again from a terminal. The command palette has both for the last run (**Run Last Run in CI…**, **Copy CLI Command of Last Run**). From a terminal: `testpion ci github -w . --run <runId|last>`; agents: `ci_config` with `runId`.
+- **From a flow:** in the flow designer, **Deploy** ▸ **CI** ▸ **Set up…** opens the dialog for that one file. Under **Run the flow** pick **once**, **once per data row** (the file's own `data:` or a dataset) or **in several environments**, and tick **Keep the run as an HTML timeline** to keep `test-results/timeline.html`, also when the run fails. See [Run a flow at scale](/test-runner/integration-testing#run-a-flow-at-scale).
 - **From the terminal:** `testpion ci <github|gitlab|azure|jenkins>`
 
   ```bash
   testpion ci github -w . --suite regression -e Staging -o .github/workflows/testpion.yml
   testpion ci gitlab -w api-tests --collection "My API" --folder Smoke -e Staging --workspace-dir api-tests
-  testpion ci azure -w . --json          # { path, content, secrets, command }
+  testpion ci github -w . --run last                     # what the latest run ran, in its environment
+  testpion ci github -w . --tests rest/checkout.yaml --data datasets/users.csv -e Staging --timeline-html
+  testpion ci github -w . --tests rest/checkout.yaml --env-matrix Development Staging
+  testpion ci azure -w . --json          # .data: { provider, path, content, secrets, command, localCommand }
   testpion ci github -w . --suite regression --openapi api/openapi.yaml   # also check the spec on pull requests
   ```
+
+  `--data` (without a file: the flow's own `data:`), `--env-matrix` and `--timeline-html` take exactly one flow file in `--tests`, and `--data` and `--env-matrix` don't mix.
 
 - **AI agents:** the `ci_config` tool of the [MCP server](/ai-testing/mcp-server).
 
 The pipeline does four things:
 
-1. Installs the TestPion CLI from its GitHub repository, pinned to your TestPion version (for example `v0.8.0`), so runs are reproducible.
+1. Installs the TestPion CLI from its GitHub repository, pinned to your TestPion version (for example `v0.46.0`), so runs are reproducible.
 2. Runs the tests with the `console`, `junit` and `html` reports.
 3. Publishes `junit.xml` as test results, where the CI system supports it.
 4. Keeps the reports as build artifacts.
 
+A flow run once per data row or in several environments keeps its rows in `test-results/data-run.json` (or the matrix in `env-matrix.json`) instead of the plain reports. These files are the CLI's [JSON envelope](/cli/reference#json-output-dry-runs-and-scripts): the generated pipeline only archives them, and a step of your own that reads them reads `.data` (`jq '.data.summary' test-results/data-run.json`).
+
 With an **OpenAPI document** (`--openapi`, or the field in the dialog), pull requests also compare the document with the target branch's version and fail on [breaking changes](#catch-breaking-api-changes).
 
 A failing test fails the build. The file never contains secret values. Instead, TestPion lists the **CI secrets to create**, such as `TESTPION_SECRET_ENV_STAGING_APIKEY` for the *Staging* environment's secret `apiKey`, and the pipeline passes them to the CLI.
+
+### Pipelines against production
+
+A pipeline that runs against an environment marked as [production](/api-testing/environments#production) runs its reads (GET, HEAD, OPTIONS, GraphQL queries, gRPC reads), but every data-changing step fails with *"… is a production environment: POST … needs confirmation"* unless the run line has `--allow-production` (`testpion test`, `run`, `run-collection`, `send`, `load`, `eval run`, `serve flows` and `monitor add / run / start` take it). So a smoke run against production needs nothing. For a pipeline that has to write, tick **Allow data-changing requests to the production environment** in the CI dialog (it shows, for any suite, collection or test files, when the environment is marked production), run `testpion ci … --allow-production`, or pass `allowProduction: true` to `ci_config`; the GitHub Action takes `allow-production: true`.
 
 ## Integration tests: start the system first
 
@@ -73,7 +86,7 @@ From version 0.44.0 the CLI is on npm, so a pipeline can run it with `npx`; pin 
 # GitHub Actions
 - uses: actions/setup-node@v4
   with: { node-version: 24 }
-- run: npx testpion@0.44.0 run -w . --suite regression -e Staging -r console junit html -o test-results
+- run: npx testpion@0.46.0 run -w . --suite regression -e Staging -r console junit html -o test-results
 ```
 
 The generated files still install the CLI from the repository, which works for any version:
@@ -82,7 +95,7 @@ The generated files still install the CLI from the repository, which works for a
 # GitHub Actions
 - uses: actions/setup-node@v4
   with: { node-version: 24 }
-- run: git clone --depth 1 --branch v0.8.0 https://github.com/nasimuddin-dev/testpion.git "$RUNNER_TEMP/testpion" && cd "$RUNNER_TEMP/testpion" && npm ci && npm run build -w @testpion/core -w @testpion/cli
+- run: git clone --depth 1 --branch v0.46.0 https://github.com/nasimuddin-dev/testpion.git "$RUNNER_TEMP/testpion" && cd "$RUNNER_TEMP/testpion" && npm ci && npm run build -w @testpion/shared -w @testpion/core -w @testpion/cli
 - run: node "$RUNNER_TEMP/testpion/packages/cli/bin/testpion.js" run -w . --suite regression -e Staging -r console junit html -o test-results
   env:
     TESTPION_SECRET_PROVIDER_OPENAI_APIKEY: ${{ secrets.OPENAI_API_KEY }}
@@ -139,7 +152,7 @@ Either side can be a file or an http(s) link. `--json` prints the result for scr
 `testpion openapi-lint` checks OpenAPI / Swagger documents for mistakes that break tools and clients, and for gaps that make an API hard to use. It exits `1` on errors, so a pipeline can stop a broken spec before it is published:
 
 ```yaml
-- run: npx testpion@0.44.0 openapi-lint specs/ --fail-on error
+- run: npx testpion@0.46.0 openapi-lint specs/ --fail-on error
 ```
 
 ```text

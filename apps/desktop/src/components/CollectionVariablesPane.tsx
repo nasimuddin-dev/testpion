@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useCollectionTree, type CollectionOutline } from '../lib/collections-store';
 import { call } from '../api';
 import { confirmAction, toastError, useApp } from '../store';
+import { openRef } from '../lib/open-ref';
 import type { Collection, KeyValue } from '../types';
 import { KeyValueEditor } from './KeyValueEditor';
 import { CountPill, TreeHeader, treeKeys } from './TreeParts';
@@ -128,7 +129,7 @@ export function CollectionVariablesPane({ initial }: { initial?: string }) {
             <div className="flex items-center gap-2 min-w-0">
               <h2 className="font-semibold truncate">{current.name}</h2>
               <span className="text-xs text-muted shrink-0">{rows.length} variables</span>
-              <Button size="sm" variant="ghost" className="ml-auto" icon={<ExternalLink size={13} />} onClick={() => useApp.getState().openIntent('collections', { collectionId: current.id, tab: 'variables' })}>
+              <Button size="sm" variant="ghost" className="ml-auto" icon={<ExternalLink size={13} />} onClick={() => void openRef({ kind: 'collection', collectionId: current.id, tab: 'variables' })}>
                 Open collection
               </Button>
               <Button size="sm" icon={<Copy size={13} />} disabled={!rows.some((r) => r.key)} onClick={() => void copyToEnvironment()} title="Use them outside this collection too (MCP servers, other collections)">

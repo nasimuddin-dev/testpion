@@ -35,15 +35,19 @@ Right-click a request in the tree, or click its **⋯** button:
 
 | Item | What it does |
 |---|---|
-| **Open in tab** | Open the request. |
+| **Open** / **Open in new tab** | Open the request (in its tab, or a tab of its own). |
+| **History in git…** | The request's versions in git (when the workspace is in git). |
+| **Save as test…** | The request as a test file in **Tests**, to run with the test runner and in CI (also `testpion test from-request "Collection/Folder/Request"`). |
 | **Rename**, **Duplicate**, **Add to favorites** | Manage the request. |
 | **Move to…** | Move it to another folder, or to a folder of another collection. Open tabs follow it. You can also drag it: onto a request to place it before that one, onto a folder to put it inside, or onto a collection's name for its top level. |
 | **Copy URL** | The URL with `{{variables}}` resolved from the active environment. |
 | **Copy as cURL (bash)**, **cURL (cmd)**, **PowerShell**, **fetch** | A runnable command or code, like the browser's *Copy as …*, with variables resolved and inherited auth applied. `fetch` code also runs in Node.js 18+. |
 | **More code snippets…** | Open the request with the code generator (Python requests and httpx, Go, Java, Kotlin, C#, Dart, HTTPie and more). |
-| **Delete** | Delete the request after a confirmation. The message that follows has **Undo** for a few seconds. |
+| **Delete…** | Delete the request after a confirmation. The message that follows has **Undo** for a few seconds. |
 
-Copied commands include the request's real header and token values, so they run as they are, like Postman's *Copy as cURL*. When they do, the confirmation message says so. Folders have their own menu (Run, Monitor on a schedule, Edit folder, New HTTP request, New folder, Rename, Move to…, Delete).
+Copied commands include the request's real header and token values, so they run as they are, like Postman's *Copy as cURL*. When they do, the confirmation message says so. Folders have their own menu (**New HTTP request**, **New folder**, **Expand all** / **Collapse all**, **Run folder**, **Monitor on a schedule…**, **Create test file from folder…**, **Edit folder (scripts, variables, auth)**, **Rename**, **Duplicate**, **Move to…**, **Delete…**), and so do collections (with **Run collection**, **Run in CI…**, **Create test file from collection…** and **Settings, runner & docs**). Every menu lists its items in the same order: create · open · run · test · configure · copy · organize · delete ([Menus and shortcuts](/getting-started/finding-your-way#menus-and-shortcuts)).
+
+A saved gRPC call or connection has a shorter menu: **Open**, **Save as test…**, **Copy as grpcurl** (or **Copy URL**), **Rename**, **Duplicate**, **Move to** (another collection) and **Delete…**; drag it onto another collection to move it there.
 
 ## Tidy up
 
@@ -82,7 +86,7 @@ From the terminal, `testpion replace "Master Collections" "http://localhost:5002
 
 From Insomnia, Bruno and Hoppscotch, TestPion takes folders, requests, bodies, headers, parameters, auth and variables. `{{ _.name }}` and `<<name>>` become `{{name}}`. Insomnia's pre-request and after-response scripts run: its `insomnia.*` script API follows Postman's, so `insomnia.test`, `insomnia.expect`, `insomnia.environment` and `insomnia.response` become their `tp.*` twins. Bruno scripts and tests run as they are (`bru`, `req`, `res`). Hoppscotch scripts use their own API (`pw.*`), so they come over as comments to rewrite with `tp.*`. An imported environment never replaces one you already have: a name that's taken gets *(imported)* added.
 - TestPion collections and workspace exports.
-- A single request copied as cURL (bash or cmd), fetch or PowerShell. It is saved to the **Imported** collection, named after its method and path. Secrets in it (tokens, API keys, cookies, passwords) are replaced by `{{variables}}`, and a message lists the ones to add as secret environment variables. To just try the request without saving it, paste it into the REST view instead (see [paste a request](/api-testing/rest#paste-a-request-from-the-browser)).
+- A single request copied as cURL (bash or cmd), fetch or PowerShell. It is saved to the **Imported** collection, named after its method and path. Secrets in it (tokens, API keys, cookies, passwords) are replaced by `{{variables}}`, and a message lists the ones to add as secret environment variables. To just try the request without saving it, paste it into the HTTP editor instead (see [paste a request](/api-testing/rest#paste-a-request-from-the-browser)).
 
 If a Postman collection's scripts use something TestPion's script sandbox doesn't have (a `tp.require` package the workspace doesn't have yet, or a `require()` of a module the sandbox doesn't have: it has ajv, atob, btoa, chai, cheerio, crypto-js, csv-parse, lodash, moment, tv4, uuid and xml2js), the import says which requests and what to use instead (`scriptWarnings` in `testpion import --json` and the MCP tool).
 
@@ -228,7 +232,7 @@ The Collection Runner works like Postman's. It runs a whole collection or one fo
 |---|---|
 | Run | The whole collection or a single folder |
 | Requests | Tick the requests to include (all by default). In a long list, the filter narrows it by name, folder or method, and **Select all** / **Deselect all** act on what it shows. **Only GET** ticks just the requests that read (GET, HEAD): a smoke run that changes nothing. From the terminal: `testpion run-collection "My API" --method GET` |
-| Environment | Variables used for the run |
+| Environment | Variables used for the run: the same picker as the top bar's. The run's results show it as a badge (**PRODUCTION** in red) |
 | Iterations | How many times to run the requests (defaults to the number of data rows, or 1) |
 | Delay | Pause between requests, in milliseconds |
 | Data | A CSV or JSON file, a SQLite database with a query, or a PostgreSQL / MySQL database (**Database…**: its URL, `{{variables}}` allowed, and a query); files in the workspace's `datasets/` folder are listed next to *Select file* (its tables are listed; click one to use it). Each row becomes one iteration. Use `{{column}}` in requests, or `tp.iterationData.get('column')` in scripts. Click the file name to preview its rows |
@@ -254,6 +258,8 @@ tp.execution.skipRequest();
 
 To run a collection from a terminal or CI, use [`testpion run-collection`](../cli/reference.md#run-collection). It runs the same way and also accepts Postman collection and environment files, like Newman.
 
-Results stream into the panel on the right, with checks, errors and a trace for each request. Earlier runs are listed under **Previous runs**, and every run is saved with its HTML, Markdown, JUnit and JSON reports. With more than one iteration, each result is prefixed with its iteration number, for example `#2 Patients / List patients`.
+On an environment marked as production, the run asks once before it starts, saying how many of its requests change data ("Run Shop (14 requests, 5 change data)"); `testpion run-collection` needs `--allow-production` for those requests ([Production](/api-testing/environments#production)).
+
+Results stream into the panel on the right, with checks, errors and a trace for each request. A request's result opens the saved request. A run's **⋯** has **Run in CI…** and **Copy CLI command**, and <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd> runs the latest run again ([From a result to its source](/getting-started/finding-your-way#from-a-result-to-its-source-and-again)). Earlier runs are listed under **Previous runs**, and every run is saved with its HTML, Markdown, JUnit and JSON reports. With more than one iteration, each result is prefixed with its iteration number, for example `#2 Patients / List patients`.
 
 :::

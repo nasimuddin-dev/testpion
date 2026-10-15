@@ -47,6 +47,11 @@ module.exports = async function run(win) {
       if (method === 'Runtime.exceptionThrown') errors.push(String(params.exceptionDetails?.exception?.description ?? params.exceptionDetails?.text).slice(0, 1200));
     });
     await win.webContents.debugger.sendCommand('Runtime.enable');
+    // the page behaves as focused whatever the system focus is: two runs side by side (or another window in front)
+    // would otherwise lose focus / blur events and :focus styles to each other, and steps that type would fail
+    await win.webContents.debugger.sendCommand('Emulation.setFocusEmulationEnabled', { enabled: true }).catch(() => undefined);
+    // real mouse and keys for steps (__t.real, see real-input.cjs): events that go through hit-testing like a user's
+    await require('./real-input.cjs').install(win).catch(() => undefined);
   } catch {
     // another debugger is attached (DevTools): console errors still count
   }
@@ -105,6 +110,7 @@ module.exports = async function run(win) {
     return `${result} | profile (${total} samples): ${top.join(' · ')}`;
   };
   await js(readFileSync(join(__dirname, 'helpers.js'), 'utf8'));
+  await js(require('./real-input.cjs').PAGE);
   const plan = require(process.env.E2E_PLAN);
   let n = 0;
   for (const step of plan) {

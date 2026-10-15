@@ -23,7 +23,7 @@ const H = `
   const selectId = async (id) => { const n = byId(id); if (!n) return null; n.dispatchEvent(new MouseEvent('click', { bubbles: true })); return __t.waitFor(() => document.querySelector('[data-step-inspector="' + id + '"]'), 3000); };
   const add = async (label, id) => {
     const b = vis('[data-flow-add]')[0]; if (!b) return 'NO ADD BUTTON'; b.click();
-    const item = await __t.waitFor(() => vis('[role=menuitem]').find((m) => m.textContent.trim() === label), 2000); if (!item) return 'NO MENU ITEM ' + label;
+    const item = await __t.waitFor(() => vis('[data-palette="blocks"] [role=option]').find((m) => m.querySelector('[data-command-label]')?.textContent.trim() === label), 2000); if (!item) return 'NO MENU ITEM ' + label;
     item.click();
     if (!(await __t.waitFor(() => byId(id), 6000))) return 'NO NODE ' + id + ': ' + nodes().map((n) => n.dataset.flowNode).join(',');
     return '';
@@ -42,7 +42,8 @@ const steps = [
      if (!r) return 'NO ROW'; r.click(); await __t.sleep(1200);
      await __t.tab('Flow');
      if (!(await __t.waitFor(() => document.querySelector('[data-flow-designer]'), 5000))) return 'NO DESIGNER';
-     if (!(await __t.button('Add a step'))) return 'NO ADD A STEP';
+     if (!(await __t.button('Add blocks'))) return 'NO ADD BLOCKS';
+     const first = await __t.waitFor(() => vis('[data-palette="blocks"] [role=option]').find((m) => m.querySelector('[data-command-label]')?.textContent.trim() === 'HTTP request'), 3000); if (!first) return 'NO PICKER'; first.click();
      if (!(await __t.waitFor(() => byId('http-request'), 6000))) return 'NO FIRST NODE';
      if (!(await setUrl('http://127.0.0.1:4010/health'))) return 'NO URL FIELD';
      return 'url saved: ' + !!(await until(async () => (await fileText()).includes('url: http://127.0.0.1:4010/health'), 5000));`,

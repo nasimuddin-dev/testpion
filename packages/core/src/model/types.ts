@@ -9,6 +9,9 @@ export const SCHEMA_VERSION = '1.0';
 
 export type { KeyValue } from '@testpion/shared';
 import type { KeyValue } from '@testpion/shared';
+import type { AssertTest, ConditionTest, DelayTest, FlowTest, ForEachSpec, LogTest, ScriptTest, SetTest, UntilSpec } from './flow-types.js';
+// the flow blocks' types (a flow's own steps: delay, condition, script, sub-flow, log, set, assert) live in flow-types.ts
+export type * from './flow-types.js';
 
 /* ------------------------------------------------------------------ auth */
 
@@ -269,10 +272,7 @@ export interface CheckResult {
 
 /* ------------------------------------------------------------------ tests */
 
-export type TestType = 'http' | 'graphql' | 'grpc' | 'websocket' | 'mcp' | 'llm' | 'rag' | 'agent' | 'delay' | 'condition' | 'script' | 'flow' | 'log';
-
-/** `forEach:` of a step: an inline list of rows, or `{ dataset: path }` (CSV, JSON, JSONL, Markdown; relative to the test file). */
-export type ForEachSpec = unknown[] | { dataset: string; limit?: number };
+export type TestType = 'http' | 'graphql' | 'grpc' | 'websocket' | 'mcp' | 'llm' | 'rag' | 'agent' | 'delay' | 'condition' | 'script' | 'flow' | 'log' | 'set' | 'assert';
 
 export interface TestBase {
   id?: string;
@@ -303,6 +303,12 @@ export interface TestBase {
   repeat?: number;
   /** Run the step once per row: the row's fields, {{$index}} and {{$item}} are its variables. */
   forEach?: ForEachSpec;
+  /** Poll: run the step again until this is true on its response (a Wait until block). */
+  until?: UntilSpec;
+  /** Clean-up: runs after every other step of its file, whatever happened (also after failures and a stop). */
+  finally?: boolean;
+  /** A parallel group: the steps of the file with the same group may run at the same time (dependsOn still applies). */
+  parallel?: string;
 }
 
 export interface HttpTest extends TestBase {
@@ -443,39 +449,7 @@ export interface AgentTest extends TestBase {
   maxSteps?: number;
 }
 
-/** A pause in a flow: waits `ms` milliseconds (never longer than the test's timeout; a cancelled run stops it at once). */
-export interface DelayTest extends TestBase {
-  type: 'delay';
-  ms: number;
-}
-
-/** A condition block: evaluates `if:` and passes; the steps that depend on it with `when: true|false` run on its branch. */
-export interface ConditionTest extends TestBase {
-  type: 'condition';
-  if: string;
-}
-
-/** A script block: runs `script:` (the tp.* API) with no request; the variables it sets flow to the steps after it. */
-export interface ScriptTest extends TestBase {
-  type: 'script';
-  script: string;
-}
-
-/** A sub-flow: runs another test file as one step with `inputs:` as its variables; its `output:` (or extracted values) come back. */
-export interface FlowTest extends TestBase {
-  type: 'flow';
-  /** The test file to run, relative to this file (or to tests/). */
-  flowFile: string;
-  inputs?: Record<string, unknown>;
-}
-
-/** A log block: shows `message:` (a template) in the run's results. */
-export interface LogTest extends TestBase {
-  type: 'log';
-  message: string;
-}
-
-export type TestCase = HttpTest | GraphQLTest | GrpcTest | WebSocketTest | McpTest | LlmTest | RagTest | AgentTest | DelayTest | ConditionTest | ScriptTest | FlowTest | LogTest;
+export type TestCase = HttpTest | GraphQLTest | GrpcTest | WebSocketTest | McpTest | LlmTest | RagTest | AgentTest | DelayTest | ConditionTest | ScriptTest | FlowTest | LogTest | SetTest | AssertTest;
 
 export interface SuiteConfig {
   name: string;
@@ -532,6 +506,8 @@ export interface TestResult {
   variables?: Record<string, unknown>;
   /** A person's verdict on the result (kept beside the run, in reviews.json; added when results are read). */
   review?: ResultReview;
+  /** The test's tags (an evaluation case's: its dataset record's `tags`), when it has any. */
+  tags?: string[];
 }
 
 /** A person's verdict on a result: good or bad, and why. The checks measure; a reviewer decides. */
@@ -576,7 +552,12 @@ export interface RunSummary {
   reproducibility: Record<string, unknown>;
   /** The test files the run included (at most 50, as the results name them): a flow's run history finds its runs by them. */
   files?: string[];
+  /** What started it, so it can be run again the same way (WF-08: Run again, Rerun last run). */
+  origin?: RunOrigin;
 }
+
+/** What a run ran: test files (under tests/, with their filters) or a collection (some of its folders and requests). */
+export type RunOrigin = { kind: 'tests'; paths: string[]; grep?: string; tags?: string[] } | { kind: 'collection'; collectionId: string; selection?: string[]; iterations?: number };
 
 /* ------------------------------------------------------------------ errors */
 
@@ -662,7 +643,7 @@ export interface Environment {
   id: string;
   name: string;
   variables: EnvironmentVariable[];
-  /** Marks the environment as production; load testing is blocked unless explicitly allowed. */
+  /** Marks the environment as production: anything that can change data there (load tests too) asks first, or needs --allow-production. */
   isProduction?: boolean;
   color?: string;
   /** Position in environment lists and pickers (lowest first); environments without one follow, by file name. */

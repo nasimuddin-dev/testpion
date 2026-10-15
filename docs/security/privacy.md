@@ -16,7 +16,7 @@ Everything written to logs, traces, history, results, reports and exports passes
 
 ## OS environment variables
 
-`{{$env.NAME}}` reads an environment variable of the computer. In the app it works only for the names you list in **Settings ▸ Privacy ▸ OS environment variables requests may read** (none by default): otherwise a collection shared with you through git, or one you import, could read `{{$env.AWS_SECRET_ACCESS_KEY}}` and send it to any URL the moment you run it. A request that reads a variable not on the list says so, with a link to the setting. The CLI reads all of them, as CI pipelines expect (the pipeline decides what is in the environment; see [CI/CD](/test-runner/ci-cd)).
+`{{$env.NAME}}` reads an environment variable of the computer. In the app it works only for the names you list in **Settings ▸ Privacy & security ▸ OS environment variables requests may read** (none by default): otherwise a collection shared with you through git, or one you import, could read `{{$env.AWS_SECRET_ACCESS_KEY}}` and send it to any URL the moment you run it. A request that reads a variable not on the list says so, with a link to the setting. The CLI reads all of them, as CI pipelines expect (the pipeline decides what is in the environment; see [CI/CD](/test-runner/ci-cd)).
 
 ## Programs a workspace starts
 

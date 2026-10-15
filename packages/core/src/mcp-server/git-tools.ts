@@ -53,9 +53,12 @@ export function gitTools(d: { store: WorkspaceStore; findCollection(ref: unknown
     {
       name: 'git_status',
       description:
-        'Git state of the workspace: whether it is in a repository, the branch, commits ahead / behind the remote, and each changed file (modified, added, deleted, renamed, untracked, conflicted; staged or not).',
+        'Git state of the workspace: whether it is in a repository, the branch, commits ahead / behind the remote, and each changed file (modified, added, deleted, renamed, untracked, conflicted; staged or not) with its `ref` (an ItemRef of kind git-file).',
       inputSchema: { type: 'object', properties: {} },
-      run: () => gitStatus(store.root),
+      run: async () => {
+        const st = await gitStatus(store.root);
+        return st.files ? { ...st, files: st.files.map((f) => ({ ...f, ref: { kind: 'git-file', path: f.path } })) } : st;
+      },
     },
     {
       name: 'git_sync',

@@ -56,7 +56,7 @@ export function registerHistoryCommands(program: Command): void {
       return withWorkspace(o.workspace, (store) => {
         const requestId = o.request ? savedRequestId(store, o.request, o.collection) : undefined;
         const items = store.meta.listHistory({ requestId, kind: requestId ? 'http' : undefined, failed: o.failed || undefined, limit: Math.min(Number(o.limit) || 20, 500) }).items;
-        const rows = items.map((h) => ({ id: h.id, timestamp: h.timestamp, kind: h.kind, name: h.name, method: h.method, status: h.status, durationMs: h.durationMs, size: h.size }));
+        const rows = items.map((h) => ({ id: h.id, ref: { kind: 'history' as const, historyId: h.id }, timestamp: h.timestamp, kind: h.kind, name: h.name, method: h.method, status: h.status, durationMs: h.durationMs, size: h.size }));
         if (o.json) printJson(rows);
         else for (const r of rows) console.log(`${dim(r.id)}  ${r.timestamp}  ${String(r.status ?? '').padEnd(4)} ${r.method ?? r.kind} ${r.name}  ${dim(formatDuration(r.durationMs ?? 0))}`);
       });

@@ -6,11 +6,13 @@ import { call, on } from '../api';
  * `reloadOn` events arrives. `undefined` until the first answer; `fallback` when the call fails. The params
  * are compared by value (JSON), so an inline object is fine. A reload keeps what is shown until the new answer
  * comes; a change of params starts over (`undefined`, or the old answer with `keep`). `enabled: false` makes
- * no call and answers `undefined`.
+ * no call and answers `undefined`. `scope` is what the answer belongs to besides the params (e.g. the open workspace's
+ * path): when it changes the call is made again, as for new params.
  */
-export function useRpc<T>(method: string, params?: unknown, opts: { fallback?: T; reloadOn?: string[]; enabled?: boolean; keep?: boolean } = {}): T | undefined {
+export function useRpc<T>(method: string, params?: unknown, opts: { fallback?: T; reloadOn?: string[]; enabled?: boolean; keep?: boolean; scope?: string } = {}): T | undefined {
   const [data, setData] = useState<T>();
   const key = JSON.stringify(params ?? null);
+  const scope = opts.scope;
   const enabled = opts.enabled ?? true;
   const events = (opts.reloadOn ?? []).join('\0');
   useEffect(() => {
@@ -32,7 +34,7 @@ export function useRpc<T>(method: string, params?: unknown, opts: { fallback?: T
       offs.forEach((off) => off());
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [method, key, enabled, events]);
+  }, [method, key, enabled, events, scope]);
   return data;
 }
 

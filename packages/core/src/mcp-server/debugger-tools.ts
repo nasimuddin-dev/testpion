@@ -17,9 +17,9 @@ import { str, type Tool } from './tool.js';
  * The HTTP Debugger for agents: start the proxy, point a program at it, read what it sent and got. The capture lives
  * in this server process; secrets in URLs, headers and bodies pass the redactor before an agent sees them.
  */
-export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore }): Tool[] {
+export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore; /** The capture's list, when other tools read it too (flow_from_exchanges). */ session?: DebuggerExchange[] }): Tool[] {
   let proxy: DebuggerProxy | undefined;
-  const session: DebuggerExchange[] = [];
+  const session: DebuggerExchange[] = d.session ?? [];
   /** The rules of this server process (an agent adds them; the proxy reads them on every request). */
   const rules: DebuggerRule[] = [];
   const red = d.redactor;
@@ -131,7 +131,7 @@ export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore })
           }
           return true;
         });
-        return { running: !!proxy, url: proxy?.url, total: session.length, exchanges: out.slice(-Math.min(Math.max(Number(a.limit) || 200, 1), 2000)).map((e) => safe(e, false)) };
+        return { running: !!proxy, url: proxy?.url, total: session.length, exchanges: out.slice(-Math.min(Math.max(Number(a.limit) || 200, 1), 2000)).map((e) => ({ ...safe(e, false), ref: { kind: 'exchange', exchangeId: e.id } })) };
       },
     },
     {

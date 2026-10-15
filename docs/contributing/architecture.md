@@ -7,7 +7,7 @@ description: "Rules for contributors and AI coding agents working on the codebas
 
 # Architecture notes for contributors
 
-Follow the engineering rules in SRS §72. In particular:
+The engineering rules, in particular:
 
 - Keep protocol adapters independent of each other and keep UI state separate from execution state.
 - Never block the renderer. Use bounded concurrency, stream data, and never hold unbounded payloads in memory.
@@ -20,17 +20,19 @@ Follow the engineering rules in SRS §72. In particular:
 packages/core        the engine, host-agnostic (Node): the same code runs in the CLI, the desktop app and a server later
   model/             the types of everything saved (types.ts) and the schema version
   storage/           workspaces on disk: collections, environments, tests, trash, git files, secrets, trust, watcher
-  protocols/         http, graphql, grpc, websocket/socket.io/mqtt, mcp, sse: one client each, nothing shared between them
-  runner/            test files, suites, the run loop, results, breakdowns, baselines, CI config
+  protocols/         http, graphql, grpc, websocket, socketio, mqtt, kafka, mcp: one client each, nothing shared between them
+  runner/            test files, suites, the run loop, flows (edits, blocks, data runs, env matrices, webhooks, timelines), results, baselines, CI config
   eval/, ai/, load/  checks and evaluators, providers and the assistant's helpers, load tests
   import/            Postman, Insomnia, Bruno, OpenAPI, HAR, cURL/fetch snippets, save-request (secrets to variables)
   scripts/           the tp.* sandbox (QuickJS in WebAssembly): scripts never reach Node
   git/               git through the system git, changes by meaning, the merge driver
-  mcp-server/        the workspace as MCP tools for agents: tool.ts (the contract), one module per subject, testpion-mcp.ts composes them
+  net/               the production guard (one rule for every host), private-network guards
+  mcp-server/        the workspace as MCP tools for agents: tool.ts (a tool), tool-contract.ts (paging, response_format, confirm, output schemas) and tool-docs.ts (when / when not / example), one module per subject, testpion-mcp.ts composes them
   index.ts           the public surface: everything the CLI and the app may use
-packages/cli         commands over core (commands/*.ts), JSON output everywhere, exit codes 0 / 1 / 2 / 3
+packages/cli         commands over core (commands/*.ts); every --json is one envelope (output.ts), exit codes 0 / 1 / 2 / 3
 apps/desktop
-  backend/           the app's RPC handlers over core (handlers/*.ts, one file per subject); backend.ts wires them and owns long-running state
+  backend/           the app's RPC handlers over core (handlers/*.ts, one file per subject); backend.ts wires them and owns long-running state;
+                     production-guard.ts checks every sending or running call against production environments
   electron/          the window, menu, updater, preload (the context bridge), --mcp-server and --merge-driver modes
   src/               the renderer (React): talks to the backend only through api.ts (RPC); from core it takes types only
   e2e/               the UI regression suite (plans/*.cjs) and the profiler plan

@@ -4,6 +4,7 @@ import type { TestResult } from '../types';
 import { formatMs, timeAgo } from '../lib/format';
 import { StatusIcon } from './Results';
 import { Badge, Button, cx, Empty, Input, LinkButton, SectionTitle } from './ui';
+import { EnvBadge } from './EnvSelect';
 import { valueText, VariablesTable } from './VariablesTable';
 
 /** A run of a flow file, as tests.flowRuns lists it. */
@@ -12,7 +13,8 @@ export interface FlowRunRow {
   name: string;
   startedAt: string;
   durationMs: number;
-  status: 'passed' | 'failed' | 'cancelled';
+  /** skipped: none of its steps ran (the engine's flowRunStatus). */
+  status: 'passed' | 'failed' | 'cancelled' | 'skipped';
   environment?: string;
   steps: number;
   passed: number;
@@ -92,7 +94,7 @@ export function FlowHistoryList({
                   {r.passed}/{r.steps} passed
                 </span>
                 {r.firstFailed && <span className="text-bad truncate">first failing: {r.firstFailed}</span>}
-                {r.environment && <span className="truncate">{r.environment}</span>}
+                {r.environment && <EnvBadge name={r.environment} className="max-w-32" />}
                 <span className="flex-1" />
                 {r.status === 'failed' && (
                   <LinkButton

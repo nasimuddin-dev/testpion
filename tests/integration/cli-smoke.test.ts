@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { join } from 'node:path';
-import { copyExample, runCli, runCliSync, tempDir } from '../helpers.js';
+import { copyExample, runCli, runCliSync, tempDir, cliData } from '../helpers.js';
 
 // Every CLI command answers --help (exit 0, a usage line), and the commands that read a workspace answer --json with
 // the shape a script or an agent relies on, against a copy of the examples workspace and no network.
@@ -11,8 +11,8 @@ const run = (args: string[]) => runCliSync(args, { cwd: dir, home: join(dir, 'ho
 const json = (args: string[]) => {
   const r = run(args);
   expect(r.status, `${args.join(' ')}: ${r.err}`).toBe(0);
-  expect(() => JSON.parse(r.out), `${args.join(' ')} printed no JSON: ${r.out.slice(0, 200)}`).not.toThrow();
-  return JSON.parse(r.out) as Record<string, unknown>;
+  expect(() => cliData(r.out), `${args.join(' ')} printed no JSON: ${r.out.slice(0, 200)}`).not.toThrow();
+  return cliData(r.out) as Record<string, unknown>;
 };
 
 beforeAll(() => {
@@ -36,7 +36,7 @@ describe('CLI smoke', () => {
 
   it('the workspace readers answer --json', () => {
     expect(json(['doctor', '--json'])).toHaveProperty('checks');
-    const info = json(['agent-info', '-w', ws]);
+    const info = JSON.parse(run(['agent-info', '-w', ws]).out) as Record<string, unknown>;
     expect(info).toMatchObject({ schemaVersion: 1, workspace: { name: 'Veterinary API (example)' } });
     expect(info).toHaveProperty('commands.mcpServer');
     expect(json(['collections', '-w', ws, '--json'])).toBeInstanceOf(Array);

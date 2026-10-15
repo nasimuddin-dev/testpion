@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { call } from '../api';
 import { formatMs, plural } from '../lib/format';
 import { BarRow, ChartCard } from './charts';
+import { RefLink } from './RefLink';
+import { type ItemRef } from '@testpion/shared';
 
 /** From `monitor.requests` (monitorRequestStats in core). */
 interface Stat {
@@ -11,6 +13,8 @@ interface Stat {
   medianMs?: number;
   p95Ms?: number;
   lastFailure?: string;
+  /** Where it comes from: the saved request, or the test file at its step (WF-08). */
+  ref?: ItemRef;
 }
 
 /** The monitor's requests over its latest runs: median time as a bar (slowest first), failures next to it. */
@@ -46,7 +50,15 @@ export function MonitorRequests({ monitorId, refresh }: { monitorId: string; ref
         {rows.slice(0, 15).map((r) => (
           <BarRow
             key={r.name}
-            label={<span title={r.name}>{r.name.slice(prefix.length)}</span>}
+            label={
+              r.ref ? (
+                <RefLink to={r.ref} icon={false} title={`Open ${r.name}`} className="text-fg">
+                  {r.name.slice(prefix.length)}
+                </RefLink>
+              ) : (
+                <span title={r.name}>{r.name.slice(prefix.length)}</span>
+              )
+            }
             labelClass="w-56"
             rightClass="w-44 whitespace-nowrap"
             segments={[{ value: r.medianMs ?? 0, color: r.failed ? 'var(--bad)' : 'var(--accent)' }]}

@@ -34,6 +34,18 @@ const json = (res, status, body, headers = {}) => {
   res.writeHead(status, { 'content-type': 'application/json', ...headers });
   res.end(JSON.stringify(body));
 };
+/**
+ * Every HTTP server here answers through this: an error in a handler (a bad parameter, a client gone mid-reply) is
+ * answered with a 500 instead of an unhandled rejection, which would end the whole process and every demo server in it.
+ */
+const handled = (handler) => async (req, res) => {
+  try {
+    await handler(req, res);
+  } catch (e) {
+    if (!res.headersSent && !res.destroyed) json(res, 500, { error: 'demo server error', message: String(e?.message ?? e) });
+    else res.destroy();
+  }
+};
 const readBody = (req) =>
   new Promise((resolve) => {
     const chunks = [];
@@ -94,7 +106,9 @@ export function createRestServer() {
     ['2', { id: '2', name: 'Whiskers', species: 'cat', ownerId: '456' }],
   ]);
   let nextId = 3;
-  return createServer(async (req, res) => {
+  const jobs = new Map();
+  let nextJob = 1;
+  return createServer(handled(async (req, res) => {
     const url = new URL(req.url, 'http://x');
     const auth = req.headers.authorization;
     const authed = auth === `Bearer ${DEMO_TOKEN}`;
@@ -152,7 +166,25 @@ export function createRestServer() {
       await new Promise((r) => setTimeout(r, Number(url.searchParams.get('ms') ?? 1000)));
       return json(res, 200, { delayed: true });
     }
-    if (p === '/status') return json(res, Number(url.searchParams.get('code') ?? 500), { error: 'requested status' });
+    if (p === '/status') {
+      // any status a client may ask for (100-599); anything else (an unresolved {{code}}, text) is the client's mistake
+      const code = Number(url.searchParams.get('code') ?? 500);
+      if (!Number.isInteger(code) || code < 100 || code > 599) return json(res, 400, { error: `code must be a status between 100 and 599, got "${url.searchParams.get('code')}"` });
+      return json(res, code, { error: 'requested status' });
+    }
+    // a background job to poll (a flow's Wait until): POST /jobs starts one; GET /jobs/{id} says running twice, then done
+    if (p === '/jobs' && req.method === 'POST') {
+      const id = `job-${nextJob++}`;
+      jobs.set(id, 0);
+      return json(res, 201, { id, status: 'running' });
+    }
+    if (p.startsWith('/jobs/') && req.method === 'GET') {
+      const id = decodeURIComponent(p.slice(6));
+      const polls = (jobs.get(id) ?? 0) + 1;
+      jobs.set(id, polls);
+      if (jobs.size > 1000) jobs.delete(jobs.keys().next().value);
+      return json(res, 200, { id, status: polls <= 2 ? 'running' : 'done', polls, ...(polls > 2 ? { result: { total: 42 } } : {}) });
+    }
     if (p === '/large') {
       // streams ~N MB of JSON without buffering it
       const mb = Number(url.searchParams.get('mb') ?? 10);
@@ -205,7 +237,7 @@ export function createRestServer() {
       if (req.method === 'DELETE' && id) return patients.delete(id) ? json(res, 204, {}) : json(res, 404, { error: 'not_found' });
     }
     json(res, 404, { error: 'not_found', path: p });
-  });
+  }));
 }
 
 /* ------------------------------------------------------------------ GraphQL */
@@ -242,7 +274,7 @@ export function createGraphQLServer() {
       return withOwner(p);
     },
   };
-  return createServer(async (req, res) => {
+  return createServer(handled(async (req, res) => {
     if (req.method !== 'POST') return json(res, 405, { errors: [{ message: 'Use POST' }] });
     let body;
     try {
@@ -252,7 +284,7 @@ export function createGraphQLServer() {
     }
     const result = await graphql({ schema, source: body.query, rootValue: root, variableValues: body.variables, operationName: body.operationName });
     json(res, 200, result);
-  });
+  }));
 }
 
 /* ------------------------------------------------------------------ Mock LLM */
@@ -291,7 +323,7 @@ export function createMockLlmServer() {
     const c = Math.ceil((out ?? '').length / 4) || 5;
     return { prompt_tokens: p, completion_tokens: c, total_tokens: p + c };
   };
-  return createServer(async (req, res) => {
+  return createServer(handled(async (req, res) => {
     const url = new URL(req.url, 'http://x');
     if (url.pathname.endsWith('/models')) return json(res, 200, { data: [{ id: 'mock-gpt' }, { id: 'mock-small' }, { id: 'mock-embed' }] });
     const body = req.method === 'POST' ? JSON.parse((await readBody(req)) || '{}') : {};
@@ -335,7 +367,7 @@ export function createMockLlmServer() {
     send({ model, choices: [{ index: 0, delta: {}, finish_reason: msg.tool_calls ? 'tool_calls' : 'stop' }] });
     if (body.stream_options?.include_usage) send({ model, choices: [], usage: usage(body.messages, msg.content) });
     res.end('data: [DONE]\n\n');
-  });
+  }));
 }
 
 /* ------------------------------------------------------------------ WebSocket */

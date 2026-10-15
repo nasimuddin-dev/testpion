@@ -3,8 +3,9 @@ import { exportTextFormat } from './export-formats.js';
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { Command, Option } from 'commander';
-import { WorkspaceManager, formatDuration, importRequestSnippet, ciConfig, compareEnvironments, environmentMatrix, compareRequestAcrossEnvironments, collectionRequests, type CiProvider, convertCollectionScripts, isRequestSnippet, Redactor, collectionMarkdown, collectionHtml, exportPostmanCollection, exportPostmanEnvironment, fetchImportText, readBrunoFolder, collectionToBru, type Environment, bundleWsdl, isWsdl, importIntoWorkspace, diffOpenApi, lintOpenApi, OPENAPI_LINT_RULES, type OpenApiLintSeverity, type OpenApiLintResult, workspaceApiCoverage, apiCoverageMarkdown, securityLint, collectionSecurityFindings, type SecurityFinding, listSpecs, unusedVariables, definedVariableNames, findEnvironment, setEnvironmentVariables, unsetEnvironmentVariables, variableFlow, collectionToOpenApiText, variableUsages, renameVariable, collectionSavedItems, listWorkspaceDatasets, appendDatasetRow, readWorkspaceDataset, workspaceReportHtml, collectionVariableFlow, loadHistory, workspaceStorage, deleteRunsBefore, listCertificates, workspaceAttention, decodeJwt, describeExpiry, recordCertificate, checkCertificate, detectFormat, resolveArazzoSources } from '@testpion/core';
+import { WorkspaceManager, formatDuration, importRequestSnippet, ciConfig, ciTargetOfRun, finishedRun, compareEnvironments, environmentMatrix, compareRequestAcrossEnvironments, collectionRequests, type CiProvider, convertCollectionScripts, isRequestSnippet, Redactor, collectionMarkdown, collectionHtml, exportPostmanCollection, exportPostmanEnvironment, fetchImportText, readBrunoFolder, collectionToBru, type Environment, bundleWsdl, isWsdl, importIntoWorkspace, diffOpenApi, lintOpenApi, OPENAPI_LINT_RULES, type OpenApiLintSeverity, type OpenApiLintResult, workspaceApiCoverage, apiCoverageMarkdown, securityLint, collectionSecurityFindings, type SecurityFinding, listSpecs, unusedVariables, definedVariableNames, findEnvironment, setEnvironmentVariables, addVariablesToEnvironments, unsetEnvironmentVariables, variableFlow, collectionToOpenApiText, variableUsages, renameVariable, collectionSavedItems, listWorkspaceDatasets, appendDatasetRow, readWorkspaceDataset, workspaceReportHtml, collectionVariableFlow, loadHistory, workspaceStorage, deleteRunsBefore, listCertificates, workspaceAttention, decodeJwt, describeExpiry, recordCertificate, checkCertificate, detectFormat, resolveArazzoSources } from '@testpion/core';
 import { EXIT, green, red, yellow, dim, bold, CliError, printJson, findWorkspaceUp, withWorkspace, warnProblems, cliSecrets, cliContext, requireCollection, requireEnvironment, loadCollectionRef, readDefinition } from '../shared.js';
+import { requireInteractive } from '../contract.js';
 
 export function registerDataCommands(program: Command): void {
   program
@@ -281,6 +282,8 @@ export function registerDataCommands(program: Command): void {
     .action(async (token: string, o: { json?: boolean }) => {
       let t = token;
       if (t === '-') {
+        // from a terminal that would wait for someone to type the token
+        if (process.stdin.isTTY) requireInteractive('Reading the token from the terminal', 'Pipe it in (echo "$TOKEN" | testpion jwt -) or pass it as the argument.');
         const chunks: Buffer[] = [];
         for await (const c of process.stdin) chunks.push(c as Buffer);
         t = Buffer.concat(chunks).toString('utf8').trim();
@@ -303,7 +306,8 @@ export function registerDataCommands(program: Command): void {
     });
   program
     .command('attention')
-    .description('what needs attention in the workspace: failing monitors, expiring certificates, the latest failed run, failing requests, flaky tests (exit 1 on a high-severity item)')
+    .alias('problems')
+    .description("the problems of the workspace, as the app's Problems panel lists them: files that can't be read, failing monitors, the latest failed run (failures and errors apart), failing requests, expiring certificates, flaky tests (exit 1 on a high-severity item); also: testpion problems")
     .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
     .option('--cert-days <days>', 'warn about certificates that expire within this many days', '30')
     .option('--json', 'print as JSON')
@@ -314,7 +318,7 @@ export function registerDataCommands(program: Command): void {
         if (o.json) printJson(items);
         else if (o.markdown) console.log(items.length ? ['**Needs attention**', ...items.map((i) => `- ${i.severity === 'high' ? '🔴' : i.severity === 'medium' ? '🟠' : '⚪'} ${i.message}`)].join('\n') : '✅ Nothing needs attention.');
         else if (!items.length) console.log(green('Nothing needs attention.'));
-        else for (const i of items) console.log(`${i.severity === 'high' ? red('high  ') : i.severity === 'medium' ? yellow('medium') : dim('low   ')} ${i.message}`);
+        else for (const i of items) console.log(`${i.severity === 'high' ? red('high  ') : i.severity === 'medium' ? yellow('medium') : dim('low   ')} ${dim(i.type.padEnd(7))} ${i.message}`);
         process.exitCode = items.some((i) => i.severity === 'high') ? EXIT.TEST_FAILURE : EXIT.SUCCESS;
       });
     });
@@ -452,7 +456,7 @@ export function registerDataCommands(program: Command): void {
             throw new CliError(`--row must be a JSON object: --row '{"message": "hi", "expected": "greeting"}'`, EXIT.CONFIG_ERROR);
           }
           const out = await appendDatasetRow(store, o.add, row);
-          return console.log(o.json ? JSON.stringify(out, null, 2) : green(`${out.path}: ${out.rows} record${out.rows === 1 ? '' : 's'}`));
+          return o.json ? printJson(out) : console.log(green(`${out.path}: ${out.rows} record${out.rows === 1 ? '' : 's'}`));
         }
         const rows = listWorkspaceDatasets(store);
         if (o.json) return printJson(rows);
@@ -699,7 +703,12 @@ export function registerDataCommands(program: Command): void {
     .option('--collection <nameOrId>', 'run a collection')
     .option('--folder <nameOrId>', 'with --collection: only this folder or request (repeatable)', (v: string, prev: string[] = []) => [...prev, v])
     .option('--tests <paths...>', 'test files or folders under tests/ (default: all)')
+    .option('--run <runId>', 'instead of --suite / --collection / --tests: what this finished run ran, in its environment ("last": the newest finished run of test files or a collection)')
+    .option('--data [file]', 'one flow file (--tests file): run it once per row of this data (a dataset; without a value, the file\'s own data:)')
+    .option('--env-matrix <names...>', 'one flow file: run it in each of these environments and compare step by step')
+    .option('--timeline-html', 'one flow file: keep the run as an HTML timeline (test-results/timeline.html), also when it fails')
     .option('-e, --environment <name>', 'environment to run with')
+    .option('--allow-production', 'the pipeline may send data-changing requests to an environment marked as production (adds --allow-production to its run line)')
     .option('--workspace-dir <path>', 'the workspace folder relative to the repository root', '.')
     .option('--openapi <file>', 'OpenAPI document in the repository: pull requests fail on breaking changes against the target branch')
     .option('--start <command>', 'integration tests: start the system under test first, in the background (e.g. "npm start", "docker compose up -d")')
@@ -709,13 +718,21 @@ export function registerDataCommands(program: Command): void {
     .option('--json', 'print { path, content, secrets, command } as JSON')
     .action((provider: string, o) => {
       return withWorkspace(o.workspace, (store) => {
+        // --run: the run's files (with its filter) or collection, and its environment unless -e names another
+        const fromRun = o.run ? ciTargetOfRun(store, finishedRun(store, String(o.run))) : undefined;
+        if (fromRun?.note) console.error(dim(fromRun.note));
         const c = ciConfig(store, {
           provider: provider as CiProvider,
           suite: o.suite,
           collection: o.collection,
           folders: o.folder,
           tests: o.tests,
-          environment: o.environment,
+          ...fromRun?.target,
+          data: o.data === true ? '' : o.data,
+          envMatrix: o.envMatrix,
+          timelineHtml: o.timelineHtml,
+          allowProduction: o.allowProduction,
+          environment: o.environment ?? fromRun?.environment,
           workspaceDir: o.workspaceDir,
           openapi: o.openapi,
           start: o.start,
@@ -793,9 +810,11 @@ export function registerDataCommands(program: Command): void {
     .argument('<assignments...>', 'key=value pairs')
     .requiredOption('-w, --workspace <nameOrPath>')
     .option('--create', 'create the environment if it does not exist')
+    .option('--also-in <environments...>', 'also add them to these environments where they are missing (empty; --copy for the same values)')
+    .option('--copy', 'with --also-in: the same values')
     .option('--json', 'print the variable names as JSON')
     .action((ref: string, pairs: string[], o) => {
-      return withWorkspace(o.workspace, (store) => {
+      return withWorkspace(o.workspace, async (store) => {
         const values: Record<string, string> = {};
         for (const p of pairs) {
           const i = p.indexOf('=');
@@ -803,8 +822,12 @@ export function registerDataCommands(program: Command): void {
           values[p.slice(0, i)] = p.slice(i + 1);
         }
         const env = setEnvironmentVariables(store, ref, values, { create: !!o.create });
-        if (o.json) printJson({ environment: env.name, set: Object.keys(values) });
-        else console.log(green(`${env.name}: set ${Object.keys(values).join(', ')}`));
+        const also = o.alsoIn?.length ? await addVariablesToEnvironments(store, env.id, Object.keys(values), (o.alsoIn as string[]).flatMap((x) => x.split(',')).map((x) => x.trim()).filter(Boolean), { copy: !!o.copy }) : undefined;
+        if (o.json) printJson({ environment: env.name, set: Object.keys(values), ...(also ? { also } : {}) });
+        else {
+          console.log(green(`${env.name}: set ${Object.keys(values).join(', ')}`));
+          for (const a of also ?? []) console.log(a.added.length ? green(`${a.environment}: added ${a.added.join(', ')}`) : `${a.environment}: has them already`);
+        }
       }).catch((e) => {
         throw e instanceof CliError ? e : new CliError((e as Error).message, EXIT.CONFIG_ERROR);
       });

@@ -11,7 +11,7 @@ import { ResponseHistory } from './ResponseHistory';
 import { JsonTree, RawView, type TreeAssertion, type TreeVariable } from './JsonView';
 import { TraceView } from './TraceView';
 import { finishSave, type SaveResult } from '../lib/files';
-import { Badge, Button, cx, Empty, MoreMenu, statusTone, Tabs, type MenuItem } from './ui';
+import { Badge, Button, cx, Empty, OverflowActions, statusTone, Tabs, type MenuItem } from './ui';
 import { useApp, toastError } from '../store';
 import { JsonTable, tableRowsOf } from './JsonTable';
 import { JwtView } from './JwtView';
@@ -130,7 +130,7 @@ export function ResponseViewer({
           <span className="hidden @md:inline">Size </span>
           <span className="text-fg tabular-nums">{formatBytes(response.size)}</span>
         </span>
-        {response.httpVersion === '2' && <Badge title="The response came over HTTP/2 (request Settings ▸ HTTP/1.1 only to turn it off)">HTTP/2</Badge>}
+        {response.httpVersion === '2' && <Badge title="The response came over HTTP/2 (request Settings ▸ HTTP version: HTTP/1.1 to turn it off)">HTTP/2</Badge>}
         {!!response.attempts && response.attempts > 1 && (
           <Badge tone="warn" title="Earlier attempts failed and were retried (request Settings ▸ Retries)">
             {response.attempts} attempts
@@ -142,14 +142,7 @@ export function ResponseViewer({
           </Badge>
         )}
         {checks && checks.length > 0 && <Badge tone={failed ? 'bad' : 'ok'}>{failed ? `${failed} failed` : `${checks.length} passed`}</Badge>}
-        <div className="ml-auto hidden @3xl:flex items-center gap-1">
-          {actions.map((a) => (
-            <Button key={a.label} size="sm" variant="ghost" icon={a.icon} onClick={a.onSelect} title={a.title}>
-              {a.label}
-            </Button>
-          ))}
-        </div>
-        <div className="ml-auto @3xl:hidden">{actions.length > 0 && <MoreMenu label="Response actions" items={actions} />}</div>
+        <OverflowActions items={actions} label="Response actions" variant="ghost" className="ml-auto" />
       </div>
       <Tabs
         value={tab}

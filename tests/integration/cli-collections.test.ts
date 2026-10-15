@@ -1,5 +1,5 @@
 import { describe, it, expect, afterAll } from 'vitest';
-import { copyExample, runCliSync } from '../helpers.js';
+import { copyExample, runCliSync, cliData } from '../helpers.js';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -17,14 +17,14 @@ describe('CLI: collections and requests', () => {
   it('lists collections with their gRPC calls and connections', () => {
     const r = cli('collections', '--json');
     expect(r.status, r.err).toBe(0);
-    const rows = JSON.parse(r.out) as Array<{ id: string; requests: number; grpcCalls: number; connections: number }>;
+    const rows = cliData(r.out) as Array<{ id: string; requests: number; grpcCalls: number; connections: number }>;
     expect(rows.find((c) => c.id === 'grpc')).toMatchObject({ requests: 0, grpcCalls: 9, connections: 0 });
     expect(rows.find((c) => c.id === 'realtime')).toMatchObject({ grpcCalls: 0, connections: 6 });
     expect(rows.find((c) => c.id === 'httpbin')!.requests).toBeGreaterThan(5);
   }, 120_000);
 
   it('lists what one collection holds', () => {
-    const grpc = JSON.parse(cli('requests', 'gRPC (grpcb.in)', '--json').out) as Array<{ kind: string; target: string }>;
+    const grpc = cliData(cli('requests', 'gRPC (grpcb.in)', '--json').out) as Array<{ kind: string; target: string }>;
     expect(grpc.map((r) => r.kind)).toEqual(Array(9).fill('grpc'));
     expect(grpc[0]!.target).toMatch(/\{\{grpcHost\}\} hello\.HelloService\//);
     const text = cli('requests', 'realtime').out;

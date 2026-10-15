@@ -6,6 +6,7 @@ import { toastError, useApp } from '../store';
 import { TreeBadge } from './CollectionTree';
 import { Badge, Button, Empty, Field, Input, Toggle } from './ui';
 
+import { refOfWorkspacePath } from '@testpion/shared';
 type Verdict = 'server-error' | 'accepted-invalid' | 'rejected-valid' | 'undocumented-status' | 'not-authorized' | 'not-judged' | 'ok' | 'failed';
 
 interface FuzzResult {
@@ -162,7 +163,7 @@ export function ApiFuzzPanel({ spec }: { spec: string }) {
                   title="Each server error and accepted invalid input as a test that expects a 4xx: it passes once the API is fixed"
                   onClick={() =>
                     void call<{ path: string; tests: number }>('openapi.fuzzSaveTests', { path: spec, report, baseUrl: report.baseUrl }).then(
-                      (r) => useApp.getState().toast(`${r.path}: ${r.tests} regression tests`, 'success', { label: 'Open Tests', onClick: () => useApp.getState().setView('tests') }),
+                      (r) => useApp.getState().toast(`${r.path}: ${r.tests} regression tests`, 'success', { ref: refOfWorkspacePath(r.path) ?? { kind: 'test', path: r.path } }),
                       (e) => toastError(e),
                     )
                   }

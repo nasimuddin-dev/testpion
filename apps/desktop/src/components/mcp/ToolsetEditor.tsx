@@ -4,6 +4,7 @@ import type { McpMockDefinition, McpMockResponse } from '@testpion/core';
 import { asError, call } from '../../api';
 import { promptText, toastError, useApp } from '../../store';
 import { copyText } from '../../lib/clipboard';
+import { RunInTerminalButton } from '../RunInTerminal';
 import { stringifyYaml } from '../../lib/yaml';
 import { CodeBlock } from '../CodeBlock';
 import { CodeEditor } from '../CodeEditor';
@@ -12,6 +13,7 @@ import { ErrorPanel } from '../Results';
 import { ResponseSplit } from '../ResponseSplit';
 import { Badge, Button, Callout, cx, Empty, Field, IconButton, Input, Menu, Segmented, Select, Split, Toggle, Textarea } from '../ui';
 import { ToolResult, type ToolRun } from './ToolsPanel';
+import { LABEL } from '../../lib/vocabulary';
 
 /**
  * The Tools tab of a mock MCP server: the toolset an agent will see, designed here. The mock file (`*.mcp-mock.yaml`)
@@ -237,7 +239,7 @@ export const ToolsetEditor = forwardRef<ToolsetEditorHandle, { file: string; ser
                       { label: 'Duplicate', icon: <CopyPlus size={14} />, onSelect: () => duplicateTool(i) },
                       { label: 'Move up', icon: <ArrowUp size={14} />, disabled: i === 0, onSelect: () => moveTool(i, i - 1) },
                       { label: 'Move down', icon: <ArrowDown size={14} />, disabled: i === tools.length - 1, onSelect: () => moveTool(i, i + 1) },
-                      { label: 'Delete', icon: <Trash2 size={14} />, danger: true, separator: true, onSelect: () => deleteTool(i) },
+                      { label: LABEL.delete, icon: <Trash2 size={14} />, danger: true, separator: true, onSelect: () => deleteTool(i) },
                     ]}
                   />
                 </div>
@@ -276,6 +278,7 @@ function ServeLine({ label, text, what, block }: { label: string; text: string; 
     <div className="grid gap-1">
       <div className="flex items-center gap-2 text-xs text-muted">
         <span className="flex-1">{label}</span>
+        {!block && <RunInTerminalButton command={text} />}
         <IconButton label={`Copy ${what}`} onClick={() => void copyText(text, what)}>
           <Copy size={13} />
         </IconButton>

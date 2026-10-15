@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { call } from '../api';
 import { activeCollectionId } from '../lib/var-popover';
 import { useApp } from '../store';
+import { openRef } from '../lib/open-ref';
+import type { ItemRef } from '@testpion/shared';
 import { Badge, Button, cx, Input, Tooltip } from './ui';
 import { Callout } from '../components/ui';
 
@@ -90,9 +92,14 @@ export function EnvQuickLook() {
     return () => window.removeEventListener(QUICK_LOOK, h);
   });
   const load = () => void call<QuickLook>('env.quickLook', { environment: env, collectionId: activeCollectionId() }).then(setData);
+  // a fix that does something there (add the variable, move these): its view with the action
   const go = (view: 'environments' | 'collections', payload: Record<string, unknown>) => {
     setOpen(false);
     useApp.getState().openIntent(view, payload);
+  };
+  const goTo = (ref: ItemRef) => {
+    setOpen(false);
+    void openRef(ref);
   };
   const f = filter.trim().toLowerCase();
   const shown = (rows: Row[] = []) => (f ? rows.filter((r) => r.key.toLowerCase().includes(f) || (!r.secret && `${r.initial ?? ''} ${r.current ?? ''}`.toLowerCase().includes(f))) : rows);
@@ -112,18 +119,18 @@ export function EnvQuickLook() {
         id: 'collection',
         title: data.collection ? `Collection · ${data.collection.name}` : 'Collection',
         rows: data.collection?.variables,
-        edit: data.collection ? () => go('collections', { collectionId: data.collection!.id, tab: 'variables' }) : undefined,
+        edit: data.collection ? () => goTo({ kind: 'collection', collectionId: data.collection!.id, tab: 'variables' }) : undefined,
         missing: data.collection ? undefined : 'no collection open',
       },
       {
         id: 'environment',
         title: data.environment ? `Environment · ${data.environment.name}` : 'Environment',
         rows: data.environment?.variables,
-        edit: data.environment ? () => go('environments', { environmentId: data.environment!.id }) : undefined,
+        edit: data.environment ? () => goTo({ kind: 'environment', environmentId: data.environment!.id }) : undefined,
         missing: data.environment ? undefined : 'no environment chosen',
       },
-      { id: 'workspace', title: 'Workspace', rows: data.workspace, edit: () => go('environments', { tab: 'workspace' }) },
-      { id: 'globals', title: 'Globals', rows: data.globals, edit: () => go('environments', { tab: 'globals' }) },
+      { id: 'workspace', title: 'Workspace', rows: data.workspace, edit: () => goTo({ kind: 'environment', scope: 'workspace' }) },
+      { id: 'globals', title: 'Globals', rows: data.globals, edit: () => goTo({ kind: 'environment', scope: 'globals' }) },
     ];
     let used = false;
     const lines = scopes.map((sc) => {
@@ -269,7 +276,7 @@ export function EnvQuickLook() {
               data?.collection?.variables,
               data?.collection ? 'This collection has no variables.' : 'Open a request of a collection to see its variables here.',
               above.collection,
-              data?.collection ? () => go('collections', { collectionId: data.collection!.id, tab: 'variables' }) : undefined,
+              data?.collection ? () => goTo({ kind: 'collection', collectionId: data.collection!.id, tab: 'variables' }) : undefined,
             )}
           {!focus &&
             section(
@@ -277,11 +284,11 @@ export function EnvQuickLook() {
               data?.environment?.variables,
               data?.environment ? 'This environment has no variables.' : 'Pick an environment in the selector to use its variables.',
               above.environment,
-              data?.environment ? () => go('environments', { environmentId: data.environment!.id }) : undefined,
+              data?.environment ? () => goTo({ kind: 'environment', environmentId: data.environment!.id }) : undefined,
               data?.environment?.isProduction ? <Badge tone="bad">PRODUCTION</Badge> : undefined,
             )}
-          {!focus && section('Workspace', data?.workspace ?? [], 'No workspace variables.', above.workspace, () => go('environments', { tab: 'workspace' }))}
-          {!focus && section('Globals', data?.globals ?? [], 'No global variables.', above.globals, () => go('environments', { tab: 'globals' }))}
+          {!focus && section('Workspace', data?.workspace ?? [], 'No workspace variables.', above.workspace, () => goTo({ kind: 'environment', scope: 'workspace' }))}
+          {!focus && section('Globals', data?.globals ?? [], 'No global variables.', above.globals, () => goTo({ kind: 'environment', scope: 'globals' }))}
           <p className="text-[0.7rem] text-muted">
             {focus
               ? 'A scope higher up wins: the collection over the environment, the environment over the workspace and the globals. Edit opens the scope to change the value there.'

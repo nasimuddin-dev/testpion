@@ -337,12 +337,16 @@ async function executeHttpOnce(spec: HttpRequestSpec, opts: HttpExecOptions = {}
   const timeoutMs = Number.isFinite(raw) && raw > 0 ? raw : 0;
   if (!timeoutMs) return executeHttpAttempt(spec, opts);
   const ctrl = new AbortController();
-  const timeoutError = new ApsError('TimeoutError', `Request timed out after ${timeoutMs} ms`, {
-    why: `The server did not answer within ${timeoutMs} ms.`,
-    suggestions: ['Increase the timeout in the request settings (or Settings ▸ default timeout).', 'Check whether the server is overloaded or the URL points at the right host.'],
-    details: { timeoutMs },
-  });
-  const timer = setTimeout(() => ctrl.abort(timeoutError), timeoutMs);
+  // made when the timer fires, not for every request (an error captures a stack: a load test sends thousands a second)
+  let timeoutError: ApsError | undefined;
+  const timer = setTimeout(() => {
+    timeoutError = new ApsError('TimeoutError', `Request timed out after ${timeoutMs} ms`, {
+      why: `The server did not answer within ${timeoutMs} ms.`,
+      suggestions: ['Increase the timeout in the request settings (or Settings ▸ default timeout).', 'Check whether the server is overloaded or the URL points at the right host.'],
+      details: { timeoutMs },
+    });
+    ctrl.abort(timeoutError);
+  }, timeoutMs);
   const outer = opts.signal;
   const onAbort = () => ctrl.abort(outer?.reason);
   if (outer?.aborted) onAbort();
@@ -357,7 +361,8 @@ async function executeHttpOnce(spec: HttpRequestSpec, opts: HttpExecOptions = {}
       },
     });
   } catch (e) {
-    if (ctrl.signal.reason === timeoutError && !outer?.aborted) throw timeoutError;
+    if (timeoutError && ctrl.signal.reason === timeoutError && !outer?.aborted) throw timeoutError;
+
     throw e;
   } finally {
     clearTimeout(timer);

@@ -1,20 +1,28 @@
 import { RecentRuns } from '../components/charts';
 import { AlarmClock, ExternalLink, Sparkles, Folder, KeyRound, Pause, Pencil, Play, Plus, Trash2 } from 'lucide-react';
 import { DocTabStrip } from '../components/DocTabStrip';
+import { noteClosedTabs } from '../lib/closed-tabs';
+import { ItemBreadcrumb } from '../components/ItemBreadcrumb';
+import { refMenu } from '../components/RefLink';
 import { SidebarShell } from '../components/SidebarShell';
 import { MonitorCharts } from '../components/MonitorCharts';
 import { MonitorRequests } from '../components/MonitorRequests';
 import { FolderList, type FolderListOps } from '../components/FolderList';
 import { EnvironmentsPane } from '../components/SidebarPanes';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { asError, call, on } from '../api';
 import type { MonitorResult } from '../lib/monitor-alerts';
 import { useIntent } from '../hooks';
 import { confirmAction, toastError, useApp } from '../store';
+import { openRef } from '../lib/open-ref';
 import type { Collection, CollectionNode, Library } from '../types';
 import { formatMs, timeAgo } from '../lib/format';
 import { Badge, Button, cx, Empty, Field, Input, Metric, MetricGrid, ModalOrPanel, PageHeader, Select, Split, Toggle, Tooltip } from '../components/ui';
 import { useCollectionTree } from '../lib/collections-store';
+import { VarInput } from '../components/VarInput';
+import { useExternalChange } from '../lib/external-change';
+import { LABEL } from '../lib/vocabulary';
+import { EnvBadge, EnvSelect } from '../components/EnvSelect';
 
 /** The tab of a monitor being created (not saved yet, so no id). */
 const NEW_TAB = 'new';
@@ -22,8 +30,11 @@ const NEW_TAB = 'new';
 interface MonitorDraft {
   id?: string;
   name: string;
+  /** The collection it runs ('' when it runs a test file). */
   collectionId: string;
   selection?: string[];
+  /** Or a test file / flow under tests/ (the collection is then ''). */
+  testFile?: string;
   environment?: string;
   everyMinutes: number;
   enabled: boolean;
@@ -143,15 +154,22 @@ export function MonitorsView() {
 
   useIntent(
     'monitors',
-    (p?: { create?: { collectionId: string; selection?: string[] }; monitorId?: string }) => {
+    // create: { collectionId } (a collection's ▸ Monitor…) or { testFile } (a flow's Deploy ▸ Schedule): the editor opens prefilled
+    (p?: { create?: { collectionId?: string; selection?: string[]; testFile?: string }; monitorId?: string }) => {
       if (p?.monitorId) openTab(p.monitorId);
-      if (p?.create) setEditing({ name: '', collectionId: p.create.collectionId, selection: p.create.selection, everyMinutes: 15, enabled: true, environment: useApp.getState().environment });
+      if (p?.create) {
+        const testFile = p.create.testFile || undefined;
+        const name = testFile ? testFile.replace(/^.*\//, '').replace(/\.(ya?ml|json)$/i, '') : '';
+        setEditing({ name, collectionId: testFile ? '' : (p.create.collectionId ?? ''), selection: testFile ? undefined : p.create.selection, testFile, everyMinutes: 15, enabled: true, environment: useApp.getState().environment });
+      }
     },
     'monitors',
   );
 
   const current = rows.find((m) => m.id === sel);
   const colName = (id: string) => collections.find((c) => c.id === id)?.name ?? 'missing collection';
+  /** What a monitor runs, as lists show it: its collection, or tests/<file>. */
+  const targetName = (m: MonitorDraft) => (m.testFile ? `tests/${m.testFile}` : colName(m.collectionId));
 
   const run = async (m: MonitorRow) => {
     setBusy((b) => [...b, m.id]);
@@ -240,19 +258,19 @@ export function MonitorsView() {
                 folders={folders}
                 selected={editing ? undefined : sel}
                 onSelect={openTab}
-                onAdd={(folder) => collections.length && setEditing({ ...newDraft(), ...(folder ? { folder } : {}) })}
+                onAdd={(folder) => setEditing({ ...newDraft(), ...(folder ? { folder } : {}) })}
                 items={rows.map((m) => ({
                   id: m.id,
                   name: m.name,
                   folder: m.folder,
                   icon: <span className={cx('block w-2 h-2 rounded-full', m.running ? 'bg-accent animate-pulse' : !m.lastResult ? 'bg-muted/50' : m.lastResult.status === 'passed' ? 'bg-ok' : 'bg-bad')} />,
                   badge: m.enabled ? <RecentRuns statuses={m.recent ?? []} /> : <Badge>paused</Badge>,
-                  subtitle: `${colName(m.collectionId)}${m.enabled ? ` · ${m.schedule}` : ''}${m.uptime7d !== undefined ? ` · ${m.uptime7d}% (7 days)` : ''}${m.lastResult ? ` · ${timeAgo(m.lastResult.startedAt)}` : ''}`,
+                  subtitle: `${targetName(m)}${m.enabled ? ` · ${m.schedule}` : ''}${m.uptime7d !== undefined ? ` · ${m.uptime7d}% (7 days)` : ''}${m.lastResult ? ` · ${timeAgo(m.lastResult.startedAt)}` : ''}`,
                 }))}
                 itemMenu={(id) => {
                   const m = rows.find((x) => x.id === id)!;
                   return [
-                    { label: 'Open in tab', icon: <ExternalLink size={14} />, onSelect: () => openTab(id) },
+                    { label: LABEL.open, icon: <ExternalLink size={14} />, onSelect: () => openTab(id) },
                     { label: 'Edit', icon: <Pencil size={14} />, onSelect: () => (openTab(id), setEditing(m)) },
                     { label: 'Run now', icon: <Play size={14} />, disabled: busy.includes(id) || m.running, onSelect: () => void run(m) },
                     { label: m.enabled ? 'Pause' : 'Resume', icon: <AlarmClock size={14} />, onSelect: () => void toggle(m) },
@@ -305,8 +323,10 @@ export function MonitorsView() {
               setEditing(undefined);
               setSel(id);
             }}
-            onClose={(ids) => {
+            onClose={(ids, closing) => {
               if (ids.includes(NEW_TAB)) setEditing(undefined);
+              // a closed monitor's tab can be reopened (Ctrl+Shift+T)
+              noteClosedTabs(closing.map((t) => (t.data ? { ref: { kind: 'monitor', monitorId: t.data.id }, label: t.data.name } : undefined)));
               closeTabs(ids.filter((id) => id !== NEW_TAB));
             }}
             onRename={(t, name) => name && name !== t.title && void update(t.id, { name })}
@@ -321,7 +341,7 @@ export function MonitorsView() {
           <MonitorDetail
             m={current}
             results={resultsById[current.id] ?? []}
-            collectionName={colName(current.collectionId)}
+            collectionName={targetName(current)}
             folderNames={names(collections.find((c) => c.id === current.collectionId), current.selection)}
             busy={busy.includes(current.id) || current.running}
             onRun={() => void run(current)}
@@ -332,14 +352,16 @@ export function MonitorsView() {
         ) : (
           loaded &&
           (rows.length > 0 ? (
-            <Empty title="Select a monitor" />
+            <Empty title="Select a monitor" actions={[{ label: 'New monitor', icon: <Plus size={13} />, onClick: () => setEditing(newDraft()) }]}>
+              Its uptime, response times and runs show here.
+            </Empty>
           ) : (
             <Empty
               icon={<AlarmClock size={24} />}
-              title="Run collections on a schedule"
-              actions={[{ label: 'New monitor', icon: <Plus size={13} />, disabled: !collections.length, onClick: () => setEditing({ name: '', collectionId: collections[0]?.id ?? '', everyMinutes: 15, enabled: true, environment: useApp.getState().environment }) }]}
+              title="Run collections and flows on a schedule"
+              actions={[{ label: 'New monitor', icon: <Plus size={13} />, onClick: () => setEditing({ name: '', collectionId: collections[0]?.id ?? '', everyMinutes: 15, enabled: true, environment: useApp.getState().environment }) }]}
             >
-              {collections.length ? 'A monitor runs a collection, or some of its folders, every few minutes while TestPion is open, and tells you when it starts failing. From the terminal: testpion monitor.' : 'Create a collection first: a monitor runs a collection on a schedule.'}
+              A monitor runs a collection (or some of its folders) or a test file / flow every few minutes while TestPion is open, and tells you when it starts failing. From the terminal: testpion monitor.
             </Empty>
           ))
         )}
@@ -379,7 +401,11 @@ function MonitorDetail(p: {
   }, [results]);
   const next = m.enabled && m.nextRunAt ? Date.parse(m.nextRunAt) - Date.now() : undefined;
   return (
-    <div className="p-4 flex flex-col gap-4 max-w-6xl">
+    <div className="p-4 pt-1 flex flex-col gap-4 max-w-6xl">
+      {/* WF-11: the same line as every item view; the large header keeps its actions */}
+      <div className="-mx-3">
+        <ItemBreadcrumb label="Where this monitor is" crumbs={[{ label: 'Monitors', view: 'monitors' }]} name={m.name} actions={refMenu({ kind: 'monitor', monitorId: m.id })} />
+      </div>
       <PageHeader
         icon={<AlarmClock size={18} />}
         title={m.name}
@@ -387,7 +413,8 @@ function MonitorDetail(p: {
           <>
             {p.collectionName}
             {p.folderNames.length > 0 && ` › ${p.folderNames.join(', ')}`}
-            {m.environment && ` · ${m.environment}`} · {m.schedule}
+            {' · '}
+            <EnvBadge name={m.environment} /> · {m.schedule}
           </>
         }
         actions={
@@ -477,7 +504,7 @@ function MonitorDetail(p: {
                   <td className="pl-4 text-muted">{r.trigger === 'schedule' ? 'schedule' : 'you'}</td>
                   <td className="text-right">
                     {r.total > 0 && (
-                      <Button size="sm" variant="ghost" onClick={() => useApp.getState().openIntent('tests', { runId: r.runId })}>
+                      <Button size="sm" variant="ghost" onClick={() => void openRef({ kind: 'run', runId: r.runId })}>
                         Open run
                       </Button>
                     )}
@@ -505,18 +532,57 @@ function formatWait(ms: number): string {
 }
 
 
+/** The test files and suites of the workspace (paths inside tests/), for a monitor that runs one. */
+function useTestFiles(): string[] {
+  const [files, setFiles] = useState<string[]>([]);
+  useEffect(() => {
+    type Node = { path: string; kind: 'dir' | 'file'; children?: Node[] };
+    const flat = (nodes: Node[]): string[] => nodes.flatMap((n) => (n.kind === 'dir' ? flat(n.children ?? []) : /\.(ya?ml|json)$/i.test(n.path) ? [n.path] : []));
+    void call<Node[]>('tests.tree').then((t) => setFiles(flat(t)), () => setFiles([]));
+  }, []);
+  return files;
+}
+
+/** What a monitor's definition is, to tell unsaved edits from a change on disk (its results and status left out). */
+function monitorSnapshot(m: Partial<MonitorDraft>): string {
+  const x = m as Record<string, unknown>;
+  return JSON.stringify(['name', 'folder', 'collectionId', 'selection', 'testFile', 'environment', 'everyMinutes', 'enabled', 'iterations', 'bail', 'webhook', 'maxP95Ms', 'minCertDays'].map((k) => x[k] ?? null));
+}
+
 function MonitorEditor({ draft, collections, onCancel, onSave }: { draft: MonitorDraft; collections: Collection[]; onCancel(): void; onSave(d: MonitorDraft): Promise<void> }) {
-  const environments = useApp((s) => s.workspace?.environments ?? []);
   const unit0 = draft.everyMinutes % 1440 === 0 ? UNITS[2] : draft.everyMinutes % 60 === 0 ? UNITS[1] : UNITS[0];
   const [d, setD] = useState<MonitorDraft>(draft);
   const [every, setEvery] = useState(String(draft.everyMinutes / unit0.f));
   const [unit, setUnit] = useState<string>(unit0.id);
   const [error, setError] = useState<string>();
   const [saving, setSaving] = useState(false);
+  // what it runs: a collection (and some of its folders) or a test file / flow under tests/
+  const [target, setTarget] = useState<'collection' | 'file'>(draft.testFile ? 'file' : 'collection');
+  const testFiles = useTestFiles();
+  // the monitor changed on disk (a pull, the CLI, an agent): follow it, or ask when the form has edits (WF-15)
+  const unitF = (UNITS.find((u) => u.id === unit) ?? UNITS[0]).f;
+  const base = useRef(monitorSnapshot(draft));
+  useExternalChange<MonitorDraft>({
+    kinds: ['library'],
+    items: () => (d.id ? [{ key: d.id, label: d.name || draft.name, base: base.current, dirty: monitorSnapshot({ ...d, everyMinutes: Number(every) * unitF }) !== base.current }] : []),
+    read: async (keys) => {
+      const m = (await call<MonitorDraft[]>('monitor.list')).find((x) => x.id === keys[0]);
+      return new Map(m ? [[keys[0]!, { snapshot: monitorSnapshot(m), value: m }]] : []);
+    },
+    take: (_id, m, snapshot) => {
+      base.current = snapshot;
+      const u = m.everyMinutes % 1440 === 0 ? UNITS[2] : m.everyMinutes % 60 === 0 ? UNITS[1] : UNITS[0];
+      setD(m);
+      setUnit(u.id);
+      setEvery(String(m.everyMinutes / u.f));
+      setTarget(m.testFile ? 'file' : 'collection');
+    },
+    keep: (_id, snapshot) => void (base.current = snapshot),
+  });
   // File ▸ New ▸ Monitor opens the editor before the collections have loaded
   useEffect(() => {
-    if (!d.collectionId && collections[0]) setD((x) => ({ ...x, collectionId: collections[0]!.id }));
-  }, [collections, d.collectionId]);
+    if (target === 'collection' && !d.collectionId && collections[0]) setD((x) => ({ ...x, collectionId: collections[0]!.id }));
+  }, [collections, d.collectionId, target]);
   const col = collections.find((c) => c.id === d.collectionId);
   // what the monitor's recent runs measured, to help choose a response time limit
   const [recentP95, setRecentP95] = useState<number[]>([]);
@@ -560,9 +626,13 @@ function MonitorEditor({ draft, collections, onCancel, onSave }: { draft: Monito
     setError(undefined);
     if (!d.name.trim()) return setError('Give the monitor a name.');
     if (!(minutes >= 1 && minutes <= 10080)) return setError('A monitor runs every 1 minute to 7 days.');
+    if (target === 'file' && !d.testFile) return setError('Pick the test file to run.');
+    if (target === 'collection' && !d.collectionId) return setError('Pick the collection to run.');
+    // one target: the other one is cleared
+    const what = target === 'file' ? { collectionId: '', selection: undefined, testFile: d.testFile } : { testFile: undefined, selection: d.selection?.length ? d.selection : undefined };
     setSaving(true);
     try {
-      await onSave({ ...d, name: d.name.trim(), everyMinutes: minutes, selection: d.selection?.length ? d.selection : undefined, environment: d.environment || undefined });
+      await onSave({ ...d, ...what, name: d.name.trim(), everyMinutes: minutes, environment: d.environment || undefined });
     } catch (e) {
       setError(asError(e).message);
     } finally {
@@ -590,26 +660,37 @@ function MonitorEditor({ draft, collections, onCancel, onSave }: { draft: Monito
         <Field label="Name">
           <Input autoFocus value={d.name} placeholder="e.g. API health" onChange={(e) => setD({ ...d, name: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && void submit()} />
         </Field>
+        <Field label="Runs">
+          <Select value={target} onChange={(e) => setTarget(e.target.value as 'collection' | 'file')} aria-label="What the monitor runs">
+            <option value="collection">A collection</option>
+            <option value="file">A test file or flow</option>
+          </Select>
+        </Field>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Collection">
-            <Select value={d.collectionId} onChange={(e) => setD({ ...d, collectionId: e.target.value, selection: undefined })}>
-              {collections.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </Select>
-          </Field>
+          {target === 'collection' ? (
+            <Field label="Collection">
+              <Select value={d.collectionId} onChange={(e) => setD({ ...d, collectionId: e.target.value, selection: undefined })}>
+                {collections.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          ) : (
+            <Field label="Test file">
+              <Select value={d.testFile ?? ''} onChange={(e) => setD({ ...d, testFile: e.target.value || undefined })} aria-label="Test file">
+                <option value="">Pick a file of tests/…</option>
+                {[...new Set([...(d.testFile ? [d.testFile] : []), ...testFiles])].map((f) => (
+                  <option key={f} value={f}>
+                    {f}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          )}
           <Field label="Environment">
-            <Select value={d.environment ?? ''} onChange={(e) => setD({ ...d, environment: e.target.value || undefined })}>
-              <option value="">No environment</option>
-              {environments.map((e) => (
-                <option key={e.id} value={e.name} disabled={!!e.problem} title={e.problem}>
-                  {e.name}
-                  {e.problem ? '  (cannot be read)' : ''}
-                </option>
-              ))}
-            </Select>
+            <EnvSelect value={d.environment} onChange={(environment) => setD({ ...d, environment })} />
           </Field>
         </div>
         <Field label="Run every" hint="From 1 minute to 7 days. The first run starts as soon as it's saved.">
@@ -624,27 +705,29 @@ function MonitorEditor({ draft, collections, onCancel, onSave }: { draft: Monito
             </Select>
           </div>
         </Field>
-        <Field label="What to run" hint={sel.size ? `${sel.size} selected` : 'Nothing selected runs the whole collection.'}>
-          <div className="max-h-44 overflow-auto rounded-md border border-line p-1">
-            {folders.map((f) => (
-              <label key={f.id} className={cx('flex items-center gap-2 pr-2 py-0.5 text-sm hover:bg-hover rounded cursor-pointer', f.folder && 'font-medium')} style={{ paddingLeft: 8 + f.depth * 18 }}>
-                <input
-                  type="checkbox"
-                  checked={sel.has(f.id)}
-                  onChange={(e) => {
-                    const next = new Set(sel);
-                    if (e.target.checked) next.add(f.id);
-                    else next.delete(f.id);
-                    setD({ ...d, selection: [...next] });
-                  }}
-                />
-                {f.folder && <Folder size={14} className="text-muted shrink-0" />}
-                <span className="truncate">{f.label}</span>
-              </label>
-            ))}
-            {!folders.length && <div className="text-sm text-muted p-2">This collection is empty.</div>}
-          </div>
-        </Field>
+        {target === 'collection' && (
+          <Field label="What to run" hint={sel.size ? `${sel.size} selected` : 'Nothing selected runs the whole collection.'}>
+            <div className="max-h-44 overflow-auto rounded-md border border-line p-1">
+              {folders.map((f) => (
+                <label key={f.id} className={cx('flex items-center gap-2 pr-2 py-0.5 text-sm hover:bg-hover rounded cursor-pointer', f.folder && 'font-medium')} style={{ paddingLeft: 8 + f.depth * 18 }}>
+                  <input
+                    type="checkbox"
+                    checked={sel.has(f.id)}
+                    onChange={(e) => {
+                      const next = new Set(sel);
+                      if (e.target.checked) next.add(f.id);
+                      else next.delete(f.id);
+                      setD({ ...d, selection: [...next] });
+                    }}
+                  />
+                  {f.folder && <Folder size={14} className="text-muted shrink-0" />}
+                  <span className="truncate">{f.label}</span>
+                </label>
+              ))}
+              {!folders.length && <div className="text-sm text-muted p-2">This collection is empty.</div>}
+            </div>
+          </Field>
+        )}
         <div className="flex items-center gap-6">
           <Toggle checked={d.enabled} onChange={(v) => setD({ ...d, enabled: v })} label="Enabled" />
           <Toggle checked={!!d.bail} onChange={(v) => setD({ ...d, bail: v || undefined })} label="Stop at the first failure" />
@@ -668,7 +751,7 @@ function MonitorEditor({ draft, collections, onCancel, onSave }: { draft: Monito
         </Field>
         <Field label="Alert webhook (optional)" hint="Posted when the monitor starts failing or passes again: a Slack, Teams or Discord incoming webhook, or any URL. {{variables}} of the environment work, so the URL can be a secret.">
           <div className="flex gap-2">
-            <Input className="mono flex-1" placeholder="https://hooks.slack.com/services/…  or  {{alertWebhook}}" value={d.webhook ?? ''} onChange={(e) => setD({ ...d, webhook: e.target.value || undefined })} aria-label="Alert webhook" />
+            <VarInput className="flex-1" placeholder="https://hooks.slack.com/services/…  or  {{alertWebhook}}" value={d.webhook ?? ''} onChange={(webhook) => setD({ ...d, webhook: webhook || undefined })} ariaLabel="Alert webhook" />
             <Button
               disabled={!d.webhook?.trim()}
               onClick={() =>

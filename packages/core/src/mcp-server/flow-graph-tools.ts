@@ -24,14 +24,14 @@ export function flowGraphTools({ store }: { store: WorkspaceStore }): Tool[] {
   const edit = (a: Record<string, unknown>, op: FlowEditOp) => {
     const r = editFlowFile(store, String(a.file ?? ''), op);
     const g = flowGraph(r.steps);
-    return { file: r.file, written: r.written, ...(r.added ? { added: r.added } : {}), steps: r.steps, edges: g.edges, problems: g.problems };
+    return { file: r.file, written: r.written, ...(r.added ? { added: r.added } : {}), steps: r.steps, edges: g.edges, ...(g.groups.length ? { groups: g.groups.map(({ kind, name, ids }) => ({ kind, name, ids })) } : {}), problems: g.problems };
   };
   const position = { type: 'array', items: { type: 'number' }, minItems: 2, maxItems: 2, description: 'Where the step goes on the canvas: [x, y] (optional; the app lays out the others)' };
   return [
     {
       name: 'flow_graph',
       description:
-        "A test file as a flow diagram: its steps (id, name, type, method and URL for HTTP, the names it extracts, dependsOn), the edges between them, the steps in columns (layers: what can run first, what waits), problems (a dependency nobody defines, a cycle), the latest run that included the file with each step's status and duration, and the diagram as Graphviz DOT. Use it to read or explain an integration flow before changing it with flow_add_step, flow_connect, flow_update_step or flow_remove_step.",
+        "A test file as a flow diagram: its steps (id, name, type, method and URL for HTTP, the names it extracts, dependsOn), the edges between them, the steps in columns (layers: what can run first, what waits), problems (a dependency nobody defines, a cycle), checks (as the designer shows them as you edit: cycles, steps that can never run, when: without a condition, steps waiting for a finally step), the canvas's sticky notes and frames, the latest run that included the file with each step's status and duration, and the diagram as Graphviz DOT. Use it to read or explain an integration flow before changing it with flow_add_step, flow_connect, flow_update_step or flow_remove_step.",
       inputSchema: { type: 'object', properties: { file: str('The test file inside tests/, e.g. rest/patient-lifecycle.yaml') }, required: ['file'] },
       run: async (a) => flowReport(await flowOfFile(store, String(a.file ?? ''))),
     },
@@ -70,7 +70,7 @@ export function flowGraphTools({ store }: { store: WorkspaceStore }): Tool[] {
     {
       name: 'flow_add_step',
       description:
-        'Add a step to a flow (a test file; an empty one works: name: X, tests: []). Give `step` as a test is written (name, type: http | graphql | grpc | websocket | mcp | llm | delay | condition | script | flow | log, method, url, headers, body, extract: { token: "$.access_token" }, assertions …), or `steps` (with chain: true each waits for the one before), or `collection` and `items` (saved requests or folders by id or name, added in order and chained, with extracts suggested from saved examples). Blocks: a pause is { type: delay, ms: 2000 }; a condition { type: condition, if: "status == 200" } with branches that depend on it and say when: true | false; a script { type: script, script: "tp.variables.set(\'total\', 3)" }; a sub-flow { type: flow, file: auth/login.yaml, inputs: { user: "{{user}}" } }; a log { type: log, message: "token {{token}}" }. Any step may have if: "<expression>", repeat: N or forEach: [rows] | { dataset: datasets/users.csv } ({{$index}}, {{$item}} and the row\'s fields are its variables). With `after`, the new step waits for that step (dependsOn) and `when` puts it on that condition\'s true or false branch. Answers the steps after the edit and the ids added.',
+        'Add a step to a flow (a test file; an empty one works: name: X, tests: []). Give `step` as a test is written (name, type: http | graphql | grpc | websocket | mcp | llm | delay | condition | script | flow | log, method, url, headers, body, extract: { token: "$.access_token" }, assertions …), or `steps` (with chain: true each waits for the one before), or `collection` and `items` (saved requests or folders by id or name, added in order and chained, with extracts suggested from saved examples). Blocks: a pause is { type: delay, ms: 2000 }; a condition { type: condition, if: "status == 200" } with branches that depend on it and say when: true | false; a script { type: script, script: "tp.variables.set(\'total\', 3)" }; a sub-flow { type: flow, file: auth/login.yaml, inputs: { user: "{{user}}" } }; a log { type: log, message: "token {{token}}" }. Any step may have if: "<expression>", repeat: N or forEach: [rows] | { dataset: datasets/users.csv } ({{$index}}, {{$item}} and the row\'s fields are its variables). Polling: until: { if: "$.status == \'done\'", every: 2s, timeout: 60s, backoff: 1.5 } on a request runs it again until the expression holds (type: wait is a request with until:). Clean-up: finally: true runs the step after every other step, whatever happened. parallel: <group> lets steps of the same group run at the same time. A Set variable is { type: set, set: { name: "{{template}}" }, scope: run | environment | collection | global }; an Assert is { type: assert, assertions: [ … ], subject: response | variables } (checks only, on the previous step\'s response or the variables). With `after`, the new step waits for that step (dependsOn) and `when` puts it on that condition\'s true or false branch. Answers the steps after the edit and the ids added.',
       write: true,
       inputSchema: {
         type: 'object',
@@ -79,10 +79,10 @@ export function flowGraphTools({ store }: { store: WorkspaceStore }): Tool[] {
           step: {
             type: 'object',
             description:
-              'One step: { name, type, method, url, … } as in a test file; a delay is { name, type: delay, ms } (0 to 600000); a condition { name, type: condition, if }; a script { name, type: script, script }; a sub-flow { name, type: flow, file, inputs }; a log { name, type: log, message }. Any step: if, when, repeat, forEach.',
+              'One step: { name, type, method, url, … } as in a test file; a delay is { name, type: delay, ms } (0 to 600000); a condition { name, type: condition, if }; a script { name, type: script, script }; a sub-flow { name, type: flow, file, inputs }; a log { name, type: log, message }; a set variable { name, type: set, set, scope }; an assert { name, type: assert, assertions, subject }. Any step: if, when, repeat, forEach; a request: until; any step: finally, parallel.',
             properties: {
               name: str('The step name'),
-              type: { type: 'string', enum: ['http', 'graphql', 'grpc', 'websocket', 'mcp', 'llm', 'rag', 'agent', 'delay', 'condition', 'script', 'flow', 'log'] },
+              type: { type: 'string', enum: ['http', 'graphql', 'grpc', 'websocket', 'mcp', 'llm', 'rag', 'agent', 'delay', 'condition', 'script', 'flow', 'log', 'set', 'assert', 'wait'] },
               if: str("An expression: the step runs only when it is true (status == 200 && $.role == 'admin' && {{count}} > 0); for type condition, the condition"),
               when: { type: 'boolean', description: 'The branch of the condition it depends on: true or false' },
               repeat: { type: 'integer', minimum: 0, maximum: 10000, description: 'Run the step this many times ({{$index}} = 0, 1, …)' },
@@ -91,6 +91,22 @@ export function flowGraphTools({ store }: { store: WorkspaceStore }): Tool[] {
               file: str('type flow: the test file to run (relative to this one, or inside tests/)'),
               inputs: { type: 'object', additionalProperties: true, description: "type flow: the sub-flow's variables" },
               message: str('type log: the text to show, with {{variables}}'),
+              until: {
+                description: "Wait until: run the request again until this holds on its response: { if: \"$.status == 'done'\", every: '2s', timeout: '60s', backoff: 1.5, maxEvery: '30s' } or just the expression",
+                anyOf: [
+                  { type: 'string' },
+                  {
+                    type: 'object',
+                    properties: { if: { type: 'string' }, every: { type: ['string', 'number'] }, timeout: { type: ['string', 'number'] }, backoff: { type: 'number', minimum: 1, maximum: 10 }, maxEvery: { type: ['string', 'number'] } },
+                    required: ['if'],
+                  },
+                ],
+              },
+              finally: { type: 'boolean', description: 'A clean-up step: runs after every other step of the file, whatever happened (nothing may wait for it)' },
+              parallel: str('A parallel group: steps with the same group may run at the same time (dependsOn still applies)'),
+              set: { type: 'object', additionalProperties: true, description: 'type set: { name: "{{template}}" } to write' },
+              scope: { type: 'string', enum: ['run', 'environment', 'collection', 'global'], description: 'type set: where the values go (default run)' },
+              subject: { type: 'string', enum: ['response', 'variables'], description: "type assert: what the assertions check (default the previous step's response)" },
             },
             additionalProperties: true,
           },
@@ -140,14 +156,31 @@ export function flowGraphTools({ store }: { store: WorkspaceStore }): Tool[] {
     {
       name: 'flow_update_step',
       description:
-        'Change keys of one step of a flow: `set` is { key: value } as in a test file (url, method, headers, body, extract, assertions, if, when, repeat, forEach, script, file, inputs, message …); null removes a key. name and id rename the step (every dependsOn that names it follows); dependsOn replaces what it waits for (a cycle is refused). Other keys and comments stay.',
+        'Change keys of one step of a flow: `set` is { key: value } as in a test file (url, method, headers, body, extract, assertions, if, when, repeat, forEach, until, finally, parallel, script, file, inputs, message, set, scope, subject …); null removes a key. name and id rename the step (every dependsOn that names it follows); dependsOn replaces what it waits for (a cycle is refused). Other keys and comments stay. With `id` a list and `set` only { parallel } and/or { finally }: puts those steps in a parallel group (null takes them out) or the Finally lane.',
       write: true,
       inputSchema: {
         type: 'object',
-        properties: { file, id: str('The step (id or name)'), set: { type: 'object', additionalProperties: true, description: '{ key: value } to set; null removes the key' } },
+        properties: {
+          file,
+          id: { anyOf: [{ type: 'string' }, { type: 'array', items: { type: 'string' } }], description: 'The step (id or name); a list only to set parallel / finally on several steps' },
+          set: { type: 'object', additionalProperties: true, description: '{ key: value } to set; null removes the key' },
+        },
         required: ['file', 'id', 'set'],
       },
-      run: (a) => edit(a, { op: 'updateStep', id: String(a.id ?? ''), set: (a.set ?? {}) as Record<string, unknown> }),
+      run: (a) => {
+        const set = (a.set ?? {}) as Record<string, unknown>;
+        if (Array.isArray(a.id)) {
+          const keys = Object.keys(set);
+          if (!keys.length || keys.some((k) => k !== 'parallel' && k !== 'finally')) throw new ApsError('ValidationError', 'With several steps in id, set takes only parallel (a group name, or null) and finally (true or false)');
+          return edit(a, {
+            op: 'group',
+            ids: a.id.map(String),
+            ...('parallel' in set ? { parallel: set.parallel === null ? null : String(set.parallel) } : {}),
+            ...('finally' in set ? { finally: set.finally === true || set.finally === 'true' } : {}),
+          });
+        }
+        return edit(a, { op: 'updateStep', id: String(a.id ?? ''), set });
+      },
     },
     {
       name: 'flow_remove_step',
@@ -171,6 +204,51 @@ export function flowGraphTools({ store }: { store: WorkspaceStore }): Tool[] {
         required: ['file', 'output'],
       },
       run: (a) => edit(a, { op: 'setOutput', output: (a.output ?? null) as Record<string, unknown> | null }),
+    },
+    {
+      name: 'flow_annotate',
+      description:
+        "Sticky notes and coloured frames on a flow's canvas (the file's layout.notes and layout.frames; the runner ignores them): explain a flow to the people who open it in the app. action add_note (text in Markdown, x, y, w, h, color), update_note / remove_note (id); add_frame (title, color, steps: the ids the frame goes around; it moves with them), update_frame / remove_frame (id). Colours: yellow, blue, green, pink, purple, gray. Read them back with flow_graph (notes, frames).",
+      write: true,
+      inputSchema: {
+        type: 'object',
+        properties: {
+          file,
+          action: { type: 'string', enum: ['add_note', 'update_note', 'remove_note', 'add_frame', 'update_frame', 'remove_frame'] },
+          id: str('The note or frame (update / remove)'),
+          text: str('A note: its Markdown text'),
+          x: { type: 'number' },
+          y: { type: 'number' },
+          w: { type: 'number', description: 'A note: its width (default 220)' },
+          h: { type: 'number', description: 'A note: its height (default 120)' },
+          color: { type: 'string', enum: ['yellow', 'blue', 'green', 'pink', 'purple', 'gray'] },
+          title: str('A frame: its title'),
+          steps: { type: 'array', items: { type: 'string' }, description: 'A frame: the step ids it goes around' },
+        },
+        required: ['file', 'action'],
+      },
+      run: (a) => {
+        const pick = (keys: string[]) => Object.fromEntries(keys.filter((k) => a[k] !== undefined).map((k) => [k, a[k]]));
+        const id = String(a.id ?? '');
+        const op: FlowEditOp =
+          a.action === 'add_note'
+            ? { op: 'addNote', note: pick(['text', 'x', 'y', 'w', 'h', 'color']) }
+            : a.action === 'update_note'
+              ? { op: 'updateNote', id, set: pick(['text', 'x', 'y', 'w', 'h', 'color']) }
+              : a.action === 'remove_note'
+                ? { op: 'removeNote', id }
+                : a.action === 'add_frame'
+                  ? { op: 'addFrame', title: a.title === undefined ? undefined : String(a.title), color: a.color === undefined ? undefined : String(a.color), steps: Array.isArray(a.steps) ? a.steps.map(String) : [] }
+                  : a.action === 'update_frame'
+                    ? { op: 'updateFrame', id, set: pick(['title', 'color', 'steps']) }
+                    : a.action === 'remove_frame'
+                      ? { op: 'removeFrame', id }
+                      : (() => {
+                          throw new ApsError('ValidationError', 'action is add_note, update_note, remove_note, add_frame, update_frame or remove_frame');
+                        })();
+        const r = editFlowFile(store, String(a.file ?? ''), op);
+        return { file: r.file, written: r.written, ...(r.added ? { added: r.added } : {}) };
+      },
     },
   ];
 }

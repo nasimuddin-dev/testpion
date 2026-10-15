@@ -1,17 +1,13 @@
 import { ArrivalSpark } from '../components/charts';
-import { FileCode2, Plus, RefreshCw, Save, ScanSearch, Send, Sparkles, Square, Terminal, Trash2, Waypoints, FileCheck2, Bookmark, History, KeyRound } from 'lucide-react';
+import { FileCode2, Plus, RefreshCw, Save, ScanSearch, Send, Sparkles, Square, Terminal, Trash2, Waypoints, FileCheck2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAssistantContext } from '../lib/assistant-context';
 import { asError, call, on } from '../api';
 import { persisted, toastError, useApp } from '../store';
-import { FolderList } from '../components/FolderList';
-import { SidebarShell } from '../components/SidebarShell';
 import { NEW_TAB_TITLE, useSingleEditorTab } from '../components/EditorTabs';
 import { RequestBreadcrumb } from '../components/RequestBreadcrumb';
-import { EnvironmentsPane, HistoryPane } from '../components/SidebarPanes';
 import { useLibrary } from '../lib/library';
 import { useSaveInCollection } from '../lib/save-in-collection';
-import { useCollectionTree } from '../lib/collections-store';
 import { useIntent, useSaveShortcut } from '../hooks';
 import type { KeyValue } from '../types';
 import { CodeEditor } from '../components/CodeEditor';
@@ -24,8 +20,9 @@ import { pickTextFile } from '../lib/files';
 import { useSticky } from '../lib/sticky';
 import { useDoc } from '../lib/docs';
 import { plural } from '../lib/format';
-import { saveAsTestFile } from '../lib/save-test';
+import { saveAsTestFile, saveAsTestMenuItem } from '../lib/save-test';
 import { copyText } from '../lib/clipboard';
+import { useExternalChange } from '../lib/external-change';
 
 interface ProtoFile {
   name: string;
@@ -105,9 +102,20 @@ export function GrpcView() {
   // descriptors fetched by reflection aren't an edit (a saved request without protos reflects when opened)
   const comparable = (x: Partial<typeof d>) => JSON.stringify({ ...x, descriptorSet: undefined, reflectedFrom: undefined });
   const saveDialog = useSaveInCollection(saved.lib.items, 'Save gRPC call');
-  // the calls of a collection in the trash are hidden (they come back with it)
-  const liveCollections = new Set(useCollectionTree().map((c) => c.id));
   const savedDirty = !!currentSaved && comparable(currentSaved.data) !== comparable(d);
+  // the saved call changed on disk (a pull, another editor): follow it, or ask when it has unsaved edits (WF-15)
+  useExternalChange<Saved>({
+    kinds: ['library'],
+    items: () => (currentSaved ? [{ key: currentSaved.id, label: currentSaved.name, base: comparable(currentSaved.data), dirty: savedDirty }] : []),
+    read: async (keys) => {
+      const lib = await saved.reload();
+      const it = lib?.items.find((i) => i.id === keys[0]);
+      return new Map(it ? [[it.id, { snapshot: comparable(it.data), value: it.data }]] : []);
+    },
+    take: (_id, data) => setD((x) => ({ ...x, ...data })),
+    // the library now holds the new version: the edits stay, and saving replaces it
+    keep: () => undefined,
+  });
   const openSaved = async (id: string) => {
     const it = await saved.find(id);
     if (!it) return;
@@ -268,40 +276,8 @@ export function GrpcView() {
   const renameTabTo = async (name: string) => (currentSaved ? saved.put({ ...currentSaved, name }) : setTabTitle(name));
   useSingleEditorTab('grpc', { title, badge: 'gRPC', badgeClass: 'text-[#2ea99e]', item: savedId, onRenameTo: renameTabTo, onSaveAsTest: d.method ? saveTest : undefined });
   return (
-    <Split id="grpc-saved" sidebar collapsed initial={18} min={12}>
-    <SidebarShell
-      id="grpc"
-      panes={[
-        {
-          id: 'saved',
-          label: 'Saved',
-          icon: <Bookmark size={13} />,
-          render: () => (
-            <FolderList
-              id="grpc-saved"
-              title="Saved requests"
-              itemNoun="request"
-              addLabel="Save current request"
-              folders={saved.lib.folders}
-              selected={savedId}
-              onSelect={openSaved}
-              onAdd={(folder) => void saveRequest(true, folder)}
-              ops={saved.ops}
-              items={saved.lib.items.filter((i) => !i.collectionId || liveCollections.has(i.collectionId)).map((i) => ({ id: i.id, name: i.name, folder: i.folder, subtitle: i.data.method || i.data.target, icon: <Waypoints size={12} className="text-muted" /> }))}
-              empty={
-                <Empty title="No saved requests">
-                  Save a request (address, method, message, metadata and its .proto files or reflection) to call it again later, and group requests in folders.
-                </Empty>
-              }
-            />
-          ),
-        },
-        { id: 'environments', label: 'Environments', icon: <KeyRound size={13} />, render: () => <EnvironmentsPane /> },
-        { id: 'history', label: 'History', icon: <History size={13} />, render: () => <HistoryPane kind="grpc" noun="gRPC calls you make" /> },
-      ]}
-    />
     <div className="h-full flex flex-col min-w-0">
-      <RequestBreadcrumb collectionId={currentSaved?.collectionId ?? collectionId} folder={currentSaved?.folder} name={title} onSave={() => void saveRequest()} />
+      <RequestBreadcrumb collectionId={currentSaved?.collectionId ?? collectionId} folder={currentSaved?.folder} name={title} onSave={() => void saveRequest()} actions={[saveAsTestMenuItem(d.method ? saveTest : undefined)]} />
       <div className="flex items-center gap-2 p-2 border-b border-line">
         <VarInput
           ariaLabel="gRPC server"
@@ -601,6 +577,5 @@ export function GrpcView() {
       </div>
       {saveDialog.modal}
     </div>
-    </Split>
   );
 }

@@ -50,6 +50,6 @@ In the results, each check lists what did not hold first (claims **not supported
 read it too. A judge is a model: read the evidence before acting on a verdict. The judge's provider, model, prompt
 version and config hash are stored with the result for reproducibility.
 
-The result stores the query, document IDs, scores, model, prompt hash, answer and evaluation, as required by §15.
+The result stores the query, document IDs, scores, model, prompt hash, answer and evaluation.
 
 :::

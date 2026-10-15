@@ -5,6 +5,7 @@ import { confirmAction, promptText, toastError, useApp } from '../store';
 import type { Collection, CollectionNode, Library, LibraryItem, McpServerConfig } from '../types';
 import { plural, uid } from '../lib/format';
 import { addToFolder, CollectionTree, mapNodes, type ExtraGroup } from './CollectionTree';
+import { openRef } from '../lib/open-ref';
 import type { RequestCategory } from '../lib/collection-filter';
 import { closeTabsFor, newRequestItems, useEditorTabsStore } from './EditorTabs';
 import { ExportDialog } from './ExportDialog';
@@ -18,6 +19,8 @@ import { copyText } from '../lib/clipboard';
 import { datasetBadge } from '../lib/datasets';
 import { GenerateDataDialog } from './GenerateDataDialog';
 import { useStableCallbacks } from '../hooks';
+import { saveAsTestItem } from '../lib/save-test';
+import { LABEL } from '../lib/vocabulary';
 
 /**
  * The Collections explorer: the one sidebar of the request editors. The workspace lists its collections;
@@ -369,12 +372,21 @@ export function Explorer() {
   // reveal the opened request in the tree when it was opened from elsewhere (search, history, a link): not when it was
   // opened from the explorer itself (e.g. Favorites), which would unfold its collection under the user's hand
   // (watched, not subscribed to: the explorer keeps only this key, so an intent that reveals nothing re-renders nothing)
-  const [revealKey, setRevealKey] = useState(() => revealKeyOf(useApp.getState().intent));
+  // what to reveal: the open request, or what Reveal in sidebar / a breadcrumb segment named (WF-11), also when that
+  // brought the explorer up (it asked before this mounted)
+  const latestReveal = () => {
+    const { intent, reveal } = useApp.getState();
+    const k = revealKeyOf(intent);
+    return reveal && reveal.nonce > (k ?? 0) ? { key: reveal.nonce, id: reveal.id } : { key: k, id: undefined };
+  };
+  const [revealKey, setRevealKey] = useState(() => latestReveal().key);
+  const [revealId, setRevealId] = useState<string | undefined>(() => latestReveal().id);
   useEffect(
     () =>
       useApp.subscribe((s, prev) => {
         const k = s.intent !== prev.intent ? revealKeyOf(s.intent) : undefined;
-        if (k !== undefined) setRevealKey(k);
+        if (k !== undefined) (setRevealId(undefined), setRevealKey(k));
+        if (s.reveal && s.reveal !== prev.reveal) (setRevealId(s.reveal.id), setRevealKey(s.reveal.nonce));
       }),
     [],
   );
@@ -403,11 +415,11 @@ export function Explorer() {
     await datasetAction(() => call('datasets.delete', { name: d.name }));
   };
   const datasetMenu = (d: DatasetRow): MenuItem[] => [
-    { label: 'Open in tab', icon: <ExternalLink size={14} />, onSelect: () => intent('dataset', { dataset: d.name }) },
+    { label: LABEL.open, icon: <ExternalLink size={14} />, onSelect: () => void openRef({ kind: 'dataset', name: d.name }) },
     { label: 'Run a collection with it', icon: <Play size={14} />, onSelect: () => intent('collections', { run: true, dataPath: d.path }) },
     { label: 'Rename', icon: <Pencil size={14} />, separator: true, onSelect: () => setRenaming(d.name) },
     { label: 'Duplicate', icon: <CopyPlus size={14} />, onSelect: () => void datasetAction(() => call('datasets.duplicate', { name: d.name })) },
-    { label: 'Delete', icon: <Trash2 size={14} />, danger: true, separator: true, onSelect: () => void deleteDataset(d) },
+    { label: LABEL.delete, icon: <Trash2 size={14} />, danger: true, separator: true, onSelect: () => void deleteDataset(d) },
   ];
   const renameDataset = (name: string): RowRename => ({
     editing: renaming === name,
@@ -468,8 +480,9 @@ export function Explorer() {
     },
   });
   const moveMenu = (kind: 'grpc' | 'websocket', item: SavedItem): MenuItem[] => [
-    { label: 'Open in tab', icon: <ExternalLink size={14} />, onSelect: () => intent(kind, { savedId: item.id }) },
-    { label: kind === 'grpc' ? 'Copy as grpcurl' : 'Copy URL', icon: <Copy size={14} />, onSelect: () => void copySaved(kind, item.id) },
+    { label: LABEL.open, icon: <ExternalLink size={14} />, onSelect: () => void openRef({ kind: 'saved', library: kind, itemId: item.id }) },
+    saveAsTestItem({ ref: { kind: 'saved', library: kind, itemId: item.id }, name: item.name }, { separator: true }),
+    { label: kind === 'grpc' ? 'Copy as grpcurl' : 'Copy URL', icon: <Copy size={14} />, separator: true, onSelect: () => void copySaved(kind, item.id) },
     {
       label: 'Rename',
       icon: <Pencil size={14} />,
@@ -487,7 +500,7 @@ export function Explorer() {
       items: collections.filter((c) => c.id !== item.collectionId).map((c) => ({ label: c.name, onSelect: () => void moveItem(kind, item.id, c.id) })),
     },
     {
-      label: 'Delete',
+      label: LABEL.delete,
       icon: <Trash2 size={14} />,
       danger: true,
       separator: true,
@@ -509,7 +522,7 @@ export function Explorer() {
   };
   /** The menu of an MCP server: open, connect, rename, duplicate, delete. */
   const serverMenu = (s: McpServerConfig & { connected?: boolean }): MenuItem[] => [
-    { label: 'Open in tab', icon: <ExternalLink size={14} />, onSelect: () => intent('mcp', { serverId: s.id }) },
+    { label: LABEL.open, icon: <ExternalLink size={14} />, onSelect: () => void openRef({ kind: 'mcp-server', serverId: s.id }) },
     s.connected
       ? { label: 'Disconnect', icon: <Unplug size={14} />, onSelect: () => void call('mcp.disconnect', { serverId: s.id }).then(load, toastError) }
       : { label: 'Connect', icon: <Plug size={14} />, onSelect: () => intent('mcp', { serverId: s.id, connect: true }) },
@@ -522,7 +535,7 @@ export function Explorer() {
     },
     { label: 'Duplicate', icon: <CopyPlus size={14} />, onSelect: () => void editServers((list) => list.flatMap((x) => (x.id === s.id ? [x, { ...x, id: uid('mcp-'), name: `${x.name} copy` }] : [x]))) },
     {
-      label: 'Delete',
+      label: LABEL.delete,
       icon: <Trash2 size={14} />,
       danger: true,
       separator: true,
@@ -626,14 +639,14 @@ export function Explorer() {
       {
         cat: 'grpc',
         items: grpcByCollection.get(c.id) ?? NONE,
-        onOpen: (id) => intent('grpc', { savedId: id }),
+        onOpen: (id) => void openRef({ kind: 'saved', library: 'grpc', itemId: id }),
         menu: (id) => savedLatest.current.moveMenu('grpc', grpc.find((i) => i.id === id)!),
         rename: (id) => savedLatest.current.renameSaved('grpc', id),
       },
       {
         cat: 'websocket',
         items: socketsByCollection.get(c.id) ?? NONE,
-        onOpen: (id) => intent('websocket', { savedId: id }),
+        onOpen: (id) => void openRef({ kind: 'saved', library: 'websocket', itemId: id }),
         menu: (id) => savedLatest.current.moveMenu('websocket', sockets.find((i) => i.id === id)!),
         rename: (id) => savedLatest.current.renameSaved('websocket', id),
       },
@@ -644,20 +657,20 @@ export function Explorer() {
   const newOfCategory = (c: Collection, cat: RequestCategory) => {
     if (cat === 'grpc' || cat === 'websocket') return intent(cat, { newDoc: true, collectionId: c.id });
     const node = newNode(cat)!;
-    void editCollection(c, (c) => ({ ...c, items: addToFolder(c.items, undefined, node) })).then(() => intent(cat === 'graphql' ? 'graphql' : 'rest', { collectionId: c.id, requestId: node.id }));
+    void editCollection(c, (c) => ({ ...c, items: addToFolder(c.items, undefined, node) })).then(() => openRef({ kind: 'request', collectionId: c.id, requestId: node.id, protocol: cat === 'graphql' ? 'graphql' : 'http' }));
   };
   // the same functions on every render, so the memoized tree re-renders only when what it shows changed
   const treeCallbacks = useStableCallbacks({
     onNewOfCategory: newOfCategory,
     onDropSaved: (kind: 'grpc' | 'websocket', id: string, to: string) => void moveItem(kind, id, to),
-    onOpen: (c: Collection, n: CollectionNode) => intent(n.kind === 'graphql' ? 'graphql' : 'rest', { collectionId: c.id, requestId: n.id }),
+    onOpen: (c: Collection, n: CollectionNode) => void openRef({ kind: 'request', collectionId: c.id, requestId: n.id }),
     onChange: (c: Collection) => void saveCollection(c),
     onRun: (c: Collection, folderId?: string) => intent('collections', { collectionId: c.id, run: true, folderId }),
     onNewRequest: (c: Collection, folderId?: string) => {
       const node = newNode('rest')!;
-      void saveCollection({ ...c, items: addToFolder(c.items, folderId, node) }).then(() => intent('rest', { collectionId: c.id, requestId: node.id }));
+      void saveCollection({ ...c, items: addToFolder(c.items, folderId, node) }).then(() => openRef({ kind: 'request', collectionId: c.id, requestId: node.id, protocol: 'http' }));
     },
-    onSettings: (c: Collection) => intent('collections', { collectionId: c.id }),
+    onSettings: (c: Collection) => void openRef({ kind: 'collection', collectionId: c.id }),
   });
 
   return (
@@ -715,9 +728,9 @@ export function Explorer() {
                 sub={c.name}
                 title={`${n.name} (${c.name})`}
                 active={openRequestId === n.id}
-                onClick={() => intent(n.kind === 'graphql' ? 'graphql' : 'rest', { collectionId: c.id, requestId: n.id, noReveal: true })}
+                onClick={() => void openRef({ kind: 'request', collectionId: c.id, requestId: n.id }, { noReveal: true })}
                 menu={[
-                  { label: 'Open in tab', icon: <ExternalLink size={14} />, onSelect: () => intent(n.kind === 'graphql' ? 'graphql' : 'rest', { collectionId: c.id, requestId: n.id, noReveal: true }) },
+                  { label: LABEL.open, icon: <ExternalLink size={14} />, onSelect: () => void openRef({ kind: 'request', collectionId: c.id, requestId: n.id }, { noReveal: true }) },
                   {
                     label: 'Remove from favorites',
                     icon: <Star size={14} />,
@@ -739,6 +752,7 @@ export function Explorer() {
               extraGroups={extraGroups}
               collapseAll={collapseAll}
               revealKey={revealKey}
+              revealId={revealId}
               activeRequestId={openRequestId}
               {...treeCallbacks}
             />
@@ -760,7 +774,7 @@ export function Explorer() {
                 sub={s.connected ? 'connected' : s.transport === 'streamable-http' ? 'http' : s.transport}
                 title={`${s.name} (${s.connected ? 'connected' : 'not connected'})`}
                 active={openRequestId === s.id}
-                onClick={() => intent('mcp', { serverId: s.id })}
+                onClick={() => void openRef({ kind: 'mcp-server', serverId: s.id })}
                 menu={withMove(serverMenu(s), moveToFolder(mcpOps, servers, s.id, s.folder))}
                 id={s.id}
                 rename={renameServer(s.id)}
@@ -781,9 +795,9 @@ export function Explorer() {
                 label={s.replace(/^specs\//, '')}
                 title={s}
                 active={openRequestId === s}
-                onClick={() => intent('apidef', { spec: s })}
+                onClick={() => void openRef({ kind: 'spec', path: s })}
                 menu={[
-                  { label: 'Open in tab', icon: <ExternalLink size={14} />, onSelect: () => intent('apidef', { spec: s, tab: 'definition' }) },
+                  { label: LABEL.open, icon: <ExternalLink size={14} />, onSelect: () => intent('apidef', { spec: s, tab: 'definition' }) },
                   { label: 'API coverage', icon: <ScanSearch size={14} />, onSelect: () => intent('apidef', { spec: s, tab: 'coverage' }) },
                   { label: 'Compare versions', icon: <GitCompare size={14} />, onSelect: () => intent('apidef', { spec: s, tab: 'compare' }) },
                   moveToFolder(specOps, specFolders.items, s, folder),
@@ -819,7 +833,7 @@ export function Explorer() {
                 sub={d.rows !== undefined ? plural(d.rows, 'row') : d.tables ? plural(d.tables.length, 'table') : undefined}
                 title={`datasets/${d.name} (${d.format}${d.rows !== undefined ? `, ${plural(d.rows, 'row')}` : ''})`}
                 active={openRequestId === d.name}
-                onClick={() => intent('dataset', { dataset: d.name })}
+                onClick={() => void openRef({ kind: 'dataset', name: d.name })}
                 menu={datasetMenu(d)}
                 id={d.name}
                 rename={renameDataset(d.name)}

@@ -29,6 +29,17 @@ function prepare(ws) {
     (name, i) => `  - id: soak-t${i}\n    name: soak test ${i}\n    method: GET\n    url: "${DEMO}/health?t=${i}"\n    assertions:\n      - { type: status, expected: 200 }\n`,
   );
   writeFileSync(join(ws, 'tests', 'soak.yaml'), `defaults:\n  type: http\ntests:\n${tests.join('')}`);
+  // a two-step flow for the flow designer and the Scale stage's per-row grid (Run with data…)
+  writeFileSync(
+    join(ws, 'tests', 'soak-flow.yaml'),
+    [
+      'name: Soak flow',
+      'tests:',
+      `  - { id: health, name: Health, url: "${DEMO}/health", assertions: [{ type: status, expected: 200 }] }`,
+      `  - { id: status, name: Status, url: "${DEMO}/status?code={{code}}", dependsOn: [health], assertions: [{ type: status, expected: 200 }] }`,
+      '',
+    ].join('\n'),
+  );
 }
 
 /** Helpers every renderer step has: tabs of the request strip, closing them (discarding edits), rows of the explorer. */
@@ -90,6 +101,7 @@ const setup = [
      return 'monitor: ' + (m?.id ?? JSON.stringify(m).slice(0, 120));`,
   ),
   r('soak-expand', `return 'soak rows: ' + (await ensureSoak());`),
+  r('soak-data', `const d = await window.aps.invoke('col.uploadDataFile', { name: 'soak-rows.csv', text: 'code\\n200\\n404\\n200\\n' }); return 'data: ' + (d?.path ?? d?.name ?? JSON.stringify(d).slice(0, 80));`),
 ];
 
 /* --------------------------------------------------------------- the cycle */
@@ -178,6 +190,80 @@ const cycle = (c) => {
        const keys = await __t.key('?'); await __t.esc();
        await __t.view('Home');
        return 'palette ' + (pal !== 'NONE') + ' | settings ' + settings + ' | shortcuts ' + (keys !== 'NONE') + ' | ms ' + ms(t0);`,
+    ),
+    // the bottom panel's Terminal (two shells, a command, both killed), the Problems tab, Quick Open, the right panel
+    // (Info, then the assistant in it): each opened and closed again
+    r(
+      `${p}-panels`,
+      `const t0 = performance.now(); await __t.view('Collections');
+       const termTabs = () => [...document.querySelectorAll('[data-terminal-tab]')];
+       const termText = () => (document.querySelector('[data-terminal-box] .xterm-rows')?.innerText ?? '').replace(/\\u00a0/g, ' ');
+       const sessions = () => window.aps.invoke('terminal.list', {});
+       const footer = (k) => document.querySelector('footer [data-status="' + k + '"]');
+       let term = 'no shell';
+       if (footer('terminal')) {
+         footer('terminal').click();
+         await __t.waitFor(() => document.querySelector('[data-terminal-box] .xterm') && termTabs().length >= 1, 15000);
+         document.querySelector('[data-terminal-strip] button[aria-label="New terminal"]')?.click();
+         await __t.waitFor(() => termTabs().length === 2, 15000);
+         const id = termTabs().find((t) => t.getAttribute('aria-selected') === 'true')?.dataset.terminalTab;
+         await __t.waitFor(() => /\\S/.test(termText()), 20000);
+         if (id) await window.aps.invoke('terminal.write', { id, data: 'echo soak-${c}\\r' });
+         const echoed = !!(await __t.waitFor(() => /^soak-${c}\\s*$/m.test(termText()), 15000));
+         for (let i = 0; i < 4 && termTabs().length; i++) { document.querySelector('[data-terminal-strip] button[aria-label="Kill terminal"]')?.click(); await __t.sleep(400); }
+         await __t.waitFor(async () => (await sessions()).length === 0, 5000);
+         if (document.querySelector('[data-bottom-panel="terminal"]')) footer('terminal')?.click();
+         term = 'echoed ' + echoed + ' sessions left ' + (await sessions()).length;
+       }
+       footer('problems')?.click();
+       const prob = !!(await __t.waitFor(() => document.querySelector('[data-bottom-panel="problems"]'), 3000));
+       footer('problems')?.click(); await __t.sleep(200);
+       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'p', ctrlKey: true, bubbles: true }));
+       const qi = await __t.waitFor(() => document.querySelector('[role=dialog] input'), 3000);
+       if (qi) { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(qi, 'soak-req'); qi.dispatchEvent(new Event('input', { bubbles: true })); }
+       const hits = await __t.waitFor(() => document.querySelectorAll('[role=dialog] [role=option]').length, 4000);
+       await __t.esc();
+       await ensureSoak(); await openReq('${REQS[3]}');
+       const host = await __t.waitFor(() => document.querySelector('[data-pinnable-panel="right"]'), 3000);
+       host?.querySelector('button[aria-expanded]')?.click();
+       const info = !!(await __t.waitFor(() => host?.querySelector('[data-context-info]'), 5000));
+       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'j', ctrlKey: true, bubbles: true }));
+       const asst = !!(await __t.waitFor(() => host?.querySelector('aside[aria-label="AI assistant"]'), 4000));
+       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'j', ctrlKey: true, bubbles: true })); await __t.sleep(300);
+       await __t.esc(); await closeAll();
+       return 'terminal ' + term + ' | problems ' + prob + ' | quick open hits ' + (hits || 0) + ' | info ' + info + ' | assistant ' + asst + ' | bottom open ' + !!document.querySelector('[data-bottom-panel]') + ' | ms ' + ms(t0);`,
+    ),
+    // the flow designer (Flow tab, a step's inspector) and the Scale stage's per-row grid (Run with data, 3 rows)
+    r(
+      `${p}-flow`,
+      `const t0 = performance.now();
+       await __t.view('Tests'); await __t.sleep(500);
+       const row = await __t.waitFor(() => [...document.querySelectorAll('[data-tree-row]')].find((b) => b.offsetParent && b.textContent.trim().endsWith('soak-flow.yaml')), 5000);
+       if (!row) return 'NO ROW soak-flow.yaml';
+       row.click(); await __t.sleep(800);
+       await __t.tab('Flow');
+       const nodes = () => vis('[data-flow-designer] [data-flow-node]');
+       const drawn = await __t.waitFor(() => nodes().length === 2, 6000);
+       let inspector = false;
+       if (drawn) { nodes()[1].dispatchEvent(new MouseEvent('click', { bubbles: true })); inspector = !!(await __t.waitFor(() => document.querySelector('[data-step-inspector]'), 3000)); }
+       await __t.tab('Editor'); await __t.sleep(300);
+       const open = await __t.waitFor(() => vis('[data-run-with-data-open]')[0], 4000);
+       let grid = 'no button';
+       if (open) {
+         open.click();
+         const dlg = await __t.waitFor(() => document.querySelector('[data-run-with-data]'), 3000);
+         const d = (await window.aps.invoke('datasets.list')).find((x) => x.name.endsWith('soak-rows.csv'));
+         const sel = dlg?.querySelector('select[aria-label="Data source"]');
+         if (sel && d) { await __t.waitFor(() => [...sel.options].some((o) => o.value === d.path), 3000); Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(sel, d.path); sel.dispatchEvent(new Event('change', { bubbles: true })); await __t.sleep(200); }
+         document.querySelector('[data-scale-start]')?.click();
+         const g = await __t.waitFor(() => vis('[data-flow-data-grid]')[0], 6000);
+         const done = g && (await __t.waitFor(() => g.dataset.running === 'false' && vis('[data-data-row]').length === 3, 30000));
+         grid = 'rows ' + vis('[data-data-row]').map((x) => x.dataset.status).join(',') + ' done ' + !!done;
+       }
+       await __t.esc();
+       let closed = 0; for (let i = 0; i < 10; i++) { const x = document.querySelector('[role=tablist][aria-label="Open test files"] button[aria-label^="Close "]'); if (!x) break; x.click(); closed++; await __t.sleep(200); await discard(); }
+       await __t.view('Home');
+       return 'nodes ' + nodes().length + ' drawn ' + !!drawn + ' | inspector ' + inspector + ' | grid ' + grid + ' | closed ' + closed + ' | ms ' + ms(t0);`,
     ),
     // the probe: the same three timed actions every cycle
     r(

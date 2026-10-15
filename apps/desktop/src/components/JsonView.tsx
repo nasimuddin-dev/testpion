@@ -173,7 +173,8 @@ export function JsonTree({ data: full, query, onAssert: assertOnFull, onSaveVari
 
   return (
     <div className="h-full flex flex-col min-h-0">
-      <div className="@container flex items-center gap-2 px-2 py-1 text-xs text-muted shrink-0 whitespace-nowrap">
+      {/* wraps in a narrow column (the JWT tab's Header): the filter goes under the buttons instead of over its neighbour */}
+      <div className="@container flex flex-wrap items-center gap-x-2 gap-y-1 px-2 py-1 text-xs text-muted shrink-0 whitespace-nowrap">
         <button className="hover:text-fg" onClick={expandAll}>
           Expand all
         </button>

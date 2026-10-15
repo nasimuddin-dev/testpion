@@ -1,10 +1,11 @@
-import { BookOpen, ChevronLeft, Code2, FlaskConical, FolderPlus, FolderTree, History, KeyRound, Network, Play, Radio, RefreshCw, Save, Sparkles, Square, Upload, Wand2, FileCheck2 } from 'lucide-react';
+import { BookOpen, ChevronLeft, Code2, FlaskConical, Network, Play, Radio, RefreshCw, Save, Sparkles, Square, Wand2, FileCheck2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAssistantContext } from '../lib/assistant-context';
 import { parse, print } from 'graphql';
 import { asError, call, on, type NormalizedError } from '../api';
-import { confirmAction, persisted, promptText, toastError, useApp } from '../store';
+import { confirmAction, persisted, toastError, useApp } from '../store';
 import { useIntent, useSendShortcut, useSaveShortcut } from '../hooks';
+import { openRef, reportIfGone } from '../lib/open-ref';
 import { setGraphQLSchema } from '../monaco';
 import type { AuthConfig, CheckConfig, CheckResult, Collection, HttpRequestSpec, HttpResponseData, KeyValue, SavedGraphQLRequest } from '../types';
 import { CodeModal } from '../components/CodeModal';
@@ -12,14 +13,12 @@ import { formatMs, uid } from '../lib/format';
 import { AssertionEditor } from '../components/AssertionEditor';
 import { AuthEditor } from '../components/AuthEditor';
 import { CodeEditor } from '../components/CodeEditor';
-import { addToFolder, CollectionTree, findNode, mapNodes } from '../components/CollectionTree';
+import { addToFolder, findNode, mapNodes } from '../components/CollectionTree';
 import { SaveModal } from './rest/dialogs';
 import { useSticky } from '../lib/sticky';
 import { useDoc } from '../lib/docs';
-import { SidebarShell } from '../components/SidebarShell';
 import { NEW_TAB_TITLE, tabTitle, useSingleEditorTab } from '../components/EditorTabs';
 import { RequestBreadcrumb } from '../components/RequestBreadcrumb';
-import { EnvironmentsPane, HistoryPane } from '../components/SidebarPanes';
 import { KeyValueEditor } from '../components/KeyValueEditor';
 import { ScriptsPanel } from '../components/ScriptsPanel';
 import { saveResponseVariable } from '../lib/save-variable';
@@ -27,10 +26,11 @@ import { JsonTree, RawView } from '../components/JsonView';
 import { JsonTable, tableRowsOf } from '../components/JsonTable';
 import { CheckList, ErrorPanel } from '../components/Results';
 import { VarInput } from '../components/VarInput';
-import { Badge, Button, cx, Empty, IconButton, Input, Select, Split, statusTone, Tabs, Tooltip } from '../components/ui';
+import { Badge, Button, cx, Empty, Input, Select, Split, statusTone, Tabs, Tooltip } from '../components/ui';
 import { ResponseSplit } from '../components/ResponseSplit';
-import { saveAsTestFile } from '../lib/save-test';
-import { currentCollectionTree, fullCollection, refreshCollections, useCollectionTree } from '../lib/collections-store';
+import { saveAsTestFile, saveAsTestMenuItem } from '../lib/save-test';
+import { currentCollectionTree, refreshCollections, useCollectionTree } from '../lib/collections-store';
+import { useExternalChange } from '../lib/external-change';
 
 interface SchemaType {
   name: string;
@@ -64,6 +64,13 @@ interface Draft {
   testScript?: string;
   /** Subscriptions: the connection_init payload (JSON), e.g. { "authorization": "Bearer {{token}}" }. */
   connectionParams?: string;
+  /** The saved version this editor holds (gqlSnapshot), to follow it on disk (WF-15); unsaved: undefined. */
+  base?: string;
+}
+
+/** A saved GraphQL request's fields, compared to tell unsaved edits and a change on disk apart. */
+function gqlSnapshot(x: Pick<Draft, 'endpoint' | 'query' | 'variables' | 'headers' | 'auth' | 'operationName' | 'assertions' | 'preRequestScript' | 'testScript'>): string {
+  return JSON.stringify([x.endpoint, x.query, x.variables, x.headers ?? [], x.auth ?? null, x.operationName ?? null, x.assertions ?? [], x.preRequestScript || null, x.testScript || null]);
 }
 
 interface SubEvent {
@@ -82,6 +89,12 @@ query GetPatient($id: ID!) {
 }
 `;
 /** GraphQL variables as editor text: saved requests may keep them as a JSON object. */
+/** A saved request as this editor's fields (opening it, or taking the version on disk), with its snapshot as the base. */
+function draftOf(collectionId: string, n: SavedGraphQLRequest): Partial<Draft> {
+  const f = { endpoint: n.request.endpoint, query: n.request.query, variables: variablesText(n.request.variables), headers: n.request.headers ?? [], auth: n.request.auth, assertions: n.assertions ?? [], collectionId, requestId: n.id, name: n.name, operationName: n.request.operationName, preRequestScript: n.preRequestScript, testScript: n.testScript };
+  return { ...f, base: gqlSnapshot(f) };
+}
+
 function variablesText(v: unknown): string {
   if (typeof v === 'string') return v;
   if (v == null) return '';
@@ -285,20 +298,40 @@ export function GraphQLView() {
     await loadCollections();
   };
   const [schemaOpen, setSchemaOpen] = useSticky<boolean>('gql:schemaOpen', false);
-  const [side, setSide] = useSticky<'collections' | 'schema' | 'environments' | 'history'>('gql:side', 'collections');
-  const [treeFilter, setTreeFilter] = useState('');
   const [saving, setSaving] = useState(false);
   const openNode = (c: Collection, n: SavedGraphQLRequest) => {
     useApp.getState().markPlace('graphql', { collectionId: c.id, requestId: n.id });
-    setD({ endpoint: n.request.endpoint, query: n.request.query, variables: variablesText(n.request.variables), headers: n.request.headers ?? [], auth: n.request.auth, assertions: n.assertions ?? [], collectionId: c.id, requestId: n.id, name: n.name, operationName: n.request.operationName, preRequestScript: n.preRequestScript, testScript: n.testScript });
+    setD(draftOf(c.id, n) as Draft);
   };
+  // the request changed on disk (a pull, another editor): follow it, or ask when it has unsaved edits (WF-15)
+  useExternalChange<SavedGraphQLRequest>({
+    kinds: ['collections'],
+    items: () => (d.collectionId && d.requestId ? [{ key: d.requestId, label: d.name, base: d.base, dirty: gqlSnapshot(d) !== d.base }] : []),
+    read: async () => {
+      const c = d.collectionId ? await call<Collection>('col.get', { id: d.collectionId }).catch(() => undefined) : undefined;
+      const n = c && d.requestId ? findNode(c.items, d.requestId) : undefined;
+      const out = new Map<string, { snapshot: string; value: SavedGraphQLRequest }>();
+      if (n?.kind === 'graphql') out.set(n.id, { snapshot: draftOf(c!.id, n).base!, value: n });
+      return out;
+    },
+    take: (_id, n, snapshot) => setD((x) => (x.requestId === n.id ? { ...x, ...draftOf(x.collectionId!, n), base: snapshot } : x)),
+    keep: (_id, snapshot) => set({ base: snapshot }),
+  });
 
   useIntent('graphql', async (p) => {
     if (p?.reset) setD({ ...docDrafts.load(), query: DEFAULT_QUERY, collectionId: undefined, requestId: undefined, name: NEW_TAB_TITLE.graphql });
+    // a GraphQL query sent earlier (History ▸ Open): what was sent, in its own tab, not saved anywhere yet
+    if (p?.request && typeof p.request === 'object') {
+      const r = p.request as { endpoint?: string; query?: string; variables?: unknown; headers?: Draft['headers']; auth?: Draft['auth']; operationName?: string };
+      setD({ ...docDrafts.load(), endpoint: r.endpoint ?? '', query: r.query ?? '', variables: variablesText(r.variables), headers: r.headers ?? [], auth: r.auth, operationName: r.operationName, collectionId: undefined, requestId: undefined, name: String(p.name ?? NEW_TAB_TITLE.graphql) });
+    }
     if (p?.collectionId) {
       const c = await call<Collection>('col.get', { id: p.collectionId }).catch(() => undefined);
       const n = c && (findNode(c.items, p.requestId) as SavedGraphQLRequest | undefined);
       if (n?.kind === 'graphql') openNode(c!, n);
+      // an HTTP request opens in its own editor; one that is gone says so
+      else if (n) void openRef({ kind: 'request', collectionId: c!.id, requestId: n.id, protocol: 'http' });
+      else void reportIfGone({ kind: 'request', collectionId: String(p.collectionId), requestId: String(p.requestId) });
     }
   });
 
@@ -323,7 +356,7 @@ export function GraphQLView() {
     };
     const items = d.requestId && findNode(c.items, d.requestId) ? mapNodes(c.items, (n) => (n.id === node.id ? node : n)) : addToFolder(c.items, folderId, node);
     await saveCollection({ ...c, items });
-    set({ collectionId: c.id, requestId: node.id, name });
+    set({ collectionId: c.id, requestId: node.id, name, base: gqlSnapshot(d) });
     useApp.getState().toast('Saved to collection', 'success');
   };
 
@@ -352,7 +385,7 @@ export function GraphQLView() {
   return (
     <div className="h-full flex flex-col" data-collection-id={d.collectionId}>
       {/* narrow windows: the secondary buttons show icons only (their tooltips name them), so the endpoint keeps its room */}
-      <RequestBreadcrumb collectionId={d.collectionId} requestId={d.requestId} name={tabTitle(d.name, NEW_TAB_TITLE.graphql)} onSave={() => void save()} />
+      <RequestBreadcrumb collectionId={d.collectionId} requestId={d.requestId} name={tabTitle(d.name, NEW_TAB_TITLE.graphql)} onSave={() => void save()} actions={[saveAsTestMenuItem(saveTest)]} />
       <div className="@container flex items-center gap-2 p-2 border-b border-line shrink-0">
         <Badge tone="accent">{isSubscription ? 'WS' : 'POST'}</Badge>
         <VarInput ariaLabel="GraphQL endpoint" className="flex-1 min-w-40 h-8" value={d.endpoint} onChange={(endpoint) => set({ endpoint })} placeholder="https://api.example.com/graphql" />
@@ -414,245 +447,155 @@ export function GraphQLView() {
       )}
       {showCode && <CodeModal request={asHttpRequest()} collectionId={d.collectionId} requestId={d.requestId} onClose={() => setShowCode(false)} />}
       <div className="flex-1 min-h-0">
-        <Split id="gql-explorer" sidebar collapsed initial={22} min={12}>
-          <SidebarShell
-            id="graphql"
-            value={side}
-            onChange={(v) => setSide(v as typeof side)}
-            panes={[
-              {
-                id: 'collections',
-                label: 'Collections',
-                icon: <FolderTree size={13} />,
-                render: () => (
-                  <>
-                    <div className="flex items-center gap-1 p-2 shrink-0">
-                      <Input className="flex-1 h-7 min-h-7 text-sm" placeholder="Filter requests" value={treeFilter} onChange={(e) => setTreeFilter(e.target.value)} />
-                      <IconButton label="Import (OpenAPI, Postman, Insomnia, Bruno, HAR …)" onClick={() => useApp.getState().openIntent('collections', { import: true })}>
-                        <Upload size={14} />
-                      </IconButton>
-                      <IconButton
-                        label="New collection"
-                        onClick={async () => {
-                          const name = await promptText('New collection', { message: 'Collection name', placeholder: 'My API', okLabel: 'Create' });
-                          if (name) await saveCollection({ schemaVersion: '1.0', id: uid('col-'), name, version: 0, variables: [], items: [], updatedAt: '' });
-                        }}
-                      >
-                        <FolderPlus size={14} />
-                      </IconButton>
-                    </div>
-                    <div className="flex-1 overflow-auto">
-                      {collections.length ? (
-                        <CollectionTree
-                          collections={collections}
-                          filter={treeFilter}
-                          activeRequestId={d.requestId}
-                          newRequestLabel="New GraphQL request"
-                          onOpen={(c, n) =>
-                            n.kind === 'graphql'
-                              ? void fullCollection(c).then((w) => {
-                                  const whole = findNode(w.items, n.id);
-                                  if (whole?.kind === 'graphql') openNode(w, whole);
-                                }, toastError)
-                              : useApp.getState().openIntent('rest', { collectionId: c.id, requestId: n.id })
-                          }
-                          onChange={(c) => void saveCollection(c)}
-                          onMoved={(ids, from, to) => d.collectionId === from && d.requestId && ids.includes(d.requestId) && set({ collectionId: to })}
-                          onRun={(c, folderId) => useApp.getState().openIntent('collections', { collectionId: c.id, run: true, folderId })}
-                          onNewRequest={async (c, folderId) => {
-                            const node: SavedGraphQLRequest = { kind: 'graphql', id: uid('gql-'), name: 'New GraphQL request', request: { endpoint: d.endpoint, query: DEFAULT_QUERY, variables: '', headers: [] }, assertions: [] };
-                            await saveCollection({ ...c, items: addToFolder(c.items, folderId, node) });
-                            openNode(c, node);
-                          }}
-                        />
-                      ) : (
-                        <Empty icon={<FolderTree size={22} />} title="No collections yet">
-                          Create a collection with the folder button, or Save this operation (Ctrl+S) to put it in one.
-                        </Empty>
-                      )}
-                    </div>
-                  </>
-                ),
-              },
-              {
-                id: 'schema',
-                label: 'Schema',
-                icon: <Network size={13} />,
-                render: () => (
-                  <div className="flex-1 min-h-0">
-                    <SchemaExplorer schema={schema} error={schemaError} sdl={sdl} onInsert={(f) => set({ query: d.query.replace(/\}\s*$/, `  ${f}\n}\n`) })} onBuild={(f) => void buildOperation(f)} onIntrospect={introspectNow} loading={introspecting} />
-                  </div>
-                ),
-              },
-              { id: 'environments', label: 'Environments', icon: <KeyRound size={13} />, render: () => <EnvironmentsPane /> },
-              {
-                id: 'history',
-                label: 'History',
-                icon: <History size={13} />,
-                render: () => (
-                  <HistoryPane
-                    kind="graphql"
-                    noun="GraphQL requests you send"
-                    onOpen={(item) => {
-                      const r = item.request as { endpoint?: string; query?: string; variables?: string; headers?: typeof d.headers; operationName?: string } | undefined;
-                      if (!r?.query) return useApp.getState().openIntent('history', { historyId: item.id });
-                      set({ name: item.name, endpoint: r.endpoint ?? d.endpoint, query: r.query, variables: variablesText(r.variables), headers: r.headers ?? [], operationName: r.operationName, collectionId: undefined, requestId: undefined });
-                    }}
-                  />
-                ),
-              },
-            ]}
-          />
-          <Split id="gql-schema" initial={74} min={40} collapsedSecond={!schemaOpen}>
-            <ResponseSplit id="gql-main" initialSide={50}>
-              <div className="h-full flex flex-col">
-                <div className="flex items-center h-8 px-2 border-b border-line gap-1 text-xs text-muted shrink-0">
-                  <span className="font-medium text-fg">{d.name}</span>
-                  {operations[0] && <Badge>{operations[0].type}</Badge>}
-                  <Button size="sm" variant="ghost" className="ml-auto" icon={<Wand2 size={12} />} onClick={prettify}>
-                    Prettify
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    icon={<Sparkles size={12} />}
-                    onClick={() =>
-                      useApp.getState().set({
-                        assistant: {
-                          task: 'generate-query',
-                          title: 'Generate GraphQL query',
-                          context: { schemaSdl: sdl?.slice(0, 20000) ?? 'unknown — introspect first', currentQuery: d.query },
-                          question: '',
-                          apply: { label: 'Use this query', run: (code) => (/^\s*(query|mutation|subscription|fragment|\{)/.test(code) ? set({ query: code }) : 'it has no GraphQL operation') },
-                        },
-                      })
-                    }
-                  >
-                    Generate
-                  </Button>
-                </div>
-                <div className="flex-1 min-h-0">
-                  <Split id="gql-editor-vars" direction="vertical" initial={65}>
-                    <CodeEditor language="graphql" path="query.graphql" value={d.query} onChange={(query) => set({ query })} />
-                    <div className="h-full flex flex-col">
-                      <Tabs
-                        value={sub}
-                        onChange={setSub}
-                        tabs={[
-                          { id: 'variables', label: 'Variables' },
-                          { id: 'headers', label: 'Headers', badge: d.headers.length },
-                          { id: 'auth', label: 'Auth' },
-                          { id: 'scripts', label: 'Scripts', badge: (d.preRequestScript?.trim() ? 1 : 0) + (d.testScript?.trim() ? 1 : 0) || undefined },
-                          ...(isSubscription ? [{ id: 'connection' as const, label: 'Connection' }] : []),
-                          { id: 'tests', label: 'Tests', badge: d.assertions.length },
-                        ]}
-                      />
-                      <div className="flex-1 min-h-0 overflow-auto">
-                        {sub === 'variables' && <CodeEditor language="json" value={d.variables} onChange={(variables) => set({ variables })} minimal />}
-                        {sub === 'headers' && (
-                          <div className="p-2">
-                            <KeyValueEditor rows={d.headers} onChange={(headers) => set({ headers })} keyPlaceholder="Header" />
-                          </div>
-                        )}
-                        {sub === 'auth' && <AuthEditor auth={d.auth} onChange={(auth) => set({ auth })} />}
-                        {sub === 'connection' && (
-                          <div className="h-full flex flex-col">
-                            <p className="px-2 py-1.5 text-xs text-muted border-b border-line">Payload of <span className="mono">connection_init</span> (JSON), for servers that read auth there, e.g. {'{ "authorization": "Bearer {{token}}" }'}. The Auth tab is also sent as a handshake header.</p>
-                            <div className="flex-1 min-h-0">
-                              <CodeEditor language="json" value={d.connectionParams ?? ''} onChange={(connectionParams) => set({ connectionParams })} minimal />
-                            </div>
-                          </div>
-                        )}
-                        {sub === 'scripts' && <ScriptsPanel pre={d.preRequestScript ?? ''} post={d.testScript ?? ''} onPre={(v) => set({ preRequestScript: v })} onPost={(v) => set({ testScript: v })} />}
-                        {sub === 'tests' && <AssertionEditor checks={d.assertions} onChange={(assertions) => set({ assertions })} groups={['Response', 'Body', 'GraphQL']} />}
-                      </div>
-                    </div>
-                  </Split>
-                </div>
-              </div>
-              <div className="h-full flex flex-col min-h-0">
-                {events && !result?.error ? (
-                  <div className="h-full flex flex-col min-h-0">
-                    <div className="flex items-center gap-2 px-3 h-9 border-b border-line text-sm shrink-0">
-                      <Badge tone={subscription ? 'ok' : 'default'}>{subscription ? 'subscribed' : 'ended'}</Badge>
-                      {subscription?.protocol && <span className="text-xs text-muted mono">{subscription.protocol}</span>}
-                      <span className="text-muted ml-auto">{events.filter((e) => e.type === 'next').length} events</span>
-                    </div>
-                    <Split id="gql-sub-events" direction="vertical" initial={45}>
-                      <div className="h-full overflow-auto">
-                        {events.map((e, i) => (
-                          <button key={i} onClick={() => setEventSel(i)} className={cx('w-full flex items-center gap-2 px-3 py-1 text-left text-sm border-b border-line/50 hover:bg-hover', eventSel === i && 'bg-accent/10')}>
-                            <span className="text-xs text-muted tabular-nums shrink-0">{new Date(e.time).toLocaleTimeString()}</span>
-                            <Badge tone={e.type === 'next' ? 'accent' : e.type === 'error' ? 'bad' : 'default'}>{e.type}</Badge>
-                            <span className="mono text-xs truncate">{e.message ?? JSON.stringify(e.data)}</span>
-                          </button>
-                        ))}
-                      </div>
-                      <div className="h-full overflow-auto">{eventSel !== undefined && events[eventSel]?.data !== undefined ? <JsonTree data={events[eventSel]!.data} /> : <Empty title="Select an event" />}</div>
-                    </Split>
-                  </div>
-                ) : result?.error ? (
-                  <ErrorPanel error={result.error} context={{ endpoint: d.endpoint, query: d.query }} />
-                ) : result?.response ? (
-                  <>
-                    <div className="flex items-center gap-3 px-3 h-9 border-b border-line text-sm shrink-0">
-                      <Badge tone={statusTone(result.response.status)}>{result.response.status}</Badge>
-                      <span className="text-muted">{formatMs(result.response.durationMs)}</span>
-                      {!!result.errors?.length && <Badge tone="bad">{result.errors.length} GraphQL error(s)</Badge>}
-                    </div>
-                    <Tabs
-                      value={resTab}
-                      onChange={setResTab}
-                      tabs={[
-                        { id: 'response', label: 'Response' },
-                        ...(tableRowsOf(result.response.json) ? [{ id: 'table' as const, label: 'Table' }] : []),
-                        { id: 'raw', label: 'Raw' },
-                        { id: 'tests', label: 'Tests', badge: result.checks?.length },
-                      ]}
-                    />
-                    <div className="flex-1 min-h-0">
-                      {resTab === 'response' && (result.response.json !== undefined ? <JsonTree data={result.response.json} onAssert={(a) => (set({ assertions: [...d.assertions, a as never] }), useApp.getState().toast(`Added a check on ${a.path} (Tests tab)`, 'success'))} onSaveVariable={(v) => void saveResponseVariable(v, env, d.testScript).then((testScript) => testScript !== undefined && set({ testScript }))} /> : <RawView text={result.response.bodyPreview} />)}
-                      {resTab === 'raw' && <RawView text={result.response.bodyPreview} />}
-                      {resTab === 'table' && (() => {
-                        const t = tableRowsOf(result.response.json);
-                        return t ? <JsonTable rows={t.rows} path={t.path} /> : <Empty title="No list of objects in this response" />;
-                      })()}
-                      {resTab === 'tests' && (
-                        <div className="h-full overflow-auto">
-                          <CheckList checks={result.checks ?? []} />
-                          {!!result.scriptLogs?.length && (
-                            <div className="border-t border-line p-3">
-                              <div className="text-xs font-medium text-muted mb-1">Script output</div>
-                              <pre className="mono text-xs whitespace-pre-wrap break-all">{result.scriptLogs.map((l) => `[${l.phase}] ${l.message}`).join('\n')}</pre>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </>
-                ) : (
-                  <Empty
-                    icon={<Play size={26} />}
-                    title="Run the operation to see the response"
-                    actions={[{ label: 'Run (Ctrl+Enter)', icon: <Play size={12} />, onClick: () => void run(), disabled: !!running }]}
-                  >
-                    Write a query or a mutation on the left; <b>Introspect</b> reads the endpoint's schema for autocomplete, validation and the schema explorer.
-                  </Empty>
-                )}
-              </div>
-            </ResponseSplit>
-            <div className="h-full flex flex-col min-h-0 bg-panel/50">
-              <div className="flex items-center gap-2 px-3 h-8 border-b border-line text-xs font-semibold uppercase tracking-wider text-muted shrink-0">
-                <Network size={13} /> Schema
-                <button className="ml-auto normal-case font-normal text-muted hover:text-fg" onClick={() => setSchemaOpen(false)} aria-label="Hide the schema">
-                  Hide
-                </button>
+        <Split id="gql-schema" initial={74} min={40} collapsedSecond={!schemaOpen}>
+          <ResponseSplit id="gql-main" initialSide={50}>
+            <div className="h-full flex flex-col">
+              <div className="flex items-center h-8 px-2 border-b border-line gap-1 text-xs text-muted shrink-0">
+                <span className="font-medium text-fg">{d.name}</span>
+                {operations[0] && <Badge>{operations[0].type}</Badge>}
+                <Button size="sm" variant="ghost" className="ml-auto" icon={<Wand2 size={12} />} onClick={prettify}>
+                  Prettify
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  icon={<Sparkles size={12} />}
+                  onClick={() =>
+                    useApp.getState().set({
+                      assistant: {
+                        task: 'generate-query',
+                        title: 'Generate GraphQL query',
+                        context: { schemaSdl: sdl?.slice(0, 20000) ?? 'unknown — introspect first', currentQuery: d.query },
+                        question: '',
+                        apply: { label: 'Use this query', run: (code) => (/^\s*(query|mutation|subscription|fragment|\{)/.test(code) ? set({ query: code }) : 'it has no GraphQL operation') },
+                      },
+                    })
+                  }
+                >
+                  Generate
+                </Button>
               </div>
               <div className="flex-1 min-h-0">
-                <SchemaExplorer schema={schema} error={schemaError} sdl={sdl} onInsert={(f) => set({ query: d.query.replace(/\}\s*$/, `  ${f}\n}\n`) })} onBuild={(f) => void buildOperation(f)} onIntrospect={introspectNow} loading={introspecting} />
+                <Split id="gql-editor-vars" direction="vertical" initial={65}>
+                  <CodeEditor language="graphql" path="query.graphql" value={d.query} onChange={(query) => set({ query })} />
+                  <div className="h-full flex flex-col">
+                    <Tabs
+                      value={sub}
+                      onChange={setSub}
+                      tabs={[
+                        { id: 'variables', label: 'Variables' },
+                        { id: 'headers', label: 'Headers', badge: d.headers.length },
+                        { id: 'auth', label: 'Auth' },
+                        { id: 'scripts', label: 'Scripts', badge: (d.preRequestScript?.trim() ? 1 : 0) + (d.testScript?.trim() ? 1 : 0) || undefined },
+                        ...(isSubscription ? [{ id: 'connection' as const, label: 'Connection' }] : []),
+                        { id: 'tests', label: 'Tests', badge: d.assertions.length },
+                      ]}
+                    />
+                    <div className="flex-1 min-h-0 overflow-auto">
+                      {sub === 'variables' && <CodeEditor language="json" value={d.variables} onChange={(variables) => set({ variables })} minimal />}
+                      {sub === 'headers' && (
+                        <div className="p-2">
+                          <KeyValueEditor rows={d.headers} onChange={(headers) => set({ headers })} keyPlaceholder="Header" />
+                        </div>
+                      )}
+                      {sub === 'auth' && <AuthEditor auth={d.auth} onChange={(auth) => set({ auth })} />}
+                      {sub === 'connection' && (
+                        <div className="h-full flex flex-col">
+                          <p className="px-2 py-1.5 text-xs text-muted border-b border-line">Payload of <span className="mono">connection_init</span> (JSON), for servers that read auth there, e.g. {'{ "authorization": "Bearer {{token}}" }'}. The Auth tab is also sent as a handshake header.</p>
+                          <div className="flex-1 min-h-0">
+                            <CodeEditor language="json" value={d.connectionParams ?? ''} onChange={(connectionParams) => set({ connectionParams })} minimal />
+                          </div>
+                        </div>
+                      )}
+                      {sub === 'scripts' && <ScriptsPanel pre={d.preRequestScript ?? ''} post={d.testScript ?? ''} onPre={(v) => set({ preRequestScript: v })} onPost={(v) => set({ testScript: v })} />}
+                      {sub === 'tests' && <AssertionEditor checks={d.assertions} onChange={(assertions) => set({ assertions })} groups={['Response', 'Body', 'GraphQL']} />}
+                    </div>
+                  </div>
+                </Split>
               </div>
             </div>
-          </Split>
+            <div className="h-full flex flex-col min-h-0">
+              {events && !result?.error ? (
+                <div className="h-full flex flex-col min-h-0">
+                  <div className="flex items-center gap-2 px-3 h-9 border-b border-line text-sm shrink-0">
+                    <Badge tone={subscription ? 'ok' : 'default'}>{subscription ? 'subscribed' : 'ended'}</Badge>
+                    {subscription?.protocol && <span className="text-xs text-muted mono">{subscription.protocol}</span>}
+                    <span className="text-muted ml-auto">{events.filter((e) => e.type === 'next').length} events</span>
+                  </div>
+                  <Split id="gql-sub-events" direction="vertical" initial={45}>
+                    <div className="h-full overflow-auto">
+                      {events.map((e, i) => (
+                        <button key={i} onClick={() => setEventSel(i)} className={cx('w-full flex items-center gap-2 px-3 py-1 text-left text-sm border-b border-line/50 hover:bg-hover', eventSel === i && 'bg-accent/10')}>
+                          <span className="text-xs text-muted tabular-nums shrink-0">{new Date(e.time).toLocaleTimeString()}</span>
+                          <Badge tone={e.type === 'next' ? 'accent' : e.type === 'error' ? 'bad' : 'default'}>{e.type}</Badge>
+                          <span className="mono text-xs truncate">{e.message ?? JSON.stringify(e.data)}</span>
+                        </button>
+                      ))}
+                    </div>
+                    <div className="h-full overflow-auto">{eventSel !== undefined && events[eventSel]?.data !== undefined ? <JsonTree data={events[eventSel]!.data} /> : <Empty title="Select an event" />}</div>
+                  </Split>
+                </div>
+              ) : result?.error ? (
+                <ErrorPanel error={result.error} context={{ endpoint: d.endpoint, query: d.query }} />
+              ) : result?.response ? (
+                <>
+                  <div className="flex items-center gap-3 px-3 h-9 border-b border-line text-sm shrink-0">
+                    <Badge tone={statusTone(result.response.status)}>{result.response.status}</Badge>
+                    <span className="text-muted">{formatMs(result.response.durationMs)}</span>
+                    {!!result.errors?.length && <Badge tone="bad">{result.errors.length} GraphQL error(s)</Badge>}
+                  </div>
+                  <Tabs
+                    value={resTab}
+                    onChange={setResTab}
+                    tabs={[
+                      { id: 'response', label: 'Response' },
+                      ...(tableRowsOf(result.response.json) ? [{ id: 'table' as const, label: 'Table' }] : []),
+                      { id: 'raw', label: 'Raw' },
+                      { id: 'tests', label: 'Tests', badge: result.checks?.length },
+                    ]}
+                  />
+                  <div className="flex-1 min-h-0">
+                    {resTab === 'response' && (result.response.json !== undefined ? <JsonTree data={result.response.json} onAssert={(a) => (set({ assertions: [...d.assertions, a as never] }), useApp.getState().toast(`Added a check on ${a.path} (Tests tab)`, 'success'))} onSaveVariable={(v) => void saveResponseVariable(v, env, d.testScript).then((testScript) => testScript !== undefined && set({ testScript }))} /> : <RawView text={result.response.bodyPreview} />)}
+                    {resTab === 'raw' && <RawView text={result.response.bodyPreview} />}
+                    {resTab === 'table' && (() => {
+                      const t = tableRowsOf(result.response.json);
+                      return t ? <JsonTable rows={t.rows} path={t.path} /> : <Empty title="No list of objects in this response" />;
+                    })()}
+                    {resTab === 'tests' && (
+                      <div className="h-full overflow-auto">
+                        <CheckList checks={result.checks ?? []} />
+                        {!!result.scriptLogs?.length && (
+                          <div className="border-t border-line p-3">
+                            <div className="text-xs font-medium text-muted mb-1">Script output</div>
+                            <pre className="mono text-xs whitespace-pre-wrap break-all">{result.scriptLogs.map((l) => `[${l.phase}] ${l.message}`).join('\n')}</pre>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <Empty
+                  icon={<Play size={26} />}
+                  title="Run the operation to see the response"
+                  actions={[{ label: 'Run (Ctrl+Enter)', icon: <Play size={12} />, onClick: () => void run(), disabled: !!running }]}
+                >
+                  Write a query or a mutation on the left; <b>Introspect</b> reads the endpoint's schema for autocomplete, validation and the schema explorer.
+                </Empty>
+              )}
+            </div>
+          </ResponseSplit>
+          <div className="h-full flex flex-col min-h-0 bg-panel/50">
+            <div className="flex items-center gap-2 px-3 h-8 border-b border-line text-xs font-semibold uppercase tracking-wider text-muted shrink-0">
+              <Network size={13} /> Schema
+              <button className="ml-auto normal-case font-normal text-muted hover:text-fg" onClick={() => setSchemaOpen(false)} aria-label="Hide the schema">
+                Hide
+              </button>
+            </div>
+            <div className="flex-1 min-h-0">
+              <SchemaExplorer schema={schema} error={schemaError} sdl={sdl} onInsert={(f) => set({ query: d.query.replace(/\}\s*$/, `  ${f}\n}\n`) })} onBuild={(f) => void buildOperation(f)} onIntrospect={introspectNow} loading={introspecting} />
+            </div>
+          </div>
         </Split>
       </div>
     </div>

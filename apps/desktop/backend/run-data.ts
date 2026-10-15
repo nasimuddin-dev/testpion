@@ -1,4 +1,4 @@
-import { readDataset, type DatasetRecord } from '@testpion/core';
+import { readDataset, type CollectionNode, type DatasetRecord } from '@testpion/core';
 
 /** What resolving a database URL's {{variables}} needs from the backend: a context for the chosen environment. */
 export interface RunDataContextSource {
@@ -22,4 +22,16 @@ export async function readRunData(be: RunDataContextSource, path: string, query?
   const rows: DatasetRecord[] = [];
   for await (const r of readDataset({ path: source, query, limit: 100_000 })) rows.push(r);
   return rows;
+}
+
+/** The name of an item (request or folder) of a collection, found anywhere in its tree (a run of one folder is named after it). */
+export function findNodeName(nodes: CollectionNode[], id: string): string | undefined {
+  for (const n of nodes) {
+    if (n.id === id) return n.name;
+    if (n.kind === 'folder') {
+      const r = findNodeName(n.items, id);
+      if (r) return r;
+    }
+  }
+  return undefined;
 }

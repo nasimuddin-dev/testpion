@@ -23,7 +23,7 @@ update feeds and `SHA256SUMS.txt`; 11 assets). Commits go straight to `main` as 
    ```bash
    python scripts/release.py 0.39.2 0.40.0 <entry.md>
    npm install --package-lock-only --ignore-scripts
-   npm run build -w @testpion/core
+   npm run build -w @testpion/shared -w @testpion/core
    npm run screenshots -w @testpion/desktop
    ```
    (`screenshots` refreshes the docs images from the app.)

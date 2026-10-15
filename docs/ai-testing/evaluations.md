@@ -9,7 +9,9 @@ description: "Evaluate LLM output with deterministic, semantic and LLM-as-judge 
 
 ## Saved evaluations
 
-Save an evaluation (its dataset, prompt, model, parameters and evaluators) with **Save** next to **Run**, and it appears under **Saved** in the sidebar. Group evaluations in folders (**New folder**, drag and drop, or **Move to folder**), and right-click one to **Run** it again, rename, duplicate or delete it. **Save** updates the evaluation you opened (it shows `Save*` when there are changes). **Save current evaluation** in a folder's menu saves a copy there. The **Runs** pane lists the runs of your evaluations; pick one to see its results.
+Save an evaluation (its dataset, prompt, model, parameters and evaluators) with **Save** next to **Run**, and it appears under **Saved** in the sidebar. Group evaluations in folders (**New folder**, drag and drop, or **Move to folder**), and right-click one to **Run** it again, rename, duplicate or delete it. **Save** updates the evaluation you opened (it shows `Save*` when there are changes). **Save current evaluation** in a folder's menu saves a copy there. The **Runs** pane lists the runs of your evaluations, each with the environment it ran against (**PRODUCTION** in red); pick one to see its results.
+
+Evaluations open in tabs, like requests: each tab keeps its own unsaved changes, a single click in the **Saved** list opens a preview tab (its name in italics) that the next click replaces, and a double-click keeps it. The first line of the view says where the evaluation is (*Evaluations › folder › name*), and its ⋯ has **Copy link**. See [Finding your way around](/getting-started/finding-your-way#open-an-item).
 
 Saved evaluations are kept in the workspace file `library/evaluations.json`, so they're versioned and shared with the workspace (use `{{variables}}` rather than typed-in keys).
 
@@ -20,7 +22,7 @@ testpion eval list                       # name, folder, model, cases, evaluator
 testpion eval run "Intent classification" -e Staging --limit 50 -r console junit
 ```
 
-`eval run` exits `1` when a case fails, writes the usual reports, and works with `--baseline` / `--save-baseline` for regression checks. AI agents use the `list_evaluations` and `run_evaluation` tools of `testpion mcp-server`.
+`eval run` exits `1` when a case fails, writes the usual reports, and works with `--baseline` / `--save-baseline` for regression checks. Against an environment marked as [production](/api-testing/environments#production), data-changing requests need `--allow-production` (the app asks once per run). AI agents use the `list_evaluations` and `run_evaluation` tools of `testpion mcp-server`.
 
 ## Evaluator types
 
@@ -70,6 +72,31 @@ Reviews are kept beside the run (`runs/<id>/reviews.json`) and never change its 
 
 - Terminal: `testpion history review <runId>` lists the reviews; `testpion history review <runId> <resultId> --bad --note "rude tone"` rates one.
 - Agents: `run_reviews` reads them (a good starting point for improving evaluators) and `review_result` adds one, marked as an agent's.
+
+## Compare runs as a matrix
+
+Run the same dataset through several variants (a saved evaluation per prompt or model, or one run with several models) and pick **Matrix** above the results: rows are the cases (the dataset records), columns the variants, and each cell the case's score (or ✓ / ✗ without scored evaluators) in that variant. The newest run of each evaluation is shown until you pick: **+ Add a run…** adds a column (up to 20 runs; a run with several models becomes a column per model) and **×** removes one. Cases line up by their record id, so runs of differently named evaluations compare case by case.
+
+<figure class="aps-screenshot">
+  <img src="/images/eval-matrix.jpg" alt="The evaluation matrix: ten cases as rows, three variants of an intent classifier as columns, a baseline picked, and the cases the desk-hint prompt got wrong in red with their score change" width="1440" height="900" loading="lazy">
+</figure>
+
+- **Baseline**: pick a run, and every cell is coloured against the baseline's cell of the same case: red when it **regressed** (it stopped passing, or its score dropped by more than the threshold, ±0.05 by default; a drop of exactly the threshold is not a regression), green when it **improved**, with the score change (`−0.12`). A case only in the baseline is **missing**, one only in the variant **new**. Each column head shows its pass count, mean score, regressions ▼, improvements ▲ and mean score change.
+- **Filter chips** count what they show: **All**, **Failed** (a variant failed it), **Regressed**, **Improved** and **Missing** (with a baseline). **Every tag** narrows to the cases with a tag (a dataset record's `tags`: a list or `"billing, edge"`), **Find a case** to an id or name.
+- **Sort** by case, lowest or highest score, biggest drop or gain, or most failures; clicking a column head sorts by that variant's score (again: the other way).
+- **A cell opens the case**: its input, output, expected value and every check with the judge's reasoning (the same detail as a run's result), and **Baseline** shows the baseline's result for the same case beside it.
+
+The backend keeps the matrix and the window asks for the rows on screen, so 5,000 cases × 10 variants scroll as fast as 50.
+
+From the terminal and CI, `eval compare` exits `1` when more cases regressed than allowed:
+
+```bash
+testpion eval compare "Intent classification" --baseline run-mv7c0rww1bdf50ac3b --json   # the newest run of that name
+testpion eval compare last --baseline main-nightly --threshold 0.1 --max-regressions 3 --fail-on-missing
+testpion eval matrix "Intent v1" "Intent v2" "Intent v3" --baseline "Intent v1" --filter regressed --tag billing --json
+```
+
+Runs are named by id, `last` (the newest finished evaluation run: a saved evaluation's or one with scored checks; a run still going, a stopped run, a collection run or a monitor's is passed by) or name (the newest finished run of that name). The report lists the regressions (a lost pass first, then the biggest drop), improvements, missing and new cases, and per variant the pass rate and mean score change; `passed` is what the exit code says. AI agents use the `eval_compare` and `eval_matrix` MCP tools (`eval_matrix` with `run` and `result` returns one cell's full result).
 
 ## Regression
 

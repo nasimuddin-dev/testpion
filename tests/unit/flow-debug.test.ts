@@ -246,6 +246,16 @@ describe('run history, replay and pins of a flow file', () => {
     expect(typeof detail.results[0]!.variables?.n).toBe('number');
   });
 
+  it('a run where none of the steps of the file ran (they wait for a step in another file) is skipped, not passed', async () => {
+    const orphan = join(root, 'tests', 'orphan-flow.yaml');
+    writeFileSync(orphan, `tests:\n  - { id: x, name: X, url: "${base}/ok", dependsOn: [elsewhere] }\n  - { id: y, name: Y, url: "${base}/ok", dependsOn: [x] }\n`);
+    const runId = `run-${Math.random().toString(36).slice(2, 10)}`;
+    const dir = store.runDir(runId);
+    await recordRun(store, await runTests({ name: 'orphan', runId, tests: loadTestsFromFile(orphan), services: services(), resultsFile: join(dir, 'results.jsonl') }), dir);
+    const h = await flowRuns(store, 'orphan-flow.yaml');
+    expect(h.runs[0]).toMatchObject({ runId, status: 'skipped', steps: 2, passed: 0, skipped: 2 });
+  });
+
   it('replays a failed run from its first failing step with its variables', async () => {
     const failed = (await flowRuns(store, file)).runs.find((r) => r.status === 'failed')!;
     const seededN = (await flowRunResults(store, file, failed.runId)).results[0]!.variables!.n;

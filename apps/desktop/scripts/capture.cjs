@@ -1,8 +1,10 @@
 // Captures documentation screenshots of the real app:
-//   npm run screenshots -w @testpion/desktop   (TESTPION_CAPTURE_OUT=<dir> writes elsewhere)
-// Starts the demo servers, copies the example workspace into a temporary profile,
-// launches Electron in capture mode and writes docs/public/images/*.jpg.
+//   npm run screenshots -w @testpion/desktop   (TESTPION_CAPTURE_OUT=<dir> writes elsewhere; TESTPION_CAPTURE_DEBUG=<dir>
+//   gets a picture of the window when a step times out)
+// Starts the demo servers, copies the example workspace into a temporary profile (never the user's own profile or
+// workspaces), launches Electron in capture mode and writes docs/public/images/*.jpg (steps: capture-steps.cjs).
 const { spawn, spawnSync } = require('node:child_process');
+const { get } = require('node:http');
 const { mkdirSync, mkdtempSync, rmSync, writeFileSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { dirname, join, resolve } = require('node:path');
@@ -28,7 +30,30 @@ writeFileSync(join(home, 'examples', 'servers', 'mcp-server.mjs'), `import ${JSO
 writeFileSync(join(home, 'settings.json'), JSON.stringify({ lastWorkspace: ws, workspacePaths: [ws], theme: process.env.TESTPION_CAPTURE_THEME ?? 'dark' }, null, 2));
 
 const servers = spawn(process.execPath, [join(root, 'examples', 'servers', 'demo-servers.mjs')], { stdio: 'ignore' });
-setTimeout(() => {
+
+/** Whether a demo server answers (any HTTP status). */
+const answers = (url) =>
+  new Promise((ok) => {
+    const req = get(url, (res) => (res.resume(), ok(true)));
+    req.on('error', () => ok(false));
+    req.setTimeout(1000, () => (req.destroy(), ok(false)));
+  });
+
+(async () => {
+  // the REST API, GraphQL and the mock LLM the steps use, up before the app starts
+  const urls = ['http://127.0.0.1:4010/health', 'http://127.0.0.1:4011/graphql', 'http://127.0.0.1:4012/v1/models'];
+  const end = Date.now() + 30_000;
+  for (;;) {
+    const up = await Promise.all(urls.map(answers));
+    if (up.every(Boolean)) break;
+    if (Date.now() > end) {
+      console.error(`[capture] the demo servers did not start: ${urls.filter((_, i) => !up[i]).join(', ')}`);
+      servers.kill();
+      rmSync(home, { recursive: true, force: true });
+      process.exit(1);
+    }
+    await new Promise((r) => setTimeout(r, 200));
+  }
   const electron = require('electron');
   const r = spawnSync(electron, ['.'], {
     cwd: resolve(__dirname, '..'),
@@ -38,4 +63,4 @@ setTimeout(() => {
   servers.kill();
   rmSync(home, { recursive: true, force: true });
   process.exit(r.status ?? 1);
-}, 1500);
+})();

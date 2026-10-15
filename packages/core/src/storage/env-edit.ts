@@ -113,3 +113,40 @@ export function unsetEnvironmentVariables(store: WorkspaceStore, ref: string, ke
   if (secret) throw new ApsError('ValidationError', `"${secret.key}" is a secret variable: remove it in the app, so its stored value is removed too`);
   return store.saveEnvironment({ ...env, variables: env.variables.filter((v) => !keys.includes(v.key)) });
 }
+
+/**
+ * WF-14 "also add to the other environments": the variables `keys` of environment `from`, added to each of `to` where
+ * they are missing (an existing variable is never changed), empty or with the same value (`copy`). A secret variable
+ * stays secret: its value is copied secret store to secret store (with `secrets`), else it is added without a value.
+ */
+export async function addVariablesToEnvironments(
+  store: WorkspaceStore,
+  from: string,
+  keys: string[],
+  to: string[],
+  opts: { copy?: boolean; secrets?: SecretStore } = {},
+): Promise<Array<{ environment: string; added: string[] }>> {
+  const src = requireEnvironment(store, from);
+  const wanted = [...new Set(keys)].map((k) => src.variables.find((v) => v.key === k)).filter((v): v is NonNullable<typeof v> => !!v);
+  if (!wanted.length) return [];
+  const out: Array<{ environment: string; added: string[] }> = [];
+  for (const ref of [...new Set(to)]) {
+    const env = requireEnvironment(store, ref);
+    if (env.id === src.id) continue;
+    const have = new Set(env.variables.map((v) => v.key));
+    const add = wanted.filter((v) => !have.has(v.key));
+    if (!add.length) {
+      out.push({ environment: env.name, added: [] });
+      continue;
+    }
+    const secretOf = (v: (typeof add)[number]) => !!(v as { secret?: boolean }).secret;
+    store.saveEnvironment({ ...env, variables: [...env.variables, ...add.map((v) => ({ ...v, value: secretOf(v) || !opts.copy ? '' : v.value, enabled: true }))] });
+    if (opts.copy && opts.secrets)
+      for (const v of add.filter(secretOf)) {
+        const value = opts.secrets.get(secretKeys.envVar(src.id, v.key));
+        if (value !== undefined) await opts.secrets.set(secretKeys.envVar(env.id, v.key), value);
+      }
+    out.push({ environment: env.name, added: add.map((v) => v.key) });
+  }
+  return out;
+}

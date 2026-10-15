@@ -7,7 +7,7 @@ description: "Introspect a schema to enable autocomplete, validation, hover docs
 
 # Schema explorer
 
-**Introspect** runs the standard introspection query and loads the schema:
+**Introspect** runs the standard introspection query and loads the schema (**Schema** shows or hides the explorer):
 
 - **Autocomplete** for fields, arguments, types, directives and variables (Ctrl+Space).
 - **Validation** as you type, with errors underlined in the editor.

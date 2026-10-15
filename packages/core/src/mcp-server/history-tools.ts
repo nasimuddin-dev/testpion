@@ -70,12 +70,12 @@ export function historyTools({ store, redactor, findCollection, findRequest }: H
     {
       name: 'recent_failures',
       description:
-        'The latest responses that failed across the workspace (sent from the TestPion app), newest first: time, kind (http, graphql, grpc, mcp, llm), name, method, URL (secrets masked), status (4xx/5xx, a transport error such as NetworkError, a non-OK gRPC code, an MCP tool error) and duration. Use it to see what broke recently; request_history and compare_responses dig into one saved request.',
+        'The latest responses that failed across the workspace (sent from the TestPion app), newest first: time, kind (http, graphql, grpc, mcp, llm), name, method, URL (secrets masked), status (4xx/5xx, a transport error such as NetworkError, a non-OK gRPC code, an MCP tool error), duration, and `ref` (an ItemRef: the app opens the entry with its request). Use it to see what broke recently; request_history and compare_responses dig into one saved request.',
       inputSchema: { type: 'object', properties: { kind: str('Only this kind: http, graphql, grpc, mcp or llm'), limit: { type: 'number', description: 'How many (default 20, max 200)' } } },
       run: (a) =>
         store.meta
           .listHistory({ failed: true, kind: a.kind ? String(a.kind) : undefined, limit: Math.min(Math.max(Number(a.limit) || 20, 1), 200) })
-          .items.map((h) => ({ id: h.id, timestamp: h.timestamp, kind: h.kind, name: h.name, method: h.method, url: h.url && redactor.redactUrl(h.url), status: h.status, durationMs: h.durationMs })),
+          .items.map((h) => ({ id: h.id, ref: { kind: 'history', historyId: h.id }, timestamp: h.timestamp, kind: h.kind, name: h.name, method: h.method, url: h.url && redactor.redactUrl(h.url), status: h.status, durationMs: h.durationMs })),
     },
     {
       name: 'response_time_stats',
@@ -95,7 +95,7 @@ export function historyTools({ store, redactor, findCollection, findRequest }: H
     {
       name: 'what_needs_attention',
       description:
-        'What needs attention in this workspace, most severe first: failing monitors, TLS certificates that expire within 30 days, the latest run if it failed, saved requests whose latest response failed, and flaky tests. Each item has a message and a ref (monitorId, host, runId, collectionId + requestId, testId). Start here to find out what to fix.',
+        'What needs attention in this workspace, most severe first: failing monitors, TLS certificates that expire within 30 days, the latest run if it failed, saved requests whose latest response failed, and flaky tests. Each item has a message and a ref, an ItemRef {kind, …ids}: monitor (monitorId, runId), certificate (host), run (runId), request (collectionId + requestId), test-case (testId); resolve_ref names it and gives the link that opens it in the app. Start here to find out what to fix.',
       inputSchema: { type: 'object', properties: { certDays: { type: 'number', description: 'Warn about certificates that expire within this many days (default 30)' } } },
       run: (a) => workspaceAttention(store, { certDays: Number(a.certDays) || 30 }),
     },

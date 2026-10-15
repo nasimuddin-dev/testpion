@@ -1,5 +1,9 @@
+import { useLibraryTabs } from '../lib/library-tabs';
+import { LibraryTabStrip } from '../components/LibraryTabStrip';
+import { ItemBreadcrumb } from '../components/ItemBreadcrumb';
+import { refMenu } from '../components/RefLink';
 import { RunMiniBar, RunsOverview, type RunRow } from '../components/RunsOverview';
-import { BarChart3, Bookmark, FlaskConical, History, KeyRound, Play, Save } from 'lucide-react';
+import { BarChart3, Bookmark, FlaskConical, Grid3x3, History, KeyRound, Play, Save } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useSticky } from '../lib/sticky';
 import { useIntent } from '../hooks';
@@ -12,11 +16,13 @@ import { pickTextFile } from '../lib/files';
 import { AssertionEditor } from '../components/AssertionEditor';
 import { CodeEditor } from '../components/CodeEditor';
 import { RunPanel } from '../components/RunPanel';
+import { EvalMatrix } from '../components/EvalMatrix';
 import { FolderList } from '../components/FolderList';
 import { SidebarShell } from '../components/SidebarShell';
 import { EnvironmentsPane } from '../components/SidebarPanes';
 import { useLibrary } from '../lib/library';
-import { Badge, Button, Callout, cx, Empty, Field, Input, Select, Split, Tabs } from '../components/ui';
+import { Badge, Button, Callout, cx, Empty, Field, Input, Segmented, Select, Split, Tabs } from '../components/ui';
+import { EnvBadge } from '../components/EnvSelect';
 
 interface Draft {
   name: string;
@@ -61,11 +67,16 @@ const drafts = persisted<Draft>('eval', {
 const EDITOR_LANGUAGE = { json: 'json', jsonl: 'jsonl', csv: 'csv', md: 'markdown' } as const;
 
 export function EvaluationsView() {
-  const [d, setD] = useState<Draft>(drafts.load);
+  // WF-19: open evaluations are tabs (each its own draft; a single click in the list opens a preview tab)
+  const tabs = useLibraryTabs<Draft>('eval', drafts);
+  const d = tabs.d;
+  const setD = tabs.setD;
   const [providers, setProviders] = useState<ProviderConfig[]>([]);
   const [runId, setRunId] = useSticky<string | undefined>('eval:runId', undefined);
   const [runs, setRuns] = useState<RunRow[]>([]);
   const [sub, setSub] = useSticky<'prompt' | 'dataset' | 'evaluators'>('eval:sub', 'dataset');
+  // the right pane: a run (or the overview of runs), or the matrix of runs side by side, case by case
+  const [pane, setPane] = useSticky<'runs' | 'matrix'>('eval:pane', 'runs', { persist: true });
   // dataset files of the workspace (datasets/), offered next to Load file
   const [datasets, setDatasets] = useState<Array<{ path: string; name: string }>>([]);
   useEffect(() => {
@@ -73,7 +84,6 @@ export function EvaluationsView() {
   }, []);
   const env = useApp((s) => s.environment);
   const set = (p: Partial<Draft>) => setD((x) => ({ ...x, ...p }));
-  useEffect(() => drafts.save(d), [d]);
   useEffect(() => {
     void call<ProviderConfig[]>('ai.providers').then((p) => {
       setProviders(p);
@@ -87,14 +97,13 @@ export function EvaluationsView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const saved = useLibrary<Draft>('evaluations');
-  const [savedId, setSavedId] = useSticky<string | undefined>('eval:saved', undefined);
+  const savedId = tabs.active.savedId;
   const current = saved.lib.items.find((i) => i.id === savedId);
   const dirty = useMemo(() => !!current && JSON.stringify(current.data) !== JSON.stringify(d), [current, d]);
-  const openSaved = async (id: string) => {
+  const openSaved = async (id: string, preview = false) => {
     const it = await saved.find(id);
     if (!it) return undefined;
-    setSavedId(id);
-    setD({ ...drafts.load(), ...it.data, name: it.name });
+    tabs.open(id, { ...drafts.defaults, ...it.data, name: it.name }, { preview });
     return it;
   };
   const saveEval = async (asNew = false, folder?: string) => {
@@ -106,7 +115,7 @@ export function EvaluationsView() {
     const name = await promptText('Save evaluation', { message: 'Name', value: d.name || 'Evaluation', okLabel: 'Save' });
     if (!name) return;
     set({ name });
-    setSavedId(await saved.put({ name, folder, data: { ...d, name } }));
+    tabs.setSaved(await saved.put({ name, folder, data: { ...d, name } }));
   };
   // the Collections explorer / search open a saved evaluation
   useIntent('evaluations', (p) => p?.savedId && void openSaved(p.savedId));
@@ -139,6 +148,7 @@ export function EvaluationsView() {
       // the engine builds the test template, exactly as `testpion eval run` and the run_evaluation MCP tool do
       const r = await call<{ runId: string }>('eval.runDraft', { draft: d, environment: env });
       setRunId(r.runId);
+      setPane('runs');
       setRuns((rs) => [{ id: r.runId, name: d.name, startedAt: new Date().toISOString(), passed: 0, total: 0, failed: 0, errors: 0 }, ...rs]);
     } catch (e) {
       toastError(e);
@@ -162,7 +172,8 @@ export function EvaluationsView() {
                 addLabel="Save current evaluation"
                 folders={saved.lib.folders}
                 selected={savedId}
-                onSelect={(id) => void openSaved(id)}
+                onSelect={(id) => void openSaved(id, true)}
+                onOpen={(id) => void openSaved(id)}
                 onAdd={(folder) => void saveEval(true, folder)}
                 ops={saved.ops}
                 itemMenu={(id) => [
@@ -177,7 +188,7 @@ export function EvaluationsView() {
                 ]}
                 items={savedItems}
                 empty={
-                  <Empty title="No saved evaluations">
+                  <Empty title="No saved evaluations" actions={[{ label: 'Save this evaluation', icon: <Save size={13} />, onClick: () => void saveEval(true) }]}>
                     Save an evaluation (dataset, prompt, model and evaluators) to run it again whenever you need, and group evaluations in folders.
                   </Empty>
                 }
@@ -197,23 +208,51 @@ export function EvaluationsView() {
                   </button>
                 )}
                 {evalRuns.map((r) => (
-                  <button key={r.id} className={cx('w-full text-left px-3 py-2 border-b border-line/60 text-sm', runId === r.id ? 'bg-accent/10' : 'hover:bg-hover')} onClick={() => setRunId(r.id)}>
+                  <button key={r.id} className={cx('w-full text-left px-3 py-2 border-b border-line/60 text-sm', runId === r.id ? 'bg-accent/10' : 'hover:bg-hover')} onClick={() => (setRunId(r.id), setPane('runs'))}>
                     <div className="truncate">{r.name}</div>
                     <RunMiniBar r={r} />
                     <div className="text-xs text-muted flex gap-2">
                       {r.total ? <span className={r.failed + r.errors ? 'text-bad' : 'text-ok'}>{r.passed}/{r.total} passed</span> : null}
+                      {r.environment && <EnvBadge name={r.environment} className="max-w-32" />}
                       <span className="ml-auto">{timeAgo(r.startedAt)}</span>
                     </div>
                   </button>
                 ))}
-                {!evalRuns.length && <Empty icon={<History size={22} />} title="No runs yet">Runs of your evaluations appear here.</Empty>}
+                {!evalRuns.length && (
+                  <Empty icon={<History size={22} />} title="No runs yet" actions={[{ label: 'Run this evaluation', icon: <Play size={13} />, onClick: () => void run() }]}>
+                    Runs of your evaluations appear here.
+                  </Empty>
+                )}
               </div>
             ),
           },
         ]}
       />
+    <div className="h-full flex flex-col min-w-0">
+    <LibraryTabStrip
+      label="Open evaluations"
+      library="evaluations"
+      tabs={tabs.tabs}
+      active={tabs.active.id}
+      titleOf={(t) => saved.lib.items.find((i) => i.id === t.savedId)?.name ?? (t.id === tabs.active.id && d.name ? d.name : 'New evaluation')}
+      dirty={dirty}
+      onSelect={tabs.select}
+      onClose={(ids) => tabs.close(ids, drafts.defaults)}
+      onKeep={tabs.keep}
+      onNew={() => tabs.newTab(drafts.defaults)}
+      newLabel="New evaluation"
+    />
+    <div className="flex-1 min-h-0">
     <Split id="eval-main" initial={42}>
       <div className="h-full flex flex-col">
+        {/* WF-11: Evaluations › folder › evaluation, like every item view */}
+        <ItemBreadcrumb
+          label="Where this evaluation is"
+          crumbs={[{ label: 'Evaluations' }, ...(current?.folder ? [{ label: current.folder }] : [])]}
+          name={current ? current.name : 'Not saved yet'}
+          dirty={dirty}
+          actions={current ? refMenu({ kind: 'saved', library: 'evaluations', itemId: current.id }) : undefined}
+        />
         <div className="p-2 border-b border-line flex flex-col gap-2">
           <div className="flex gap-2 flex-wrap">
             <Input className="flex-1 min-w-40 font-medium" value={d.name} onChange={(e) => set({ name: e.target.value })} aria-label="Evaluation name" />
@@ -393,7 +432,25 @@ export function EvaluationsView() {
         </div>
       </div>
       <div className="h-full flex flex-col min-h-0">
-        {runId ? (
+        {evalRuns.length > 0 && (
+          <div className="flex items-center gap-2 px-2 py-1 border-b border-line">
+            <Segmented
+              label="Results"
+              size="xs"
+              value={pane}
+              onChange={setPane}
+              options={[
+                { value: 'runs', label: runId ? 'Run' : 'Runs', icon: <History size={12} /> },
+                { value: 'matrix', label: 'Matrix', icon: <Grid3x3 size={12} />, title: 'Runs side by side, case by case, against a baseline' },
+              ]}
+            />
+          </div>
+        )}
+        {pane === 'matrix' && evalRuns.length > 0 ? (
+          <div className="flex-1 min-h-0">
+            <EvalMatrix runs={evalRuns} />
+          </div>
+        ) : runId ? (
           <RunPanel runId={runId} expectedTotal={d.limit ? Math.min(d.limit, count) : count} />
         ) : (
           <div className="h-full flex flex-col">
@@ -413,6 +470,8 @@ export function EvaluationsView() {
         )}
       </div>
     </Split>
+    </div>
+    </div>
     </Split>
   );
 }

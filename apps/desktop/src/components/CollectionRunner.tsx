@@ -8,7 +8,10 @@ import { RunPanel } from './RunPanel';
 import { GenerateDataDialog } from './GenerateDataDialog';
 import { RunsOverview, type RunRow } from './RunsOverview';
 import { hasNativeDialogs, pickTextFile } from '../lib/files';
-import { LinkButton, Badge, Button, cx, Empty, Field, Input, Modal, Select, Split, Toggle, Textarea } from './ui';
+import { LinkButton, Badge, Button, cx, Empty, Field, Input, Modal, MoreMenu, Select, Split, Toggle, Textarea } from './ui';
+import { RefLink } from './RefLink';
+import { EnvBadge, EnvSelect } from './EnvSelect';
+import { runCiMenuItems } from '../lib/run-ci';
 
 interface RunnableRequest {
   id: string;
@@ -54,7 +57,6 @@ function findName(nodes: CollectionNode[], id: string): string | undefined {
  * changes the order.
  */
 export function CollectionRunner({ collection, folderId, onFolderChange, dataPath }: { collection: Collection; folderId?: string; onFolderChange(id?: string): void; /** A workspace dataset (its path) chosen before the runner opened: it is the run's data. */ dataPath?: string }) {
-  const envs = useApp((s) => s.workspace?.environments ?? []);
   const activeEnv = useApp((s) => s.environment);
   const [environment, setEnvironment] = useState(activeEnv ?? '');
   // the collection's gRPC calls and connections run after its requests (not in a folder run)
@@ -107,6 +109,8 @@ export function CollectionRunner({ collection, folderId, onFolderChange, dataPat
   const [runId, setRunId] = useState<string>();
   const [runs, setRuns] = useState<RunRow[]>([]);
   const [starting, setStarting] = useState(false);
+  // the environment of each run started here, for its header while it runs (the runs list has it once it finished)
+  const [startedIn, setStartedIn] = useState<Record<string, string | undefined>>({});
 
   const folders = useMemo(() => {
     const out: Array<{ id: string; label: string }> = [];
@@ -126,6 +130,8 @@ export function CollectionRunner({ collection, folderId, onFolderChange, dataPat
     setRunId(undefined);
     setUnchecked(new Set());
   }, [collection.id, loadRuns]);
+  // a run that finishes joins the list (with its totals and environment) however long it took
+  useEffect(() => on('run.finished', () => void loadRuns()), [loadRuns]);
   useEffect(() => setUnchecked(new Set()), [folderId]);
   // a dataset picked in the sidebar or its tab: previewed and set as the run's data, whichever collection is chosen
   useEffect(() => {
@@ -166,6 +172,7 @@ export function CollectionRunner({ collection, folderId, onFolderChange, dataPat
         bail,
         keepVariableValues: keepValues,
       });
+      setStartedIn((m) => ({ ...m, [r.runId]: environment || undefined }));
       setRunId(r.runId);
       setTimeout(() => void loadRuns(), 500);
     } catch (e) {
@@ -230,15 +237,7 @@ export function CollectionRunner({ collection, folderId, onFolderChange, dataPat
                 </Select>
               </Field>
               <Field label="Environment">
-                <Select value={environment} onChange={(e) => setEnvironment(e.target.value)}>
-                  <option value="">No environment</option>
-                  {envs.map((e) => (
-                    <option key={e.name} value={e.name} disabled={!!e.problem} title={e.problem}>
-                      {e.name}
-                      {e.problem ? '  (cannot be read)' : ''}
-                    </option>
-                  ))}
-                </Select>
+                <EnvSelect value={environment || undefined} onChange={(name) => setEnvironment(name ?? '')} />
               </Field>
               <Field label="Iterations" hint={data ? `Defaults to ${data.count} (one per data row)` : undefined}>
                 <Input type="number" min={1} placeholder={String(data?.count ?? 1)} value={iterations} onChange={(e) => setIterations(e.target.value)} />
@@ -439,7 +438,10 @@ export function CollectionRunner({ collection, folderId, onFolderChange, dataPat
                     >
                       {r.method.slice(0, 5)}
                     </span>
-                    <span className="truncate">{r.name}</span>
+                    {/* the request itself, one click away (WF-08); a click on the name opens it, the row's box picks it */}
+                    <RefLink to={r.kind === 'grpc' || r.kind === 'websocket' ? { kind: 'saved', library: r.kind, itemId: r.id } : { kind: 'request', collectionId: collection.id, requestId: r.id }} icon={false} className="text-fg" title={`Open ${r.name}`}>
+                      {r.name}
+                    </RefLink>
                     {r.path.length > 0 && <span className="ml-auto text-xs text-muted truncate max-w-[45%]">{r.path.join(' / ')}</span>}
                   </label>
                 ))}
@@ -468,6 +470,14 @@ export function CollectionRunner({ collection, folderId, onFolderChange, dataPat
                 </option>
               ))}
             </Select>
+            {/* the run's environment, the same badge as every run surface (WF-05) */}
+            {runId && <EnvBadge className="text-xs" name={runId in startedIn ? startedIn[runId] : runs.find((r) => r.id === runId)?.environment} />}
+            {/* WF-09: the picked run as a pipeline, or as the command that runs it from a terminal */}
+            {runId && (
+              <span className="ml-auto">
+                <MoreMenu label="Run actions" items={runCiMenuItems(runId)} />
+              </span>
+            )}
           </div>
           <div className="flex-1 min-h-0">
             {runId ? (

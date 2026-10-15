@@ -1,11 +1,17 @@
 import { AlarmClock, BarChart3, Bot, Code2, Keyboard, Columns2, CopyX, Disc, GitCompare, ScanSearch, TerminalSquare, Variable, Download, FileDown, FlaskConical, FolderOpen, FolderPlus, FolderTree, Gauge, GitBranch, History, KeyRound, Layers, ListChecks, ListX, Network, Play, Plug, Radio, RefreshCw, ScrollText, Search, Settings, Sparkles, SquareTerminal, Upload, Waypoints, Workflow, X, type LucideIcon } from 'lucide-react';
+import { RightPanel } from './components/RightPanel';
+import { openReverseProxyCapture } from './lib/capture';
 import { createElement, lazy, Suspense, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from 'react';
 import { call, on } from './api';
 import { useApp, type ViewId } from './store';
 import { watchSecretRefs } from './lib/secret-refs';
+import { watchOpenLinks } from './lib/open-ref';
 import { focusedScriptEditor } from './lib/script-editor';
+import { focusedPaletteCommands } from './lib/palette-context';
 import { VarPopoverHost } from './components/VarPopoverHost';
-import { CommandPalette, DialogHost, LogsPanel, ProgressHost, SearchDialog, Sidebar, StatusBar, Toaster, TopBar, NAV, type PaletteCommand } from './components/Shell';
+import { ProductionFrame } from './components/ProductionFrame';
+import './lib/production-guard'; // WF-06: every refused production send or run is asked about here, once
+import { DialogHost, LogsPanel, ProgressHost, SearchDialog, Sidebar, StatusBar, Toaster, TopBar, NAV, type PaletteCommand } from './components/Shell';
 import { checkForUpdates, scheduleUpdateCheck } from './updates';
 import { ViewBoundary } from './components/ViewBoundary';
 import { isRequestView } from './store';
@@ -19,9 +25,15 @@ import { setResponseLayout } from './components/ResponseSplit';
 import { loadMonaco } from './components/CodeEditor';
 import { Spinner, TooltipProvider } from './components/ui';
 import { McpClientRequests } from './components/McpClientRequests';
+import { focusTerminal, newTerminal, useShellCapable } from './lib/terminal';
+import { railOrder, railTarget } from './lib/rail';
+import { copyRunCommand, runInCi } from './lib/run-ci';
+import { reopenClosedTab } from './lib/closed-tabs';
+import { runAgain } from './lib/run-again';
+import { QuickOpen } from './components/QuickOpen';
+import { stepProblem } from './lib/problems';
+import { CookiesModal } from './components/CookiesModal';
 
-// the AI assistant's panel (with its Markdown renderer) loads when it is first opened
-const AssistantPanel = lazy(async () => ({ default: (await import('./components/AssistantPanel')).AssistantPanel }));
 
 /**
  * Each tool is a separate product surface. Loading it only when selected keeps
@@ -169,12 +181,13 @@ async function announceNewExamples() {
 export default function App() {
   const view = useApp((s) => s.view);
   const paletteOpen = useApp((s) => s.paletteOpen);
+  const cookiesOpen = useApp((s) => s.cookiesOpen);
   const searchOpen = useApp((s) => s.searchOpen);
-  const assistant = useApp((s) => s.assistant);
   const ci = useApp((s) => s.ci);
   const openapiDiff = useApp((s) => s.openapiDiff);
   const apiCoverage = useApp((s) => s.apiCoverage);
   const explorerOpen = useApp((s) => s.explorerOpen);
+  const explorerInTests = useApp((s) => !!s.explorerInTests);
   const variableUsages = useApp((s) => s.variableUsages);
   const recordOpen = useApp((s) => s.recordOpen);
   const feedback = useApp((s) => s.feedback);
@@ -211,6 +224,8 @@ export default function App() {
     const offMonitors = watchMonitorAlerts();
     const offRuns = watchRunNotifications();
     const offSecrets = watchSecretRefs();
+    // testpion://open links (testpion open <ref>, an agent, a report): the item opens here
+    const offLinks = watchOpenLinks();
     const offUpdate = on('update.checkManual', () => void checkForUpdates({ manual: true }));
     // files changed outside the app (git pull, a branch switch, another editor): show the new state and say so
     const offDisk = on<{ message: string; kinds: string[] }>('workspace.changedOnDisk', (p) => {
@@ -232,6 +247,7 @@ export default function App() {
       offMonitors();
       offRuns();
       offSecrets();
+      offLinks();
     };
   }, []);
 
@@ -292,19 +308,41 @@ export default function App() {
       } else if (mod && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'b') {
         e.preventDefault();
         const st = useApp.getState();
-        if (isRequestView(st.view)) st.toggleExplorer();
+        // the Tests view shows the explorer too, when asked (requests are dragged from it onto a flow's canvas)
+        if (st.view === 'tests') set({ explorerInTests: !st.explorerInTests });
+        else if (isRequestView(st.view)) st.toggleExplorer();
         else (st.setView(st.lastRequestView), st.toggleExplorer(true));
       } else if (mod && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'j') {
         // the AI assistant, with what is on screen (again: close it)
         e.preventDefault();
         const open = useApp.getState().assistant;
         set({ assistant: open?.task === 'free' ? undefined : { task: 'free', title: 'Ask the assistant', context: {} } });
+      } else if (e.key === 'F8' && !mod && !e.altKey) {
+        // the next (Shift: previous) problem (WF-03)
+        e.preventDefault();
+        void stepProblem(e.shiftKey ? -1 : 1);
+      } else if (mod && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'p') {
+        // Quick Open (WF-01): items, the latest first
+        e.preventDefault();
+        set({ paletteOpen: true, paletteQuery: '', searchOpen: false });
+      } else if (mod && e.shiftKey && !e.altKey && e.key.toLowerCase() === 'e') {
+        // switch environment (Insomnia's binding): Quick Open at #
+        e.preventDefault();
+        set({ paletteOpen: true, paletteQuery: '#', searchOpen: false });
       } else if (mod && e.key.toLowerCase() === 'k') {
         e.preventDefault();
-        set({ paletteOpen: true, searchOpen: false });
+        set({ paletteOpen: true, paletteQuery: '>', searchOpen: false });
       } else if (mod && e.shiftKey && e.key.toLowerCase() === 'f') {
         e.preventDefault();
         set({ searchOpen: true, paletteOpen: false });
+      } else if (mod && e.shiftKey && !e.altKey && e.key.toLowerCase() === 'r') {
+        // Rerun last run (WF-08): the latest run, as it ran
+        e.preventDefault();
+        void runAgain('last');
+      } else if (mod && e.shiftKey && !e.altKey && e.key.toLowerCase() === 't') {
+        // Reopen closed tab (WF-10), whichever strip it was in
+        e.preventDefault();
+        void reopenClosedTab();
       } else if (mod && e.key === ',') {
         e.preventDefault();
         useApp.getState().setView('settings');
@@ -313,12 +351,22 @@ export default function App() {
         e.preventDefault();
         const st = useApp.getState();
         set(st.logsOpen && st.bottomTab === 'console' ? { logsOpen: false } : { logsOpen: true, bottomTab: 'console' });
+      } else if (mod && e.code === 'Backquote' && useApp.getState().info?.capabilities?.shell) {
+        // as in VS Code: Ctrl+` shows / hides the Terminal, Ctrl+Shift+` opens a new one
+        e.preventDefault();
+        const st = useApp.getState();
+        if (e.shiftKey) newTerminal();
+        else if (st.logsOpen && st.bottomTab === 'terminal') set({ logsOpen: false });
+        else focusTerminal();
       } else if (e.key === '?' && !mod && !isTyping(e.target)) {
         e.preventDefault();
         set({ shortcutsOpen: true });
       } else if (mod && e.altKey && /^[1-9]$/.test(e.key)) {
-        const n = NAV[Number(e.key) - 1];
-        if (n) useApp.getState().setView(n.id);
+        // the rail's order (lib/rail.ts): Home 1, Collections 2, Debugger 3 …
+        const target = railTarget(railOrder(NAV), Number(e.key));
+        const st = useApp.getState();
+        if (target === 'collections') (st.setView(st.lastRequestView), st.toggleExplorer(true));
+        else if (target) st.setView(target as ViewId);
       }
     };
     window.addEventListener('keydown', onKey);
@@ -334,17 +382,20 @@ export default function App() {
     };
   }, []);
 
+  const shellCapable = useShellCapable();
   const commands = useMemo<PaletteCommand[]>(() => {
     const s = useApp.getState();
     const cmds: PaletteCommand[] = [
-      { id: 'new-request', label: 'New Request', hint: 'REST', run: () => s.openIntent('rest', { newTab: true }) },
-      { id: 'new-graphql', label: 'New GraphQL Query', hint: 'GraphQL', run: () => s.openIntent('graphql', { reset: true }) },
-      { id: 'new-mcp', label: 'New MCP Test', hint: 'MCP', run: () => s.setView('mcp') },
+      { id: 'new-graphql', label: 'New GraphQL Request', hint: 'GraphQL', run: () => s.openIntent('graphql', { reset: true }) },
       { id: 'new-ai', label: 'New AI Test', hint: 'AI Lab', run: () => s.openIntent('ai', { reset: true }) },
       { id: 'run-test', label: 'Run Test', hint: 'Tests', run: () => s.openIntent('tests', { runCurrent: true }) },
       { id: 'run-suite', label: 'Run Suite', hint: 'Tests', run: () => s.openIntent('tests', { runAll: true }) },
-      { id: 'open-collection', label: 'Open Collection', hint: 'Collections', run: () => s.setView('collections') },
-      { id: 'search-history', label: 'Search History', hint: 'History', run: () => s.setView('history') },
+      { id: 'rerun-last', label: 'Rerun Last Run', hint: 'Ctrl+Shift+R', run: () => void runAgain('last') },
+      { id: 'reopen-tab', label: 'Reopen Closed Tab', hint: 'Ctrl+Shift+T', run: () => void reopenClosedTab() },
+      { id: 'open-recent', label: 'Open Recent…', hint: 'Ctrl+P', run: () => setTimeout(() => s.set({ paletteOpen: true, paletteQuery: '' }), 0) },
+      { id: 'ci-last', label: 'Run Last Run in CI…', hint: 'Tests', run: () => void runInCi('last') },
+      { id: 'cli-last', label: 'Copy CLI Command of Last Run', hint: 'Tests', run: () => void copyRunCommand('last') },
+      { id: 'search-history', label: 'Open History', hint: 'History', run: () => s.setView('history') },
       { id: 'open-settings', label: 'Open Settings', hint: `${'Ctrl'}+,`, run: () => s.setView('settings') },
       { id: 'export-results', label: 'Export Results', hint: 'Tests', run: () => s.openIntent('tests', { exportLatest: true }) },
       { id: 'search', label: 'Search Workspace', hint: 'Ctrl+Shift+F', run: () => s.set({ searchOpen: true }) },
@@ -353,6 +404,12 @@ export default function App() {
       { id: 'tab-close-all', label: 'Close All Tabs', hint: 'Ctrl+Shift+W', run: () => s.openIntent('rest', { tabCommand: 'closeAll' }) },
       { id: 'toggle-console', label: 'Show Console', hint: 'Ctrl+Alt+C', run: () => s.set({ logsOpen: true, bottomTab: 'console' }) },
       { id: 'toggle-logs', label: 'Show Application Logs', run: () => s.set({ logsOpen: true, bottomTab: 'logs' }) },
+      ...(shellCapable
+        ? [
+            { id: 'terminal-new', label: 'Terminal: New', hint: 'Ctrl+Shift+`', run: newTerminal },
+            { id: 'terminal-focus', label: 'Terminal: Focus', hint: 'Ctrl+`', run: focusTerminal },
+          ]
+        : []),
       { id: 'assistant', label: 'Ask AI Assistant', run: () => s.set({ assistant: { task: 'free', title: 'Ask the assistant', context: {} } }) },
       { id: 'feedback', label: 'Send Feedback or Report a Problem…', hint: 'Help', run: () => s.set({ feedback: {} }) },
       { id: 'agents', label: 'Connect an AI Agent (Claude, Cursor, VS Code, Codex) over MCP…', hint: 'Settings', run: () => s.openIntent('settings', { tab: 'agents' }) },
@@ -360,7 +417,7 @@ export default function App() {
       { id: 'compare', label: 'Compare Models', hint: 'AI Lab', run: () => s.openIntent('ai', { tab: 'compare' }) },
       { id: 'ai-usage', label: 'AI Usage: tokens and cost per model', hint: 'AI Lab', run: () => s.openIntent('ai', { tab: 'usage' }) },
       { id: 'mcp-usage', label: 'MCP Tool Usage: calls, failures and time per tool', hint: 'MCP', run: () => s.openIntent('mcp', { tab: 'usage' }) },
-      { id: 'eval', label: 'New Evaluation Run', hint: 'Evaluations', run: () => s.setView('evaluations') },
+      { id: 'eval', label: 'New Evaluation', hint: 'Evaluations', run: () => s.setView('evaluations') },
       { id: 'shortcuts', label: 'Keyboard Shortcuts', hint: '?', run: () => s.set({ shortcutsOpen: true }) },
       { id: 'git-ready', label: 'Make Workspace Ready for Git', hint: 'Workspace', run: () => void runMenuCommand('git-ready') },
       { id: 'git-clone', label: 'Clone Workspace from Git…', hint: 'Workspace', run: () => void runMenuCommand('git-clone') },
@@ -377,7 +434,7 @@ export default function App() {
       { id: 'm-new-env', label: 'New Environment', hint: 'File', run: () => void runMenuCommand('new-environment') },
       { id: 'm-open-examples', label: 'Open Examples Workspace', hint: 'Help', run: () => void runMenuCommand('open-examples') },
       { id: 'm-ci', label: 'Run in CI (GitHub Actions, GitLab, Azure, Jenkins)…', hint: 'Tests', run: () => useApp.getState().set({ ci: {} }) },
-      { id: 'm-record', label: 'Record traffic (reverse proxy) into a collection…', hint: 'Collections', run: () => useApp.getState().set({ recordOpen: true }) },
+      { id: 'm-record', label: 'Capture: Reverse Proxy for One API…', hint: 'Debugger', run: () => openReverseProxyCapture() },
       { id: 'm-var-usages', label: 'Find variable usages / rename a variable everywhere…', hint: 'Environments', run: () => useApp.getState().set({ variableUsages: true }) },
       { id: 'm-openapi-diff', label: 'Compare OpenAPI versions (breaking changes)…', hint: 'Tests', run: () => useApp.getState().set({ openapiDiff: true }) },
       { id: 'm-api-coverage', label: 'API coverage (OpenAPI operations tested)…', hint: 'Tests', run: () => useApp.getState().set({ apiCoverage: {} }) },
@@ -396,12 +453,15 @@ export default function App() {
     for (const e of (workspace?.environments ?? []).filter((x) => !x.problem))
       cmds.push({ id: `env-${e.id}`, label: `Switch Environment: ${e.name}`, icon: <span className="block w-2.5 h-2.5 rounded-full" style={{ background: e.color ?? 'var(--ok)' }} />, run: () => s.setEnvironment(e.name) });
     return cmds;
-  }, [workspace]);
-  // the focus in a request's script editor: the palette offers its own command first (Ctrl+Shift+I in the editor)
-  const paletteCommands = useMemo<PaletteCommand[]>(() => {
+  }, [workspace, shellCapable]);
+  // what is on screen offers its own commands (Quick Open's @, and first among the > commands): a request's script
+  // editor (Insert Snippet…, Ctrl+Shift+I there), the flow designer's canvas …
+  const hereCommands = useMemo<PaletteCommand[]>(() => {
     const ed = paletteOpen ? focusedScriptEditor() : undefined;
-    return ed ? [{ id: 'insert-snippet', label: 'Insert Snippet…', hint: 'Ctrl+Shift+I', icon: <Code2 size={16} />, run: () => ed.insertSnippet() }, ...commands] : commands;
-  }, [paletteOpen, commands]);
+    const here = paletteOpen ? focusedPaletteCommands() : [];
+    return ed ? [{ id: 'insert-snippet', label: 'Insert Snippet…', hint: 'Ctrl+Shift+I', icon: <Code2 size={16} />, run: () => ed.insertSnippet() }, ...here] : here;
+  }, [paletteOpen]);
+  const paletteCommands = useMemo<PaletteCommand[]>(() => (hereCommands.length ? [...hereCommands, ...commands] : commands), [hereCommands, commands]);
 
   if (!ready)
     return (
@@ -428,7 +488,7 @@ export default function App() {
         <ViewBoundary view="sidebar" variant="bar" label="sidebar" className="w-48 border-r flex-col items-start">
           <Sidebar />
         </ViewBoundary>
-        {explorerOpen && isRequestView(view) && (
+        {((explorerOpen && isRequestView(view)) || (view === 'tests' && explorerInTests)) && (
           <ViewBoundary view="explorer">
             <Explorer />
           </ViewBoundary>
@@ -481,18 +541,15 @@ export default function App() {
             </ViewBoundary>
           )}
         </main>
-        {assistant && (
-          <ViewBoundary view="assistant" variant="bar" label="assistant" className="w-80 border-l flex-col items-start" onDismiss={close({ assistant: undefined })}>
-            <Suspense fallback={null}>
-              <AssistantPanel key={JSON.stringify(assistant).slice(0, 200)} />
-            </Suspense>
-          </ViewBoundary>
-        )}
+        {/* WF-20: one pinnable host on the right — the Info panel and the AI assistant */}
+        <ViewBoundary view="assistant" variant="bar" label="side panel" className="w-80 border-l flex-col items-start" onDismiss={close({ assistant: undefined })}>
+          <RightPanel />
+        </ViewBoundary>
       </div>
       <ViewBoundary view="statusbar" variant="bar" label="status bar" className="border-t">
         <StatusBar />
       </ViewBoundary>
-      {paletteOpen && guard('command palette', <CommandPalette commands={paletteCommands} />, close({ paletteOpen: false }))}
+      {paletteOpen && guard('command palette', <QuickOpen commands={paletteCommands} here={hereCommands} />, close({ paletteOpen: false, paletteQuery: undefined }))}
       {searchOpen && guard('search', <SearchDialog />, close({ searchOpen: false }))}
       {shortcutsOpen &&
         guard(
@@ -559,6 +616,8 @@ export default function App() {
       {guard('dialog', <DialogHost />)}
       {guard('variable popover', <VarPopoverHost />)}
       {guard('progress', <ProgressHost />)}
+      {cookiesOpen && guard('cookies', <CookiesModal onClose={() => useApp.getState().set({ cookiesOpen: false })} />, close({ cookiesOpen: false }))}
+      <ProductionFrame />
     </div>
     </TooltipProvider>
   );

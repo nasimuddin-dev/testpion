@@ -9,7 +9,11 @@ description: "Reference for the testpion command-line interface."
 
 ```text
 testpion test [paths...]      Run test files, directories, globs or a *.suite.yaml
+testpion test <flow> --data [file] | --env-matrix <envs>   One flow file once per data row, or in several environments side by side
+testpion test from-request <item>   Save a saved request (a folder, a collection, any item ref) as a test file, like Save as test… in the app
 testpion run --suite <name>   Run tests/<name>.suite.yaml from a workspace (or testpion run <file> for one test file)
+testpion search <words>       Find items by name or content, like Quick Open (Ctrl+P); each hit has a ref for testpion open
+testpion problems             What is failing in the workspace, as the app's Problems list (alias: attention; exit 1 on a high-severity item)
 testpion send <request|url>   Send one saved request (scripts, auth, checks) or a URL and print the response, like curl
 testpion run-collection <collection>   Run a collection like Postman's Collection Runner / Newman
 testpion mock-graphql --schema <file>   Fake data for any query against a GraphQL schema (see GraphQL mock server)
@@ -22,6 +26,7 @@ testpion vars move <c> --to <envs> Move collection variables into environments (
 testpion tidy <collection>     Duplicate requests, typed-in hosts, empty folders, unused variables (--remove-* fixes)
 testpion replace <c> <find> <with> Find and replace across a collection's requests (preview; --apply saves)
 testpion agent-info               What an AI agent needs to use TestPion here, as JSON (workspace, commands, exit codes, MCP setup)
+testpion open <ref>              Open an item in the TestPion app by its ref (a testpion://open link, the JSON "ref" of --json output, or kind:id); checked first (--json, --print)
 testpion tests-from-spec <spec> Write a first test suite from an API definition (examples and invalid requests)
 testpion integration-suite <spec|collection> Write an integration suite: a flow per resource (create, read, update, list, delete), the login first
 testpion generate-data <name>  Generate rows of test data into datasets/ from a JSON schema or an API operation
@@ -30,29 +35,36 @@ testpion export <c> -f asyncapi Write a collection's connections as an AsyncAPI 
 testpion openapi-ops <spec>    List an OpenAPI document's operations by tag (--json: schemas and a request per operation)
 testpion secrets <environment> Check an environment's secret manager references (op://, vault://, aws-sm:// …)
 testpion record <target>      Record traffic through a local reverse proxy; -w saves it as a collection (see Record traffic)
-testpion debug [-p port] [-o session.har] [--rules debugger/rules.json] [--decrypt] [-w workspace] [--json]   The HTTP Debugger's proxy: other programs' traffic (HTTP_PROXY=…), printed as it happens (program, process id, server); rules applied
+testpion debug [-p port] [-o session.har] [--rules debugger/rules.json] [--decrypt] [-w workspace] [--json] [--save-collection [name] | --to <collection>] [--group host|path|none]   The HTTP Debugger's proxy: other programs' traffic (HTTP_PROXY=…), printed as it happens (program, process id, server); rules applied
 testpion mock-mcp <file>      Serve an MCP mock (stdio, or --http) for AI agents and MCP clients
-testpion env set|unset|get <env> -w   Set or remove plain variables of an environment (secrets stay in the app)
+testpion env set|unset|get <env> -w   Set or remove plain variables of an environment (secrets stay in the app); set --also-in <envs> [--copy] adds them to others where missing
 testpion vars usages|rename -w   Where a variable is used; rename it everywhere
 testpion openapi-diff <old> <new>   List breaking changes between two OpenAPI versions (--fail-on-breaking for CI)
 testpion openapi-lint [specs...]     Lint OpenAPI documents: broken $refs, undeclared path parameters, duplicate operationIds …
 testpion eval list|run <name>   Evaluations saved in the app: list them, or run one by name (exit 1 on failures)
+testpion eval compare <run> --baseline <run>   Compare an evaluation run with a baseline case by case; exit 1 on regressions (for CI)
+testpion eval matrix <runs...>   Evaluation runs side by side: cases × variants, against a baseline (a page at a time)
+testpion agents init [--targets agents,claude,cursor]   Write or refresh AGENTS.md (and a CLAUDE.md pointer, a Cursor rule) for coding agents
 testpion coverage <spec> -w   API coverage: which OpenAPI operations and responses the runs exercised (--min for CI)
 testpion docs <collection>    Write Markdown (or --html) documentation for a collection
 testpion export <collection>  Export a collection as Postman v2.1 (or TestPion JSON)
 testpion export-environment <name>   Export an environment in Postman's format
 testpion mcp-server           Serve a workspace to AI agents over MCP (stdio)
-testpion load <url>           Safeguarded load test (--threshold "p95<500" "errors<1%" to pass/fail; --grpc <method> for a gRPC server)
+testpion load <url>           Safeguarded load test (--threshold "p95<500" "errors<1%" to pass/fail; --grpc <method> for a gRPC server; --collection, or --test-file <flow> for a whole flow per virtual user)
 testpion import <file|-> -w   Import OpenAPI/Swagger, Postman, Insomnia, Bruno (a collection folder too), WSDL (SOAP), HAR, collections, Arazzo workflows (as flow files), or a copied cURL / fetch / PowerShell request
 testpion env list|order|diff -w  List environments; set their order; compare two
-testpion monitor list|add|remove|run|results|uptime|start -w  Collections on a schedule (monitors)
-testpion ci <github|gitlab|azure|jenkins> -w  A CI pipeline file for a suite, collection or tests (--start, --wait-for: start the system under test first)
+testpion monitor list|add|remove|run|results|uptime|start -w  Collections or test files (flows) on a schedule (monitors; add --test-file <path>)
+testpion ci <github|gitlab|azure|jenkins> -w  A CI pipeline file for a suite, collection or tests (--start, --wait-for: start the system under test first; --run last: what a run ran; one flow: --data, --env-matrix, --timeline-html)
 testpion lint-tests [paths] -w   Check test files before running them: unknown types, check types, misspelt keys, dependsOn ids (--json; exit 1 on errors)
-testpion flow <file> -w       A test file as a flow: the steps in columns with the latest run's results (--json for steps, edges, layers and problems; --dot for Graphviz)
+testpion flow <file> -w       A test file as a flow: the steps in columns with the latest run's results and the designer's checks (cycles, steps that never run; -e <env> also unset variables) (--json for steps, edges, layers, problems, checks, notes and frames; --dot for Graphviz)
 testpion flow runs <file> -w  A flow's run history, newest first; --run <id> shows that run's steps with the variables after each (--json)
-testpion flow edit <file> -w  Edit a flow as the app's designer does: --op '<json>' (addStep, updateStep, connect, removeStep …; a JSON list for several), --connect <a> --to <b>, --remove <step>, --dry-run (--json)
+testpion flow edit <file> -w  Edit a flow as the app's designer does: --op '<json>' (addStep, updateStep, connect, removeStep, addNote, addFrame …; a JSON list for several), --connect <a> --to <b>, --remove <step>, --parallel <group> --steps a,b, --finally <steps>, --webhook [path] / --no-webhook, --dry-run (--json)
 testpion flow export <file> --arazzo -w   A flow as an Arazzo 1.0 workflow document (-o file.arazzo.yaml, --spec specs/api.yaml, --json)
+testpion flow from-har <file.har> -w   Recorded traffic as a flow file: values that flow between requests extracted, noise left out, secrets as variables (-o tests/x.yaml, -e env, --dry-run, --json)
+testpion flow report <file> -w   A run of a flow as a timeline with its critical path (--run <id>, --html out.html, --json)
 testpion flows -w             The flows exposed as MCP tools (test files and suites with an expose: block): tool, file, inputs (--json)
+testpion serve flows -w       Run flows behind their webhooks (webhook: blocks): POST JSON to the path, get the flow's output (--port 4020, --host, -e env, --jsonl)
+testpion scripts convert --to tp|pm -w   Rewrite collection scripts between Postman's pm.* and TestPion's tp.* (--dry-run)
 testpion wait-for <url>       Wait until a URL answers (the health check before integration tests); exit 3 when it never does
 testpion trash list|restore|empty -w  Recently deleted collections and environments (30 days)
 testpion history list|stats|diff|test|export-har -w  Response history of saved requests; response times; compare two responses; a test across runs; HAR export
@@ -68,12 +80,42 @@ testpion grpc <target> [method] [-p protos]   Call a gRPC method, or list the me
 testpion report <results.jsonl>              Re-generate reports
 ```
 
+## JSON output, dry runs and scripts
+
+Every command that takes `--json` prints **one envelope** on stdout, whatever happens (success, a failed check, a wrong argument, a missing file):
+
+```json
+{
+  "schema_version": 1,
+  "command": "eval compare",
+  "status": "failed",
+  "data": { "passed": false, "counts": { "regressed": 3 } },
+  "errors": [],
+  "warnings": [],
+  "metrics": { "duration_ms": 412, "exit_code": 1 }
+}
+```
+
+- `status` follows the exit code: `ok` (0), `failed` (1: a test or check failed), `error` (2 configuration, 3 execution). An error is `{ code, message, hint, retryable }`: `code` is the kind (`ConfigurationError`, `NetworkError`, `TimeoutError` …), `hint` what to do, `retryable` whether trying again may help (network, timeouts, rate limits, server errors).
+- `data` is exactly what the command printed as JSON before 0.46: **migrate a script with `jq .data`** (`testpion collections --json | jq '.data[].name'`).
+- `warnings` collects what the command also wrote to stderr (a collection file that could not be read …).
+- With `--json` stdout holds only the envelope: everything written for people goes to stderr.
+
+**`--jsonl`** on the commands that stream (`test`, `run`, `run-collection`, `eval run`, `load`, `serve flows`, `debug`, `monitor start`, `record`): a line per event as it happens (`{ schema_version, command, type: "result" | "row" | "call" | "exchange" | "listening", data }`), then the envelope as the last line with `type: "result"`. `serve flows --json` and `debug --json` printed lines before and now mean `--jsonl`. `test <file> --data <rows> --json` streams its rows inside the envelope's `data` (`{ rows, summary }`), so a run of 100,000 rows needs no memory.
+
+**`--dry-run`** on the commands that write files or change state (`import`, `export`, `export-environment`, `docs`, `ci`, `report`, `workspace-report`, `env set / unset / order`, `vars rename`, `replace`, `tidy`, `workspace create / rename / delete / export`, `trash restore / empty`, `monitor add / remove`, `datasets`, `generate-data`, `tests-from-spec`, `integration-suite`, `test from-request`, `flow export`, `history export-har`, `git setup`): the command runs against a copy of the workspace and of the app folder, every write outside them is diverted and every delete skipped, and the result lists each file it would add, change or delete (`dry_run: { applied: false, changes: [{ path, change, bytes }] }` in the envelope). Commands with a dry run of their own (`agents init`, `vars move`, `flow edit`, `flow from-har`, `scripts convert`) keep it.
+
+**`--non-interactive`** (the default with `CI` or `TESTPION_NON_INTERACTIVE=1`): a command never waits for input; where it would (a token read from the terminal by `jwt -`) it fails at once with a hint. When a command fails and stdout is not a terminal, stderr suggests the `--json` form.
+
+`testpion agent-info` prints its JSON as before (it has no `--json`).
+
 ## `test` / `run` options
 
 | Option | Description |
 |---|---|
 | `-w, --workspace` | Workspace name or directory (default: nearest `workspace.json`). |
 | `-e, --environment` | Environment name. |
+| `--allow-production` | Allow data-changing requests (POST, PUT, PATCH, DELETE, mutations …) to an environment marked as production; without it they fail with *needs confirmation* and reads still run. Also for `send`, `run-collection`, `load`, `eval run`, `serve flows` and `monitor add / run / start`. See [Production](/api-testing/environments#production). |
 | `-c, --concurrency` | Parallel workers. |
 | `--retries`, `--timeout` | Retries per failing test; per-test timeout in ms. |
 | `-r, --reporter` | `console junit json html markdown` |
@@ -86,11 +128,42 @@ testpion report <results.jsonl>              Re-generate reports
 | `--trace all\|failures\|none` | Trace persistence. |
 | `--log-level` | Enable debug logging; secrets stay redacted. |
 | `--watch` | Run again whenever a test, collection, environment or data file in the workspace (or the given paths) changes, until Ctrl+C. Results and reports the run writes don't count as changes. |
-| `--rerun-failed [runId]` | Run only the tests that failed or errored in a run (default: the last one). In the app: **Re-run failed** on a finished run. |
+| `--rerun-failed [runId]` | Run only the tests that failed or errored in a run (default: the last one). In the app: **Rerun failed** on a finished run; **Run again** (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd> for the last run) runs the whole run again as it ran. |
 | `--from <step>` | One flow file: run this step and the steps after it; the steps before it are seeded from `--seed-run` (default: the latest run of the file that has them). In the app: **Run from here**. |
 | `--to <step>` | One flow file: run this step with only the steps it waits for. In the app: **Run to here**. |
 | `--seed-run <runId>` | One flow file: the run whose variables and responses seed the steps before `--from`; alone, replays that run from its first failing step (see `testpion flow runs`). |
+| `--data [file]` | `test`, one flow file: run it once per row of a CSV, JSON or JSONL file, a SQLite database, or `postgres://…` / `mysql://…` / `env:NAME` with `--data-query`; each row's columns are variables, with `{{$row.column}}` and `{{$index}}`. Without a value: the file's own `data:`. Exit 1 when a row failed, or when nothing ran (every row skipped every step, e.g. they wait for a step in another file: the run is **skipped**, not passed). See [Run a flow at scale](/test-runner/integration-testing#run-a-flow-at-scale). |
+| `--data-query <sql>`, `--data-limit <n>`, `--data-concurrency <n>` | With `--data`: the `SELECT` of a database; at most this many rows; rows at once (default 1). `--bail` stops at the first failing row. |
+| `--env-matrix <names...>` | `test`, one flow file: run it in each environment (`dev,staging,prod`, or `-e` repeated) and print a step × environment matrix with the values that differ marked. Exit 1 when an environment failed, or when nothing ran in any environment (**skipped**). |
+| `--allow-skipped` | With `--data` or `--env-matrix`: a run where nothing ran exits 0 (it is still reported as skipped). |
+| `--json` | The [envelope](#json-output-dry-runs-and-scripts) with the run in `data` (`summary`, `reports`, `outDir`); with `--data`, `data` streams `{ "rows": [ … ], "summary": { … } }`; with `--env-matrix`, the matrix. |
+| `--jsonl` | A JSON line per result as it finishes, then the envelope (for scripts and AI agents). |
 | `--otlp <url>`, `--otlp-header k:v` | Send the run's traces to an OpenTelemetry collector (OTLP/HTTP); without `--otlp`, `OTEL_EXPORTER_OTLP_ENDPOINT` / `OTEL_EXPORTER_OTLP_HEADERS` are used. See [traces](/test-runner/traces). Also for `run-collection`. |
+
+## `test from-request`
+
+Saves a saved request as a test file under `tests/`, the same as **Save as test…** in the app. A folder or a whole collection becomes one file with a test per request.
+
+```bash
+testpion test from-request "Veterinary API/Patients/Create a patient" -w my-workspace
+testpion test from-request "Veterinary API/Patients" -n "Patients smoke" --json
+testpion test from-request "saved:grpc:lib-123" --json      # any item ref: a saved gRPC call, a History entry …
+```
+
+| Option | Description |
+|---|---|
+| `-w, --workspace` | Workspace name or directory (default: nearest `workspace.json`). |
+| `-n, --name` | The test's (or the file's) name; default: the request's. |
+| `--json` | Print `{ path, tests, ref }`. |
+
+## `search`
+
+Finds items in a workspace by name or content, like Quick Open in the app; each hit's `ref` goes to `testpion open`.
+
+```bash
+testpion search patients -w my-workspace
+testpion search "create order" --json -n 5
+```
 
 ## `send`
 
@@ -99,17 +172,18 @@ Sends one request and prints the response body (pretty-printed JSON), like `curl
 ```bash
 testpion send "Veterinary API/Authentication/Get access token" -e Development -i
 testpion send "Get patient" -e Development --fail          # a unique name is enough
-testpion send "{{baseUrl}}/patients?limit=2" -e Development --json
+testpion send "{{baseUrl}}/patients?limit=2" -e Development --json   # a URL uses this folder's workspace (or -w) for its environments
 testpion send https://api.example.com/items -X POST -H "Content-Type: application/json" -d '{"name":"Rex"}'
 ```
 
 | Option | Description |
 |---|---|
 | `-e, --environment` | Environment whose variables resolve (and the collection's). |
+| `--allow-production` | Allow a data-changing request to an environment marked as production. |
 | `-X`, `-H`, `-d` | Method, headers and body, for a URL. |
 | `-i, --include` | Also print the status line and response headers. |
 | `--fail` | Exit `1` on an HTTP error status (400+) or a failed check. |
-| `--json` | Print `{ status, statusText, url, durationMs, headers, body, checks }`. |
+| `--json` | The envelope, with `{ status, statusText, url, durationMs, headers, body, checks }` in `data`. |
 
 Check results go to stderr, so `testpion send … | jq` gets only the body.
 
@@ -124,6 +198,7 @@ testpion storage -w my-workspace --delete-runs-older-than 30   # disk use; clean
 testpion load-history -w my-workspace          # earlier load tests: req/s, p95 (and server p95), errors, pass rules
 testpion variable-flow "Veterinary API"  # who sets and uses each variable; exit 1 on used-before-set / never-set
 testpion attention -w my-workspace --markdown    # what needs attention (exit 1 on a high-severity item); --markdown to post it
+testpion problems --json                 # the same list as the app's Problems (alias of attention): kind, group, type (failure / error / warning), ref
 testpion certificates --warn 21          # TLS certificates of the hosts called, soonest to expire first; exit 1 if one expires within 21 days
 testpion certificates --check api.example.com:443 https://auth.example.com --warn 21   # connect and check now (trust, days left)
 testpion workspace-report -o report.html # what needs attention, activity, collection health, monitors (with 30-day uptime) and runs as one HTML file to share
@@ -148,6 +223,7 @@ testpion run-collection api.postman_collection.json -e staging.postman_environme
 | Option | Description |
 |---|---|
 | `-e, --environment` | Environment name, or a Postman environment file. |
+| `--allow-production` | Allow the data-changing requests of the run in an environment marked as production. |
 | `-d, --iteration-data` | CSV, JSON or JSONL data file, or a SQLite database: one row per iteration (`tp.iterationData`, `{{column}}`). |
 | `--iteration-query` | With a SQLite database as `-d`: the read-only `SELECT` whose rows are the iterations. |
 | `-n, --iteration-count` | Number of iterations (default: the number of data rows, or 1). |
@@ -377,12 +453,33 @@ Build a feedback or problem report as Markdown, and a link to a pre-filled GitHu
 testpion feedback -k idea -t "Import Swagger 2 examples" -m "Examples in Swagger 2 files are not imported" --json
 ```
 
-## `agents-md`
+## `agents init`
 
-Write (or refresh) the TestPion section of `AGENTS.md` in the workspace folder, for coding agents (Claude Code, Codex, Cursor, Copilot): how to use the workspace over MCP and the CLI, the check types and the test file format. Text outside the section is kept. `--stdout` prints it instead. See [Use TestPion from AI agents](/ai-testing/mcp-server#agents-md).
+Write (or refresh) `AGENTS.md` in the workspace root, for coding agents (Claude Code, Codex, Cursor, Copilot): the workspace's folders, collections, environments (names only, never values), tests and flows, the commands and exit codes, the MCP server, how to add a request, a test or a flow, and the secrets and production rules. `--targets` adds `claude` (a one-line `CLAUDE.md` that imports `@AGENTS.md`) and `cursor` (`.cursor/rules/testpion.mdc`); AGENTS.md is always written.
+
+Only the part between `<!-- testpion:begin -->` and `<!-- testpion:end -->` is TestPion's: your text around it, its line endings and a BOM stay as they are, and running it again replaces only that part (a file whose text would not change is not written). A `CLAUDE.md` that already names `AGENTS.md` gets no second pointer; a link inside the workspace (CLAUDE.md → AGENTS.md) is written once, a link outside it is left alone.
+
+| Option | |
+|---|---|
+| `--targets <list>` | `agents` (always), `claude`, `cursor`, comma-separated |
+| `--force` | repair broken markers (a begin without its end, two blocks) instead of skipping the file |
+| `--dry-run` | report what would be written, write nothing |
+| `--json` | `{ workspace, root, dryRun, files: [{ target, path, status, reason? }] }`; status is `created`, `updated`, `unchanged` or `skipped` |
+
+Exit code `2` when a file was skipped (broken markers, a folder where the file should be) or a target is unknown. `testpion agents-md` (0.45) is the same as `agents init`; `agents-md --stdout` prints the AGENTS.md part. The app does the same in **Settings ▸ AI agents ▸ Write AGENTS.md** and agents with the `agents_init` MCP tool. See [Use TestPion from AI agents](/ai-testing/mcp-server#agents-md).
 
 ```bash
-testpion agents-md -w my-workspace
+testpion agents init -w my-workspace --targets agents,claude,cursor --json
+```
+
+## `eval compare` and `eval matrix`
+
+`eval compare <run> --baseline <run>` compares an evaluation run with a baseline run case by case and exits `1` when more cases regressed than `--max-regressions` (default `0`): for CI after `eval run`. A case regressed when it stopped passing or its mean score dropped by more than `--threshold` (default `0.05`, strictly more); improvements, missing and new cases are listed apart, and `--fail-on-missing` fails on a missing case too. Runs are ids, `last` or names (the newest finished run of that name). `--json` prints the report (counts, per-variant pass rate and mean score change, the lists, `passed`).
+
+`eval matrix <runs…>` prints a page of the cases × variants matrix (`--baseline`, `--filter all|failed|regressed|improved|changed|missing`, `--tag`, `--sort case|score|delta|failures`, `--offset`, `--limit`, `--json`). See [Compare runs as a matrix](/ai-testing/evaluations#compare-runs-as-a-matrix).
+
+```bash
+testpion eval run "Intent v2" -q && testpion eval compare "Intent v2" --baseline "Intent v1" --threshold 0.05
 ```
 
 ## `jwt`
@@ -441,7 +538,43 @@ An Arazzo document's workflows become flow files: operations become method and U
 
 Secrets in a copied request (the `Authorization` header and other sensitive headers, auth credentials, cookies, and sensitive query or body fields) are not written to the workspace. They are replaced by `{{variables}}`, and the output lists them (`placeholders` with `--json`) so you can add them as secret environment variables.
 
+## `flow from-har`
+
+```bash
+testpion flow from-har session.har -w my-workspace
+testpion flow from-har session.har -o tests/recorded/checkout.yaml -e Staging --json -w my-workspace
+```
+
+A HAR file (saved by the HTTP Debugger, a browser's developer tools, Fiddler …) as a flow file: one step per request in time order, each origin as `{{baseUrl}}`, values that came from an earlier response (tokens, ids, cursors) as `{{variables}}` with an `extract` and a `dependsOn`, the recorded status checked; static assets, preflights and analytics left out; secrets as variables to set. See [Record a flow](/test-runner/integration-testing#record-a-flow).
+
+| Option | Description |
+|---|---|
+| `-o, --out <file>` | The flow file inside `tests/` (default: `tests/recorded/<name>.yaml`, a free name). |
+| `--name <name>` | The flow's name (default: the HAR file's name). |
+| `-e, --environment <name>` | Use this environment's variables that hold an origin or a secret that was sent, by name. |
+| `--keep-noise` | Keep static assets, preflights and analytics requests. |
+| `--noise-host <host...>` | More hosts to leave out as telemetry. |
+| `--dry-run` | Print the YAML; write nothing. |
+| `--json` | `{ file, steps, links, variables, secrets, dropped, notes, text }`. |
+
+## `flow report`
+
+```bash
+testpion flow report rest/checkout.yaml -w my-workspace
+testpion flow report rest/checkout.yaml --run run-ab12 --html checkout-timeline.html
+testpion flow report rest/checkout.yaml --json
+```
+
+A run of a flow (the latest that included the file, or `--run`) as a timeline: each step's start and end, how long it waited and for which step, the steps that ran at the same time, the **critical path** (the chain of steps that decided the total time) and the slowest steps. See [Run timeline and critical path](/test-runner/integration-testing#run-timeline-and-critical-path).
+
+| Option | Description |
+|---|---|
+| `--run <runId>` | The run (default: the latest run of the file; see `testpion flow runs`). |
+| `--html <out>` | Write the timeline as one self-contained HTML file (inline SVG and CSS, no scripts, nothing from the network). |
+| `--json` | `{ file, runId, run, timeline: { totalMs, bars: [{ id, name, status, start, end, lane, waitMs, blockedBy, critical }], lanes, criticalPath, criticalBusyMs, waitMs, slowest } }`. |
+
 ## `flow export`
+
 
 ```bash
 testpion flow export arazzo/adoptpet.yaml --arazzo -o adopt-pet.arazzo.yaml -w my-workspace
@@ -458,6 +591,29 @@ testpion flow export checkout.yaml --spec specs/shop.openapi.yaml --json -w my-w
 
 What Arazzo cannot say (checks other than status, body and header ones, `if`, `forEach`, scripts, non-HTTP steps, a request no OpenAPI operation describes) is kept under `x-testpion-*` keys and listed as notes (on stderr without `--json`).
 
+## `serve flows`
+
+```bash
+testpion flow edit orders/new-order.yaml --webhook /hooks/new-order --webhook-secret '{{ORDER_HOOK_SECRET}}' -w my-api
+testpion serve flows -w my-api -e Staging                 # http://127.0.0.1:4020 until Ctrl+C
+testpion serve flows -w my-api --port 0 --jsonl           # any free port; JSON lines for scripts
+curl -X POST http://127.0.0.1:4020/hooks/new-order -H 'content-type: application/json' -H 'x-testpion-secret: <secret>' -d '{"customerId":"c-42"}'
+```
+
+Serves every flow with a `webhook:` block: a POST of a JSON body to its path runs the flow with the fields as its inputs and answers `{ ok, output, steps: [{ name, status, ms }], runId }` (`422` with `failedStep` when a step failed; `400` bad JSON or a missing input, `401` wrong secret, `404` unknown path, `405` other methods, `413` a body over 1 MB, `429` too many runs, `504` too slow). GET with a query works too. New and changed flows are picked up without a restart. See [Deploy a flow](/test-runner/integration-testing#deploy-a-flow).
+
+| Option | Description |
+|---|---|
+| `-p, --port <port>` | Port (default `4020`; `0` picks a free one). |
+| `--host <host>` | Address (default `127.0.0.1`, this machine only; `0.0.0.0` serves the network). |
+| `-e, --environment <name>` | The environment every run uses. |
+| `--max-concurrent <n>` | Runs at once before callers get `429` (default 4). |
+| `--timeout <sec>` | A run longer than this is cancelled (`504`; default 120). |
+| `--allow-production` | Let the flows change data in an environment marked as production. |
+| `--jsonl` | One line `{ "type": "listening", "data": { url, port, hooks } }`, then one `{ "type": "call", "data": { path, method, status, file, runId, durationMs, error } }` per call (every line also has `schema_version` and `command`). `--json` means the same here. |
+
+`testpion flow edit <file> --webhook [path]` adds or moves a flow's webhook (default path `/hooks/<file>`), `--webhook-secret <secret>` sets what callers send (`""` removes it) and `--no-webhook` removes the block; the `setWebhook` op (`{"op":"setWebhook","webhook":{"path":"/hooks/x","secret":"{{S}}"}}`, `null` removes it) does the same in `--op`.
+
 ## `scripts convert`
 
 ```bash
@@ -466,6 +622,17 @@ testpion scripts convert --to tp -w my-workspace --collection "Checkout API"
 ```
 
 Rewrites collection, folder and request scripts written for Postman to TestPion's `tp.*` (or back to Postman's name with `--to pm`). Both names always run in TestPion; only code changes, not strings or comments, and scripts that declare their own `tp` are skipped and listed.
+
+## `open`
+
+```bash
+testpion open run:run-8f2c1a -w .                          # the run's results in the app
+testpion open request:payments:create-invoice -w .         # kind:id, the kind's ids in order
+testpion open 'testpion://open?kind=test&path=smoke/login.yaml'
+testpion open history:h-abc --json                         # {ref, url, resolution}: checked, nothing opened
+```
+
+Brings TestPion to one item: the OS opens the `testpion://open` link, which starts the app or brings the running one forward on that item. The ref is the `ref` field of `--json` output and MCP tool results (`{"kind": …, …ids}`), its link, or the short form `kind:id`; the kinds are listed in [Finding your way around](/getting-started/finding-your-way#for-ai-agents-ref). It is looked up in the workspace (`-w`, or the nearest one) first: an item that is gone is reported with what is still there, exit code 2. `--print` prints the link, `--json` prints the ref, the link and the lookup without opening anything, `--no-check` skips the lookup.
 
 ## `history`
 
@@ -481,12 +648,13 @@ testpion history mcp-tools -w my-workspace --server weather            # MCP too
 testpion history llm -w my-workspace                                    # AI Lab prompts per model: tokens, estimated cost, median time
 ```
 
-`history list` shows recent responses of requests sent in the app (`--collection`, `--request`, `--failed`, `-n/--limit`). `history stats` summarises the response times of a request's recent responses (`-n/--limit`, default 50): count, failed (no status or 400+), fastest, mean, median, p95 and slowest. `history diff` compares two of them: the status, timing, header changes (volatile ones such as `date` are flagged) and a field-by-field JSON body diff, or a line diff for text. Values of sensitive fields and headers are masked. `history activity` is the Home dashboard as data: per local day, requests sent and how many failed (4xx/5xx, transport errors, non-OK gRPC codes, MCP tool errors), the median response time, test runs and failed tests; plus requests per type and the slowest requests on average (`-d/--days`, default 14, up to 90).
+`history list` shows recent responses of requests sent in the app (`--collection`, `--request`, `--failed`, `-n/--limit`); with `--json` each has its `ref` (`testpion open` opens it). `history stats` summarises the response times of a request's recent responses (`-n/--limit`, default 50): count, failed (no status or 400+), fastest, mean, median, p95 and slowest. `history diff` compares two of them: the status, timing, header changes (volatile ones such as `date` are flagged) and a field-by-field JSON body diff, or a line diff for text. Values of sensitive fields and headers are masked. `history activity` is the Home dashboard as data: per local day, requests sent and how many failed (4xx/5xx, transport errors, non-OK gRPC codes, MCP tool errors), the median response time, test runs and failed tests; plus requests per type and the slowest requests on average (`-d/--days`, default 14, up to 90).
 
 ## `monitor`
 
 ```bash
 testpion monitor add "API health" --collection "My API" --folder Smoke --every 15m -e Staging -w my-workspace
+testpion monitor add "Checkout flow" --test-file flows/checkout.yaml --every 15m -e Staging -w my-workspace   # a test file / flow instead of a collection
 testpion monitor add "API health" --collection "My API" --every 5m --max-p95 800 -w my-workspace   # also fail when p95 > 800 ms
 testpion monitor add "API health" --collection "My API" --every 1h --min-cert-days 21 -w my-workspace   # and when a certificate expires within 21 days
 testpion monitor run --due -w my-workspace      # for cron; exit 1 if a run failed
@@ -502,10 +670,26 @@ testpion monitor start -w my-workspace          # keep running them until Ctrl+C
 ```bash
 testpion ci github -w . --suite regression -e Staging -o .github/workflows/testpion.yml
 testpion ci gitlab -w api-tests --collection "My API" --folder Smoke --workspace-dir api-tests
+testpion ci github -w . --run last -o .github/workflows/testpion.yml   # what the latest run ran (files and filter, or collection and folders), in its environment
 testpion ci jenkins -w . --tests rest graphql --json
 ```
 
 Writes a pipeline for GitHub Actions, GitLab CI, Azure Pipelines or Jenkins that installs the CLI (pinned to this version), runs the suite, collection or tests, publishes `junit.xml` and keeps the reports. Without `-o` it prints the file; the CI secrets to create are listed on stderr (and under `secrets` with `--json`). See [CI/CD](/test-runner/ci-cd#generate-a-pipeline).
+
+| Option | Description |
+|---|---|
+| `--suite`, `--collection` (+ `--folder`), `--tests <paths...>` | What the pipeline runs (one of them). |
+| `--run <runId\|last>` | Instead: what this finished run ran (its files and filters, or its collection and folders), in its environment. `last` is the newest finished run of test files or a collection (a run still going, a stopped run, a monitor's run or an evaluation is passed by). In the app: a run's ⋯ ▸ **Run in CI…**. |
+| `--data [file]` | One flow file (`--tests <file>`): run it once per data row (a dataset; without a value, the file's own `data:`); the rows land in `test-results/data-run.json` (the JSON envelope, rows in `.data`). |
+| `--env-matrix <names...>` | One flow file: run it in each environment and compare (`test-results/env-matrix.json`). |
+| `--timeline-html` | One flow file: keep the run as `test-results/timeline.html`, also when it fails. |
+| `-e, --environment` | The environment to run with. |
+| `--allow-production` | Data-changing requests may go to an environment marked as production: adds `--allow-production` to the pipeline's run line. |
+| `--start <command>`, `--wait-for <url>`, `--wait-seconds <n>` | Start the system under test first and wait for its health URL. |
+| `--openapi <file>` | Pull requests fail on breaking changes to this OpenAPI document. |
+| `--workspace-dir <path>`, `-o, --out <file>`, `--json` | The workspace folder in the repository; where to write the file; `{ path, content, secrets, command }` in the envelope. |
+
+A pipeline whose environment is marked as production runs its reads only; `ci --allow-production` puts `--allow-production` on the run line it writes, so its data-changing steps run too (the app's CI dialog has a checkbox for it, and the `ci_config` MCP tool takes `allowProduction`).
 
 ## `env`
 
@@ -521,18 +705,20 @@ testpion env order Development Staging Production -w my-workspace
 
 ## `mcp-server`
 
-Serves a workspace to AI agents over MCP on stdio: `list_collections`, `list_requests`, `get_request`, `list_environments`, `collection_docs`, `send_request`, `grpc_call`, `realtime_exchange` and `run_collection`. See [Use TestPion from AI agents](/ai-testing/mcp-server).
+Serves a workspace to AI agents over MCP on stdio: browsing (`list_collections`, `list_requests`, `get_request`, `search_workspace`, `resolve_ref`, `item_info` …), sending and running (`send_request`, `grpc_call`, `realtime_exchange`, `run_collection`, `run_tests`, `load_test` …), flows (`flow_graph`, `flow_add_step`, `flow_runs`, `flow_data_run` …), evaluations, git, the HTTP Debugger and more. Every tool keeps one contract: tools that delete or overwrite need `confirm: true`, lists page with `limit` / `cursor`, big results are concise unless `response_format: "detailed"`. See [Use TestPion from AI agents](/ai-testing/mcp-server) for every tool.
 
 ```bash
 testpion mcp-server -w my-workspace
 testpion mcp-server --read-only
+testpion mcp-server --profile minimal      # only the common jobs' tools; search_tools finds the rest
 ```
 
 | Option | Description |
 |---|---|
 | `-w, --workspace` | Workspace name or directory (default: nearest `workspace.json`). |
 | `--read-only` | Only the browsing tools; no requests are sent. |
-| `--allow-production` | Allow sending to environments marked as production. |
+| `--profile full\|minimal` | Which tools are listed: every tool (`full`, the default) or the common jobs (`minimal`, for agents that load every listed tool into their context); `search_tools` finds the others, and any tool can be called. |
+| `--allow-production` | Allow sending to environments marked as production. Each sending tool call must also pass `allowProduction: true`. |
 | `--block-private-networks` | Refuse requests to localhost, private networks and cloud metadata addresses, and don't start local (stdio) MCP servers. For shared or hosted use; see [Network policy](/security/privacy#network-policy-shared-and-hosted-servers). |
 | `--allow-host <host...>` | With `--block-private-networks`: hosts that stay reachable. |
 

@@ -30,7 +30,7 @@ The jar is shared beyond HTTP requests, so a session you log in to with a reques
 
 ## The Cookies dialog
 
-Click the **cookie button** next to **Send** to open the Cookies dialog. It opens on the domain of the current request.
+Click the **cookie button** next to **Send** to open the Cookies dialog. It opens on the domain of the current request. From anywhere else, use the status bar's **Tools ▸ Cookies…**.
 
 - The left column lists every domain in the jar, with the number of cookies.
 - Click a cookie to edit its name, value, path, expiry, `Secure`, `HttpOnly` and whether subdomains get it.

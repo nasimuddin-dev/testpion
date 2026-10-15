@@ -13,10 +13,12 @@ import {
   type RunSummary,
 } from '@testpion/core';
 import { EXIT, dim, bold, CliError, printJson, openWorkspace, withWorkspace, cliContext, requireEnvironment } from '../shared.js';
+import { cli } from '../output.js';
 import { finishRun, printResult } from '../run.js';
+import { registerEvalCompareCommands } from './eval-compare.js';
 
 export function registerEvaluationCommands(program: Command): void {
-  const ev = program.command('eval').description('evaluations saved in the app (dataset × prompt × model × evaluators): list them or run one by name');
+  const ev = program.command('eval').description('evaluations saved in the app (dataset × prompt × model × evaluators): list them, run one by name, compare runs (matrix, compare with a baseline)');
   ev.command('list')
     .description('list the saved evaluations of a workspace')
     .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
@@ -48,6 +50,7 @@ export function registerEvaluationCommands(program: Command): void {
     .action(async (ref: string, o: { workspace?: string; environment?: string; concurrency?: string; retries?: string; limit?: string; reporter: string[]; out?: string; baseline?: string; saveBaseline?: string; failOnRegression?: boolean; verbose?: boolean; quiet?: boolean }) => {
       process.exitCode = await executeEvalRun(ref, o);
     });
+  registerEvalCompareCommands(ev);
 }
 
 async function executeEvalRun(
@@ -87,7 +90,7 @@ async function executeEvalRun(
       onTrace: (trace) => void store.saveTrace(trace, 'test', runId),
       environment: o.environment,
       onEvent: (e: RunEvent) => {
-        if (e.type === 'test-end' && !o.quiet) printResult(e.result, !!o.verbose);
+        if (e.type === 'test-end' && (!o.quiet || cli.jsonl)) printResult(e.result, !!o.verbose);
       },
     });
   } finally {

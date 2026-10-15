@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { cliData } from '../helpers.js';
 
 const cli = (args: string[], cwd: string) =>
   new Promise<{ status: number | null; stdout: string; stderr: string }>((ok) => {
@@ -39,7 +40,7 @@ describe('importing an OpenAPI document', () => {
       expect((await cli(['workspace', 'create', 'shop', '--path', join(dir, 'shop')], dir)).status).toBe(0);
       writeFileSync(join(dir, 'petshop.json'), JSON.stringify(spec));
       const imp = await cli(['import', 'petshop.json', '-w', join(dir, 'shop'), '--json'], dir);
-      const out = JSON.parse(imp.stdout) as { collection: string; specPath: string; contractChecks: number };
+      const out = cliData(imp.stdout) as { collection: string; specPath: string; contractChecks: number };
       expect(out).toMatchObject({ collection: 'Pet Shop', specPath: 'specs/pet-shop.openapi.json', contractChecks: 2 });
       expect(JSON.parse(readFileSync(join(dir, 'shop', out.specPath), 'utf8')).info.title).toBe('Pet Shop');
 

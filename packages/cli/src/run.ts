@@ -48,10 +48,15 @@ import {
   flowRunPlan,
   testFileRef,
   type FlowRunPlan,
+  assertProductionStep,
+  isDataChangingMethod,
 } from '@testpion/core';
+import { cli, emitEvent, machine, noteError } from './output.js';
 import { EXIT, green, red, yellow, dim, bold, cyan, CliError, printJson, collectVar, openWorkspace, cliContext, requireCollection, requireEnvironment, readImport, loadCollectionRef, cleanupFailedRun, readResults } from './shared.js';
 
 export function printResult(r: TestResult, verbose: boolean): void {
+  // --jsonl: each result is an event line
+  if (cli.jsonl) return emitEvent('result', r);
   const icon = r.status === 'passed' ? green('✓') : r.status === 'skipped' ? yellow('○') : red('✗');
   const meta = [r.latencyMs !== undefined ? `${Math.round(r.latencyMs)}ms` : `${r.durationMs}ms`, r.tokens ? `${r.tokens.totalTokens} tok` : '', r.attempts > 1 ? `${r.attempts} attempts` : ''].filter(Boolean).join(', ');
   console.log(`  ${icon} ${r.name} ${dim(`(${meta})`)}`);
@@ -102,6 +107,7 @@ export interface RunCliOptions {
 }
 
 export async function executeRun(paths: string[], o: RunCliOptions, label?: string): Promise<number> {
+  if (Array.isArray(o.environment)) throw new CliError('-e was given more than once: to run a flow in several environments, give one flow file to testpion test (an environment matrix)', EXIT.CONFIG_ERROR);
   const firstPath = paths[0] ? resolve(paths[0]) : undefined;
   const { store, ephemeral } = openWorkspace(o.workspace, firstPath && existsSync(firstPath) ? dirname(firstPath) : undefined, new WorkspaceManager());
   const logger = new Logger((o.logLevel?.toUpperCase() as 'INFO') ?? 'WARN');
@@ -177,7 +183,7 @@ export async function executeRun(paths: string[], o: RunCliOptions, label?: stri
   process.on('SIGINT', onSigint);
 
   const onEvent = (e: RunEvent) => {
-    if (e.type === 'test-end' && !o.quiet) printResult(e.result, !!o.verbose);
+    if (e.type === 'test-end' && (!o.quiet || cli.jsonl)) printResult(e.result, !!o.verbose);
   };
   let summary;
   try {
@@ -232,6 +238,8 @@ export async function finishRun(a: {
   const results = () => readResults(resultsFile);
   const formats = o.reporter.filter((r) => r !== 'console') as ReportFormat[];
   const paths2 = await recordRun(store, summary, outDir, { reports: formats, history: !ephemeral });
+  // --jsonl: the run's summary and report files are the result envelope's data
+  if (machine()) printJson({ summary, reports: paths2, outDir });
 
   let regressionFailed = false;
   if (o.baseline) {
@@ -262,9 +270,13 @@ export async function finishRun(a: {
   }
   store.close();
   if (ephemeral) rmSync(ephemeral, { recursive: true, force: true });
-  if (summary.cancelled) return EXIT.EXECUTION_ERROR;
+  if (summary.cancelled) {
+    noteError(new CliError('The run was cancelled', EXIT.EXECUTION_ERROR));
+    return EXIT.EXECUTION_ERROR;
+  }
   if (summary.total === 0) {
     console.error(yellow(a.emptyMessage ?? 'No tests found.'));
+    noteError(new CliError(a.emptyMessage ?? 'No tests found.', EXIT.CONFIG_ERROR));
     return EXIT.CONFIG_ERROR;
   }
   return summary.failed + summary.errors > 0 || (o.failOnRegression && regressionFailed) ? EXIT.TEST_FAILURE : EXIT.SUCCESS;
@@ -436,7 +448,7 @@ export async function executeCollectionRun(ref: string, o: CollectionCliOptions)
       traceBatch: (fn) => store.meta.batch(fn),
       environment,
       onEvent: (e: RunEvent) => {
-        if (e.type !== 'test-end' || o.quiet) return;
+        if (e.type !== 'test-end' || (o.quiet && !cli.jsonl)) return;
         const it = Number(/@(\d+)/.exec(e.result.id)?.[1] ?? 1);
         if (it !== lastIteration && (iterations ?? data?.length ?? 1) > 1) console.log(cyan(`\nIteration ${it}`));
         lastIteration = it;
@@ -485,7 +497,9 @@ export async function executeSend(
 ): Promise<number> {
   const settings = new WorkspaceManager().loadSettings();
   const isUrl = /^(https?:\/\/|\{\{)/i.test(target);
-  const { store, ephemeral } = openWorkspace(o.workspace, isUrl && !o.workspace ? tmpdir() : undefined, new WorkspaceManager());
+  // the workspace as every command finds it (-w, else the nearest one up from here), also for a URL: its
+  // environments and variables resolve `{{baseUrl}}`; outside a workspace an ephemeral one is used
+  const { store, ephemeral } = openWorkspace(o.workspace, undefined, new WorkspaceManager());
   let response: { status: number; statusText: string; headers: Array<[string, string]>; body: string; durationMs: number; url: string; timing?: ReturnType<typeof timingSummary> } | undefined;
   let checks: Array<{ name: string; passed: boolean; message?: string }> = [];
   let error: string | undefined;
@@ -498,6 +512,7 @@ export async function executeSend(
         const headers = (o.header ?? []).map((h) => ({ key: h.slice(0, h.indexOf(':')).trim(), value: h.slice(h.indexOf(':') + 1).trim(), enabled: true }));
         const body = o.data === undefined ? undefined : /^\s*[{[]/.test(o.data) ? { type: 'json' as const, content: o.data } : { type: 'text' as const, content: o.data };
         const spec = ctx.vars.resolveDeep({ method: o.method.toUpperCase(), url: target, headers, body });
+        assertProductionStep(ctx.services.production, { action: `${spec.method} ${spec.url}`, changesData: isDataChangingMethod(spec.method) }); // --allow-production
         const { response: r, prepared } = await executeHttp({ ...spec, settings: { timeoutMs: settings.defaultTimeoutMs } }, { redactor: ctx.redactor, maxPreviewBytes: 10 * 1024 * 1024, cookieJar: ctx.services.cookieJar });
         response = { status: r.status, statusText: r.statusText, headers: r.headers, body: r.bodyPreview, durationMs: r.durationMs, url: prepared.url, timing: timingSummary(r) };
       } finally {
@@ -549,6 +564,7 @@ export async function executeSend(
   if (!response) {
     if (o.json) printJson({ error: error ?? 'no response', checks });
     else console.error(red(error ?? 'The request got no response'));
+    noteError(new CliError(error ?? 'The request got no response', EXIT.EXECUTION_ERROR));
     return EXIT.EXECUTION_ERROR;
   }
   const failed = response.status >= 400 || checks.some((c) => !c.passed);
@@ -677,10 +693,15 @@ function otlpExporter(o: { otlp?: string; otlpHeader?: string[] }) {
   };
 }
 
+/** -e given once is a name; repeated, the names (an environment matrix). */
+function collectEnvironment(v: string, prev: string | string[] | undefined): string | string[] {
+  return prev === undefined ? v : [...[prev].flat(), v];
+}
+
 export function runOptions(cmd: Command): Command {
   return cmd
     .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
-    .option('-e, --environment <name>', 'environment to use')
+    .option('-e, --environment <name>', 'environment to use (testpion test <flow file>: repeat it to run the flow in each, an environment matrix)', collectEnvironment)
     .option('-c, --concurrency <n>', 'parallel workers')
     .option('--retries <n>', 'retries per failing test')
     .option('--timeout <ms>', 'per-test timeout in ms')

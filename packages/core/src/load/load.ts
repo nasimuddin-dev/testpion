@@ -8,6 +8,8 @@ import { estimateCost, type ProviderRegistry } from '../ai/index.js';
 import type { Redactor } from '../util/redact.js';
 import { CookieJar } from '../cookies/cookie-jar.js';
 import { parseGrpcTarget, prepareGrpcCall, type GrpcRequestSpec } from '../protocols/grpc/grpc.js';
+import type { ExecServices } from '../runner/execute.js';
+import { flowLoadFile, flowLoadScenario, type FlowLoadScenario } from './flow-load.js';
 
 export type LoadTarget =
   | { kind: 'http'; request: HttpRequestSpec }
@@ -15,7 +17,9 @@ export type LoadTarget =
   /** Each virtual user runs these requests in order, again and again (a collection or folder; see collectionLoadTarget). */
   | { kind: 'sequence'; name?: string; requests: Array<{ name: string; request: HttpRequestSpec }> }
   /** A unary or server-streaming gRPC method (one client, calls multiplexed over its connection). */
-  | { kind: 'grpc'; request: GrpcRequestSpec };
+  | { kind: 'grpc'; request: GrpcRequestSpec }
+  /** A flow (test file): each virtual user runs the whole flow again and again; per step and per iteration numbers (see flow-load.ts). */
+  | { kind: 'flow'; file: string; name?: string };
 
 export interface LoadTestConfig {
   target: LoadTarget;
@@ -60,8 +64,10 @@ export interface LoadSnapshot {
   series: Array<{ t: number; rps: number; p95: number; errors: number; vus: number }>;
   /** Sequences: each request's numbers, in order. */
   perRequest?: Array<{ name: string; requests: number; errors: number; latency: LatencyStats }>;
-  /** Sequences: complete passes through all the requests. */
+  /** Sequences: complete passes through all the requests; flows: runs of the flow. */
   iterations?: number;
+  /** Flows: the runs of the whole flow (how many failed, how long one took). */
+  iteration?: { count: number; failed: number; latency: LatencyStats };
   /**
    * HTTP: the server's time to first byte, and the connections: how many requests opened a new one (and paid for
    * DNS, TCP and TLS, on average `setupMs`) or reused one from the pool.
@@ -106,9 +112,9 @@ export function checkLoadSafeguards(cfg: LoadTestConfig, resolvedUrl?: string): 
       suggestions: ['Raise the limit in Settings → Load testing if this is intentional.'],
     });
   if (cfg.environmentIsProduction && !cfg.allowProduction)
-    throw new ApsError('ConfigurationError', 'Load testing is blocked for environments marked as production', {
+    throw new ApsError('ConfigurationError', 'A load test against an environment marked as production needs confirmation', {
       why: 'Load tests can degrade or take down live systems.',
-      suggestions: ['Run against a staging environment.', 'If you are authorised to load-test production, enable "Allow production" explicitly for this run.'],
+      suggestions: ['Run against a staging environment.', 'If you are authorised to load-test production, confirm it: the app asks; from the terminal add --allow-production.'],
     });
   // an unset variable would otherwise surface as a strange "remote host {{baseurl}}" error
   const unresolved = resolvedUrl?.match(/\{\{\s*([^}]+?)\s*\}\}/);
@@ -127,11 +133,35 @@ export function checkLoadSafeguards(cfg: LoadTestConfig, resolvedUrl?: string): 
   }
 }
 
-/** Run a load test. The target must already have variables resolved. */
-export async function runLoadTest(
-  cfg: LoadTestConfig,
-  deps: { providers?: ProviderRegistry; pricing?: PriceEntry[]; redactor?: Redactor; signal?: AbortSignal; onSnapshot?: (s: LoadSnapshot) => void },
-): Promise<LoadSnapshot> {
+export interface LoadTestDeps {
+  providers?: ProviderRegistry;
+  pricing?: PriceEntry[];
+  redactor?: Redactor;
+  signal?: AbortSignal;
+  onSnapshot?: (s: LoadSnapshot) => void;
+  /** A flow target: the engine services its runs start from, and the tests/ folder its file is in. */
+  services?: ExecServices;
+  testsDir?: string;
+  /** A flow target already prepared (tests). */
+  flow?: FlowLoadScenario;
+  /** From prepareLoadTest: the checks already passed (a host awaits it so Start fails at once). */
+  prepared?: PreparedLoadTest;
+}
+
+/** A load test that passed every check, with what its target needs ready (a gRPC caller, a flow's steps, a model). */
+export interface PreparedLoadTest {
+  url?: string;
+  grpcCaller?: Awaited<ReturnType<typeof prepareGrpcCall>>;
+  flow?: FlowLoadScenario;
+  llm?: ReturnType<ProviderRegistry['resolveModel']>;
+}
+
+/**
+ * Every check a load test makes before it sends anything (safeguards for each host it would reach, the target
+ * ready to run). A host awaits this before it reports the test as started, so a refused test is an error on Start
+ * rather than an event after it; runLoadTest calls it when it isn't given the result.
+ */
+export async function prepareLoadTest(cfg: LoadTestConfig, deps: Pick<LoadTestDeps, 'providers' | 'services' | 'testsDir' | 'flow'> = {}): Promise<PreparedLoadTest> {
   const url = cfg.target.kind === 'http' ? buildUrl(cfg.target.request.url, cfg.target.request.params, cfg.target.request.pathVariables).toString() : undefined;
   checkLoadSafeguards(cfg, url);
   // a sequence: every host must pass the safeguards
@@ -146,6 +176,30 @@ export async function runLoadTest(
     checkLoadSafeguards(cfg, `${tls ? 'https' : 'http'}://${address}`);
     return prepareGrpcCall(t.request);
   })(cfg.target) : undefined;
+  // a flow: its steps read once; every host it sends to must pass the safeguards
+  let flow: FlowLoadScenario | undefined;
+  if (cfg.target.kind === 'flow') {
+    if (!deps.flow && !deps.services) throw new ApsError('ConfigurationError', 'A flow load test needs the engine services (variables, providers)');
+    flow = deps.flow ?? (await flowLoadScenario({ file: flowLoadFile(cfg.target.file, deps.testsDir ?? process.cwd()), services: deps.services! }));
+    for (const u of flow.urls) {
+      if (!/\{\{/.test(u)) {
+        try {
+          new URL(u);
+        } catch {
+          continue; // not a URL (a gRPC target, an MCP server …)
+        }
+      }
+      checkLoadSafeguards(cfg, u);
+    }
+  }
+  const llm = cfg.target.kind === 'llm' ? deps.providers?.resolveModel(cfg.target.model) : undefined;
+  if (cfg.target.kind === 'llm' && !llm) throw new ApsError('ConfigurationError', 'No provider registry for LLM load test');
+  return { url, grpcCaller, flow, llm };
+}
+
+/** Run a load test. The target must already have variables resolved. */
+export async function runLoadTest(cfg: LoadTestConfig, deps: LoadTestDeps): Promise<LoadSnapshot> {
+  const { grpcCaller, flow, llm } = deps.prepared ?? (await prepareLoadTest(cfg, deps));
 
   const ctrl = new AbortController();
   const onAbort = () => ctrl.abort();
@@ -201,11 +255,12 @@ export async function runLoadTest(
   let active = 0;
   const bucket = cfg.requestsPerSecond ? new TokenBucket(cfg.requestsPerSecond) : undefined;
 
-  const llm = cfg.target.kind === 'llm' ? deps.providers?.resolveModel(cfg.target.model) : undefined;
-  if (cfg.target.kind === 'llm' && !llm) throw new ApsError('ConfigurationError', 'No provider registry for LLM load test');
-
-  const per = cfg.target.kind === 'sequence' ? cfg.target.requests.map((r) => ({ name: r.name, requests: 0, errors: 0, latency: new LatencyRecorder() })) : [];
+  const per = cfg.target.kind === 'sequence' ? cfg.target.requests.map((r) => ({ name: r.name, requests: 0, errors: 0, latency: new LatencyRecorder() })) : (flow?.steps ?? []).map((name) => ({ name, requests: 0, errors: 0, latency: new LatencyRecorder() }));
+  const stepRow = new Map<string, number>();
+  per.forEach((p, i) => !stepRow.has(p.name) && stepRow.set(p.name, i));
   let iterations = 0;
+  let iterFailed = 0;
+  const iterLatency = new LatencyRecorder();
   /** One request of a sequence: counted like a single-request test, and in its own row. */
   const step = async (i: number, request: HttpRequestSpec, cookieJar?: CookieJar) => {
     const t0 = performance.now();
@@ -242,7 +297,44 @@ export async function runLoadTest(
     }
   };
 
-  const once = async (jar?: CookieJar) => {
+  const once = async (jar: CookieJar | undefined, vuIndex: number) => {
+    if (flow) {
+      try {
+        const r = await flow.iterate(vuIndex, signal);
+        if (signal.aborted) return;
+        for (const s of r.steps) {
+          if (s.status === 'skipped') continue;
+          const row = per[stepRow.get(s.name) ?? -1];
+          const bad = s.status === 'failed' || s.status === 'error';
+          requests++;
+          secReq++;
+          latency.record(s.ms);
+          secLat.record(s.ms);
+          const code = s.httpStatus !== undefined ? String(s.httpStatus) : s.status;
+          status[code] = (status[code] ?? 0) + 1;
+          if (bad) {
+            errors++;
+            secErr++;
+          }
+          if (row) {
+            row.requests++;
+            row.latency.record(s.ms);
+            if (bad) row.errors++;
+          }
+        }
+        iterations++;
+        iterLatency.record(r.ms);
+        if (!r.ok) iterFailed++;
+      } catch (e) {
+        if (signal.aborted) return;
+        const err = normalizeError(e);
+        errors++;
+        secErr++;
+        iterFailed++;
+        errKinds[err.kind] = (errKinds[err.kind] ?? 0) + 1;
+      }
+      return;
+    }
     if (cfg.target.kind === 'sequence') {
       const reqs = cfg.target.requests;
       for (let i = 0; i < reqs.length; i++) {
@@ -325,7 +417,7 @@ export async function runLoadTest(
       if (bucket) await bucket.take(signal).catch(() => undefined);
       if (signal.aborted || performance.now() >= endAt) break;
       active++;
-      await once(jar);
+      await once(jar, i);
       active--;
       if (cfg.thinkTimeMs) await sleep(cfg.thinkTimeMs, signal).catch(() => undefined);
     }
@@ -348,7 +440,8 @@ export async function runLoadTest(
       statusCodes: { ...status },
       errorKinds: { ...errKinds },
       series: series.slice(-600),
-      ...(cfg.target.kind === 'sequence' ? { iterations, perRequest: per.map((p) => ({ name: p.name, requests: p.requests, errors: p.errors, latency: p.latency.stats() })) } : {}),
+      ...(cfg.target.kind === 'sequence' || flow ? { iterations, perRequest: per.map((p) => ({ name: p.name, requests: p.requests, errors: p.errors, latency: p.latency.stats() })) } : {}),
+      ...(flow ? { iteration: { count: iterations, failed: iterFailed, latency: iterLatency.stats() } } : {}),
       ...(newConns + reusedConns ? { http: { ttfb: ttfbRec.stats(), newConnections: newConns, reused: reusedConns, setupMs: newConns ? round(setupSum / newConns, 1) : undefined } } : {}),
     };
     if (cfg.target.kind === 'llm')

@@ -3,7 +3,8 @@ import { breakdownOfRun, reviewResult, runResultsFile, runReviewReport } from '.
 import { monitorRequestStats } from '../runner/monitor-requests.js';
 import { streamTests } from '../runner/loader.js';
 import { join, relative, sep } from 'node:path';
-import { testFromRequest } from '../runner/test-from.js';
+import { saveTest } from '../runner/test-from-ref.js';
+import { ciTargetOfRun, finishedRun, resultSourceRefs } from '../runner/result-source.js';
 import { evaluateThresholds, parseThreshold } from '../load/thresholds.js';
 import { loadHistory, loadRunRecord, recordLoadRun } from '../load/history.js';
 import { ENGINE_VERSION } from '../version.js';
@@ -14,10 +15,12 @@ import { AGENT_PROMPTS, agentGuide, toolAnnotations } from './agent-kit.js';
 import { checkTypes } from '../eval/checks.js';
 import { isSuiteFile, loadSuite, loadTestsFromFile } from '../runner/loader.js';
 import { lintTestFile } from '../runner/test-schema.js';
+import { webhookFlows } from '../runner/flow-webhook-config.js';
 import { tmpdir } from 'node:os';
 import { readdirSync, rmSync, statSync } from 'node:fs';
 import type { RunEvent } from '../runner/runner.js';
 import { ApsError, normalizeError } from '../errors.js';
+import { assertProductionStep, isDataChangingMethod, isGrpcReadMethod } from '../net/production-guard.js';
 import { Redactor } from '../util/redact.js';
 import { shortId } from '../util/ids.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
@@ -39,12 +42,21 @@ import { gitTools } from './git-tools.js';
 import { openApiTools } from './openapi-tools.js';
 import { debuggerTools } from './debugger-tools.js';
 import { historyTools } from './history-tools.js';
+import { refTools } from './ref-tools.js';
 import { flowGraphTools, planFlowRun } from './flow-graph-tools.js';
+import { deployTools } from './deploy-tools.js';
 import { flowTools } from './flow-tools.js';
+import { scaleTools } from './scale-tools.js';
+import { evalAgentTools } from './eval-agent-tools.js';
+import { contractCallResult, elicitationConfirmer, isContractResult, withToolContract, type Confirmer } from './tool-contract.js';
+import { TOOL_DOCS } from './tool-docs.js';
+
 import { mockTools } from './mock-tools.js';
 import { datasetTools } from './dataset-tools.js';
 import { arazzoTools } from './arazzo-tools.js';
-import { str, withEnvironmentSecrets, type Tool } from './tool.js';
+import { recordingTools } from './recording-tools.js';
+import type { DebuggerExchange } from '../debugger/proxy.js';
+import { str, withEnvironmentSecrets, withProductionConsent, type Tool } from './tool.js';
 import { MINIMAL_TOOLS, searchTool } from './search-tools.js';
 import { commandLine, isCommandTrusted } from '../storage/trust.js';
 import { McpSession } from '../protocols/mcp/client.js';
@@ -70,7 +82,7 @@ import { buildGraphQLOperation } from '../protocols/graphql/operation-builder.js
 import { exportOtlp } from '../trace/otlp.js';
 import { collectionToOpenApiText } from '../openapi/from-collection.js';
 import { renameVariable, variableUsages } from '../storage/variable-refactor.js';
-import { requireCollection, requireEnvironment, setEnvironmentVariables } from '../storage/env-edit.js';
+import { addVariablesToEnvironments, requireCollection, requireEnvironment, setEnvironmentVariables } from '../storage/env-edit.js';
 import { runLoadTest, type LoadTarget } from '../load/load.js';
 import { collectionLoadTarget } from '../load/collection-load.js';
 import { compareHistory } from '../storage/history-compare.js';
@@ -79,6 +91,7 @@ import { ciConfig, type CiConfigOptions } from '../runner/ci-config.js';
 import { compareEnvironments, environmentMatrix } from '../storage/env-compare.js';
 import { compareRequestAcrossEnvironments } from '../runner/env-request-compare.js';
 import { executeMonitor, findMonitor, listMonitors, monitorDaily, monitorResults, monitorStatus } from '../runner/monitors.js';
+import { toItemRef } from '@testpion/shared';
 
 /**
  * `testpion mcp-server`: the TestPion engine as MCP tools, so AI agents (Claude, IDE assistants …)
@@ -146,7 +159,7 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
         onEvent: (e: RunEvent) => void (e.type === 'test-end' && results.push(e.result)),
       });
       await recordRun(store, summary, outDir);
-      return { summary, runId, total: summary.total, passed: summary.passed, failed: summary.failed, errors: summary.errors, durationMs: summary.durationMs, results: results.slice(0, 200).map(summarizeResult) };
+      return { summary, runId, ref: { kind: 'run' as const, runId }, environment: environment ?? null, total: summary.total, passed: summary.passed, failed: summary.failed, errors: summary.errors, durationMs: summary.durationMs, results: results.slice(0, 200).map(summarizeResult) };
     } finally {
       await ctx.dispose();
     }
@@ -161,6 +174,11 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
   const clip = (t: string) => (t.length > BODY_CHARS ? `${t.slice(0, BODY_CHARS)}… [${t.length - BODY_CHARS} more characters]` : t);
   const summarizeResult = (r: TestResult) => ({
     name: r.name,
+    // where it came from (its test file at the step): run_tests with paths [ref.path] and step [ref.step] runs it again
+    ...(() => {
+      const ref = resultSourceRefs(store, r)[0];
+      return ref ? { ref } : {};
+    })(),
     status: r.status,
     latencyMs: r.latencyMs,
     url: (r.metadata as { url?: string } | undefined)?.url,
@@ -190,6 +208,8 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
     };
   };
 
+  /** What debugger_capture captured in this server; flow_from_exchanges reads it too. */
+  const captured: DebuggerExchange[] = [];
   const all: Tool[] = [
     {
       name: 'list_collections',
@@ -336,6 +356,7 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
         const ctx = createEngineContext({ store, secrets, settings, environment });
         try {
           const spec: HttpRequestSpec = ctx.vars.resolveDeep(requestFrom(a).request);
+          assertProductionStep(ctx.services.production, { action: `${spec.method} ${spec.url}`, changesData: isDataChangingMethod(spec.method) });
           const { response, prepared } = await executeHttp({ ...spec, settings: { timeoutMs: settings.defaultTimeoutMs } }, { redactor: ctx.redactor, maxPreviewBytes: 1024 * 1024, cookieJar: ctx.services.cookieJar });
           recordCertificate(store, prepared.url, response.connection?.certificate);
           return {
@@ -392,6 +413,7 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
           const descriptorSet = protoFiles.length ? undefined : (await reflectServer(parseGrpcTarget(r.target), { metadata: r.metadata })).descriptorSet;
           if (!a.method) return describeRoot(grpcRoot({ protoFiles, descriptorSet })).map((m) => ({ method: m.name, clientStreaming: m.clientStreaming, serverStreaming: m.serverStreaming, example: m.example }));
           if (!r.target) throw new ApsError('ValidationError', 'Give the server address (target)');
+          assertProductionStep(ctx.services.production, { action: `gRPC ${String(a.method)}`, changesData: !isGrpcReadMethod(String(a.method)) });
           const out = await executeGrpc({ target: r.target, method: String(a.method), message: JSON.stringify(r.message), metadata: r.metadata, protoFiles, descriptorSet, timeoutMs: settings.defaultTimeoutMs }, { redactor: ctx.redactor });
           const body = (v: unknown) => clip(ctx.redactor.redactString(JSON.stringify(v)));
           return {
@@ -458,6 +480,7 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
             password: a.password as string | undefined,
             clientId: a.clientId as string | undefined,
           });
+          assertProductionStep(ctx.services.production, { action: `messages sent to ${r.url}`, changesData: Array.isArray(r.send) && r.send.length > 0 });
           return await runRealtimeExchange(
             {
               url: r.url,
@@ -540,19 +563,17 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
       name: 'save_test',
       write: true,
       description:
-        'Save a saved request (REST or GraphQL) of a collection as a YAML test file under tests/ (tests/rest or tests/graphql), with its checks or a first status / no-errors check, for `testpion test` and CI. {{variables}} are kept. Returns the file path.',
-      inputSchema: { type: 'object', properties: { collection: str('Collection name or id'), request: str('Request name or id'), name: str('Test name (default: the request name)') }, required: ['collection', 'request'] },
+        'Save as a YAML test file under tests/, with its checks or a first status / no-errors check, for `testpion test` and CI: a saved request (collection + request), or any item by its `ref` (a request, a folder or whole collection as one file with a test per request, a saved gRPC call or connection, a History entry). {{variables}} are kept. Returns the file path and its ref.',
+      inputSchema: { type: 'object', properties: { collection: str('Collection name or id'), request: str('Request name or id'), ref: { type: 'object', description: 'Or: the item as an ItemRef ({ kind: "folder", collectionId, folderId } …)' }, name: str('Test name (default: the request name)') } },
       run: (a) => {
-        const { node } = findRequest(findCollection(a.collection), a.request);
-        const name = String(a.name ?? node.name);
-        const t =
-          node.kind === 'graphql'
-            ? testFromRequest(name, { kind: 'graphql', endpoint: node.request.endpoint, query: node.request.query, variables: node.request.variables as Record<string, unknown> | undefined, operationName: node.request.operationName, headers: node.request.headers, auth: node.request.auth }, node.assertions)
-            : testFromRequest(name, { kind: 'http', request: node.request, preRequestScript: node.preRequestScript, testScript: node.testScript }, node.assertions);
-        let path = t.path;
-        for (let i = 2; existsSync(store.safePath(path, store.path('tests'))); i++) path = t.path.replace(/\.yaml$/, `-${i}.yaml`);
-        store.writeTestFile(path, t.yaml);
-        return { path: `tests/${path}` };
+        const ref = a.ref ? toItemRef(a.ref) : undefined;
+        if (a.ref && !ref) throw new ApsError('ValidationError', 'ref is not an ItemRef');
+        const target = ref ?? (() => {
+          const c = findCollection(a.collection);
+          return { kind: 'request' as const, collectionId: c.id, requestId: findRequest(c, a.request).node.id };
+        })();
+        const r = saveTest(store, { name: a.name === undefined ? undefined : String(a.name), ref: target });
+        return { path: `tests/${r.path}`, tests: r.tests, ref: { kind: 'test', path: r.path } };
       },
     },
     {
@@ -764,12 +785,13 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
     {
       name: 'set_environment_variable',
       write: true,
-      description: 'Set plain (non-secret) variables of an environment, e.g. { "baseUrl": "https://staging.example.com" }; `create` makes the environment if needed. Secret variables are refused: the user sets those in the app.',
-      inputSchema: { type: 'object', properties: { environment: str('Environment name or id'), values: { type: 'object', additionalProperties: { type: 'string' }, description: 'key → value' }, create: { type: 'boolean' } }, required: ['environment', 'values'] },
-      run: (a) => {
+      description: 'Set plain (non-secret) variables of an environment, e.g. { "baseUrl": "https://staging.example.com" }; `create` makes the environment if needed; `alsoIn` adds them to other environments where they are missing (empty, or the same value with `copyValues`). Secret variables are refused: the user sets those in the app.',
+      inputSchema: { type: 'object', properties: { environment: str('Environment name or id'), values: { type: 'object', additionalProperties: { type: 'string' }, description: 'key → value' }, create: { type: 'boolean' }, alsoIn: { type: 'array', items: { type: 'string' }, description: 'Other environments to add them to where they are missing' }, copyValues: { type: 'boolean', description: 'With alsoIn: the same values (default: empty)' } }, required: ['environment', 'values'] },
+      run: async (a) => {
         const values = Object.fromEntries(Object.entries((a.values ?? {}) as Record<string, unknown>).map(([k, v]) => [k, String(v)]));
         const env = setEnvironmentVariables(store, String(a.environment), values, { create: a.create === true });
-        return { environment: env.name, set: Object.keys(values) };
+        const also = Array.isArray(a.alsoIn) && a.alsoIn.length ? await addVariablesToEnvironments(store, env.id, Object.keys(values), a.alsoIn.map(String), { copy: a.copyValues === true }) : undefined;
+        return { environment: env.name, set: Object.keys(values), ...(also ? { also } : {}) };
       },
     },
     {
@@ -832,16 +854,26 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
           collection: str('Collection name or id'),
           folders: { type: 'array', items: { type: 'string' }, description: 'With collection: folder or request names' },
           tests: { type: 'array', items: { type: 'string' }, description: 'Test files or folders under tests/' },
+          data: str("One flow file (tests: [file]): run it once per row of this dataset ('' for the file's own data:)"),
+          envMatrix: { type: 'array', items: { type: 'string' }, description: 'One flow file: run it in each of these environments and compare' },
+          allowProduction: { type: 'boolean', description: 'Allow data-changing requests to an environment marked as production' },
+          timelineHtml: { type: 'boolean', description: 'One flow file: keep the run as an HTML timeline (test-results/timeline.html)' },
           environment: str('Environment name'),
           workspaceDir: str('The workspace folder relative to the repository root (default ".")'),
           openapi: str('OpenAPI document in the repository (e.g. openapi.yaml): pull requests fail on breaking changes against the target branch'),
           start: str('Integration tests: a command that starts the system under test in the background first (e.g. "npm start", "docker compose up -d")'),
           waitFor: str('With start: a URL polled until it answers before the tests run (the health check)'),
           waitSeconds: { type: 'number', description: 'How long to wait for it (default 90)' },
+          runId: str('Instead of suite / collection / tests: a finished run (id, or "last": the newest finished run of test files or a collection) — the pipeline runs what it ran, in its environment'),
         },
         required: ['provider'],
       },
-      run: (a) => ciConfig(store, a as unknown as CiConfigOptions),
+      run: (a) => {
+        if (!a.runId) return ciConfig(store, a as unknown as CiConfigOptions);
+        const { target, environment, note } = ciTargetOfRun(store, finishedRun(store, String(a.runId)));
+        const { runId: _run, ...rest } = a;
+        return { ...ciConfig(store, { ...(rest as unknown as CiConfigOptions), ...target, environment: a.environment ? String(a.environment) : environment }), ...(note ? { note } : {}) };
+      },
     },
     {
       name: 'list_certificates',
@@ -878,7 +910,7 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
     },
     {
       name: 'list_monitors',
-      description: 'Monitors of the workspace (collections that run on a schedule): collection, folders, environment, schedule, enabled, last result (passed / failed / error with counts) and next run.',
+      description: 'Monitors of the workspace (collections, or test files / flows under tests/, that run on a schedule; save_monitor adds one): collection and folders or testFile, environment, schedule, enabled, last result (passed / failed / error with counts) and next run.',
       inputSchema: { type: 'object', properties: {} },
       run: () => listMonitors(store).map((m) => monitorStatus(store, m)),
     },
@@ -921,7 +953,7 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
           context: (o) => createEngineContext({ store, secrets, settings, environment: o.environment, collectionId: o.collectionId }),
           onEvent: (e: RunEvent) => e.type === 'test-end' && e.result.status !== 'passed' && e.result.status !== 'skipped' && failures.push(e.result),
         });
-        return { ...r, name: m.name, failures: failures.slice(0, 50).map(summarizeResult) };
+        return { ...r, name: m.name, environment: m.environment ?? null, failures: failures.slice(0, 50).map(summarizeResult) };
       },
     },
     {
@@ -968,7 +1000,7 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
         const results: TestResult[] = [];
         try {
           const summary = await runCollection({ name: c.name, runId: shortId('mcp-'), collection: c, selection, data, iterations, realtime: collectionRealtimeTests(store, c, selection), services: ctx.services, traceMode: 'none', environment, onEvent: (e: RunEvent) => e.type === 'test-end' && results.push(e.result) });
-          return { total: summary.total, passed: summary.passed, failed: summary.failed, errors: summary.errors, skipped: summary.skipped, durationMs: summary.durationMs, results: results.slice(0, 200).map(summarizeResult) };
+          return { environment: environment ?? null, total: summary.total, passed: summary.passed, failed: summary.failed, errors: summary.errors, skipped: summary.skipped, durationMs: summary.durationMs, results: results.slice(0, 200).map(summarizeResult) };
         } finally {
           await ctx.dispose();
         }
@@ -990,7 +1022,8 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
           else if (/\.(ya?ml|json)$/.test(abs)) files.push(abs);
         };
         for (const p of ((a.paths as string[] | undefined) ?? ['.']).map(String)) walk(p);
-        const out = files.map((f) => ({ file: relative(tests, f).split(sep).join('/'), problems: lintTestFile(readFileSync(f, 'utf8'), { file: f, suite: isSuiteFile(f) }) })).filter((x) => x.problems.length);
+        const webhooks = webhookFlows(tests);
+        const out = files.map((f) => ({ file: relative(tests, f).split(sep).join('/'), problems: lintTestFile(readFileSync(f, 'utf8'), { file: f, suite: isSuiteFile(f), webhooks }) })).filter((x) => x.problems.length);
         return { files: files.length, problems: out.reduce((n, x) => n + x.problems.length, 0), results: out };
       },
     },
@@ -1026,6 +1059,7 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
           rerunFailed: { anyOf: [{ type: 'boolean' }, { type: 'string' }], description: 'true: the failed tests of the last run; or a run id' },
           from: str('With one flow file in paths: run from this step (id or name) on, the steps before it taken from seedRunId (default: the latest run of the file); see flow_runs'),
           seedRunId: str('With one flow file in paths: the earlier run whose variables and responses seed the steps before `from`; alone, replays that run from its first failing step'),
+          step: str("Only this test or step (its id: a result's ref.step), e.g. to run one result again"),
         },
       },
       run: async (a) => {
@@ -1036,7 +1070,7 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
         const plan = a.from || a.seedRunId ? await planFlowRun(store, paths, a) : undefined;
         const { summary, ...run } = await recordedRun(environment, {
           name: rerun ? `Failed tests of ${rerun.runId}` : paths.join(', '),
-          tests: streamTests(paths, store.path('tests'), { grep: a.grep ? String(a.grep) : undefined, tags: Array.isArray(a.tags) ? (a.tags as unknown[]).map(String) : undefined, ...(rerun ? { ids: rerun.ids } : {}) }),
+          tests: streamTests(paths, store.path('tests'), { grep: a.grep ? String(a.grep) : undefined, tags: Array.isArray(a.tags) ? (a.tags as unknown[]).map(String) : undefined, ...(rerun ? { ids: rerun.ids } : a.step ? { ids: [String(a.step)] } : {}) }),
           concurrency: 4,
           ...(plan ? { plan: { onlyIds: plan.onlyIds, seed: plan.seed } } : {}),
         });
@@ -1234,13 +1268,14 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
       name: 'load_test',
       write: true,
       description:
-        'Load-test a local API (localhost / private network only; remote hosts are never allowed from here): a URL, or a collection (every virtual user sends its requests in order, with per-user cookies). At most 50 virtual users and 60 seconds. `warmUp` runs the collection once with scripts first (e.g. to log in). Returns throughput, latency percentiles, error rate, status codes and, for collections, per-request numbers.',
+        'Load-test a local API (localhost / private network only; remote hosts are never allowed from here): a URL, a collection (every virtual user sends its requests in order, with per-user cookies) or a flow file (`test_file`: every virtual user runs the whole flow again and again; per-step numbers and `iteration`: runs of the flow, failed, p50 / p95). At most 50 virtual users and 60 seconds. `warmUp` runs the collection once with scripts first (e.g. to log in). Returns throughput, latency percentiles, error rate, status codes and, for collections, per-request numbers.',
       inputSchema: {
         type: 'object',
         properties: {
           url: str('URL to load-test (GET), or use collection'),
           collection: str('Collection name or id'),
           folder: str('With collection: only this folder or request (name or id)'),
+          test_file: str('Or a flow file (a path inside tests/): each virtual user runs the whole flow'),
           environment: str('Environment name'),
           virtualUsers: { type: 'number', description: 'Virtual users, 1–50 (default 5)' },
           durationSec: { type: 'number', description: 'Seconds, 1–60 (default 10)' },
@@ -1255,7 +1290,7 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
         const duration = Math.min(60, Math.max(1, Number(a.durationSec) || 10));
         const c = a.collection ? findCollection(a.collection) : undefined;
         const g = a.grpc as { target?: string; method?: string; message?: unknown } | undefined;
-        if (!c && !a.url && !g) throw new ApsError('ValidationError', 'Give a url, a collection or grpc');
+        if (!c && !a.url && !g && !a.test_file) throw new ApsError('ValidationError', 'Give a url, a collection, a test_file or grpc');
         const thresholds = Array.isArray(a.thresholds) ? (a.thresholds as unknown[]).map(String) : [];
         thresholds.forEach(parseThreshold); // a typo fails before the test runs
         const ctx = createEngineContext({ store, secrets, settings, environment, collectionId: c?.id });
@@ -1280,36 +1315,42 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
             const gt = ctx.vars.resolve(String(g.target));
             const descriptorSet = (await reflectServer(parseGrpcTarget(gt))).descriptorSet;
             target = { kind: 'grpc', request: { target: gt, method: String(g.method), message: JSON.stringify(ctx.vars.resolveDeep(g.message ?? {})), descriptorSet } };
-          } else target = { kind: 'http', request: { method: 'GET', url: ctx.vars.resolve(String(a.url)) } };
+          } else if (a.test_file) target = { kind: 'flow', file: String(a.test_file).replace(/^tests[\\/]/, '') };
+          else target = { kind: 'http', request: { method: 'GET', url: ctx.vars.resolve(String(a.url)) } };
           const startedAt = new Date().toISOString();
           const s = await runLoadTest(
             { target, virtualUsers: vus, durationSec: duration, allowRemoteHosts: false, environmentIsProduction: !!ctx.environment?.isProduction, maxVirtualUsers: 50 },
-            { redactor: ctx.redactor },
+            { redactor: ctx.redactor, services: ctx.services, testsDir: store.path('tests') },
           );
           const { series: _series, ...summary } = s;
           const checked = thresholds.length ? evaluateThresholds(thresholds, s) : undefined;
           // kept in the workspace's load history like the app's load tests (load_history reads it)
           if (s.requests) {
-            const targetText = c ? `collection ${c.name}${a.folder ? ` / ${String(a.folder)}` : ''}` : g ? `gRPC ${String(g.target)} ${String(g.method)}` : `GET ${redactor.redactUrl(String(a.url))}`;
+            const targetText = c ? `collection ${c.name}${a.folder ? ` / ${String(a.folder)}` : ''}` : g ? `gRPC ${String(g.target)} ${String(g.method)}` : a.test_file ? `test file ${target.kind === 'flow' ? target.file : ''}` : `GET ${redactor.redactUrl(String(a.url))}`;
             recordLoadRun(
               store,
               loadRunRecord(s, { id: shortId('load-'), startedAt, name: targetText, target: targetText, environment, virtualUsers: vus, durationSec: duration, thresholds: checked?.map((t) => ({ expr: t.expr, passed: t.passed, actual: t.actual })) }),
             );
           }
-          return { ...prep, ...summary, ...(checked ? { thresholds: checked, passed: checked.every((t) => t.passed) } : {}) };
+          return { ...prep, environment: environment ?? null, ...summary, ...(checked ? { thresholds: checked, passed: checked.every((t) => t.passed) } : {}) };
         } finally {
           await ctx.dispose();
         }
       },
     },
     ...historyTools({ store, redactor, findCollection, findRequest }),
+    ...refTools({ store }),
     ...mockTools({ store }),
     ...datasetTools({ store }),
     ...arazzoTools({ store }),
     ...gitTools({ store, findCollection, redactor }),
     ...openApiTools({ store, readSpecRef: readSpec, context: (environment) => createEngineContext({ store, secrets, settings, environment }) }),
-    ...debuggerTools({ redactor, store }),
+    ...debuggerTools({ redactor, store, session: captured }),
+    ...recordingTools({ store, redactor, secrets, session: captured }),
     ...flowGraphTools({ store }),
+    ...scaleTools({ store, secrets, settings, redactor, checkEnvironment }),
+    ...deployTools({ store }),
+    ...evalAgentTools({ store }),
     ...workspaceEditTools({
       store,
       redactor,
@@ -1344,8 +1385,11 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
   ];
   // list_flows and one tool per flow with an expose: block (flow-tools.ts); a flow never shadows a built-in tool
   all.push(...flowTools({ store, secrets, settings, redactor, checkEnvironment }).filter((t) => !all.some((x) => x.name === t.name)));
-  const tools = withEnvironmentSecrets(store, all.filter((t) => !(opts.readOnly && t.write)));
-  tools.push(searchTool(tools, (name, write) => toolAnnotations(name, write).title));
+  const base = withEnvironmentSecrets(store, withProductionConsent(all.filter((t) => !(opts.readOnly && t.write)), !!opts.allowProduction));
+  base.push(searchTool(base, (name, write) => toolAnnotations(name, write).title));
+  // one contract for every tool (tool-contract.ts): descriptions, id names, pages, size, confirmation, output schemas
+  let confirmer: Confirmer | undefined;
+  const tools = withToolContract(base, { docs: TOOL_DOCS, confirmer: () => confirmer });
   const listed = opts.profile === 'minimal' ? tools.filter((t) => MINIMAL_TOOLS.has(t.name)) : tools;
 
   const server = new (mcpServer().Server)(
@@ -1356,9 +1400,9 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
     },
   );
   server.setRequestHandler(mcpTypes().ListToolsRequestSchema, async () => ({
-    tools: listed.map(({ name, description, inputSchema, write }) => {
+    tools: listed.map(({ name, description, inputSchema, outputSchema, write }) => {
       const annotations = toolAnnotations(name, !!write);
-      return { name, title: annotations.title, description, inputSchema, annotations };
+      return { name, title: annotations.title, description, inputSchema, ...(outputSchema ? { outputSchema } : {}), annotations };
     }),
   }));
   // resources: what an agent (or its user, e.g. with @ in Claude Code) can read as context without calling tools
@@ -1407,7 +1451,9 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
     const tool = tools.find((t) => t.name === req.params.name);
     if (!tool) return { isError: true, content: [{ type: 'text', text: `Unknown tool ${req.params.name}` }] };
     try {
-      const out = await tool.run((req.params.arguments ?? {}) as Record<string, unknown>);
+      const r = await tool.run((req.params.arguments ?? {}) as Record<string, unknown>);
+      if (isContractResult(r)) return contractCallResult(r);
+      const out = r;
       if (typeof out === 'string') return { content: [{ type: 'text', text: out }] };
       // the JSON as text for every client, and as structured content for clients that read it (a list is wrapped: structured content is an object)
       const structured = Array.isArray(out) ? { items: out } : out && typeof out === 'object' ? (out as Record<string, unknown>) : { value: out };
@@ -1418,6 +1464,8 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
       return { isError: true, content: [{ type: 'text', text: `${err.kind}: ${err.message}${err.suggestions.length ? `\n${err.suggestions.join('\n')}` : ''}` }] };
     }
   });
+  // a deleting or overwriting call without confirm: true asks the user when the client can (MCP elicitation)
+  confirmer = elicitationConfirmer(server);
   return server;
 }
 

@@ -139,7 +139,7 @@ layout:
     writeFileSync(join(ws, 'tests', 'checkout.yaml'), before.replace('amount: 10', 'amount: 11'));
     const st = await gitStatus(ws);
     const now = await describeGitChanges(ws, st.files);
-    expect(now).toEqual([{ file: 'tests/checkout.yaml', kind: 'test', change: 'changed', title: 'Checkout ▸ pay', details: ['body'], itemId: 'pay', itemKind: 'step' }]);
+    expect(now).toEqual([{ file: 'tests/checkout.yaml', kind: 'test', change: 'changed', title: 'Checkout ▸ pay', details: ['body'], itemId: 'pay', itemKind: 'step', ref: { kind: 'flow', path: 'checkout.yaml', step: 'pay' } }]);
     expect((await describeRevChanges(ws, 'HEAD')).map((c) => c.title)).toEqual(['Checkout ▸ pay']);
     const d = await describeItemDiff(ws, 'tests/checkout.yaml', 'pay');
     expect(d.parts.find((p) => p.part === 'Body')).toMatchObject({ differs: true, before: 'amount: 10', after: 'amount: 11' });

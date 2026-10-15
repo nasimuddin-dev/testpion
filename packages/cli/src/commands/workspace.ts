@@ -35,7 +35,8 @@ export function registerWorkspaceCommands(program: Command): void {
     .option('--json', 'print the renamed workspace as JSON')
     .action((ref: string, name: string, o) => {
       const w = new WorkspaceManager().rename(ref, name);
-      console.log(o.json ? JSON.stringify(w, null, 2) : green(`Renamed to "${w.name}"`));
+      if (o.json) printJson(w);
+      else console.log(green(`Renamed to "${w.name}"`));
     });
   ws.command('delete')
     .description('delete a workspace the app created (its folder is removed), or unregister a folder you opened (its files stay)')
@@ -51,7 +52,8 @@ export function registerWorkspaceCommands(program: Command): void {
           EXIT.CONFIG_ERROR,
         );
       const r = mgr.delete(d.path);
-      console.log(o.json ? JSON.stringify({ name: d.name, path: d.path, ...r }, null, 2) : green(r.deletedFiles ? `Deleted "${d.name}"` : `Removed "${d.name}" from the list (folder kept: ${d.path})`));
+      if (o.json) printJson({ name: d.name, path: d.path, ...r });
+      else console.log(green(r.deletedFiles ? `Deleted "${d.name}"` : `Removed "${d.name}" from the list (folder kept: ${d.path})`));
     });
   ws.command('create')
     .argument('<name>')
@@ -147,7 +149,8 @@ export function registerWorkspaceCommands(program: Command): void {
     .action((id: string, o) => {
       return withWorkspace(o.workspace, (store) => {
         const r = restoreFromTrash(store, id);
-        console.log(o.json ? JSON.stringify(r, null, 2) : green(`Restored ${r.kind} "${r.name}"`));
+        if (o.json) printJson(r);
+        else console.log(green(`Restored ${r.kind} "${r.name}"`));
       });
     });
   trash

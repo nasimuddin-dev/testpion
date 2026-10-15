@@ -1,6 +1,9 @@
-import { ArrowDownLeft, ArrowUpRight, Braces, CircleDot, Copy, MoreHorizontal, Pencil, Plug, Plus, Radio, Save, Trash2, Unplug, History, KeyRound } from 'lucide-react';
+import { ItemBreadcrumb } from '../components/ItemBreadcrumb';
+import { refMenu } from '../components/RefLink';
+import { ArrowDownLeft, ArrowUpRight, Braces, CircleDot, Copy, MoreHorizontal, Plug, Plus, Radio, Save, Trash2, Unplug } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAssistantContext } from '../lib/assistant-context';
+import { LABEL } from '../lib/vocabulary';
 import { asError, call, on, type NormalizedError } from '../api';
 import { ask, confirmAction, persisted, toastError, useApp } from '../store';
 import { useDoc, useDocs } from '../lib/docs';
@@ -12,16 +15,16 @@ import { JsonTree } from '../components/JsonView';
 import { useSticky } from '../lib/sticky';
 import { KeyValueEditor } from '../components/KeyValueEditor';
 import { ErrorPanel } from '../components/Results';
-import { FolderList, type FolderListOps } from '../components/FolderList';
-import { SidebarShell } from '../components/SidebarShell';
+import { type FolderListOps } from '../components/FolderList';
 import { closeTabsFor, NEW_TAB_TITLE, useSingleEditorTab } from '../components/EditorTabs';
-import { EnvironmentsPane, HistoryPane } from '../components/SidebarPanes';
 import { McpUsage } from '../components/McpUsage';
 import { Button, cx, Empty, Field, IconButton, Input, Menu, SectionTitle, Select, Split, Tabs, VirtualList, Textarea } from '../components/ui';
 import { PromptsPanel, ResourcesPanel, type Discovery } from '../components/mcp/McpPanels';
 import { splitCommandLine, joinCommandLine } from '../lib/command-line';
 import { ToolsPanel } from '../components/mcp/ToolsPanel';
 import { ToolsetEditor, type ToolsetEditorHandle } from '../components/mcp/ToolsetEditor';
+import { VarInput } from '../components/VarInput';
+import { useExternalChange } from '../lib/external-change';
 
 interface McpEvent {
   id: string;
@@ -63,6 +66,8 @@ export function McpView() {
   const [connecting, setConnecting] = useState<string>();
   const [connError, setConnError] = useState<NormalizedError>();
   const [tab, setTab] = useSticky<Tab>(`mcp:tab:${docId ?? 'main'}`, 'tools');
+  // a tool call to show again (History ▸ Open): the Tools tab picks the tool and fills its arguments
+  const [callFocus, setCallFocus] = useState<{ serverId: string; tool: string; args: Record<string, unknown>; at: number }>();
   const env = useApp((s) => s.environment);
   const load = useCallback(async () => {
     const s = await call<McpServerConfig[]>('mcp.servers');
@@ -93,6 +98,10 @@ export function McpView() {
     if (p?.addServer) addServer();
     if (p?.tab) setTab(p.tab as Tab);
     if (p?.serverId && p.connect) void connect(p.serverId as string);
+    if (p?.serverId && p.call && typeof p.call.tool === 'string') {
+      setCallFocus({ serverId: p.serverId as string, tool: p.call.tool as string, args: (p.call.args as Record<string, unknown>) ?? {}, at: Date.now() });
+      setTab('tools');
+    }
   });
 
   const server = servers.find((s) => s.id === selected);
@@ -117,11 +126,35 @@ export function McpView() {
   const current = draft ?? server;
   const savedJson = !draft && server ? JSON.stringify(configOf(server)) : '';
   const [form, setForm] = useState<McpServerConfig | undefined>(current && configOf(current));
+  // another server on screen: its form; a change of the saved one on disk is followed below (never silently over edits)
   useEffect(() => {
     setForm(current ? configOf(current) : undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [current?.id, savedJson]);
+  }, [current?.id, !!draft]);
+  // the saved server changed from inside the app (renamed in its tab or the sidebar, saved from another tab): a form
+  // without edits follows it; a form with edits keeps them (they are still unsaved, against the new saved state)
+  const lastSaved = useRef(savedJson);
+  useEffect(() => {
+    const prev = lastSaved.current;
+    lastSaved.current = savedJson;
+    if (prev === savedJson || !prev || !savedJson || draft || !server) return;
+    setForm((f) => (f && JSON.stringify(f) !== prev ? f : configOf(server)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [savedJson]);
   const dirty = !!draft || (!!form && JSON.stringify(form) !== savedJson);
+  // the server changed in mcp-servers.json (a pull, another editor): follow it, or ask when the form has edits (WF-15)
+  useExternalChange<McpServerConfig>({
+    kinds: ['mcp'],
+    items: () => (!draft && server && form ? [{ key: server.id, label: server.name, base: savedJson, dirty }] : []),
+    read: async (keys) => {
+      const list = await call<McpServerConfig[]>('mcp.servers');
+      setServers(list);
+      const s = list.find((x) => x.id === keys[0]);
+      return new Map(s ? [[s.id, { snapshot: JSON.stringify(configOf(s)), value: configOf(s) }]] : []);
+    },
+    take: (_id, config) => setForm(config),
+    keep: () => undefined,
+  });
 
   /** Connect; a stdio server not yet allowed on this computer shows its command line first (Run once / Always). */
   const connectWithTrust = async (id: string, env: string | undefined): Promise<{ discovery: Discovery; events: McpEvent[] }> => {
@@ -249,7 +282,7 @@ It runs with your permissions. Allow it only if you know where this workspace co
     if (!current) return;
     // discarding a new server closes its tab
     if (draft) return docId ? useDocs.getState().close('mcp', docId) : setDraft(null);
-    if (!(await confirmAction({ title: 'Remove MCP server', message: `Remove the MCP server "${current.name}"?`, detail: 'Saved tests that call it will fail until you add it again.', confirmLabel: 'Remove server', danger: true }))) return;
+    if (!(await confirmAction({ title: 'Delete MCP server', message: `Delete the MCP server "${current.name}"?`, detail: 'Saved tests that call it will fail until you add it again.', confirmLabel: 'Delete server', danger: true }))) return;
     if (server?.connected) await disconnect(current.id);
     closeTabsFor([current.id]);
     await saveServers(servers.filter((s) => s.id !== current.id));
@@ -277,158 +310,111 @@ It runs with your permissions. Allow it only if you know where this workspace co
   );
   return (
     <>
-    <Split id="mcp-servers" sidebar collapsed initial={20} min={14}>
-      <SidebarShell
-        id="mcp"
-        panes={[
-          {
-            id: 'saved',
-            label: 'Servers',
-            icon: <Plug size={13} />,
-            render: () => (
-              <FolderList
-                id="mcp-servers"
-                title="MCP servers"
-                itemNoun="server"
-                addLabel="Add MCP server"
-                folders={folders}
-                selected={draft ? undefined : selected}
-                onSelect={selectServer}
-                onAdd={(folder) => addServer(folder)}
-                items={servers.map((s) => ({
-                  id: s.id,
-                  name: s.name,
-                  folder: s.folder,
-                  icon: <CircleDot size={10} className={s.connected ? 'text-ok' : 'text-muted'} />,
-                  subtitle: serverSummary(s),
-                }))}
-                itemMenu={(id) => {
-                  const s = servers.find((x) => x.id === id)!;
-                  return [
-                    { label: 'Settings', icon: <Pencil size={14} />, onSelect: () => (selectServer(id), setTab('settings')) },
-                    s.connected ? { label: 'Disconnect', icon: <Unplug size={14} />, onSelect: () => void disconnect(id) } : { label: 'Connect', icon: <Plug size={14} />, onSelect: () => (selectServer(id), void connect(id)) },
-                  ];
-                }}
-                ops={serverOps}
-                empty={
-                  <Empty
-                    title="No MCP servers"
-                    actions={[{ label: 'Add server', icon: <Plus size={12} />, onClick: () => addServer() }]}
-                  >
-                    An MCP server is what an AI agent calls. Add one (a local command over stdio, Streamable HTTP, legacy SSE, or a mock definition), connect, and call its tools with generated forms; a call becomes a test with Save as test.
-                  </Empty>
-                }
-              />
-            ),
-          },
-          { id: 'environments', label: 'Environments', icon: <KeyRound size={13} />, render: () => <EnvironmentsPane /> },
-          { id: 'history', label: 'History', icon: <History size={13} />, render: () => <HistoryPane kind="mcp" noun="MCP tool calls you make" /> },
-        ]}
-      />
-      <div className="h-full flex flex-col min-w-0">
-        {current && form ? (
-          <>
-            <div className="flex items-center gap-2 px-3 py-2 border-b border-line shrink-0">
-              <Select className="w-44 shrink-0" aria-label="Transport" value={form.transport} onChange={(e) => setForm(withTransport(form, e.target.value as McpServerConfig['transport']))}>
-                {TRANSPORTS.map(([v, label]) => (
-                  <option key={v} value={v}>
-                    {label}
-                  </option>
-                ))}
-              </Select>
-              <TargetInput s={form} onChange={setForm} />
-              {server?.connected && !draft ? (
-                <Button variant="primary" icon={<Unplug size={14} />} onClick={() => disconnect(current.id)}>
-                  Disconnect
-                </Button>
-              ) : (
-                <Button variant="primary" icon={<Plug size={14} />} loading={connecting === current.id} onClick={() => void connectCurrent()} title={dirty ? 'Save and connect' : 'Connect'}>
-                  Connect
-                </Button>
-              )}
-              <Button icon={<Save size={14} />} onClick={() => void saveForm()} title="Save (Ctrl+S)">
-                Save
+    <div className="h-full flex flex-col min-w-0">
+      {current && form ? (
+        <>
+          {/* WF-11: MCP servers › folder › server, like every item view */}
+          <ItemBreadcrumb
+            label="Where this MCP server is"
+            crumbs={[{ label: 'MCP servers' }, ...(form.folder ? [{ label: form.folder }] : [])]}
+            name={form.name || NEW_TAB_TITLE.mcp}
+            dirty={dirty}
+            actions={draft ? undefined : refMenu({ kind: 'mcp-server', serverId: current.id })}
+          />
+          <div className="flex items-center gap-2 px-3 py-2 border-b border-line shrink-0">
+            <Select className="w-44 shrink-0" aria-label="Transport" value={form.transport} onChange={(e) => setForm(withTransport(form, e.target.value as McpServerConfig['transport']))}>
+              {TRANSPORTS.map(([v, label]) => (
+                <option key={v} value={v}>
+                  {label}
+                </option>
+              ))}
+            </Select>
+            <TargetInput s={form} onChange={setForm} />
+            {server?.connected && !draft ? (
+              <Button variant="primary" icon={<Unplug size={14} />} onClick={() => disconnect(current.id)}>
+                Disconnect
               </Button>
-              <Menu
-                width={230}
-                trigger={
-                  <IconButton label="More server actions">
-                    <MoreHorizontal size={15} />
-                  </IconButton>
-                }
-                items={[
-                  { label: 'Ping', icon: <Radio size={14} />, disabled: !server?.connected || !!draft, onSelect: () => void call<number>('mcp.ping', { serverId: current.id }).then((ms) => useApp.getState().toast(`Ping ${ms} ms`)) },
-                  { label: 'Save as mock', icon: <Copy size={14} />, disabled: !server?.connected || !!draft || form.transport === 'mock', onSelect: () => void saveMock(current.id) },
-                  { label: draft ? 'Discard' : 'Remove server…', icon: <Trash2 size={14} />, danger: true, separator: true, onSelect: () => void removeCurrent() },
-                ]}
-              />
-            </div>
-            <Tabs
-              value={tab}
-              onChange={setTab}
-              tabs={[
-                // a mock server designs its tools (the toolset); calling them with the inspector is a second tab once connected
-                ...(form.transport === 'mock' ? [{ id: 'tools' as const, label: 'Tools', badge: undefined }, ...(disc ? [{ id: 'calls' as const, label: 'Call tools', badge: disc.tools.length }] : [])] : [{ id: 'tools' as const, label: 'Tools', badge: disc?.tools.length }]),
-                { id: 'resources', label: 'Resources', badge: disc ? disc.resources.length + disc.resourceTemplates.length : undefined },
-                { id: 'prompts', label: 'Prompts', badge: disc?.prompts.length },
-                ...(draft ? [] : [{ id: 'usage' as const, label: 'Usage' }]),
-                { id: 'trace', label: 'Protocol trace', badge: draft ? undefined : events[current.id]?.length },
-                { id: 'info', label: 'Server info' },
-                { id: 'settings', label: 'Settings' },
+            ) : (
+              <Button variant="primary" icon={<Plug size={14} />} loading={connecting === current.id} onClick={() => void connectCurrent()} title={dirty ? 'Save and connect' : 'Connect'}>
+                Connect
+              </Button>
+            )}
+            <Button icon={<Save size={14} />} onClick={() => void saveForm()} title="Save (Ctrl+S)">
+              Save
+            </Button>
+            <Menu
+              width={230}
+              trigger={
+                <IconButton label="More server actions">
+                  <MoreHorizontal size={15} />
+                </IconButton>
+              }
+              items={[
+                { label: 'Ping', icon: <Radio size={14} />, disabled: !server?.connected || !!draft, onSelect: () => void call<number>('mcp.ping', { serverId: current.id }).then((ms) => useApp.getState().toast(`Ping ${ms} ms`)) },
+                { label: 'Save as mock', icon: <Copy size={14} />, disabled: !server?.connected || !!draft || form.transport === 'mock', onSelect: () => void saveMock(current.id) },
+                { label: draft ? 'Discard' : LABEL.delete, icon: <Trash2 size={14} />, danger: true, separator: true, onSelect: () => void removeCurrent() },
               ]}
             />
-            <div className="flex-1 min-h-0">
-              {connError && tab !== 'trace' && tab !== 'settings' && tab !== 'usage' && <ErrorPanel error={connError} context={{ server }} />}
-              {tab === 'settings' ? (
-                <ServerSettings s={form} onChange={setForm} folders={folders} />
-              ) : tab === 'usage' ? (
-                <McpUsage serverId={current.id} />
-              ) : tab === 'trace' ? (
-                <McpTrace events={draft ? [] : events[current.id] ?? []} error={connError} />
-              ) : tab === 'tools' && form.transport === 'mock' ? (
-                <ToolsetEditor ref={toolset} key={form.mockFile} file={form.mockFile} serverName={form.name} connected={!!server?.connected && !draft} />
-              ) : !disc ? (
-                !connError && (
-                  <Empty
-                    icon={<Plug size={26} />}
-                    title="Not connected"
-                    actions={[{ label: 'Connect', icon: <Plug size={12} />, onClick: () => void connect(current.id) }]}
-                  >
-                    Connect to discover the server's tools, resources and prompts. Every JSON-RPC message is kept in the protocol trace.
-                  </Empty>
-                )
-              ) : tab === 'tools' || tab === 'calls' ? (
-                <ToolsPanel serverId={current.id} tools={disc.tools} />
-              ) : tab === 'resources' ? (
-                <ResourcesPanel serverId={current.id} disc={disc} />
-              ) : tab === 'prompts' ? (
-                <PromptsPanel serverId={current.id} prompts={disc.prompts} />
-              ) : (
-                <div className="h-full">
-                  <JsonTree data={{ serverInfo: disc.serverInfo, capabilities: disc.capabilities, instructions: disc.instructions }} />
-                </div>
-              )}
-            </div>
-          </>
-        ) : (
-          <Empty
-            icon={<Plug size={28} />}
-            title="Select or add an MCP server"
-            actions={[{ label: 'Add server', icon: <Plus size={14} />, onClick: () => addServer() }]}
-          >
-            A local command (stdio), Streamable HTTP, legacy SSE or a mock definition.
-          </Empty>
-        )}
-      </div>
-    </Split>
+          </div>
+          <Tabs
+            value={tab}
+            onChange={setTab}
+            tabs={[
+              // a mock server designs its tools (the toolset); calling them with the inspector is a second tab once connected
+              ...(form.transport === 'mock' ? [{ id: 'tools' as const, label: 'Tools', badge: undefined }, ...(disc ? [{ id: 'calls' as const, label: 'Call tools', badge: disc.tools.length }] : [])] : [{ id: 'tools' as const, label: 'Tools', badge: disc?.tools.length }]),
+              { id: 'resources', label: 'Resources', badge: disc ? disc.resources.length + disc.resourceTemplates.length : undefined },
+              { id: 'prompts', label: 'Prompts', badge: disc?.prompts.length },
+              ...(draft ? [] : [{ id: 'usage' as const, label: 'Usage' }]),
+              { id: 'trace', label: 'Protocol trace', badge: draft ? undefined : events[current.id]?.length },
+              { id: 'info', label: 'Server info' },
+              { id: 'settings', label: 'Settings' },
+            ]}
+          />
+          <div className="flex-1 min-h-0">
+            {connError && tab !== 'trace' && tab !== 'settings' && tab !== 'usage' && <ErrorPanel error={connError} context={{ server }} />}
+            {tab === 'settings' ? (
+              <ServerSettings s={form} onChange={setForm} folders={folders} />
+            ) : tab === 'usage' ? (
+              <McpUsage serverId={current.id} />
+            ) : tab === 'trace' ? (
+              <McpTrace events={draft ? [] : events[current.id] ?? []} error={connError} />
+            ) : tab === 'tools' && form.transport === 'mock' ? (
+              <ToolsetEditor ref={toolset} key={form.mockFile} file={form.mockFile} serverName={form.name} connected={!!server?.connected && !draft} />
+            ) : !disc ? (
+              !connError && (
+                <Empty
+                  icon={<Plug size={26} />}
+                  title="Not connected"
+                  actions={[{ label: 'Connect', icon: <Plug size={12} />, onClick: () => void connect(current.id) }]}
+                >
+                  Connect to discover the server's tools, resources and prompts. Every JSON-RPC message is kept in the protocol trace.
+                </Empty>
+              )
+            ) : tab === 'tools' || tab === 'calls' ? (
+              <ToolsPanel serverId={current.id} tools={disc.tools} focus={callFocus?.serverId === current.id ? callFocus : undefined} />
+            ) : tab === 'resources' ? (
+              <ResourcesPanel serverId={current.id} disc={disc} />
+            ) : tab === 'prompts' ? (
+              <PromptsPanel serverId={current.id} prompts={disc.prompts} />
+            ) : (
+              <div className="h-full">
+                <JsonTree data={{ serverInfo: disc.serverInfo, capabilities: disc.capabilities, instructions: disc.instructions }} />
+              </div>
+            )}
+          </div>
+        </>
+      ) : (
+        <Empty
+          icon={<Plug size={28} />}
+          title="Select or add an MCP server"
+          actions={[{ label: 'Add server', icon: <Plus size={14} />, onClick: () => addServer() }]}
+        >
+          A local command (stdio), Streamable HTTP, legacy SSE or a mock definition.
+        </Empty>
+      )}
+    </div>
     </>
   );
-}
-
-function serverSummary(s: McpServerConfig): string {
-  if (s.transport === 'stdio') return `${s.command} ${(s.args ?? []).join(' ')}`;
-  if (s.transport === 'mock') return `mock · ${s.mockFile}`;
-  return s.url;
 }
 
 /** A server's saved configuration (without its live connection state). */
@@ -479,7 +465,7 @@ function TargetInput({ s, onChange }: { s: McpServerConfig; onChange(s: McpServe
       />
     );
   if (s.transport === 'mock') return <Input className={cls} aria-label="Mock definition file" placeholder="mocks/server.mcp-mock.yaml" value={s.mockFile} onChange={(e) => onChange({ ...s, mockFile: e.target.value })} />;
-  return <Input className={cls} aria-label="Server URL" placeholder="https://example.com/mcp" value={s.url} onChange={(e) => onChange({ ...s, url: e.target.value })} />;
+  return <VarInput className={cls} ariaLabel="Server URL" placeholder="https://example.com/mcp" value={s.url} onChange={(url) => onChange({ ...s, url })} />;
 }
 
 /** The Settings tab: every field of the server, or its JSON. */
@@ -573,7 +559,7 @@ function ServerSettings({ s, onChange, folders = [] }: { s: McpServerConfig; onC
             ) : (
               <>
                 <Field label="URL">
-                  <Input className="mono" value={s.url} onChange={(e) => onChange({ ...s, url: e.target.value })} />
+                  <VarInput ariaLabel="URL" value={s.url} onChange={(url) => onChange({ ...s, url })} />
                 </Field>
                 <Field label="Headers" hint="Use {{variables}} for tokens and keys.">
                   <KeyValueEditor rows={s.headers ?? []} onChange={(headers) => onChange({ ...s, headers })} />

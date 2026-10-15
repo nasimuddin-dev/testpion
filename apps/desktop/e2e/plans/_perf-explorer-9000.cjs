@@ -147,6 +147,20 @@ const steps = [
     })()`,
     false,
   ],
+  // openRef (WF-02) in the big workspace: the backend's ref.resolve (one indexed lookup per click: first look at a
+  // collection builds its id map, then O(1)), and opening a request deep in the last collection by a click on a named item
+  [
+    'open-ref-9000',
+    `profile:(async () => { ${METER}
+      const ref = (c, n) => ({ kind: 'request', collectionId: 'big' + c, requestId: 'big' + c + '-' + n });
+      const first = []; for (let c = 0; c < 3; c++) { const t = performance.now(); const r = await window.aps.invoke('ref.resolve', { ref: ref(c, 2999) }); if (!r.ok) return 'NOT FOUND ' + c; first.push(Math.round(performance.now() - t)); }
+      const each = []; for (let i = 0; i < 60; i++) { const t = performance.now(); const r = await window.aps.invoke('ref.resolve', { ref: ref(i % 3, (i * 97) % 3000) }); if (!r.ok) return 'NOT FOUND ' + i; each.push(performance.now() - t); }
+      const t1 = performance.now(); const gone = await window.aps.invoke('ref.resolve', { ref: ref(2, 'deleted') }); const goneMs = Math.round(performance.now() - t1);
+      const sorted = each.sort((a, b) => a - b);
+      return 'first per collection ms: ' + first.join(',') + ' | resolve p50 ms: ' + sorted[30].toFixed(1) + ' p95 ms: ' + sorted[57].toFixed(1) + ' | gone: ' + (gone.ok ? 'FOUND' : gone.reason) + ' ' + goneMs + 'ms' + ipc() + loaf();
+    })()`,
+    false,
+  ],
   [
     'switch-10-tabs',
     `profile:(async () => { ${METER}

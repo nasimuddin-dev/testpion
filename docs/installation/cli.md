@@ -7,6 +7,8 @@ description: Install the testpion command-line runner to run TestPion tests loca
 
 The `testpion` CLI runs the same tests as the desktop app, using the same engine. Use it on CI servers and in scripts.
 
+On a computer with the desktop app you don't need to install it: the app's **Terminal** tab (<kbd>Ctrl</kbd>+<kbd>&#96;</kbd>) opens a shell in the workspace folder with `testpion` on the `PATH`. See [Terminal](/getting-started/terminal).
+
 ## Requirements
 
 - Node.js 22.13 or newer (24+ recommended).
@@ -26,7 +28,7 @@ Or run it without installing, which suits CI jobs and one-off runs:
 npx testpion run-collection collection.postman_collection.json -e staging.json
 ```
 
-Pin a version in CI (`npx testpion@0.44.0 …`) so a new release doesn't change a pipeline unannounced. In a Node.js project, `npm install --save-dev testpion` keeps the version in `package.json`.
+Pin a version in CI (`npx testpion@0.46.0 …`) so a new release doesn't change a pipeline unannounced. In a Node.js project, `npm install --save-dev testpion` keeps the version in `package.json`.
 
 ## Install from source
 
@@ -36,7 +38,7 @@ For an unreleased change, or to work on TestPion itself:
 git clone https://github.com/nasimuddin-dev/testpion.git
 cd testpion
 npm ci
-npm run build -w @testpion/core -w @testpion/cli
+npm run build -w @testpion/shared -w @testpion/core -w @testpion/cli
 npm link -w @testpion/cli
 testpion --help
 ```
@@ -51,5 +53,11 @@ testpion run -w ./my-workspace -e Staging --suite regression
 ```
 
 Exit codes: `0` success · `1` test failure · `2` configuration error · `3` execution error.
+
+For scripts, `--json` prints one envelope, `{ schema_version, command, status, data, errors, warnings, metrics }`, with the result in `.data`:
+
+```bash
+testpion collections --json | jq '.data[].name'
+```
 
 See the [CLI reference](/cli/reference) and [CI/CD integration](/test-runner/ci-cd).

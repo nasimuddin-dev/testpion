@@ -11,7 +11,7 @@ A GraphQL mock answers **any valid query** against a schema with fake but correc
 
 ## From the app
 
-1. In the **GraphQL** view, enter the endpoint and click **Introspect**.
+1. In the **GraphQL** editor, enter the endpoint and click **Introspect**.
 2. Click **Mock**. The mock starts on `http://127.0.0.1:<port>/graphql` and the URL is copied to the clipboard.
 3. Point your app (or another GraphQL tab) at that URL. The button shows **Mock on**; click it again to stop.
 

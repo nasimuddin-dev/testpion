@@ -4,11 +4,13 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { call } from '../api';
 import { toastError, useApp } from '../store';
+import { openRef } from '../lib/open-ref';
 import { dynamicVariables } from '../editor-intel';
 import { inspectVariables, type VarInfo } from '../lib/vars-cache';
 import { collectionOf, useVarPopover, VARS_CHANGED } from '../lib/var-popover';
 import { Button, cx, useDebounced } from './ui';
 import { copyText } from '../lib/clipboard';
+import { AlsoAddTo, type AlsoAdd } from './AlsoAddTo';
 
 
 /**
@@ -220,6 +222,8 @@ export function VarPopover({ name, info, environment, collectionId, x, y, onClos
   const editable = !dynamic && (!defined || info?.scope === 'environment');
   const [draft, setDraft] = useState(info?.secret ? '' : info?.value ?? '');
   const [busy, setBusy] = useState(false);
+  // a new variable: the other environments it goes to as well (WF-14)
+  const [also, setAlso] = useState<AlsoAdd>({ to: [], copy: false });
   useEffect(() => {
     const away = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && onClose();
     const esc = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
@@ -234,8 +238,11 @@ export function VarPopover({ name, info, environment, collectionId, x, y, onClos
     if (!environment) return;
     setBusy(true);
     try {
-      const r = await call<{ environment: string }>('vars.setInEnvironment', { environment, name, value: draft });
-      useApp.getState().toast(`${defined ? 'Updated' : 'Added'} {{${name}}} in ${r.environment}`, 'success');
+      const r = await call<{ environment: string; also: Array<{ environment: string; added: string[] }> }>('vars.setInEnvironment', { environment, name, value: draft, ...(!defined && also.to.length ? { alsoIn: also.to, copy: also.copy } : {}) });
+      const envId = useApp.getState().workspace?.environments.find((e) => e.name === r.environment)?.id;
+      const more = (r.also ?? []).filter((x) => x.added.length).map((x) => x.environment);
+      useApp.getState().toast(`${defined ? 'Updated' : 'Added'} {{${name}}} in ${r.environment}${more.length ? ` and ${more.join(', ')}` : ''}`, 'success', { ref: { kind: 'variable', key: name, environmentId: envId } });
+      if (more.length) void useApp.getState().refreshWorkspace();
       onSaved();
       onClose();
     } catch (e) {
@@ -275,6 +282,7 @@ export function VarPopover({ name, info, environment, collectionId, x, y, onClos
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && changed && void save()}
           />
+          {!defined && environment && <AlsoAddTo exclude={environment} value={also} onChange={setAlso} />}
         </>
       ) : (
         <>
@@ -291,15 +299,15 @@ export function VarPopover({ name, info, environment, collectionId, x, y, onClos
         )}
         {/* where this variable is set: its collection's settings, the workspace or global variables, or the environments */}
         {(() => {
-          const open = (view: 'environments' | 'collections', payload: Record<string, unknown>) => (onClose(), useApp.getState().openIntent(view, payload));
+          const open = (ref: Parameters<typeof openRef>[0]) => (onClose(), void openRef(ref));
           const where =
             info?.scope === 'collection' && collectionId
-              ? { label: 'Collection variables', go: () => open('collections', { collectionId, tab: 'variables' }) }
+              ? { label: 'Collection variables', go: () => open({ kind: 'collection', collectionId, tab: 'variables' }) }
               : info?.scope === 'workspace'
-              ? { label: 'Workspace variables', go: () => open('environments', { tab: 'workspace' }) }
+              ? { label: 'Workspace variables', go: () => open({ kind: 'environment', scope: 'workspace' }) }
               : info?.scope === 'global'
-              ? { label: 'Globals', go: () => open('environments', { tab: 'globals' }) }
-              : { label: 'Environments', go: () => open('environments', {}) };
+              ? { label: 'Globals', go: () => open({ kind: 'environment', scope: 'globals' }) }
+              : { label: 'Environments', go: () => open({ kind: 'environment' }) };
           return (
             <Button size="sm" variant="ghost" icon={<KeyRound size={12} />} onClick={where.go}>
               {where.label}

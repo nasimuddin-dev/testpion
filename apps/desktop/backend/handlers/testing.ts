@@ -3,6 +3,7 @@ import { copyFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   lintTestFile,
+  webhookFlows,
   exportArazzoFromWorkspace,
   reviewResult,
   reviewCounts,
@@ -21,16 +22,25 @@ import {
   type LoadTestConfig,
   type CheckConfig,
   exportOtlp,
-  testFromRequest,
+  saveTest,
+  type ItemRef,
   type TestSource,
   evaluateThresholds,
   parseThreshold,
   testHistory,
+  locateTest,
+  dropIntoFlow,
+  type DropTarget,
   flakyTests,
   scoreTrend,
   latestResults,
   workspaceAttention,
   readRunSummary,
+  resultSourceRefs,
+  runAgainPlan,
+  ciTargetOfRun,
+  finishedRun,
+  ciCommand,
   compareRuns,
   flowOfFile,
   editFlowFile,
@@ -49,6 +59,9 @@ function reportFile(format: string): string {
   return f;
 }
 
+/** A drop on the flow canvas (tests.flowEdit with op `drop`): items by ref, or ready steps (a palette block), and where. */
+type DropOp = { op: 'drop'; refs?: ItemRef[]; steps?: Array<Record<string, unknown>>; target?: DropTarget };
+
 export function testingHandlers(be: Backend): Handlers {
   /** The variable names an environment, the globals and the workspace define: a step that reads another one is marked in the Flow tab. */
   const knownVariables = (environment?: string): string[] => {
@@ -64,16 +77,18 @@ export function testingHandlers(be: Backend): Handlers {
     'tests.read': ({ path }: { path: string }) => be.ws.readTestFile(path),
     'tests.write': ({ path, content }: { path: string; content: string }) => be.ws.writeTestFile(path, content),
     /** What is wrong in a test file being edited (unknown keys, types, checks …), with positions, for the editor's markers. */
-    'tests.lint': ({ content, path }: { content: string; path?: string }) => lintTestFile(content, { file: path, suite: !!path && isSuiteFile(path) }),
+    'tests.lint': ({ content, path }: { content: string; path?: string }) =>
+      lintTestFile(content, { file: path, suite: !!path && isSuiteFile(path), ...(path && /^\s*"?webhook"?\s*:/m.test(content) ? { webhooks: webhookFlows(be.ws.path('tests')) } : {}) }),
     /** The keys of test files, by context and type, with help: the editor's completion and hover. */
     'tests.guide': () => testEditorGuide(),
-    /** Save as test: a request from the REST, GraphQL, gRPC or WebSocket view as tests/<kind>/<name>.yaml (a free name). */
-    'tests.saveFrom': ({ name, source, assertions }: { name: string; source: TestSource; assertions?: CheckConfig[] }) => {
-      const t = testFromRequest(name, source, assertions);
-      let path = t.path;
-      for (let i = 2; existsSync(be.ws.safePath(path, be.ws.path('tests'))); i++) path = t.path.replace(/\.yaml$/, `-${i}.yaml`);
-      be.ws.writeTestFile(path, t.yaml);
-      return { path };
+    /**
+     * Save as test (WF-07), the one way: an editor's request (`source`) or an item by its `ref` (a saved request, a folder
+     * or collection as one file, a saved gRPC call or connection, a History entry) as tests/<kind>/<name>.yaml (a free name).
+     */
+    'tests.saveFrom': ({ name, source, ref, assertions }: { name?: string; source?: TestSource; ref?: ItemRef; assertions?: CheckConfig[] }) => {
+      if (!source && !ref) throw new ApsError('ValidationError', 'tests.saveFrom: give source or ref');
+      const r = saveTest(be.ws, ref ? { name, ref } : { name, source: source!, assertions });
+      return { ...r, ref: { kind: 'test', path: r.path } };
     },
     'tests.delete': ({ path }: { path: string }) => be.ws.deleteTestFile(path),
     /** The expose: block of a test file or suite (the flow as an MCP tool), if any; a proposed tool name otherwise. */
@@ -105,13 +120,20 @@ export function testingHandlers(be: Backend): Handlers {
       const saved = await be.saveOrDownload(name, [{ name: 'Arazzo', extensions: ['yaml', 'yml'] }], (dest) => writeFileSync(dest, r.text), () => Buffer.from(r.text));
       return { ...r, saved };
     },
-    'tests.flow': async ({ file, raw, environment }: { file: string; raw?: boolean; environment?: string }) => flowOfFile(be.ws, file, { raw, known: raw ? knownVariables(environment) : undefined }),
+    'tests.flow': async ({ file, raw, environment, text }: { file: string; raw?: boolean; environment?: string; text?: string }) =>
+      flowOfFile(be.ws, file, { raw, known: raw ? knownVariables(environment) : undefined, ...(typeof text === 'string' ? { text } : {}) }),
     /**
      * The flow designer: one edit of a test file (add, connect, change, remove, place steps …) applied and saved; the
      * answer has the text before (the designer's undo) and after (the editor shows it), and the flow as tests.flow reads it.
      */
-    'tests.flowEdit': async ({ file, op, environment }: { file: string; op: FlowEditOp; environment?: string }) => {
-      const r = editFlowFile(be.ws, file, op);
+    'tests.flowEdit': async ({ file, op, environment }: { file: string; op: FlowEditOp | DropOp; environment?: string }) => {
+      // a drop on the canvas (items from the explorer, History, the Debugger, a block): one edit, with notes for the toast
+      if (op?.op === 'drop') {
+        const d = op as DropOp;
+        const r = await dropIntoFlow(be.ws, file, { refs: d.refs, steps: d.steps, target: d.target }, { exchanges: (ids) => (be.debugger?.exchanges ?? []).filter((e) => ids.includes(e.id)) });
+        return { file: r.file, before: r.before, text: r.text, added: r.added ?? [], notes: r.notes, flow: await flowOfFile(be.ws, r.file, { raw: true, known: knownVariables(environment) }) };
+      }
+      const r = editFlowFile(be.ws, file, op as FlowEditOp);
       return { file: r.file, before: r.before, text: r.text, added: r.added ?? [], flow: await flowOfFile(be.ws, r.file, { raw: true, known: knownVariables(environment) }) };
     },
     /** A CI pipeline (GitHub Actions, GitLab CI, Azure Pipelines, Jenkins) for a suite, collection or test files. */
@@ -143,8 +165,32 @@ export function testingHandlers(be: Backend): Handlers {
     'runs.latestResults': ({ names }: { names: string[] }) => latestResults(be.ws, names ?? []),
     'runs.flaky': ({ runs }: { runs?: number } = {}) => flakyTests(be.ws, { runs }),
     'runs.testHistory': ({ id, name, limit }: { id?: string; name?: string; limit?: number }) => testHistory(be.ws, { id, name }, { limit }),
+    /** Where a test is, by its id (a test-case link): its file and line, or null. */
+    'tests.locate': async ({ testId }: { testId: string }) => (await locateTest(be.ws, testId)) ?? null,
     'runs.summary': ({ runId }: { runId: string }) => readRunSummary(be.ws, runId) ?? null,
-    'runs.results': (q: { runId: string; offset?: number; limit?: number; status?: string; query?: string }) => be.pageResults(q),
+    /** A page of a run's results, each with `refs` to where it came from (its test file at the step, or the saved request: WF-08). */
+    'runs.results': async (q: { runId: string; offset?: number; limit?: number; status?: string; query?: string }) => {
+      const page = await be.pageResults(q);
+      const origin = readRunSummary(be.ws, q.runId)?.origin;
+      return { ...page, items: page.items.map((r) => ({ ...r, refs: resultSourceRefs(be.ws, r, origin) })) };
+    },
+    /**
+     * Run a run again (WF-08): as it ran, or only `resultIds` (Run again on a result). `runId` may be "last". Starts a
+     * new run and answers its id; the production guard asks like any run.
+     */
+    'runs.runAgain': ({ runId, resultIds, environment }: { runId: string; resultIds?: string[]; environment?: string }) => {
+      const plan = runAgainPlan(finishedRun(be.ws, runId), resultIds);
+      const env = environment ?? plan.environment;
+      return plan.kind === 'collection'
+        ? be.startCollectionRun({ collectionId: plan.collectionId, selection: plan.selection, iterations: plan.iterations, environment: env, name: plan.name })
+        : be.startTestRun({ paths: plan.paths, ids: plan.ids, grep: plan.grep, tags: plan.tags, environment: env, name: plan.name });
+    },
+    // WF-09: a run as a CI target (the Run in CI dialog preselected with it) and the CLI command that runs it here
+    'runs.ci': ({ runId }: { runId: string }) => {
+      const { target, environment, note } = ciTargetOfRun(be.ws, finishedRun(be.ws, runId));
+      const command = ciCommand({ provider: 'github', ...target, environment, workspaceDir: be.ws.root.replace(/\\/g, '/') }, 'testpion');
+      return { request: { ...target, ...(environment ? { environment } : {}) }, command, ...(note ? { note } : {}) };
+    },
     // a person's verdict on a result (good / bad and why), and how many were rated
     'runs.review': ({ runId, resultId, rating, note }: { runId: string; resultId: string; rating?: 'good' | 'bad' | null; note?: string | null }) => reviewResult(be.ws, runId, resultId, { rating, note }) ?? null,
     'runs.reviewCounts': ({ runId, total }: { runId: string; total: number }) => reviewCounts(runReviews(be.ws, runId), total),
@@ -188,7 +234,19 @@ export function testingHandlers(be: Backend): Handlers {
     },
 
     'traces.list': (q: { query?: string; kind?: string; failed?: boolean; limit?: number; offset?: number }) => be.ws.meta.listTraces(q),
-    'traces.get': ({ id }: { id: string }) => be.ws.loadTrace(id),
+    /** A trace, with what it belongs to (WF-16): its History entry and saved request, or its run. */
+    'traces.get': ({ id }: { id: string }) => {
+      const trace = be.ws.loadTrace(id);
+      if (!trace) return trace;
+      const h = be.ws.meta.historyOfTrace(id);
+      const runId = be.ws.meta.getTrace(id)?.runId;
+      const refs: ItemRef[] = [
+        ...(h?.collectionId && h.requestId ? [{ kind: 'request' as const, collectionId: h.collectionId, requestId: h.requestId }] : []),
+        ...(h ? [{ kind: 'history' as const, historyId: h.id }] : []),
+        ...(runId ? [{ kind: 'run' as const, runId }] : []),
+      ];
+      return refs.length ? { ...trace, refs } : trace;
+    },
     /** Send traces to an OpenTelemetry collector (OTLP/HTTP JSON). Header values may use {{variables}} (e.g. a secret API key). */
     'traces.exportOtlp': async ({ ids, endpoint, headers, environment }: { ids: string[]; endpoint: string; headers?: Array<{ key: string; value: string; enabled?: boolean }>; environment?: string }) => {
       if (!ids?.length) throw new ApsError('ValidationError', 'No traces to send');

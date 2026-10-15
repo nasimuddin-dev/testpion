@@ -237,18 +237,25 @@ export function exportArazzo(text: string, opts: ArazzoExportOptions = {}): Araz
   const exprOf = (name: string): string => {
     const p = producer.get(name);
     if (p) return `$steps.${p.step}.outputs.${p.output}`;
-    if (name.startsWith('$')) {
-      notes.push(`{{${name}}} (a built-in value) has no Arazzo form; it is an input`);
-    }
     usedInputs.add(name);
     return `$inputs.${name}`;
+  };
+  // a dynamic value ({{$randomFirstName}}, {{$timestamp}}, {{$guid}} …) is new each run: never a workflow input. It stays
+  // {{$name}}, the runtime expression TestPion resolves when the step runs (and keeps when the document is imported)
+  const dynamicNoted = new Set<string>();
+  const dynamic = (name: string): string => {
+    if (!dynamicNoted.has(name)) {
+      dynamicNoted.add(name);
+      notes.push(`{{${name}}} is a dynamic value with no Arazzo form: it stays {{${name}}}, resolved by TestPion when the step runs (not a workflow input)`);
+    }
+    return `{{${name}}}`;
   };
   /** A value with {{variables}} → the same with runtime expressions (a whole {{x}} → the bare expression). */
   const valueOf = (v: unknown): unknown => {
     if (typeof v === 'string') {
       const whole = /^\{\{\s*([^{}\s]+)\s*\}\}$/.exec(v);
-      if (whole) return exprOf(whole[1]!);
-      return v.replace(/\{\{\s*([^{}\s]+)\s*\}\}/g, (_, n: string) => `{${exprOf(n)}}`);
+      if (whole) return whole[1]!.startsWith('$') ? dynamic(whole[1]!) : exprOf(whole[1]!);
+      return v.replace(/\{\{\s*([^{}\s]+)\s*\}\}/g, (_, n: string) => (n.startsWith('$') ? dynamic(n) : `{${exprOf(n)}}`));
     }
     if (Array.isArray(v)) return v.map(valueOf);
     if (isRecord(v)) return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, valueOf(x)]));
@@ -262,11 +269,13 @@ export function exportArazzo(text: string, opts: ArazzoExportOptions = {}): Araz
     const sid = ids[i]!;
     const step: ArazzoJson = { stepId: sid };
     if (t.description || (t.name && t.name !== sid)) step.description = String(t.description ?? t.name);
-    const type = String(t.type ?? (t.request || t.url ? 'http' : ''));
+    const written = String(t.type ?? (t.request || t.url ? 'http' : ''));
+    // a wait step is a request polled with until: (kept under x-testpion)
+    const type = written === 'wait' ? 'http' : written;
     const deps = asList(t.dependsOn);
     if (deps.length && !(deps.length === 1 && deps[0] === prev)) step['x-testpion-dependsOn'] = deps;
     const extras: ArazzoJson = {};
-    for (const k of ['if', 'when', 'repeat', 'forEach', 'skip', 'timeout', 'vars', 'preRequestScript', 'tags']) if (t[k] !== undefined) extras[k] = t[k];
+    for (const k of ['if', 'when', 'repeat', 'forEach', 'until', 'finally', 'parallel', 'skip', 'timeout', 'vars', 'preRequestScript', 'tags']) if (t[k] !== undefined) extras[k] = t[k];
     if (type === 'http') {
       const r = isRecord(t.request) ? { ...t, ...t.request } : t;
       const method = String(r.method ?? 'GET').toUpperCase();
@@ -368,7 +377,7 @@ export function exportArazzo(text: string, opts: ArazzoExportOptions = {}): Araz
     if (retries > 0) step.onFailure = [{ name: 'retry', type: 'retry', retryLimit: retries }];
     if (Object.keys(extras).length) {
       step['x-testpion'] = extras;
-      const flow = ['if', 'when', 'repeat', 'forEach'].filter((k) => extras[k] !== undefined);
+      const flow = ['if', 'when', 'repeat', 'forEach', 'until', 'finally', 'parallel'].filter((k) => extras[k] !== undefined);
       if (flow.length) notes.push(`${sid}: ${flow.join(', ')} kept under x-testpion (Arazzo steps have no such keys)`);
     }
     steps.push(step);

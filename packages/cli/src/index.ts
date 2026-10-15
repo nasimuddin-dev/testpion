@@ -7,8 +7,12 @@ import {
   setProxySettings,
   setTlsTrust,
   prefetchEnvironmentSecrets,
+  setProductionAllowedByDefault,
 } from '@testpion/core';
 import { EXIT, red, dim, yellow, CliError, withWorkspace } from './shared.js';
+import { applyCliContract, commandFromArgv } from './contract.js';
+import { beginCommand, cli, finishOutput, machine, noteWarning } from './output.js';
+import { describeDryRun, finishDryRun } from './dry-run.js';
 import { registerRunCommands } from './commands/run.js';
 import { registerEvaluationCommands } from './commands/evaluations.js';
 import { registerServeCommands } from './commands/serve.js';
@@ -17,6 +21,8 @@ import { registerWorkspaceCommands } from './commands/workspace.js';
 import { registerMonitorCommands } from './commands/monitor.js';
 import { registerDoctorCommand } from './commands/doctor.js';
 import { registerAgentInfoCommand } from './commands/agent-info.js';
+import { registerAgentsCommands } from './commands/agents.js';
+import { registerOpenCommand } from './commands/open.js';
 import { registerSecretsCommands } from './commands/secrets.js';
 import { registerHistoryCommands } from './commands/history.js';
 import { registerOpenApiCommands } from './commands/openapi.js';
@@ -27,9 +33,15 @@ import { registerTidyCommand } from './commands/tidy.js';
 import { registerFlowsCommand } from './commands/flows.js';
 import { registerFlowCommand } from './commands/flow.js';
 import { registerFlowExportCommand } from './commands/flow-export.js';
+import { registerFlowFromHarCommand } from './commands/flow-from-har.js';
+import { registerFlowReportCommand } from './commands/flow-scale.js';
+import { registerTestFromCommand } from './commands/test-from.js';
+
+/** The commands that send to APIs with an environment (by their path): they take --allow-production. */
+export const SENDING_COMMANDS = new Set(['test', 'run', 'run-collection', 'load', 'send', 'monitor add', 'monitor run', 'monitor start', 'eval run', 'serve flows']);
 
 /** The testpion command line: one module per area of commands (commands/*.ts). */
-function buildProgram(): Command {
+export function buildProgram(): Command {
   const program = new Command();
   program
     .name('testpion')
@@ -43,6 +55,8 @@ function buildProgram(): Command {
   registerWorkspaceCommands(program);
   registerDoctorCommand(program);
   registerAgentInfoCommand(program);
+  registerAgentsCommands(program);
+  registerOpenCommand(program);
   registerMonitorCommands(program);
   registerSecretsCommands(program);
   registerHistoryCommands(program);
@@ -54,6 +68,19 @@ function buildProgram(): Command {
   registerFlowsCommand(program);
   registerFlowCommand(program);
   registerFlowExportCommand(program);
+  registerFlowFromHarCommand(program);
+  registerFlowReportCommand(program);
+  registerTestFromCommand(program);
+
+  // WF-06: the commands that send take --allow-production; without it the engine refuses data-changing requests to an
+  // environment marked as production (GETs still run, so a smoke run against production works as before)
+  const all = (c: Command): Command[] => [c, ...c.commands.flatMap(all)];
+  const path = (c: Command): string => (c.parent && c.parent !== program ? `${path(c.parent)} ${c.name()}` : c.name());
+  for (const c of all(program)) if (SENDING_COMMANDS.has(path(c))) c.option('--allow-production', 'allow data-changing requests (POST, PUT, PATCH, DELETE, mutations …) to an environment marked as production');
+  program.hook('preAction', (_cmd, action) => {
+    // `mcp-server --allow-production` is the server's own gate (each tool call still passes allowProduction)
+    if (path(action) !== 'mcp-server') setProductionAllowedByDefault((action.opts() as { allowProduction?: unknown }).allowProduction === true);
+  });
 
   // an environment's secret manager references (op://, vault://, aws-sm:// …) are read before the command runs
   program.hook('preAction', async (_cmd, action) => {
@@ -67,9 +94,14 @@ function buildProgram(): Command {
       if (e instanceof CliError) return; // the command says what is wrong with the workspace
       throw e;
     }
-    for (const f of r.failed) console.error(yellow(`${f.ref}: ${f.error}`));
+    for (const f of r.failed) {
+      console.error(yellow(`${f.ref}: ${f.error}`));
+      noteWarning(`${f.ref}: ${f.error}`);
+    }
   });
 
+  // the same options and output for every command: --json envelope, --jsonl, --dry-run, --non-interactive (contract.ts)
+  applyCliContract(program);
   return program;
 }
 
@@ -88,21 +120,41 @@ export async function main(argv = process.argv): Promise<number> {
   }
   const program = buildProgram();
   program.exitOverride();
+  let code: number;
+  let error: unknown;
   try {
     await program.parseAsync(argv);
-    return Number(process.exitCode ?? 0);
+    code = Number(process.exitCode ?? 0);
   } catch (e) {
     if (e instanceof CommanderError) {
       if (e.code === 'commander.helpDisplayed' || e.code === 'commander.version' || e.code === 'commander.help') return EXIT.SUCCESS;
-      return EXIT.CONFIG_ERROR;
-    }
-    if (e instanceof CliError) {
+      // a wrong argument: the command never started, but a --json caller still gets the envelope
+      if (!cli.command && argv.includes('--json'))
+        beginCommand(commandFromArgv(program, argv), { json: true }, true);
+      code = EXIT.CONFIG_ERROR;
+      error = new CliError(e.message.replace(/^error: /, ''), code);
+    } else if (e instanceof CliError) {
       console.error(red(e.message));
-      return e.exitCode;
+      const hint = (e as { hint?: unknown }).hint;
+      if (typeof hint === 'string') console.error(dim(`  → ${hint}`));
+      code = e.exitCode;
+      error = e;
+    } else {
+      const err = normalizeError(e);
+      console.error(red(`${err.kind}: ${err.message}`));
+      for (const s of err.suggestions) console.error(dim(`  → ${s}`));
+      code = e instanceof ApsError && (err.kind === 'ConfigurationError' || err.kind === 'ValidationError' || err.kind === 'SchemaError') ? EXIT.CONFIG_ERROR : EXIT.EXECUTION_ERROR;
+      error = e;
     }
-    const err = normalizeError(e);
-    console.error(red(`${err.kind}: ${err.message}`));
-    for (const s of err.suggestions) console.error(dim(`  → ${s}`));
-    return e instanceof ApsError && (err.kind === 'ConfigurationError' || err.kind === 'ValidationError' || err.kind === 'SchemaError') ? EXIT.CONFIG_ERROR : EXIT.EXECUTION_ERROR;
   }
+  // a dry run: what would have changed (nothing was)
+  const dry = finishDryRun();
+  if (dry) {
+    cli.dryRun = dry;
+    if (!machine()) console.log(describeDryRun(dry));
+  }
+  finishOutput(code, error);
+  // a script that reads the text: the --json form answers with a structured error
+  if (code > 1 && !machine() && cli.canJson && !process.stdout.isTTY) console.error(dim(`For a machine-readable error, run it again with --json (status, errors: [{ code, message, hint, retryable }]).`));
+  return code;
 }

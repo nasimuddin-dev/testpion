@@ -36,6 +36,9 @@ inputs:
   environment:
     description: The environment to run with.
     default: ''
+  allow-production:
+    description: 'Data-changing requests may go to an environment marked as production (true/false; adds --allow-production).'
+    default: 'false'
   start:
     description: 'Integration tests: a command that starts the system under test, run in the background before the tests.'
     default: ''
@@ -69,7 +72,7 @@ runs:
       run: |
         cd "${{ github.action_path }}"
         npm ci --no-audit --no-fund --ignore-scripts
-        npm run build -w @testpion/core -w @testpion/cli
+        npm run build -w @testpion/shared -w @testpion/core -w @testpion/cli
     - name: Start the system under test
       if: inputs.start != ''
       shell: bash
@@ -81,15 +84,16 @@ runs:
       run: |
         CLI="${{ github.action_path }}/packages/cli/bin/testpion.js"
         ENV=""; [ -n "${{ inputs.environment }}" ] && ENV="-e ${{ inputs.environment }}"
+        PROD=""; [ "${{ inputs.allow-production }}" = "true" ] && PROD="--allow-production"
         if [ -n "${{ inputs.collection }}" ]; then
           FOLDER=""; [ -n "${{ inputs.folder }}" ] && FOLDER="--folder ${{ inputs.folder }}"
-          node "$CLI" run-collection "${{ inputs.collection }}" -w "${{ inputs.workspace }}" $ENV $FOLDER -r console junit html -o "${{ inputs.out }}"
+          node "$CLI" run-collection "${{ inputs.collection }}" -w "${{ inputs.workspace }}" $ENV $FOLDER -r console junit html -o "${{ inputs.out }}" $PROD
         elif [ -n "${{ inputs.suite }}" ]; then
-          node "$CLI" run -w "${{ inputs.workspace }}" --suite "${{ inputs.suite }}" $ENV -r console junit html -o "${{ inputs.out }}"
+          node "$CLI" run -w "${{ inputs.workspace }}" --suite "${{ inputs.suite }}" $ENV -r console junit html -o "${{ inputs.out }}" $PROD
         else
           PATHS=""; for t in ${{ inputs.tests }}; do PATHS="$PATHS ${{ inputs.workspace }}/tests/$t"; done
           [ -z "$PATHS" ] && PATHS="${{ inputs.workspace }}/tests"
-          node "$CLI" test $PATHS -w "${{ inputs.workspace }}" $ENV -r console junit html -o "${{ inputs.out }}"
+          node "$CLI" test $PATHS -w "${{ inputs.workspace }}" $ENV -r console junit html -o "${{ inputs.out }}" $PROD
         fi
     - name: Upload the reports
       if: always() && inputs.upload == 'true'

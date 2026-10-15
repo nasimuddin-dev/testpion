@@ -1,11 +1,11 @@
 ---
 title: "Monitors"
-description: "Run a collection, or some of its folders, on a schedule and get told when it starts failing. In the app, on a server or from cron."
+description: "Run a collection, some of its folders, or a test file / flow on a schedule and get told when it starts failing. In the app, on a server or from cron."
 ---
 
 # Monitors
 
-A monitor runs a collection (or chosen folders and requests) on a schedule, every 1 minute to 7 days, like a Postman monitor. Each run is a normal collection run, with scripts, assertions and reports. The monitor keeps a history of results, so you can see when a check started failing.
+A monitor runs a collection (or chosen folders and requests), or a test file or flow under `tests/`, on a schedule, every 1 minute to 7 days, like a Postman monitor. Each run is a normal collection run (or test run), with scripts, assertions and reports. The monitor keeps a history of results, so you can see when a check started failing.
 
 ## In the app
 
@@ -13,14 +13,14 @@ A monitor runs a collection (or chosen folders and requests) on a schedule, ever
   <img src="/images/monitors.jpg" alt="The Monitors view: a monitor with its last result, success rate, run time, next run, a bar per recent run and the list of runs" width="1440" height="900" loading="lazy">
 </figure>
 
-Open **Monitors** in the sidebar and click **New monitor**. You can also right-click a collection or folder and choose **Monitor on a schedule…**, or use **File ▸ New ▸ Monitor**. Then choose:
+Open **Monitors** on the rail (<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>5</kbd>) and click **New monitor**. You can also right-click a collection or folder and choose **Monitor on a schedule…**, or use **File ▸ New ▸ Monitor…**. Then choose:
 
-- **Collection** and **Environment**.
+- **Runs**: **A collection** or **A test file or flow**, then the **Collection** (or the **Test file**, from `tests/`) and the **Environment** (the same picker as the top bar; production is marked in red). A flow's **Deploy ▸ Schedule** opens this editor with its file already picked.
 - **Run every**: minutes, hours or days.
-- **What to run**: tick folders or requests. Tick nothing to run the whole collection.
+- **What to run** (a collection): tick folders or requests. Tick nothing to run the whole collection. A test file always runs as a whole, its steps in order like `testpion test` (a suite runs its files).
 - **Stop at the first failure**, if later requests depend on earlier ones.
 
-The first run starts as soon as the monitor is saved; after that it runs whenever it is due. For each monitor the page shows:
+A monitor on an environment marked as [production](/api-testing/environments#production) asks when you save it whether it may change data there: with your yes its data-changing requests run on the schedule; without it its reads run and its writes fail. The first run starts as soon as the monitor is saved; after that it runs whenever it is due. For each monitor the page shows:
 
 - the last result, the success rate and the median run time;
 - when it runs next;
@@ -67,7 +67,9 @@ The app runs monitors only while it is open. To run them all the time, use the C
 
 ```bash
 testpion monitor add "API health" --collection "Veterinary API" --folder Diagnostics --every 5m -e Development -w my-workspace
-testpion monitor list -w my-workspace --json            # schedule, last result, next run
+testpion monitor add "Checkout flow" --test-file flows/checkout.yaml --every 15m -e Staging -w my-workspace   # a flow on a schedule
+testpion monitor add "Prod orders" --test-file orders/new-order.yaml --every 1h -e Production --allow-production -w my-workspace   # may change data in production
+testpion monitor list -w my-workspace --json | jq '.data'   # schedule, last result, next run
 testpion monitor run "API health" -w my-workspace       # run one now
 testpion monitor run --due -w my-workspace              # run the ones that are due (for cron)
 testpion monitor results "API health" -w my-workspace   # recent results, newest first
@@ -82,8 +84,8 @@ testpion monitor remove "API health" -w my-workspace
 */15 * * * * cd /srv/api-tests && testpion monitor run --due -w . >> monitors.log 2>&1
 ```
 
-`--every` takes minutes (`30`) or a number with `m`, `h` or `d` (`15m`, `2h`, `1d`).
+`--every` takes minutes (`30`) or a number with `m`, `h` or `d` (`15m`, `2h`, `1d`). A monitor runs either `--collection` (with `--folder`s) or `--test-file` (a path under `tests/`; `tests/` in front is fine), never both; `monitor list` shows which.
 
 ## For AI agents
 
-The [MCP server](/ai-testing/mcp-server) has `list_monitors` (definitions with their last result and next run), `monitor_results`, `monitor_uptime` (uptime per day) and `run_monitor` (which returns the details of failed requests). `run_monitor` refuses production environments unless the server was started with `--allow-production`.
+The [MCP server](/ai-testing/mcp-server) has `save_monitor` (add or change one: `collection` and `selection`, or `testFile`; `every`, `environment`, `webhook`), `list_monitors` (definitions with their last result and next run), `monitor_results`, `monitor_uptime` (uptime per day) and `run_monitor` (which returns the details of failed requests). `run_monitor` refuses production environments unless the server was started with `--allow-production`. A monitor on a production environment changes data on its schedule only when it was saved with consent: the app asks when you save it, `testpion monitor add … --allow-production` gives it from the terminal ([Production](/api-testing/environments#production)); `save_monitor` never gives it, and replacing a monitor with `save_monitor` keeps the consent it has while its environment stays the same.

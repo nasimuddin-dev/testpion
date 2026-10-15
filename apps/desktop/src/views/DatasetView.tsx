@@ -1,3 +1,5 @@
+import { ItemBreadcrumb } from '../components/ItemBreadcrumb';
+import { refMenu } from '../components/RefLink';
 import { Copy, Database, Play, Save } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { asError, call, on } from '../api';
@@ -131,6 +133,7 @@ export function DatasetView() {
   const columnTypes = preview ? Object.fromEntries(preview.columns.map((c) => [c.name, c.type])) : undefined;
   return (
     <div className="h-full flex flex-col min-w-0" data-dataset-view={name}>
+      <ItemBreadcrumb label="Where this dataset is" crumbs={[{ label: 'Datasets' }, ...name.split('/').slice(0, -1).map((f) => ({ label: f }))]} name={name.split('/').pop()!} actions={refMenu({ kind: 'dataset', name })} />
       <div className="flex items-center gap-2 px-3 py-2 border-b border-line shrink-0 min-w-0">
         <Database size={16} className="text-muted shrink-0" />
         <span className="font-semibold truncate" title={file?.path}>

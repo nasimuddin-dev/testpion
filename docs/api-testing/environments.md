@@ -11,9 +11,13 @@ description: "Variable scopes and precedence, secret variables, dynamic variable
 
 `Global → Workspace → Environment → Collection → Request → Runtime`. Later scopes win. Runtime variables are set by scripts, `extract:` rules and CLI `--var key=value`.
 
+## Switch environment
+
+The environment picker is one control, the same everywhere: the pill in the top bar, the environment in the status bar (a click opens the same menu), and the environment field of the Collection runner, a monitor and Load. <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd> opens Quick Open on environments and variables. Production environments are marked in red, and every run shows the environment it ran against as a badge. See [The environment, the same way everywhere](/getting-started/finding-your-way#the-environment-the-same-way-everywhere).
+
 ## Order
 
-In the **Environments** view, drag an environment up or down the list (or focus it and press **Alt+↑** / **Alt+↓**) to change its position. The order is saved in the workspace (an `order` field in each environment file) and used everywhere environments are listed: the environment picker in the top bar, the Home view, the REST sidebar and the collection runner. Environments without a position, such as newly created ones, come last.
+In the **Environments** view, drag an environment up or down the list (or focus it and press **Alt+↑** / **Alt+↓**) to change its position. The order is saved in the workspace (an `order` field in each environment file) and used everywhere environments are listed: the environment picker (the top bar, the status bar, the Collection runner, monitors and Load) and the Home view. Environments without a position, such as newly created ones, come last.
 
 ## Typing variables
 
@@ -45,7 +49,7 @@ Under an environment's variables, *Not used anywhere in the workspace* lists the
 
 ## Built-in variables
 
-`{{$env.NAME}}` (an OS environment variable; in the app only the names listed in **Settings ▸ Privacy ▸ OS environment variables requests may read**, so a shared or imported collection can't read your keys; the CLI reads all of them), `{{$secret.NAME}}` (secret store) and `{{workspaceDir}}`, plus **dynamic variables** that give a new value every time they're used. Their names are Postman's, so imported Postman collections send the same kind of values. Type `{{$` to pick one; the list says what each gives.
+`{{$env.NAME}}` (an OS environment variable; in the app only the names listed in **Settings ▸ Privacy & security ▸ OS environment variables requests may read**, so a shared or imported collection can't read your keys; the CLI reads all of them), `{{$secret.NAME}}` (secret store) and `{{workspaceDir}}`, plus **dynamic variables** that give a new value every time they're used. Their names are Postman's, so imported Postman collections send the same kind of values. Type `{{$` to pick one; the list says what each gives.
 
 | Kind | Variables |
 | --- | --- |
@@ -100,6 +104,17 @@ The **Environments** view has a tab for each scope: **Environments**, **Collecti
 
 Wherever a `{{variable}}` appears (the URL bar, params, headers, auth fields, the body and other code editors, test files), **double-click** it to see its value and where it comes from (environment, collection, workspace, dynamic). In the URL bar, params and headers a single click is enough. A variable of the active environment can be edited right there, and one that isn't defined yet can be added to it; **Copy** copies the value (secret values are never shown).
 
+**Hover** any text field that uses variables (auth, settings, an MCP server's URL, a monitor's webhook, a tool's arguments …) to see each variable's value and where it comes from, as the URL bar shows them.
+
+## Also add to the other environments
+
+Adding a variable to one environment offers the others, so a request resolves whichever environment is active:
+
+- In a variable's popover, a variable that isn't defined yet shows **Also add to** with the other environments (production ones marked): tick them, and **Copy the value** if they should get the same one (else they get it empty, to fill in there).
+- In **Environments**, saving an environment with new variables that other environments lack asks **New in Dev: …**, with the same choice.
+
+A variable an environment already has is never changed. A secret variable stays secret in the others; its value is copied through the OS secret store. From the terminal: `testpion env set Dev apiKey=… --also-in Staging,Production [--copy]`; AI agents: `set_environment_variable` with `alsoIn` (and `copyValues`).
+
 ## Quick look: every variable at once
 
 Click the **eye** button next to the environment selector to see every variable the request on screen can use, in the order they win: its **collection's** variables, the active **environment's**, the **workspace's** and the **globals**. Each shows its value (what is saved), and a **Current value** column appears when a script changed one on this machine. A variable that a scope above also sets is shown faded as *(overridden)*. Type in the filter to find a variable by name or value in large collections; **Edit** opens that scope's variables. Secret and sensitive values are never shown.
@@ -139,8 +154,16 @@ From the terminal, `testpion env diff Staging Production -w my-workspace` lists 
 
 ## Production
 
-Mark an environment as **production** to show a warning in the status bar and block load tests unless you opt in for that run.
+Mark an environment as **production** and the app guards it everywhere, the same way:
 
-With a production environment active, sending a request that can change data (anything but GET, HEAD and OPTIONS) from the REST view asks first. **Send and don't ask again** stops asking for that environment until you restart the app.
+- While it is the active environment, a thin frame in its colour runs around the window, and the status bar says **PRODUCTION**.
+- **Sending** something that can change data asks first: a REST request other than GET, HEAD, OPTIONS and TRACE, a GraphQL mutation, a gRPC call that is not a read (`Get…`, `List…`, `Watch…`, health checks), a message over an open WebSocket, Socket.IO, MQTT or Kafka connection (to the server it was opened with, whichever environment is active by then), and an MCP tool call the server does not mark read-only. Reads are sent without asking.
+- **Running** anything asks once for the whole run: test files and suites, flows (also per data row and in several environments), a collection run ("Run Shop (14 requests, 5 change data)"), an evaluation, a load test, a monitor's **Run now**, and the flows served behind their webhooks.
+- A **monitor** on a production environment asks when you save it; its scheduled runs then may change data there. A monitor saved without that consent (or moved to another environment) still runs its reads on its schedule, and its data-changing requests fail with *needs confirmation*.
+- **Send and don't ask again** (or **Run and don't ask again**) stops asking for that environment until you restart the app.
+
+The question comes from the app's backend, not from each view: nothing reaches a production environment without it, and the engine itself refuses a data-changing step in a run that was not confirmed (the step fails, the run goes on). A pre-request script that turns a GET into a POST is stopped too. A request a script sends with `tp.sendRequest` is a send like any other: a send whose scripts call it asks first, and in a run without consent a data-changing `tp.sendRequest` to the production environment is refused (the script's callback gets the error).
+
+From the terminal, `testpion send`, `test`, `run`, `run-collection`, `load`, `eval run`, `serve flows` and `monitor add / run / start` take `--allow-production`; without it, data-changing requests to a production environment fail with *needs confirmation* and reads still run, so a smoke run against production works as before. For AI agents, the MCP server must be started with `--allow-production` **and** each sending tool call must pass `allowProduction: true`.
 
 :::

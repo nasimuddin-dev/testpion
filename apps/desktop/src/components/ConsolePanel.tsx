@@ -6,6 +6,8 @@ import { call } from '../api';
 import { formatBytes, formatMs } from '../lib/format';
 import { Badge, cx, IconButton, Input, statusTone } from './ui';
 import { useEventLog } from '../lib/use-rpc';
+import { RelatedRefs } from './RefLink';
+import type { ItemRef } from '@testpion/shared';
 
 export interface ConsoleEntry {
   id: string;
@@ -24,6 +26,8 @@ export interface ConsoleEntry {
   logs: Array<{ phase: 'pre-request' | 'test'; message: string }>;
   error?: string;
   failedChecks?: number;
+  /** What it belongs to: the saved request, its History entry, its run, its trace (WF-16). */
+  refs?: ItemRef[];
 }
 
 type Filter = 'all' | 'errors' | 'logs';
@@ -104,7 +108,7 @@ export function ConsolePanel() {
         {shown.map((e, i) => {
           const key = `${e.id}-${e.time}-${i}`;
           const expanded = open.has(key);
-          const hasDetails = !!(e.request || e.response || e.error);
+          const hasDetails = !!(e.request || e.response || e.error || e.refs?.length);
           return (
             <div key={key} className="border-b border-line/70">
               <button className={cx('w-full flex items-center gap-2 px-3 py-1 text-left hover:bg-hover', isError(e) && 'text-bad')} onClick={() => hasDetails && toggle(key)} aria-expanded={hasDetails ? expanded : undefined}>
@@ -128,6 +132,7 @@ export function ConsolePanel() {
               ))}
               {expanded && (
                 <div className="pl-9 pr-3 pb-2 grid gap-2">
+                  <RelatedRefs refs={e.refs} />
                   {e.error && <div className="text-bad">{e.error}</div>}
                   {e.request && <Section title="Request" headers={e.request.headers} body={e.request.body} />}
                   {e.response && <Section title="Response" headers={e.response.headers} body={e.response.body} />}

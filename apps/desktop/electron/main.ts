@@ -4,10 +4,12 @@ import { join } from 'node:path';
 import * as nodeModule from 'node:module';
 import { createRequire } from 'node:module';
 import { Backend } from '../backend/backend.js';
+import { openLinksIn, queueOpenLink } from '../backend/open-links.js';
 import { canInstallInPlace, createUpdater } from './updater.js';
 import { installAppMenu, installTextContextMenu } from './app-menu.js';
 import { defaultAppDir, normalizeError, runMergeDriver } from '@testpion/core';
 import { parseMcpMode, runMcpMode } from './mcp-mode.js';
+import { ptyHost } from './pty-host.js';
 
 const isDev = !!process.env.VITE_DEV_SERVER_URL;
 
@@ -31,6 +33,28 @@ if (mergeAt >= 0) {
     process.stderr.write(`TestPion merge driver: ${String(e)}\n`);
   }
   app.exit(code);
+}
+
+// `TestPion --cli …`: the testpion command line, no window (the Terminal panel's `testpion` command runs this; see
+// backend/terminal.ts). The CLI is a bundle of its own (dist-electron/cli.cjs), loaded only in this mode.
+const cliAt = mergeAt < 0 ? process.argv.indexOf('--cli') : -1;
+if (cliAt >= 0) {
+  app.dock?.hide();
+  // exit once what was written reached the terminal
+  const done = (code: number) => {
+    let left = 2;
+    const one = () => void (--left === 0 && app.exit(code));
+    process.stdout.write('', one);
+    process.stderr.write('', one);
+  };
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const cli = require(join(__dirname, 'cli.cjs')) as { main(argv: string[]): Promise<number> };
+    cli.main(['testpion', 'testpion', ...process.argv.slice(cliAt + 1)]).then(done, (e: unknown) => (console.error(e), done(3)));
+  } catch (e) {
+    console.error(`TestPion command line: ${e instanceof Error ? e.message : String(e)}`);
+    done(3);
+  }
 }
 
 // tp.visualizer pages run on their own origin (tpviz://<id>/) with their own security policy, so their
@@ -72,7 +96,7 @@ process.on('unhandledRejection', (e) => {
 });
 
 // `TestPion --mcp-server`: serve a workspace to an AI agent over stdio, with no window (stdout is the protocol)
-const mcpMode = parseMcpMode(process.argv);
+const mcpMode = cliAt < 0 ? parseMcpMode(process.argv) : null;
 if (mcpMode) {
   console.log = console.error;
   console.info = console.error;
@@ -94,7 +118,19 @@ if (!capture && !existsSync(join(app.getPath('appData'), 'TestPion'))) {
 }
 
 // Single instance — a second launch focuses the existing window.
-if (mergeAt < 0 && !capture && !mcpMode && !app.requestSingleInstanceLock()) app.quit();
+if (mergeAt < 0 && cliAt < 0 && !capture && !mcpMode && !app.requestSingleInstanceLock()) app.quit();
+// testpion://open?kind=…&… links (testpion open <ref>, an agent, a link in a report) open the item in this app: the
+// installer registers the scheme; a run from source registers itself for this user. A link that started the app waits
+// for the window (open-links.ts); later ones come through second-instance (Windows, Linux) or open-url (macOS).
+if (mergeAt < 0 && cliAt < 0 && !capture && !mcpMode) {
+  if (app.isPackaged) app.setAsDefaultProtocolClient('testpion');
+  else if (process.env.TESTPION_REGISTER_LINKS) app.setAsDefaultProtocolClient('testpion', process.execPath, [app.getAppPath()]);
+  for (const link of openLinksIn(process.argv)) queueOpenLink(link);
+  app.on('open-url', (e, url) => {
+    e.preventDefault();
+    openLink(url);
+  });
+}
 // The taskbar identity: the installed app uses the installer's (its shortcuts carry it). Runs from source get their own,
 // or Windows ties the installed app's taskbar button to electron.exe and shows Electron's icon for it.
 const APP_ID = app.isPackaged ? 'dev.nasimuddin.protolens' : 'dev.nasimuddin.protolens.source';
@@ -149,6 +185,8 @@ function createWindow(): void {
       spellcheck: false,
     },
   });
+  // the window's shells end with it (macOS keeps the app running without a window); a reload keeps them (the page reattaches)
+  win.on('closed', () => backend?.terminals.dispose('window'));
   // say which program and icon the taskbar button belongs to (Windows otherwise reuses what it cached for the id)
   if (process.platform === 'win32') {
     const icon = windowIcon() ?? process.execPath;
@@ -177,6 +215,9 @@ function createWindow(): void {
     return { action: 'deny' };
   });
   win.webContents.on('will-navigate', (e, url) => {
+    // a reload of the app's own page (location.reload(): the crash screen's Reload) also comes here: let it through
+    const own = win?.webContents.getURL().split('#')[0];
+    if (own && url.split('#')[0] === own) return;
     if (!isDev || !url.startsWith(process.env.VITE_DEV_SERVER_URL!)) e.preventDefault();
   });
   if (isDev) void win.loadURL(process.env.VITE_DEV_SERVER_URL!);
@@ -213,7 +254,7 @@ const menu = (command: string) => emit('menu.command', { command });
 
 app.whenReady().then(() => {
   mark('electronReady');
-  if (mergeAt >= 0) return;
+  if (mergeAt >= 0 || cliAt >= 0) return;
   if (mcpMode) return void runMcpMode(mcpMode, process.env.TESTPION_HOME || defaultAppDir()).then((code) => app.exit(code));
   try {
     start();
@@ -320,6 +361,8 @@ function startBackend(): void {
     openPath: (p) => shell.openPath(p),
     // agents start this app with --mcp-server (from source: electron plus the app folder)
     mcpCommand: app.isPackaged ? { command: process.execPath, args: [] } : { command: process.execPath, args: [app.getAppPath()] },
+    // the Terminal panel's shells (node-pty loads at the first terminal)
+    terminal: ptyHost,
     saveDialog: async (opts) => (win ? (await dialog.showSaveDialog(win, opts)).filePath || undefined : undefined),
     openDialog: async (opts) => {
       if (!win) return undefined;
@@ -397,7 +440,14 @@ function startBackend(): void {
   backendStarted(be);
 }
 
-app.on('second-instance', () => {
+/** Open a testpion:// link in the window (queued while the window or the backend is not there yet). */
+function openLink(url: string): void {
+  if (win && !win.isDestroyed() && backend) emit('app.openLink', { url });
+  else queueOpenLink(url);
+}
+
+app.on('second-instance', (_e, argv) => {
+  for (const link of openLinksIn(argv)) openLink(link);
   if (win) {
     if (win.isMinimized()) win.restore();
     win.focus();

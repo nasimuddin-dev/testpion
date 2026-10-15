@@ -1,3 +1,4 @@
+import { assertProductionStep, isDataChangingMethod, type ProductionGate } from '../net/production-guard.js';
 import type { VariableScope, ScopeName } from '../vars/variables.js';
 import type { Redactor } from '../util/redact.js';
 import type { ScriptInput, ScriptOutput, ScriptRequestSender, ScriptScope } from './sandbox.js';
@@ -46,9 +47,14 @@ export function applyScriptOutput(out: Pick<ScriptOutput, 'vars' | 'unset' | 'sc
  * cancellation) and a per-request timeout. `{{variables}}` are not resolved, as in Postman; scripts use
  * `tp.variables.replaceIn()` for that.
  */
-export function scriptRequestSender(o: { redactor?: Redactor; cookieJar?: CookieJar; signal?: AbortSignal; timeoutMs?: number }): ScriptRequestSender {
+/**
+ * `production` is required (it may be undefined): the production guard of the context the script runs in, so a
+ * data-changing tp.sendRequest to a production environment needs the same consent as the request itself (WF-06).
+ */
+export function scriptRequestSender(o: { redactor?: Redactor; cookieJar?: CookieJar; signal?: AbortSignal; timeoutMs?: number; production: ProductionGate | undefined }): ScriptRequestSender {
   return async (req) => {
     if (!/^https?:\/\//i.test(req.url)) throw new Error(`tp.sendRequest: "${req.url}" is not an http(s) URL`);
+    assertProductionStep(o.production, { action: `tp.sendRequest ${String(req.method ?? 'GET').toUpperCase()} ${o.redactor ? o.redactor.redactUrl(req.url) : req.url}`, changesData: isDataChangingMethod(req.method) });
     const timeoutMs = o.timeoutMs ?? 30_000;
     const signal = o.signal ? AbortSignal.any([o.signal, AbortSignal.timeout(timeoutMs)]) : AbortSignal.timeout(timeoutMs);
     const body = typeof req.body === 'string' ? { type: 'text' as const, content: req.body } : req.body ? { type: 'form-urlencoded' as const, fields: req.body.urlencoded } : undefined;
