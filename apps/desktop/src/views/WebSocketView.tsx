@@ -16,7 +16,7 @@ import { CodeEditor } from '../components/CodeEditor';
 import { KeyValueEditor } from '../components/KeyValueEditor';
 import { JsonTree } from '../components/JsonView';
 import { VarInput } from '../components/VarInput';
-import { Badge, Button, cx, Empty, Input, Select, Split, Tabs, VirtualList } from '../components/ui';
+import { Badge, Button, cx, Empty, Input, Segmented, Select, Split, Tabs, VirtualList } from '../components/ui';
 import { MessageRate } from '../components/MessageRate';
 import { saveAsTestFile, saveAsTestMenuItem } from '../lib/save-test';
 import { useExternalChange } from '../lib/external-change';
@@ -322,22 +322,16 @@ export function WebSocketView() {
       <RequestBreadcrumb collectionId={current?.collectionId ?? collectionId} folder={current?.folder} name={title} onSave={() => void save()} actions={[saveAsTestMenuItem(saveTest)]} />
       <div className="flex items-center gap-2 p-2 border-b border-line">
         <Badge tone={status === 'open' ? 'ok' : status === 'connecting' ? 'warn' : 'default'}>{status}</Badge>
-        <div className="flex rounded-md border border-line overflow-hidden text-xs shrink-0" role="group" aria-label="Protocol">
-          {MODES.map((m) => (
-            <button
-              key={m.id}
-              type="button"
-              disabled={status !== 'closed'}
-              className={cx('px-2 py-1', (d.mode ?? 'websocket') === m.id ? 'bg-accent-soft text-fg' : 'text-muted hover:text-fg')}
-              onClick={() => {
-                setD({ ...d, mode: m.id });
-                setTab('message');
-              }}
-            >
-              {m.label}
-            </button>
-          ))}
-        </div>
+        <Segmented
+          label="Protocol"
+          value={d.mode ?? 'websocket'}
+          disabled={status !== 'closed'}
+          onChange={(mode) => {
+            setD({ ...d, mode });
+            setTab('message');
+          }}
+          options={MODES.map((m) => ({ value: m.id, label: m.label }))}
+        />
         <VarInput
           ariaLabel={kafka ? 'Kafka brokers' : mqtt ? 'Broker URL' : 'WebSocket URL'}
           className="flex-1 h-8"

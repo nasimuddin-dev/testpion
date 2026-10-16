@@ -43,22 +43,67 @@ function defaults(type: AuthConfig['type']): AuthConfig {
   }
 }
 
-/** Auth configuration; values support {{variables}} so credentials can live in secret environment variables. */
-export function AuthEditor({ auth, onChange, allowInherit = true }: { auth?: AuthConfig; onChange(a: AuthConfig): void; allowInherit?: boolean }) {
-  const a = auth ?? { type: allowInherit ? 'inherit' : 'none' };
+/** An auth in a few words: its type and the value that says which credential it is ({{variables}} as written). */
+export function describeAuth(a: AuthConfig): string {
+  const label = TYPES.find((t) => t.id === a.type)?.label ?? a.type;
+  const x = a as Record<string, unknown>;
+  const what =
+    a.type === 'bearer'
+      ? x.token
+      : a.type === 'basic' || a.type === 'digest'
+        ? x.username
+        : a.type === 'apiKey'
+          ? `${String(x.key ?? '')} in the ${x.in === 'query' ? 'query' : 'header'}`
+          : a.type === 'oauth2' || a.type === 'oauth1'
+            ? (x.clientId ?? x.consumerKey)
+            : a.type === 'awsv4'
+              ? x.service
+              : undefined;
+  return typeof what === 'string' && what ? `${label}: ${what}` : label;
+}
+
+/**
+ * Auth configuration; values support {{variables}} so credentials can live in secret environment variables.
+ * `inherited`: the auth this item gets when it has none of its own and where it comes from (a test file's `defaults:`):
+ * "Inherit" then names that source and shows what it is, and **Override** starts the item's own auth from it.
+ */
+export function AuthEditor({
+  auth,
+  onChange,
+  allowInherit = true,
+  inherited,
+}: {
+  auth?: AuthConfig;
+  onChange(a: AuthConfig): void;
+  allowInherit?: boolean;
+  inherited?: { auth: AuthConfig; from: string };
+}) {
+  const canInherit = allowInherit || !!inherited;
+  const a = auth ?? { type: canInherit ? 'inherit' : 'none' };
   const set = (patch: Record<string, unknown>) => onChange({ ...a, ...patch } as AuthConfig);
   return (
     <div className="p-3 flex flex-col gap-3 max-w-2xl">
       <Field label="Type">
         <Select value={a.type} onChange={(e) => onChange(defaults(e.target.value as AuthConfig['type']))}>
-          {TYPES.filter((t) => allowInherit || t.id !== 'inherit').map((t) => (
+          {TYPES.filter((t) => canInherit || t.id !== 'inherit').map((t) => (
             <option key={t.id} value={t.id}>
-              {t.label}
+              {t.id === 'inherit' && inherited ? `Inherit from ${inherited.from}` : t.label}
             </option>
           ))}
         </Select>
       </Field>
-      {a.type === 'inherit' && <p className="text-sm text-muted">Uses the auth configured on the parent folder or collection.</p>}
+      {a.type === 'inherit' && !inherited && <p className="text-sm text-muted">Uses the auth configured on the parent folder or collection.</p>}
+      {a.type === 'inherit' && inherited && (
+        <div className="flex items-center gap-2 flex-wrap text-sm" data-auth-inherited={inherited.from}>
+          <span className="text-muted">Uses</span>
+          <span className="mono truncate min-w-0">{describeAuth(inherited.auth)}</span>
+          <span className="text-muted">(from {inherited.from})</span>
+          <Button size="sm" onClick={() => onChange({ ...inherited.auth })} title={`Give this one its own auth, starting from the one in ${inherited.from}`}>
+            Override
+          </Button>
+        </div>
+      )}
+      {a.type === 'none' && inherited && <p className="text-sm text-muted">Sent without auth: overrides the {describeAuth(inherited.auth)} from {inherited.from}.</p>}
       {a.type === 'bearer' && (
         <>
           <Field label="Token" hint="Tip: reference a secret environment variable, e.g. {{accessToken}}">

@@ -4,7 +4,7 @@ import { ChevronRight, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { call } from '../api';
 import { formatBytes, formatMs } from '../lib/format';
-import { Badge, cx, IconButton, Input, statusTone } from './ui';
+import { Badge, cx, IconButton, Input, Segmented, statusTone } from './ui';
 import { useEventLog } from '../lib/use-rpc';
 import { RelatedRefs } from './RefLink';
 import type { ItemRef } from '@testpion/shared';
@@ -74,13 +74,17 @@ export function ConsolePanel() {
   return (
     <>
       <div className="flex items-center gap-2 px-3 h-8 border-b border-line text-xs shrink-0">
-        <div className="flex rounded-md border border-line overflow-hidden">
-          {(['all', 'errors', 'logs'] as const).map((f) => (
-            <button key={f} className={cx('px-2 h-6 capitalize', filter === f ? 'bg-accent text-white' : 'hover:bg-hover')} onClick={() => setFilter(f)}>
-              {f === 'logs' ? 'With logs' : f}
-            </button>
-          ))}
-        </div>
+        <Segmented
+          label="Show"
+          size="xs"
+          value={filter}
+          onChange={setFilter}
+          options={[
+            { value: 'all', label: 'All' },
+            { value: 'errors', label: 'Errors' },
+            { value: 'logs', label: 'With logs' },
+          ]}
+        />
         <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filter by URL, status or log text" aria-label="Filter console" className="h-6 min-h-0 text-xs w-64" />
         <span className="text-muted">
           {shown.length} of {entries.length} · secrets are redacted

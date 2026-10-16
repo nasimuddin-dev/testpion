@@ -7,7 +7,7 @@ description: "The Terminal tab of TestPion's bottom panel: PowerShell, cmd, Git 
 
 The bottom panel has a **Terminal** tab next to **Console**, **Logs** and **Problems**, like the terminal of VS Code. It runs a real shell of your computer in the open workspace's folder, and the `testpion` command works in it without installing anything: it is the app's own command line, always the same version as the app.
 
-Open it with <kbd>Ctrl</kbd>+<kbd>&#96;</kbd> (<kbd>⌘</kbd>+<kbd>&#96;</kbd> on macOS; press again to hide the panel), the command palette's **Terminal: Focus** and **Terminal: New** (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>&#96;</kbd>), or the panel's **Terminal** tab. The first visit opens a terminal.
+Open it with <kbd>Ctrl</kbd>+<kbd>&#96;</kbd> (<kbd>⌘</kbd>+<kbd>&#96;</kbd> on macOS; press again to hide the panel; both keys can be changed in [Settings ▸ Keyboard](/getting-started/keyboard-shortcuts#change-the-keys)), the command palette's **Terminal: Focus** and **Terminal: New** (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>&#96;</kbd>), or the panel's **Terminal** tab. The first visit opens a terminal.
 
 <figure class="aps-screenshot">
   <img src="/images/terminal.jpg" alt="The Terminal tab of the bottom panel: PowerShell in the workspace folder, testpion sending a request to the health endpoint of the Development environment, and its JSON answer" width="1440" height="900" loading="lazy">

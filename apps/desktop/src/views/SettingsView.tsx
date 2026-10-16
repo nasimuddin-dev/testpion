@@ -1,16 +1,17 @@
 import { StoragePanel } from '../components/StoragePanel';
 import { AgentsPanel } from '../components/AgentsPanel';
+import { KeyboardSettings } from '../components/KeyboardSettings';
 import { Plus, Save, Trash2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { asError, call } from '../api';
 import { pickTextFile } from '../lib/files';
 import { toastError, useApp } from '../store';
 import { useIntent } from '../hooks';
 import type { AppSettings, PriceEntry, ProviderConfig } from '../types';
 import { checkForUpdates } from '../updates';
-import { Badge, Button, Field, IconButton, Input, Select, Tabs, Toggle, Textarea } from '../components/ui';
+import { Badge, Button, Field, IconButton, Input, Segmented, Select, Tabs, Toggle, Textarea } from '../components/ui';
 
-type Tab = 'appearance' | 'requests' | 'git' | 'proxy' | 'certificates' | 'privacy' | 'pricing' | 'load' | 'storage' | 'assistant' | 'about' | 'agents';
+type Tab = 'appearance' | 'keyboard' | 'requests' | 'git' | 'proxy' | 'certificates' | 'privacy' | 'pricing' | 'load' | 'storage' | 'assistant' | 'about' | 'agents';
 
 export function SettingsView() {
   const settings = useApp((s) => s.settings);
@@ -34,18 +35,24 @@ export function SettingsView() {
     'settings-tab',
   );
   const [providers, setProviders] = useState<ProviderConfig[]>([]);
-  useEffect(() => setS(settings), [settings]);
+  // the fields changed here and not saved yet: settings saved elsewhere meanwhile (the rail, key bindings, a workspace
+  // opened) show up without losing them, and Save writes only these over the latest settings
+  const dirty = useRef(new Set<keyof AppSettings>());
+  useEffect(() => setS((cur) => (cur && settings ? { ...settings, ...Object.fromEntries([...dirty.current].map((k) => [k, cur[k]])) } : settings)), [settings]);
   useEffect(() => {
     void call<ProviderConfig[]>('ai.providers').then(setProviders);
   }, []);
   if (!s) return null;
-  const set = (p: Partial<AppSettings>) => setS({ ...s, ...p });
+  const set = (p: Partial<AppSettings>) => {
+    for (const k of Object.keys(p)) dirty.current.add(k as keyof AppSettings);
+    setS({ ...s, ...p });
+  };
   const save = () =>
     useApp
       .getState()
-      .saveSettings(s)
+      .saveSettings({ ...(useApp.getState().settings ?? s), ...Object.fromEntries([...dirty.current].map((k) => [k, s[k]])) })
       .then(
-        () => useApp.getState().toast('Settings saved', 'success'),
+        () => (dirty.current.clear(), useApp.getState().toast('Settings saved', 'success')),
         (e) => toastError(e),
       );
   const setPrice = (i: number, p: Partial<PriceEntry>) => set({ pricing: s.pricing.map((x, j) => (j === i ? { ...x, ...p } : x)) });
@@ -56,6 +63,7 @@ export function SettingsView() {
         onChange={setTab}
         tabs={[
           { id: 'appearance', label: 'Appearance' },
+          { id: 'keyboard', label: 'Keyboard' },
           { id: 'requests', label: 'Requests' },
           { id: 'git', label: 'Git' },
           { id: 'proxy', label: 'Proxy' },
@@ -69,7 +77,7 @@ export function SettingsView() {
           { id: 'about', label: 'About' },
         ]}
         right={
-          tab !== 'storage' && tab !== 'agents' && (
+          tab !== 'storage' && tab !== 'agents' && tab !== 'keyboard' && (
             <Button size="sm" variant="primary" icon={<Save size={12} />} onClick={save}>
               Save settings
             </Button>
@@ -87,6 +95,17 @@ export function SettingsView() {
                   <option value="dark">Dark</option>
                 </Select>
               </Field>
+              <Field label="Density" hint="Compact fits more rows and fields on screen: smaller spacing, row heights and small text everywhere. For this computer.">
+                <Segmented
+                  label="Density"
+                  value={s.density ?? 'comfortable'}
+                  onChange={(density) => set({ density })}
+                  options={[
+                    { value: 'comfortable', label: 'Comfortable' },
+                    { value: 'compact', label: 'Compact' },
+                  ]}
+                />
+              </Field>
               <Field label="Response layout" hint="Where the response goes in the HTTP, GraphQL, gRPC and MCP editors. Auto puts it beside the request when there is room. Also: the layout button at the right of the tabs.">
                 <Select value={s.responseLayout ?? 'auto'} onChange={(e) => set({ responseLayout: e.target.value as AppSettings['responseLayout'] })}>
                   <option value="auto">Auto (side by side when there is room)</option>
@@ -100,7 +119,11 @@ export function SettingsView() {
               <Toggle checked={s.reducedMotion} onChange={(reducedMotion) => set({ reducedMotion })} label="Reduce motion" />
               <Toggle checked={s.notifyRunFinished !== false} onChange={(notifyRunFinished) => set({ notifyRunFinished })} label="Notify me when a run finishes while TestPion is in the background" />
               <p className="text-xs text-muted">
-                Keyboard: Ctrl/Cmd+K commands · Ctrl/Cmd+Shift+F search · Ctrl/Cmd+Enter send/run · Ctrl/Cmd+S save · Ctrl/Cmd+Alt+1…9 switch views · Ctrl/Cmd+, settings.
+                Keyboard shortcuts: every one, and changing their keys, in{' '}
+                <button className="text-accent hover:underline" onClick={() => setTab('keyboard')}>
+                  Keyboard
+                </button>
+                .
               </p>
             </>
           )}
@@ -210,6 +233,7 @@ export function SettingsView() {
               </div>
             </>
           )}
+          {tab === 'keyboard' && <KeyboardSettings />}
           {tab === 'storage' && <StoragePanel />}
           {tab === 'agents' && <AgentsPanel />}
           {tab === 'load' && (

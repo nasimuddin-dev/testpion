@@ -34,6 +34,8 @@ export interface RestTab {
   base?: string;
   /** Pinned tabs stay first and are not closed by "close others / all". */
   pinned?: boolean;
+  /** A preview tab (WF-19): a single click in the explorer opened it; the next one replaces it until it is kept or edited. */
+  preview?: boolean;
 }
 
 export interface SendResult {

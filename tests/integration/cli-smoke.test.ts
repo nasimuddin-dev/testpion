@@ -53,6 +53,16 @@ describe('CLI smoke', () => {
     expect(json(['history', 'list', '-w', ws, '--json'])).toBeDefined();
   }, 120_000);
 
+  it('an unknown History kind is a validation error listing the kinds, not an empty list', () => {
+    expect(json(['history', 'list', '-w', ws, '--kind', 'capture', '--json'])).toBeDefined();
+    const r = run(['history', 'list', '-w', ws, '--kind', 'bogus', '--json']);
+    expect(r.status).toBe(2);
+    const env = JSON.parse(r.out) as { status: string; errors: Array<{ code: string; message: string; hint?: string }> };
+    expect(env.status).toBe('error');
+    expect(env.errors[0]).toMatchObject({ code: 'ValidationError', message: expect.stringContaining('bogus') });
+    expect(env.errors[0]!.hint).toMatch(/http, graphql, grpc, mcp, llm, websocket, capture/);
+  }, 60_000);
+
   it('generators write where they say, and a dry request is linted, not sent', () => {
     const flows = json(['integration-suite', 'specs/veterinary-api.yaml', '-w', ws, '--json']);
     expect(flows).toMatchObject({ resources: ['patient'] });

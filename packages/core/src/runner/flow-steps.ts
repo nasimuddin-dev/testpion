@@ -32,6 +32,34 @@ export interface FlowOfFile {
   inputs?: Array<{ name: string; default?: unknown; description?: string }>;
   /** The MCP tool the file is exposed as (its `expose.tool`), when it is. */
   exposed?: string;
+  /**
+   * The auth each HTTP step inherits from the file's `defaults: auth:` (by step id) and where it comes from: in effect
+   * while the step has no auth of its own, `overridden` when it has. What the inspector shows instead of "No auth", and
+   * what Inherit goes back to. Without `raw`, a credential typed into the file is `***` ({{variables}} are kept).
+   */
+  inheritedAuth?: Record<string, { auth: Record<string, unknown>; from: 'defaults'; overridden?: true }>;
+}
+
+const isMap = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
+const SECRET_AUTH_KEY = /^(token|password|secret|clientSecret|consumerSecret|tokenSecret|secretKey|accessKey|privateKey|value|sessionToken)$/;
+
+/**
+ * The auth HTTP steps inherit from `defaults: auth:`: each step with no auth of its own (none at the step, none in its
+ * `request:`) runs with it, as the loader merges it (loader.ts); a step's own auth (even `{ type: none }`) overrides it.
+ */
+export function inheritedAuthOf(defaults: Record<string, unknown>, steps: FlowStep[], items: Array<Record<string, unknown>>, o: { redact?: boolean } = {}): FlowOfFile['inheritedAuth'] {
+  const written = defaults.auth;
+  if (!isMap(written) || typeof written.type !== 'string') return undefined;
+  // for agents and the terminal: a credential typed into the file is not repeated ({{variables}} are kept)
+  const auth = o.redact ? Object.fromEntries(Object.entries(written).map(([k, v]) => [k, SECRET_AUTH_KEY.test(k) && typeof v === 'string' && !/^\s*\{\{[^{}]+\}\}\s*$/.test(v) ? '***' : v])) : written;
+  const out: NonNullable<FlowOfFile['inheritedAuth']> = {};
+  steps.forEach((s, i) => {
+    if (s.type !== 'http') return;
+    const item = items[i] ?? {};
+    const own = item.auth ?? (isMap(item.request) ? item.request.auth : undefined);
+    out[s.id] = { auth, from: 'defaults', ...(own !== undefined ? { overridden: true as const } : {}) };
+  });
+  return Object.keys(out).length ? out : undefined;
 }
 
 // tp.environment.set('x', ...) and the like: a script that sets a variable for the steps after it
@@ -171,6 +199,13 @@ export async function flowOfFile(store: WorkspaceStore, file: string, opts: { ru
       : [];
   if (inputs.length) out.inputs = inputs;
   if (opts.known) markUnresolved(steps, tests, opts.known);
+  {
+    // the auth steps inherit from defaults: (the designer, `testpion flow --json`, flow_graph); typed secrets are only
+    // in the designer's raw read, which shows the file as written
+    const items = Array.isArray(data) ? data : Array.isArray(root?.tests) ? (root!.tests as unknown[]) : [];
+    const inherited = items.length === steps.length ? inheritedAuthOf(defaultsMap, steps, items as Array<Record<string, unknown>>, { redact: !opts.raw }) : undefined;
+    if (inherited) out.inheritedAuth = inherited;
+  }
   if (opts.raw) {
     const items = Array.isArray(data) ? data : Array.isArray(root?.tests) ? (root!.tests as unknown[]) : root ? [root] : [];
     if (items.length === steps.length) out.raw = Object.fromEntries(steps.map((s, i) => [s.id, (items[i] ?? {}) as Record<string, unknown>]));

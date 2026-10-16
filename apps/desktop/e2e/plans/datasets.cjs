@@ -112,11 +112,9 @@ const steps = [
      if (!input) return 'NO RENAME FIELD';
      setInput(input, 'e2e-people'); key(input, 'Enter');
      const renamed = await __t.waitFor(() => row('e2e-people.csv'), 4000);
-     // delete: a confirmation, then the file is in Recently deleted
+     // delete: at once (no question), with Undo in the message; the file is in Recently deleted
      await __t.menu('e2e-people.csv');
      (await menuItem('Delete…'))?.click();
-     const d = await __t.waitFor(() => dialog(/Delete datasets\\/e2e-people\\.csv/), 3000);
-     [...(d?.querySelectorAll('button') ?? [])].find((b) => b.textContent.trim() === 'Delete')?.click();
      const gone = await __t.waitFor(() => (row('e2e-people.csv') ? null : true), 4000);
      const trash = (await window.aps.invoke('trash.list')).filter((t) => t.kind === 'dataset').map((t) => t.name).join(',');
      await window.aps.invoke('datasets.delete', { name: 'e2e-users.csv' }); await __t.sleep(500);

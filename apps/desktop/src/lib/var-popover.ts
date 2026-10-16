@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { isTemplateBlock } from '@testpion/shared';
 
 /**
  * The {{variable}} popover, one for the whole app: what a variable holds, where it comes from, edit or add it. A click
@@ -25,6 +26,7 @@ export const useVarPopover = create<{ open?: VarPopoverRequest; show(r: VarPopov
 /** The {{variable}} around position `at` in a line of text (the name inside the braces), if any. */
 export function variableAt(text: string, at: number): string | undefined {
   for (const m of text.matchAll(/\{\{\s*([^{}]+?)\s*\}\}/g)) {
+    if (isTemplateBlock(m[1]!)) continue;
     const start = m.index ?? 0;
     if (at >= start && at <= start + m[0].length) return m[1]!.trim();
   }

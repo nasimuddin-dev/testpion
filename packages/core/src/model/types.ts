@@ -730,8 +730,11 @@ export interface Collection {
 export interface HistoryEntry {
   id: string;
   timestamp: string;
-  kind: 'http' | 'graphql' | 'grpc' | 'mcp' | 'llm' | 'websocket';
+  /** `capture`: a Debugger capture session made into something (a collection, a flow, a saved HAR session). */
+  kind: 'http' | 'graphql' | 'grpc' | 'mcp' | 'llm' | 'websocket' | 'capture';
   name: string;
+  /** A `capture` entry: what was captured and what it became (debugger/capture-history.ts). */
+  capture?: CaptureSessionInfo;
   method?: string;
   url?: string;
   status?: number | string;
@@ -746,6 +749,24 @@ export interface HistoryEntry {
   requestId?: string;
   /** `request` is a preview: a value (a body, a prompt) longer than 64 KB was cut when it was stored. */
   requestPreview?: boolean;
+}
+
+/** A Debugger capture session in History: the exchanges it covered and what was made of them. */
+export interface CaptureSessionInfo {
+  /** What the exchanges became: a collection (Save to collection), a flow (Create flow), a saved HAR session. */
+  result: 'collection' | 'flow' | 'session';
+  /** Opens the result (an ItemRef: a collection, a flow file, a saved capture session). */
+  ref: import('@testpion/shared').ItemRef;
+  /** How many exchanges, and how they came in: through the proxy (`proxy`) or the reverse proxy (`reverse`). */
+  exchanges: number;
+  sources: Array<'proxy' | 'reverse'>;
+  /** The hosts they went to (the first 20, most requests first). */
+  hosts: string[];
+  /** The first and the last exchange's start (ISO). */
+  from?: string;
+  to?: string;
+  /** How many requests / steps the result has, when it is not one per exchange (noise left out). */
+  items?: number;
 }
 
 export interface AppSettings {
@@ -786,6 +807,12 @@ export interface AppSettings {
   tls?: { systemCa?: boolean; extraCa?: string };
   /** Git: how often the app fetches in the background (minutes; 0 = off, default 5) while a workspace in git with a remote is open. */
   git?: { autoFetchMinutes?: number };
+  /** The rail of the desktop app (per computer): the order of its views and which are shown; the rest are under More…. */
+  rail?: { order?: string[]; shown?: string[] };
+  /** Row heights, paddings and text sizes of the desktop app: comfortable (default) or compact. */
+  density?: 'comfortable' | 'compact';
+  /** Rebound keyboard shortcuts of the desktop app: command id → key combination ("Mod+Shift+P"; "" turns it off). */
+  keybindings?: Record<string, string>;
   /** Settings layout revision, used for one-time migrations of defaults. */
   settingsRevision?: number;
 }

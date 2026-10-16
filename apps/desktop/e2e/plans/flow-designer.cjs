@@ -147,6 +147,37 @@ const steps = [
      if (!done) return 'NOT ALL STATUSES: ' + nodes().map((n) => n.dataset.flowNode + '=' + n.dataset.status).join(',');
      return 'delay: ' + byId('wait').dataset.status + ' | statuses: ' + nodes().map((n) => n.dataset.status).join(',') + ' | edges: ' + document.querySelectorAll('[data-flow-designer] [data-flow-edge]').length;`,
   ),
+  // a step without auth of its own inherits the file's defaults: auth: the inspector says so (not "No auth"), Override
+  // gives the step its own copy, and Inherit takes it away again
+  step(
+    'inherited-auth-from-defaults',
+    `const P = 'rest/auth-defaults.yaml';
+     const read = () => window.aps.invoke('tests.read', { path: P });
+     await window.aps.invoke('tests.write', { path: P, content: "name: Auth defaults\\ndefaults:\\n  auth: { type: bearer, token: '{{token}}' }\\ntests:\\n  - id: one\\n    name: One\\n    url: http://127.0.0.1:4010/health\\n" });
+     await __t.view('Tests'); await __t.sleep(600);
+     const r = await __t.waitFor(() => [...document.querySelectorAll('[data-tree-row]')].find((b) => b.offsetParent && b.textContent.trim().endsWith('auth-defaults.yaml')), 4000);
+     if (!r) return 'NO ROW'; await __t.real.click(r); await __t.sleep(1000);
+     await __t.tab('Flow');
+     if (!(await __t.waitFor(() => byId('one'), 5000))) return 'NO NODE';
+     if (!(await selectId('one'))) return 'NO INSPECTOR';
+     const box = await __t.waitFor(() => vis('[data-step-inspector="one"] [data-auth-inherited]')[0], 3000); if (!box) return 'NO INHERITED AUTH';
+     const type = vis('[data-step-inspector="one"] select').find((s) => [...s.options].some((o) => o.value === 'inherit'));
+     const shown = (type?.selectedOptions[0]?.textContent ?? '') + ' | ' + box.textContent.replace(/\\s+/g, ' ').trim();
+     const over = [...box.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Override'); if (!over) return 'NO OVERRIDE';
+     await __t.real.click(over);
+     const own = await until(async () => /- id: one[\\s\\S]*auth:[\\s\\S]*type: bearer/.test(await read()), 5000);
+     return shown + ' | override saved: ' + !!own;`,
+  ),
+  step(
+    'inherit-again-removes-the-own-auth',
+    `const read = () => window.aps.invoke('tests.read', { path: 'rest/auth-defaults.yaml' });
+     await __t.sleep(500);
+     const t2 = vis('[data-step-inspector="one"] select').find((s) => [...s.options].some((o) => o.value === 'inherit'));
+     if (!t2) return 'NO TYPE SELECT';
+     try { setInput(t2, 'inherit'); } catch (e) { return 'SET FAILED ' + e.stack; }
+     const back = await until(async () => !/- id: one[\\s\\S]*auth:/.test(await read()), 5000);
+     return 'inherit again: ' + !!back + ' | shown: ' + !!vis('[data-step-inspector="one"] [data-auth-inherited]')[0];`,
+  ),
 ];
 
 module.exports = withExpect(steps, {
@@ -160,4 +191,6 @@ module.exports = withExpect(steps, {
   'yaml-in-the-editor': /^name: A user: true \| name: HTTP request: true \| url: http:\/\/127\.0\.0\.1:4010\/health: true \| status: \$\.status: true \| \{\{status\}\}: true \| dependsOn: true$/,
   'undo-takes-the-last-change-back': /^undone: true \| edge label gone: true \| editor: true$/,
   'delay-between-the-steps': /^delay: passed \| statuses: passed,passed,passed \| edges: 3$/,
+  'inherited-auth-from-defaults': /^Inherit from defaults \| Uses ?Bearer token: \{\{token\}\} ?\(from defaults\) ?Override \| override saved: true$/,
+  'inherit-again-removes-the-own-auth': /^inherit again: true \| shown: true$/,
 });

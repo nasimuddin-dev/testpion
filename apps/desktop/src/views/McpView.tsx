@@ -5,7 +5,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAssistantContext } from '../lib/assistant-context';
 import { LABEL } from '../lib/vocabulary';
 import { asError, call, on, type NormalizedError } from '../api';
-import { ask, confirmAction, persisted, toastError, useApp } from '../store';
+import { ask, persisted, toastError, useApp } from '../store';
+import { restoreFolder } from '../components/FolderList';
+import { deleteWithUndo, putBack } from '../lib/undo-delete';
 import { useDoc, useDocs } from '../lib/docs';
 import { useIntent, useSaveShortcut } from '../hooks';
 import type { KeyValue, McpServerConfig } from '../types';
@@ -231,9 +233,17 @@ It runs with your permissions. Allow it only if you know where this workspace co
     renameItem: (id, name) => saveServers(servers.map((s) => (s.id === id ? { ...s, name } : s))),
     moveItem: (id, folder) => saveServers(servers.map((s) => (s.id === id ? { ...s, folder } : s))),
     deleteItem: async (id) => {
+      const at = servers.findIndex((s) => s.id === id);
+      const gone = servers[at];
       closeTabsFor([id]);
-      if (servers.find((s) => s.id === id)?.connected) await disconnect(id);
+      if (gone?.connected) await disconnect(id);
       await saveServers(servers.filter((s) => s.id !== id));
+      // the undo puts its configuration back in its place in the list as saved now (secrets stay in the secret store)
+      return async () => {
+        if (!gone) return;
+        const { connected: _c, ...config } = gone;
+        await saveServers(putBack(await call<McpServerConfig[]>('mcp.servers'), config as McpServerConfig, at));
+      };
     },
     duplicateItem: (id) => {
       const s = servers.find((x) => x.id === id);
@@ -245,8 +255,15 @@ It runs with your permissions. Allow it only if you know where this workspace co
       await saveServers(servers.map((s) => (s.folder === from ? { ...s, folder: to } : s)));
     },
     deleteFolder: async (name) => {
+      const at = folders.indexOf(name);
+      const was = new Set(servers.filter((s) => s.folder === name).map((s) => s.id));
       await saveFolders(folders.filter((f) => f !== name));
       await saveServers(servers.map((s) => (s.folder === name ? { ...s, folder: undefined } : s)));
+      return async () => {
+        const lib = await call<{ folders: string[] }>('lib.get', { kind: 'mcp' });
+        await saveFolders(restoreFolder(lib.folders, name, at));
+        await saveServers((await call<McpServerConfig[]>('mcp.servers')).map((s) => (was.has(s.id) && !s.folder ? { ...s, folder: name } : s)));
+      };
     },
   };
   const saveServers = async (list: McpServerConfig[]) => {
@@ -282,11 +299,9 @@ It runs with your permissions. Allow it only if you know where this workspace co
     if (!current) return;
     // discarding a new server closes its tab
     if (draft) return docId ? useDocs.getState().close('mcp', docId) : setDraft(null);
-    if (!(await confirmAction({ title: 'Delete MCP server', message: `Delete the MCP server "${current.name}"?`, detail: 'Saved tests that call it will fail until you add it again.', confirmLabel: 'Delete server', danger: true }))) return;
-    if (server?.connected) await disconnect(current.id);
-    closeTabsFor([current.id]);
-    await saveServers(servers.filter((s) => s.id !== current.id));
-    setSelected(undefined);
+    const id = current.id;
+    // at once, with Undo in the message (the same as the list's Delete)
+    if (await deleteWithUndo({ what: `the MCP server "${current.name}"`, run: () => serverOps.deleteItem(id) })) setSelected(undefined);
   };
   // a mock server's Tools tab edits its toolset file: Ctrl+S saves that when it has changes, else the server
   const toolset = useRef<ToolsetEditorHandle>(null);

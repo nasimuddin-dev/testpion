@@ -13,7 +13,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { asError, call, on } from '../api';
 import type { MonitorResult } from '../lib/monitor-alerts';
 import { useIntent } from '../hooks';
-import { confirmAction, toastError, useApp } from '../store';
+import { toastError, useApp } from '../store';
+import { deleteWithUndo } from '../lib/undo-delete';
+import { restoreFolder } from '../components/FolderList';
 import { openRef } from '../lib/open-ref';
 import type { Collection, CollectionNode, Library } from '../types';
 import { formatMs, timeAgo } from '../lib/format';
@@ -198,11 +200,8 @@ export function MonitorsView() {
     }
     await load();
   };
-  const remove = async (m: MonitorRow) => {
-    if (!(await confirmAction({ title: 'Delete monitor', message: `Delete "${m.name}"?`, detail: 'Its past runs stay in the Tests view.', confirmLabel: 'Delete', danger: true }))) return;
-    await call('monitor.delete', { id: m.id });
-    await load();
-  };
+  /** At once, with Undo in the message (the same as the list's Delete). */
+  const remove = (m: MonitorRow) => deleteWithUndo({ what: `the monitor "${m.name}"`, run: () => monitorOps.deleteItem(m.id), note: 'Its past runs stay in the Tests view' });
 
   const newDraft = (): MonitorDraft => ({ name: '', collectionId: collections[0]?.id ?? '', everyMinutes: 15, enabled: true, environment: useApp.getState().environment });
   /** Change the monitors library directly (folders): monitors keep their data, only folders change. */
@@ -225,8 +224,16 @@ export function MonitorsView() {
     renameItem: (id, name) => update(id, { name }),
     moveItem: (id, folder) => update(id, { folder }),
     deleteItem: async (id) => {
+      const m = rows.find((x) => x.id === id);
       await call('monitor.delete', { id });
       await load();
+      // the undo saves the monitor again under its id (its settings, folder and schedule); its past runs never went
+      return async () => {
+        if (!m) return;
+        const { lastResult: _r, running: _x, schedule: _s, nextRunAt: _n, due: _d, ...data } = m;
+        await call('monitor.save', { monitor: data });
+        await load();
+      };
     },
     duplicateItem: async (id) => {
       const m = rows.find((x) => x.id === id);
@@ -238,7 +245,12 @@ export function MonitorsView() {
     },
     setFolders: (next) => editLibrary((lib) => ({ ...lib, folders: next })),
     renameFolder: (from, to) => editLibrary((lib) => ({ ...lib, folders: lib.folders.map((f) => (f === from ? to : f)), items: lib.items.map((i) => (i.folder === from ? { ...i, folder: to } : i)) })),
-    deleteFolder: (name) => editLibrary((lib) => ({ ...lib, folders: lib.folders.filter((f) => f !== name), items: lib.items.map((i) => (i.folder === name ? { ...i, folder: undefined } : i)) })),
+    deleteFolder: async (name) => {
+      const was = new Set<string>();
+      let at = -1;
+      await editLibrary((lib) => ((at = lib.folders.indexOf(name)), { ...lib, folders: lib.folders.filter((f) => f !== name), items: lib.items.map((i) => (i.folder === name ? (was.add(i.id), { ...i, folder: undefined }) : i)) }));
+      return () => editLibrary((lib) => ({ ...lib, folders: restoreFolder(lib.folders, name, at), items: lib.items.map((i) => (was.has(i.id) && !i.folder ? { ...i, folder: name } : i)) }));
+    },
   };
   return (
     <Split id="monitors" sidebar initial={20} min={12}>

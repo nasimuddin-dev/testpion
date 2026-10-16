@@ -5,7 +5,7 @@ import { toastError, useApp } from '../store';
 import type { Collection } from '../types';
 import { downloadContent, finishSave, type SaveResult } from '../lib/files';
 import { Markdown } from './Markdown';
-import { Button, cx, useDebounced, Textarea } from './ui';
+import { Button, Segmented, useDebounced, Textarea } from './ui';
 
 /**
  * Postman-style collection documentation: the collection description plus every folder and request
@@ -32,19 +32,15 @@ export function CollectionDocs({ collection, onDescription }: { collection: Coll
   return (
     <div className="h-full flex flex-col min-h-0">
       <div className="flex items-center gap-2 px-3 h-10 border-b border-line shrink-0">
-        <div className="flex rounded-md border border-line overflow-hidden text-xs">
-          {(
-            [
-              ['view', 'Documentation', <Eye key="v" size={12} />],
-              ['edit', 'Edit description', <Pencil key="e" size={12} />],
-            ] as const
-          ).map(([m, label, icon]) => (
-            <button key={m} className={cx('px-2.5 h-7 inline-flex items-center gap-1.5', mode === m ? 'bg-accent text-white' : 'hover:bg-hover')} onClick={() => setMode(m)}>
-              {icon}
-              {label}
-            </button>
-          ))}
-        </div>
+        <Segmented
+          label="Documentation mode"
+          value={mode}
+          onChange={setMode}
+          options={[
+            { value: 'view', label: 'Documentation', icon: <Eye size={12} /> },
+            { value: 'edit', label: 'Edit description', icon: <Pencil size={12} /> },
+          ]}
+        />
         <span className="text-xs text-muted ml-2">Sensitive values are masked. Request docs are written in each request’s Docs tab.</span>
         <Button size="sm" variant="ghost" className="ml-auto" icon={<Download size={12} />} disabled={!markdown} onClick={() => downloadContent(`${collection.name}.md`, markdown, { type: 'text/markdown' })}>
           Export Markdown

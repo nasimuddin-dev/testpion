@@ -25,7 +25,7 @@ Collection files are written in a **git-friendly form**: keys in a fixed order a
 
 Pick one:
 
-- **A new repository for the open workspace.** Open the **Git** view (the rail on the left, or <kbd>Ctrl</kbd>+<kbd>K</kbd> ▸ *Git*) and click **Initialize repository**. TestPion runs `git init`, writes `.gitignore` and `.gitattributes`, and sets up merging by request (see [Merging](#merging-collections-request-by-request)).
+- **A new repository for the open workspace.** Open the **Git** view (the rail's **More…**, or <kbd>Ctrl</kbd>+<kbd>K</kbd> ▸ *Go to Git*) and click **Initialize repository**. TestPion runs `git init`, writes `.gitignore` and `.gitattributes`, and sets up merging by request (see [Merging](#merging-collections-request-by-request)).
 - **Connect to a remote.** In the Git view click **Connect to a remote…** (or **⋯ ▸ Change remote…** later) and paste the URL of an empty repository, for example `https://github.com/team/api-tests.git` or `git@github.com:team/api-tests.git`.
 - **Clone a repository that already holds a workspace.** Open the workspace switcher (top left) and click **Clone**, or <kbd>Ctrl</kbd>+<kbd>K</kbd> ▸ *Clone Workspace from Git…*. Paste the URL, choose a parent folder; TestPion clones into a folder named after the repository and opens the workspace. When the workspace is in a sub-folder (`api-tests/`), it is found; when the repository holds several, you choose one.
 - **A workspace in your code repository.** Create the workspace in a folder of the checkout (**New**, then *in a folder*), or **Open folder** for one that is there already. TestPion only looks at the workspace folder: the rest of the repository is never listed or committed by it.
@@ -82,11 +82,13 @@ The same check runs in the terminal: `testpion git check` (exit code 1 when some
 - **Branch button** (top of the Git view): switch to another branch (a remote branch becomes a local one that tracks it), **New branch…** (your uncommitted changes come along), **Rename** the current branch, or **Delete a branch** (a branch with commits no other branch has asks once more).
 - **Fetch** sees what the remote has; **Pull** brings in your team's commits; **Push** sends yours (the first push of a branch sets where it goes).
 - **Pull & push.** When your team pushed commits you don't have and you have commits to push, **Push** becomes **Pull & push** and a strip says *Your team pushed 2 commits. Pull before pushing.* (with **Pull & push** and **Pull**). Pull & push pulls with a merge (collections merge request by request, see [Merging](#merging-collections-request-by-request)) and then pushes, so two people changing the same collection never get stuck at a refused push. If someone pushes in between, it pulls once more and pushes again. When the same request was changed on both sides it stops before pushing: the **Conflicts** list opens with *Resolve the conflicts, commit, then Push*. A push the remote refused anyway says so in a message with **Pull & push** as its button.
-- **Background fetch.** While a workspace in git with a remote is open, TestPion fetches quietly every 5 minutes (and when you open the Git view), so the **Pull** count, the strip and a small count on the rail's **Git** icon show your team's new commits before you push. It never asks you to sign in (a remote that needs it is skipped and noted in the log) and never runs during a pull or push. Change the interval, or turn it off with 0, in **Settings ▸ Git**.
+- **Background fetch.** While a workspace in git with a remote is open, TestPion fetches quietly every 5 minutes (and when you open the Git view), so the **Pull** count, the strip and a small count on the rail's **Git** icon (on **More…** while Git is not shown on the rail) show your team's new commits before you push. It never asks you to sign in (a remote that needs it is skipped and noted in the log) and never runs during a pull or push. Change the interval, or turn it off with 0, in **Settings ▸ Git**.
 - **Uncommitted work during a pull.** When git would refuse to pull because of changes you have not committed, TestPion sets them aside (`git stash`), pulls, and puts them back; the message says *Your uncommitted changes were set aside and put back*. Putting them back merges collections request by request too, so an unsaved-to-git edit of one request survives a pull that changed another request of the same collection. If your change and the pulled one touch the same request, the file is listed under **Conflicts**. Open request tabs with unsaved edits are named before a pull: pull anyway (a request the pull changes then asks which version to keep) or save them first.
 - **Pull request:** on a branch other than the default, the Git view shows **Pull request**. It opens GitHub, GitLab, Bitbucket or Azure DevOps with the branch selected and, on GitHub and GitLab, the description filled with the branch's changes by meaning.
 
 After a pull or a branch switch the app reloads the changed collections, environments and tests by itself. A change made outside TestPion (a `git pull` in a terminal, another editor) shows up the same way, with a message saying what changed.
+
+TestPion knows its own saves by the file and what it wrote into it, not by the time: a file another program changes right after TestPion saved it (an editor that saves on focus, a formatter, an AI agent running `testpion` in a terminal) is still reported and shown. Files that TestPion writes itself (a test file saved from the editor or through `tests.write`, generated tests, a dataset, an import) show up in every list at once, with no message. (Inside the app, every such change arrives as one `data.changed` event naming the RPC, the kinds and the paths it wrote; see [Every write says what it changed](/architecture/design#cloud-ready-design).)
 
 ## Merging collections request by request
 
@@ -159,7 +161,7 @@ jobs:
         with: { fetch-depth: 0 }   # the base branch, for the diff
       - uses: actions/setup-node@v4
         with: { node-version: 24 }
-      - run: git clone --depth 1 --branch v0.46.0 https://github.com/nasimuddin-dev/testpion.git "$RUNNER_TEMP/testpion" && cd "$RUNNER_TEMP/testpion" && npm ci && npm run build -w @testpion/shared -w @testpion/core -w @testpion/cli
+      - run: git clone --depth 1 --branch v0.47.0 https://github.com/nasimuddin-dev/testpion.git "$RUNNER_TEMP/testpion" && cd "$RUNNER_TEMP/testpion" && npm ci && npm run build -w @testpion/shared -w @testpion/core -w @testpion/cli
       - name: What the pull request changes
         run: |
           T="node $RUNNER_TEMP/testpion/packages/cli/bin/testpion.js"
@@ -187,7 +189,7 @@ api-tests:
   image: node:24
   rules: [{ if: $CI_PIPELINE_SOURCE == "merge_request_event" }]
   script:
-    - git clone --depth 1 --branch v0.46.0 https://github.com/nasimuddin-dev/testpion.git /tmp/testpion && (cd /tmp/testpion && npm ci && npm run build -w @testpion/shared -w @testpion/core -w @testpion/cli)
+    - git clone --depth 1 --branch v0.47.0 https://github.com/nasimuddin-dev/testpion.git /tmp/testpion && (cd /tmp/testpion && npm ci && npm run build -w @testpion/shared -w @testpion/core -w @testpion/cli)
     - git fetch origin "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"
     - node /tmp/testpion/packages/cli/bin/testpion.js diff "origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME" HEAD --markdown -w api-tests | tee changes.md
     - node /tmp/testpion/packages/cli/bin/testpion.js run -w api-tests -e Staging -r console junit -o test-results

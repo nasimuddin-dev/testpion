@@ -9,6 +9,7 @@ import { detectFormat, importAny } from './importers.js';
 import { importArazzo, resolveArazzoSourcesLocally } from './arazzo.js';
 import { scriptCompatibility, type ScriptWarning } from '../scripts/compat.js';
 import type { ImportScriptsMode, ImportScriptsSummary } from './import-scripts.js';
+import { atomicWrite } from '../storage/fsutil.js';
 
 export interface WorkspaceImportResult {
   format: string;
@@ -48,7 +49,7 @@ export function importArazzoIntoWorkspace(store: WorkspaceStore, text: string, o
     for (let i = 2; existsSync(store.safePath(rel)); i++) rel = f.path.replace(/\.yaml$/, `-${i}.yaml`);
     const file = store.safePath(rel);
     mkdirSync(dirname(file), { recursive: true });
-    writeFileSync(file, f.text);
+    atomicWrite(file, f.text);
     flows.push({ path: rel, workflowId: f.workflowId, steps: f.steps });
   }
   return { format: 'arazzo', flows, ...(r.notes.length ? { notes: r.notes } : {}) };
@@ -109,7 +110,7 @@ export function importIntoWorkspace(
     const rel = `specs/${slugify(collection.name) || 'api'}.${r.format}.${ext}`;
     const file = store.safePath(rel);
     mkdirSync(dirname(file), { recursive: true });
-    writeFileSync(file, text);
+    atomicWrite(file, text);
     out.specPath = rel;
     if (opts.contractChecks !== false) {
       let added = 0;
@@ -130,7 +131,7 @@ export function importIntoWorkspace(
     const rel = `specs/asyncapi/${slugify(collection.name) || 'events'}.${ext}`;
     const file = store.safePath(rel);
     mkdirSync(dirname(file), { recursive: true });
-    writeFileSync(file, text);
+    atomicWrite(file, text);
     out.specPath = rel;
   }
   if (collection) {

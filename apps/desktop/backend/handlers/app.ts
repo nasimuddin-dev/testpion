@@ -5,6 +5,7 @@ import {
   ENGINE_VERSION,
   type AppSettings,
   defaultSettings,
+  normalizeUiPrefs,
   getProxySettings,
   describeCertificates,
   getTlsTrust,
@@ -51,7 +52,7 @@ export function appHandlers(be: Backend): Handlers {
           throw new ApsError('ValidationError', `The proxy URL "${s.proxy.url}" is not a URL (e.g. http://proxy.example.com:8080)`, { suggestions: [] });
         }
       }
-      be.settings = be.manager.saveSettings({ ...defaultSettings(), ...s, telemetry: false });
+      be.settings = be.manager.saveSettings({ ...defaultSettings(), ...normalizeUiPrefs(s), telemetry: false });
       be.logger.setLevel(be.settings.logLevel);
       be.logger.redactor.setFields(be.settings.redactFields);
       be.applyProxy();

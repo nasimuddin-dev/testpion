@@ -7,7 +7,7 @@ description: "Send an HTTP request, add assertions and save it to a collection."
 
 # Your first request
 
-TestPion opens on **Home**, with shortcuts to a new request, a GraphQL query, import, a new collection, MCP, the AI lab and these docs. It also shows your recent requests, collections and environments. Click an environment there to make it active.
+TestPion opens on **Home**, with shortcuts to a new request, a GraphQL query, import, a new collection, MCP, the AI lab and these docs. It also shows your recent requests, collections and environments. Click an environment there to make it active. In a new workspace, Home's **Get started** walks the same steps as this page, and **Take the tour** points at each control in the app ([Get started](/getting-started/finding-your-way#get-started)).
 
 1. Start the demo servers: `node examples/servers/demo-servers.mjs`.
 2. In **Environments**, create `Development` with `baseUrl = http://127.0.0.1:4010`. The eye button next to the environment selector gives a [quick look](/api-testing/environments#quick-look-every-variable-at-once) at its variables.
@@ -17,6 +17,6 @@ TestPion opens on **Home**, with shortcuts to a new request, a GraphQL query, im
 6. Press **Ctrl/Cmd+S** to save the request to a collection.
 7. Make it a test: the ⋯ at the end of the breadcrumb line ▸ **Save as test…** writes it to `tests/rest/`, and the toast's **Run now** runs it. A run's ⋯ ▸ **Run in CI…** then writes the pipeline ([CI/CD](/test-runner/ci-cd)).
 
-Variables resolved from the environment are shown in blue; unresolved ones are shown in red. Hover the URL (or any field with `{{variables}}`) to see where each value came from; the **Info** panel on the right edge lists them all. A `{{variable}}` with no value in the URL's host stops the request with a message such as *{{baseUrl}} has no value*.
+Variables resolved from the environment are shown in blue; unresolved ones are shown in red, and the environment switcher in the top bar counts them ([Undefined variables](/api-testing/environments#undefined-variables)). Hover the URL (or any field with `{{variables}}`) to see where each value came from; the **Info** panel on the right edge lists them all. A `{{variable}}` with no value in the URL's host stops the request with a message such as *{{baseUrl}} has no value*.
 
 :::

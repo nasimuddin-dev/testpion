@@ -23,7 +23,7 @@ dataset:
 
 ## In the app
 
-The Collections explorer has a **Datasets** section after API definitions: every file in the workspace's `datasets/` folder with its format (CSV, JSONL, JSON, MD, DB) and how many rows it holds. Its menu makes a **New CSV** or **New JSONL** (empty, named by you) or opens **Generate test data…**; a row's menu has **Run a collection with it** (the Collection Runner opens with the file as its data; pick the collection there), **Rename**, **Duplicate** and **Delete** (the file goes to *Recently deleted* for 30 days, like a collection).
+The Collections explorer has a **Datasets** section after API definitions: every file in the workspace's `datasets/` folder with its format (CSV, JSONL, JSON, MD, DB) and how many rows it holds. Its menu makes a **New CSV** or **New JSONL** (empty, named by you) or opens **Generate test data…**; a row's menu has **Run a collection with it** (the Collection Runner opens with the file as its data; pick the collection there), **Rename**, **Duplicate** and **Delete** (at once, with **Undo** in the message for 8 seconds; then the file stays in the workspace's trash for 30 days, like a collection: `testpion trash list` / `trash restore`).
 
 A dataset opens in a tab of its own:
 

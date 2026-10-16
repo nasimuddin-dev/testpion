@@ -23,10 +23,10 @@ import {
   Circle,
 } from 'lucide-react';
 import { openReverseProxyCapture } from '../lib/capture';
-import { Disc, FolderPlus, Settings2 } from 'lucide-react';
+import { Disc, FolderPlus, Plus, Settings2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { call } from '../api';
-import { confirmAction, promptText, toastError, useApp } from '../store';
+import { confirmAction, persisted, promptText, toastError, useApp } from '../store';
 import { Badge, Button, cx, Empty, Input, Menu, PageHeader, Select, Split, Tabs, type MenuItem } from '../components/ui';
 import { formatBytes, formatMs } from '@testpion/shared';
 import { downloadContent, finishSave, pickBinaryFile, pickTextFile, type SaveResult } from '../lib/files';
@@ -46,6 +46,8 @@ import { CreateFlowDialog } from '../components/debugger/CreateFlowDialog';
 import { SaveToCollectionDialog } from '../components/debugger/SaveToCollectionDialog';
 import { Dock } from '../components/debugger/Dock';
 import { ToolRail, type DockPanel } from '../components/debugger/ToolRail';
+import { useLibraryTabs } from '../lib/library-tabs';
+import { LibraryTabStrip } from '../components/LibraryTabStrip';
 import { copyText } from '../lib/clipboard';
 import { plural } from '../lib/format';
 import { useDebuggerSession } from '../components/debugger/use-debugger-session';
@@ -68,6 +70,8 @@ interface Session {
 }
 
 const toast = (m: string) => useApp.getState().toast(m, 'success');
+/** The Debugger's session tabs hold no draft: a tab is the live capture or a saved session (by name). */
+const debuggerTabDrafts = persisted<null>('debugger-tab', null);
 
 /** An exchange as a REST request, for Open in a tab and Resend. */
 export function DebuggerView() {
@@ -108,8 +112,24 @@ export function DebuggerView() {
   const [recording, setRecording] = useState<{ since: string; count: number }>();
   const filterBox = useRef<HTMLInputElement>(null);
 
+  // WF-19 sessions are tabs: the live capture (always there) and saved sessions opened beside it (a single click in the
+  // Sessions menu previews one), kept per workspace; the backend shows the active tab's session (debug.view)
+  const sessionTabs = useLibraryTabs<null>('debugger', debuggerTabDrafts, { keepFirst: true });
+  const viewing = sessionTabs.active.savedId;
   const list = useExchangeList(filter);
   const rows = list.rows;
+  useEffect(() => {
+    setSelected(undefined);
+    setSelectedIds([]);
+    void call<Status>('debug.view', { session: viewing }).then(
+      (s) => (setStatus(s), void list.sync()),
+      (e) => {
+        toastError(e); // gone (deleted, renamed): its tab closes, the live capture shows
+        sessionTabs.close([sessionTabs.active.id], null);
+      },
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewing]);
   const seen = list.seen;
   /** After an action: the list's changes and the status (the capture's count, the system proxy, …). */
   const load = useCallback(async () => {
@@ -184,6 +204,8 @@ export function DebuggerView() {
   }, [rows.length]);
   useIntent('debugger', (p) => {
     if (p?.record && !recording) void startRecording();
+    // a saved capture session (its History entry, a link): opened as the Sessions menu opens it (replace or add)
+    if (typeof p?.session === 'string') void openSession({ name: p.session });
     // an exchange named elsewhere (a flow step, an agent's link): selected when the session still has it
     if (typeof p?.exchangeId === 'string') {
       const id = p.exchangeId;
@@ -245,17 +267,15 @@ export function DebuggerView() {
       toastError(e);
     }
   };
-  const openSession = async (s: Session) => {
-    const replace = rows.length
-      ? await confirmAction({ title: `Open ${s.name}`, message: 'Replace the current session with it, or add its exchanges to it?', confirmLabel: 'Replace', cancelLabel: 'Add' })
-      : true;
+  /** A saved session opens in its own tab (WF-19); the live capture goes on in its tab. `preview`: a single click. */
+  const openSession = (s: Pick<Session, 'name'>, o: { preview?: boolean } = {}) => sessionTabs.open(s.name, null, o);
+  /** The saved session on screen joins the live capture (its exchanges are added to it), which is then shown. */
+  const addToLive = async (name: string) => {
     try {
-      const r = await call<Status & { loaded: number }>('debug.openSession', { name: s.name, append: !replace });
+      const r = await call<Status & { loaded: number }>('debug.openSession', { name, append: true });
+      sessionTabs.select(sessionTabs.tabs.find((t) => !t.savedId)?.id ?? 'main');
       setStatus(r);
-      setSelected(undefined);
-      setSelectedIds([]);
-      toast(`Opened ${r.loaded} exchanges`);
-      void load();
+      toast(`Added ${plural(r.loaded, 'exchange')} to the live capture`);
     } catch (e) {
       toastError(e);
     }
@@ -525,11 +545,34 @@ export function DebuggerView() {
           </>
         }
       />
+      <LibraryTabStrip
+        label="Open sessions"
+        library="debugger"
+        refOf={(t) => (t.savedId ? { kind: 'capture', name: t.savedId } : undefined)}
+        tabs={sessionTabs.tabs}
+        active={sessionTabs.active.id}
+        titleOf={(t) => (t.savedId ? (t.savedId === 'autosave' ? 'AutoSave' : t.savedId) : 'Live capture')}
+        fixed={(t) => !t.savedId}
+        onSelect={sessionTabs.select}
+        onClose={(ids) => sessionTabs.close(ids.filter((id) => sessionTabs.tabs.find((t) => t.id === id)?.savedId), null)}
+        onKeep={sessionTabs.keep}
+      />
+      {viewing && (
+        <div className="flex items-center gap-2 px-3 py-1 border-b border-line text-xs bg-panel" data-session-tab={viewing}>
+          <FolderOpen size={12} className="text-muted" />
+          <span className="text-muted">
+            Saved session <b className="text-fg">{viewing}</b> (debugger/{viewing}.har): the live capture goes on in its own tab.
+          </span>
+          <Button size="sm" variant="ghost" className="ml-auto" icon={<Plus size={12} />} onClick={() => void addToLive(viewing)}>
+            Add to the live capture
+          </Button>
+        </div>
+      )}
       <Tabs
         value={tab}
         onChange={setTab}
         tabs={[
-          { id: 'traffic', label: 'Traffic', badge: status?.exchanges || undefined },
+          { id: 'traffic', label: 'Traffic', badge: (viewing ? rows.length : status?.exchanges) || undefined },
           { id: 'stats', label: 'Statistics' },
           { id: 'connections', label: 'Connections' },
           { id: 'rules', label: 'Rules', badge: rules?.activeCount || undefined },

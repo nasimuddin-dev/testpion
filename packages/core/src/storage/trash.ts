@@ -3,7 +3,7 @@ import { basename, join } from 'node:path';
 import { ApsError } from '../errors.js';
 import { shortId, slugify } from '../util/ids.js';
 import type { WorkspaceStore } from './workspace.js';
-import { readJson } from './fsutil.js';
+import { readJson, renameOwned } from './fsutil.js';
 import { COLLECTION_ITEM_KINDS } from '../runner/collection-realtime.js';
 
 /**
@@ -38,7 +38,7 @@ export function moveToTrash(store: WorkspaceStore, kind: TrashKind, file: string
   mkdirSync(dir, { recursive: true });
   const ignore = join(trashDir(store), '.gitignore');
   if (!existsSync(ignore)) writeFileSync(ignore, '# deleted items (restorable in TestPion for 30 days); never commit them\n*\n');
-  renameSync(file, join(dir, `${Date.now()}--${basename(file)}`));
+  renameOwned(file, join(dir, `${Date.now()}--${basename(file)}`));
 }
 
 /** The id a trashed collection file had (undefined for an unreadable file). */
@@ -123,7 +123,7 @@ export function restoreFromTrash(store: WorkspaceStore, id: string): { kind: Tra
     mkdirSync(dir, { recursive: true });
     let dest = join(dir, name);
     if (existsSync(dest)) dest = join(dir, name.replace(/(\.[^.]+)?$/, '-restored$1'));
-    renameSync(path, dest);
+    renameOwned(path, dest);
     return { kind, id: basename(dest), name: basename(dest) };
   }
   const data = readJson<{ id: string; name: string } & Record<string, unknown>>(path);

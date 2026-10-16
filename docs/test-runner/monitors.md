@@ -13,7 +13,7 @@ A monitor runs a collection (or chosen folders and requests), or a test file or 
   <img src="/images/monitors.jpg" alt="The Monitors view: a monitor with its last result, success rate, run time, next run, a bar per recent run and the list of runs" width="1440" height="900" loading="lazy">
 </figure>
 
-Open **Monitors** on the rail (<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>5</kbd>) and click **New monitor**. You can also right-click a collection or folder and choose **Monitor on a schedule…**, or use **File ▸ New ▸ Monitor…**. Then choose:
+Open **Monitors** (the rail's **More…**, or <kbd>Ctrl</kbd>+<kbd>K</kbd> ▸ *Go to Monitors*) and click **New monitor**. You can also right-click a collection or folder and choose **Monitor on a schedule…**, or use **File ▸ New ▸ Monitor…**. Then choose:
 
 - **Runs**: **A collection** or **A test file or flow**, then the **Collection** (or the **Test file**, from `tests/`) and the **Environment** (the same picker as the top bar; production is marked in red). A flow's **Deploy ▸ Schedule** opens this editor with its file already picked.
 - **Run every**: minutes, hours or days.

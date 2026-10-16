@@ -106,7 +106,10 @@ export function PinnablePanel({
   useEffect(() => {
     if (lastReveal.current === revealKey) return;
     lastReveal.current = revealKey;
-    if (!pinned) setOpen(true);
+    if (pinned) return;
+    // a close still pending from before (the pointer left the panel as it hid) must not take the panel away again
+    clearTimer();
+    setOpen(true);
   }, [revealKey, pinned]);
 
   // the overlay closes on Esc and on a click outside it
@@ -127,7 +130,8 @@ export function PinnablePanel({
   }, [pinned, open, close]);
 
   const onPanelLeave = () => {
-    if (pinned) return;
+    // a hidden panel the pointer "leaves" (it hid under the pointer: Esc, a click outside) has nothing to close
+    if (pinned || !open) return;
     clearTimer();
     timer.current = setTimeout(() => {
       // kept while one of its menus is open or the keyboard is in it (as in Visual Studio)

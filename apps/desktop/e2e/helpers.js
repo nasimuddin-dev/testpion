@@ -24,10 +24,25 @@ window.__t = (() => {
     sleep,
     waitFor,
     esc,
-    view: async (label) => { await esc(); document.querySelector(`nav [aria-label="${label}"]`)?.click(); await sleep(1200); return !!document.querySelector(`nav [aria-label="${label}"][aria-current="page"]`); },
+    view: async (label) => { await esc(); await window.__t.rail(label); await sleep(1200); return !!document.querySelector(`nav [aria-label="${label}"][aria-current="page"]`); },
+    // go to a view by its rail label: its rail button, or (a view the rail doesn't show) the rail's More… menu; no waiting
+    rail: async (label) => {
+      const b = document.querySelector(`nav [aria-label="${label}"]`);
+      if (b) return b.click(), true;
+      const more = document.querySelector('nav [aria-label="More views"]');
+      if (!more) return false;
+      more.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, pointerType: 'mouse' }));
+      const item = await waitFor(() => [...document.querySelectorAll('[role=menuitem]')].find((m) => m.textContent.trim() === label), 1500);
+      item?.click();
+      await waitFor(() => !document.querySelector('[role=menu]'), 1000);
+      return !!item;
+    },
     requests: async () => { await esc(); window.dispatchEvent(new KeyboardEvent('keydown', { key: '2', ctrlKey: true, altKey: true, bubbles: true })); await waitFor(() => aside() && rows().length, 3000); await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))); return !!aside(); },
     expand: async (text) => { const r = row(text); if (!r) return `NO ROW ${text}`; if (r.getAttribute('aria-expanded') === 'false') r.click(); await sleep(500); return 'ok'; },
-    open: async (text) => { const r = row(text); if (!r) return `NO ROW ${text}`; r.click(); await sleep(1800); return 'ok'; },
+    // opens for good (a click previews, WF-19; the double-click keeps it), as a user opening several requests does
+    open: async (text) => { const r = row(text); if (!r) return `NO ROW ${text}`; r.click(); r.dispatchEvent(new MouseEvent('dblclick', { bubbles: true })); await sleep(1800); return 'ok'; },
+    // a single click: a preview tab, replaced by the next one opened that way
+    preview: async (text) => { const r = row(text); if (!r) return `NO ROW ${text}`; r.click(); await sleep(1500); return 'ok'; },
     // a new tab of a kind (WebSocket, GraphQL, gRPC …) from the tab strip's + menu (a request opens first, so the strip is there)
     newTab: async (label) => {
       await esc();
@@ -46,7 +61,8 @@ window.__t = (() => {
       const set = (v) => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(f, v); f.dispatchEvent(new Event('input', { bubbles: true })); };
       set(text); await sleep(900);
       const r = [...document.querySelectorAll('aside [data-tree-row], aside button')].find((b) => b.offsetParent && b.getAttribute('aria-expanded') === null && b.textContent.trim().endsWith(text));
-      r?.click(); await sleep(1800);
+      // opened for good, as `open` does (a single click only previews, WF-19)
+      r?.click(); r?.dispatchEvent(new MouseEvent('dblclick', { bubbles: true })); await sleep(1800);
       set(''); await sleep(400);
       return r ? 'ok' : `NO ROW ${text}`;
     },

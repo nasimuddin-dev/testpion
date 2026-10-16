@@ -43,6 +43,8 @@ export type ItemRef =
   /** A collection's mock server. */
   | { kind: 'mock'; collectionId: string }
   | { kind: 'certificate'; host: string }
+  /** A Debugger capture session saved as a HAR file (debugger/sessions/<name>.har): opens in the Debugger. */
+  | { kind: 'capture'; name: string }
   /** A changed file in the Git view: its path in the workspace; `line` the line a link pointed at (1-based, as text). */
   | { kind: 'git-file'; path: string; line?: string }
   /** A page of the documentation (https only). */
@@ -72,6 +74,7 @@ export const ITEM_REF_FIELDS: Readonly<Record<ItemKind, readonly string[]>> = {
   dataset: ['name'],
   mock: ['collectionId'],
   certificate: ['host'],
+  capture: ['name'],
   'git-file': ['path', 'line?'],
   doc: ['url'],
 };
@@ -100,6 +103,7 @@ export const ITEM_KIND_LABEL: Readonly<Record<ItemKind, string>> = {
   dataset: 'Dataset',
   mock: 'Mock server',
   certificate: 'Certificate',
+  capture: 'Capture session',
   'git-file': 'Changed file',
   doc: 'Documentation',
 };

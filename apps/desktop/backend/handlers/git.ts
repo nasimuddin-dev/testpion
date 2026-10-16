@@ -57,11 +57,10 @@ export function gitHandlers(be: Backend): Handlers {
    * outside TestPion" notice (the user asked for it).
    */
   const rewritten = async <T>(op: () => Promise<T>): Promise<T> => {
-    be.lastOwnChange = Date.now();
     try {
       return await op();
     } finally {
-      be.lastOwnChange = Date.now();
+      be.adoptDiskState(); // git wrote the files for the app: they are its own changes, not outside ones
       be.ws.reloadWorkspaceFile();
       be.host.emit('data.changed', { method: 'git' });
       be.host.emit('git.changed', {});
@@ -130,7 +129,6 @@ export function gitHandlers(be: Backend): Handlers {
      * environment (in the OS secret store); plain environment / workspace / collection variables become secret.
      */
     'git.fixSecrets': async ({ findings, environmentId }: { findings: SecretFinding[]; environmentId: string }) => {
-      be.lastOwnChange = Date.now();
       const r = await fixCommittableSecrets(be.ws, be.secrets, findings, { environmentId });
       be.host.emit('data.changed', { method: 'col.save' });
       return changed(r);
@@ -190,7 +188,6 @@ export function gitHandlers(be: Backend): Handlers {
       if (!file) throw new ApsError('ValidationError', 'A collection or an environment');
       const text = await gitShow(ws(), file, rev);
       if (text === undefined) throw new ApsError('ValidationError', `${file} is not in commit ${rev.slice(0, 7)}`);
-      be.lastOwnChange = Date.now();
       atomicWrite(be.ws.safePath(file), text);
       be.host.emit('data.changed', { method: collectionId ? 'col.save' : 'env.save' });
       return { file, rev };
@@ -202,7 +199,6 @@ export function gitHandlers(be: Backend): Handlers {
       if (!old) throw new ApsError('ValidationError', `The request is not in commit ${rev.slice(0, 7)}`);
       const current = be.ws.getCollection(collectionId);
       const next = replaceCollectionItem(current, itemId, old) ?? { ...current, items: [...current.items, old] };
-      be.lastOwnChange = Date.now();
       const saved = be.ws.saveCollection(next as Collection);
       be.host.emit('data.changed', { method: 'col.save' });
       return changed({ collection: saved.id, item: old });

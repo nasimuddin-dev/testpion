@@ -127,58 +127,79 @@ export function exchangesToHar(exchanges: DebuggerExchange[], redactor: Redactor
 
 /** A HAR file (ours or another tool's) as exchanges, for opening a saved session. */
 export function exchangesFromHar(har: unknown): DebuggerExchange[] {
-  const entries = (har as Partial<HarLog>)?.log?.entries;
+  // a HAR file is someone's file: any field may be missing or of another type (a hand edit, another tool, a newer
+  // version). Each is read for the type it must have, else left out: the session opens, never a TypeError from deep inside.
+  const obj = (v: unknown): Record<string, any> | undefined => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, any>) : undefined);
+  const str = (v: unknown): string | undefined => (typeof v === 'string' ? v : undefined);
+  const num = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
+  const bool = (v: unknown): boolean | undefined => (typeof v === 'boolean' ? v : undefined);
+  const list = <T>(v: unknown): T[] | undefined => (Array.isArray(v) ? (v.filter((x) => obj(x)) as T[]) : undefined);
+  const entries = obj(obj(har)?.log)?.entries;
   if (!Array.isArray(entries)) return [];
-  const flat = (h?: Array<{ name: string; value: string }>) => Object.fromEntries((h ?? []).filter((x) => x && typeof x.name === 'string').map((x) => [x.name.toLowerCase(), String(x.value ?? '')]));
+  const flat = (h: unknown) =>
+    Object.fromEntries(
+      (Array.isArray(h) ? h : []).filter((x) => typeof obj(x)?.name === 'string').map((x: { name: string; value?: unknown }) => [x.name.toLowerCase(), x.value == null ? '' : String(x.value)]),
+    );
   return entries
-    .filter((x) => x && x.request && typeof x.request.url === 'string')
-    .map((x) => {
-      const t = x._testpion;
+    .filter((x) => typeof obj(obj(x)?.request)?.url === 'string')
+    .map((x: Record<string, any>) => {
+      const t = obj(x._testpion);
+      const req = x.request as Record<string, any>;
+      const url = req.url as string;
       let host = '';
       try {
-        host = new URL(x.request.url).host;
+        host = new URL(url).host;
       } catch {
-        host = x.request.url;
+        host = url;
       }
       // until the first byte of the answer: sending plus waiting (-1 is HAR's "not known")
-      const send = Math.max(0, x.timings?.send ?? 0);
-      const wait = send + Math.max(0, x.timings?.wait ?? 0);
-      const total = typeof x.time === 'number' ? x.time : wait + Math.max(0, x.timings?.receive ?? 0);
-      const res = x.response ?? ({} as HarEntry['response']);
+      const timings = obj(x.timings);
+      const send = Math.max(0, num(timings?.send) ?? 0);
+      const wait = send + Math.max(0, num(timings?.wait) ?? 0);
+      const total = num(x.time) ?? wait + Math.max(0, num(timings?.receive) ?? 0);
+      const res = obj(x.response) ?? {};
+      const content = obj(res.content);
+      const postText = str(obj(req.postData)?.text);
+      const comment = str(x.comment);
+      const bodySize = num(req.bodySize);
+      const httpVersion = str(req.httpVersion);
+      const serverAddress = str(t?.serverAddress) ?? str(x.serverIPAddress);
+      const kind = str(t?.kind);
+      const responseHeaders = flat(res.headers);
       return {
-        id: t?.id ?? shortId('dbg-'),
-        startedAt: x.startedDateTime ?? new Date(0).toISOString(),
-        kind: t?.kind ?? 'http',
-        method: x.request.method ?? 'GET',
-        url: x.request.url,
+        id: str(t?.id) || shortId('dbg-'),
+        startedAt: str(x.startedDateTime) ?? new Date(0).toISOString(),
+        kind: kind === 'tunnel' || kind === 'websocket' ? kind : 'http',
+        method: str(req.method) || 'GET',
+        url,
         host,
-        clientPort: t?.clientPort ?? 0,
-        application: t?.application ?? (x.comment?.startsWith('application: ') ? x.comment.slice(13) : undefined),
-        requestHeaders: flat(x.request.headers),
-        requestBody: x.request.postData?.text || undefined,
-        requestBodyBytes: x.request.bodySize >= 0 ? x.request.bodySize : (x.request.postData?.text?.length ?? 0),
-        status: res.status || undefined,
-        statusText: res.statusText,
-        responseHeaders: flat(res.headers),
-        responseBody: res.content?.text || undefined,
-        responseBodyBytes: res.content?.size ?? res.bodySize ?? 0,
-        responseBodyTruncated: t?.truncated,
-        contentType: res.content?.mimeType || flat(res.headers)['content-type'],
+        clientPort: num(t?.clientPort) ?? 0,
+        application: str(t?.application) ?? (comment?.startsWith('application: ') ? comment.slice(13) : undefined),
+        requestHeaders: flat(req.headers),
+        requestBody: postText || undefined,
+        requestBodyBytes: bodySize !== undefined && bodySize >= 0 ? bodySize : (postText?.length ?? 0),
+        status: num(res.status) || undefined,
+        statusText: str(res.statusText),
+        responseHeaders,
+        responseBody: str(content?.text) || undefined,
+        responseBodyBytes: num(content?.size) ?? num(res.bodySize) ?? 0,
+        responseBodyTruncated: bool(t?.truncated),
+        contentType: str(content?.mimeType) || responseHeaders['content-type'],
         sendMs: send,
         waitMs: Math.max(0, wait),
         durationMs: Math.max(0, total),
-        ...(x.request.httpVersion === 'HTTP/2' || x.request.httpVersion === 'h2' ? { httpVersion: '2' as const } : {}),
-        ...(t?.serverAddress || x.serverIPAddress ? { serverAddress: t?.serverAddress ?? x.serverIPAddress } : {}),
-        ...(t?.pid ? { pid: t.pid } : {}),
-        ...(t?.user ? { user: t.user } : {}),
-        ...(t?.highlightStyle ? { highlightStyle: t.highlightStyle } : {}),
-        error: t?.error,
-        bookmarked: t?.bookmarked,
-        tls: t?.tls,
-        frames: t?.frames,
-        events: t?.events,
-        highlight: t?.highlight,
-        rules: t?.rules,
+        ...(httpVersion === 'HTTP/2' || httpVersion === 'h2' ? { httpVersion: '2' as const } : {}),
+        ...(serverAddress ? { serverAddress } : {}),
+        ...(num(t?.pid) ? { pid: num(t?.pid) } : {}),
+        ...(str(t?.user) ? { user: str(t?.user) } : {}),
+        ...(obj(t?.highlightStyle) ? { highlightStyle: obj(t?.highlightStyle) as DebuggerExchange['highlightStyle'] } : {}),
+        error: str(t?.error),
+        bookmarked: bool(t?.bookmarked),
+        tls: bool(t?.tls),
+        frames: list<NonNullable<DebuggerExchange['frames']>[number]>(t?.frames),
+        events: list<NonNullable<DebuggerExchange['events']>[number]>(t?.events),
+        highlight: str(t?.highlight),
+        rules: Array.isArray(t?.rules) ? (t.rules as unknown[]).filter((r): r is string => typeof r === 'string') : undefined,
       };
     });
 }

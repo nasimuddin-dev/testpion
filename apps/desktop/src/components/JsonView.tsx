@@ -2,7 +2,9 @@ import { detectLanguage, highlight as syntaxTokens, type CodeLanguage } from '..
 import { Camera, ChevronDown, ChevronRight, ChevronUp, CircleCheck, Copy, Equal, ListChecks, ListOrdered, Search, Shapes, Variable, WrapText } from 'lucide-react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { JSONPath } from 'jsonpath-plus';
-import { cx, IconButton, Input, Menu, VirtualList, type MenuItem } from './ui';
+import { cx, IconButton, Input, Menu, useDebounced, VirtualList, type MenuItem } from './ui';
+import { SuggestInput } from './SuggestInput';
+import { jsonPathProblem, jsonPaths, rootedJsonPath, suggestJsonPaths } from '../lib/json-paths';
 import { copyText } from '../lib/clipboard';
 import { plural } from '../lib/format';
 
@@ -99,18 +101,24 @@ function assertionItems(r: { path: string; value: unknown; expandable: boolean }
 const childPath = (parent: string, value: unknown, key: string) => (Array.isArray(value) ? `${parent}[${key}]` : `${parent}.${key}`);
 
 export function JsonTree({ data: full, query, onAssert: assertOnFull, onSaveVariable }: { data: unknown; query?: string; onAssert?(a: TreeAssertion): void; onSaveVariable?(v: TreeVariable): void }) {
-  // "Filter with JSONPath": show only what the expression selects
+  // "Filter with JSONPath": show only what the expression selects (evaluated a moment after typing stops: a big body
+  // is not searched on every keystroke); the field suggests the body's own paths (lib/json-paths.ts)
   const [filter, setFilter] = useState('');
+  const applied = useDebounced(filter, 150);
+  const [suggesting, setSuggesting] = useState(false);
+  const paths = useMemo(() => (suggesting ? jsonPaths(full) : []), [suggesting, full]);
   const filtered = useMemo(() => {
-    const f = filter.trim();
+    const f = applied.trim();
     if (!f) return undefined;
+    const problem = jsonPathProblem(f);
+    if (problem) return { data: undefined, error: problem };
     try {
-      const r = JSONPath({ path: f, json: full as object, wrap: true }) as unknown[];
+      const r = JSONPath({ path: rootedJsonPath(f), json: full as object, wrap: true }) as unknown[];
       return { data: r, error: undefined };
     } catch (e) {
       return { data: undefined, error: (e as Error).message };
     }
-  }, [filter, full]);
+  }, [applied, full]);
   const data = useMemo(() => filtered?.data ?? (filtered ? [] : full), [filtered, full]);
   // paths inside a filtered result aren't the response's paths, so checks are only offered unfiltered
   const onAssert = filtered ? undefined : assertOnFull;
@@ -181,16 +189,22 @@ export function JsonTree({ data: full, query, onAssert: assertOnFull, onSaveVari
         <button className="hover:text-fg" onClick={() => setExpanded(new Set(['$']))}>
           Collapse all
         </button>
-        <input
-          className="field h-6 text-xs mono flex-1 min-w-24 max-w-72 ml-2"
-          placeholder="Filter with JSONPath, e.g. $.items[*].name"
-          aria-label="Filter with JSONPath"
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          spellCheck={false}
-        />
+        <span className="flex flex-1 min-w-24 max-w-72 ml-2">
+          <SuggestInput
+            className="h-6 text-xs mono"
+            placeholder="Filter with JSONPath, e.g. $.items[*].name"
+            aria-label="Filter with JSONPath"
+            value={filter}
+            onChange={setFilter}
+            onFocus={() => setSuggesting(true)}
+            suggest={(v) => suggestJsonPaths(paths, v)}
+            onKeyDown={(e) => e.key === 'Escape' && filter && (e.preventDefault(), setFilter(''))}
+          />
+        </span>
         {filtered && (
-          <span className={filtered.error ? 'text-bad' : ''}>{filtered.error ? 'Not a valid JSONPath' : `${(filtered.data ?? []).length} match${(filtered.data ?? []).length === 1 ? '' : 'es'}`}</span>
+          <span data-filter-count className={filtered.error ? 'text-bad' : ''} title={filtered.error}>
+            {filtered.error ? `Not a valid JSONPath: ${filtered.error}` : `${(filtered.data ?? []).length} match${(filtered.data ?? []).length === 1 ? '' : 'es'}`}
+          </span>
         )}
         <span className="ml-auto hidden @2xl:inline truncate">
           {filtered

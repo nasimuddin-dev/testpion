@@ -93,6 +93,17 @@ describe('desktop backend', () => {
     await expect(Promise.resolve().then(() => call('settings.save', { ...current, proxy: { mode: 'custom', url: 'proxy:8080 x' } }))).rejects.toThrow(/not a URL/);
   });
 
+  it('settings.save keeps the desktop preferences (rail, density, keybindings) in the shape the window reads', async () => {
+    const current = (await call('settings.get')) as Record<string, unknown>;
+    const bad = (await call('settings.save', { ...current, rail: { order: 'home', shown: [1, 'tests'] }, density: 7, keybindings: 'Mod+K' })) as Record<string, unknown>;
+    expect(bad.rail).toEqual({ shown: ['tests'] });
+    expect(bad).not.toHaveProperty('density');
+    expect(bad).not.toHaveProperty('keybindings');
+    const good = (await call('settings.save', { ...current, rail: { order: ['home', 'tests'], shown: ['home'] }, density: 'compact', keybindings: { palette: 'Mod+J' } })) as Record<string, unknown>;
+    expect(good).toMatchObject({ rail: { order: ['home', 'tests'], shown: ['home'] }, density: 'compact', keybindings: { palette: 'Mod+J' } });
+    await call('settings.save', { ...current });
+  });
+
   it('vars.setInEnvironment adds a variable to an environment, then updates it (the {{variable}} popover)', async () => {
     const env = { id: 'pop-env', name: 'Popover', variables: [{ key: 'baseUrl', value: 'http://a', enabled: true }] };
     await call('env.save', { env });

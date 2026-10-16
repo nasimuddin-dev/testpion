@@ -39,6 +39,7 @@ export const LIST_TOOLS: Record<string, { field?: string }> = {
   flaky_tests: {},
   what_needs_attention: {},
   recent_failures: {},
+  history_list: {},
   request_history: {},
   monitor_results: {},
   monitor_requests: {},

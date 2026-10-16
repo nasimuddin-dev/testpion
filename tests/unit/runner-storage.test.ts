@@ -414,4 +414,31 @@ describe('settings recovery', () => {
     mgr.saveSettings(s);
     expect(readdirSync(home).some((f) => f.startsWith('settings.json.broken-'))).toBe(true);
   });
+
+  it('drops desktop preferences of the wrong shape (rail, density, keybindings) instead of handing them to the app', () => {
+    const home = join(dir, 'home-prefs');
+    mkdirSync(home, { recursive: true });
+    const load = (v: unknown) => {
+      writeFileSync(join(home, 'settings.json'), JSON.stringify(v));
+      return new WorkspaceManager(home).loadSettings();
+    };
+    const bad = load({ theme: 'dark', rail: { order: 'home', shown: 5 }, density: 'huge', keybindings: ['Mod+K'] });
+    expect(bad.theme).toBe('dark');
+    expect(bad).not.toHaveProperty('rail');
+    expect(bad).not.toHaveProperty('density');
+    expect(bad).not.toHaveProperty('keybindings');
+    expect(load({ rail: 'tests', keybindings: null, density: null })).not.toHaveProperty('rail');
+    // what is usable is kept: the strings of a list, the string bindings
+    const mixed = load({ rail: { order: ['home', 3, 'tests'], shown: ['tests'] }, density: 'compact', keybindings: { palette: 'Mod+J', send: 7 } });
+    expect(mixed.rail).toEqual({ order: ['home', 'tests'], shown: ['tests'] });
+    expect(mixed.density).toBe('compact');
+    expect(mixed.keybindings).toEqual({ palette: 'Mod+J' });
+    // JSON that is not an object holds no settings: defaults, and the problem is said
+    for (const v of [null, [1, 2], 'x', 3]) {
+      writeFileSync(join(home, 'settings.json'), JSON.stringify(v));
+      const mgr = new WorkspaceManager(home);
+      expect(mgr.loadSettings().theme).toBe('system');
+      expect(mgr.settingsProblem).toMatch(/not a JSON object/);
+    }
+  });
 });

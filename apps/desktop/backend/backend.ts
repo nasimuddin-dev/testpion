@@ -113,6 +113,7 @@ import {
   readJson,
   describeChanges,
   watchWorkspace,
+  type WorkspaceWatch,
   requireEnvironment,
   assertProductionStep,
   isDataChangingMethod,
@@ -136,6 +137,7 @@ import { externalSecretsHandlers, prefetchSecretsFor } from './handlers/external
 import { fuzzHandlers } from './handlers/fuzz.js';
 import { flowDebugHandlers } from './handlers/flow-debug.js';
 import { debuggerFlowHandlers } from './handlers/debugger-flow.js';
+import { debuggerReverseHandlers } from './handlers/debugger-reverse.js';
 import { terminalHandlers, createTerminals, type TerminalHost, type TerminalManager } from './handlers/terminal.js';
 import { flowDeployHandlers, stopFlowWebhooks } from './handlers/flow-deploy.js';
 import { flowScaleHandlers, cancelScaleRuns } from './handlers/flow-scale.js';
@@ -143,6 +145,7 @@ import { evalMatrixHandlers } from './handlers/eval-matrix.js';
 import { checkRpcParams, guardHandler } from './rpc-params.js';
 import { forgetProductionSessions, guardProduction } from './production-guard.js';
 import { VizPages } from './viz-pages.js';
+import { OwnWrites, type OwnWriteBatch } from './own-writes.js';
 import { clipConsole, consoleFromResult, consoleProtocol, consoleRefs, pushConsole, type ConsoleEntry } from './console-log.js';
 import { hasTemplate } from '@testpion/shared';
 import { assistantInstruction } from './assistant-tasks.js';
@@ -334,14 +337,10 @@ export class Backend {
       const id = readJson<{ id: string }>(join(dir, 'workspace.json')).id;
       const mine = this.manager.list().find((w) => w.id === id);
       if (!mine) return;
-      // the files it adds are the app's own (no "changed on disk" for them)
-      this.lastOwnChange = Date.now();
+      // the files it adds are the app's own (copyOwned: no "changed on disk" for them)
       const added = addTemplateAdditions(dir, mine.path);
       this.examplesAdded = added;
-      if (added.length && this.store?.root === mine.path) {
-        this.lastOwnChange = Date.now();
-        this.host.emit('data.changed', { method: 'ws.import' });
-      }
+      if (added.length && this.store?.root === mine.path) this.host.emit('data.changed', { method: 'ws.import' });
       this.settings = this.manager.saveSettings({ ...this.settings, examplesOfferedVersion: ENGINE_VERSION });
       if (added.length) this.logger.info(`Added to the examples workspace: ${added.join(', ')}`);
     } catch (e) {
@@ -367,11 +366,21 @@ export class Backend {
     }
   }
 
-  /** Stops watching the open workspace's folder (GIT-103). */
-  private stopWatching?: () => void;
-  /** When the app last changed workspace data itself (an RPC that saves): the watcher's events then are its own. */
-  /** When TestPion itself last wrote the workspace (its own changes are not news); git operations set it too. */
-  lastOwnChange = 0;
+  /** Watches the open workspace's folder (GIT-103): call it to stop. */
+  private stopWatching?: WorkspaceWatch;
+  /** The app's own writes to the workspace, as `data.changed` (own-writes.ts). */
+  private readonly ownWrites = new OwnWrites(
+    () => this.store?.root,
+    (b) => this.host.emit('data.changed', { method: 'write', ...b }),
+  );
+
+  /**
+   * Another program changed the workspace for the app (git switch, pull, discard): the folder as it is now is the
+   * known state, so the watcher does not report those files as changed outside TestPion. The caller refreshes.
+   */
+  adoptDiskState(): void {
+    this.stopWatching?.adopt();
+  }
 
   /** Notice changes made outside the app (git pull, a branch switch, another editor) and refresh the UI. */
   private watchStore(root: string): void {
@@ -390,7 +399,6 @@ export class Backend {
         this.host.emit('data.changed', { method: 'disk', kinds, paths: changes.map((c) => c.path).slice(0, 50), ...(complete ? { collectionIds: collectionIds as string[] } : {}) });
         this.host.emit('workspace.changedOnDisk', { message: describeChanges(changes), kinds: [...new Set(changes.map((c) => c.kind))], files: changes.map((c) => c.path).slice(0, 50) });
       },
-      { isOwnChange: () => Date.now() - this.lastOwnChange < 1500 },
     );
   }
 
@@ -540,21 +548,30 @@ export class Backend {
     const h = typeof method === 'string' && Object.hasOwn(this.handlers, method) ? this.handlers[method] : undefined;
     if (!h) throw new ApsError('ConfigurationError', `Unknown backend method ${String(method).slice(0, 80)}`);
     const t0 = performance.now();
+    // the workspace files this call wrote (any handler, through fsutil): said in its data.changed, like the watcher would
+    let written: OwnWriteBatch | undefined;
+    const changed = () => {
+      if (!written && !DATA_CHANGING.test(method)) return;
+      // the Collections explorer (and anything else listing workspace items) refreshes on this
+      // (a save names its collection: the window then reads that one, not every collection again)
+      const one = method === 'col.save' ? { collectionId: (params as { id?: string } | undefined)?.id } : {};
+      this.host.emit('data.changed', { method, ...one, ...(written ?? {}) });
+    };
     try {
-      const own = DATA_CHANGING.test(method);
-      if (own) this.lastOwnChange = Date.now();
       params = checkRpcParams(method, params); // "<method>: missing <param>" before anything runs
       await prefetchSecretsFor(this, params); // the environment's secret manager references, before they're needed
       // the proxy settings apply from the first method that may go over the network (start-up's reads don't wait)
       if (!LOCAL_READS.test(method)) await ensureProxyApplied();
-      const r = await guardProduction(this, method, params, async () => h(params ?? {})); // WF-06: production needs consent
-      if (own) this.lastOwnChange = Date.now();
+      const checked = params;
+      const r = await this.ownWrites.run(
+        () => guardProduction(this, method, checked, async () => h(checked ?? {})), // WF-06: production needs consent
+        (b) => (written = b),
+      );
       this.logger.trace(`rpc ${method}`, { ms: Math.round(performance.now() - t0) });
-      // the Collections explorer (and anything else listing workspace items) refreshes on this
-      // (a save names its collection: the window then reads that one, not every collection again)
-      if (DATA_CHANGING.test(method)) this.host.emit('data.changed', method === 'col.save' ? { method, collectionId: (params as { id?: string } | undefined)?.id } : { method });
+      changed();
       return r;
     } catch (e) {
+      if (written) changed(); // what it wrote before it failed is on disk
       const err = normalizeError(e);
       if (err.kind !== 'CancelledError') this.logger.warn(`rpc ${method} failed: ${err.message}`);
       throw err;
@@ -624,7 +641,7 @@ export class Backend {
    */
   private buildHandlers(): Handlers {
     const all: Handlers = {};
-    for (const group of [appHandlers, workspaceHandlers, collectionsHandlers, requestsHandlers, grpcHandlers, mcpHandlers, aiHandlers, testingHandlers, monitorHandlers, agentHandlers, feedbackHandlers, gitHandlers, debuggerHandlers, debuggerRulesHandlers, externalSecretsHandlers, fuzzHandlers, flowDebugHandlers, debuggerFlowHandlers, flowDeployHandlers, terminalHandlers, flowScaleHandlers, evalMatrixHandlers]) {
+    for (const group of [appHandlers, workspaceHandlers, collectionsHandlers, requestsHandlers, grpcHandlers, mcpHandlers, aiHandlers, testingHandlers, monitorHandlers, agentHandlers, feedbackHandlers, gitHandlers, debuggerHandlers, debuggerRulesHandlers, externalSecretsHandlers, fuzzHandlers, flowDebugHandlers, debuggerFlowHandlers, debuggerReverseHandlers, flowDeployHandlers, terminalHandlers, flowScaleHandlers, evalMatrixHandlers]) {
       for (const [name, fn] of Object.entries(group(this))) {
         if (name in all) throw new Error(`RPC method ${name} is defined twice`);
         // the parameters are checked first; a TypeError from inside becomes an InternalError naming the method
@@ -1350,6 +1367,7 @@ export class Backend {
     for (const t of this.deferred) clearTimeout(t);
     this.terminals.dispose('quit');
     this.stopWatching?.();
+    this.ownWrites.dispose();
     this.monitorScheduler.stop();
     this.gitAutoFetch.stop();
     for (const c of this.controllers.values()) c.abort();

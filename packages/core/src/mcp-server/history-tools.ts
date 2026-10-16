@@ -6,6 +6,7 @@ import type { Collection, CollectionNode } from '../model/types.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import type { Redactor } from '../util/redact.js';
 import { ApsError } from '../errors.js';
+import { HISTORY_KINDS, historyKindOf } from '../model/history-kinds.js';
 import { str, type Tool } from './tool.js';
 
 /**
@@ -38,6 +39,37 @@ export function historyTools({ store, redactor, findCollection, findRequest }: H
           .listHistory({ requestId: node.id, kind: 'http', limit })
           .items.map((h) => ({ id: h.id, timestamp: h.timestamp, status: h.status, durationMs: h.durationMs, size: h.size, url: h.url && redactor.redactUrl(h.url) }));
       },
+    },
+    {
+      name: 'history_list',
+      description:
+        "The workspace's History, newest first (what `testpion history list --json` prints): id, `ref` (an ItemRef that opens the entry), time, kind, name, method, status, duration, size. kind `capture` lists the HTTP Debugger's capture sessions — each Save to collection, Create flow or Save session — with `capture`: the result (collection, flow, session), `capture.ref` that opens it (resolve_ref / the testpion:// link), how many exchanges, through the proxy or the reverse proxy, the hosts, and from when to when.",
+      inputSchema: {
+        type: 'object',
+        properties: {
+          kind: { type: 'string', enum: HISTORY_KINDS, description: `Only this kind: ${HISTORY_KINDS.join(', ')} (capture: the Debugger's capture sessions)` },
+          query: str('Only entries matching this text (name, URL, method, status)'),
+          failed: { type: 'boolean', description: 'Only entries that failed' },
+          limit: { type: 'number', description: 'How many (default 20, max 200)' },
+        },
+      },
+      run: (a) =>
+        store.meta
+          .listHistory({ kind: historyKindOf(a.kind), query: a.query ? String(a.query) : undefined, failed: a.failed === true || undefined, brief: true, limit: Math.min(Math.max(Number(a.limit) || 20, 1), 200) })
+          .items.map((h) => ({
+            id: h.id,
+            ref: { kind: 'history', historyId: h.id },
+            timestamp: h.timestamp,
+            kind: h.kind,
+            name: h.name,
+            method: h.method,
+            // a capture session's url is its hosts, already redacted when it was recorded
+            url: h.url && (h.capture ? h.url : redactor.redactUrl(h.url)),
+            status: h.status,
+            durationMs: h.durationMs,
+            size: h.size,
+            ...(h.capture ? { capture: h.capture } : {}),
+          })),
     },
     {
       name: 'score_trend',
@@ -74,7 +106,7 @@ export function historyTools({ store, redactor, findCollection, findRequest }: H
       inputSchema: { type: 'object', properties: { kind: str('Only this kind: http, graphql, grpc, mcp or llm'), limit: { type: 'number', description: 'How many (default 20, max 200)' } } },
       run: (a) =>
         store.meta
-          .listHistory({ failed: true, kind: a.kind ? String(a.kind) : undefined, limit: Math.min(Math.max(Number(a.limit) || 20, 1), 200) })
+          .listHistory({ failed: true, kind: historyKindOf(a.kind), limit: Math.min(Math.max(Number(a.limit) || 20, 1), 200) })
           .items.map((h) => ({ id: h.id, ref: { kind: 'history', historyId: h.id }, timestamp: h.timestamp, kind: h.kind, name: h.name, method: h.method, url: h.url && redactor.redactUrl(h.url), status: h.status, durationMs: h.durationMs })),
     },
     {

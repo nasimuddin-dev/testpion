@@ -3,6 +3,8 @@ import type { WorkspaceStore } from './workspace.js';
 import { secretKeys, type SecretStore } from './secrets.js';
 import { ApsError } from '../errors.js';
 import { escapeRegex } from '../util/redact.js';
+import { SCRIPT_KEYS, UNTEMPLATED_KEYS } from '@testpion/shared';
+import { templatedFileText } from './item-info.js';
 
 /**
  * Where a variable is used in a workspace, and renaming it everywhere: `{{name}}` in requests (URL,
@@ -24,11 +26,10 @@ const esc = escapeRegex;
 const tokenRe = (name: string) => new RegExp(`\\{\\{\\s*${esc(name)}\\s*\\}\\}`, 'g');
 /** tp.environment.get('x'), tp.variables.set("x", …), tp.globals.has(`x`) … */
 const scriptRe = (name: string) => new RegExp(`((?:pm|tp|aps)\\.(?:environment|globals|collectionVariables|variables|iterationData)\\.(?:get|set|has|unset)\\(\\s*)(['"\`])${esc(name)}\\2`, 'g');
-const SCRIPT_KEYS = new Set(['preRequestScript', 'testScript']);
 
 function fieldName(path: Array<string | number>, root: unknown): string {
   const key = path[path.length - 1];
-  if (typeof key === 'string' && SCRIPT_KEYS.has(key)) return key === 'preRequestScript' ? 'pre-request script' : 'test script';
+  if (typeof key === 'string' && SCRIPT_KEYS.has(key)) return key === 'preRequestScript' ? 'pre-request script' : key === 'testScript' ? 'test script' : 'script';
   const has = (k: string) => path.includes(k);
   // headers[i].value → "header <name>"
   const hi = path.indexOf('headers');
@@ -76,7 +77,8 @@ export function variableUsages(store: WorkspaceStore, name: string): VariableUsa
   const out: VariableUsage[] = [];
   const tok = tokenRe(name);
   const scr = scriptRe(name);
-  const hit = (s: string, script: boolean) => (tok.lastIndex = 0, scr.lastIndex = 0, tok.test(s) || (script && scr.test(s)));
+  // a script uses a variable by tp.*.get/set('name'); {{name}} in one (a visualizer template) is not a use (templatedText)
+  const hit = (s: string, script: boolean) => (tok.lastIndex = 0, scr.lastIndex = 0, script ? scr.test(s) : tok.test(s));
   for (const e of store.listEnvironments()) if (e.variables.some((v) => v.key === name)) out.push({ where: `Environment ${e.name}`, kind: 'definition', field: 'variable' });
   if (store.workspace.variables?.some((v) => v.key === name)) out.push({ where: 'Workspace', kind: 'definition', field: 'variable' });
   for (const c of store.listCollections().filter((x) => !x.problem)) {
@@ -93,7 +95,9 @@ export function variableUsages(store: WorkspaceStore, name: string): VariableUsa
       if (node.kind === 'folder' && node.variables?.some((v) => v.key === name)) add({ where, kind: 'definition', field: 'folder variable', collectionId: c.id });
       const { items: _items, ...own } = node as CollectionNode & { items?: unknown };
       eachString(own, [], (s, p) => {
-        const script = typeof p[p.length - 1] === 'string' && SCRIPT_KEYS.has(p[p.length - 1] as string);
+        const key = p[p.length - 1];
+        const script = typeof key === 'string' && SCRIPT_KEYS.has(key);
+        if (!script && typeof key === 'string' && UNTEMPLATED_KEYS.has(key)) return; // a description is not templated
         if (hit(s, script)) add({ where, kind: script ? 'script' : 'request', field: fieldName(p, own), collectionId: c.id, requestId: node.kind === 'folder' ? undefined : node.id });
       });
     }
@@ -102,7 +106,7 @@ export function variableUsages(store: WorkspaceStore, name: string): VariableUsa
     const text = store.readTestFile(f);
     tok.lastIndex = 0;
     scr.lastIndex = 0;
-    if (tok.test(text) || scr.test(text)) out.push({ where: `tests/${f}`, kind: 'test-file', field: 'file' });
+    if (tok.test(templatedFileText(f, text)) || scr.test(text)) out.push({ where: `tests/${f}`, kind: 'test-file', field: 'file' });
   }
   return out;
 }

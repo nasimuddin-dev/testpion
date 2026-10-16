@@ -7,7 +7,22 @@ description: "Every keyboard shortcut of the TestPion app in one list: Quick Ope
 
 # Keyboard shortcuts
 
-On macOS use <kbd>⌘</kbd> for <kbd>Ctrl</kbd> and <kbd>⌥</kbd> for <kbd>Alt</kbd>. In the app, <kbd>?</kbd> (outside a text field) or **Help ▸ Keyboard Shortcuts** shows the same list.
+On macOS use <kbd>⌘</kbd> for <kbd>Ctrl</kbd> and <kbd>⌥</kbd> for <kbd>Alt</kbd>. In the app, <kbd>?</kbd> (outside a text field) or **Help ▸ Keyboard Shortcuts** shows the same list. The tables list the **default** keys.
+
+## Change the keys {#change-the-keys}
+
+**Settings ▸ Keyboard** (also **Change the keys…** in the <kbd>?</kbd> list, and <kbd>Ctrl</kbd>+<kbd>K</kbd> ▸ *Keyboard Shortcuts: Change the Keys…*) lists every shortcut with a search box (by what it does or by its keys). The ones under **Anywhere** can be changed, except <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>1</kbd>…<kbd>9</kbd> (the rail's), <kbd>F12</kbd> and <kbd>Ctrl</kbd>+<kbd>Z</kbd>:
+
+1. Click a shortcut's keys: it says **Press keys…**. Press the new combination (<kbd>Esc</kbd> cancels, <kbd>Backspace</kbd> turns the shortcut off).
+2. Keys another command has are named (*Ctrl+P is already “Quick Open”*): **Use it here** moves them to this command and gives the other one this command's old keys. Keys an editor or the system keeps (<kbd>Ctrl</kbd>+<kbd>S</kbd>, <kbd>Ctrl</kbd>+<kbd>C</kbd>, <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>1</kbd>…<kbd>9</kbd> …) and a key alone that typing needs (a letter, <kbd>Shift</kbd>+a letter) are refused with the reason.
+3. ↺ beside a shortcut puts its default back; **Reset all** puts every default back.
+4. **Export…** saves your changes as `testpion-keybindings.json` (`{ "testpionKeybindings": 1, "bindings": { "palette": "Mod+Shift+P" } }`, only the keys you changed; `Mod` = <kbd>Ctrl</kbd> / <kbd>⌘</kbd>); **Import…** reads such a file on another computer and says what it skipped.
+
+Your keys are this computer's (the app's `settings.json`, `keybindings`), and the shortcuts list (<kbd>?</kbd>), the tooltips, the top bar and the command palette's hints show them. The editors' own keys (send, save, find …) are listed for reference and keep their keys. The native **File** menu shows the default key of **Settings…**.
+
+<figure class="aps-screenshot">
+  <img src="/images/settings-keyboard.jpg" alt="Settings ▸ Keyboard: a search box, Reset all, Export and Import, and every shortcut grouped as in this page, the app-wide ones with their keys to click and change" width="1440" height="900" loading="lazy">
+</figure>
 
 ## Anywhere
 
@@ -20,7 +35,7 @@ On macOS use <kbd>⌘</kbd> for <kbd>Ctrl</kbd> and <kbd>⌥</kbd> for <kbd>Alt<
 | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd> | Run the last run again, as it ran (same files or collection, same environment). |
 | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>T</kbd> | Reopen the tab you closed last, in whichever tab bar it was. |
 | <kbd>Alt</kbd>+<kbd>←</kbd> / <kbd>Alt</kbd>+<kbd>→</kbd> | Back / forward to where you were (also the mouse's back and forward buttons). |
-| <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>1</kbd> … <kbd>9</kbd> | Go to a view in the rail's order: 1 Home, 2 Collections, 3 Debugger, 4 Tests, 5 Monitors, 6 Load, 7 AI Lab, 8 Evaluations, 9 Environments (the rail's tooltips show each). |
+| <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>1</kbd> … <kbd>9</kbd> | Go to a view shown on the rail, in its order: by default 1 Home, 2 Collections, 3 Tests, 4 Environments, 5 History (the rail's tooltips show each; [rearrange the rail](/getting-started/finding-your-way#choose-what-the-rail-shows) and the numbers follow). |
 | <kbd>Ctrl</kbd>+<kbd>B</kbd> | Show or hide the Collections explorer (in **Tests**, beside the flow designer, to drag requests onto the canvas). |
 | <kbd>F8</kbd> / <kbd>Shift</kbd>+<kbd>F8</kbd> | Open the next / previous item of **Problems** (while a flow is paused in the debugger, <kbd>F8</kbd> continues it). |
 | <kbd>Ctrl</kbd>+<kbd>J</kbd> | Ask the AI assistant about what is on screen (again: close it). |
@@ -29,6 +44,7 @@ On macOS use <kbd>⌘</kbd> for <kbd>Ctrl</kbd> and <kbd>⌥</kbd> for <kbd>Alt<
 | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>&#96;</kbd> | New terminal. |
 | <kbd>Ctrl</kbd>+<kbd>,</kbd> | Settings. |
 | <kbd>F12</kbd> | Developer Tools (Windows and Linux; **View** menu on macOS). |
+| <kbd>Ctrl</kbd>+<kbd>Z</kbd> | Undo a delete while its message shows **Undo** (8 seconds; outside text fields and editors, which keep their own undo). |
 | <kbd>?</kbd> | The list of shortcuts (outside a text field). |
 
 ## Requests and tabs

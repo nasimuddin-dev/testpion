@@ -182,7 +182,8 @@ export function normalizeTest(raw: Record<string, unknown>, file?: string, index
         params: kvList(r.params ?? r.query),
         headers,
         cookies: kvList(r.cookies),
-        auth: authOf(r.auth),
+        // a step's own auth, else the file's `defaults: auth:` (also for a step written with a nested `request:`)
+        auth: authOf(r.auth ?? (r !== raw ? raw.auth : undefined)),
         body: bodyOf(r.body ?? (r.json !== undefined ? { type: 'json', content: JSON.stringify(r.json, null, 2) } : undefined), ct),
         settings: r.settings as HttpRequestSpec['settings'],
       };

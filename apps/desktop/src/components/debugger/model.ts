@@ -19,6 +19,8 @@ export interface Exchange {
   host: string;
   clientPort: number;
   application?: string;
+  /** How it came in: the proxy (unset), or the reverse proxy in front of one API (`reverse`). */
+  source?: 'proxy' | 'reverse';
   /** The program's process id, and the server's address (ip:port). */
   pid?: number;
   /** The account the program runs as. */

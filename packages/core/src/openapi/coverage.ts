@@ -258,7 +258,7 @@ export async function workspaceApiCoverage(
     sources.runs.push({ id, name: meta?.name ?? id, startedAt: meta?.startedAt ?? '' });
   }
   if (opts.history) {
-    const entries = store.meta.listHistory({ limit: opts.history }).items;
+    const entries = store.meta.listHistory({ limit: opts.history, requests: true }).items;
     sources.historyEntries = entries.length;
     observations.push(...observationsFromHistory(entries));
   }

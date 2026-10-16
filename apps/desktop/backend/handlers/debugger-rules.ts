@@ -60,7 +60,6 @@ export const activeRules = (be: Backend, state: DebuggerState): DebuggerRule[] =
 function save(be: Backend, state: DebuggerState) {
   const f = rulesOf(be, state);
   mkdirSync(be.ws.path('debugger'), { recursive: true });
-  be.lastOwnChange = Date.now(); // our own write: not news for the "changed outside TestPion" notice
   atomicWrite(be.ws.path(RULES_FILE), JSON.stringify(f, null, 2) + '\n');
   be.host.emit('debug.rules', { active: f.active, count: (f.profiles[f.active] ?? []).filter((r) => r.enabled).length });
 }
@@ -296,8 +295,10 @@ export function debuggerRulesHandlers(be: Backend): Handlers {
     /* ---- compare two exchanges */
 
     'debug.compare': ({ a, b }: { a: string; b: string }) => {
-      const ea = state.exchanges.find((x) => x.id === a);
-      const eb = state.exchanges.find((x) => x.id === b);
+      // in the session on screen (the live capture, or a saved session's tab)
+      const shown = state.view?.() ?? state.exchanges;
+      const ea = shown.find((x) => x.id === a);
+      const eb = shown.find((x) => x.id === b);
       if (!ea || !eb) throw new ApsError('ValidationError', 'Both exchanges must be in the session');
       const red = be.logger.redactor;
       const comparable = (e: DebuggerExchange) => ({

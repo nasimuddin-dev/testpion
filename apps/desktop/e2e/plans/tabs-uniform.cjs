@@ -34,6 +34,19 @@ const steps = [
     `const it = vis('[role=menuitem]').find((m) => m.textContent.trim().startsWith('Close other tabs')); const off = it && (it.getAttribute('aria-disabled') === 'true' || it.hasAttribute('data-disabled')); await __t.esc(); return 'one tab, close others disabled: ' + off + ' | tabs: ' + tabsOf('Open monitors').length;`,
   ),
   step('monitors-close-all', `const t = tabsOf('Open monitors')[0]; await menuOf(t); await pick('Close all tabs'); return 'left: ' + tabsOf('Open monitors').length;`),
+  // WF-19: environments, saved prompts and Debugger sessions are tabs of the same strip, with the same menu
+  step(
+    'environments-tab-menu',
+    `await __t.view('Environments'); await __t.sleep(800); const tabs = tabsOf('Open environments'); if (!tabs.length) return 'NO ENVIRONMENT TABS'; return await menuOf(tabs[0]);`,
+  ),
+  step(
+    'prompts-tab-menu',
+    `await __t.esc(); await __t.view('AI Lab'); await __t.sleep(800); await __t.tab('Playground'); await __t.sleep(600); const tabs = tabsOf('Open prompts'); if (!tabs.length) return 'NO PROMPT TABS'; return await menuOf(tabs[0]);`,
+  ),
+  step(
+    'live-capture-tab-is-fixed',
+    `await __t.esc(); await __t.view('Debugger'); await __t.sleep(800); const live = tabsOf('Open sessions').find((t) => /Live capture/.test(t.textContent)); if (!live) return 'NO LIVE TAB'; live.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 400, clientY: 60 })); await __t.sleep(500); const m = !!document.querySelector('[role=menuitem]'); await __t.esc(); return 'menu: ' + m + ' | close button: ' + !!live.querySelector('[aria-label^="Close"]');`,
+  ),
   step(
     'requests-menu-same',
     `await __t.requests(); await __t.sleep(500); if (!document.querySelector('[role=tablist][aria-label="Open requests"] [role=tab]')) { await __t.find('Custom headers'); await __t.sleep(1200); } return await __t.tabMenu();`,
@@ -49,5 +62,8 @@ module.exports = withExpect(steps, {
   'monitors-tab-menu': /^tabs: 1 \| Run now \| Rename \| Close tab \| Close other tabs \(off\) \| Close tabs to the right \(off\) \| Close all tabs \| Reopen closed tabCtrl\+Shift\+T( \(off\))?$/,
   'monitors-close-others-disabled': /^one tab, close others disabled: true \| tabs: 1$/,
   'monitors-close-all': /^left: 0$/,
+  'environments-tab-menu': /^Rename \(off\) \| Close tab \| Close other tabs \(off\) \| Close tabs to the right \(off\) \| Close all tabs \| Reopen closed tabCtrl\+Shift\+T( \(off\))?$/,
+  'prompts-tab-menu': /^Rename \(off\) \| Close tab \| Close other tabs \(off\) \| Close tabs to the right \(off\) \| Close all tabs \| Reopen closed tabCtrl\+Shift\+T( \(off\))?$/,
+  'live-capture-tab-is-fixed': /^menu: false \| close button: false$/,
   'requests-menu-same': /RenameF2 \| Close tabMiddle-click \| Close other tabs \| Close tabs to the right \| Close all tabs \| Reopen closed tabCtrl\+Shift\+T( \(off\))?$/,
 });

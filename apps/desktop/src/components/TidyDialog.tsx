@@ -46,7 +46,7 @@ export function TidyDialog({ collection, onClose, onDone, onReplace }: { collect
       });
       onDone();
       onClose();
-      useApp.getState().toast(`${r.removed} removed from ${collection.name}`, 'success', { label: 'Undo', onClick: () => void call('col.save', collection).then(onDone).catch(toastError) });
+      useApp.getState().toast(`${r.removed} removed from ${collection.name}`, 'success', undefined, { undo: () => call('col.save', collection).then(onDone), restored: `${collection.name} is back as it was` });
     } catch (e) {
       toastError(e);
     } finally {

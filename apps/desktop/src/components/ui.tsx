@@ -1,10 +1,13 @@
 import { cloneElement, forwardRef, isValidElement, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type TextareaHTMLAttributes, type MouseEvent as ReactMouseEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactElement, type ReactNode, type SelectHTMLAttributes } from 'react';
+import type { CSSProperties } from 'react';
+import { createPortal } from 'react-dom';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import * as MenuPrimitive from '@radix-ui/react-dropdown-menu';
 import * as SwitchPrimitive from '@radix-ui/react-switch';
 import * as TooltipPrimitive from '@radix-ui/react-tooltip';
 import { ChevronDown, ChevronRight, ChevronsRight, Loader2, MoreHorizontal, X } from 'lucide-react';
 import { iconForLabel, textOf } from './action-icons';
+import { scaledRow, useDensity } from '../lib/density';
 
 // icons drawn in every tab and menu row, made once (React skips an element it has already rendered)
 const TAB_CLOSE_ICON = <X size={12} />;
@@ -295,7 +298,7 @@ export function statusTone(status?: number | string): 'ok' | 'bad' | 'warn' | 'd
   if (typeof status === 'string' && /^\d{3}$/.test(status)) status = Number(status);
   if (typeof status === 'number') return status < 300 ? 'ok' : status < 400 ? 'warn' : 'bad';
   if (status === undefined || status === '') return 'default';
-  if (/^(passed|ok|success|connected|closed|open|sent)$/i.test(status)) return 'ok';
+  if (/^(passed|ok|success|connected|closed|open|sent|saved)$/i.test(status)) return 'ok';
   if (status === 'skipped' || status === 'running' || status === 'pending') return 'warn';
   // failed, error, NetworkError, TimeoutError, gRPC codes other than OK (UNAVAILABLE, NOT_FOUND …)
   return 'bad';
@@ -695,7 +698,7 @@ function scrollingAncestor(el: HTMLElement | null): HTMLElement | null {
  */
 export function VirtualList<T>({
   items,
-  rowHeight,
+  rowHeight: givenRowHeight,
   render,
   className,
   overscan = 8,
@@ -716,6 +719,8 @@ export function VirtualList<T>({
   keyOf?(item: T, index: number): string | number;
   scrollParent?: boolean;
 }) {
+  // rows follow the density (Settings ▸ Appearance): the given height is the comfortable one
+  const rowHeight = scaledRow(givenRowHeight, useDensity());
   const ref = useRef<HTMLDivElement>(null);
   const [scrollTop, setScrollTop] = useState(0);
   const [height, setHeight] = useState(400);
@@ -818,15 +823,18 @@ export function Segmented<T extends string | number>({
   onChange,
   label,
   size = 'sm',
+  disabled,
 }: {
   value: T | undefined;
-  options: Array<{ value: NoInfer<T>; label: ReactNode; icon?: ReactNode; title?: string }>;
+  options: Array<{ value: NoInfer<T>; label: ReactNode; icon?: ReactNode; title?: string; disabled?: boolean }>;
   onChange(v: NoInfer<T>): void;
   label: string;
   size?: 'xs' | 'sm';
+  /** The whole control (e.g. while a connection is open); an option can be disabled on its own too. */
+  disabled?: boolean;
 }) {
   return (
-    <div role="radiogroup" aria-label={label} className={cx('inline-flex rounded-lg border border-line p-0.5 font-normal shrink-0', size === 'xs' ? 'text-[11px]' : 'text-xs')}>
+    <div role="radiogroup" aria-label={label} aria-disabled={disabled || undefined} className={cx('inline-flex rounded-lg border border-line p-0.5 font-normal shrink-0', size === 'xs' ? 'text-[11px]' : 'text-xs')}>
       {options.map((o) => (
         <button
           key={String(o.value)}
@@ -834,7 +842,12 @@ export function Segmented<T extends string | number>({
           role="radio"
           aria-checked={value === o.value}
           title={o.title}
-          className={cx('inline-flex items-center gap-1 rounded-md', size === 'xs' ? 'px-2 py-0.5' : 'px-2.5 py-1', value === o.value ? 'bg-accent/15 text-accent font-medium' : 'text-muted hover:text-fg')}
+          disabled={disabled || o.disabled}
+          className={cx(
+            'inline-flex items-center gap-1 rounded-md disabled:opacity-40 disabled:pointer-events-none',
+            size === 'xs' ? 'px-2 py-0.5' : 'px-2.5 py-1',
+            value === o.value ? 'bg-accent/15 text-accent font-medium' : 'text-muted hover:text-fg',
+          )}
           onClick={() => onChange(o.value)}
         >
           {o.icon}
@@ -963,4 +976,121 @@ export function useDebounced<T>(value: T, ms = 250): T {
     return () => clearTimeout(t);
   }, [value, ms]);
   return v;
+}
+
+/**
+ * One step of a guided tour, pointing at an element on screen (`anchor`; centred when there is none): a small card with
+ * a title, a few words, "n of m", **Back**, **Next** (**Done** on the last), **Skip tour** and, optionally, an action
+ * ("Show me"). The element gets a ring; the rest of the window stays usable. Keys: Esc skips, → / Enter next, ← back.
+ * The card follows the element when the window scrolls or resizes, and takes the focus on each step.
+ */
+export function Coachmark({
+  anchor,
+  title,
+  children,
+  step,
+  total,
+  onNext,
+  onBack,
+  onSkip,
+  action,
+  done,
+}: {
+  anchor?: Element | null;
+  title: string;
+  children: ReactNode;
+  /** 0-based. */
+  step: number;
+  total: number;
+  onNext(): void;
+  onBack?(): void;
+  onSkip(): void;
+  action?: { label: string; onClick(): void };
+  /** The step is already done (shown as such). */
+  done?: boolean;
+}) {
+  const [rect, setRect] = useState<DOMRect | undefined>(() => anchor?.getBoundingClientRect());
+  const next = useRef<HTMLButtonElement>(null);
+  useLayoutEffect(() => {
+    if (!anchor) return setRect(undefined);
+    let frame = 0;
+    const measure = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => setRect(anchor.isConnected ? anchor.getBoundingClientRect() : undefined));
+    };
+    measure();
+    const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(measure) : undefined;
+    ro?.observe(anchor);
+    window.addEventListener('resize', measure);
+    window.addEventListener('scroll', measure, true);
+    return () => {
+      cancelAnimationFrame(frame);
+      ro?.disconnect();
+      window.removeEventListener('resize', measure);
+      window.removeEventListener('scroll', measure, true);
+    };
+  }, [anchor]);
+  useEffect(() => next.current?.focus(), [step]);
+  const last = step === total - 1;
+  const W = 320;
+  const vw = typeof window === 'undefined' ? 1200 : window.innerWidth;
+  const vh = typeof window === 'undefined' ? 800 : window.innerHeight;
+  // below the element when there is room, else above it; centred when there is no element
+  const pos: CSSProperties = rect
+    ? { left: Math.max(12, Math.min(vw - W - 12, rect.left + rect.width / 2 - W / 2)), ...(rect.bottom + 190 < vh ? { top: rect.bottom + 10 } : { bottom: Math.max(12, vh - rect.top + 10) }) }
+    : { left: Math.max(12, vw / 2 - W / 2), top: Math.max(12, vh / 3) };
+  const keys = (e: ReactKeyboardEvent) => {
+    if (e.repeat) return e.preventDefault(); // a held key moves one step, not through the whole tour
+    if (e.key === 'Escape') (e.preventDefault(), onSkip());
+    else if (e.key === 'ArrowRight') (e.preventDefault(), onNext());
+    else if (e.key === 'ArrowLeft' && onBack) (e.preventDefault(), onBack());
+  };
+  return createPortal(
+    <>
+      {rect && <div aria-hidden className="fixed z-[60] pointer-events-none rounded-lg ring-2 ring-accent ring-offset-2 ring-offset-bg transition-all" style={{ left: rect.left - 2, top: rect.top - 2, width: rect.width + 4, height: rect.height + 4 }} data-coachmark-ring />}
+      <div
+        role="dialog"
+        aria-modal="false"
+        aria-labelledby="coachmark-title"
+        aria-describedby="coachmark-text"
+        data-coachmark={step}
+        className="fixed z-[61] rounded-xl border border-line bg-panel shadow-xl p-4 flex flex-col gap-2 text-sm"
+        style={{ width: W, ...pos }}
+        onKeyDown={keys}
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-[0.7rem] font-medium text-muted tabular-nums">
+            {step + 1} of {total}
+          </span>
+          {done && <span className="text-[0.7rem] text-ok">done</span>}
+          <button type="button" className="ml-auto text-xs text-muted hover:text-fg" onClick={onSkip}>
+            Skip tour
+          </button>
+        </div>
+        <h3 id="coachmark-title" className="font-semibold">
+          {title}
+        </h3>
+        <div id="coachmark-text" className="text-muted">
+          {children}
+        </div>
+        <div className="flex items-center gap-2 mt-1">
+          {action && (
+            <Button size="sm" variant="ghost" onClick={action.onClick}>
+              {action.label}
+            </Button>
+          )}
+          <span className="ml-auto" />
+          {onBack && step > 0 && (
+            <Button size="sm" variant="ghost" onClick={onBack}>
+              Back
+            </Button>
+          )}
+          <Button ref={next} size="sm" variant="primary" onClick={onNext}>
+            {last ? 'Done' : 'Next'}
+          </Button>
+        </div>
+      </div>
+    </>,
+    document.body,
+  );
 }

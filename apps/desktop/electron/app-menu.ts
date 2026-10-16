@@ -86,7 +86,7 @@ function build(a: AppMenuActions): Menu {
         // the window handles the key itself (also without this menu: the browser version); the menu only shows it
         item({ label: 'Reopen Closed Tab', i: 'newTab', accelerator: 'CmdOrCtrl+Shift+T', registerAccelerator: false, click: () => a.menu('reopen-closed-tab') }),
         sep,
-        item({ label: 'Settings…', i: 'settings', accelerator: 'CmdOrCtrl+,', click: () => a.menu('settings') }),
+        item({ label: 'Settings…', i: 'settings', accelerator: 'CmdOrCtrl+,', registerAccelerator: false, click: () => a.menu('settings') }),
         sep,
         mac ? item({ role: 'close', label: 'Close Window', i: 'closeWindow', accelerator: 'CmdOrCtrl+Alt+W' }) : item({ role: 'quit', label: 'Exit', i: 'quit' }),
       ],

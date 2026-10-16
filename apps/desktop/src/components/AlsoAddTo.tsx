@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { CopyPlus } from 'lucide-react';
 import { call } from '../api';
-import { toastError, useApp } from '../store';
+import { selectEnvironments, toastError, useApp } from '../store';
 import { plural } from '../lib/format';
 import { Badge, Button, cx, Modal } from './ui';
 
@@ -13,7 +13,7 @@ export interface AlsoAdd {
 
 /** The other readable environments (by name), the active one left out. */
 function useOtherEnvironments(exclude?: string) {
-  return useApp((s) => s.workspace?.environments ?? []).filter((e) => !e.problem && e.name !== exclude);
+  return useApp(selectEnvironments).filter((e) => !e.problem && e.name !== exclude);
 }
 
 /**

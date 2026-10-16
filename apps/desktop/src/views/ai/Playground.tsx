@@ -13,33 +13,43 @@ import { formatCost, formatMs, uid, undatedModel } from '../../lib/format';
 import { JsonTree } from '../../components/JsonView';
 import { CheckList, ErrorPanel } from '../../components/Results';
 import { Button, Empty, LinkButton, Metric, Split, Tabs } from '../../components/ui';
-import { ChatResult, SavedPrompt, useDraft, ModelPicker, Params, responseFormat, parseExpected, PromptEditor, NoProviders } from './common';
+import { ChatResult, SavedPrompt, drafts, type Draft, ModelPicker, Params, responseFormat, parseExpected, PromptEditor, NoProviders } from './common';
+import { useLibraryTabs } from '../../lib/library-tabs';
+import { LibraryTabStrip } from '../../components/LibraryTabStrip';
 
 import { refOfWorkspacePath } from '@testpion/shared';
 import { saveAsTest as saveAsTestShared, saveAsTestLabel } from '../../lib/save-test';
+type PlayResult = ChatResult | { error: NormalizedError };
+
 export function Playground({ providers, onSetUp }: { providers: ProviderConfig[]; onSetUp(): void }) {
-  const [d, set] = useDraft();
-  const [running, setRunning] = useState<string>();
+  // WF-19: open prompts are tabs (each its own draft; a single click in Saved opens a preview tab), kept per workspace;
+  // the Model comparison has its own draft (common.tsx useCompareDraft)
+  const tabs = useLibraryTabs<Draft>('ai', drafts);
+  const d = tabs.d;
+  const setD = tabs.setD;
+  const set = (p: Partial<Draft>) => setD((x) => ({ ...x, ...p }));
+  const [running, setRunning] = useState<{ id: string; tab: string }>();
   const [stream, setStream] = useState('');
-  const [result, setResult] = useSticky<ChatResult | { error: NormalizedError } | undefined>('ai:playground:result', undefined);
+  // each tab's last result (in memory: answers may hold secrets); a run writes to the tab it started in
+  const [results, setResults] = useSticky<Record<string, PlayResult | undefined>>('ai:playground:results', {});
+  const result = results[tabs.active.id];
+  const setResultOf = (tab: string, r: PlayResult | undefined) => setResults((m) => ({ ...m, [tab]: r }));
   const [resTab, setResTab] = useSticky<'output' | 'json' | 'evaluation' | 'prompt'>('ai:playground:resTab', 'output');
   const env = useApp((s) => s.environment);
   const idRef = useRef<string | undefined>(undefined);
   // saved prompts (model, prompt, system, variables, structured output, evaluators) with folders
   const saved = useLibrary<SavedPrompt>('ai-prompts');
-  const [savedId, setSavedId] = useSticky<string | undefined>('ai:saved', undefined);
+  const savedId = tabs.active.savedId;
   const current = saved.lib.items.find((i) => i.id === savedId);
   const snapshot = (): SavedPrompt => ({ provider: d.provider, model: d.model, system: d.system, prompt: d.prompt, input: d.input, temperature: d.temperature, topP: d.topP, maxTokens: d.maxTokens, seed: d.seed, format: d.format, schema: d.schema, expected: d.expected, evaluators: d.evaluators });
   // compared when the draft or the saved prompt changes, not on every streamed token
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const dirty = useMemo(() => !!current && JSON.stringify(current.data) !== JSON.stringify(snapshot()), [current, d]);
-  const openSaved = async (id: string) => {
+  const openSaved = async (id: string, preview = false) => {
     const it = await saved.find(id);
     if (!it) return;
-    setSavedId(id);
-    // parameters the saved prompt doesn't set go back to their defaults (not the previous prompt's values)
-    set({ temperature: undefined, topP: undefined, maxTokens: undefined, seed: undefined, ...it.data });
-    setResult(undefined);
+    // parameters the saved prompt doesn't set are its defaults (not another prompt's values)
+    tabs.open(id, { ...drafts.defaults, temperature: undefined, topP: undefined, maxTokens: undefined, seed: undefined, ...it.data }, { preview });
   };
   // global search → open a saved prompt (keyed: the Playground unmounts when another tab is shown)
   // … or a prompt sent earlier (History ▸ Open): what was sent, not saved as a prompt
@@ -49,9 +59,8 @@ export function Playground({ providers, onSetUp }: { providers: ProviderConfig[]
       if (p?.savedId) return void openSaved(p.savedId);
       const r = p?.prompt as { provider?: string; model?: string; prompt?: string; system?: string; input?: unknown } | undefined;
       if (!r || typeof r !== 'object') return;
-      setSavedId(undefined);
-      set({ ...(r.provider ? { provider: r.provider } : {}), ...(r.model ? { model: r.model } : {}), prompt: r.prompt ?? '', system: r.system ?? '', ...(r.input !== undefined ? { input: r.input as typeof d.input } : {}) });
-      setResult(undefined);
+      // what was sent: a new tab of its own (the open prompts stay as they are)
+      tabs.newTab({ ...drafts.defaults, ...(r.provider ? { provider: r.provider } : {}), ...(r.model ? { model: r.model } : {}), prompt: r.prompt ?? '', system: r.system ?? '', ...(r.input !== undefined ? { input: r.input as Draft['input'] } : {}) });
     },
     'ai-playground-saved',
   );
@@ -63,7 +72,7 @@ export function Playground({ providers, onSetUp }: { providers: ProviderConfig[]
     }
     const name = await promptText('Save prompt', { message: 'Name', value: d.prompt.split('\n')[0]!.slice(0, 40) || 'Prompt', okLabel: 'Save' });
     if (!name) return;
-    setSavedId(await saved.put({ name, folder, data: snapshot() }));
+    tabs.setSaved(await saved.put({ name, folder, data: snapshot() }));
   };
   useEffect(
     () =>
@@ -73,13 +82,14 @@ export function Playground({ providers, onSetUp }: { providers: ProviderConfig[]
       }),
     [],
   );
-  const onModel = useCallback((provider: string, model: string) => set({ provider, model }), [set]);
+  const onModel = useCallback((provider: string, model: string) => setD((x) => ({ ...x, provider, model })), [setD]); // eslint-disable-line react-hooks/exhaustive-deps
   const run = async () => {
     const id = uid('ai-');
+    const tab = tabs.active.id;
     idRef.current = id;
-    setRunning(id);
+    setRunning({ id, tab });
     setStream('');
-    setResult(undefined);
+    setResultOf(tab, undefined);
     setResTab('output');
     useApp.getState().setActivity(id, `Running ${d.model || 'model'}`);
     try {
@@ -100,9 +110,9 @@ export function Playground({ providers, onSetUp }: { providers: ProviderConfig[]
         evaluators: d.evaluators,
         expected: parseExpected(d.expected),
       });
-      setResult(r);
+      setResultOf(tab, r);
     } catch (e) {
-      setResult({ error: asError(e) });
+      setResultOf(tab, { error: asError(e) });
     } finally {
       setRunning(undefined);
       useApp.getState().setActivity(id);
@@ -142,6 +152,8 @@ export function Playground({ providers, onSetUp }: { providers: ProviderConfig[]
   };
   if (!providers.length) return <NoProviders onSetUp={onSetUp} />;
   const r = result && !('error' in result) ? result : undefined;
+  // a run in another tab streams there, not here
+  const runningHere = running?.tab === tabs.active.id ? running : undefined;
   return (
     <Split id="ai-saved" sidebar initial={18} min={12}>
     <SidebarShell
@@ -159,7 +171,8 @@ export function Playground({ providers, onSetUp }: { providers: ProviderConfig[]
               addLabel="Save current prompt"
               folders={saved.lib.folders}
               selected={savedId}
-              onSelect={openSaved}
+              onSelect={(id) => void openSaved(id, true)}
+              onOpen={(id) => void openSaved(id)}
               onAdd={(folder) => void savePrompt(true, folder)}
               ops={saved.ops}
               items={saved.lib.items.map((i) => ({ id: i.id, name: i.name, folder: i.folder, subtitle: `${i.data.model || i.data.provider}`, icon: <Sparkles size={12} className="text-muted" /> }))}
@@ -176,6 +189,22 @@ export function Playground({ providers, onSetUp }: { providers: ProviderConfig[]
       ]}
     />
     <div className="h-full flex flex-col min-w-0">
+      <LibraryTabStrip
+        label="Open prompts"
+        library="ai-prompts"
+        tabs={tabs.tabs}
+        active={tabs.active.id}
+        titleOf={(t) => saved.lib.items.find((i) => i.id === t.savedId)?.name ?? 'New prompt'}
+        dirty={dirty}
+        onSelect={tabs.select}
+        onClose={(ids) => {
+          setResults((m) => Object.fromEntries(Object.entries(m).filter(([k]) => !ids.includes(k))));
+          tabs.close(ids, drafts.defaults);
+        }}
+        onKeep={tabs.keep}
+        onNew={() => tabs.newTab(drafts.defaults)}
+        newLabel="New prompt"
+      />
       <div className="flex items-center gap-2 p-2 border-b border-line flex-wrap">
         <ModelPicker providers={providers} provider={d.provider} model={d.model} onChange={onModel} />
         {current && <span className="text-sm text-muted truncate">{current.name}{dirty ? ' · edited' : ''}</span>}
@@ -187,7 +216,7 @@ export function Playground({ providers, onSetUp }: { providers: ProviderConfig[]
             {saveAsTestLabel({})}
           </Button>
           {running ? (
-            <Button variant="danger" icon={<Square size={12} />} onClick={() => void call('ai.cancel', { id: running }).catch(toastError)}>
+            <Button variant="danger" icon={<Square size={12} />} onClick={() => void call('ai.cancel', { id: running.id }).catch(toastError)}>
               Stop
             </Button>
           ) : (
@@ -210,7 +239,7 @@ export function Playground({ providers, onSetUp }: { providers: ProviderConfig[]
           <div className="h-full flex flex-col min-h-0">
             {result && 'error' in result ? (
               <ErrorPanel error={result.error!} context={{ provider: d.provider, model: d.model }} />
-            ) : running || r ? (
+            ) : runningHere || r ? (
               <>
                 <div className="flex gap-2 p-2 flex-wrap border-b border-line">
                   <Metric label="Latency" value={r ? formatMs(r.timing.totalMs) : '…'} />
@@ -259,7 +288,7 @@ export function Playground({ providers, onSetUp }: { providers: ProviderConfig[]
                   }
                 />
                 <div className="flex-1 min-h-0 overflow-auto">
-                  {resTab === 'output' && <pre className="p-3 whitespace-pre-wrap text-sm leading-relaxed">{r ? r.text : stream}{running && <span className="inline-block w-2 h-4 bg-accent align-middle ml-0.5 animate-pulse" />}</pre>}
+                  {resTab === 'output' && <pre className="p-3 whitespace-pre-wrap text-sm leading-relaxed">{r ? r.text : stream}{runningHere && <span className="inline-block w-2 h-4 bg-accent align-middle ml-0.5 animate-pulse" />}</pre>}
                   {resTab === 'json' && r && <JsonTree data={r.json} />}
                   {resTab === 'evaluation' && r && (
                     <>

@@ -70,6 +70,6 @@ testpion workspace delete "Checkout API v2" --yes --json       # --yes is requir
 
 ## Recently deleted
 
-Deleted collections and environments aren't gone straight away. They stay in the workspace's `trash/` folder for 30 days; that folder ignores itself in git, so it is never committed. Click the **Recently deleted** icon at the top of the Collections or Environments list to **Restore** an item or delete it for good. A restored environment keeps its secret values. If you've created another item with the same name meanwhile, the restored one is called *Name (restored)*.
+Deleting a collection, an environment or a dataset happens at once, with **Undo** in the message for 8 seconds (<kbd>Ctrl</kbd>+<kbd>Z</kbd> outside a text field does the same; see [Deleting and Undo](/getting-started/finding-your-way#deleting-and-undo)). After that they still aren't gone straight away. They stay in the workspace's `trash/` folder for 30 days; that folder ignores itself in git, so it is never committed. Click the **Recently deleted** icon at the top of the Collections or Environments list to **Restore** an item or delete it for good. A restored environment keeps its secret values. If you've created another item with the same name meanwhile, the restored one is called *Name (restored)*.
 
-From the terminal: `testpion trash list -w <workspace> [--json]`, `testpion trash restore <id> -w <workspace>`, `testpion trash empty -w <workspace> --yes`.
+Deleted datasets are kept in the trash the same way; restore them from the terminal. From the terminal: `testpion trash list -w <workspace> [--json]`, `testpion trash restore <id> -w <workspace>`, `testpion trash empty -w <workspace> --yes`.

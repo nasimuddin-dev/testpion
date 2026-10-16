@@ -3,6 +3,8 @@
  * Shared by the desktop application and the `testpion` CLI.
  */
 export * from './model/types.js';
+export * from './model/history-kinds.js';
+export * from './model/ui-prefs.js';
 export * from './errors.js';
 export * from './util/ids.js';
 export * from './util/concurrency.js';
@@ -78,6 +80,7 @@ export * from './debugger/proxy.js';
 export * from './debugger/session.js';
 export * from './debugger/har.js';
 export * from './debugger/capture.js';
+export * from './debugger/capture-history.js';
 export * from './debugger/rules.js';
 export * from './debugger/certificate.js';
 export * from './debugger/frames.js';
@@ -202,6 +205,7 @@ export * from './import/curl.js';
 export * from './import/snippet.js';
 export * from './import/save-request.js';
 export * from './record/recorder.js';
+export * from './record/reverse-capture.js';
 export * from './import/postman-export.js';
 export * from './codegen/codegen.js';
 export * from './engine.js';

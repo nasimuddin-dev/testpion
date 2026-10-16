@@ -5,6 +5,7 @@ import { asError, call, on } from '../api';
 import { confirmAction, promptText, toastError, useApp } from '../store';
 import { useIntent, useSaveShortcut } from '../hooks';
 import { useExternalChange } from '../lib/external-change';
+import { touchesFiles, type DataChangedEvent } from '../lib/data-changed';
 import { LABEL } from '../lib/vocabulary';
 import { runCiMenuItems } from '../lib/run-ci';
 import { noteClosedTabs } from '../lib/closed-tabs';
@@ -203,8 +204,9 @@ export function TestsView() {
     void loadTree();
     void loadRuns();
   }, [loadTree, loadRuns]);
-  // test files changed outside the app (git pull, another editor): the tree shows them
-  useEffect(() => on<{ kinds: string[] }>('workspace.changedOnDisk', (p) => void (p.kinds.includes('tests') && loadTree())), [loadTree]);
+  // test files written by anyone — this window (tests.write), an AI agent, a generator, git, another editor: the tree
+  // shows them (every write to the workspace's files is a data.changed naming its kinds, lib/data-changed.ts)
+  useEffect(() => on<DataChangedEvent>('data.changed', (e) => void (touchesFiles(e, ['tests']) && loadTree())), [loadTree]);
 
   /** Show an open file's tab (the one on screen keeps its edits for when it comes back). */
   const show = (path: string | undefined) => {
@@ -663,7 +665,7 @@ export function TestsView() {
                     <Input className="text-xs" placeholder="grep name" value={opts.grep} onChange={(e) => setOpts({ ...opts, grep: e.target.value })} />
                     <Input className="text-xs" placeholder="tags" value={opts.tags} onChange={(e) => setOpts({ ...opts, tags: e.target.value })} />
                   </div>
-                  <Button variant="primary" icon={<Play size={13} />} onClick={() => run([], 'All tests')}>
+                  <Button variant="primary" icon={<Play size={13} />} onClick={() => run([], 'All tests')} data-tour="run-all">
                     Run all tests
                   </Button>
                 </div>

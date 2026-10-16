@@ -1,6 +1,7 @@
 import { JSONPath } from 'jsonpath-plus';
 import { ArrowLeftRight, ChevronDown, Code2, Pencil, Cookie, Sparkles, Save, Send, Square } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { usePublishRequest } from '../lib/request-variables';
 import { useAssistantContext } from '../lib/assistant-context';
 import { asError, call, on } from '../api';
 import { confirmAction, promptText, toastError, useApp } from '../store';
@@ -120,7 +121,8 @@ export function RestView() {
     [],
   );
 
-  const update = (patch: Partial<RestTab>) => setTabs((ts) => ts.map((t) => (t.id === tab.id ? { ...t, ...patch, dirty: true } : t)));
+  // an edit keeps a preview tab (WF-19)
+  const update = (patch: Partial<RestTab>) => setTabs((ts) => ts.map((t) => (t.id === tab.id ? { ...t, ...patch, dirty: true, preview: false } : t)));
 
   // files changed outside the app (GIT-103 / GIT-302, WF-15): open requests follow their saved version; a tab with
   // unsaved edits asks first, and only when that very request changed on disk (lib/external-change.ts)
@@ -187,14 +189,22 @@ export function RestView() {
     return () => window.removeEventListener('paste', onPaste);
   }, []);
 
-  const openRequest = (c: Collection, n: CollectionNode) => {
+  /**
+   * Open a saved request in its tab, or a new one. `preview` (a single click in the explorer, WF-19): in the preview
+   * tab, which the next such click replaces (an unedited one only); opened again for good, it stops being a preview.
+   */
+  const openRequest = (c: Collection, n: CollectionNode, o: { preview?: boolean } = {}) => {
     if (n.kind === 'graphql') return void openRef({ kind: 'request', collectionId: c.id, requestId: n.id, protocol: 'graphql' });
     if (n.kind !== 'http') return;
     useApp.getState().markPlace('rest', { collectionId: c.id, requestId: n.id });
     const existing = tabs.find((t) => t.requestId === n.id);
-    if (existing) return setActive(existing.id);
-    const t: RestTab = { ...tabFromSaved(n), id: uid('tab-'), collectionId: c.id };
-    setTabs((ts) => [...ts, t]);
+    if (existing) {
+      if (!o.preview && existing.preview) setTabs((ts) => ts.map((x) => (x.id === existing.id ? { ...x, preview: false } : x)));
+      return setActive(existing.id);
+    }
+    const t: RestTab = { ...tabFromSaved(n), id: uid('tab-'), collectionId: c.id, ...(o.preview ? { preview: true } : {}) };
+    const reuse = o.preview ? tabs.find((x) => x.preview && !x.dirty && !x.pinned) : undefined;
+    setTabs((ts) => (reuse ? ts.map((x) => (x.id === reuse.id ? t : x)) : [...ts, t]));
     setActive(t.id);
   };
 
@@ -212,7 +222,7 @@ export function RestView() {
       let c = currentCollections().find((x) => x.id === p.collectionId);
       if (!c || !findNode(c.items, p.requestId)) c = await call<Collection>('col.get', { id: p.collectionId }).catch(() => undefined);
       const n = c && findNode(c.items, p.requestId);
-      if (c && n) openRequest(c, n);
+      if (c && n) openRequest(c, n, { preview: !!p.preview });
       // gone (deleted, moved, another workspace): say so, with what to open instead, not a silently unchanged editor
       else void reportIfGone({ kind: 'request', collectionId: String(p.collectionId), requestId: String(p.requestId) });
       // "More code snippets…" in the collection tree
@@ -375,6 +385,9 @@ export function RestView() {
     void saveAsTestFile(t.name, { kind: 'http', request: toEngineRequest(t.request), preRequestScript: t.preRequestScript, testScript: t.testScript, status: results[t.id]?.response?.status }, t.assertions);
 
   const result = results[tab.id];
+  // the environment switcher's badge of undefined {{variables}} (lib/request-variables.ts) follows the tab on screen
+  const onScreen = useMemo(() => (tab === placeholder ? undefined : { request: tab.request, preRequestScript: tab.preRequestScript, testScript: tab.testScript }), [tab, tab.request, tab.preRequestScript, tab.testScript]);
+  usePublishRequest('rest', onScreen, tab.collectionId);
   // "Ask the assistant" includes the open request and its latest response (secrets are hidden by the backend)
   useAssistantContext(
     'rest',
@@ -527,6 +540,8 @@ export function RestView() {
       item: t.requestId,
       dirty: t.dirty,
       pinned: t.pinned,
+      preview: t.preview,
+      onKeep: () => setTabs((ts) => ts.map((x) => (x.id === t.id ? { ...x, preview: false } : x))),
       onSelect: () => setActive(t.id),
       onClose: () => void closeTab(t.id),
       closeMany: (keys: string[]) => void closeTabs(keys.map((k) => k.replace(/^rest:/, ''))),
@@ -593,7 +608,7 @@ export function RestView() {
             Cancel
           </Button>
         ) : (
-          <Button variant="primary" icon={<Send size={13} />} onClick={send} title="Send (Ctrl+Enter)">
+          <Button variant="primary" icon={<Send size={13} />} onClick={send} title="Send (Ctrl+Enter)" data-tour="send">
             Send
           </Button>
         )}

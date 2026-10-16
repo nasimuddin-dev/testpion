@@ -22,6 +22,7 @@ import { asError, call, on } from '../api';
 import { Button, cx, Menu, menuKeys, rowActionClass, VirtualList, type MenuItem } from './ui';
 import { CLOSED_ICON, CountPill, focusRow, FOLDER_ICON, InlineRename, MORE_ICON, OPEN_ICON, NodeMenu } from './TreeParts';
 import { confirmAction, promptText, toastError, useApp } from '../store';
+import { deleteWithUndo, restoreDeleted } from '../lib/undo-delete';
 import { MoveDialog, subtreeIds } from './MoveDialog';
 import { closeTabsFor } from './EditorTabs';
 import { plural, uid } from '../lib/format';
@@ -155,7 +156,8 @@ export const CollectionTree = memo(function CollectionTree({
 }: {
   collections: Collection[];
   activeRequestId?: string;
-  onOpen(c: Collection, node: CollectionNode): void;
+  /** Open a request; `preview`: a single click (a preview tab, WF-19), double-click opens it for good. */
+  onOpen(c: Collection, node: CollectionNode, o?: { preview?: boolean }): void;
   onChange(c: Collection): void;
   onNewRequest(c: Collection, folderId?: string): void;
   /** Open the Collection Runner for a collection or one of its folders. */
@@ -218,35 +220,20 @@ export const CollectionTree = memo(function CollectionTree({
       toastError(e);
     }
   };
-  /** Move a collection to Recently deleted (restorable for 30 days); its tabs close. */
-  const deleteCollection = async (c: Collection) => {
-    if (
-      !(await confirmAction({
-        title: 'Delete collection',
-        message: `Delete the collection "${c.name}" and all its requests, gRPC calls and connections?`,
-        detail: 'You can restore it, with everything in it, from Recently deleted for 30 days.',
-        confirmLabel: 'Delete collection',
-        danger: true,
-      }))
-    )
-      return;
-    try {
-      closeTabsFor(c.items.flatMap(subtreeIds));
-      await call('col.delete', { id: c.id });
-      useApp.getState().toast(`Deleted "${c.name}"`, 'info');
-    } catch (e) {
-      toastError(e);
-    }
-  };
+  /** Move a collection to Recently deleted (restorable for 30 days); its tabs close; Undo in the message brings it back. */
+  const deleteCollection = (c: Collection) =>
+    deleteWithUndo({
+      what: `the collection "${c.name}"`,
+      run: async () => {
+        closeTabsFor(c.items.flatMap(subtreeIds));
+        await call('col.delete', { id: c.id });
+      },
+      undo: () => restoreDeleted('collection', c.id),
+      note: 'Recently deleted keeps it for 30 days',
+    });
   const renameNode = (_c: Collection, n: CollectionNode) => setRenaming(n.id);
-  /** Delete a request or folder, with Undo in the toast (puts the collection back as it was). */
-  const deleteNode = async (c: Collection, n: CollectionNode) => {
-    const ok =
-      n.kind === 'folder'
-        ? await confirmAction({ title: 'Delete folder', message: `Delete the folder "${n.name}" and all requests in it?`, confirmLabel: 'Delete folder', danger: true })
-        : await confirmAction({ title: 'Delete request', message: `Delete the request "${n.name}"?`, detail: 'Its saved examples are deleted too.', confirmLabel: 'Delete request', danger: true });
-    if (ok) removeWithUndo(c, n);
-  };
+  /** Delete a request or folder at once, with Undo in the message (lib/undo.ts: puts the collection back as it was). */
+  const deleteNode = async (c: Collection, n: CollectionNode) => removeWithUndo(c, n);
   /** F2 renames and Delete deletes the focused request or folder (like a file tree). */
   const rowKeys = (c: Collection, n: CollectionNode) => (e: React.KeyboardEvent) => {
     if (e.key === 'F2') {
@@ -261,7 +248,7 @@ export const CollectionTree = memo(function CollectionTree({
     change(c, (c) => {
       // its tabs (and those of everything in a deleted folder) close too
       closeTabsFor(subtreeIds(n));
-      useApp.getState().toast(`Deleted "${n.name}"`, 'info', { label: 'Undo', onClick: () => onChange(c) });
+      useApp.getState().toast(`Deleted ${n.kind === 'folder' ? 'the folder' : 'the request'} "${n.name}"`, 'info', undefined, { undo: () => onChange(c), restored: `Restored ${n.kind === 'folder' ? 'the folder' : 'the request'} "${n.name}"` });
       return { ...c, items: mapNodes(c.items, (x) => (x.id === n.id ? null : x)) };
     });
   // drag and drop: a request or folder onto a request (before it), a folder (into it) or a collection (top level)
@@ -922,7 +909,7 @@ export const CollectionTree = memo(function CollectionTree({
 const rowKey = (r: TreeRow) => `${r.t}:${r.key}`;
 
 interface RowContext {
-  onOpen(c: Collection, n: CollectionNode): void;
+  onOpen(c: Collection, n: CollectionNode, o?: { preview?: boolean }): void;
   change(c: Collection, f: (whole: Collection) => Collection | undefined): void;
   toggle(id: string, shown: boolean): void;
   rowKeys(c: Collection, n: CollectionNode): (e: React.KeyboardEvent) => void;
@@ -1017,7 +1004,8 @@ const RequestRow = memo(function RequestRow({
       ) : (
         <button
           className="flex items-center gap-1.5 flex-1 min-w-0 text-left pl-4"
-          onClick={() => x().onOpen(c, n)}
+          onClick={() => x().onOpen(c, n, { preview: true })}
+          onDoubleClick={() => x().onOpen(c, n)}
           onKeyDown={(e) => x().rowKeys(c, n)(e)}
           data-tree-row
           data-rename-id={n.id}

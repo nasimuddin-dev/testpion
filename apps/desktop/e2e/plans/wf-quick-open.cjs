@@ -22,7 +22,10 @@ const steps = [
   ),
   s(
     'find-by-name',
-    `key('p', { ctrlKey: true }); await type('Say hello');
+    // the pointer rests where the list's later rows appear: rows landing under a still pointer are not chosen (Enter
+    // opens the first hit, the one the keyboard is on)
+    `await __t.real.move({ x: Math.round(innerWidth / 2), y: Math.round(innerHeight * 0.12) + 44 + 4 + 3 * 46 });
+     key('p', { ctrlKey: true }); await type('Say hello');
      const hit = await __t.waitFor(() => rows().find((x) => /Say hello/.test(x)), 4000);
      if (!hit) return 'NO HIT | ' + rows().slice(0, 5).join(' / ');
      document.querySelector('[role=dialog] input').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));

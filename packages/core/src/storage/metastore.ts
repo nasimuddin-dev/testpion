@@ -3,6 +3,10 @@ import { dirname, resolve, sep } from 'node:path';
 import { createRequire } from 'node:module';
 import type { HistoryEntry, RunSummary } from '../model/types.js';
 import { atomicWrite } from './fsutil.js';
+import { isRequestEntry, REQUEST_HISTORY_KINDS } from '../model/history-kinds.js';
+
+/** SQL: only request entries (isRequestEntry), not capture sessions or other non-request kinds. */
+const REQUEST_KIND_SQL = `kind IN (${REQUEST_HISTORY_KINDS.map((k) => `'${k}'`).join(', ')})`;
 
 export interface TraceMeta {
   id: string;
@@ -61,7 +65,7 @@ export function historyOk(status: number | string | undefined): boolean {
   if (status === undefined || status === null || status === '') return true;
   const n = typeof status === 'number' ? status : Number(status);
   if (!isNaN(n)) return n > 0 && n < 400;
-  return /^(ok|passed|success|connected|closed)$/i.test(String(status));
+  return /^(ok|passed|success|connected|closed|saved)$/i.test(String(status));
 }
 
 /**
@@ -89,6 +93,8 @@ export function summarizeActivity(
   const byKind: Record<string, number> = {};
   const slow = new Map<string, { name: string; kind: string; total: number; count: number }>();
   for (const h of history) {
+    // request statistics count requests sent: a capture session (or any non-request kind) is not one
+    if (!isRequestEntry(h)) continue;
     const pre = 'day' in h ? h : undefined;
     const d = index.get(pre ? pre.day : dayOf(Date.parse((h as HistoryEntry).timestamp)));
     if (!d) continue;
@@ -121,7 +127,8 @@ export function summarizeActivity(
   }
   const slowest = [...slow.values()]
     .map((s) => ({ name: s.name, kind: s.kind, durationMs: Math.round(s.total / s.count), count: s.count }))
-    .sort((a, b) => b.durationMs - a.durationMs)
+    // ties in a fixed order (by kind and name), whatever order the rows came in
+    .sort((a, b) => b.durationMs - a.durationMs || (a.kind < b.kind ? -1 : a.kind > b.kind ? 1 : a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
     .slice(0, 5);
   return { days, medianMs: all.length ? median(all) : undefined, byKind, slowest };
 }
@@ -191,6 +198,8 @@ export interface ListQuery {
   failed?: boolean;
   /** History only: the list columns without `request` and `responseMeta` (lists that show only the summary; `getHistory` has the rest). */
   brief?: boolean;
+  /** History only: requests sent only (isRequestEntry), not capture sessions. */
+  requests?: boolean;
   limit?: number;
   offset?: number;
 }
@@ -420,7 +429,7 @@ class SqliteMetaStore implements MetaStore {
   addHistory(e: HistoryEntry): void {
     // long bodies are cut: the entry is then a preview of what was sent
     const req = capHistoryRequest(e.request);
-    const doc = { request: req.value, responseMeta: e.responseMeta, collectionId: e.collectionId, requestId: e.requestId, ...(req.cut || e.requestPreview ? { requestPreview: true } : {}) };
+    const doc = { request: req.value, responseMeta: e.responseMeta, collectionId: e.collectionId, requestId: e.requestId, ...(req.cut || e.requestPreview ? { requestPreview: true } : {}), ...(e.capture ? { capture: e.capture } : {}) };
     this.stmt('INSERT OR REPLACE INTO history (id, ts, kind, name, method, url, status, duration, size, trace_id, payload, doc, collection_id, request_id, status_ok) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(
       e.id,
       e.timestamp,
@@ -464,7 +473,9 @@ class SqliteMetaStore implements MetaStore {
     }
     // status_ok is historyOk(status), set on insert
     if (q.failed) w.sql = (w.sql ? w.sql + ' AND ' : 'WHERE ') + 'status_ok = 0';
-    const cols = q.brief ? 'id, ts, kind, name, method, url, status, duration, size, trace_id, payload, collection_id, request_id' : '*';
+    if (q.requests) w.sql = (w.sql ? w.sql + ' AND ' : 'WHERE ') + REQUEST_KIND_SQL;
+    // a brief list leaves the request out; a capture session's doc is small and says what it became (its row opens that)
+    const cols = q.brief ? "id, ts, kind, name, method, url, status, duration, size, trace_id, payload, collection_id, request_id, CASE WHEN kind = 'capture' THEN doc END AS doc" : '*';
     const rows = this.db.prepare(`SELECT ${cols} FROM history ${w.sql} ORDER BY ts DESC LIMIT ? OFFSET ?`).all(...w.args, q.limit ?? 100, q.offset ?? 0) as Array<Record<string, unknown>>;
     return { total: this.total('history', w, q, rows.length), items: rows.map(historyRow) };
   }
@@ -540,12 +551,12 @@ class SqliteMetaStore implements MetaStore {
       errors: Number(r.errors),
     }));
     // only the columns counted, with the local day and the status verdict worked out by SQLite (no date parsing per row)
-    const hist = this.stmt('SELECT date(ts, ?) AS day, kind, name, status_ok AS ok, duration AS durationMs FROM history WHERE ts >= ?').all(`${-(opts.tzOffsetMin ?? 0)} minutes`, since) as unknown as ActivityRow[];
+    const hist = this.stmt(`SELECT date(ts, ?) AS day, kind, name, status_ok AS ok, duration AS durationMs FROM history WHERE ts >= ? AND ${REQUEST_KIND_SQL}`).all(`${-(opts.tzOffsetMin ?? 0)} minutes`, since) as unknown as ActivityRow[];
     return summarizeActivity(hist, runs, opts);
   }
 
   requestStats(collectionId: string): RequestStat[] {
-    const rows = this.stmt("SELECT ts, status, duration, request_id AS rid, json_extract(doc, '$.responseMeta.checksOk') AS cok FROM history WHERE collection_id = ? ORDER BY ts DESC LIMIT 5000").all(
+    const rows = this.stmt(`SELECT ts, status, duration, request_id AS rid, json_extract(doc, '$.responseMeta.checksOk') AS cok FROM history WHERE collection_id = ? AND ${REQUEST_KIND_SQL} ORDER BY ts DESC LIMIT 5000`).all(
       collectionId,
     ) as Array<Record<string, unknown>>;
     return summarizeRequestStats(
@@ -564,8 +575,8 @@ class SqliteMetaStore implements MetaStore {
     // its own checks passed, else by its status (as summarizeRequestStats decides)
     const rows = this.stmt(
       `SELECT k.cid, COUNT(*) AS sent, SUM(CASE WHEN COALESCE(json_extract(h.doc, '$.responseMeta.checksOk'), h.status_ok) THEN 0 ELSE 1 END) AS failing
-       FROM (SELECT DISTINCT collection_id AS cid, request_id AS rid FROM history WHERE collection_id IS NOT NULL AND request_id IS NOT NULL) k
-       JOIN history h ON h.rowid = (SELECT rowid FROM history WHERE request_id = k.rid AND collection_id = k.cid ORDER BY ts DESC LIMIT 1)
+       FROM (SELECT DISTINCT collection_id AS cid, request_id AS rid FROM history WHERE collection_id IS NOT NULL AND request_id IS NOT NULL AND ${REQUEST_KIND_SQL}) k
+       JOIN history h ON h.rowid = (SELECT rowid FROM history WHERE request_id = k.rid AND collection_id = k.cid AND ${REQUEST_KIND_SQL} ORDER BY ts DESC LIMIT 1)
        GROUP BY k.cid`,
     ).all() as Array<{ cid: string; sent: number; failing: number }>;
     return Object.fromEntries(rows.map((r) => [r.cid, { sent: r.sent, failing: r.failing }]));
@@ -621,6 +632,7 @@ function historyRow(r: Record<string, unknown>): HistoryEntry {
     collectionId: doc.collectionId,
     requestId: doc.requestId,
     ...(doc.requestPreview ? { requestPreview: true } : {}),
+    ...(doc.capture ? { capture: doc.capture } : {}),
   };
 }
 
@@ -691,7 +703,8 @@ class JsonlMetaStore implements MetaStore {
     this.log('history', e);
   }
   listHistory(q: ListQuery = {}) {
-    const base = q.requestId ? this.data.history.filter((h) => h.requestId === q.requestId) : this.data.history;
+    const all = q.requests ? this.data.history.filter(isRequestEntry) : this.data.history;
+    const base = q.requestId ? all.filter((h) => h.requestId === q.requestId) : all;
     return this.page(q.failed ? base.filter((h) => !historyOk(h.status)) : base, q, (h, s) => `${h.name} ${h.url} ${h.method} ${h.status}`.toLowerCase().includes(s), (h) => h.timestamp);
   }
   getHistory(id: string) {
@@ -733,14 +746,14 @@ class JsonlMetaStore implements MetaStore {
   requestStats(collectionId: string) {
     return summarizeRequestStats(
       this.data.history
-        .filter((h) => h.collectionId === collectionId)
+        .filter((h) => h.collectionId === collectionId && isRequestEntry(h))
         .sort((a, b) => (a.timestamp < b.timestamp ? 1 : -1))
         .slice(0, 5000)
         .map((h) => ({ ...h, checksOk: (h.responseMeta as { checksOk?: boolean } | undefined)?.checksOk })),
     );
   }
   historyByCollection() {
-    const ids = new Set(this.data.history.map((h) => h.collectionId).filter((c): c is string => !!c));
+    const ids = new Set(this.data.history.filter(isRequestEntry).map((h) => h.collectionId).filter((c): c is string => !!c));
     return Object.fromEntries(
       [...ids].map((c) => {
         const stats = this.requestStats(c);

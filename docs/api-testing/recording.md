@@ -15,12 +15,14 @@ To capture a program that can use an HTTP proxy (a browser, a terminal, a whole 
 
 ## In the app
 
-In the app, the reverse proxy is a capture mode of the [HTTP Debugger](/api-testing/http-debugger#reverse-proxy-for-one-api): open **Debugger** (<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>3</kbd>) and choose **Capture ▸ Reverse proxy for one API…**. The status bar's **Tools ▸ Reverse proxy for one API…**, the command palette (*Capture: Reverse Proxy for One API…*) and the **Capture traffic into a collection** button in the Collections view's header open the same dialog.
+In the app, the reverse proxy is a capture mode of the [HTTP Debugger](/api-testing/http-debugger#reverse-proxy-for-one-api): open **Debugger** (the rail's **More…**, or <kbd>Ctrl</kbd>+<kbd>K</kbd> ▸ *Go to Debugger*) and choose **Capture ▸ Reverse proxy for one API…**. The status bar's **Tools ▸ Reverse proxy for one API…**, the command palette (*Capture: Reverse Proxy for One API…*) and the **Capture traffic into a collection** button in the Collections view's header open the same dialog.
 
 1. Enter the API's base URL, for example `https://api.example.com`, and optionally a local port. Click **Start recording**.
 2. TestPion shows (and copies) the local address, such as `http://127.0.0.1:52308`. Use it in your app instead of the API's base URL.
 3. Requests appear as they happen: method, path, status and time.
-4. Enter a name under **Save as collection** and click **Save**. **Stop** ends the recording; **Clear** empties the list.
+4. Enter a name under **Save as collection** and click **Save**. **Stop** ends the recording; **Clear** empties the dialog's list.
+
+The recorded requests are also rows of the Debugger's grid (marked **reverse**, *Reverse proxy* in the Application column): **Show in Debugger** goes there, to filter them, make a flow of them, save some of them to a collection or export them as HAR. Each save in the app is a capture session in History (*Kind ▸ Capture sessions*, `testpion history list --kind capture`); `testpion record` doesn't add one.
 
 The saved collection has a `baseUrl` variable set to the API. Requests are named after their method and path and grouped by the first path segment; a repeated request keeps its other responses as more examples. Browser noise (cookies, `sec-*` headers, `accept-language` …) is left out.
 

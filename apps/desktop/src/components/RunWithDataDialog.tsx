@@ -1,7 +1,7 @@
 import { FileSpreadsheet, Layers, Play, Upload } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { asError, call } from '../api';
-import { toastError, useApp } from '../store';
+import { selectEnvironments, toastError, useApp } from '../store';
 import { hasNativeDialogs, pickTextFile } from '../lib/files';
 import { Button, Field, Input, Modal, Segmented, Select, Toggle, cx } from './ui';
 
@@ -24,7 +24,7 @@ export type ScaleStart = { id: string; kind: 'data' | 'matrix' };
  */
 export function RunWithDataDialog({ file, initial = 'data', onClose, onStarted }: { file: string; initial?: 'data' | 'matrix'; onClose(): void; onStarted(s: ScaleStart): void }) {
   const [mode, setMode] = useState<'data' | 'matrix'>(initial);
-  const envs = useApp((s) => s.workspace?.environments ?? []);
+  const envs = useApp(selectEnvironments);
   const activeEnv = useApp((s) => s.environment);
   const [datasets, setDatasets] = useState<DataFile[]>([]);
   const [source, setSource] = useState('');

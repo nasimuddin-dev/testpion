@@ -13,6 +13,8 @@ export interface TargetOptions {
   newTab?: boolean;
   /** Leave the explorer as it is (a click in the explorer itself). */
   noReveal?: boolean;
+  /** A preview tab (WF-19: a single click in the explorer): the next one opened that way replaces it. */
+  preview?: boolean;
 }
 
 /** The editor of each request protocol (SOAP is edited as HTTP). */
@@ -27,7 +29,7 @@ export function refTarget(ref: ItemRef, opts: TargetOptions = {}): RefTarget | u
   const go = (view: ViewId, payload: Record<string, unknown> = {}): RefTarget => ({ view, payload: { ...payload, ...tab } });
   switch (ref.kind) {
     case 'request':
-      return go(PROTOCOL_VIEW[ref.protocol ?? 'http'] ?? 'rest', { collectionId: ref.collectionId, requestId: ref.requestId, ...(opts.noReveal ? { noReveal: true } : {}) });
+      return go(PROTOCOL_VIEW[ref.protocol ?? 'http'] ?? 'rest', { collectionId: ref.collectionId, requestId: ref.requestId, ...(opts.noReveal ? { noReveal: true } : {}), ...(opts.preview ? { preview: true } : {}) });
     case 'collection':
       return go('collections', { collectionId: ref.collectionId, ...(ref.tab === 'run' ? { run: true } : ref.tab === 'mock' ? { mock: true } : ref.tab ? { tab: ref.tab } : {}) });
     case 'folder':
@@ -59,6 +61,8 @@ export function refTarget(ref: ItemRef, opts: TargetOptions = {}): RefTarget | u
       return go('history', { historyId: ref.historyId });
     case 'trace':
       return go('traces', { traceId: ref.traceId });
+    case 'capture':
+      return go('debugger', { session: ref.name });
     case 'exchange':
       return go('debugger', { exchangeId: ref.exchangeId });
     case 'mcp-server':

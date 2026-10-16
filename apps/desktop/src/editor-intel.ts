@@ -1,5 +1,6 @@
 import type * as Monaco from 'monaco-editor';
 import { call } from './api';
+import { isTemplateBlock } from '@testpion/shared';
 import { useApp } from './store';
 import { inspectVariables, type VarInfo } from './lib/vars-cache';
 
@@ -342,6 +343,7 @@ export function installEditorIntel(monaco: typeof Monaco): void {
       provideHover: async (model, position) => {
         const line = model.getLineContent(position.lineNumber);
         for (const m of line.matchAll(/\{\{\s*([\w.$-]+)\s*\}\}/g)) {
+          if (isTemplateBlock(m[1]!)) continue;
           const start = m.index! + 1;
           const end = start + m[0].length;
           if (position.column < start || position.column > end) continue;
@@ -378,6 +380,7 @@ export function installEditorIntel(monaco: typeof Monaco): void {
       const script = model.getLanguageId() === 'javascript';
       const decos: Monaco.editor.IModelDeltaDecoration[] = [];
       for (const m of text.matchAll(/\{\{\s*([\w.$-]+)\s*\}\}/g)) {
+        if (isTemplateBlock(m[1]!)) continue; // {{else}}: Handlebars, not a variable
         const ok = isKnownVariable(m[1]!, known);
         if (!ok && script) continue;
         const s = model.getPositionAt(m.index!);

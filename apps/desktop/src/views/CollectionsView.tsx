@@ -29,6 +29,7 @@ import { downloadContent, generateFlows } from '../lib/files';
 import { useCallback, useEffect, useState } from 'react';
 import { call } from '../api';
 import { confirmAction, promptText, toastError, useApp } from '../store';
+import { deleteWithUndo, restoreDeleted } from '../lib/undo-delete';
 import { useIntent } from '../hooks';
 import { openRef } from '../lib/open-ref';
 import type { Collection, CollectionNode } from '../types';
@@ -317,22 +318,22 @@ export function CollectionsView() {
                     variant="ghost"
                     className="text-bad"
                     icon={<Trash2 size={12} />}
-                    onClick={async () => {
-                      if (
-                        !(await confirmAction({
-                          title: 'Delete collection',
-                          message: `Delete the collection "${draft.name}" and all its requests?`,
-                          detail: 'You can restore it from Recently deleted for 30 days.',
-                          confirmLabel: 'Delete collection',
-                          danger: true,
-                        }))
-                      )
-                        return;
-                      await call('col.delete', { id: draft.id });
-                      closeTabsFor(draft.items.flatMap(subtreeIds));
-                      setSel(undefined);
-                      await load();
-                    }}
+                    onClick={() =>
+                      void deleteWithUndo({
+                        what: `the collection "${draft.name}"`,
+                        run: async () => {
+                          await call('col.delete', { id: draft.id });
+                          closeTabsFor(draft.items.flatMap(subtreeIds));
+                          setSel(undefined);
+                          await load();
+                        },
+                        undo: async () => {
+                          await restoreDeleted('collection', draft.id);
+                          await load();
+                        },
+                        note: 'Recently deleted keeps it for 30 days',
+                      })
+                    }
                   />
                 </div>
               </div>

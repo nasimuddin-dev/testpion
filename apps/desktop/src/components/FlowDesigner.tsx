@@ -65,6 +65,8 @@ export interface DesignerFlow {
   steps: FlowStep[];
   run?: { runId: string };
   raw?: Record<string, Record<string, unknown>>;
+  /** The auth each HTTP step inherits from the file's `defaults:` (by step id); `overridden` when it has its own. */
+  inheritedAuth?: Record<string, { auth: Record<string, unknown>; from: 'defaults'; overridden?: true }>;
   /** The file's output: (what the flow returns). */
   output?: Record<string, unknown>;
   /** The Start node: the flow's inputs and the MCP tool it is exposed as. */
@@ -941,6 +943,7 @@ export function FlowDesigner({
             file={file}
             step={one}
             raw={flow.raw?.[one.id]}
+            inheritedAuth={flow.inheritedAuth?.[one.id]}
             steps={flow.steps}
             lastRunId={liveRun ?? flow.run?.runId}
             update={(set) => apply({ op: 'updateStep', id: one.id, set })}

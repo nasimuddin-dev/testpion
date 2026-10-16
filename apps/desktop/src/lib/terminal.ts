@@ -30,7 +30,7 @@ interface TerminalState {
 export const useTerminals = create<TerminalState>(() => ({ sessions: [], queue: [] }));
 
 // what was asked in one workspace (Run in terminal …) is not done in the next one
-afterScopeChange(() => useTerminals.setState({ queue: [] }));
+afterScopeChange(() => void (useTerminals.getState().queue.length && useTerminals.setState({ queue: [] })));
 
 function ask(r: TerminalRequest): void {
   useTerminals.setState((s) => ({ queue: [...s.queue, r] }));

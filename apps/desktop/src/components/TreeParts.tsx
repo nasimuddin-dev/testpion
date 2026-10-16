@@ -1,6 +1,7 @@
 import { ChevronDown, ChevronRight, Folder, FolderInput, FolderOpen, FolderPlus, MoreHorizontal, Pencil, Plus, Trash2, AlarmClock, ChevronsDownUp, ChevronsUpDown, CopyPlus, ExternalLink, FilePlus2, FolderCog, History, Play, Star, SquareArrowOutUpRight } from 'lucide-react';
 import { memo, useEffect, useRef, useState, type HTMLAttributes, type ReactNode } from 'react';
-import { confirmAction, promptText } from '../store';
+import { promptText } from '../store';
+import { deleteWithUndo } from '../lib/undo-delete';
 import { cx, Menu, rowActionClass, type MenuItem } from './ui';
 import { LABEL } from '../lib/vocabulary';
 
@@ -169,6 +170,7 @@ export function folderMenuItems({
   addLabel?: string;
   onAdd?(): void;
   rename(to: string): unknown;
+  /** Remove the folder (its items move to the top level); returns what puts it back. */
   remove(): unknown;
 }): MenuItem[] {
   return [
@@ -186,18 +188,8 @@ export function folderMenuItems({
       icon: <Trash2 size={14} />,
       danger: true,
       separator: true,
-      onSelect: async () => {
-        if (
-          await confirmAction({
-            title: 'Delete folder',
-            message: `Delete the folder "${name}"?`,
-            detail: `Its ${itemNoun}s are kept and move to the top level.`,
-            confirmLabel: 'Delete folder',
-            danger: true,
-          })
-        )
-          await remove();
-      },
+      // at once, with Undo in the message: nothing is lost (its items move to the top level)
+      onSelect: () => void deleteWithUndo({ what: `the folder "${name}"`, run: remove, note: `Its ${itemNoun}s moved to the top level` }),
     },
   ];
 }

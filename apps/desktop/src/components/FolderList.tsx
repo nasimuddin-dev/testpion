@@ -1,6 +1,6 @@
 import { Copy, FolderPlus, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
-import { confirmAction } from '../store';
+import { deleteWithUndo, putBack } from '../lib/undo-delete';
 import { Button, cx, Input, type MenuItem } from './ui';
 import { closeTabsFor } from './EditorTabs';
 import { askFolderName, focusRow, folderMenuItems, InlineRename, moveToFolderItem, RowMenu, TreeFolderRow, TreeHeader, treeKeys } from './TreeParts';
@@ -20,13 +20,17 @@ export interface FolderListItem {
 export interface FolderListOps {
   renameItem(id: string, name: string): void | Promise<void>;
   moveItem(id: string, folder: string | undefined): void | Promise<void>;
-  deleteItem(id: string): void | Promise<void>;
+  /** Delete an item; returns what puts it back (the list then offers Undo instead of asking first). */
+  deleteItem(id: string): Undo | Promise<Undo>;
   duplicateItem?(id: string): void | Promise<void>;
   setFolders(folders: string[]): void | Promise<void>;
   renameFolder(from: string, to: string): void | Promise<void>;
-  /** Remove a folder; its items move to the top level. */
-  deleteFolder(name: string): void | Promise<void>;
+  /** Remove a folder; its items move to the top level. Returns what puts the folder and its items back. */
+  deleteFolder(name: string): Undo | Promise<Undo>;
 }
+
+/** What puts a deleted item or folder back. */
+export type Undo = () => unknown;
 
 const collapsedKey = (id: string) => `aps.folders.${id}`;
 
@@ -102,7 +106,7 @@ export function FolderList({
       icon: <Trash2 size={14} />,
       danger: true,
       separator: true,
-      onSelect: () => void confirmAction({ title: `Delete ${itemNoun}`, message: `Delete "${it.name}"?`, confirmLabel: 'Delete', danger: true }).then((ok) => ok && ops.deleteItem(it.id)),
+      onSelect: () => void deleteWithUndo({ what: `${itemNoun} "${it.name}"`, run: () => ops.deleteItem(it.id) }),
     },
   ];
   const folderMenu = (f: string): MenuItem[] => folderMenuItems({ name: f, itemNoun, addLabel, onAdd: () => onAdd(f), rename: (to) => ops.renameFolder(f, to), remove: () => ops.deleteFolder(f) });
@@ -206,14 +210,26 @@ export function FolderList({
 }
 
 /** FolderListOps for a Library (lib.get / lib.save) held in state: every change is saved. */
-export function libraryOps<T>(lib: { folders: string[]; items: Array<{ id: string; name: string; folder?: string; data: T }> }, save: (next: typeof lib) => void | Promise<void>, newId: () => string): FolderListOps {
+export function libraryOps<T>(
+  lib: { folders: string[]; items: Array<{ id: string; name: string; folder?: string; data: T }> },
+  save: (next: typeof lib) => void | Promise<void>,
+  newId: () => string,
+  /** The library as saved now (an undo puts its item back into that, not into the list it was deleted from). */
+  latest: () => Promise<typeof lib> = async () => lib,
+): FolderListOps {
   const items = lib.items;
   return {
     renameItem: (id, name) => save({ ...lib, items: items.map((i) => (i.id === id ? { ...i, name } : i)) }),
     moveItem: (id, folder) => save({ ...lib, items: items.map((i) => (i.id === id ? { ...i, folder } : i)) }),
-    deleteItem: (id) => {
+    deleteItem: async (id) => {
+      const at = items.findIndex((i) => i.id === id);
+      const it = items[at];
       closeTabsFor([id]);
-      return save({ ...lib, items: items.filter((i) => i.id !== id) });
+      await save({ ...lib, items: items.filter((i) => i.id !== id) });
+      return async () => {
+        const cur = await latest();
+        if (it) await save({ ...cur, items: putBack(cur.items, it, at) });
+      };
     },
     duplicateItem: (id) => {
       const it = items.find((i) => i.id === id);
@@ -221,6 +237,21 @@ export function libraryOps<T>(lib: { folders: string[]; items: Array<{ id: strin
     },
     setFolders: (folders) => save({ ...lib, folders }),
     renameFolder: (from, to) => save({ folders: lib.folders.map((f) => (f === from ? to : f)), items: items.map((i) => (i.folder === from ? { ...i, folder: to } : i)) }),
-    deleteFolder: (name) => save({ folders: lib.folders.filter((f) => f !== name), items: items.map((i) => (i.folder === name ? { ...i, folder: undefined } : i)) }),
+    deleteFolder: async (name) => {
+      const was = new Set(items.filter((i) => i.folder === name).map((i) => i.id));
+      const at = lib.folders.indexOf(name);
+      await save({ folders: lib.folders.filter((f) => f !== name), items: items.map((i) => (i.folder === name ? { ...i, folder: undefined } : i)) });
+      return async () => {
+        const cur = await latest();
+        await save({ folders: restoreFolder(cur.folders, name, at), items: cur.items.map((i) => (was.has(i.id) && !i.folder ? { ...i, folder: name } : i)) });
+      };
+    },
   };
+}
+
+/** The folder list with `name` back at `index` (unless it is there again). */
+export function restoreFolder(folders: string[], name: string, index: number): string[] {
+  if (folders.includes(name)) return folders;
+  const at = Math.max(0, Math.min(index < 0 ? folders.length : index, folders.length));
+  return [...folders.slice(0, at), name, ...folders.slice(at)];
 }

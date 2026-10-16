@@ -15,6 +15,14 @@ description: "Variable scopes and precedence, secret variables, dynamic variable
 
 The environment picker is one control, the same everywhere: the pill in the top bar, the environment in the status bar (a click opens the same menu), and the environment field of the Collection runner, a monitor and Load. <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd> opens Quick Open on environments and variables. Production environments are marked in red, and every run shows the environment it ran against as a badge. See [The environment, the same way everywhere](/getting-started/finding-your-way#the-environment-the-same-way-everywhere).
 
+## Undefined variables {#undefined-variables}
+
+When the request open in the editor (HTTP; also its headers, body, auth and scripts) uses a `{{variable}}` that the active environment, its collection, the workspace and the globals don't define, the environment switcher shows a red count, in the top bar and in the status bar. It follows what you type (a moment after you stop), switching environment and adding variables; it is the same answer as the red variables in the fields and the unset marks of the **Info** panel.
+
+- Click the count: each undefined variable is listed as **Add {{name}} to** *(the active environment)*…, which opens the variable's popover to give it a value — with **Also add to** the other environments.
+- Not counted: dynamic variables (`{{$guid}}`, `{{$env.NAME}}` …) and names the request's own scripts set (`tp.environment.set('token', …)`).
+- **For AI agents:** `send_request` answers `unresolvedVariables` (the names that were not defined when it was sent), `item_info` lists the variables a saved request uses, and `set_environment_variable` with `alsoIn` adds them (to several environments at once).
+
 ## Order
 
 In the **Environments** view, drag an environment up or down the list (or focus it and press **Alt+↑** / **Alt+↓**) to change its position. The order is saved in the workspace (an `order` field in each environment file) and used everywhere environments are listed: the environment picker (the top bar, the status bar, the Collection runner, monitors and Load) and the Home view. Environments without a position, such as newly created ones, come last.
@@ -98,7 +106,7 @@ The CLI reads every reference of the environment it runs with, as it reads `{{$e
 
 ## All variable scopes in one place
 
-The **Environments** view has a tab for each scope: **Environments**, **Collection variables**, **Workspace variables** and **Global variables**. Collection variables (an imported Postman collection keeps its variables there) are listed per collection: pick one on the left, edit its variables, **Save**; they are the same as in the collection's own settings. A scope with no variables yet says what it is for and, when your collections have variables, links to them.
+Environments open in tabs like requests: a single click in the list opens a preview tab, a double-click keeps it, and each tab keeps its unsaved edits (secret values you typed are kept only until you switch tabs, never on disk before **Save**). The **Environments** view has a tab for each scope: **Environments**, **Collection variables**, **Workspace variables** and **Global variables**. Collection variables (an imported Postman collection keeps its variables there) are listed per collection: pick one on the left, edit its variables, **Save**; they are the same as in the collection's own settings. A scope with no variables yet says what it is for and, when your collections have variables, links to them.
 
 ## See or change one variable
 

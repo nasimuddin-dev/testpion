@@ -24,6 +24,19 @@ function prepare(ws) {
     request: { method: 'GET', url: `${DEMO}${paths[i]}`, headers: [{ key: 'Accept', value: 'application/json', enabled: true }] },
   }));
   items.push({ kind: 'http', id: 'soak-large', name: 'soak-large', request: { method: 'GET', url: `${DEMO}/large?mb=2`, headers: [] } });
+  // deleted and brought back with the undo message every cycle
+  items.push({ kind: 'http', id: 'soak-undo', name: 'soak-undo', request: { method: 'GET', url: `${DEMO}/health?undo=1`, headers: [] } });
+  // a saved Debugger session, opened in a tab of its own every cycle
+  mkdirSync(join(ws, 'debugger'), { recursive: true });
+  const entry = (i) => ({
+    startedDateTime: new Date(Date.parse('2026-10-01T10:00:00Z') + i * 1000).toISOString(),
+    time: 10,
+    request: { method: 'GET', url: 'http://saved.test/soak/' + i, httpVersion: 'HTTP/1.1', headers: [], queryString: [], cookies: [], headersSize: -1, bodySize: 0 },
+    response: { status: 200, statusText: 'OK', httpVersion: 'HTTP/1.1', headers: [], cookies: [], content: { size: 2, mimeType: 'application/json', text: '{}' }, redirectURL: '', headersSize: -1, bodySize: 2 },
+    cache: {},
+    timings: { send: 1, wait: 8, receive: 1 },
+  });
+  writeFileSync(join(ws, 'debugger', 'soak-session.har'), JSON.stringify({ log: { version: '1.2', creator: { name: 'soak', version: '1' }, entries: Array.from({ length: 20 }, (_, i) => entry(i)) } }));
   writeFileSync(join(ws, 'collections', 'soak.json'), JSON.stringify({ schemaVersion: '1.0', id: 'soak', name: 'Soak collection', items }, null, 2));
   const tests = REQS.slice(0, 5).map(
     (name, i) => `  - id: soak-t${i}\n    name: soak test ${i}\n    method: GET\n    url: "${DEMO}/health?t=${i}"\n    assertions:\n      - { type: status, expected: 200 }\n`,
@@ -56,7 +69,8 @@ const H = `${DOM}
     if (c.getAttribute('aria-expanded') === 'false') c.click();
     return !!(await __t.waitFor(() => soakRow('${REQS[0]}'), 3000));
   };
-  const openReq = async (name) => { const r = soakRow(name); if (!r) return false; r.click(); return !!(await __t.waitFor(() => vis('main input[aria-label="Request URL"]').find((i) => i.offsetParent), 4000)); };
+  // opened for good, as a person opening several requests does (a single click only previews, WF-19)
+  const openReq = async (name) => { const r = soakRow(name); if (!r) return false; r.click(); r.dispatchEvent(new MouseEvent('dblclick', { bubbles: true })); return !!(await __t.waitFor(() => vis('main input[aria-label="Request URL"]').find((i) => i.offsetParent), 4000)); };
   const setVal = (el, v) => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, v); el.dispatchEvent(new Event('input', { bubbles: true })); };
 `;
 const r = (name, body) => [name, `(async () => { ${H} ${body} })()`, false];
@@ -102,6 +116,15 @@ const setup = [
   ),
   r('soak-expand', `return 'soak rows: ' + (await ensureSoak());`),
   r('soak-data', `const d = await window.aps.invoke('col.uploadDataFile', { name: 'soak-rows.csv', text: 'code\\n200\\n404\\n200\\n' }); return 'data: ' + (d?.path ?? d?.name ?? JSON.stringify(d).slice(0, 80));`),
+  // a second workspace (a new one shows Get started with the guided tour), made through the backend; the window stays in the examples
+  r(
+    'soak-tour-workspace',
+    `const here = await window.aps.invoke('ws.current');
+     await window.aps.invoke('ws.create', { name: 'Soak tour' });
+     await window.aps.invoke('ws.open', { ref: here.path });
+     window.__soakHome = here.name;
+     return 'workspaces: ' + (await window.aps.invoke('ws.list')).map((w) => w.name).join(', ') + ' | back in: ' + (await window.aps.invoke('ws.current')).name;`,
+  ),
 ];
 
 /* --------------------------------------------------------------- the cycle */
@@ -264,6 +287,96 @@ const cycle = (c) => {
        let closed = 0; for (let i = 0; i < 10; i++) { const x = document.querySelector('[role=tablist][aria-label="Open test files"] button[aria-label^="Close "]'); if (!x) break; x.click(); closed++; await __t.sleep(200); await discard(); }
        await __t.view('Home');
        return 'nodes ' + nodes().length + ' drawn ' + !!drawn + ' | inspector ' + inspector + ' | grid ' + grid + ' | closed ' + closed + ' | ms ' + ms(t0);`,
+    ),
+    // v0.47's surfaces: the rail's More…, Settings ▸ Keyboard, the density switched there and back, a delete undone from
+    // its message, a saved Debugger session in its tab, saved AI prompts in tabs, the guided tour in a second workspace
+    r(
+      `${p}-surfaces`,
+      `const t0 = performance.now(); const out = [];
+       const press = (b) => b?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, pointerType: 'mouse' }));
+       const closeTabs = async (strip) => { let n = 0; for (let i = 0; i < 10; i++) { const x = document.querySelector('[role=tablist][aria-label="' + strip + '"] button[aria-label^="Close "]'); if (!x) break; x.click(); n++; await __t.sleep(200); await discard(); } return n; };
+       // the rail's More… menu, opened and closed
+       await __t.view('Home');
+       press(document.querySelector('nav [aria-label="More views"]'));
+       const more = await __t.waitFor(() => document.querySelectorAll('[role=menu] [role=menuitem]').length, 2000);
+       await __t.esc(); await __t.waitFor(() => !document.querySelector('[role=menu]'), 1500);
+       out.push('more ' + (more || 0));
+       // Settings ▸ Keyboard with a search
+       await __t.view('Settings'); await __t.tab('Keyboard');
+       const kb = await __t.waitFor(() => vis('[data-keyboard-settings]')[0], 3000);
+       const search = vis('input[aria-label="Search shortcuts"]')[0];
+       if (search) { setVal(search, 'palette'); await __t.sleep(200); out.push('keyboard rows ' + vis('[data-shortcut-row]').length); setVal(search, ''); await __t.sleep(200); } else out.push('keyboard ' + !!kb);
+       // the density: compact, then comfortable again (Settings ▸ Appearance, saved)
+       const density = [];
+       for (const d of ['Compact', 'Comfortable']) {
+         await __t.tab('Appearance');
+         vis('main button').find((b) => b.textContent.trim() === d)?.click(); await __t.sleep(150);
+         vis('main button').find((b) => b.textContent.trim() === 'Save settings')?.click();
+         await __t.waitFor(() => document.documentElement.dataset.density === d.toLowerCase(), 3000); await painted();
+         density.push(document.documentElement.dataset.density);
+       }
+       out.push('density ' + density.join('>'));
+       // a request deleted (no question), brought back with Undo in its message
+       await ensureSoak();
+       const ur = soakRow('soak-undo');
+       let undo = 'no row';
+       if (ur) {
+         ur.focus(); await __t.real.key('Delete');
+         const toast = await __t.waitFor(() => [...document.querySelectorAll('[data-sonner-toast]')].find((t) => /Deleted the request "soak-undo"/.test(t.textContent)), 3000);
+         const b = toast && (toast.querySelector('button[data-button]:not([data-cancel])') ?? [...toast.querySelectorAll('button')].find((x) => x.textContent.trim() === 'Undo'));
+         b?.click();
+         const back = await __t.waitFor(() => soakRow('soak-undo'), 5000);
+         undo = 'toast ' + !!toast + ' restored ' + !!back;
+       }
+       out.push('undo ' + undo);
+       // a saved Debugger session in a tab of its own, then closed
+       await __t.view('Debugger');
+       const sb = await __t.waitFor(() => [...document.querySelectorAll('main button')].find((b) => b.offsetParent && /^Session/.test(b.textContent.trim())), 3000);
+       let session = 'no menu';
+       if (sb) {
+         press(sb); sb.click();
+         const it = await __t.waitFor(() => [...document.querySelectorAll('[role=menuitem]')].find((m) => /^Open soak-session/.test(m.textContent.trim())), 3000);
+         if (it) {
+           it.click();
+           const rows = await __t.waitFor(() => [...document.querySelectorAll('main [role=row]')].filter((r) => /saved\\.test/.test(r.textContent)).length >= 10, 5000);
+           const closed = await closeTabs('Open sessions');
+           session = 'rows ' + !!rows + ' closed ' + closed;
+         } else { await __t.esc(); session = 'no item'; }
+       }
+       out.push('session ' + session);
+       // two saved prompts in the AI Lab: one kept, one a preview; then both closed
+       await __t.view('AI Lab'); await __t.tab('Playground');
+       const prompt = (n) => [...document.querySelectorAll('[data-tree-row]')].find((x) => x.getAttribute('aria-label') === n);
+       const pa = await __t.waitFor(() => prompt('Classify intent (JSON)'), 4000);
+       let prompts = 'no prompt';
+       if (pa) {
+         pa.click(); await __t.sleep(300); pa.dispatchEvent(new MouseEvent('dblclick', { bubbles: true })); await __t.sleep(300);
+         prompt('Summarise a text')?.click(); await __t.sleep(500); await painted();
+         const n = document.querySelectorAll('[role=tablist][aria-label="Open prompts"] [role=tab]').length;
+         prompts = 'tabs ' + n + ' closed ' + (await closeTabs('Open prompts'));
+       }
+       out.push('prompts ' + prompts);
+       // the guided tour in the second workspace (switched to and back with the workspace menu)
+       const switchTo = async (name) => {
+         const wb = document.querySelector('button[title^="Switch workspace"]'); if (!wb) return false;
+         wb.click(); const f = await __t.waitFor(() => document.querySelector('[role=dialog][aria-label="Workspaces"] input'), 3000); if (!f) return false;
+         setVal(f, name); await __t.sleep(150);
+         f.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+         return !!(await __t.waitFor(() => wb.textContent.trim() === name, 8000));
+       };
+       let tour = 'no switch';
+       if (await switchTo('Soak tour')) {
+         await __t.view('Home');
+         const card = () => document.querySelector('[role=dialog][data-coachmark]');
+         if (!card()) (await __t.waitFor(() => document.querySelector('[data-take-tour]'), 5000))?.click();
+         const opened = !!(await __t.waitFor(card, 5000));
+         [...(card()?.querySelectorAll('button') ?? [])].find((b) => b.textContent.trim() === 'Skip tour')?.click();
+         const shut = !!(await __t.waitFor(() => !card(), 3000));
+         tour = 'opened ' + opened + ' closed ' + shut + ' | back ' + (await switchTo(window.__soakHome));
+       }
+       out.push('tour ' + tour);
+       await __t.view('Home');
+       return out.join(' | ') + ' | ms ' + ms(t0);`,
     ),
     // the probe: the same three timed actions every cycle
     r(

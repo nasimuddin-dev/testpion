@@ -5,7 +5,10 @@ import { GitItemHistory } from '../components/GitItemHistory';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useCollectionTree } from '../lib/collections-store';
 import { call } from '../api';
-import { confirmAction, promptText, toastError, useApp } from '../store';
+import { persisted, promptText, toastError, useApp } from '../store';
+import { useLibraryTabs } from '../lib/library-tabs';
+import { LibraryTabStrip } from '../components/LibraryTabStrip';
+import { deleteWithUndo, restoreDeleted } from '../lib/undo-delete';
 import { useIntent } from '../hooks';
 import type { Environment, KeyValue } from '../types';
 import { CollectionVariablesPane } from '../components/CollectionVariablesPane';
@@ -20,6 +23,13 @@ import { refreshEnvironments, useEnvironments } from '../lib/environments-store'
 import { downloadContent } from '../lib/files';
 import { AlsoAddDialog } from '../components/AlsoAddTo';
 import { LABEL } from '../lib/vocabulary';
+
+/**
+ * WF-19: open environments are tabs (the one tab model: a single click in the list opens a preview tab, double-click
+ * keeps it), each with its unsaved edits (`null`: none, the saved environment is shown), kept per workspace. Secret
+ * values typed in are never kept here (they go to the OS store on Save).
+ */
+const envDrafts = persisted<Environment | null>('env-edit', null);
 
 export function EnvironmentsView() {
   const git = useGit();
@@ -43,7 +53,12 @@ export function EnvironmentsView() {
       toastError(e);
     }
   };
-  const [sel, setSel] = useState<string>();
+  const tabs = useLibraryTabs<Environment | null>('environments', envDrafts);
+  const sel = tabs.active.savedId;
+  /** Open an environment: in its tab, or the preview tab (a single click in the list), or a new tab. */
+  const setSel = (id: string | undefined, o: { preview?: boolean } = {}) => id && tabs.open(id, null, o);
+  /** Its tabs close (a deleted environment). */
+  const closeTabsOf = (id: string) => tabs.close(tabs.tabs.filter((t) => t.savedId === id).map((t) => t.id), null);
   const newEnvironment = async () => {
     const name = await promptText('New environment', { message: 'Environment name', value: 'Staging', okLabel: 'Create' });
     if (!name) return;
@@ -53,7 +68,11 @@ export function EnvironmentsView() {
     setSel(env.id);
     await useApp.getState().refreshWorkspace();
   };
-  const [draft, setDraft] = useState<Environment>();
+  // what the open tab shows: its unsaved edits, else the environment as saved
+  const savedEnv = envs.find((e) => e.id === sel);
+  const draft: Environment | undefined = tabs.d ?? savedEnv;
+  const dirty = !!tabs.d && JSON.stringify(tabs.d) !== JSON.stringify(savedEnv);
+  const setDraft = (v: Environment | undefined | ((d: Environment | undefined) => Environment | undefined)) => tabs.setD((cur) => (typeof v === 'function' ? v(cur ?? savedEnv) : v) ?? null);
   /** A copy of an environment (secret values are not copied). */
   const duplicateEnv = async (from: Environment) => {
     const env = { ...from, id: uid('env-'), name: `${from.name} copy`, isProduction: false, variables: from.variables.map((v) => (v.secret ? { ...v, value: '' } : v)) };
@@ -62,13 +81,23 @@ export function EnvironmentsView() {
     setSel(env.id);
     await useApp.getState().refreshWorkspace();
   };
-  const deleteEnv = async (env: Environment) => {
-    if (!(await confirmAction({ title: 'Delete environment', message: `Delete the environment "${env.name}"?`, detail: 'You can restore it, with its secret values, from Recently deleted for 30 days.', confirmLabel: 'Delete environment', danger: true }))) return;
-    await call('env.delete', { id: env.id });
-    if (sel === env.id) setSel(undefined);
-    await load();
-    await useApp.getState().refreshWorkspace();
-  };
+  /** At once, with Undo in the message (the environment and its secret values come back from Recently deleted). */
+  const deleteEnv = (env: Environment) =>
+    deleteWithUndo({
+      what: `the environment "${env.name}"`,
+      run: async () => {
+        await call('env.delete', { id: env.id });
+        closeTabsOf(env.id);
+        await load();
+        await useApp.getState().refreshWorkspace();
+      },
+      undo: async () => {
+        await restoreDeleted('environment', env.id);
+        await load();
+        await useApp.getState().refreshWorkspace();
+      },
+      note: 'Recently deleted keeps it for 30 days',
+    });
   const [menuFor, setMenuFor] = useState<string>();
   /** The environment being renamed in place (F2, or Rename in its menu). */
   const [renamingEnv, setRenamingEnv] = useState<string>();
@@ -102,7 +131,8 @@ export function EnvironmentsView() {
   const [globals, setGlobals] = useState<KeyValue[]>(settings?.globalVariables ?? []);
   const load = async () => {
     const e = await refreshEnvironments();
-    setSel((s) => s ?? e[0]?.id);
+    // nothing open yet: the first environment, in the first tab
+    if (!tabs.active.savedId && e[0]) tabs.open(e[0].id, null);
   };
   const envsVersion = useApp((s) => s.envsVersion);
   useEffect(() => {
@@ -137,16 +167,17 @@ export function EnvironmentsView() {
     const e = envs.find((x) => x.id === sel);
     if (reordering.current) {
       reordering.current = false;
-      // a reorder or a rename from the list: keep the open environment's unsaved edits
-      if (e) setDraft((d) => (d?.id === e.id ? { ...d, order: e.order, name: e.name } : e));
+      // a reorder or a rename from the list: the open environment's unsaved edits take its new order and name
+      if (e && tabs.d) setDraft((d) => (d?.id === e.id ? { ...d, order: e.order, name: e.name } : d));
       return;
     }
     const add = pendingAdd.current;
     if (e && add && add.envId === e.id && !e.variables.some((v) => v.key === add.key)) {
       pendingAdd.current = undefined;
       // unsaved until Save, like any edit
-      setDraft({ ...e, variables: [...e.variables, { key: add.key, value: '', enabled: true }] });
-    } else setDraft(e);
+      setDraft((d) => ({ ...(d ?? e), variables: [...(d ?? e).variables, { key: add.key, value: '', enabled: true }] }));
+    }
+    // a tab keeps its unsaved edits (switching tabs, a save elsewhere); without edits it shows the environment as saved
     refreshUnused(e?.name);
     setSecretValues({});
     if (e && !e.problem) void call('env.secretStatus', { envId: e.id, keys: (e.variables ?? []).filter((v) => v.secret).map((v) => v.key) }).then(setSecretStatus, toastError);
@@ -185,6 +216,7 @@ export function EnvironmentsView() {
       const added = variables.map((v) => v.key).filter((k) => k && !before.has(k));
       const missingElsewhere = added.filter((k) => envs.some((e) => e.id !== draft.id && !e.problem && !e.variables.some((v) => v.key === k)));
       await call('env.save', { env: { ...draft, variables }, secrets });
+      tabs.setD(null); // saved: the tab shows the environment as saved
       await load();
       await useApp.getState().refreshWorkspace();
       useApp.getState().toast('Environment saved', 'success');
@@ -267,9 +299,10 @@ export function EnvironmentsView() {
                     data-tree-row
                     data-rename-id={e.id}
                     onClick={() => {
-                      setSel(e.id);
+                      setSel(e.id, { preview: true });
                       useApp.getState().markPlace('environments', { environmentId: e.id });
                     }}
+                    onDoubleClick={() => setSel(e.id)}
                     onKeyDown={(ev) => {
                       if (ev.key === 'F2') {
                         ev.preventDefault();
@@ -307,6 +340,22 @@ export function EnvironmentsView() {
                 </div>
               ))}
             </div>
+            <div className="h-full flex flex-col min-w-0">
+            <LibraryTabStrip
+              label="Open environments"
+              library="environments"
+              refOf={(t) => (t.savedId ? { kind: 'environment', environmentId: t.savedId } : undefined)}
+              tabs={tabs.tabs}
+              active={tabs.active.id}
+              titleOf={(t) => envs.find((x) => x.id === t.savedId)?.name ?? 'Environment'}
+              dirty={dirty}
+              onSelect={tabs.select}
+              onClose={(ids) => tabs.close(ids, null)}
+              onKeep={tabs.keep}
+              onNew={() => void newEnvironment()}
+              newLabel="New environment"
+            />
+            <div className="flex-1 min-h-0">
             {draft ? (
               <div className="h-full overflow-auto p-3 flex flex-col gap-3">
                 <div className="flex items-end gap-3 flex-wrap">
@@ -402,6 +451,8 @@ export function EnvironmentsView() {
                   : 'An environment holds the variables a request refers to as {{baseUrl}}, {{token}} …: one per stage (Development, Staging, Production), switched in the top bar. Secret values go to the OS secret store, never into the workspace files.'}
               </Empty>
             )}
+            </div>
+            </div>
           </Split>
         )}
         {scope === 'collection' && <CollectionVariablesPane initial={colVarsFor} />}

@@ -101,7 +101,8 @@ export function collectionsTouched(e: { method?: string; collectionId?: string; 
   if (!e.method) return e.kind ? 'none' : 'all';
   if (NOT_COLLECTIONS.test(e.method)) return 'none';
   if (e.method === 'col.save' && e.collectionId) return [e.collectionId];
-  if (e.method === 'disk') {
+  // the files it wrote (an RPC's own writes, the app's background writes, the disk) say whether collections changed
+  if (e.method === 'disk' || e.kinds) {
     if (e.kinds && !e.kinds.includes('collections') && !e.kinds.includes('workspace')) return 'none';
     if (e.collectionIds && !e.kinds?.includes('workspace')) return e.collectionIds.length ? e.collectionIds : 'none';
   }

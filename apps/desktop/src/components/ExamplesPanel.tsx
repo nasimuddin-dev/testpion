@@ -1,8 +1,9 @@
 import { editorLanguageOfText } from '../data-languages';
 import { BookmarkPlus, Pencil, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { call } from '../api';
-import { confirmAction, toastError } from '../store';
+import { toastError } from '../store';
+import { deleteWithUndo, putBack } from '../lib/undo-delete';
 import type { SavedExample } from '../types';
 import { CodeEditor } from './CodeEditor';
 import { Badge, cx, Empty, IconButton, PinnablePanel, statusTone } from './ui';
@@ -26,6 +27,9 @@ export function ExamplesPanel({ collectionId, requestId, examples, onChange }: {
   const [renaming, setRenaming] = useState<string>();
   const current = examples.find((e) => e.id === selected) ?? examples[0];
 
+  // the examples as they are now (an undo puts its example back into these)
+  const latest = useRef(examples);
+  latest.current = examples;
   const persist = async (next: SavedExample[]) => {
     if (!collectionId || !requestId) return;
     try {
@@ -111,7 +115,15 @@ export function ExamplesPanel({ collectionId, requestId, examples, onChange }: {
             >
               <Pencil size={14} />
             </IconButton>
-            <IconButton label="Delete example" onClick={async () => (await confirmAction({ title: 'Delete example', message: `Delete the example "${current.name}"?`, detail: 'Mock servers stop serving it.', confirmLabel: 'Delete example', danger: true })) && void persist(examples.filter((e) => e.id !== current.id))}>
+            <IconButton
+              label="Delete example"
+              onClick={() => {
+                const gone = current;
+                const at = examples.findIndex((e) => e.id === gone.id);
+                // at once, with Undo in the message: it goes back in its place among the examples as they are then
+                void deleteWithUndo({ what: `the example "${gone.name}"`, run: () => persist(examples.filter((e) => e.id !== gone.id)), undo: () => persist(putBack(latest.current, gone, at)) });
+              }}
+            >
               <Trash2 size={14} />
             </IconButton>
           </div>

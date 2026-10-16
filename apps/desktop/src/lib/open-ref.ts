@@ -139,6 +139,7 @@ export function refLabel(value: ItemRef): string {
     case 'git-file':
       return ref.path.replace(/^.*\//, '');
     case 'dataset':
+    case 'capture':
       return ref.name;
     case 'run':
       return `Run ${ref.runId}`;
@@ -287,7 +288,12 @@ async function reopenHistory(historyId: string): Promise<boolean> {
 }
 
 /** Open a history entry the caller already has in its editor; one without a request to send opens in History. */
-export function openHistoryEntry(e: { kind: string; name?: string; request?: unknown }, historyId?: string): boolean {
+export function openHistoryEntry(e: { kind: string; name?: string; request?: unknown; capture?: { ref: ItemRef } }, historyId?: string): boolean {
+  // a capture session opens what it became: the collection, the flow, the saved session in the Debugger
+  if (e.capture?.ref) {
+    void openRef(e.capture.ref);
+    return true;
+  }
   const t = historyEditorTarget(e);
   if (t) {
     go(t);

@@ -1,8 +1,9 @@
-import { AlarmClock, BarChart3, Bot, Code2, Keyboard, Columns2, CopyX, Disc, GitCompare, ScanSearch, TerminalSquare, Variable, Download, FileDown, FlaskConical, FolderOpen, FolderPlus, FolderTree, Gauge, GitBranch, History, KeyRound, Layers, ListChecks, ListX, Network, Play, Plug, Radio, RefreshCw, ScrollText, Search, Settings, Sparkles, SquareTerminal, Upload, Waypoints, Workflow, X, type LucideIcon } from 'lucide-react';
+import { AlarmClock, BarChart3, Bot, Code2, Keyboard, Columns2, CopyX, Disc, GitCompare, ScanSearch, TerminalSquare, Variable, Download, FileDown, FlaskConical, FolderOpen, FolderPlus, FolderTree, Gauge, GitBranch, History, KeyRound, Layers, ListChecks, ListX, Network, Play, Plug, Radio, RefreshCw, RotateCcw, Rows3, ScrollText, Search, Settings, Sparkles, SquareTerminal, Upload, Waypoints, Workflow, X, type LucideIcon } from 'lucide-react';
 import { RightPanel } from './components/RightPanel';
 import { openReverseProxyCapture } from './lib/capture';
 import { createElement, lazy, Suspense, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from 'react';
-import { call, on } from './api';
+import { call, modKey, on } from './api';
+import { touchesFiles, type DataChangedEvent } from './lib/data-changed';
 import { useApp, type ViewId } from './store';
 import { watchSecretRefs } from './lib/secret-refs';
 import { watchOpenLinks } from './lib/open-ref';
@@ -26,12 +27,16 @@ import { loadMonaco } from './components/CodeEditor';
 import { Spinner, TooltipProvider } from './components/ui';
 import { McpClientRequests } from './components/McpClientRequests';
 import { focusTerminal, newTerminal, useShellCapable } from './lib/terminal';
-import { railOrder, railTarget } from './lib/rail';
+import { railShortcut } from './lib/rail';
+import { resetRail, useRail } from './lib/use-rail';
+import { handleGlobalKey } from './lib/key-commands';
+import { applyDensity } from './lib/density';
+import { saveUiPrefs } from './lib/ui-prefs';
+import { keyLabel, useBindings } from './lib/keybindings';
 import { copyRunCommand, runInCi } from './lib/run-ci';
 import { reopenClosedTab } from './lib/closed-tabs';
 import { runAgain } from './lib/run-again';
 import { QuickOpen } from './components/QuickOpen';
-import { stepProblem } from './lib/problems';
 import { CookiesModal } from './components/CookiesModal';
 
 
@@ -110,6 +115,7 @@ function useThemeEffect() {
       document.documentElement.dataset.theme = dark ? 'dark' : 'light';
       document.documentElement.dataset.reducedMotion = String(!!settings?.reducedMotion);
       document.documentElement.style.setProperty('--font-size', `${settings?.fontSize ?? 14}px`);
+      if (settings) applyDensity(settings.density);
     };
     apply();
     const mq = window.matchMedia('(prefers-color-scheme: dark)');
@@ -118,8 +124,6 @@ function useThemeEffect() {
   }, [settings]);
 }
 
-/** Keys typed into a field are text, not shortcuts. */
-const isTyping = (t: EventTarget | null) => t instanceof HTMLElement && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || !!t.closest('.monaco-editor'));
 
 /** Icons of the command palette's commands (the same icons as the menus and navigation). */
 const PALETTE_ICONS: Record<string, LucideIcon> = {
@@ -147,6 +151,7 @@ const PALETTE_ICONS: Record<string, LucideIcon> = {
   eval: FlaskConical,
   update: RefreshCw,
   shortcuts: Keyboard,
+  'keyboard-settings': Keyboard,
   'm-new-http': Network,
   'm-new-grpc': Waypoints,
   'm-new-ws': Radio,
@@ -234,6 +239,27 @@ export default function App() {
       if (p.kinds.includes('environments') || p.kinds.includes('workspace')) s.set({ envsVersion: (s.envsVersion ?? 0) + 1 });
       s.toast(`${p.message}: TestPion shows the new version.`);
     });
+    // environments (and workspace.json) written by anyone through the app — this window, an agent over MCP, the
+    // assistant, a generator: the environment picker and every dialog listing them read the workspace again (once per
+    // burst; changes made outside the app come as workspace.changedOnDisk above)
+    let reading = false;
+    let again = false;
+    const offData = on<DataChangedEvent>('data.changed', (e) => {
+      if (!touchesFiles(e, ['environments'])) return;
+      again = true;
+      if (reading) return;
+      reading = true;
+      void (async () => {
+        try {
+          while (again) {
+            again = false;
+            await useApp.getState().refreshWorkspace().catch(() => undefined);
+          }
+        } finally {
+          reading = false;
+        }
+      })();
+    });
     // application menu (File ▸ New, Import, Export, Save …)
     const offMenu = on<{ command: MenuCommand }>('menu.command', ({ command }) => void runMenuCommand(command));
     // File menu: request tab commands (handled by the REST view)
@@ -242,6 +268,7 @@ export default function App() {
       off();
       offUpdate();
       offDisk();
+      offData();
       offTabs();
       offMenu();
       offMonitors();
@@ -297,78 +324,8 @@ export default function App() {
   useEffect(() => setVisited([useApp.getState().view]), [workspace?.id]);
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const mod = e.ctrlKey || e.metaKey;
-      const { set } = useApp.getState();
-      // Back / Forward like a browser
-      if (e.altKey && !mod && !e.shiftKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
-        e.preventDefault();
-        if (e.key === 'ArrowLeft') useApp.getState().goBack();
-        else useApp.getState().goForward();
-      } else if (mod && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'b') {
-        e.preventDefault();
-        const st = useApp.getState();
-        // the Tests view shows the explorer too, when asked (requests are dragged from it onto a flow's canvas)
-        if (st.view === 'tests') set({ explorerInTests: !st.explorerInTests });
-        else if (isRequestView(st.view)) st.toggleExplorer();
-        else (st.setView(st.lastRequestView), st.toggleExplorer(true));
-      } else if (mod && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'j') {
-        // the AI assistant, with what is on screen (again: close it)
-        e.preventDefault();
-        const open = useApp.getState().assistant;
-        set({ assistant: open?.task === 'free' ? undefined : { task: 'free', title: 'Ask the assistant', context: {} } });
-      } else if (e.key === 'F8' && !mod && !e.altKey) {
-        // the next (Shift: previous) problem (WF-03)
-        e.preventDefault();
-        void stepProblem(e.shiftKey ? -1 : 1);
-      } else if (mod && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'p') {
-        // Quick Open (WF-01): items, the latest first
-        e.preventDefault();
-        set({ paletteOpen: true, paletteQuery: '', searchOpen: false });
-      } else if (mod && e.shiftKey && !e.altKey && e.key.toLowerCase() === 'e') {
-        // switch environment (Insomnia's binding): Quick Open at #
-        e.preventDefault();
-        set({ paletteOpen: true, paletteQuery: '#', searchOpen: false });
-      } else if (mod && e.key.toLowerCase() === 'k') {
-        e.preventDefault();
-        set({ paletteOpen: true, paletteQuery: '>', searchOpen: false });
-      } else if (mod && e.shiftKey && e.key.toLowerCase() === 'f') {
-        e.preventDefault();
-        set({ searchOpen: true, paletteOpen: false });
-      } else if (mod && e.shiftKey && !e.altKey && e.key.toLowerCase() === 'r') {
-        // Rerun last run (WF-08): the latest run, as it ran
-        e.preventDefault();
-        void runAgain('last');
-      } else if (mod && e.shiftKey && !e.altKey && e.key.toLowerCase() === 't') {
-        // Reopen closed tab (WF-10), whichever strip it was in
-        e.preventDefault();
-        void reopenClosedTab();
-      } else if (mod && e.key === ',') {
-        e.preventDefault();
-        useApp.getState().setView('settings');
-      } else if (mod && e.altKey && e.key.toLowerCase() === 'c') {
-        // Postman's shortcut for the console
-        e.preventDefault();
-        const st = useApp.getState();
-        set(st.logsOpen && st.bottomTab === 'console' ? { logsOpen: false } : { logsOpen: true, bottomTab: 'console' });
-      } else if (mod && e.code === 'Backquote' && useApp.getState().info?.capabilities?.shell) {
-        // as in VS Code: Ctrl+` shows / hides the Terminal, Ctrl+Shift+` opens a new one
-        e.preventDefault();
-        const st = useApp.getState();
-        if (e.shiftKey) newTerminal();
-        else if (st.logsOpen && st.bottomTab === 'terminal') set({ logsOpen: false });
-        else focusTerminal();
-      } else if (e.key === '?' && !mod && !isTyping(e.target)) {
-        e.preventDefault();
-        set({ shortcutsOpen: true });
-      } else if (mod && e.altKey && /^[1-9]$/.test(e.key)) {
-        // the rail's order (lib/rail.ts): Home 1, Collections 2, Debugger 3 …
-        const target = railTarget(railOrder(NAV), Number(e.key));
-        const st = useApp.getState();
-        if (target === 'collections') (st.setView(st.lastRequestView), st.toggleExplorer(true));
-        else if (target) st.setView(target as ViewId);
-      }
-    };
+    // every app-wide shortcut, with the person's bindings (Settings ▸ Keyboard; lib/key-commands.ts)
+    const onKey = handleGlobalKey;
     window.addEventListener('keydown', onKey);
     // the mouse's back / forward (thumb) buttons
     const onMouse = (e: MouseEvent) => {
@@ -383,6 +340,8 @@ export default function App() {
   }, []);
 
   const shellCapable = useShellCapable();
+  const rail = useRail();
+  const bindings = useBindings();
   const commands = useMemo<PaletteCommand[]>(() => {
     const s = useApp.getState();
     const cmds: PaletteCommand[] = [
@@ -390,27 +349,27 @@ export default function App() {
       { id: 'new-ai', label: 'New AI Test', hint: 'AI Lab', run: () => s.openIntent('ai', { reset: true }) },
       { id: 'run-test', label: 'Run Test', hint: 'Tests', run: () => s.openIntent('tests', { runCurrent: true }) },
       { id: 'run-suite', label: 'Run Suite', hint: 'Tests', run: () => s.openIntent('tests', { runAll: true }) },
-      { id: 'rerun-last', label: 'Rerun Last Run', hint: 'Ctrl+Shift+R', run: () => void runAgain('last') },
-      { id: 'reopen-tab', label: 'Reopen Closed Tab', hint: 'Ctrl+Shift+T', run: () => void reopenClosedTab() },
-      { id: 'open-recent', label: 'Open Recent…', hint: 'Ctrl+P', run: () => setTimeout(() => s.set({ paletteOpen: true, paletteQuery: '' }), 0) },
+      { id: 'rerun-last', label: 'Rerun Last Run', hint: keyLabel('rerun-last', bindings), run: () => void runAgain('last') },
+      { id: 'reopen-tab', label: 'Reopen Closed Tab', hint: keyLabel('reopen-tab', bindings), run: () => void reopenClosedTab() },
+      { id: 'open-recent', label: 'Open Recent…', hint: keyLabel('quick-open', bindings), run: () => setTimeout(() => s.set({ paletteOpen: true, paletteQuery: '' }), 0) },
       { id: 'ci-last', label: 'Run Last Run in CI…', hint: 'Tests', run: () => void runInCi('last') },
       { id: 'cli-last', label: 'Copy CLI Command of Last Run', hint: 'Tests', run: () => void copyRunCommand('last') },
       { id: 'search-history', label: 'Open History', hint: 'History', run: () => s.setView('history') },
-      { id: 'open-settings', label: 'Open Settings', hint: `${'Ctrl'}+,`, run: () => s.setView('settings') },
+      { id: 'open-settings', label: 'Open Settings', hint: keyLabel('settings', bindings), run: () => s.setView('settings') },
       { id: 'export-results', label: 'Export Results', hint: 'Tests', run: () => s.openIntent('tests', { exportLatest: true }) },
-      { id: 'search', label: 'Search Workspace', hint: 'Ctrl+Shift+F', run: () => s.set({ searchOpen: true }) },
+      { id: 'search', label: 'Search Workspace', hint: keyLabel('search', bindings), run: () => s.set({ searchOpen: true }) },
       { id: 'tab-close', label: 'Close Tab', hint: 'Ctrl+W', run: () => s.openIntent('rest', { tabCommand: 'close' }) },
       { id: 'tab-close-others', label: 'Close Other Tabs', hint: 'Requests', run: () => s.openIntent('rest', { tabCommand: 'closeOthers' }) },
       { id: 'tab-close-all', label: 'Close All Tabs', hint: 'Ctrl+Shift+W', run: () => s.openIntent('rest', { tabCommand: 'closeAll' }) },
-      { id: 'toggle-console', label: 'Show Console', hint: 'Ctrl+Alt+C', run: () => s.set({ logsOpen: true, bottomTab: 'console' }) },
+      { id: 'toggle-console', label: 'Show Console', hint: keyLabel('toggle-console', bindings), run: () => s.set({ logsOpen: true, bottomTab: 'console' }) },
       { id: 'toggle-logs', label: 'Show Application Logs', run: () => s.set({ logsOpen: true, bottomTab: 'logs' }) },
       ...(shellCapable
         ? [
-            { id: 'terminal-new', label: 'Terminal: New', hint: 'Ctrl+Shift+`', run: newTerminal },
-            { id: 'terminal-focus', label: 'Terminal: Focus', hint: 'Ctrl+`', run: focusTerminal },
+            { id: 'terminal-new', label: 'Terminal: New', hint: keyLabel('new-terminal', bindings), run: newTerminal },
+            { id: 'terminal-focus', label: 'Terminal: Focus', hint: keyLabel('terminal', bindings), run: focusTerminal },
           ]
         : []),
-      { id: 'assistant', label: 'Ask AI Assistant', run: () => s.set({ assistant: { task: 'free', title: 'Ask the assistant', context: {} } }) },
+      { id: 'assistant', label: 'Ask AI Assistant', hint: keyLabel('assistant', bindings), run: () => s.set({ assistant: { task: 'free', title: 'Ask the assistant', context: {} } }) },
       { id: 'feedback', label: 'Send Feedback or Report a Problem…', hint: 'Help', run: () => s.set({ feedback: {} }) },
       { id: 'agents', label: 'Connect an AI Agent (Claude, Cursor, VS Code, Codex) over MCP…', hint: 'Settings', run: () => s.openIntent('settings', { tab: 'agents' }) },
       { id: 'load', label: 'New Load Test', run: () => s.setView('load') },
@@ -418,7 +377,8 @@ export default function App() {
       { id: 'ai-usage', label: 'AI Usage: tokens and cost per model', hint: 'AI Lab', run: () => s.openIntent('ai', { tab: 'usage' }) },
       { id: 'mcp-usage', label: 'MCP Tool Usage: calls, failures and time per tool', hint: 'MCP', run: () => s.openIntent('mcp', { tab: 'usage' }) },
       { id: 'eval', label: 'New Evaluation', hint: 'Evaluations', run: () => s.setView('evaluations') },
-      { id: 'shortcuts', label: 'Keyboard Shortcuts', hint: '?', run: () => s.set({ shortcutsOpen: true }) },
+      { id: 'shortcuts', label: 'Keyboard Shortcuts', hint: keyLabel('shortcuts', bindings), run: () => s.set({ shortcutsOpen: true }) },
+      { id: 'keyboard-settings', label: 'Keyboard Shortcuts: Change the Keys…', hint: 'Settings', run: () => s.openIntent('settings', { tab: 'keyboard' }) },
       { id: 'git-ready', label: 'Make Workspace Ready for Git', hint: 'Workspace', run: () => void runMenuCommand('git-ready') },
       { id: 'git-clone', label: 'Clone Workspace from Git…', hint: 'Workspace', run: () => void runMenuCommand('git-clone') },
       { id: 'git-view', label: 'Git: Changes, Commit, Pull and Push', hint: 'Workspace', run: () => useApp.getState().setView('git') },
@@ -448,12 +408,15 @@ export default function App() {
     ];
     // every command has an icon: its own, or a generic one for a command added without
     for (const c of cmds) c.icon = createElement(PALETTE_ICONS[c.id] ?? TerminalSquare, { size: 16 });
-    // "Go to" commands use the navigation's own icons
-    for (const n of NAV) cmds.push({ id: `go-${n.id}`, label: `Go to ${n.label}`, icon: n.icon, run: () => s.setView(n.id) });
+    // "Go to" commands use the navigation's own icons, with the rail's shortcut when the view is on the rail
+    for (const n of NAV) cmds.push({ id: `go-${n.id}`, label: `Go to ${n.label}`, icon: n.icon, hint: railShortcut(rail.visible, n.id, modKey), run: () => s.setView(n.id) });
+    cmds.push({ id: 'density', label: 'Density: Switch Compact / Comfortable', icon: createElement(Rows3, { size: 16 }), hint: 'View', run: () => void saveUiPrefs({ density: useApp.getState().settings?.density === 'compact' ? 'comfortable' : 'compact' }) });
+    cmds.push({ id: 'rail-all', label: 'Rail: Show Every View', icon: createElement(Rows3, { size: 16 }), hint: 'View', run: () => void resetRail(true) });
+    cmds.push({ id: 'rail-reset', label: 'Rail: Reset to the Default Views', icon: createElement(RotateCcw, { size: 16 }), hint: 'View', run: () => void resetRail() });
     for (const e of (workspace?.environments ?? []).filter((x) => !x.problem))
       cmds.push({ id: `env-${e.id}`, label: `Switch Environment: ${e.name}`, icon: <span className="block w-2.5 h-2.5 rounded-full" style={{ background: e.color ?? 'var(--ok)' }} />, run: () => s.setEnvironment(e.name) });
     return cmds;
-  }, [workspace, shellCapable]);
+  }, [workspace, shellCapable, rail, bindings]);
   // what is on screen offers its own commands (Quick Open's @, and first among the > commands): a request's script
   // editor (Insert Snippet…, Ctrl+Shift+I there), the flow designer's canvas …
   const hereCommands = useMemo<PaletteCommand[]>(() => {

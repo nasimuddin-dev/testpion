@@ -130,7 +130,7 @@ export function testingHandlers(be: Backend): Handlers {
       // a drop on the canvas (items from the explorer, History, the Debugger, a block): one edit, with notes for the toast
       if (op?.op === 'drop') {
         const d = op as DropOp;
-        const r = await dropIntoFlow(be.ws, file, { refs: d.refs, steps: d.steps, target: d.target }, { exchanges: (ids) => (be.debugger?.exchanges ?? []).filter((e) => ids.includes(e.id)) });
+        const r = await dropIntoFlow(be.ws, file, { refs: d.refs, steps: d.steps, target: d.target }, { exchanges: (ids) => (be.debugger?.view?.() ?? be.debugger?.exchanges ?? []).filter((e) => ids.includes(e.id)) });
         return { file: r.file, before: r.before, text: r.text, added: r.added ?? [], notes: r.notes, flow: await flowOfFile(be.ws, r.file, { raw: true, known: knownVariables(environment) }) };
       }
       const r = editFlowFile(be.ws, file, op as FlowEditOp);

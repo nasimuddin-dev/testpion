@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { MemorySecretStore, WorkspaceStore, renameVariable, secretKeys, variableUsages, type Collection, type SavedHttpRequest } from '../../packages/core/src/index.js';
+import { MemorySecretStore, WorkspaceStore, itemInfo, renameVariable, secretKeys, templateVariables, variableUsages, type Collection, type SavedHttpRequest } from '../../packages/core/src/index.js';
 
 const collection: Collection = {
   schemaVersion: '1.0',
@@ -76,6 +76,34 @@ describe('variable usages and rename', () => {
       // the secret moved with it
       expect(secrets.get(secretKeys.envVar(env.id, 'accessToken'))).toBe('sk-live-1');
       expect(secrets.get(secretKeys.envVar(env.id, 'token'))).toBeUndefined();
+    } finally {
+      store.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // one definition of a request's templated text (templatedText): a visualizer template in a script is not a use
+  it('does not count {{…}} inside scripts or descriptions as uses, here or in the Info panel', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'tp-usage-'));
+    const store = WorkspaceStore.create(join(dir, 'ws'), 'W');
+    try {
+      const listPatients: SavedHttpRequest = {
+        kind: 'http',
+        id: 'req-list',
+        name: 'List patients',
+        request: { method: 'GET', url: '{{baseUrl}}/patients' },
+        description: 'Shows {{total}} in prose',
+        testScript: "const template = `<h3>{{total}}</h3>{{#each items}}<td>{{id}}</td>{{/each}}`;\npm.visualizer.set(template, pm.response.json());\ntp.variables.set('lastId', 1);",
+      };
+      store.saveCollection({ ...collection, auth: undefined, preRequestScript: undefined, items: [listPatients] });
+      store.writeTestFile('vis.yaml', 'name: vis\ntype: http\nrequest:\n  url: "{{baseUrl}}/x"\ntestScript: "const t = `{{total}}{{#each items}}{{/each}}`"\n');
+      expect(variableUsages(store, 'total')).toEqual([]);
+      expect(variableUsages(store, 'id')).toEqual([]);
+      expect(variableUsages(store, 'lastId').map((u) => `${u.kind} | ${u.field}`)).toEqual(['script | test script']);
+      expect(variableUsages(store, 'baseUrl').map((u) => u.field)).toContain('URL');
+      const info = itemInfo(store, { kind: 'request', collectionId: 'shop', requestId: 'req-list' });
+      expect(templateVariables(info.text ?? '')).toEqual(['baseUrl']);
+      expect(templateVariables(itemInfo(store, { kind: 'test', path: 'vis.yaml' }).text ?? '')).toEqual(['baseUrl']);
     } finally {
       store.close();
       rmSync(dir, { recursive: true, force: true });

@@ -23,7 +23,7 @@ const steps = [
      const rows = () => [...document.querySelectorAll('aside [data-tree-row]')].filter((b) => b.offsetParent && b.getAttribute('aria-expanded') === null);
      await filter(''); await __t.expand('Public REST APIs (playground)');
      for (const f of ['DummyJSON', 'Restful-Booker', 'Postman Echo']) await __t.expand(f);
-     for (const r of rows().filter((b) => /^(GET|POST|PUT|PATCH|DELETE)/.test(b.textContent.trim())).slice(0, 14)) { r.click(); await __t.sleep(350); }
+     for (const r of rows().filter((b) => /^(GET|POST|PUT|PATCH|DELETE)/.test(b.textContent.trim())).slice(0, 14)) { r.click(); r.dispatchEvent(new MouseEvent('dblclick', { bubbles: true })); await __t.sleep(350); }
      await __t.sleep(800);
      return 'tabs: ' + tabs().length + ' | overflows: ' + (strip().scrollWidth > strip().clientWidth) + ' | ' + view();`,
   ),

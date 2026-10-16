@@ -1,5 +1,46 @@
 # Changelog
 
+## 0.47.0 — 2026-10-15
+
+### Behaviour changes: what works differently (read before upgrading)
+- **A single click on a request opens a preview tab.** In the Collections explorer a click opens the request in a *preview* tab (its name in italics) that the next click replaces, as test files, monitors, load tests and evaluations already did; double-click the item or the tab, press <kbd>Enter</kbd> or change something to keep it. Saved AI prompts, environments and saved Debugger sessions now open in tabs the same way. ([Open an item](/getting-started/finding-your-way#open-an-item))
+- **The rail shows five views, and <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>3</kbd> is now Tests.** The rail shows Home, Collections, Tests, Environments and History; **More…** under them lists Debugger, Monitors, Load, AI Lab, Evaluations, Traces and Git. <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>1</kbd>…<kbd>9</kbd> count the shown views, so by default 1 Home, 2 Collections, 3 Tests, 4 Environments, 5 History (3 was the Debugger, 4 Tests …). Right-click the rail to show a view again (**Show on the rail**, **Show every view**). ([Choose what the rail shows](/getting-started/finding-your-way#choose-what-the-rail-shows))
+- **Deleting no longer asks "Are you sure?" when it can be undone.** A request, folder, collection, environment, dataset, gRPC call or connection, saved prompt, load test, evaluation, monitor, MCP server, example or a list's folder goes at once (the <kbd>Delete</kbd> key too), with **Undo** in the message for 8 seconds and <kbd>Ctrl</kbd>+<kbd>Z</kbd> outside text fields; it comes back with its id, in its place. Deletes that can't be taken back still ask. ([Deleting and Undo](/getting-started/finding-your-way#deleting-and-undo))
+- **Flow steps written with a nested `request:` now get the file's `defaults: auth:`**, like every other HTTP step (it was ignored, so such steps were sent without auth). A step that must go without it says `auth: { type: none }`.
+- **The Model comparison has its own prompt.** It no longer shares the prompt with the AI Playground, whose saved prompts now open in tabs.
+
+### Choose what the rail shows
+- Right-click a rail item: **Hide from the rail**, **Move up** / **Move down**, **Show on the rail ▸**, **Show every view**, **Reset the rail**. A view opened from More… (or <kbd>Ctrl</kbd>+<kbd>K</kbd>, a link) shows on the rail while it is open, with **Keep on the rail**; the Git view's count shows on More… while Git is hidden there.
+- The tooltips, the shortcuts list and the command palette's hints follow the shown views; <kbd>Ctrl</kbd>+<kbd>K</kbd> ▸ **Rail: Show Every View** / **Rail: Reset to the Default Views**. The choice is this computer's (`settings.json` `rail`).
+
+### Settings ▸ Keyboard
+Every shortcut on one page with a search; the app-wide ones can be rebound (click, press the keys), with clashes named (**Use it here** swaps) and reserved keys refused with the reason, reset one by one or all, and exported / imported as JSON (`testpion-keybindings.json`). The shortcuts list, tooltips, the top bar and the palette's hints show your keys; saved for this computer (`settings.json` `keybindings`). Also from the <kbd>?</kbd> list (**Change the keys…**) and <kbd>Ctrl</kbd>+<kbd>K</kbd>. ([Change the keys](/getting-started/keyboard-shortcuts#change-the-keys))
+
+### Responses: JSONPath suggestions and Diff vs previous
+- **JSONPath filter with suggestions.** The **Filter with JSONPath** field of every JSON tree (response bodies, History, Traces, the Debugger) suggests the body's own paths as you type (arrays as `[*]`), shows the match count, and says why a path is wrong instead of quietly matching something; a big body is filtered once typing pauses. ([Checks from the response](/api-testing/rest#checks-from-the-response))
+- **Diff vs previous.** A response's actions compare it with the previous response of the same request (sent earlier this session, else from History): status, time, headers and a field-by-field body diff, the same view as History ▸ Compare. Agents and scripts already have it: `testpion history diff --json`, MCP `compare_responses`. ([Diff vs previous](/api-testing/rest#diff-vs-previous))
+
+### Compact density
+**Settings ▸ Appearance ▸ Density**: *Compact* fits more rows and fields on screen in every view (tighter spacing, fields, list rows and small text), through the design tokens, so every view follows; kept for this computer and applied from the first paint. <kbd>Ctrl</kbd>+<kbd>K</kbd> ▸ **Density: Switch Compact / Comfortable** toggles it.
+
+### Undefined variables at a glance
+The environment switcher (top bar and status bar) shows a red count when the open HTTP request uses `{{variables}}` the active environment, its collection, the workspace and the globals don't define, updated as you type; click it to add each one (and to the other environments). ([Undefined variables](/api-testing/environments#undefined-variables))
+
+### The HTTP Debugger
+- **The reverse proxy fills the Debugger's grid.** What *Reverse proxy for one API* forwards joins the Debugger's session (marked *reverse*, *Reverse proxy* in the Application column and filter), so selection, filters, Create flow, Save to collection, HAR export and sessions work on it; the dialog keeps its own list and Save, and **Show in Debugger** goes there. ([Reverse proxy for one API](/api-testing/http-debugger#reverse-proxy-for-one-api))
+- **Capture sessions in History.** Each Save to collection, Create flow and Save session adds a History entry (kind *capture*): the exchanges, hosts, proxy or reverse proxy, the time span, and a link that opens what it became. `testpion history list --kind capture --json` (and `-q/--query`), MCP `history_list`; a new link kind `capture` opens a saved session. ([Sessions](/api-testing/http-debugger#sessions))
+- **Saved sessions in tabs.** A saved session opens in a tab beside **Live capture**, which keeps capturing; **Add to the live capture** copies it in.
+
+### Flows: inherited auth in the designer
+An HTTP step without auth of its own shows the auth it inherits from the file's `defaults: auth:` (and where it comes from) instead of "No auth", with **Override** and **No auth** to change it for that step; `testpion flow --json` and `flow_graph` list it as `inheritedAuth` (typed credentials masked). ([Design a flow](/test-runner/integration-testing#design-a-flow))
+
+### More
+- **Files written by anyone show up at once.** Every change TestPion makes to the workspace's files (a test file saved through `tests.write`, generated tests, a dataset, an import, a move to the trash) tells the views which files changed (`data.changed` with the method, kinds and paths), so the Tests list and the explorer follow straight away, without a "changed outside" message. TestPion now tells its own saves by the file and what it wrote into it, not by a 1.5-second window: a change another program makes right after a save is no longer missed. ([Git](/getting-started/git))
+- **A guided tour of the first loop.** A short, skippable tour on Home (Send → Save → Save as test → Run → Run in CI), shown once per workspace and from **Get started ▸ Take the tour**; keyboard friendly. ([Get started](/getting-started/finding-your-way#get-started))
+- **One mode switch.** The response body's view modes (Pretty, Table, Raw, Preview, Visualize), the Console filter, the WebSocket protocol, a trace payload's view, an MCP tool result and collection docs use the one shared switch (labelled words, not lowercase buttons).
+- **Preferences that can't break the app.** A `rail`, `keybindings` or `density` value of the wrong shape in `settings.json` (a hand edit, another version) is ignored: the app starts with the default for it.
+- **Quick Open, the command palette and search:** <kbd>Enter</kbd> opens the row the keyboard is on, even when the list opens under a resting mouse pointer (it opened whatever row landed under the pointer).
+
 ## 0.46.1 — 2026-10-15
 
 Fixes for 0.46.0, found by the macOS and Linux test runs.

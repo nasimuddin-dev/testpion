@@ -1,8 +1,11 @@
 import { writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { Command } from 'commander';
+import { itemRefUrl } from '@testpion/shared';
 import {
   WorkspaceManager,
+  historyKindOf,
+  HISTORY_KINDS,
   formatDuration,
   compareHistory,
   responseTimeStats,
@@ -50,15 +53,19 @@ export function registerHistoryCommands(program: Command): void {
     .option('--collection <nameOrId>', 'collection of --request')
     .option('--request <nameOrId>', 'only responses of this saved request')
     .option('--failed', 'only responses that failed (4xx/5xx, transport errors, non-OK gRPC codes)')
+    .option('--kind <kind>', `only this kind: ${HISTORY_KINDS.join(', ')} (capture: Debugger capture sessions and what they became)`)
+    .option('-q, --query <text>', 'only entries matching this text (name, URL, method, status)')
     .option('-n, --limit <n>', 'how many', '20')
     .option('--json', 'print as JSON')
     .action((o) => {
       return withWorkspace(o.workspace, (store) => {
         const requestId = o.request ? savedRequestId(store, o.request, o.collection) : undefined;
-        const items = store.meta.listHistory({ requestId, kind: requestId ? 'http' : undefined, failed: o.failed || undefined, limit: Math.min(Number(o.limit) || 20, 500) }).items;
-        const rows = items.map((h) => ({ id: h.id, ref: { kind: 'history' as const, historyId: h.id }, timestamp: h.timestamp, kind: h.kind, name: h.name, method: h.method, status: h.status, durationMs: h.durationMs, size: h.size }));
+        const kind = requestId ? 'http' : historyKindOf(o.kind);
+        const items = store.meta.listHistory({ requestId, kind, query: o.query, failed: o.failed || undefined, brief: true, limit: Math.min(Number(o.limit) || 20, 500) }).items;
+        // a capture session also names what it became (`capture.ref`: the collection, the flow file, the saved session)
+        const rows = items.map((h) => ({ id: h.id, ref: { kind: 'history' as const, historyId: h.id }, timestamp: h.timestamp, kind: h.kind, name: h.name, method: h.method, status: h.status, durationMs: h.durationMs, size: h.size, ...(h.capture ? { capture: h.capture } : {}) }));
         if (o.json) printJson(rows);
-        else for (const r of rows) console.log(`${dim(r.id)}  ${r.timestamp}  ${String(r.status ?? '').padEnd(4)} ${r.method ?? r.kind} ${r.name}  ${dim(formatDuration(r.durationMs ?? 0))}`);
+        else for (const r of rows) console.log(`${dim(r.id)}  ${r.timestamp}  ${String(r.status ?? '').padEnd(4)} ${r.method ?? r.kind} ${r.name}  ${dim(r.capture ? itemRefUrl(r.capture.ref) : formatDuration(r.durationMs ?? 0))}`);
       });
     });
   histCmd

@@ -7,6 +7,7 @@ import { dirname, extname, join, relative, sep } from 'node:path';
 import { ApsError } from '../errors.js';
 import { queryAll } from '../util/jsonpath.js';
 import { dbKindOf, dbRecords } from './db-datasets.js';
+import { noteOwnChange } from '../storage/fsutil.js';
 
 export type DatasetRecord = Record<string, unknown>;
 
@@ -308,6 +309,7 @@ export async function appendDatasetRow(
     }
   }
   appendFileSync(file, (needsNewline ? '\n' : '') + JSON.stringify(row) + '\n');
+  noteOwnChange(file); // the app's own change: the views hear of it, the watcher does not report it
   return { path: relative(store.root, file).split(sep).join('/'), rows: await countLines(file) };
 }
 

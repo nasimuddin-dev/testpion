@@ -6,6 +6,7 @@ import { slugify } from '../util/ids.js';
 import { fuzzCases, fuzzFindingsToTests, type FuzzCase, type FuzzReport } from './fuzz.js';
 import { openApiOutline, successCode } from './outline.js';
 import { importAsyncApi } from '../import/asyncapi.js';
+import { atomicWrite } from '../storage/fsutil.js';
 
 /**
  * A first test suite from an API definition (`testpion tests-from-spec`, the Preview tab's Generate tests,
@@ -119,7 +120,7 @@ export function writeTestsFromSpec(
       continue;
     }
     mkdirSync(dirname(file), { recursive: true });
-    writeFileSync(file, f.yaml);
+    atomicWrite(file, f.yaml);
     written.push(f);
   }
   return { written, skipped };
@@ -184,6 +185,6 @@ export function writeFuzzFindingTests(store: Pick<WorkspaceStore, 'safePath'>, s
   for (let i = 2; existsSync(store.safePath(rel)); i++) rel = `tests/${api}/fuzz-findings-${i}.yaml`;
   const file = store.safePath(rel);
   mkdirSync(dirname(file), { recursive: true });
-  writeFileSync(file, yaml);
+  atomicWrite(file, yaml);
   return { path: rel, tests };
 }

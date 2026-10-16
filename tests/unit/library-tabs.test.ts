@@ -27,6 +27,18 @@ describe('library tabs', () => {
     expect(openTab(d.state, 's4', true, 'n5').state.tabs.map((t) => t.id)).toEqual(['main', 'n2', 'n5']);
   });
 
+  it('keepFirst: the first tab is never reused (the Debugger’s live capture stays; a saved session gets its own tab)', () => {
+    const a = openTab(start, 'session-1', false, 'n1', true);
+    expect(a.state).toEqual({ tabs: [{ id: 'main' }, { id: 'n1', savedId: 'session-1' }], active: 'n1' });
+    const b = openTab(a.state, 'session-2', true, 'n2', true);
+    const c = openTab(b.state, 'session-3', true, 'n3', true);
+    expect(c.state.tabs.map((t) => [t.id, t.savedId])).toEqual([
+      ['main', undefined],
+      ['n1', 'session-1'],
+      ['n2', 'session-3'],
+    ]);
+  });
+
   it('closing activates the next tab to the right; closing all leaves one fresh tab', () => {
     const s: TabsState = { tabs: [{ id: 'a' }, { id: 'b' }, { id: 'c' }], active: 'b' };
     expect(closeTabs(s, ['b']).active).toBe('c');

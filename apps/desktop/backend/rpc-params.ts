@@ -1,4 +1,4 @@
-import { ApsError, normalizeError, type ErrorKind } from '@testpion/core';
+import { ApsError, HISTORY_KINDS, normalizeError, type ErrorKind } from '@testpion/core';
 
 /**
  * A light check of the parameters of RPC calls, before the handler runs: every host (the window, the web bridge, a
@@ -76,6 +76,7 @@ export const RPC_PARAMS: Record<string, ParamSpec> = {
   'debug.deleteSession': { name: 's' },
   'debug.exchanges': { host: 's?', method: 's?', text: 's?', kind: 's?', application: 's?', type: 's?', limit: 'n?', offset: 'n?' },
   'debug.openSession': { name: 's?', path: 's?', text: 's?', base64: 's?' },
+  'debug.view': { session: 's?' },
   'debug.profile': { action: 's', name: 's', from: 's?' },
   'debug.record': { on: 'b?' },
   'debug.saveFilterPreset': { name: 's', filter: 'o' },
@@ -236,6 +237,12 @@ export const RPC_PARAMS: Record<string, ParamSpec> = {
   'wsock.connect': { url: 's', protocols: 'sa?', headers: 'a?' },
 };
 
+/** Parameters that take one of a fixed list of values (an unknown one is a mistake, not an empty answer). */
+export const RPC_VALUES: Record<string, Record<string, readonly string[]>> = {
+  'history.list': { kind: HISTORY_KINDS },
+  'history.exportHar': { kind: HISTORY_KINDS },
+};
+
 const NAMES: Record<string, string> = { s: 'a string', n: 'a number', b: 'true or false', o: 'an object', a: 'a list', sa: 'a list of strings', x: 'a value', null: 'null' };
 
 function isType(v: unknown, t: string): boolean {
@@ -282,6 +289,9 @@ export function checkRpcParams(method: string, params: unknown): Record<string, 
       continue;
     }
     if (!types.some((t) => isType(v, t))) throw new ApsError('ValidationError', `${method}: ${key} must be ${types.map((t) => NAMES[t] ?? t).join(' or ')}`, { details: { method, param: key } });
+    const allowed = RPC_VALUES[method]?.[key];
+    if (allowed && v !== '' && !allowed.includes(v as string))
+      throw new ApsError('ValidationError', `${method}: unknown ${key} "${String(v)}"`, { suggestions: [`Use one of: ${allowed.join(', ')}`], details: { method, param: key, valid: allowed } });
   }
   return p;
 }

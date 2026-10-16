@@ -409,6 +409,8 @@ export default function TerminalPanel() {
   };
 
   // the requests of the window (Run in terminal, Terminal: New / Focus), in order; the first visit opens a terminal
+  // (showing the panel), not a later change of the queue: another workspace empties it and starts with no terminal
+  const visited = useRef(false);
   useEffect(() => {
     if (!shells?.available || busy.current || !box.current) return;
     const todo = useTerminals.getState().queue;
@@ -417,7 +419,9 @@ export default function TerminalPanel() {
       try {
         await restored;
         if (todo.length) useTerminals.setState((s) => ({ queue: s.queue.slice(todo.length) }));
-        if (!live.size && !todo.some((r) => r.kind === 'new')) await create();
+        const first = !visited.current;
+        visited.current = true;
+        if (first && !live.size && !todo.some((r) => r.kind === 'new')) await create();
         for (const r of todo) {
           if (r.kind === 'new') await create();
           else {

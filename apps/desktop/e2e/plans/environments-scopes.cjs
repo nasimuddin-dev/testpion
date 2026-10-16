@@ -4,7 +4,8 @@
 const { withExpect } = require('../lib.cjs');
 
 const H = `
-  const tabs = () => [...document.querySelectorAll('main [role=tab]')].filter((t) => t.offsetParent);
+  // the scope tabs (not the open environments' tab strip below them)
+  const tabs = () => [...document.querySelectorAll('main [role=tab]')].filter((t) => t.offsetParent && !t.closest('[aria-label="Open environments"]'));
   const tab = async (label) => { const t = tabs().find((x) => x.textContent.trim().startsWith(label)); if (!t) return false; t.click(); await __t.sleep(800); return true; };
   const setVal = (el, v) => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, v); el.dispatchEvent(new Event('input', { bubbles: true })); };
 `;

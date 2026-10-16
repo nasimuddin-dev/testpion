@@ -32,7 +32,7 @@ export function useLibrary<T>(kind: string) {
     },
     [kind, reload],
   );
-  const ops: FolderListOps = useMemo(() => libraryOps(lib, save, () => uid('lib-')), [lib, save]);
+  const ops: FolderListOps = useMemo(() => libraryOps(lib, save, () => uid('lib-'), () => call<Library<T>>('lib.get', { kind })), [lib, save, kind]);
   /** Add or replace an item; returns its id. */
   const put = useCallback(
     async (item: Omit<LibraryItem<T>, 'id'> & { id?: string }) => {

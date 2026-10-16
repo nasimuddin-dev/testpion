@@ -15,6 +15,8 @@ import { RecentRuns } from '../components/charts';
 import { refreshCollections, useCollectionTree } from '../lib/collections-store';
 import { useRecentItems } from '../lib/recent-items';
 import { LOOP_STEPS, runStep, WALKTHROUGHS, walkthroughDocs, type OnboardingStep } from '../lib/onboarding';
+import { shouldAutoStart, useTour } from '../lib/tour';
+import { GuidedTour } from '../components/GuidedTour';
 import { openRef } from '../lib/open-ref';
 import { refIcon } from '../components/RefLink';
 import { ITEM_KIND_LABEL, itemRefKey } from '@testpion/shared';
@@ -63,7 +65,7 @@ const greeting = () => {
  * The first steps in a new workspace, each a button, ticked from what the workspace holds (a request sent, a
  * collection, an environment, a test run); gone once all are done, or hidden with "Hide".
  */
-function GetStarted({ steps, onHide }: { steps: Array<{ id: string; label: string; text: string; done: boolean; onClick(): void }>; onHide(): void }) {
+function GetStarted({ steps, onHide, onTour }: { steps: Array<{ id: string; label: string; text: string; done: boolean; onClick(): void }>; onHide(): void; onTour(): void }) {
   const inExamples = useApp((s) => s.workspace?.id === EXAMPLES_ID);
   const done = steps.filter((s) => s.done).length;
   return (
@@ -76,7 +78,10 @@ function GetStarted({ steps, onHide }: { steps: Array<{ id: string; label: strin
         <span aria-hidden className="h-1.5 flex-1 max-w-40 rounded-full bg-hover overflow-hidden">
           <span className="block h-full bg-accent rounded-full transition-all" style={{ width: `${(done / steps.length) * 100}%` }} />
         </span>
-        <LinkButton className="ml-auto text-xs" onClick={onHide}>
+        <LinkButton className="ml-auto text-xs" onClick={onTour} data-take-tour>
+          Take the tour
+        </LinkButton>
+        <LinkButton className="text-xs" onClick={onHide}>
           Hide
         </LinkButton>
       </div>
@@ -201,6 +206,11 @@ export function HomeView() {
   const [loop, setLoop] = useState<OnboardingStep[]>([]);
   const allDone = loop.length > 0 && loop.every((s) => s.done);
   const showGetStarted = !getStartedHidden && !allDone && loop.length > 0 && ws?.id !== EXAMPLES_ID;
+  // the guided tour of the first loop opens by itself once per workspace (lib/tour.ts), on Home, with Get started shown
+  const view = useApp((s) => s.view);
+  useEffect(() => {
+    if (showGetStarted && view === 'home' && !useTour.getState().open && shouldAutoStart(loop, { examples: ws?.id === EXAMPLES_ID })) useTour.getState().start(loop, { intro: true });
+  }, [showGetStarted, view, loop, ws?.id]);
   const setView = useApp((s) => s.setView);
 
   const stale = useRef(false);
@@ -288,8 +298,10 @@ export function HomeView() {
               }
             }}
             steps={loop.map((s) => ({ id: s.id, ...LOOP_STEPS[s.id], done: s.done, onClick: () => runStep(s) }))}
+            onTour={() => useTour.getState().start(loop)}
           />
         )}
+        <GuidedTour progress={loop} />
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3.5">
           <Action icon={<Network size={16} />} hue="blue" title="New HTTP request" text="Send a request, paste cURL or fetch from the browser, write tp.* scripts (scripts written for Postman run unchanged)." onClick={() => open('rest', { newTab: true })} />
           <Action icon={<GitBranch size={16} />} hue="pink" title="New GraphQL query" text="Explore a schema with autocomplete and run queries." onClick={() => open('graphql', { reset: true })} />

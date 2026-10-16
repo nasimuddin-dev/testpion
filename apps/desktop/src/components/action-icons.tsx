@@ -62,7 +62,7 @@ const RULES: Array<[RegExp, (size: number) => ReactNode]> = [
   [/^(delete|remove|empty|discard|clear|forget|uninstall)/, (s) => <Trash2 size={s} />],
   [/^(create|add|new|initiali[sz]e|init)\b/, (s) => <Plus size={s} />],
   [/^(save|keep mine)/, (s) => <Save size={s} />],
-  [/^(rename|edit|change|bulk edit)\b/, (s) => <Pencil size={s} />],
+  [/^(rename|edit|change|bulk edit|override)\b/, (s) => <Pencil size={s} />],
   [/^(paste)\b/, (s) => <ClipboardPaste size={s} />],
   [/^(copy|duplicate|clone)\b/, (s) => <Copy size={s} />],
   [/^(import|upload|choose file|attach|load file|load from)\b/, (s) => <Upload size={s} />],

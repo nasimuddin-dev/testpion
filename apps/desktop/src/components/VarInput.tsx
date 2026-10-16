@@ -2,6 +2,7 @@ import { openQuickLook } from './EnvQuickLook';
 import { Copy, KeyRound, Layers, Save, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { isTemplateBlock } from '@testpion/shared';
 import { call } from '../api';
 import { toastError, useApp } from '../store';
 import { openRef } from '../lib/open-ref';
@@ -76,6 +77,7 @@ export function VarInput({
     if (!el || el.selectionStart !== el.selectionEnd) return;
     const caret = el.selectionStart ?? 0;
     for (const m of value.matchAll(/\{\{\s*([^{}]+?)\s*\}\}/g)) {
+      if (isTemplateBlock(m[1]!)) continue; // Handlebars ({{#each}}, {{/each}}, {{else}}): not a variable
       const start = m.index ?? 0;
       if (caret > start && caret < start + m[0].length) {
         const token = overlay.current?.querySelector<HTMLElement>(`[data-var="${start}"]`);
@@ -116,6 +118,7 @@ export function VarInput({
   const parts: React.ReactNode[] = [];
   let last = 0;
   for (const m of value.matchAll(/\{\{\s*([^{}]+?)\s*\}\}/g)) {
+      if (isTemplateBlock(m[1]!)) continue; // Handlebars ({{#each}}, {{/each}}, {{else}}): not a variable
     parts.push(value.slice(last, m.index));
     const name = m[1]!.trim();
     const base = name.split('.')[0]!;

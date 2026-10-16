@@ -28,6 +28,7 @@ const SAMPLES: Record<ItemKind, ItemRef> = {
   dataset: { kind: 'dataset', name: 'users.csv' },
   mock: { kind: 'mock', collectionId: 'api' },
   certificate: { kind: 'certificate', host: 'api.example.com' },
+  capture: { kind: 'capture', name: 'morning capture' },
   'git-file': { kind: 'git-file', path: 'collections/api.json' },
   doc: { kind: 'doc', url: 'https://testpion.dev/getting-started/finding-your-way' },
 };
@@ -54,6 +55,7 @@ const EXPECTED: Record<ItemKind, [string, Record<string, unknown>] | 'dialog' | 
   dataset: ['dataset', { dataset: 'users.csv' }],
   mock: ['collections', { collectionId: 'api', mock: true }],
   certificate: ['settings', { tab: 'certificates', host: 'api.example.com' }],
+  capture: ['debugger', { session: 'morning capture' }],
   'git-file': ['git', { file: 'collections/api.json' }],
   doc: 'external',
 };

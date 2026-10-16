@@ -1,8 +1,9 @@
-import type { ItemRef } from '@testpion/shared';
+import { templatedText, type ItemRef } from '@testpion/shared';
 import type { CollectionNode, RunSummary } from '../model/types.js';
 import { readRunSummary } from '../runner/run-records.js';
 import { requestIdOfResult, testsPathOf } from '../runner/result-source.js';
 import { resolveItemRef } from './item-refs.js';
+import { parseYaml } from '../util/lazy-yaml.js';
 import type { WorkspaceStore } from './workspace.js';
 
 /** What the context panel (WF-20) and agents show about one item: where it is kept, its text for variable lookup, the runs that included it. */
@@ -21,7 +22,6 @@ export interface ItemInfo {
 }
 
 const MAX_TEXT = 200_000;
-const SCRIPT_KEYS = new Set(['preRequestScript', 'testScript']);
 const findNode = (nodes: CollectionNode[], id: string): CollectionNode | undefined => {
   for (const n of nodes) {
     if (n.id === id) return n;
@@ -32,6 +32,15 @@ const findNode = (nodes: CollectionNode[], id: string): CollectionNode | undefin
   }
   return undefined;
 };
+
+/** A test or flow file's templated text, as for a request (`templatedText`: scripts and descriptions left out); unparsable: the file as it is. */
+export function templatedFileText(path: string, raw: string): string {
+  try {
+    return templatedText(path.endsWith('.json') ? JSON.parse(raw) : parseYaml(raw));
+  } catch {
+    return raw;
+  }
+}
 
 /**
  * One item's context: its file, its text (for the variables it uses) and the runs that included it — a test file by
@@ -48,15 +57,15 @@ export function itemInfo(store: WorkspaceStore, value: ItemRef, opts: { runs?: n
     out.file = store.collectionFileOf(ref.collectionId);
     const c = store.getCollection(ref.collectionId);
     const node = ref.kind === 'collection' ? undefined : findNode(c.items, ref.kind === 'request' ? ref.requestId : ref.folderId);
-    // scripts are not templated: a {{name}} in one (a visualizer template's {{#each items}}…) is not a variable used
-    out.text = JSON.stringify(node ?? { variables: c.variables, auth: (c as { auth?: unknown }).auth }, (k, v) => (SCRIPT_KEYS.has(k) ? undefined : v)).slice(0, MAX_TEXT);
+    // only what is templated when it is sent: a {{name}} in a script (a visualizer's {{#each items}}…) is not a variable used
+    out.text = templatedText(node ?? { variables: c.variables, auth: (c as { auth?: unknown }).auth }).slice(0, MAX_TEXT);
     const id = ref.kind === 'request' ? ref.requestId : undefined;
     matches = (s) =>
       s.origin?.kind === 'collection' && s.origin.collectionId === ref.collectionId && (!id || !s.origin.selection?.length || s.origin.selection.some((x) => requestIdOfResult(x) === id));
   } else if (ref.kind === 'test' || ref.kind === 'flow') {
     out.file = `tests/${ref.path}`;
     try {
-      out.text = store.readTestFile(ref.path).slice(0, MAX_TEXT);
+      out.text = templatedFileText(ref.path, store.readTestFile(ref.path)).slice(0, MAX_TEXT);
     } catch {
       /* unreadable: no variables */
     }

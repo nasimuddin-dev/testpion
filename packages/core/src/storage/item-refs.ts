@@ -9,6 +9,7 @@ import { join } from 'node:path';
 import { ITEM_KIND_LABEL, LIBRARY_LABEL, toItemRef, type ItemRef, type RefResolution, type RequestProtocol } from '@testpion/shared';
 import type { WorkspaceStore } from './workspace.js';
 import type { CollectionNode } from '../model/types.js';
+import { CAPTURE_SESSIONS_DIR, captureSessionFileName } from '../debugger/capture-history.js';
 
 export type { ItemRef, RefResolution } from '@testpion/shared';
 
@@ -196,6 +197,10 @@ export function resolveItemRef(store: WorkspaceStore, value: unknown): RefResolu
       return ok(r, r.path, 'Changed file');
     case 'certificate':
       return ok(r, r.host, 'Certificate');
+    case 'capture':
+      return fileIn(store, store.path(CAPTURE_SESSIONS_DIR), captureSessionFileName(r.name))
+        ? ok(r, r.name, `${CAPTURE_SESSIONS_DIR}/${captureSessionFileName(r.name)}`)
+        : missing(r, `The capture session ${r.name} is no longer saved (deleted or renamed).`, { label: 'Open the Debugger', view: 'debugger' });
     case 'exchange':
       return ok(r, r.exchangeId, ITEM_KIND_LABEL.exchange);
     case 'doc':

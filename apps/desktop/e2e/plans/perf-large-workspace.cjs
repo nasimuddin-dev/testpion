@@ -90,7 +90,7 @@ const steps = [
       // open 12 requests in tabs
       const rows = [...document.querySelectorAll('aside [data-tree-row]')].filter((b) => /Request \\d+ of folder 0$/.test(b.textContent.trim())).slice(0, 12);
       const t0 = performance.now();
-      for (const r of rows) { r.click(); await ${painted}(); }
+      for (const r of rows) { r.click(); r.dispatchEvent(new MouseEvent("dblclick", { bubbles: true })); await ${painted}(); }
       const opened = ${ms('t0')};
       const tabs = document.querySelectorAll('[role=tablist][aria-label="Open requests"] [role=tab]').length;
       // type into the URL bar of the active one

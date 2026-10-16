@@ -79,7 +79,7 @@ function hasPipeline(root: string): boolean {
  * in a collection, a test file, a run, a CI pipeline that runs testpion. Each step names what its button opens.
  */
 export function onboardingProgress(store: WorkspaceStore): OnboardingStep[] {
-  const sent = store.meta.listHistory({ limit: 1 }).items[0];
+  const sent = store.meta.listHistory({ limit: 1, requests: true }).items[0];
   let saved: ItemRef | undefined;
   for (const c of store.listCollections()) {
     if ((c as { problem?: string }).problem) continue;

@@ -7,7 +7,7 @@ description: "Build and test HTTP requests: methods, bodies, cookies, streaming,
 
 # REST and HTTP
 
-Open the HTTP editor from the Collections explorer: click a saved request, or the explorer's **+** ▸ **HTTP request** (<kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>T</kbd>). The left rail has no entry per protocol: every request editor (HTTP, GraphQL, gRPC, WebSocket, MCP) is reached through **Collections**, **Quick Open** (<kbd>Ctrl</kbd>+<kbd>P</kbd>) or the **+** at the end of the tab bar. See [Finding your way around](/getting-started/finding-your-way).
+Open the HTTP editor from the Collections explorer: click a saved request (a single click opens a preview tab, in italics, that the next click replaces; double-click it, or change something, to keep it), or the explorer's **+** ▸ **HTTP request** (<kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>T</kbd>). The left rail has no entry per protocol: every request editor (HTTP, GraphQL, gRPC, WebSocket, MCP) is reached through **Collections**, **Quick Open** (<kbd>Ctrl</kbd>+<kbd>P</kbd>) or the **+** at the end of the tab bar. See [Finding your way around](/getting-started/finding-your-way).
 
 ## Body: completion from the API definition
 
@@ -82,11 +82,11 @@ The method, URL, query parameters, headers, cookies, body (JSON, form, multipart
 
 The request editors share one sidebar, the **Collections explorer** (<kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>B</kbd> hides or shows it). It lists the workspace's collections, each holding its requests by kind (**REST**, **SOAP**, **GraphQL**, **gRPC**, **WebSocket & MQTT**), and below them **MCP servers**, **API definitions** and **Datasets**; **Favorites** come first when you have some. Its header has **New** (a collection or any kind of request), **Import**, **Export** and a filter. Every row has a **⋯** menu, and a right-click opens the same menu: **Open**, **Open in new tab**, **Save as test…**, the copy commands, **Rename**, **Duplicate**, **Move to…**, **Delete…** (see [Request menu](/api-testing/collections#request-menu)). The sidebar follows the tab you switch to: the request's collection and folders open and its row scrolls into view.
 
-Environments have their own view (**Environments** in the rail) and the picker in the top bar; History has its own view too.
+Environments have their own view (**Environments** on the rail) and the picker in the top bar; History has its own view too.
 
 ## Tabs and history
 
-Each request opens in a tab. A dot on a tab means it has unsaved changes. The tab bar is shared by every request editor (HTTP, GraphQL, gRPC, WebSocket, MCP), and the **+** after the tabs opens a new request of any kind.
+Each request opens in a tab. A single click in the explorer opens a **preview** tab (its name in italics) that the next single click replaces; a double-click on the item or the tab, <kbd>Enter</kbd>, or an edit keeps it. A dot on a tab means it has unsaved changes. The tab bar is shared by every request editor (HTTP, GraphQL, gRPC, WebSocket, MCP), and the **+** after the tabs opens a new request of any kind.
 
 When more tabs are open than fit, the tab bar scrolls sideways (the mouse wheel, or the **‹** / **›** buttons at its ends), and the count button at its right end lists every open tab to jump to. Right-click a tab (or middle-click to close it) for:
 
@@ -142,7 +142,15 @@ From the terminal: `testpion env diff Staging Production --request "List patient
 
 ## Checks from the response
 
-To find something in a big response, type a JSONPath in **Filter with JSONPath** above the tree (for example `$.items[*].name` or `$..id`): the tree then shows only the matches.
+To find something in a big response, type a JSONPath in **Filter with JSONPath** above the tree (for example `$.items[*].name` or `$..id`): the tree then shows only the matches, with their count.
+
+- As you type, the field **suggests the response's own paths** (arrays as `[*]`, the keys of their items merged): `$.it` offers `$.items`, `$.items[*]`, `$.items[*].id` …, the next level first; a plain word (`name`) finds that key anywhere. <kbd>↑</kbd> / <kbd>↓</kbd> move, <kbd>Enter</kbd> or <kbd>Tab</kbd> takes one, <kbd>Esc</kbd> closes the list (again: clears the filter).
+- A path that can't be right says why (`Not a valid JSONPath: “]” is missing`) instead of matching something by accident.
+- The same filter (and its suggestions) is on every JSON tree in the app: History, Traces, the Debugger, JWTs.
+
+<figure class="aps-screenshot">
+  <img src="/images/response-filter.jpg" alt="The JSONPath filter of a response with $.it typed: the suggestions $.items, $.items[*], $.items[*].id, name, ownerId and species, from the response itself" width="1440" height="900" loading="lazy">
+</figure>
 
 In the **Pretty** view of a JSON response, click a key to open its menu:
 
@@ -164,6 +172,17 @@ A `text/event-stream` response (live feeds, notifications, streaming LLM APIs) i
 - When the response ends, it opens on the **Events** tab. The raw text is on **Body**.
 - Up to 10,000 events are kept per response.
 - AI agents using [`testpion mcp-server`](/cli/reference#mcp-server) get the parsed events from `send_request`.
+
+## Diff vs previous {#diff-vs-previous}
+
+**Diff vs previous** (in the response's actions, or its ⋯ menu when the panel is narrow) compares the response with the **previous response of the same request**: the one you sent before it in this session, else, for a saved request, the one before it in its [History](#response-history-and-compare). It shows the same comparison as History ▸ Compare: the status and time change, the body field by field (**added**, **removed**, **changed**, **type**, each with its JSON path; text bodies: a line diff) and the header changes. **Hide the diff** or × goes back to the body.
+
+<figure class="aps-screenshot">
+  <img src="/images/response-diff.jpg" alt="Diff vs previous on List patients after a patient was created: status 200 to 200, the time, $.items[2] added and $.total changed from 2 to 3, no header changes" width="1440" height="900" loading="lazy">
+</figure>
+
+- The app keeps the last two responses of the 20 requests sent most recently, in memory only (bodies over 512 KB compared by their start); History keeps the rest.
+- **For AI agents and scripts:** the same comparison of two sends by history id: `testpion history diff <before> <after> --json` and the MCP tool `compare_responses` (both mask sensitive values); `testpion history list --request "…" --json` / `request_history` give the ids.
 
 ## Response history and compare
 

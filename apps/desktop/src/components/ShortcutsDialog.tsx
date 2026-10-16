@@ -1,23 +1,30 @@
 import { isMac, modKey } from '../api';
 import { useApp } from '../store';
-import { Kbd, Modal } from './ui';
-import { railOrder } from '../lib/rail';
-import { NAV } from './Shell';
+import { Keyboard } from 'lucide-react';
+import { Button, Kbd, Modal } from './ui';
+import { railItem, useRail } from '../lib/use-rail';
 import { shortcutGroups } from '../lib/shortcuts';
+import { useBindings } from '../lib/keybindings';
 
 /** Every keyboard shortcut, grouped (Help ▸ Keyboard Shortcuts, the command palette, or ?): lib/shortcuts.ts, the list the docs page follows. */
-const GROUPS = shortcutGroups({
-  mod: modKey,
-  alt: isMac ? '⌥' : 'Alt',
-  shift: isMac ? '⇧' : 'Shift',
-  mac: isMac,
-  views: railOrder(NAV).map((id) => (id === 'collections' ? 'Collections' : (NAV.find((n) => n.id === id)?.label ?? id))),
-});
-
 export function ShortcutsDialog() {
+  // Ctrl/Cmd+Alt+1…9: the views shown on the rail, in its order
+  const views = useRail().visible.map((id) => railItem(id)?.label ?? id);
+  // the person's keys (Settings ▸ Keyboard)
+  const bindings = useBindings();
+  const GROUPS = shortcutGroups({ mod: modKey, alt: isMac ? '⌥' : 'Alt', shift: isMac ? '⇧' : 'Shift', mac: isMac, views, bindings });
   const close = () => useApp.getState().set({ shortcutsOpen: false });
   return (
-    <Modal title="Keyboard shortcuts" onClose={close} width={720}>
+    <Modal
+      title="Keyboard shortcuts"
+      onClose={close}
+      width={720}
+      footer={
+        <Button icon={<Keyboard size={14} />} onClick={() => (close(), useApp.getState().openIntent('settings', { tab: 'keyboard' }))}>
+          Change the keys…
+        </Button>
+      }
+    >
       <div className="grid md:grid-cols-2 gap-x-8 gap-y-5">
         {GROUPS.map((g) => (
           <section key={g.title}>

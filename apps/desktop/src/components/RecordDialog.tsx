@@ -1,4 +1,4 @@
-import { Circle, Copy, FolderPlus, Square, Trash2 } from 'lucide-react';
+import { Bug, Circle, Copy, FolderPlus, Square, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { call } from '../api';
 import { toastError, useApp } from '../store';
@@ -66,7 +66,11 @@ export function RecordDialog({ onClose }: { onClose(): void }) {
   return (
     <Modal title="Capture: reverse proxy for one API" onClose={onClose} width={760}>
       <div className="flex flex-col gap-3">
-        <p className="text-sm text-muted">TestPion listens on this computer and forwards every request to the API. Point your app or any client at the local address instead of the API, use it as usual, and the requests and responses appear here. Save them as a collection to replay, test or mock them.</p>
+        <p className="text-sm text-muted">
+          TestPion listens on this computer and forwards every request to the API. Point your app or any client at the local address instead of the API, use it as usual, and the requests and responses appear here
+          and in the HTTP Debugger (marked <b>reverse</b>), where you can filter them, make a flow of them, save them to a collection or export them as HAR. Save them as a collection here to replay, test or mock them
+          (the responses become examples).
+        </p>
         {running ? (
           <div className="flex items-center gap-2 rounded-md border border-line bg-panel p-2">
             <Badge tone="bad">
@@ -97,6 +101,9 @@ export function RecordDialog({ onClose }: { onClose(): void }) {
         <div className="flex items-center gap-2 text-sm">
           <span className="font-medium">Exchanges</span>
           <span className="text-muted">{items.length}</span>
+          <Button size="sm" variant="ghost" icon={<Bug size={12} />} onClick={() => (onClose(), useApp.getState().openIntent('debugger', {}))}>
+            Show in Debugger
+          </Button>
           {!!items.length && (
             <Button size="sm" variant="ghost" icon={<Trash2 size={12} />} className="ml-auto" onClick={() => void call('record.clear').then(() => setItems([]), toastError)}>
               Clear

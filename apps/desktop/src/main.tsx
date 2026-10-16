@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { installErrorCapture } from './lib/error-capture';
+import { applyStoredDensity } from './lib/density';
 
 installErrorCapture();
 import '@fontsource-variable/inter';
@@ -11,6 +12,8 @@ import { ViewBoundary } from './components/ViewBoundary';
 
 // apply the stored theme before first paint to avoid a flash
 document.documentElement.dataset.theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+// and the density this computer used last (Settings ▸ Appearance), so nothing jumps when the settings arrive
+applyStoredDensity();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

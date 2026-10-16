@@ -2,7 +2,7 @@ import { CodeBlock } from './CodeBlock';
 import { Check, Copy, Download, TerminalSquare } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { asError, call } from '../api';
-import { toastError, useApp } from '../store';
+import { selectEnvironments, toastError, useApp } from '../store';
 import { finishSave, type SaveResult } from '../lib/files';
 import { Button, Field, Input, Modal, Select, Tabs } from './ui';
 import { useCollectionTree } from '../lib/collections-store';
@@ -45,7 +45,7 @@ const suitesOf = (nodes: TreeNode[]): string[] => nodes.flatMap((n) => (n.kind =
 export function CiDialog() {
   const req = useApp((s) => s.ci)!;
   const close = () => useApp.getState().set({ ci: undefined });
-  const environments = useApp((s) => s.workspace?.environments ?? []);
+  const environments = useApp(selectEnvironments);
   const [provider, setProvider] = usePersisted<Provider>('aps.ci.provider', 'github', { parse: (v) => (v as Provider) || undefined, text: true });
   const [target, setTarget] = useState<string>(
     req.collection ? `collection:${req.collection}` : req.suite ? `suite:${req.suite}` : req.tests?.length === 1 ? `file:${req.tests[0]}` : req.tests?.length ? 'selected' : 'tests',

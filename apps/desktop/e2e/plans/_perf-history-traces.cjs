@@ -28,7 +28,7 @@ const viewSteps = (label, filterLabel, picker) => [
     `open-${label.toLowerCase()}`,
     `profile:(async () => { ${METER}
       const t0 = performance.now();
-      document.querySelector('nav [aria-label="${label}"]').click();
+      await __t.rail('${label}'); // (Traces is under the rail's More… by default: its menu is part of the time)
       // the view is current and its own rows are painted (the previous view's rows stay in the DOM, hidden)
       await __t.waitFor(() => document.querySelector('nav [aria-label="${label}"][aria-current="page"]'), 10000); await ${painted}();
       await __t.waitFor(() => (${picker}().length > 5 ? true : null), 20000); await ${painted}();

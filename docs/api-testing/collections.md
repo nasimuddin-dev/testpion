@@ -43,7 +43,7 @@ Right-click a request in the tree, or click its **⋯** button:
 | **Copy URL** | The URL with `{{variables}}` resolved from the active environment. |
 | **Copy as cURL (bash)**, **cURL (cmd)**, **PowerShell**, **fetch** | A runnable command or code, like the browser's *Copy as …*, with variables resolved and inherited auth applied. `fetch` code also runs in Node.js 18+. |
 | **More code snippets…** | Open the request with the code generator (Python requests and httpx, Go, Java, Kotlin, C#, Dart, HTTPie and more). |
-| **Delete…** | Delete the request after a confirmation. The message that follows has **Undo** for a few seconds. |
+| **Delete…** | Delete the request at once (also <kbd>Delete</kbd> on a focused row). The message that follows has **Undo** for 8 seconds, and <kbd>Ctrl</kbd>+<kbd>Z</kbd> outside a text field does the same: the request comes back with its id, in its place ([Deleting and Undo](/getting-started/finding-your-way#deleting-and-undo)). |
 
 Copied commands include the request's real header and token values, so they run as they are, like Postman's *Copy as cURL*. When they do, the confirmation message says so. Folders have their own menu (**New HTTP request**, **New folder**, **Expand all** / **Collapse all**, **Run folder**, **Monitor on a schedule…**, **Create test file from folder…**, **Edit folder (scripts, variables, auth)**, **Rename**, **Duplicate**, **Move to…**, **Delete…**), and so do collections (with **Run collection**, **Run in CI…**, **Create test file from collection…** and **Settings, runner & docs**). Every menu lists its items in the same order: create · open · run · test · configure · copy · organize · delete ([Menus and shortcuts](/getting-started/finding-your-way#menus-and-shortcuts)).
 

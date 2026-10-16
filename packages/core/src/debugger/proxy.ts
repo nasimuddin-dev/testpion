@@ -50,6 +50,8 @@ export interface DebuggerExchange {
   startedAt: string;
   /** 'http' for a captured request, 'tunnel' for an HTTPS CONNECT (host only), 'websocket' for an upgraded connection. */
   kind: 'http' | 'tunnel' | 'websocket';
+  /** How it came in: through the proxy (unset), or the reverse proxy standing in front of one server (`reverse`). */
+  source?: 'proxy' | 'reverse';
   method: string;
   url: string;
   host: string;

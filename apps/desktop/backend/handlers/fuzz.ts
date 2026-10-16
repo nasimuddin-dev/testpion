@@ -53,8 +53,7 @@ export function fuzzHandlers(be: Backend): Handlers {
       if (!SPEC_PATH.test(path ?? '')) throw new ApsError('ValidationError', `Not an API definition in specs/: ${path ?? ''}`);
       const out = writeFuzzFindingTests(be.ws, path, report, { baseUrl });
       if (!out) throw new ApsError('ValidationError', 'No server errors or accepted invalid inputs to save as tests');
-      be.host.emit('workspace.changedOnDisk', { message: `${out.path} written`, kinds: ['tests'], files: [out.path] });
-      return out;
+      return out; // its data.changed names the file (own-writes.ts)
     },
     'openapi.fuzzStop': () => {
       running?.abort();

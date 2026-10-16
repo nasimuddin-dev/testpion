@@ -7,10 +7,10 @@ import type { ProviderConfig } from '../../types';
 import { formatCost, formatMs, uid } from '../../lib/format';
 import { CheckList } from '../../components/Results';
 import { Button, Empty, IconButton, Split } from '../../components/ui';
-import { ChatResult, useDraft, ModelPicker, Params, responseFormat, parseExpected, PromptEditor, ModelError, AddKeyHint, NoProviders } from './common';
+import { ChatResult, useCompareDraft, ModelPicker, Params, responseFormat, parseExpected, PromptEditor, ModelError, AddKeyHint, NoProviders } from './common';
 
 export function Compare({ providers, onSetUp }: { providers: ProviderConfig[]; onSetUp(): void }) {
-  const [d, set] = useDraft();
+  const [d, set] = useCompareDraft();
   const [running, setRunning] = useState(false);
   const [results, setResults] = useSticky<Array<ChatResult & { error?: NormalizedError }>>('ai:compare:results', []);
   const env = useApp((s) => s.environment);

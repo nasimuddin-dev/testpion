@@ -94,7 +94,14 @@ const steps = [
       ${button('Session')}?.click(); await __t.sleep(500);
       [...document.querySelectorAll('[role=menuitem]')].find((m) => /^Open e2e-session/.test(m.textContent.trim()))?.click(); await __t.sleep(1000);
       const back = await __t.waitFor(() => [...document.querySelectorAll('main [role=row]')].some((r) => r.textContent.includes('/health')), 4000);
-      return 'saved: ' + !!saved + ' | cleared: ' + empty + ' | opened: ' + !!back;
+      // it opened in a tab of its own (WF-19); the live capture goes on in its tab, where the next steps work
+      const tabs = [...document.querySelectorAll('[role=tablist][aria-label="Open sessions"] [role=tab]')];
+      const inTab = tabs.some((t) => t.textContent.includes('e2e-session') && t.getAttribute('aria-selected') === 'true');
+      tabs.find((t) => /Live capture/.test(t.textContent))?.click(); await __t.sleep(800);
+      // the live capture was cleared above: capture again for the steps after this one
+      await window.aps.invoke('debug.selfTest', { url: 'http://127.0.0.1:4010/health' });
+      await __t.waitFor(() => [...document.querySelectorAll('main [role=row]')].some((r) => r.textContent.includes('/health')), 6000);
+      return 'saved: ' + !!saved + ' | cleared: ' + empty + ' | opened: ' + !!back + ' | in its tab: ' + inTab;
     })()`,
   ],
   [
@@ -234,7 +241,7 @@ module.exports = withExpect(steps, {
   start: /^listening \| port: \d+$/,
   'exchange-listed-and-opens': /^row: GET true 200 true \| detail tabs: true \| body shown: true \| opened as request: true$/,
   'inspectors-and-keyboard': /^raw request line: true \| raw response line: true \| auth: true \| hex: true \| delete key: true$/,
-  'session-saved-and-opened': /^saved: true \| cleared: true \| opened: true$/,
+  'session-saved-and-opened': /^saved: true \| cleared: true \| opened: true \| in its tab: true$/,
   'rule-replies-without-the-server': /^rule listed: true \| bar: true \| status: 503 \| row 503: true \| badge: true$/,
   'websocket-frames-and-sse-events': /^ws sent: true \| ws received: true \| sse events: 3 \| ws closed: true$/,
   'https-certificate-and-decode': /^decrypt on: true \| label: true \| fingerprint: true \| base64: hello world$/,

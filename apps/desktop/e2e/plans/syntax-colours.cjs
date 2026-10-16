@@ -22,9 +22,13 @@ const steps = [
      const url = vis('main input[aria-label="Request URL"]')[0];
      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(url, 'http://127.0.0.1:${PORT}/pets'); url.dispatchEvent(new Event('input', { bubbles: true })); await __t.sleep(300);
      button('Send')?.click();
-     await __t.waitFor(() => vis('main button').find((b) => b.textContent.trim().toLowerCase() === 'raw'), 10000);
-     vis('main button').find((b) => b.textContent.trim().toLowerCase() === 'raw').click(); await __t.sleep(600);
-     return 'raw view: ' + ${syn("vis('main .mono').find((x) => /Rex/.test(x.textContent) && x.querySelector('.syn-key'))")};`,
+     // the body's view modes are the shared Segmented control (a radio group of labelled words), clicked for real
+     const group = await __t.waitFor(() => vis('main [role=radiogroup][aria-label="Body view"]')[0], 10000);
+     if (!group) return 'NO BODY VIEW CONTROL';
+     const labels = [...group.querySelectorAll('[role=radio]')].map((b) => b.textContent.trim()).join(',');
+     await __t.real.click([...group.querySelectorAll('[role=radio]')].find((b) => b.textContent.trim() === 'Raw')); await __t.sleep(600);
+     const checked = group.querySelector('[aria-checked="true"]')?.textContent.trim();
+     return 'modes: ' + labels + ' | checked: ' + checked + ' | raw view: ' + ${syn("vis('main .mono').find((x) => /Rex/.test(x.textContent) && x.querySelector('.syn-key'))")};`,
   ),
   step(
     'editor-languages',
@@ -58,7 +62,7 @@ const steps = [
 ];
 
 module.exports = withExpect(steps, {
-  'send-and-read-it-raw': /^raw view: keys [1-9]\d* strings [1-9]\d* numbers [1-9]/,
+  'send-and-read-it-raw': /^modes: Pretty,(Table,)?Raw \| checked: Raw \| raw view: keys [1-9]\d* strings [1-9]\d* numbers [1-9]/,
   'editor-languages': /^languages: jsonl,csv,http \| http: .*keyword.*string\.key\.json/,
   'a-trace-payload-raw': /^trace raw: keys [1-9]\d* strings [1-9]\d* numbers [1-9]/,
   'a-minified-page-is-pretty-in-its-trace': /^lines: (1[0-9]|[2-9]\d) \| indented: true \| title: true$/,

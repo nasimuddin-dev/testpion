@@ -10,7 +10,7 @@ const steps = [
     const rows = [...document.querySelectorAll('aside [data-tree-row]')].filter((b) => b.textContent.includes('of folder 2')).slice(0, 15);
     if (!rows.length) return 'NO ROWS; sample: ' + [...document.querySelectorAll('aside [data-tree-row]')].slice(20, 23).map((b) => JSON.stringify(b.textContent)).join(' ');
     const t0 = performance.now();
-    for (const r of rows) { r.click(); await ${painted}(); }
+    for (const r of rows) { r.click(); r.dispatchEvent(new MouseEvent("dblclick", { bubbles: true })); await ${painted}(); }
     return 'open 15 ms: ' + Math.round(performance.now() - t0);
   })()`, false],
   ['switch-tabs', `profile:(async () => {

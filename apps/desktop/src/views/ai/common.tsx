@@ -5,6 +5,8 @@ import { asError, call, type NormalizedError } from '../../api';
 import { persisted, useApp } from '../../store';
 import type { CheckConfig, CheckResult, ProviderConfig } from '../../types';
 import { templateVars } from '../../lib/format';
+import { loadDraft } from '../../lib/draft-store';
+import { afterScopeChange } from '../../lib/ws-scope';
 import { AssertionEditor } from '../../components/AssertionEditor';
 import { CodeEditor } from '../../components/CodeEditor';
 import { AddKeyButton, setupProviderOf } from '../../components/Results';
@@ -66,9 +68,19 @@ export const drafts = persisted<Draft>('ai', {
 });
 
 
-export function useDraft() {
-  const [d, setD] = useState<Draft>(drafts.load);
-  useEffect(() => drafts.save(d), [d]);
+/**
+ * The Model comparison's own draft (the prompt, its inputs and the models to compare), apart from the Playground's
+ * prompt tabs: editing one never changes the other. The models to compare, which only the comparison ever used, come
+ * along from the draft the two once shared; the prompt starts from the default.
+ */
+export const compareDrafts = persisted<Draft>('ai-compare', drafts.defaults);
+const loadCompare = (): Draft => loadDraft<Draft>('ai-compare') ?? { ...drafts.defaults, compare: drafts.load().compare ?? [] };
+
+export function useCompareDraft() {
+  const [d, setD] = useState<Draft>(loadCompare);
+  useEffect(() => compareDrafts.save(d), [d]);
+  // another workspace: its own comparison
+  useEffect(() => afterScopeChange(() => setD(loadCompare())), []);
   const set = useCallback((p: Partial<Draft>) => setD((x) => ({ ...x, ...p })), []);
   return [d, set] as const;
 }

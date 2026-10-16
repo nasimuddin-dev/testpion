@@ -21,12 +21,13 @@ export interface TabsState {
 /**
  * Where a saved item opens: its own tab when it has one (opened for good, a preview stops being one); else the preview
  * tab when `preview` (replaced); else the first tab while it is the only one, empty and unsaved; else a new tab
- * (`newId`). `id` is the tab it lands in; `fresh` whether that tab starts from the item's draft.
+ * (`newId`). `id` is the tab it lands in; `fresh` whether that tab starts from the item's draft. `keepFirst`: the first
+ * tab is never reused (the Debugger's live capture is a tab of its own, not an empty one).
  */
-export function openTab(s: TabsState, savedId: string, preview: boolean, newId: string): { state: TabsState; id: string; fresh: boolean } {
+export function openTab(s: TabsState, savedId: string, preview: boolean, newId: string, keepFirst = false): { state: TabsState; id: string; fresh: boolean } {
   const had = s.tabs.find((t) => t.savedId === savedId);
   if (had) return { state: { tabs: s.tabs.map((t) => (t.id === had.id && !preview ? { ...t, preview: false } : t)), active: had.id }, id: had.id, fresh: false };
-  const reuse = (preview ? s.tabs.find((t) => t.preview) : undefined) ?? (s.tabs.length === 1 && !s.tabs[0]!.savedId && !s.tabs[0]!.preview ? s.tabs[0] : undefined);
+  const reuse = (preview ? s.tabs.find((t) => t.preview) : undefined) ?? (!keepFirst && s.tabs.length === 1 && !s.tabs[0]!.savedId && !s.tabs[0]!.preview ? s.tabs[0] : undefined);
   const id = reuse ? reuse.id : newId;
   const next: LibraryTab = { id, savedId, ...(preview ? { preview: true } : {}) };
   return { state: { tabs: reuse ? s.tabs.map((t) => (t.id === reuse.id ? next : t)) : [...s.tabs, next], active: id }, id, fresh: true };
@@ -53,7 +54,7 @@ const draftKeyOf = (group: string, id: string) => `${group}${id === 'main' ? '' 
  * single click replaces it; double-click or an edit keeps it), and the open tabs kept per workspace (draft-store,
  * which is scoped). The view's `d` is the active tab's draft.
  */
-export function useLibraryTabs<D>(group: string, drafts: Drafts<D>) {
+export function useLibraryTabs<D>(group: string, drafts: Drafts<D>, opts: { keepFirst?: boolean } = {}) {
   const stateKey = `tabs:${group}`;
   const read = (): TabsState => {
     const s = loadDraft<TabsState>(stateKey);
@@ -84,8 +85,9 @@ export function useLibraryTabs<D>(group: string, drafts: Drafts<D>) {
    * Open a saved item: its tab when it has one; else in the preview tab (replaced) when `preview`, else a new tab.
    * `data` is the item's saved draft (the tab starts from it).
    */
-  const open = (savedId: string, data: D, opts: { preview?: boolean } = {}) => {
-    const r = openTab(stRef.current, savedId, !!opts.preview, uid('t'));
+  const keepFirst = !!opts.keepFirst;
+  const open = (savedId: string, data: D, o: { preview?: boolean } = {}) => {
+    const r = openTab(stRef.current, savedId, !!o.preview, uid('t'), keepFirst);
     if (r.fresh) {
       draftsOf(r.id).save(data);
       // the tab on screen was reused: it shows the item now

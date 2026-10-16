@@ -31,16 +31,16 @@ export function RequestBreadcrumb({ collectionId, requestId, folder, name, dirty
     : undefined;
   // the request's own actions (Save as test …), the same ⋯ as a row of the tree, at the line's end
   const more = actions?.length ? (
-    <span className="ml-auto shrink-0">
+    <span className="ml-auto shrink-0" data-tour="request-more">
       <RowMenu label={name} items={actions} header />
     </span>
   ) : null;
   if (!c || !path)
     return (
-      <div className="flex items-center gap-1.5 px-3 pt-1.5 text-xs text-muted min-w-0">
+      <div className="flex items-center gap-1.5 px-3 pt-1.5 text-xs text-muted min-w-0" data-tour="request-line">
         <span className="truncate">{collectionId && !collections.length ? '' : 'Not saved in a collection'}</span>
         {onSave && (!collectionId || collections.length > 0) && (
-          <LinkButton className="shrink-0" onClick={onSave}>
+          <LinkButton className="shrink-0" onClick={onSave} data-tour="save">
             Save (Ctrl+S)
           </LinkButton>
         )}

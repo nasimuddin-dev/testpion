@@ -12,7 +12,7 @@ import { JsonTree } from '../components/JsonView';
 import { Badge, Button, cx, Empty, Input, menuKeys, Select, Split, statusTone, VirtualList, type MenuItem } from '../components/ui';
 import { RowMenu } from '../components/TreeParts';
 import { saveAsTestItem } from '../lib/save-test';
-import { refOpenLabel } from '@testpion/shared';
+import { refOpenLabel, type ItemRef } from '@testpion/shared';
 import { LABEL } from '../lib/vocabulary';
 import { setDragRefs } from '../lib/drag-ref';
 
@@ -32,7 +32,19 @@ interface Entry {
   /** Sent from a saved request. */
   collectionId?: string;
   requestId?: string;
+  /** A Debugger capture session (kind `capture`): what it covered and what it became (`ref` opens that). */
+  capture?: { result: 'collection' | 'flow' | 'session'; ref: ItemRef; exchanges: number; sources: string[]; hosts: string[]; from?: string; to?: string; items?: number };
 }
+
+/** The kinds History filters by; `capture` is a Debugger capture session saved as a collection, a flow or a HAR session. */
+const KINDS: Array<[string, string]> = [
+  ['http', 'HTTP'],
+  ['graphql', 'GraphQL'],
+  ['grpc', 'gRPC'],
+  ['mcp', 'MCP'],
+  ['llm', 'LLM'],
+  ['capture', 'Capture sessions'],
+];
 
 const MIX = [
   { key: 'ok', label: '2xx / OK', color: 'var(--ok)' },
@@ -46,7 +58,7 @@ const MIX = [
 function bucket(status: Entry['status']): (typeof MIX)[number]['key'] {
   if (typeof status === 'number') return status < 300 ? 'ok' : status < 400 ? '3xx' : status < 500 ? '4xx' : '5xx';
   // as the history's own Failed filter counts them (historyOk in core)
-  return status === undefined || status === '' || /^(ok|passed|success|connected|closed)$/i.test(status) ? 'ok' : 'error';
+  return status === undefined || status === '' || /^(ok|passed|success|connected|closed|saved)$/i.test(status) ? 'ok' : 'error';
 }
 
 /** The outcomes of the entries shown, as one bar with a count per kind (hover a part for its share). */
@@ -174,7 +186,8 @@ export function HistoryView() {
     { label: 'Open', icon: <RotateCcw size={14} />, onSelect: () => reopen(e) },
     ...(e.collectionId && e.requestId ? [{ label: refOpenLabel({ kind: 'request' }), icon: <FileText size={14} />, onSelect: () => void openRef({ kind: 'request', collectionId: e.collectionId!, requestId: e.requestId! }) }] : []),
     ...(e.traceId ? [{ label: refOpenLabel({ kind: 'trace' }), icon: <Waypoints size={14} />, onSelect: () => void openRef({ kind: 'trace', traceId: e.traceId! }) }] : []),
-    saveAsTestItem({ ref: { kind: 'history', historyId: e.id }, name: e.name }, { separator: true }),
+    // a capture session is not a request: nothing to save as a test (its collection or flow is where tests come from)
+    ...(e.capture ? [] : [saveAsTestItem({ ref: { kind: 'history', historyId: e.id }, name: e.name }, { separator: true })]),
     { label: LABEL.delete, icon: <Trash2 size={14} />, danger: true, separator: true, onSelect: () => void remove(e) },
   ];
   return (
@@ -184,8 +197,10 @@ export function HistoryView() {
           <Input className="flex-1" placeholder="Search history (name, URL, method, status)" value={query} onChange={(e) => setQuery(e.target.value)} />
           <Select value={kind} onChange={(e) => setKind(e.target.value)} aria-label="Kind">
             <option value="">All</option>
-            {['http', 'graphql', 'grpc', 'mcp', 'llm'].map((k) => (
-              <option key={k}>{k}</option>
+            {KINDS.map(([k, label]) => (
+              <option key={k} value={k}>
+                {label}
+              </option>
             ))}
           </Select>
           <label className="flex items-center gap-1 text-xs text-muted whitespace-nowrap" title="Only responses that failed: 4xx/5xx, transport errors, non-OK gRPC codes, MCP tool errors">
@@ -244,7 +259,9 @@ export function HistoryView() {
                 <div className="flex items-center gap-2 text-sm">
                   {e.method && <span className={cx('mono method-badge text-[0.64rem] font-bold w-14 shrink-0', `method-${e.method}`)}>{e.method}</span>}
                   {!e.method && <Badge>{e.kind}</Badge>}
-                  <span className="truncate">{e.url ?? e.name}</span>
+                  <span className="truncate" data-history-capture={e.capture ? e.capture.result : undefined}>
+                    {e.capture ? e.name : (e.url ?? e.name)}
+                  </span>
                   {e.status !== undefined && (
                     <span className="ml-auto">
                       <Badge tone={statusTone(e.status)}>{e.status}</Badge>
@@ -260,6 +277,11 @@ export function HistoryView() {
                     </span>
                   )}
                   {e.size !== undefined && <span>{formatBytes(e.size)}</span>}
+                  {e.capture && (
+                    <span className="truncate">
+                      {e.capture.sources.includes('reverse') ? (e.capture.sources.length > 1 ? 'proxy + reverse proxy' : 'reverse proxy') : 'proxy'} · {e.capture.hosts.join(', ') || 'no host'}
+                    </span>
+                  )}
                 </div>
               </button>
               <span className="absolute right-1 top-1/2 -translate-y-1/2">
@@ -308,7 +330,7 @@ export function HistoryView() {
             </div>
             <TimingStrip timing={(sel.responseMeta as { timing?: Timing } | undefined)?.timing} />
             <div className="flex-1 min-h-0">
-              <JsonTree data={{ timestamp: sel.timestamp, kind: sel.kind, status: sel.status, durationMs: sel.durationMs, request: sel.request }} />
+              <JsonTree data={sel.capture ? { timestamp: sel.timestamp, kind: sel.kind, status: sel.status, capture: sel.capture } : { timestamp: sel.timestamp, kind: sel.kind, status: sel.status, durationMs: sel.durationMs, request: sel.request }} />
             </div>
             <p className="text-xs text-muted p-2 border-t border-line">History stores redacted request metadata; response bodies are kept on disk under payloads/.</p>
           </>

@@ -381,6 +381,12 @@ export const TOOL_DOCS: Record<string, ToolDoc> = {
     example: { kind: 'http', limit: 20 },
     narrow: 'Filter with `kind`, lower `limit`, or page with `cursor`.',
   },
+  history_list: {
+    when: 'Use it to browse History by kind or text, and (kind `capture`) to find what was captured in the HTTP Debugger and where it went: the collection, flow or saved session, with a ref that opens it.',
+    whenNot: 'For only the failures, use `recent_failures`; for one saved request, use `request_history`; for the live Debugger session, use `debugger_exchanges`.',
+    example: { kind: 'capture', limit: 20 },
+    narrow: 'Filter with `kind` or `query`, lower `limit`, or page with `cursor`.',
+  },
   response_time_stats: {
     when: 'Use it to spot a slow or flaky endpoint from a saved request’s recent response times (p50, p95).',
     whenNot: 'For the individual responses, use `request_history`; for a whole collection, use `collection_health`.',

@@ -33,6 +33,12 @@ import {
   workspaceProtoRoots,
   DebuggerSession,
   batcher,
+  noteOwnChange,
+  CAPTURE_SESSIONS_DIR,
+  captureSessionFileName,
+  recordCaptureSession,
+  removeOwned,
+  writeOwned,
 } from '@testpion/core';
 import { networkInterfaces } from 'node:os';
 import { activeRules, holdBreakpoint, type PendingBreakpoint } from './debugger-rules.js';
@@ -42,7 +48,7 @@ import type { Backend, Handlers } from '../backend.js';
 let qrcodeMod: Promise<typeof import('qrcode')> | undefined;
 const qrcode = () => (qrcodeMod ??= import('qrcode').then((m) => ((m as { default?: typeof import('qrcode') }).default ?? m) as typeof import('qrcode')));
 import { request as httpRequest } from 'node:http';
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { rename, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { request as httpsRequest } from 'node:https';
@@ -79,8 +85,10 @@ interface ListSync {
   revs: WeakMap<DebuggerExchange, number>;
 }
 
+/** Epochs are unique across every session's list (the live one, saved ones shown in their tabs): a switch is a reset. */
+let epochSeq = 0;
 function listOf(state: DebuggerState): ListSync {
-  return (state.list ??= { rev: 0, epoch: 1, nextSeq: 1, seqs: new WeakMap(), revs: new WeakMap() });
+  return (state.list ??= { rev: 0, epoch: ++epochSeq, nextSeq: 1, seqs: new WeakMap(), revs: new WeakMap() });
 }
 /** An exchange was added or changed: its revision moves on (and it gets its place the first time). */
 function changed(state: DebuggerState, e: DebuggerExchange): void {
@@ -94,7 +102,7 @@ function changed(state: DebuggerState, e: DebuggerExchange): void {
 /** The list was replaced, cleared or shortened by the user: the window reloads it once. */
 function replaced(state: DebuggerState): void {
   const l = listOf(state);
-  l.epoch++;
+  l.epoch = ++epochSeq;
   l.rev++;
   l.nextSeq = 1;
   l.firstAt = undefined;
@@ -190,9 +198,16 @@ export interface DebuggerState {
   list?: ListSync;
   /** Put everything back (the system proxy) and stop the timers; the backend calls it when it is disposed. */
   release?(): Promise<void>;
+  /** The exchanges of the session on screen (the live capture, or a saved session's tab): what selections refer to. */
+  view?(): DebuggerExchange[];
+  /**
+   * Add an exchange another capture mode made (the reverse proxy, handlers/debugger-reverse.ts) to the session, as the
+   * proxy's own are: the grid, AutoSave and the list's changes see it the same.
+   */
+  capture?(e: DebuggerExchange): void;
 }
 
-const SESSIONS_DIR = 'debugger';
+const SESSIONS_DIR = CAPTURE_SESSIONS_DIR;
 const AUTOSAVE = 'autosave';
 /** The longest AutoSave works without letting the proxy serve what waits. */
 const AUTOSAVE_SLICE_MS = 10;
@@ -307,6 +322,8 @@ const statusClass = (e: DebuggerExchange) => (e.error ? 'error' : !e.status ? 'p
 export function debuggerHandlers(be: Backend): Handlers {
   const state: DebuggerState = (be.debugger ??= newDebuggerState());
   const status = () => ({
+    /** The saved session on screen (a Debugger tab), when not the live capture. */
+    viewing,
     lan: !!state.lan,
     // rules that change what programs send or get (not ignore / highlight): the status bar shows them wherever you are
     changingRules: state.proxy ? activeRules(be, state).filter((r) => r.enabled && (r.kind === 'modify' || r.kind === 'reply' || r.kind === 'redirect' || r.kind === 'breakpoint')).length : 0,
@@ -319,20 +336,52 @@ export function debuggerHandlers(be: Backend): Handlers {
     decrypt: !!state.decrypt,
     noDecrypt: state.noDecrypt ?? [],
   });
+  /**
+   * The session on screen (WF-19 Debugger tabs): the live capture, or a saved session opened in its own tab — read from
+   * its HAR into memory (the last few kept), never into the live capture, which goes on capturing behind it. What the
+   * grid reads and does (list, filters, details, bookmarks, delete, stats, HAR export, Create flow, Save to collection)
+   * acts on the session on screen.
+   */
+  const views = new Map<string, DebuggerState>();
+  let viewing: string | undefined;
+  /** A saved session's file in memory (read once; again after it was saved anew): at most 4 are kept. */
+  const viewOf = (file: string): DebuggerState => {
+    const had = views.get(file);
+    if (had) return had;
+    if (!existsSync(file)) throw new ApsError('ValidationError', `No saved session "${basename(file, '.har')}"`);
+    let har: unknown;
+    try {
+      har = JSON.parse(readFileSync(file, 'utf8'));
+    } catch {
+      throw new ApsError('ValidationError', `The saved session "${basename(file, '.har')}" is not a HAR file`);
+    }
+    const v = newDebuggerState();
+    v.session.load(exchangesFromHar(har));
+    views.set(file, v);
+    for (const k of [...views.keys()].slice(0, Math.max(0, views.size - 4))) if (k !== file) views.delete(k);
+    return v;
+  };
+  const shown = (): DebuggerState => {
+    if (!viewing) return state;
+    try {
+      return viewOf(viewing);
+    } catch {
+      viewing = undefined; // gone meanwhile: the live capture
+      return state;
+    }
+  };
+  state.view = () => shown().exchanges;
   const sessionsDir = () => be.ws.path(SESSIONS_DIR);
   const sessionFile = (name: string) => {
-    const clean = name
-      .replace(/\.har$/i, '')
-      .replace(/[^\w.\- ]+/g, '_')
-      .trim();
-    if (!clean) throw new ApsError('ValidationError', 'A session needs a name');
-    return be.ws.safePath(`${clean}.har`, sessionsDir());
+    const file = captureSessionFileName(name); // the same name a capture ref (History) finds it by
+    if (file === '.har') throw new ApsError('ValidationError', 'A session needs a name');
+    return be.ws.safePath(file, sessionsDir());
   };
   const writeSession = (name: string) => {
     mkdirSync(sessionsDir(), { recursive: true });
     const file = sessionFile(name);
-    be.lastOwnChange = Date.now();
-    writeFileSync(file, JSON.stringify(exchangesToHar(state.exchanges, be.logger.redactor, ENGINE_VERSION), null, 2));
+    if (file !== viewing) views.delete(file); // a tab showing it later reads it again (the one on screen stays as shown)
+    writeOwned(file, JSON.stringify(exchangesToHar(state.exchanges, be.logger.redactor, ENGINE_VERSION), null, 2));
     return { name: basename(file, '.har'), path: file, exchanges: state.exchanges.length };
   };
   const touch = () => {
@@ -364,10 +413,9 @@ export function debuggerHandlers(be: Backend): Handlers {
       }
       mkdirSync(sessionsDir(), { recursive: true });
       const file = sessionFile(AUTOSAVE);
-      be.lastOwnChange = Date.now();
       await writeFile(`${file}.tmp`, shell.slice(0, at) + parts.join(',') + shell.slice(at));
       await rename(`${file}.tmp`, file);
-      be.lastOwnChange = Date.now();
+      noteOwnChange(file); // the app's own write (the watcher does not report it; the views hear of it)
     } catch (e) {
       state.dirty = true;
       be.logger.warn(`Debugger autosave failed: ${(e as Error).message}`);
@@ -397,6 +445,13 @@ export function debuggerHandlers(be: Backend): Handlers {
   state.release = async () => {
     stopAutosave();
     await restoreSystem();
+  };
+  // one store for every capture mode: what the reverse proxy forwards joins the session like the proxy's exchanges
+  state.capture = (e) => {
+    state.session.add(e);
+    changed(state, e);
+    touch();
+    signals.push(e.id);
   };
   const stop = async () => {
     for (const bp of [...(state.breakpoints?.values() ?? [])]) bp.resolve(undefined);
@@ -664,7 +719,7 @@ export function debuggerHandlers(be: Backend): Handlers {
       offset?: number;
     } = {}) => {
       const needle = text?.toLowerCase();
-      const out = state.exchanges.filter((e) => {
+      const out = shown().exchanges.filter((e) => {
         if (host && !e.host.toLowerCase().includes(host.toLowerCase())) return false;
         if (method && e.method !== method.toUpperCase()) return false;
         if (kind && e.kind !== kind) return false;
@@ -689,17 +744,17 @@ export function debuggerHandlers(be: Backend): Handlers {
       const end = Math.max(0, out.length - Math.max(0, offset));
       const page = n > 0 ? out.slice(Math.max(0, end - n), end) : out.slice(0, end);
       if (idsOnly) return page.map((e) => e.id);
-      return page.map((e) => leanRow(be, state, e));
+      return page.map((e) => leanRow(be, shown(), e));
     },
     /**
      * The grid's changes since the window last asked: the rows added or changed after revision `since`, or every row
      * (reset) when the list was replaced since `epoch`; `firstSeq` drops the rows the session no longer keeps.
      */
     'debug.changes': ({ epoch, since = 0 }: { epoch?: number; since?: number } = {}) => {
-      const l = listOf(state);
+      const l = listOf(shown());
       const reset = epoch !== l.epoch;
-      const rows = state.exchanges.filter((e) => reset || (l.revs.get(e) ?? 0) > since).map((e) => leanRow(be, state, e));
-      return { epoch: l.epoch, rev: l.rev, reset, rows, firstSeq: state.exchanges.length ? l.seqs.get(state.exchanges[0]!) : undefined, total: state.exchanges.length };
+      const rows = shown().exchanges.filter((e) => reset || (l.revs.get(e) ?? 0) > since).map((e) => leanRow(be, shown(), e));
+      return { epoch: l.epoch, rev: l.rev, reset, rows, firstSeq: shown().exchanges.length ? l.seqs.get(shown().exchanges[0]!) : undefined, total: shown().exchanges.length };
     },
     /** Requests the workspace's mock servers received (the Incoming tab), newest last. */
     'debug.incoming': () => state.incoming ?? [],
@@ -708,33 +763,33 @@ export function debuggerHandlers(be: Backend): Handlers {
     },
     /** One exchange whole (bodies included, redacted), with the Auth inspector's reading of its credentials (never the secret itself). */
     'debug.exchange': ({ id }: { id: string }) => {
-      const e = state.exchanges.find((x) => x.id === id);
+      const e = shown().exchanges.find((x) => x.id === id);
       if (!e) throw new ApsError('ValidationError', 'That exchange is no longer in the session');
       const size = (h?: Record<string, string>) => Object.entries(h ?? {}).reduce((n, [k, v]) => n + k.length + 2 + v.length + 2, 0);
       // the sizes as sent (the headers shown are masked)
       return { ...redacted(be, e), auth: authOf(be, e), requestHeaderBytes: size(e.requestHeaders), responseHeaderBytes: e.responseHeaders ? size(e.responseHeaders) : undefined };
     },
     'debug.bookmark': ({ id, on }: { id: string; on: boolean }) => {
-      const e = state.exchanges.find((x) => x.id === id);
+      const e = shown().exchanges.find((x) => x.id === id);
       if (e) {
         e.bookmarked = on;
-        changed(state, e);
+        changed(shown(), e);
       }
       touch();
       return true;
     },
     'debug.delete': ({ ids }: { ids: string[] }) => {
       const set = new Set(ids);
-      state.session.remove(set);
-      listOf(state).epoch++;
-      listOf(state).rev++;
+      shown().session.remove(set);
+      listOf(shown()).epoch = ++epochSeq;
+      listOf(shown()).rev++;
       touch();
       return status();
     },
     'debug.clear': () => {
-      state.session.clear();
-      replaced(state);
-      state.dirty = false;
+      shown().session.clear();
+      replaced(shown());
+      if (!viewing) state.dirty = false;
       // the window refreshes whoever cleared (a menu, a shortcut, an agent)
       be.host.emit('debug.exchange', { phase: 'cleared' });
       return status();
@@ -743,7 +798,7 @@ export function debuggerHandlers(be: Backend): Handlers {
     'debug.stats': () => {
       const by = <K extends string>(key: (e: DebuggerExchange) => K | undefined) => {
         const m = new Map<K, { count: number; bytes: number; ms: number }>();
-        for (const e of state.exchanges) {
+        for (const e of shown().exchanges) {
           const k = key(e);
           if (!k) continue;
           const v = m.get(k) ?? { count: 0, bytes: 0, ms: 0 };
@@ -754,16 +809,16 @@ export function debuggerHandlers(be: Backend): Handlers {
         }
         return [...m.entries()].map(([name, v]) => ({ name, ...v })).sort((a, b) => b.bytes - a.bytes);
       };
-      const done = state.exchanges.filter((e) => e.durationMs !== undefined);
+      const done = shown().exchanges.filter((e) => e.durationMs !== undefined);
       // the overview: requests per time slice (so a burst, a gap or a retry storm shows), and the status mix
-      const times = state.exchanges.map((e) => Date.parse(e.startedAt)).filter((t) => !Number.isNaN(t));
+      const times = shown().exchanges.map((e) => Date.parse(e.startedAt)).filter((t) => !Number.isNaN(t));
       const first = times.length ? Math.min(...times) : 0;
       const last = times.length ? Math.max(...times) : 0;
       const span = Math.max(1000, last - first);
       const buckets = Math.min(60, Math.max(10, Math.ceil(span / 1000)));
       const slice = span / buckets;
       const timeline = Array.from({ length: buckets }, (_, i) => ({ t: new Date(first + i * slice).toISOString(), count: 0, errors: 0 }));
-      for (const e of state.exchanges) {
+      for (const e of shown().exchanges) {
         const t = Date.parse(e.startedAt);
         if (Number.isNaN(t)) continue;
         const b = timeline[Math.min(buckets - 1, Math.floor((t - first) / slice))]!;
@@ -771,11 +826,11 @@ export function debuggerHandlers(be: Backend): Handlers {
         if (e.error || (e.status ?? 0) >= 400) b.errors++;
       }
       const statuses: Record<string, number> = {};
-      for (const e of state.exchanges) statuses[statusClass(e)] = (statuses[statusClass(e)] ?? 0) + 1;
+      for (const e of shown().exchanges) statuses[statusClass(e)] = (statuses[statusClass(e)] ?? 0) + 1;
       return {
-        total: state.exchanges.length,
-        bytes: state.exchanges.reduce((n, e) => n + e.responseBodyBytes, 0),
-        errors: state.exchanges.filter((e) => e.error || (e.status ?? 0) >= 400).length,
+        total: shown().exchanges.length,
+        bytes: shown().exchanges.reduce((n, e) => n + e.responseBodyBytes, 0),
+        errors: shown().exchanges.filter((e) => e.error || (e.status ?? 0) >= 400).length,
         firstAt: first ? new Date(first).toISOString() : undefined,
         lastAt: last ? new Date(last).toISOString() : undefined,
         timeline,
@@ -794,10 +849,24 @@ export function debuggerHandlers(be: Backend): Handlers {
       };
     },
     /** The session as HAR (the same format the history exports), for saving and for other tools. */
-    'debug.har': () => exchangesToHar(state.exchanges, be.logger.redactor, ENGINE_VERSION),
+    'debug.har': () => exchangesToHar(shown().exchanges, be.logger.redactor, ENGINE_VERSION),
 
     /* ---- sessions: HAR files in the workspace's debugger/ folder (never committed) */
 
+    /**
+     * Show a saved session (its tab) or, without `session`, the live capture. The saved session is read from its HAR
+     * once and kept in memory while its tab may come back (at most 4); the live capture is not touched.
+     */
+    'debug.view': ({ session }: { session?: string } = {}) => {
+      if (!session) viewing = undefined;
+      else {
+        const file = sessionFile(session);
+        viewOf(file);
+        viewing = file;
+      }
+      be.host.emit('debug.exchange', { phase: 'session' });
+      return status();
+    },
     'debug.sessions': () => {
       const dir = sessionsDir();
       if (!existsSync(dir)) return [];
@@ -813,7 +882,9 @@ export function debuggerHandlers(be: Backend): Handlers {
       if (!state.exchanges.length) throw new ApsError('ValidationError', 'Nothing captured yet');
       const r = writeSession(name);
       state.dirty = false;
-      return r;
+      // History: this capture session, saved (opens it in the Debugger again)
+      const entry = recordCaptureSession(be.ws, state.exchanges, { result: 'session', ref: { kind: 'capture', name: r.name }, target: r.name }, be.logger.redactor);
+      return { ...r, historyId: entry.id };
     },
     /** Open a saved session (or any HAR file by path): its exchanges replace the session, or join it with `append`. */
     'debug.openSession': ({ name, path, text, base64, append }: { name?: string; path?: string; text?: string; /** A SAZ (zip) file's bytes. */ base64?: string; append?: boolean }) => {
@@ -844,7 +915,12 @@ export function debuggerHandlers(be: Backend): Handlers {
     },
     'debug.deleteSession': ({ name }: { name: string }) => {
       const f = sessionFile(name);
-      if (existsSync(f)) unlinkSync(f);
+      if (existsSync(f)) removeOwned(f);
+      views.delete(f);
+      if (viewing === f) {
+        viewing = undefined; // its tab shows the live capture again
+        be.host.emit('debug.exchange', { phase: 'session' });
+      }
       return true;
     },
   };

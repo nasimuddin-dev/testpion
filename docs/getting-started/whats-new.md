@@ -1,13 +1,81 @@
 ---
 title: "What's new: how to use it"
-description: "What's new in TestPion 0.46, step by step: a visual flow designer with debugging, deploying and runs at scale, Quick Open and Problems, a Terminal, one production guard, evaluation matrices, AGENTS.md, and the behaviour changes to read before upgrading."
+description: "What's new in TestPion 0.47 and 0.46, step by step: a calmer rail with More…, your own keyboard shortcuts, compact density, Undo instead of confirmations, JSONPath suggestions and Diff vs previous, a visual flow designer, a Terminal, one production guard, and the behaviour changes to read before upgrading."
 ---
 
 ::: v-pre
 
 # What's new: how to use it
 
-The options added in 0.46, each with the steps to use it and a link to the full reference. Every one also works from the terminal (`testpion …`, with `--json`) and for AI agents (an MCP tool of `testpion mcp-server`). **Read [Behaviour changes](#behaviour-changes-read-before-upgrading) before upgrading a CI pipeline, a script or an agent.** The 0.45 additions follow [below](#what-was-new-in-0-45); older ones are in the [changelog](/changelog).
+The options added in 0.47 and 0.46, each with the steps to use it and a link to the full reference. Where it makes sense, an option also works from the terminal (`testpion …`, with `--json`) and for AI agents (an MCP tool of `testpion mcp-server`). **Read the behaviour changes of [0.47](#behaviour-changes-in-0-47) and [0.46](#behaviour-changes-read-before-upgrading) before upgrading.** The 0.45 additions follow [below](#what-was-new-in-0-45); older ones are in the [changelog](/changelog).
+
+## What's new in 0.47 {#whats-new-in-0-47}
+
+### Behaviour changes in 0.47 {#behaviour-changes-in-0-47}
+- **A single click on a request opens a preview tab** (in italics) that the next click replaces; double-click, <kbd>Enter</kbd> or an edit keeps it. Saved AI prompts, environments and saved Debugger sessions open in tabs the same way.
+- **The rail shows five views** (Home, Collections, Tests, Environments, History) and **More…** for the others, so <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>3</kbd> is now **Tests** (it was the Debugger). Right-click the rail ▸ **Show every view** for the old rail.
+- **Deleting something you can get back no longer asks**: it goes at once, with **Undo** in the message (8 seconds) and <kbd>Ctrl</kbd>+<kbd>Z</kbd>.
+- **Flow steps written with a nested `request:` now get the file's `defaults: auth:`** (before, they were sent without it).
+- **The AI Lab's Model comparison has its own prompt**, apart from the Playground's tabs.
+
+### Choose what the rail shows {#choose-what-the-rail-shows}
+1. The rail shows five views: Home, Collections, Tests, Environments and History. Click **More…** under them for the others (Debugger, Monitors, Load, AI Lab, Evaluations, Traces, Git).
+2. Right-click a rail item: **Hide from the rail**, **Move up** / **Move down**, **Show on the rail ▸** a view from More…, **Show every view** or **Reset the rail**.
+3. A view opened from More… stays on the rail while it is open; right-click it ▸ **Keep on the rail** to keep it.
+4. <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>1</kbd>…<kbd>9</kbd> follow the shown views in their order (by default 3 is Tests). The choice is this computer's. [Choose what the rail shows](/getting-started/finding-your-way#choose-what-the-rail-shows)
+
+### Filter a response by JSONPath, with suggestions; Diff vs previous {#response-filter-and-diff}
+1. Send a request. In the body's **Filter with JSONPath**, type `$.` or a key name: the field lists the response's own paths (arrays as `[*]`); <kbd>Enter</kbd> takes one, the tree shows the matches and their count. A wrong path says what is wrong.
+2. Send it again and pick **Diff vs previous** in the response's actions: status, time, headers and the body field by field against the previous response (this session, else History). [Diff vs previous](/api-testing/rest#diff-vs-previous)
+3. Agents and scripts: `testpion history diff <before> <after> --json`, MCP `compare_responses`.
+
+### Change the keyboard shortcuts {#change-the-keyboard-shortcuts}
+1. **Settings ▸ Keyboard** (or <kbd>?</kbd> ▸ **Change the keys…**, or <kbd>Ctrl</kbd>+<kbd>K</kbd> ▸ *Keyboard Shortcuts: Change the Keys…*) lists every shortcut; search by name or keys.
+2. Click a shortcut and press the new keys. A clash names the command that has them (**Use it here** swaps); reserved keys are refused with the reason. ↺ resets one, **Reset all** every one.
+3. **Export…** / **Import…** move your keys to another computer as JSON. [Change the keys](/getting-started/keyboard-shortcuts#change-the-keys)
+
+### Compact density {#compact-density}
+1. **Settings ▸ Appearance ▸ Density ▸ Compact**, then **Save settings** (or <kbd>Ctrl</kbd>+<kbd>K</kbd> ▸ *Density: Switch Compact / Comfortable*).
+2. Every view gets tighter spacing, smaller fields, row heights and small text; **Comfortable** goes back. Kept for this computer, applied from the first paint.
+
+### Undo instead of “Are you sure?” {#undo-instead-of-confirmations}
+1. Delete a request, folder, collection, environment, dataset, monitor, MCP server, saved prompt, example …: it goes at once.
+2. Click **Undo** in the message (8 s) or press <kbd>Ctrl</kbd>+<kbd>Z</kbd> outside a text field: it comes back with its id, in its place. [Deleting and Undo](/getting-started/finding-your-way#deleting-and-undo)
+3. Deletes that can't be undone (Delete for good, git branches, history, runs, test files) still ask.
+
+### A badge for undefined variables {#undefined-variables-badge}
+1. Type a `{{variable}}` that the active environment doesn't define into a request: the environment switcher (top bar and status bar) shows a red count.
+2. Click it ▸ **Add {{name}} to** *(the active environment)*…: give it a value (and **Also add to** the other environments); the count goes. [Undefined variables](/api-testing/environments#undefined-variables)
+
+### Files written by anyone show up at once {#files-show-up-at-once}
+1. Save a test file from the editor, generate tests from an API definition, or let an AI agent write one (`testpion` in a terminal, the MCP server): the Tests list shows it straight away, without a "changed outside" message for TestPion's own saves.
+2. A file another program changes right after TestPion saved it (an editor that saves on focus, a formatter, a `git pull`) is still reported and shown: TestPion tells its own saves by what it wrote, not by the time. [Git](/getting-started/git)
+
+### Inherited auth in the flow designer {#inherited-auth-in-flows}
+1. Give a test file `defaults: auth:` and open its **Flow** tab; select an HTTP step that has no auth of its own.
+2. **Authorization** shows **Inherit from defaults** and what it is (*Uses Bearer token: {{token}} (from defaults)*), not "No auth". **Override** gives the step its own copy; **No auth** sends this step without it. A step written with a nested `request:` inherits it too. [Design a flow](/test-runner/integration-testing)
+
+### Capture sessions in History {#capture-sessions-in-history}
+1. In the HTTP Debugger, **Save to collection…**, **Create flow…** or **Session ▸ Save session…**.
+2. **History ▸ Kind ▸ Capture sessions** lists each one: how many exchanges, the hosts, through the proxy or the reverse proxy, and what it became; **Open** opens the collection, the flow or the saved session.
+3. Agents and scripts: `testpion history list --kind capture --json`, MCP `history_list` (`kind: capture`). [Sessions](/api-testing/http-debugger#sessions)
+
+### The reverse proxy fills the Debugger's grid {#reverse-proxy-in-the-grid}
+1. **Debugger ▸ Capture ▸ Reverse proxy for one API…**, start it and point your client at the local address.
+2. The requests appear in the dialog and in the Debugger's grid, marked **reverse** (*Reverse proxy* in the Application column and filter): select them, **Create flow**, **Save to collection**, **Export as HAR** as with any capture. [Reverse proxy for one API](/api-testing/http-debugger#reverse-proxy-for-one-api)
+
+### Tabs for prompts, environments and Debugger sessions; preview tabs for requests {#more-tabs}
+1. A single click on a request in Collections opens a **preview** tab (in italics) that the next click replaces; double-click, <kbd>Enter</kbd> or an edit keeps it.
+2. Saved AI prompts, environments and saved Debugger sessions open in tabs the same way, each with its own unsaved changes; the **Model comparison** keeps a prompt of its own. The Debugger's **Live capture** tab stays; a saved session opens beside it (**Add to the live capture** copies it in). [Open an item](/getting-started/finding-your-way#open-an-item)
+
+### A guided tour of the first loop {#guided-tour}
+1. In a new workspace, Home opens a short tour by itself (once per workspace): **Next** (or <kbd>→</kbd>) shows where to **Send**, **Save**, **Save as test**, **Run** and **Run in CI**; **Show me** opens what the step builds on; <kbd>Esc</kbd> or **Skip tour** ends it.
+2. **Get started ▸ Take the tour** brings it back, at the first step not done yet. [Get started](/getting-started/finding-your-way#get-started)
+
+### Small things {#small-things-0-47}
+- The response body's **Pretty / Table / Raw / Preview / Visualize** switch, the Console's filter, the WebSocket view's protocol, a trace's payload view, an MCP tool result and collection docs use the one shared switch (labelled words, the same look everywhere).
+- A `rail`, `keybindings` or `density` value of the wrong shape in `settings.json` never stops the app: it starts with the default for that one.
+- Quick Open, the command palette and search: <kbd>Enter</kbd> opens the row the keyboard is on, even when the list opens under a resting mouse pointer.
 
 ## What's new in 0.46
 

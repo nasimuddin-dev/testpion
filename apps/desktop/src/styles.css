@@ -126,11 +126,6 @@
   --color-judge: var(--judge);
   --font-sans: 'Inter Variable', 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', 'Cascadia Code', 'SF Mono', Consolas, monospace;
-  /* a slightly larger small-text scale: dense tool UIs were too small at text-xs = 0.75rem */
-  --text-xs: 0.8rem;
-  --text-xs--line-height: 1.1rem;
-  --text-sm: 0.9rem;
-  --text-sm--line-height: 1.3rem;
   --radius-sm: 6px;
   --radius-md: var(--radius);
   --radius-lg: 12px;
@@ -138,6 +133,36 @@
   --shadow-sm: var(--elev-sm);
   --shadow-md: var(--elev-md);
   --shadow-lg: var(--elev-lg);
+}
+
+/* the small text sizes are theme variables (not inlined), so the density below can change them */
+@theme {
+  /* a slightly larger small-text scale: dense tool UIs were too small at text-xs = 0.75rem */
+  --text-xs: 0.8rem;
+  --text-xs--line-height: 1.1rem;
+  --text-sm: 0.9rem;
+  --text-sm--line-height: 1.3rem;
+}
+
+/*
+ * Density (Settings ▸ Appearance, lib/density.ts): compact changes these tokens and nothing else. --spacing is what
+ * every h- / w- / p- / m- / gap- utility is made of, so all the shared components (ui.tsx) and views follow; form
+ * fields use --control-*; VirtualList rows scale by the same ratio (COMPACT_SCALE = 0.215 / 0.25).
+ */
+:root {
+  --control-h: 32px;
+  --control-px: 10px;
+  --control-py: 4px;
+}
+:root[data-density='compact'] {
+  --spacing: 0.215rem;
+  --text-xs: 0.76rem;
+  --text-xs--line-height: 1.02rem;
+  --text-sm: 0.85rem;
+  --text-sm--line-height: 1.18rem;
+  --control-h: 28px;
+  --control-px: 8px;
+  --control-py: 2px;
 }
 
 html {
@@ -320,8 +345,8 @@ textarea,
   background: var(--field);
   border: 1px solid var(--line-strong);
   border-radius: var(--radius);
-  padding: 4px 10px;
-  min-height: 32px;
+  padding: var(--control-py) var(--control-px);
+  min-height: var(--control-h);
   outline: none;
   box-shadow: var(--elev-sm);
   transition: border-color 0.15s, box-shadow 0.15s, background-color 0.15s;

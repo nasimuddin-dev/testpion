@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { Check, Copy } from 'lucide-react';
 import type { Span, Trace } from '../types';
 import { formatMs } from '../lib/format';
-import { Badge, cx, Split, Tabs } from './ui';
+import { Badge, cx, Segmented, Split, Tabs } from './ui';
 import { JsonTree, RawView } from './JsonView';
 import { useCopied } from '../lib/clipboard';
 import { RelatedRefs } from './RefLink';
@@ -201,13 +201,16 @@ function PayloadBox({ title, payload, emptyText }: { title: string; payload?: { 
         {p && (
           <div className="ml-auto flex items-center gap-1">
             {(p.json !== undefined || p.markup) && (
-              <div className="flex rounded-md border border-line overflow-hidden">
-                {(['Pretty', 'Raw'] as const).map((m) => (
-                  <button key={m} className={cx('px-2 h-6', (m === 'Raw') === raw ? 'bg-accent-soft text-accent' : 'text-muted hover:text-fg')} onClick={() => setRaw(m === 'Raw')}>
-                    {m}
-                  </button>
-                ))}
-              </div>
+              <Segmented
+                label="Body view"
+                size="xs"
+                value={raw ? 'raw' : 'pretty'}
+                onChange={(m) => setRaw(m === 'raw')}
+                options={[
+                  { value: 'pretty', label: 'Pretty' },
+                  { value: 'raw', label: 'Raw' },
+                ]}
+              />
             )}
             <button aria-label={`Copy the ${title.toLowerCase()}`} title="Copy" className="p-1 rounded text-muted hover:text-fg hover:bg-hover" onClick={copy}>
               {copied ? <Check size={13} className="text-ok" /> : <Copy size={13} />}

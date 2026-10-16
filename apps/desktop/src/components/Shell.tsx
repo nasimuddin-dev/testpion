@@ -6,20 +6,15 @@ import {
   Boxes,
   CheckCircle2,
   Cpu,
-  FlaskConical,
   FolderTree,
-  Gauge,
   GitBranch,
   HelpCircle,
   History,
-  House,
   Info,
   KeyRound,
   Network,
   Plug,
-  Radio,
   Bookmark,
-  Waypoints,
   ScrollText,
   Search,
   Settings,
@@ -27,17 +22,15 @@ import {
   Sparkles,
   TerminalSquare,
   X,
-  AlarmClock,
   ArrowLeft,
   ArrowRight,
   ChevronDown as NavChevron,
   Menu as MenuIcon,
   MessageSquare,
-  FolderGit2,
   Bug,
 } from 'lucide-react';
 import { Fragment, lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { call, modKey, on } from '../api';
+import { call, on } from '../api';
 import { useGit } from '../lib/git';
 import wordmarkUrl from '../../build/wordmark-nav.png';
 import markUrl from '../../build/icons/64x64.png';
@@ -50,120 +43,14 @@ import { toItemRef } from '@testpion/shared';
 const TerminalPanel = lazy(() => import('./TerminalPanel'));
 import { WorkspaceMenu } from './WorkspaceMenu';
 import { EnvQuickLook } from './EnvQuickLook';
-import { isRequestView, useApp, type ViewId, type DialogRequest, type DialogTone, type NavLocation } from '../store';
-import { Button, cx, IconButton, Input, Kbd, Menu, Modal, Spinner, Tooltip } from './ui';
+import { useApp, type DialogRequest, type DialogTone, type NavLocation } from '../store';
+import { Button, cx, IconButton, Input, Kbd, Menu, Modal, Spinner } from './ui';
 import { Toaster as SonnerToaster } from 'sonner';
 
-/**
- * The main navigation, grouped by what you are doing: send requests (per protocol), test and run
- * them, AI, then the workspace's data. Order is also the Ctrl/Cmd+Alt+1… shortcut order.
- */
-export const NAV: Array<{ id: ViewId; label: string; icon: ReactNode; group: string; hint?: string }> = [
-  { id: 'home', label: 'Home', icon: <House size={18} />, group: 'Start' },
-  { id: 'rest', label: 'REST', icon: <Network size={18} />, group: 'Requests', hint: 'REST / HTTP requests' },
-  { id: 'graphql', label: 'GraphQL', icon: <GitBranch size={18} />, group: 'Requests' },
-  { id: 'grpc', label: 'gRPC', icon: <Waypoints size={18} />, group: 'Requests' },
-  { id: 'websocket', label: 'WebSocket', icon: <Radio size={18} />, group: 'Requests', hint: 'WebSocket, Socket.IO, MQTT and Kafka' },
-  { id: 'mcp', label: 'MCP', icon: <Plug size={18} />, group: 'Requests', hint: 'MCP servers (inspector)' },
-  { id: 'debugger', label: 'Debugger', icon: <Bug size={18} />, group: 'Testing', hint: 'HTTP Debugger: the traffic of other programs through a local proxy' },
-  { id: 'tests', label: 'Tests', icon: <ShieldCheck size={18} />, group: 'Testing', hint: 'Test files and runs' },
-  { id: 'monitors', label: 'Monitors', icon: <AlarmClock size={18} />, group: 'Testing', hint: 'Scheduled runs' },
-  { id: 'load', label: 'Load', icon: <Gauge size={18} />, group: 'Testing', hint: 'Load tests' },
-  { id: 'ai', label: 'AI Lab', icon: <Sparkles size={18} />, group: 'AI', hint: 'Prompts and model comparison' },
-  { id: 'evaluations', label: 'Evaluations', icon: <FlaskConical size={18} />, group: 'AI', hint: 'LLM, RAG and agent evaluations' },
-  { id: 'environments', label: 'Environments', icon: <KeyRound size={18} />, group: 'Workspace', hint: 'Environments and variables' },
-  { id: 'history', label: 'History', icon: <History size={18} />, group: 'Workspace' },
-  { id: 'traces', label: 'Traces', icon: <Activity size={18} />, group: 'Workspace', hint: 'Traces of every request and run' },
-  { id: 'git', label: 'Git', icon: <FolderGit2 size={18} />, group: 'Workspace', hint: 'Git: changes, commit, branches, pull and push' },
-];
-
-/** A small count on a rail icon (the Git view's commits to pull): one look for every rail item that needs one. */
-function RailCount({ n }: { n: number }) {
-  return (
-    <span data-rail-count="" className="absolute top-0 right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-accent text-white text-[0.6rem] font-bold leading-4 text-center pointer-events-none">
-      {n > 99 ? '99+' : n}
-    </span>
-  );
-}
-
-/** The rail: the request editors are reached through Collections (explorer, New menu), not listed one by one. */
-const RAIL = NAV.filter((n) => n.group !== 'Requests');
-/** The rail's order, Collections second: the Ctrl/Cmd+Alt+1…9 order (lib/rail.ts). */
-const RAIL_ORDER = railOrder(NAV);
-
-export function Sidebar() {
-  const view = useApp((s) => s.view);
-  const setView = useApp((s) => s.setView);
-  // the team pushed commits this branch does not have yet (the backend fetches in the background): a count on Git
-  const behind = useGit().status?.behind ?? 0;
-  const counts: Partial<Record<ViewId, { n: number; title: string }>> = behind > 0 ? { git: { n: behind, title: `${behind} new commit${behind === 1 ? '' : 's'} on the remote to pull` } } : {};
-  const item = (id: ViewId, label: string, icon: ReactNode, shortcut?: string, hint?: string) => (
-    <Tooltip content={[shortcut ? `${hint ?? label}  ·  ${shortcut}` : (hint ?? label), counts[id]?.title].filter(Boolean).join('  ·  ')} side="right">
-      <button
-        onClick={() => setView(id)}
-        aria-current={view === id ? 'page' : undefined}
-        aria-label={label}
-        className={cx(
-          // short windows: icons only (the tooltip names them), so the whole rail fits without scrolling
-          'group relative w-full flex flex-col items-center gap-0.5 py-1 [@media(max-height:680px)]:py-0.5 rounded-xl text-[0.72rem] font-medium transition-colors duration-150',
-          view === id ? 'text-fg' : 'text-muted hover:text-fg',
-        )}
-      >
-        {view === id && <span aria-hidden className="absolute -left-1.5 top-2 h-6 w-[3px] rounded-r-full bg-[image:var(--brand-gradient)]" />}
-        <span
-          className={cx(
-            'grid place-items-center h-8 w-12 rounded-lg transition-[background-color,color,transform] duration-150 group-active:scale-90 [&>svg]:h-[22px] [&>svg]:w-[22px] [@media(max-height:680px)]:[&>svg]:h-5 [@media(max-height:680px)]:[&>svg]:w-5',
-            view === id ? 'bg-accent-soft text-accent shadow-sm ring-1 ring-accent/15' : 'group-hover:bg-hover',
-          )}
-        >
-          {icon}
-          {counts[id] && <RailCount n={counts[id]!.n} />}
-        </span>
-        <span className="w-full truncate px-0.5 text-center leading-tight [@media(max-height:680px)]:hidden">{label}</span>
-      </button>
-    </Tooltip>
-  );
-  const explorerOpen = useApp((s) => s.explorerOpen);
-  const inRequests = isRequestView(view);
-  // Collections: every request editor (REST, GraphQL, gRPC, WebSocket, MCP) with the explorer as its sidebar;
-  // clicking it again while there shows or hides the explorer (like VS Code's activity bar)
-  const explorerToggle = (
-    <Tooltip content={inRequests ? `${explorerOpen ? 'Hide' : 'Show'} the Collections sidebar  ·  ${modKey}+B` : `Collections: requests of every kind (REST, GraphQL, gRPC, WebSocket, MCP)  ·  ${railShortcut(RAIL_ORDER, 'collections', modKey)}`} side="right">
-      <button
-        onClick={() => {
-          const s = useApp.getState();
-          if (inRequests) return s.toggleExplorer();
-          s.setView(s.lastRequestView);
-          s.toggleExplorer(true);
-        }}
-        aria-current={inRequests ? 'page' : undefined}
-        aria-label="Collections"
-        className={cx(
-          'group relative w-full flex flex-col items-center gap-0.5 py-1 [@media(max-height:680px)]:py-0.5 rounded-xl text-[0.72rem] font-medium transition-colors duration-150',
-          inRequests ? 'text-fg' : 'text-muted hover:text-fg',
-        )}
-      >
-        {inRequests && <span aria-hidden className="absolute -left-1.5 top-2 h-6 w-[3px] rounded-r-full bg-[image:var(--brand-gradient)]" />}
-        <span className={cx('grid place-items-center h-8 w-12 rounded-lg transition-[background-color,color,transform] duration-150 group-active:scale-90 [&>svg]:h-[22px] [&>svg]:w-[22px] [@media(max-height:680px)]:[&>svg]:h-5 [@media(max-height:680px)]:[&>svg]:w-5', inRequests ? 'bg-accent-soft text-accent shadow-sm ring-1 ring-accent/15' : 'group-hover:bg-hover')}>
-          <FolderTree size={18} />
-        </span>
-        <span className="w-full truncate px-0.5 text-center leading-tight [@media(max-height:680px)]:hidden">Collections</span>
-      </button>
-    </Tooltip>
-  );
-  return (
-    <nav aria-label="Main navigation" className="w-[84px] [@media(max-height:680px)]:w-[64px] shrink-0 border-r border-line bg-chrome flex flex-col items-stretch gap-0.5 px-1.5 py-2 overflow-y-auto overflow-x-hidden [scrollbar-width:none]">
-      {RAIL.map((n, i) => (
-        <div key={n.id}>
-          {i > 0 && RAIL[i - 1]!.group !== n.group && <div className="mx-3 my-1 [@media(max-height:680px)]:my-0.5 border-t border-line/70" />}
-          {item(n.id, n.label, n.icon, railShortcut(RAIL_ORDER, n.id, modKey), n.hint)}
-          {n.id === 'home' && <div className="mt-0.5">{explorerToggle}</div>}
-        </div>
-      ))}
-      <div className="mt-auto pt-2">{item('settings', 'Settings', <Settings size={18} />, `${modKey}+,`)}</div>
-    </nav>
-  );
-}
+/** The navigation (components/nav.tsx) and the rail (components/Rail.tsx), here for the modules that import them from the shell. */
+export { NAV } from './nav';
+export { Sidebar } from './Rail';
+import { NAV } from './nav';
 
 /** The environment switcher: a colour dot on the left of every environment (red for production), the app's own menu. */
 /** The active environment (WF-05: the shared EnvSelect, the same menu as the status bar's). */
@@ -207,6 +94,7 @@ function useTitleBarColors(ref: React.RefObject<HTMLElement | null>) {
 }
 
 export function TopBar() {
+  const bindings = useBindings();
   const set = useApp((s) => s.set);
   const noDrag = { WebkitAppRegion: 'no-drag' } as React.CSSProperties;
   const header = useRef<HTMLElement>(null);
@@ -255,14 +143,14 @@ export function TopBar() {
         <Search size={15} />
         <span className="truncate">Search requests, tests, tools, traces…</span>
         <span className="ml-auto hidden sm:inline">
-          <Kbd>{modKey}+Shift+F</Kbd>
+          <Kbd>{keyLabel('search', bindings)}</Kbd>
         </span>
       </button>
       <div className="flex items-center gap-1.5" style={noDrag}>
         <EnvironmentPicker />
         <EnvQuickLook />
         <Button size="md" variant="ghost" onClick={() => set({ paletteOpen: true })} icon={<TerminalSquare size={15} />}>
-          <span className="hidden lg:inline">Commands</span> <Kbd>{modKey}+K</Kbd>
+          <span className="hidden lg:inline">Commands</span> <Kbd>{keyLabel('palette', bindings)}</Kbd>
         </Button>
         <IconButton label="AI assistant" onClick={() => set({ assistant: { task: 'free', title: 'Ask the assistant', context: {} } })}>
           <Bot size={17} />
@@ -339,7 +227,7 @@ export function StatusBar() {
         <button
           key={t}
           className={cx('flex items-center gap-1 hover:text-fg', logsOpen && bottomTab === t && 'text-fg')}
-          title={t === 'console' ? 'Console: requests and script output (Ctrl+Alt+C)' : 'Application logs'}
+          title={t === 'console' ? `Console: requests and script output (${keyLabel('toggle-console')})` : 'Application logs'}
           onClick={() => useApp.getState().set(logsOpen && bottomTab === t ? { logsOpen: false } : { logsOpen: true, bottomTab: t })}
         >
           {t === 'console' ? <TerminalSquare size={12} /> : <ScrollText size={12} />} {t === 'console' ? 'Console' : 'Logs'}
@@ -534,7 +422,7 @@ export function CommandPalette({
                 role="option"
                 aria-selected={i === idx}
                 data-command={c.id}
-                onMouseEnter={() => setIdx(i)}
+                {...hoverSelect(() => setIdx(i))}
                 onClick={() => run(c)}
                 className={cx('w-full text-left px-4 text-sm flex items-center gap-3', c.detail ? 'py-1.5' : 'py-2', i === idx && 'bg-accent/10')}
               >
@@ -645,7 +533,7 @@ export function SearchDialog() {
         </div>
         <div className="max-h-[55vh] overflow-auto py-1" role="listbox">
           {hits.map((h, i) => (
-            <button key={`${h.kind}:${h.id}`} role="option" aria-selected={i === idx} onMouseEnter={() => setIdx(i)} onClick={() => open(h)} className={cx('w-full text-left px-4 py-2 flex items-center gap-3', i === idx && 'bg-accent/10')}>
+            <button key={`${h.kind}:${h.id}`} role="option" aria-selected={i === idx} {...hoverSelect(() => setIdx(i))} onClick={() => open(h)} className={cx('w-full text-left px-4 py-2 flex items-center gap-3', i === idx && 'bg-accent/10')}>
               <span className="text-muted">{iconOf(h)}</span>
               <span className="min-w-0">
                 <div className="text-sm truncate">{h.title}</div>
@@ -695,10 +583,11 @@ const DIALOG_TONES: Record<DialogTone, { icon: ReactNode; className: string }> =
 import { iconForLabel } from './action-icons';
 import { useEventLog } from '../lib/use-rpc';
 import { plural } from '../lib/format';
-import { railOrder, railShortcut } from '../lib/rail';
 import { ProblemsPanel } from './ProblemsPanel';
 import { StatusBarTools } from './StatusBarTools';
 import { EnvSelect } from './EnvSelect';
+import { keyLabel, useBindings } from '../lib/keybindings';
+import { hoverSelect } from '../lib/hover-select';
 export { iconForLabel };
 
 function DialogView({ d }: { d: DialogRequest }) {
@@ -779,6 +668,7 @@ function placeLabel(l: NavLocation): string {
 
 /** Back / Forward like a browser (Alt+← / Alt+→ and the mouse's back / forward buttons), plus recent places. */
 function NavButtons() {
+  const bindings = useBindings();
   const nav = useApp((s) => s.nav);
   const prev = nav.back[nav.back.length - 1];
   const next = nav.forward[nav.forward.length - 1];
@@ -788,10 +678,10 @@ function NavButtons() {
   };
   return (
     <div className="flex items-center gap-0.5">
-      <IconButton label={prev ? `Back to ${placeLabel(prev)}  (Alt+←)` : 'Back'} disabled={!prev} onClick={() => useApp.getState().goBack()}>
+      <IconButton label={prev ? `Back to ${placeLabel(prev)}  (${keyLabel('back', bindings)})` : 'Back'} disabled={!prev} onClick={() => useApp.getState().goBack()}>
         <ArrowLeft size={16} />
       </IconButton>
-      <IconButton label={next ? `Forward to ${placeLabel(next)}  (Alt+→)` : 'Forward'} disabled={!next} onClick={() => useApp.getState().goForward()}>
+      <IconButton label={next ? `Forward to ${placeLabel(next)}  (${keyLabel('forward', bindings)})` : 'Forward'} disabled={!next} onClick={() => useApp.getState().goForward()}>
         <ArrowRight size={16} />
       </IconButton>
       <Menu

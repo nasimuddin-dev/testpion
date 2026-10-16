@@ -7,6 +7,7 @@ import type { FeedbackRequest } from './components/FeedbackDialog';
 import { asError, call } from './api';
 import { loadDraft, saveDraft } from './lib/draft-store';
 import { setDraftScope } from './lib/ws-scope';
+import { offerUndo, UNDO_MS } from './lib/undo';
 import { normalizeEnvironment } from './lib/environments-store';
 import { refOpenLabel, type ItemRef } from '@testpion/shared';
 
@@ -158,7 +159,11 @@ interface AppState {
   dialog?: DialogRequest;
   progress?: ProgressState | null;
   set(p: Partial<AppState>): void;
-  toast(text: string, kind?: Toast['kind'], action?: ToastAction | ToastAction[]): void;
+  /**
+   * A message at the bottom right. `opts.undo`: the message is about something reversible (a delete): it gets Undo for
+   * 8 s, also Ctrl/Cmd+Z (lib/undo.ts); the undo's failure is shown as an error.
+   */
+  toast(text: string, kind?: Toast['kind'], action?: ToastAction | ToastAction[], opts?: { undo?: () => unknown; restored?: string }): void;
   setActivity(key: string, label?: string): void;
   openIntent(view: ViewId, payload: any): void;
   /** Back / forward through the places visited (views and the items opened in them), like a browser. */
@@ -185,6 +190,10 @@ function toastButton(a: ToastAction): { label: string; onClick(): void } {
   if (!('ref' in a)) return { label: a.label, onClick: a.onClick };
   return { label: a.label ?? refOpenLabel(a.ref), onClick: () => void import('./lib/open-ref').then((m) => m.openRef(a.ref, { newTab: a.newTab })) };
 }
+
+const NO_ENVIRONMENTS: WorkspaceCurrent['environments'] = [];
+/** The open workspace's environments, for `useApp(selectEnvironments)`: the same empty list while none is open (a new [] per read would re-render forever). */
+export const selectEnvironments = (s: { workspace?: WorkspaceCurrent }): WorkspaceCurrent['environments'] => s.workspace?.environments ?? NO_ENVIRONMENTS;
 
 /** The request editors: they use the Collections explorer as their (only) sidebar and aren't on the rail. */
 export const REQUEST_VIEWS: ViewId[] = ['rest', 'graphql', 'grpc', 'websocket', 'mcp', 'apidef', 'dataset', 'collections'];
@@ -304,14 +313,29 @@ export const useApp = create<AppState>((set, get) => ({
   activity: {},
   mcpConnected: 0,
   set: (p) => set(p),
-  toast: (text, kind = 'info', actions) => {
+  toast: (text, kind = 'info', actions, opts) => {
     const id = ++toastId;
-    const [main, second] = [actions ?? []].flat().map(toastButton);
+    const sonnerId = `t${id}`;
+    // Undo comes first, before any other action (Open …)
+    const undo = opts?.undo;
+    const undoButton = undo && {
+      label: 'Undo',
+      onClick: offerUndo(
+        // then it says so ("Restored the request …"), or why it could not
+        () =>
+          void Promise.resolve()
+            .then(undo)
+            .then(() => get().toast(opts?.restored ?? 'Undone', 'success'), toastError),
+        UNDO_MS,
+        () => sonner.dismiss(sonnerId),
+      ),
+    };
+    const [main, second] = [...(undoButton ? [undoButton] : []), ...[actions ?? []].flat().map(toastButton)];
     // a toast with an action (Undo, Open run) stays longer, so there is time to use it
     const duration = main ? 8000 : kind === 'error' || kind === 'warning' ? 7000 : 3500;
     set({ toasts: [...get().toasts, { id, kind, text }] });
     setTimeout(() => set({ toasts: get().toasts.filter((t) => t.id !== id) }), duration);
-    (kind === 'error' ? sonner.error : kind === 'success' ? sonner.success : kind === 'warning' ? sonner.warning : sonner)(text, { duration, ...(main ? { action: main } : {}), ...(second ? { cancel: second } : {}) });
+    (kind === 'error' ? sonner.error : kind === 'success' ? sonner.success : kind === 'warning' ? sonner.warning : sonner)(text, { id: sonnerId, duration, ...(main ? { action: main } : {}), ...(second ? { cancel: second } : {}) });
   },
   setActivity: (key, label) => {
     const a = { ...get().activity };

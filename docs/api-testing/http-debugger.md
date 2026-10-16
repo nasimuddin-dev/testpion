@@ -7,7 +7,7 @@ description: "See the HTTP traffic of other programs: a browser, an app under te
 
 # HTTP Debugger
 
-The **HTTP Debugger** (**Debugger** in the rail, under Testing; <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>3</kbd>) shows the traffic of *other* programs. TestPion runs a local proxy; a program pointed at it sends every request through, and each exchange is listed as it happens with the program that sent it, the status, the size and the timing. A row opens whole: the request and response side by side, and a timing breakdown.
+The **HTTP Debugger** (**Debugger** under the rail's **More…**, or <kbd>Ctrl</kbd>+<kbd>K</kbd> ▸ *Go to Debugger*; right-click a rail item ▸ **Show on the rail** to keep it there) shows the traffic of *other* programs. TestPion runs a local proxy; a program pointed at it sends every request through, and each exchange is listed as it happens with the program that sent it, the status, the size and the timing. A row opens whole: the request and response side by side, and a timing breakdown.
 
 ## The workbench
 
@@ -102,7 +102,7 @@ A long capture stays quick: the session keeps the last 5,000 exchanges, the list
 
 ### Sessions
 
-The **Session** menu keeps captures: **Save session…** writes the session as a HAR file in the workspace's `debugger/` folder (which `.gitignore` keeps out of git); a saved session opens from the same menu, replacing the current one or adding to it. **Import a HAR file…** opens a file from any tool (a browser's DevTools, Fiddler, Charles), and **Import a Fiddler session (.saz)…** opens Fiddler's own archives; **Export as HAR…** saves one anywhere. While capturing, **AutoSave** writes the live session to `debugger/autosave.har` every minute, so a crash loses at most a minute. **Clear the session** (<kbd>Ctrl</kbd>+<kbd>E</kbd>) forgets it. A session keeps about 5,000 exchanges (the oldest go in small blocks) and 200 MB of bodies: past that, the oldest exchanges lose their bodies first (their headers, sizes and timing stay, and the panes say so).
+The **Session** menu keeps captures: **Save session…** writes the session as a HAR file in the workspace's `debugger/` folder (which `.gitignore` keeps out of git); a saved session opens from the same menu (**Open** *name*) in a tab of its own beside the **Live capture** tab, which keeps capturing meanwhile: the grid, filters, Create flow and Save to collection work on the session on screen, and **Add to the live capture** in its bar copies its exchanges in. Session tabs work like the other tabs of the app (a preview tab first, kept per workspace); the Live capture tab can't be closed. **Import a HAR file…** opens a file from any tool (a browser's DevTools, Fiddler, Charles), and **Import a Fiddler session (.saz)…** opens Fiddler's own archives; **Export as HAR…** saves one anywhere. While capturing, **AutoSave** writes the live session to `debugger/autosave.har` every minute, so a crash loses at most a minute. **Clear the session** (<kbd>Ctrl</kbd>+<kbd>E</kbd>) forgets it. Every **Save session…**, **Save to collection…** and **Create flow…** also adds a **capture session** to History (*Kind ▸ Capture sessions*): how many exchanges, the hosts, through the proxy or the reverse proxy, and what they became; **Open** there opens it again (`testpion history list --kind capture --json`, MCP `history_list`). A session keeps about 5,000 exchanges (the oldest go in small blocks) and 200 MB of bodies: past that, the oldest exchanges lose their bodies first (their headers, sizes and timing stay, and the panes say so).
 
 Secrets (Authorization headers, API keys, passwords in bodies) are masked wherever the session is shown or saved; the proxy listens on this computer only unless you ask for the LAN.
 
@@ -132,7 +132,13 @@ Select rows and pick **Create flow from selection…** (right-click, or the tool
 
 ## Reverse proxy for one API
 
-A client that can't use a proxy (a front end with a configurable base URL, a mobile build, a test suite) can point at a local address instead: **Capture ▸ Reverse proxy for one API…** forwards to the API you give and lists what passes, and **Save** keeps it as a collection with the responses as examples. The status bar's **Tools ▸ Reverse proxy for one API…**, the command palette (*Capture: Reverse Proxy for One API…*) and the **Capture traffic into a collection** button in the Collections view's header open the same dialog in the Debugger. No certificate is needed, because the client talks plain HTTP to TestPion. See [Record traffic](/api-testing/recording) for the details and the `testpion record` command.
+A client that can't use a proxy (a front end with a configurable base URL, a mobile build, a test suite) can point at a local address instead: **Capture ▸ Reverse proxy for one API…** forwards to the API you give and lists what passes, and **Save** keeps it as a collection with the responses as examples. The status bar's **Tools ▸ Reverse proxy for one API…**, the command palette (*Capture: Reverse Proxy for One API…*) and the **Capture traffic into a collection** button in the Collections view's header open the same dialog in the Debugger. No certificate is needed, because the client talks plain HTTP to TestPion.
+
+What the reverse proxy forwards is in the Debugger's grid too, next to the proxy's traffic: each row has a **reverse** badge and *Reverse proxy* in the **Application** column (pick it in the Application filter to see only those). Everything works on them as on any row: select, filter, **Create flow from selection…**, **Save to collection…**, **Export as HAR…**, Save session and AutoSave, and History's capture sessions (they say *reverse proxy*). **Show in Debugger** in the dialog goes there; the dialog's **Clear** starts its own list again (the rows stay in the Debugger, whose **Clear** removes them). See [Record traffic](/api-testing/recording) for the details and the `testpion record` command.
+
+<figure class="aps-screenshot">
+  <img src="/images/debugger-sessions.jpg" alt="The HTTP Debugger with two session tabs, Live capture and the saved session clinic-morning; the live capture holds five requests through the reverse proxy, each marked reverse, one selected with its request and response" width="1440" height="900" loading="lazy">
+</figure>
 
 ## From the terminal and for agents
 

@@ -1,7 +1,7 @@
 /** RPC handlers: Collections (requests, folders, examples, import/export) and their mock servers. */
-import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, relative, sep } from 'node:path';
-import { atomicWrite, ApsError, dbKindOf, redactDbUrl, isSqliteDataset, collectionVariableFlow, listWorkspaceDatasets, appendDatasetRow, readDataset, readWorkspaceDataset, moveToTrash, sqliteTables, fetchImportText, bruFilesToBrunoExport, collectionToBru, importIntoWorkspace, diffOpenApi, lintOpenApi, openApiOutline, asyncApiOutline, workspaceApiCoverage, apiCoverageMarkdown, collectionSecurityFindings, definedVariableNames, listSpecs, findBodySchema, readSpecRef, type SpecRef, startRecorder, recordingToCollection, type RecordedExchange, collectionToOpenApiText, collectionToHttpFile, collectionToAsyncApi, generateWorkspaceDataset, replaceInCollection, moveCollectionVariablesToEnvironments, tidyCollection, applyTidy, type ReplaceField, writeTestsFromSpec, writeFlows, exampleFromResponse, startMockServer, collectionMarkdown, collectionHtml, exportPostmanCollection, withRequestExamples, type SavedExample, convertCollectionScripts, importRequestSnippet, isRequestSnippet, type Collection, collectionSavedItems, duplicateCollection, shortId, collectionTreeOf } from '@testpion/core';
+import { atomicWrite, writeOwned, renameOwned, copyOwned, ApsError, dbKindOf, redactDbUrl, isSqliteDataset, collectionVariableFlow, listWorkspaceDatasets, appendDatasetRow, readDataset, readWorkspaceDataset, moveToTrash, sqliteTables, fetchImportText, bruFilesToBrunoExport, collectionToBru, importIntoWorkspace, diffOpenApi, lintOpenApi, openApiOutline, asyncApiOutline, workspaceApiCoverage, apiCoverageMarkdown, collectionSecurityFindings, definedVariableNames, listSpecs, findBodySchema, readSpecRef, type SpecRef, collectionToOpenApiText, collectionToHttpFile, collectionToAsyncApi, generateWorkspaceDataset, replaceInCollection, moveCollectionVariablesToEnvironments, tidyCollection, applyTidy, type ReplaceField, writeTestsFromSpec, writeFlows, exampleFromResponse, startMockServer, collectionMarkdown, collectionHtml, exportPostmanCollection, withRequestExamples, type SavedExample, convertCollectionScripts, importRequestSnippet, isRequestSnippet, type Collection, collectionSavedItems, duplicateCollection, shortId, collectionTreeOf } from '@testpion/core';
 import type { Backend, Handlers, CollectionRunParams } from '../backend.js';
 import { countDatasetRecords, datasetFormatOfName } from '@testpion/shared';
 import { recordIncoming } from './debugger.js';
@@ -142,27 +142,7 @@ export function collectionsHandlers(be: Backend): Handlers {
       const r = importIntoWorkspace(be.ws, text, { name: envName, secrets: be.secrets, scripts: keepPm ? 'keep' : 'tp' });
       return { format: r.format, collection: r.collection?.name, environment: r.environments?.map((e) => e.name).join(', ') || r.environment?.name, specPath: r.specPath, contractChecks: r.contractChecks, scriptWarnings: r.scriptWarnings, savedItems: r.savedItems, notes: r.notes, scripts: r.scripts, flows: r.flows?.map((f) => f.path) };
     },
-    /** Record traffic: a reverse proxy on 127.0.0.1 in front of `target`; every exchange is sent as a `record.exchange` event. */
-    'record.start': async ({ target, port }: { target: string; port?: number }) => {
-      await be.recorder?.close();
-      const summary = (e: RecordedExchange) => ({ id: e.id, time: e.time, method: e.method, path: be.logger.redactor.redactUrl(`http://x${e.path}`).slice(8), status: e.status, durationMs: e.durationMs, error: e.error });
-      be.recorder = await startRecorder({ target, port, onExchange: (e) => be.host.emit('record.exchange', summary(e)) });
-      return { url: be.recorder.url, target: be.recorder.target };
-    },
-    'record.stop': async () => {
-      await be.recorder?.close();
-      const n = be.recorder?.exchanges.length ?? 0;
-      return { exchanges: n };
-    },
-    'record.status': () => (be.recorder ? { url: be.recorder.url, target: be.recorder.target, exchanges: be.recorder.exchanges.length } : null),
-    /** Save what was recorded as a collection (secrets become {{variables}}; responses become examples). */
-    'record.save': ({ name }: { name: string }) => {
-      if (!be.recorder?.exchanges.length) throw new ApsError('ValidationError', 'Nothing recorded yet');
-      const r = recordingToCollection(be.recorder.exchanges, { name: name.trim() || 'Recorded', target: be.recorder.target, redactor: be.logger.redactor });
-      const saved = be.ws.saveCollection(r.collection);
-      return { collectionId: saved.id, name: saved.name, requests: r.requests, placeholders: r.placeholders.map((p) => p.variable) };
-    },
-    'record.clear': () => void be.recorder?.exchanges.splice(0),
+    // record.* (the reverse proxy, a capture mode of the HTTP Debugger): handlers/debugger-reverse.ts
     /** Security findings in a collection's request definitions (typed-in secrets, secrets in URLs, plain http …). */
     'col.securityLint': ({ id, environment }: { id: string; environment?: string }) => {
       const c = be.ws.getCollection(id);
@@ -214,15 +194,13 @@ export function collectionsHandlers(be: Backend): Handlers {
     /** A first test suite from an API definition: tests/<api>/<tag>.yaml and tests/<api>.suite.yaml (existing files kept). */
     'openapi.generateTests': ({ path, negative, overwrite }: { path: string; negative?: boolean; overwrite?: boolean }) => {
       if (!SPEC_PATH.test(path ?? '')) throw new ApsError('ValidationError', `Not an API definition in specs/: ${path ?? ''}`);
-      const r = writeTestsFromSpec(be.ws, path, { negative, overwrite });
-      if (r.written.length) be.host.emit('workspace.changedOnDisk', { message: `${r.written.length} test files written`, kinds: ['tests'], files: r.written.map((f) => f.path) });
+      const r = writeTestsFromSpec(be.ws, path, { negative, overwrite }); // its data.changed names the files (own-writes.ts)
       return { written: r.written.map((f) => ({ path: f.path, tests: f.tests })), skipped: r.skipped };
     },
     /** An integration suite (a flow per resource) from a definition in specs/ or from a collection: tests/<api>/flows/*.yaml and tests/<api>-integration.suite.yaml. */
     'openapi.generateFlows': ({ path, collectionId, overwrite }: { path?: string; collectionId?: string; overwrite?: boolean }) => {
       if (!collectionId && !SPEC_PATH.test(path ?? '')) throw new ApsError('ValidationError', `Not an API definition in specs/: ${path ?? ''}`);
-      const r = writeFlows(be.ws, collectionId ? { collection: be.ws.getCollection(collectionId) } : { spec: path! }, { overwrite });
-      if (r.written.length) be.host.emit('workspace.changedOnDisk', { message: `${r.written.length} test files written`, kinds: ['tests'], files: r.written.map((f) => f.path) });
+      const r = writeFlows(be.ws, collectionId ? { collection: be.ws.getCollection(collectionId) } : { spec: path! }, { overwrite }); // its data.changed names the files
       return { written: r.written.map((f) => ({ path: f.path, tests: f.tests })), skipped: r.skipped, resources: r.resources, variables: r.variables };
     },
     /** Lint problems of an OpenAPI document (the text being edited, or a document in specs/), with their places. */
@@ -312,7 +290,7 @@ export function collectionsHandlers(be: Backend): Handlers {
       mkdirSync(dir, { recursive: true });
       let dest = join(dir, `${base}.${ext}`);
       for (let i = 2; existsSync(dest); i++) dest = join(dir, `${base}-${i}.${ext}`);
-      writeFileSync(dest, format === 'csv' ? 'id,name\n' : '');
+      writeOwned(dest, format === 'csv' ? 'id,name\n' : '');
       be.host.emit('data.changed', { kind: 'datasets' });
       return { name: datasetName(dest), path: dest };
     },
@@ -327,7 +305,7 @@ export function collectionsHandlers(be: Backend): Handlers {
       if (dest === file) return { name: datasetName(file), path: file };
       if (existsSync(dest)) throw new ApsError('ValidationError', `datasets/${datasetName(dest)} exists already`);
       mkdirSync(dirname(dest), { recursive: true });
-      renameSync(file, dest);
+      renameOwned(file, dest);
       be.host.emit('data.changed', { kind: 'datasets' });
       return { name: datasetName(dest), path: dest };
     },
@@ -338,7 +316,7 @@ export function collectionsHandlers(be: Backend): Handlers {
       const m = /^(.*?)(\.[^./]+)?$/.exec(file)!;
       let dest = `${m[1]}-copy${m[2] ?? ''}`;
       for (let i = 2; existsSync(dest); i++) dest = `${m[1]}-copy-${i}${m[2] ?? ''}`;
-      copyFileSync(file, dest);
+      copyOwned(file, dest);
       be.host.emit('data.changed', { kind: 'datasets' });
       return { name: datasetName(dest), path: dest };
     },
@@ -372,7 +350,7 @@ export function collectionsHandlers(be: Backend): Handlers {
       mkdirSync(dir, { recursive: true });
       let dest = join(dir, `${base}.csv`);
       for (let i = 2; existsSync(dest); i++) dest = join(dir, `${base}-${i}.csv`);
-      writeFileSync(dest, text);
+      writeOwned(dest, text);
       be.host.emit('data.changed', { kind: 'datasets' });
       return { path: dest, name: relative(dir, dest).split(sep).join('/') };
     },
@@ -387,7 +365,7 @@ export function collectionsHandlers(be: Backend): Handlers {
       const dir = be.ws.path('datasets', 'uploads');
       mkdirSync(dir, { recursive: true });
       const dest = join(dir, safe);
-      writeFileSync(dest, text);
+      writeOwned(dest, text);
       return be.handlers['col.previewDataFile']!({ path: dest });
     },
     /** Pick a CSV/JSON data file for a collection run; returns a preview of its rows. */

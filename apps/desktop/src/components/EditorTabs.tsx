@@ -29,6 +29,9 @@ export interface EditorTab {
   badgeClass?: string;
   dirty?: boolean;
   pinned?: boolean;
+  /** A preview tab (WF-19): opened by a single click in the explorer, replaced by the next one; `onKeep` keeps it. */
+  preview?: boolean;
+  onKeep?(): void;
   /** The saved request (or gRPC call, connection) the tab shows, highlighted in the sidebar. */
   item?: string;
   onSelect?(): void;
@@ -97,7 +100,7 @@ export const useEditorTabsStore = create<EditorTabsState>((set, get) => ({
   },
 }));
 
-const sameTab = (a: EditorTab, b: EditorTab) => a.key === b.key && a.title === b.title && a.badge === b.badge && a.dirty === b.dirty && a.pinned === b.pinned;
+const sameTab = (a: EditorTab, b: EditorTab) => a.key === b.key && a.title === b.title && a.badge === b.badge && a.dirty === b.dirty && a.pinned === b.pinned && a.preview === b.preview;
 
 /** Publish an editor's tabs (call it on every render; unchanged tabs don't re-render the strip). */
 export function useEditorTabs(group: string, tabs: EditorTab[], active?: string) {
@@ -286,6 +289,7 @@ const toDocTab = (t: EditorTab): DocTab<EditorTab> => ({
   badgeClass: t.badgeClass,
   dirty: t.dirty,
   pinned: t.pinned,
+  preview: t.preview,
   rename: t.onRenameTo ? 'inline' : t.onRename ? 'dialog' : undefined,
   data: t,
 });
@@ -338,6 +342,7 @@ export function EditorTabStrip() {
       onSelect={(t) => select(t.data!)}
       onClose={(_ids, closing) => (closing.length === 1 ? closing[0]!.data!.onClose() : close(closing.map((t) => t.data!)))}
       onRename={(t, name) => (name !== undefined ? t.data!.onRenameTo?.(name) : t.data!.onRename?.())}
+      onKeep={(t) => t.data!.onKeep?.()}
       extraItems={({ data: t }) => [
         { label: t!.pinned ? 'Unpin tab' : 'Pin tab', icon: t!.pinned ? <PinOff size={13} /> : <Pin size={13} />, disabled: !t!.onTogglePin, onSelect: () => t!.onTogglePin?.() },
         { label: 'Duplicate tab', icon: <Copy size={13} />, disabled: !t!.onDuplicate, onSelect: () => t!.onDuplicate?.() },

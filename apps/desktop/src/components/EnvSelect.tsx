@@ -1,6 +1,9 @@
 import { ChevronDown, KeyRound, TriangleAlert } from 'lucide-react';
-import { useApp } from '../store';
+import { selectEnvironments, useApp } from '../store';
 import { openRef } from '../lib/open-ref';
+import { useUndefinedVariables } from '../lib/request-variables';
+import { useVarPopover } from '../lib/var-popover';
+import { useRef } from 'react';
 import { Badge, Menu, cx, type MenuItem } from './ui';
 
 type Env = { id?: string; name: string; color?: string; isProduction?: boolean; problem?: string };
@@ -48,7 +51,7 @@ export function EnvSelect({
   onChange?(name: string | undefined): void;
   ariaLabel?: string;
 }) {
-  const envs = useApp((s) => s.workspace?.environments ?? []) as Env[];
+  const envs = useApp(selectEnvironments) as Env[];
   const active = useApp((s) => s.environment);
   const controlled = !!onChange;
   const current = controlled ? value : active;
@@ -94,5 +97,52 @@ export function EnvSelect({
         <ChevronDown size={13} className="text-muted shrink-0" />
       </button>
     );
-  return <Menu items={items} width={240} align={variant === 'status' ? 'start' : undefined} trigger={trigger} />;
+  const menu = <Menu items={items} width={240} align={variant === 'status' ? 'start' : undefined} trigger={trigger} />;
+  // the window's active environment (top bar, status bar): a badge when the request on screen uses undefined variables
+  return controlled ? menu : (
+    <span className="inline-flex items-center gap-1">
+      {menu}
+      <UndefinedVariablesBadge variant={variant === 'status' ? 'status' : 'topbar'} environment={envObj?.name} />
+    </span>
+  );
+}
+
+/**
+ * The {{variables}} the request on screen uses that the active environment, its collection and the globals don't
+ * define (lib/request-variables.ts, the same resolution as the field highlighting and the Info panel): a red count;
+ * each opens the variable popover to add it to the environment (and to the others, Also add to).
+ */
+function UndefinedVariablesBadge({ variant, environment }: { variant: 'topbar' | 'status'; environment?: string }) {
+  const { names, collectionId } = useUndefinedVariables();
+  const anchor = useRef<HTMLButtonElement>(null);
+  if (!names.length) return null;
+  const where = environment ? `the environment "${environment}"` : 'any environment (none is active)';
+  const add = (name: string) => {
+    const r = anchor.current?.getBoundingClientRect();
+    useVarPopover.getState().show({ name, collectionId, x: Math.max(8, Math.min((r?.left ?? 8) - 120, innerWidth - 360)), y: variant === 'status' ? Math.max(8, (r?.top ?? 400) - 260) : (r?.bottom ?? 40) + 4 });
+  };
+  return (
+    <Menu
+      width={280}
+      align={variant === 'status' ? 'start' : 'end'}
+      items={names.slice(0, 30).map((n) => ({
+        label: environment ? `Add {{${n}}} to ${environment}…` : `Define {{${n}}}…`,
+        icon: <TriangleAlert size={13} className="text-bad" />,
+        title: `{{${n}}} is not defined in ${where}, its collection or the globals`,
+        onSelect: () => add(n),
+      }))}
+      trigger={
+        <button
+          ref={anchor}
+          data-undefined-vars={names.length}
+          aria-label={`${names.length} undefined variable${names.length === 1 ? '' : 's'} in this request`}
+          title={`Not defined in ${where}: ${names.slice(0, 8).join(', ')}${names.length > 8 ? ' …' : ''}. Click to add them.`}
+          className={cx('inline-flex items-center gap-1 rounded-full font-semibold text-white bg-bad tabular-nums', variant === 'status' ? 'h-4 px-1.5 text-[0.65rem]' : 'h-5 px-1.5 text-[0.7rem]')}
+        >
+          <TriangleAlert size={variant === 'status' ? 10 : 11} aria-hidden />
+          {names.length > 99 ? '99+' : names.length}
+        </button>
+      }
+    />
+  );
 }

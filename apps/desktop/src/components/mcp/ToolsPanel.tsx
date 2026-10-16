@@ -14,7 +14,7 @@ import { Markdown } from '../Markdown';
 import { useSticky } from '../../lib/sticky';
 import { downloadContent } from '../../lib/files';
 import { CheckList, ErrorPanel } from '../Results';
-import { Badge, Button, cx, Empty, IconButton, Input, Split, Tabs } from '../ui';
+import { Badge, Button, cx, Empty, IconButton, Input, Segmented, Split, Tabs } from '../ui';
 import { ResponseSplit } from '../ResponseSplit';
 import { type Tool } from './McpPanels';
 import { copyText } from '../../lib/clipboard';
@@ -220,13 +220,17 @@ export function ToolResult({ r, name }: { r: Extract<ToolRun, { content: unknown
         <span className="text-muted">{formatMs(r.durationMs)}</span>
         {text && <span className="text-muted">{text.length.toLocaleString()} chars</span>}
         <div className="ml-auto flex items-center gap-1">
-          <div className="flex rounded-md border border-line overflow-hidden text-xs" role="group" aria-label="Display">
-            {(['pretty', 'raw', 'markdown'] as const).map((m) => (
-              <button key={m} type="button" className={cx('px-2 py-0.5 capitalize', effective === m ? 'bg-accent-soft text-fg' : 'text-muted hover:text-fg', m === 'markdown' && !text && 'opacity-40 pointer-events-none')} onClick={() => (setMode(m), setTab('content'))}>
-                {m}
-              </button>
-            ))}
-          </div>
+          <Segmented
+            label="Display"
+            size="xs"
+            value={effective}
+            onChange={(m) => (setMode(m), setTab('content'))}
+            options={[
+              { value: 'pretty', label: 'Pretty' },
+              { value: 'raw', label: 'Raw' },
+              { value: 'markdown', label: 'Markdown', disabled: !text },
+            ]}
+          />
           <IconButton label="Copy result" onClick={copy}>
             <Copy size={13} />
           </IconButton>

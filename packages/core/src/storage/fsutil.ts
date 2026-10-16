@@ -1,4 +1,4 @@
-import { closeSync, copyFileSync, fsyncSync, mkdirSync, openSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync, writeSync } from 'node:fs';
+import { closeSync, copyFileSync, cpSync, fsyncSync, mkdirSync, openSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync, writeSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { createHash, randomBytes } from 'node:crypto';
 import { ApsError } from '../errors.js';
@@ -55,24 +55,158 @@ export function relativeInside(parent: string, child: string, o: { orSame?: bool
 
 export const isInside = (parent: string, child: string, o: { orSame?: boolean } = {}): boolean => relativeInside(parent, child, o) !== undefined;
 
+/**
+ * The app's own changes to files, by path (GIT-103): what this process last made each file (absolute path → its content
+ * fingerprint `hash:<size>:<sha1>`, or `gone`). A folder watcher tells its own saves from changes made outside the app
+ * (git pull, another editor) by comparing the file now with this, not by the time: other bytes are someone else's
+ * change, however soon after a save they come. A removed folder is one entry (`gone`, `dir: true`) that covers what was
+ * in it. Entries are kept for a minute (the watcher's events arrive within that); `OUTSIDE` marks a path whose last
+ * change was someone else's, so an own entry of a folder above it no longer speaks for it.
+ */
+const recentWrites = new Map<string, { at: number; fingerprint: string; dir?: boolean }>();
+const OWN_WRITE_TTL_MS = 60_000;
+/** At most this many own writes are remembered (~200 B each): a write the watcher has not seen yet is only forgotten beyond it. */
+const MAX_OWN_WRITES = 100_000;
+const OUTSIDE = 'outside';
+const ownWriteListeners = new Set<(path: string) => void>();
+
+/** The content fingerprint the watcher compares: `hash:<size>:<sha1>`. */
+export function contentFingerprint(bytes: Buffer): string {
+  return `hash:${bytes.length}:${createHash('sha1').update(bytes).digest('hex')}`;
+}
+
+function recordOwn(path: string, fingerprint: string, dir?: boolean): void {
+  const abs = resolve(path);
+  recentWrites.delete(abs); // newest last: pruning goes oldest first
+  recentWrites.set(abs, { at: Date.now(), fingerprint, ...(dir ? { dir } : {}) });
+  // only what has expired goes (oldest first, stopping at the first one still fresh: O(1) a write): a write the
+  // watcher has not seen yet is never forgotten — an import of thousands of files would otherwise come back as
+  // "changed outside TestPion". MAX_OWN_WRITES bounds the memory of a flood that never pauses.
+  if (recentWrites.size > 1000) {
+    const now = Date.now();
+    for (const [k, w] of recentWrites) {
+      if (now - w.at < OWN_WRITE_TTL_MS && recentWrites.size <= MAX_OWN_WRITES) break;
+      recentWrites.delete(k);
+    }
+  }
+  for (const l of ownWriteListeners) {
+    try {
+      l(abs);
+    } catch {
+      /* a listener's failure never fails the write */
+    }
+  }
+}
+
+/**
+ * Be told of every change this process makes to a file through these helpers (absolute path): the backend turns the
+ * ones inside the open workspace into the same `data.changed` the watcher sends for outside changes. Returns `off`.
+ */
+export function onOwnWrite(listener: (path: string) => void): () => void {
+  ownWriteListeners.add(listener);
+  return () => void ownWriteListeners.delete(listener);
+}
+
+export function writtenByUs(path: string, withinMs = OWN_WRITE_TTL_MS): boolean {
+  const f = ownWrite(path, withinMs);
+  return f !== undefined;
+}
+
+/**
+ * What this process last made `path` (within `withinMs`): `hash:<size>:<sha1>`, or `gone` when it removed the file or a
+ * folder it was in. The watcher compares it with the file now: the same state is its own change; anything else is an
+ * outside change (another editor, git), even right after a save.
+ */
+export function ownWrite(path: string, withinMs = OWN_WRITE_TTL_MS): string | undefined {
+  const abs = resolve(path);
+  const now = Date.now();
+  const w = recentWrites.get(abs);
+  if (w) return w.fingerprint !== OUTSIDE && now - w.at < withinMs ? w.fingerprint : undefined;
+  // a folder this process removed (or moved away) takes what was in it along
+  for (let dir = dirname(abs), i = 0; i < 16 && dir !== dirname(dir); dir = dirname(dir), i++) {
+    const d = recentWrites.get(dir);
+    if (d) return d.dir && d.fingerprint === 'gone' && now - d.at < withinMs ? 'gone' : undefined;
+  }
+  return undefined;
+}
+
+/** The file at `path` was last changed by someone else (the watcher saw other bytes than this process wrote). */
+export function forgetOwnWrite(path: string): void {
+  const abs = resolve(path);
+  if (recentWrites.has(abs)) recentWrites.set(abs, { at: Date.now(), fingerprint: OUTSIDE });
+  else if (ownWrite(abs) !== undefined) recentWrites.set(abs, { at: Date.now(), fingerprint: OUTSIDE }); // under a removed folder
+}
+
+/**
+ * Record a change this process made without the helpers below (another library wrote the file, an async write and
+ * rename): `path` as it is on disk now — a file's content, a folder's files (each), or gone.
+ */
+export function noteOwnChange(path: string): void {
+  let st: import('node:fs').Stats | undefined;
+  try {
+    st = statSync(path);
+  } catch {
+    st = undefined;
+  }
+  if (!st) return recordOwn(path, 'gone', true);
+  if (st.isDirectory()) {
+    const walk = (dir: string, depth: number) => {
+      if (depth > 8) return;
+      let names: import('node:fs').Dirent[] = [];
+      try {
+        names = readdirSync(dir, { withFileTypes: true });
+      } catch {
+        return;
+      }
+      for (const e of names) {
+        const p = join(dir, e.name);
+        if (e.isDirectory()) walk(p, depth + 1);
+        else if (e.isFile()) noteOwnChange(p);
+      }
+    };
+    return walk(path, 0);
+  }
+  try {
+    recordOwn(path, st.size > 8 * 1024 * 1024 ? `stat:${st.size}:${Math.round(st.mtimeMs)}` : contentFingerprint(readFileSync(path)));
+  } catch {
+    recordOwn(path, 'gone', true);
+  }
+  forgetText(path);
+}
+
+/** Remove a file or folder as the app's own change (the watcher does not report it). */
+export function removeOwned(path: string, opts: { recursive?: boolean } = {}): void {
+  rmSync(path, { force: true, recursive: !!opts.recursive, ...(opts.recursive ? { maxRetries: 5, retryDelay: 100 } : {}) });
+  recordOwn(path, 'gone', true);
+  forgetText(path);
+}
+
+/** Rename (move) a file or folder as the app's own change: the old path is gone, the new one holds what moved. */
+export function renameOwned(from: string, to: string): void {
+  renameWithRetry(from, to);
+  recordOwn(from, 'gone', true);
+  forgetText(from);
+  noteOwnChange(to);
+}
+
+/** Copy a file or folder as the app's own change. */
+export function copyOwned(from: string, to: string, opts: { recursive?: boolean } = {}): void {
+  mkdirSync(dirname(to), { recursive: true });
+  if (opts.recursive) cpSync(from, to, { recursive: true });
+  else copyFileSync(from, to);
+  noteOwnChange(to);
+}
+
+/** Write a file in place (no temp file: an append-style rewrite, a small file) as the app's own change. */
+export function writeOwned(path: string, data: string | Buffer): void {
+  mkdirSync(dirname(path), { recursive: true });
+  const bytes = typeof data === 'string' ? Buffer.from(data, 'utf8') : data;
+  writeFileSync(path, bytes);
+  recordOwn(path, contentFingerprint(bytes));
+  forgetText(path);
+}
+
 /** Atomic write: write a temp file, fsync, then rename over the target. A crash never leaves a half-written file. */
-/**
- * Files this process wrote, and when (absolute path → ms): a folder watcher tells its own saves from changes made
- * outside the app (git pull, another editor) with `writtenByUs`.
- */
-const recentWrites = new Map<string, { at: number; fingerprint: string }>();
-export function writtenByUs(path: string, withinMs = 2000): boolean {
-  return ownWrite(path, withinMs) !== undefined;
-}
-/**
- * What this process wrote to `path` lately, as `hash:<size>:<sha1>` (the watcher's content fingerprint), when it was
- * within `withinMs`. The watcher compares it with the file now: the same bytes are its own save; different bytes were
- * written by someone else right after (another editor, git), which is an outside change even within the window.
- */
-export function ownWrite(path: string, withinMs = 2000): string | undefined {
-  const w = recentWrites.get(resolve(path));
-  return w && Date.now() - w.at < withinMs ? w.fingerprint : undefined;
-}
 
 export function atomicWrite(path: string, data: string | Buffer): void {
   stageAtomicWrite(path, data).commit();
@@ -102,8 +236,6 @@ export function stageAtomicWrite(path: string, data: string | Buffer): { commit(
     commit() {
       if (done) return;
       done = true;
-      recentWrites.set(resolve(path), { at: Date.now(), fingerprint: `hash:${bytes.length}:${createHash('sha1').update(bytes).digest('hex')}` });
-      if (recentWrites.size > 2000) for (const [k, w] of recentWrites) if (Date.now() - w.at > 10_000) recentWrites.delete(k);
       try {
         renameWithRetry(tmp, path);
       } catch (e) {
@@ -112,6 +244,7 @@ export function stageAtomicWrite(path: string, data: string | Buffer): { commit(
       } finally {
         forgetText(path);
       }
+      recordOwn(path, contentFingerprint(bytes));
     },
     discard() {
       if (done) return;
@@ -175,8 +308,7 @@ export function writeDerived(path: string, data: string | Buffer): void {
     writeFileSync(path, data);
   }
   const bytes = typeof data === 'string' ? Buffer.from(data, 'utf8') : data;
-  recentWrites.set(resolve(path), { at: Date.now(), fingerprint: `hash:${bytes.length}:${createHash('sha1').update(bytes).digest('hex')}` });
-  if (recentWrites.size > 2000) for (const [k, w] of recentWrites) if (Date.now() - w.at > 10_000) recentWrites.delete(k);
+  recordOwn(path, contentFingerprint(bytes));
   forgetText(path);
 }
 

@@ -1,12 +1,13 @@
 import { createHash } from 'node:crypto';
-import { readdirSync, readFileSync, statSync, watch, type FSWatcher } from 'node:fs';
-import { join, relative, sep } from 'node:path';
-import { ownWrite } from './fsutil.js';
+import { readdirSync, readFileSync, statSync, watch } from 'node:fs';
+import { join, sep } from 'node:path';
+import { forgetOwnWrite, ownWrite } from './fsutil.js';
 
 /**
  * Watch a workspace folder for changes made outside the app (GIT-103): `git pull`, a branch switch, another editor.
- * Results and this computer's state are ignored, so are the app's own saves (`writtenByUs`). Changes arrive in
- * batches (a pull touches many files at once).
+ * Results and this computer's state are ignored, so are the app's own changes: each is known by path and what it made
+ * the file (fsutil `ownWrite`), never by the time, so an outside change right after a save is still reported. Changes
+ * arrive in batches (a pull touches many files at once).
  */
 export type WorkspaceChangeKind = 'collections' | 'environments' | 'tests' | 'library' | 'mcp' | 'providers' | 'workspace' | 'specs' | 'other';
 
@@ -33,14 +34,29 @@ export function changeKind(path: string): WorkspaceChangeKind | undefined {
   return 'other';
 }
 
-/**
- * Start watching; `onChange` gets each batch once things are quiet for `debounceMs`. `isQuiet()` (optional) tells
- * the watcher the app itself is saving right now, so the event is its own. Returns a function that stops it.
- */
-export function watchWorkspace(root: string, onChange: (changes: WorkspaceChange[]) => void, opts: { debounceMs?: number; isOwnChange?: () => boolean } = {}): () => void {
+/** A running watch: call it to stop; `adopt()` takes the folder as it is now as known (see below). */
+export type WorkspaceWatch = (() => void) & {
+  /**
+   * The app had another program change the folder for it (git switch, pull, discard): take every file as it is now as
+   * the known state, so those changes are not reported as outside ones. The caller refreshes everything itself.
+   */
+  adopt(): void;
+};
+
+/** The folder events the watcher listens to (node's recursive `fs.watch`; a test passes its own). */
+export type WatchSource = (root: string, listener: (event: string, name: string | null) => void) => { close(): void };
+
+const nodeWatch: WatchSource = (root, listener) => {
+  const w = watch(root, { recursive: true, persistent: false }, (event, name) => listener(event, name === null ? null : String(name)));
+  w.on('error', () => undefined);
+  return w;
+};
+
+/** Start watching; `onChange` gets each batch once things are quiet for `debounceMs`. */
+export function watchWorkspace(root: string, onChange: (changes: WorkspaceChange[]) => void, opts: { debounceMs?: number; watch?: WatchSource } = {}): WorkspaceWatch {
   const pending = new Map<string, WorkspaceChange>();
   let timer: ReturnType<typeof setTimeout> | undefined;
-  let watcher: FSWatcher | undefined;
+  let watcher: { close(): void } | undefined;
   /**
    * What each file was when last seen: its size and last write. Windows reports a file being read (its access time)
    * as a change, so an event only counts when the file itself is different (or appeared, or is gone).
@@ -105,35 +121,45 @@ export function watchWorkspace(root: string, onChange: (changes: WorkspaceChange
     pending.clear();
     if (batch.length) onChange(batch);
   };
-  try {
-    watcher = watch(root, { recursive: true, persistent: false }, (_event, name) => {
-      if (!name) return;
-      const path = String(name).split(sep).join('/');
-      const kind = changeKind(path);
-      if (!kind) return;
-      const own = ownWrite(join(root, path));
-      const f = own !== undefined || opts.isOwnChange?.() ? fingerprint(path, 'hash') : undefined;
-      // the app's own write (the file holds exactly what it wrote): the file's new state is the known one. Other bytes
-      // right after a save are someone else's (an editor, git): they are reported like any outside change.
-      if (f !== undefined && (opts.isOwnChange?.() || f === own || f === 'gone')) {
+  const onEvent = (name: string | null) => {
+    if (!name) return;
+    const path = String(name).split(sep).join('/');
+    const kind = changeKind(path);
+    if (!kind) return;
+    const full = join(root, path);
+    const own = ownWrite(full);
+    if (own !== undefined) {
+      // the app's own change when the file is exactly what it made it (or gone, when it removed it): that is the known
+      // state now. Anything else is someone else's change after it (an editor, git), reported like any outside change.
+      const f = fingerprint(path, own.startsWith('stat:') ? 'stat' : 'hash');
+      if (f === own) {
         if (f === 'gone') seen.delete(path);
         else seen.set(path, f);
         return;
       }
-      // a just-written temp file renamed into place reports the final name too: one entry per path
-      pending.set(path, { path, kind });
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(flush, opts.debounceMs ?? 400);
-    });
-    watcher.on('error', () => undefined);
+      if (f !== 'dir') forgetOwnWrite(full);
+    }
+    // a just-written temp file renamed into place reports the final name too: one entry per path
+    pending.set(path, { path, kind });
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(flush, opts.debounceMs ?? 400);
+  };
+  try {
+    watcher = (opts.watch ?? nodeWatch)(root, (_event, name) => onEvent(name));
   } catch {
     // a host without recursive watching: the app still works, it just won't notice outside changes
-    return () => undefined;
+    return Object.assign(() => undefined, { adopt: () => undefined });
   }
-  return () => {
+  const stop = () => {
     if (timer) clearTimeout(timer);
+    timer = undefined;
     watcher?.close();
   };
+  const adopt = () => {
+    seen.clear();
+    snapshot('');
+  };
+  return Object.assign(stop, { adopt });
 }
 
 /** A short description of a batch for the user: "2 collections and 1 environment changed on disk". */

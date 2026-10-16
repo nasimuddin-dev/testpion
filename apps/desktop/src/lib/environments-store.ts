@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import { call, on } from '../api';
 import type { Environment } from '../types';
 import { displayName } from './format';
+import { touchesFiles, type DataChangedEvent } from './data-changed';
 
 /**
  * An environment as the window shows it: a text name and a list of variables, whatever a hand edit or a merge left in
@@ -54,7 +55,9 @@ function wire() {
       running = false;
     }
   };
-  on('data.changed', () => {
+  on<DataChangedEvent>('data.changed', (e) => {
+    // a test file, a collection … saved: the environments are as they were (their secrets change through env.* / vars.*)
+    if (!touchesFiles(e, ['environments']) && !/^(env|vars)\./.test(e?.method ?? '')) return;
     again = true;
     if (running) return;
     running = true;

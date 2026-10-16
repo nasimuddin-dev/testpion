@@ -1,7 +1,7 @@
 import { ArrowLeftRight, Play } from 'lucide-react';
 import { useState } from 'react';
 import { asError, call } from '../../api';
-import { useApp } from '../../store';
+import { selectEnvironments, useApp } from '../../store';
 import { CompareView, type Compared } from '../../components/ResponseHistory';
 import { Badge, Button, Empty, IconButton, Modal, Select, Spinner, statusTone } from '../../components/ui';
 import { formatMs } from '../../lib/format';
@@ -25,7 +25,7 @@ interface Result {
  * e.g. Staging and Production. Both are real requests (scripts and checks run as usual).
  */
 export function EnvCompareDialog({ tab, onClose }: { tab: RestTab; onClose(): void }) {
-  const envs = useApp((s) => s.workspace?.environments ?? []);
+  const envs = useApp(selectEnvironments);
   const current = useApp((s) => s.environment);
   const [left, setLeft] = useState(current ?? envs[0]?.name ?? '');
   const [right, setRight] = useState(envs.find((e) => e.name !== (current ?? envs[0]?.name))?.name ?? '');

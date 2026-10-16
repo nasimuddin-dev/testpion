@@ -118,10 +118,13 @@ export function StepInspector({
   lastRunId,
   update,
   actions,
+  inheritedAuth,
 }: {
   file: string;
   step: FlowStep;
   raw?: Record<string, unknown>;
+  /** The auth the step inherits from the file's `defaults:` (tests.flow `inheritedAuth`), when it has none of its own. */
+  inheritedAuth?: { auth: Record<string, unknown>; from: string };
   steps: FlowStep[];
   lastRunId?: string;
   update(set: Record<string, unknown>): Promise<unknown>;
@@ -135,7 +138,12 @@ export function StepInspector({
   const [extract, setExtract] = useCommitted<KeyValue[]>(asRows(r.extract), (rows) => update({ extract: asMap(rows) }));
   const checksKey = r.checks && !r.assertions ? 'checks' : 'assertions';
   const [checks, setChecks] = useCommitted<CheckConfig[]>(Array.isArray(r[checksKey]) ? (r[checksKey] as CheckConfig[]) : [], (c) => update({ [checksKey]: c.length ? c : null }));
-  const [auth, setAuth] = useCommitted<AuthConfig | undefined>(req.auth as AuthConfig | undefined, (a) => update({ auth: a && a.type !== 'none' ? a : null }));
+  // a step without auth of its own runs with the file's `defaults: auth:` (inherited): "Inherit from defaults" shows it;
+  // its own "No auth" then overrides it (written as auth: { type: none }), and Inherit removes the step's auth again
+  const ownAuth = (req.auth ?? r.auth) as AuthConfig | undefined;
+  const [auth, setAuth] = useCommitted<AuthConfig | undefined>(ownAuth, (a) =>
+    update({ auth: !a || a.type === 'inherit' || (a.type === 'none' && !inheritedAuth) ? null : a }),
+  );
   const body0 =
     req.json !== undefined
       ? { type: 'json', content: JSON.stringify(req.json, null, 2) }
@@ -221,7 +229,12 @@ export function StepInspector({
             <KeyValueEditor rows={headers} onChange={setHeaders} keyPlaceholder="Header" />
           </Field>
           <Field label="Authorization">
-            <AuthEditor auth={auth ?? { type: 'none' }} onChange={setAuth} allowInherit={false} />
+            <AuthEditor
+              auth={auth ?? { type: inheritedAuth ? 'inherit' : 'none' }}
+              onChange={setAuth}
+              allowInherit={false}
+              inherited={inheritedAuth ? { auth: inheritedAuth.auth as unknown as AuthConfig, from: inheritedAuth.from } : undefined}
+            />
           </Field>
           {editableBody ? (
             <Field label="Body">

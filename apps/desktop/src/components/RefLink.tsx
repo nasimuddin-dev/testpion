@@ -1,5 +1,6 @@
 import {
   Activity,
+  Disc3,
   BookOpen,
   Bookmark,
   Boxes,
@@ -72,6 +73,8 @@ export function refIcon(ref: ItemRef, size = 12): ReactNode {
       return <History {...p} />;
     case 'trace':
       return <Activity {...p} />;
+    case 'capture':
+      return <Disc3 {...p} />;
     case 'exchange':
       return <Bug {...p} />;
     case 'mcp-server':

@@ -16,3 +16,4 @@ export * from './flow-timeline.js';
 export * from './item-ref.js';
 export * from './production.js';
 export * from './run-status.js';
+export * from './response-diff.js';

@@ -1,5 +1,5 @@
 // WF-13 One vocabulary and one menu order: History and Traces rows have the same right-click menu as their ⋯, a
-// request's menu says Open / Open in new tab and Delete…, Ctrl+Alt+n follows the rail (3 = Debugger) and the shortcuts
+// request's menu says Open / Open in new tab and Delete…, Ctrl+Alt+n follows the rail's shown views (3 = Tests) and the shortcuts
 // list says so in the rail's order.
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
 const { withExpect, step } = require('../lib.cjs');
@@ -47,6 +47,6 @@ const steps = [
 module.exports = withExpect(steps, {
   'history-row': /^Open \| Open trace \| Save as test… \| Delete…$/,
   'traces-row': /^Open( \| Open run)? \| Copy link$/,
-  'rail-shortcut': /^view: debugger$/,
-  'shortcuts-list': /^Go to a view in the rail's order: 1 Home, 2 Collections, 3 Debugger, 4 Tests, 5 Monitors, 6 Load, 7 AI Lab, 8 Evaluations, 9 Environments \| terminal listed: true$/,
+  'rail-shortcut': /^view: tests$/,
+  'shortcuts-list': /^Go to a view in the rail's order: 1 Home, 2 Collections, 3 Tests, 4 Environments, 5 History \| terminal listed: true$/,
 });

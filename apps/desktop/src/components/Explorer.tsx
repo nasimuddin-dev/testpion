@@ -2,6 +2,8 @@ import { ChevronDown, ChevronRight, ChevronsDownUp, Copy, CopyPlus, Database, Do
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { call, on } from '../api';
 import { confirmAction, promptText, toastError, useApp } from '../store';
+import { restoreFolder } from './FolderList';
+import { deleteWithUndo, putBack, restoreDeleted } from '../lib/undo-delete';
 import type { Collection, CollectionNode, Library, LibraryItem, McpServerConfig } from '../types';
 import { plural, uid } from '../lib/format';
 import { addToFolder, CollectionTree, mapNodes, type ExtraGroup } from './CollectionTree';
@@ -410,10 +412,13 @@ export function Explorer() {
       intent('dataset', { dataset: r.name, tab: 'file' });
     });
   };
-  const deleteDataset = async (d: DatasetRow) => {
-    if (!(await confirmAction({ title: 'Delete dataset', message: `Delete datasets/${d.name}?`, detail: 'It goes to Recently deleted (Collections ▸ Recently deleted) for 30 days.', confirmLabel: 'Delete', danger: true }))) return;
-    await datasetAction(() => call('datasets.delete', { name: d.name }));
-  };
+  const deleteDataset = (d: DatasetRow) =>
+    deleteWithUndo({
+      what: `datasets/${d.name}`,
+      run: () => datasetAction(() => call('datasets.delete', { name: d.name })),
+      undo: () => datasetAction(() => restoreDeleted('dataset', d.name)),
+      note: 'Recently deleted keeps it for 30 days',
+    });
   const datasetMenu = (d: DatasetRow): MenuItem[] => [
     { label: LABEL.open, icon: <ExternalLink size={14} />, onSelect: () => void openRef({ kind: 'dataset', name: d.name }) },
     { label: 'Run a collection with it', icon: <Play size={14} />, onSelect: () => intent('collections', { run: true, dataPath: d.path }) },
@@ -504,10 +509,21 @@ export function Explorer() {
       icon: <Trash2 size={14} />,
       danger: true,
       separator: true,
-      onSelect: async () => {
-        if (!(await confirmAction({ title: kind === 'grpc' ? 'Delete gRPC call' : 'Delete connection', message: `Delete "${item.name}"?`, confirmLabel: 'Delete', danger: true }))) return;
-        closeTabsFor([item.id]);
-        await editLibrary(kind, (items) => items.filter((i) => i.id !== item.id));
+      onSelect: () => {
+        // the whole saved item (its request and settings) and its place, to put it back as it was
+        let removed: { item: LibraryItem<unknown>; at: number } | undefined;
+        void deleteWithUndo({
+          what: `${kind === 'grpc' ? 'the gRPC call' : 'the connection'} "${item.name}"`,
+          run: async () => {
+            closeTabsFor([item.id]);
+            await editLibrary(kind, (items) => {
+              const at = items.findIndex((i) => i.id === item.id);
+              if (at >= 0) removed = { item: items[at]!, at };
+              return items.filter((i) => i.id !== item.id);
+            });
+          },
+          undo: () => removed && editLibrary(kind, (items) => putBack(items, removed!.item, removed!.at)),
+        });
       },
     },
   ];
@@ -591,8 +607,15 @@ export function Explorer() {
       onAdd,
       rename: (next) => renameFolder(ops, name, next),
       remove: async () => {
-        await ops.assign((_, folder) => (folder === name ? undefined : folder));
+        const was = new Set<string>();
+        const at = ops.folders.indexOf(name);
+        await ops.assign((id, folder) => (folder === name ? (was.add(id), undefined) : folder));
         await ops.setFolders((fs) => fs.filter((x) => x !== name));
+        // the undo: the folder back in its place, and the items that were in it
+        return async () => {
+          await ops.setFolders((fs) => restoreFolder(fs, name, at));
+          await ops.assign((id, folder) => (was.has(id) && !folder ? name : folder));
+        };
       },
     });
   /** "Move to folder" in an item's menu (the shared one). */
@@ -663,7 +686,7 @@ export function Explorer() {
   const treeCallbacks = useStableCallbacks({
     onNewOfCategory: newOfCategory,
     onDropSaved: (kind: 'grpc' | 'websocket', id: string, to: string) => void moveItem(kind, id, to),
-    onOpen: (c: Collection, n: CollectionNode) => void openRef({ kind: 'request', collectionId: c.id, requestId: n.id }),
+    onOpen: (c: Collection, n: CollectionNode, o?: { preview?: boolean }) => void openRef({ kind: 'request', collectionId: c.id, requestId: n.id }, o?.preview ? { preview: true } : {}),
     onChange: (c: Collection) => void saveCollection(c),
     onRun: (c: Collection, folderId?: string) => intent('collections', { collectionId: c.id, run: true, folderId }),
     onNewRequest: (c: Collection, folderId?: string) => {

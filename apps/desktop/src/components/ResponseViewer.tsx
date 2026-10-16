@@ -1,5 +1,7 @@
 import { prettyBody } from '../lib/pretty';
-import { BookmarkPlus, Camera, Download, ExternalLink, Sparkles } from 'lucide-react';
+import { BookmarkPlus, Camera, Download, ExternalLink, GitCompareArrows, Sparkles } from 'lucide-react';
+import { ResponseDiffPanel } from './ResponseDiffPanel';
+import { rememberResponse, responseId } from '../lib/response-memory';
 import DOMPurify from 'dompurify';
 import { useEffect, useMemo, useState } from 'react';
 import { call, visualizationUrl } from '../api';
@@ -11,7 +13,7 @@ import { ResponseHistory } from './ResponseHistory';
 import { JsonTree, RawView, type TreeAssertion, type TreeVariable } from './JsonView';
 import { TraceView } from './TraceView';
 import { finishSave, type SaveResult } from '../lib/files';
-import { Badge, Button, cx, Empty, OverflowActions, statusTone, Tabs, type MenuItem } from './ui';
+import { Badge, Button, cx, Empty, OverflowActions, Segmented, statusTone, Tabs, type MenuItem } from './ui';
 import { useApp, toastError } from '../store';
 import { JsonTable, tableRowsOf } from './JsonTable';
 import { JwtView } from './JwtView';
@@ -86,6 +88,13 @@ export function ResponseViewer({
   useEffect(() => {
     if (tab === 'trace' && traceId && trace?.traceId !== traceId) void call<Trace>('traces.get', { id: traceId }).then(setTrace);
   }, [tab, traceId, trace]);
+  // Diff vs previous: each response is noted per request (its saved id, else its tab) to compare the next one with
+  const memoryKey = requestId ?? eventsKey;
+  const sendId = traceId ?? historyId ?? responseId(response);
+  useEffect(() => {
+    if (memoryKey) rememberResponse(memoryKey, sendId, response);
+  }, [memoryKey, sendId, response]);
+  const [diffOpen, setDiffOpen] = useState(false);
   const failed = checks?.filter((c) => !c.passed).length ?? 0;
   /** What can be done with this response: buttons when the panel is wide, a ⋯ menu when it is not. */
   const actions: Array<MenuItem & { title?: string }> = [
@@ -104,6 +113,12 @@ export function ResponseViewer({
         ]
       : []),
     ...(onSuggestAssertions ? [{ label: 'Suggest assertions', icon: <Sparkles size={12} />, onSelect: onSuggestAssertions }] : []),
+    {
+      label: diffOpen ? 'Hide the diff' : 'Diff vs previous',
+      icon: <GitCompareArrows size={12} />,
+      onSelect: () => (setDiffOpen(!diffOpen), setTab('body')),
+      title: 'Compare this response with the previous one of the same request: status, time, headers and the body field by field',
+    },
     ...(onSaveExample ? [{ label: 'Save as example', icon: <BookmarkPlus size={12} />, onSelect: onSaveExample, title: 'Save this response as an example of the request' }] : []),
     ...(response.payloadPath
       ? [
@@ -162,18 +177,26 @@ export function ResponseViewer({
         ]}
         right={
           tab === 'body' && (
-            <div className="flex rounded-md border border-line overflow-hidden text-xs">
-              {(['pretty', ...(table ? ['table'] : []), 'raw', ...(isHtml ? ['preview'] : []), ...(visualizer ? ['visualize'] : [])] as const).map((m) => (
-                <button key={m} className={cx('px-2 h-6 capitalize', mode === m ? 'bg-accent text-white' : 'hover:bg-hover')} onClick={() => setMode(m as typeof mode)}>
-                  {m}
-                </button>
-              ))}
-            </div>
+            <Segmented
+              label="Body view"
+              size="xs"
+              value={mode}
+              onChange={setMode}
+              options={[
+                { value: 'pretty', label: 'Pretty' },
+                ...(table ? [{ value: 'table' as const, label: 'Table' }] : []),
+                { value: 'raw', label: 'Raw' },
+                ...(isHtml ? [{ value: 'preview' as const, label: 'Preview' }] : []),
+                ...(visualizer ? [{ value: 'visualize' as const, label: 'Visualize' }] : []),
+              ]}
+            />
           )
         }
       />
       <div className="flex-1 min-h-0">
+        {tab === 'body' && diffOpen && <ResponseDiffPanel response={response} memoryKey={memoryKey} sendId={sendId} requestId={requestId} historyId={historyId} onClose={() => setDiffOpen(false)} />}
         {tab === 'body' &&
+          !diffOpen &&
           (!response.bodyPreview ? (
             <Empty title="Empty body" />
           ) : mode === 'pretty' && isJson ? (

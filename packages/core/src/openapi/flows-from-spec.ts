@@ -9,6 +9,7 @@ import { fuzzCases, type FuzzCase } from './fuzz.js';
 import { collectionToOpenApiText } from './from-collection.js';
 import { deref, openApiOutline, successCode, type OutlineOperation } from './outline.js';
 import type { GeneratedTestFile } from './tests-from-spec.js';
+import { atomicWrite } from '../storage/fsutil.js';
 
 /**
  * An integration suite from an API definition (`testpion integration-suite`, the Preview tab's Generate ▸ Integration
@@ -336,7 +337,7 @@ export function writeFlows(store: Pick<WorkspaceStore, 'safePath'>, source: { sp
       continue;
     }
     mkdirSync(dirname(file), { recursive: true });
-    writeFileSync(file, f.yaml);
+    atomicWrite(file, f.yaml);
     written.push(f);
   }
   return { written, skipped, variables: r.variables, resources: r.resources };

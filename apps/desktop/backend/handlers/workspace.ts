@@ -1,4 +1,5 @@
 /** RPC handlers: Workspaces, environments, current values, cookies and variables. */
+import { describeVariables } from '../var-descriptions.js';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { basename, resolve as resolvePath } from 'node:path';
 import {
@@ -220,10 +221,7 @@ export function workspaceHandlers(be: Backend): Handlers {
       const { text, ...info } = itemInfo(be.ws, r);
       const ctx = be.context({ environment, collectionId: info.collectionId });
       try {
-        const variables = (text ? templateVariables(text) : []).slice(0, 200).map((name) => {
-          const d = ctx.vars.describe(name);
-          return { name, scope: d?.scope, value: d ? (d.secret ? '••••••' : String(typeof d.value === 'object' ? JSON.stringify(d.value) : d.value).slice(0, 200)) : undefined, secret: d?.secret };
-        });
+        const variables = describeVariables(ctx.vars, (text ? templateVariables(text) : []).slice(0, 200), 200);
         return { ...info, variables };
       } finally {
         void ctx.dispose();
@@ -337,11 +335,12 @@ export function workspaceHandlers(be: Backend): Handlers {
     'env.secretStatus': ({ envId, keys }: { envId: string; keys: string[] }) => Object.fromEntries(keys.map((k) => [k, !!be.secrets.get(secretKeys.envVar(envId, k))])),
     'vars.inspect': ({ environment, collectionId, template }: { environment?: string; collectionId?: string; template?: string }) => {
       const ctx = be.context({ environment, collectionId });
-      const names = template ? templateVariables(template) : Object.keys(ctx.vars.toObject());
-      return names.map((n) => {
-        const d = ctx.vars.describe(n);
-        return { name: n, scope: d?.scope, value: d ? (d.secret ? '••••••' : String(typeof d.value === 'object' ? JSON.stringify(d.value) : d.value)) : undefined, secret: d?.secret };
-      });
+      try {
+        return describeVariables(ctx.vars, template ? templateVariables(template) : Object.keys(ctx.vars.toObject()));
+      } finally {
+        // asked on every keystroke and hover: the context it opened must not outlive the answer
+        void ctx.dispose();
+      }
     },
 
     /** The dynamic variables ({{$guid}}, {{$randomFirstName}} …) with what each one gives. */

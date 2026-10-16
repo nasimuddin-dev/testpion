@@ -238,10 +238,20 @@ module.exports = async function run(win) {
   const click = (text, sel) => clickOn(`__cap.byText(${J(text)}${sel ? `, ${J(sel)}` : ''})`, `"${text}"`);
   /** Click the first visible element matching a selector. */
   const clickSel = (sel, what = sel) => clickOn(`__cap.one(${J(sel)})`, what);
+  /** Open the rail's More… menu (it opens on pointer down). */
+  const openMore = async () => {
+    await clickOn(`(() => { const m = __cap.one('nav [aria-label="More views"]'); m?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, pointerType: 'mouse' })); return m; })()`, 'the rail\'s More…');
+    await until(`__cap.one('[role=menu]')`, 'the More… menu');
+  };
+  /** Go to a view by its rail label: its rail item, or (a view the rail shows under More…) the More… menu's item. */
   const nav = async (label) => {
     // close what is open (a menu, a dialog) first
     await js(`__cap.all('[role=menu], [role=dialog]').length && __cap.key('Escape'); true`);
-    await clickSel(`nav [aria-label="${label}"]`, `the ${label} rail item`);
+    await until(`!__cap.all('[role=menu]').length`, 'the open menu to close');
+    if (!(await js(`!!__cap.one('nav [aria-label="${label}"]')`))) {
+      await openMore();
+      await click(label, '[role=menuitem]');
+    } else await clickSel(`nav [aria-label="${label}"]`, `the ${label} rail item`);
     await until(`document.querySelector('nav [aria-label="${label}"][aria-current="page"]')`, `the ${label} view`);
   };
   const tab = (text) => click(text, '[role=tab]');
@@ -260,20 +270,28 @@ module.exports = async function run(win) {
     win.webContents.sendInputEvent({ type: 'char', keyCode: '\r' });
     win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Return' });
   };
+  /** A real mouse click in the middle of the element `expr` finds (focus and pointer events as a person's click). */
+  const realClick = async (expr, what) => {
+    await until(expr, what);
+    const r = await js(`(() => { const b = (${expr}).getBoundingClientRect(); return { x: Math.round(b.left + b.width / 2), y: Math.round(b.top + b.height / 2) }; })()`);
+    win.webContents.sendInputEvent({ type: 'mouseDown', x: r.x, y: r.y, button: 'left', clickCount: 1 });
+    win.webContents.sendInputEvent({ type: 'mouseUp', x: r.x, y: r.y, button: 'left', clickCount: 1 });
+  };
   // the pointer rests on the empty middle of the status bar: no hover highlight, no edge panel opening on hover
   const park = () => win.webContents.sendInputEvent({ type: 'mouseMove', x: Math.round(W / 2), y: H - 3 });
   /** Wait until nothing is loading and the transient toasts are gone (an error toast fails the run). */
-  const settle = async () => {
+  const settle = async ({ toasts = false } = {}) => {
     const error = await js(`__cap.all('[data-sonner-toast][data-type=error]').map((t) => __cap.text(t)).join(' | ')`);
     if (error) throw new Error(`an error toast is on screen: ${error}`);
-    await until(`!__cap.all('[data-sonner-toast]').length`, 'the toasts to go', 15000);
+    if (!toasts) await until(`!__cap.all('[data-sonner-toast]').length`, 'the toasts to go', 15000);
     await until(`!__cap.all('.animate-spin, [aria-busy=true]').length`, 'loading to finish', 15000);
     // two frames, then the CSS transitions (150-200 ms) end
     await js(`new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(() => r(true), 350))))`);
   };
-  const shot = async (name) => {
+  /** A screenshot of the window; `toasts: true` keeps the message on screen (the shot is of it). */
+  const shot = async (name, opts) => {
     park();
-    await settle();
+    await settle(opts);
     // force a full repaint: a window that isn't visible on screen (covered, locked screen) otherwise keeps
     // stale regions; a one-pixel resize makes the compositor redraw everything
     win.setContentSize(W, H + 1);
@@ -288,8 +306,8 @@ module.exports = async function run(win) {
   };
   /**
    * A new test file, written the way another editor (or git) puts it in the workspace, and shown in the Tests list: the
-   * view lists files that appear on disk. The app ignores what the folder watcher sees within 1.5 s of its own writes
-   * (a run just recorded): the file is written again until the list has it.
+   * view lists files that appear on disk (a change made outside the app is reported at once); should the list miss it,
+   * the file is written again until the list has it.
    */
   const addTestFile = async (path, text) => {
     const root = (await invoke('ws.current')).path;
@@ -318,17 +336,35 @@ module.exports = async function run(win) {
   park();
   // a fresh profile opens on Home
   await until(`document.querySelector('nav [aria-label="Home"][aria-current="page"]') && __cap.one('section[aria-label=Activity]')`, 'Home');
+  // the guided tour opens by itself the first time Home shows Get started (a fresh profile: now); Next goes to the
+  // Send button of a new request
+  await until(`__cap.one('section[aria-label="Get started"]') && __cap.one('[role=dialog][data-coachmark]')`, 'the guided tour to open on Home');
+  await click('Next', '[role=dialog][data-coachmark] button');
+  await until(`__cap.one('[role=dialog][data-coachmark]')?.getAttribute('data-coachmark') === '1' && __cap.one('[data-coachmark-ring]') && __cap.one('[data-tour="send"]')`, 'the tour at the Send button');
+  await shot('guided-tour');
+  await click('Skip tour', '[role=dialog][data-coachmark] button');
+  await until(`!__cap.one('[role=dialog][data-coachmark]')`, 'the tour to close');
+  await nav('Home');
   await shot('home');
+  // the rail: five views, More… for the others
+  await openMore();
+  await until(`__cap.all('[role=menu] [role=menuitem]').some((m) => __cap.text(m) === 'Debugger')`, 'the views under More…');
+  await shot('rail-more');
+  await js(`__cap.key('Escape'); true`);
+  await until(`!__cap.all('[role=menu]').length`, 'the More… menu to close');
 
   // ---------------------------------------------------------------- REST: a request of the collection, sent
   const EXPLORER = 'aside[aria-label="Collections explorer"]';
   const FILTER = `${EXPLORER} input[placeholder^="Filter"]`;
-  /** Open a request of the explorer by name: the filter shows it (wherever it is folded), a click opens it. */
+  /**
+   * Open a request of the explorer by name, for good: the filter shows it (wherever it is folded); a click opens a
+   * preview tab, which the double-click keeps (the next request opened would replace a preview).
+   */
   const openRequest = async (name) => {
     await until(`__cap.one(${J(FILTER)})`, 'the explorer filter');
     await js(`__cap.input(__cap.one(${J(FILTER)}), ${J(name)}); true`);
     const row = `__cap.all('${EXPLORER} [data-tree-row]').find((b) => !b.hasAttribute('aria-expanded') && __cap.text(b).endsWith(${J(name)}))`;
-    await clickOn(row, `the explorer row "${name}"`);
+    await until(`(() => { const r = ${row}; r?.click(); r?.dispatchEvent(new MouseEvent('dblclick', { bubbles: true })); return r; })()`, `the explorer row "${name}"`);
     await until(`__cap.all('[role=tablist][aria-label="Open requests"] [role=tab][aria-selected="true"]').some((t) => __cap.text(t).includes(${J(name)}))`, `the tab of "${name}"`);
     await js(`__cap.input(__cap.one(${J(FILTER)}), ''); true`);
     await until(`!__cap.one(${J(FILTER)}).value`, 'the filter to clear');
@@ -352,14 +388,57 @@ module.exports = async function run(win) {
   await openRequest('List patients');
   await sendAndWait();
   // the JSON tree (the request also has a visualizer, which the Body tab shows first)
-  await click('pretty', 'main button'); // (capitalised by CSS)
+  await click('Pretty', 'main [role=radio]');
   await until(`__cap.screen().includes('"items"') && __cap.screen().includes('"total"')`, 'the JSON tree');
   await shot('rest');
+  // the JSONPath filter: the response's own paths suggested as you type
+  const JSONPATH = `__cap.one('main input[aria-label="Filter with JSONPath"]')`;
+  await until(JSONPATH, 'the JSONPath filter');
+  await realClick(JSONPATH, 'the JSONPath filter');
+  await until(`document.activeElement === ${JSONPATH}`, 'the focus in the filter');
+  // (a window in the background gets no focus events: the field is told, as a focused window would tell it)
+  await js(`${JSONPATH}.dispatchEvent(new FocusEvent('focusin', { bubbles: true })); true`);
+  type('$.it');
+  await until(`__cap.all('[role=listbox] [role=option]').length >= 3 && ${JSONPATH}.value === '$.it'`, 'the path suggestions');
+  await shot('response-filter');
+  await js(`__cap.key('Escape'); true`);
+  await until(`!__cap.all('[role=listbox]').length`, 'the suggestions to close');
+  await js(`__cap.input(${JSONPATH}, ''); true`);
+  await until(`!${JSONPATH}.value && __cap.screen().includes('"total"')`, 'the filter to clear');
   // the response's timeline: connection set-up, waiting and download
   await responseTab('Timeline');
   await until(`__cap.screen().includes('waiting (TTFB)')`, 'the timeline');
   await shot('rest-timeline');
   await responseTab('Body');
+
+  // Diff vs previous: a patient registered, the list sent again and compared with the response before
+  await openRequest('Create patient');
+  await click('Send', 'main button');
+  await until(`/\\b201\\b/.test(__cap.screen()) && /Time \\d+ ms/.test(__cap.screen())`, 'the patient created');
+  await clickOn(`__cap.all('[role=tablist][aria-label="Open requests"] [role=tab]').find((t) => __cap.text(t).includes('List patients'))`, 'the List patients tab');
+  await until(`__cap.all('[role=tablist][aria-label="Open requests"] [role=tab][aria-selected="true"]').some((t) => __cap.text(t).includes('List patients'))`, 'the list on screen');
+  await sendAndWait();
+  const diffAction = `__cap.all('main button').find((b) => __cap.text(b) === 'Diff vs previous')`;
+  if (await js(`!!${diffAction}`)) await clickOn(diffAction, 'Diff vs previous');
+  else {
+    await clickOn(`(() => { const m = __cap.one('main button[aria-label="Response actions"]'); m?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, pointerType: 'mouse' })); return m; })()`, 'the response actions');
+    await click('Diff vs previous', '[role=menuitem]');
+  }
+  await until(`__cap.one('main [data-response-diff]') && /added|changed/i.test(__cap.screen('main [data-response-diff]'))`, 'the diff against the previous response');
+  await shot('response-diff');
+  await clickSel('main [data-response-diff] button[aria-label="Close the diff"]', 'Close the diff');
+  await until(`!__cap.one('main [data-response-diff]')`, 'the diff to close');
+
+  // Undo instead of a question: a request deleted from the explorer, the message with Undo
+  const logOut = `__cap.all('${EXPLORER} [data-tree-row]').find((b) => __cap.text(b).endsWith('Log out (expires the cookie)'))`;
+  // the collection, its REST requests and the Cookie session folder unfolded, one level per try
+  const unfold = `__cap.all('${EXPLORER} [data-tree-row][aria-expanded="false"]').find((b) => ['Veterinary API', 'REST', 'Cookie session'].some((n) => __cap.text(b).startsWith(n)))`;
+  await until(`${logOut} || ((${unfold})?.click(), false)`, 'the Log out request in the explorer');
+  await js(`${logOut}.focus(); __cap.key('Delete'); true`);
+  await until(`__cap.all('[data-sonner-toast]').some((t) => /Deleted the request/.test(__cap.text(t)))`, 'the Undo message');
+  await shot('undo-toast', { toasts: true });
+  await clickOn(`__cap.all('[data-sonner-toast] button').find((b) => __cap.text(b) === 'Undo')`, 'Undo');
+  await until(`${logOut}`, 'the request back in the explorer');
 
   // the right edge's Info panel for the request on screen (the token request): where it is saved, its variables and
   // where each comes from (the secret masked), the runs that included it
@@ -608,6 +687,29 @@ module.exports = async function run(win) {
   await until(`__cap.one('section[aria-label=Activity] svg') && !/Nothing in the last/.test(__cap.screen('section[aria-label=Activity]'))`, 'the activity charts');
   await shot('home-activity');
 
+  // ---------------------------------------------------------------- the Debugger's session tabs (after Home's activity,
+  // which a saved capture session would show): the clinic's capture saved; the reverse proxy for one API fills the live
+  // capture (rows marked reverse), and the saved session opens in a tab beside it
+  await nav('Debugger');
+  await invoke('debug.openSession', { text: J({ log: { version: '1.2', creator: { name: 'TestPion', version: '1' }, entries } }) });
+  await until(`__cap.all('main [role=row][data-exchange]').length === ${calls.length}`, 'the session again');
+  await invoke('debug.saveSession', { name: 'clinic-morning' });
+  await invoke('debug.clear');
+  const reverse = await invoke('record.start', { target: 'http://127.0.0.1:4010' });
+  for (const path of ['/health', '/echo?patient=7&visit=annual', '/patients', '/health', '/echo?patient=12&visit=vaccination'])
+    await invoke('http.send', { request: { method: 'GET', url: reverse.url + path, headers: [], body: { type: 'none' } } }).catch(() => undefined);
+  await until(`__cap.all('main [role=row][data-exchange] [data-source="reverse"]').length === 5`, 'the reverse proxy rows in the grid');
+  await clickOn(`(() => { const b = __cap.all('main button').find((x) => /^Session/.test(__cap.text(x))); b?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, pointerType: 'mouse' })); return b; })()`, 'the Session menu');
+  await clickOn(`__cap.all('[role=menuitem]').find((m) => /^Open clinic-morning/.test(__cap.text(m)))`, 'the saved session in the Session menu');
+  await until(`__cap.one('[data-session-tab="clinic-morning"]')`, 'the saved session in its tab');
+  await clickOn(`__cap.all('[role=tablist][aria-label="Open sessions"] [role=tab]').find((t) => /Live capture/.test(__cap.text(t)))`, 'the Live capture tab');
+  await until(`!__cap.one('[data-session-tab]') && __cap.all('main [role=row][data-exchange]').length === 5`, 'the live capture again');
+  await clickOn(`__cap.all('main [role=row][data-exchange]').find((r) => r.textContent.includes('patient=7'))`, 'a reverse proxy row');
+  await until(`__cap.screen().includes('GET /echo?patient=7&visit=annual HTTP/1.1')`, 'the row in the details');
+  await shot('debugger-sessions');
+  await invoke('record.stop');
+  await invoke('debug.clear');
+
   // ---------------------------------------------------------------- a run's Charts tab (the test run from above)
   await nav('Tests');
   await clickOn(`__cap.all('main [role=tab]').filter((x) => __cap.text(x).startsWith('Runs')).pop()`, 'the Runs tab');
@@ -616,6 +718,32 @@ module.exports = async function run(win) {
   await tab('Charts');
   await until(`__cap.all('main svg, main canvas').length >= 3 && /slowest/i.test(__cap.screen())`, 'the charts');
   await shot('run-charts');
+
+  // ---------------------------------------------------------------- Settings ▸ Keyboard: every shortcut, rebindable
+  await nav('Settings');
+  await tab('Keyboard');
+  await until(`__cap.all('[data-shortcut-row]').length > 30`, 'the shortcuts');
+  await shot('settings-keyboard');
+
+  // ---------------------------------------------------------------- compact density: the request editor, tighter
+  const density = async (label) => {
+    await nav('Settings');
+    await tab('Appearance');
+    await click(label, 'main [role=radio], main button');
+    await click('Save settings', 'main button');
+    await until(`document.documentElement.dataset.density === ${J(label.toLowerCase())}`, `the ${label} density`);
+  };
+  await density('Compact');
+  await nav('Collections');
+  await clickOn(`__cap.all('[role=tablist][aria-label="Open requests"] [role=tab]').find((t) => __cap.text(t).includes('List patients'))`, 'the List patients tab');
+  await until(`__cap.all('[role=tablist][aria-label="Open requests"] [role=tab][aria-selected="true"]').some((t) => __cap.text(t).includes('List patients'))`, 'the request in compact density');
+  await click('Pretty', 'main [role=radio]');
+  await until(`__cap.screen().includes('"total"')`, 'the JSON tree in compact density');
+  await shot('density-compact');
+  await density('Comfortable');
+  // the terminal opens over the run's charts, as before
+  await nav('Tests');
+  await until(`__cap.screen().includes('Charts') && /slowest/i.test(__cap.screen())`, 'the run charts again');
 
   // ---------------------------------------------------------------- the bottom panel's Terminal, testpion on its PATH
   if (await js(`!!document.querySelector('[data-status=terminal]')`)) {
@@ -632,5 +760,7 @@ module.exports = async function run(win) {
     enter();
     await until(`__cap.one('[data-terminal-box] .xterm-rows').innerText.includes('"status": "ok"') && /veterinary-workspace[^\\n]*[>$] ?$/.test(__cap.one('[data-terminal-box] .xterm-rows').innerText.trim())`, 'the request sent from the terminal', 60000);
     await shot('terminal');
+    await clickSel('[data-status=terminal]', 'the Terminal');
+    await until(`!__cap.one('[data-terminal-box]')`, 'the bottom panel to close');
   } else console.log('[capture] skipped terminal.jpg: no shell on this platform');
 };

@@ -69,6 +69,29 @@ const steps = [
       return 'new messages after own save: ' + (${toasts}.length - before);
     })()`,
   ],
+  // tests.write (an agent, the assistant, this window) lists the file at once, quietly; another program writing a file
+  // right after (well within the old 1.5 s window) is still reported
+  [
+    'tests-write-lists-it',
+    `(async () => {
+      await __t.view('Tests'); await __t.sleep(600);
+      const before = ${toasts}.length;
+      await window.aps.invoke('tests.write', { path: 'written-by-rpc.yaml', content: 'tests:\\n  - name: from tests.write\\n    type: http\\n    method: GET\\n    url: https://example.com\\n' });
+      const listed = await __t.waitFor(() => [...document.querySelectorAll('[data-tree-row]')].some((b) => b.offsetParent && b.textContent.trim().endsWith('written-by-rpc.yaml')), 3000);
+      await __t.sleep(1200);
+      return 'listed: ' + !!listed + ' | messages: ' + (${toasts}.length - before);
+    })()`,
+  ],
+  [
+    'outside-write-right-after-own-write',
+    `main:
+      const { writeFileSync } = require('node:fs');
+      const { join } = require('node:path');
+      writeFileSync(join(home, 'ws', 'tests', 'written-by-rpc.yaml'), 'tests:\\n  - name: edited in another editor\\n    type: http\\n    method: GET\\n    url: https://example.com\\n');
+      return 'written';`,
+    false,
+  ],
+  ['outside-write-is-reported', `(async () => { const msg = await __t.waitFor(() => ${toasts}.find((t) => /1 test file changed outside TestPion/.test(t)), 5000); return 'message: ' + (msg ? 'yes' : 'none'); })()`],
   // GIT-302: a request open with unsaved edits changes on disk (a pull): the app asks; taking the new version shows it
   [
     'edit-an-open-request',
@@ -115,6 +138,9 @@ module.exports = withExpect(steps, {
   'change-files-outside': /^written$/,
   'app-shows-it': /^tree updated: true \| test file listed: true \| message: .*1 collection, 1 test file changed outside TestPion/,
   'own-save-is-quiet': /^new messages after own save: 0$/,
+  'tests-write-lists-it': /^listed: true \| messages: 0$/,
+  'outside-write-right-after-own-write': /^written$/,
+  'outside-write-is-reported': /^message: yes$/,
   'edit-an-open-request': /^edited: true$/,
   'same-request-changes-on-disk': /^written$/,
   // the new URL from disk, followed by the request's query parameters (the URL bar shows both)

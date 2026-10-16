@@ -80,6 +80,33 @@ describe('debugger sessions (HAR)', () => {
     expect(exchangesFromHar({ not: 'har' })).toEqual([]);
   });
 
+  it('opens a HAR whose fields have the wrong types (a hand edit, another tool): what is usable, never a TypeError', () => {
+    const har = {
+      log: {
+        entries: [
+          null,
+          'x',
+          { request: { url: 5 } },
+          {
+            startedDateTime: 7,
+            time: 'slow',
+            comment: 42,
+            request: { method: 3, url: 'https://x.test/b', headers: 'Accept: */*', postData: 'raw', bodySize: '9', httpVersion: null },
+            response: { status: '200', headers: { a: 1 }, content: 'hello', bodySize: 4 },
+            timings: [1, 2],
+            _testpion: { id: 9, kind: 'nope', frames: 'x', events: { a: 1 }, rules: ['r', 2], tls: 'yes', clientPort: '1', highlightStyle: 'red', pid: 'p' },
+          },
+        ],
+      },
+    };
+    const list = exchangesFromHar(har);
+    expect(list).toHaveLength(1);
+    expect(list[0]).toMatchObject({ method: 'GET', url: 'https://x.test/b', host: 'x.test', kind: 'http', requestHeaders: {}, responseHeaders: {}, requestBodyBytes: 0, responseBodyBytes: 4, clientPort: 0, rules: ['r'], durationMs: 0 });
+    expect(list[0]!.id).toMatch(/^dbg-/);
+    for (const k of ['frames', 'events', 'tls', 'status', 'pid', 'highlightStyle', 'application'] as const) expect(list[0]![k]).toBeUndefined();
+    for (const bad of [null, 'x', 1, [], { log: null }, { log: { entries: 'x' } }]) expect(exchangesFromHar(bad)).toEqual([]);
+  });
+
   it('gives the lines that make each shell send through the proxy', () => {
     const lines = proxyShellLines('http://127.0.0.1:8899');
     expect(lines.map((l) => l.shell)).toEqual(['bash / zsh', 'PowerShell', 'cmd', 'curl', 'Chrome / Edge']);

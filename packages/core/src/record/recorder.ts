@@ -66,7 +66,15 @@ const textOf = (buf: Buffer, contentType: string | undefined, max: number): { te
 };
 
 /** Start recording. Only loopback addresses are used: this is a development tool. */
-export async function startRecorder(opts: { target: string; port?: number; maxBodyBytes?: number; cors?: boolean; onExchange?: (e: RecordedExchange) => void }): Promise<Recorder> {
+export async function startRecorder(opts: {
+  target: string;
+  port?: number;
+  maxBodyBytes?: number;
+  cors?: boolean;
+  onExchange?: (e: RecordedExchange) => void;
+  /** Keep the exchanges in `exchanges` (default). The app passes false: they go to the Debugger's store instead. */
+  keep?: boolean;
+}): Promise<Recorder> {
   let target: URL;
   try {
     target = new URL(opts.target);
@@ -126,8 +134,10 @@ export async function startRecorder(opts: { target: string; port?: number; maxBo
       res.end(JSON.stringify({ error: 'upstream_failed', message: ex.error, target: base }));
     } finally {
       ex.durationMs = Math.round(performance.now() - t0);
-      exchanges.push(ex);
-      if (exchanges.length > 5000) exchanges.shift();
+      if (opts.keep !== false) {
+        exchanges.push(ex);
+        if (exchanges.length > 5000) exchanges.shift();
+      }
       opts.onExchange?.(ex);
     }
   };

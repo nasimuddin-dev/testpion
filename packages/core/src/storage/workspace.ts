@@ -3,9 +3,10 @@ import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { homedir, tmpdir } from 'node:os';
 import type { AppSettings, Collection, Environment, Library, McpServerConfig, ProviderConfig, Trace, Workspace } from '../model/types.js';
 import { SCHEMA_VERSION, defaultSettings } from '../model/types.js';
+import { normalizeUiPrefs } from '../model/ui-prefs.js';
 import { ApsError } from '../errors.js';
 import { shortId, slugify } from '../util/ids.js';
-import { atomicWrite, readJson, relativeInside, readTextCached, writeDerived, writeJson } from './fsutil.js';
+import { atomicWrite, readJson, relativeInside, readTextCached, writeDerived, writeJson, removeOwned } from './fsutil.js';
 import { looksLikeWorkspace, normalizeCollection, normalizeEnvironment, scanString } from './normalize.js';
 
 export { isWorkspaceDir, looksLikeWorkspace, normalizeCollection, normalizeEnvironment } from './normalize.js';
@@ -305,7 +306,7 @@ export class WorkspaceStore {
     atomicWrite(p, code);
   }
   deleteScriptPackage(name: string): void {
-    rmSync(this.packagePath(name), { force: true });
+    removeOwned(this.packagePath(name));
   }
 
   saveCollection(c: Collection): Collection {
@@ -485,7 +486,7 @@ export class WorkspaceStore {
   }
 
   deleteTestFile(rel: string): void {
-    rmSync(this.safePath(rel, this.path('tests')), { force: true, recursive: true });
+    removeOwned(this.safePath(rel, this.path('tests')), { recursive: true });
   }
 
   /* traces */
@@ -673,6 +674,11 @@ export class WorkspaceManager {
     let s: Partial<AppSettings> = {};
     try {
       s = readJson<Partial<AppSettings>>(this.settingsPath, {});
+      // a file that is JSON but not an object (null, a list, a string) holds no settings: defaults, like a broken file
+      if (!s || typeof s !== 'object' || Array.isArray(s)) {
+        this.settingsProblem = 'settings.json is not a JSON object';
+        s = {};
+      }
     } catch (e) {
       // a broken settings.json stays as it is; start from defaults (saving settings keeps a copy, settings.json.broken-<ts>)
       this.settingsProblem = (e as Error).message;
@@ -685,7 +691,7 @@ export class WorkspaceManager {
       const tmp = tmpdir().toLowerCase();
       s.workspacePaths = s.workspacePaths.filter((p) => !(typeof p === 'string' && p.toLowerCase().startsWith(tmp) && !existsSync(p)));
     }
-    return { ...defaultSettings(), ...s, settingsRevision: 2 };
+    return { ...defaultSettings(), ...normalizeUiPrefs(s), settingsRevision: 2 };
   }
 
   saveSettings(s: AppSettings): AppSettings {

@@ -5,7 +5,7 @@
  * noise is left out, secrets become variables to set). A dry run previews it for the dialog; nothing is written then.
  */
 import { existsSync } from 'node:fs';
-import { ApsError, collectionFromExchanges, flowFromExchanges, isSecretRef, recordedFlowPath, secretKeys, type CaptureGrouping, type DebuggerExchange, type FlowFromExchangesResult } from '@testpion/core';
+import { ApsError, collectionFromExchanges, flowFromExchanges, isSecretRef, recordCaptureSession, recordedFlowPath, secretKeys, type CaptureGrouping, type DebuggerExchange, type FlowFromExchangesResult } from '@testpion/core';
 import type { Backend, Handlers } from '../backend.js';
 
 interface CreateFlowParams {
@@ -34,7 +34,8 @@ const recordings = new WeakMap<Backend, string>();
 
 export function debuggerFlowHandlers(be: Backend): Handlers {
   const exchangesOf = (p: CreateFlowParams): DebuggerExchange[] => {
-    const all = be.debugger?.exchanges ?? [];
+    // the session on screen: the live capture, or a saved session in its tab
+    const all = be.debugger?.view?.() ?? be.debugger?.exchanges ?? [];
     if (p.ids?.length) {
       const want = new Set(p.ids);
       const found = all.filter((e) => want.has(e.id));
@@ -90,7 +91,9 @@ export function debuggerFlowHandlers(be: Backend): Handlers {
       if (p.dryRun) return { ...out, written: false };
       be.ws.writeTestFile(where.file, r.text);
       be.logger.info(`Recorded flow tests/${where.file}: ${r.steps.length} steps from ${exchanges.length} exchanges`);
-      return { ...out, written: true };
+      // History: this capture session and the flow it became (opens the flow)
+      const entry = recordCaptureSession(be.ws, exchanges, { result: 'flow', ref: { kind: 'flow', path: where.file }, target: `tests/${where.file}`, items: r.steps.length }, be.logger.redactor);
+      return { ...out, written: true, historyId: entry.id };
     },
     /**
      * WF-12 Save to collection: the exchanges as saved requests (core collectionFromExchanges, the same reading as a
@@ -110,8 +113,10 @@ export function debuggerFlowHandlers(be: Backend): Handlers {
       const saved = be.ws.saveCollection(r.collection);
       be.refreshMock(saved.id);
       be.logger.info(`Saved ${r.requests.length} captured requests to collection "${saved.name}"`);
+      // History: this capture session and the collection it went to (opens the collection)
+      const entry = recordCaptureSession(be.ws, exchanges, { result: 'collection', ref: { kind: 'collection', collectionId: saved.id }, target: saved.name, items: r.requests.length }, be.logger.redactor);
       const { collection: _c, ...rest } = r;
-      return { collectionId: saved.id, collection: saved.name, ...rest, dropped: r.dropped.map((d) => ({ ...d, url: be.logger.redactor.redactUrl(d.url) })) };
+      return { collectionId: saved.id, collection: saved.name, historyId: entry.id, ...rest, dropped: r.dropped.map((d) => ({ ...d, url: be.logger.redactor.redactUrl(d.url) })) };
     },
     /** "Record a flow…": start (remember when), stop (the exchanges since then), or ask. */
     'debug.record': ({ on }: { on?: boolean } = {}) => {

@@ -1,6 +1,6 @@
 import { copyFileSync, existsSync, mkdirSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
-import { readJson, writeJson } from './fsutil.js';
+import { readJson, writeJson, copyOwned } from './fsutil.js';
 
 /**
  * New content of a workspace template (the examples that ship with the app) for a copy installed earlier: what the
@@ -101,7 +101,7 @@ export function addTemplateAdditions(templateDir: string, dest: string): string[
       // a file the copy never had (or the user deleted: then it was offered before and stays deleted)
       if (isNew(fileKey)) {
         mkdirSync(dirname(target), { recursive: true });
-        copyFileSync(src, target);
+        copyOwned(src, target);
         added.push(describeFile(rel, kind, src));
       }
       offer(fileKey);

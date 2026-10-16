@@ -4,6 +4,7 @@ import { parseYaml } from '../util/lazy-yaml.js';
 import { ApsError } from '../errors.js';
 import { generateRows, operationBodySchema, rowsToCsv, type DatasetRow } from '../runner/generate-dataset.js';
 import type { WorkspaceStore } from './workspace.js';
+import { atomicWrite } from './fsutil.js';
 
 export interface GeneratedDataset {
   /** Workspace-relative path, e.g. datasets/patients.csv. */
@@ -48,6 +49,6 @@ export function generateWorkspaceDataset(
   if (existsSync(file) && !o.overwrite) throw new ApsError('ValidationError', `${rel} already exists`, { suggestions: ['Choose another name, or overwrite it.'] });
   const rows = generateRows(schema, o.rows, { doc });
   mkdirSync(join(store.root, 'datasets'), { recursive: true });
-  writeFileSync(file, format === 'csv' ? rowsToCsv(rows) : JSON.stringify(rows, null, 2) + '\n');
+  atomicWrite(file, format === 'csv' ? rowsToCsv(rows) : JSON.stringify(rows, null, 2) + '\n');
   return { path: rel, rows: rows.length, columns: [...new Set(rows.flatMap((r) => Object.keys(r)))], preview: rows.slice(0, 10) };
 }

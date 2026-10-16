@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { Backend } from '../../apps/desktop/backend/backend.js';
 import { checkRpcParams, guardHandler } from '../../apps/desktop/backend/rpc-params.js';
 import { yamlPrefix } from '../../apps/desktop/backend/test-preview.js';
-import { secretKeys } from '../../packages/core/src/index.js';
+import { HISTORY_KINDS, historyKindOf, secretKeys } from '../../packages/core/src/index.js';
 
 /** The desktop backend's robustness fixes (audit 2026-10-09): parameter checks, tests.preview, ws.update secrets, unknown environments. */
 const open: Backend[] = [];
@@ -30,6 +30,24 @@ describe('RPC parameter checks', () => {
     expect(err(await call('git.stage', { paths: 'a.json' }).catch((e) => e))).toMatchObject({ kind: 'ValidationError', message: 'git.stage: paths must be a list of strings' });
     expect(err(await call('http.send', { request: {}, environment: { x: 1 } }).catch((e) => e))).toMatchObject({ kind: 'ValidationError', message: 'http.send: environment must be a string' });
     expect(err(await call('col.list', 42).catch((e) => e))).toMatchObject({ kind: 'ValidationError', message: 'col.list: the parameters must be an object, not number' });
+  });
+
+  it('a History kind must be one of the kinds in core (an unknown one is not an empty list)', () => {
+    expect(checkRpcParams('history.list', { kind: 'capture' })).toEqual({ kind: 'capture' });
+    expect(checkRpcParams('history.list', { kind: '' })).toEqual({ kind: '' });
+    expect(checkRpcParams('history.list', {})).toEqual({});
+    for (const method of ['history.list', 'history.exportHar']) {
+      let e: unknown;
+      try {
+        checkRpcParams(method, { kind: 'bogus' });
+      } catch (x) {
+        e = x;
+      }
+      expect(e).toMatchObject({ kind: 'ValidationError', message: `${method}: unknown kind "bogus"` });
+      expect((e as { suggestions: string[] }).suggestions.join(' ')).toContain(HISTORY_KINDS.join(', '));
+    }
+    expect(() => historyKindOf('bogus')).toThrow(expect.objectContaining({ kind: 'ValidationError', suggestions: [`Use one of: ${HISTORY_KINDS.join(', ')}`] }));
+    expect([historyKindOf(undefined), historyKindOf(''), historyKindOf('grpc')]).toEqual([undefined, undefined, 'grpc']);
   });
 
   it('an optional parameter sent as null counts as absent; a nullable one keeps its null', () => {
