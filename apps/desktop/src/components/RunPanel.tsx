@@ -19,7 +19,7 @@ import { RunTimeline } from './RunTimeline';
 import { TestHistory } from './TestHistory';
 import { VariablesTable } from './VariablesTable';
 import { viewContent } from '../lib/files';
-import { outputFileName } from '@testpion/shared';
+import { runOutputSpec } from './output/run-specs';
 import { OutputActions } from './output/OutputFrame';
 import type { OutputSpec } from './output/output-core';
 import { Badge, Button, cx, Empty, Field, Input, Metric, Modal, Segmented, Select, Split, Tabs, VirtualList, MetricGrid, MoreMenu, Textarea } from './ui';
@@ -168,23 +168,10 @@ export function RunPanel({ runId, expectedTotal, onRerunFailed, focusName }: { r
   const pct = expectedTotal ? Math.min(100, (completed / expectedTotal) * 100) : undefined;
   // the down arrow: the run's reports (written when it finishes), its results as CSV, or all of them in a ZIP
   const outcome = s?.cancelled ? 'cancelled' : s && s.failed + s.errors === 0 ? 'passed' : 'failed';
-  const spec = useMemo<OutputSpec>(() => {
-    const source = { kind: 'run' as const, runId };
-    return {
-      id: 'run.results',
-      what: 'run results',
-      name: outputFileName({ name: `run-${s?.name ?? runId}`, status: s ? outcome : undefined, when: s ? new Date(s.startedAt) : undefined, ext: '' }),
-      formats: [
-        { format: 'html', label: 'HTML report', source, default: true },
-        { format: 'json', label: 'JSON results', source },
-        { format: 'junit', label: 'JUnit XML (CI)', source },
-        { format: 'md', label: 'Markdown summary', source },
-        { format: 'csv', label: 'Results (CSV)', source },
-        { format: 'zip', label: 'All reports (ZIP)', source },
-      ],
-      empty: done && s ? undefined : 'The run is still going: its reports are written when it finishes',
-    };
-  }, [runId, s, outcome, done]);
+  const spec = useMemo<OutputSpec>(
+    () => runOutputSpec({ id: runId, name: s?.name, startedAt: s?.startedAt, outcome: s ? outcome : undefined }, done && s ? undefined : 'The run is still going: its reports are written when it finishes'),
+    [runId, s, outcome, done],
+  );
 
   return (
     <div className="h-full flex flex-col min-h-0" data-output="run.results">
