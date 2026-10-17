@@ -19,3 +19,4 @@ export * from './production.js';
 export * from './run-status.js';
 export * from './response-diff.js';
 export * from './text-diff.js';
+export * from './output/index.js';
