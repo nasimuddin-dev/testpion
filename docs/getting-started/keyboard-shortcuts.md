@@ -34,6 +34,7 @@ Your keys are this computer's (the app's `settings.json`, `keybindings`), and th
 | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd> | Search the workspace. |
 | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd> | Run the last run again, as it ran (same files or collection, same environment). |
 | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>T</kbd> | Reopen the tab you closed last, in whichever tab bar it was. |
+| <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> | Download the output you are in (a response, a result, a log) in its default format; the command palette's **Download Output…** offers the other formats. See [Save and export results](/getting-started/save-and-export-results). |
 | <kbd>Alt</kbd>+<kbd>←</kbd> / <kbd>Alt</kbd>+<kbd>→</kbd> | Back / forward to where you were (also the mouse's back and forward buttons). |
 | <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>1</kbd> … <kbd>9</kbd> | Go to a view shown on the rail, in its order: by default 1 Home, 2 Collections, 3 Tests, 4 Environments, 5 History (the rail's tooltips show each; [rearrange the rail](/getting-started/finding-your-way#choose-what-the-rail-shows) and the numbers follow). |
 | <kbd>Ctrl</kbd>+<kbd>B</kbd> | Show or hide the Collections explorer (in **Tests**, beside the flow designer, to drag requests onto the canvas). |
