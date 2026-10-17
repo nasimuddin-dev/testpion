@@ -3,7 +3,8 @@ import { Terminal, type ILink, type ITheme } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { Eraser, Plus, SquareTerminal, Trash2, X } from 'lucide-react';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { outputFileName } from '@testpion/shared';
 import { bridge, call, on } from '../api';
 import { toastError, useApp } from '../store';
 import { useTerminals, type TerminalSessionInfo } from '../lib/terminal';
@@ -12,6 +13,8 @@ import { terminalLinks } from '../lib/terminal-links';
 import { openRef } from '../lib/open-ref';
 import { afterScopeChange, scopedKey } from '../lib/ws-scope';
 import { cx, Empty, IconButton, Select } from './ui';
+import { OutputActions } from './output/OutputFrame';
+import type { OutputSpec } from './output/output-core';
 
 /**
  * The bottom panel's Terminal: shells of this computer (PowerShell, cmd, Git Bash, zsh, bash …) in the workspace folder,
@@ -479,6 +482,26 @@ export default function TerminalPanel() {
     dispose(id);
   };
   const activeLive = active ? live.get(active) : undefined;
+  const activeLabel = activeLive?.info.label;
+  // the shown terminal's transcript: its buffer as text (xterm has already interpreted the escape sequences)
+  const spec = useMemo<OutputSpec>(
+    () => ({
+      id: 'terminal',
+      what: 'terminal transcript',
+      name: outputFileName({ name: `terminal-${activeLabel ?? 'shell'}`, ext: '' }),
+      formats: [
+        {
+          format: 'text',
+          build: () => {
+            const l = active ? live.get(active) : undefined;
+            return l ? bufferText(l.term, l.term.buffer.active.length).replace(/\s+$/, '') + '\n' : '';
+          },
+        },
+      ],
+      empty: active && activeLabel !== undefined ? undefined : 'No terminal is open',
+    }),
+    [active, activeLabel],
+  );
 
   if (shells && !shells.available)
     return (
@@ -537,18 +560,20 @@ export default function TerminalPanel() {
             </option>
           ))}
         </Select>
-        <span className="ml-auto" />
-        <IconButton label="Clear terminal" disabled={!activeLive} onClick={() => (activeLive?.term.clear(), activeLive?.term.focus())}>
-          <Eraser size={13} />
-        </IconButton>
-        <IconButton label="Kill terminal" disabled={!activeLive} onClick={() => active && kill(active)}>
-          <Trash2 size={13} />
-        </IconButton>
+        <OutputActions spec={spec}>
+          <IconButton label="Clear terminal" disabled={!activeLive} onClick={() => (activeLive?.term.clear(), activeLive?.term.focus())}>
+            <Eraser size={13} />
+          </IconButton>
+          <IconButton label="Kill terminal" disabled={!activeLive} onClick={() => active && kill(active)}>
+            <Trash2 size={13} />
+          </IconButton>
+        </OutputActions>
       </div>
       <div
         ref={box}
         className="relative flex-1 min-h-0 pl-2 pt-1 bg-panel overflow-hidden"
         data-terminal-box=""
+        data-output="terminal"
         onContextMenu={(e) => {
           // right-click: copy the selection, else paste (as Windows Terminal and VS Code on Windows)
           const t = activeLive?.term;
