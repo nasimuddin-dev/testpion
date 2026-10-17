@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useRef, useState } from 'react';
+import { useEffect, useId, useReducer, useRef, useState } from 'react';
 import { Check, ChevronDown, Copy, Download, KeyRound, ShieldCheck, TriangleAlert, X } from 'lucide-react';
 import { OUTPUT_FORMATS, outputSurface } from '@testpion/shared';
 import { call } from '../../api';
@@ -43,7 +43,9 @@ export function OutputDownload({ spec: given }: { spec: OutputSpec }) {
   const button = useRef<HTMLButtonElement>(null);
   const live = useRef(spec);
   live.current = spec;
-  const job = running.get(spec.id);
+  // one save at a time per control (two grids of a panel may share a surface id)
+  const key = useId();
+  const job = running.get(key) ?? running.get(spec.id);
   const info = outputSurface(spec.id);
   const redactedByDefault = info?.redaction === 'redacted-default';
   const disabled = !!spec.empty || !spec.formats.length;
@@ -51,7 +53,7 @@ export function OutputDownload({ spec: given }: { spec: OutputSpec }) {
   const save = (f: OutputFormatSpec | undefined) => {
     if (!f) return;
     rememberFormat(live.current, f);
-    void saveOutput(live.current, f);
+    void saveOutput(live.current, f, { key });
   };
   useEffect(() => {
     const el = button.current;
@@ -87,7 +89,7 @@ export function OutputDownload({ spec: given }: { spec: OutputSpec }) {
             separator: textFormats.length <= 1,
             title: 'Save with the values masked by default (asks first)',
             onSelect: () => undefined,
-            items: spec.formats.map((f) => ({ label: formatLabel(f), onSelect: () => void saveWithSecrets(live.current, f) })),
+            items: spec.formats.map((f) => ({ label: formatLabel(f), onSelect: () => void saveWithSecrets(live.current, f, key) })),
           },
         ]
       : []),

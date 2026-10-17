@@ -76,7 +76,7 @@ async function payload(spec: OutputSpec, f: OutputFormatSpec) {
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
-/** Progress of the saves running now (the control shows it), by surface id. */
+/** Progress of the saves running now (the control shows it), by control (or surface id when saved from elsewhere). */
 const listeners = new Set<() => void>();
 export const running = new Map<string, { jobId: string; bytes: number; total?: number }>();
 const changed = () => listeners.forEach((l) => l());
@@ -88,11 +88,12 @@ export function onRunningChange(l: () => void): () => void {
 let jobSeq = 0;
 
 /** Save one format of a surface: dialog, progress (big ones), toast. `includeSecrets` only after the person confirmed. */
-export async function saveOutput(spec: OutputSpec, f: OutputFormatSpec, opts: { includeSecrets?: boolean } = {}): Promise<void> {
-  if (running.has(spec.id)) return;
+export async function saveOutput(spec: OutputSpec, f: OutputFormatSpec, opts: { includeSecrets?: boolean; key?: string } = {}): Promise<void> {
+  const key = opts.key ?? spec.id;
+  if (running.has(key)) return;
   const jobId = `out-${Date.now().toString(36)}-${++jobSeq}`;
   const state = { jobId, bytes: 0, total: undefined as number | undefined };
-  running.set(spec.id, state);
+  running.set(key, state);
   changed();
   let toastShown = false;
   const started = Date.now();
@@ -130,20 +131,20 @@ export async function saveOutput(spec: OutputSpec, f: OutputFormatSpec, opts: { 
   } finally {
     off();
     if (toastShown) sonner.dismiss(jobId);
-    running.delete(spec.id);
+    running.delete(key);
     changed();
   }
 }
 
 /** Save with the secrets a redacted export masks, after the person confirmed it. */
-export async function saveWithSecrets(spec: OutputSpec, f: OutputFormatSpec): Promise<void> {
+export async function saveWithSecrets(spec: OutputSpec, f: OutputFormatSpec, key?: string): Promise<void> {
   const ok = await confirmAction({
     title: 'Include secrets in the file?',
     message: `The ${spec.what} is saved with the values that are masked by default: Authorization and cookie headers, tokens, API keys and the values of secret variables. Anyone with the file can use them.`,
     confirmLabel: 'Save with secrets',
     danger: true,
   });
-  if (ok) await saveOutput(spec, f, { includeSecrets: true });
+  if (ok) await saveOutput(spec, f, { includeSecrets: true, key });
 }
 
 /** Copy a format's text (built and redacted like a save): what the Copy beside the down arrow does. */
