@@ -14,7 +14,7 @@ import { ResponseHistory } from './ResponseHistory';
 import { JsonTree, RawView, type TreeAssertion, type TreeVariable } from './JsonView';
 import { TraceView } from './TraceView';
 import { OutputActions } from './output/OutputFrame';
-import { responseSpecs } from './output/response-specs';
+import { responseBaseName, responseSpecs } from './output/response-specs';
 import { Badge, Button, cx, Empty, OverflowActions, Segmented, statusTone, Tabs, type MenuItem } from './ui';
 import { JsonTable, tableRowsOf } from './JsonTable';
 import { JwtView } from './JwtView';
@@ -301,7 +301,7 @@ export function ResponseViewer({
             <RawView text={stream ?? ''} />
           </div>
         )}
-        {tab === 'events' && response.events && <SseEvents events={response.events} stopped={response.streamStopped} dropped={response.eventsDropped} stateKey={eventsKey} />}
+        {tab === 'events' && response.events && <SseEvents events={response.events} stopped={response.streamStopped} dropped={response.eventsDropped} stateKey={eventsKey} outputName={responseBaseName(response, method, 'events')} />}
         {tab === 'trace' && (
           <div className="h-full min-h-0" data-output="response.trace">
             {trace ? <TraceView trace={trace} /> : <Empty title="Loading trace…" />}

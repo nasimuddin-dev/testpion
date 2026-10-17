@@ -20,6 +20,9 @@ import { Badge, Button, cx, Empty, Input, Segmented, Select, Split, Tabs, Virtua
 import { MessageRate } from '../components/MessageRate';
 import { saveAsTestFile, saveAsTestMenuItem } from '../lib/save-test';
 import { useExternalChange } from '../lib/external-change';
+import { jsonLines, jsonPretty, outputFileName, toCsv } from '@testpion/shared';
+import { OutputHeader } from '../components/output/OutputFrame';
+import type { OutputSpec } from '../components/output/output-core';
 
 interface WsMessage {
   id: string;
@@ -279,6 +282,32 @@ export function WebSocketView() {
     session && void call<Array<{ name: string; partitions: number }>>('kafka.topics', { id: session }).then(setClusterTopics, (e) => toastError(e));
   const [direction, setDirection] = useState<'all' | 'sent' | 'received'>('all');
   const shown = messages.filter((m) => (direction === 'all' || m.direction === direction) && (!filter || `${m.topic ?? ''} ${m.event ?? ''} ${m.data}`.toLowerCase().includes(filter.toLowerCase())));
+  // the down arrow of the message log: every kept message (not only the filtered ones)
+  const logSpec = useMemo<OutputSpec>(() => {
+    const iso = (t: number) => new Date(t).toISOString();
+    const hasTopic = messages.some((m) => m.topic !== undefined);
+    const hasEvent = messages.some((m) => m.event !== undefined);
+    const hasKey = messages.some((m) => m.key !== undefined);
+    return {
+      id: 'ws.log',
+      what: 'message log',
+      name: outputFileName({ name: `${kafka ? 'kafka' : mqtt ? 'mqtt' : sio ? 'socketio' : 'ws'}-${hostOf(d.url)}-messages`, ext: '' }),
+      empty: messages.length ? undefined : 'No messages yet',
+      formats: [
+        { format: 'jsonl', build: () => jsonLines(messages) },
+        {
+          format: 'csv',
+          build: () =>
+            toCsv([
+              ['time', 'direction', ...(hasTopic ? ['topic'] : []), ...(hasEvent ? ['event'] : []), ...(hasKey ? ['key'] : []), 'data'],
+              ...messages.map((m) => [iso(m.time), m.direction, ...(hasTopic ? [m.topic ?? ''] : []), ...(hasEvent ? [m.event ?? ''] : []), ...(hasKey ? [m.key ?? ''] : []), m.data]),
+            ]),
+        },
+        { format: 'text', build: () => messages.map((m) => `${iso(m.time)} ${m.direction}${m.topic ? ` [${m.topic}]` : ''}${m.event ? ` [${m.event}]` : ''} ${m.data}`).join('\n') + '\n' },
+        { format: 'json', build: () => jsonPretty(messages) },
+      ],
+    };
+  }, [messages, kafka, mqtt, sio, d.url]);
   let parsed: unknown;
   try {
     parsed = selected ? JSON.parse(selected.data) : undefined;
@@ -590,20 +619,25 @@ export function WebSocketView() {
             )}
           </div>
           <Split id="ws-log" direction="vertical" initial={60}>
-            <div className="h-full flex flex-col">
-              <div className="flex items-center gap-2 px-2 h-9 border-b border-line">
-                <span className="text-sm font-medium">Messages</span>
-                <MessageRate messages={messages} />
-                <Select className="ml-auto h-6 min-h-6 py-0 text-xs w-28" aria-label="Direction" value={direction} onChange={(e) => setDirection(e.target.value as typeof direction)}>
-                  <option value="all">All</option>
-                  <option value="sent">Sent</option>
-                  <option value="received">Received</option>
-                </Select>
-                <Input className="h-6 min-h-6 text-xs w-40" placeholder="Filter" value={filter} onChange={(e) => setFilter(e.target.value)} />
-                <Button size="sm" variant="ghost" icon={<Trash2 size={12} />} onClick={() => setMessages([])}>
-                  Clear
-                </Button>
-              </div>
+            <div className="h-full flex flex-col" data-output="ws.log">
+              <OutputHeader
+                spec={logSpec}
+                title="Messages"
+                left={<MessageRate messages={messages} />}
+                actions={
+                  <>
+                    <Select className="h-6 min-h-6 py-0 text-xs w-28" aria-label="Direction" value={direction} onChange={(e) => setDirection(e.target.value as typeof direction)}>
+                      <option value="all">All</option>
+                      <option value="sent">Sent</option>
+                      <option value="received">Received</option>
+                    </Select>
+                    <Input className="field-sm h-6 min-h-6 text-xs w-40" placeholder="Filter" value={filter} onChange={(e) => setFilter(e.target.value)} />
+                    <Button size="sm" variant="ghost" icon={<Trash2 size={12} />} onClick={() => setMessages([])}>
+                      Clear
+                    </Button>
+                  </>
+                }
+              />
               {shown.length ? (
                 <VirtualList
                   className="flex-1"

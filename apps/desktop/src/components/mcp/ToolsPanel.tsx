@@ -1,6 +1,6 @@
 import { CodeBlock } from '../CodeBlock';
 import { AiAction } from '../ai/AiAction';
-import { Copy, Download, FileCheck2, Play, Wrench } from 'lucide-react';
+import { FileCheck2, Play, Wrench } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { asError, call, type NormalizedError } from '../../api';
 import { confirmAction, toastError, useApp } from '../../store';
@@ -13,12 +13,13 @@ import { JsonSchemaForm } from '../JsonSchemaForm';
 import { JsonTree, RawView } from '../JsonView';
 import { Markdown } from '../Markdown';
 import { useSticky } from '../../lib/sticky';
-import { downloadContent } from '../../lib/files';
 import { CheckList, ErrorPanel } from '../Results';
-import { Badge, Button, cx, Empty, IconButton, Input, Segmented, Split, Tabs } from '../ui';
+import { Badge, Button, cx, Empty, Input, Segmented, Split, Tabs } from '../ui';
 import { ResponseSplit } from '../ResponseSplit';
 import { type Tool } from './McpPanels';
-import { copyText } from '../../lib/clipboard';
+import { jsonPretty, outputFileName } from '@testpion/shared';
+import { OutputHeader } from '../output/OutputFrame';
+import type { OutputSpec } from '../output/output-core';
 import { saveAsTest, saveAsTestLabel } from '../../lib/save-test';
 
 /** Tool calls already put on screen (each `focus` once, also when the panel mounts later, after Connect). */
@@ -205,15 +206,30 @@ export function ToolResult({ r, name }: { r: Extract<ToolRun, { content: unknown
   // display options, like the REST response: Pretty (JSON as a tree), Raw, Markdown (rendered)
   const [mode, setMode] = useSticky<ViewMode>('mcp:resultMode', 'pretty');
   const effective: ViewMode = mode === 'markdown' && !text ? 'pretty' : mode;
-  const copy = () => void copyText(text || JSON.stringify(r.content, null, 2), 'the result');
-  const save = () => downloadContent(`${name}-result.${jsonOf(text) !== undefined ? 'json' : looksMarkdown ? 'md' : 'txt'}`, text || JSON.stringify(r.content, null, 2));
+  // the down arrow (with Copy): the result as JSON (the text when it is JSON, else the whole result), its text as Markdown, or as text
+  const textJson = jsonOf(text);
+  const spec: OutputSpec = {
+    id: 'mcp.tool-result',
+    what: 'tool result',
+    name: outputFileName({ name: `${name}-result`, status: r.isError ? 'error' : undefined, ext: '' }),
+    formats: [
+      { format: 'json', build: () => jsonPretty(textJson !== undefined ? textJson : { isError: r.isError, content: r.content, ...(r.structuredContent !== undefined ? { structuredContent: r.structuredContent } : {}) }) },
+      ...(text ? [{ format: 'md' as const, label: looksMarkdown ? 'Markdown' : 'Markdown (the text)', build: () => text }] : []),
+      { format: 'text', build: () => text || jsonPretty(r.content) },
+    ],
+  };
   return (
-    <div className="h-full flex flex-col">
-      <div className="flex items-center gap-2 px-3 h-9 border-b border-line text-sm">
-        <Badge tone={r.isError ? 'bad' : 'ok'}>{r.isError ? 'isError' : 'success'}</Badge>
-        <span className="text-muted">{formatMs(r.durationMs)}</span>
-        {text && <span className="text-muted">{text.length.toLocaleString()} chars</span>}
-        <div className="ml-auto flex items-center gap-1">
+    <div className="h-full flex flex-col" data-output="mcp.tool-result">
+      <OutputHeader
+        spec={spec}
+        left={
+          <>
+            <Badge tone={r.isError ? 'bad' : 'ok'}>{r.isError ? 'isError' : 'success'}</Badge>
+            <span className="text-muted">{formatMs(r.durationMs)}</span>
+            {text && <span className="text-muted">{text.length.toLocaleString()} chars</span>}
+          </>
+        }
+        actions={
           <Segmented
             label="Display"
             size="xs"
@@ -225,14 +241,8 @@ export function ToolResult({ r, name }: { r: Extract<ToolRun, { content: unknown
               { value: 'markdown', label: 'Markdown', disabled: !text },
             ]}
           />
-          <IconButton label="Copy result" onClick={copy}>
-            <Copy size={13} />
-          </IconButton>
-          <IconButton label="Save result" onClick={save}>
-            <Download size={13} />
-          </IconButton>
-        </div>
-      </div>
+        }
+      />
       <Tabs
         value={tab}
         onChange={setTab}
