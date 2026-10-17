@@ -7,13 +7,17 @@ import {
   listTrash,
   purgeTrash,
   restoreFromTrash,
+  trashKindsText,
+  TRASH_DAYS,
   makeGitReady,
   findCommittableSecrets,
   installPreCommitHook,
   gitSetupMergeDriver,
   isInGitRepository,
+  exportSummary,
+  workspaceExportFileName,
 } from '@testpion/core';
-import { EXIT, green, dim, bold, CliError, printJson, withWorkspace } from '../shared.js';
+import { EXIT, green, dim, bold, yellow, CliError, printJson, withWorkspace } from '../shared.js';
 import { registerGitCommands } from './git.js';
 
 /** This very CLI as a command line (forward slashes: git runs it with sh), for git hooks and the merge driver. */
@@ -64,12 +68,21 @@ export function registerWorkspaceCommands(program: Command): void {
       s.close();
     });
   ws.command('export')
+    .description('one JSON file with everything a workspace defines (specs/, datasets/, mocks/ and protos/ too); secret values are replaced by {{variables}}, never exported')
     .argument('<nameOrPath>')
-    .requiredOption('-o, --output <file>')
+    .option('-o, --output <file>', 'the file to write (default: <workspace name>.testpion.json)')
+    .option('--json', 'print what was exported, replaced (replaced: [{kind, item, field, variable}]) and left out (notes) as JSON')
     .action((ref: string, o) =>
       withWorkspace(ref, (store) => {
-        writeFileSync(o.output, JSON.stringify(store.exportBundle(), null, 2));
-        console.log(green(`Exported to ${o.output} (secret values are never exported)`));
+        const bundle = store.exportBundle();
+        const output = o.output ?? workspaceExportFileName(store.workspace.name);
+        writeFileSync(output, JSON.stringify(bundle, null, 2));
+        const summary = exportSummary(bundle);
+        if (o.json) return printJson({ path: resolve(output), ...summary });
+        console.log(green(`Exported to ${output}`));
+        const [included, ...rest] = summary.lines;
+        console.log(dim(included!));
+        for (const line of rest) console.log(yellow(line));
       }),
     );
 
@@ -127,7 +140,7 @@ export function registerWorkspaceCommands(program: Command): void {
 
   registerGitCommands(git, program);
 
-  const trash = program.command('trash').description('recently deleted collections and environments (kept 30 days): list, restore, empty');
+  const trash = program.command('trash').description(`recently deleted ${trashKindsText()} (kept ${TRASH_DAYS} days): list, restore, empty`);
   trash
     .command('list')
     .requiredOption('-w, --workspace <nameOrPath>')

@@ -1,7 +1,7 @@
 /** RPC handlers: Collections (requests, folders, examples, import/export) and their mock servers. */
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, relative, sep } from 'node:path';
-import { atomicWrite, writeOwned, renameOwned, copyOwned, ApsError, dbKindOf, redactDbUrl, isSqliteDataset, collectionVariableFlow, listWorkspaceDatasets, appendDatasetRow, readDataset, readWorkspaceDataset, moveToTrash, sqliteTables, fetchImportText, bruFilesToBrunoExport, collectionToBru, importIntoWorkspace, diffOpenApi, lintOpenApi, openApiOutline, asyncApiOutline, workspaceApiCoverage, apiCoverageMarkdown, collectionSecurityFindings, definedVariableNames, listSpecs, findBodySchema, readSpecRef, type SpecRef, collectionToOpenApiText, collectionToHttpFile, collectionToAsyncApi, generateWorkspaceDataset, replaceInCollection, moveCollectionVariablesToEnvironments, tidyCollection, applyTidy, type ReplaceField, writeTestsFromSpec, writeFlows, exampleFromResponse, startMockServer, collectionMarkdown, collectionHtml, exportPostmanCollection, withRequestExamples, type SavedExample, convertCollectionScripts, importRequestSnippet, isRequestSnippet, type Collection, collectionSavedItems, duplicateCollection, shortId, collectionTreeOf } from '@testpion/core';
+import { importFileFilters, atomicWrite, writeOwned, renameOwned, copyOwned, ApsError, dbKindOf, redactDbUrl, isSqliteDataset, collectionVariableFlow, listWorkspaceDatasets, appendDatasetRow, readDataset, readWorkspaceDataset, moveToTrash, sqliteTables, fetchImportText, bruFilesToBrunoExport, collectionToBru, importIntoWorkspace, diffOpenApi, lintOpenApi, openApiOutline, asyncApiOutline, workspaceApiCoverage, apiCoverageMarkdown, collectionSecurityFindings, definedVariableNames, listSpecs, findBodySchema, readSpecRef, type SpecRef, collectionToOpenApiText, collectionToHttpFile, collectionToAsyncApi, generateWorkspaceDataset, replaceInCollection, moveCollectionVariablesToEnvironments, tidyCollection, applyTidy, type ReplaceField, writeTestsFromSpec, writeFlows, exampleFromResponse, startMockServer, collectionMarkdown, collectionHtml, exportPostmanCollection, withRequestExamples, type SavedExample, convertCollectionScripts, importRequestSnippet, isRequestSnippet, type Collection, collectionSavedItems, duplicateCollection, shortId, collectionTreeOf, replaceSpecWithImported } from '@testpion/core';
 import type { Backend, Handlers, CollectionRunParams } from '../backend.js';
 import { countDatasetRecords, datasetFormatOfName } from '@testpion/shared';
 import { recordIncoming } from './debugger.js';
@@ -140,7 +140,7 @@ export function collectionsHandlers(be: Backend): Handlers {
       // an OpenAPI document is kept in specs/ and its requests get an openapi contract check
       // .env imports: secret-looking values go to the OS secret store, never into workspace files
       const r = importIntoWorkspace(be.ws, text, { name: envName, secrets: be.secrets, scripts: keepPm ? 'keep' : 'tp' });
-      return { format: r.format, collection: r.collection?.name, environment: r.environments?.map((e) => e.name).join(', ') || r.environment?.name, specPath: r.specPath, contractChecks: r.contractChecks, scriptWarnings: r.scriptWarnings, savedItems: r.savedItems, notes: r.notes, scripts: r.scripts, flows: r.flows?.map((f) => f.path) };
+      return { format: r.format, collection: r.collection?.name, environment: r.environments?.map((e) => e.name).join(', ') || r.environment?.name, specPath: r.specPath, specKeptBoth: r.specKeptBoth, collectionId: r.collection?.id, contractChecks: r.contractChecks, scriptWarnings: r.scriptWarnings, savedItems: r.savedItems, notes: r.notes, scripts: r.scripts, flows: r.flows?.map((f) => f.path) };
     },
     // record.* (the reverse proxy, a capture mode of the HTTP Debugger): handlers/debugger-reverse.ts
     /** Security findings in a collection's request definitions (typed-in secrets, secrets in URLs, plain http …). */
@@ -157,6 +157,8 @@ export function collectionsHandlers(be: Backend): Handlers {
     /** OpenAPI documents kept in the workspace (specs/), for comparing versions. */
     // the API definitions list shows AsyncAPI documents too; coverage, diff and the data generator take OpenAPI only
     'openapi.specs': ({ includeAsync }: { includeAsync?: boolean } = {}) => listSpecs(be.ws, { includeAsync }),
+    /** EX-G3 "Replace instead" after an import kept both: the new document takes the old one's name, the old one goes to Recently deleted. */
+    'openapi.replaceSpec': ({ kept, original, collectionId }: { kept: string; original: string; collectionId?: string }) => replaceSpecWithImported(be.ws, { kept, original, collectionId }),
     /** An AsyncAPI document as its readers see it: servers, channels, what the application does, messages. */
     'asyncapi.outline': ({ path, text }: { path?: string; text?: string }) => {
       if (text === undefined && (!path || !SPEC_PATH.test(path))) throw new ApsError('ValidationError', `Not an API definition in specs/: ${path ?? ''}`);
@@ -234,7 +236,7 @@ export function collectionsHandlers(be: Backend): Handlers {
       return be.handlers['col.import']!({ text: JSON.stringify(exported), fileName: name });
     },
     'col.importFile': async ({ keepPm }: { keepPm?: boolean } = {}) => {
-      const f = await be.host.openDialog?.({ filters: [{ name: 'API definitions, collections, .env and .http files', extensions: ['json', 'yaml', 'yml', 'har', 'env', 'wsdl', 'xml', 'bru', 'http', 'rest'] }, { name: 'All files', extensions: ['*'] }] });
+      const f = await be.host.openDialog?.({ filters: importFileFilters('API definitions, collections, GraphQL schemas, .env and .http files') });
       if (!f) return null;
       return be.handlers['col.import']!({ text: readFileSync(f, 'utf8'), fileName: basename(f), keepPm });
     },

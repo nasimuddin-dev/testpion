@@ -1,0 +1,128 @@
+# An Insomnia 5 collection export (Insomnia 10+: Export ▸ Insomnia v5 YAML), built from the format's source and docs:
+# - file shape: https://raw.githubusercontent.com/Kong/insomnia/develop/packages/insomnia/src/common/insomnia-v5.ts
+#   (type, schema_version, meta, collection[] with children, headers, scripts{preRequest, afterResponse}, settings, environments)
+# - template tags: https://developer.konghq.com/insomnia/template-tags/ (args as Insomnia writes them; b64:: encoded JSONPath)
+# - scripts: https://developer.konghq.com/insomnia/scripts/ (insomnia.test / expect / environment / response, parentFolders)
+type: collection.insomnia.rest/5.0
+schema_version: "5.1"
+name: Vet clinic (Insomnia 5)
+meta:
+  id: wrk_5c1b2a
+  created: 1760000000000
+  modified: 1760000000000
+  description: The clinic API, an Insomnia 5 sample
+collection:
+  - name: Log in
+    meta:
+      id: req_login
+      created: 1760000000001
+      modified: 1760000000001
+      isPrivate: false
+      description: Gets a token
+      sortKey: -1760000000001
+    method: POST
+    url: "{{ _.baseUrl }}/auth/token"
+    body:
+      mimeType: application/json
+      text: '{"user": "vet", "password": "{{ _[''vet-password''] }}", "nonce": "{% uuid ''v4'' %}"}'
+    headers:
+      - name: Content-Type
+        value: application/json
+    authentication:
+      type: none
+    scripts:
+      preRequest: insomnia.environment.set('loginAt', Date.now());
+      afterResponse: |-
+        insomnia.test('logged in', () => insomnia.expect(insomnia.response.code).to.eql(200));
+    settings:
+      renderRequestBody: true
+      encodeUrl: true
+      followRedirects: global
+      cookies:
+        send: true
+        store: true
+      rebuildPath: true
+  - name: Patients
+    meta:
+      id: fld_patients
+      created: 1760000000002
+      modified: 1760000000002
+      sortKey: -1760000000002
+    headers:
+      - name: X-Clinic
+        value: north
+    scripts:
+      preRequest: console.log('folder pre-request');
+    authentication:
+      type: bearer
+      token: "{% response 'body', 'req_login', 'b64::JC50b2tlbg==::46b', 'never', 60 %}"
+    children:
+      - name: List patients
+        meta:
+          id: req_list
+          created: 1760000000003
+          modified: 1760000000003
+          sortKey: -1760000000003
+        method: GET
+        url: "{{ _.baseUrl }}/patients"
+        parameters:
+          - name: since
+            value: "{% now 'millis', '' %}"
+        headers:
+          - name: X-Request-Id
+            value: "{% uuid 'v4' %}"
+          - name: X-Signature
+            value: "{% hash 'sha256', 'hex', '{{ _.apiKey }}' %}"
+        authentication:
+          type: bearer
+          token: "{% response 'body', 'req_login', 'b64::JC50b2tlbg==::46b', 'never', 60 %}"
+        scripts:
+          preRequest: |-
+            const started = Date.now();
+            console.log('listing patients', started);
+        settings:
+          followRedirects: "off"
+      - name: Create patient
+        meta:
+          id: req_create
+          created: 1760000000004
+          modified: 1760000000004
+          sortKey: -1760000000004
+        method: POST
+        url: "{{ _.baseUrl }}/patients"
+        body:
+          mimeType: application/json
+          text: '{"name": "{% faker ''randomFirstName'' %}", "tag": "{% base64 ''encode'', ''normal'', ''rex'' %}", "at": "{% now ''iso-8601'', '''' %}", "ts": "{% timestamp %}", "question": "{% prompt ''Security question'', ''Security question'', '''' %}", "sid": "{% cookie ''https://clinic.test'', ''sid'' %}"}'
+        authentication:
+          type: hawk
+          id: vet
+          key: "{{ _.hawkKey }}"
+          algorithm: sha256
+        scripts:
+          afterResponse: |-
+            insomnia.test('created', () => insomnia.expect(insomnia.response.code).to.eql(201));
+            const clinic = insomnia.parentFolders.get('Patients');
+      - name: Patient stream
+        meta:
+          id: ws_stream
+        url: wss://clinic.test/patients/stream
+cookieJar:
+  name: Default Jar
+  meta:
+    id: jar_1
+environments:
+  name: Base Environment
+  meta:
+    id: env_base
+  data:
+    baseUrl: https://clinic.test
+    vet-password: demo
+    apiKey: demo-key
+    hawkKey: demo-hawk
+  subEnvironments:
+    - name: Staging
+      meta:
+        id: env_stg
+      data:
+        baseUrl: https://staging.clinic.test
+        requestId: "{% uuid 'v4' %}"

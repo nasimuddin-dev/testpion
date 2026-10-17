@@ -1,4 +1,5 @@
 import { DEFAULT_REDACT_FIELDS } from '../model/types.js';
+import { isSecretReference, matchSecretKey, replaceSecretValues, secretKeyFields, type SecretKeyFields } from '../security/secrets.js';
 
 export const REDACTED = '[REDACTED]';
 
@@ -11,19 +12,16 @@ export const REDACTED = '[REDACTED]';
  *     which catches secrets embedded in URLs, bodies or error messages.
  */
 export class Redactor {
-  private fields: Set<string>;
-  private normFields: Set<string>;
+  private fields: SecretKeyFields;
   private values = new Set<string>();
   private valueRegex?: RegExp;
 
   constructor(fields: string[] = DEFAULT_REDACT_FIELDS) {
-    this.fields = new Set(fields.map((f) => f.toLowerCase()));
-    this.normFields = new Set(fields.map(norm));
+    this.fields = secretKeyFields(fields);
   }
 
   setFields(fields: string[]): void {
-    this.fields = new Set(fields.map((f) => f.toLowerCase()));
-    this.normFields = new Set(fields.map(norm));
+    this.fields = secretKeyFields(fields);
   }
 
   /** Register a secret value; values shorter than 4 characters are ignored to avoid over-masking. */
@@ -47,11 +45,9 @@ export class Redactor {
     return this.matchKey(key) !== 'none';
   }
 
+  /** The shared key-name rule (security/secrets.ts) with this redactor's fields. */
   private matchKey(key: string): 'exact' | 'suffix' | 'none' {
-    const k = norm(key);
-    if (this.fields.has(key.toLowerCase()) || this.normFields.has(k)) return 'exact';
-    for (const f of this.normFields) if (f.length >= 5 && k.endsWith(f)) return 'suffix';
-    return 'none';
+    return matchSecretKey(key, this.fields);
   }
 
   redactString(s: string): string {
@@ -107,10 +103,6 @@ export class Redactor {
   }
 }
 
-function norm(s: string): string {
-  return s.toLowerCase().replace(/[-_\s.]/g, '');
-}
-
 /** A string as a literal for a RegExp source: every special character escaped. */
 export function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -148,28 +140,6 @@ function ibanValid(raw: string): boolean {
   return rem === 1;
 }
 
-/**
- * Credentials found by their shape, wherever they are (a body field called `t`, a query string, a log line): private
- * keys, JWTs, Authorization schemes, the key formats of the big providers, and credential query parameters. Each
- * replaces only the secret part (`Bearer [REDACTED:bearer]`), so the text still reads.
- */
-const SECRET_PATTERNS: Array<{ kind: string; re: RegExp; keep?: number }> = [
-  { kind: 'private-key', re: /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|$)/g },
-  { kind: 'jwt', re: /\beyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]*/g },
-  // the scheme stays (group 1), the credential goes
-  // (a credential has a digit or base64 padding: "Token validation" in prose is not one)
-  { kind: 'bearer', re: /\b(Bearer|Basic|Token|Digest|ApiKey)(\s+)(?=[A-Za-z0-9._~+/=-]*[0-9=+/])[A-Za-z0-9._~+/=-]{12,}/gi, keep: 2 },
-  { kind: 'api-key', re: /\bsk-(?:ant-|proj-|live-|svcacct-)?[A-Za-z0-9_-]{20,}/g },
-  { kind: 'api-key', re: /\b(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{40,})/g },
-  { kind: 'api-key', re: /\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/g },
-  { kind: 'api-key', re: /\bAIza[0-9A-Za-z_-]{35}/g },
-  { kind: 'api-key', re: /\bxox[abprs]-[A-Za-z0-9-]{10,}/g },
-  { kind: 'api-key', re: /\b(?:sk|rk|pk)_(?:live|test)_[A-Za-z0-9]{16,}/g },
-  { kind: 'api-key', re: /\b(?:glpat-[A-Za-z0-9_-]{20,}|npm_[A-Za-z0-9]{36}|hf_[A-Za-z0-9]{30,})/g },
-  // credential query parameters in any URL (the name stays)
-  { kind: 'query-credential', re: /([?&](?:access_token|id_token|refresh_token|token|api_?key|apikey|key|sig|signature|password|passwd|secret|client_secret|code|auth)=)[^&#\s"'<>]{4,}/gi, keep: 1 },
-];
-
 const PII_PATTERNS: Array<{ kind: string; re: RegExp; valid?: (m: string) => boolean }> = [
   { kind: 'email', re: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g },
   { kind: 'iban', re: /\b[A-Z]{2}\d{2}(?: ?[A-Z0-9]{4}){2,7}(?: ?[A-Z0-9]{1,4})?\b/g, valid: ibanValid },
@@ -198,17 +168,9 @@ const PII_PATTERNS: Array<{ kind: string; re: RegExp; valid?: (m: string) => boo
  */
 export function maskSensitiveText(s: string, opts: { pii?: boolean } = {}, hit?: (kind: string) => void): string {
   if (!s || s.length < 8) return s;
-  let out = s;
-  for (const p of SECRET_PATTERNS) {
-    p.re.lastIndex = 0;
-    if (!p.re.test(out)) continue;
-    p.re.lastIndex = 0;
-    out = out.replace(p.re, (...m: unknown[]) => {
-      hit?.(p.kind);
-      const kept = p.keep ? (m.slice(1, 1 + p.keep) as string[]).join('') : '';
-      return `${kept}[REDACTED:${p.kind}]`;
-    });
-  }
+  // credentials by their shape (private keys, JWTs, Authorization schemes, provider keys, connection-string passwords,
+  // credential query parameters): the one detector, security/secrets.ts; only the secret part goes, so the text still reads
+  let out = replaceSecretValues(s, (p) => `[REDACTED:${p.kind}]`, 'low', hit);
   if (opts.pii !== false)
     for (const p of PII_PATTERNS) {
       p.re.lastIndex = 0;
@@ -293,7 +255,7 @@ export function redactForAi<T>(data: T, redactor: Redactor, opts: { pii?: boolea
  */
 export function findLiteralSecrets(data: unknown, redactor: Redactor, path = ''): string[] {
   const out: string[] = [];
-  const literal = (v: unknown): v is string => typeof v === 'string' && v.trim().length >= 6 && !/\{\{[^}]+\}\}/.test(v);
+  const literal = (v: unknown): v is string => typeof v === 'string' && v.trim().length >= 6 && !isSecretReference(v);
   const walk = (v: unknown, p: string, depth: number) => {
     if (depth > 6 || out.length > 20 || !v || typeof v !== 'object') return;
     if (Array.isArray(v)) {

@@ -2,6 +2,9 @@
 // a Postman, an Insomnia and a Bruno sample (e2e/fixtures), each with pre-request and post-response scripts and a
 // token passed between requests, against the local demo server. Every request and every script test must pass.
 // Postman's pm.* scripts come over as TestPion's tp.* (the toast says how many), and the script editor shows tp.test.
+// 0.50 fidelity: a Postman request with Hawk auth (TestPion has none) becomes No auth, never inherited, with a disabled
+// X-Imported-Auth-Hawk header and a note; an Insomnia 5 YAML file with scripts and a {% response %} token (chained);
+// a Bruno folder with its .env (process.env.X becomes {{X}}, the values secret variables of "Bruno .env").
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
 const { readdirSync, readFileSync, statSync } = require('node:fs');
 const { join, relative } = require('node:path');
@@ -46,17 +49,19 @@ const importVia = (button, picked, folder) => `
   for (let i = 0; i < 40 && !col; i++) { await __t.sleep(150); col = (await window.aps.invoke('col.list')).find((x) => !before.includes(x.id)); }
   await __t.sleep(600);
   const toast = [...document.querySelectorAll('[data-sonner-toast]')].map((t) => t.textContent.trim()).find((t) => /Imported/.test(t)) ?? 'no toast';
+  // every message of the import (the notes come in their own)
+  const toasts = [...document.querySelectorAll('[data-sonner-toast]')].map((t) => t.textContent.trim()).join(' ¶ ');
   await __t.esc();
 `;
 
-/** Run the imported collection (with the environment the import created, if any) and wait for its summary. */
-const runIt = `
+/** Run the imported collection (with the environment the import created, if any: `envName` picks it) and wait for its summary. */
+const runWith = (envName = '/Vet clinic|Base Environment/i') => `
   if (!col) return 'NOT IMPORTED | ' + toast;
   const flat = (n) => n.flatMap((x) => (x.kind === 'folder' ? flat(x.items) : [x]));
   const reqs = flat(col.items);
   const scripted = reqs.filter((r) => r.preRequestScript || r.testScript).length;
   const envs = await window.aps.invoke('env.list');
-  const env = envs.find((e) => /Vet clinic|Base Environment/i.test(e.name));
+  const env = envs.find((e) => ${envName}.test(e.name));
   const { runId } = await window.aps.invoke('col.run', { collectionId: col.id, environment: env?.name, keepVariableValues: false });
   let s = null;
   for (let i = 0; i < 60 && !s; i++) { await __t.sleep(250); s = await window.aps.invoke('runs.summary', { runId }); }
@@ -67,6 +72,7 @@ const runIt = `
   const scriptChecks = checks.filter((c) => /logged in|a list of patients|pre-request value was sent/.test(c));
   return 'collection: ' + col.name + ' | requests: ' + reqs.length + ' | with scripts: ' + scripted + ' | run: ' + s.passed + ' passed, ' + s.failed + ' failed, ' + (s.errors ?? 0) + ' errors | script tests: ' + scriptChecks.sort().join(', ');
 `;
+const runIt = runWith();
 
 const step = (name, body) => [name, `(async () => { ${body} })()`];
 const steps = [
@@ -87,6 +93,32 @@ const steps = [
   ),
   step('insomnia-file', importVia('Choose file…', fixtureFiles('insomnia')) + runIt),
   step('bruno-folder', importVia('Bruno folder…', brunoFiles, 'vet-clinic') + runIt),
+  // Hawk: No auth (not the collection's bearer), a disabled placeholder header, and the note in a message
+  step(
+    'postman-hawk-becomes-none',
+    importVia('Choose file…', fixtureFiles('postman-hawk')) +
+      `if (!col) return 'NOT IMPORTED | ' + toast;
+       const r = col.items[0];
+       const h = (r.request.headers ?? []).find((x) => /^X-Imported-Auth-/.test(x.key));
+       return 'auth: ' + (r.request.auth?.type ?? 'inherit') + ' | placeholder: ' + (h ? h.key + ' enabled=' + h.enabled : 'NONE') + ' | note: ' + /Postman auth "hawk" is not supported, so it was set to No auth \\(not inherited\\)/.test(toasts);`,
+  ),
+  step('insomnia5-yaml', importVia('Choose file…', fixtureFiles('insomnia5')) + 'window.__ins5 = toasts;' + runIt),
+  // the {% response %} token is chained: Log in's post-response script sets a variable, List patients uses it
+  step(
+    'insomnia5-chained-token',
+    `const cols = await window.aps.invoke('col.list'); const c = cols.find((x) => x.name === 'Vet clinic (Insomnia 5 sample)'); if (!c) return 'NO COLLECTION';
+     const flat = (n) => n.flatMap((x) => (x.kind === 'folder' ? flat(x.items) : [x]));
+     const reqs = flat((await window.aps.invoke('col.get', { id: c.id })).items);
+     const list = reqs.find((r) => r.name.startsWith('List patients')); const login = reqs.find((r) => r.name === 'Log in');
+     return 'token: ' + list?.request.auth?.token + ' | set by Log in: ' + /tp\\.collectionVariables\\.set\\(/.test(login?.testScript ?? '') + ' | insomnia.: ' + /\\binsomnia\\./.test(reqs.flatMap((r) => [r.preRequestScript ?? '', r.testScript ?? '']).join('\\n').split('\\n').filter((l) => !l.trim().startsWith('//')).join('\\n')) + ' | note: ' + /\\{% response %\\} from "Log in" became/.test(window.__ins5 ?? '');`,
+  ),
+  step('bruno-folder-with-env', importVia('Bruno folder…', fixtureFiles('bruno-env/clinic-env'), 'clinic-env') + 'window.__bruEnv = toasts;' + runWith('/^Bruno \\.env$/')),
+  step(
+    'bruno-env-values',
+    `const envs = await window.aps.invoke('env.list'); const e = envs.find((x) => x.name === 'Bruno .env'); if (!e) return 'NO ENV';
+     const vars = (e.variables ?? []).filter((v) => ['BASE_URL', 'VET_PASSWORD'].includes(v.key)).map((v) => v.key + (v.secret ? ' (secret)' : '') + (v.value ? ' value in file' : ''));
+     return 'env: ' + vars.sort().join(', ') + ' | note: ' + /\\.env: 2 values \\(BASE_URL, VET_PASSWORD\\) became secret variables/.test(window.__bruEnv ?? '');`,
+  ),
 ];
 
 module.exports = withExpect(steps, {
@@ -94,4 +126,9 @@ module.exports = withExpect(steps, {
   'postman-scripts-tp': /^Converted [1-9]\d* scripts? to tp\.\* \| editor has tp\.test: true \| pm\.: false$/,
   'insomnia-file': /^collection: Vet clinic \(Insomnia sample\) \| requests: 3 \| with scripts: 3 \| run: 3 passed, 0 failed, 0 errors \| script tests: ✓a list of patients, ✓logged in, ✓the pre-request value was sent$/,
   'bruno-folder': /^collection: Vet clinic \(Bruno sample\) \| requests: 3 \| with scripts: 3 \| run: 3 passed, 0 failed, 0 errors \| script tests: ✓a list of patients, ✓logged in, ✓the pre-request value was sent$/,
+  'postman-hawk-becomes-none': /^auth: none \| placeholder: X-Imported-Auth-Hawk enabled=false \| note: true$/,
+  'insomnia5-yaml': /^collection: Vet clinic \(Insomnia 5 sample\) \| requests: 3 \| with scripts: 3 \| run: 3 passed, 0 failed, 0 errors \| script tests: ✓a list of patients, ✓logged in, ✓the pre-request value was sent$/,
+  'insomnia5-chained-token': /^token: \{\{\w+\}\} \| set by Log in: true \| insomnia\.: false \| note: true$/,
+  'bruno-folder-with-env': /^collection: Vet clinic \(Bruno \.env sample\) \| requests: 2 \| with scripts: 2 \| run: 2 passed, 0 failed, 0 errors \| script tests: ✓a list of patients, ✓logged in$/,
+  'bruno-env-values': /^env: BASE_URL \(secret\), VET_PASSWORD \(secret\) \| note: true$/,
 });

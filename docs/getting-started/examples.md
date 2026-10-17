@@ -7,7 +7,11 @@ description: "The TestPion Examples workspace: ready-to-run requests and tests f
 
 TestPion comes with a **TestPion Examples** workspace. It opens the first time you start the app, and you can open it again at any time from **Help ▸ Open Examples Workspace** or the link on the Home page. Everything in it works against free public services, with nothing to install or configure. Select the **Public APIs** environment (it is selected for you) and press **Send**.
 
-The workspace is copied into your data folder once. You can change it freely: app updates never overwrite your copy.
+The workspace is copied into your data folder once. You can change it freely: app updates never overwrite your copy. They only add the examples that are new in that version and, when an older version left a second copy of an example collection (two *Live streams (SSE)*, say), merge it back into one; the copy stays in [Recently deleted](/getting-started/workspaces#recently-deleted) for 30 days.
+
+<figure class="aps-screenshot">
+  <img src="/images/examples-sidebar.jpg" alt="The TestPion Examples workspace in the Collections sidebar: each example collection listed once, Live streams (SSE) open with its three requests, and the MCP servers in their folders" width="1440" height="900" loading="lazy">
+</figure>
 
 ## What's inside
 

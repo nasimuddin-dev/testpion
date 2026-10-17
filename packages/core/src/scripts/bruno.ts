@@ -32,7 +32,9 @@ export const BRUNO_SOURCE = String.raw`
     getCollectionVar: function (k) { return pm.collectionVariables.get(k); },
     getFolderVar: function (k) { return pm.variables.get(k); },
     getRequestVar: function (k) { return pm.variables.get(k); },
-    getProcessEnv: function () { return undefined; },
+    // the collection's .env values are imported as (secret) environment variables
+    getProcessEnv: function (k) { return pm.variables.get(k); },
+    getSecretVar: function (k) { return pm.variables.get(k); },
     interpolate: function (s) { return pm.variables.replaceIn(s); },
     getRequestName: function () { return pm.info.requestName; },
     setNextRequest: function (n) { pm.execution.setNextRequest(n); },
@@ -85,6 +87,99 @@ export const BRUNO_SOURCE = String.raw`
 
 /** Does a script use Bruno's API (and so needs BRUNO_SOURCE)? */
 export const USES_BRUNO = /^\/\/ Bruno script|\bbru\.(get|set|has|delete|interpolate|runner|sleep|setNextRequest)|\bres\.(getBody|getStatus|getHeader|getResponseTime)\b|\breq\.(get|set|delete)[A-Z]\w*\(/m;
+
+/**
+ * Bruno's `bru.*` calls that have a TestPion equivalent, as `tp.*` (the import rewrites them: TestPion scripts speak
+ * tp.*). `req`, `res`, `test` and `expect` keep running through the shim above. A value is the replacement of
+ * `bru.<name>` (the call's own parentheses and arguments follow it), or a whole expression when it ends with `()`.
+ */
+const BRU_TO_TP: Record<string, string> = {
+  getEnvVar: 'tp.environment.get',
+  setEnvVar: 'tp.environment.set',
+  hasEnvVar: 'tp.environment.has',
+  deleteEnvVar: 'tp.environment.unset',
+  'getEnvName()': 'tp.environment.name',
+  getGlobalEnvVar: 'tp.globals.get',
+  setGlobalEnvVar: 'tp.globals.set',
+  getVar: 'tp.variables.get',
+  // runtime variables last for the rest of the run, like Bruno's (the shim does the same)
+  setVar: 'tp.collectionVariables.set',
+  hasVar: 'tp.variables.has',
+  deleteVar: 'tp.collectionVariables.unset',
+  getCollectionVar: 'tp.collectionVariables.get',
+  getFolderVar: 'tp.variables.get',
+  getRequestVar: 'tp.variables.get',
+  // .env values are imported as environment variables; secrets too
+  getProcessEnv: 'tp.variables.get',
+  getSecretVar: 'tp.variables.get',
+  interpolate: 'tp.variables.replaceIn',
+  'getRequestName()': 'tp.info.requestName',
+  setNextRequest: 'tp.execution.setNextRequest',
+  'runner.setNextRequest': 'tp.execution.setNextRequest',
+  'runner.skipRequest': 'tp.execution.skipRequest',
+  'runner.stopExecution()': 'tp.execution.setNextRequest(null)',
+};
+/** `bru.*` the shim runs as it is (no rewrite needed, no warning). */
+const BRU_SHIM = new Set(['sleep', 'cwd']);
+
+/**
+ * A Bruno script with `bru.*` rewritten to `tp.*` where TestPion has the same thing. Strings and comments are left
+ * alone. A `bru.*` call TestPion has nothing for (sendRequest, runRequest, cookies …) gets a `// TODO(import)` line
+ * above it and is listed in `warnings`.
+ */
+export function brunoToTp(code: string): { code: string; changed: number; warnings: string[] } {
+  let changed = 0;
+  const warnings = new Set<string>();
+  const out = code.replace(/("(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'|`(?:\\.|[^`\\])*`|\/\/[^\n]*|\/\*[\s\S]*?\*\/)|(?<![\w$.])bru\.((?:runner\.)?\w+)(\(\s*\))?/g, (m, skip: string | undefined, name: string, empty: string | undefined) => {
+    if (skip) return m;
+    const whole = empty !== undefined ? BRU_TO_TP[`${name}()`] : undefined;
+    if (whole) return changed++, whole;
+    const to = BRU_TO_TP[name];
+    if (to) return changed++, `${to}${empty ?? ''}`;
+    if (!BRU_SHIM.has(name)) warnings.add(`bru.${name}`);
+    return m;
+  });
+  if (!warnings.size) return { code: out, changed, warnings: [] };
+  // a TODO above each line that uses an API TestPion doesn't have
+  const lines = out.split('\n').flatMap((l, i, all) => {
+    const used = [...warnings].filter((w) => new RegExp(`(?<![\\w$.])${w.replace('.', '\\.')}\\b`).test(l));
+    // (once: a script imported again keeps its TODO)
+    return used.length && !/^\s*\/\//.test(l) && !/^\s*\/\/ TODO\(import\)/.test(all[i - 1] ?? '') ? [`${/^\s*/.exec(l)![0]}// TODO(import): ${used.join(', ')} has no TestPion equivalent yet: rewrite this line with TestPion's script API (sendRequest, cookies …)`, l] : [l];
+  });
+  return { code: lines.join('\n'), changed, warnings: [...warnings] };
+}
+
+/** The way back, for a Bruno export of a script that came from Bruno: each `tp.*` of the table as Bruno's `bru.*`. */
+const TP_TO_BRU: Array<[RegExp, string]> = [
+  [/(?<![\w$.])tp\.execution\.setNextRequest\(null\)/g, 'bru.runner.stopExecution()'],
+  [/(?<![\w$.])tp\.environment\.name\b/g, 'bru.getEnvName()'],
+  [/(?<![\w$.])tp\.info\.requestName\b/g, 'bru.getRequestName()'],
+  ...(
+    [
+      ['environment.get', 'getEnvVar'],
+      ['environment.set', 'setEnvVar'],
+      ['environment.has', 'hasEnvVar'],
+      ['environment.unset', 'deleteEnvVar'],
+      ['globals.get', 'getGlobalEnvVar'],
+      ['globals.set', 'setGlobalEnvVar'],
+      ['variables.get', 'getVar'],
+      ['variables.has', 'hasVar'],
+      // a request variable (vars:pre-request on import) is a runtime variable in Bruno's script API
+      ['variables.set', 'setVar'],
+      ['variables.replaceIn', 'interpolate'],
+      ['collectionVariables.set', 'setVar'],
+      ['collectionVariables.unset', 'deleteVar'],
+      ['collectionVariables.get', 'getCollectionVar'],
+      ['execution.setNextRequest', 'runner.setNextRequest'],
+      ['execution.skipRequest', 'runner.skipRequest'],
+    ] as const
+  ).map(([tp, bru]): [RegExp, string] => [new RegExp(`(?<![\\w$.])tp\\.${tp.replace('.', '\\.')}(?=\\s*\\()`, 'g'), `bru.${bru}`]),
+];
+
+/** A script that came from Bruno, for Bruno again: its `tp.*` calls back to `bru.*` (strings and comments left alone). */
+export function tpToBruno(code: string): string {
+  return code.replace(/("(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'|`(?:\\.|[^`\\])*`|\/\/[^\n]*|\/\*[\s\S]*?\*\/)|[^"'`/]+|\//g, (m, skip: string | undefined) => (skip ? m : TP_TO_BRU.reduce((s, [re, to]) => s.replace(re, to), m)));
+}
 
 const literal = (raw: string): string => {
   const v = raw.trim();

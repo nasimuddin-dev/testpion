@@ -74,7 +74,7 @@ From the terminal, `testpion replace "Master Collections" "http://localhost:5002
 
 **Import** accepts:
 
-- OpenAPI 3 / Swagger 2 (JSON or YAML). Tags become folders, parameters and example bodies are generated, security schemes map to auth, and each documented response becomes a saved [example](#examples) (so the collection can be [mocked](/api-testing/mock-servers) right away). The document is kept in the workspace's `specs/` folder and every request gets a [**Matches OpenAPI contract**](../test-runner/assertions.md#openapi-contract-testing) check, so running the collection tests the API against its own contract (`testpion import --no-contract-checks` leaves the checks out).
+- OpenAPI 3 / Swagger 2 (JSON or YAML). Tags become folders, parameters and example bodies are generated, security schemes map to auth, and each documented response becomes a saved [example](#examples) (so the collection can be [mocked](/api-testing/mock-servers) right away). The document is kept in the workspace's `specs/` folder and every request gets a [**Matches OpenAPI contract**](../test-runner/assertions.md#openapi-contract-testing) check, so running the collection tests the API against its own contract (`testpion import --no-contract-checks` leaves the checks out). A document whose name `specs/` already holds with different content is **kept beside it** (`specs/petstore-2.openapi.yaml`), never written over: the message says *Saved as …* with **Replace instead**, which puts the new document in the old one's place (the old one goes to [Recently deleted](/getting-started/workspaces#recently-deleted)); `testpion import --replace-spec` replaces at once. The same document imported again is not copied. AsyncAPI documents are kept the same way.
 - Postman v2.1 collections (including scripts, request descriptions and saved responses, which become [examples](#examples)) and environments.
 - Insomnia exports (the v4 JSON export and v5 YAML files). Environments come over too: the base environment is merged into each sub-environment. From a v4 export, gRPC requests (with their `.proto` files) and WebSocket requests come over as the collection's gRPC calls and connections.
 - Bruno collections: the collection folder itself (**Bruno folder…**, the folder with `bruno.json` and the `.bru` files you keep in git), a single `.bru` request file, or a JSON export (*Export collection*). See [Bruno](#bruno) below.
@@ -83,10 +83,13 @@ From the terminal, `testpion replace "Master Collections" "http://localhost:5002
 - AsyncAPI 2 and 3 documents of event-driven APIs (Kafka, MQTT, WebSocket, Socket.IO). See [AsyncAPI](#asyncapi) below.
 - `.http` / `.rest` files of VS Code's REST Client and the JetBrains HTTP Client. See [.http files](#http-files) below.
 - HAR files.
-
-From Insomnia, Bruno and Hoppscotch, TestPion takes folders, requests, bodies, headers, parameters, auth and variables. `{{ _.name }}` and `<<name>>` become `{{name}}`. Insomnia's pre-request and after-response scripts run: its `insomnia.*` script API follows Postman's, so `insomnia.test`, `insomnia.expect`, `insomnia.environment` and `insomnia.response` become their `tp.*` twins. Bruno scripts and tests run as they are (`bru`, `req`, `res`). Hoppscotch scripts use their own API (`pw.*`), so they come over as comments to rewrite with `tp.*`. An imported environment never replaces one you already have: a name that's taken gets *(imported)* added.
+- GraphQL schema files (SDL, `.graphql` or `.gql`; **Choose file…** offers them): a GraphQL request for `{{graphqlUrl}}` with an operation for the first Query field; the schema is kept in `specs/graphql/`.
 - TestPion collections and workspace exports.
 - A single request copied as cURL (bash or cmd), fetch or PowerShell. It is saved to the **Imported** collection, named after its method and path. Secrets in it (tokens, API keys, cookies, passwords) are replaced by `{{variables}}`, and a message lists the ones to add as secret environment variables. To just try the request without saving it, paste it into the HTTP editor instead (see [paste a request](/api-testing/rest#paste-a-request-from-the-browser)).
+
+From Insomnia, Bruno and Hoppscotch, TestPion takes folders, requests, bodies, headers, parameters, auth and variables. `{{ _.name }}`, `{{ _['a-b'] }}` and `<<name>>` become `{{name}}`. Insomnia's pre-request and after-response scripts run (v4 and v5 files, request and folder scripts): its `insomnia.*` script API follows Postman's, so `insomnia.test`, `insomnia.expect`, `insomnia.environment` and `insomnia.response` become their `tp.*` twins, and a plain JavaScript script stays as it is. Insomnia template tags become dynamic variables, pre-request lines or chained variables (`{% response %}`). Bruno scripts and tests run, written with `tp.*` (`req`, `res` and `test` as in Bruno). An auth scheme TestPion doesn't have becomes **No auth** with a disabled `X-Imported-Auth-…` header, never the folder's auth. What each importer maps and what becomes a note: [Import fidelity](/getting-started/import-fidelity). Hoppscotch scripts use their own API (`pw.*`), so they come over as comments to rewrite with `tp.*`. An imported environment never replaces one you already have: a name that's taken gets *(imported)* added.
+
+**Check after import.** Whatever did not map one to one is listed after every import, naming the request or folder: an auth scheme TestPion doesn't have, a template tag left as text, a script call TestPion lacks, a secret value to enter again. The message says *Check after import (N notes)* with the first ones (*and N more*); `testpion import` prints up to 20 and `--json` lists them all in `notes`, as does the MCP tool `import_definition`. What each importer maps: [Import fidelity](/getting-started/import-fidelity).
 
 If a Postman collection's scripts use something TestPion's script sandbox doesn't have (a `tp.require` package the workspace doesn't have yet, or a `require()` of a module the sandbox doesn't have: it has ajv, atob, btoa, chai, cheerio, crypto-js, csv-parse, lodash, moment, tv4, uuid and xml2js), the import says which requests and what to use instead (`scriptWarnings` in `testpion import --json` and the MCP tool).
 
@@ -137,16 +140,16 @@ The document is kept in `specs/asyncapi/` and listed under **API definitions** (
 
 ### Bruno
 
-A Bruno collection comes over with its folders (in Bruno's order), requests, query and path parameters, bodies, auth, headers (disabled ones stay disabled; collection and folder headers are added to their requests), collection variables, docs and the environments in `environments/`. Secret variables arrive empty: set them again as secrets.
+A Bruno collection comes over with its folders (in Bruno's order), requests, query and path parameters, bodies, auth, headers (disabled ones stay disabled; collection and folder headers are added to their requests), collection variables, docs and the environments in `environments/`. Secret variables arrive empty: set them again as secrets (the import lists them as *values needed*). The collection's `.env` is read too: `{{process.env.X}}` becomes `{{X}}`, a secret variable of a *Bruno .env* environment and of each imported one, with its value in the secret store.
 
-Bruno scripts **run as they are**: TestPion's script sandbox has Bruno's API next to Postman's, so `bru.setVar()`, `bru.getEnvVar()`, `req.setHeader()`, `res.getBody()`, `res('path')`, `test()` and `expect()` work. Collection and folder scripts become collection and folder scripts. The no-code parts are converted too:
+Bruno scripts **run**: their `bru.*` calls are written with TestPion's `tp.*` (`bru.setVar()` → `tp.collectionVariables.set()`, `bru.getEnvVar()` → `tp.environment.get()` …), and `req.setHeader()`, `res.getBody()`, `res('path')`, `test()` and `expect()` work as in Bruno. A `bru.*` call TestPion doesn't have gets a `// TODO(import)` line and a note. Collection and folder scripts become collection and folder scripts. The no-code parts are converted too:
 
 - **Assertions** (`res.status: eq 200`, `res.body.id: isNumber`, `res.headers['content-type']: contains json` …) become tests with the same names; a plain status check becomes a status check.
 - **vars:post-response** (`token: res.body.token`) sets the variable from the response for the requests after it, and **vars:pre-request** sets request variables.
 
 From the terminal, give the folder: `testpion import ./my-bruno-collection -w my-workspace`.
 
-The other way works too: **Export ▸ Bruno collection folder…** (or `testpion export "My API" --format bruno --out ./bruno/my-api`) writes the collection as a Bruno folder, with the workspace's environments (secret variables by name only). Status and JSONPath `equals` / `exists` checks become Bruno assertions; scripts that came from Bruno go back as they were, and TestPion (`tp.*`) scripts are marked, since Bruno runs its own script API.
+The other way works too: **Export ▸ Bruno collection folder…** (or `testpion export "My API" --format bruno --out ./bruno/my-api`) writes the collection as a Bruno folder, with the workspace's environments (secret variables by name only). Status and JSONPath `equals` / `exists` checks become Bruno assertions; scripts that came from Bruno go back with Bruno's `bru.*`, and TestPion (`tp.*`) scripts are marked, since Bruno runs its own script API.
 
 **Import…** in the workspace menu (top bar) accepts the same files. A TestPion workspace export opens as a new workspace, and anything else (a Postman, Insomnia, Bruno or Hoppscotch file, OpenAPI, HAR) is added to the open workspace.
 
@@ -176,6 +179,25 @@ testpion export "Veterinary API" -o vet.postman_collection.json          # Postm
 testpion export "Veterinary API" -f testpion -o vet.collection.json
 testpion export-environment Staging -o staging.postman_environment.json
 ```
+
+### Export the whole workspace
+
+**Export** ▸ *The whole workspace* (also in the workspace switcher and the app menu) writes one file, `<workspace name>.testpion.json`, that **Import** opens as a new workspace on another computer:
+
+- **What it holds:** every collection, environment, test file, saved item (gRPC calls, connections, prompts …), MCP server, provider and script package, the workspace variables, and the files of `specs/`, `datasets/`, `mocks/` and `protos/`. Text files are kept as text, others (a SQLite dataset) as base64; they come back byte for byte.
+- **What it leaves out:** run results, history, traces and Recently deleted; and any file over 10 MB, or past 50 MB in all. A file left out is named in the message (and in `notes` with `--json`), never dropped silently: copy it by hand.
+- **Secrets:** an export never holds a secret value. Secret variables are exported empty, and so is a variable that has a secret name or value but isn't marked secret (it is marked secret in the export). A typed-in secret becomes a `{{variable}}`: an auth token or password, a header with a secret name or a secret-shaped value, an MCP server's header or `env` value (every one, except names that never hold a secret such as `Content-Type` or `NODE_ENV`), a password in a connection string (`postgres://app:{{dbPassword}}@db/clinic`), a provider key. Request bodies are not changed. The message after export lists each replacement; on import, the message lists the **values needed**. Set them as secret variables of an environment. See [Privacy: exports](/security/privacy#exports).
+
+```bash
+testpion workspace export "Veterinary API"                 # writes "Veterinary API.testpion.json"
+testpion workspace export "Veterinary API" -o vet.testpion.json --json   # { path, collections, environments, tests, files, replaced: [{ kind, item, field, variable }], notes, lines }
+```
+
+Exports of earlier versions (`.apsworkspace.json`) still import.
+
+<figure class="aps-screenshot">
+  <img src="/images/export-workspace-toast.jpg" alt="The message after exporting the Veterinary API workspace: where the file went, what it includes, and the two secrets replaced by variables, an environment client secret and the Petstore MCP server Authorization header" width="1440" height="900" loading="lazy">
+</figure>
 
 ## Examples
 

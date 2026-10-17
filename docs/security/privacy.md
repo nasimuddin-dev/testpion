@@ -14,6 +14,19 @@ Everything written to logs, traces, history, results, reports and exports passes
 1. **Sensitive field names:** `password`, `token`, `apiKey`, `authorization`, `cookie`, `secret`, `ssn`, `creditCard` and more. These are configurable in Settings and matched case-insensitively, including as suffixes (`accessToken`, `x-api-key`).
 2. **Known secret values:** every secret resolved during a run is registered, and any occurrence inside any string is masked (URLs, bodies, error messages). Tokens obtained at runtime (OAuth, `extract:` into sensitive names) are registered too.
 
+## Exports
+
+A workspace export (`<name>.testpion.json`, **Export ▸ Workspace…** or `testpion workspace export`) is meant to be shared, so it **never contains a secret value**:
+
+- **Contains:** collections, environments, workspace variables, test files, saved items, MCP servers, providers, script packages, and the files of `specs/`, `datasets/`, `mocks/` and `protos/` (up to 10 MB each, 50 MB in all; a file left out is named in the message).
+- **Never contains:** the values of secret variables (exported empty), anything in the OS secret store, run results, history, traces, cookies, `.local/` (trusted commands, current values) and Recently deleted.
+- **Replaced by `{{variables}}`:** a value typed in where a secret belongs, found by one detector shared with `testpion git check` and the masks above. It looks at the **name** (`password`, `Authorization`, `X-API-Key`, `client_secret` and your redact fields) and at the **shape** of the value, each with a confidence: private key blocks, JWTs, `Bearer` / `Basic` credentials, provider keys (`sk-…`, `ghp_…`, `github_pat_…`, `glpat-…`, `xoxb-…`, `AKIA…`, `AIza…`, `SG.…`, `npm_…`, `pypi-…`, Stripe, Hugging Face, Twilio), passwords in connection strings (`postgres://`, `mysql://`, `mongodb://`, `amqp://`, `redis://` …) and credential query parameters. MCP servers are **denied by default**: every header and stdio `env` value becomes a variable, except names that never hold a secret (`Content-Type`, `Accept`, `User-Agent`, `NODE_ENV` …). An environment or workspace variable with a secret name or value that is not marked secret is exported empty and marked secret. A `{{variable}}`, `{{$secret.…}}` or `$env.NAME` reference is never replaced. Request bodies are not changed.
+- **Listed:** the export says what it replaced (where, and the variable; never the value): the message in the app, the CLI output and `replaced: [{ kind, item, field, variable }]` with `--json`. Importing the file lists the **values needed**, to set as secret variables.
+
+<figure class="aps-screenshot">
+  <img src="/images/export-workspace-toast.jpg" alt="The message after a workspace export lists each secret it replaced: the Development environment clientSecret and the Petstore MCP server Authorization header, now {{clientSecret}} and {{PETSTORE_MCP_AUTHORIZATION}}" width="1440" height="900" loading="lazy">
+</figure>
+
 ## AI features
 
 TestPion's own AI features (explain, suggest checks, write tests or a flow, explain and fix a failed run, find out why a test is flaky) send a context only when you start one, only to the model you chose, and redacted more strictly than logs: besides the rules above, credentials found by their shape in any text (JWTs, `Bearer` / `Basic` credentials, private keys, provider API keys, `?access_token=` and similar) and personal data (e-mail addresses, phone numbers, card numbers, IBANs) are masked. **What will be sent…** shows the exact messages first; *Metadata only* and *Names only* send less, and **Local only** refuses any model that is not on this computer. Variable names may be sent, values never. See [AI features: privacy, cost and review](/ai-testing/ai-features#what-is-sent-and-how-to-see-it-first).

@@ -383,7 +383,7 @@ A pipeline uses its own key (or a model on the runner) and is counted as *CI* in
 
 ```yaml
 # GitHub Actions: propose an integration flow for review in the pull request
-- run: npx testpion@0.49.0 flow generate --collection "Veterinary API" --folder Patients --json > flow-proposal.json
+- run: npx testpion@0.50.0 flow generate --collection "Veterinary API" --folder Patients --json > flow-proposal.json
   env:
     TESTPION_AI_PROVIDER: anthropic
     TESTPION_AI_MODEL_LARGE: claude-sonnet-5-5
@@ -395,7 +395,7 @@ Without a model set up, `flow generate` (and `flow_generate`) returns TestPion's
 A failed test job can explain itself in its log and reports ([triage](#explain-and-fix-failures-triage)); the exit code stays the run's:
 
 ```yaml
-- run: npx testpion@0.49.0 test tests/ --triage --reporter console junit html
+- run: npx testpion@0.50.0 test tests/ --triage --reporter console junit html
   env:
     TESTPION_AI_PROVIDER: anthropic
     TESTPION_AI_MODEL_LARGE: claude-sonnet-5-5
@@ -405,7 +405,7 @@ A failed test job can explain itself in its log and reports ([triage](#explain-a
   with: { name: triage, path: runs/*/triage.md }
 ```
 
-`--triage` sends at the default privacy level (*Full (redacted)* on a runner without a `settings.json`). To send *Metadata only* from a pipeline, run the triage as its own step after the tests: `npx testpion@0.49.0 ai triage --run last --privacy metadata` (it exits 0, so add `if: failure()` to run it only after a failed test step). Without a key the job still gets `triage.md` with TestPion's grouping.
+`--triage` sends at the default privacy level (*Full (redacted)* on a runner without a `settings.json`). To send *Metadata only* from a pipeline, run the triage as its own step after the tests: `npx testpion@0.50.0 ai triage --run last --privacy metadata` (it exits 0, so add `if: failure()` to run it only after a failed test step). Without a key the job still gets `triage.md` with TestPion's grouping.
 
 ## The prompts are tested (for contributors)
 

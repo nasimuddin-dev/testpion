@@ -130,3 +130,18 @@ describe('secret guard: fix in one click', () => {
     store.close();
   });
 });
+
+describe('secret guard: the shared detector (SEC-1)', () => {
+  it('flags MCP headers and env together, and a provider-key-shaped value under any name; references and allow-listed names never', async () => {
+    const { VALUE_FIXTURES } = await import('../fixtures/secrets/values.js');
+    const key = VALUE_FIXTURES.find((f) => f.id === 'github')!.positive;
+    const store = WorkspaceStore.create(join(root, 'sec1'), 'Sec1');
+    store.saveMcpServers([{ id: 'h', name: 'H', transport: 'streamable-http', url: 'https://x', headers: [{ key: 'Authorization', value: 'Bearer abcdef123456', enabled: true }, { key: 'Content-Type', value: key, enabled: true }, { key: 'X-Token', value: '{{token}}', enabled: true }] }]);
+    store.saveEnvironment({ id: 'dev', name: 'Dev', variables: [{ key: 'ghCreds', value: key, enabled: true }, { key: 'region', value: 'eu-west-1', enabled: true }] });
+    const where = findCommittableSecrets(store).map((f) => f.where);
+    expect(where).toContain('MCP server H, Authorization');
+    expect(where).toContain('environment Dev, variable ghCreds');
+    expect(where.some((w) => /Content-Type|X-Token|region/.test(w))).toBe(false);
+    store.close();
+  });
+});

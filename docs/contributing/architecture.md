@@ -19,7 +19,8 @@ The engineering rules, in particular:
 ```
 packages/core        the engine, host-agnostic (Node): the same code runs in the CLI, the desktop app and a server later
   model/             the types of everything saved (types.ts) and the schema version
-  storage/           workspaces on disk: collections, environments, tests, trash, git files, secrets, trust, watcher
+  storage/           workspaces on disk: collections, environments, tests, trash, git files, secrets, trust, watcher; the
+                     workspace export (workspace-bundle, bundle-secrets: files capped, secrets replaced) and unique node ids
   protocols/         http, graphql, grpc, websocket, socketio, mqtt, kafka, mcp: one client each, nothing shared between them
   runner/            test files, suites, the run loop, flows (edits, blocks, data runs, env matrices, webhooks, timelines), results, baselines, CI config
   eval/, load/       checks and evaluators, load tests
@@ -28,7 +29,9 @@ packages/core        the engine, host-agnostic (Node): the same code runs in the
                      the analyses of a failed run (run-evidence, triage) and of a flaky test (flaky, flaky-run), the fix
                      items they share (fix-items) and the tp.* reference read from the sandbox (script-reference);
                      the usage ledger is storage/ai-usage.ts (see Design ▸ TestPion's own AI features)
-  import/            Postman, Insomnia, Bruno, OpenAPI, HAR, cURL/fetch snippets, save-request (secrets to variables)
+  import/            Postman, Insomnia (template tags), Bruno (.env, bru.* → tp.*), Hoppscotch, GraphQL SDL, OpenAPI, HAR,
+                     cURL/fetch snippets, save-request (secrets to variables); foreign auth that never becomes inherit; notes
+  security/          the one secret detector (names and value shapes, with a confidence) for exports, git check and masks
   scripts/           the tp.* sandbox (QuickJS in WebAssembly): scripts never reach Node
   git/               git through the system git, changes by meaning, the merge driver
   net/               the production guard (one rule for every host), private-network guards

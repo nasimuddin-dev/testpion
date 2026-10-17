@@ -3,6 +3,7 @@ import { promptText, toastError, useApp } from './store';
 import { openRef } from './lib/open-ref';
 import { reopenClosedTab } from './lib/closed-tabs';
 import { downloadContent, hasNativeDialogs } from './lib/files';
+import { exportWorkspace } from './lib/workspace-export';
 import { plural, uid } from './lib/format';
 
 /**
@@ -141,9 +142,7 @@ export async function runMenuCommand(cmd: MenuCommand): Promise<void> {
       case 'export-workspace': {
         const ws = s.workspace;
         if (!ws) return;
-        const r = await call<{ path?: string; bundle?: unknown }>('ws.export', { ref: ws.path });
-        if (r.bundle) downloadContent(`${ws.name}.apsworkspace.json`, JSON.stringify(r.bundle, null, 2), { type: 'application/json' });
-        if (r.bundle || r.path) s.toast('Workspace exported (secret values are never exported)', 'success');
+        await exportWorkspace(ws.path);
         return;
       }
       case 'save':

@@ -1,0 +1,40 @@
+"""
+The vet clinic's GraphQL schema (SDL), as a schema file someone exports from their server
+(graphql-js printSchema, Apollo Rover `rover graph introspect`, or a hand-written schema.graphql).
+"""
+scalar DateTime
+
+enum Species {
+  DOG
+  CAT
+  RABBIT
+}
+
+type Owner {
+  id: ID!
+  name: String!
+  email: String
+}
+
+type Patient {
+  id: ID!
+  name: String!
+  species: Species!
+  born: DateTime
+  owner: Owner
+}
+
+type Query {
+  "One patient by id"
+  patient(id: ID!): Patient
+  patients(species: Species, first: Int = 20): [Patient!]!
+}
+
+input NewPatient {
+  name: String!
+  species: Species!
+}
+
+type Mutation {
+  addPatient(input: NewPatient!): Patient!
+}

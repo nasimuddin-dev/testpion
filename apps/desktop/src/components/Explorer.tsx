@@ -1,16 +1,18 @@
-import { ChevronDown, ChevronRight, ChevronsDownUp, Copy, CopyPlus, Database, Download, ExternalLink, FileCode2, FolderInput, FolderPlus, GitCompare, Layers, PanelLeftClose, Pencil, Play, Plug, Plus, RefreshCw, ScanSearch, Star, Trash2, Unplug, Upload, Wand2 } from 'lucide-react';
+import { ArchiveRestore, ChevronDown, ChevronRight, ChevronsDownUp, Copy, CopyPlus, Database, Download, ExternalLink, FileCode2, FolderInput, FolderPlus, GitCompare, Layers, PanelLeftClose, Pencil, Play, Plug, Plus, RefreshCw, ScanSearch, Star, Trash2, Unplug, Upload, Wand2 } from 'lucide-react';
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { call, on } from '../api';
-import { confirmAction, promptText, toastError, useApp } from '../store';
+import { promptText, toastError, useApp } from '../store';
 import { restoreFolder } from './FolderList';
-import { deleteWithUndo, putBack, restoreDeleted } from '../lib/undo-delete';
+import { deleteMcpServerWithUndo, deleteWithUndo, putBack, restoreDeleted } from '../lib/undo-delete';
 import type { Collection, CollectionNode, Library, LibraryItem, McpServerConfig } from '../types';
 import { plural, uid } from '../lib/format';
 import { addToFolder, CollectionTree, mapNodes, type ExtraGroup } from './CollectionTree';
 import { openRef } from '../lib/open-ref';
+import { scopedNodeId } from '../lib/tree-rows';
 import type { RequestCategory } from '../lib/collection-filter';
 import { closeTabsFor, newRequestItems, useEditorTabsStore } from './EditorTabs';
 import { ExportDialog } from './ExportDialog';
+import { SIDEBAR_TRASH_KINDS, TrashDialog } from './TrashDialog';
 import { fullCollection, refreshCollections, useCollectionTree } from '../lib/collections-store';
 import { ImportModal } from '../views/rest/dialogs';
 import { isDocView, useDocs } from '../lib/docs';
@@ -100,10 +102,15 @@ interface RowRename {
   done(name?: string): void;
 }
 
-function Row({ id, icon, label, sub, onClick, title, active, menu, indent, rename }: { id?: string; icon?: ReactNode; label: string; sub?: ReactNode; onClick(): void; title?: string; active?: boolean; menu?: MenuItem[]; indent?: boolean; rename?: RowRename }) {
+/**
+ * A row of a library section. `scope` (the section: favorites, mcp, specs, datasets) and `id` name it in the whole
+ * sidebar (`data-node-id` = `<scope>:<id>`), like the Collections tree's rows (lib/tree-rows).
+ */
+function Row({ id, scope, icon, label, sub, onClick, title, active, menu, indent, rename }: { id?: string; scope?: string; icon?: ReactNode; label: string; sub?: ReactNode; onClick(): void; title?: string; active?: boolean; menu?: MenuItem[]; indent?: boolean; rename?: RowRename }) {
   const [menuOpen, setMenuOpen] = useState(false);
   return (
     <div
+      data-node-id={id === undefined ? undefined : scope ? `${scope}:${id}` : id}
       className={cx('group mx-1 flex items-center rounded-md pr-1 transition-colors', active ? 'bg-accent-soft' : menuOpen ? 'bg-hover' : 'hover:bg-hover')}
       onContextMenu={(e) => {
         if (!menu) return;
@@ -393,6 +400,8 @@ export function Explorer() {
     [],
   );
   const [exporting, setExporting] = useState(false);
+  // Recently deleted: what this sidebar's deletes moved there (collections, datasets, API definitions, MCP servers)
+  const [trashOpen, setTrashOpen] = useState(false);
   const importDefinition = () => setImporting(true);
   /** The datasets: a new empty one, generated test data, and a row's rename, duplicate and delete (the file goes to Recently deleted). */
   const [generatingData, setGeneratingData] = useState(false);
@@ -555,12 +564,8 @@ export function Explorer() {
       icon: <Trash2 size={14} />,
       danger: true,
       separator: true,
-      onSelect: async () => {
-        if (!(await confirmAction({ title: 'Remove MCP server', message: `Remove the MCP server "${s.name}"?`, detail: 'Saved tests that call it will fail until you add it again.', confirmLabel: 'Remove server', danger: true }))) return;
-        closeTabsFor([s.id]);
-        if (s.connected) await call('mcp.disconnect', { serverId: s.id }).catch(() => undefined);
-        await editServers((list) => list.filter((x) => x.id !== s.id));
-      },
+      // at once, with Undo (Recently deleted keeps it: its place in the list comes back, a connected server reconnects)
+      onSelect: () => void deleteMcpServerWithUndo(s, { after: () => load(false) }),
     },
   ];
   /** Change a folders library (the folder names, and for API definitions which folder each one is in), read fresh so steps in a row see each other. */
@@ -732,6 +737,9 @@ export function Explorer() {
         <IconButton label="Collapse all" className="h-7 w-7 shrink-0" onClick={() => setCollapseAll((n) => n + 1)}>
           <ChevronsDownUp size={14} />
         </IconButton>
+        <IconButton label="Recently deleted" className="h-7 w-7 shrink-0" onClick={() => setTrashOpen(true)}>
+          <ArchiveRestore size={14} />
+        </IconButton>
       </div>
       {/* keyboard, like a file tree: ↑ ↓ move between rows, → expands, ← collapses (Enter opens, F2 renames, Delete deletes) */}
       <div className="flex-1 overflow-auto" onKeyDown={treeKeys}>
@@ -740,8 +748,10 @@ export function Explorer() {
           <Section id="favorites" title="Favorites" icon={<Star size={14} />} count={favorites.length} sections={sections} def forceOpen={!!f && shownFavorites.length > 0}>
             {shownFavorites.map(({ c, n }) => (
               <Row
-                key={`fav-${n.id}`}
-                id={`fav-${n.id}`}
+                // a favourite is a request of one collection: two collections may hold the same request id
+                key={`fav-${scopedNodeId(c.id, n.id)}`}
+                id={`fav-${scopedNodeId(c.id, n.id)}`}
+                scope="favorites"
                 icon={
                   <span className={cx('mono method-badge text-[0.6rem] font-bold w-8 inline-block', n.kind === 'http' ? `method-${n.request.method}` : 'text-[#e535ab]')}>
                     {(n.kind === 'http' ? n.request.method : 'GQL').slice(0, 5)}
@@ -791,6 +801,7 @@ export function Explorer() {
             renderFoldered('mcp', shownServers, mcpOps, (name) => folderMenu(mcpOps, name, 'server', 'Add an MCP server', () => intent('mcp', { addServer: true })), (s, inFolder) => (
               <Row
                 key={s.id}
+                scope="mcp"
                 indent={inFolder}
                 icon={<KindBadge text="MCP" cls={s.connected ? 'text-ok' : 'text-accent'} />}
                 label={s.name}
@@ -813,6 +824,8 @@ export function Explorer() {
             renderFoldered('specs', shownSpecs.map((p) => ({ id: p, folder: specFolderOf.get(p) })), specOps, (name) => folderMenu(specOps, name, 'API definition', 'Import an OpenAPI document', importDefinition), ({ id: s, folder }, inFolder) => (
               <Row
                 key={s}
+                id={s}
+                scope="specs"
                 indent={inFolder}
                 icon={<KindBadge text="API" cls="text-[#8b5cf6]" />}
                 label={s.replace(/^specs\//, '')}
@@ -851,6 +864,7 @@ export function Explorer() {
             shownDatasets.map((d) => (
               <Row
                 key={d.name}
+                scope="datasets"
                 icon={<KindBadge text={datasetBadge(d.format).text} cls={datasetBadge(d.format).cls} />}
                 label={d.name}
                 sub={d.rows !== undefined ? plural(d.rows, 'row') : d.tables ? plural(d.tables.length, 'table') : undefined}
@@ -878,6 +892,7 @@ export function Explorer() {
         />
       )}
       {importing && <ImportModal onClose={() => setImporting(false)} onDone={() => void load()} />}
+      {trashOpen && <TrashDialog kinds={SIDEBAR_TRASH_KINDS} onClose={() => setTrashOpen(false)} onRestored={() => void load()} />}
       {exporting && <ExportDialog collections={collections.map((c) => ({ id: c.id, name: c.name }))} onClose={() => setExporting(false)} />}
     </aside>
   );

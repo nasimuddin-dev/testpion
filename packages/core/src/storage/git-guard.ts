@@ -1,8 +1,8 @@
 import { securityLint } from '../eval/security.js';
-import { Redactor } from '../util/redact.js';
 import type { Collection, CollectionNode, Environment, KeyValue } from '../model/types.js';
 import type { WorkspaceStore } from './workspace.js';
 import { secretKeys, type SecretStore } from './secrets.js';
+import { confidenceAtLeast, classifySecret, isSecretReference, secretKeyFields } from '../security/secrets.js';
 
 /**
  * Secrets that would be published by committing the workspace (GIT-104): values typed in where a secret variable
@@ -31,7 +31,8 @@ export interface SecretFinding {
   variable?: string;
 }
 
-const hasVariable = (v: string) => /\{\{\s*[^{}]+\s*\}\}/.test(v);
+/** A `{{variable}}` or another reference (`$secret.x`, `$env.X`): never a finding (the one rule, security/secrets.ts). */
+const hasVariable = (v: string) => isSecretReference(v);
 
 /** A variable name for a field: "X-Api-Key" → apiKey, "continuationToken" stays, "client_secret" → clientSecret. */
 export function variableNameFor(field: string): string {
@@ -46,8 +47,13 @@ export function variableNameFor(field: string): string {
 
 export function findCommittableSecrets(store: WorkspaceStore): SecretFinding[] {
   const out: SecretFinding[] = [];
-  const red = new Redactor();
-  const sensitive = (key: string) => red.isSensitiveKey(key);
+  // a secret key name with a typed value, or a value shaped like a provider key, a private key or a URL with a password
+  // (high confidence): the one detector, security/secrets.ts
+  const fields = secretKeyFields();
+  const literal = (key: string, value: string | undefined) => {
+    const v = classifySecret(key, value, fields);
+    return !!v && confidenceAtLeast(v.confidence, 'high');
+  };
   // collections: the security lint's "typed in" findings (headers, auth, body fields)
   for (const c of store.listCollections()) {
     if ((c as { problem?: string }).problem) continue;
@@ -59,22 +65,22 @@ export function findCommittableSecrets(store: WorkspaceStore): SecretFinding[] {
       else out.push({ file, where: f.where, message: f.message, kind: 'collection-auth', collectionId: c.id, part: f.part, field: f.field, variable });
     }
     for (const v of c.variables ?? [])
-      if (sensitive(v.key) && v.value && !hasVariable(v.value) && !(v as { secret?: boolean }).secret)
+      if (literal(v.key, v.value) && !(v as { secret?: boolean }).secret)
         out.push({ file, where: `collection ${c.name}, variable ${v.key}`, message: `The collection variable "${v.key}" holds a value typed in: move it to a secret environment variable`, kind: 'collection-variable', collectionId: c.id, field: v.key, variable: v.key });
   }
   // environments and the workspace: a sensitive-looking variable with a plain value (not marked secret)
   for (const e of store.listEnvironments()) {
     for (const v of e.variables)
-      if (sensitive(v.key) && v.value && !v.secret && !hasVariable(v.value))
+      if (!v.secret && literal(v.key, v.value))
         out.push({ file: `environments/${e.id}.json`, where: `environment ${e.name}, variable ${v.key}`, message: `"${v.key}" holds a value in plain text: mark it secret (lock icon) so its value stays in the OS secret store`, kind: 'environment-variable', environmentId: e.id, field: v.key, variable: v.key });
   }
   for (const v of store.workspace.variables ?? [])
-    if (sensitive(v.key) && v.value && !(v as { secret?: boolean }).secret && !hasVariable(v.value))
+    if (!(v as { secret?: boolean }).secret && literal(v.key, v.value))
       out.push({ file: 'workspace.json', where: `workspace variable ${v.key}`, message: `"${v.key}" holds a value in plain text: mark it secret`, kind: 'workspace-variable', field: v.key, variable: v.key });
   // MCP servers (headers, environment of a local command) and providers (API keys)
   for (const s of store.getMcpServers()) {
-    const kv: Array<[string, string]> = 'env' in s && s.env ? Object.entries(s.env) : 'headers' in s && s.headers ? s.headers.map((h) => [h.key, h.value]) : [];
-    for (const [k, v] of kv) if (sensitive(k) && v && !hasVariable(v)) out.push({ file: 'mcp-servers.json', where: `MCP server ${s.name}, ${k}`, message: `"${k}" holds a value typed in: use a {{secret variable}}`, kind: 'mcp-server', serverId: s.id, field: k, variable: variableNameFor(k) });
+    const kv: Array<[string, string]> = [...('env' in s && s.env ? Object.entries(s.env) : []), ...('headers' in s && s.headers ? s.headers.map((h): [string, string] => [h.key, h.value]) : [])];
+    for (const [k, v] of kv) if (literal(k, v)) out.push({ file: 'mcp-servers.json', where: `MCP server ${s.name}, ${k}`, message: `"${k}" holds a value typed in: use a {{secret variable}}`, kind: 'mcp-server', serverId: s.id, field: k, variable: variableNameFor(k) });
   }
   for (const p of store.getProviders()) if (p.apiKey && !hasVariable(p.apiKey)) out.push({ file: 'providers.json', where: `provider ${p.name}`, message: 'The API key is typed in: save it in Settings ▸ Providers (kept in the OS secret store)', kind: 'provider', providerId: p.id });
   return out;

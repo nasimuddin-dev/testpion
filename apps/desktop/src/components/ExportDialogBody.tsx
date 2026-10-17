@@ -4,6 +4,7 @@ import { call } from '../api';
 import { toastError, useApp } from '../store';
 import { Button, Field, Modal, Select } from './ui';
 import { downloadContent } from '../lib/files';
+import { exportWorkspace } from '../lib/workspace-export';
 
 type Format = 'testpion' | 'postman' | 'openapi' | 'bruno' | 'http' | 'asyncapi';
 
@@ -18,8 +19,8 @@ const FORMATS: Array<[Format, string, string]> = [
 
 /**
  * Export from the Collections sidebar: one collection in a chosen format, or the whole workspace (every
- * collection, environment, test and saved item, secret values never). Saved where you choose in the desktop
- * app; downloaded in a browser.
+ * collection, environment, test, saved item and the files of specs/, datasets/, mocks/ and protos/; secret values
+ * never). Saved where you choose in the desktop app; downloaded in a browser.
  */
 export function ExportDialogBody({ collections, initial, onClose }: { collections: Array<{ id: string; name: string }>; initial?: string; onClose(): void }) {
   const workspace = useApp((s) => s.workspace);
@@ -32,10 +33,7 @@ export function ExportDialogBody({ collections, initial, onClose }: { collection
     try {
       if (what === 'workspace') {
         if (!workspace) return;
-        const r = await call<{ path?: string; bundle?: unknown }>('ws.export', { ref: workspace.path });
-        if (r.bundle) downloadContent(`${workspace.name}.apsworkspace.json`, JSON.stringify(r.bundle, null, 2), { type: 'application/json' });
-        if (r.bundle || r.path) toast(`Workspace exported${r.path ? ` to ${r.path}` : ''} (secret values are never exported)`, 'success');
-        if (r.bundle || r.path) onClose();
+        if (await exportWorkspace(workspace.path)) onClose();
         return;
       }
       const r = await call<{ path?: string; collection?: unknown; text?: string; name: string; notes: string[] }>('col.export', { id: what, format });
@@ -79,7 +77,7 @@ export function ExportDialogBody({ collections, initial, onClose }: { collection
         </Field>
         {what === 'workspace' ? (
           <p className="text-sm text-muted">
-            Every collection, environment, test file, saved item and setting of the workspace in one file, which Open workspace ▸ Import brings back. Secret values are never exported.
+            One file (<code>{workspace ? `${workspace.name}.testpion.json` : '.testpion.json'}</code>) that Open workspace ▸ Import brings back: every collection, environment, test file, saved item, MCP server and setting, and the files in specs/, datasets/, mocks/ and protos/. Secret values are never exported: typed-in tokens, passwords and keys become {'{{variables}}'}, and the message after export lists each one. Files over 10 MB, run results, history and Recently deleted are left out, and the message names any file it left out.
           </p>
         ) : (
           <Field label="Format" hint={hint}>

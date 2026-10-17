@@ -171,7 +171,9 @@ export function bruFilesToBrunoExport(files: Array<{ path: string; text: string 
     }
   }
   const collectionFile = norm.find((f) => f.path === 'collection.bru');
-  const root: Any = { name: collectionName ?? 'Bruno collection', version: '1', items: [], environments: [], ...(collectionFile ? { root: rootOf(parseBru(collectionFile.text)) } : {}) };
+  // the collection's .env ({{process.env.X}}): its values become secret variables on import (never workspace files)
+  const dotenv = norm.find((f) => f.path === '.env');
+  const root: Any = { name: collectionName ?? 'Bruno collection', version: '1', items: [], environments: [], ...(collectionFile ? { root: rootOf(parseBru(collectionFile.text)) } : {}), ...(dotenv ? { dotenv: dotenv.text } : {}) };
   const folders = new Map<string, Any>([['', root]]);
   const folderOf = (dir: string): Any => {
     if (folders.has(dir)) return folders.get(dir);
@@ -208,7 +210,7 @@ export function looksLikeBru(text: string): boolean {
   return /^meta\s*\{/m.test(text) && new RegExp(`^(${METHODS.join('|')})\\s*\\{`, 'm').test(text);
 }
 
-/** Read a Bruno collection folder (bruno.json + .bru files) from disk as the text of a Bruno JSON export. */
+/** Read a Bruno collection folder (bruno.json, .bru files and the root .env) from disk as the text of a Bruno JSON export. */
 export function readBrunoFolder(dir: string): string {
   if (!existsSync(join(dir, 'bruno.json')) && !readdirSync(dir).some((f) => f.endsWith('.bru')))
     throw new ApsError('ValidationError', `${dir} is not a Bruno collection folder (no bruno.json or .bru files)`, { suggestions: ['Choose the folder that holds bruno.json.'] });
@@ -217,11 +219,12 @@ export function readBrunoFolder(dir: string): string {
   const walk = (d: string, depth: number) => {
     if (depth > 12) return;
     for (const name of readdirSync(d)) {
-      if (name === 'node_modules' || name.startsWith('.')) continue;
+      // dotfiles are skipped, except the collection's own .env (not .env.example / .env.local …)
+      if (name === 'node_modules' || (name.startsWith('.') && !(name === '.env' && d === dir))) continue;
       const p = join(d, name);
       const st = statSync(p);
       if (st.isDirectory()) walk(p, depth + 1);
-      else if (name.endsWith('.bru') || (name === 'bruno.json' && d === dir)) {
+      else if (name.endsWith('.bru') || ((name === 'bruno.json' || name === '.env') && d === dir)) {
         total += st.size;
         if (total > 50 * 1024 * 1024) throw new ApsError('ValidationError', 'The Bruno folder is larger than 50 MB');
         files.push({ path: relative(dir, p), text: readFileSync(p, 'utf8') });

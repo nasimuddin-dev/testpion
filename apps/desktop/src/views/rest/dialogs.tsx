@@ -1,13 +1,15 @@
 /** Save-to-collection and Import dialogs of the REST view. */
+import { toastSpecKeptBoth } from '../../lib/spec-import';
 import { FolderOpen, Link2, Upload } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { call } from '../../api';
 import { toastError, useApp } from '../../store';
 import type { Collection, CollectionNode } from '../../types';
 import { uid } from '../../lib/format';
+import { IMPORT_FILE_ACCEPT } from '@testpion/shared';
 
 import { pickTextFile, pickFolderFiles } from '../../lib/files';
-import { convertedScriptsText, toastUnchangedScripts, type ImportScriptsSummary } from '../../lib/import-scripts';
+import { convertedScriptsText, toastImportNotes, toastUnchangedScripts, type ImportScriptsSummary } from '../../lib/import-scripts';
 import { Button, Field, Input, Modal, Select, Textarea } from '../../components/ui';
 
 /**
@@ -136,6 +138,8 @@ export function ImportModal({ onClose, onDone }: { onClose(): void; onDone(): vo
       request?: string;
       placeholders?: Array<{ variable: string }>;
       specPath?: string;
+      specKeptBoth?: { existing: string };
+      collectionId?: string;
       contractChecks?: number;
       savedItems?: Record<string, number>;
       notes?: string[];
@@ -159,13 +163,7 @@ export function ImportModal({ onClose, onDone }: { onClose(): void; onDone(): vo
             'success',
           );
         toastUnchangedScripts(r.scripts);
-        if (r.notes?.length) useApp.getState().toast(`Not imported: ${r.notes.slice(0, 3).join('; ')}${r.notes.length > 3 ? ` (+${r.notes.length - 3} more)` : ''}`, 'warning');
-        const w = r.scriptWarnings ?? [];
-        if (w.length) {
-          const apis = [...new Set(w.map((x) => x.api))].join(', ');
-          const where = [...new Set(w.map((x) => x.where))];
-          useApp.getState().toast(`${where.length} request${where.length > 1 ? 's' : ''} use${where.length > 1 ? '' : 's'} script APIs TestPion doesn't have (${apis}): ${where.slice(0, 3).join('; ')}${where.length > 3 ? ' …' : ''}. Tip: ${w[0]!.hint}.`, 'warning');
-        }
+        toastImportNotes({ ...r, notes: toastSpecKeptBoth(r) });
         onDone();
         await useApp.getState().refreshWorkspace();
         onClose();
@@ -188,7 +186,7 @@ export function ImportModal({ onClose, onDone }: { onClose(): void; onDone(): vo
             onClick={() =>
               run(async () => {
                 // the browser picker works in the desktop app and in the browser / cloud alike
-                const f = await pickTextFile('.json,.yaml,.yml,.har,.env,.wsdl,.xml,.bru,.txt,.sh,.ps1');
+                const f = await pickTextFile(IMPORT_FILE_ACCEPT);
                 return f ? call('col.import', { text: f.text, fileName: f.name, keepPm }) : null;
               })
             }
@@ -197,10 +195,11 @@ export function ImportModal({ onClose, onDone }: { onClose(): void; onDone(): vo
           </Button>
           <Button
             icon={<FolderOpen size={13} />}
-            title="Import a Bruno collection folder (bruno.json and .bru files, as kept in git)"
+            title="Import a Bruno collection folder (bruno.json, .bru files and its .env, as kept in git)"
             onClick={() =>
               run(async () => {
-                const f = await pickFolderFiles((p) => p.endsWith('.bru') || p === 'bruno.json');
+                // the root .env too ({{process.env.X}}): its values go to the secret store, never workspace files
+                const f = await pickFolderFiles((p) => p.endsWith('.bru') || p === 'bruno.json' || p === '.env');
                 return f ? call('col.importBrunoFolder', { name: f.name, files: f.files }) : null;
               })
             }
@@ -213,7 +212,7 @@ export function ImportModal({ onClose, onDone }: { onClose(): void; onDone(): vo
         </>
       }
     >
-      <p className="text-sm text-muted mb-2">OpenAPI 3 / Swagger 2 (JSON or YAML), Postman v2.1 collections and environments, Insomnia exports (v4 JSON, v5 YAML), Bruno collection folders (<b>Bruno folder…</b>), exports and .bru files, Hoppscotch collections, WSDL 1.1 and 2.0 (SOAP services), AsyncAPI 2 and 3 (Kafka, MQTT and WebSocket channels as connections), HAR files, .env files, TestPion collections (as a file, pasted, or a link), Arazzo 1.0 workflows (each becomes a flow file under tests/arazzo/; its OpenAPI sources are looked up in specs/), or a request copied as cURL, fetch, PowerShell or HTTPie (saved to the <b>Imported</b> collection, with secrets replaced by variables).</p>
+      <p className="text-sm text-muted mb-2">OpenAPI 3 / Swagger 2 (JSON or YAML), Postman v2.1 collections and environments, Insomnia exports (v4 JSON, v5 YAML), Bruno collection folders (<b>Bruno folder…</b>), exports and .bru files, Hoppscotch collections, WSDL 1.1 and 2.0 (SOAP services), AsyncAPI 2 and 3 (Kafka, MQTT and WebSocket channels as connections), HAR files, .env files, .http / .rest files, GraphQL schemas (.graphql / .gql SDL: a request for its endpoint, the schema kept in specs/graphql/), TestPion collections (as a file, pasted, or a link), Arazzo 1.0 workflows (each becomes a flow file under tests/arazzo/; its OpenAPI sources are looked up in specs/), or a request copied as cURL, fetch, PowerShell or HTTPie (saved to the <b>Imported</b> collection, with secrets replaced by variables).</p>
       <form
         className="flex gap-2 mb-2"
         onSubmit={(e) => {

@@ -755,7 +755,7 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
       name: 'import_definition',
       write: true,
       description:
-        'Import an API definition or collection into the workspace from a public http(s) link (`url`: OpenAPI/Swagger URL, a GitHub/GitLab/Bitbucket file page, a Postman collection API link) or from `text` (OpenAPI, AsyncAPI, Postman collection or environment, Insomnia, Bruno, Hoppscotch, WSDL, HAR, .env). OpenAPI imports keep the document in specs/ and add contract checks to each request. Postman / Insomnia scripts are converted to TestPion\'s tp.* (pm.* still runs; `keep_pm: true` leaves pm.*); `scripts` reports how many were converted and which were left. Returns what was created; secret values from a .env are never written to files (listed in `secretsToSet`).',
+        'Import an API definition or collection into the workspace from a public http(s) link (`url`: OpenAPI/Swagger URL, a GitHub/GitLab/Bitbucket file page, a Postman collection API link) or from `text` (OpenAPI, AsyncAPI, Postman collection or environment, Insomnia, Bruno, Hoppscotch, WSDL, HAR, .env, GraphQL SDL). OpenAPI imports keep the document in specs/ and add contract checks to each request. Postman / Insomnia scripts are converted to TestPion\'s tp.* (pm.* still runs; `keep_pm: true` leaves pm.*); `scripts` reports how many were converted and which were left. Returns what was created; secret values from a .env are never written to files (listed in `secretsToSet`); `notes` lists everything that did not map one to one (unsupported auth set to none with a placeholder header, Insomnia template tags, values needed …), naming the item.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -781,6 +781,8 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
           secretsToSet: r.secretsToSet?.length ? r.secretsToSet : undefined,
           scriptWarnings: r.scriptWarnings,
           scripts: r.scripts,
+          // everything that did not map one to one (unsupported auth, template tags, values needed …), naming the item
+          notes: r.notes?.length ? r.notes : undefined,
         };
       },
     },

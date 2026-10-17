@@ -11,6 +11,9 @@ import {
   environmentMatrix,
   WorkspaceStore,
   WORKSPACE_FORMATS,
+  exportSummary,
+  importWorkspaceBundle,
+  workspaceExportFileName,
   exportPostmanEnvironment,
   DYNAMIC_VARIABLES,
   variableUsages,
@@ -37,6 +40,7 @@ import {
   toItemRef,
   samePath,
   type RefResolution,
+  importFileFilters,
 } from '@testpion/core';
 import type { Backend, Handlers } from '../backend.js';
 import { takeOpenLinks } from '../open-links.js';
@@ -154,23 +158,25 @@ export function workspaceHandlers(be: Backend): Handlers {
       try {
         const store = other ?? be.ws;
         const bundle = store.exportBundle();
-        const counts = { collections: bundle.collections?.length ?? 0, environments: bundle.environments?.length ?? 0 };
+        // what is in it, what was replaced by {{variables}} and what was left out (the toast says it, as the CLI does)
+        const summary = exportSummary(bundle);
+        const fileName = workspaceExportFileName(store.workspace.name);
         // no save dialog (browser / cloud): the caller downloads the bundle
-        if (!be.host.saveDialog) return { bundle, name: store.workspace.name, ...counts };
-        const dest = await be.host.saveDialog({ defaultPath: `${store.workspace.name}.apsworkspace.json`, filters: [{ name: 'Workspace', extensions: ['json'] }] });
+        if (!be.host.saveDialog) return { bundle, name: store.workspace.name, fileName, ...summary };
+        const dest = await be.host.saveDialog({ defaultPath: fileName, filters: [{ name: 'Workspace', extensions: ['json'] }] });
         if (!dest) return { cancelled: true };
         writeFileSync(dest, JSON.stringify(bundle, null, 2));
-        return { path: dest, name: store.workspace.name, ...counts };
+        return { path: dest, name: store.workspace.name, fileName, ...summary };
       } finally {
         other?.close();
       }
     },
     'ws.import': ({ bundle, name }: { bundle: WorkspaceBundle; name?: string }) => {
-      const s = be.manager.importBundle(bundle, name);
-      const root = s.root;
-      s.close();
+      const r = importWorkspaceBundle(be.manager, bundle, name);
+      const root = r.store.root;
+      r.store.close();
       be.openStore(root);
-      return be.handlers['ws.current']!({});
+      return { ...(be.handlers['ws.current']!({}) as object), notes: r.notes, valuesNeeded: r.valuesNeeded, files: r.files };
     },
     /**
      * "Import…" from the workspace menu: a TestPion workspace export becomes a new workspace; anything the
@@ -178,7 +184,7 @@ export function workspaceHandlers(be: Backend): Handlers {
      */
     /** Import… with the native file dialog: a workspace export, or a collection / definition / .env added to this workspace. */
     'ws.importPick': async ({ keepPm }: { keepPm?: boolean } = {}) => {
-      const f = await be.host.openDialog?.({ filters: [{ name: 'Workspace exports, collections, API definitions, .env, .http', extensions: ['json', 'yaml', 'yml', 'har', 'env', 'wsdl', 'xml', 'http', 'rest', 'bru'] }, { name: 'All files', extensions: ['*'] }] });
+      const f = await be.host.openDialog?.({ filters: importFileFilters('Workspace exports, collections, API definitions, GraphQL schemas, .env, .http') });
       if (!f) return null;
       return be.handlers['ws.importFile']!({ text: readFileSync(f, 'utf8'), fileName: basename(f), keepPm });
     },
@@ -190,12 +196,13 @@ export function workspaceHandlers(be: Backend): Handlers {
       } catch {
         /* YAML (OpenAPI) or not JSON: the collection importer decides */
       }
+      // a workspace export by its content (the name may be .testpion.json, or .apsworkspace.json from before 0.50)
       if (data?.format && WORKSPACE_FORMATS.has(data.format)) {
-        const s = be.manager.importBundle(data as unknown as WorkspaceBundle);
-        const root = s.root;
-        s.close();
+        const r = importWorkspaceBundle(be.manager, data as unknown as WorkspaceBundle);
+        const root = r.store.root;
+        r.store.close();
         be.openStore(root);
-        return { kind: 'workspace', name: be.ws.workspace.name };
+        return { kind: 'workspace', name: be.ws.workspace.name, notes: r.notes, valuesNeeded: r.valuesNeeded, files: r.files };
       }
       const r = be.handlers['col.import']!({ text, fileName, keepPm }) as { format: string; collection?: string; environment?: string };
       return { kind: 'collection', ...r, workspace: be.ws.workspace.name };
@@ -276,7 +283,7 @@ export function workspaceHandlers(be: Backend): Handlers {
     /** Variables of one environment added to others where they are missing (after adding new ones in the Environments view). */
     'vars.addToEnvironments': ({ from, keys, to, copy }: { from: string; keys: string[]; to: string[]; copy?: boolean }) => addVariablesToEnvironments(be.ws, from, keys, to, { copy, secrets: be.secrets }),
     'env.delete': ({ id }: { id: string }) => be.ws.deleteEnvironment(id),
-    /** Recently deleted collections and environments (30 days). */
+    /** Recently deleted items, every kind of the trash (storage/trash.ts KINDS), 30 days. */
     'trash.list': () => listTrash(be.ws),
     'trash.restore': ({ id }: { id: string }) => restoreFromTrash(be.ws, id),
     'trash.purge': ({ id }: { id?: string }) => purgeTrash(be.ws, id),

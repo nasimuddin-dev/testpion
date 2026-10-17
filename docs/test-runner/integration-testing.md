@@ -506,7 +506,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: nasimuddin-dev/testpion@v0.49.0
+      - uses: nasimuddin-dev/testpion@v0.50.0
         with:
           workspace: api-tests
           suite: integration
@@ -536,20 +536,20 @@ Exit codes: `0` all passed, `1` a test failed, `2` a configuration problem, `3` 
 Add `--triage` to the run line (`testpion test`, `run` or `run-collection`, in a workspace): after a run with failures, TestPion groups them by likely cause — the same failed check, status and endpoint — and, with an AI model set up for the job, explains each cause with its evidence and a fix it verified against the failing and the last passing response. The job log gets a *Triage* section, `triage.md` and `triage.json` are written beside the reports, and the JUnit (`<system-out>`), HTML and Markdown reports get a *Triage (AI)* section when a model answered. Nothing is changed in your tests (a fix is a proposal to apply on your computer: `testpion ai apply <id>`, or the app's review), and **the exit code stays the run's**: a failed test still fails the build, and a triage that cannot be made is only a warning.
 
 ```yaml
-- run: npx testpion@0.49.0 run -w . --suite integration -e Staging -r console junit html -o test-results --triage
+- run: npx testpion@0.50.0 run -w . --suite integration -e Staging -r console junit html -o test-results --triage
   env:
     TESTPION_AI_PROVIDER: anthropic                     # or ollama on the runner; without a model: the grouping only
     TESTPION_AI_MODEL_LARGE: claude-sonnet-5-5
     ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 ```
 
-Failure bodies are masked before anything is sent (secrets, tokens, personal data); to send no body values at all, run `npx testpion@0.49.0 ai triage --run last --privacy metadata` as a step after the tests instead (`if: failure()`). See [Explain and fix failures](/ai-testing/ai-features#explain-and-fix-failures-triage) for what you get, the privacy levels and the cost caps.
+Failure bodies are masked before anything is sent (secrets, tokens, personal data); to send no body values at all, run `npx testpion@0.50.0 ai triage --run last --privacy metadata` as a step after the tests instead (`if: failure()`). See [Explain and fix failures](/ai-testing/ai-features#explain-and-fix-failures-triage) for what you get, the privacy levels and the cost caps.
 
 The reusable GitHub Action above has no triage input yet and writes no job summary, so `triage.md` is not shown on the run's page. To triage with the Action, add a step after it (the Action records the run in the workspace, so `--run last` finds it):
 
 ```yaml
 - if: failure()
-  run: npx testpion@0.49.0 ai triage -w api-tests --run last > triage.md; cat triage.md >> "$GITHUB_STEP_SUMMARY"
+  run: npx testpion@0.50.0 ai triage -w api-tests --run last > triage.md; cat triage.md >> "$GITHUB_STEP_SUMMARY"
   env:
     TESTPION_AI_PROVIDER: anthropic
     TESTPION_AI_MODEL_LARGE: claude-sonnet-5-5

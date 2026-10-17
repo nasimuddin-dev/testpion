@@ -1,0 +1,21 @@
+meta {
+  name: List patients (uses the token)
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{process.env.BASE_URL}}/patients
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+tests {
+  test("a list of patients", function () {
+    expect(res.getBody().items).to.be.an("array");
+  });
+}

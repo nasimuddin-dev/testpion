@@ -51,7 +51,7 @@ testpion export <collection>  Export a collection as Postman v2.1 (or TestPion J
 testpion export-environment <name>   Export an environment in Postman's format
 testpion mcp-server           Serve a workspace to AI agents over MCP (stdio)
 testpion load <url>           Safeguarded load test (--threshold "p95<500" "errors<1%" to pass/fail; --grpc <method> for a gRPC server; --collection, or --test-file <flow> for a whole flow per virtual user)
-testpion import <file|-> -w   Import OpenAPI/Swagger, Postman, Insomnia, Bruno (a collection folder too), WSDL (SOAP), HAR, collections, Arazzo workflows (as flow files), or a copied cURL / fetch / PowerShell request
+testpion import <file|-> -w   Import OpenAPI/Swagger, Postman, Insomnia, Bruno (a collection folder too), Hoppscotch, WSDL (SOAP), a GraphQL schema, HAR, collections, Arazzo workflows (as flow files), or a copied cURL / fetch / PowerShell request
 testpion env list|order|diff -w  List environments; set their order; compare two
 testpion monitor list|add|remove|run|results|uptime|start -w  Collections or test files (flows) on a schedule (monitors; add --test-file <path>)
 testpion ci <github|gitlab|azure|jenkins> -w  A CI pipeline file for a suite, collection or tests (--start, --wait-for: start the system under test first; --run last: what a run ran; one flow: --data, --env-matrix, --timeline-html)
@@ -66,9 +66,9 @@ testpion flows -w             The flows exposed as MCP tools (test files and sui
 testpion serve flows -w       Run flows behind their webhooks (webhook: blocks): POST JSON to the path, get the flow's output (--port 4020, --host, -e env, --jsonl)
 testpion scripts convert --to tp|pm -w   Rewrite collection scripts between Postman's pm.* and TestPion's tp.* (--dry-run)
 testpion wait-for <url>       Wait until a URL answers (the health check before integration tests); exit 3 when it never does
-testpion trash list|restore|empty -w  Recently deleted collections and environments (30 days)
+testpion trash list|restore|empty -w  Recently deleted collections, environments, datasets, API definitions and MCP servers (30 days)
 testpion history list|stats|diff|test|export-har -w  Response history of saved requests; response times; compare two responses; a test across runs; HAR export
-testpion workspace list|create|rename|delete|export   Manage workspaces (see Workspaces)
+testpion workspace list|create|rename|delete|export   Manage workspaces (see Workspaces); export writes <name>.testpion.json, secrets replaced by {{variables}}
 testpion git setup|check|hook install -w   Make a workspace git-ready; find secrets before a commit; a pre-commit hook
 testpion git status|changes|diff|commit|log|branch|switch|pull|push|sync|resolve -w   Git for the workspace (sync: pull & push in one step) (see Keep your workspace in git)
 testpion diff <from> [to] -w  What changed between two commits, by meaning (--markdown for a pull-request comment)
@@ -543,10 +543,33 @@ testpion export-environment Staging -o staging.postman_environment.json
 
 Parts that Postman can't represent are listed on standard error as `not exported: …`. Secret environment values are never written.
 
+## `workspace export`
+
+One file with everything a workspace defines, which `testpion import` (or **Import** in the app) opens as a new workspace. See [Export the whole workspace](/api-testing/collections#export-the-whole-workspace) for what it holds.
+
+```bash
+testpion workspace export "Veterinary API (example)"     # writes "Veterinary API (example).testpion.json"
+testpion workspace export ./vet -o vet.testpion.json --json
+```
+
+```text
+Exported to Veterinary API (example).testpion.json
+Included 1 collection, 2 environments, 16 test files and 3 files from specs/, datasets/, mocks/ and protos/.
+Replaced 1 secret with variables: environment Development variables.clientSecret → {{clientSecret}}.
+```
+
+| Option | Description |
+|---|---|
+| `<nameOrPath>` | The workspace's name or folder. |
+| `-o, --output <file>` | The file to write (default: `<workspace name>.testpion.json` in the current folder). |
+| `--json` | `{ path, collections, environments, tests, files, replaced: [{ kind, item, field, variable }], notes, lines }`: each secret replaced by a `{{variable}}` (never its value) and each file left out (over 10 MB, or past 50 MB in all). |
+| `--dry-run` | Write nothing; list the file it would write. |
+
 ## `import`
 
 ```bash
 testpion import openapi.yaml -w my-workspace
+testpion import openapi-v2.yaml -w my-workspace --replace-spec   # replace the document of the same name (default: keep both)
 testpion import ./bruno/clinic-api -w my-workspace      # a Bruno collection folder (bruno.json + .bru files)
 testpion export "Clinic API" -w my-workspace --format bruno --out ./bruno/clinic-api   # and back
 testpion import 'http://127.0.0.1:4010/soap/patients?wsdl' -w my-workspace   # a SOAP service's WSDL
@@ -563,9 +586,18 @@ testpion import adopt-pet.arazzo.yaml -w my-workspace --json   # Arazzo: one flo
 | `--folder <path>` | For a copied request: folder path inside the collection, such as `"Auth / Tokens"`. |
 | `--name <name>` | For a copied request: its name (default: the method and path, e.g. `POST /v1/owners`). |
 | `--no-contract-checks` | For an OpenAPI / Swagger document: don't add `openapi` contract checks to the imported requests (the document is still kept in `specs/`). |
-| `--keep-pm` | For a Postman or Insomnia file: keep `pm.*` in scripts. By default they are converted to TestPion's `tp.*` and the output says `Converted N scripts to tp.*` (`pm.*` runs either way; `testpion export -f postman` turns `tp.*` back into `pm.*`). |
+| `--replace-spec` | For an OpenAPI, AsyncAPI or GraphQL schema document whose path in `specs/` holds a different document: replace it (the old one goes to the trash, `testpion trash list`). By default both are kept and the new one is saved as `name-2` (`specs/petstore-2.openapi.yaml`), with a note. |
+| `--keep-pm` | For a Postman or Insomnia file: keep `pm.*` in scripts. By default they are converted to TestPion's `tp.*` and the output says `Converted N scripts to tp.* (--keep-pm keeps pm.*)`; for other tools (Bruno's `bru.*` …) it says only `Converted N scripts to tp.*`, since `--keep-pm` changes nothing there (`pm.*` runs either way; `testpion export -f postman` turns `tp.*` back into `pm.*`). |
 | `--fetch-sources` | For an Arazzo document: download the OpenAPI source descriptions given as http(s) links. By default they are looked up next to the Arazzo file and in the workspace (`specs/`); an `operationId` whose document is not found becomes a skipped step to fill in. |
-| `--json` | Print the result as JSON, for scripts and AI agents (includes `specPath` and `contractChecks` for OpenAPI imports, `flows` — `[{ path, workflowId, steps }]` — and `notes` (what did not come over) for Arazzo imports, and `scripts` — `{ converted, unchanged: [{ where, reason }] }` — for Postman and Insomnia imports). |
+| `--json` | Print the result as JSON, for scripts and AI agents (includes `specPath` and `contractChecks` for OpenAPI imports, `flows` — `[{ path, workflowId, steps }]` — for Arazzo imports, `notes` (what did not map one to one, for every import: unsupported auth, template tags, values needed, a spec saved as `name-2` …), and `scripts` — `{ converted, unchanged: [{ where, reason }] }` — for Postman, Insomnia and Bruno imports). Without `--json`, the output lists the first 20 notes under *Check after import (N notes)*. |
+
+What did not map one to one is listed after the result, naming the request (all of them under `notes` with `--json`; [Import fidelity](/getting-started/import-fidelity) lists what each importer maps):
+
+```text
+Imported postman: collection "Hawk sample (Postman)"
+Check after import (1 note):
+  "Health with Hawk": Postman auth "hawk" is not supported, so it was set to No auth (not inherited) with a disabled X-Imported-Auth-Hawk header as a reminder: set it up by hand
+```
 
 An Arazzo document's workflows become flow files: operations become method and URL (`{{baseUrl}}` + path), `$inputs.x` becomes `{{x}}`, `$steps.s.outputs.o` becomes `{{s_o}}` with an `extract` on step `s`, success criteria become checks, a retry action `retries`. See [Arazzo workflows](/test-runner/integration-testing#arazzo-workflows-import-and-export) for the whole mapping and `testpion flow export` for the way back.
 

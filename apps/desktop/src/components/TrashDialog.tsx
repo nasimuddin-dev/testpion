@@ -1,5 +1,5 @@
-import { Database, FolderTree, KeyRound, RotateCcw, Trash2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { Database, FileCode2, FolderTree, KeyRound, Plug, RotateCcw, Trash2 } from 'lucide-react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { call } from '../api';
 import { confirmAction, toastError, useApp } from '../store';
 import { plural, timeAgo } from '../lib/format';
@@ -7,19 +7,32 @@ import { Button, Empty, IconButton, Modal, Tooltip } from './ui';
 
 export interface TrashItem {
   id: string;
-  kind: 'collection' | 'environment' | 'dataset';
+  kind: 'collection' | 'environment' | 'dataset' | 'spec' | 'mcp-server';
   itemId: string;
   name: string;
   deletedAt: string;
   size: number;
 }
 
-/** Deleted collections, environments and datasets (kept 30 days): restore them, or delete them for good. */
-export function TrashDialog({ kind, onClose, onRestored }: { kind?: TrashItem['kind']; onClose(): void; onRestored?(item: { kind: TrashItem['kind']; id: string; name: string }): void }) {
+/** Each kind's icon and line in the list (one table: a new trash kind is one row). */
+const KIND_ROWS: Record<TrashItem['kind'], { icon: ReactNode; line(it: TrashItem): string }> = {
+  collection: { icon: <FolderTree size={16} />, line: (it) => `Collection · ${plural(it.size, 'request')}` },
+  environment: { icon: <KeyRound size={16} />, line: (it) => `Environment · ${plural(it.size, 'variable')}` },
+  dataset: { icon: <Database size={16} />, line: (it) => `Dataset · ${(it.size / 1024).toFixed(1)} KB` },
+  spec: { icon: <FileCode2 size={16} />, line: (it) => `API definition · ${(it.size / 1024).toFixed(1)} KB` },
+  'mcp-server': { icon: <Plug size={16} />, line: () => 'MCP server' },
+};
+
+/** The kinds the Collections sidebar holds: its Recently deleted lists every one of them (the Environments view lists environments). */
+export const SIDEBAR_TRASH_KINDS: readonly TrashItem['kind'][] = ['collection', 'dataset', 'spec', 'mcp-server'];
+
+/** Deleted collections, environments, datasets, API definitions and MCP servers (kept 30 days): restore them, or delete them for good. `kinds`: only these. */
+export function TrashDialog({ kinds, onClose, onRestored }: { kinds?: readonly TrashItem['kind'][]; onClose(): void; onRestored?(item: { kind: TrashItem['kind']; id: string; name: string }): void }) {
   const [items, setItems] = useState<TrashItem[]>();
   const toast = useApp((s) => s.toast);
-  const load = () => void call<TrashItem[]>('trash.list').then((all) => setItems(kind ? all.filter((i) => i.kind === kind) : all));
-  useEffect(load, [kind]);
+  const shown = kinds?.join(',');
+  const load = () => void call<TrashItem[]>('trash.list').then((all) => setItems(kinds ? all.filter((i) => kinds.includes(i.kind)) : all));
+  useEffect(load, [shown]);
   const restore = async (it: TrashItem) => {
     try {
       const r = await call<{ kind: TrashItem['kind']; id: string; name: string }>('trash.restore', { id: it.id });
@@ -55,17 +68,17 @@ export function TrashDialog({ kind, onClose, onRestored }: { kind?: TrashItem['k
     >
       {items && !items.length ? (
         <Empty icon={<Trash2 size={22} />} title="Nothing deleted recently">
-          Collections, environments and datasets you delete stay here for 30 days, so you can restore them.
+          Collections, environments, datasets, API definitions and MCP servers you delete stay here for 30 days, so you can restore them.
         </Empty>
       ) : (
         <ul className="flex flex-col divide-y divide-line/60">
           {(items ?? []).map((it) => (
             <li key={it.id} className="flex items-center gap-3 py-2">
-              <span className="text-muted">{it.kind === 'collection' ? <FolderTree size={16} /> : it.kind === 'dataset' ? <Database size={16} /> : <KeyRound size={16} />}</span>
+              <span className="text-muted">{KIND_ROWS[it.kind]?.icon ?? <Trash2 size={16} />}</span>
               <div className="min-w-0 flex-1">
                 <div className="font-medium truncate">{it.name}</div>
                 <div className="text-xs text-muted">
-                  {it.kind === 'collection' ? `Collection · ${plural(it.size, 'request')}` : it.kind === 'dataset' ? `Dataset · ${(it.size / 1024).toFixed(1)} KB` : `Environment · ${plural(it.size, 'variable')}`} · deleted {timeAgo(it.deletedAt)}
+                  {KIND_ROWS[it.kind]?.line(it) ?? it.kind} · deleted {timeAgo(it.deletedAt)}
                 </div>
               </div>
               <Button size="sm" icon={<RotateCcw size={13} />} onClick={() => void restore(it)}>

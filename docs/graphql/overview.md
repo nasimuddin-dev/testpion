@@ -18,6 +18,7 @@ Enter the endpoint (variables allowed), then write the operation in the Monaco e
 - **Code** shows the call as code (cURL, fetch, Python, Go and more): the JSON `POST` with the query, variables and operation name, with `{{variables}}` resolved.
 - Subscriptions run over WebSocket (`graphql-transport-ws` and `graphql-ws`): see [subscriptions](./subscriptions.md).
 - The schema explorer's **Build** writes a whole operation for a root field (see [schema explorer](./schema-explorer.md#build-an-operation)).
+- **Import** a schema file (SDL, `.graphql`; paste it in the Import dialog, or `testpion import schema.graphql -w <workspace>`): it becomes a GraphQL request for `{{graphqlUrl}}` (a collection variable to set) with a ready operation for the first Query field, and the schema is kept in `specs/graphql/` for [mocking](./mocking.md) (see [Import fidelity](/getting-started/import-fidelity)).
 
 See [schema explorer](./schema-explorer.md), [testing](./testing.md) and the [GraphQL mock server](./mocking.md).
 

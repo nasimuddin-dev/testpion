@@ -32,16 +32,17 @@ import { ChangeMark } from './ChangeMark';
 import { GitItemHistory } from './GitItemHistory';
 import { useGit } from '../lib/git';
 import { fullCollection } from '../lib/collections-store';
-import { countCategory, hasCategory, isEmptyFolder, matchesCollectionNode, requestCategory, type RequestCategory } from '../lib/collection-filter';
+import { matchesCollectionNode, requestCategory, type RequestCategory } from '../lib/collection-filter';
 
 // the tree's data operations live in lib/collection-nodes (re-exported: views import them from here)
 export { mapNodes, findNode, addToFolder, insertBefore, folderIdsTo, withNewIds, duplicateNode } from '../lib/collection-nodes';
-import { mapNodes, findNode, addToFolder, insertBefore, folderIdsTo, withNewIds, duplicateNode } from '../lib/collection-nodes';
+import { mapNodes, findNode, addToFolder, insertBefore, folderIdsTo, withNewIds, duplicateNode, moveIntoCollection, nodeIdsExcept } from '../lib/collection-nodes';
 import { usePersisted } from '../lib/sticky';
 import { saveAsTestItem } from '../lib/save-test';
 import { openRef } from '../lib/open-ref';
-import { setDragRefs } from '../lib/drag-ref';
+import { deferDrop, setDragRefs, useDragSession } from '../lib/drag-ref';
 import { savedItemRef } from '@testpion/shared';
+import { buildTreeRows, examplesOpenKey, findTreeRow, folderOpenKey, isOpenKey, scopedNodeId, treeRowKey, type ExtraGroup, type TreeRow } from '../lib/tree-rows';
 
 /** How each category of request looks in the tree. */
 export const CATEGORY_META: Record<RequestCategory, { label: string; badge: string; cls: string }> = {
@@ -58,15 +59,7 @@ const requestCount = (nodes: CollectionNode[]): number => nodes.reduce((a, n) =>
 /** The one name of "new request of this kind" in every menu and button: New HTTP request, New GraphQL request … */
 export const newRequestOf = (cat: RequestCategory) => (cat === 'rest' ? 'New HTTP request' : `New ${CATEGORY_META[cat].label} request`);
 
-/** Saved items of a collection that aren't collection requests (gRPC calls, WebSocket connections). */
-export interface ExtraGroup {
-  cat: 'grpc' | 'websocket';
-  items: Array<{ id: string; name: string; folder?: string; badge?: string }>;
-  onOpen(id: string): void;
-  menu?(id: string): MenuItem[];
-  /** Rename an item in place (F2, or Rename in its menu). */
-  rename?(id: string): { editing: boolean; start(): void; done(name?: string): void };
-}
+export type { ExtraGroup } from '../lib/tree-rows';
 
 /** Drag data of a saved gRPC call or connection in the tree: `{ kind, id, from? }`. */
 export const SAVED_ITEM_MIME = 'application/x-testpion-saved-item';
@@ -118,17 +111,6 @@ export function TreeBadge({ label, className }: { label: string; className?: str
     </span>
   );
 }
-
-/** One row of the tree as drawn: the open part of every collection, flattened, so only the rows on screen are rendered. */
-type TreeRow =
-  | { t: 'col'; key: string; c: Collection; open: boolean }
-  | { t: 'cat'; key: string; c: Collection; cat: RequestCategory; count: number; open: boolean }
-  | { t: 'folder'; key: string; c: Collection; n: CollectionFolder; depth: number; open: boolean }
-  | { t: 'req'; key: string; c: Collection; n: Exclude<CollectionNode, CollectionFolder>; depth: number }
-  | { t: 'example'; key: string; c: Collection; n: SavedHttpRequest; ex: { id: string; name: string; status: number }; depth: number }
-  | { t: 'xfolder'; key: string; folder: string; count: number; open: boolean; depth: number }
-  | { t: 'xitem'; key: string; g: ExtraGroup; i: ExtraGroup['items'][number]; depth: number; from?: string }
-  | { t: 'empty'; key: string; c: Collection };
 
 /** Below this many rows every row is drawn (a small tree); above it only the rows on screen and a margin. */
 const DRAW_ALL = 300;
@@ -206,7 +188,8 @@ export const CollectionTree = memo(function CollectionTree({
   const finishRename = (c: Collection, id: string, name?: string) => {
     setRenaming(undefined);
     if (name) change(c, (c) => (id === c.id ? { ...c, name } : { ...c, items: mapNodes(c.items, (x) => (x.id === id ? { ...x, name } : x)) }));
-    focusRow(id);
+    // rows carry their collection-scoped id (two collections may share node ids)
+    focusRow(id === c.id ? id : scopedNodeId(c.id, id));
   };
   const health = useCollectionsHealth();
   const [moving, setMoving] = useState<{ c: Collection; n: CollectionNode }>();
@@ -232,7 +215,7 @@ export const CollectionTree = memo(function CollectionTree({
       undo: () => restoreDeleted('collection', c.id),
       note: 'Recently deleted keeps it for 30 days',
     });
-  const renameNode = (_c: Collection, n: CollectionNode) => setRenaming(n.id);
+  const renameNode = (c: Collection, n: CollectionNode) => setRenaming(scopedNodeId(c.id, n.id));
   /** Delete a request or folder at once, with Undo in the message (lib/undo.ts: puts the collection back as it was). */
   const deleteNode = async (c: Collection, n: CollectionNode) => removeWithUndo(c, n);
   /** F2 renames and Delete deletes the focused request or folder (like a file tree). */
@@ -260,23 +243,43 @@ export const CollectionTree = memo(function CollectionTree({
     const own = subtreeIds(drag.n);
     return !(place.beforeId && own.includes(place.beforeId)) && !(place.folderId && own.includes(place.folderId));
   };
+  /** A node arriving from another collection: fresh ids for those another collection already has (B-01). */
+  const arriving = <T extends CollectionNode>(n: T, from: Collection, to: Collection) => {
+    const r = moveIntoCollection(n, nodeIdsExcept([...collections.filter((x) => x.id !== to.id), to], from.id));
+    // tabs of a request whose id changed close (they would name a request that is gone); the others follow it
+    if (r.renamed.size) closeTabsFor([...r.renamed.keys()]);
+    return { node: r.node, kept: subtreeIds(n).filter((id) => !r.renamed.has(id)) };
+  };
   const drop = (to: Collection, place: { beforeId?: string; folderId?: string }) => {
     const d = drag;
+    endDrag();
+    if (!d || !canDrop(place)) return;
+    // after the drop event: the drag loop has ended before anything re-renders or opens (menus-uniform P0-1)
+    deferDrop(() =>
+      void Promise.all([fullCollection(d.c), to.id === d.c.id ? undefined : fullCollection(to)]).then(([from, other]) => {
+        const n = wholeNode(from, d.n);
+        const without = mapNodes(from.items, (x) => (x.id === n.id ? null : x));
+        const insert = (items: CollectionNode[], m: CollectionNode) => (place.beforeId ? insertBefore(items, place.beforeId, m) : addToFolder(items, place.folderId, m));
+        if (!other) onChange({ ...from, items: insert(without, n) });
+        else {
+          const { node, kept } = arriving(n, from, other);
+          onChange({ ...other, items: insert(other.items, node) });
+          onChange({ ...from, items: without });
+          onMoved?.(kept, from.id, other.id);
+        }
+      }, toastError),
+    );
+  };
+  /** The drag of a row, set a frame after dragstart (the row must not re-render inside it), and cleared once. */
+  const dragFrame = useRef<number | undefined>(undefined);
+  const endDrag = () => {
+    if (dragFrame.current !== undefined) cancelAnimationFrame(dragFrame.current);
+    dragFrame.current = undefined;
     setDrag(undefined);
     setDropAt(undefined);
-    if (!d || !canDrop(place)) return;
-    void Promise.all([fullCollection(d.c), to.id === d.c.id ? undefined : fullCollection(to)]).then(([from, other]) => {
-      const n = wholeNode(from, d.n);
-      const insert = (items: CollectionNode[]) => (place.beforeId ? insertBefore(items, place.beforeId, n) : addToFolder(items, place.folderId, n));
-      const without = mapNodes(from.items, (x) => (x.id === n.id ? null : x));
-      if (!other) onChange({ ...from, items: insert(without) });
-      else {
-        onChange({ ...other, items: insert(other.items) });
-        onChange({ ...from, items: without });
-        onMoved?.(subtreeIds(n), from.id, other.id);
-      }
-    }, toastError);
   };
+  // the window ends every drag (drop anywhere, dragend on a row that is gone, Esc, a click, the window losing focus)
+  useDragSession(endDrag);
   const dragProps = (c: Collection, n: CollectionNode) => ({
     draggable: true,
     onDragStart: (e: React.DragEvent) => {
@@ -285,9 +288,13 @@ export const CollectionTree = memo(function CollectionTree({
       e.dataTransfer.setData('text/plain', n.name);
       // the same item for any other drop target (a flow canvas adds it as a step, a folder as a chain of steps)
       setDragRefs(e, [n.kind === 'folder' ? { kind: 'folder', collectionId: c.id, folderId: n.id } : { kind: 'request', collectionId: c.id, requestId: n.id }], n.name);
-      setDrag({ c, n });
+      if (dragFrame.current !== undefined) cancelAnimationFrame(dragFrame.current);
+      dragFrame.current = requestAnimationFrame(() => {
+        dragFrame.current = undefined;
+        setDrag({ c, n });
+      });
     },
-    onDragEnd: () => (setDrag(undefined), setDropAt(undefined)),
+    onDragEnd: endDrag,
   });
   // a gRPC call or connection dragged from another collection and dropped on this one moves there
   const collectionDropProps = (c: Collection) => {
@@ -308,7 +315,7 @@ export const CollectionTree = memo(function CollectionTree({
         setDropAt(undefined);
         try {
           const d = JSON.parse(e.dataTransfer.getData(SAVED_ITEM_MIME)) as { kind: 'grpc' | 'websocket'; id: string; from?: string };
-          if (d.from !== c.id) onDropSaved!(d.kind, d.id, c.id);
+          if (d.from !== c.id) deferDrop(() => onDropSaved!(d.kind, d.id, c.id));
         } catch {
           /* not ours */
         }
@@ -333,16 +340,20 @@ export const CollectionTree = memo(function CollectionTree({
   const move = (fromShown: Collection, shown: CollectionNode, toShown: Collection, folderId: string | undefined) => {
     setMoving(undefined);
     void Promise.all([fullCollection(fromShown), toShown.id === fromShown.id ? undefined : fullCollection(toShown)]).then(([from, other]) => {
-      const n = wholeNode(from, shown);
+      const shownNode = wholeNode(from, shown);
       const to = other ?? from;
-      const without = { ...from, items: mapNodes(from.items, (x) => (x.id === n.id ? null : x)) };
+      const without = { ...from, items: mapNodes(from.items, (x) => (x.id === shownNode.id ? null : x)) };
+      let n = shownNode;
       if (!other) onChange({ ...without, items: addToFolder(without.items, folderId, n) });
       else {
+        const moved = arriving(shownNode, from, other);
+        n = moved.node;
         // add to the new collection first: a failed save then leaves a copy rather than losing the request
         onChange({ ...other, items: addToFolder(other.items, folderId, n) });
         onChange(without);
+        onMoved?.(moved.kept, from.id, to.id);
       }
-      onMoved?.(subtreeIds(n), from.id, to.id);
+      if (!other) onMoved?.(subtreeIds(n), from.id, to.id);
       useApp.getState().toast(`Moved "${n.name}" to ${to.name}${folderId ? ` › ${findNode(to.items, folderId)?.name ?? ''}` : ''}`, 'success', { ref: n.kind === 'folder' ? { kind: 'folder', collectionId: to.id, folderId: n.id } : { kind: 'request', collectionId: to.id, requestId: n.id } });
     }, toastError);
   };
@@ -419,7 +430,7 @@ export const CollectionTree = memo(function CollectionTree({
    */
   const setSubtree = (c: Collection, folder: CollectionFolder | undefined, shown: boolean) => {
     const keys: string[] = [];
-    const walk = (nodes: CollectionNode[]) => nodes.forEach((n) => n.kind === 'folder' && (keys.push(n.id), walk(n.items)));
+    const walk = (nodes: CollectionNode[]) => nodes.forEach((n) => n.kind === 'folder' && (keys.push(folderOpenKey(c.id, n.id)), walk(n.items)));
     walk(folder ? folder.items : c.items);
     if (!folder) {
       for (const cat of ['rest', 'soap', 'graphql', 'grpc', 'websocket'] as RequestCategory[]) keys.push(`${c.id}:cat:${cat}`);
@@ -427,7 +438,7 @@ export const CollectionTree = memo(function CollectionTree({
       for (const k of Object.keys(open)) if (k.startsWith(`${c.id}:`)) keys.push(k);
     }
     setOpen((o) => {
-      return { ...o, ...Object.fromEntries(keys.map((k) => [k, shown])), [folder?.id ?? c.id]: shown };
+      return { ...o, ...Object.fromEntries(keys.map((k) => [k, shown])), [folder ? folderOpenKey(c.id, folder.id) : c.id]: shown };
     });
   };
   const [editing, setEditing] = useState<{ c: Collection; folder: CollectionFolder }>();
@@ -435,77 +446,7 @@ export const CollectionTree = memo(function CollectionTree({
 
   // every row that shows (the open collections, categories and folders), in order: a list of thousands is cheap to
   // build; only the rows on screen are drawn
-  const rows = useMemo(() => {
-    const out: TreeRow[] = [];
-    const matches = (n: CollectionNode) => matchesCollectionNode(n, filter, favoritesOnly);
-    // in a category, a folder shows when it holds requests of that category (empty folders: the first category)
-    const inScope = (n: CollectionNode, scope?: { cat: RequestCategory; first: boolean }) =>
-      !scope || (n.kind === 'folder' ? hasCategory(n.items, scope.cat) || (scope.first && isEmptyFolder(n)) : requestCategory(n) === scope.cat);
-    const extraShown = (i: ExtraGroup['items'][number]) => !f || i.name.toLowerCase().includes(f) || !!i.folder?.toLowerCase().includes(f);
-    const addNodes = (c: Collection, nodes: CollectionNode[], depth: number, scope?: { cat: RequestCategory; first: boolean }) => {
-      for (const n of nodes) {
-        if (!matches(n) || !inScope(n, scope)) continue;
-        if (n.kind === 'folder') {
-          const isOpen = open[n.id] ?? !!f;
-          out.push({ t: 'folder', key: n.id, c, n, depth, open: isOpen });
-          if (isOpen) addNodes(c, n.items, depth + 1, scope);
-          continue;
-        }
-        out.push({ t: 'req', key: n.id, c, n, depth });
-        if (n.kind === 'http' && n.examples?.length && open[`${n.id}:examples`]) for (const ex of n.examples) out.push({ t: 'example', key: `${n.id}:ex:${ex.id}`, c, n, ex, depth });
-      }
-    };
-    const addExtra = (g: ExtraGroup, depth: number, from?: string) => {
-      const shown = g.items.filter(extraShown);
-      const folders = [...new Set(shown.map((i) => i.folder ?? ''))].sort((a, b) => (a === '' ? -1 : b === '' ? 1 : a.localeCompare(b)));
-      for (const folder of folders) {
-        // a folder of saved gRPC calls / connections: the same row as a collection's folders
-        const key = `${from ?? ''}:${g.cat}:folder:${folder}`;
-        const isOpen = !!f || (open[key] ?? true);
-        const inside = shown.filter((i) => (i.folder ?? '') === folder);
-        if (folder) out.push({ t: 'xfolder', key, folder, count: inside.length, open: isOpen, depth });
-        if (isOpen || !folder) for (const i of inside) out.push({ t: 'xitem', key: `${from ?? ''}:${g.cat}:${i.id}`, g, i, depth: depth + (folder ? 1 : 0), from });
-      }
-    };
-    /** A collection's contents: grouped by category when it holds more than one kind of request. */
-    const addContents = (c: Collection, extras: ExtraGroup[]) => {
-      if (!categorize) return addNodes(c, c.items, 1);
-      const cats = (['rest', 'soap', 'graphql'] as const).filter((k) => hasCategory(c.items, k));
-      if (!cats.length && c.items.some(isEmptyFolder)) cats.push('rest');
-      // the category level shows even for one kind, so every collection reads the same way
-      if (!cats.length && !extras.length) {
-        addNodes(c, c.items, 1);
-        return;
-      }
-      cats.forEach((cat, i) => {
-        const key = `${c.id}:cat:${cat}`;
-        const isOpen = !!f || (open[key] ?? true);
-        const scope = { cat, first: i === 0 };
-        if (f && !c.items.some((n) => matches(n) && inScope(n, scope))) return;
-        out.push({ t: 'cat', key, c, cat, count: countCategory(c.items, cat), open: isOpen });
-        if (isOpen) addNodes(c, c.items, 2, scope);
-      });
-      for (const g of extras) {
-        const key = `${c.id}:cat:${g.cat}`;
-        const isOpen = !!f || (open[key] ?? true);
-        if (f && !g.items.some(extraShown)) continue;
-        out.push({ t: 'cat', key, c, cat: g.cat, count: g.items.length, open: isOpen });
-        if (isOpen) addExtra(g, 2, c.id);
-      }
-    };
-    for (const c of collections) {
-      const extras = (extraGroups?.(c) ?? []).filter((g) => g.items.length);
-      // grouped by category, collections start folded: the workspace lists them, expanding shows the categories
-      // a collection opens when the user opens it (or something is revealed in it), not because its request is open
-      const isOpen = categorize && f ? true : (open[c.id] ?? !categorize);
-      if (categorize && f && !c.items.some(matches) && !extras.some((g) => g.items.some(extraShown))) continue;
-      out.push({ t: 'col', key: c.id, c, open: isOpen });
-      if (!isOpen) continue;
-      addContents(c, extras);
-      if (!f && !favoritesOnly && !c.problem && !c.items.length && !extras.length) out.push({ t: 'empty', key: `${c.id}:empty`, c });
-    }
-    return out;
-  }, [collections, open, filter, f, favoritesOnly, categorize, extraGroups]);
+  const rows = useMemo(() => buildTreeRows({ collections, open, filter, favoritesOnly, categorize, extraGroups }), [collections, open, filter, favoritesOnly, categorize, extraGroups]);
   // nothing to show for the filter (or no favourites): say so
   const nothingMatches = useMemo(() => {
     if (!f && !favoritesOnly) return false;
@@ -517,7 +458,7 @@ export const CollectionTree = memo(function CollectionTree({
   // folders, even ones folded by hand, and scroll its row into view. Switching or closing tabs leaves the tree as it is.
   // (a target named before the tree mounted — Reveal in sidebar from another view — is revealed at once)
   const lastReveal = useRef(revealId ? undefined : revealKey);
-  const [reveal, setReveal] = useState<{ id: string; nonce: number }>();
+  const [reveal, setReveal] = useState<{ id: string; nonce: number; collectionId?: string }>();
   useEffect(() => {
     const target = revealId ?? activeRequestId;
     if (!target) return;
@@ -530,16 +471,16 @@ export const CollectionTree = memo(function CollectionTree({
       if (!folders) continue;
       const node = c.id === target ? undefined : findNode(c.items, target);
       const cat = node && node.kind !== 'folder' ? requestCategory(node) : undefined;
-      const keys = [c.id, ...(cat && categorize ? [`${c.id}:cat:${cat}`] : []), ...folders];
+      const keys = [c.id, ...(cat && categorize ? [`${c.id}:cat:${cat}`] : []), ...folders.map((id) => folderOpenKey(c.id, id))];
       setOpen((o) => (keys.every((k) => o[k] !== false) ? o : { ...o, ...Object.fromEntries(keys.map((k) => [k, true])) }));
       break;
     }
-    setReveal({ id: target, nonce: revealKey ?? 0 });
+    setReveal({ id: target, nonce: revealKey ?? 0, collectionId: collections.find((c) => c.id === target || !!findNode(c.items, target))?.id });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeRequestId, revealKey, revealId]);
   // the row to scroll to (a collection, folder, request or saved item), once the folders on its way are open
   const revealIndex = useMemo(
-    () => (reveal ? rows.findIndex((r) => (r.t === 'col' ? r.c.id === reveal.id : r.t === 'req' || r.t === 'folder' ? r.n.id === reveal.id : r.t === 'xitem' ? r.i.id === reveal.id : false)) : -1),
+    () => (reveal ? findTreeRow(rows, reveal.id, reveal.collectionId) : -1),
     [reveal, rows],
   );
   // done once it scrolled (the list scrolls in its own effect, which runs first): later changes leave the scroll alone
@@ -566,21 +507,25 @@ export const CollectionTree = memo(function CollectionTree({
     setHistoryFor,
   };
   const canHistory = !!git.status?.repository;
+  // the dragged row stays drawn while the list scrolls or changes under the drag (its dragend must reach React)
+  const dragIndex = useMemo(() => (drag ? rows.findIndex((r) => (r.t === 'req' || r.t === 'folder') && r.c.id === drag.c.id && r.n.id === drag.n.id) : -1), [drag, rows]);
   const rowHeight = 2 * useApp((s) => s.settings?.fontSize ?? 14);
 
   const folderRow = (r: Extract<TreeRow, { t: 'folder' }>) => {
-    const { c, n, depth, open: isOpen } = r;
+    const { c, n, depth, open: isOpen, key: sid } = r;
+    const openKey = folderOpenKey(c.id, n.id);
     return (
       <div
-        className={cx('group flex items-center h-8 text-sm rounded-md mx-1 hover:bg-hover pr-1 transition-colors', menuFor === n.id && 'bg-hover', dropClass(n.id))}
+        data-node-id={sid}
+        className={cx('group flex items-center h-8 text-sm rounded-md mx-1 hover:bg-hover pr-1 transition-colors', menuFor === sid && 'bg-hover', dropClass(sid))}
         style={{ paddingLeft: 8 + depth * 12 }}
         {...dragProps(c, n)}
-        {...dropProps(c, n.id, 'into', { folderId: n.id })}
+        {...dropProps(c, sid, 'into', { folderId: n.id })}
         // (after dragProps: undefined here would turn its draggable off, and a folder could not be dragged onto a flow)
-        draggable={renaming !== n.id}
-        onContextMenu={(e) => (e.preventDefault(), setMenuFor(n.id))}
+        draggable={renaming !== sid}
+        onContextMenu={(e) => (e.preventDefault(), setMenuFor(sid))}
       >
-        {renaming === n.id ? (
+        {renaming === sid ? (
           <div className="flex items-center gap-1 flex-1 min-w-0">
             {isOpen ? OPEN_ICON : CLOSED_ICON}
             {FOLDER_ICON}
@@ -589,10 +534,10 @@ export const CollectionTree = memo(function CollectionTree({
         ) : (
           <button
             className="flex items-center gap-1 flex-1 min-w-0 text-left"
-            onClick={() => toggle(n.id, isOpen)}
+            onClick={() => toggle(openKey, isOpen)}
             onKeyDown={rowKeys(c, n)}
             data-tree-row
-            data-rename-id={n.id}
+            data-rename-id={sid}
             aria-expanded={isOpen}
             title="F2 renames · Delete deletes"
           >
@@ -606,8 +551,8 @@ export const CollectionTree = memo(function CollectionTree({
           </button>
         )}
         <NodeMenu
-          open={menuFor === n.id}
-          onOpenChange={(o) => setMenuFor(o ? n.id : undefined)}
+          open={menuFor === sid}
+          onOpenChange={(o) => setMenuFor(o ? sid : undefined)}
           onEdit={() => void fullCollection(c).then((whole) => setEditing({ c: whole, folder: wholeNode(whole, n) }), toastError)}
           onExpandAll={() => setSubtree(c, n, true)}
           onCollapseAll={() => setSubtree(c, n, false)}
@@ -640,6 +585,7 @@ export const CollectionTree = memo(function CollectionTree({
     ];
     return (
       <div
+        data-node-id={key}
         className={cx('group flex items-center h-8 text-sm rounded-md mx-1 pr-1 transition-colors', menuFor === key ? 'bg-hover' : 'hover:bg-hover')}
         style={{ paddingLeft: 20 }}
         onContextMenu={(e) => {
@@ -671,7 +617,7 @@ export const CollectionTree = memo(function CollectionTree({
 
   /** A folder of saved gRPC calls / connections: the same row as a collection's folders. */
   const extraFolderRow = (r: Extract<TreeRow, { t: 'xfolder' }>) => (
-    <div className="group flex items-center h-8 text-sm rounded-md mx-1 hover:bg-hover pr-1 transition-colors" style={{ paddingLeft: 8 + r.depth * 12 }}>
+    <div data-node-id={r.key} className="group flex items-center h-8 text-sm rounded-md mx-1 hover:bg-hover pr-1 transition-colors" style={{ paddingLeft: 8 + r.depth * 12 }}>
       <button className="flex items-center gap-1 flex-1 min-w-0 text-left" onClick={() => toggle(r.key, r.open)} aria-expanded={r.open} data-tree-row>
         {r.open ? OPEN_ICON : CLOSED_ICON}
         {FOLDER_ICON}
@@ -689,6 +635,7 @@ export const CollectionTree = memo(function CollectionTree({
     const rn = g.rename?.(i.id);
     return (
       <div
+        data-node-id={r.key}
         {...(onDropSaved && !rn?.editing ? savedItemDragProps(g.cat, i.id, i.name, from) : {})}
         onDragEnd={() => setDropAt(undefined)}
         className={cx('group flex items-center h-8 text-sm pr-1 rounded-md mx-1 transition-colors', activeRequestId === i.id ? 'bg-accent-soft text-fg' : menuFor === i.id ? 'bg-hover' : 'hover:bg-hover')}
@@ -744,6 +691,7 @@ export const CollectionTree = memo(function CollectionTree({
     const { c, open: isOpen } = r;
     return (
       <div
+        data-node-id={r.key}
         className={cx('group flex items-center gap-0.5 h-8 rounded-md mx-1 hover:bg-hover pr-1 pl-1.5 transition-colors', menuFor === c.id && 'bg-hover', dropClass(c.id))}
         {...collectionDropProps(c)}
         onContextMenu={(e) => {
@@ -844,10 +792,10 @@ export const CollectionTree = memo(function CollectionTree({
             n={r.n}
             depth={r.depth}
             active={activeRequestId === r.n.id}
-            menuOpen={menuFor === r.n.id}
-            renaming={renaming === r.n.id}
-            examplesOpen={!!open[`${r.n.id}:examples`]}
-            dropMode={dropAt?.id === r.n.id ? dropAt.mode : undefined}
+            menuOpen={menuFor === r.key}
+            renaming={renaming === r.key}
+            examplesOpen={!!isOpenKey(open, examplesOpenKey(r.c.id, r.n.id), `${r.n.id}:examples`)}
+            dropMode={dropAt?.id === r.key ? dropAt.mode : undefined}
             gitMark={git.items.get(r.n.id)}
             canHistory={canHistory}
             ctx={ctx}
@@ -856,6 +804,7 @@ export const CollectionTree = memo(function CollectionTree({
       case 'example':
         return (
           <button
+            data-node-id={r.key}
             className="w-full flex items-center gap-2 h-8 text-xs rounded-md mx-1 pr-2 hover:bg-hover text-left text-muted hover:text-fg"
             style={{ paddingLeft: 8 + r.depth * 12 + 28 }}
             title="Saved example: opens the request (see its Examples tab)"
@@ -867,7 +816,7 @@ export const CollectionTree = memo(function CollectionTree({
         );
       case 'empty':
         return (
-          <div className="pl-7 pr-3 h-8 flex items-center gap-2">
+          <div className="pl-7 pr-3 h-8 flex items-center gap-2" data-node-id={r.key}>
             <p className="text-xs text-muted truncate">No requests yet.</p>
             <Button size="sm" icon={<Plus size={12} />} onClick={() => newRequest(r.c)}>
               {newRequestLabel ?? 'New HTTP request'}
@@ -891,7 +840,9 @@ export const CollectionTree = memo(function CollectionTree({
       <VirtualList
         items={rows}
         rowHeight={rowHeight}
-        keyOf={rowKey}
+        keyOf={treeRowKey}
+        name="CollectionTree"
+        keepIndex={dragIndex >= 0 ? dragIndex : undefined}
         render={renderRow}
         scrollParent
         overscan={rows.length <= DRAW_ALL ? DRAW_ALL : OVERSCAN}
@@ -906,8 +857,6 @@ export const CollectionTree = memo(function CollectionTree({
     </div>
   );
 });
-
-const rowKey = (r: TreeRow) => `${r.t}:${r.key}`;
 
 interface RowContext {
   onOpen(c: Collection, n: CollectionNode, o?: { preview?: boolean }): void;
@@ -963,12 +912,14 @@ const RequestRow = memo(function RequestRow({
   const x = () => ctx.current;
   const method = n.kind === 'http' ? n.request.method : 'GQL';
   const examples = n.kind === 'http' ? (n.examples ?? []) : [];
-  const exKey = `${n.id}:examples`;
+  // one id for this row in the whole tree: two collections may hold nodes with the same id
+  const sid = scopedNodeId(c.id, n.id);
+  const exKey = examplesOpenKey(c.id, n.id);
   const dragOf = () => x().dragProps(c, n) as { onDragStart(e: React.DragEvent): void; onDragEnd(): void };
-  const dropOf = () => x().dropProps(c, n.id, 'before', { beforeId: n.id });
+  const dropOf = () => x().dropProps(c, sid, 'before', { beforeId: n.id });
   return (
     <div
-      data-node-id={n.id}
+      data-node-id={sid}
       className={cx(
         'group flex items-center h-8 text-sm pr-1 rounded-md mx-1 transition-colors',
         active ? 'bg-accent-soft text-fg' : 'hover:bg-hover',
@@ -984,7 +935,7 @@ const RequestRow = memo(function RequestRow({
       onDrop={(e) => dropOf().onDrop(e)}
       onContextMenu={(e) => {
         e.preventDefault();
-        x().setMenuFor(n.id);
+        x().setMenuFor(sid);
       }}
     >
       {examples.length > 0 && (
@@ -1009,7 +960,7 @@ const RequestRow = memo(function RequestRow({
           onDoubleClick={() => x().onOpen(c, n)}
           onKeyDown={(e) => x().rowKeys(c, n)(e)}
           data-tree-row
-          data-rename-id={n.id}
+          data-rename-id={sid}
           title="Enter opens · F2 renames · Delete deletes"
         >
           <TreeBadge label={method} className={n.kind === 'http' ? `method-${method}` : 'text-[#e535ab]'} />
@@ -1020,7 +971,7 @@ const RequestRow = memo(function RequestRow({
       )}
       <NodeMenu
         open={menuOpen}
-        onOpenChange={(o) => x().setMenuFor(o ? n.id : undefined)}
+        onOpenChange={(o) => x().setMenuFor(o ? sid : undefined)}
         onOpen={() => x().onOpen(c, n)}
         onOpenNewTab={() => void openRef({ kind: 'request', collectionId: c.id, requestId: n.id }, { newTab: true })}
         testItems={menuOpen ? [saveAsTestItem({ ref: { kind: 'request', collectionId: c.id, requestId: n.id }, name: n.name })] : undefined}

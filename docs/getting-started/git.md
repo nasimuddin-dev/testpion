@@ -68,7 +68,7 @@ A test or flow file under `tests/` is compared by meaning too, step by step (a s
 
 ### The secret guard
 
-Before every commit TestPion checks for secrets **typed into** the workspace: a bearer token in a header, a password in basic auth or in a body field, a variable that holds a key in plain text, an MCP server's env or headers, a provider API key. When it finds one, nothing is committed and the list says where:
+Before every commit TestPion checks for secrets **typed into** the workspace: a bearer token in a header, a password in basic auth or in a body field, a variable that holds a key in plain text, an MCP server's env or headers, a provider API key. It finds them by their name and by their shape (a JWT, a `Bearer` token, a private key, a provider key such as `sk-…`, `ghp_…` or `AKIA…`, a connection string with a password), so a variable named `dbUrl` that holds `postgres://app:…@db/clinic` is found too: the same detector that keeps secrets out of [workspace exports](/security/privacy#exports). When it finds one, nothing is committed and the list says where:
 
 > **Not committed: 2 secrets are typed into the workspace**
 > environment Staging, variable apiKey (environments/staging.json) …
@@ -161,7 +161,7 @@ jobs:
         with: { fetch-depth: 0 }   # the base branch, for the diff
       - uses: actions/setup-node@v4
         with: { node-version: 24 }
-      - run: git clone --depth 1 --branch v0.49.0 https://github.com/nasimuddin-dev/testpion.git "$RUNNER_TEMP/testpion" && cd "$RUNNER_TEMP/testpion" && npm ci && npm run build -w @testpion/shared -w @testpion/core -w @testpion/cli
+      - run: git clone --depth 1 --branch v0.50.0 https://github.com/nasimuddin-dev/testpion.git "$RUNNER_TEMP/testpion" && cd "$RUNNER_TEMP/testpion" && npm ci && npm run build -w @testpion/shared -w @testpion/core -w @testpion/cli
       - name: What the pull request changes
         run: |
           T="node $RUNNER_TEMP/testpion/packages/cli/bin/testpion.js"
@@ -189,7 +189,7 @@ api-tests:
   image: node:24
   rules: [{ if: $CI_PIPELINE_SOURCE == "merge_request_event" }]
   script:
-    - git clone --depth 1 --branch v0.49.0 https://github.com/nasimuddin-dev/testpion.git /tmp/testpion && (cd /tmp/testpion && npm ci && npm run build -w @testpion/shared -w @testpion/core -w @testpion/cli)
+    - git clone --depth 1 --branch v0.50.0 https://github.com/nasimuddin-dev/testpion.git /tmp/testpion && (cd /tmp/testpion && npm ci && npm run build -w @testpion/shared -w @testpion/core -w @testpion/cli)
     - git fetch origin "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"
     - node /tmp/testpion/packages/cli/bin/testpion.js diff "origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME" HEAD --markdown -w api-tests | tee changes.md
     - node /tmp/testpion/packages/cli/bin/testpion.js run -w api-tests -e Staging -r console junit -o test-results

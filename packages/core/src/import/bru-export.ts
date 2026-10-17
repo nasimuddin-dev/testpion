@@ -1,9 +1,10 @@
 import type { AuthConfig, CheckConfig, Collection, CollectionFolder, CollectionNode, Environment, KeyValue, SavedGraphQLRequest, SavedHttpRequest } from '../model/types.js';
+import { tpToBruno } from '../scripts/bruno.js';
 
 /**
  * A collection as a Bruno collection folder (the way Bruno keeps collections in git): bruno.json,
  * collection.bru, a folder per folder (with folder.bru), a .bru file per request and environments/*.bru.
- * Secret variables keep their names only. Scripts that came from Bruno go back as they were; other
+ * Secret variables keep their names only. Scripts that came from Bruno go back with Bruno's bru.*; other
  * scripts use the tp.* API (Postman's too), which Bruno doesn't run, so they are marked.
  */
 export function collectionToBru(collection: Collection, environments: Environment[] = []): Array<{ path: string; text: string }> {
@@ -56,7 +57,8 @@ const kvEntries = (l?: KeyValue[]): Array<[string, string, boolean]> => (l ?? []
 /** A script for Bruno: its own scripts without the import marker; tp.* scripts marked (Bruno runs bru / req / res). */
 function script(s: string | undefined): string | undefined {
   if (!s?.trim()) return undefined;
-  if (/^\/\/ Bruno script/.test(s)) return s.replace(/^\/\/ Bruno script[^\n]*\n?/, '');
+  // a script imported from Bruno: its tp.* calls (bru.* rewritten on import) go back as bru.*
+  if (/^\/\/ Bruno script/.test(s)) return tpToBruno(s.replace(/^\/\/ Bruno script[^\n]*\n?/, ''));
   return `// Exported from TestPion: this script uses the tp.* script API (Postman-compatible); rewrite it with Bruno's bru / req / res to run it in Bruno.\n${s}`;
 }
 

@@ -187,7 +187,7 @@ Not sure which tool? **`search_tools`** takes what you want to do ("capture traf
 | `api_fuzz` | Fuzz an API from its OpenAPI document (local hosts only, DELETE left out unless asked): server errors, invalid input accepted, undocumented statuses. |
 | `openapi_outline` | An OpenAPI document's operations by tag, with parameters, request body, responses (schemas as short type outlines) and the request an import would make; narrow it with `tag` or `operationId`. |
 | `openapi_lint` | Lint problems of an OpenAPI document (or every document in `specs/`), each with its rule, level, line and column. |
-| `import_definition` | Import an OpenAPI document, Postman / Insomnia / Bruno / Hoppscotch collection, HAR or .env, from a public link (`url`) or `text`. OpenAPI imports get contract checks. |
+| `import_definition` | Import an OpenAPI document, Postman / Insomnia / Bruno / Hoppscotch collection, GraphQL schema, HAR or .env, from a public link (`url`) or `text`. OpenAPI imports get contract checks; a document of a name `specs/` already holds is kept beside it. `notes` lists what did not map one to one (unsupported auth, template tags, values needed). |
 | `import_arazzo` | Import an [Arazzo 1.0](/test-runner/integration-testing#arazzo-workflows-import-and-export) document (`text`, a workspace `file` or a `url`) as flow files under `tests/arazzo/`, one per workflow; its OpenAPI sources are found in the workspace (`fetch_sources: true` downloads http(s) ones). Returns the files and `notes` (what did not come over); `dry_run: true` writes nothing. |
 | `export_arazzo` | A flow file as an Arazzo 1.0 document (`text` as YAML, `document`, `notes`), matched against an OpenAPI `spec` (default: the sources an import noted, else the best-matching spec in `specs/`). |
 | `item_info` | One item's context, as the app's Info panel shows it: the file that holds it, the `{{variables}}` it uses and the latest runs that included it. Takes a ref like `resolve_ref`. |
@@ -293,6 +293,7 @@ Tick **Also CLAUDE.md** (a one-line pointer: `See @AGENTS.md …`) and **Also a 
 
 - Output uses the workspace's redaction rules. Sensitive headers, JSON fields and known secret values are masked, and environment values are never listed.
 - Secrets resolve inside TestPion when a request is sent. The agent sees `{{accessToken}}`, never the token. In the CLI, secrets come from `TESTPION_SECRET_*` environment variables (see [Secrets](/security/secrets)).
+- An agent's import never overwrites: `import_definition` keeps an API definition beside a different one of the same name (`specs/x-2.yaml`, said in `notes`), as the app and `testpion import` do. Deleting an MCP server in the app happens at once with **Undo** and goes to **Recently deleted**; the agent tools that delete keep asking to confirm (above).
 - Requests go only where your collections and environments point. Production environments need `--allow-production` on the server, and a data-changing request to one also needs `allowProduction: true` on the call; `--read-only` removes sending altogether.
 
 ## llms.txt

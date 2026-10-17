@@ -70,4 +70,18 @@ const closeByCommandLine = (like, label, excludeNames = []) =>
 const mainMemory = (label, gc = false) =>
   `main: ${gc ? "const v8 = require('v8'); v8.setFlagsFromString('--expose_gc'); require('vm').runInNewContext('gc')(); require('vm').runInNewContext('gc')(); " : ''}const m = process.memoryUsage(); return '${label}: rss MB ' + Math.round(m.rss / 1048576) + ' | heap MB ' + Math.round(m.heapUsed / 1048576);`;
 
-module.exports = { withExpect, allUnder, DOM, step, stepWith, EXCHANGES, waitRunning, run, curl, powershell, closeByCommandLine, mainMemory };
+/**
+ * Opens Recently deleted the way a user does (real input): the Collections sidebar's Recently deleted button. Defines
+ * `openRecentlyDeleted()` in a renderer step: the dialog element, or a string saying what was missing.
+ */
+const OPEN_RECENTLY_DELETED = `
+  const openRecentlyDeleted = async () => {
+    await __t.requests();
+    const open = await __t.waitFor(() => [...document.querySelectorAll('aside[aria-label="Collections explorer"] button[aria-label="Recently deleted"]')].find((x) => x.offsetParent), 3000);
+    if (!open) return 'NO RECENTLY DELETED BUTTON';
+    await __t.real.click(open);
+    return (await __t.waitFor(() => [...document.querySelectorAll('[role=dialog]')].find((x) => /Recently deleted/.test(x.textContent)), 3000)) ?? 'NO DIALOG';
+  };
+`;
+
+module.exports = { withExpect, allUnder, DOM, step, stepWith, EXCHANGES, waitRunning, run, curl, powershell, closeByCommandLine, mainMemory, OPEN_RECENTLY_DELETED };

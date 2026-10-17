@@ -16,7 +16,11 @@ module.exports = async function run(win) {
   const { dialog } = require('electron');
   if (process.env.E2E_STUB_OPEN) dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [process.env.E2E_STUB_OPEN] });
   if (process.env.E2E_STUB_SAVE)
-    dialog.showSaveDialog = async () => (process.env.E2E_STUB_SAVE === 'CANCEL' ? { canceled: true, filePath: '' } : { canceled: false, filePath: process.env.E2E_STUB_SAVE });
+    // the options the app asked with (its default file name …) are kept for "main:" steps: global.__e2eLastSaveOptions
+    dialog.showSaveDialog = async (...args) => {
+      global.__e2eLastSaveOptions = args.find((a) => a && typeof a === 'object' && !a.webContents) ?? {};
+      return process.env.E2E_STUB_SAVE === 'CANCEL' ? { canceled: true, filePath: '' } : { canceled: false, filePath: process.env.E2E_STUB_SAVE };
+    };
   const errors = [];
   // console warnings: kept per step and in the report (they never fail a step), so a run shows them
   const warnings = [];

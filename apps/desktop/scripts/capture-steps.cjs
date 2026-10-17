@@ -357,6 +357,14 @@ module.exports = async function run(win) {
   const EXPLORER = 'aside[aria-label="Collections explorer"]';
   const FILTER = `${EXPLORER} input[placeholder^="Filter"]`;
   /**
+   * The explorer on screen. Collections on the rail hides it when it is clicked while a request editor is the view (a
+   * toggle, like VS Code's activity bar), so a hidden explorer is shown with Ctrl+B instead of guessing the state.
+   */
+  const showExplorer = async () => {
+    if (!(await js(`!!__cap.one(${J(FILTER)})`))) await js(`__cap.key('b', { ctrlKey: true }); true`);
+    await until(`__cap.one(${J(FILTER)})`, 'the Collections explorer');
+  };
+  /**
    * Open a request of the explorer by name, for good: the filter shows it (wherever it is folded); a click opens a
    * preview tab, which the double-click keeps (the next request opened would replace a preview).
    */
@@ -375,6 +383,7 @@ module.exports = async function run(win) {
   };
   // the Collections rail item opens the request editors with the explorer
   await nav('Collections');
+  await showExplorer();
   // a token first (the collection's requests use it): its access token (a JWT) decoded in the JWT tab
   await openRequest('Get access token');
   // the blank tab a fresh profile starts with
@@ -1045,4 +1054,108 @@ tests:
   await shot('ai-flaky-review');
   await clickOn(`__cap.all('[role=dialog] button').find((b) => __cap.text(b) === 'Close')`, 'Close');
   await until(`!__cap.one('[data-proposal]')`, 'the review to close');
+
+  // ---------------------------------------------------------------- nothing lost, nothing leaked (0.50)
+  await nav('Collections');
+  await showExplorer();
+  /**
+   * Keep the messages on screen for a shot: a pointer over them pauses their timers (as a person reading them does),
+   * and leaving lets them go again. (The real pointer stays parked on the status bar.)
+   */
+  const holdToasts = (hold) =>
+    js(`(() => { const t = __cap.one('[data-sonner-toast]'); t?.dispatchEvent(new MouseEvent(${J(hold ? 'mouseover' : 'mouseout')}, { bubbles: true, relatedTarget: ${hold ? 'null' : 'document.body'} })); return true; })()`);
+  // an MCP server with a token in a header, written through the app (as its editor saves it): the export replaces the
+  // token by a variable, and its Delete goes at once with Undo
+  const mcpServers = (await invoke('mcp.servers')).map(({ connected: _c, ...s }) => s);
+  await invoke('mcp.saveServers', {
+    servers: [...mcpServers, { id: 'petstore-mcp', name: 'Petstore MCP', transport: 'streamable-http', url: 'http://127.0.0.1:4010/mcp', headers: [{ key: 'Authorization', value: 'Bearer demo-token', enabled: true }] }],
+  });
+  const petstoreMcp = `__cap.one('${EXPLORER} [data-node-id="mcp:petstore-mcp"]')`;
+  await clickSel(`${EXPLORER} button[aria-label="Refresh"]`, 'Refresh');
+  await until(petstoreMcp, 'the Petstore MCP server in the explorer');
+
+  // Export ▸ The whole workspace: what the file holds, its name; then the message listing what was replaced
+  await clickSel(`${EXPLORER} button[aria-label="Export a collection or the workspace"]`, 'the Export button');
+  const what = `__cap.one('[role=dialog] select[aria-label="What to export"]')`;
+  await until(what, 'the Export dialog');
+  await js(`__cap.input(${what}, 'workspace'); true`);
+  await until(`__cap.text(__cap.one('[role=dialog]')).includes('.testpion.json')`, 'the whole workspace chosen');
+  await shot('export-workspace');
+  // the save dialog answers with a file of a folder that names nobody (the message shows the path), removed afterwards
+  const { dialog } = require('electron');
+  const exportFile = process.platform === 'win32' ? join(process.env.PUBLIC || 'C:\\Users\\Public', 'Documents', 'Veterinary API (example).testpion.json') : join('/tmp', 'Veterinary API (example).testpion.json');
+  const showSaveDialog = dialog.showSaveDialog;
+  dialog.showSaveDialog = async () => ({ canceled: false, filePath: exportFile });
+  try {
+    await click('Export', '[role=dialog] button');
+    await until(`__cap.all('[data-sonner-toast]').some((t) => /^Exported "/.test(__cap.text(t)) && /Replaced/.test(__cap.text(t)))`, 'the message after export');
+    await holdToasts(true);
+    await shot('export-workspace-toast', { toasts: true });
+    await holdToasts(false);
+  } finally {
+    dialog.showSaveDialog = showSaveDialog;
+    require('node:fs').rmSync(exportFile, { force: true });
+  }
+
+  // Import a Postman collection with a Hawk request: it comes over as No auth, and the message says what to check
+  await settle();
+  await clickSel(`${EXPLORER} button[aria-label^="Import ("]`, 'the Import button');
+  const pasted = `__cap.one('[role=dialog] textarea')`;
+  await until(pasted, 'the Import dialog');
+  const hawk = require('node:fs').readFileSync(join(__dirname, '..', 'e2e', 'fixtures', 'postman-hawk', 'hawk.postman_collection.json'), 'utf8');
+  await js(`__cap.input(${pasted}, ${J(hawk)}); true`);
+  await click('Import pasted content', '[role=dialog] button');
+  await until(`!__cap.one('[role=dialog]') && __cap.all('[data-sonner-toast]').some((t) => /Check after import \\(\\d+ notes?\\)/.test(__cap.text(t)))`, 'the import notes');
+  await holdToasts(true);
+  await shot('import-notes', { toasts: true });
+  await holdToasts(false);
+
+  // an API definition an import replaced (Replace instead): the old one goes to Recently deleted
+  await settle();
+  const root = (await invoke('ws.current')).path;
+  const spec = require('node:fs').readFileSync(join(root, 'specs', 'veterinary-api.yaml'), 'utf8');
+  const first = await invoke('col.import', { text: spec });
+  const second = await invoke('col.import', { text: spec.replace(/^(\s+version:\s*).*$/m, (_m, head) => `${head}1.1.0`) });
+  if (!second.specKeptBoth) throw new Error(`the second import did not keep both: ${J({ first: first.specPath, second: second.specPath })}`);
+  await invoke('openapi.replaceSpec', { kept: second.specPath, original: second.specKeptBoth.existing, collectionId: second.collectionId });
+
+  // Delete the MCP server: at once, with Undo in the message (left to pass, so Recently deleted keeps it)
+  await clickSel(`${EXPLORER} button[aria-label="Refresh"]`, 'Refresh');
+  await until(petstoreMcp, 'the Petstore MCP server in the explorer');
+  await js(`(() => { const r = ${petstoreMcp}; const b = r.getBoundingClientRect(); r.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: b.left + 40, clientY: b.top + 10, button: 2 })); return true; })()`);
+  await click('Delete…', '[role=menuitem]');
+  await until(`__cap.all('[data-sonner-toast]').some((t) => /Deleted the MCP server "Petstore MCP"/.test(__cap.text(t)) && /Undo/.test(__cap.text(t)))`, 'the message with Undo');
+  await until(`!${petstoreMcp}`, 'the server gone from the explorer');
+  await holdToasts(true);
+  await shot('mcp-delete-undo', { toasts: true });
+  await holdToasts(false);
+  await settle();
+
+  // Recently deleted (beside the explorer's filter): the MCP server and the replaced API definition, each with Restore
+  await clickSel(`${EXPLORER} button[aria-label="Recently deleted"]`, 'Recently deleted');
+  await until(`(() => { const d = __cap.one('[role=dialog]'); const t = __cap.text(d); return d && t.includes('Petstore MCP') && t.includes('API definition'); })()`, 'the Recently deleted dialog');
+  await shot('recently-deleted');
+  await js(`__cap.key('Escape'); true`);
+  await until(`!__cap.one('[role=dialog]')`, 'Recently deleted to close');
+
+  // the Examples workspace's sidebar: every collection once (the copy an older version left is merged back)
+  // (opened through the app, then the window starts again in it, as after a restart)
+  await invoke('ws.openExamples');
+  const restarted = new Promise((r) => win.webContents.once('did-finish-load', r));
+  win.webContents.reload();
+  await restarted;
+  await js(HELPERS);
+  await until(`(await window.aps.invoke('ws.current'))?.name === 'TestPion Examples' && document.body.innerText.includes('TestPion Examples') && __cap.one('nav [aria-label="Collections"]')`, 'the Examples workspace', 30000);
+  park();
+  await nav('Collections');
+  await showExplorer();
+  // the blank tab a new workspace starts with
+  await js(`__cap.one('[aria-label="Close New HTTP request"]')?.click(); true`);
+  await until(`!__cap.one('[aria-label="Close New HTTP request"]')`, 'the blank tab to close');
+  await clickSel(`${EXPLORER} button[aria-label="Collapse all"]`, 'Collapse all');
+  const streams = `__cap.all('${EXPLORER} [data-tree-row]').find((b) => __cap.text(b).startsWith('Live streams (SSE)'))`;
+  await until(streams, 'the Live streams (SSE) collection');
+  await js(`(() => { const r = ${streams}; if (r.getAttribute('aria-expanded') === 'false') r.click(); return true; })()`);
+  await until(`(${streams})?.getAttribute('aria-expanded') === 'true'`, 'the Live streams (SSE) collection open');
+  await shot('examples-sidebar');
 };

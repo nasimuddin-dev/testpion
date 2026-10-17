@@ -1,11 +1,12 @@
 import { Copy, FolderPlus, Pencil, Plus, Trash2 } from 'lucide-react';
-import { useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { deleteWithUndo, putBack } from '../lib/undo-delete';
 import { Button, cx, Input, type MenuItem } from './ui';
 import { closeTabsFor } from './EditorTabs';
 import { askFolderName, focusRow, folderMenuItems, InlineRename, moveToFolderItem, RowMenu, TreeFolderRow, TreeHeader, treeKeys } from './TreeParts';
 import { usePersisted } from '../lib/sticky';
 import { LABEL } from '../lib/vocabulary';
+import { uniqueKeys } from '../lib/unique-keys';
 
 export interface FolderListItem {
   id: string;
@@ -72,6 +73,11 @@ export function FolderList({
   empty?: ReactNode;
 }) {
   const [collapsed, setCollapsed] = usePersisted<Record<string, boolean>>(collapsedKey(id), {});
+  // one key per row even if two items share an id (a hand-edited or older library file): React never merges them
+  const rowKey = useMemo(() => {
+    const keys = uniqueKeys(items, (it) => it.id, `FolderList ${id}`);
+    return new Map(items.map((it, i) => [it, String(keys[i])]));
+  }, [items, id]);
   const [menuFor, setMenuFor] = useState<string>();
   /** The item being renamed in place (F2, or Rename in its menu). */
   const [renaming, setRenaming] = useState<string>();
@@ -128,7 +134,8 @@ export function FolderList({
 
   const row = (it: FolderListItem, nested: boolean) => (
     <div
-      key={it.id}
+      key={rowKey.get(it) ?? it.id}
+      data-node-id={`${id}:${rowKey.get(it) ?? it.id}`}
       draggable={renaming !== it.id}
       onDragStart={(e) => e.dataTransfer.setData('application/x-testpion-item', it.id)}
       onContextMenu={(e) => (e.preventDefault(), setMenuFor(it.id))}

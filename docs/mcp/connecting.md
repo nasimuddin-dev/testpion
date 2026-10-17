@@ -26,8 +26,14 @@ Servers are saved in `mcp-servers.json` in the workspace:
 
 - Every field accepts variables, so tokens can come from secret environment variables.
 - **Folders:** group servers in folders with the folder button above the list, the server's `⋯` / right-click menu in the Collections explorer (**Move to folder**), the *Folder* field of the server editor, or by dragging a server onto a folder. A server's folder is its `folder` field; empty folders are kept in `library/mcp.json`.
+- **Delete** in the server's `⋯` / right-click menu of the Collections sidebar removes it at once, without a question, and disconnects it. **Undo** in the message (8 seconds, or <kbd>Ctrl</kbd>+<kbd>Z</kbd>) puts it back in its place in the list with its settings, and reconnects it if it was connected. After that, **Recently deleted** (the icon beside the sidebar's Filter box) keeps it for 30 days (`testpion trash list` / `trash restore`). **Delete** in the server tab's ⋯ menu is the same Delete: at once, with **Undo** (it reconnects a connected server), and the server is in **Recently deleted** too.
+- **Exports** never carry a server's header or `env` values: each becomes a `{{variable}}` such as `{{PETSTORE_MCP_AUTHORIZATION}}` (names that never hold a secret, like `Content-Type` or `NODE_ENV`, are kept), and the export lists them. See [Privacy: exports](/security/privacy#exports).
 - On Windows, use `npx.cmd` or the full path to `node.exe` for stdio servers.
 - Anything the server writes to stderr is captured in the trace, which helps diagnose startup failures.
 - From the terminal, `testpion mcp -- node server.js` lists a server's tools, resources and prompts; `testpion mcp --server "My server" -w . --call get_forecast --args '{"city":"Paris"}'` calls a tool of a server saved in the workspace (`--json` for scripts and CI: the result is in the envelope's `.data`). AI agents do the same through the `mcp_server_tools` and `mcp_call_tool` tools of the workspace's MCP server.
+
+<figure class="aps-screenshot">
+  <img src="/images/mcp-delete-undo.jpg" alt="The Petstore MCP server deleted from the Collections sidebar: the message Deleted the MCP server Petstore MCP, Recently deleted keeps it for 30 days, with Undo" width="1440" height="900" loading="lazy">
+</figure>
 
 :::

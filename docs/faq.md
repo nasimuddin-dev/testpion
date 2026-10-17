@@ -43,7 +43,7 @@ Yes. `testpion mcp-server` serves it as MCP tools (send requests, run tests, des
 
 ## Can I import my Postman collections or OpenAPI specs?
 
-Yes: OpenAPI 3 and Swagger 2 (JSON or YAML, from a file or a link), Postman v2.0 and v2.1 collections and environments (their `pm.*` scripts are converted to `tp.*` and run, and `testpion run-collection` accepts Newman's options), Insomnia, Bruno (a collection folder too), Hoppscotch, WSDL 1.1 and 2.0 (SOAP services), AsyncAPI, `.http` files, Arazzo workflows and HAR files, or a request copied as cURL, fetch, PowerShell or HTTPie. See [collections](/api-testing/collections).
+Yes: OpenAPI 3 and Swagger 2 (JSON or YAML, from a file or a link), Postman v2.0 and v2.1 collections and environments (their `pm.*` scripts are converted to `tp.*` and run, and `testpion run-collection` accepts Newman's options), Insomnia (with its scripts and template tags), Bruno (a collection folder too, scripts converted to `tp.*`), Hoppscotch, GraphQL schemas (SDL), WSDL 1.1 and 2.0 (SOAP services), AsyncAPI, `.http` files, Arazzo workflows and HAR files, or a request copied as cURL, fetch, PowerShell or HTTPie. See [collections](/api-testing/collections); what did not come over one to one is listed after the import ([Import fidelity](/getting-started/import-fidelity)).
 
 ## Are LLM-as-judge scores reliable?
 

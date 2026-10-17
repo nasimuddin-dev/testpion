@@ -7,7 +7,7 @@
  */
 import { useCallback, useRef, useState } from 'react';
 import type { ItemRef } from '@testpion/shared';
-import { hasDragBlock, hasDragRefs, readDragBlock, readDragRefs } from '../lib/drag-ref';
+import { deferDrop, hasDragBlock, hasDragRefs, readDragBlock, readDragRefs } from '../lib/drag-ref';
 import { portY } from './FlowNode';
 
 /** Where a drag would land. */
@@ -81,7 +81,8 @@ export function useFlowDrop({ enabled, toGraph, onDrop }: { enabled: boolean; to
       show(undefined);
       const refs = readDragRefs(e);
       const block = readDragBlock(e);
-      if (refs.length || block) onDrop!({ refs, block, hint: h, at });
+      // the data is read now (only a drop event can); the step is added after it, outside the OS drag loop
+      if (refs.length || block) deferDrop(() => onDrop!({ refs, block, hint: h, at }));
     },
   };
   return { hint, handlers };

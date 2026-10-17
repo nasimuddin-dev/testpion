@@ -1,13 +1,81 @@
 ---
 title: "What's new: how to use it"
-description: "What's new in TestPion 0.49, 0.48, 0.47 and 0.46, step by step: AI that explains and fixes a failed run and finds out why a test is flaky, AI that writes integration flows from a collection, verified checks and tests, what is sent, Local only and cost caps, a calmer rail with More…, your own keyboard shortcuts, compact density, Undo instead of confirmations, JSONPath suggestions and Diff vs previous, a visual flow designer, a Terminal, one production guard, and the behaviour changes to read before upgrading."
+description: "What's new in TestPion 0.50, 0.49, 0.48, 0.47 and 0.46, step by step: workspace exports with everything and no secrets, imports that list what to check, AI that explains and fixes a failed run and finds out why a test is flaky, AI that writes integration flows from a collection, verified checks and tests, what is sent, Local only and cost caps, a calmer rail with More…, your own keyboard shortcuts, compact density, Undo instead of confirmations, JSONPath suggestions and Diff vs previous, a visual flow designer, a Terminal, one production guard, and the behaviour changes to read before upgrading."
 ---
 
 ::: v-pre
 
 # What's new: how to use it
 
-The options added in 0.49, 0.48, 0.47 and 0.46, each with the steps to use it and a link to the full reference. Where it makes sense, an option also works from the terminal (`testpion …`, with `--json`) and for AI agents (an MCP tool of `testpion mcp-server`). **Read the behaviour changes of [0.49](#behaviour-changes-in-0-49), [0.48](#behaviour-changes-in-0-48), [0.47](#behaviour-changes-in-0-47) and [0.46](#behaviour-changes-read-before-upgrading) before upgrading.** The 0.45 additions follow [below](#what-was-new-in-0-45); older ones are in the [changelog](/changelog).
+The options added in 0.50, 0.49, 0.48, 0.47 and 0.46, each with the steps to use it and a link to the full reference. Where it makes sense, an option also works from the terminal (`testpion …`, with `--json`) and for AI agents (an MCP tool of `testpion mcp-server`). **Read the behaviour changes of [0.50](#behaviour-changes-in-0-50), [0.49](#behaviour-changes-in-0-49), [0.48](#behaviour-changes-in-0-48), [0.47](#behaviour-changes-in-0-47) and [0.46](#behaviour-changes-read-before-upgrading) before upgrading.** The 0.45 additions follow [below](#what-was-new-in-0-45); older ones are in the [changelog](/changelog).
+
+## What's new in 0.50: nothing lost, nothing leaked {#whats-new-in-0-50}
+
+0.50 makes moving work in and out of TestPion safe: a workspace export holds everything it needs and no secret, an import says what it could not bring over instead of guessing, and nothing you delete or import over is gone for good.
+
+- **Export a whole workspace** with its API definitions, datasets, mocks and protos, every typed-in secret replaced by a `{{variable}}` and listed ([steps](#workspace-export-files)).
+- **Imports that tell you what did not come over**: unsupported auth, Insomnia template tags and scripts, Bruno scripts and `.env`, GraphQL schemas, each with a note naming the request ([steps](#import-fidelity), [Import fidelity](/getting-started/import-fidelity)).
+- **An import never overwrites an API definition**: both are kept, with **Replace instead** ([steps](#spec-keep-both)).
+- **Delete an MCP server with Undo**, and find it, a replaced API definition or a deleted dataset in **Recently deleted** ([steps](#mcp-server-undo)).
+- **The Collections sidebar shows each request once**: rows no longer repeat or vanish when two collections share request ids, and dragging a row leaves no ghost behind ([details](#sidebar-rows)).
+
+### Behaviour changes in 0.50 {#behaviour-changes-in-0-50}
+- **Workspace exports hold more, and never a secret.** They now include the files of `specs/`, `datasets/`, `mocks/` and `protos/` (a file over 10 MB, or past 50 MB in all, is left out and named). A token, password or key typed into a collection's auth or headers, every MCP server header and `env` value (except names such as `Content-Type` or `NODE_ENV`), a password in a connection string and a provider key become `{{variables}}`; the message after export lists each one, and the import lists the **values needed**. Set them as secret variables of an environment on the other computer.
+- **The export file is called `<workspace name>.testpion.json`** (it was `.apsworkspace.json`, which still imports), and `testpion workspace export` writes it without `-o`.
+- **Importing an API definition no longer overwrites one of the same name.** A different document is saved beside it as `specs/<name>-2…`; **Replace instead** in the message (or `testpion import --replace-spec`) puts it in the old one's place, and the old one goes to Recently deleted.
+- **Deleting an MCP server no longer asks first**: it goes at once with **Undo**, like every other item that can come back, and Recently deleted keeps it for 30 days.
+- **An unsupported auth imports as No auth, never inherit.** A Postman, Insomnia, Bruno or Hoppscotch request with Hawk, NTLM, EdgeGrid, ASAP, WSSE, netrc or another scheme TestPion doesn't have used to inherit its folder's auth, so it could send credentials it was never meant to. It now sends **No auth**, with a disabled `X-Imported-Auth-<Scheme>` header and a note: set it up by hand.
+- **Imported Bruno scripts are written with `tp.*`** (`bru.setVar` → `tp.collectionVariables.set` …); `req`, `res` and `test` still run as in Bruno, and **Export ▸ Bruno collection folder** writes `bru.*` back.
+- **Every import lists its notes**: *Check after import (N notes)* in the app, up to 20 in `testpion import` (all in `notes` with `--json`), and `notes` in the MCP tool `import_definition`.
+
+### Export a whole workspace, nothing lost and nothing leaked {#workspace-export-files}
+1. **File ▸ Export ▸ Workspace…**, **Export** in the workspace switcher, or the Collections sidebar's **Export** icon ▸ *The whole workspace*. The file is called `<workspace name>.testpion.json`.
+2. It holds the collections, environments, tests, saved items and MCP servers, and now the files of `specs/`, `datasets/` (a SQLite dataset too), `mocks/` and `protos/`. A file over 10 MB is left out and named in the message, never dropped silently.
+3. Read the message after export: it lists every secret it replaced. A token typed into a collection's auth or a header, an MCP server's header or `env` value, a database password in a connection string, a provider key: each becomes a `{{variable}}` (`Bearer {{PETSTORE_MCP_AUTHORIZATION}}`), and its value stays on your computer. Names that never hold a secret (`Content-Type`, `Accept`, `NODE_ENV` …) are kept as they are.
+4. **Import** the file on the other computer: it opens as a new workspace, and the message lists the **values needed**. Set them as secret variables of an environment.
+
+<figure class="aps-screenshot">
+  <img src="/images/export-workspace.jpg" alt="The Export dialog with The whole workspace chosen: the file name, what it holds and that secret values are replaced by variables" width="1440" height="900" loading="lazy">
+</figure>
+
+Terminal: `testpion workspace export <workspace> [-o file] [--json]` (`--json` returns `replaced: [{ kind, item, field, variable }]` and `notes`). ([Export](/api-testing/collections#export-the-whole-workspace), [Privacy: exports](/security/privacy#exports))
+
+### Imports that tell you what did not come over {#import-fidelity}
+1. Import a Postman, Insomnia, Bruno or Hoppscotch collection as before (**Import** ▸ **Choose file…**, **Bruno folder…**, a link or pasted text; `testpion import`).
+2. Read the **Check after import** message: it names each request whose auth, template tag or script needed a change (`testpion import --json` lists every note under `notes`).
+3. Look for a disabled `X-Imported-Auth-…` header: the request's auth scheme isn't in TestPion yet, so it sends **No auth** (never the parent's) until you set it up.
+4. Insomnia `{% response %}` chaining becomes a variable such as `{{insomnia_log_in_access_token}}`, set by the post-response script of the request it comes from: send that request first (or run the collection in order).
+5. For a Bruno folder with a `.env`, activate the *Bruno .env* environment (or any imported one): its secret values are in the secret store. A GraphQL schema file (`.graphql`) becomes a request for `{{graphqlUrl}}`: set that variable. What each importer maps: [Import fidelity](/getting-started/import-fidelity).
+
+<figure class="aps-screenshot">
+  <img src="/images/import-notes.jpg" alt="After importing a Postman collection with a Hawk request: the message Check after import (1 note) names the request, set to No auth with a disabled X-Imported-Auth-Hawk header" width="1440" height="900" loading="lazy">
+</figure>
+
+### Importing an API definition never overwrites one {#spec-keep-both}
+1. Import an OpenAPI or AsyncAPI document whose name the workspace already has (for example a newer version of `specs/petstore.openapi.yaml`).
+2. TestPion keeps both: the new document is saved as `specs/petstore-2.openapi.yaml`, its requests check that file, and the message says *Saved as specs/petstore-2.openapi.yaml*. The same document imported again is not copied.
+3. Click **Replace instead** in the message to put the new document in the old one's place: the old one goes to **Recently deleted** (30 days), and the new collection's contract checks follow.
+
+Terminal: `testpion import openapi.yaml -w <workspace>` keeps both and prints the same note; `--replace-spec` replaces at once.
+
+### Delete an MCP server with Undo {#mcp-server-undo}
+1. In the Collections sidebar, an MCP server's ⋯ ▸ **Delete** removes it at once (no question first); a connected server is disconnected.
+2. Click **Undo** in the message (or press <kbd>Ctrl</kbd>+<kbd>Z</kbd>) within 8 seconds: the server comes back in its place in the list, with its settings, and reconnects if it was connected.
+3. Later, click **Recently deleted** (the icon beside the sidebar's Filter box): it keeps deleted collections, datasets, MCP servers and API definitions replaced by an import for 30 days, with **Restore** (`testpion trash list` / `trash restore`).
+
+<figure class="aps-screenshot">
+  <img src="/images/recently-deleted.jpg" alt="The Recently deleted dialog of the Collections sidebar listing a deleted MCP server and an API definition, each with Restore" width="1440" height="900" loading="lazy">
+</figure>
+
+### One row per request in the Collections sidebar {#sidebar-rows}
+- Two collections may hold requests with the same id (a copied collection file, an import, an older examples update). The sidebar now tells them apart, so no row is shown twice or goes missing.
+- Imports, moves and copies between collections, and examples updates, give a fresh id to a request whose id is already taken.
+- A second copy of an example collection left by an older version (such as two *Live streams (SSE)*) is merged back into one when the examples workspace is updated; the copy is kept in **Recently deleted**.
+- Dragging a row shows one small chip with its name, and the row never stays behind as a ghost.
+
+<figure class="aps-screenshot">
+  <img src="/images/examples-sidebar.jpg" alt="The TestPion Examples workspace in the Collections sidebar: each example collection listed once, Live streams (SSE) open with its three requests" width="1440" height="900" loading="lazy">
+</figure>
 
 ## What's new in 0.49 {#whats-new-in-0-49}
 

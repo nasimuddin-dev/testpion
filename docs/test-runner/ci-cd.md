@@ -59,7 +59,7 @@ TestPion writes the pipeline file for you, like Postman's *Run in CI*. It works 
 
 The pipeline does four things:
 
-1. Installs the TestPion CLI from its GitHub repository, pinned to your TestPion version (for example `v0.49.0`), so runs are reproducible.
+1. Installs the TestPion CLI from its GitHub repository, pinned to your TestPion version (for example `v0.50.0`), so runs are reproducible.
 2. Runs the tests with the `console`, `junit` and `html` reports.
 3. Publishes `junit.xml` as test results, where the CI system supports it.
 4. Keeps the reports as build artifacts.
@@ -86,7 +86,7 @@ From version 0.44.0 the CLI is on npm, so a pipeline can run it with `npx`; pin 
 # GitHub Actions
 - uses: actions/setup-node@v4
   with: { node-version: 24 }
-- run: npx testpion@0.49.0 run -w . --suite regression -e Staging -r console junit html -o test-results
+- run: npx testpion@0.50.0 run -w . --suite regression -e Staging -r console junit html -o test-results
 ```
 
 The generated files still install the CLI from the repository, which works for any version:
@@ -95,7 +95,7 @@ The generated files still install the CLI from the repository, which works for a
 # GitHub Actions
 - uses: actions/setup-node@v4
   with: { node-version: 24 }
-- run: git clone --depth 1 --branch v0.49.0 https://github.com/nasimuddin-dev/testpion.git "$RUNNER_TEMP/testpion" && cd "$RUNNER_TEMP/testpion" && npm ci && npm run build -w @testpion/shared -w @testpion/core -w @testpion/cli
+- run: git clone --depth 1 --branch v0.50.0 https://github.com/nasimuddin-dev/testpion.git "$RUNNER_TEMP/testpion" && cd "$RUNNER_TEMP/testpion" && npm ci && npm run build -w @testpion/shared -w @testpion/core -w @testpion/cli
 - run: node "$RUNNER_TEMP/testpion/packages/cli/bin/testpion.js" run -w . --suite regression -e Staging -r console junit html -o test-results
   env:
     TESTPION_SECRET_PROVIDER_OPENAI_APIKEY: ${{ secrets.OPENAI_API_KEY }}
@@ -154,7 +154,7 @@ Either side can be a file or an http(s) link. `--json` prints the result for scr
 `testpion openapi-lint` checks OpenAPI / Swagger documents for mistakes that break tools and clients, and for gaps that make an API hard to use. It exits `1` on errors, so a pipeline can stop a broken spec before it is published:
 
 ```yaml
-- run: npx testpion@0.49.0 openapi-lint specs/ --fail-on error
+- run: npx testpion@0.50.0 openapi-lint specs/ --fail-on error
 ```
 
 ```text

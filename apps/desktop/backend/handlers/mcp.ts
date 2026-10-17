@@ -20,6 +20,7 @@ import {
   mcpToolUsage,
   atomicWrite,
   saveTest,
+  trashMcpServer,
 } from '@testpion/core';
 import type { Backend, Handlers } from '../backend.js';
 import { commandLine, forgetTrustedCommands, isCommandTrusted, trustCommand, trustedCommands } from '@testpion/core';
@@ -202,6 +203,16 @@ export function mcpHandlers(be: Backend): Handlers {
       await be.mcpSessions.get(serverId)?.close();
       be.mcpSessions.delete(serverId);
       be.mcpRedactors.delete(serverId);
+    },
+    /**
+     * EX-G6: delete a server to Recently deleted (its config and place in the list), disconnecting it first. The answer
+     * has the trash entry (`trash.restore` brings it back: the Undo) and whether it was connected (Undo reconnects it).
+     */
+    'mcp.deleteServer': async ({ serverId }: { serverId: string }) => {
+      const connected = !!be.mcpSessions.get(serverId)?.connected;
+      const { trashId, server } = trashMcpServer(be.ws, serverId);
+      await be.handlers['mcp.disconnect']!({ serverId });
+      return { trashId, id: server.id, name: server.name, connected };
     },
     'mcp.events': ({ serverId }: { serverId: string }) => be.mcpSessions.get(serverId)?.events ?? [],
     'mcp.call': async ({ serverId, tool, args, assertions }: { serverId: string; tool: string; args: Record<string, unknown>; assertions?: CheckConfig[] }) => {

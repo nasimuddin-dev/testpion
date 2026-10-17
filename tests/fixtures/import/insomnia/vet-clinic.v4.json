@@ -1,0 +1,43 @@
+{
+  "_type": "export",
+  "__export_format": 4,
+  "__export_date": "2026-10-17T10:00:00.000Z",
+  "__export_source": "insomnia.desktop.app:v9.3.3",
+  "resources": [
+    { "_id": "wrk_vet", "_type": "workspace", "parentId": null, "name": "Vet clinic (Insomnia 4)", "description": "", "scope": "collection" },
+    { "_id": "env_base", "_type": "environment", "parentId": "wrk_vet", "name": "Base Environment", "data": { "baseUrl": "https://clinic.test", "api-key": "demo-key" } },
+    {
+      "_id": "req_login",
+      "_type": "request",
+      "parentId": "wrk_vet",
+      "name": "Log in",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/auth/token",
+      "metaSortKey": 1,
+      "body": { "mimeType": "application/json", "text": "{\"user\": \"vet\", \"apiKey\": \"{{ _['api-key'] }}\"}" },
+      "headers": [{ "name": "Content-Type", "value": "application/json" }],
+      "authentication": {},
+      "preRequestScript": "",
+      "afterResponseScript": "insomnia.test('logged in', () => insomnia.expect(insomnia.response.code).to.eql(200));"
+    },
+    { "_id": "fld_patients", "_type": "request_group", "parentId": "wrk_vet", "name": "Patients", "metaSortKey": 2, "environment": {}, "headers": [{ "name": "X-Clinic", "value": "north" }] },
+    {
+      "_id": "req_get",
+      "_type": "request",
+      "parentId": "fld_patients",
+      "name": "Get patient",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/patients/{% response 'body', 'req_login', '$.patients[0].id', 'when-expired', 60 %}",
+      "metaSortKey": 3,
+      "headers": [
+        { "name": "Authorization", "value": "Bearer {% response 'body', 'req_login', 'b64::JC50b2tlbg==::46b', 'never', 60 %}" },
+        { "name": "X-Session", "value": "{% response 'header', 'req_login', 'X-Session', 'never', 60 %}" },
+        { "name": "X-Host", "value": "{% os 'hostname' %}" },
+        { "name": "X-Item", "value": "{% response 'body', 'req_login', '$..items[?(@.id)]', 'never', 60 %}" }
+      ],
+      "authentication": { "type": "ntlm", "username": "vet", "password": "x" },
+      "preRequestScript": "// plain JavaScript, no insomnia.*\nconst ids = [1, 2, 3];\nfor (const id of ids) console.log('patient', id);",
+      "afterResponseScript": ""
+    }
+  ]
+}

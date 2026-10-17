@@ -1,4 +1,5 @@
-import type { CollectionNode } from '../types';
+import type { Collection, CollectionNode } from '../types';
+import { collectNodeIds, ensureUniqueIds } from '@testpion/shared';
 import { uid } from './format';
 
 /** A collection's tree of folders and requests, changed without mutating it (every change makes new arrays). */
@@ -58,3 +59,19 @@ export function duplicateNode(nodes: CollectionNode[], id: string, copy: (n: Col
   return nodes.flatMap((n) => (n.id === id ? [n, copy(n)] : n.kind === 'folder' ? [{ ...n, items: duplicateNode(n.items, id, copy) }] : [n]));
 }
 
+
+/** Every node id of these collections except one (the collection a node is leaving). */
+export function nodeIdsExcept(collections: readonly Pick<Collection, 'id' | 'items'>[], exceptId: string): Set<string> {
+  const out = new Set<string>();
+  for (const c of collections) if (c.id !== exceptId) collectNodeIds(c.items, []).forEach((id) => out.add(id));
+  return out;
+}
+
+/**
+ * A request or folder moved or copied into another collection, with fresh ids for those already taken there or in any
+ * other collection (`taken`), so no two rows of the tree share an id (B-01). Free ids are kept, so tabs and links follow.
+ */
+export function moveIntoCollection<N extends CollectionNode>(node: N, taken: Iterable<string>): { node: N; renamed: Map<string, string> } {
+  const r = ensureUniqueIds({ items: [node] }, taken, (prefix) => uid(prefix));
+  return { node: r.collection.items[0] as N, renamed: r.renamed };
+}

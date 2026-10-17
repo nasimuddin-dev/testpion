@@ -1,15 +1,18 @@
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { Collection, CollectionNode, Environment, LibraryItem } from '../model/types.js';
 import { COLLECTION_ITEM_KINDS } from '../runner/collection-realtime.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { shortId, slugify } from '../util/ids.js';
+import { ApsError } from '../errors.js';
 import { secretKeys, type SecretStore } from '../storage/secrets.js';
 import { detectFormat, importAny } from './importers.js';
 import { importArazzo, resolveArazzoSourcesLocally } from './arazzo.js';
 import { scriptCompatibility, type ScriptWarning } from '../scripts/compat.js';
 import type { ImportScriptsMode, ImportScriptsSummary } from './import-scripts.js';
-import { atomicWrite } from '../storage/fsutil.js';
+import { atomicWrite, renameOwned } from '../storage/fsutil.js';
+import { trashSpec } from '../storage/trash.js';
+import { workspaceNodeIds } from '../storage/node-ids.js';
 
 export interface WorkspaceImportResult {
   format: string;
@@ -21,6 +24,10 @@ export interface WorkspaceImportResult {
   secretsToSet?: string[];
   /** OpenAPI / Swagger imports: where the document was kept (relative to the workspace). */
   specPath?: string;
+  /** Keep both (the default): a different document already had the path, so this one was saved beside it (`specPath`); `existing` is untouched. */
+  specKeptBoth?: { existing: string };
+  /** `specs: 'replace'`: the document that had the path went to Recently deleted (`trashId` restores it). */
+  specReplaced?: { path: string; trashId: string };
   /** Requests that got an `openapi` contract check. */
   contractChecks?: number;
   /** Script APIs the sandbox doesn't provide (cheerio, pm.vault …): these requests need a change to run. */
@@ -99,19 +106,17 @@ export function importIntoWorkspace(
   store: WorkspaceStore,
   text: string,
   /** `scripts: 'keep'` leaves Postman's `pm.*` in imported scripts; the default rewrites them to `tp.*`. */
-  opts: { contractChecks?: boolean; name?: string; secrets?: SecretStore; scripts?: ImportScriptsMode; arazzo?: { baseDir?: string; sources?: Record<string, string> } } = {},
+  /** `specs`: an API definition whose path holds a different document is kept beside it (`keep-both`, the default: x-2.yaml) or replaces it (the old one goes to the trash). */
+  opts: { contractChecks?: boolean; name?: string; secrets?: SecretStore; scripts?: ImportScriptsMode; arazzo?: { baseDir?: string; sources?: Record<string, string> }; specs?: SpecConflict } = {},
 ): WorkspaceImportResult {
   if (detectFormat(text) === 'arazzo') return importArazzoIntoWorkspace(store, text, opts.arazzo);
-  const r = importAny(text, { name: opts.name, scripts: opts.scripts });
+  // node ids never repeat across the workspace's collections: colliding ones are renamed (with a note)
+  const r = importAny(text, { name: opts.name, scripts: opts.scripts, takenIds: workspaceNodeIds(store.listCollections()) });
   const out: WorkspaceImportResult = { format: r.format, ...(r.scripts ? { scripts: r.scripts } : {}) };
   let collection = r.collection;
   if (collection && (r.format === 'openapi' || r.format === 'swagger')) {
     const ext = text.trimStart().startsWith('{') ? 'json' : 'yaml';
-    const rel = `specs/${slugify(collection.name) || 'api'}.${r.format}.${ext}`;
-    const file = store.safePath(rel);
-    mkdirSync(dirname(file), { recursive: true });
-    atomicWrite(file, text);
-    out.specPath = rel;
+    const rel = keepSpec(store, `specs/${slugify(collection.name) || 'api'}`, `.${r.format}.${ext}`, text, opts.specs, out);
     if (opts.contractChecks !== false) {
       let added = 0;
       const withCheck = (nodes: CollectionNode[]): CollectionNode[] =>
@@ -128,12 +133,10 @@ export function importIntoWorkspace(
   // an AsyncAPI document is kept for the asyncapi check and tests-from-spec (in specs/asyncapi/, apart from the OpenAPI ones)
   if (collection && r.format === 'asyncapi') {
     const ext = text.trimStart().startsWith('{') ? 'json' : 'yaml';
-    const rel = `specs/asyncapi/${slugify(collection.name) || 'events'}.${ext}`;
-    const file = store.safePath(rel);
-    mkdirSync(dirname(file), { recursive: true });
-    atomicWrite(file, text);
-    out.specPath = rel;
+    keepSpec(store, `specs/asyncapi/${slugify(collection.name) || 'events'}`, `.${ext}`, text, opts.specs, out);
   }
+  // a GraphQL schema (SDL) is kept in specs/graphql/ (lane C, IMP-FIX-4)
+  if (collection && r.specFile) keepSpec(store, r.specFile.path.replace(/\.graphql$/, ''), '.graphql', r.specFile.text, opts.specs, out);
   if (collection) {
     // an import never replaces a collection the workspace already has (a file exported from it, imported again)
     const ids = new Set(store.listCollections().map((c) => c.id));
@@ -144,7 +147,7 @@ export function importIntoWorkspace(
     if (saved) out.savedItems = restoreSavedItems(store, saved, out.collection.id);
     const warnings = scriptCompatibility(collection, (name) => store.readScriptPackage(name) !== undefined);
     if (warnings.length) out.scriptWarnings = warnings;
-    if (r.notes?.length) out.notes = r.notes;
+    if (r.notes?.length) out.notes = [...r.notes, ...(out.notes ?? [])];
   }
   // an import never replaces an environment the workspace already has: a clash gets a new id and name
   const envs = (r.environments ?? (r.environment ? [r.environment] : [])).map((e) => {
@@ -170,4 +173,70 @@ export function importIntoWorkspace(
     out.environments = envs;
   }
   return out;
+}
+
+/** What an import does when an API definition's path already holds a different document. */
+export type SpecConflict = 'keep-both' | 'replace';
+
+/**
+ * EX-G3: keep an imported API definition at `<stem><suffix>` without ever overwriting another document. The same text
+ * there already is reused; a different one is kept and the import goes to `<stem>-2<suffix>` (-3 …), unless `replace`:
+ * then the old document goes to Recently deleted (undoable) first. Notes say which happened.
+ */
+function keepSpec(store: WorkspaceStore, stem: string, suffix: string, text: string, mode: SpecConflict = 'keep-both', out: WorkspaceImportResult): string {
+  const wanted = `${stem}${suffix}`;
+  const same = (rel: string) => {
+    try {
+      return readFileSync(store.safePath(rel), 'utf8') === text;
+    } catch {
+      return false;
+    }
+  };
+  let rel = wanted;
+  if (existsSync(store.safePath(wanted)) && !same(wanted)) {
+    if (mode === 'replace') {
+      out.specReplaced = { path: wanted, trashId: trashSpec(store, wanted) };
+      (out.notes ??= []).push(`Replaced ${wanted}; the earlier document is in Recently deleted (restorable for 30 days).`);
+    } else {
+      for (let i = 2; existsSync(store.safePath(rel)) && !same(rel); i++) rel = `${stem}-${i}${suffix}`;
+      if (rel !== wanted) {
+        out.specKeptBoth = { existing: wanted };
+        (out.notes ??= []).push(`Saved as ${rel}: ${wanted} holds a different document and was kept. Replace instead to use this one there (the earlier one goes to Recently deleted).`);
+      }
+    }
+  }
+  if (!same(rel)) {
+    const file = store.safePath(rel);
+    mkdirSync(dirname(file), { recursive: true });
+    atomicWrite(file, text);
+  }
+  out.specPath = rel;
+  return rel;
+}
+
+/**
+ * "Replace instead" after Keep both: the document saved as `kept` (specs/x-2.yaml) takes the place of `original`
+ * (specs/x.yaml), which goes to Recently deleted; the contract checks of `collectionId` that named `kept` name `original`.
+ */
+export function replaceSpecWithImported(store: WorkspaceStore, o: { kept: string; original: string; collectionId?: string }): { specPath: string; trashId?: string; contractChecks: number } {
+  const kept = store.safePath(o.kept);
+  const original = store.safePath(o.original);
+  if (!store.isInside(kept, 'specs') || !store.isInside(original, 'specs')) throw new ApsError('ValidationError', 'Both paths must be API definitions in specs/', { suggestions: [] });
+  if (!existsSync(kept)) throw new ApsError('ConfigurationError', `No API definition ${o.kept}`, { suggestions: [] });
+  const trashId = existsSync(original) ? trashSpec(store, o.original) : undefined;
+  renameOwned(kept, original);
+  let contractChecks = 0;
+  const c = o.collectionId ? store.listCollections().find((x) => x.id === o.collectionId && !x.problem) : undefined;
+  if (c) {
+    const fix = (nodes: CollectionNode[]): CollectionNode[] =>
+      nodes.map((n) => {
+        if (n.kind === 'folder') return { ...n, items: fix(n.items) };
+        if (!n.assertions?.some((a) => (a as { spec?: string }).spec === o.kept)) return n;
+        contractChecks++;
+        return { ...n, assertions: n.assertions.map((a) => ((a as { spec?: string }).spec === o.kept ? { ...a, spec: o.original } : a)) } as CollectionNode;
+      });
+    const items = fix(c.items);
+    if (contractChecks) store.saveCollection({ ...c, items });
+  }
+  return { specPath: o.original, trashId, contractChecks };
 }

@@ -7,7 +7,6 @@ import * as SwitchPrimitive from '@radix-ui/react-switch';
 import * as TooltipPrimitive from '@radix-ui/react-tooltip';
 import { ChevronDown, ChevronRight, ChevronsRight, Loader2, MoreHorizontal, X } from 'lucide-react';
 import { iconForLabel, textOf } from './action-icons';
-import { scaledRow, useDensity } from '../lib/density';
 
 // icons drawn in every tab and menu row, made once (React skips an element it has already rendered)
 const TAB_CLOSE_ICON = <X size={12} />;
@@ -684,134 +683,8 @@ export function Split({ id, direction = 'horizontal', initial = 50, min = 15, si
   );
 }
 
-/** The element that scrolls `el` (its nearest ancestor with overflow auto or scroll). */
-function scrollingAncestor(el: HTMLElement | null): HTMLElement | null {
-  for (let p = el?.parentElement; p; p = p.parentElement) if (/(auto|scroll|overlay)/.test(getComputedStyle(p).overflowY)) return p;
-  return null;
-}
-
-/**
- * Fixed-row-height virtual list: renders only visible rows, so 1M rows cost the same as 50. With `scrollParent` it has
- * no scroll box of its own: it scrolls with the element around it (a tree in a sidebar with other sections above and
- * below it). `keyOf` keeps a row's component when rows above it come and go; `scrollKey` scrolls to `scrollToIndex`
- * again even when the index is the same.
- */
-export function VirtualList<T>({
-  items,
-  rowHeight: givenRowHeight,
-  render,
-  className,
-  overscan = 8,
-  scrollToIndex,
-  scrollKey,
-  onEndReached,
-  keyOf,
-  scrollParent = false,
-}: {
-  items: T[];
-  rowHeight: number;
-  render(item: T, index: number): ReactNode;
-  className?: string;
-  overscan?: number;
-  scrollToIndex?: number;
-  scrollKey?: unknown;
-  onEndReached?(): void;
-  keyOf?(item: T, index: number): string | number;
-  scrollParent?: boolean;
-}) {
-  // rows follow the density (Settings ▸ Appearance): the given height is the comfortable one
-  const rowHeight = scaledRow(givenRowHeight, useDensity());
-  const ref = useRef<HTMLDivElement>(null);
-  const [scrollTop, setScrollTop] = useState(0);
-  const [height, setHeight] = useState(400);
-  const scrollFrame = useRef<number | undefined>(undefined);
-  const pendingScrollTop = useRef(0);
-  /** With scrollParent: the element that scrolls, and where the list starts in it. */
-  const outer = useRef<{ box: HTMLElement; measure(): void } | undefined>(undefined);
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    if (!scrollParent) {
-      const ro = new ResizeObserver(() => setHeight(el.clientHeight));
-      ro.observe(el);
-      setHeight(el.clientHeight);
-      return () => ro.disconnect();
-    }
-    const box = scrollingAncestor(el);
-    if (!box) return;
-    // the part of the list on screen: from where the box's view starts (relative to the list's top) for the box's height
-    const measure = () => {
-      const top = el.getBoundingClientRect().top - box.getBoundingClientRect().top;
-      setScrollTop(-top);
-      setHeight(box.clientHeight);
-    };
-    outer.current = { box, measure };
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(box);
-    const onScroll = () => {
-      if (scrollFrame.current !== undefined) return;
-      scrollFrame.current = requestAnimationFrame(() => {
-        scrollFrame.current = undefined;
-        measure();
-      });
-    };
-    box.addEventListener('scroll', onScroll, { passive: true });
-    return () => {
-      ro.disconnect();
-      box.removeEventListener('scroll', onScroll);
-      outer.current = undefined;
-    };
-  }, [scrollParent]);
-  // what is above the list may have grown or shrunk with it (a section opened): measure again when the rows change
-  useEffect(() => outer.current?.measure(), [items]);
-  useEffect(() => {
-    if (scrollToIndex === undefined || !ref.current) return;
-    const el = ref.current;
-    if (outer.current) {
-      const { box } = outer.current;
-      const top = el.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop + scrollToIndex * rowHeight;
-      if (top < box.scrollTop || top > box.scrollTop + box.clientHeight - rowHeight) box.scrollTop = Math.max(0, top - box.clientHeight / 3);
-      return;
-    }
-    const top = scrollToIndex * rowHeight;
-    if (top < el.scrollTop || top > el.scrollTop + el.clientHeight - rowHeight) el.scrollTop = Math.max(0, top - el.clientHeight / 3);
-  }, [scrollToIndex, rowHeight, scrollKey]);
-  useEffect(() => () => {
-    if (scrollFrame.current !== undefined) cancelAnimationFrame(scrollFrame.current);
-  }, []);
-  const start = Math.min(items.length, Math.max(0, Math.floor(scrollTop / rowHeight) - overscan));
-  const end = Math.max(start, Math.min(items.length, Math.ceil((scrollTop + height) / rowHeight) + overscan));
-  useEffect(() => {
-    if (onEndReached && end >= items.length - 5 && items.length) onEndReached();
-  }, [end, items.length, onEndReached]);
-  const rows: ReactNode[] = [];
-  for (let i = start; i < end; i++)
-    rows.push(
-      <div key={keyOf ? keyOf(items[i]!, i) : i} style={{ position: 'absolute', top: i * rowHeight, height: rowHeight, left: 0, right: 0 }}>
-        {render(items[i]!, i)}
-      </div>,
-    );
-  if (scrollParent) return <div ref={ref} className={cx('relative', className)} style={{ height: items.length * rowHeight }}>{rows}</div>;
-  return (
-    <div
-      ref={ref}
-      className={cx('overflow-auto relative', className)}
-      onScroll={(e) => {
-        pendingScrollTop.current = e.currentTarget.scrollTop;
-        // Scrolling can emit far more events than frames. Coalescing updates
-        // keeps large lists responsive while preserving the same visible rows.
-        if (scrollFrame.current !== undefined) return;
-        scrollFrame.current = requestAnimationFrame(() => {
-          scrollFrame.current = undefined;
-          setScrollTop(pendingScrollTop.current);
-        });
-      }}
-    >
-      <div style={{ height: items.length * rowHeight, position: 'relative' }}>{rows}</div>
-    </div>
-  );
-}
+// the virtual list lives in its own module; imported from here as before
+export { VirtualList } from './VirtualList';
 
 /**
  * A choice among a few options shown side by side (7 / 14 / 30 days, Table / Chart, Mine / Theirs): one control, the

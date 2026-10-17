@@ -497,7 +497,7 @@ export function EnvironmentsView() {
           </div>
         )}
       </div>
-      {trashOpen && <TrashDialog kind="environment" onClose={() => setTrashOpen(false)} onRestored={(r) => void load().then(() => setSel(r.id))} />}
+      {trashOpen && <TrashDialog kinds={['environment']} onClose={() => setTrashOpen(false)} onRestored={(r) => void load().then(() => setSel(r.id))} />}
       {comparing && sel && <EnvCompare environments={envs} initialLeft={sel} onClose={() => setComparing(false)} />}
       {matrix && <EnvMatrix onClose={() => setMatrix(false)} />}
       {historyOf && <GitItemHistory target={{ environmentId: historyOf.id }} name={historyOf.name} onClose={() => (setHistoryOf(undefined), void load())} />}

@@ -1,0 +1,52 @@
+# An Insomnia 5 collection (Insomnia 10+: Export ▸ Insomnia v5 YAML) for the import tests: scripts (insomnia.*), a
+# token passed with {% response %} (chained), against the local demo server.
+type: collection.insomnia.rest/5.0
+schema_version: "5.1"
+name: Vet clinic (Insomnia 5 sample)
+meta:
+  id: wrk_v5_vetclinic
+collection:
+  - name: Log in
+    meta:
+      id: req_login
+      sortKey: -3
+    method: POST
+    url: "{{ _.baseUrl }}/auth/token"
+    body:
+      mimeType: application/json
+      text: '{"username": "vet", "password": "paws"}'
+    headers:
+      - name: Content-Type
+        value: application/json
+    scripts:
+      preRequest: insomnia.environment.set('loginAt', new Date().toISOString());
+      afterResponse: insomnia.test('logged in', () => insomnia.expect(insomnia.response.code).to.eql(200));
+  - name: List patients (uses the token)
+    meta:
+      id: req_list
+      sortKey: -2
+    method: GET
+    url: "{{ _.baseUrl }}/patients"
+    authentication:
+      type: bearer
+      token: "{% response 'body', 'req_login', 'b64::JC5hY2Nlc3NfdG9rZW4=::46b', 'never', 60 %}"
+    scripts:
+      afterResponse: insomnia.test('a list of patients', () => insomnia.expect(insomnia.response.json().items).to.be.an('array'));
+  - name: Echo a value set before sending
+    meta:
+      id: req_echo
+      sortKey: -1
+    method: GET
+    url: "{{ _.baseUrl }}/echo"
+    parameters:
+      - name: stamp
+        value: "{{ _.stamp }}"
+    scripts:
+      preRequest: insomnia.environment.set('stamp', 'insomnia5-' + Date.now());
+      afterResponse: insomnia.test('the pre-request value was sent', () => insomnia.expect(insomnia.response.json().query.stamp).to.eql(insomnia.environment.get('stamp')));
+environments:
+  name: Base Environment
+  meta:
+    id: env_base
+  data:
+    baseUrl: http://127.0.0.1:4010

@@ -1,5 +1,6 @@
 import { call } from '../api';
 import { toastError, useApp } from '../store';
+import { closeTabsFor } from '../components/EditorTabs';
 
 /**
  * Deletes that can be taken back (lib/undo.ts): no "Are you sure?" first; the item goes at once and the message says
@@ -32,9 +33,9 @@ export async function deleteWithUndo(o: {
   return true;
 }
 
-export type TrashedKind = 'collection' | 'environment' | 'dataset';
+export type TrashedKind = 'collection' | 'environment' | 'dataset' | 'spec' | 'mcp-server';
 
-/** Undo a delete that went to Recently deleted (collections, environments, datasets): its newest entry comes back. */
+/** Undo a delete that went to Recently deleted (any kind of the trash): its newest entry comes back. */
 export async function restoreDeleted(kind: TrashedKind, itemId: string): Promise<{ id: string; name: string }> {
   const list = await call<Array<{ id: string; kind: string; itemId: string }>>('trash.list');
   const base = (s: string) => s.split(/[\\/]/).pop()!;
@@ -48,4 +49,34 @@ export function putBack<T extends { id: string }>(list: T[], item: T, index: num
   if (list.some((x) => x.id === item.id)) return list;
   const at = Math.max(0, Math.min(index, list.length));
   return [...list.slice(0, at), item, ...list.slice(at)];
+}
+
+/**
+ * EX-G6: THE delete of an MCP server, wherever it is asked for (the sidebar's menu, the MCP tab's ⋯ menu): its tabs
+ * close, it goes to Recently deleted (disconnected first), and Undo puts it back in its place in the list (the trash
+ * keeps its config and position); one that was connected reconnects (a program not yet allowed opens its tab to ask).
+ * `after` reloads the caller's list.
+ */
+export function deleteMcpServerWithUndo(server: { id: string; name: string }, o: { after(): unknown }): Promise<boolean> {
+  let gone: { trashId: string; connected: boolean } | undefined;
+  return deleteWithUndo({
+    what: `the MCP server "${server.name}"`,
+    note: 'Recently deleted keeps it for 30 days',
+    run: async () => {
+      gone = await call<{ trashId: string; connected: boolean }>('mcp.deleteServer', { serverId: server.id });
+      closeTabsFor([server.id]);
+      await o.after();
+    },
+    undo: async () => {
+      if (!gone) return;
+      const back = await call<{ id: string }>('trash.restore', { id: gone.trashId });
+      await o.after();
+      if (!gone.connected) return;
+      const app = useApp.getState();
+      await call('mcp.connect', { serverId: back.id, environment: app.environment }).then(
+        () => o.after(),
+        () => app.openIntent('mcp', { serverId: back.id, connect: true }),
+      );
+    },
+  });
 }

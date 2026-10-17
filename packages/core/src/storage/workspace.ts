@@ -16,6 +16,9 @@ import { moveToTrash } from './trash.js';
 import { markTemplateInstalled } from './template-update.js';
 import { writeGitFiles } from './git-files.js';
 import { adoptLooseRequests, describeAdoption, type AdoptedRequests } from './loose-requests.js';
+import { exportWorkspaceBundle, importWorkspaceBundle, type WorkspaceBundle } from './workspace-bundle.js';
+
+export { WORKSPACE_FORMATS, type WorkspaceBundle } from './workspace-bundle.js';
 
 /* ------------------------------------------------------------------ migrations */
 
@@ -565,34 +568,9 @@ export class WorkspaceStore {
     return dir;
   }
 
-  /** Portable export bundle. Secret values are never included. */
+  /** Portable export bundle (workspace-bundle.ts). Secret values are never included. */
   exportBundle(): WorkspaceBundle {
-    const tests: Record<string, string> = {};
-    const walk = (nodes: TestFileNode[]) => {
-      for (const n of nodes) {
-        if (n.kind === 'dir') walk(n.children ?? []);
-        else {
-          const p = this.path('tests', n.path);
-          if (statSync(p).size < 5 * 1024 * 1024) tests[n.path] = readFileSync(p, 'utf8');
-        }
-      }
-    };
-    walk(this.testTree());
-    return {
-      format: 'testpion-workspace',
-      schemaVersion: SCHEMA_VERSION,
-      exportedAt: new Date().toISOString(),
-      workspace: { ...this.ws, variables: this.ws.variables.map((v) => ((v as { secret?: boolean }).secret ? { ...v, value: '' } : v)) },
-      collections: this.listCollections().filter((c) => !c.problem),
-      environments: this.listEnvironments()
-        .filter((e) => !e.problem)
-        .map((e) => ({ ...e, variables: e.variables.map((v) => (v.secret ? { ...v, value: '' } : v)) })),
-      providers: this.getProviders(),
-      mcpServers: this.getMcpServers(),
-      tests,
-      library: this.libraryKinds().reduce<Record<string, Library>>((all, kind) => ({ ...all, [kind]: this.getLibrary(kind) }), {}),
-      packages: Object.fromEntries(this.listScriptPackages().map((p) => [p.name, this.readScriptPackage(p.name) ?? ''])),
-    };
+    return exportWorkspaceBundle(this);
   }
 
   /** Kinds of saved items this workspace has (library/*.json). */
@@ -610,23 +588,6 @@ export class WorkspaceStore {
   }
 }
 
-export interface WorkspaceBundle {
-  /** "fluxpion-workspace" / "protopion-workspace" / "protolens-workspace" in exports from before the TestPion name (still imported). */
-  format: 'testpion-workspace' | 'fluxpion-workspace' | 'protopion-workspace' | 'protolens-workspace';
-  schemaVersion: string;
-  exportedAt: string;
-  workspace: Workspace;
-  collections: Collection[];
-  environments: Environment[];
-  providers: ProviderConfig[];
-  mcpServers: McpServerConfig[];
-  tests: Record<string, string>;
-  /** Saved items with folders by kind (WebSocket connections, AI prompts …); absent in older exports. */
-  library?: Record<string, Pick<Library, 'folders' | 'items'>>;
-  /** Script packages for tp.require, by name; absent in older exports. */
-  packages?: Record<string, string>;
-}
-
 /* ------------------------------------------------------------------ app-level manager */
 
 export interface WorkspaceInfo {
@@ -635,9 +596,6 @@ export interface WorkspaceInfo {
   path: string;
   updatedAt: string;
 }
-
-/** Workspace export formats this version imports (the project's earlier names included). */
-export const WORKSPACE_FORMATS = new Set(['testpion-workspace', 'fluxpion-workspace', 'protopion-workspace', 'protolens-workspace']);
 
 export function defaultAppDir(): string {
   // earlier names of the variable: FLUXPION_HOME (0.5), PROTOPION_HOME (0.4), PROTOLENS_HOME (0.2–0.3), APS_HOME (0.1)
@@ -847,32 +805,9 @@ export class WorkspaceManager {
     return { deletedFiles: managed };
   }
 
+  /** Import an export as a new workspace (workspace-bundle.ts; `importWorkspaceBundle` also says what was skipped and what to fill in). */
   importBundle(bundle: WorkspaceBundle, name?: string): WorkspaceStore {
-    if (!WORKSPACE_FORMATS.has(bundle?.format)) throw new ApsError('ValidationError', 'Not a TestPion workspace export');
-    const { ws } = migrateWorkspace({ ...(bundle.workspace as unknown as Record<string, unknown>), schemaVersion: bundle.schemaVersion });
-    // the same export imported twice gets a numbered name, so the switcher can tell them apart
-    const base = name ?? `${(ws as unknown as Workspace).name} (imported)`;
-    const taken = new Set(this.list().map((w) => w.name));
-    let unique = base;
-    for (let i = 2; !name && taken.has(unique); i++) unique = `${base} ${i}`;
-    const store = this.create(unique);
-    store.updateWorkspace({ variables: (ws as unknown as Workspace).variables, description: (ws as unknown as Workspace).description });
-    for (const c of bundle.collections ?? []) store.saveCollection(c);
-    // the export's environments replace the default one a new workspace starts with (unless it has one by that id)
-    if (bundle.environments?.length && !bundle.environments.some((e) => e.id === 'development')) store.deleteEnvironment('development');
-    for (const e of bundle.environments ?? []) store.saveEnvironment(e);
-    store.saveProviders(bundle.providers ?? []);
-    store.saveMcpServers(bundle.mcpServers ?? []);
-    for (const [kind, lib] of Object.entries(bundle.library ?? {})) store.saveLibrary(kind, { folders: lib.folders ?? [], items: lib.items ?? [] });
-    // an export from an older version may hold gRPC calls and connections outside a collection
-    adoptLooseRequests(store);
-    for (const [name, code] of Object.entries(bundle.packages ?? {})) if (SCRIPT_PACKAGE_NAME.test(name) && typeof code === 'string') store.saveScriptPackage(name, code);
-    for (const [rel, content] of Object.entries(bundle.tests ?? {})) {
-      const p = store.safePath(rel, store.path('tests'));
-      mkdirSync(dirname(p), { recursive: true });
-      atomicWrite(p, content);
-    }
-    return store;
+    return importWorkspaceBundle(this, bundle, name).store;
   }
 }
 

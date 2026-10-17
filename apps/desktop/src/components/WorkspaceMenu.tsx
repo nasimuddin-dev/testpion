@@ -3,10 +3,13 @@ import { runMenuCommand } from '../menu-commands';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { asError, call } from '../api';
 import { promptText, toastError, useApp } from '../store';
-import { downloadContent, hasNativeDialogs, pickTextFile } from '../lib/files';
+import { hasNativeDialogs, pickTextFile } from '../lib/files';
+import { IMPORT_FILE_ACCEPT } from '@testpion/shared';
+import { exportWorkspace as exportWorkspaceFile, toastWorkspaceImported } from '../lib/workspace-export';
+import { toastSpecKeptBoth } from '../lib/spec-import';
 import { Badge, Button, cx, IconButton, Input, Menu, Modal, Spinner, type MenuItem } from './ui';
 import { plural } from '../lib/format';
-import { convertedScriptsText, toastUnchangedScripts, type ImportScriptsSummary } from '../lib/import-scripts';
+import { convertedScriptsText, toastImportNotes, toastUnchangedScripts, type ImportScriptsSummary } from '../lib/import-scripts';
 
 interface WorkspaceInfo {
   id: string;
@@ -67,13 +70,14 @@ export function WorkspaceMenu() {
     setOpen(false);
     if (!isCurrent(w)) void act(() => call('ws.open', { ref: w.path }), `Switched to "${w.name}"`);
   };
-  type ImportResult = { kind: string; name?: string; format?: string; collection?: string; environment?: string; workspace?: string; scripts?: ImportScriptsSummary } | null;
+  type ImportResult = { kind: string; name?: string; files?: number; valuesNeeded?: string[]; specPath?: string; specKeptBoth?: { existing: string }; collectionId?: string; format?: string; collection?: string; environment?: string; workspace?: string; scripts?: ImportScriptsSummary; notes?: string[]; scriptWarnings?: Array<{ where: string; api: string; hint: string }> } | null;
   const imported = (r: ImportResult) => {
-    if (r?.kind === 'workspace') toast(`Workspace "${r.name}" imported and opened`, 'success');
+    if (r?.kind === 'workspace') toastWorkspaceImported(r);
     else if (r) {
       const what = [r.collection && `collection "${r.collection}"`, r.environment && `environment "${r.environment}"`].filter(Boolean).join(' and ');
       toast(`Imported ${what || r.format} (${r.format}) into "${r.workspace}"${convertedScriptsText(r.scripts) ? `. ${convertedScriptsText(r.scripts)}` : ''}`, 'success');
       toastUnchangedScripts(r.scripts);
+      toastImportNotes({ ...r, notes: toastSpecKeptBoth(r) });
       useApp.getState().openIntent('collections', {});
     }
   };
@@ -84,23 +88,15 @@ export function WorkspaceMenu() {
       return void act(async () => (r = await call<ImportResult>('ws.importPick'))).then(() => imported(r));
     }
     // browser / cloud: pick the file in the page
-    void pickTextFile('.json,.yaml,.yml,.har,.env,.wsdl,.xml,.http,.rest,.bru').then(async (f) => {
+    void pickTextFile(IMPORT_FILE_ACCEPT).then(async (f) => {
       if (!f) return;
       let r: ImportResult = null;
       await act(async () => (r = await call<ImportResult>('ws.importFile', { text: f.text, fileName: f.name })));
       imported(r);
     });
   };
-  /** Export a workspace to one .json file (asks where; in the browser it downloads). Secret values are never exported. */
-  const exportWorkspace = (w: { name: string; path: string }) =>
-    void call<{ path?: string; bundle?: unknown; cancelled?: boolean; collections?: number; environments?: number }>('ws.export', { ref: w.path }).then(
-      (r) => {
-        if (r.cancelled) return;
-        if (r.bundle) downloadContent(`${w.name}.apsworkspace.json`, JSON.stringify(r.bundle, null, 2), { type: 'application/json' });
-        toast(`Exported "${w.name}" (${plural(r.collections ?? 0, 'collection')}, ${plural(r.environments ?? 0, 'environment')})${r.path ? ` to ${r.path}` : ''}. Secret values are never exported.`, 'success');
-      },
-      (e) => toastError(e),
-    );
+  /** Export a workspace to one .testpion.json file (asks where; in the browser it downloads); the message says what was replaced and left out. */
+  const exportWorkspace = (w: { name: string; path: string }) => void exportWorkspaceFile(w.path).catch(toastError);
   const rowMenu = (w: WorkspaceInfo): MenuItem[] => [
     { label: isCurrent(w) ? 'Open (current)' : 'Open', icon: <Check size={14} />, disabled: isCurrent(w), onSelect: () => switchTo(w) },
     { label: 'Rename', icon: <Pencil size={14} />, onSelect: () => setNameDialog({ mode: 'rename', target: w, value: w.name }) },

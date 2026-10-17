@@ -63,6 +63,7 @@ const docsSidebar = [
       { text: 'Keyboard shortcuts', link: '/getting-started/keyboard-shortcuts' },
       { text: 'Examples workspace', link: '/getting-started/examples' },
       { text: 'Workspaces', link: '/getting-started/workspaces' },
+      { text: 'Import fidelity', link: '/getting-started/import-fidelity' },
       { text: 'Terminal', link: '/getting-started/terminal' },
       { text: 'Keep your workspace in git', link: '/getting-started/git' },
       { text: 'Your first AI test', link: '/getting-started/first-ai-test' },

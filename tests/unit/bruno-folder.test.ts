@@ -151,7 +151,8 @@ describe('Bruno .bru files', () => {
       { key: 'X-Trace', value: 'from-collection', enabled: true },
     ]);
     expect(login.assertions).toEqual([{ type: 'status', expected: 200 }]);
-    expect(login.testScript).toContain('bru.setVar("token", res.body.token);');
+    // vars:post-response: a runtime variable, written with TestPion's tp.* (bru.setVar's equivalent)
+    expect(login.testScript).toContain('tp.collectionVariables.set("token", res.body.token);');
     const get = (c.items[1] as CollectionFolder).items[0] as SavedHttpRequest;
     expect(get.request).toMatchObject({ url: '{{baseUrl}}/patients/:id', params: [{ key: 'full', value: 'true', enabled: true }], pathVariables: [{ key: 'id', value: '7', enabled: true }], auth: { type: 'bearer', token: '{{token}}' } });
     expect(get.description).toBe('Reads one patient.');

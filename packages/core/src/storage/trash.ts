@@ -1,44 +1,215 @@
-import { existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { ApsError } from '../errors.js';
+import type { McpServerConfig } from '../model/types.js';
 import { shortId, slugify } from '../util/ids.js';
 import type { WorkspaceStore } from './workspace.js';
-import { readJson, renameOwned } from './fsutil.js';
+import { readJson, renameOwned, writeJson } from './fsutil.js';
 import { COLLECTION_ITEM_KINDS } from '../runner/collection-realtime.js';
 
 /**
- * Recently deleted collections, environments and datasets. Deleting moves the file to the workspace's `trash/`
- * folder (never committed: it holds its own `.gitignore`), from where it can be restored for 30 days.
- * Secret values stay in the secret store, so a restored environment still has them. A deleted collection's gRPC
- * calls and connections stay in the library, hidden, and come back with it; purged, they are deleted with it.
+ * Recently deleted collections, environments, datasets, API definitions (specs/) and MCP servers. Deleting moves the
+ * item to the workspace's `trash/` folder (never committed: it holds its own `.gitignore`), from where it can be
+ * restored for 30 days. Secret values stay in the secret store, so a restored environment still has them. A deleted
+ * collection's gRPC calls and connections stay in the library, hidden, and come back with it; purged, they are deleted
+ * with it. An MCP server keeps its id and its place in the list; an API definition its path.
  */
-export type TrashKind = 'collection' | 'environment' | 'dataset';
+export type TrashKind = 'collection' | 'environment' | 'dataset' | 'spec' | 'mcp-server';
 export const TRASH_DAYS = 30;
 
 export interface TrashItem {
   /** Trash entry id (`<kind>/<file>`). */
   id: string;
   kind: TrashKind;
-  /** The item's own id and name when it was deleted. */
+  /** The item's own id and name when it was deleted (a spec: its path, `specs/x.yaml`). */
   itemId: string;
   name: string;
   deletedAt: string;
-  /** Requests in a collection, variables in an environment, bytes of a dataset. */
+  /** Requests in a collection, variables in an environment, bytes of a dataset or spec, tools … nothing for a server (0). */
   size: number;
 }
 
-const DIRS: Record<TrashKind, string> = { collection: 'collections', environment: 'environments', dataset: 'datasets' };
+/** What one kind of trashed item is: where its entries live, and how one is listed and put back. */
+interface KindDef {
+  /** What the items are called, plural ("API definitions"): help texts list the kinds from here. */
+  label: string;
+  dir: string;
+  /** An entry's file name after `<time>--`: JSON files for items saved as JSON, the file itself for datasets and specs. */
+  entry: RegExp;
+  describe(store: WorkspaceStore, path: string, name: string): Pick<TrashItem, 'itemId' | 'name' | 'size'>;
+  restore(store: WorkspaceStore, path: string, name: string): { id: string; name: string };
+}
 
-const trashDir = (store: WorkspaceStore, kind?: TrashKind) => (kind ? store.path('trash', DIRS[kind]) : store.path('trash'));
+/** A saved JSON item's id and name; one with the same id or name again gets a new id and "(restored)". */
+function unclash<T extends { id: string; name: string }>(data: T, existing: Array<{ id: string; name: string }>): T {
+  const clash = existing.some((x) => x.id === data.id || x.name.toLowerCase() === String(data.name).toLowerCase());
+  return clash ? { ...data, id: `${slugify(String(data.name))}-${shortId().slice(-4)}`, name: `${data.name} (restored)` } : data;
+}
 
-/** Move a workspace file (collections/x.json, environments/x.json, datasets/x.csv) into the trash. */
-export function moveToTrash(store: WorkspaceStore, kind: TrashKind, file: string): void {
-  if (!existsSync(file)) return;
+/** A file put back in its folder, as name-restored.ext when the name is taken again. */
+function restoreFile(path: string, dir: string, rel: string): string {
+  let dest = join(dir, ...rel.split('/'));
+  if (existsSync(dest)) dest = dest.replace(/(\.[^./\\]+)?$/, '-restored$1');
+  mkdirSync(join(dest, '..'), { recursive: true });
+  renameOwned(path, dest);
+  return dest;
+}
+
+const count = (data: Record<string, unknown>): number => {
+  const walk = (nodes: unknown): number => (Array.isArray(nodes) ? nodes.reduce<number>((n, x) => n + ((x as { kind?: string }).kind === 'folder' ? walk((x as { items?: unknown }).items) : 1), 0) : 0);
+  return walk(data.items);
+};
+
+/** A spec's path inside specs/ as one file name (`asyncapi/x.yaml` → `asyncapi%2Fx.yaml`), and back (never out of specs/). */
+const specEntryName = (rel: string) => encodeURIComponent(rel.replace(/^specs\//, ''));
+function specRelOf(name: string): string {
+  let rel = '';
+  try {
+    rel = decodeURIComponent(name);
+  } catch {
+    /* a malformed %-sequence (a file put there by hand): not an entry */
+  }
+  if (!rel || rel.split('/').some((n) => n === '..' || n === '' || n.includes('\\')) || /^[a-z]:/i.test(rel)) throw new ApsError('ValidationError', `Not a trash entry: ${name}`, { suggestions: [] });
+  return rel;
+}
+
+const KINDS: Record<TrashKind, KindDef> = {
+  collection: {
+    label: 'collections',
+    dir: 'collections',
+    entry: /^(.+)\.json$/,
+    describe: (_s, path, name) => {
+      const data = readJson<Record<string, unknown>>(path);
+      return { itemId: String(data.id ?? name), name: String(data.name ?? name), size: count(data) };
+    },
+    restore: (store, path) => {
+      const data = readJson<{ id: string; name: string } & Record<string, unknown>>(path);
+      const existing = store.listCollections().map((c) => ({ id: c.id, name: c.name }));
+      const item = unclash(data, existing);
+      store.saveCollection(item as never);
+      // restored under a new id (its name or id is taken again): its gRPC calls and connections follow it,
+      // unless a live collection has the old id (then they can't be told apart and stay where they are)
+      if (item.id !== data.id && !existing.some((x) => x.id === data.id))
+        for (const k of COLLECTION_ITEM_KINDS) {
+          const lib = store.getLibrary(k);
+          if (lib.items.some((i) => i.collectionId === data.id)) store.saveLibrary(k, { folders: lib.folders, items: lib.items.map((i) => (i.collectionId === data.id ? { ...i, collectionId: item.id } : i)) });
+        }
+      rmSync(path, { force: true });
+      return { id: item.id, name: item.name };
+    },
+  },
+  environment: {
+    label: 'environments',
+    dir: 'environments',
+    entry: /^(.+)\.json$/,
+    describe: (_s, path, name) => {
+      const data = readJson<Record<string, unknown>>(path);
+      return { itemId: String(data.id ?? name), name: String(data.name ?? name), size: Array.isArray(data.variables) ? data.variables.length : 0 };
+    },
+    restore: (store, path) => {
+      const item = unclash(readJson<{ id: string; name: string } & Record<string, unknown>>(path), store.listEnvironments());
+      store.saveEnvironment(item as never);
+      rmSync(path, { force: true });
+      return { id: item.id, name: item.name };
+    },
+  },
+  // a dataset keeps its own name and extension (users.csv)
+  dataset: {
+    label: 'datasets',
+    dir: 'datasets',
+    entry: /^(.+)$/,
+    describe: (_s, path, name) => ({ itemId: name, name, size: statSync(path).size }),
+    restore: (store, path, name) => {
+      const dest = restoreFile(path, store.path('datasets'), name);
+      return { id: basename(dest), name: basename(dest) };
+    },
+  },
+  // an API definition keeps its path under specs/ (asyncapi/x.yaml), encoded as one file name
+  spec: {
+    label: 'API definitions',
+    dir: 'specs',
+    entry: /^(.+)$/,
+    describe: (_s, path, name) => {
+      const rel = `specs/${specRelOf(name)}`;
+      return { itemId: rel, name: rel.replace(/^specs\//, ''), size: statSync(path).size };
+    },
+    restore: (store, path, name) => {
+      const dest = restoreFile(path, store.path('specs'), specRelOf(name));
+      const rel = `specs/${dest.slice(store.path('specs').length + 1).split(/[\\/]/).join('/')}`;
+      return { id: rel, name: rel.replace(/^specs\//, '') };
+    },
+  },
+  // an MCP server: its config and its place in the list (it goes back there)
+  'mcp-server': {
+    label: 'MCP servers',
+    dir: 'mcp-servers',
+    entry: /^(.+)\.json$/,
+    describe: (_s, path, name) => {
+      const { server } = readJson<{ server: McpServerConfig }>(path);
+      return { itemId: String(server?.id ?? name), name: String(server?.name ?? name), size: 0 };
+    },
+    restore: (store, path) => {
+      const { server, position } = readJson<{ server: McpServerConfig; position?: number }>(path);
+      const list = store.getMcpServers();
+      const item = unclash(server, list);
+      const at = Math.max(0, Math.min(Number.isInteger(position) ? position! : list.length, list.length));
+      store.saveMcpServers([...list.slice(0, at), item, ...list.slice(at)]);
+      rmSync(path, { force: true });
+      return { id: item.id, name: item.name };
+    },
+  },
+};
+
+const TRASH_KINDS = Object.keys(KINDS) as TrashKind[];
+
+/** The kinds Recently deleted keeps, in words ("collections, environments, … and MCP servers"), for help texts. */
+export function trashKindsText(): string {
+  const labels = TRASH_KINDS.map((k) => KINDS[k].label);
+  return labels.length > 1 ? `${labels.slice(0, -1).join(', ')} and ${labels.at(-1)}` : labels.join('');
+}
+const ENTRY_ID = new RegExp(`^(${TRASH_KINDS.join('|')})\\/(\\d+--[^/\\\\]+)$`);
+
+const trashDir = (store: WorkspaceStore, kind?: TrashKind) => (kind ? store.path('trash', KINDS[kind].dir) : store.path('trash'));
+
+/** The trash folder for a kind, made (with the .gitignore that keeps the trash out of commits) when needed. */
+function ensureTrashDir(store: WorkspaceStore, kind: TrashKind): string {
   const dir = trashDir(store, kind);
   mkdirSync(dir, { recursive: true });
   const ignore = join(trashDir(store), '.gitignore');
   if (!existsSync(ignore)) writeFileSync(ignore, '# deleted items (restorable in TestPion for 30 days); never commit them\n*\n');
-  renameOwned(file, join(dir, `${Date.now()}--${basename(file)}`));
+  return dir;
+}
+
+/** Move a workspace file (collections/x.json, environments/x.json, datasets/x.csv) into the trash; the entry id, or undefined when there was no file. */
+export function moveToTrash(store: WorkspaceStore, kind: TrashKind, file: string, entryName = basename(file)): string | undefined {
+  if (!existsSync(file)) return undefined;
+  const name = `${Date.now()}--${entryName}`;
+  renameOwned(file, join(ensureTrashDir(store, kind), name));
+  return `${kind}/${name}`;
+}
+
+/** Delete an API definition (`specs/x.yaml`, `specs/asyncapi/y.yaml`) to the trash; the entry id. */
+export function trashSpec(store: WorkspaceStore, rel: string): string {
+  const path = rel.replace(/\\/g, '/').replace(/^\/+/, '');
+  if (!/^specs\/./.test(path)) throw new ApsError('ValidationError', `Not an API definition in specs/: ${rel}`, { suggestions: [] });
+  const file = store.safePath(path);
+  if (!store.isInside(file, 'specs')) throw new ApsError('ValidationError', `Not an API definition in specs/: ${rel}`, { suggestions: [] });
+  const id = moveToTrash(store, 'spec', file, specEntryName(path));
+  if (!id) throw new ApsError('ConfigurationError', `No API definition ${rel}`, { suggestions: [] });
+  return id;
+}
+
+/** Delete an MCP server to the trash (its config and place in the list); the entry id and the server. */
+export function trashMcpServer(store: WorkspaceStore, serverId: string): { trashId: string; server: McpServerConfig } {
+  const list = store.getMcpServers();
+  const position = list.findIndex((s) => s.id === serverId);
+  if (position < 0) throw new ApsError('ConfigurationError', `Unknown MCP server ${serverId}`, { suggestions: [] });
+  const server = list[position]!;
+  const name = `${Date.now()}--${slugify(server.id) || 'server'}.json`;
+  // the entry first, then the list without it: a failure in between never loses the server
+  writeJson(join(ensureTrashDir(store, 'mcp-server'), name), { server, position });
+  store.saveMcpServers(list.filter((s) => s.id !== serverId));
+  return { trashId: `mcp-server/${name}`, server };
 }
 
 /** The id a trashed collection file had (undefined for an unreadable file). */
@@ -63,22 +234,16 @@ function dropCollectionItems(store: WorkspaceStore, collectionIds: Array<string 
   }
 }
 
-function count(kind: TrashKind, data: Record<string, unknown>): number {
-  if (kind === 'environment') return Array.isArray(data.variables) ? data.variables.length : 0;
-  const walk = (nodes: unknown): number => (Array.isArray(nodes) ? nodes.reduce<number>((n, x) => n + ((x as { kind?: string }).kind === 'folder' ? walk((x as { items?: unknown }).items) : 1), 0) : 0);
-  return walk(data.items);
-}
-
 /** Deleted items, newest first; entries older than 30 days are removed on the way. */
 export function listTrash(store: WorkspaceStore, now = Date.now()): TrashItem[] {
   const out: TrashItem[] = [];
-  for (const kind of Object.keys(DIRS) as TrashKind[]) {
+  for (const kind of TRASH_KINDS) {
     const dir = trashDir(store, kind);
     if (!existsSync(dir)) continue;
     for (const f of readdirSync(dir)) {
-      // a dataset keeps its own name and extension (users.csv); collections and environments are JSON files
-      const m = kind === 'dataset' ? /^(\d+)--(.+)$/.exec(f) : /^(\d+)--(.+)\.json$/.exec(f);
-      if (!m) continue;
+      const m = /^(\d+)--(.+)$/.exec(f);
+      const name = m && KINDS[kind].entry.exec(m[2]!)?.[1];
+      if (!m || !name) continue;
       const at = Number(m[1]);
       const path = join(dir, f);
       if (now - at > TRASH_DAYS * 86_400_000) {
@@ -87,13 +252,8 @@ export function listTrash(store: WorkspaceStore, now = Date.now()): TrashItem[] 
         if (gone) dropCollectionItems(store, [gone]);
         continue;
       }
-      if (kind === 'dataset') {
-        out.push({ id: `${kind}/${f}`, kind, itemId: m[2]!, name: m[2]!, deletedAt: new Date(at).toISOString(), size: statSync(path).size });
-        continue;
-      }
       try {
-        const data = readJson<Record<string, unknown>>(path);
-        out.push({ id: `${kind}/${f}`, kind, itemId: String(data.id ?? m[2]), name: String(data.name ?? m[2]), deletedAt: new Date(at).toISOString(), size: count(kind, data) });
+        out.push({ id: `${kind}/${f}`, kind, ...KINDS[kind].describe(store, path, name), deletedAt: new Date(at).toISOString() });
       } catch {
         /* unreadable entry: leave it for "Empty trash" */
       }
@@ -102,46 +262,24 @@ export function listTrash(store: WorkspaceStore, now = Date.now()): TrashItem[] 
   return out.sort((a, b) => b.deletedAt.localeCompare(a.deletedAt));
 }
 
-function entryPath(store: WorkspaceStore, id: string): { kind: TrashKind; path: string } {
-  const m = /^(collection|environment|dataset)\/(\d+--[^/\\]+)$/.exec(id);
-  if (!m) throw new ApsError('ValidationError', `Not a trash entry: ${id}`, { suggestions: [] });
-  const path = join(trashDir(store, m[1] as TrashKind), m[2]!);
+function entryPath(store: WorkspaceStore, id: string): { kind: TrashKind; path: string; name: string } {
+  const m = ENTRY_ID.exec(id);
+  const kind = m?.[1] as TrashKind | undefined;
+  const name = kind && KINDS[kind].entry.exec(m![2]!.replace(/^\d+--/, ''))?.[1];
+  if (!kind || !name) throw new ApsError('ValidationError', `Not a trash entry: ${id}`, { suggestions: [] });
+  const path = join(trashDir(store, kind), m![2]!);
   if (!existsSync(path)) throw new ApsError('ValidationError', 'That item is no longer in the trash', { suggestions: [] });
-  return { kind: m[1] as TrashKind, path };
+  return { kind, path, name };
 }
 
 /**
- * Put a deleted item back. If the workspace has an item with the same id or name again, the restored one
- * gets a new id and "(restored)" after its name, so nothing is overwritten. A dataset goes back to datasets/
- * (as name-restored.csv when the name is taken again).
+ * Put a deleted item back. If the workspace has an item with the same id or name again, the restored one gets a new id
+ * and "(restored)" after its name, so nothing is overwritten. A dataset or an API definition goes back to its folder (as
+ * name-restored.ext when the name is taken again); an MCP server to its place in the list.
  */
 export function restoreFromTrash(store: WorkspaceStore, id: string): { kind: TrashKind; id: string; name: string } {
-  const { kind, path } = entryPath(store, id);
-  if (kind === 'dataset') {
-    const name = basename(path).replace(/^\d+--/, '');
-    const dir = store.path('datasets');
-    mkdirSync(dir, { recursive: true });
-    let dest = join(dir, name);
-    if (existsSync(dest)) dest = join(dir, name.replace(/(\.[^.]+)?$/, '-restored$1'));
-    renameOwned(path, dest);
-    return { kind, id: basename(dest), name: basename(dest) };
-  }
-  const data = readJson<{ id: string; name: string } & Record<string, unknown>>(path);
-  const existing = kind === 'collection' ? store.listCollections().map((c) => ({ id: c.id, name: c.name })) : store.listEnvironments().map((e) => ({ id: e.id, name: e.name }));
-  const clash = existing.some((x) => x.id === data.id || x.name.toLowerCase() === String(data.name).toLowerCase());
-  const item = clash ? { ...data, id: `${slugify(String(data.name))}-${shortId().slice(-4)}`, name: `${data.name} (restored)` } : data;
-  if (kind === 'collection') {
-    store.saveCollection(item as never);
-    // restored under a new id (its name or id is taken again): its gRPC calls and connections follow it,
-    // unless a live collection has the old id (then they can't be told apart and stay where they are)
-    if (item.id !== data.id && !existing.some((x) => x.id === data.id))
-      for (const k of COLLECTION_ITEM_KINDS) {
-        const lib = store.getLibrary(k);
-        if (lib.items.some((i) => i.collectionId === data.id)) store.saveLibrary(k, { folders: lib.folders, items: lib.items.map((i) => (i.collectionId === data.id ? { ...i, collectionId: item.id } : i)) });
-      }
-  } else store.saveEnvironment(item as never);
-  rmSync(path, { force: true });
-  return { kind, id: item.id, name: item.name };
+  const { kind, path, name } = entryPath(store, id);
+  return { kind, ...KINDS[kind].restore(store, path, name) };
 }
 
 /** Delete trash entries for good: one, or all. */
@@ -156,7 +294,7 @@ export function purgeTrash(store: WorkspaceStore, id?: string): number {
   const items = listTrash(store);
   const dir = trashDir(store, 'collection');
   const gone = existsSync(dir) ? readdirSync(dir).map((f) => trashedCollectionId(join(dir, f))) : [];
-  for (const kind of Object.keys(DIRS) as TrashKind[]) rmSync(trashDir(store, kind), { recursive: true, force: true });
+  for (const kind of TRASH_KINDS) rmSync(trashDir(store, kind), { recursive: true, force: true });
   dropCollectionItems(store, gone);
   return items.length;
 }

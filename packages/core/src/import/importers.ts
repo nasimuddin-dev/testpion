@@ -14,12 +14,17 @@ import { importAsyncApi, isAsyncApi } from './asyncapi.js';
 import { importHttpFile, isHttpFile } from './http-file.js';
 import { importScriptsToTp, type ImportScriptsMode, type ImportScriptsSummary } from './import-scripts.js';
 import { importArazzo, isArazzo, type ArazzoFlowFile } from './arazzo.js';
+import { mapForeignAuth } from './foreign-auth.js';
+import { importGraphqlSdl } from './graphql-sdl.js';
+import { ensureUniqueIds } from '../storage/node-ids.js';
+import type { ImportFormat } from '@testpion/shared';
 
 function newCollection(name: string, items: CollectionNode[], extra: Partial<Collection> = {}): Collection {
   return { schemaVersion: SCHEMA_VERSION, id: slugify(name) + '-' + shortId().slice(-4), name, version: 0, variables: [], items, updatedAt: new Date().toISOString(), ...extra };
 }
 
-export function detectFormat(text: string): 'openapi' | 'swagger' | 'postman' | 'postman-env' | 'har' | 'aps-collection' | 'aps-workspace' | 'graphql-sdl' | 'insomnia' | 'bruno' | 'hoppscotch' | 'dotenv' | 'wsdl' | 'asyncapi' | 'http-file' | 'arazzo' | 'unknown' {
+/** Which format a text is in; every format it returns has its file extensions in IMPORT_FORMATS (the pickers' filter). */
+export function detectFormat(text: string): ImportFormat | 'unknown' {
   const t = text.trim();
   if (isWsdl(t)) return 'wsdl';
   // an .http / .rest file (VS Code REST Client, JetBrains HTTP Client)
@@ -208,68 +213,6 @@ function sampleRef(ref: string, spec: any): any {
 
 /* ------------------------------------------------------------------ Postman */
 
-function pmAuth(a: any): AuthConfig | undefined {
-  if (!a) return undefined;
-  // v2.1 stores auth attributes as [{ key, value }]; v2.0 as a plain object ({ token: "…" })
-  const get = (arr: any[] | Record<string, unknown> | undefined, k: string) =>
-    String((Array.isArray(arr) ? arr.find((x: any) => x.key === k)?.value : (arr as Record<string, unknown> | undefined)?.[k]) ?? '');
-  switch (a.type) {
-    case 'noauth':
-      return { type: 'none' };
-    case 'bearer':
-      return { type: 'bearer', token: get(a.bearer, 'token') };
-    case 'basic':
-      return { type: 'basic', username: get(a.basic, 'username'), password: get(a.basic, 'password') };
-    case 'apikey':
-      return { type: 'apiKey', key: get(a.apikey, 'key'), value: get(a.apikey, 'value'), in: get(a.apikey, 'in') === 'query' ? 'query' : 'header' };
-    case 'digest':
-      return { type: 'digest', username: get(a.digest, 'username'), password: get(a.digest, 'password') };
-    case 'oauth1': {
-      const opt = (k: string) => get(a.oauth1, k) || undefined;
-      const sm = get(a.oauth1, 'signatureMethod');
-      return {
-        type: 'oauth1',
-        consumerKey: get(a.oauth1, 'consumerKey'),
-        consumerSecret: get(a.oauth1, 'consumerSecret'),
-        ...(opt('token') ? { token: opt('token') } : {}),
-        ...(opt('tokenSecret') ? { tokenSecret: opt('tokenSecret') } : {}),
-        ...(sm === 'HMAC-SHA256' || sm === 'PLAINTEXT' ? { signatureMethod: sm } : sm === 'HMAC-SHA1' ? { signatureMethod: 'HMAC-SHA1' as const } : {}),
-        ...(opt('realm') ? { realm: opt('realm') } : {}),
-        ...(get(a.oauth1, 'addParamsToHeader') === 'false' ? { addTo: 'query' as const } : {}),
-      };
-    }
-    case 'awsv4':
-      return {
-        type: 'awsv4',
-        accessKey: get(a.awsv4, 'accessKey'),
-        secretKey: get(a.awsv4, 'secretKey'),
-        region: get(a.awsv4, 'region'),
-        service: get(a.awsv4, 'service'),
-        ...(get(a.awsv4, 'sessionToken') ? { sessionToken: get(a.awsv4, 'sessionToken') } : {}),
-      };
-    case 'oauth2': {
-      const g = get(a.oauth2, 'grant_type');
-      const opt = (k: string) => get(a.oauth2, k) || undefined;
-      return {
-        type: 'oauth2',
-        grantType: g === 'client_credentials' ? 'client_credentials' : g === 'password_credentials' ? 'password' : 'authorization_code',
-        tokenUrl: get(a.oauth2, 'accessTokenUrl'),
-        authUrl: opt('authUrl'),
-        clientId: get(a.oauth2, 'clientId'),
-        clientSecret: opt('clientSecret'),
-        scope: opt('scope'),
-        username: opt('username'),
-        password: opt('password'),
-        usePkce: g === 'authorization_code_with_pkce' || undefined,
-        redirectUri: opt('redirect_uri'),
-        clientAuth: get(a.oauth2, 'client_authentication') === 'header' ? 'header' : undefined,
-      };
-    }
-    default:
-      return undefined;
-  }
-}
-
 type PmEvent = { listen: string; script?: { exec?: string[] | string } };
 /** Script of a Postman `event` list (`prerequest` or `test`). */
 function pmScript(events: PmEvent[] | undefined, listen: string): string | undefined {
@@ -309,8 +252,16 @@ function pmExamples(responses: any, parent?: { method?: string; url?: string }):
  * A Postman v2 / v2.1 collection. Its `pm.*` scripts become `tp.*` unless `scripts` is `'keep'`
  * (`pm.*` still runs: it is an alias of `tp`).
  */
-export function importPostman(text: string, opts: { scripts?: ImportScriptsMode } = {}): { collection: Collection; scripts: ImportScriptsSummary } {
+export function importPostman(text: string, opts: { scripts?: ImportScriptsMode } = {}): { collection: Collection; scripts: ImportScriptsSummary; notes: string[] } {
   const d = JSON.parse(text);
+  const notes: string[] = [];
+  /** The item's auth (undefined: inherits); an unsupported scheme adds a note and, for a request, a disabled placeholder header. */
+  const authOf = (raw: unknown, where: string, headers?: KeyValue[]): AuthConfig | undefined => {
+    const a = mapForeignAuth('postman', raw, where);
+    notes.push(...a.notes);
+    headers?.push(...a.headers);
+    return a.auth;
+  };
   const convert = (items: any[]): CollectionNode[] =>
     (items ?? []).map((it: any): CollectionNode => {
       if (Array.isArray(it.item)) {
@@ -320,7 +271,7 @@ export function importPostman(text: string, opts: { scripts?: ImportScriptsMode 
           id: shortId('fld-'),
           name: it.name,
           items: convert(it.item),
-          auth: pmAuth(it.auth),
+          auth: authOf(it.auth, it.name ?? 'Folder'),
           ...(variables.length ? { variables } : {}),
           ...(pmScript(it.event, 'prerequest') ? { preRequestScript: pmScript(it.event, 'prerequest') } : {}),
           ...(pmScript(it.event, 'test') ? { testScript: pmScript(it.event, 'test') } : {}),
@@ -334,7 +285,7 @@ export function importPostman(text: string, opts: { scripts?: ImportScriptsMode 
       // v2.0 also allows headers as one "Name: value" string per line
       const rawHeaders = typeof r.header === 'string' ? r.header.split(/\r?\n/).filter((l: string) => l.includes(':')).map((l: string) => ({ key: l.slice(0, l.indexOf(':')).trim(), value: l.slice(l.indexOf(':') + 1).trim() })) : r.header;
       const headers: KeyValue[] = (rawHeaders ?? []).map((h: any) => ({ key: h.key, value: h.value ?? '', enabled: !h.disabled, ...(h.description ? { description: pmDescription(h.description) } : {}) }));
-      const auth = pmAuth(r.auth) ?? { type: 'inherit' as const };
+      const auth = authOf(r.auth, it.name ?? url, headers) ?? { type: 'inherit' as const };
       if (r.body?.mode === 'graphql') {
         const g = r.body.graphql ?? {};
         return {
@@ -379,11 +330,11 @@ export function importPostman(text: string, opts: { scripts?: ImportScriptsMode 
   const collection = newCollection(d.info?.name ?? 'Postman import', convert(d.item), {
     description: pmDescription(d.info?.description),
     variables: (d.variable ?? []).map((v: any) => ({ key: v.key, value: String(v.value ?? ''), enabled: !v.disabled })),
-    auth: pmAuth(d.auth),
+    auth: authOf(d.auth, d.info?.name ?? 'Postman import'),
     preRequestScript: pmScript(d.event, 'prerequest'),
     testScript: pmScript(d.event, 'test'),
   });
-  return importScriptsToTp(collection, opts.scripts);
+  return { ...importScriptsToTp(collection, opts.scripts), notes };
 }
 
 export function importPostmanEnvironment(text: string): Environment {
@@ -424,11 +375,36 @@ export function importHar(text: string): { collection: Collection } {
   return { collection: newCollection(`HAR import ${new Date().toISOString().slice(0, 10)}`, items) };
 }
 
-/** Import any supported document into a collection (and optionally an environment). */
-export function importAny(
-  text: string,
-  opts: { name?: string; scripts?: ImportScriptsMode } = {},
-): { format: string; collection?: Collection; environment?: Environment; environments?: Environment[]; secretValues?: Record<string, Record<string, string>>; savedItems?: unknown; notes?: string[]; scripts?: ImportScriptsSummary; flows?: ArazzoFlowFile[] } {
+export interface ImportAnyResult {
+  format: string;
+  collection?: Collection;
+  environment?: Environment;
+  environments?: Environment[];
+  secretValues?: Record<string, Record<string, string>>;
+  savedItems?: unknown;
+  /** Everything that did not map one to one (unsupported auth, template tags, script APIs, values needed …), naming the item. */
+  notes?: string[];
+  scripts?: ImportScriptsSummary;
+  flows?: ArazzoFlowFile[];
+  /** A schema or definition to keep in the workspace (a GraphQL SDL: specs/graphql/<name>.graphql), relative to the workspace. */
+  specFile?: { path: string; text: string };
+}
+
+/**
+ * Import any supported document into a collection (and optionally an environment). Node ids (folders, requests) are
+ * made unique: against `takenIds` (the workspace's other collections, `workspaceNodeIds`) and within the file, so an
+ * imported collection never shares ids with another one (a TestPion file imported twice, say); a note says how many changed.
+ */
+export function importAny(text: string, opts: { name?: string; scripts?: ImportScriptsMode; takenIds?: Iterable<string> } = {}): ImportAnyResult {
+  const r = importDocument(text, opts);
+  if (!r.collection) return r;
+  const { collection, renamed } = ensureUniqueIds(r.collection, opts.takenIds ?? []);
+  if (!renamed.size) return r;
+  const note = `${renamed.size} request and folder id${renamed.size === 1 ? ' was' : 's were'} renamed because another collection of the workspace (or the file itself) uses them`;
+  return { ...r, collection, notes: [...(r.notes ?? []), note] };
+}
+
+function importDocument(text: string, opts: { name?: string; scripts?: ImportScriptsMode }): ImportAnyResult {
   const format = detectFormat(text);
   switch (format) {
     case 'openapi':
@@ -442,14 +418,20 @@ export function importAny(
       return { format, ...importHar(text) };
     case 'insomnia': {
       const r = importInsomnia(text, { scripts: opts.scripts });
-      return { format, collection: r.collection, environment: r.environments[0], environments: r.environments, savedItems: r.savedItems, scripts: r.scripts };
+      return { format, collection: r.collection, environment: r.environments[0], environments: r.environments, savedItems: r.savedItems, scripts: r.scripts, ...(r.notes.length ? { notes: r.notes } : {}) };
     }
     case 'bruno': {
-      const r = importBruno(text);
-      return { format, collection: r.collection, environment: r.environments[0], environments: r.environments };
+      const r = importBruno(text, { scripts: opts.scripts });
+      return { format, collection: r.collection, environment: r.environments[0], environments: r.environments, scripts: r.scripts, ...(r.notes.length ? { notes: r.notes } : {}), ...(r.secretValues ? { secretValues: r.secretValues } : {}) };
     }
-    case 'hoppscotch':
-      return { format, ...importHoppscotch(text) };
+    case 'hoppscotch': {
+      const r = importHoppscotch(text);
+      return { format, collection: r.collection, ...(r.notes.length ? { notes: r.notes } : {}) };
+    }
+    case 'graphql-sdl': {
+      const r = importGraphqlSdl(text, opts.name);
+      return { format, collection: r.collection, notes: r.notes, specFile: r.specFile };
+    }
     case 'wsdl':
       return { format, ...importWsdl(text) };
     case 'http-file': {
@@ -472,6 +454,7 @@ export function importAny(
     case 'aps-collection': {
       // `savedItems` (its gRPC calls and connections) are restored by importIntoWorkspace, not kept in the collection
       const { savedItems: _items, ...c } = JSON.parse(text) as Collection & { savedItems?: unknown };
+      // a native import keeps its node ids: importAny makes them unique in the workspace (ensureUniqueIds)
       return { format, collection: { ...c, id: c.id || shortId('col-') } };
     }
     default: {
@@ -490,7 +473,7 @@ export function importAny(
         }
       }
       throw new ApsError('ValidationError', `Unrecognised import format (${format})`, {
-        suggestions: ['Supported: OpenAPI 3 / Swagger 2 (JSON or YAML), Postman v2.1 collections & environments, Insomnia (v4 export, v5 YAML), Bruno collections (folder, .bru file or export), Hoppscotch collections, WSDL 1.1 and 2.0 (SOAP), AsyncAPI 2 and 3 (Kafka, MQTT, WebSocket), .http / .rest files (REST Client, JetBrains), .env files, HAR, TestPion collections and workspace exports, Arazzo 1.0 workflows (as flow files).'],
+        suggestions: ['Supported: OpenAPI 3 / Swagger 2 (JSON or YAML), Postman v2.1 collections & environments, Insomnia (v4 export, v5 YAML), Bruno collections (folder, .bru file or export), Hoppscotch collections, WSDL 1.1 and 2.0 (SOAP), AsyncAPI 2 and 3 (Kafka, MQTT, WebSocket), .http / .rest files (REST Client, JetBrains), .env files, HAR, GraphQL schemas (SDL), TestPion collections and workspace exports, Arazzo 1.0 workflows (as flow files).'],
       });
     }
   }

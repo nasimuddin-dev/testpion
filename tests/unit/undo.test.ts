@@ -11,6 +11,7 @@ vi.mock('../../apps/desktop/src/api', () => ({
     calls.push([method, params]);
     if (method === 'trash.list') return trash;
     if (method === 'trash.restore') return { id: 'api', name: 'My API' };
+    if (method === 'mcp.deleteServer') return { trashId: 'mcp-server/1--s.json', id: 's', name: 'S', connected: true };
     return undefined;
   },
   asError: (e: unknown) => ({ message: String(e), suggestions: [] }),
@@ -18,9 +19,12 @@ vi.mock('../../apps/desktop/src/api', () => ({
   modKey: 'Ctrl',
   isMac: false,
 }));
+vi.mock('sonner', () => ({ toast: Object.assign(() => undefined, { dismiss: () => undefined, error: () => undefined, success: () => undefined, warning: () => undefined }) }));
+const closedTabs: string[] = [];
+vi.mock('../../apps/desktop/src/components/EditorTabs', () => ({ closeTabsFor: (ids: string[]) => void closedTabs.push(...ids) }));
 
 const { offerUndo, undoLatest, hasUndo } = await import('../../apps/desktop/src/lib/undo');
-const { putBack, restoreDeleted } = await import('../../apps/desktop/src/lib/undo-delete');
+const { putBack, restoreDeleted, deleteMcpServerWithUndo } = await import('../../apps/desktop/src/lib/undo-delete');
 const { restoreFolder } = await import('../../apps/desktop/src/components/FolderList');
 
 afterEach(() => {
@@ -82,5 +86,17 @@ describe('putting things back', () => {
     await restoreDeleted('dataset', 'sub/users.csv');
     expect(calls.at(-1)).toEqual(['trash.restore', { id: 'dataset/3--users.csv' }]);
     await expect(restoreDeleted('environment', 'staging')).rejects.toThrow(/no longer in Recently deleted/);
+  });
+
+  it('an MCP server (sidebar and MCP tab alike): Recently deleted, its tabs close; Undo restores it and reconnects it', async () => {
+    const after = vi.fn();
+    expect(await deleteMcpServerWithUndo({ id: 's', name: 'S' }, { after })).toBe(true);
+    expect(calls).toEqual([['mcp.deleteServer', { serverId: 's' }]]);
+    expect(closedTabs).toEqual(['s']);
+    expect(after).toHaveBeenCalledTimes(1);
+    expect(undoLatest()).toBe(true);
+    await vi.waitFor(() => expect(calls.map((c) => c[0])).toEqual(['mcp.deleteServer', 'trash.restore', 'mcp.connect']));
+    expect(calls[1]).toEqual(['trash.restore', { id: 'mcp-server/1--s.json' }]);
+    expect(calls[2]![1]).toMatchObject({ serverId: 'api' }); // the id the restore answered (a taken id gets a new one)
   });
 });

@@ -41,6 +41,19 @@ function prepare(ws) {
   });
   writeFileSync(join(ws, 'debugger', 'soak-session.har'), JSON.stringify({ log: { version: '1.2', creator: { name: 'soak', version: '1' }, entries: Array.from({ length: 20 }, (_, i) => entry(i)) } }));
   writeFileSync(join(ws, 'collections', 'soak.json'), JSON.stringify({ schemaVersion: '1.0', id: 'soak', name: 'Soak collection', items }, null, 2));
+  // two collections sharing request ids (an older import, a copied file): expanded, selected and dragged every cycle (B-01)
+  const ghost = () =>
+    Array.from({ length: 3 }, (_, f) => ({
+      kind: 'folder',
+      id: `soak-gf${f}`,
+      name: `Ghost folder ${f}`,
+      items: Array.from({ length: 10 }, (_, i) => ({ kind: 'http', id: `soak-g${f}-${i}`, name: `Ghost ${f}-${i}`, request: { method: 'GET', url: `${DEMO}/health?g=${f}-${i}`, headers: [] } })),
+    }));
+  for (const [id, name] of [
+    ['soak-ghost-a', 'Soak ghost A'],
+    ['soak-ghost-b', 'Soak ghost B'],
+  ])
+    writeFileSync(join(ws, 'collections', `${id}.json`), JSON.stringify({ schemaVersion: '1.0', id, name, items: ghost() }, null, 2));
   // the offline demo model's answers for the AI cycle: a flow plan naming two soak requests, checks for /health
   const pp = join(ws, 'providers.json');
   const pc = JSON.parse(readFileSync(pp, 'utf8'));
@@ -583,6 +596,47 @@ const cycle = (c) => {
        await __t.view('Home');
        return out.join(' | ') + ' | ms ' + ms(t0);`,
     ),
+    // 0.50 sidebar and export surfaces: two collections sharing ids expanded, a row selected, a drag started and given up
+    // (no drag chip left), an MCP server deleted and brought back with Undo, the Export dialog opened and closed
+    r(
+      `${p}-sidebar-050`,
+      `const t0 = performance.now(); const out = [];
+       await __t.requests();
+       const aside = () => document.querySelector('aside[aria-label="Collections explorer"]');
+       const colRow = (name) => [...(aside()?.querySelectorAll('[data-tree-row][aria-expanded]') ?? [])].find((b) => b.querySelector('.truncate')?.textContent.trim() === name);
+       const on = async (el) => { el?.scrollIntoView({ block: 'center' }); await __t.sleep(80); return el; };
+       for (const n of ['Soak ghost A', 'Soak ghost B']) { const b = await on(colRow(n)); if (b?.getAttribute('aria-expanded') === 'false') { await __t.real.click(b); await __t.sleep(200); } }
+       for (const scope of ['soak-ghost-a', 'soak-ghost-b']) { const f = await on(aside().querySelector('[data-node-id="' + scope + ':soak-gf1"] [data-tree-row]')); if (f?.getAttribute('aria-expanded') === 'false') { await __t.real.click(f); await __t.sleep(200); } }
+       const ids = [...aside().querySelectorAll('[data-node-id]')].map((n) => n.getAttribute('data-node-id'));
+       out.push('unique ids ' + (new Set(ids).size === ids.length));
+       const row = await on(aside().querySelector('[data-node-id="soak-ghost-b:soak-g1-3"] [data-tree-row]'));
+       if (row) { await __t.real.click(row); await __t.sleep(300); }
+       const drag = await on(aside().querySelector('[data-node-id="soak-ghost-a:soak-g1-4"] [data-tree-row]'));
+       // given up: dropped on the rail, where nothing takes it
+       const rail = document.querySelector('nav [aria-label="Home"]')?.getBoundingClientRect();
+       out.push('drag ' + (drag && rail ? await __t.real.dnd(drag, { x: rail.left + rail.width / 2, y: rail.bottom + 40 }) : 'NO ROW'));
+       await __t.sleep(300); await __t.esc();
+       out.push('drag chips ' + document.querySelectorAll('[data-drag-chip]').length);
+       for (const n of ['Soak ghost A', 'Soak ghost B']) { const b = await on(colRow(n)); if (b?.getAttribute('aria-expanded') === 'true') { await __t.real.click(b); await __t.sleep(150); } }
+       await closeAll();
+       const srv = await on(aside().querySelector('[data-node-id="mcp:deepwiki"] [data-tree-row]'));
+       let mcp = 'NO SERVER ROW';
+       if (srv) {
+         await __t.real.rightClick(srv);
+         const del = await __t.waitFor(() => [...document.querySelectorAll('[role=menuitem]')].find((m) => m.textContent.trim() === 'Delete…'), 2000);
+         if (del) {
+           await __t.real.click(del);
+           const undo = await __t.waitFor(() => [...document.querySelectorAll('[data-sonner-toast]')].find((t) => /Deleted the MCP server "DeepWiki"/.test(t.textContent))?.querySelector('button[data-button]:not([data-cancel])'), 3000);
+           if (undo) { await __t.real.click(undo); mcp = 'back ' + !!(await __t.waitFor(async () => (await window.aps.invoke('mcp.servers')).some((x) => x.id === 'deepwiki'), 4000)); }
+           else mcp = 'NO UNDO';
+         } else { await __t.esc(); mcp = 'NO DELETE'; }
+       }
+       out.push('mcp ' + mcp);
+       for (const t of document.querySelectorAll('[data-sonner-toast] [aria-label="Close toast"]')) t.click();
+       const ex = aside().querySelector('button[aria-label="Export a collection or the workspace"]');
+       if (ex) { await __t.real.click(ex); const d = await __t.waitFor(() => document.querySelector('[role=dialog]'), 3000); await __t.esc(); await __t.waitFor(() => !document.querySelector('[role=dialog]'), 3000); out.push('export dialog ' + !!d + ' closed ' + !document.querySelector('[role=dialog]')); }
+       return out.join(' | ') + ' | ms ' + ms(t0);`,
+    ),
     // the probe: the same three timed actions every cycle
     r(
       `${p}-probe`,
@@ -621,7 +675,7 @@ function MEASURE(c) {
     const page = await win.webContents.executeJavaScript(\`(() => { const S = window.__soak ?? {}; const sum = (o) => Object.values(o ?? {}).reduce((a, b) => a + b, 0);
       return { dom: document.getElementsByTagName('*').length, models: window.__monaco?.editor.getModels().length ?? -1, editors: window.__monaco?.editor.getEditors?.().length ?? -1,
         winListeners: sum(S.win), docListeners: sum(S.doc), otherListeners: S.other, winByType: S.win, docByType: S.doc, intervals: S.intervals?.size, timeouts: S.timeouts?.size, observers: S.observers, observersCreated: S.created,
-        tabs: document.querySelectorAll('[role=tab]').length, dialogs: document.querySelectorAll('[role=dialog]').length, iframes: document.querySelectorAll('iframe').length,
+        tabs: document.querySelectorAll('[role=tab]').length, dragChips: document.querySelectorAll('[data-drag-chip]').length, dialogs: document.querySelectorAll('[role=dialog]').length, iframes: document.querySelectorAll('iframe').length,
         perfMem: performance.memory ? performance.memory.usedJSHeapSize : -1, lsBytes: (() => { let n = 0; for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); n += k.length + (localStorage.getItem(k) ?? '').length; } return n; })(),
         probe: window.__soakProbe }; })()\`);
     const m = process.memoryUsage();
@@ -632,7 +686,7 @@ function MEASURE(c) {
       renderer: { jsHeapUsed: hu.usedSize, jsHeapTotal: hu.totalSize, cdp: { Nodes: pm.Nodes, JSEventListeners: pm.JSEventListeners, Documents: pm.Documents, Frames: pm.Frames, LayoutObjects: pm.LayoutObjects, JSHeapUsedSize: pm.JSHeapUsedSize }, ...page },
       history: hist };
     fs.appendFileSync(path.join(out, 'metrics.jsonl'), JSON.stringify(row) + '\\n');
-    return 'cycle ${c}: main heap MB ' + (m.heapUsed / 1048576).toFixed(1) + ' | rss MB ' + (m.rss / 1048576).toFixed(0) + ' | handles ' + row.main.handles + ' | page heap MB ' + (hu.usedSize / 1048576).toFixed(1) + ' | nodes ' + pm.Nodes + ' | listeners ' + pm.JSEventListeners + ' | dom ' + page.dom + ' | models ' + page.models + ' | probe ' + JSON.stringify(page.probe);`;
+    return 'cycle ${c}: main heap MB ' + (m.heapUsed / 1048576).toFixed(1) + ' | rss MB ' + (m.rss / 1048576).toFixed(0) + ' | handles ' + row.main.handles + ' | page heap MB ' + (hu.usedSize / 1048576).toFixed(1) + ' | nodes ' + pm.Nodes + ' | listeners ' + pm.JSEventListeners + ' | dom ' + page.dom + ' | models ' + page.models + ' | drag chips ' + page.dragChips + ' | probe ' + JSON.stringify(page.probe);`;
 }
 
 /** Heap snapshots of the page (through the DevTools protocol) and of the main process. */

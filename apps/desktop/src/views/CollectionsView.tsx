@@ -27,6 +27,7 @@ import {
   Workflow,
 } from 'lucide-react';
 import { downloadContent, generateFlows } from '../lib/files';
+import { exportWorkspace } from '../lib/workspace-export';
 import { useCallback, useEffect, useState } from 'react';
 import { call } from '../api';
 import { confirmAction, promptText, toastError, useApp } from '../store';
@@ -41,7 +42,7 @@ import { CollectionRunner } from '../components/CollectionRunner';
 import { MockPanel } from '../components/MockPanel';
 import { CollectionDocs } from '../components/CollectionDocs';
 import { addToFolder, CollectionTree } from '../components/CollectionTree';
-import { TrashDialog } from '../components/TrashDialog';
+import { SIDEBAR_TRASH_KINDS, TrashDialog } from '../components/TrashDialog';
 import { KeyValueEditor } from '../components/KeyValueEditor';
 import { Badge, Button, cx, Empty, IconButton, Menu, SectionTitle, Split, Tabs } from '../components/ui';
 import { InlineRename } from '../components/TreeParts';
@@ -200,14 +201,7 @@ export function CollectionsView() {
                         icon: <Package size={14} />,
                         separator: true,
                         onSelect: () =>
-                          void call<{ path?: string; bundle?: unknown }>('ws.export', {}).then(
-                            (r) => {
-                              // no native save dialog (browser / cloud): download the export instead
-                              if (r.bundle) downloadContent(`${useApp.getState().workspace?.name ?? 'workspace'}.apsworkspace.json`, JSON.stringify(r.bundle, null, 2), { type: 'application/json' });
-                              if (r.path || r.bundle) useApp.getState().toast('Workspace exported (secret values are never exported)', 'success');
-                            },
-                            (e) => toastError(e),
-                          ),
+                          void exportWorkspace().catch(toastError),
                       },
                     ];
                   })()}
@@ -450,7 +444,7 @@ export function CollectionsView() {
         />
       )}
       {securityOpen && draft && <SecurityReviewDialog collectionId={draft.id} name={draft.name} onClose={() => setSecurityOpen(false)} />}
-      {trashOpen && <TrashDialog kind="collection" onClose={() => setTrashOpen(false)} onRestored={(r) => void load().then(() => setSel(r.id))} />}
+      {trashOpen && <TrashDialog kinds={SIDEBAR_TRASH_KINDS} onClose={() => setTrashOpen(false)} onRestored={(r) => void load().then(() => r.kind === 'collection' && setSel(r.id))} />}
       {importing && <ImportModal onClose={() => setImporting(false)} onDone={load} />}
     </>
   );
