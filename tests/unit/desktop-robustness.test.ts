@@ -138,9 +138,14 @@ describe('tests.preview', () => {
       text += `  - id: t${i}\n    name: test ${i}\n    request:\n      method: GET\n      url: http://localhost/${i}\n    assertions:\n      - type: status\n        expected: 200\n`;
     text += 'defaults:\n  type: http\n  tags: [big]\n';
     writeFileSync(join(root, 'tests', 'big.yaml'), text);
-    const t0 = performance.now();
-    const r = (await call('tests.preview', { path: 'big.yaml' })) as { tests: Array<{ id: string; type: string; tags?: string[] }> };
-    const ms = performance.now() - t0;
+    // the best of three calls: a real slowdown (parsing the whole file) is slow every time, a one-off stall of a busy machine is not
+    let ms = Infinity;
+    let r = { tests: [] } as { tests: Array<{ id: string; type: string; tags?: string[] }> };
+    for (let i = 0; i < 3; i++) {
+      const t0 = performance.now();
+      r = (await call('tests.preview', { path: 'big.yaml' })) as typeof r;
+      ms = Math.min(ms, performance.now() - t0);
+    }
     expect(r.tests).toHaveLength(500);
     expect(r.tests[499]).toMatchObject({ id: 't499', type: 'http', tags: ['big'] });
     expect(ms).toBeLessThan(1500); // the whole file takes several seconds; the prefix well under one
