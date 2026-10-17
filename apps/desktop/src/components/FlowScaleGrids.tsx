@@ -8,7 +8,9 @@ import { StatusIcon } from './Results';
 import { ResultDetail } from './RunPanel';
 import { Badge, Button, cx, Empty, Segmented, Spinner, Split, VirtualList } from './ui';
 import { usePagedRows } from '../lib/paged-rows';
-import { scaleRunStatus, type FlowRunStatus } from '@testpion/shared';
+import { htmlDocument, jsonPretty, outputFileName, rowsFromObjects, scaleRunStatus, toCsv, type FlowRunStatus } from '@testpion/shared';
+import { OutputActions, OutputHeader } from './output/OutputFrame';
+import type { OutputSpec } from './output/output-core';
 
 /** A run's status as a badge tone: skipped (nothing ran) is a warning, not a pass. */
 const STATUS_TONE: Record<string, 'ok' | 'bad' | 'warn'> = { passed: 'ok', failed: 'bad', cancelled: 'warn', skipped: 'warn' };
@@ -103,6 +105,28 @@ const short = (v: unknown) => {
   return s.length > 60 ? `${s.slice(0, 59)}…` : s;
 };
 
+/** Objects as the three formats of a small grid the window holds (the matrix, the list of runs). */
+function gridFormats(title: string, objects: () => Array<Record<string, unknown>>): OutputSpec['formats'] {
+  const table = () => rowsFromObjects(objects());
+  return [
+    {
+      format: 'csv',
+      build: () => {
+        const t = table();
+        return toCsv([t.columns, ...t.rows]);
+      },
+    },
+    { format: 'json', build: () => jsonPretty(objects()) },
+    {
+      format: 'html',
+      build: () => {
+        const t = table();
+        return htmlDocument(title, [{ table: { columns: t.columns, rows: t.rows } }], { generatedAt: new Date().toISOString() });
+      },
+    },
+  ];
+}
+
 /** The progress events of one scale run, and its end. */
 function useScaleEvents(id: string, onProgress: (p: Progress) => void, onFinished: () => void) {
   const cb = useRef({ onProgress, onFinished });
@@ -169,6 +193,23 @@ export function FlowDataGrid({ id }: { id: string }) {
   // the value columns: from the run (once finished), else from the rows on screen
   const columns = (s?.columns?.length ? s.columns : Object.keys(peek(0)?.[0]?.values ?? {})).slice(0, 6);
   const grid = `56px 22px 72px minmax(120px,1.2fr) ${columns.map(() => 'minmax(80px,1fr)').join(' ')}`;
+  // the run's status as the engine gives it (a run where nothing ran is skipped, never passed)
+  const status = s ? (s.status ?? scaleRunStatus(s)) : undefined;
+  // the down arrow: every row the grid pages through (with the current filter), paged by the backend, never in the window
+  const spec = useMemo<OutputSpec>(() => {
+    const source = { kind: 'grid' as const, grid: 'scale-rows' as const, params: { id, status: filter === 'all' ? undefined : filter } };
+    return {
+      id: 'flow.grid',
+      what: 'data run rows',
+      name: outputFileName({ name: `data-run-${id}${filter === 'all' ? '' : `-${filter}`}`, status: running ? undefined : status, ext: '' }),
+      formats: [
+        { format: 'csv', source },
+        { format: 'json', source },
+        { format: 'html', source },
+      ],
+      empty: matched ? undefined : filter === 'all' ? 'No rows yet' : `No ${filter} rows`,
+    };
+  }, [id, filter, running, status, matched]);
   if (summary && 'error' in summary)
     return (
       <Empty icon={<FileSpreadsheet size={24} />} title="This data run cannot be read">
@@ -176,8 +217,6 @@ export function FlowDataGrid({ id }: { id: string }) {
       </Empty>
     );
   const done = counts.passed + counts.failed + counts.cancelled + counts.skipped;
-  // the run's status as the engine gives it (a run where nothing ran is skipped, never passed)
-  const status = s ? (s.status ?? scaleRunStatus(s)) : undefined;
   return (
     <div className="h-full flex flex-col min-h-0" data-flow-data-grid={id} data-running={!summary ? 'unknown' : running ? 'true' : 'false'}>
       <div className="flex items-center gap-2 px-3 py-2 border-b border-line flex-wrap">
@@ -208,11 +247,13 @@ export function FlowDataGrid({ id }: { id: string }) {
               .join(' · ')}
           </span>
         )}
-        {running && (
-          <Button size="sm" variant="danger" className="ml-auto" icon={<Square size={11} />} data-scale-cancel onClick={() => void call('tests.scaleCancel', { id }).catch(toastError)}>
-            Cancel
-          </Button>
-        )}
+        <OutputActions spec={spec}>
+          {running && (
+            <Button size="sm" variant="danger" icon={<Square size={11} />} data-scale-cancel onClick={() => void call('tests.scaleCancel', { id }).catch(toastError)}>
+              Cancel
+            </Button>
+          )}
+        </OutputActions>
       </div>
       {s?.dataError && <div className="px-3 py-1.5 text-xs text-warn border-b border-line">The data could not be read to the end: {s.dataError}</div>}
       <Split id="flow-data-grid" initial={62} min={25}>
@@ -373,6 +414,29 @@ export function FlowMatrixGrid({ id }: { id: string }) {
     (p) => setM((cur) => (cur && !('error' in cur) && cur.running ? { ...cur, columns: p.columns ?? cur.columns } : cur)),
     () => void load(),
   );
+  // the down arrow: the matrix the window holds (environment × step, then the values), one row per cell
+  const spec = useMemo<OutputSpec>(() => {
+    const mx = m && !('error' in m) ? m : undefined;
+    const cells = (): Array<Record<string, unknown>> => {
+      if (!mx) return [];
+      const out: Array<Record<string, unknown>> = [];
+      for (const st of mx.steps ?? [])
+        for (const c of mx.columns) {
+          const x = c.cells?.[st.id];
+          out.push({ kind: 'step', name: st.name, environment: c.environment, status: x?.status ?? '', ms: x ? x.ms : '', error: x?.error ?? '', differs: !!mx.differingSteps?.includes(st.id) });
+        }
+      for (const o of mx.outputs ?? []) mx.environments.forEach((e, i) => out.push({ kind: 'value', name: o.key, environment: e, value: o.values[i], differs: o.differs }));
+      return out;
+    };
+    const status = mx ? (mx.status ?? scaleRunStatus({ kind: 'matrix', passed: mx.passed ?? 0, failed: mx.failed ?? 0, skipped: mx.skipped })) : undefined;
+    return {
+      id: 'flow.grid',
+      what: 'environment matrix',
+      name: outputFileName({ name: `matrix-${id.replace(/^matrix-/, '')}`, status: mx?.running ? undefined : status, ext: '' }),
+      formats: gridFormats('Environment matrix', cells),
+      empty: mx?.steps?.length || mx?.outputs?.length ? undefined : 'Nothing in the matrix yet',
+    };
+  }, [id, m]);
   if (!m)
     return (
       <div className="p-4">
@@ -404,11 +468,13 @@ export function FlowMatrixGrid({ id }: { id: string }) {
           {m.passed} of {m.environments.length} environments passed
         </span>
         {!m.running && <span className="text-xs text-muted">{formatMs(m.durationMs)}</span>}
-        {m.running && (
-          <Button size="sm" variant="danger" className="ml-auto" icon={<Square size={11} />} onClick={() => void call('tests.scaleCancel', { id }).catch(toastError)}>
-            Cancel
-          </Button>
-        )}
+        <OutputActions spec={spec}>
+          {m.running && (
+            <Button size="sm" variant="danger" icon={<Square size={11} />} onClick={() => void call('tests.scaleCancel', { id }).catch(toastError)}>
+              Cancel
+            </Button>
+          )}
+        </OutputActions>
       </div>
       <Split id="flow-matrix" initial={60} min={25}>
         <div className="h-full overflow-auto">
@@ -518,9 +584,26 @@ export function ScaleRunPanel({ file, id, onSelect }: { file?: string; id: strin
   const load = useCallback(() => call<ScaleRow[]>('tests.scaleRuns', { file, limit: 50 }).then(setRuns, () => setRuns([])), [file]);
   useEffect(() => void load(), [load, id]);
   useEffect(() => on('scale.finished', () => void load()), [load]);
+  // the down arrow of the list: the runs it shows (at most 50, already in the window)
+  const spec = useMemo<OutputSpec>(
+    () => ({
+      id: 'flow.grid',
+      what: 'data runs and matrices',
+      name: outputFileName({ name: `scale-runs${file ? `-${file.replace(/^.*[\\/]/, '').replace(/\.[^.]*$/, '')}` : ''}`, ext: '' }),
+      formats: gridFormats('Data runs and environment matrices', () =>
+        runs.map((r) => ({ id: r.id, kind: r.kind, file: r.file, startedAt: r.startedAt, status: r.running ? 'running' : r.status, total: r.total, passed: r.passed, failed: r.failed, durationMs: r.durationMs, source: r.source ?? '', environments: (r.environments ?? []).join(' ') })),
+      ),
+      empty: runs.length ? undefined : 'No data runs or matrices yet',
+    }),
+    [file, runs],
+  );
   return (
+    // the list and the open run show together: the marker is on their common root, each has its own down arrow
+    <div className="h-full min-h-0" data-output="flow.grid">
     <Split id="tests-scale-runs" initial={22} min={12}>
-      <div className="h-full overflow-auto" data-scale-runs>
+      <div className="h-full flex flex-col min-h-0">
+      <OutputHeader spec={spec} title="Runs" />
+      <div className="flex-1 min-h-0 overflow-auto" data-scale-runs>
         {runs.map((r) => (
           <button
             key={r.id}
@@ -539,7 +622,9 @@ export function ScaleRunPanel({ file, id, onSelect }: { file?: string; id: strin
           </button>
         ))}
       </div>
+      </div>
       <div className="h-full min-h-0">{id.startsWith('matrix-') ? <FlowMatrixGrid key={id} id={id} /> : <FlowDataGrid key={id} id={id} />}</div>
     </Split>
+    </div>
   );
 }

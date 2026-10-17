@@ -2,7 +2,7 @@ import { RefLink } from './RefLink';
 import { AiAction } from './ai/AiAction';
 import { LABEL } from '../lib/vocabulary';
 import { CodeBlock } from './CodeBlock';
-import { Activity, Braces, Download, FileBarChart, FileCode2, FileText, GitCompare, Square, Target, RotateCcw, ScanSearch, ThumbsDown, ThumbsUp } from 'lucide-react';
+import { Activity, FileBarChart, GitCompare, Square, Target, RotateCcw, ScanSearch, ThumbsDown, ThumbsUp } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { call, on } from '../api';
 import { toastError, useApp } from '../store';
@@ -18,8 +18,11 @@ import { RunTimeline } from './RunTimeline';
 
 import { TestHistory } from './TestHistory';
 import { VariablesTable } from './VariablesTable';
-import { finishSave, viewContent, type SaveResult } from '../lib/files';
-import { Badge, Button, cx, Empty, Field, Input, Metric, Modal, Segmented, Select, Split, Tabs, VirtualList, Menu, MetricGrid, MoreMenu, Textarea } from './ui';
+import { viewContent } from '../lib/files';
+import { outputFileName } from '@testpion/shared';
+import { OutputActions } from './output/OutputFrame';
+import type { OutputSpec } from './output/output-core';
+import { Badge, Button, cx, Empty, Field, Input, Metric, Modal, Segmented, Select, Split, Tabs, VirtualList, MetricGrid, MoreMenu, Textarea } from './ui';
 import { usePersisted } from '../lib/sticky';
 
 interface Progress {
@@ -163,9 +166,28 @@ export function RunPanel({ runId, expectedTotal, onRerunFailed, focusName }: { r
   const s = summary;
   const completed = s?.total ?? progress.completed;
   const pct = expectedTotal ? Math.min(100, (completed / expectedTotal) * 100) : undefined;
+  // the down arrow: the run's reports (written when it finishes), its results as CSV, or all of them in a ZIP
+  const outcome = s?.cancelled ? 'cancelled' : s && s.failed + s.errors === 0 ? 'passed' : 'failed';
+  const spec = useMemo<OutputSpec>(() => {
+    const source = { kind: 'run' as const, runId };
+    return {
+      id: 'run.results',
+      what: 'run results',
+      name: outputFileName({ name: `run-${s?.name ?? runId}`, status: s ? outcome : undefined, when: s ? new Date(s.startedAt) : undefined, ext: '' }),
+      formats: [
+        { format: 'html', label: 'HTML report', source, default: true },
+        { format: 'json', label: 'JSON results', source },
+        { format: 'junit', label: 'JUnit XML (CI)', source },
+        { format: 'md', label: 'Markdown summary', source },
+        { format: 'csv', label: 'Results (CSV)', source },
+        { format: 'zip', label: 'All reports (ZIP)', source },
+      ],
+      empty: done && s ? undefined : 'The run is still going: its reports are written when it finishes',
+    };
+  }, [runId, s, outcome, done]);
 
   return (
-    <div className="h-full flex flex-col min-h-0">
+    <div className="h-full flex flex-col min-h-0" data-output="run.results">
       <div className="flex items-center gap-3 px-3 py-2 border-b border-line flex-wrap">
         {!done ? (
           <>
@@ -186,8 +208,9 @@ export function RunPanel({ runId, expectedTotal, onRerunFailed, focusName }: { r
           {!done && progress.running > 0 && <span className="text-muted text-xs">{progress.running} running</span>}
         </span>
         {s?.environment && <EnvBadge name={s.environment} className="text-xs max-w-48" />}
-        {done && (
-          <div className="ml-auto flex flex-wrap gap-1">
+        <OutputActions spec={spec} className="flex-wrap">
+          {done && (
+          <>
             {onRerunFailed && s && s.failed + s.errors > 0 && (
               <Button size="sm" icon={<RotateCcw size={12} />} title="Run only the tests that failed or errored" onClick={() => onRerunFailed(runId)}>
                 {LABEL.rerunFailed}
@@ -200,7 +223,6 @@ export function RunPanel({ runId, expectedTotal, onRerunFailed, focusName }: { r
             }>
               HTML report
             </Button>
-            <ExportMenu runId={runId} />
             <MoreMenu label="Run actions" items={[...runCiMenuItems(runId), ...(s && s.failed + s.errors > 0 ? [triageRunItem(runId, { title: s.name, separator: true })] : [])]} />
             <Button size="sm" icon={<ScanSearch size={12} />} title="Which OpenAPI operations and responses this run exercised" onClick={() => useApp.getState().set({ apiCoverage: { runId } })}>
               API coverage
@@ -208,8 +230,9 @@ export function RunPanel({ runId, expectedTotal, onRerunFailed, focusName }: { r
             <Button size="sm" icon={<GitCompare size={12} />} onClick={() => setBaselineOpen(true)}>
               Baselines
             </Button>
-          </div>
-        )}
+          </>
+          )}
+        </OutputActions>
       </div>
       {!done && (
         <div className="h-1 bg-panel2 relative overflow-hidden">
@@ -322,26 +345,6 @@ export function RunPanel({ runId, expectedTotal, onRerunFailed, focusName }: { r
       )}
       {baselineOpen && <BaselineModal runId={runId} onClose={() => setBaselineOpen(false)} />}
     </div>
-  );
-}
-
-function ExportMenu({ runId }: { runId: string }) {
-  const exp = (format: 'html' | 'json' | 'junit' | 'markdown') => void call<SaveResult>('runs.exportReport', { runId, format }).then((r) => finishSave(r, 'Report'), toastError);
-  return (
-    <Menu
-      width={210}
-      items={[
-        { label: 'HTML report', icon: <FileBarChart size={14} />, onSelect: () => exp('html') },
-        { label: 'JSON results', icon: <Braces size={14} />, onSelect: () => exp('json') },
-        { label: 'JUnit XML (CI)', icon: <FileCode2 size={14} />, onSelect: () => exp('junit') },
-        { label: 'Markdown summary', icon: <FileText size={14} />, onSelect: () => exp('markdown') },
-      ]}
-      trigger={
-        <Button size="sm" icon={<Download size={12} />}>
-          Export
-        </Button>
-      }
-    />
   );
 }
 
