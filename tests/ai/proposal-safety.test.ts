@@ -40,7 +40,23 @@ describe('proposal ids and target paths', () => {
   it('refuses a target path outside tests/ (or not a test file) before anything is sent', async () => {
     const h = harness({ rules: [{ match: '.', response: ANSWER }] });
     try {
-      for (const path of ['../outside.yaml', '../../.local/x.yaml', 'a/../../../x.yaml', 'C:\\Windows\\x.yaml', '/tmp/x.yaml', 'notes.txt'])
+      // the same answer on every OS: C:\… and ..\… are plain file names to node:path on Linux and macOS, refused all the same
+      for (const path of [
+        '../outside.yaml',
+        '../../.local/x.yaml',
+        'a/../../../x.yaml',
+        'C:\\Windows\\x.yaml',
+        'C:/Windows/x.yaml',
+        'C:x.yaml',
+        '..\\..\\x.yaml',
+        'a\\..\\..\\x.yaml',
+        '\\\\server\\share\\x.yaml',
+        '//server/share/x.yaml',
+        '/tmp/x.yaml',
+        '%2e%2e/x.yaml',
+        'tests/../../x.yaml',
+        'notes.txt',
+      ])
         await expect(runAiTask(h.deps, { task: 'design-flow', question: 'a flow', path })).rejects.toThrow(/escapes the workspace|YAML or JSON/);
       expect(h.rec.requests).toHaveLength(0);
       // tests/ in front is accepted (and dropped)
@@ -70,8 +86,11 @@ describe('proposal ids and target paths', () => {
       const id = r.proposal!.id;
       const file = join(h.store.root, '.local', 'ai', 'proposals', `${id}.json`);
       const p = getProposal(h.store, id);
-      writeFileSync(file, JSON.stringify({ ...p, items: p.items.map((i) => ({ ...i, path: '../../escaped.yaml' })) }));
-      expect(() => applyProposal(h.store, id)).toThrow(/Nothing of .* could be applied: .*escapes the workspace/);
+      for (const path of ['../../escaped.yaml', 'C:\\escaped.yaml', '..\\..\\escaped.yaml', '/escaped.yaml']) {
+        writeFileSync(file, JSON.stringify({ ...p, items: p.items.map((i) => ({ ...i, path })) }));
+        expect(() => applyProposal(h.store, id)).toThrow(/Nothing of .* could be applied: .*escapes the workspace/);
+      }
+      expect(readdirSync(h.store.path('tests'), { recursive: true }).filter((f) => String(f).includes('escaped'))).toEqual([]);
       expect(existsSync(join(h.store.root, '..', 'escaped.yaml'))).toBe(false);
       expect(existsSync(join(h.store.root, 'escaped.yaml'))).toBe(false);
       // an undo record pointing outside tests/ is refused too

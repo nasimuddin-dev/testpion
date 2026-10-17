@@ -13,6 +13,7 @@ import { atomicWrite, removeOwned } from '../storage/fsutil.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { noteProposalOutcome, type AiSurface } from '../storage/ai-usage.js';
 import { shortId } from '../util/ids.js';
+import { checkedTestFilePath } from '../storage/test-path.js';
 
 export type ProposalItemKind = 'file' | 'flow' | 'assertion' | 'script' | 'request' | 'patch' | 'text';
 
@@ -101,11 +102,8 @@ const fileOf = (store: WorkspaceStore, id: string) => {
  * it again (writeTestFile), so a hand-edited proposal cannot write outside either.
  */
 export function proposedTestFilePath(store: WorkspaceStore, asked: string): string {
-  const p = asked.trim().replace(/^tests[\\/]/, '');
-  store.safePath(p, store.path('tests'));
-  if (!/\.(ya?ml|json)$/i.test(p))
-    throw new ApsError('ValidationError', `A proposed test file is YAML or JSON (.yaml, .yml, .json) under tests/: ${asked}`, { suggestions: ['Pass a path under tests/, e.g. flows/orders.yaml.'] });
-  return p;
+  // the same rules on every OS (storage/test-path.ts), not node:path's: C:\x.yaml is refused on Linux and macOS too
+  return checkedTestFilePath(store.path('tests'), asked).rel;
 }
 
 export function newProposalId(): string {

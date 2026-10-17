@@ -128,12 +128,16 @@ export async function runCollection(opts: CollectionRunOptions): Promise<RunSumm
     }
     opts.onEvent?.(e);
   };
+  // the run stopped (cancelled, bailed, its results file failed): a request not run never reports, so nothing waits
+  // for it and no further request is chosen (else the run would wait forever for a result that does not come)
+  let stopped = false;
   const onAbort = () => {
+    stopped = true;
     for (const w of waiters.values()) w(undefined);
     waiters.clear();
   };
   opts.signal?.addEventListener('abort', onAbort, { once: true });
-  const waitFor = (id: string) => new Promise<TestResult | undefined>((resolve) => (opts.signal?.aborted ? resolve(undefined) : waiters.set(id, resolve)));
+  const waitFor = (id: string) => new Promise<TestResult | undefined>((resolve) => (stopped || opts.signal?.aborted ? resolve(undefined) : waiters.set(id, resolve)));
   // setNextRequest takes a request id or name
   const find = (target: string) => {
     const byId = refs.findIndex((r) => r.id === target);
@@ -148,7 +152,7 @@ export async function runCollection(opts: CollectionRunOptions): Promise<RunSumm
       let i = 0;
       let steps = 0;
       while (i < refs.length) {
-        if (opts.signal?.aborted) return;
+        if (stopped || opts.signal?.aborted) return;
         if (++steps > maxSteps) throw new ApsError('ValidationError', `Stopped iteration ${it + 1}: more than ${maxSteps} requests — check for a setNextRequest loop`);
         if (!first && delayMs > 0) await sleep(delayMs, opts.signal).catch(() => undefined);
         first = false;
@@ -170,7 +174,7 @@ export async function runCollection(opts: CollectionRunOptions): Promise<RunSumm
       }
       // then the collection's gRPC calls and connections, in order
       for (const t of realtime) {
-        if (opts.signal?.aborted) return;
+        if (stopped || opts.signal?.aborted) return;
         if (!first && delayMs > 0) await sleep(delayMs, opts.signal).catch(() => undefined);
         first = false;
         const id = `${t.id}@${it + 1}`;
@@ -182,7 +186,17 @@ export async function runCollection(opts: CollectionRunOptions): Promise<RunSumm
   };
 
   try {
-    return await runTests({ ...opts, name: opts.name, tests: tests(), concurrency: 1, onEvent });
+    return await runTests({
+      ...opts,
+      name: opts.name,
+      tests: tests(),
+      concurrency: 1,
+      onEvent,
+      onStop: () => {
+        onAbort();
+        opts.onStop?.();
+      },
+    });
   } finally {
     // the caller's signal (the app's AbortController) must not keep a finished run reachable
     opts.signal?.removeEventListener('abort', onAbort);

@@ -1,8 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { fakeServices } from '../helpers.js';
+import { mkdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { fakeServices, tempDir } from '../helpers.js';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { collectionRequests, runCollection, VariableScope, type Collection, type ExecServices, type RunEvent, type TestResult } from '../../packages/core/src/index.js';
+import { collectionRequests, runCollection, runTests, VariableScope, type Collection, type ExecServices, type RunEvent, type TestCase, type TestResult } from '../../packages/core/src/index.js';
 
 let server: Server;
 let base: string;
@@ -157,5 +159,34 @@ describe('collection runner', () => {
     ]);
     expect(svc.vars.get('seenUrl')).toBe('{{baseUrl}}/graphql');
     expect(svc.vars.get('gqlAuth')).toBe('Bearer gql-tok');
+  });
+});
+
+describe('a collection run that stops early ends (it never waits for a result that does not come)', () => {
+  const failing = (): Collection => ({
+    ...collection(),
+    auth: undefined,
+    testScript: undefined,
+    items: ['a', 'b', 'c'].map((id) => ({ kind: 'http' as const, id, name: id, request: { method: 'GET' as const, url: `{{baseUrl}}/stop-${id}` }, assertions: [{ type: 'status', expected: 201 }] })),
+  });
+
+  it('bail: the first failing request ends the run, the next ones are not sent', async () => {
+    seen.length = 0;
+    const s = await runCollection({ name: 'bail', collection: failing(), services: services(), bail: true });
+    expect(s).toMatchObject({ total: 1, failed: 1 });
+    expect(seen.map((x) => x.url)).toEqual(['/stop-a']);
+  });
+
+  it('a results file that cannot be written fails the run with why (no hang, no unhandled error)', async () => {
+    const { dir, cleanup } = tempDir();
+    try {
+      mkdirSync(join(dir, 'results.jsonl')); // a folder where the file goes
+      await expect(runCollection({ name: 'broken', collection: failing(), services: services(), resultsFile: join(dir, 'results.jsonl') })).rejects.toThrow(/results could not be written/);
+      await expect(runTests({ name: 'broken', tests: [{ id: 't', name: 't', type: 'http', request: { method: 'GET', url: `${base}/x` } } as TestCase], services: services(), resultsFile: join(dir, 'results.jsonl') })).rejects.toThrow(
+        /results could not be written/,
+      );
+    } finally {
+      cleanup();
+    }
   });
 });

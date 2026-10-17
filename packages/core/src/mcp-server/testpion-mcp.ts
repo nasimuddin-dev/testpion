@@ -37,6 +37,7 @@ import { describeRoot, executeGrpc, grpcRoot, parseGrpcTarget } from '../protoco
 import { reflectServer } from '../protocols/grpc/reflection.js';
 import { runRealtimeExchange, type RealtimeExchange } from '../protocols/realtime.js';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { checkedTestFilePath } from '../storage/test-path.js';
 import { workspaceEditTools } from './workspace-edit-tools.js';
 import { gitTools } from './git-tools.js';
 import { openApiTools } from './openapi-tools.js';
@@ -1227,9 +1228,8 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
         required: ['path', 'content'],
       },
       run: async (a) => {
-        const rel = String(a.path ?? '').replace(/\\/g, '/').replace(/^tests\//, '');
-        if (!/\.(ya?ml|json)$/i.test(rel)) throw new ApsError('ValidationError', 'The path must end with .yaml, .yml or .json');
-        const dest = store.safePath(rel, store.path('tests'));
+        // the same rules on every OS as an AI proposal's file (storage/test-path.ts): / between folders, inside tests/, .yaml/.yml/.json
+        const { rel, abs: dest } = checkedTestFilePath(store.path('tests'), String(a.path ?? ''));
         if (existsSync(dest) && a.overwrite !== true) throw new ApsError('ConfigurationError', `tests/${rel} exists; pass overwrite: true to replace it`);
         // parse a copy first, so a broken file never lands in the workspace
         const tmp = join(tmpdir(), `testpion-check-${shortId('t-')}-${rel.split('/').pop()}`);

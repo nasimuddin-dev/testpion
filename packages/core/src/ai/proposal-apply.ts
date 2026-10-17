@@ -13,6 +13,7 @@ import { ApsError } from '../errors.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { shortId } from '../util/ids.js';
 import { noteProposalOutcome } from '../storage/ai-usage.js';
+import { checkedTestFilePath } from '../storage/test-path.js';
 import { getProposal, saveProposal, type Proposal, type ProposalItem, type ProposalUndo } from './proposal.js';
 
 export interface ApplyResult {
@@ -53,8 +54,10 @@ function applyItem(store: WorkspaceStore, item: ProposalItem): ProposalUndo {
   switch (item.kind) {
     case 'file':
     case 'flow': {
-      const path = (item.path ?? (item.target && 'path' in item.target ? String(item.target.path) : '')).replace(/^tests[\\/]/, '');
-      if (!path || !/\.(ya?ml|json)$/i.test(path)) throw new ApsError('ValidationError', `"${item.title}" has no test file path (tests/….yaml)`);
+      const asked = item.path ?? (item.target && 'path' in item.target ? String(item.target.path) : '');
+      if (!asked) throw new ApsError('ValidationError', `"${item.title}" has no test file path (tests/….yaml)`);
+      // a proposal file can be hand-edited: its path is checked again, as named and really (a link under tests/)
+      const { rel: path } = checkedTestFilePath(store.path('tests'), asked);
       let before: string | null = null;
       try {
         before = store.readTestFile(path);
@@ -148,12 +151,15 @@ export function applyProposal(store: WorkspaceStore, id: string, o: { items?: st
 export function undoProposal(store: WorkspaceStore, id: string): { id: string; restored: number } {
   const p: Proposal = getProposal(store, id);
   if (p.status !== 'applied' || !p.applied || p.applied.undone) throw new ApsError('ConfigurationError', `The AI proposal "${id}" has nothing to undo`);
+  // every path first: a hand-edited undo that names a place outside tests/ restores nothing at all
+  for (const u of p.applied.undo) if (u.file) checkedTestFilePath(store.path('tests'), u.file.path);
   let restored = 0;
   for (const u of [...p.applied.undo].reverse()) {
     if (u.file) {
+      const { rel, abs } = checkedTestFilePath(store.path('tests'), u.file.path);
       if (u.file.before === null) {
-        if (existsSync(store.safePath(u.file.path, store.path('tests')))) store.deleteTestFile(u.file.path);
-      } else store.writeTestFile(u.file.path, u.file.before);
+        if (existsSync(abs)) store.deleteTestFile(rel);
+      } else store.writeTestFile(rel, u.file.before);
       restored++;
     } else if (u.node) {
       const c = store.getCollection(u.node.collectionId);

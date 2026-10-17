@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { join } from 'node:path';
 import { Backend } from '../../apps/desktop/backend/backend.js';
 import { ciTargetOfRun, monitorRequestStats, executeMonitor, finishedRun, readRunSummary, recordRun, requestIdOfResult, stageAtomicWrite, resultSourceRefs, runAgainPlan, saveMonitor, WorkspaceStore, type RunSummary } from '../../packages/core/src/index.js';
-import { tempDir, waitFor } from '../helpers.js';
+import { tempDir } from '../helpers.js';
 
 // WF-08: a result names its source (the test file at its step, or the saved request), and a run (or some of its
 // results) runs again the way it first ran.
@@ -42,8 +42,11 @@ beforeAll(async () => {
     `tests:\n  - id: one\n    name: one\n    type: http\n    method: GET\n    url: ${base}/t1\n  - id: two\n    name: two\n    type: http\n    method: GET\n    url: ${base}/t2\n`,
   );
   s.close();
-  be = new Backend({ appDir: join(tmp.dir, 'app'), emit: () => undefined, noMonitors: true });
+  be = new Backend({ appDir: join(tmp.dir, 'app'), emit: onEvent, noMonitors: true });
   be.openStore(root);
+  // the first runs of a fresh process load the run, report and protocol modules (seconds on a busy CI runner): paid
+  // here, once, so each test below measures what it is about
+  await Promise.all([be.invoke('col.run', { collectionId: 'c1' }), be.invoke('tests.run', { paths: ['smoke/two.yaml'] })].map(async (p) => finished(((await p) as { runId: string }).runId)));
 });
 afterAll(async () => {
   await be.dispose();
@@ -51,7 +54,32 @@ afterAll(async () => {
   tmp.cleanup();
 });
 
-const finished = (runId: string) => waitFor(() => !!readRunSummary(be.ws, runId), 15_000, `run ${runId}`).then(() => readRunSummary(be.ws, runId)!);
+/**
+ * A run's end as the backend tells it (`run.finished`, after its summary and history row are recorded; `run.error`
+ * first when it failed), not a poll of the summary file against the clock: a slow run is waited for, a failed one
+ * fails the test at once with its error, and the summary is there when it ended.
+ */
+const ended = new Map<string, { error?: { message?: string } }>();
+const waiting = new Map<string, () => void>();
+const errors = new Map<string, { message?: string }>();
+function onEvent(channel: string, payload: unknown) {
+  const p = payload as { runId?: string; error?: { message?: string } };
+  if (!p?.runId) return;
+  if (channel === 'run.error') errors.set(p.runId, p.error ?? {});
+  if (channel === 'run.finished') {
+    ended.set(p.runId, { error: errors.get(p.runId) });
+    waiting.get(p.runId)?.();
+  }
+}
+async function finished(runId: string): Promise<RunSummary> {
+  if (!ended.has(runId)) await new Promise<void>((r) => waiting.set(runId, r));
+  waiting.delete(runId);
+  const error = ended.get(runId)!.error;
+  if (error) throw new Error(`run ${runId} failed: ${error.message}`);
+  const summary = readRunSummary(be.ws, runId);
+  expect(summary, `run ${runId} ended without its summary`).toBeDefined();
+  return summary!;
+}
 
 describe('result → source', () => {
   it('collection results name their saved request; test results their file at the step', async () => {

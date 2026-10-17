@@ -31,6 +31,12 @@ export interface RunOptions {
   timeoutMs?: number;
   services: ExecServices;
   signal?: AbortSignal;
+  /**
+   * Called once when the run stops early — cancelled, bailed, stopped at a breakpoint, or its results file failed. The
+   * steps not started then end without a result, so a source that waits for each result before choosing the next (a
+   * collection run) stops waiting here instead of forever.
+   */
+  onStop?(): void;
   /** Stream results as JSON lines to this file (also used as the checkpoint for `resume`). */
   resultsFile?: string;
   /** Skip tests already present in `resultsFile` and continue the run. */
@@ -161,6 +167,20 @@ export async function runTests(opts: RunOptions): Promise<RunSummary> {
   const tracker = new VariableTracker(opts.services.vars);
   const onAbort = () => ctrl.abort();
   const signal = ctrl.signal;
+  if (opts.onStop) {
+    const onStop = opts.onStop;
+    signal.addEventListener(
+      'abort',
+      () => {
+        try {
+          onStop();
+        } catch {
+          /* listeners must not break the run */
+        }
+      },
+      { once: true },
+    );
+  }
   const emit = (e: RunEvent) => {
     try {
       opts.onEvent?.(e);
@@ -182,20 +202,35 @@ export async function runTests(opts: RunOptions): Promise<RunSummary> {
     }
   }
   let out: WriteStream | undefined;
+  /**
+   * The results file could not be written (a folder in its place, a full disk, no file handles left): the run stops and
+   * fails with this, instead of waiting forever for a `drain` a broken stream never sends (and of an unhandled 'error'
+   * event, which takes down the process that runs it).
+   */
+  let outError: Error | undefined;
+  // many workers write concurrently: share one drain wait instead of one listener per writer
+  let drain: Promise<void> | undefined;
+  let drained: (() => void) | undefined;
   if (opts.resultsFile) {
     mkdirSync(dirname(opts.resultsFile), { recursive: true });
     out = createWriteStream(opts.resultsFile, { flags: opts.resume ? 'a' : 'w' });
+    out.on('error', (e) => {
+      outError ??= e;
+      drained?.();
+      ctrl.abort();
+    });
   }
-  // many workers write concurrently: share one drain wait instead of one listener per writer
-  let drain: Promise<void> | undefined;
   const write = async (r: TestResult) => {
-    if (out && !out.write(JSON.stringify(r) + '\n')) {
-      drain ??= new Promise<void>((res) =>
-        out!.once('drain', () => {
-          drain = undefined;
+    if (!out || outError || out.destroyed) return;
+    if (!out.write(JSON.stringify(r) + '\n') && !outError && !out.destroyed) {
+      drain ??= new Promise<void>((res) => {
+        drained = () => {
+          out!.off('drain', drained!);
+          drain = drained = undefined;
           res();
-        }),
-      );
+        };
+        out!.once('drain', drained);
+      });
       await drain;
     }
   };
@@ -585,6 +620,11 @@ export async function runTests(opts: RunOptions): Promise<RunSummary> {
     await flushTraces();
     if (out) await endAndClose(out);
   }
+  if (outError)
+    throw new ApsError('ConfigurationError', `The run's results could not be written to ${opts.resultsFile}: ${outError.message}`, {
+      cause: outError,
+      suggestions: ['Check that the folder is writable and the disk has space.'],
+    });
 
   const summary = agg.summary({
     runId,

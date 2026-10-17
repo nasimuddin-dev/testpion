@@ -295,6 +295,9 @@ export async function runFlowData(o: FlowDataRunOptions): Promise<FlowDataRunRes
         return;
       }
       if (n.done) return;
+      // cancelled (or bailed by another row) while this row was being read: it never starts, and is not counted as a
+      // cancelled row — only the rows that were running when the run stopped are
+      if (ctrl.signal.aborted) return;
       const index = next++;
       if (index >= max) {
         truncated = true;

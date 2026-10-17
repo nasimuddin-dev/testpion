@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.48.1 — 2026-10-16
+
+Fixes for 0.48.0, found by the macOS, Linux and Windows test runs.
+
+### Fixes
+- **Where an AI proposal may write is decided the same way on every OS**: a target path (`--path` of `testpion ai run` and `testpion flow generate`, an RPC's or MCP tool's `path`, a hand-edited proposal, an undo record, and the MCP tool `write_test_file`) must be a `/`-separated path inside `tests/` ending in `.yaml`, `.yml` or `.json`. A Windows path (`C:\…`, `C:/…`, `\\server\share`), a backslash (`..\x.yaml`), `..`, a leading `/`, percent-encoding, control characters, empty folder names, names Windows cannot hold (`CON`, `a:b`, a trailing dot) and over-long paths are refused before anything is sent — on Linux and macOS a path like `C:\Windows\x.yaml` used to be accepted as a file name inside `tests/`. Writing also checks where the file really lands, so a link inside `tests/` that leads elsewhere is refused.
+- **Runs always end, and are recorded when they do**: a collection run with **bail** (`testpion run-collection --bail`) stopped at the first failure but then never finished; it now ends there with its results recorded. A run whose results file cannot be written (a full disk, a folder in the way) now fails with that reason instead of waiting forever (and no longer raises an unhandled error).
+- **Cancelling a data-driven flow run never starts another row**: a row being read from the data at the moment of the cancel (or of a bail by another row) no longer starts, and is no longer counted as a cancelled row; only the rows that were running are.
+
 ## 0.48.0 — 2026-10-16
 
 ### Behaviour changes: what works differently (read before upgrading)

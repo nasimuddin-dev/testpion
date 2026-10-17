@@ -30,6 +30,8 @@ let base = '';
 let inflight = 0;
 let maxInflight = 0;
 let requests = 0;
+/** A test's own view of each request as it arrives (to act on the server's signal, not on the clock). */
+let onRequest: ((url: URL) => void) | undefined;
 const tmp = tempDir('tp-flow-scale-');
 
 beforeAll(async () => {
@@ -39,6 +41,7 @@ beforeAll(async () => {
     requests++;
 
     maxInflight = Math.max(maxInflight, inflight);
+    onRequest?.(url);
     const ms = Number(url.searchParams.get('ms') ?? 0);
     if (ms) await new Promise((r) => setTimeout(r, ms));
     inflight--;
@@ -117,17 +120,50 @@ describe('data-driven flow runs', () => {
   });
 
   it('cancel stops the run: the rows running are cancelled, no more start', async () => {
+    // cancelled on the server's signal, not after a fixed time: the moment both rows' first requests are held there
+    // (each row waits for its response, so no request of the run is on the way when it is cancelled)
     const ctrl = new AbortController();
-    const p = runFlowData({ file: twoSteps(), data: { records: rows(20, [], 80) }, services: fakeServices({ vars: { baseUrl: base } }), concurrency: 2, signal: ctrl.signal });
-    setTimeout(() => ctrl.abort(), 120);
-    const r = await p;
-    expect(r.stopped).toBe(true);
-    expect(r.total).toBeLessThan(6);
-    expect(r.cancelled).toBeGreaterThan(0);
-    // nothing starts after the run returned
-    const seen = requests;
-    await new Promise((res) => setTimeout(res, 200));
-    expect(requests).toBe(seen);
+    let mine = 0; // this run's requests (ms=301 marks them)
+    onRequest = (url) => {
+      if (url.searchParams.get('ms') === '301' && ++mine === 2) ctrl.abort();
+    };
+    try {
+      const r = await runFlowData({ file: twoSteps(), data: { records: rows(20, [], 301) }, services: fakeServices({ vars: { baseUrl: base } }), concurrency: 2, signal: ctrl.signal });
+      expect(r.stopped).toBe(true);
+      // exactly the two rows that were running, both cancelled; none of the other 18 started
+      expect(r).toMatchObject({ total: 2, cancelled: 2, passed: 0, failed: 0 });
+      expect(mine).toBe(2);
+      // nothing starts after the run returned: a monotonic count, read once the run settled and again later (past
+      // the 301 ms the server holds a request)
+      await new Promise((res) => setTimeout(res, 400));
+      expect(mine).toBe(2);
+    } finally {
+      onRequest = undefined;
+    }
+  });
+
+  it('a row read while the run is cancelled never starts (and is not counted)', async () => {
+    // the cancel lands exactly while the third row is being read from the data (its getter cancels): deterministic
+    const ctrl = new AbortController();
+    const records = rows(5, [], 1);
+    const third = records[2]!;
+    Object.defineProperty(records, 2, {
+      get: () => {
+        ctrl.abort();
+        return third;
+      },
+    });
+    const created: string[] = []; // this run's first steps (ms=1 marks them)
+    onRequest = (url) => void (url.searchParams.get('ms') === '1' && created.push(url.searchParams.get('user')!));
+    try {
+      const finished: number[] = [];
+      const r = await runFlowData({ file: twoSteps(), data: { records }, services: fakeServices({ vars: { baseUrl: base } }), concurrency: 1, signal: ctrl.signal, onRow: (x) => finished.push(x.index) });
+      expect(r).toMatchObject({ stopped: true, total: 2, passed: 2, cancelled: 0 });
+      expect(finished).toEqual([0, 1]);
+      expect(created).toEqual(['u0', 'u1']); // nothing of row 2
+    } finally {
+      onRequest = undefined;
+    }
   });
 
   it("reads the file's data: header (a CSV next to it), and limits", async () => {
