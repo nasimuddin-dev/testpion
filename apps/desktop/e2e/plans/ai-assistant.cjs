@@ -13,11 +13,26 @@ const slowModel = (ws) => {
   for (const h of c.providers.find((x) => x.id === 'demo').headers) if (h.key === 'x-mock-latency-ms') h.value = '1500';
   // "Generate GraphQL query" gets an operation in a code block (the request carries the current query)
   const rules = c.providers.find((x) => x.id === 'demo').headers.find((h) => h.key === 'x-mock-rules');
-  // and "Suggest assertions" for the demo server's /health gets two checks as YAML
+  // and "Suggest assertions" / "Generate tests" for the demo server's /health get checks and tp tests as JSON
   rules.value = JSON.stringify([
     { match: 'currentQuery', response: 'Here it is:\n\n```graphql\nquery Generated { countries { code name } }\n```' },
     { match: '"gaps"', response: 'Tests for the most important gaps:\n\n```yaml\ntests:\n  - id: pet-not-found\n    type: http\n    request: { method: GET, url: "{{baseUrl}}/pet/0" }\n    checks:\n      - { type: status, expected: 404 }\n```' },
-    { match: '127.0.0.1:4010/health', response: '```yaml\n- type: status\n  expected: 200\n- type: equals\n  path: $.status\n  expected: ok\n```' },
+    // "Generate tests" (its context has the response's timeMs): one test passes, one does not
+    {
+      match: '"timeMs"',
+      response: JSON.stringify({ tests: [{ name: 'is ok', code: 'tp.response.to.have.status(200);' }, { name: 'is created', code: 'tp.response.to.have.status(201);' }] }),
+    },
+    // "Suggest assertions": two checks hold, one pins the server's time (fails, a safer form is offered)
+    {
+      match: '127.0.0.1:4010/health',
+      response: JSON.stringify({
+        checks: [
+          { type: 'status', expected: 200 },
+          { type: 'equals', path: '$.status', expected: 'ok' },
+          { type: 'equals', path: '$.time', expected: '2020-01-01T00:00:00.000Z' },
+        ],
+      }),
+    },
     ...JSON.parse(rules.value),
   ]);
   writeFileSync(p, JSON.stringify(c, null, 2));
@@ -108,11 +123,36 @@ const steps = [
     const before = tests();
     [...document.querySelectorAll('main button')].find((b) => b.offsetParent && b.textContent.trim() === 'Send')?.click(); await __t.sleep(2000);
     if (!(await __t.responseAction('Suggest assertions'))) return 'NO BUTTON Suggest assertions';
-    for (let i = 0; i < 60 && !${panel}?.querySelector('[data-answer-apply]'); i++) await __t.sleep(150);
-    const apply = ${panel}?.querySelector('[data-answer-apply]'); if (!apply) return 'NO BUTTON apply';
+    // the checks come as a proposal that opens by itself: each verified against this response; the one that pins the
+    // server's time fails, is unticked, and offers safer forms — switching to one checks it again
+    const modal = await __t.waitFor(() => document.querySelector('[data-proposal]'), 12000); if (!modal) return 'NO REVIEW';
+    const badges = [...modal.querySelectorAll('[data-proposal-item] [data-verification]')].map((b) => b.getAttribute('data-verification')).join(',');
+    const ticked = [...modal.querySelectorAll('[data-proposal-item] input[type=checkbox]')].map((c) => (c.checked ? 1 : 0)).join('');
+    const safer = [...modal.querySelectorAll('[data-proposal-safer] button')];
+    const offered = safer.map((b) => b.textContent.trim()).join(' / ');
+    const exists = safer.find((b) => b.textContent.trim() === 'exists $.time'); if (!exists) return 'NO BUTTON safer exists';
+    await __t.real.click(exists);
+    await __t.waitFor(() => [...document.querySelectorAll('[data-proposal-item] input[type=checkbox]')].every((c) => c.checked), 6000);
+    const after = [...document.querySelectorAll('[data-proposal-item] input[type=checkbox]')].map((c) => (c.checked ? 1 : 0)).join('');
+    const apply = document.querySelector('[data-proposal-accept]'); if (!apply) return 'NO BUTTON accept';
     const label = apply.textContent.trim(); apply.click(); await __t.sleep(800);
     ${panel}?.querySelector('[aria-label="Close assistant"]').click(); await __t.sleep(400);
-    return 'button: ' + label + ' | tests tab: ' + before + ' -> ' + tests();
+    return 'button: ' + label + ' | verified: ' + badges + ' | ticked: ' + ticked + ' | safer: ' + offered + ' | after: ' + after + ' | tests tab: ' + before + ' -> ' + tests();
+  })()`],
+  ['generate-tests-verified', `(async () => {
+    // the same response: Generate tests writes tp tests, each run in the sandbox against it; the failing one is unticked
+    if (!(await __t.responseAction('Generate tests'))) return 'NO BUTTON Generate tests';
+    const modal = await __t.waitFor(() => document.querySelector('[data-proposal]'), 12000); if (!modal) return 'NO REVIEW';
+    const rows = [...modal.querySelectorAll('[data-proposal-item]')].map((r) => (r.querySelector('input[type=checkbox]').checked ? '[x] ' : '[ ] ') + r.querySelector('.mono').textContent.trim() + ' ' + r.querySelector('[data-verification]')?.getAttribute('data-verification'));
+    // Run now sends the request again and checks every test against the new response
+    const run = modal.closest('[role=dialog]').querySelector('[data-proposal-run-now]'); if (!run) return 'NO BUTTON Run now';
+    await __t.real.click(run);
+    const toast = await __t.waitFor(() => [...document.querySelectorAll('[data-sonner-toast]')].map((t) => t.textContent.trim()).find((t) => /^Sent again/.test(t)), 15000);
+    const apply = document.querySelector('[data-proposal-accept]'); if (!apply) return 'NO BUTTON accept';
+    const label = apply.textContent.trim(); apply.click(); await __t.sleep(800);
+    const added = [...document.querySelectorAll('[data-sonner-toast]')].map((t) => t.textContent.trim()).find((t) => /Post-response script/.test(t)) ?? 'no toast';
+    ${panel}?.querySelector('[aria-label="Close assistant"]').click(); await __t.sleep(400);
+    return 'items: ' + rows.join(', ') + ' | run now: ' + String(toast ?? 'none').slice(0, 60) + ' | button: ' + label + ' | ' + String(added).slice(0, 60);
   })()`],
   ['apply-coverage', `(async () => {
     await __t.requests();
@@ -123,8 +163,10 @@ const steps = [
     let sug; for (let i = 0; i < 60 && !(sug = [...document.querySelectorAll('main button')].find((b) => b.offsetParent && b.textContent.trim() === 'Suggest tests with AI' && !b.disabled)); i++) await __t.sleep(150);
     if (!sug) return 'NO BUTTON Suggest tests with AI';
     sug.click(); await __t.sleep(400);
-    for (let i = 0; i < 60 && !${panel}?.querySelector('[data-answer-apply]'); i++) await __t.sleep(150);
-    const apply = ${panel}?.querySelector('[data-answer-apply]'); if (!apply) return 'NO BUTTON apply';
+    for (let i = 0; i < 80 && !${panel}?.querySelector('[data-proposal-review]'); i++) await __t.sleep(150);
+    const review = ${panel}?.querySelector('[data-proposal-review]'); if (!review) return 'NO BUTTON Review';
+    review.click(); await __t.sleep(600);
+    const apply = document.querySelector('[data-proposal-accept]'); if (!apply) return 'NO BUTTON accept';
     const label = apply.textContent.trim(); apply.click(); await __t.sleep(1200);
     const toast = [...document.querySelectorAll('[data-sonner-toast]')].map((t) => t.textContent.trim()).find((t) => t.includes('Saved tests/')) ?? 'no toast';
     const path = /tests\\/(\\S+?\\.yaml)/.exec(toast)?.[1];
@@ -190,11 +232,12 @@ module.exports = withExpect(
     // Ctrl+J opens the assistant with questions that fit the open MCP server; a click asks one; Ctrl+J closes it
     'shortcut-and-suggestions': /^chips: What can this server do\? \/ .* \| questions: 1 \| answers: 1 \| context: none \| last: Mock response: Question: What can this server do\? Context: .*Weather.* \| open after Ctrl\+J: false \| open after Esc: false$/,
     // an answer can be put to use where it was asked for
-    'apply-coverage': /^button: Save as a test file \| toast: Saved tests\/coverage\/[\w-]+-gaps\.yaml.*Open \| file: tests: - id: pet-not-found/,
+    'apply-coverage': /^button: Save as a test file \(1\) \| toast: Saved tests\/coverage\/[\w-]+-gaps\.yaml.*Open \| file: tests: - id: pet-not-found/,
     'apply-checks': (r) => {
-      const m = /^button: Add to the checks \| tests tab: Tests(\d*) -> Tests(\d+)$/.exec(r);
-      return (m && +m[2] === (+m[1] || 0) + 2) || 'the two suggested checks should be added to the Tests tab';
+      const m = /^button: Add to the checks \(3\) \| verified: pass,pass,fail \| ticked: 110 \| safer: regex \$\.time \/.*\/ \/ type \$\.time = "string" \/ exists \$\.time \| after: 111 \| tests tab: Tests(\d*) -> Tests(\d+)$/.exec(r);
+      return (m && +m[2] === (+m[1] || 0) + 3) || 'the failing time check should be unticked, switch to exists, and all three be added to the Tests tab';
     },
+    'generate-tests-verified': /^items: \[x\] is ok pass, \[ \] is created fail \| run now: Sent again \(status 200\): 1 item fails now \| button: Add to the Post-response script \(1\) \| Added the tests to the Post-response script/,
     'restart-reruns-task': /^ran again: true \| questions: 0 \| answers: 1 \| .*last: Here it is: query Generated/,
     // the second New conversation lands while the first answer is being written: one fresh answer, nothing stopped
     'restart-during-answer': /^questions: 0 \| answers: 1 \| .*last: Here it is: query Generated.* \| stopped shown: false$/,

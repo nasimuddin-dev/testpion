@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { startAi } from '../components/ai/AiAction';
 import type { ItemRef } from '@testpion/shared';
 import { useRpc } from './use-rpc';
 import { openRef } from './open-ref';
@@ -53,7 +54,5 @@ export async function stepProblem(dir: 1 | -1): Promise<void> {
 
 /** Ask the assistant about one problem: its message, kind and what it names (never values). */
 export function askAboutProblem(p: Problem): void {
-  useApp
-    .getState()
-    .set({ assistant: { task: 'triage-attention', title: 'What to do about this', context: { items: [{ severity: p.severity, kind: p.kind, type: p.type, message: p.message, ref: p.ref }] } } });
+  startAi({ task: 'triage-attention', title: 'What to do about this', context: { items: [{ severity: p.severity, kind: p.kind, type: p.type, message: p.message, ref: p.ref }] } });
 }

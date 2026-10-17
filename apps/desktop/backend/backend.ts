@@ -103,6 +103,10 @@ import {
   ensureProxyApplied,
   setTlsTrust,
   APP_CLAUDE_ID,
+  runAiTask,
+  aiRunDeps,
+  type AiTaskRequest,
+  type AiTaskResult,
   APP_CLAUDE_SECRET,
   DEFAULT_CLAUDE_MODEL,
   appClaudeProvider,
@@ -124,6 +128,7 @@ import { collectionsHandlers } from './handlers/collections.js';
 import { requestsHandlers } from './handlers/requests.js';
 import { mcpHandlers } from './handlers/mcp.js';
 import { aiHandlers } from './handlers/ai.js';
+import { aiTaskHandlers } from './handlers/ai-tasks.js';
 import { testingHandlers } from './handlers/testing.js';
 import { monitorHandlers, runMonitorNow } from './handlers/monitors.js';
 import { grpcHandlers } from './handlers/grpc.js';
@@ -148,7 +153,6 @@ import { VizPages } from './viz-pages.js';
 import { OwnWrites, type OwnWriteBatch } from './own-writes.js';
 import { clipConsole, consoleFromResult, consoleProtocol, consoleRefs, pushConsole, type ConsoleEntry } from './console-log.js';
 import { hasTemplate } from '@testpion/shared';
-import { assistantInstruction } from './assistant-tasks.js';
 import { findNodeName, readRunData } from './run-data.js';
 
 /** How long after start the monitor scheduler and the background git fetch begin (the window's first paint comes first). */
@@ -641,7 +645,7 @@ export class Backend {
    */
   private buildHandlers(): Handlers {
     const all: Handlers = {};
-    for (const group of [appHandlers, workspaceHandlers, collectionsHandlers, requestsHandlers, grpcHandlers, mcpHandlers, aiHandlers, testingHandlers, monitorHandlers, agentHandlers, feedbackHandlers, gitHandlers, debuggerHandlers, debuggerRulesHandlers, externalSecretsHandlers, fuzzHandlers, flowDebugHandlers, debuggerFlowHandlers, debuggerReverseHandlers, flowDeployHandlers, terminalHandlers, flowScaleHandlers, evalMatrixHandlers]) {
+    for (const group of [appHandlers, workspaceHandlers, collectionsHandlers, requestsHandlers, grpcHandlers, mcpHandlers, aiHandlers, aiTaskHandlers, testingHandlers, monitorHandlers, agentHandlers, feedbackHandlers, gitHandlers, debuggerHandlers, debuggerRulesHandlers, externalSecretsHandlers, fuzzHandlers, flowDebugHandlers, debuggerFlowHandlers, debuggerReverseHandlers, flowDeployHandlers, terminalHandlers, flowScaleHandlers, evalMatrixHandlers]) {
       for (const [name, fn] of Object.entries(group(this))) {
         if (name in all) throw new Error(`RPC method ${name} is defined twice`);
         // the parameters are checked first; a TypeError from inside becomes an InternalError naming the method
@@ -1089,51 +1093,25 @@ export class Backend {
   }
 
   /**
-   * The AI assistant: one task (explain an error, suggest checks, …) or a free question, with the context of the view.
-   * `history` holds the earlier turns of the conversation, so a follow-up knows what was said; with `requestId` the
-   * answer streams as `assistant.deltas` events and `ai.cancel` stops it.
+   * The AI assistant and every AI action of the window: one task of the core runner (packages/core/src/ai/tasks) with
+   * the view's context — routing, redaction, budgets, caps, verification, proposals and the usage ledger live there, so
+   * the CLI, the MCP server and a cloud host behave the same. With `requestId` the first answer streams as
+   * `assistant.deltas` and `ai.cancel` stops it.
    */
-  async assistant(p: { task: string; context: unknown; question?: string; environment?: string; history?: Array<{ role: 'user' | 'assistant'; content: string }>; requestId?: string }) {
-    const providerRef = this.settings.assistantProvider;
-    if (!providerRef)
-      throw new ApsError('ConfigurationError', 'The AI assistant is off', { suggestions: ['Open Settings ▸ AI assistant and save your Claude (Anthropic) API key, or choose a provider of this workspace (a local model works offline).'] });
-    if (providerRef === APP_CLAUDE_ID && !this.appClaudeKey())
-      throw new ApsError('ConfigurationError', 'No Claude API key is saved', { suggestions: ['Open Settings ▸ AI assistant and save your Anthropic API key.'] });
+  async assistant(p: AiTaskRequest & { environment?: string; requestId?: string }): Promise<AiTaskResult> {
+    // the app's Claude provider without its key: say so (the window offers Settings ▸ AI assistant)
+    const uses = [this.settings.assistantProvider, this.settings.ai?.small?.provider, this.settings.ai?.large?.provider];
+    if (!p.provider && uses.includes(APP_CLAUDE_ID) && !this.appClaudeKey())
+      throw new ApsError('ConfigurationError', 'No Claude API key is saved', { details: { setup: { assistant: true } }, suggestions: ['Open Settings ▸ AI assistant and save your Anthropic API key.'] });
     const ctx = this.context({ environment: p.environment });
-    const { provider, model } = ctx.services.providers.resolveModel({ provider: providerRef, name: this.settings.assistantModel });
-    // what each task asks for (assistant-tasks.ts)
-    // request generation may use the names (never the values) of the variables in scope
-    const extra = p.task === 'generate-request' ? { variables: Object.keys(ctx.vars.toObject()).filter((k) => !k.startsWith('$')).slice(0, 200) } : {};
-    const context = JSON.stringify(ctx.redactor.redact({ ...(p.context as object), ...extra }), null, 2).slice(0, 24_000);
-    const hasContext = !!p.context && typeof p.context === 'object' && Object.keys(p.context as object).length > 0;
-    // the conversation so far: the first turn carries the context, follow-ups only the question (the context stays in the first turn)
-    const history = (p.history ?? []).slice(-12).map((m) => ({ role: m.role, content: ctx.redactor.redactString(m.content).slice(0, 8000) }));
-    const first = history.length === 0;
-    const turn = first ? `${p.question ? `Question: ${p.question}\n\n` : ''}${hasContext || !p.question ? `Context:\n${context}` : ''}`.trim() : (p.question ?? '');
-    if (!first) history[0] = { role: 'user', content: `${history[0]!.content}\n\nContext:\n${context}` };
     const id = p.requestId ?? shortId('as-');
     const ctrl = new AbortController();
     this.controllers.set(id, ctrl);
     const deltas = this.batched<unknown>('assistant.deltas', 40);
     try {
-      const r = await provider.chat({
-        model,
-        temperature: 0.2,
-        maxTokens: 2000,
-        signal: ctrl.signal,
-        stream: !!p.requestId,
-        onDelta: p.requestId ? (d) => deltas.push({ id, delta: d }) : undefined,
-        messages: [
-          {
-            role: 'system',
-            content: `You are the AI assistant inside TestPion, a developer tool for testing REST, GraphQL, MCP and LLM systems. ${assistantInstruction(p.task)} Format answers in Markdown (short headings, lists, fenced code blocks with a language). Values shown as *** were hidden by TestPion; never ask for them.${first ? '' : ' This is a follow-up in the conversation: answer the question itself, in prose with code blocks where useful (the output-only rule above applied to the first answer); when you change code you gave before, give the whole new version in one code block.'}`,
-          },
-          ...history,
-          { role: 'user', content: turn },
-        ],
-      });
+      const r = await runAiTask(aiRunDeps({ ctx, settings: this.settings, store: this.ws, surface: 'app', signal: ctrl.signal, onDelta: p.requestId && !p.dryRun ? (d) => deltas.push({ id, delta: d }) : undefined }), p);
       deltas.flush();
-      return { text: r.text, provider: provider.config.name, model: r.model || model, aiGenerated: true, usage: r.usage };
+      return r;
     } finally {
       this.controllers.delete(id);
     }

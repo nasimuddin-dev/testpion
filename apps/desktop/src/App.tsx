@@ -1,4 +1,5 @@
 import { AlarmClock, BarChart3, Bot, Code2, Keyboard, Columns2, CopyX, Disc, GitCompare, ScanSearch, TerminalSquare, Variable, Download, FileDown, FlaskConical, FolderOpen, FolderPlus, FolderTree, Gauge, GitBranch, History, KeyRound, Layers, ListChecks, ListX, Network, Play, Plug, Radio, RefreshCw, RotateCcw, Rows3, ScrollText, Search, Settings, Sparkles, SquareTerminal, Upload, Waypoints, Workflow, X, type LucideIcon } from 'lucide-react';
+import { askAssistant } from './components/ai/AiAction';
 import { RightPanel } from './components/RightPanel';
 import { openReverseProxyCapture } from './lib/capture';
 import { createElement, lazy, Suspense, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from 'react';
@@ -49,6 +50,7 @@ import { CookiesModal } from './components/CookiesModal';
 const DIALOG_FALLBACK = 'fixed bottom-9 left-1/2 -translate-x-1/2 z-[60] w-[min(720px,92vw)] rounded-lg border shadow-lg';
 const ShortcutsDialog = lazy(async () => ({ default: (await import('./components/ShortcutsDialog')).ShortcutsDialog }));
 const CiDialog = lazy(async () => ({ default: (await import('./components/CiDialog')).CiDialog }));
+const FlowGenerateDialog = lazy(async () => ({ default: (await import('./components/ai/FlowGenerateDialog')).FlowGenerateDialog }));
 const RecordDialog = lazy(async () => ({ default: (await import('./components/RecordDialog')).RecordDialog }));
 const FeedbackDialog = lazy(async () => ({ default: (await import('./components/FeedbackDialog')).FeedbackDialog }));
 const VariableUsagesDialog = lazy(async () => ({ default: (await import('./components/VariableUsagesDialog')).VariableUsagesDialog }));
@@ -189,6 +191,7 @@ export default function App() {
   const cookiesOpen = useApp((s) => s.cookiesOpen);
   const searchOpen = useApp((s) => s.searchOpen);
   const ci = useApp((s) => s.ci);
+  const flowGenerate = useApp((s) => s.flowGenerate);
   const openapiDiff = useApp((s) => s.openapiDiff);
   const apiCoverage = useApp((s) => s.apiCoverage);
   const explorerOpen = useApp((s) => s.explorerOpen);
@@ -369,7 +372,7 @@ export default function App() {
             { id: 'terminal-focus', label: 'Terminal: Focus', hint: keyLabel('terminal', bindings), run: focusTerminal },
           ]
         : []),
-      { id: 'assistant', label: 'Ask AI Assistant', hint: keyLabel('assistant', bindings), run: () => s.set({ assistant: { task: 'free', title: 'Ask the assistant', context: {} } }) },
+      { id: 'assistant', label: 'Ask AI Assistant', hint: keyLabel('assistant', bindings), run: () => askAssistant() },
       { id: 'feedback', label: 'Send Feedback or Report a Problem…', hint: 'Help', run: () => s.set({ feedback: {} }) },
       { id: 'agents', label: 'Connect an AI Agent (Claude, Cursor, VS Code, Codex) over MCP…', hint: 'Settings', run: () => s.openIntent('settings', { tab: 'agents' }) },
       { id: 'load', label: 'New Load Test', run: () => s.setView('load') },
@@ -521,6 +524,14 @@ export default function App() {
             <ShortcutsDialog />
           </Suspense>,
           close({ shortcutsOpen: false }),
+        )}
+      {flowGenerate &&
+        guard(
+          'flow generation',
+          <Suspense fallback={null}>
+            <FlowGenerateDialog request={flowGenerate} onClose={() => useApp.getState().set({ flowGenerate: undefined })} />
+          </Suspense>,
+          close({ flowGenerate: undefined }),
         )}
       {ci &&
         guard(

@@ -1,4 +1,5 @@
-import { BookOpen, ChevronLeft, Code2, FlaskConical, Network, Play, Radio, RefreshCw, Save, Sparkles, Square, Wand2, FileCheck2 } from 'lucide-react';
+import { BookOpen, ChevronLeft, Code2, FlaskConical, Network, Play, Radio, RefreshCw, Save, Square, Wand2, FileCheck2 } from 'lucide-react';
+import { AiAction } from '../components/ai/AiAction';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAssistantContext } from '../lib/assistant-context';
 import { parse, print } from 'graphql';
@@ -456,24 +457,17 @@ export function GraphQLView() {
                 <Button size="sm" variant="ghost" className="ml-auto" icon={<Wand2 size={12} />} onClick={prettify}>
                   Prettify
                 </Button>
-                <Button
-                  size="sm"
+                <AiAction
                   variant="ghost"
-                  icon={<Sparkles size={12} />}
-                  onClick={() =>
-                    useApp.getState().set({
-                      assistant: {
-                        task: 'generate-query',
-                        title: 'Generate GraphQL query',
-                        context: { schemaSdl: sdl?.slice(0, 20000) ?? 'unknown — introspect first', currentQuery: d.query },
-                        question: '',
-                        apply: { label: 'Use this query', run: (code) => (/^\s*(query|mutation|subscription|fragment|\{)/.test(code) ? set({ query: code }) : 'it has no GraphQL operation') },
-                      },
-                    })
-                  }
-                >
-                  Generate
-                </Button>
+                  label="Generate"
+                  request={() => ({
+                    task: 'generate-query',
+                    title: 'Generate GraphQL query',
+                    context: { schemaSdl: sdl?.slice(0, 20000) ?? 'unknown — introspect first', currentQuery: d.query },
+                    question: '',
+                    apply: { label: 'Use this query', run: (code) => (/^\s*(query|mutation|subscription|fragment|\{)/.test(code) ? set({ query: code }) : 'it has no GraphQL operation') },
+                  })}
+                />
               </div>
               <div className="flex-1 min-h-0">
                 <Split id="gql-editor-vars" direction="vertical" initial={65}>

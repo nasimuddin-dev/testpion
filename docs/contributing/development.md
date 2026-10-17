@@ -20,6 +20,16 @@ node examples/servers/demo-servers.mjs   # local REST/GraphQL/LLM/WebSocket demo
 
 Every feature ships with an implementation, unit tests, integration tests, documentation and an example. A UI feature also gets a plan in `apps/desktop/e2e/plans/`; a CLI command prints its `--json` output through the envelope (`packages/cli/src/output.ts`); a new MCP tool follows the tool contract (`packages/core/src/mcp-server/tool-contract.ts`: paging, `response_format`, `confirm: true` for deleting or overwriting) and is added to the pinned tool list in `tests/integration/workspace-run.test.ts`.
 
+## AI features
+
+A new AI task is an entry in `packages/core/src/ai/tasks/registry.ts` (its prompt in `prompts.ts`; changing a prompt bumps the task's `version`) with golden cases in `tests/ai/`, which run with the mock provider in `npm test`: no key and no network. To see how the prompts do with a real model, run the same cases live (never in CI by default):
+
+```bash
+AI_EVAL_LIVE=1 TESTPION_AI_PROVIDER=ollama TESTPION_AI_MODEL=llama3.2 npx vitest run tests/ai   # prints a scorecard per task
+```
+
+The UI plans and the documentation screenshots use the offline mock with scripted answers (`x-mock-rules` on a mock provider: a regular expression on the last user message and the answer); see `apps/desktop/e2e/plans/ai-flow-from-collection.cjs` and `apps/desktop/scripts/capture-steps.cjs`. See [AI features](/ai-testing/ai-features#the-prompts-are-tested-for-contributors).
+
 ## Hardening of the packaged app
 
 `electron-builder.yml` sets Electron fuses in the installed binary: it can't be started as a plain Node.js runtime (`ELECTRON_RUN_AS_NODE`), doesn't read `NODE_OPTIONS`, ignores `--inspect` and only loads the app from its archive. Check a packaged build with `npm run package:dir -w @testpion/desktop`, then start `release/win-unpacked/TestPion.exe`.

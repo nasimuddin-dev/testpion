@@ -6,7 +6,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
 import { extname } from 'node:path';
 import { parseYaml } from '../util/lazy-yaml.js';
-import { flowChecks, flowGraph, layoutExtras, stepLine, templateVariables, toDot, type FlowCheck, type FlowFrameDef, type FlowGraph, type FlowNote, type FlowStep } from '@testpion/shared';
+import { flowChecks, flowGraph, layoutExtras, namesSetByScripts, stepLine, templatedText, templateVariables, toDot, type FlowCheck, type FlowFrameDef, type FlowGraph, type FlowNote, type FlowStep } from '@testpion/shared';
 import { ApsError } from '../errors.js';
 import type { TestCase } from '../model/types.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
@@ -62,20 +62,20 @@ export function inheritedAuthOf(defaults: Record<string, unknown>, steps: FlowSt
   return Object.keys(out).length ? out : undefined;
 }
 
-// tp.environment.set('x', ...) and the like: a script that sets a variable for the steps after it
-const SET_RE = /\b(?:tp|pm)\.(?:environment|collectionVariables|globals|variables)\.set\(\s*(['"`])([^'"`]+)\1/g;
-
-/** The {{variables}} a test reads anywhere in what it sends, checks and runs (not its name or notes). */
+/**
+ * The {{variables}} a test reads in what it sends and checks (not its name or notes, and not its scripts: a {{name}} in
+ * one, such as a visualizer template, is not a use — the shared `templatedText` definition).
+ */
 export function variablesUsedBy(t: TestCase): string[] {
-  const { name: _n, description: _d, id: _i, file: _f, extract: _e, ...rest } = t as TestCase & { file?: string };
-  return templateVariables(JSON.stringify(rest).replace(/\\"/g, '"'));
+  const { name: _n, id: _i, file: _f, extract: _e, ...rest } = t as TestCase & { file?: string };
+  return templateVariables(templatedText(rest).replace(/\\"/g, '"'));
 }
 
 /** The variables a test makes for the tests after it: what it extracts and what its scripts set. */
 export function variablesSetBy(t: TestCase): string[] {
   const out = new Set(Object.keys(t.extract ?? {}));
   if (t.type === 'set') for (const k of Object.keys(t.set)) out.add(k);
-  for (const s of [t.preRequestScript, t.testScript, t.type === 'script' ? t.script : undefined]) for (const m of (s ?? '').matchAll(SET_RE)) out.add(m[2]!);
+  for (const s of [t.preRequestScript, t.testScript, t.type === 'script' ? t.script : undefined]) for (const n of namesSetByScripts(s ?? '')) out.add(n);
   return [...out];
 }
 
@@ -155,7 +155,8 @@ export function testFileRef(store: WorkspaceStore, file: string): string {
 /** The steps of a test file (inside tests/) with the latest run's result of each, when a run included the file. */
 export async function flowOfFile(store: WorkspaceStore, file: string, opts: { runs?: number; raw?: boolean; known?: Iterable<string>; text?: string } = {}): Promise<FlowOfFile> {
   const abs = store.safePath(file, store.path('tests'));
-  if (!existsSync(abs)) throw new ApsError('ConfigurationError', `No such test file: tests/${file}`);
+  // with `text` the file need not exist yet (a proposed flow previewed before it is written)
+  if (opts.text === undefined && !existsSync(abs)) throw new ApsError('ConfigurationError', `No such test file: tests/${file}`);
   const rel = relative(store.path('tests'), abs).split(sep).join('/');
   if (isSuiteFile(abs)) return { file: rel, steps: [] };
   // `text`: the file as an editor holds it now (unsaved), so the canvas never shows an older version than the editor

@@ -1,5 +1,6 @@
 import { CodeBlock } from '../CodeBlock';
-import { Copy, Download, FileCheck2, Play, Sparkles, Wrench } from 'lucide-react';
+import { AiAction } from '../ai/AiAction';
+import { Copy, Download, FileCheck2, Play, Wrench } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { asError, call, type NormalizedError } from '../../api';
 import { confirmAction, toastError, useApp } from '../../store';
@@ -123,32 +124,25 @@ export function ToolsPanel({ serverId, tools, focus }: { serverId: string; tools
               <label className="ml-auto text-xs flex items-center gap-1 text-muted">
                 <input type="checkbox" checked={raw} onChange={(e) => (setRaw(e.target.checked), e.target.checked && setRawText(JSON.stringify(value, null, 2)))} /> Raw JSON
               </label>
-              <Button size="sm" variant="ghost" icon={<Sparkles size={12} />} onClick={() =>
-                  useApp.getState().set({
-                    assistant: {
-                      task: 'generate-args',
-                      title: `Arguments for ${tool.name}`,
-                      context: { tool: tool.name, description: tool.description, inputSchema: tool.inputSchema },
-                      apply: {
-                        label: 'Use these arguments',
-                        run: (code) => {
-                          let v: unknown;
-                          try {
-                            v = JSON.parse(code);
-                          } catch {
-                            return 'it is not valid JSON';
-                          }
-                          if (!v || typeof v !== 'object' || Array.isArray(v)) return 'it is not a JSON object';
-                          setArgs((a) => ({ ...a, [tool.name]: v as Record<string, unknown> }));
-                          setRawText(JSON.stringify(v, null, 2));
-                        },
-                      },
-                    },
-                  })
-                }
-              >
-                Generate args
-              </Button>
+              <AiAction variant="ghost" label="Generate args" request={() => ({
+                task: 'generate-args',
+                title: `Arguments for ${tool.name}`,
+                context: { tool: tool.name, description: tool.description, inputSchema: tool.inputSchema },
+                apply: {
+                  label: 'Use these arguments',
+                  run: (code) => {
+                    let v: unknown;
+                    try {
+                      v = JSON.parse(code);
+                    } catch {
+                      return 'it is not valid JSON';
+                    }
+                    if (!v || typeof v !== 'object' || Array.isArray(v)) return 'it is not a JSON object';
+                    setArgs((a) => ({ ...a, [tool.name]: v as Record<string, unknown> }));
+                    setRawText(JSON.stringify(v, null, 2));
+                  },
+                },
+              })} />
               <Button size="sm" icon={<FileCheck2 size={12} />} onClick={saveTest}>
                 {saveAsTestLabel({})}
               </Button>

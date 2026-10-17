@@ -1,4 +1,5 @@
 import { openDocs } from '../lib/docs-link';
+import { askAssistant } from '../components/ai/AiAction';
 import { Activity as ActivityIcon, AlarmClock, BookOpen, Bug, Gauge, FileDown, Bot, LockKeyhole, ShieldCheck, FolderPlus, FolderTree, GitBranch, History, KeyRound, Network, Play, Plug, Plus, Sparkles, Upload, ArrowRight } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { asError, call, modKey, on } from '../api';
@@ -311,7 +312,7 @@ export function HomeView() {
           <Action icon={<Gauge size={16} />} hue="amber" title="Load test an API" text="Virtual users, ramp-up, latency percentiles and errors, live." onClick={() => setView('load')} />
           <Action icon={<Plug size={16} />} hue="green" title="Test an MCP server" text="Connect over stdio or HTTP and call tools with generated forms." onClick={() => setView('mcp')} />
           <Action icon={<Sparkles size={16} />} hue="violet" title="Try an AI prompt" text="Compare models, check structured output, track tokens and cost." onClick={() => open('ai', { reset: true })} />
-          <Action icon={<Bot size={16} />} hue="indigo" title="Ask the assistant" text="Explain an error, draft tests or ask how to do something." onClick={() => useApp.getState().set({ assistant: { task: 'free', title: 'Ask the assistant', context: {} } })} />
+          <Action icon={<Bot size={16} />} hue="indigo" title="Ask the assistant" text="Explain an error, draft tests or ask how to do something." onClick={() => askAssistant()} />
           <Action icon={<BookOpen size={16} />} hue="slate" title="Read the docs" text="Guides for requests, scripts, the runner, mocks and the CLI." onClick={() => openDocs()} />
         </div>
 

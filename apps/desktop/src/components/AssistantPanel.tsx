@@ -1,6 +1,8 @@
-import { BookOpen, Bot, Check, Copy, Paperclip, RotateCcw, Square, X } from 'lucide-react';
+import { BookOpen, Bot, Check, Copy, Eye, ListChecks, Paperclip, RotateCcw, Square, X } from 'lucide-react';
 import { memo, useEffect, useRef, useState } from 'react';
 import { extractCodeBlock } from '@testpion/shared';
+import { stringify as toYaml } from 'yaml';
+import type { AiTaskResult, Proposal, ProposalItem } from '@testpion/core';
 import { asError, call, on } from '../api';
 import { currentViewContext, type ViewContext } from '../lib/assistant-context';
 import { useApp, type AssistantRequest, toastError } from '../store';
@@ -8,6 +10,10 @@ import { Markdown } from './Markdown';
 import { AiGeneratedNotice, ErrorPanel } from './Results';
 import { Badge, Button, cx, IconButton, Input, Spinner } from './ui';
 import { copyText } from '../lib/clipboard';
+import { aiSetupAction } from '../lib/ai-errors';
+import { offerUndo } from '../lib/undo';
+import { AiPreviewDialog, taskParams, type AiPrivacy } from './ai/AiPreviewDialog';
+import { ProposalReview, VerificationBadgeView } from './ai/ProposalReview';
 
 interface Turn {
   role: 'user' | 'assistant';
@@ -16,6 +22,10 @@ interface Turn {
   task?: boolean;
   provider?: string;
   model?: string;
+  /** What the answer proposes (verified items to review and apply). */
+  proposal?: Proposal;
+  /** The answer stopped at the output limit. */
+  truncated?: boolean;
 }
 
 /**
@@ -24,7 +34,11 @@ interface Turn {
  * as an AI-generated suggestion.
  */
 export function AssistantPanel() {
-  const req = useApp((s) => s.assistant)!;
+  const stored = useApp((s) => s.assistant)!;
+  // "What will be sent" can change the privacy level of this conversation
+  const [privacy, setPrivacy] = useState<AiPrivacy | undefined>(stored.privacy);
+  const req = privacy === stored.privacy ? stored : { ...stored, privacy };
+  const [previewing, setPreviewing] = useState(false);
   const set = useApp((s) => s.set);
   const env = useApp((s) => s.environment);
   const free = req.task === 'free';
@@ -44,7 +58,7 @@ export function AssistantPanel() {
 
   // which conversation an answer belongs to: New conversation starts another, and answers to the old one are dropped
   const conversation = useRef(0);
-  const ask = async (q?: string, fresh = false) => {
+  const ask = async (q?: string, fresh = false, hint?: string) => {
     const text = q?.trim();
     if (!fresh && (busy || (!text && turns.length))) return;
     const mine = conversation.current;
@@ -58,9 +72,10 @@ export function AssistantPanel() {
     setBusy(id);
     try {
       const context = free ? (viewCtx?.context ?? {}) : req.context;
-      const r = await call<{ text: string; provider: string; model: string }>('assistant.ask', { task: req.task, context, question: text, environment: env, history, requestId: id });
+      // the core task runner (packages/core/src/ai/tasks): redaction, budgets, caps, verification and proposals happen there
+      const r = await call<AiTaskResult>('ai.runTask', { ...taskParams({ ...req, context }, env), question: text, hint, history, requestId: id });
       if (mine !== conversation.current) return;
-      setTurns((t) => [...t, { role: 'assistant', content: r.text, provider: r.provider, model: r.model }]);
+      setTurns((t) => [...t, { role: 'assistant', content: r.text, provider: r.provider, model: r.model, proposal: r.proposal, truncated: r.truncated }]);
     } catch (e) {
       if (mine !== conversation.current) return;
       const err = asError(e);
@@ -102,7 +117,8 @@ export function AssistantPanel() {
     // a task runs again, in the new conversation
     else void ask(undefined, true);
   };
-  const notSetUp = error && /AI assistant is off|No Claude API key|No AI provider/.test(error.message);
+  // a key, a model or Local only: the one setup helper says what to open (lib/ai-errors.ts)
+  const setup = error ? aiSetupAction(error) : undefined;
 
   return (
     <aside
@@ -120,7 +136,10 @@ export function AssistantPanel() {
       <div className="h-10 flex items-center gap-1 px-3 border-b border-line">
         <Bot size={16} className="text-judge shrink-0" />
         <span className="font-medium text-sm truncate ml-1">{req.title}</span>
-        <IconButton label="New conversation" className="ml-auto" onClick={restart} disabled={!turns.length && !error}>
+        <IconButton label="What will be sent…" className="ml-auto" onClick={() => setPreviewing(true)} data-ai-preview-open>
+          <Eye size={14} />
+        </IconButton>
+        <IconButton label="New conversation" onClick={restart} disabled={!turns.length && !error}>
           <RotateCcw size={14} />
         </IconButton>
         <IconButton label="Close assistant" onClick={() => (stop(), set({ assistant: undefined }))}>
@@ -137,7 +156,16 @@ export function AssistantPanel() {
               </div>
             )
           ) : (
-            <Answer key={i} turn={t} apply={req.apply} />
+            <Answer
+              key={i}
+              turn={t}
+              apply={req.apply}
+              onRegenerate={(hint) => void ask(undefined, true, hint)}
+              // a generating task's first answer opens its review at once (checks, tests, a request)
+              autoReview={!!req.autoReview && i === 1}
+              response={req.response}
+              onRunNow={req.rerun}
+            />
           ),
         )}
         {busy && (streaming ? <Answer turn={{ role: 'assistant', content: streaming }} live /> : (
@@ -145,13 +173,20 @@ export function AssistantPanel() {
             <Spinner /> Thinking…
           </div>
         ))}
-        {notSetUp ? (
-          <div className="rounded-xl border border-line bg-panel p-4 flex flex-col gap-2">
-            <div className="font-medium">Set up the AI assistant</div>
-            <p className="text-sm text-muted">Save your Claude (Anthropic) API key in Settings, or choose a provider of this workspace such as a local model. The key is kept in the OS secret store.</p>
+        {setup ? (
+          <div className="rounded-xl border border-line bg-panel p-4 flex flex-col gap-2" data-ai-setup>
+            <div className="font-medium">{setup.label === 'Add the key' ? 'Add the API key' : setup.label === 'Change the limits' ? 'Over an AI limit' : 'Set up the AI assistant'}</div>
+            <p className="text-sm text-muted">
+              {error!.message}.{' '}
+              {setup.label === 'Add the key'
+                ? 'The key is kept in the OS secret store.'
+                : setup.label === 'Change the limits'
+                  ? 'Nothing was sent. Send less (Metadata only, a smaller selection) or raise the limit.'
+                  : 'Save your Claude (Anthropic) API key in Settings, or choose a provider of this workspace such as a local model.'}
+            </p>
             <div>
-              <Button variant="primary" size="sm" onClick={() => (useApp.getState().set({ assistant: undefined }), useApp.getState().openIntent('settings', { tab: 'assistant' }))}>
-                Open Settings ▸ AI assistant
+              <Button variant="primary" size="sm" onClick={setup.onClick}>
+                {setup.label}
               </Button>
             </div>
           </div>
@@ -172,6 +207,21 @@ export function AssistantPanel() {
         )}
         <div ref={end} />
       </div>
+      {previewing && (
+        <AiPreviewDialog
+          request={free ? { ...req, context: viewCtx?.context ?? {} } : req}
+          onClose={() => setPreviewing(false)}
+          onSend={(p) => {
+            setPreviewing(false);
+            setPrivacy(p);
+            // the conversation starts again with the chosen level
+            conversation.current++;
+            setTurns([]);
+            setError(undefined);
+            if (!free) setTimeout(() => void ask(undefined, true), 0);
+          }}
+        />
+      )}
       <div className="p-3 border-t border-line flex flex-col gap-2">
         {free && viewCtx && !turns.length && (
           <div className="flex items-center gap-1.5 text-xs text-muted min-w-0" data-assistant-context>
@@ -224,8 +274,63 @@ export function suggestedQuestions(view?: ViewContext): string[] {
   return c.graphql ? ['Explain this query', 'Which checks should I add?', 'Write a query for related data'] : [`What will this ${what} do?`, 'How do I add authentication?', 'Which checks should I add?'];
 }
 
-/** One answer: Markdown, each code block with its own Copy button, the model that wrote it, and Apply when the task has one. */
-const Answer = memo(function Answer({ turn, live, apply }: { turn: Turn; live?: boolean; apply?: AssistantRequest['apply'] }) {
+/** The text an editor's own Apply takes for the chosen items: checks as one YAML list, anything else as its text. */
+export function codeOfItems(items: ProposalItem[]): string {
+  const checks = items.filter((i) => i.kind === 'assertion');
+  if (checks.length === items.length) return toYaml(checks.map((i) => i.data)).trim();
+  return items.map((i) => i.after).join('\n\n');
+}
+
+/**
+ * Accept the chosen items of a proposal: into the editor that asked when it has its own Apply (a tab's unsaved checks, a
+ * query, the flow designer's one-undo-step replace), else into the workspace (`ai.applyProposal`: test files, a saved request's checks or script), with Undo.
+ */
+async function acceptItems(proposal: Proposal, items: ProposalItem[], apply?: AssistantRequest['apply']): Promise<boolean> {
+  const toast = useApp.getState().toast;
+  try {
+    if (apply) {
+      const r = await apply.run(codeOfItems(items));
+      if (typeof r === 'string') {
+        toast(`Couldn't use the answer: ${r}`, 'error');
+        return false;
+      }
+      if (r) toast(r.done, 'success', r.action);
+      else toast(`${apply.label}: ${items.length} item${items.length === 1 ? '' : 's'}`, 'success');
+      // the editor applied them (its own undo): the proposal and the usage ledger record the acceptance
+      void call('ai.applyProposal', { id: proposal.id, items: items.map((i) => i.id), recordOnly: true }).catch(() => undefined);
+      return true;
+    }
+    const r = await call<{ applied: Array<{ title: string }>; skipped: Array<{ item: string; reason: string }> }>('ai.applyProposal', { id: proposal.id, items: items.map((i) => i.id) });
+    const undo = offerUndo(() => call('ai.undoProposal', { id: proposal.id }).then(() => toast('Undone', 'success'), toastError));
+    toast(`Applied ${r.applied.length} change${r.applied.length === 1 ? '' : 's'}${r.skipped.length ? ` (${r.skipped.length} skipped: ${r.skipped[0]!.reason})` : ''}`, r.skipped.length ? 'info' : 'success', { label: 'Undo', onClick: undo });
+    return true;
+  } catch (e) {
+    toastError(e);
+    return false;
+  }
+}
+
+/** One answer: Markdown, each code block with its own Copy button, the model that wrote it, and Review / Apply when the task proposes something. */
+const Answer = memo(function Answer({
+  turn,
+  live,
+  apply,
+  onRegenerate,
+  autoReview,
+  response,
+  onRunNow,
+}: {
+  turn: Turn;
+  live?: boolean;
+  apply?: AssistantRequest['apply'];
+  onRegenerate?(hint: string): void;
+  autoReview?: boolean;
+  response?: AssistantRequest['response'];
+  onRunNow?: AssistantRequest['rerun'];
+}) {
+  const [reviewing, setReviewing] = useState(() => !!autoReview && !!turn.proposal?.items.some((i) => i.kind !== 'text'));
+  // a proposal of changes (checks, files, scripts, requests) is reviewed; text alone (a query, arguments, a message) keeps Apply
+  const p = turn.proposal?.items.some((i) => i.kind !== 'text') ? turn.proposal : undefined;
   const use = async () => {
     if (!apply) return;
     const toast = useApp.getState().toast;
@@ -262,9 +367,45 @@ const Answer = memo(function Answer({ turn, live, apply }: { turn: Turn; live?: 
       <div ref={box}>
         <Markdown source={turn.content} className={cx('leading-relaxed', live && 'opacity-90')} />
       </div>
+      {!live && turn.truncated && <p className="text-xs text-warn">The answer was cut at the output limit: ask a narrower question, or ask it to continue.</p>}
+      {!live && p && (
+        <div className="rounded-lg border border-line bg-panel px-2.5 py-2 flex flex-col gap-1.5" data-proposal-chip={p.id}>
+          <div className="flex items-center gap-2 text-xs">
+            <ListChecks size={13} className="text-accent" />
+            <span className="font-medium">
+              {p.items.length} proposed change{p.items.length === 1 ? '' : 's'}
+            </span>
+            <Button size="sm" variant="primary" className="ml-auto" onClick={() => setReviewing(true)} data-proposal-review>
+              Review
+            </Button>
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {p.items
+              .flatMap((i) => i.verification)
+              .slice(0, 6)
+              .map((b, k) => (
+                <VerificationBadgeView key={k} b={b} />
+              ))}
+          </div>
+        </div>
+      )}
+      {reviewing && p && (
+        <ProposalReview
+          proposal={p}
+          response={response}
+          onRunNow={onRunNow}
+          acceptLabel={apply ? apply.label : 'Accept selected'}
+          onAccept={async (items) => {
+            if (await acceptItems(p, items, apply)) setReviewing(false);
+          }}
+          onRegenerate={onRegenerate ? (hint) => (setReviewing(false), onRegenerate(hint)) : undefined}
+          onDiscard={() => void call('ai.discardProposal', { id: p.id }).then(() => (setReviewing(false), useApp.getState().toast('Proposal discarded', 'info')), toastError)}
+          onClose={() => setReviewing(false)}
+        />
+      )}
       {!live && turn.model && (
         <div className="flex items-center gap-2 text-xs text-muted">
-          {apply && (
+          {apply && !p && (
             <Button size="sm" variant="primary" icon={<Check size={12} />} onClick={() => void use()} data-answer-apply>
               {apply.label}
             </Button>

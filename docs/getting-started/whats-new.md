@@ -1,13 +1,57 @@
 ---
 title: "What's new: how to use it"
-description: "What's new in TestPion 0.47 and 0.46, step by step: a calmer rail with More…, your own keyboard shortcuts, compact density, Undo instead of confirmations, JSONPath suggestions and Diff vs previous, a visual flow designer, a Terminal, one production guard, and the behaviour changes to read before upgrading."
+description: "What's new in TestPion 0.48, 0.47 and 0.46, step by step: AI that writes integration flows from a collection, verified checks and tests, what is sent, Local only and cost caps, a calmer rail with More…, your own keyboard shortcuts, compact density, Undo instead of confirmations, JSONPath suggestions and Diff vs previous, a visual flow designer, a Terminal, one production guard, and the behaviour changes to read before upgrading."
 ---
 
 ::: v-pre
 
 # What's new: how to use it
 
-The options added in 0.47 and 0.46, each with the steps to use it and a link to the full reference. Where it makes sense, an option also works from the terminal (`testpion …`, with `--json`) and for AI agents (an MCP tool of `testpion mcp-server`). **Read the behaviour changes of [0.47](#behaviour-changes-in-0-47) and [0.46](#behaviour-changes-read-before-upgrading) before upgrading.** The 0.45 additions follow [below](#what-was-new-in-0-45); older ones are in the [changelog](/changelog).
+The options added in 0.48, 0.47 and 0.46, each with the steps to use it and a link to the full reference. Where it makes sense, an option also works from the terminal (`testpion …`, with `--json`) and for AI agents (an MCP tool of `testpion mcp-server`). **Read the behaviour changes of [0.48](#behaviour-changes-in-0-48), [0.47](#behaviour-changes-in-0-47) and [0.46](#behaviour-changes-read-before-upgrading) before upgrading.** The 0.45 additions follow [below](#what-was-new-in-0-45); older ones are in the [changelog](/changelog).
+
+## What's new in 0.48 {#whats-new-in-0-48}
+
+### Behaviour changes in 0.48 {#behaviour-changes-in-0-48}
+- **Suggest assertions, Generate tests and Describe a request open a review** instead of adding their result at once: each item was checked first (against the response, or in the sandbox); tick what you want, then **Add to the checks**, **Add to the Post-response script** or **Open as a new request**. Generated tests are added after your own script.
+- **AI features need a model you set up**: your Claude key or a provider of the workspace in **Settings ▸ AI assistant** (a local Ollama or LM Studio works offline). **Local only** there refuses cloud models.
+- **AI calls can be capped**: tokens per call, tokens per day and cost per day (**Settings ▸ AI assistant ▸ Limits**); a call over a cap is refused before anything is sent. The CLI, MCP agents and CI are counted and capped too.
+- **More is masked before anything reaches a model**: credentials found by their shape (JWTs, Bearer tokens, private keys, provider API keys, `?access_token=`) and personal data (e-mail addresses, phone numbers, card numbers, IBANs; **Mask personal data** turns that off).
+
+
+### Let AI write an integration flow from a folder {#ai-flow-from-collection}
+1. In the explorer, right-click a collection or a folder ▸ **Generate integration flow with AI…** (or, on an empty flow's canvas, **Generate with AI**).
+2. Check the folder, add a hint if you like (*also test pagination*), choose **Metadata only** to send no body values, read the estimate, then **Generate**.
+3. The flow opens on a canvas preview marked *AI-generated*: its steps (your saved requests, in create → read → update → delete order, values passed between them), the model's assumptions, what TestPion dropped, and the badges (*parsed · linted*, *every variable is extracted before it is used*, *2/2 steps pass on a mock*). Edit the YAML, **Try on mock**, **Regenerate** with a hint, or **Accept** — then **Run now**.
+
+Terminal: `testpion flow generate --collection "Veterinary API" --folder Patients [--apply] --json`. Agents: `flow_generate`, then `ai_apply_proposal`. ([Let AI write the flow](/test-runner/integration-testing#let-ai-write-the-flow))
+
+### Suggested checks and tests are proven first {#ai-verified-checks}
+1. Send a request, then **Suggest assertions** or **Generate tests** on the response: the review opens by itself.
+2. Each check ran against this response and the previous one; a check that pins a changing value (an id, a time) is unticked or flagged with **Safer:** forms (`exists`, `type`, a format `regex`) — click one to use it. Each `tp.test` ran in the sandbox; a failing one is unticked with its message.
+3. **Run now** sends the request again and checks everything once more; **Add to the checks** / **Add to the Post-response script** adds what is ticked (your own script is kept).
+
+Terminal: `testpion ai run suggest-assertions --item request:<collection>:<request> --json`. Agents: `ai_run_task` with `task: "suggest-assertions"`. ([Proposals](/ai-testing/ai-features#proposals-review-accept-undo))
+
+### See what an AI action sends, before it is sent {#ai-what-will-be-sent}
+1. Next to any AI button (*Explain with AI*, *How to fix (AI)*, *Generate* …) click the **eye** icon, **What will be sent…** (in the assistant panel it is in the header).
+2. Read the model (and whether it stays on this computer), each section of the context with its tokens, what was masked, the estimate and the exact messages.
+3. Switch **Full (redacted)** / **Metadata only** / **Names only** to send less; **Send** goes ahead with that level.
+
+Terminal: `testpion ai run explain-error --context @error.json --dry-run`. Agents: `ai_run_task` with `dryRun: true`. ([What is sent](/ai-testing/ai-features#what-is-sent-and-how-to-see-it-first))
+
+### Keep AI on this computer, and cap what it costs {#ai-local-only-and-caps}
+1. **Settings ▸ AI assistant**: choose a provider of the workspace such as **Ollama (local)** or **LM Studio (local)**, then turn on **Local only** — a cloud model is refused before anything is sent.
+2. Under **Models per task**, pick a cheaper model for *Small tasks* and the best one for *Large tasks*.
+3. Under **Limits**, set tokens per call, tokens per day or cost per day. **AI Lab ▸ Usage ▸ AI features** shows today's calls, tokens and cost, and what is left.
+
+CLI/CI: `TESTPION_AI_LOCAL_ONLY=1`, `TESTPION_AI_MODEL_SMALL` / `_LARGE`, `testpion ai usage --json`. Agents: `ai_usage`.
+
+### Review AI changes before they are applied {#ai-proposals}
+1. Ask for something that changes files, for example **API coverage ▸ Suggest tests with AI** (tests for the coverage gaps). Suggested checks and tests on a response open [the review at once](#ai-verified-checks); a flow has [its own review](#ai-flow-from-collection).
+2. The answer ends with **N proposed changes** and the verification badges (*passes on the current response*, *parsed · linted · 4 steps*, *2/2 tests pass*). Click **Review**.
+3. Untick what you don't want (failing items start unticked), open an item to see its diff, then **Accept selected** (<kbd>Ctrl</kbd>+<kbd>Enter</kbd>) — **Undo** in the message puts it back — or **Regenerate** with a hint, or **Discard**.
+
+Terminal: `testpion ai run design-flow -q "…" --path flows/x.yaml`, then `testpion ai apply <id>` (`ai undo <id>`). Agents: `ai_run_task`, then `ai_apply_proposal` after the user agrees.
 
 ## What's new in 0.47 {#whats-new-in-0-47}
 

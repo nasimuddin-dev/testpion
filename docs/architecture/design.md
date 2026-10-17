@@ -351,7 +351,7 @@ Every feature is designed for three audiences: the person using the app, the AI 
 | **AGENTS.md** | What a coding agent needs about this workspace, written from the live workspace | `testpion agents init`, `agents_init` |
 | **llms.txt** | A map of the docs and key facts, written for models | [/llms.txt](/llms.txt) |
 | **Files** | Diff-friendly JSON and YAML to edit and review in git | `collections/*.json`, `tests/**/*.yaml` |
-| **In the app** | AI actions that are labelled and shown before they run | Describe with AI, Generate tests, Explain an error |
+| **In the app** | AI actions that are labelled, show what they send, and propose instead of applying | **What will be sent…**, Suggest assertions, Generate integration flow with AI, Explain with AI |
 
 Rules for new features:
 
@@ -359,3 +359,18 @@ Rules for new features:
 - Keep secrets out of everything an agent can read, and out of files.
 - Label AI output, show it for review, and never run or save it on its own.
 - Document the feature in these docs and, when agents need it, in `llms.txt`.
+
+### TestPion's own AI features
+
+The AI features (explain, suggest checks, write tp tests or a flow, fix lint problems …) are one engine module, `packages/core/src/ai/`, used the same way by every host: the desktop backend (`apps/desktop/backend/handlers/ai-tasks.ts`, a thin RPC adapter), the CLI (`testpion ai …`, `testpion flow generate`), the MCP server (`packages/core/src/mcp-server/ai-tools.ts`) and, later, a cloud host. The window never talks to a model: it calls `ai.preview`, `ai.runTask`, `ai.reverifyProposal` and `ai.applyProposal` over RPC.
+
+| Part | Where | What it does |
+|---|---|---|
+| **Task registry** | `ai/tasks/registry.ts`, `ai/tasks/prompts.ts` | One definition per task (27): id, versioned prompt, tier (small or large model), what its context holds, its output (Markdown or JSON with a schema), how the answer becomes a proposal and which verifiers check it. |
+| **Task runner** | `ai/tasks/run.ts` (`runAiTask`) | Route the model (`ai/ai-settings.ts`: override → `TESTPION_AI_*` → the tier's model → the assistant's; Local only) → build the context (`ai/context.ts`, `ai/item-context.ts`: redaction, privacy level, per-section budgets) → estimate tokens and cost, check the caps → stop here for a dry run (the preview) → call the model (`ai/structured.ts`: JSON schema where the provider has it, validated, repaired up to twice; truncation detected) → verify and repair → make a proposal → record the call. |
+| **Proposals** | `ai/proposal.ts`, `ai/proposal-apply.ts`, `ai/proposal-verify.ts` | What a task suggests, never applied by the task: items with before/after text and verification badges, kept a day in `.local/ai/proposals/`; applied (some or all items) through the workspace's own writers, with what each replaced kept for undo; verified again after an edit, a safer form, *Run now* or *Try on mock*. Paths stay under `tests/`. |
+| **Verifiers** | `ai/verify.ts` | `checks`, `script`, `test-file`, `flow-refs`, `flow-vars`, `flow-mock`, `json`, `yaml`. YAML from a model is made safe first (`ai/yaml-repair.ts`), and the test-file format the model is given is generated from the lint's schema and check registry (`ai/flow-format.ts`). |
+| **Usage ledger** | `storage/ai-usage.ts` | Every call from every surface (app, CLI, MCP, CI) with task, model, tokens, cost, time and outcome, in the workspace's metadata store; the per-call and per-day caps are checked against it before anything is sent. |
+| **Prompt tests** | `tests/ai/` | Golden cases per task with the mock provider in `npm test`; `AI_EVAL_LIVE=1` runs them against a real model with a scorecard. |
+
+In the window, every AI button is one component (`src/components/ai/AiAction.tsx`: the action and **What will be sent…**), every proposal opens the one review (`ProposalReview`, or `FlowProposalReview` for a flow on a canvas), and every setup problem (no model, a missing key, Local only, a cap) offers its fix through one helper (`src/lib/ai-errors.ts`).

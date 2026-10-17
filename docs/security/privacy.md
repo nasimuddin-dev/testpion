@@ -14,6 +14,10 @@ Everything written to logs, traces, history, results, reports and exports passes
 1. **Sensitive field names:** `password`, `token`, `apiKey`, `authorization`, `cookie`, `secret`, `ssn`, `creditCard` and more. These are configurable in Settings and matched case-insensitively, including as suffixes (`accessToken`, `x-api-key`).
 2. **Known secret values:** every secret resolved during a run is registered, and any occurrence inside any string is masked (URLs, bodies, error messages). Tokens obtained at runtime (OAuth, `extract:` into sensitive names) are registered too.
 
+## AI features
+
+TestPion's own AI features (explain, suggest checks, write tests or a flow) send a context only when you start one, only to the model you chose, and redacted more strictly than logs: besides the rules above, credentials found by their shape in any text (JWTs, `Bearer` / `Basic` credentials, private keys, provider API keys, `?access_token=` and similar) and personal data (e-mail addresses, phone numbers, card numbers, IBANs) are masked. **What will be sent…** shows the exact messages first; *Metadata only* and *Names only* send less, and **Local only** refuses any model that is not on this computer. Variable names may be sent, values never. See [AI features: privacy, cost and review](/ai-testing/ai-features#what-is-sent-and-how-to-see-it-first).
+
 ## OS environment variables
 
 `{{$env.NAME}}` reads an environment variable of the computer. In the app it works only for the names you list in **Settings ▸ Privacy & security ▸ OS environment variables requests may read** (none by default): otherwise a collection shared with you through git, or one you import, could read `{{$env.AWS_SECRET_ACCESS_KEY}}` and send it to any URL the moment you run it. A request that reads a variable not on the list says so, with a link to the setting. The CLI reads all of them, as CI pipelines expect (the pipeline decides what is in the environment; see [CI/CD](/test-runner/ci-cd)).

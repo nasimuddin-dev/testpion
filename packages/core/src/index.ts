@@ -61,6 +61,7 @@ export * from './cookies/cookie-jar.js';
 export * from './ai/index.js';
 export * from './ai/agent.js';
 export * from './ai/assist.js';
+export * from './ai/tasks/index.js';
 
 export * from './eval/checks.js';
 export * from './eval/snapshot.js';

@@ -3,6 +3,7 @@ import { existsSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve, relative, isAbsolute } from 'node:path';
 import { Command, Option } from 'commander';
+import { formatUsd } from '@testpion/shared';
 import {
   ApsError,
   collectionRequests,
@@ -263,7 +264,7 @@ export async function finishRun(a: {
       `\n${ok ? green(bold('PASSED')) : red(bold('FAILED'))}  ${summary.passed} passed, ${summary.failed} failed, ${summary.errors} errors, ${summary.skipped} skipped · ${formatDuration(summary.durationMs)}`,
     );
     if (summary.latency.count) console.log(dim(`latency p50 ${summary.latency.p50}ms · p95 ${summary.latency.p95}ms · p99 ${summary.latency.p99}ms`));
-    if (summary.tokens.totalTokens) console.log(dim(`tokens ${summary.tokens.inputTokens} in / ${summary.tokens.outputTokens} out${summary.costUsd ? ` · est. cost $${summary.costUsd}` : ''}`));
+    if (summary.tokens.totalTokens) console.log(dim(`tokens ${summary.tokens.inputTokens} in / ${summary.tokens.outputTokens} out${summary.costUsd ? ` · est. cost ${formatUsd(summary.costUsd)}` : ''}`));
     for (const [k, v] of Object.entries(summary.scores)) console.log(dim(`score ${k}: ${v.mean} (${v.count})`));
     for (const [f, p] of Object.entries(paths2)) console.log(dim(`${f} report: ${p}`));
     if (summary.cancelled && a.rerun) console.log(yellow(`Run cancelled. Resume with: ${a.rerun}`));

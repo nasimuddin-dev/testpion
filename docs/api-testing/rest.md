@@ -328,14 +328,20 @@ After you send, the response body opens on **Visualize** (next to Pretty and Raw
 
 ## AI help
 
-With an assistant model set in **Settings ▸ AI assistant** (a local model works offline), the request builder can draft work for you. Everything the AI produces is labelled and shown to you first. Nothing is sent or run on its own.
+With an assistant model set in **Settings ▸ AI assistant** (a local model works offline), the request builder can draft work for you. Everything the AI produces is labelled, checked by TestPion and shown to you in a review first; nothing is added until you accept it, and nothing is sent or run on its own.
 
-- **Describe a request** (sparkles button next to Send): write what you want in plain words, for example *create a patient named Biscuit, a dog, owned by customer 123*. A new tab opens with the method, URL, headers and body filled in. The assistant only sees the **names** of your variables, so it writes `{{baseUrl}}` and `{{accessToken}}` instead of real values.
-- **Generate tests** (above a response): the assistant writes `tp.test(...)` checks for the response's status, fields, types and timing and appends them to the Post-response script, headed by an *AI-generated* comment. Send again to run them. Imports the sandbox doesn't support are removed.
-- **Explain** (above a 4xx or 5xx response): opens the assistant with what the error means, the likely cause and how to fix the request.
-- **Suggest assertions** proposes TestPion checks (YAML) for the response.
+- **Suggest assertions** (a response's actions): the review opens at once with TestPion checks for the response — status, headers, fields, types. Each check has already run against the response on screen and, for a saved request, the one before it in History: a check that passes now but failed before is unticked (*the value changes*), and one that pins a generated value (an id, a time, a token) is flagged with **Safer:** forms (`type`, `exists`, a format `regex`) — click one to use it. **Add to the checks** adds the ticked ones to the Tests tab.
+- **Generate tests** (a response's actions): one `tp.test(...)` per item, each run once in the sandbox against the response (and the previous one); a failing test is unticked with its message, and a test written with `pm.*` is sent back to the model to be written with `tp.*`. **Add to the Post-response script** adds the ticked tests after your own script, never replacing it.
+- **Describe a request** (sparkles button next to Send): write what you want in plain words, for example *create a patient named Biscuit, a dog, owned by customer 123*. The proposed request is reviewed, then **Open as a new request** opens it in a new, unsaved tab with the method, URL, headers and body filled in. The assistant only sees the **names** of your variables, so it writes `{{baseUrl}}` and `{{accessToken}}` instead of real values.
+- **Explain** (a 4xx or 5xx response's actions): opens the assistant with what the error means, the likely cause and how to fix the request.
 
-Context sent to the model is redacted first (sensitive headers, fields and secret values are masked) and trimmed to the first few thousand characters of the body.
+In the review, **Run now** sends the request again (the usual way, under the production guard) and checks every item against the new response; **Regenerate** asks again with a hint; **Discard** drops the proposal. What you add is in the editor: save the request to keep it.
+
+<figure class="aps-screenshot">
+  <img src="/images/ai-suggest-assertions.jpg" alt="Review of the assertions suggested for Get patient: each check passes on the current response; the ones pinning the id and the owner id are flagged as values that change, with Safer forms; Run now and Add to the checks" width="1440" height="900" loading="lazy">
+</figure>
+
+What is sent to the model is redacted first (secret values, sensitive headers and fields, credentials and personal data found by their shape), and a large body is sampled and summarised to its shape rather than cut. **What will be sent…** (the eye beside an AI button) shows the exact messages and the estimate first. See [AI features: privacy, cost and review](/ai-testing/ai-features).
 
 ## Editor help
 

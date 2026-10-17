@@ -2,6 +2,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync } from 'nod
 import { dirname, resolve, sep } from 'node:path';
 import { createRequire } from 'node:module';
 import type { HistoryEntry, RunSummary } from '../model/types.js';
+import { MAX_AI_CALLS, type AiCallRecord } from './ai-usage.js';
 import { atomicWrite } from './fsutil.js';
 import { isRequestEntry, REQUEST_HISTORY_KINDS } from '../model/history-kinds.js';
 
@@ -229,6 +230,10 @@ export interface MetaStore {
   requestStats(collectionId: string): RequestStat[];
   /** Per collection: how many of its saved requests were sent, and how many of those failed the last time. */
   historyByCollection(): Record<string, { sent: number; failing: number }>;
+  /** The AI usage ledger (ai-usage.ts): one row per AI feature call. */
+  addAiCall(c: AiCallRecord): void;
+  /** Ledger rows since `since` (ISO), newest first. */
+  listAiCalls(q?: { since?: string; limit?: number }): AiCallRecord[];
   /** Run `fn` in one transaction (a burst of inserts: a run's traces). Nested calls join the outer one. */
   batch<T>(fn: () => T): T;
   close(): void;
@@ -328,7 +333,7 @@ class SqliteMetaStore implements MetaStore {
   private root: string;
   /** Prepared once: inserts happen for every request sent and every trace of a run. */
   private statements = new Map<string, ReturnType<SqliteDb['prepare']>>();
-  private inserts = { history: 0, traces: 0 };
+  private inserts = { history: 0, traces: 0, ai: 0 };
   private batchDepth = 0;
 
   private stmt(sql: string) {
@@ -350,6 +355,8 @@ class SqliteMetaStore implements MetaStore {
 
   private migrate(): void {
     this.db.exec('CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT)');
+    // the AI usage ledger (a table of its own: no schema bump, older databases get it on open)
+    this.db.exec('CREATE TABLE IF NOT EXISTS ai_calls (id TEXT PRIMARY KEY, at TEXT, doc TEXT); CREATE INDEX IF NOT EXISTS ai_calls_at ON ai_calls(at DESC);');
     const row = this.db.prepare("SELECT value FROM meta WHERE key='schema'").get() as { value: string } | undefined;
     const v = row ? Number(row.value) : 0;
     if (v < 1) {
@@ -408,7 +415,26 @@ class SqliteMetaStore implements MetaStore {
   }
 
   /** Bound a table to `max` rows: counted first (the common case is "nothing to do"), then the oldest by `order` go, by rowid, with their files. */
-  private prune(table: 'history' | 'traces', order: string, fileCol: string, max: number): void {
+  addAiCall(c: AiCallRecord): void {
+    this.stmt('INSERT OR REPLACE INTO ai_calls (id, at, doc) VALUES (?,?,?)').run(c.id, c.at, JSON.stringify(c));
+    if (this.inserts.ai++ % PRUNE_EVERY === 0) this.prune('ai_calls', 'at', 'NULL', MAX_AI_CALLS);
+  }
+
+  listAiCalls(q: { since?: string; limit?: number } = {}): AiCallRecord[] {
+    const limit = Math.min(Math.max(q.limit ?? 1000, 1), MAX_AI_CALLS);
+    const rows = (q.since ? this.stmt('SELECT doc FROM ai_calls WHERE at >= ? ORDER BY at DESC, rowid DESC LIMIT ?').all(q.since, limit) : this.stmt('SELECT doc FROM ai_calls ORDER BY at DESC, rowid DESC LIMIT ?').all(limit)) as Array<{ doc: string }>;
+    const out: AiCallRecord[] = [];
+    for (const r of rows) {
+      try {
+        out.push(JSON.parse(r.doc) as AiCallRecord);
+      } catch {
+        /* a broken row is skipped */
+      }
+    }
+    return out;
+  }
+
+  private prune(table: 'history' | 'traces' | 'ai_calls', order: string, fileCol: string, max: number): void {
     const n = (this.stmt(`SELECT COUNT(*) AS n FROM ${table}`).get() as { n: number }).n;
     if (n <= max) return;
     const old = this.db.prepare(`SELECT rowid AS id, ${fileCol} AS file FROM ${table} ORDER BY ${order} ASC LIMIT ?`).all(n - max) as Array<{ id: number; file: string | null }>;
@@ -653,7 +679,7 @@ function traceRow(r: Record<string, unknown>): TraceMeta {
 /** Fallback when `node:sqlite` is unavailable: append-only JSON-lines files with periodic compaction. */
 class JsonlMetaStore implements MetaStore {
   readonly backend = 'jsonl' as const;
-  private data: { history: HistoryEntry[]; runs: RunMeta[]; traces: TraceMeta[] } = { history: [], runs: [], traces: [] };
+  private data: { history: HistoryEntry[]; runs: RunMeta[]; traces: TraceMeta[]; ai: AiCallRecord[] } = { history: [], runs: [], traces: [], ai: [] };
 
   private root: string;
 
@@ -774,12 +800,22 @@ class JsonlMetaStore implements MetaStore {
   getTrace(id: string) {
     return this.data.traces.find((t) => t.id === id);
   }
+  addAiCall(c: AiCallRecord) {
+    this.data.ai.push(c);
+    if (this.data.ai.length > MAX_AI_CALLS) this.data.ai.splice(0, this.data.ai.length - MAX_AI_CALLS);
+    this.log('ai', c);
+  }
+  listAiCalls(q: { since?: string; limit?: number } = {}) {
+    const rows = q.since ? this.data.ai.filter((c) => c.at >= q.since!) : this.data.ai;
+    return [...rows].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0)).slice(0, Math.min(Math.max(q.limit ?? 1000, 1), MAX_AI_CALLS));
+  }
   close() {
     // compact
     const lines = [
       ...this.data.history.map((v) => ({ t: 'history', v })),
       ...this.data.runs.map((v) => ({ t: 'runs', v })),
       ...this.data.traces.map((v) => ({ t: 'traces', v })),
+      ...this.data.ai.map((v) => ({ t: 'ai', v })),
     ];
     atomicWrite(this.path, lines.map((l) => JSON.stringify(l)).join('\n') + '\n');
   }

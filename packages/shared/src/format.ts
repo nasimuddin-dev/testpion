@@ -17,6 +17,28 @@ export function formatMs(ms: number | undefined): string {
   return `${Math.floor(ms / 60_000)}m ${Math.round((ms % 60_000) / 1000)}s`;
 }
 
+/**
+ * An amount of US dollars for people, the same in the app, the CLI and reports: cents from $1 up ("$2.00"), more
+ * digits below it where a call's cost lives ("$0.0123", "$0.00015"), "$0" for nothing, "–" when unknown.
+ */
+export function formatUsd(c: number | undefined | null): string {
+  if (c === undefined || c === null || !Number.isFinite(c)) return '–';
+  if (c === 0) return '$0';
+  const sign = c < 0 ? '-' : '';
+  const a = Math.abs(c);
+  if (a >= 1) return `${sign}$${a.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  if (a < 0.000001) return `${sign}<$0.000001`;
+  // at most 4 decimals from a cent up, 6 below; trailing zeros dropped, but never fewer than cents
+  const s = a.toFixed(a >= 0.01 ? 4 : 6).replace(/0+$/, '');
+  const [, dec = ''] = s.split('.');
+  return `${sign}$${dec.length < 2 ? a.toFixed(2) : s}`;
+}
+
+/** "1 call", "3 calls" (an irregular plural can be passed: plural(n, 'entry', 'entries')). */
+export function plural(n: number, word: string, many = `${word}s`): string {
+  return `${n.toLocaleString('en-US')} ${n === 1 ? word : many}`;
+}
+
 /** The same without the sub-millisecond case (reports and the CLI). */
 export function formatDuration(ms: number): string {
   if (ms < 1000) return `${Math.round(ms)} ms`;

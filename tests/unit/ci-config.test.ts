@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parse as parseYaml } from 'yaml';
-import { ENGINE_VERSION, WorkspaceStore, ciCommand, ciConfig, ciSecrets, ciTargetOfRun, finishedRun, recordRun, type CiProvider, type RunSummary } from '../../packages/core/src/index.js';
+import { ENGINE_VERSION, WorkspaceStore, ciCommand, ciConfig, ciSecrets, ciTargetOfRun, contextOfItem, finishedRun, parseItemRef, recordRun, type CiProvider, type RunSummary } from '../../packages/core/src/index.js';
 import { cliData, runCli } from '../helpers.js';
 
 const dir = mkdtempSync(join(tmpdir(), 'tp-ci-'));
@@ -156,6 +156,9 @@ describe('a run for CI: "last" and --allow-production', () => {
     expect(ciTargetOfRun(store, finishedRun(store, 'last')).target).toEqual({ tests: ['rest'] });
     // by id a run is taken as it is
     expect(finishedRun(store, 'run-stopped').runId).toBe('run-stopped');
+    // an AI task's --item run:last reads the same run (and run:last:<resultId> one of its results)
+    expect((await contextOfItem(store, parseItemRef('run:last'))).label).toBe('run-tests');
+    await expect(contextOfItem(store, parseItemRef('run:last:res-9'))).rejects.toThrow('No result "res-9" in run run-tests');
   });
 
   it('`testpion ci --allow-production` puts it on the run line', async () => {

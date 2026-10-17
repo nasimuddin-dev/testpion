@@ -1,4 +1,6 @@
 import { CodeBlock } from './CodeBlock';
+import { AiAction } from './ai/AiAction';
+import { aiSetupAction } from '../lib/ai-errors';
 import { AlertTriangle, BookOpen, Bot, CheckCircle2, CircleHelp, CircleSlash, KeyRound, Lightbulb, Loader2, MessageSquareWarning, Plus, Sparkles, XCircle } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { NormalizedError } from '../api';
@@ -88,8 +90,9 @@ export function ErrorPanel({ error, context, raw = true }: { error: NormalizedEr
   // an AI provider without its key: the way to fix it is one click away (the assistant can't explain it without a key)
   const setup = setupProviderOf(error);
   const missing = missingVariableOf(error);
-  const ask = () =>
-    useApp.getState().set({ assistant: { task: 'explain-error', title: `Explain ${error.kind}`, context: { error, ...((context as object) ?? {}) } } });
+  const ask = () => ({ task: 'explain-error', title: `Explain ${error.kind}`, context: { error, ...((context as object) ?? {}) } });
+  // the AI itself is not set up (no model, the Claude key, Local only): the fix, not "Explain with AI"
+  const aiFix = setup ? undefined : aiSetupAction(error);
   return (
     <Callout tone="bad" block role="alert" className="m-3 rounded-lg p-4 text-sm">
       <div className="flex items-start gap-2">
@@ -126,14 +129,16 @@ export function ErrorPanel({ error, context, raw = true }: { error: NormalizedEr
               <LinkButton icon={<BookOpen size={12} />} onClick={() => openDocs('api-testing/environments')}>
                 How variables work
               </LinkButton>
-              <LinkButton icon={<Sparkles size={12} />} onClick={ask}>
-                Explain with AI assistant
-              </LinkButton>
+              <AiAction variant="link" label="Explain with AI assistant" request={ask} preview={false} />
             </div>
           ) : (
-            <Button size="sm" variant="ghost" className="mt-3 -ml-2" icon={<Sparkles size={12} />} onClick={ask}>
-              Explain with AI assistant
-            </Button>
+            aiFix ? (
+              <Button size="sm" variant="primary" className="mt-3" onClick={aiFix.onClick}>
+                {aiFix.label}
+              </Button>
+            ) : (
+              <AiAction variant="ghost" className="mt-3 -ml-2" label="Explain with AI assistant" request={ask} />
+            )
           )}
         </div>
       </div>

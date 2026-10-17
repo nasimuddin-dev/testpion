@@ -1,4 +1,5 @@
 import { toast as sonner } from 'sonner';
+import { aiSetupAction } from './lib/ai-errors';
 import type { ReactNode } from 'react';
 import { docKey, isDocView, routeDoc, useDocs } from './lib/docs';
 import { create } from 'zustand';
@@ -61,6 +62,14 @@ export interface CiRequest {
 /** What an assistant answer's Apply did: nothing (done), a problem (a string), or a message with an action (Open …). */
 export type AssistantApplied = string | void | { done: string; action?: { label: string; onClick(): void } };
 
+/** A response as AI checks are verified against it (core StoredResponse). */
+export interface AiResponse {
+  status?: number;
+  headers?: Array<[string, string]>;
+  body?: string;
+  latencyMs?: number;
+}
+
 export interface AssistantRequest {
   task: string;
   title: string;
@@ -71,6 +80,38 @@ export interface AssistantRequest {
    * answer's first code block (or its whole text) and returns a message when it can't use it, or what it did.
    */
   apply?: { label: string; run(code: string): AssistantApplied | Promise<AssistantApplied> };
+  /** The privacy level chosen in "What will be sent" (else the AI settings' default). */
+  privacy?: 'full' | 'metadata' | 'names';
+  /** The response checks and scripts are verified against (the one on screen). */
+  response?: AiResponse;
+  /** The response before it: a check that passes on one and not the other pins a value that changes. */
+  previous?: AiResponse;
+  /** Open the review as soon as the proposal is there (generating tasks: checks, tests, a request). */
+  autoReview?: boolean;
+  /** "Run now" in the review: send the request again (its own editor, under the production guard); the checks are verified against the new response. */
+  rerun?(): Promise<AiResponse | undefined>;
+  /** The workspace item it is about (a saved request: checks and scripts are proposed for it). */
+  item?: import('@testpion/shared').ItemRef;
+  /** Where a generated test file goes (under tests/). */
+  path?: string;
+}
+
+/**
+ * "Generate integration flow with AI" (AI-1): from a collection or folder (right-click it), or from the flow canvas
+ * (where describing it in words is the other source). The dialog runs the task and opens the proposal's review.
+ */
+export interface FlowGenerateRequest {
+  /** The collection or folder preselected. */
+  source?: { collectionId: string; folderId?: string };
+  /** Start on "Describe in words" (the canvas of an open flow). */
+  mode?: 'collection' | 'describe';
+  /** The flow file the result goes to (the open flow: its review shows the diff); default a new file under tests/flows/. */
+  path?: string;
+  /** describe: the open flow's steps, as context. */
+  steps?: unknown[];
+  environment?: string;
+  /** The open flow designer applies an accepted flow itself (one undo step); else it is written through ai.applyProposal. */
+  onAccept?(text: string): Promise<boolean>;
 }
 
 export interface DialogButton {
@@ -135,6 +176,8 @@ interface AppState {
   /** Which tab of the bottom panel is shown. */
   bottomTab: 'console' | 'logs' | 'terminal' | 'problems';
   assistant?: AssistantRequest;
+  /** The "Generate integration flow with AI" dialog (AI-1). */
+  flowGenerate?: FlowGenerateRequest;
   shortcutsOpen?: boolean;
   /** The "Run in CI" dialog, with what to run preselected. */
   ci?: CiRequest;
@@ -399,19 +442,10 @@ export function notifySystem(title: string, body: string, opts: { ref?: ItemRef;
  */
 export function toastError(e: unknown): void {
   const err = asError(e);
-  const provider = (err.details as { setup?: { provider?: string } } | undefined)?.setup?.provider;
+  // an AI setup problem (a key, no model, Local only) offers its fix (lib/ai-errors.ts, the one place that decides)
+  const setup = aiSetupAction(err);
   const behind = isPushRejected(err);
-  useApp
-    .getState()
-    .toast(
-      err.message,
-      'error',
-      provider
-        ? { label: 'Add the key', onClick: () => useApp.getState().openIntent('ai', { providerId: provider, tab: 'providers' }) }
-        : behind
-          ? { label: 'Pull & push', onClick: () => useApp.getState().openIntent('git', { sync: true }) }
-          : undefined,
-    );
+  useApp.getState().toast(err.message, 'error', setup ?? (behind ? { label: 'Pull & push', onClick: () => useApp.getState().openIntent('git', { sync: true }) } : undefined));
 }
 
 /** A push the remote refused because it has commits this branch does not (the core's hint says "pull first"). */

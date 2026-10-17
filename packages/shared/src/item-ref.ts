@@ -252,6 +252,11 @@ export function parseItemRef(text: string): ItemRef | undefined {
     values.push(tail.slice(0, c));
     tail = tail.slice(c + 1);
   }
+  // a run id (TestPion makes it: never a ':') may be followed by its result: run:<runId>:<resultId>, run:last:<resultId>
+  if (kind === 'run' && tail.includes(':')) {
+    const c = tail.indexOf(':');
+    return toItemRef({ kind, runId: tail.slice(0, c), resultId: tail.slice(c + 1) });
+  }
   values.push(tail);
   return toItemRef(Object.fromEntries([['kind', kind], ...required.map((f, i) => [f, values[i]])]));
 }

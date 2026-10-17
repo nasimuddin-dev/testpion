@@ -22,7 +22,10 @@ packages/core        the engine, host-agnostic (Node): the same code runs in the
   storage/           workspaces on disk: collections, environments, tests, trash, git files, secrets, trust, watcher
   protocols/         http, graphql, grpc, websocket, socketio, mqtt, kafka, mcp: one client each, nothing shared between them
   runner/            test files, suites, the run loop, flows (edits, blocks, data runs, env matrices, webhooks, timelines), results, baselines, CI config
-  eval/, ai/, load/  checks and evaluators, providers and the assistant's helpers, load tests
+  eval/, load/       checks and evaluators, load tests
+  ai/                LLM providers, and the AI features: the task registry and runner (tasks/), the context builder (redaction,
+                     privacy levels, budgets), structured output, verifiers, proposals (apply / undo) and the AI settings;
+                     the usage ledger is storage/ai-usage.ts (see Design ▸ TestPion's own AI features)
   import/            Postman, Insomnia, Bruno, OpenAPI, HAR, cURL/fetch snippets, save-request (secrets to variables)
   scripts/           the tp.* sandbox (QuickJS in WebAssembly): scripts never reach Node
   git/               git through the system git, changes by meaning, the merge driver

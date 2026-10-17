@@ -794,6 +794,8 @@ export interface AppSettings {
   examplesOfferedVersion?: string;
   assistantProvider?: string;
   assistantModel?: string;
+  /** AI features: small/large models, local only, privacy level, cost caps (ai/ai-settings.ts). */
+  ai?: import('../ai/ai-settings.js').AiSettings;
   workspacePaths: string[];
   /** Lowest-precedence variables shared by all workspaces. */
   globalVariables: KeyValue[];

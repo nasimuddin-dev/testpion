@@ -1,4 +1,5 @@
 import { Bot, Copy, FileText, History, Info, KeyRound } from 'lucide-react';
+import { askAssistant } from './ai/AiAction';
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import type { ItemRef } from '@testpion/shared';
 import { call } from '../api';
@@ -235,7 +236,7 @@ export function RightPanel() {
         <Empty
           icon={<Bot size={22} />}
           title="Ask the assistant"
-          actions={[{ label: 'Ask the assistant', icon: <Bot size={13} />, onClick: () => useApp.getState().set({ assistant: { task: 'free', title: 'Ask the assistant', context: {} } }) }]}
+          actions={[{ label: 'Ask the assistant', icon: <Bot size={13} />, onClick: () => askAssistant() }]}
         >
           It sees what is on screen (never secret values) and proposes changes for you to review.
         </Empty>

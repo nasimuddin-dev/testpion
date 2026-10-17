@@ -1,10 +1,7 @@
-export { formatBytes, formatMs } from '@testpion/shared';
+export { formatBytes, formatMs, plural } from '@testpion/shared';
 
-export function formatCost(c: number | undefined): string {
-  if (c === undefined || c === null) return '–';
-  if (c === 0) return '$0';
-  return c < 0.01 ? `$${c.toFixed(6)}` : `$${c.toFixed(4)}`;
-}
+/** Dollars, as everywhere (the shared `formatUsd`: "$2.00", "$0.0123", "$0.00015"). */
+export { formatUsd as formatCost } from '@testpion/shared';
 
 export function timeAgo(iso: string | number): string {
   const t = typeof iso === 'number' ? iso : Date.parse(iso);
@@ -44,11 +41,6 @@ export function uid(prefix = ''): string {
 }
 
 export { templateVariables as templateVars } from '@testpion/shared';
-
-/** "1 request", "3 requests" (irregular plurals can be passed: plural(n, 'entry', 'entries')). */
-export function plural(n: number, word: string, many = `${word}s`): string {
-  return `${n.toLocaleString()} ${n === 1 ? word : many}`;
-}
 
 /** A model's name without the snapshot date a provider answers with (gpt-4o-mini-2024-07-18 → gpt-4o-mini). */
 export const undatedModel = (m: string) => m.replace(/(-\d{4}-\d{2}-\d{2}|-\d{8}|@\d{8})$/, '');

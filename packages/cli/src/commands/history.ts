@@ -1,7 +1,7 @@
 import { writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { Command } from 'commander';
-import { itemRefUrl } from '@testpion/shared';
+import { formatUsd, itemRefUrl } from '@testpion/shared';
 import {
   WorkspaceManager,
   historyKindOf,
@@ -239,7 +239,7 @@ export function registerHistoryCommands(program: Command): void {
         const w = Math.min(48, Math.max(...rows.map((r) => `${r.provider} · ${r.model}`.length)));
         for (const r of rows)
           console.log(
-            `${`${r.provider} · ${r.model}`.slice(0, w).padEnd(w)}  ${String(r.calls).padStart(5)} prompts  ${`${r.inputTokens} in / ${r.outputTokens} out`.padEnd(22)}  ${dim(`${r.costUsd !== undefined ? `$${r.costUsd.toFixed(4)}` : 'no price'} · median ${r.medianMs ?? '-'} ms`)}`,
+            `${`${r.provider} · ${r.model}`.slice(0, w).padEnd(w)}  ${String(r.calls).padStart(5)} prompts  ${`${r.inputTokens} in / ${r.outputTokens} out`.padEnd(22)}  ${dim(`${r.costUsd !== undefined ? formatUsd(r.costUsd) : 'no price'} · median ${r.medianMs ?? '-'} ms`)}`,
           );
       });
     });

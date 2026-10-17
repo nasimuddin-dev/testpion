@@ -35,6 +35,19 @@ export interface ProviderLike {
 /** A local OpenAI-compatible server (LM Studio, vLLM on this machine) that needs no key. */
 export const isLocalProvider = (p: ProviderLike): boolean => p.kind === 'openai-compatible' && /localhost|127\.0\.0\.1/.test(p.baseUrl ?? '');
 
+/**
+ * Whether what is sent to a provider stays on this computer: the offline mock, or Ollama / an OpenAI-compatible server
+ * (LM Studio, vLLM, llama.cpp) on a loopback address. Ollama Cloud and every hosted API do not. The AI "Local only"
+ * setting allows only these.
+ */
+export const staysOnThisComputer = (p: ProviderLike): boolean => {
+  if (p.kind === 'mock') return true;
+  if (p.kind !== 'ollama' && p.kind !== 'openai-compatible') return false;
+  const m = /^[a-z][a-z0-9+.-]*:\/\/(\[[^\]]+\]|[^/:?#]+)/i.exec(p.baseUrl ?? (p.kind === 'ollama' ? 'http://127.0.0.1:11434' : ''));
+  const host = (m?.[1] ?? '').toLowerCase().replace(/^\[|\]$/g, '');
+  return host === 'localhost' || host.endsWith('.localhost') || /^127\.\d+\.\d+\.\d+$/.test(host) || host === '::1' || host === '0.0.0.0';
+};
+
 /** Whether a provider must have an API key to be used: the cloud ones; not the offline demo, Ollama or a local server. */
 export const providerNeedsKey = (p: ProviderLike): boolean => p.kind !== 'mock' && p.kind !== 'ollama' && !isLocalProvider(p);
 
@@ -56,4 +69,6 @@ export const PROVIDER_PRESETS: readonly ProviderPreset[] = [
   { id: 'anthropic', name: 'Anthropic', kind: 'anthropic', baseUrl: DEFAULT_BASE_URLS.anthropic!, defaultModel: 'claude-haiku-4-5-20251001', apiKey: '{{$secret.provider.anthropic.apiKey}}' },
   { id: 'gemini', name: 'Google Gemini', kind: 'gemini', baseUrl: DEFAULT_BASE_URLS.gemini!, defaultModel: 'gemini-2.5-flash', apiKey: '{{$secret.provider.gemini.apiKey}}' },
   { id: 'ollama', name: 'Ollama (local)', kind: 'ollama', baseUrl: DEFAULT_BASE_URLS.ollama!, defaultModel: 'llama3.2' },
+  // LM Studio's local server speaks the OpenAI API (json_schema structured output, tools) and needs no key
+  { id: 'lmstudio', name: 'LM Studio (local)', kind: 'openai-compatible', baseUrl: 'http://127.0.0.1:1234/v1', defaultModel: 'local-model' },
 ];

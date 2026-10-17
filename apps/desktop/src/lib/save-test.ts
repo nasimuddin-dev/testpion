@@ -26,7 +26,7 @@ export function saveAsTestLabel(t: Pick<SaveTestTarget, never> & { ref?: ItemRef
 }
 
 /** Run a saved test file now (the active environment; production asks first) and show the run. */
-async function runNow(path: string): Promise<void> {
+export async function runTestFileNow(path: string): Promise<void> {
   try {
     const r = await call<{ runId: string }>('tests.run', { paths: [path], environment: useApp.getState().environment, name: path });
     void openRef({ kind: 'run', runId: r.runId });
@@ -50,7 +50,7 @@ export async function saveAsTest(target: SaveTestTarget): Promise<string | undef
   if (!name) return undefined;
   try {
     const r = await call<{ path: string; tests: number; ref: ItemRef }>('tests.saveFrom', 'ref' in target ? { name, ref: target.ref } : { name, source: target.source, assertions: target.assertions });
-    useApp.getState().toast(`Saved tests/${r.path}${r.tests > 1 ? ` (${r.tests} tests)` : ''}`, 'success', [{ label: 'Run now', onClick: () => void runNow(r.path) }, { ref: r.ref }]);
+    useApp.getState().toast(`Saved tests/${r.path}${r.tests > 1 ? ` (${r.tests} tests)` : ''}`, 'success', [{ label: 'Run now', onClick: () => void runTestFileNow(r.path) }, { ref: r.ref }]);
     return r.path;
   } catch (e) {
     toastError(e);

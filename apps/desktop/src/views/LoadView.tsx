@@ -1,8 +1,9 @@
 import { useLibraryTabs } from '../lib/library-tabs';
+import { AiAction } from '../components/ai/AiAction';
 import { LibraryTabStrip } from '../components/LibraryTabStrip';
 import { ItemBreadcrumb } from '../components/ItemBreadcrumb';
 import { refMenu } from '../components/RefLink';
-import { AlertTriangle, Bookmark, Gauge, KeyRound, Play, Save, Sparkles, Square } from 'lucide-react';
+import { AlertTriangle, Bookmark, Gauge, KeyRound, Play, Save, Square } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { asError, call, on } from '../api';
 import { confirmAction, persisted, promptText, toastError, useApp } from '../store';
@@ -476,18 +477,11 @@ export function LoadView() {
                 {s.elapsedSec}s elapsed · {s.activeVUs} active VUs
               </span>
               {s.done && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="ml-auto"
-                  icon={<Sparkles size={12} />}
-                  onClick={() => {
+                <AiAction variant="ghost" className="ml-auto" label="Analyze with AI" request={() => {
                     const { series, ...summary } = s;
-                    useApp.getState().set({ assistant: { task: 'analyze-load', title: 'Load test analysis', context: { config: { virtualUsers: d.vus, durationSec: d.duration, rampUpSec: d.rampUp, target: d.kind }, results: summary, lastSeconds: series.slice(-30) } } });
+                    return { task: 'analyze-load', title: 'Load test analysis', context: { config: { virtualUsers: d.vus, durationSec: d.duration, rampUpSec: d.rampUp, target: d.kind }, results: summary, lastSeconds: series.slice(-30) } };
                   }}
-                >
-                  Analyze with AI
-                </Button>
+                />
               )}
             </div>
             {s.done && checked && (

@@ -55,6 +55,7 @@ import { mockTools } from './mock-tools.js';
 import { datasetTools } from './dataset-tools.js';
 import { arazzoTools } from './arazzo-tools.js';
 import { recordingTools } from './recording-tools.js';
+import { aiTools } from './ai-tools.js';
 import type { DebuggerExchange } from '../debugger/proxy.js';
 import { str, withEnvironmentSecrets, withProductionConsent, type Tool } from './tool.js';
 import { MINIMAL_TOOLS, searchTool } from './search-tools.js';
@@ -1351,6 +1352,7 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
     ...scaleTools({ store, secrets, settings, redactor, checkEnvironment }),
     ...deployTools({ store }),
     ...evalAgentTools({ store }),
+    ...aiTools({ store, secrets, settings }),
     ...workspaceEditTools({
       store,
       redactor,

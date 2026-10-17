@@ -1,3 +1,4 @@
+import { generateFlowItem } from './ai/flow-generate';
 import {
   Plus,
   Workflow,
@@ -619,7 +620,7 @@ export const CollectionTree = memo(function CollectionTree({
           onRun={onRun && (() => onRun(c, n.id))}
           runLabel="Run folder"
           onMonitor={() => useApp.getState().openIntent('monitors', { create: { collectionId: c.id, selection: [n.id] } })}
-          testItems={[saveAsTestItem({ ref: { kind: 'folder', collectionId: c.id, folderId: n.id }, name: n.name })]}
+          testItems={[saveAsTestItem({ ref: { kind: 'folder', collectionId: c.id, folderId: n.id }, name: n.name }), generateFlowItem({ collectionId: c.id, folderId: n.id })]}
           onNewFolder={async () => {
             const name = await promptText('New folder', { message: 'Folder name', okLabel: 'Create' });
             if (name) change(c, (c) => ({ ...c, items: addToFolder(c.items, n.id, { kind: 'folder', id: uid('fld-'), name, items: [] } as CollectionFolder) }));
@@ -813,7 +814,7 @@ export const CollectionTree = memo(function CollectionTree({
             onRun={onRun && (() => onRun(c))}
             runLabel="Run collection"
             onMonitor={() => useApp.getState().openIntent('monitors', { create: { collectionId: c.id } })}
-            testItems={[saveAsTestItem({ ref: { kind: 'collection', collectionId: c.id }, name: c.name })]}
+            testItems={[saveAsTestItem({ ref: { kind: 'collection', collectionId: c.id }, name: c.name }), generateFlowItem({ collectionId: c.id })]}
             onNewFolder={async () => {
               const name = await promptText('New folder', { message: 'Folder name', okLabel: 'Create' });
               if (name) change(c, (c) => ({ ...c, items: [...c.items, { kind: 'folder', id: uid('fld-'), name, items: [] }] }));

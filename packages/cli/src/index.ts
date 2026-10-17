@@ -34,8 +34,10 @@ import { registerFlowsCommand } from './commands/flows.js';
 import { registerFlowCommand } from './commands/flow.js';
 import { registerFlowExportCommand } from './commands/flow-export.js';
 import { registerFlowFromHarCommand } from './commands/flow-from-har.js';
+import { registerFlowGenerateCommand } from './commands/flow-generate.js';
 import { registerFlowReportCommand } from './commands/flow-scale.js';
 import { registerTestFromCommand } from './commands/test-from.js';
+import { registerAiCommands } from './commands/ai.js';
 
 /** The commands that send to APIs with an environment (by their path): they take --allow-production. */
 export const SENDING_COMMANDS = new Set(['test', 'run', 'run-collection', 'load', 'send', 'monitor add', 'monitor run', 'monitor start', 'eval run', 'serve flows']);
@@ -69,8 +71,10 @@ export function buildProgram(): Command {
   registerFlowCommand(program);
   registerFlowExportCommand(program);
   registerFlowFromHarCommand(program);
+  registerFlowGenerateCommand(program);
   registerFlowReportCommand(program);
   registerTestFromCommand(program);
+  registerAiCommands(program);
 
   // WF-06: the commands that send take --allow-production; without it the engine refuses data-changing requests to an
   // environment marked as production (GETs still run, so a smoke run against production works as before)

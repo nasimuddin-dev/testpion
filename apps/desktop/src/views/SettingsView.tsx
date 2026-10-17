@@ -1,6 +1,7 @@
 import { StoragePanel } from '../components/StoragePanel';
 import { AgentsPanel } from '../components/AgentsPanel';
 import { KeyboardSettings } from '../components/KeyboardSettings';
+import { AiSettingsPanel } from '../components/ai/AiSettingsPanel';
 import { Plus, Save, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { asError, call } from '../api';
@@ -539,6 +540,7 @@ function AssistantSettings({ s, set, providers }: { s: AppSettings; set(p: Parti
               </Field>
             </div>
           )}
+          <AiSettingsPanel s={s} set={set} providers={providers} />
           <p className="text-xs text-muted">Save settings to keep the choice of source and model (the API key is saved on its own).</p>
         </>
       )}

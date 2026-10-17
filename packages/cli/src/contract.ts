@@ -50,6 +50,9 @@ export const WRITE_COMMANDS = new Set([
   'flow export',
   'history export-har',
   'git setup',
+  'ai apply',
+  'ai undo',
+  'ai discard',
 ]);
 
 const all = (c: Command): Command[] => [c, ...c.commands.flatMap(all)];

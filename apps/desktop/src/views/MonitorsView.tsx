@@ -1,5 +1,6 @@
 import { RecentRuns } from '../components/charts';
-import { AlarmClock, ExternalLink, Sparkles, Folder, KeyRound, Pause, Pencil, Play, Plus, Trash2 } from 'lucide-react';
+import { AiAction } from '../components/ai/AiAction';
+import { AlarmClock, ExternalLink, Folder, KeyRound, Pause, Pencil, Play, Plus, Trash2 } from 'lucide-react';
 import { DocTabStrip } from '../components/DocTabStrip';
 import { noteClosedTabs } from '../lib/closed-tabs';
 import { ItemBreadcrumb } from '../components/ItemBreadcrumb';
@@ -435,30 +436,15 @@ function MonitorDetail(p: {
               Run now
             </Button>
             {last && last.status !== 'passed' && (
-              <Button
-                size="sm"
-                icon={<Sparkles size={14} />}
-                title="Ask the AI assistant what is wrong and what to do (the monitor's results, reasons and per-request numbers are sent; no bodies or secrets)"
-                onClick={() =>
-                  void call('monitor.requests', { id: m.id, runs: 20 }).then(
-                    (requests) =>
-                      useApp.getState().set({
-                        assistant: {
-                          task: 'explain-monitor',
-                          title: `Why "${m.name}" is failing`,
-                          context: {
-                            monitor: { name: m.name, schedule: m.schedule, environment: m.environment, maxP95Ms: m.maxP95Ms, minCertDays: m.minCertDays },
-                            latestResults: results.slice(0, 15).map((r) => ({ when: r.startedAt, status: r.status, passed: r.passed, total: r.total, p95Ms: r.p95Ms, certDaysLeft: r.certDaysLeft, reason: r.reason, error: r.error })),
-                            requests,
-                          },
-                        },
-                      }),
-                    () => undefined,
-                  )
-                }
-              >
-                Explain with AI
-              </Button>
+              <AiAction hint="Ask the AI assistant what is wrong and what to do (the monitor's results, reasons and per-request numbers are sent; no bodies or secrets)" label="Explain with AI" request={async () => ({
+                task: 'explain-monitor',
+                title: `Why "${m.name}" is failing`,
+                context: {
+                  monitor: { name: m.name, schedule: m.schedule, environment: m.environment, maxP95Ms: m.maxP95Ms, minCertDays: m.minCertDays },
+                  latestResults: results.slice(0, 15).map((r) => ({ when: r.startedAt, status: r.status, passed: r.passed, total: r.total, p95Ms: r.p95Ms, certDaysLeft: r.certDaysLeft, reason: r.reason, error: r.error })),
+                  requests: await call('monitor.requests', { id: m.id, runs: 20 }).catch(() => undefined),
+                },
+              })} />
             )}
             <Tooltip content={m.enabled ? 'Pause the schedule' : 'Resume the schedule'}>
               <Button size="sm" icon={m.enabled ? <Pause size={14} /> : <AlarmClock size={14} />} onClick={p.onToggle}>

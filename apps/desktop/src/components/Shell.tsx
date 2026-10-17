@@ -1,3 +1,4 @@
+import { askAssistant } from './ai/AiAction';
 import {
   Activity,
   AlertOctagon,
@@ -152,7 +153,7 @@ export function TopBar() {
         <Button size="md" variant="ghost" onClick={() => set({ paletteOpen: true })} icon={<TerminalSquare size={15} />}>
           <span className="hidden lg:inline">Commands</span> <Kbd>{keyLabel('palette', bindings)}</Kbd>
         </Button>
-        <IconButton label="AI assistant" onClick={() => set({ assistant: { task: 'free', title: 'Ask the assistant', context: {} } })}>
+        <IconButton label="AI assistant" onClick={() => askAssistant()}>
           <Bot size={17} />
         </IconButton>
         <IconButton label="Settings" onClick={() => useApp.getState().setView('settings')}>

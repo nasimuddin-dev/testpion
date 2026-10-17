@@ -1,4 +1,5 @@
 import { prettyBody } from '../lib/pretty';
+import { AiAction } from './ai/AiAction';
 import { BookmarkPlus, Camera, Download, ExternalLink, GitCompareArrows, Sparkles } from 'lucide-react';
 import { ResponseDiffPanel } from './ResponseDiffPanel';
 import { rememberResponse, responseId } from '../lib/response-memory';
@@ -14,7 +15,7 @@ import { JsonTree, RawView, type TreeAssertion, type TreeVariable } from './Json
 import { TraceView } from './TraceView';
 import { finishSave, type SaveResult } from '../lib/files';
 import { Badge, Button, cx, Empty, OverflowActions, Segmented, statusTone, Tabs, type MenuItem } from './ui';
-import { useApp, toastError } from '../store';
+import { toastError } from '../store';
 import { JsonTable, tableRowsOf } from './JsonTable';
 import { JwtView } from './JwtView';
 import { findDecodedJwts } from '@testpion/shared';
@@ -373,34 +374,23 @@ function Timeline({ phases, url, connection }: { phases: Array<{ name: string; s
         </div>
       ))}
       <div className="mt-2 flex items-center gap-3 flex-wrap">
-        <Button
-          size="sm"
-          icon={<Sparkles size={12} />}
-          title="Ask the AI assistant where the time went and what to try (the URL, phases, connection and certificate are sent; no bodies or headers)"
-          onClick={() =>
-            useApp.getState().set({
-              assistant: {
-                task: 'explain-timing',
-                title: 'Where the time went',
-                context: {
-                  url,
-                  phases,
-                  connection: connection && {
-                    ...connection,
-                    certificate: connection.certificate && {
-                      subject: connection.certificate.subject,
-                      issuer: connection.certificate.issuer,
-                      validTo: connection.certificate.validTo,
-                      daysLeft: connection.certificate.daysLeft,
-                    },
-                  },
-                },
+        <AiAction hint="Ask the AI assistant where the time went and what to try (the URL, phases, connection and certificate are sent; no bodies or headers)" label="Explain with AI" request={() => ({
+          task: 'explain-timing',
+          title: 'Where the time went',
+          context: {
+            url,
+            phases,
+            connection: connection && {
+              ...connection,
+              certificate: connection.certificate && {
+                subject: connection.certificate.subject,
+                issuer: connection.certificate.issuer,
+                validTo: connection.certificate.validTo,
+                daysLeft: connection.certificate.daysLeft,
               },
-            })
-          }
-        >
-          Explain with AI
-        </Button>
+            },
+          },
+        })} />
         <p className="text-xs text-muted flex items-center gap-1">
           <ExternalLink size={11} /> Full span details are available in the Trace tab.
         </p>

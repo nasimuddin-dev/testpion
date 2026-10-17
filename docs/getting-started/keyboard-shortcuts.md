@@ -103,6 +103,18 @@ On the canvas of a test file's **Flow** tab (see [Design a flow](/test-runner/in
 | <kbd>F8</kbd> / <kbd>F10</kbd> | While paused: **Continue** / **Step over**. |
 | <kbd>Ctrl</kbd>+<kbd>Enter</kbd> | Save a sticky note you are writing. |
 
+## Reviewing an AI proposal
+
+In the review of suggested checks, tests, a flow or a request ([proposals](/ai-testing/ai-features#proposals-review-accept-undo)):
+
+| Keys | What it does |
+|---|---|
+| <kbd>Tab</kbd> | Move through the items and their buttons. |
+| <kbd>Space</kbd> | Tick or untick the focused item. |
+| <kbd>Enter</kbd> | On an item's title: show or hide its diff. |
+| <kbd>Ctrl</kbd>+<kbd>Enter</kbd> | **Accept selected** (on a flow's canvas review: **Accept**). |
+| <kbd>Esc</kbd> | Close the review (nothing is applied). |
+
 ## HTTP Debugger
 
 | Keys | What it does |

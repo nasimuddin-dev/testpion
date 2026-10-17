@@ -763,4 +763,160 @@ module.exports = async function run(win) {
     await clickSel('[data-status=terminal]', 'the Terminal');
     await until(`!__cap.one('[data-terminal-box]')`, 'the bottom panel to close');
   } else console.log('[capture] skipped terminal.jpg: no shell on this platform');
+
+  // ---------------------------------------------------------------- the AI features, with a scripted offline model
+  // (last, so the shots above stay as they were). Two providers are added to the throwaway workspace: a local Ollama
+  // for small tasks (only previewed here: nothing is sent to it) and an offline mock model whose answers are scripted
+  // (x-mock-rules: a regular expression on the last user message → the answer), so the dialogs show a realistic,
+  // verified proposal. No real model and no key.
+  const AI_CHECKS = [
+    { type: 'status', expected: 200 },
+    { type: 'header', header: 'content-type', expected: 'json' },
+    { type: 'exists', path: '$.id' },
+    { type: 'equals', path: '$.id', expected: '1' },
+    { type: 'type', path: '$.name', expected: 'string' },
+    { type: 'equals', path: '$.species', expected: 'dog' },
+    { type: 'equals', path: '$.ownerId', expected: '123' },
+  ];
+  const AI_FLOW = {
+    name: 'Patients lifecycle',
+    summary: 'Registers a patient, reads it back by the id the create returned, and checks that an unknown patient answers 404.',
+    assumptions: ['POST /patients answers 201 with the new id in $.id', 'Patient 999 does not exist on any server the flow runs against'],
+    steps: [
+      {
+        id: 'create-patient',
+        request: 'req-create',
+        extract: { patientId: '$.id' },
+        assertions: [
+          { type: 'status', expected: 201 },
+          { type: 'exists', path: '$.id' },
+          { type: 'equals', path: '$.name', expected: 'Biscuit' },
+        ],
+      },
+      {
+        id: 'read-patient',
+        request: 'req-get',
+        dependsOn: ['create-patient'],
+        url: '{{baseUrl}}/patients/{{patientId}}',
+        assertions: [
+          { type: 'status', expected: 200 },
+          { type: 'equals', path: '$.species', expected: 'dog' },
+        ],
+      },
+      { id: 'unknown-patient', request: 'req-get', url: '{{baseUrl}}/patients/999', negative: true, assertions: [{ type: 'status', expected: 404 }] },
+      // a request the folder does not have: TestPion drops the step and says so in the review
+      { id: 'discharge-patient', request: 'req-discharge', dependsOn: ['read-patient'] },
+    ],
+  };
+  const own = (await invoke('ai.providers')).filter((p) => !p.builtIn).map(({ hasKey: _k, needsKey: _n, ...p }) => p);
+  await invoke('ai.saveProviders', {
+    providers: [
+      ...own.filter((p) => p.id !== 'ollama-local' && p.id !== 'demo-ai'),
+      { id: 'ollama-local', name: 'Ollama (local)', kind: 'ollama', baseUrl: 'http://127.0.0.1:11434', defaultModel: 'llama3.2' },
+      {
+        id: 'demo-ai',
+        name: 'Offline demo model',
+        kind: 'mock',
+        baseUrl: 'mock://local',
+        defaultModel: 'demo',
+        headers: [
+          {
+            key: 'x-mock-rules',
+            value: J([
+              { match: 'required":\\["checks"', response: J({ checks: AI_CHECKS }) },
+              { match: '"source"', response: J(AI_FLOW) },
+            ]),
+          },
+        ],
+      },
+    ],
+  });
+  const appSettings = await invoke('settings.get');
+  await invoke('settings.save', {
+    ...appSettings,
+    assistantProvider: 'demo-ai',
+    assistantModel: 'demo',
+    ai: { small: { provider: 'ollama-local', model: 'llama3.2' }, large: { provider: 'demo-ai', model: 'demo' }, localOnly: true, maxTokensPerCall: 16000, dailyTokens: 250000, dailyBudgetUsd: 2 },
+  });
+  // the window reads the settings when it starts: start it again (the workspace and the profile stay)
+  const loaded = new Promise((r) => win.webContents.once('did-finish-load', r));
+  win.webContents.reload();
+  await loaded;
+  await js(HELPERS);
+  await until(`document.body.innerText.includes('Veterinary API (example)') && __cap.one('nav [aria-label="Collections"]')`, 'the workspace to open again', 30000);
+  park();
+
+  // "What will be sent…": a request that cannot connect, its error's Explain with AI (a small task: the local model)
+  await nav('Collections');
+  await js(`(() => { const p = __cap.one('[aria-label="New tab"]'); p.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, pointerType: 'mouse' })); return true; })()`);
+  await click('HTTP request', '[role=menuitem]');
+  const URL_INPUT = `__cap.one('main input[aria-label="Request URL"]')`;
+  await until(URL_INPUT, 'the URL field of the new request');
+  await js(`__cap.input(${URL_INPUT}, 'http://127.0.0.1:1/patients?access_token=abcdef123456&page=2'); true`);
+  await click('Send', 'main button');
+  await until(`__cap.one('main [role=alert] [data-ai-preview-open]')`, 'the error with its AI action', 30000);
+  await clickSel('main [role=alert] [data-ai-preview-open]', 'What will be sent…');
+  await until(`__cap.one('[data-ai-preview] [data-ai-estimate]') && /stays on this computer/.test(__cap.text(__cap.one('[data-ai-preview] [data-ai-model]')))`, 'What will be sent, with the local model', 20000);
+  await shot('ai-what-will-be-sent');
+  await js(`__cap.key('Escape'); true`);
+  await until(`!__cap.one('[data-ai-preview]')`, 'What will be sent to close');
+
+  // a flow from a folder: Save as example on a new patient (so the flow can run on a mock), then the folder's menu
+  /** A response action: a button when the panel is wide, else in its ⋯ menu. */
+  const responseAction = async (label) => {
+    const button = `__cap.all('main button').find((b) => __cap.text(b) === ${J(label)})`;
+    if (await js(`!!${button}`)) return clickOn(button, label);
+    await clickOn(`(() => { const m = __cap.one('main button[aria-label="Response actions"]'); m?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, pointerType: 'mouse' })); return m; })()`, 'the response actions');
+    await click(label, '[role=menuitem]');
+  };
+  // a fresh token (the earlier one may have expired while the shots above were taken)
+  await openRequest('Get access token');
+  await sendAndWait();
+  await openRequest('Create patient');
+  await click('Send', 'main button');
+  await until(`/\\b201\\b/.test(__cap.screen()) && /Time \\d+ ms/.test(__cap.screen())`, 'the patient created');
+  await responseAction('Save as example');
+  await until(`__cap.byText('Save', '[role=dialog] button')`, 'the Save as example dialog');
+  await click('Save', '[role=dialog] button');
+  await until(`__cap.all('[data-sonner-toast]').some((t) => /Saved example/.test(__cap.text(t)))`, 'the example saved');
+  const patients = `__cap.all('${EXPLORER} [data-tree-row][aria-expanded]').find((b) => __cap.text(b).startsWith('Patients'))`;
+  const unfoldRest = `__cap.all('${EXPLORER} [data-tree-row][aria-expanded="false"]').find((b) => ['Veterinary API', 'REST'].some((n) => __cap.text(b).startsWith(n)))`;
+  await until(`${patients} || ((${unfoldRest})?.click(), false)`, 'the Patients folder in the explorer');
+  await js(`(() => { const r = ${patients}; const b = r.getBoundingClientRect(); r.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: b.left + 20, clientY: b.top + 8, button: 2 })); return true; })()`);
+  await click('Generate integration flow with AI…', '[role=menuitem]');
+  await until(`__cap.one('[data-flow-generate-dialog]') && /tokens in/.test(__cap.text(__cap.one('[data-flow-estimate]')))`, 'the Generate integration flow dialog with its estimate', 20000);
+  await realClick(`__cap.one('[data-flow-generate-dialog] input[aria-label="Hint for the flow"]')`, 'the hint field');
+  type('include a patient that does not exist');
+  await until(`__cap.one('[data-flow-generate-dialog] input[aria-label="Hint for the flow"]').value.length > 10 && /tokens in/.test(__cap.text(__cap.one('[data-flow-estimate]')))`, 'the hint and the estimate');
+  await shot('ai-flow-generate');
+  await clickSel('[data-flow-generate]', 'Generate');
+  await until(`__cap.one('[data-flow-proposal] [data-flow-node]') && __cap.all('[data-flow-proposal-badges] [data-verification]').length >= 3 && __cap.one('[data-flow-proposal-notes]')`, 'the flow proposal, verified', 30000);
+  await shot('ai-flow-review');
+  await clickSel('[data-proposal-discard]', 'Discard');
+  await until(`!__cap.one('[data-flow-proposal]')`, 'the review to close');
+
+  // Suggest assertions on a patient: the review opens by itself, a pinned id and owner flagged with safer forms
+  await openRequest('Get patient');
+  await sendAndWait();
+  await responseAction('Suggest assertions');
+  await until(`__cap.one('[data-proposal] [data-proposal-safer]') && __cap.all('[data-proposal] [data-proposal-item]').length >= 6`, 'the review of the suggested checks', 30000);
+  await shot('ai-suggest-assertions');
+  await clickOn(`__cap.all('[role=dialog] button').find((b) => __cap.text(b) === 'Close')`, 'Close');
+  await until(`!__cap.one('[data-proposal]')`, 'the review to close');
+  // the assistant ran the task in the right edge's panel: close it, and slide the panel away
+  await js(`__cap.one('[aria-label="Close assistant"]')?.click(); true`);
+  await clickSel('[aria-label="Assistant (unpinned panel)"]', 'the Assistant edge tab');
+  await until(`!__cap.one('[role=region][aria-label="Assistant"]')`, 'the assistant panel to close');
+
+  // Settings ▸ AI assistant: the models per task, Local only, the limits
+  await nav('Settings');
+  await tab('AI assistant');
+  await until(`(() => { const p = __cap.one('[data-ai-settings]'); p?.scrollIntoView({ block: 'center' }); return p; })()`, 'the AI settings');
+  await shot('settings-ai');
+
+  // AI Lab ▸ Usage: the AI features' calls above, from the app
+  await nav('AI Lab');
+  await tab('Usage');
+  await until(`__cap.one('[data-ai-feature-usage] table') && /generate-assertions/.test(__cap.screen('[data-ai-feature-usage]'))`, 'the AI features usage');
+  await shot('ai-feature-usage');
 };

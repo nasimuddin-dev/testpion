@@ -7,6 +7,13 @@ export interface MockRule {
   /** Regular expression matched against the last user message. */
   match: string;
   response?: string;
+  /**
+   * Answers in turn, one per matching call (the last one repeats): a scripted conversation, e.g. an invalid answer,
+   * then a corrected one, to test repair loops.
+   */
+  responses?: string[];
+  /** The finish reason to report (`length` simulates an answer cut at the output limit); one per call with `responses`. */
+  finishReason?: string | string[];
   /** Force a tool call (agent testing). */
   toolCall?: { name: string; arguments?: Record<string, unknown> };
 }
@@ -24,6 +31,8 @@ export class MockProvider implements LlmProvider {
   private latency = 0;
   // a rule's pattern, compiled once (an evaluation calls chat() per record)
   private patterns = new Map<string, RegExp>();
+  /** How many times each scripted rule answered. */
+  private turns = new Map<MockRule, number>();
   private pattern(match: string): RegExp {
     let re = this.patterns.get(match);
     if (!re) {
@@ -58,8 +67,17 @@ export class MockProvider implements LlmProvider {
         return false;
       }
     });
+    let finish: string | undefined;
     if (rule?.toolCall && !hasToolResult) toolCalls = [{ id: 'call_0', name: rule.toolCall.name, arguments: rule.toolCall.arguments ?? {} }];
-    else if (rule?.response !== undefined) text = rule.response;
+    else if (rule?.responses?.length) {
+      const n = this.turns.get(rule) ?? 0;
+      this.turns.set(rule, n + 1);
+      text = rule.responses[Math.min(n, rule.responses.length - 1)]!;
+      finish = Array.isArray(rule.finishReason) ? rule.finishReason[Math.min(n, rule.finishReason.length - 1)] : rule.finishReason;
+    } else if (rule?.response !== undefined) {
+      text = rule.response;
+      finish = Array.isArray(rule.finishReason) ? rule.finishReason[0] : rule.finishReason;
+    }
     else if (req.tools?.length && !hasToolResult) {
       const tool = req.tools.find((t) => lastUser.toLowerCase().includes(t.name.toLowerCase())) ?? req.tools[0]!;
       toolCalls = [{ id: 'call_0', name: tool.name, arguments: {} }];
@@ -78,7 +96,7 @@ export class MockProvider implements LlmProvider {
       toolCalls,
       usage: { inputTokens: inT, outputTokens: outT, totalTokens: inT + outT },
       usageEstimated: true,
-      finishReason: toolCalls.length ? 'tool_calls' : 'stop',
+      finishReason: toolCalls.length ? 'tool_calls' : (finish ?? 'stop'),
       model: req.model || 'mock',
       timing: { startedAt, totalMs, firstTokenMs: totalMs },
     };

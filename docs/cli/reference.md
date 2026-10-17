@@ -472,6 +472,30 @@ Exit code `2` when a file was skipped (broken markers, a folder where the file s
 testpion agents init -w my-workspace --targets agents,claude,cursor --json
 ```
 
+## `ai`
+
+TestPion's own [AI tasks](/ai-testing/ai-features) from the terminal and CI, with the model of `--provider` / `--model`, `TESTPION_AI_PROVIDER` / `TESTPION_AI_MODEL` (`_SMALL` / `_LARGE` per tier), or the app settings. Calls are counted in the workspace's AI usage (surface `cli`, or `ci` when `CI` is set) and refused over the caps of the AI settings; `TESTPION_AI_LOCAL_ONLY=1` allows only models on this computer.
+
+| Command | What it does |
+|---|---|
+| `ai tasks` | The tasks: id, title, tier, output, whether it proposes changes, verifiers. |
+| `ai run <task>` | Run a task. Context from `--item <ref>` (`request:<c>:<r>`, `history:<id>`, `run:<id>[:<resultId>]` (`run:last`: the newest finished run, the rule of `ci --run last`), `test:<path>`, `flow:<path>`, `spec:<path>`, `collection:<id>`, `folder:<c>:<f>`) and/or `--context <json\|@file>`; `-q` the question; `--privacy full\|metadata\|names`; `--hint`; `--path` where a test file goes; `--target` where a request goes; `--max-tokens`; `-e` environment (variable names only). Prints the answer (streamed) and, for a generating task, a **proposal** with each item's verification. `--dry-run` prints what would be sent and sends nothing. `--apply [--items i1,i3]` applies at once. |
+| `ai apply <id>` | Apply a proposal's ticked items (or `--items`). Takes the generic `--dry-run` (lists the files it would write; nothing changes). |
+| `ai undo <id>` | Put back what an applied proposal replaced. |
+| `ai discard <id>` | Discard a proposal. |
+| `ai proposals` | The workspace's proposals (`--status`), or one in full (`--id`). |
+| `ai usage` | Calls, tokens and cost today and over `--days` (default 30), per task, model and surface, and the caps. |
+
+```bash
+testpion ai tasks --json | jq -r '.data.tasks[] | select(.proposes) | .id'
+testpion ai run generate-assertions --item request:veterinary-api:req-get --dry-run
+testpion ai run explain-error --context @error.json --privacy metadata --provider ollama
+testpion ai run design-flow -q "create a patient, read it back" --path flows/patients.yaml --json | jq -r .data.proposal.id
+testpion ai apply ai-mvbu2qjg9a3b644187 --json
+```
+
+`suggest-assertions` is an alias of `generate-assertions`, `generate-tests` of `generate-pm-tests`. With `--item request:<c>:<r>`, suggested checks and tests are verified against the request's latest response in History (sent from the app); without one each item says *no response to check against*. `ai run --json` returns `{ task, taskVersion, provider, model, text, truncated, finishReason, problems, repairs, calls, usage, ms, preview, proposal?, applied? }`; `preview` is what was (or, with `--dry-run`, would be) sent: the model, privacy level, sections, masks and estimate (and the messages on a dry run). Exit code `2` when no model is set up (`ConfigurationError`, *The AI assistant is off*), Local only refuses the provider, or a cap refuses the call — nothing was sent. Exit code `1` (envelope `status: "failed"`) when the answer is still invalid after the repairs: `problems` lists why (without `--json` they are printed under the answer). With the global `--dry-run`, `ai apply` prints *would apply …* and the files it would change, nothing else. See [AI features](/ai-testing/ai-features#from-the-terminal-agents-and-ci).
+
 ## `eval compare` and `eval matrix`
 
 `eval compare <run> --baseline <run>` compares an evaluation run with a baseline run case by case and exits `1` when more cases regressed than `--max-regressions` (default `0`): for CI after `eval run`. A case regressed when it stopped passing or its mean score dropped by more than `--threshold` (default `0.05`, strictly more); improvements, missing and new cases are listed apart, and `--fail-on-missing` fails on a missing case too. Runs are ids, `last` or names (the newest finished run of that name). `--json` prints the report (counts, per-variant pass rate and mean score change, the lists, `passed`).
@@ -537,6 +561,33 @@ testpion import adopt-pet.arazzo.yaml -w my-workspace --json   # Arazzo: one flo
 An Arazzo document's workflows become flow files: operations become method and URL (`{{baseUrl}}` + path), `$inputs.x` becomes `{{x}}`, `$steps.s.outputs.o` becomes `{{s_o}}` with an `extract` on step `s`, success criteria become checks, a retry action `retries`. See [Arazzo workflows](/test-runner/integration-testing#arazzo-workflows-import-and-export) for the whole mapping and `testpion flow export` for the way back.
 
 Secrets in a copied request (the `Authorization` header and other sensitive headers, auth credentials, cookies, and sensitive query or body fields) are not written to the workspace. They are replaced by `{{variables}}`, and the output lists them (`placeholders` with `--json`) so you can add them as secret environment variables.
+
+## `flow generate`
+
+```bash
+testpion flow generate --collection "Veterinary API" --folder Patients -w my-workspace
+testpion flow generate --collection veterinary-api --folder fld-patients --privacy metadata --dry-run
+testpion flow generate --collection "Veterinary API" --folder Patients --hint "also test pagination" --apply --json
+testpion flow generate --collection "Veterinary API" --folder Patients --no-ai
+```
+
+Your model writes an integration flow from the saved requests of a collection or one folder: steps that use those requests by id (a step naming one that is not there is dropped), create → read → update → delete, values extracted and passed on, status and key-field checks, one or two error cases, and its assumptions. It starts from the flow TestPion builds without AI, and it is verified before it is shown: lint (cycles, unknown `dependsOn`), every `{{variable}}` extracted by a step it waits for, a run on a mock of the collection. Nothing is written without `--apply` (or `testpion ai apply <id>`). See [Let AI write the flow](/test-runner/integration-testing#let-ai-write-the-flow).
+
+| Option | Description |
+|---|---|
+| `--collection <nameOrId>` | The collection (required). |
+| `--folder <nameOrId>` | One folder: its name, its path (`Orders/Refunds`) or its id. |
+| `--hint <text>` | An extra instruction (*also test pagination*). |
+| `--privacy <level>` | `full` (redacted, default), `metadata` (methods, URLs, shapes and names; no body values), `names`. |
+| `--path <file>` | The flow file under `tests/` (default `tests/flows/<collection>-<folder>.yaml`, a free name). |
+| `--provider <id>`, `--model <name>` | The model (default: `TESTPION_AI_PROVIDER` / `TESTPION_AI_MODEL[_LARGE]`, then the app settings). |
+| `--no-ai` | Only the deterministic draft (no model is called). Without a model set up this is what you get, with a note. |
+| `--dry-run` | Send nothing: print what would be sent (messages, sections, tokens, cost, what was masked). |
+| `--apply` | Write the flow when its verification did not fail (else it stays a proposal). |
+| `-e, --environment <name>` | Environment whose variable names (never values) the flow may use. |
+| `--json` | `{ proposal, model, usage, costUsd?, repairs, problems, applied? }`; without a model `{ proposal, model: "none (deterministic draft)", fallback }`; with `--apply` on a flow whose verification failed, `applied: null` and `why`. `--dry-run`: the task result with its `preview`. |
+
+A file that already exists is not replaced: the default name gets a number (`veterinary-api-patients-2.yaml`). Exit code `2` for an unknown collection or folder, a path outside `tests/`, Local only refusing the provider or a cap refusing the call.
 
 ## `flow from-har`
 

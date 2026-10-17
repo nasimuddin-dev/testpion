@@ -1,11 +1,12 @@
-// Soak: the same realistic cycle (tabs, sends, every view, runs, the Debugger, dialogs, a large response) N times; after
+// Soak: the same realistic cycle (tabs, sends, every view, runs, the Debugger, dialogs, a large response, the AI surfaces
+// with the offline demo model) N times; after
 // each cycle both processes are garbage-collected and their memory, handles, listeners, timers, DOM size and the time of
 // a fixed probe are appended to metrics.jsonl, so a leak or a slowdown shows as a trend. Not part of the suite (`_`).
 //
 //   SOAK_CYCLES=25 SOAK_OUT=<dir> node apps/desktop/e2e/run-e2e.mjs --only _soak --timeout 4000
 //
 // SOAK_SNAP_AT=5 (0 = none): heap snapshots of the page and the main process after that cycle and after the last one.
-const { writeFileSync, mkdirSync } = require('node:fs');
+const { readFileSync, writeFileSync, mkdirSync } = require('node:fs');
 const { join } = require('node:path');
 const { DOM } = require('../lib.cjs');
 
@@ -38,6 +39,22 @@ function prepare(ws) {
   });
   writeFileSync(join(ws, 'debugger', 'soak-session.har'), JSON.stringify({ log: { version: '1.2', creator: { name: 'soak', version: '1' }, entries: Array.from({ length: 20 }, (_, i) => entry(i)) } }));
   writeFileSync(join(ws, 'collections', 'soak.json'), JSON.stringify({ schemaVersion: '1.0', id: 'soak', name: 'Soak collection', items }, null, 2));
+  // the offline demo model's answers for the AI cycle: a flow plan naming two soak requests, checks for /health
+  const pp = join(ws, 'providers.json');
+  const pc = JSON.parse(readFileSync(pp, 'utf8'));
+  const rules = pc.providers.find((x) => x.id === 'demo').headers.find((h) => h.key === 'x-mock-rules');
+  const plan = {
+    name: 'Soak flow from AI',
+    summary: 'Health, then the patients list.',
+    assumptions: [],
+    steps: [
+      { id: 'health', request: REQS[0], assertions: [{ type: 'status', expected: 200 }] },
+      { id: 'patients', request: REQS[2], dependsOn: ['health'], assertions: [{ type: 'status', expected: 200 }] },
+    ],
+  };
+  const checks = { checks: [{ type: 'status', expected: 200 }, { type: 'exists', path: '$.status' }] };
+  rules.value = JSON.stringify([{ match: '"source"', response: JSON.stringify(plan) }, { match: '127.0.0.1:4010/health', response: JSON.stringify(checks) }, ...JSON.parse(rules.value)]);
+  writeFileSync(pp, JSON.stringify(pc, null, 2));
   const tests = REQS.slice(0, 5).map(
     (name, i) => `  - id: soak-t${i}\n    name: soak test ${i}\n    method: GET\n    url: "${DEMO}/health?t=${i}"\n    assertions:\n      - { type: status, expected: 200 }\n`,
   );
@@ -378,6 +395,75 @@ const cycle = (c) => {
        await __t.view('Home');
        return out.join(' | ') + ' | ms ' + ms(t0);`,
     ),
+    // the AI surfaces with the offline demo model: Generate integration flow (dialog, estimate, "What will be sent…",
+    // generate, review, discard), a proposal review (Suggest assertions on a response) opened and closed, Settings ▸ AI
+    // assistant, and the assistant answering a suggested question
+    r(
+      `${p}-ai`,
+      `const t0 = performance.now(); const out = [];
+       const panel = () => document.querySelector('aside[aria-label="AI assistant"]');
+       const closePanel = async () => { panel()?.querySelector('[aria-label="Close assistant"]')?.click(); await __t.waitFor(() => !panel(), 2000); };
+       const dialogButton = (root, label) => [...(root?.closest('[role=dialog]')?.querySelectorAll('button') ?? [])].find((b) => b.textContent.trim() === label);
+       // 1. a flow from the soak collection: generated, reviewed, discarded
+       await ensureSoak();
+       const col = [...document.querySelectorAll('aside [data-tree-row]')].find((b) => b.textContent.trim().startsWith('Soak collection'));
+       let flow = 'no row';
+       if (col) {
+         await __t.real.rightClick(col);
+         const item = await __t.waitFor(() => [...document.querySelectorAll('[role=menuitem]')].find((m) => m.textContent.trim() === 'Generate integration flow with AI…'), 3000);
+         if (item) {
+           await __t.real.click(item);
+           const dlg = await __t.waitFor(() => document.querySelector('[data-flow-generate-dialog]'), 4000);
+           const est = await __t.waitFor(() => /tokens in/.test(dlg?.querySelector('[data-flow-estimate]')?.textContent ?? ''), 10000);
+           // "What will be sent…" of the dialog, opened and cancelled
+           let preview = 'no button';
+           const eye = await __t.waitFor(() => { const b = dlg?.closest('[role=dialog]')?.querySelector('[data-ai-preview-open]'); return b && !b.disabled && b; }, 5000);
+           if (eye) {
+             eye.click();
+             const pd = await __t.waitFor(() => document.querySelector('[data-ai-preview] [data-ai-estimate]') && document.querySelector('[data-ai-preview]'), 10000);
+             dialogButton(pd, 'Cancel')?.click();
+             preview = 'estimate ' + !!pd + ' closed ' + !!(await __t.waitFor(() => !document.querySelector('[data-ai-preview]'), 3000));
+           }
+           out.push('preview ' + preview);
+           dlg?.closest('[role=dialog]')?.querySelector('[data-flow-generate]')?.click();
+           const rev = await __t.waitFor(() => document.querySelector('[data-flow-proposal] [data-flow-node]') && document.querySelector('[data-flow-proposal]'), 20000);
+           const nodes = rev ? rev.querySelectorAll('[data-flow-node]').length : 0;
+           rev?.closest('[role=dialog]')?.querySelector('[data-proposal-discard]')?.click();
+           const gone = await __t.waitFor(() => !document.querySelector('[data-flow-proposal]') && !document.querySelector('[data-flow-generate-dialog]'), 5000);
+           flow = 'estimate ' + !!est + ' nodes ' + nodes + ' discarded ' + !!gone;
+         } else { await __t.esc(); flow = 'no menu item'; }
+       }
+       out.push('flow ' + flow);
+       // 2. a proposal review: Suggest assertions on a response, opened and closed
+       let review = 'no tab';
+       if (await openReq('${REQS[0]}')) {
+         button('Send')?.click();
+         await __t.waitFor(() => button('Send') && !button('Send').disabled && vis('main button[aria-label="Response actions"]')[0], 8000);
+         if (await __t.responseAction('Suggest assertions')) {
+           const m = await __t.waitFor(() => document.querySelector('[data-proposal]'), 12000);
+           const items = m ? m.querySelectorAll('[data-proposal-item]').length : 0;
+           dialogButton(m, 'Close')?.click();
+           const shut = await __t.waitFor(() => !document.querySelector('[data-proposal]'), 3000);
+           await closePanel();
+           review = 'items ' + items + ' closed ' + !!shut;
+         } else review = 'no action';
+       }
+       out.push('review ' + review);
+       await closeAll();
+       // 4. Settings ▸ AI assistant
+       await __t.view('Settings'); await __t.tab('AI assistant');
+       out.push('settings ' + !!(await __t.waitFor(() => vis('[data-ai-settings]')[0], 3000)));
+       // 5. the assistant answers a suggested question
+       await __t.view('Collections');
+       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'j', ctrlKey: true, bubbles: true }));
+       const chip = await __t.waitFor(() => panel()?.querySelector('[data-suggestion]'), 4000);
+       let answer = 'no chip';
+       if (chip) { chip.click(); answer = 'answered ' + !!(await __t.waitFor(() => panel()?.querySelector('[data-turn=assistant] [data-answer-model]'), 15000)); }
+       await closePanel();
+       out.push('assistant ' + answer);
+       await __t.view('Home');
+       return out.join(' | ') + ' | ms ' + ms(t0);`,
+    ),
     // the probe: the same three timed actions every cycle
     r(
       `${p}-probe`,
@@ -450,6 +536,8 @@ function SNAPSHOT(c) {
 
 const steps = [...setup];
 for (let c = 1; c <= CYCLES; c++) steps.push(...cycle(c));
+// the AI surfaces use the examples' offline demo model (no network, no key)
+steps.settings = { assistantProvider: 'demo', assistantModel: 'demo' };
 steps.prepare = (ws, out) => {
   prepare(ws);
   if (process.env.SOAK_OUT) mkdirSync(process.env.SOAK_OUT, { recursive: true });

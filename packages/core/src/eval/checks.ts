@@ -1,3 +1,4 @@
+import { checkSubject } from '@testpion/shared';
 import { compareSnapshot, describeDifference } from './snapshot.js';
 import { decodeJwt, describeExpiry, findJwts, type DecodedJwt } from '../util/jwt.js';
 import { createHash } from 'node:crypto';
@@ -50,9 +51,39 @@ type CheckFn = (cfg: CheckConfig, ctx: CheckContext) => Promise<CheckResult> | C
 
 const registry = new Map<string, CheckFn>();
 
-/** Register a custom check type (plugin extension point). */
-export function registerCheck(type: string, fn: CheckFn): void {
+/** What a check of a response reads, in one line, and one example of it: the AI format reference and lint hints read these. */
+export interface CheckDoc {
+  fields: string;
+  example: CheckConfig;
+}
+const docs = new Map<string, CheckDoc>();
+
+/** Register a custom check type (plugin extension point); `doc` says what it reads (shown to AI models writing checks). */
+export function registerCheck(type: string, fn: CheckFn, doc?: CheckDoc): void {
   registry.set(type, fn);
+  if (doc) docs.set(type, doc);
+}
+
+/** Describe a registered check type (its fields and an example). */
+export function documentCheck(type: string, doc: CheckDoc): void {
+  docs.set(type, doc);
+}
+
+/** Other names of a check type (http-status → status, response-time → latency …): name → the type it stands for. */
+export function checkAliases(): Record<string, string> {
+  const first = new Map<CheckFn, string>();
+  const out: Record<string, string> = {};
+  for (const [t, fn] of registry) {
+    const canonical = first.get(fn);
+    if (canonical) out[t] = canonical;
+    else first.set(fn, t);
+  }
+  return out;
+}
+
+/** The documented check types (those that read a response's status, headers or body), in registry order. */
+export function checkDocs(): Array<CheckDoc & { type: string }> {
+  return [...docs].filter(([t]) => registry.has(t)).map(([type, d]) => ({ type, ...d }));
 }
 
 export function checkTypes(): string[] {
@@ -82,10 +113,8 @@ function res(
 }
 
 function defaultName(cfg: CheckConfig): string {
-  const parts = [cfg.type];
-  if (cfg.path) parts.push(String(cfg.path));
-  if (cfg.tool) parts.push(String(cfg.tool));
-  return parts.join(' ');
+  // the shared words for what it reads: `header content-type`, `equals $.id`, `tool_called search`
+  return [cfg.type, checkSubject(cfg)].filter(Boolean).join(' ');
 }
 
 /** Value addressed by `path`, or the whole body/text when no path is given. */
@@ -359,6 +388,26 @@ registerCheck('header', (cfg, ctx) => {
   const ok = !!h && (cfg.expected instanceof RegExp ? cfg.expected.test(h[1]) : h[1].includes(String(cfg.expected)));
   return res(cfg, ok, ok ? `header ${name} matches` : `header ${name} = ${h?.[1] ?? 'missing'}`, { expected: cfg.expected, actual: h?.[1] });
 });
+
+// the checks of a response (status, headers, body): what each reads, for models writing checks and for lint hints
+for (const [type, fields, example] of [
+  ['status', 'expected: 201, a list [200, 204] or a class "2xx"', { type: 'status', expected: 201 }],
+  ['exists', 'path (a JSONPath into the body)', { type: 'exists', path: '$.id' }],
+  ['not-exists', 'path', { type: 'not-exists', path: '$.password' }],
+  ['equals', 'path, expected', { type: 'equals', path: '$.name', expected: 'Rex' }],
+  ['json-path', 'path, expected', { type: 'json-path', path: '$.status', expected: 'active' }],
+  ['contains', 'expected: text in the body, or an item of the list at path', { type: 'contains', path: '$.tags', expected: 'new' }],
+  ['regex', 'pattern; path optional', { type: 'regex', path: '$.createdAt', pattern: '^\\d{4}-\\d{2}-\\d{2}' }],
+  ['type', 'path, expected: string | number | integer | boolean | array | object | null', { type: 'type', path: '$.id', expected: 'number' }],
+  ['length', 'path, expected or min / max', { type: 'length', path: '$.items', min: 1 }],
+  ['greater-than', 'path, expected (a number)', { type: 'greater-than', path: '$.total', expected: 0 }],
+  ['less-than', 'path, expected (a number)', { type: 'less-than', path: '$.price', expected: 1000 }],
+  ['latency', 'max: milliseconds', { type: 'latency', max: 2000 }],
+  ['header', 'header, expected (optional: text it contains)', { type: 'header', header: 'content-type', expected: 'json' }],
+  ['is-json', 'nothing: the body is JSON', { type: 'is-json' }],
+  ['json-schema', 'schema: a JSON Schema (or a file path)', { type: 'json-schema', schema: { type: 'object', required: ['id'] } }],
+] as Array<[string, string, CheckConfig]>)
+  documentCheck(type, { fields, example });
 
 registerCheck('graphql-no-errors', (cfg, ctx) => {
   const n = ctx.graphqlErrors?.length ?? 0;

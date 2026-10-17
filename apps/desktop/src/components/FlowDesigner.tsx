@@ -1,3 +1,4 @@
+import { startFlowGenerate } from './ai/flow-generate';
 import {
   FileSpreadsheet,
   GanttChart,
@@ -44,7 +45,7 @@ import { openRef } from '../lib/open-ref';
 import { pref, savePref, useFlowFileFollow } from './flow-designer-lib';
 import type { PaletteCommand } from './Shell';
 import { asError, call, on } from '../api';
-import { confirmAction, promptText, toastError, useApp } from '../store';
+import { promptText, toastError, useApp } from '../store';
 import type { TestResult } from '../types';
 import { FlowOutputEditor } from './FlowBlockFields';
 import { DeployPanel, triggerLabel, type DeployStatus } from './FlowDeploy';
@@ -426,46 +427,14 @@ export function FlowDesigner({
     setPicking(false);
     await apply({ op: 'addFromCollection', collection, items: [item], chain: true, ...placeNew() }, { select: true });
   };
-  const generate = async () => {
-    const job = await promptText('Generate a flow with AI', {
-      message: 'What should the flow do? One or two sentences.',
-      placeholder: 'e.g. log in, create an order with the token, read it back, cancel it',
-      okLabel: 'Generate',
-      detail: flow.steps.length
-        ? 'The assistant writes the whole file; you review it before it replaces this one (Undo brings it back).'
-        : 'The assistant writes the steps as YAML; you review them before they are saved.',
+  /** Generate with AI (AI-1): from a collection or folder, or described in words; the review's Accept replaces this file in one undo step. */
+  const generate = () =>
+    startFlowGenerate({
+      path: file,
+      environment: env,
+      steps: flow.steps.map(({ id, name, type, method, url, extract, dependsOn }) => ({ id, name, type, method, url, extract, dependsOn })),
+      onAccept: async (text) => !!(await apply({ op: 'replace', text })),
     });
-    if (!job) return;
-    useApp.getState().set({
-      assistant: {
-        task: 'design-flow',
-        title: 'Design a flow',
-        context: { file: `tests/${file}`, environment: env, steps: flow.steps.map(({ id, name, type, method, url, extract, dependsOn }) => ({ id, name, type, method, url, extract, dependsOn })) },
-        question: job,
-        apply: {
-          label: 'Review and use this flow',
-          run: async (code) => {
-            const problems = await call<Array<{ severity: string; message: string; line: number }>>('tests.lint', { content: code, path: file }).catch((e) => [
-              { severity: 'error', message: asError(e).message, line: 1 },
-            ]);
-            const errors = problems.filter((p) => p.severity === 'error');
-            if (errors.length) return `it is not a test file the runner can load: ${errors.map((p) => `line ${p.line}: ${p.message}`).join('; ')}`;
-            if (
-              !(await confirmAction({
-                title: 'Replace the flow',
-                message: `Replace tests/${file} with the AI-generated flow?`,
-                detail: 'Read the YAML in the assistant first. Undo in the Flow tab brings the current file back.',
-                confirmLabel: 'Replace',
-              }))
-            )
-              return 'not used';
-            const r = await apply({ op: 'replace', text: code });
-            return r ? { done: 'AI-generated flow saved: check each step, then Run flow' } : 'it could not be saved';
-          },
-        },
-      },
-    });
-  };
 
   /** Delete what is selected (an edge, steps, notes): one edit, one undo step. */
   const remove = () => {
@@ -735,7 +704,7 @@ export function FlowDesigner({
         setTimeout(() => document.querySelector<HTMLInputElement>('[data-flow-output] input[aria-label="New name"]')?.focus(), 50);
       },
       fromCollection: () => setPicking(true),
-      generate: () => void generate(),
+      generate,
     });
 
   /* ---------------------------------------------------------------- the Start node and Deploy */
@@ -784,7 +753,7 @@ export function FlowDesigner({
           { id: 'example', label: 'API example', icon: <Globe size={14} />, tone: 'var(--ok)', title: 'A ready request to a public API with an extract and a check: Run flow works at once', onClick: () => addStep(API_EXAMPLE) },
           { id: 'collection', label: 'Create from collection', icon: <FolderInput size={14} />, tone: 'var(--warn)', title: 'Saved requests (or a folder, chained)', onClick: () => setPicking(true) },
           { id: 'record', label: 'Record from the Debugger', icon: <Bug size={14} />, tone: 'var(--bad)', title: 'Use your app; the exchanges become steps', onClick: () => useApp.getState().openIntent('debugger', { record: true }) },
-          { id: 'ai', label: 'Generate with AI', icon: <Sparkles size={14} />, tone: 'oklch(0.62 0.18 300)', title: 'Describe the flow; the assistant writes it', onClick: () => void generate() },
+          { id: 'ai', label: 'Generate with AI', icon: <Sparkles size={14} />, tone: 'oklch(0.62 0.18 300)', title: 'From a collection or folder, or described in words: the AI writes it, you review it', onClick: generate },
         ],
   };
   // the toolbar's less used actions: buttons on a wide canvas, the ⋯ menu on a narrow one

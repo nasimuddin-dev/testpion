@@ -1,3 +1,4 @@
+import { startAi } from '../components/ai/AiAction';
 import {
   Bug,
   ChevronDown,
@@ -229,7 +230,7 @@ export function DebuggerView() {
   };
   const ask = (e: Exchange) => {
     const { auth: _a, ...exchange } = e;
-    useApp.getState().set({ assistant: { task: 'explain-exchange', title: `Explain ${e.method} ${e.host}`, context: { exchange } } });
+    startAi({ task: 'explain-exchange', title: `Explain ${e.method} ${e.host}`, context: { exchange } });
   };
   const remove = async (ids: string[]) => {
     await call('debug.delete', { ids });

@@ -1,5 +1,6 @@
 import { createWriteStream, mkdirSync, type WriteStream } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { formatUsd } from '@testpion/shared';
 import type { RunSummary, TestResult } from '../model/types.js';
 import { formatDuration } from '../util/stats.js';
 import { endAndClose } from '../storage/fsutil.js';
@@ -90,7 +91,7 @@ function summaryLines(s: RunSummary): Array<[string, string]> {
     ['Latency p50 / p95 / p99', `${s.latency.p50} / ${s.latency.p95} / ${s.latency.p99} ms`],
   ];
   if (s.tokens.totalTokens) rows.push(['Tokens (in / out / total)', `${s.tokens.inputTokens} / ${s.tokens.outputTokens} / ${s.tokens.totalTokens}`]);
-  if (s.costUsd) rows.push(['Estimated cost', `$${s.costUsd.toFixed(4)} (estimate from configured prices)`]);
+  if (s.costUsd) rows.push(['Estimated cost', `${formatUsd(s.costUsd)} (estimate from configured prices)`]);
   if (s.environment) rows.push(['Environment', s.environment]);
   if (s.cancelled) rows.push(['Cancelled', 'yes']);
   return rows;

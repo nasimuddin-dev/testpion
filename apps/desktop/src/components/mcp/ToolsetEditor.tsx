@@ -1,4 +1,5 @@
 import { ArrowDown, ArrowUp, Copy, CopyPlus, FileCode, MoreHorizontal, Play, Plus, Save, Server, Sparkles, Trash2, Wrench } from 'lucide-react';
+import { startAi } from '../ai/AiAction';
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import type { McpMockDefinition, McpMockResponse } from '@testpion/core';
 import { asError, call } from '../../api';
@@ -128,26 +129,24 @@ export const ToolsetEditor = forwardRef<ToolsetEditorHandle, { file: string; ser
         : 'The assistant proposes the tools, which you review before saving.',
     });
     if (!job) return;
-    useApp.getState().set({
-      assistant: {
-        task: 'design-toolset',
-        title: 'Design a toolset',
-        context: { file, name: def.name, instructions: def.instructions, existingTools: tools.map((t) => ({ name: t.name, description: t.description, inputSchema: t.inputSchema })) },
-        question: `${tools.length ? 'Add the tools an agent needs for' : 'Design the tools an agent needs for'}: ${job}`,
-        apply: {
-          label: 'Review in the Tools tab',
-          run: async (code) => {
-            let d: McpMockDefinition;
-            try {
-              d = await call<McpMockDefinition>('mcp.mock.parse', { text: code });
-            } catch (e) {
-              return `it is not a mock definition: ${asError(e).message}`;
-            }
-            setDef({ ...def, ...d, name: d.name || def.name });
-            setMode('form');
-            setSel(0);
-            return { done: `${d.tools?.length ?? 0} AI-generated tools loaded: review them, Try one, then Save` };
-          },
+    startAi({
+      task: 'design-toolset',
+      title: 'Design a toolset',
+      context: { file, name: def.name, instructions: def.instructions, existingTools: tools.map((t) => ({ name: t.name, description: t.description, inputSchema: t.inputSchema })) },
+      question: `${tools.length ? 'Add the tools an agent needs for' : 'Design the tools an agent needs for'}: ${job}`,
+      apply: {
+        label: 'Review in the Tools tab',
+        run: async (code) => {
+          let d: McpMockDefinition;
+          try {
+            d = await call<McpMockDefinition>('mcp.mock.parse', { text: code });
+          } catch (e) {
+            return `it is not a mock definition: ${asError(e).message}`;
+          }
+          setDef({ ...def, ...d, name: d.name || def.name });
+          setMode('form');
+          setSel(0);
+          return { done: `${d.tools?.length ?? 0} AI-generated tools loaded: review them, Try one, then Save` };
         },
       },
     });

@@ -1,7 +1,8 @@
-import { CircleAlert, CircleCheck, FileUp, GitCompare, Sparkles } from 'lucide-react';
+import { CircleAlert, CircleCheck, FileUp, GitCompare } from 'lucide-react';
+import { AiAction } from './ai/AiAction';
 import { useEffect, useState } from 'react';
 import { call } from '../api';
-import { toastError, useApp } from '../store';
+import { toastError } from '../store';
 import { pickTextFile } from '../lib/files';
 import { Button, cx, Field, Input, ModalOrPanel, Select } from './ui';
 
@@ -121,18 +122,7 @@ export function OpenApiDiffDialog({ onClose, inline, before: fixedBefore }: { on
             <div className="text-sm text-muted flex items-center gap-2">
               {result.operations.old} → {result.operations.new} operations ({result.operations.added} added, {result.operations.removed} removed)
               {!!(result.breaking.length + result.nonBreaking.length) && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="ml-auto"
-                  icon={<Sparkles size={12} />}
-                  onClick={() => {
-                    useApp.getState().set({ assistant: { task: 'explain-api-changes', title: 'Impact of the API changes', context: { breaking: result.breaking.slice(0, 80), other: result.nonBreaking.slice(0, 80), operations: result.operations } } });
-                    onClose();
-                  }}
-                >
-                  Explain with AI
-                </Button>
+                <AiAction variant="ghost" className="ml-auto" onStart={onClose} label="Explain with AI" request={() => ({ task: 'explain-api-changes', title: 'Impact of the API changes', context: { breaking: result.breaking.slice(0, 80), other: result.nonBreaking.slice(0, 80), operations: result.operations } })} />
               )}
             </div>
             {result.breaking.length ? (

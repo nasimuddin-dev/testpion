@@ -1,12 +1,11 @@
 import { useEffect, useState } from 'react';
+import { AiAction } from './ai/AiAction';
 import { call } from '../api';
-import { useApp } from '../store';
 import { openRef } from '../lib/open-ref';
 import { formatMs, plural, timeAgo } from '../lib/format';
 import { axisMs, ChartCard, PointLine, Swatch } from './charts';
 import { StatusIcon } from './Results';
-import { Sparkles } from 'lucide-react';
-import { Button, Empty, Spinner } from './ui';
+import { Empty, Spinner } from './ui';
 
 /** From `runs.testHistory` (testHistory in core). */
 interface Point {
@@ -57,26 +56,15 @@ export function TestHistory({ id, name, runId }: { id: string; name: string; run
       </div>
       {(flips > 0 || passed < counted.length) && (
         <div>
-          <Button
-            size="sm"
-            icon={<Sparkles size={12} />}
-            title="Ask the AI assistant whether this test is flaky or broken, and why (statuses, times and failed check names are sent)"
-            onClick={() =>
-              useApp.getState().set({
-                assistant: {
-                  task: 'explain-test-history',
-                  title: `History of "${name}"`,
-                  context: {
-                    test: name,
-                    summary: { runs: counted.length, passed, failed: counted.length - passed, flips, medianMs: median },
-                    runs: points.map((p) => ({ when: p.startedAt, status: p.status, latencyMs: p.latencyMs, attempts: p.attempts, environment: p.environment, failedChecks: p.failures })),
-                  },
-                },
-              })
-            }
-          >
-            Explain with AI
-          </Button>
+          <AiAction hint="Ask the AI assistant whether this test is flaky or broken, and why (statuses, times and failed check names are sent)" label="Explain with AI" request={() => ({
+            task: 'explain-test-history',
+            title: `History of "${name}"`,
+            context: {
+              test: name,
+              summary: { runs: counted.length, passed, failed: counted.length - passed, flips, medianMs: median },
+              runs: points.map((p) => ({ when: p.startedAt, status: p.status, latencyMs: p.latencyMs, attempts: p.attempts, environment: p.environment, failedChecks: p.failures })),
+            },
+          })} />
         </div>
       )}
       {timed.length > 1 && (

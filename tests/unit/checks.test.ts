@@ -184,3 +184,22 @@ describe('script sandbox (QuickJS/WASM)', () => {
     expect(out.error).toMatch(/timed out|interrupted/i);
   });
 });
+
+describe('one label of a check, wherever it is shown (AI proposals, verification, the Checks tab)', () => {
+  it('names the header a header check reads', async () => {
+    const { checkLabel } = await import('../../packages/shared/src/index.js');
+    expect(checkLabel({ type: 'header', header: 'content-type', expected: 'json' })).toBe('header content-type = "json"');
+    expect(checkLabel({ type: 'status', expected: 201 })).toBe('status = 201');
+    expect(checkLabel({ type: 'matches', path: '$.email', pattern: '@' })).toBe('matches $.email /@/');
+    expect((await one({ type: 'header', header: 'content-type', expected: 'json' }, http())).name).toBe('header content-type');
+  });
+});
+
+describe('money and counts for people (shared by the app, the CLI and reports)', () => {
+  it('formats dollars with sensible decimals and counts with the right plural', async () => {
+    const { formatUsd, plural } = await import('../../packages/shared/src/index.js');
+    expect(`${formatUsd(2)} left of ${formatUsd(2)}`).toBe('$2.00 left of $2.00');
+    expect([0, 0.5, 0.0123, 0.00015, 1234.5, undefined].map(formatUsd)).toEqual(['$0', '$0.50', '$0.0123', '$0.00015', '$1,234.50', '–']);
+    expect([plural(1, 'call'), plural(3, 'call'), plural(2, 'entry', 'entries')]).toEqual(['1 call', '3 calls', '2 entries']);
+  });
+});

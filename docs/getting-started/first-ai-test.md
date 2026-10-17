@@ -32,4 +32,6 @@ limits:
 
 Run it with `testpion test tests/ai`.
 
+This page tests *your* LLM prompts. To have TestPion's own AI write checks, tp tests or an integration flow for your API (reviewed before anything is saved), see [AI features: privacy, cost and review](/ai-testing/ai-features) and [Let AI write the flow](/test-runner/integration-testing#let-ai-write-the-flow).
+
 :::

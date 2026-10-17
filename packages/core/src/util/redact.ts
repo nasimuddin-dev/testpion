@@ -116,6 +116,176 @@ export function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+/* ------------------------------------------------------------ pattern detectors (AI context) */
+
+/** What was masked and where (`response.body.user.email`), for "What will be sent". */
+export interface Redaction {
+  path: string;
+  kind: string;
+}
+
+/** Luhn checksum of a card number's digits. */
+function luhn(digits: string): boolean {
+  let sum = 0;
+  for (let i = 0; i < digits.length; i++) {
+    let d = digits.charCodeAt(digits.length - 1 - i) - 48;
+    if (i % 2 === 1) d = d * 2 > 9 ? d * 2 - 9 : d * 2;
+    sum += d;
+  }
+  return sum % 10 === 0;
+}
+
+/** ISO 13616 check of an IBAN (mod 97 = 1). */
+function ibanValid(raw: string): boolean {
+  const s = raw.replace(/\s+/g, '').toUpperCase();
+  if (s.length < 15 || s.length > 34) return false;
+  const moved = s.slice(4) + s.slice(0, 4);
+  let rem = 0;
+  for (const ch of moved) {
+    const v = ch >= 'A' && ch <= 'Z' ? String(ch.charCodeAt(0) - 55) : ch;
+    for (const d of v) rem = (rem * 10 + (d.charCodeAt(0) - 48)) % 97;
+  }
+  return rem === 1;
+}
+
+/**
+ * Credentials found by their shape, wherever they are (a body field called `t`, a query string, a log line): private
+ * keys, JWTs, Authorization schemes, the key formats of the big providers, and credential query parameters. Each
+ * replaces only the secret part (`Bearer [REDACTED:bearer]`), so the text still reads.
+ */
+const SECRET_PATTERNS: Array<{ kind: string; re: RegExp; keep?: number }> = [
+  { kind: 'private-key', re: /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|$)/g },
+  { kind: 'jwt', re: /\beyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]*/g },
+  // the scheme stays (group 1), the credential goes
+  // (a credential has a digit or base64 padding: "Token validation" in prose is not one)
+  { kind: 'bearer', re: /\b(Bearer|Basic|Token|Digest|ApiKey)(\s+)(?=[A-Za-z0-9._~+/=-]*[0-9=+/])[A-Za-z0-9._~+/=-]{12,}/gi, keep: 2 },
+  { kind: 'api-key', re: /\bsk-(?:ant-|proj-|live-|svcacct-)?[A-Za-z0-9_-]{20,}/g },
+  { kind: 'api-key', re: /\b(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{40,})/g },
+  { kind: 'api-key', re: /\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/g },
+  { kind: 'api-key', re: /\bAIza[0-9A-Za-z_-]{35}/g },
+  { kind: 'api-key', re: /\bxox[abprs]-[A-Za-z0-9-]{10,}/g },
+  { kind: 'api-key', re: /\b(?:sk|rk|pk)_(?:live|test)_[A-Za-z0-9]{16,}/g },
+  { kind: 'api-key', re: /\b(?:glpat-[A-Za-z0-9_-]{20,}|npm_[A-Za-z0-9]{36}|hf_[A-Za-z0-9]{30,})/g },
+  // credential query parameters in any URL (the name stays)
+  { kind: 'query-credential', re: /([?&](?:access_token|id_token|refresh_token|token|api_?key|apikey|key|sig|signature|password|passwd|secret|client_secret|code|auth)=)[^&#\s"'<>]{4,}/gi, keep: 1 },
+];
+
+const PII_PATTERNS: Array<{ kind: string; re: RegExp; valid?: (m: string) => boolean }> = [
+  { kind: 'email', re: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g },
+  { kind: 'iban', re: /\b[A-Z]{2}\d{2}(?: ?[A-Z0-9]{4}){2,7}(?: ?[A-Z0-9]{1,4})?\b/g, valid: ibanValid },
+  {
+    kind: 'card-number',
+    re: /\b\d(?:[ -]?\d){12,18}\b/g,
+    valid: (m) => {
+      const d = m.replace(/\D/g, '');
+      return d.length >= 13 && d.length <= 19 && luhn(d);
+    },
+  },
+  {
+    // a phone number with separators or a country code (9–15 digits); dates, times and plain ids do not match
+    kind: 'phone',
+    re: /(?<![\w.:/-]|\d[ .-])(?:\+\d{1,3}[ .-]?)?(?:\(\d{2,4}\)[ .-]?|\d{2,4}[ .-])\d{3,4}[ .-]\d{3,4}(?![\w.:/-]|[ .-]\d)/g,
+    valid: (m) => {
+      const n = m.replace(/\D/g, '').length;
+      return n >= 9 && n <= 15 && !/^\d{4}-\d{2}-\d{2}/.test(m);
+    },
+  },
+];
+
+/**
+ * Mask credentials (always) and personal data (`pii`, default on) found by their shape in a text. `hit` is told each
+ * kind found. Known secret values and sensitive field names are the Redactor's job; this is what neither catches.
+ */
+export function maskSensitiveText(s: string, opts: { pii?: boolean } = {}, hit?: (kind: string) => void): string {
+  if (!s || s.length < 8) return s;
+  let out = s;
+  for (const p of SECRET_PATTERNS) {
+    p.re.lastIndex = 0;
+    if (!p.re.test(out)) continue;
+    p.re.lastIndex = 0;
+    out = out.replace(p.re, (...m: unknown[]) => {
+      hit?.(p.kind);
+      const kept = p.keep ? (m.slice(1, 1 + p.keep) as string[]).join('') : '';
+      return `${kept}[REDACTED:${p.kind}]`;
+    });
+  }
+  if (opts.pii !== false)
+    for (const p of PII_PATTERNS) {
+      p.re.lastIndex = 0;
+      if (!p.re.test(out)) continue;
+      p.re.lastIndex = 0;
+      out = out.replace(p.re, (m: string) => {
+        if (p.valid && !p.valid(m)) return m;
+        hit?.(p.kind);
+        return `[REDACTED:${p.kind}]`;
+      });
+    }
+  return out;
+}
+
+const MAX_REDACTIONS = 200;
+
+/**
+ * Data made safe to send to an AI model: sensitive field names (`password`, `authorization`, the user's list) and known
+ * secret values (secret variables, keys the engine resolved) by the Redactor, then credentials and personal data found
+ * by their shape in every string (JSON inside a string included). Returns the copy and what was masked where.
+ */
+export function redactForAi<T>(data: T, redactor: Redactor, opts: { pii?: boolean } = {}): { value: T; redactions: Redaction[]; total: number } {
+  const redactions: Redaction[] = [];
+  let total = 0;
+  const note = (path: string, kind: string) => {
+    total++;
+    if (redactions.length < MAX_REDACTIONS && !redactions.some((r) => r.path === path && r.kind === kind)) redactions.push({ path: path || '(root)', kind });
+  };
+  const text = (s: string, path: string): string => {
+    const known = redactor.redactString(s);
+    if (known !== s) note(path, 'secret-value');
+    // JSON inside a string (a body, a message): its field names count too
+    if (known.length > 1 && known.length < 1_000_000 && /^\s*[{[]/.test(known)) {
+      try {
+        const parsed = JSON.parse(known) as unknown;
+        if (parsed && typeof parsed === 'object') return JSON.stringify(walk(parsed, path, 1));
+      } catch {
+        /* not JSON */
+      }
+    }
+    return maskSensitiveText(known, opts, (kind) => note(path, kind));
+  };
+  const walk = (v: unknown, path: string, depth: number): unknown => {
+    if (v == null || depth > 64) return v;
+    if (typeof v === 'string') return text(v, path);
+    if (typeof v !== 'object') return v;
+    if (v instanceof Uint8Array || v instanceof ArrayBuffer) return '[binary]';
+    if (Array.isArray(v)) {
+      // [key, value] header tuples
+      if (v.length === 2 && typeof v[0] === 'string' && typeof v[1] === 'string' && redactor.isSensitiveKey(v[0])) {
+        if (v[1]) note(`${path}.${v[0]}`, 'field');
+        return [v[0], v[1] ? REDACTED : v[1]];
+      }
+      return v.map((x, i) => walk(x, `${path}[${i}]`, depth + 1));
+    }
+    const obj = v as Record<string, unknown>;
+    const kv = typeof obj.key === 'string' && 'value' in obj;
+    const out: Record<string, unknown> = {};
+    for (const [k, x] of Object.entries(obj)) {
+      const p = path ? `${path}.${k}` : k;
+      if (kv && k === 'value' && (redactor.isSensitiveKey(obj.key as string) || obj.secret === true)) {
+        if (x) note(`${path}.${String(obj.key)}`, obj.secret === true ? 'secret-variable' : 'field');
+        out[k] = x ? REDACTED : x;
+      } else if (typeof x === 'string' && x && redactor.isSensitiveKey(k)) {
+        note(p, 'field');
+        out[k] = REDACTED;
+      } else if (typeof x === 'number' && /^(ssn|creditcard|cardnumber|pin|cvv|cvc)$/i.test(k.replace(/[-_\s.]/g, ''))) {
+        // numbers only on exact identity fields, never `totalTokens`
+        note(p, 'field');
+        out[k] = REDACTED;
+      } else out[k] = walk(x, p, depth + 1);
+    }
+    return out;
+  };
+  return { value: walk(data, '', 0) as T, redactions, total };
+}
+
 /**
  * Literal secret values in data about to be saved in a workspace file: `{ key, value }` rows (headers,
  * metadata) with a sensitive key, and sensitive-looking properties (token, password, secret …), whose

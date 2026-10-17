@@ -3,6 +3,7 @@ import { BarRow, ChartCard, StatTile, Swatch } from './charts';
 import { Empty, LinkButton, Spinner } from './ui';
 import { useApp } from '../store';
 import { useRpc } from '../lib/use-rpc';
+import { AiFeatureUsage } from './ai/AiFeatureUsage';
 
 /** From `ai.usage` (llmUsage in core). */
 interface Usage {
@@ -20,12 +21,25 @@ interface Usage {
 const IN = 'color-mix(in oklab, var(--accent) 45%, transparent)';
 const OUT = 'var(--accent)';
 
-/** What the prompts run here used, per model: tokens (input and output), estimated cost and time. */
+/** AI usage: the AI features' calls (the usage ledger), then the prompts run in the AI Lab per model. */
 export function AiUsage() {
+  return (
+    <div className="h-full overflow-auto p-4 flex flex-col gap-6 max-w-5xl">
+      <AiFeatureUsage />
+      <section className="flex flex-col gap-3" aria-label="AI Lab usage">
+        <h2 className="font-semibold">AI Lab prompts</h2>
+        <AiLabUsage />
+      </section>
+    </div>
+  );
+}
+
+/** What the prompts run here used, per model: tokens (input and output), estimated cost and time. */
+function AiLabUsage() {
   const rows = useRpc<Usage[]>('ai.usage', undefined, { fallback: [] });
   if (!rows)
     return (
-      <div className="h-full grid place-items-center">
+      <div className="py-6 grid place-items-center">
         <Spinner />
       </div>
     );
@@ -37,7 +51,7 @@ export function AiUsage() {
   const cost = priced.reduce((n, r) => n + (r.costUsd ?? 0), 0);
   const max = Math.max(1, ...rows.map((r) => r.inputTokens + r.outputTokens));
   return (
-    <div className="h-full overflow-auto p-4 flex flex-col gap-3 max-w-5xl">
+    <div className="flex flex-col gap-3">
       <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))' }}>
         <StatTile label="Prompts run" value={calls.toLocaleString()} sub={plural(rows.length, 'model')} />
         <StatTile label="Input tokens" value={tokensIn.toLocaleString()} />

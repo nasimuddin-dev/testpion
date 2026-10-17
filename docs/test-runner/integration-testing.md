@@ -15,6 +15,55 @@ The examples workspace has a complete one: `tests/rest/patient-lifecycle.yaml` i
 
 TestPion writes a first flow for every resource of an API: in a definition's **Preview**, **Generate tests ▸ Integration flows**; on a collection, **Export ▸ Integration flows**; from the terminal, `testpion integration-suite specs/clinic.yaml` (or a collection name); for agents, `generate_flows`. Each flow is the file described below (create, read back, update, listed, delete, gone), the login first. Review the generated bodies and set the variables it names, then run the suite. See [the test runner](/test-runner/overview#an-integration-suite-from-an-api-definition-or-a-collection).
 
+## Let AI write the flow
+
+Name a collection or a folder and your model writes the integration flow: right-click it in the explorer ▸ **Generate integration flow with AI…** (also in a collection's **Export** menu, beside **Integration flows**; or, on an empty flow's canvas, **Generate with AI** ▸ *From a collection or folder*).
+
+AI features need a model set up in **Settings ▸ AI assistant** (your Claude key, or a model on this computer such as Ollama); see [AI features: privacy, cost and review](/ai-testing/ai-features#set-up-a-model).
+
+1. **Choose** the collection and folder (each with its number of requests), an optional **hint** (*also test pagination*, *include the refund path*) and what is **sent**: *Full (redacted)*, *Metadata only* (methods, URLs, header names, the shape of bodies and saved examples, no body values) or *Names only*. The dialog shows the model, whether it stays on this computer and the token and cost estimate before anything is sent; **What will be sent…** shows the exact messages. Variable names are sent, never their values; secrets, tokens and personal data are masked. A folder of more than 60 requests is sampled (every endpoint once, the draft's requests first).
+2. **Generate**. The model starts from the flow TestPion builds without AI (the same as **Integration flows** above) and improves it: the order a client would use (log in, create, read back, update, list, delete, check it is gone), what each step **extracts** for the next (`orderId: $.id` → `{{orderId}}`), the **checks** (the status the saved examples show, then the key fields — never a generated id or time), one or two **error cases** (an unknown id → 404, an invalid body → 400/422), and the **assumptions** it made. Every step uses one of the folder's saved requests **by id**: a step naming a request that is not there is dropped (the review says which), and a URL may only gain `{{variables}}` on the saved request's own host. A request's own or inherited auth is kept.
+3. **Checked before you see it**: the file is linted (cycles, unknown `dependsOn`), every `{{variable}}` must be extracted by a step it waits for (or be one your workspace already has), and the flow runs against a **mock** built from the collection's saved examples (every step pointed at the mock; no real server is called). A problem goes back to the model up to twice; what is still wrong is shown, never hidden.
+4. **Review** on a canvas preview marked *AI-generated*: the steps and the values flowing between them, the summary, the assumptions, what TestPion changed, the verification badges, and the **YAML** (edit it there: **Check again** verifies the edit) — and, when it replaces a file, the **Changes**. **Try on mock** runs it on the mock again; **Regenerate** asks again with a hint; **Discard** drops it. A flow that failed its verification can still be accepted, after a question.
+5. **Accept** writes `tests/flows/<collection>-<folder>.yaml` (from the canvas: the open file, one Undo step) and offers **Run now**, **Open** and **Undo**. Nothing is saved or run before Accept.
+
+<figure class="aps-screenshot">
+  <img src="/images/ai-flow-generate.jpg" alt="Generate integration flow with AI: From a collection or folder, the Veterinary API collection and its Patients folder (3 requests), a hint, the privacy level Full (redacted), the model and its token estimate, What will be sent and Generate" width="1440" height="900" loading="lazy">
+</figure>
+
+<figure class="aps-screenshot">
+  <img src="/images/ai-flow-review.jpg" alt="The review of an AI-generated flow on a canvas preview: create a patient, read it back, an unknown patient answers 404; the badges parsed and linted, every variable extracted before it is used, 3 of 3 steps pass on a mock; the summary, the assumptions, what TestPion changed (a step naming a request that is not in the folder, dropped), Regenerate with a hint, Discard, Try on mock and Accept" width="1440" height="900" loading="lazy">
+</figure>
+
+Without a model set up, the dialog offers **Set up AI** / **Add the key**, or **Use the draft without AI** (the deterministic flow, reviewed the same way).
+
+**Try on mock** needs saved examples: the mock answers each step with the saved example of its request, so a step whose request has none fails there (a warning, not an error). **Save as example** on a real response of that request (the response's actions), then **Try on mock** again.
+
+From the terminal and for agents — it only proposes until you apply (here in the [examples workspace](/getting-started/examples)):
+
+```bash
+testpion flow generate --collection "Veterinary API" --folder Patients --dry-run           # what would be sent, the estimate
+testpion flow generate --collection "Veterinary API" --folder Patients --hint "also test pagination"   # the proposal, verified
+testpion flow generate --collection "Veterinary API" --folder Patients --apply --json      # write it when its checks pass
+testpion ai apply ai-mvbu2qjg9a3b644187                                                    # or apply a proposal later
+```
+
+The proposal prints the flow, the assumptions and each verification:
+
+```text
+Proposal ai-mvbu2qjg9a3b644187 · 1 item · Offline demo model/demo · AI-generated, review before applying
+  Registers a patient, reads it back by the id the create returned, and checks that an unknown patient answers 404.
+  assumed: POST /patients answers 201 with the new id in $.id
+  [x] i1  tests/flows/veterinary-api-patients.yaml  tests/flows/veterinary-api-patients.yaml
+        ✓ parsed · linted · 3 steps
+        ✓ every variable is extracted before it is used, or set in the workspace
+        ✓ 3/3 steps pass on a mock of Veterinary API
+
+Apply: testpion ai apply ai-mvbu2qjg9a3b644187 · discard: testpion ai discard ai-mvbu2qjg9a3b644187
+```
+
+Agents call `flow_generate` (`collection`, `folder`, `hint`, `privacy`, `dryRun`) and apply the returned proposal with `ai_apply_proposal` after the user agrees. Without a model both return the deterministic draft with a note. See [AI features: privacy, cost and review](/ai-testing/ai-features).
+
 ## Write a flow
 
 A flow is a test file whose steps depend on each other. Three things make it work:
@@ -122,7 +171,7 @@ The **Flow** tab of a test file is also where you build one, on a canvas (a suit
   <img src="/images/flow-designer.jpg" alt="The flow designer: a webhook-started flow from a token to a patient's removal, three checks side by side in a frame, a sticky note, every step passed, and the inspector of the selected step" width="1440" height="900" loading="lazy">
 </figure>
 
-1. **Start**: **Tests ▸ + ▸ New flow (designer)** creates `name: …` with `tests: []` and opens the designer. An empty flow shows its **Start** node with the first choices on the canvas (**Add blocks**, **API example**, **Create from collection**, **Record from the Debugger**, **Generate with AI**; see step 9): **Create from collection** (one saved request, or a folder's requests in order, each waiting for the one before it, with `extract` suggested for the ids and tokens in their saved example responses) and **Generate with AI** (describe the flow; the assistant writes the YAML, you read it in the assistant and **Review and use this flow** replaces the file, marked as AI-generated; Undo brings the old file back).
+1. **Start**: **Tests ▸ + ▸ New flow (designer)** creates `name: …` with `tests: []` and opens the designer. An empty flow shows its **Start** node with the first choices on the canvas (**Add blocks**, **API example**, **Create from collection**, **Record from the Debugger**, **Generate with AI**; see step 9): **Create from collection** (one saved request, or a folder's requests in order, each waiting for the one before it, with `extract` suggested for the ids and tokens in their saved example responses) and **Generate with AI** (from a collection or folder, or described in words: the flow is verified and opens in a review on a canvas preview; **Accept** replaces the file in one Undo step — see [Let AI write the flow](#let-ai-write-the-flow)).
 2. **Add steps** with **Add step**: an HTTP request, GraphQL, gRPC, WebSocket, an MCP tool call, an LLM prompt, a **Delay** (a pause, `type: delay` with `ms: 2000`: for a search index or a queue to catch up; **Wait (ms)** in the inspector), a **Condition (if / else)**, **For each (loop)**, a **Script**, a **Sub-flow**, a **Log**, **Wait until (poll)** (a request run again until a condition holds), **Set variable**, **Assert** (checks only), **Finally (clean-up)**, **Parallel group** (two requests in a frame), **Flow output…**, or **From a collection…**. With a step selected, the new one goes after it and waits for it (after a condition, on its true branch; on the false one when only that is still empty).
 3. **Connect** two steps by dragging the dot on a step's right edge onto another step: that step gains a `dependsOn` on the first and can use what it extracts as `{{name}}`. A condition has two dots, **true** and **false**: the step you drop one on runs only on that branch (`when: true` or `when: false`), and its connection is labelled with it. A connection that would make a cycle is refused with a message. Click a connection and press <kbd>Delete</kbd> to remove it.
 4. **Edit** the selected step in the inspector on the right: its name; for HTTP the method, URL, headers, authorization and body (the request view's editors); the values to **Extract** (variable → JSONPath, with **Pick from the last response** once the flow has run); its **Checks** (the same editor as a request's Tests tab); and the steps it **Waits for**. A step without auth of its own runs with the file's `defaults: auth:`: its **Authorization** shows **Inherit from defaults** and what that is (for example *Uses Bearer token: {{token}} (from defaults)*); **Override** gives the step its own copy to change, **No auth** sends this step without it (`auth: { type: none }`), and **Inherit from defaults** removes the step's own auth again (`testpion flow <file> --json` and the `flow_graph` tool list the same as `inheritedAuth`; a step written with a nested `request:` inherits it too). Under **Runs**: **Only if** (an `if:` expression), the **Branch** of the condition it waits for, and **Repeat** (once, a number of times, for each row of a list, or of a dataset); the node shows **× 3**. A condition edits its expression and lists its branches, a script its code, a sub-flow its **Flow file** and **Inputs**, a log its **Message**, a set variable its **Variables** and **Scope**, an assert what it **Check**s (the previous response or the variables) and its checks. Any request has **Polling** (**Wait until**: the expression, **Every**, **Timeout**, **Backoff**), and every step under **Order** its **Parallel group** and **Finally**; with no step selected, **Output** edits what the flow returns. **Open in editor** shows the step in the YAML.
@@ -457,7 +506,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: nasimuddin-dev/testpion@v0.47.0
+      - uses: nasimuddin-dev/testpion@v0.48.0
         with:
           workspace: api-tests
           suite: integration

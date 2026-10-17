@@ -14,8 +14,9 @@ import { globToRegex } from '../util/glob.js';
 import type { VariableScope } from '../vars/variables.js';
 
 export * from './types.js';
+export type { MockRule } from './providers/mock.js';
 
-export { DEFAULT_BASE_URLS, isLocalProvider, providerNeedsKey, PROVIDER_KINDS, PROVIDER_PRESETS, providerKindLabel } from '@testpion/shared';
+export { DEFAULT_BASE_URLS, isLocalProvider, staysOnThisComputer, providerNeedsKey, PROVIDER_KINDS, PROVIDER_PRESETS, providerKindLabel } from '@testpion/shared';
 
 /** Wraps a provider with rate limiting, bounded concurrency and retry with exponential backoff. */
 class ManagedProvider implements LlmProvider {
@@ -156,8 +157,9 @@ export class ProviderRegistry {
 
   /** Allow `provider: mock` / `provider: ollama` without explicit configuration. */
   private implicit(ref: string): ProviderConfig | undefined {
-    if (ref === 'mock') return { id: 'mock', name: 'Mock', kind: 'mock', baseUrl: DEFAULT_BASE_URLS.mock! };
-    if (ref === 'ollama') return { id: 'ollama', name: 'Ollama', kind: 'ollama', baseUrl: DEFAULT_BASE_URLS.ollama! };
+    // (a model name is still taken from the call; these are the defaults when it names none)
+    if (ref === 'mock') return { id: 'mock', name: 'Mock', kind: 'mock', baseUrl: DEFAULT_BASE_URLS.mock!, defaultModel: 'mock' };
+    if (ref === 'ollama') return { id: 'ollama', name: 'Ollama', kind: 'ollama', baseUrl: DEFAULT_BASE_URLS.ollama!, defaultModel: 'llama3.2' };
     if (ref === 'openai-compatible' && process.env.OPENAI_API_KEY)
       return { id: 'openai-env', name: 'OpenAI (env)', kind: 'openai-compatible', baseUrl: process.env.OPENAI_BASE_URL || DEFAULT_BASE_URLS['openai-compatible']!, apiKey: '{{$env.OPENAI_API_KEY}}' };
     if (ref === 'anthropic' && process.env.ANTHROPIC_API_KEY)

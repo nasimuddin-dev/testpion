@@ -245,7 +245,8 @@ const steps = [
     'suggestion-ai-asks-and-cancels',
     `const before = await fileText(${JSON.stringify(F_EMPTY)});
      await R.click('[data-flow-suggestion="ai"] button');
-     const d = await __t.waitFor(() => vis('[role=dialog]').find((x) => /Generate a flow/.test(x.textContent)), 3000);
+     // the shared "Generate integration flow with AI" dialog (AI-1), the same as the explorer's
+     const d = await __t.waitFor(() => vis('[role=dialog]').find((x) => x.querySelector('[data-flow-generate-dialog]') && /Generate integration flow with AI/.test(x.textContent)), 3000);
      await R.key('Escape'); await sleep(400);
      return 'dialog: ' + !!d + ' | closed: ' + !vis('[role=dialog]').length + ' | file unchanged: ' + (before === (await fileText(${JSON.stringify(F_EMPTY)})));`,
   ),

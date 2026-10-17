@@ -1,5 +1,6 @@
 import { CodeBlock } from './CodeBlock';
-import { Bug, ChevronDown, ChevronRight, ExternalLink, FlaskConical, Play, Sparkles, Square, TriangleAlert } from 'lucide-react';
+import { AiAction } from './ai/AiAction';
+import { Bug, ChevronDown, ChevronRight, ExternalLink, FlaskConical, Play, Square, TriangleAlert } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { call, on } from '../api';
 import { toastError, useApp } from '../store';
@@ -172,34 +173,22 @@ export function ApiFuzzPanel({ spec }: { spec: string }) {
                 </Button>
               )}
               {findings.length > 0 && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className={report.counts['server-error'] + report.counts['accepted-invalid'] > 0 ? undefined : 'ml-auto'}
-                  icon={<Sparkles size={12} />}
-                  onClick={() =>
-                    useApp.getState().set({
-                      assistant: {
-                        task: 'explain-fuzz',
-                        title: `Fuzzing · ${spec.replace(/^specs\//, '')}`,
-                        context: {
-                          document: spec,
-                          findings: findings.slice(0, 60).map((r) => ({
-                            operation: r.case.operation,
-                            case: r.case.name,
-                            verdict: r.verdict,
-                            status: r.status,
-                            message: r.message,
-                            request: { url: r.case.request.url, body: r.case.request.body?.content?.slice(0, 500) },
-                            response: r.bodyPreview?.slice(0, 300),
-                          })),
-                        },
-                      },
-                    })
-                  }
-                >
-                  Explain and fix (AI)
-                </Button>
+                <AiAction variant="ghost" className={report.counts['server-error'] + report.counts['accepted-invalid'] > 0 ? undefined : 'ml-auto'} label="Explain and fix (AI)" request={() => ({
+                  task: 'explain-fuzz',
+                  title: `Fuzzing · ${spec.replace(/^specs\//, '')}`,
+                  context: {
+                    document: spec,
+                    findings: findings.slice(0, 60).map((r) => ({
+                          operation: r.case.operation,
+                          case: r.case.name,
+                          verdict: r.verdict,
+                          status: r.status,
+                          message: r.message,
+                          request: { url: r.case.request.url, body: r.case.request.body?.content?.slice(0, 500) },
+                          response: r.bodyPreview?.slice(0, 300),
+                    })),
+                  },
+                })} />
               )}
             </div>
             {!findings.length ? (

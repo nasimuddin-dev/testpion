@@ -1,4 +1,5 @@
 import { JSONPath } from 'jsonpath-plus';
+import { startAi } from '../components/ai/AiAction';
 import { ArrowLeftRight, ChevronDown, Code2, Pencil, Cookie, Sparkles, Save, Send, Square } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePublishRequest } from '../lib/request-variables';
@@ -37,7 +38,7 @@ const isEditable = (el: EventTarget | null) =>
 import { addToFolder, findNode, mapNodes } from '../components/CollectionTree';
 import { ResponseViewer } from '../components/ResponseViewer';
 import { EnvCompareDialog } from './rest/EnvCompareDialog';
-import { toastAiError } from '../lib/ai-errors';
+import { generateRequestAi, generateTestsAi, suggestChecksAi } from '../lib/ai-request-actions';
 import type { TreeAssertion, TreeVariable } from '../components/JsonView';
 import { saveResponseVariable } from '../lib/save-variable';
 import { SseEvents } from '../components/SseEvents';
@@ -262,6 +263,7 @@ export function RestView() {
         });
       else if (r.unresolved?.length && !r.error)
         useApp.getState().toast(`Unresolved variables: ${r.unresolved.join(', ')}${r.cycles?.length ? `. They refer to each other in a loop: ${r.cycles.join('; ')}` : ''}`, 'error');
+      return r;
     } catch (e) {
       setResults((rs) => ({ ...rs, [tabId]: { error: asError(e) } }));
     } finally {
@@ -431,53 +433,45 @@ export function RestView() {
     }
   };
 
-  /** Natural language → a new request tab (nothing is sent until the user clicks Send). */
+  /** Natural language → a proposed request, reviewed, then opened as a new unsaved tab (nothing is sent until Send). */
   const describeRequest = async () => {
     const description = await promptText('Describe a request', {
-      message: 'Describe the request in plain words. The AI assistant fills in method, URL, headers and body; you review it before sending.',
+      message: 'Describe the request in plain words. The AI assistant fills in method, URL, headers and body; you review it before it opens (nothing is sent until you click Send).',
       placeholder: 'Create a patient named Biscuit, a dog, owned by customer 123',
       okLabel: 'Generate',
     });
     if (!description?.trim()) return;
-    const actId = uid('ai-');
-    useApp.getState().setActivity(actId, 'Generating a request with AI');
-    try {
-      const r = await call<{ name?: string; request: HttpRequestSpec; model: string }>('ai.generateRequest', { description, environment: env });
-      const t: RestTab = { ...blankRequest(), name: r.name ?? 'AI request', request: fromEngineRequest(r.request), dirty: true };
-      setTabs((ts) => [...ts, t]);
-      setActive(t.id);
-      useApp.getState().toast(`Request drafted by ${r.model}: review it before sending`, 'info');
-    } catch (e) {
-      toastAiError(e);
-    } finally {
-      useApp.getState().setActivity(actId);
-    }
+    startAi(
+      generateRequestAi(description, (r) => {
+        const t: RestTab = { ...blankRequest(), name: r.name ?? 'AI request', request: fromEngineRequest(r.request), dirty: true };
+        setTabs((ts) => [...ts, t]);
+        setActive(t.id);
+        return { done: 'AI-drafted request opened: review it before sending' };
+      }),
+    );
   };
+  /** What the AI actions on a response are about: the tab's request, the response, the saved request (its History), and Send again. */
+  const aboutResponse = () => ({
+    request: { method: tab.request.method, url: tab.request.url },
+    response: result!.response!,
+    ...(tab.collectionId && tab.requestId ? { item: { kind: 'request' as const, collectionId: tab.collectionId, requestId: tab.requestId } } : {}),
+    rerun: () => send().then((r) => r?.response),
+  });
   const generateTests = result?.response
-    ? async () => {
-        const res = result.response!;
-        const actId = uid('ai-');
-        useApp.getState().setActivity(actId, 'Generating tests with AI');
-        try {
-          const r = await call<{ script: string; model: string }>('ai.generateTests', {
-            environment: env,
-            request: { method: tab.request.method, url: tab.request.url },
-            response: { status: res.status, headers: res.headers.slice(0, 20), body: res.bodyPreview.slice(0, 6000), timeMs: res.durationMs },
-          });
-          update({ testScript: tab.testScript?.trim() ? `${tab.testScript.trimEnd()}\n\n${r.script}` : r.script });
-          useApp.getState().toast(`Added tests by ${r.model} to the Post-response script (Scripts tab). Send again to run them.`, 'success');
-        } catch (e) {
-          toastAiError(e);
-        } finally {
-          useApp.getState().setActivity(actId);
-        }
+    ? () => {
+        const tabId = tab.id;
+        startAi(
+          generateTestsAi(aboutResponse(), (code) => {
+            if (!tabs.some((t) => t.id === tabId)) return 'the request was closed';
+            setTabs((ts) => ts.map((t) => (t.id === tabId ? { ...t, testScript: t.testScript?.trim() ? `${t.testScript.trimEnd()}\n\n${code.trim()}\n` : `${code.trim()}\n`, dirty: true } : t)));
+            return { done: 'Added the tests to the Post-response script (Scripts tab). Save the request to keep them.' };
+          }),
+        );
       }
     : undefined;
   const explain = result?.response
     ? () =>
-        useApp.getState().set({
-          assistant: { task: 'explain-response', title: 'Explain this response', context: { request: { method: tab.request.method, url: tab.request.url }, status: result.response!.status, headers: result.response!.headers.slice(0, 20), body: result.response!.bodyPreview.slice(0, 6000) } },
-        })
+        startAi({ task: 'explain-response', title: 'Explain this response', context: { request: { method: tab.request.method, url: tab.request.url }, status: result.response!.status, headers: result.response!.headers.slice(0, 20), body: result.response!.bodyPreview } })
     : undefined;
 
   // a field clicked in the response tree becomes a check in the request's Tests tab
@@ -516,17 +510,7 @@ export function RestView() {
     if (!tabs.some((t) => t.id === tabId)) return 'the request was closed';
     setTabs((ts) => ts.map((t) => (t.id === tabId ? { ...t, assertions: [...t.assertions, ...checks], dirty: true } : t)));
   };
-  const suggest = result?.response
-    ? () =>
-        useApp.getState().set({
-          assistant: {
-            task: 'generate-assertions',
-            title: 'Suggested assertions',
-            context: { request: { method: tab.request.method, url: tab.request.url }, status: result.response!.status, headers: result.response!.headers.slice(0, 20), body: result.response!.bodyPreview.slice(0, 6000) },
-            apply: { label: 'Add to the checks', run: (code) => addSuggestedChecks(tab.id, code) },
-          },
-        })
-    : undefined;
+  const suggest = result?.response ? () => startAi(suggestChecksAi(aboutResponse(), (code) => addSuggestedChecks(tab.id, code))) : undefined;
 
   // REST's tabs are shown in the shared tab strip above every request editor (with the other editors' tabs)
   useEditorTabs(

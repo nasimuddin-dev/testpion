@@ -118,6 +118,7 @@ const docsSidebar = [
     text: 'AI Testing',
     items: [
       { text: 'Overview', link: '/ai-testing/overview' },
+      { text: 'AI features: privacy, cost, review', link: '/ai-testing/ai-features' },
       { text: 'Prompts', link: '/ai-testing/prompts' },
       { text: 'Evaluations', link: '/ai-testing/evaluations' },
       { text: 'RAG', link: '/ai-testing/rag' },

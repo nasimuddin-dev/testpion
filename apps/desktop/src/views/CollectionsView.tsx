@@ -1,3 +1,4 @@
+import { generateFlowItem } from '../components/ai/flow-generate';
 import { CollectionOverview } from '../components/CollectionOverview';
 import { openReverseProxyCapture } from '../lib/capture';
 import { ReplaceDialog } from '../components/ReplaceDialog';
@@ -193,6 +194,7 @@ export function CollectionsView() {
                         separator: true,
                         onSelect: () => void generateFlows({ collectionId: target.id, name: target.name }, confirmAction),
                       },
+                      generateFlowItem({ collectionId: target.id }),
                       {
                         label: 'Whole workspace (.json)…',
                         icon: <Package size={14} />,

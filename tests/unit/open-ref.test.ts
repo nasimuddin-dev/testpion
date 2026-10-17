@@ -100,6 +100,9 @@ describe('ItemRef', () => {
 
   it('reads the short form kind:id (the last id keeps its colons)', () => {
     expect(parseItemRef('run:run-1')).toEqual({ kind: 'run', runId: 'run-1' });
+    // a run id never holds ':': what follows is one of its results (run:<runId>:<resultId>, run:last:<resultId>)
+    expect(parseItemRef('run:run-1:res-2')).toEqual({ kind: 'run', runId: 'run-1', resultId: 'res-2' });
+    expect(parseItemRef('run:last')).toEqual({ kind: 'run', runId: 'last' });
     expect(parseItemRef('request:api:r1')).toEqual({ kind: 'request', collectionId: 'api', requestId: 'r1' });
     expect(parseItemRef('doc:https://testpion.dev/x')).toEqual({ kind: 'doc', url: 'https://testpion.dev/x' });
     expect(parseItemRef('request:api')).toBeUndefined();

@@ -20,8 +20,8 @@ module.exports = withExpect(steps, {
   explorer: /plus buttons in rows: 0/,
   'collection-menu': /^New HTTP request \| New GraphQL request/,
   // create · expand / collapse · run · test · configure · organize · delete
-  'collection-menu-groups': /^New HTTP request \| New GraphQL request \| New SOAP request \| New gRPC request \| New WebSocket & MQTT request \| New folder ‖ Expand all \| Collapse all ‖ Run collection \| Monitor on a schedule… \| Run in CI… ‖ Create test file from collection… ‖ Settings, runner & docs \| Convert scripts to tp\.\* \| Convert scripts to pm\.\* ‖ Rename \| Duplicate ‖ Delete…$/,
-  'folder-menu-groups': /^New HTTP request \| New folder ‖ Expand all \| Collapse all ‖ Run folder \| Monitor on a schedule… ‖ Create test file from folder… ‖ Edit folder \(scripts, variables, auth\) ‖ Rename \| Duplicate \| Move to… ‖ Delete…$/,
+  'collection-menu-groups': /^New HTTP request \| New GraphQL request \| New SOAP request \| New gRPC request \| New WebSocket & MQTT request \| New folder ‖ Expand all \| Collapse all ‖ Run collection \| Monitor on a schedule… \| Run in CI… ‖ Create test file from collection… \| Generate integration flow with AI… ‖ Settings, runner & docs \| Convert scripts to tp\.\* \| Convert scripts to pm\.\* ‖ Rename \| Duplicate ‖ Delete…$/,
+  'folder-menu-groups': /^New HTTP request \| New folder ‖ Expand all \| Collapse all ‖ Run folder \| Monitor on a schedule… ‖ Create test file from folder… \| Generate integration flow with AI… ‖ Edit folder \(scripts, variables, auth\) ‖ Rename \| Duplicate \| Move to… ‖ Delete…$/,
   'request-menu-groups': /^Open \| Open in new tab ‖ Save as test… ‖ Copy .* ‖ Rename \| Duplicate \| Move to… \| (Add to|Remove from) favorites ‖ Delete…$/,
   'mcp-menu': /^Add an MCP server \| New folder/,
   'new-from-menu': (r) => { const m = /tabs (\d+) -> (\d+)/.exec(r); return (m && +m[2] === +m[1] + 1) || 'a new tab should open'; },

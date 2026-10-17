@@ -1,7 +1,7 @@
 /** RPC handlers: AI providers, chat, the AI assistant and prompt/schema helpers. */
 import {
   normalizeError,
-  generatedTestScript,
+  ApsError,
   secretKeys,
   validateSchema,
   templateVariables,
@@ -73,15 +73,20 @@ export function aiHandlers(be: Backend): Handlers {
     },
 
     'assistant.ask': (p: Parameters<Backend['assistant']>[0]) => be.assistant(p),
-    /** Natural language → an HTTP request (shown to the user before anything is sent). */
+    /** Natural language → an HTTP request (structured output, shown to the user before anything is sent). */
     'ai.generateRequest': async ({ description, environment }: { description: string; environment?: string }) => {
-      const r = await be.assistant({ task: 'generate-request', context: {}, question: description, environment });
-      return { ...parseGeneratedRequest(r.text), model: `${r.provider}/${r.model}` };
+      const r = await be.assistant({ task: 'generate-request', question: description, environment });
+      if (r.value === undefined) throw new ApsError('ValidationError', `The model did not describe a request: ${r.problems.join('; ') || 'no JSON in the answer'}`);
+      return { ...parseGeneratedRequest(JSON.stringify(r.value)), model: `${r.provider}/${r.model}`, problems: r.problems };
     },
-    /** tp tests for a response, labelled as AI-generated. */
-    'ai.generateTests': async ({ request, response, environment }: { request: unknown; response: unknown; environment?: string }) => {
-      const r = await be.assistant({ task: 'generate-pm-tests', context: { request, response }, environment });
-      return { script: generatedTestScript(r.text, `${r.provider}/${r.model}`), model: `${r.provider}/${r.model}` };
+    /** tp tests for a response, labelled as AI-generated, run once in the sandbox against that response (the badge says how they did). */
+    'ai.generateTests': async ({ request, response, environment }: { request: unknown; response: { status?: number; headers?: Array<[string, string]>; body?: string; bodyPreview?: string } & Record<string, unknown>; environment?: string }) => {
+      const stored = { status: response?.status, headers: response?.headers, body: response?.body ?? response?.bodyPreview };
+      const r = await be.assistant({ task: 'generate-pm-tests', context: { request, response }, response: stored, environment });
+      // one tp.test per item, each run in the sandbox: the ones that passed, as one script
+      const items = (r.proposal?.items ?? []).filter((i) => i.selected);
+      if (!items.length) throw new ApsError('ValidationError', `No test passed its check against the response: ${r.problems.join('; ') || 'the model wrote none'}`);
+      return { script: items.map((i) => i.after.trim()).join('\n\n') + '\n', model: `${r.provider}/${r.model}`, verification: items.flatMap((i) => i.verification), proposalId: r.proposal?.id };
     },
 
     'schema.validate': ({ schema, data }: { schema: unknown; data: unknown }) => validateSchema(schema, data),

@@ -1,7 +1,8 @@
 import { RefLink } from './RefLink';
+import { AiAction } from './ai/AiAction';
 import { LABEL } from '../lib/vocabulary';
 import { CodeBlock } from './CodeBlock';
-import { Activity, Braces, Download, FileBarChart, FileCode2, FileText, GitCompare, Square, Target, RotateCcw, ScanSearch, Sparkles, ThumbsDown, ThumbsUp } from 'lucide-react';
+import { Activity, Braces, Download, FileBarChart, FileCode2, FileText, GitCompare, Square, Target, RotateCcw, ScanSearch, ThumbsDown, ThumbsUp } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { call, on } from '../api';
 import { toastError, useApp } from '../store';
@@ -451,29 +452,18 @@ export function ResultDetail({ r, runId, onReviewed, initialTab = 'checks' }: { 
             {r.status === 'skipped' && <div className="p-3 text-sm text-warn">Skipped: {String(r.metadata?.reason ?? '')}</div>}
             {r.status === 'failed' && (
               <div className="px-3 pt-3">
-                <Button
-                  size="sm"
-                  icon={<Sparkles size={12} />}
-                  title="Ask the AI assistant why the checks failed and what to change (the test or the API)"
-                  onClick={() =>
-                    useApp.getState().set({
-                      assistant: {
-                        task: 'explain-test-failure',
-                        title: `Why "${r.name}" failed`,
-                        context: {
-                          test: r.name,
-                          type: r.type,
-                          failedChecks: r.checks.filter((c) => !c.passed).map((c) => ({ name: c.name, type: c.type, message: c.message, expected: c.expected, actual: c.actual })),
-                          passedChecks: r.checks.filter((c) => c.passed).map((c) => c.name),
-                          input: String(r.input ?? '').slice(0, 4000),
-                          output: String(r.output ?? '').slice(0, 8000),
-                        },
-                      },
-                    })
-                  }
-                >
-                  Explain with AI
-                </Button>
+                <AiAction hint="Ask the AI assistant why the checks failed and what to change (the test or the API)" label="Explain with AI" request={() => ({
+                  task: 'explain-test-failure',
+                  title: `Why "${r.name}" failed`,
+                  context: {
+                    test: r.name,
+                    type: r.type,
+                    failedChecks: r.checks.filter((c) => !c.passed).map((c) => ({ name: c.name, type: c.type, message: c.message, expected: c.expected, actual: c.actual })),
+                    passedChecks: r.checks.filter((c) => c.passed).map((c) => c.name),
+                    input: String(r.input ?? '').slice(0, 4000),
+                    output: String(r.output ?? '').slice(0, 8000),
+                  },
+                })} />
               </div>
             )}
             <CheckList checks={r.checks} />

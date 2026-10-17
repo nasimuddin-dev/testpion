@@ -1,7 +1,8 @@
+import { normalizeAiSettings } from '../ai/ai-settings.js';
 import type { AppSettings } from './types.js';
 
 /**
- * The desktop app's own preferences in settings (`rail`, `density`, `keybindings`) in the shape the app reads, whatever
+ * The desktop app's own preferences in settings (`rail`, `density`, `keybindings`, and the AI settings every host reads) in the shape the app reads, whatever
  * settings.json or a caller holds: a value of the wrong type (a hand-edited file, an older or newer version) is dropped
  * for the default rather than reaching the window, where it would stop the app from starting.
  */
@@ -22,6 +23,11 @@ export function normalizeUiPrefs<T extends Partial<AppSettings>>(s: T): T {
     const kept = plain(k) ? Object.entries(k).filter((e): e is [string, string] => typeof e[1] === 'string') : [];
     if (kept.length) out.keybindings = Object.fromEntries(kept);
     else delete out.keybindings;
+  }
+  if ('ai' in out) {
+    const ai = normalizeAiSettings(out.ai);
+    if (ai) out.ai = ai;
+    else delete out.ai;
   }
   return out;
 }

@@ -1,7 +1,8 @@
 import { Download, ScanSearch, Sparkles } from 'lucide-react';
+import { startAi } from './ai/AiAction';
 import { useEffect, useMemo, useState } from 'react';
 import { call } from '../api';
-import { type AssistantApplied, toastError, useApp } from '../store';
+import { type AssistantApplied, toastError } from '../store';
 import { openRef } from '../lib/open-ref';
 import { parseYaml } from '../lib/yaml';
 import { SidePicker, type Side } from './OpenApiDiffDialog';
@@ -117,7 +118,7 @@ export function ApiCoverageDialog({ runId, spec: initialSpec, onClose, inline }:
       .slice(0, 40)
       .map((o) => ({ method: o.method, path: o.path, operationId: o.operationId, summary: o.summary, called: o.covered, untestedStatuses: o.untestedStatuses }));
     const api = result.report.title;
-    useApp.getState().set({ assistant: { task: 'suggest-coverage-tests', title: 'Tests for the coverage gaps', context: { api, gaps }, apply: { label: 'Save as a test file', run: (code) => saveGapTests(api ?? 'api', code) } } });
+    startAi({ task: 'suggest-coverage-tests', title: 'Tests for the coverage gaps', context: { api, gaps }, apply: { label: 'Save as a test file', run: (code) => saveGapTests(api ?? 'api', code) } });
     onClose();
   };
 

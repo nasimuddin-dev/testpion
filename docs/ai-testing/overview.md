@@ -20,13 +20,15 @@ The key then powers the AI assistant: explaining errors and responses, where a r
 
 For the CLI and CI, set the key as the `TESTPION_SECRET_APP_ANTHROPIC_APIKEY` environment variable: `claude-app` is then available there too.
 
+Rather keep everything on this computer? Choose **A provider of this workspace** with **Ollama (local)** or **LM Studio (local)**, and turn on **Local only**. Below the provider, **Settings ▸ AI assistant** also sets a model for small and for large tasks, what is sent by default and the cost limits. How the AI features handle privacy, cost and review — **What will be sent…**, proposals you accept or discard, the usage view — is in [AI features: privacy, cost and review](./ai-features.md).
+
 ### Talking to the assistant
 
-Open it with <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>J</kbd> (press it again to close), the robot button in the top bar, **Ask AI Assistant** in the command palette, or one of the AI buttons in a view (Explain this response, Suggest assertions, …). It opens in the panel on the right edge of the window, beside **Info** ([the Info panel](/getting-started/finding-your-way#the-info-panel)); pin it to keep it docked. Before you type, it suggests questions that fit what is on screen, such as *Why did this request fail?* after an error or *What can this server do?* on an MCP server.
+Open it with <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>J</kbd> (press it again to close), the robot button in the top bar, **Ask AI Assistant** in the command palette, or one of the AI buttons in a view (**Explain with AI**, **How to fix (AI)**, **Suggest assertions**, …). Every AI button has the eye beside it, **What will be sent…**, which shows the exact messages first; the assistant's header has it too. It opens in the panel on the right edge of the window, beside **Info** ([the Info panel](/getting-started/finding-your-way#the-info-panel)); pin it to keep it docked. Before you type, it suggests questions that fit what is on screen, such as *Why did this request fail?* after an error or *What can this server do?* on an MCP server.
 
 - **A conversation.** Follow-up questions remember what was asked and answered, so "and how do I fix it?" works. **New conversation** (↺) starts over; the task you opened it for runs again.
 - **What you are looking at goes with the question.** With a request open (HTTP, GraphQL, gRPC, WebSocket/MQTT or an MCP server), a free question carries it and its latest result, shown as *Context: GET …/pets · 404* above the field. Choose × to leave it out. Secret values (tokens, keys, passwords) are hidden before anything is sent.
-- **Use an answer where you asked for it.** Suggested assertions have **Add to the checks** (they go into the request's Tests tab), a generated GraphQL query has **Use this query**, and generated MCP arguments have **Use these arguments**. Review what was added before you save.
+- **Use an answer where you asked for it.** Generated checks, tests, flows and requests are *proposals*, checked by TestPion first and opened in a review: **Suggest assertions** offers **Add to the checks** (the request's Tests tab) for the checks you tick, **Generate tests** **Add to the Post-response script**; a generated GraphQL query has **Use this query**, and generated MCP arguments have **Use these arguments**. Review what was added before you save. See [Proposals: review, accept, undo](./ai-features.md#proposals-review-accept-undo).
 - **Answers stream in** as they are written, and **Stop** ends one early (what arrived so far is kept). They are formatted (headings, lists, code), and each code block has its own **Copy**.
 - Every answer is labelled as an AI-generated suggestion, with the model that wrote it.
 
@@ -43,7 +45,7 @@ The Playground's **Saved prompts** list keeps prompts with their model, paramete
 | Anthropic | Messages API. |
 | Google Gemini | `generateContent` / `streamGenerateContent`. |
 | Amazon Bedrock | The Converse API, so every Bedrock model works the same way (text, system prompt, tools). The key is `accessKeyId:secretAccessKey` (add `:sessionToken` for temporary credentials), signed with AWS Signature V4, or a Bedrock API key. Set the region (or use a `bedrock-runtime.<region>` base URL). Answers arrive whole rather than streamed. Embeddings use Titan (default) or Cohere models. |
-| Ollama | Local, OpenAI-compatible endpoint. |
+| Ollama | Local, OpenAI-compatible endpoint. LM Studio's local server is an OpenAI-compatible preset, **LM Studio (local)**. |
 | Mock | Offline and deterministic, with configurable rules. |
 
 Providers support per-provider rate limits (requests per second or minute, tokens per minute, concurrency) and retries with exponential backoff that honour `Retry-After`.
@@ -66,12 +68,12 @@ Each row of the comparison marks the **fastest** (latency, time to first token) 
 
 ## Usage
 
-The AI Lab's **Usage** tab adds up the prompts you ran: prompts, input and output tokens and estimated cost (from the price table) per model, with a bar per model and the median time and time to first token. `testpion history llm` prints the same, and agents use the `llm_usage` MCP tool.
+The AI Lab's **Usage** tab starts with **AI features**: what TestPion's own AI features used (calls, tokens and cost today and over 30 days, per task, model and surface, and what is left of your [limits](./ai-features.md#cost-estimates-caps-and-usage)). Below it, **AI Lab prompts** adds up the prompts you ran: prompts, input and output tokens and estimated cost (from the price table) per model, with a bar per model and the median time and time to first token. `testpion history llm` prints the prompts, `testpion ai usage` the AI features; agents use the `llm_usage` and `ai_usage` MCP tools.
 
 <figure class="aps-screenshot">
-  <img src="/images/ai-usage.jpg" alt="The AI Lab Usage tab: prompts run, input and output tokens, estimated cost, tokens per model and a table with median time and time to first token" width="1440" height="900" loading="lazy">
+  <img src="/images/ai-usage.jpg" alt="The AI Lab Usage tab: the AI features section (no AI feature used yet in this workspace), then the AI Lab prompts: prompts run, input and output tokens, estimated cost, tokens per model and a table with median time and time to first token" width="1440" height="900" loading="lazy">
 </figure>
 
-Next: [prompts](./prompts.md), [evaluations](./evaluations.md), [RAG](./rag.md), [agents](./agents.md), [safety](./safety.md).
+Next: [AI features: privacy, cost and review](./ai-features.md), [prompts](./prompts.md), [evaluations](./evaluations.md), [RAG](./rag.md), [agents](./agents.md), [safety](./safety.md).
 
 :::

@@ -17,6 +17,10 @@ No. Requests go only to the servers you call, and prompts only to the AI provide
 
 OpenAI and any OpenAI-compatible server (vLLM, LM Studio, OpenRouter and others), Azure OpenAI, Anthropic, Google Gemini, Amazon Bedrock (any model, through the Converse API), Ollama for local models, and a built-in offline mock. See [AI testing](/ai-testing/overview).
 
+## What does TestPion's own AI send, and can it stay on my computer?
+
+Only what the AI action you click needs, redacted (secrets, tokens, keys and personal data masked), to the model you set up — and **What will be sent…** shows it first. With Ollama or LM Studio and **Settings ▸ AI assistant ▸ Local only**, nothing leaves your computer. Generated tests and flows are proposals you review; nothing is saved until you accept. See [AI features](/ai-testing/ai-features).
+
 ## Do I need an internet connection?
 
 No for local APIs, local MCP servers, local models (Ollama) and the mock provider. Cloud AI providers and remote APIs need network access, of course.

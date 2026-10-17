@@ -93,6 +93,16 @@ Prompt templates with variables, JSON mode and JSON Schema outputs, and streamin
 
 [AI testing guide](/ai-testing/overview)
 
+## AI that writes tests and flows, under your control
+
+Your Claude key or a model on your computer (Ollama, LM Studio) writes the tedious parts: an **integration flow from a collection or folder** (right-click ▸ **Generate integration flow with AI…**: its saved requests in create → read → update → delete order, ids passed between steps, checks and error cases), **suggested checks** and **tp tests** for a response, a request from words, explanations of errors and failed tests. Everything it writes is a proposal, verified before you see it — checks run against the response and the one before it (a value that changes is flagged with a safer form), tests run in the sandbox, flows are linted and tried on a mock — and reviewed before it is added, with Undo. **What will be sent…** shows the exact messages first; privacy levels, **Local only** and stronger masking keep secrets and personal data out; cost caps and the **AI features** usage view keep the bill in sight. The same from the terminal (`testpion ai …`, `testpion flow generate`) and for agents (`ai_run_task`, `flow_generate`).
+
+<figure class="aps-screenshot">
+  <img src="/images/ai-flow-review.jpg" alt="An AI-generated integration flow in its review: the steps on a canvas, the verification badges, the assumptions and what TestPion changed" width="1440" height="900" loading="lazy">
+</figure>
+
+[AI features: privacy, cost and review](/ai-testing/ai-features) · [Let AI write the flow](/test-runner/integration-testing#let-ai-write-the-flow)
+
 ## Evaluations
 
 <figure class="aps-screenshot">

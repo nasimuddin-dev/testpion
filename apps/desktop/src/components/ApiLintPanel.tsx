@@ -1,6 +1,6 @@
-import { CircleAlert, CircleCheck, Info, Sparkles, TriangleAlert } from 'lucide-react';
-import { useApp } from '../store';
-import { Badge, Button, Empty } from './ui';
+import { CircleAlert, CircleCheck, Info, TriangleAlert } from 'lucide-react';
+import { AiAction } from './ai/AiAction';
+import { Badge, Empty } from './ui';
 import { plural } from '../lib/format';
 
 export interface ApiLintProblem {
@@ -50,23 +50,11 @@ export function ApiLintPanel({ spec, text, result, onOpen }: { spec: string; tex
           {ICON.info} {plural(counts.info, 'note')}
         </span>
         <span className="text-muted">· {plural(result.operations, 'operation')}</span>
-        <Button
-          size="sm"
-          variant="ghost"
-          className="ml-auto"
-          icon={<Sparkles size={12} />}
-          onClick={() =>
-            useApp.getState().set({
-              assistant: {
-                task: 'fix-openapi-lint',
-                title: `Fixes · ${spec.replace(/^specs\//, '')}`,
-                context: { document: spec, problems: problems.slice(0, 80).map(({ rule, severity, line, where, message }) => ({ rule, severity, line, where, message })), text: text.slice(0, 40_000) },
-              },
-            })
-          }
-        >
-          How to fix (AI)
-        </Button>
+        <AiAction variant="ghost" className="ml-auto" label="How to fix (AI)" request={() => ({
+          task: 'fix-openapi-lint',
+          title: `Fixes · ${spec.replace(/^specs\//, '')}`,
+          context: { document: spec, problems: problems.slice(0, 80).map(({ rule, severity, line, where, message }) => ({ rule, severity, line, where, message })), text: text.slice(0, 40_000) },
+        })} />
       </div>
       <ul className="flex-1 overflow-auto p-1">
         {problems.map((p, i) => (

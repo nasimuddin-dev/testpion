@@ -221,6 +221,41 @@ export const TOOL_DOCS: Record<string, ToolDoc> = {
     example: {},
     narrow: 'Lower `limit`, or page with `cursor`.',
   },
+  ai_list_tasks: {
+    when: "Use it to see which of TestPion's AI tasks exist before calling `ai_run_task`: what each does, its context and whether it proposes changes.",
+    whenNot: 'You are a model yourself: for most jobs read the workspace with the deterministic tools (get_request, run_breakdown, api_coverage) and reason on your own.',
+    example: {},
+  },
+  ai_run_task: {
+    when: "Use it when the user wants TestPion's own configured model (their key or a local model) to explain or generate: verified checks for a response, a flow, tp tests, a request.",
+    whenNot: 'To write a test file yourself, use `write_test_file`; to apply a proposal, use `ai_apply_proposal`. Use `dryRun: true` first when the user asks what would be sent.',
+    example: { task: 'generate-assertions', item: 'request:veterinary-api:get-pet' },
+  },
+  flow_generate: {
+    when: "Use it when the user wants TestPion's own model to write an integration flow from a collection or a folder (their key or a local model); it proposes, verified.",
+    whenNot: 'To write CRUD flows without a model, use `generate_flows`; to design one yourself, read the requests (`list_requests`, `get_request`) and use `write_test_file`. Apply the proposal with `ai_apply_proposal`.',
+    example: { collection: 'Veterinary API', folder: 'Patients', hint: 'also test pagination' },
+  },
+  ai_proposals: {
+    when: 'Use it to list the open AI proposals, or read one in full (items, before/after, verification) before applying it.',
+    whenNot: 'To make a new proposal, use `ai_run_task`.',
+    example: { id: 'ai-k3x9q2' },
+  },
+  ai_apply_proposal: {
+    when: 'Use it after the user agreed to an AI proposal: applies its ticked items (or `items`), keeping what it replaced for undo.',
+    whenNot: 'Never apply without the user seeing the items; to look first, use `ai_proposals` or `dryRun: true`.',
+    example: { id: 'ai-k3x9q2', items: ['i1', 'i2'] },
+  },
+  ai_undo_proposal: {
+    when: 'Use it when the user wants an applied AI proposal reverted.',
+    whenNot: 'To drop a proposal that was not applied, there is nothing to undo: just do not apply it.',
+    example: { id: 'ai-k3x9q2' },
+  },
+  ai_usage: {
+    when: "Use it to see what TestPion's AI features used (tokens, cost, per task, model and surface) and what is left of the user's daily caps.",
+    whenNot: 'For AI Lab prompts per model, use `llm_usage`.',
+    example: { days: 7 },
+  },
   mcp_tool_usage: {
     when: 'Use it to see which tools of the workspace’s MCP servers are called most, are slow or fail.',
     whenNot: 'To call a tool, use `mcp_call_tool`; for LLM prompts, use `llm_usage`.',
