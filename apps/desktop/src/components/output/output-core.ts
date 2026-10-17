@@ -74,7 +74,8 @@ async function payload(spec: OutputSpec, f: OutputFormatSpec) {
   return { ...base, content: typeof v === 'string' ? { text: v } : { base64: bytesToBase64(v) } };
 }
 
-const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+/** "response body" → "Response body"; "gRPC response" stays as it is. */
+const cap = (s: string) => (/^[a-z]{2}/.test(s) ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 
 /** Progress of the saves running now (the control shows it), by control (or surface id when saved from elsewhere). */
 const listeners = new Set<() => void>();
