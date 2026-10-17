@@ -1,6 +1,6 @@
 import { prettyBody } from '../lib/pretty';
 import { AiAction } from './ai/AiAction';
-import { BookmarkPlus, Camera, Download, ExternalLink, GitCompareArrows, Sparkles } from 'lucide-react';
+import { BookmarkPlus, Camera, ExternalLink, GitCompareArrows, Sparkles } from 'lucide-react';
 import { ResponseDiffPanel } from './ResponseDiffPanel';
 import { rememberResponse, responseId } from '../lib/response-memory';
 import DOMPurify from 'dompurify';
@@ -13,9 +13,9 @@ import { CheckList } from './Results';
 import { ResponseHistory } from './ResponseHistory';
 import { JsonTree, RawView, type TreeAssertion, type TreeVariable } from './JsonView';
 import { TraceView } from './TraceView';
-import { finishSave, type SaveResult } from '../lib/files';
+import { OutputActions } from './output/OutputFrame';
+import { responseSpecs } from './output/response-specs';
 import { Badge, Button, cx, Empty, OverflowActions, Segmented, statusTone, Tabs, type MenuItem } from './ui';
-import { toastError } from '../store';
 import { JsonTable, tableRowsOf } from './JsonTable';
 import { JwtView } from './JwtView';
 import { findDecodedJwts } from '@testpion/shared';
@@ -40,7 +40,13 @@ export function ResponseViewer({
   onGenerateTests,
   onExplain,
   eventsKey,
+  method,
+  environment,
 }: {
+  /** The request's method (for the download's file name: GET-patients-…-200.json). */
+  method?: string;
+  /** The environment it was sent with (its secret values are masked in redacted downloads). */
+  environment?: string;
   /** Keeps the selected server-sent event when a live stream's list gives way to this response (the request tab's id). */
   eventsKey?: string;
   response: HttpResponseData;
@@ -121,20 +127,33 @@ export function ResponseViewer({
       title: 'Compare this response with the previous one of the same request: status, time, headers and the body field by field',
     },
     ...(onSaveExample ? [{ label: 'Save as example', icon: <BookmarkPlus size={12} />, onSelect: onSaveExample, title: 'Save this response as an example of the request' }] : []),
-    ...(response.payloadPath
-      ? [
-          {
-            label: 'Save response',
-            icon: <Download size={12} />,
-            onSelect: () => void call<SaveResult>('http.saveBody', { payloadPath: response.payloadPath, name: 'response' + (isJson ? '.json' : '.txt') }).then((r) => finishSave(r, 'Response'), toastError),
-          },
-        ]
-      : []),
   ];
+  // what the down arrow saves, tab by tab (the Events and History tabs have their own bars)
+  const specs = useMemo(
+    () => responseSpecs(response, { method, checks, curl, stream, scriptLogs, jwts, table, prettyText, trace, environment }),
+    [response, method, checks, curl, stream, scriptLogs, jwts, table, prettyText, trace, environment],
+  );
+  const spec = tab === 'body' && diffOpen ? undefined : specs[tab];
+  const bodyView =
+    tab === 'body' ? (
+      <Segmented
+        label="Body view"
+        size="xs"
+        value={mode}
+        onChange={setMode}
+        options={[
+          { value: 'pretty', label: 'Pretty' },
+          ...(table ? [{ value: 'table' as const, label: 'Table' }] : []),
+          { value: 'raw', label: 'Raw' },
+          ...(isHtml ? [{ value: 'preview' as const, label: 'Preview' }] : []),
+          ...(visualizer ? [{ value: 'visualize' as const, label: 'Visualize' }] : []),
+        ]}
+      />
+    ) : undefined;
   return (
     <div className="h-full flex flex-col min-h-0">
       {/* one line, whatever the width: the numbers never break, and the actions fold into a ⋯ menu when the panel is narrow */}
-      <div className="@container flex items-center gap-3 px-3 h-9 border-b border-line text-sm shrink-0 whitespace-nowrap overflow-hidden">
+      <div className="@container flex items-center gap-3 px-3 h-9 border-b border-line text-sm shrink-0 whitespace-nowrap overflow-clip">
         <Badge tone={statusTone(response.status)}>
           {response.status} {response.statusText}
         </Badge>
@@ -176,29 +195,13 @@ export function ResponseViewer({
           ...(requestId ? [{ id: 'history' as Tab, label: 'History' }] : []),
           ...(curl ? [{ id: 'code' as Tab, label: 'cURL' }] : []),
         ]}
-        right={
-          tab === 'body' && (
-            <Segmented
-              label="Body view"
-              size="xs"
-              value={mode}
-              onChange={setMode}
-              options={[
-                { value: 'pretty', label: 'Pretty' },
-                ...(table ? [{ value: 'table' as const, label: 'Table' }] : []),
-                { value: 'raw', label: 'Raw' },
-                ...(isHtml ? [{ value: 'preview' as const, label: 'Preview' }] : []),
-                ...(visualizer ? [{ value: 'visualize' as const, label: 'Visualize' }] : []),
-              ]}
-            />
-          )
-        }
+        right={spec ? <OutputActions spec={spec}>{bodyView}</OutputActions> : bodyView}
       />
       <div className="flex-1 min-h-0">
         {tab === 'body' && diffOpen && <ResponseDiffPanel response={response} memoryKey={memoryKey} sendId={sendId} requestId={requestId} historyId={historyId} onClose={() => setDiffOpen(false)} />}
-        {tab === 'body' &&
-          !diffOpen &&
-          (!response.bodyPreview ? (
+        {tab === 'body' && !diffOpen && (
+          <div className="h-full min-h-0" data-output="response.body">
+          {!response.bodyPreview ? (
             <Empty title="Empty body" />
           ) : mode === 'pretty' && isJson ? (
             <JsonTree data={response.json} onAssert={onAddAssertion} onSaveVariable={onSaveVariable} />
@@ -218,11 +221,18 @@ export function ResponseViewer({
             <iframe title="HTML preview" sandbox="" className="w-full h-full bg-white" srcDoc={response.bodyPreview} />
           ) : (
             <RawView text={mode === 'pretty' ? prettyText : response.bodyPreview} />
-          ))}
-        {tab === 'headers' && <KvTable rows={response.headers} />}
+          )}
+          </div>
+        )}
+        {tab === 'headers' && (
+          <div className="h-full min-h-0" data-output="response.headers">
+            <KvTable rows={response.headers} />
+          </div>
+        )}
         {tab === 'history' && requestId && <ResponseHistory requestId={requestId} latestId={historyId} />}
-        {tab === 'cookies' &&
-          (response.cookies.length ? (
+        {tab === 'cookies' && (
+          <div className="h-full min-h-0 overflow-auto" data-output="response.cookies">
+          {response.cookies.length ? (
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-xs text-muted">
@@ -247,11 +257,21 @@ export function ResponseViewer({
             </table>
           ) : (
             <Empty title="No cookies" />
-          ))}
-        {tab === 'jwt' && <JwtView tokens={jwts} />}
-        {tab === 'timeline' && <Timeline phases={response.timeline} url={response.url} connection={response.connection} />}
+          )}
+          </div>
+        )}
+        {tab === 'jwt' && (
+          <div className="h-full min-h-0" data-output="response.jwt">
+            <JwtView tokens={jwts} />
+          </div>
+        )}
+        {tab === 'timeline' && (
+          <div className="h-full min-h-0 overflow-auto" data-output="response.timeline">
+            <Timeline phases={response.timeline} url={response.url} connection={response.connection} />
+          </div>
+        )}
         {tab === 'tests' && (
-          <div className="overflow-auto h-full">
+          <div className="overflow-auto h-full" data-output="response.tests">
             <CheckList
               checks={checks ?? []}
               actions={(c) =>
@@ -276,10 +296,22 @@ export function ResponseViewer({
             )}
           </div>
         )}
-        {tab === 'stream' && <RawView text={stream ?? ''} />}
+        {tab === 'stream' && (
+          <div className="h-full min-h-0" data-output="response.stream">
+            <RawView text={stream ?? ''} />
+          </div>
+        )}
         {tab === 'events' && response.events && <SseEvents events={response.events} stopped={response.streamStopped} dropped={response.eventsDropped} stateKey={eventsKey} />}
-        {tab === 'trace' && (trace ? <TraceView trace={trace} /> : <Empty title="Loading trace…" />)}
-        {tab === 'code' && <RawView text={curl ?? ''} />}
+        {tab === 'trace' && (
+          <div className="h-full min-h-0" data-output="response.trace">
+            {trace ? <TraceView trace={trace} /> : <Empty title="Loading trace…" />}
+          </div>
+        )}
+        {tab === 'code' && (
+          <div className="h-full min-h-0" data-output="response.curl">
+            <RawView text={curl ?? ''} />
+          </div>
+        )}
       </div>
     </div>
   );

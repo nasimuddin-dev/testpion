@@ -36,6 +36,7 @@ import { saveUiPrefs } from './lib/ui-prefs';
 import { keyLabel, useBindings } from './lib/keybindings';
 import { copyRunCommand, runInCi } from './lib/run-ci';
 import { reopenClosedTab } from './lib/closed-tabs';
+import { downloadFocusedOutput } from './components/output/output-core';
 import { runAgain } from './lib/run-again';
 import { QuickOpen } from './components/QuickOpen';
 import { CookiesModal } from './components/CookiesModal';
@@ -356,6 +357,8 @@ export default function App() {
       { id: 'run-suite', label: 'Run Suite', hint: 'Tests', run: () => s.openIntent('tests', { runAll: true }) },
       { id: 'rerun-last', label: 'Rerun Last Run', hint: keyLabel('rerun-last', bindings), run: () => void runAgain('last') },
       { id: 'reopen-tab', label: 'Reopen Closed Tab', hint: keyLabel('reopen-tab', bindings), run: () => void reopenClosedTab() },
+      // the format menu of the output nearest to the focus (Ctrl+Shift+S saves its default format at once)
+      { id: 'download-output', label: 'Download Output…', hint: keyLabel('download-output', bindings), run: () => setTimeout(() => downloadFocusedOutput(true), 0) },
       { id: 'open-recent', label: 'Open Recent…', hint: keyLabel('quick-open', bindings), run: () => setTimeout(() => s.set({ paletteOpen: true, paletteQuery: '' }), 0) },
       { id: 'ci-last', label: 'Run Last Run in CI…', hint: 'Tests', run: () => void runInCi('last') },
       { id: 'cli-last', label: 'Copy CLI Command of Last Run', hint: 'Tests', run: () => void copyRunCommand('last') },

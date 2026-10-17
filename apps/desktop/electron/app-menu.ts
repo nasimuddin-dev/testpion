@@ -79,6 +79,8 @@ function build(a: AppMenuActions): Menu {
         }),
         sep,
         item({ label: 'Save', i: 'save', accelerator: 'CmdOrCtrl+S', click: () => a.menu('save') }),
+        // the window owns the key (rebindable in Settings ▸ Keyboard); the menu only shows it
+        item({ label: 'Download Output…', i: 'save', accelerator: 'CmdOrCtrl+Shift+S', registerAccelerator: false, click: () => a.menu('download-output') }),
         sep,
         item({ label: 'Close Tab', i: 'closeTab', accelerator: 'CmdOrCtrl+W', click: () => a.tabs('close') }),
         item({ label: 'Close Other Tabs', i: 'closeOthers', click: () => a.tabs('closeOthers') }),
