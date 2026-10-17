@@ -6,6 +6,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import type { WorkspaceStore } from '../storage/workspace.js';
+import { realPathOf } from '../storage/fsutil.js';
 import { readExposure } from './exposed-flows.js';
 import { webhookFlows, webhookOfText } from './flow-webhook-config.js';
 import { formatEvery, lastMonitorResult, listMonitors, monitorTestFile } from './monitors.js';
@@ -24,10 +25,14 @@ export interface FlowDeployStatus {
   ciFiles?: string[];
 }
 
-/** CI pipeline files of the repository the workspace is in (the workspace folder up to the git root, at most 6 levels). */
+/**
+ * CI pipeline files of the repository the workspace is in (the workspace folder up to the git root, at most 6 levels).
+ * The folders above are those of its real path, as git finds the repository: a workspace opened through a link is in
+ * the repository its folder really is in, not in the folders above the link.
+ */
 export function ciPipelineFiles(root: string): string[] {
   const out: string[] = [];
-  let dir = root;
+  let dir = realPathOf(root);
   for (let depth = 0; depth < 6; depth++) {
     for (const f of ['.gitlab-ci.yml', 'azure-pipelines.yml', 'Jenkinsfile', 'bitbucket-pipelines.yml']) if (existsSync(join(dir, f))) out.push(join(dir, f));
     const wf = join(dir, '.github', 'workflows');
@@ -89,7 +94,8 @@ export function flowDeployStatus(store: WorkspaceStore, file: string, opts: { se
   }
   if (ciFiles.length) {
     out.ci = true;
-    out.ciFiles = ciFiles.map((f) => relative(store.root, f).replace(/\\/g, '/'));
+    const real = realPathOf(store.root); // where ciPipelineFiles looked from
+    out.ciFiles = ciFiles.map((f) => relative(real, f).replace(/\\/g, '/'));
   }
   return out;
 }

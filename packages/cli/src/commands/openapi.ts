@@ -1,5 +1,5 @@
 import { readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { basename, relative, resolve as resolvePath, sep } from 'node:path';
+import { basename, resolve as resolvePath, sep } from 'node:path';
 import type { Command } from 'commander';
 import {
   fetchImportText,
@@ -12,6 +12,7 @@ import {
   writeTestsFromSpec,
   writeFuzzFindingTests,
   WorkspaceManager,
+  relativeInside,
   type FuzzVerdict,
   type HttpRequestSpec,
 } from '@testpion/core';
@@ -120,8 +121,9 @@ export function registerOpenApiCommands(program: Command): void {
           if (o.markdown) writeFileSync(o.markdown, fuzzMarkdown(report));
         if (o.saveTests) {
           return withWorkspace(o.workspace, (store) => {
-            const rel = relative(store.root, resolvePath(ref)).split(sep).join('/');
-            const saved = writeFuzzFindingTests(store, rel.startsWith('..') ? `specs/${basename(ref)}` : rel, report, { baseUrl: runBase || undefined });
+            // the spec as the workspace names it (also when the workspace and the spec are named apart through a link)
+            const rel = relativeInside(store.root, resolvePath(ref))?.split(sep).join('/');
+            const saved = writeFuzzFindingTests(store, rel ?? `specs/${basename(ref)}`, report, { baseUrl: runBase || undefined });
             if (!o.json) console.error(saved ? green(`${saved.path}: ${saved.tests} regression tests`) : dim('Nothing to save as tests.'));
           });
         }

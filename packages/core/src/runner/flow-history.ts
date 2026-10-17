@@ -11,7 +11,7 @@ import { join, relative, sep } from 'node:path';
 import type { TestResult, TestStatus, Trace } from '../model/types.js';
 import { ApsError } from '../errors.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
-import { atomicWrite } from '../storage/fsutil.js';
+import { atomicWrite, pathMatcher } from '../storage/fsutil.js';
 import { isSuiteFile, loadTestsFromFile } from './loader.js';
 import { readResultsFile } from './runner.js';
 import { readRunSummary } from './run-records.js';
@@ -45,8 +45,6 @@ interface StepRef {
   dependsOn: string[];
 }
 
-const norm = (p: string) => p.replace(/\\/g, '/').toLowerCase();
-
 /** The test file inside tests/ (absolute) and its path with forward slashes, or an error for a missing file or a suite. */
 function flowFile(store: WorkspaceStore, file: string): { abs: string; rel: string } {
   const abs = store.safePath(file, store.path('tests'));
@@ -75,10 +73,11 @@ function stepRef(steps: StepRef[], ref: string, what: string): StepRef {
 async function resultsOf(store: WorkspaceStore, abs: string, runId: string, ids?: Set<string>): Promise<TestResult[]> {
   const f = join(store.runDir(runId), 'results.jsonl');
   if (!existsSync(f)) return [];
-  const wanted = norm(abs);
+  // the file as the workspace names it, or as the run did (its real path, resolved from the current folder)
+  const isFile = pathMatcher(abs);
   const out: TestResult[] = [];
   for await (const r of await readResultsFile(f)) {
-    const mine = r.file ? norm(r.file) === wanted : !!ids?.has(r.id);
+    const mine = r.file ? isFile(r.file) : !!ids?.has(r.id);
     if (!mine) continue;
     out.push(r);
     if (out.length >= 1000) break;
@@ -93,13 +92,13 @@ async function resultsOf(store: WorkspaceStore, abs: string, runId: string, ids?
 export async function flowRuns(store: WorkspaceStore, file: string, opts: { limit?: number; scan?: number } = {}): Promise<{ file: string; runs: FlowRunRow[] }> {
   const { abs, rel } = flowFile(store, file);
   const limit = Math.min(Math.max(opts.limit ?? 30, 1), 200);
-  const wanted = norm(abs);
+  const isFile = pathMatcher(abs); // as the workspace names it, or as a run did (see resultsOf)
   const ids = new Set((await stepsOf(abs)).map((s) => s.id));
   const runs: FlowRunRow[] = [];
   for (const run of store.meta.listRuns({ limit: Math.min(Math.max(opts.scan ?? 300, limit), 1000) }).items) {
     if (runs.length >= limit) break;
     const summary = readRunSummary(store, run.id);
-    if (summary?.files && !summary.files.some((f) => norm(f) === wanted)) continue;
+    if (summary?.files && !summary.files.some(isFile)) continue;
     if (!summary?.files && run.total > 5000) continue;
     const results = await resultsOf(store, abs, run.id, ids);
     if (!results.length) continue;

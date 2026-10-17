@@ -55,6 +55,28 @@ export function relativeInside(parent: string, child: string, o: { orSame?: bool
 
 export const isInside = (parent: string, child: string, o: { orSame?: boolean } = {}): boolean => relativeInside(parent, child, o) !== undefined;
 
+/** Whether two paths name the same file or folder, as given or really (`relativeInside`): a folder and a link to it are one. */
+export const samePath = (a: string, b: string): boolean => relativeInside(a, b, { orSame: true }) === '';
+
+/**
+ * Whether a path names `target`: as written (`\` and `/` alike, case aside — how recorded result files were always
+ * compared), or really (both resolved, as `relativeInside`): a run that resolved its files from the current folder (a
+ * real path) and a workspace opened through a link name one file two ways. For the many results of a run: the real
+ * path of each name is looked up once.
+ */
+export function pathMatcher(target: string): (p: string | undefined) => boolean {
+  const norm = (p: string) => p.replace(/\\/g, '/').toLowerCase();
+  const want = norm(target);
+  const seen = new Map<string, boolean>();
+  return (p) => {
+    if (!p) return false;
+    if (norm(p) === want) return true;
+    let same = seen.get(p);
+    if (same === undefined) seen.set(p, (same = samePath(target, p)));
+    return same;
+  };
+}
+
 /**
  * The app's own changes to files, by path (GIT-103): what this process last made each file (absolute path → its content
  * fingerprint `hash:<size>:<sha1>`, or `gone`). A folder watcher tells its own saves from changes made outside the app
@@ -70,6 +92,30 @@ const MAX_OWN_WRITES = 100_000;
 const OUTSIDE = 'outside';
 const ownWriteListeners = new Set<(path: string) => void>();
 
+/**
+ * The key of a path in the own-writes registry: its real path (its folder's, with its name), so a write and the
+ * watcher's event agree however each names the workspace — through a link (macOS /tmp and /var, a junction) or really
+ * (a path from the current folder, a real path made for a write). Each folder's real path is looked up once (a few
+ * thousand are remembered): a write costs one map lookup, not a walk of every folder on its path.
+ */
+const realDirs = new Map<string, string>();
+function ownKey(path: string): string {
+  const abs = resolve(path);
+  const dir = dirname(abs);
+  if (dir === abs) return abs;
+  let real = realDirs.get(dir);
+  if (real === undefined) {
+    try {
+      real = realpathSync(dir);
+    } catch {
+      return realPathOf(abs); // its folder is gone too (a removed folder's file): the nearest folder that exists
+    }
+    if (realDirs.size > 4096) realDirs.clear();
+    realDirs.set(dir, real);
+  }
+  return join(real, basename(abs));
+}
+
 /** The content fingerprint the watcher compares: `hash:<size>:<sha1>`. */
 export function contentFingerprint(bytes: Buffer): string {
   return `hash:${bytes.length}:${createHash('sha1').update(bytes).digest('hex')}`;
@@ -77,8 +123,9 @@ export function contentFingerprint(bytes: Buffer): string {
 
 function recordOwn(path: string, fingerprint: string, dir?: boolean): void {
   const abs = resolve(path);
-  recentWrites.delete(abs); // newest last: pruning goes oldest first
-  recentWrites.set(abs, { at: Date.now(), fingerprint, ...(dir ? { dir } : {}) });
+  const key = ownKey(abs);
+  recentWrites.delete(key); // newest last: pruning goes oldest first
+  recentWrites.set(key, { at: Date.now(), fingerprint, ...(dir ? { dir } : {}) });
   // only what has expired goes (oldest first, stopping at the first one still fresh: O(1) a write): a write the
   // watcher has not seen yet is never forgotten — an import of thousands of files would otherwise come back as
   // "changed outside TestPion". MAX_OWN_WRITES bounds the memory of a flood that never pauses.
@@ -118,7 +165,7 @@ export function writtenByUs(path: string, withinMs = OWN_WRITE_TTL_MS): boolean 
  * outside change (another editor, git), even right after a save.
  */
 export function ownWrite(path: string, withinMs = OWN_WRITE_TTL_MS): string | undefined {
-  const abs = resolve(path);
+  const abs = ownKey(path);
   const now = Date.now();
   const w = recentWrites.get(abs);
   if (w) return w.fingerprint !== OUTSIDE && now - w.at < withinMs ? w.fingerprint : undefined;
@@ -132,7 +179,7 @@ export function ownWrite(path: string, withinMs = OWN_WRITE_TTL_MS): string | un
 
 /** The file at `path` was last changed by someone else (the watcher saw other bytes than this process wrote). */
 export function forgetOwnWrite(path: string): void {
-  const abs = resolve(path);
+  const abs = ownKey(path);
   if (recentWrites.has(abs)) recentWrites.set(abs, { at: Date.now(), fingerprint: OUTSIDE });
   else if (ownWrite(abs) !== undefined) recentWrites.set(abs, { at: Date.now(), fingerprint: OUTSIDE }); // under a removed folder
 }

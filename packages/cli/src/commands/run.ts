@@ -19,6 +19,7 @@ import {
   writeReports,
   testFileRef,
   productionAllowed,
+  relativeInside,
   type LoadTarget,
 } from '@testpion/core';
 import { hasTemplate } from '@testpion/shared';
@@ -64,11 +65,9 @@ export function registerRunCommands(program: Command): void {
           throw new CliError(`No such test file or folder: ${p}`, EXIT.CONFIG_ERROR);
         };
         for (const p of paths.length ? paths : [tests]) walk(paths.length ? locate(p) : p, p);
-        // files under tests/ are named from there (ai/rag.yaml); others as a path from the current folder
-        const shownName = (f: string) => {
-          const rel = relative(tests, f);
-          return (!rel.startsWith('..') && !isAbsolute(rel) ? rel : relative(process.cwd(), f) || f).split(sep).join('/');
-        };
+        // files under tests/ are named from there (ai/rag.yaml, also when the workspace and the file are named apart
+        // through a link); others as a path from the current folder
+        const shownName = (f: string) => (relativeInside(tests, f) ?? (relative(process.cwd(), f) || f)).split(sep).join('/');
         // webhook paths are checked across the workspace (two flows on one path)
         const webhooks = webhookFlows(tests);
         const results = files.map((f) => ({ file: shownName(f), problems: lintTestFile(readFileSync(f, 'utf8'), { file: f, suite: isSuiteFile(f), webhooks }) })).filter((x) => x.problems.length);

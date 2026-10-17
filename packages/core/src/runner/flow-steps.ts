@@ -10,7 +10,7 @@ import { flowChecks, flowGraph, layoutExtras, namesSetByScripts, stepLine, templ
 import { ApsError } from '../errors.js';
 import type { TestCase } from '../model/types.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
-import { relativeInside } from '../storage/fsutil.js';
+import { pathMatcher, relativeInside } from '../storage/fsutil.js';
 import { isSuiteFile, loadTestsFromFile } from './loader.js';
 import { readResultsFile } from './runner.js';
 import { loopLabel } from './flow-blocks.js';
@@ -215,13 +215,14 @@ export async function flowOfFile(store: WorkspaceStore, file: string, opts: { ru
   if (!steps.length) return out;
   // the latest run that included the file (by the results' file, else by the steps' ids), newest first
   const ids = new Set(steps.map((s) => s.id));
-  const wanted = abs.replace(/\\/g, '/').toLowerCase();
+  // the file as the workspace names it, or as a run did (its real path, resolved from the current folder)
+  const isFile = pathMatcher(abs);
   for (const run of store.meta.listRuns({ limit: Math.min(Math.max(opts.runs ?? 30, 1), 300) }).items) {
     const results = join(store.runDir(run.id), 'results.jsonl');
     if (!existsSync(results)) continue;
     const found = new Map<string, { status: string; durationMs: number; tries?: number }>();
     for await (const r of await readResultsFile(results)) {
-      const sameFile = r.file ? r.file.replace(/\\/g, '/').toLowerCase() === wanted : ids.has(r.id);
+      const sameFile = r.file ? isFile(r.file) : ids.has(r.id);
       const tries = typeof r.metadata?.tries === 'number' ? r.metadata.tries : undefined;
       if (sameFile && ids.has(r.id) && !found.has(r.id)) found.set(r.id, { status: r.status, durationMs: r.durationMs, ...(tries !== undefined ? { tries } : {}) });
     }

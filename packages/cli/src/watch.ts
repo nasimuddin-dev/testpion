@@ -1,6 +1,6 @@
 import { existsSync, statSync, watch, type FSWatcher } from 'node:fs';
-import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
-import { WorkspaceManager } from '@testpion/core';
+import { dirname, join, resolve } from 'node:path';
+import { isInside, WorkspaceManager } from '@testpion/core';
 import { dim, bold, findWorkspaceUp } from './shared.js';
 
 /** Files a run writes itself (results, reports, traces, the database): changes there never trigger a re-run. */
@@ -18,10 +18,8 @@ export function watchTargets(workspace: string | undefined, paths: string[] = []
     if (!existsSync(abs)) continue;
     const dir = statSync(abs).isDirectory() ? abs : dirname(abs);
     // already inside a watched folder?
-    const inside = [...out].some((d) => {
-      const r = relative(d, dir);
-      return !r.startsWith('..') && !isAbsolute(r);
-    });
+    // (as named or really: a workspace given through a link and a file named by its real path is one folder)
+    const inside = [...out].some((d) => isInside(d, dir, { orSame: true }));
     if (!inside) out.add(dir);
   }
   return [...out];

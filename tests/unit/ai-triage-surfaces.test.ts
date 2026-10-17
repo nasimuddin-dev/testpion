@@ -16,7 +16,8 @@ import { cliData, runCli, runCliSync, tempDir } from '../helpers.js';
 import { mockProvider } from '../ai/harness.js';
 import { addRun, httpResult } from '../ai/run-fixtures.js';
 
-const t = tempDir('tp-ai-triage-surfaces-');
+// the workspaces are reached through a link, as every temp folder is on macOS (/var → /private/var)
+const t = tempDir('tp-ai-triage-surfaces-', { alias: true });
 let server: Server;
 let api = '';
 beforeAll(async () => {
@@ -163,7 +164,10 @@ describe('CLI: testpion ai triage, ai run analyze-flaky, test --triage', () => {
     );
     const ws = store.root;
     store.close();
-    const r = await runCli(['test', 'tests/smoke/health.yaml', '--triage', '-w', ws], { env, cwd: ws });
+    // -w names the workspace through the link; the current folder is its real path (what process.cwd() says on macOS),
+    // so the run records the test file by its real path: triage still finds the file and proposes the edit
+    const real = join(t.real, 'ci');
+    const r = await runCli(['test', 'tests/smoke/health.yaml', '--triage', '-w', ws], { env, cwd: real });
     expect(r.status).toBe(1);
     expect(r.out).toMatch(/## Triage \(AI\)/);
     expect(r.out).toMatch(/Health answers "ok" now/);
@@ -176,7 +180,7 @@ describe('CLI: testpion ai triage, ai run analyze-flaky, test --triage', () => {
     expect(JSON.parse(readFileSync(join(dir, 'triage.json'), 'utf8')).proposal.items[0].kind).toBe('file');
 
     // no model: the grouping, never a failure of the command itself
-    const off = await runCli(['test', 'tests/smoke/health.yaml', '--triage', '-w', ws], { env: { ...env, TESTPION_AI_PROVIDER: '', TESTPION_AI_MODEL: '' }, cwd: ws });
+    const off = await runCli(['test', 'tests/smoke/health.yaml', '--triage', '-w', ws], { env: { ...env, TESTPION_AI_PROVIDER: '', TESTPION_AI_MODEL: '' }, cwd: real });
     expect(off.status).toBe(1);
     expect(off.out).toMatch(/## Triage\n/);
     expect(off.out).toMatch(/grouped by TestPion \(no model\)/);

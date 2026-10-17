@@ -72,8 +72,7 @@ export function gitHandlers(be: Backend): Handlers {
 
   /** Register a cloned or connected workspace folder in the workspace list and open it. */
   const openFolder = (dir: string) => {
-    const s = be.manager.loadSettings();
-    if (!s.workspacePaths.includes(dir)) be.settings = be.manager.saveSettings({ ...s, workspacePaths: [...s.workspacePaths, dir] });
+    be.settings = be.manager.rememberWorkspacePath(dir);
     be.openStore(dir);
     be.host.emit('data.changed', { method: 'ws.open' });
   };

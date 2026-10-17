@@ -6,7 +6,7 @@ import { SCHEMA_VERSION, defaultSettings } from '../model/types.js';
 import { normalizeUiPrefs } from '../model/ui-prefs.js';
 import { ApsError } from '../errors.js';
 import { shortId, slugify } from '../util/ids.js';
-import { atomicWrite, readJson, relativeInside, readTextCached, writeDerived, writeJson, removeOwned } from './fsutil.js';
+import { atomicWrite, isInside, readJson, realPathOf, relativeInside, readTextCached, samePath, writeDerived, writeJson, removeOwned } from './fsutil.js';
 import { looksLikeWorkspace, normalizeCollection, normalizeEnvironment, scanString } from './normalize.js';
 
 export { isWorkspaceDir, looksLikeWorkspace, normalizeCollection, normalizeEnvironment } from './normalize.js';
@@ -194,10 +194,9 @@ export class WorkspaceStore {
     return join(root, inside);
   }
 
-  /** Whether an absolute path is inside one of the workspace's folders (e.g. `payloads`). */
+  /** Whether an absolute path is inside one of the workspace's folders (e.g. `payloads`), named as given or really (`relativeInside`). */
   isInside(file: string, ...folder: string[]): boolean {
-    const base = resolve(this.root, ...folder);
-    return typeof file === 'string' && resolve(file).startsWith(base + sep);
+    return typeof file === 'string' && relativeInside(resolve(this.root, ...folder), file) !== undefined;
   }
 
   /* collections */
@@ -688,8 +687,9 @@ export class WorkspaceManager {
     // forget workspaces that lived in the system temp folder and are gone (test runs used to add them);
     // other missing paths stay listed, e.g. a workspace on a drive that isn't connected right now
     if (Array.isArray(s.workspacePaths)) {
-      const tmp = tmpdir().toLowerCase();
-      s.workspacePaths = s.workspacePaths.filter((p) => !(typeof p === 'string' && p.toLowerCase().startsWith(tmp) && !existsSync(p)));
+      // the temp folder as named and really (macOS: /var/folders/… is /private/var/folders/…, as a CLI run records it)
+      const tmps = [...new Set([tmpdir(), realPathOf(tmpdir())].map((t) => t.toLowerCase()))];
+      s.workspacePaths = s.workspacePaths.filter((p) => !(typeof p === 'string' && tmps.some((t) => p.toLowerCase().startsWith(t)) && !existsSync(p)));
     }
     return { ...defaultSettings(), ...normalizeUiPrefs(s), settingsRevision: 2 };
   }
@@ -709,6 +709,8 @@ export class WorkspaceManager {
       try {
         const w = readJson<Workspace>(join(p, 'workspace.json'));
         if (!looksLikeWorkspace(w)) continue;
+        // the same folder listed twice (by a link to it and by its real path, as an older version could add it): once
+        if (out.some((x) => x.id === w.id && samePath(x.path, p))) continue;
         out.push({ id: w.id, name: w.name, path: p, updatedAt: w.updatedAt });
       } catch {
         /* skip invalid */
@@ -731,11 +733,15 @@ export class WorkspaceManager {
       while (existsSync(root)) root = join(this.appDir, 'workspaces', `${slugify(name)}-${i++}`);
     }
     const s = WorkspaceStore.create(root, name);
-    if (path) {
-      const settings = this.loadSettings();
-      if (!settings.workspacePaths.includes(root)) this.saveSettings({ ...settings, workspacePaths: [...settings.workspacePaths, root] });
-    }
+    if (path) this.rememberWorkspacePath(root);
     return s;
+  }
+
+  /** Add a folder the user opened, cloned or created to the workspace list, once (by any name: a link, its real path). */
+  rememberWorkspacePath(dir: string): AppSettings {
+    const settings = this.loadSettings();
+    if (settings.workspacePaths.some((p) => typeof p === 'string' && samePath(p, dir))) return settings;
+    return this.saveSettings({ ...settings, workspacePaths: [...settings.workspacePaths, dir] });
   }
 
   open(ref: string): WorkspaceStore {
@@ -788,9 +794,9 @@ export class WorkspaceManager {
     return { id: w.id, name: w.name, path: dest, updatedAt: w.updatedAt };
   }
 
-  /** Whether the app created this workspace (inside its data folder) rather than a folder the user opened. */
+  /** Whether the app created this workspace (in its data folder's workspaces/, as named or really) rather than a folder the user opened. */
   isManaged(path: string): boolean {
-    return resolve(path).startsWith(resolve(this.appDir, 'workspaces'));
+    return isInside(resolve(this.appDir, 'workspaces'), path);
   }
 
   /** A workspace with counts of what it holds, e.g. for a delete confirmation. */
@@ -837,7 +843,7 @@ export class WorkspaceManager {
       }
     }
     const settings = this.loadSettings();
-    this.saveSettings({ ...settings, workspacePaths: settings.workspacePaths.filter((x) => resolve(x) !== resolve(p)), ...(settings.lastWorkspace && resolve(settings.lastWorkspace) === resolve(p) ? { lastWorkspace: undefined } : {}) });
+    this.saveSettings({ ...settings, workspacePaths: settings.workspacePaths.filter((x) => !samePath(x, p)), ...(settings.lastWorkspace && samePath(settings.lastWorkspace, p) ? { lastWorkspace: undefined } : {}) });
     return { deletedFiles: managed };
   }
 

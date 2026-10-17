@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.49.1 — 2026-10-17
+
+Fixes for 0.49.0, found by the macOS test run: workspaces reached through a link (a macOS /tmp or /var folder, a linked projects folder) now work everywhere.
+
+### Fixes
+- **Workspaces opened through a symbolic link keep working** — a folder under `/tmp` or `/var` on macOS (both are links to `/private/…`), a junction on Windows, a linked home or projects folder. A run started from the folder itself records its files by their real path, and TestPion now relates every such path to the workspace whichever way each one names it, so:
+  - `--triage` and **Explain and fix failures with AI** find the failing test file and propose a fix of it (on macOS the triage of a CLI run proposed none);
+  - **Run again**, **Run in CI** (`testpion ci --run`) and links from a result name the file under `tests/`;
+  - a flow's **Runs**, its **Timeline** (`testpion flow report --file`) and the designer's step results find the runs that included it;
+  - the app's own writes made by the real path (`agents-md`, for one) are not shown as *changed outside TestPion*, and the window still refreshes for them;
+  - the folder is listed once in the workspace list, **Delete** and **Rename** recognise the open workspace by either path, and **Show in folder** opens it;
+  - the pre-commit secret guard (`testpion git hook install`) and the CI files of a flow's **Deploy** panel are found in the repository the folder really is in;
+  - `lint-tests` names the file under `tests/`, `openapi fuzz --save-tests` keeps the spec's path, `--watch` watches the folder once, and `--dry-run` reports writes into the workspace as changes of it.
+- A folder beside the app's data folder whose name starts the same (`workspaces-old`) is no longer taken for one the app created, and an Arazzo source description is read only from inside the workspace or the Arazzo file's folder, not from a folder whose name merely starts the same.
+
 ## 0.49.0 — 2026-10-17
 
 ### Explain and fix failures with AI

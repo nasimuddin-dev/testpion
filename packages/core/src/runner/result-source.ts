@@ -1,4 +1,5 @@
-import { isAbsolute, relative, sep } from 'node:path';
+import { isAbsolute, sep } from 'node:path';
+import { relativeInside } from '../storage/fsutil.js';
 import type { ItemRef } from '@testpion/shared';
 import type { RunOrigin, RunSummary } from '../model/types.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
@@ -15,13 +16,17 @@ import { readRunSummary } from './run-records.js';
 /** A collection run numbers its results per iteration: `<request id>@<iteration>` (`#n` when it ran again). */
 export const requestIdOfResult = (id: string): string => id.replace(/@\d+(#\d+)?$/, '');
 
-/** A result file's path under tests/ (as refs name it), or undefined outside the workspace's tests. */
+/**
+ * A result file's path under tests/ (as refs name it), or undefined outside the workspace's tests. A recorded absolute
+ * path may name the workspace another way than the store does (the real path behind a link: on macOS every temp folder,
+ * /var → /private/var, and the current folder a run resolved its files from), so it is related as given or really
+ * (`relativeInside`), never by a plain `relative`.
+ */
 export function testsPathOf(store: Pick<WorkspaceStore, 'path'>, file: string | undefined): string | undefined {
   if (!file) return undefined;
-  const tests = store.path('tests');
-  const rel = isAbsolute(file) ? relative(tests, file) : file;
-  if (!rel || rel.startsWith('..') || isAbsolute(rel)) return undefined;
-  return rel.split(sep).join('/');
+  if (!isAbsolute(file)) return file.startsWith('../') || file.startsWith('..\\') || file === '..' ? undefined : file.split(sep).join('/');
+  const rel = relativeInside(store.path('tests'), file);
+  return rel ? rel.split(sep).join('/') : undefined;
 }
 
 /** Where a result came from: the saved request of a collection run (or a monitor of one), else its test file at its step. */

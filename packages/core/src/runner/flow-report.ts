@@ -5,11 +5,13 @@
  * Timeline tab of a run read it here. What each step waits for comes from its file (dependsOn, finally).
  */
 import { existsSync } from 'node:fs';
-import { join, relative, sep } from 'node:path';
+import { join, sep } from 'node:path';
 import { flowTimeline, timelineHtml, type FlowTimeline, type TimelineStepInput } from '@testpion/shared';
 import type { TestResult } from '../model/types.js';
 import { ApsError } from '../errors.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
+import { pathMatcher } from '../storage/fsutil.js';
+import { testsPathOf } from './result-source.js';
 import { loadTestsFromFile } from './loader.js';
 import { readResultsFile } from './runner.js';
 import { readRunSummary } from './run-records.js';
@@ -28,8 +30,6 @@ export interface FlowRunTimeline {
   truncated?: boolean;
   timeline: FlowTimeline;
 }
-
-const norm = (p: string) => p.replace(/\\/g, '/').toLowerCase();
 
 /** What each step of a file waits for, by id (empty for a file that is gone). */
 async function depsOf(abs: string): Promise<Map<string, { dependsOn: string[]; finally: boolean }>> {
@@ -53,11 +53,12 @@ async function depsOf(abs: string): Promise<Map<string, { dependsOn: string[]; f
 export async function runTimeline(store: WorkspaceStore, runId: string, o: { file?: string } = {}): Promise<FlowRunTimeline> {
   const resultsFile = join(store.runDir(runId), 'results.jsonl');
   if (!existsSync(resultsFile)) throw new ApsError('ValidationError', `No run ${runId} (or it has no results yet)`);
-  const wanted = o.file ? norm(store.safePath(o.file, store.path('tests'))) : undefined;
+  // the file as the workspace names it, or as the run did (its real path, resolved from the current folder)
+  const isFile = o.file ? pathMatcher(store.safePath(o.file, store.path('tests'))) : undefined;
   const results: TestResult[] = [];
   let truncated = false;
   for await (const r of await readResultsFile(resultsFile)) {
-    if (wanted && (!r.file || norm(r.file) !== wanted)) continue;
+    if (isFile && !isFile(r.file)) continue;
     if (results.length >= MAX_TIMELINE_STEPS) {
       truncated = true;
       break;
@@ -67,11 +68,7 @@ export async function runTimeline(store: WorkspaceStore, runId: string, o: { fil
   if (!results.length) throw new ApsError('ValidationError', o.file ? `Run ${runId} did not include tests/${o.file}` : `Run ${runId} has no results`);
   const files = [...new Set(results.map((r) => r.file ?? ''))];
   const many = files.length > 1;
-  const tests = store.path('tests');
-  const label = (f: string) => {
-    const rel = relative(tests, f);
-    return (!rel.startsWith('..') ? rel : f).split(sep).join('/');
-  };
+  const label = (f: string) => testsPathOf(store, f) ?? f.split(sep).join('/');
   const deps = new Map<string, Map<string, { dependsOn: string[]; finally: boolean }>>();
   for (const f of files) deps.set(f, f ? await depsOf(f) : new Map());
   const key = (f: string, id: string) => (many ? `${label(f)}#${id}` : id);

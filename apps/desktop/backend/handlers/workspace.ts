@@ -1,7 +1,7 @@
 /** RPC handlers: Workspaces, environments, current values, cookies and variables. */
 import { describeVariables } from '../var-descriptions.js';
 import { readFileSync, writeFileSync } from 'node:fs';
-import { basename, resolve as resolvePath } from 'node:path';
+import { basename } from 'node:path';
 import {
   ApsError,
   listTrash,
@@ -35,6 +35,7 @@ import {
   isWorkspaceDir,
   resolveItemRef,
   toItemRef,
+  samePath,
   type RefResolution,
 } from '@testpion/core';
 import type { Backend, Handlers } from '../backend.js';
@@ -94,8 +95,7 @@ export function workspaceHandlers(be: Backend): Handlers {
           throw new ApsError('ConfigurationError', `${dir} is not a TestPion workspace (it has no TestPion workspace.json)`, {
             suggestions: ['Choose the folder that contains workspace.json, e.g. a workspace kept in a git repository.', 'To start a new workspace use New; to bring in a Postman collection or OpenAPI file use Import.'],
           });
-        const s = be.manager.loadSettings();
-        if (!s.workspacePaths.includes(dir)) be.settings = be.manager.saveSettings({ ...s, workspacePaths: [...s.workspacePaths, dir] });
+        be.settings = be.manager.rememberWorkspacePath(dir);
       }
       if (!ref && !be.host.openDialog) throw new ApsError('ValidationError', 'There is no folder picker here: give the path of the workspace folder');
       if (!path) throw new ApsError('ConfigurationError', `Workspace ${ref} not found`);
@@ -122,11 +122,11 @@ export function workspaceHandlers(be: Backend): Handlers {
     },
     'ws.duplicate': ({ ref, name }: { ref: string; name: string }) => be.manager.duplicate(ref, name),
     /** A workspace with counts (collections, environments, tests) and whether deleting removes its files. */
-    'ws.details': ({ ref }: { ref: string }) => ({ ...be.manager.details(ref), current: !!be.store && resolvePath(be.manager.details(ref).path) === resolvePath(be.store.root) }),
+    'ws.details': ({ ref }: { ref: string }) => ({ ...be.manager.details(ref), current: !!be.store && samePath(be.manager.details(ref).path, be.store.root) }),
     /** Rename any workspace; the open one goes through its store so the UI state stays in sync. */
     'ws.rename': ({ ref, name }: { ref: string; name: string }) => {
       const p = be.manager.resolve(ref);
-      if (p && be.store && resolvePath(p) === resolvePath(be.store.root)) return be.ws.updateWorkspace({ name: name.trim() });
+      if (p && be.store && samePath(p, be.store.root)) return be.ws.updateWorkspace({ name: name.trim() });
       return be.manager.rename(ref, name);
     },
     /**
@@ -137,8 +137,9 @@ export function workspaceHandlers(be: Backend): Handlers {
       const p = be.manager.resolve(ref);
       if (!p) throw new ApsError('ConfigurationError', `Workspace "${ref}" not found`);
       let switchedTo: string | undefined;
-      if (be.store && resolvePath(p) === resolvePath(be.store.root)) {
-        const other = be.manager.list().find((w) => resolvePath(w.path) !== resolvePath(p));
+      // the open one by any name (a link to it, its real path): switched away from before its folder goes
+      if (be.store && samePath(p, be.store.root)) {
+        const other = be.manager.list().find((w) => !samePath(w.path, p));
         if (!other) throw new ApsError('ValidationError', 'This is your only workspace. Create another workspace first, then delete this one.');
         be.openStore(other.path);
         switchedTo = other.name;
@@ -149,7 +150,7 @@ export function workspaceHandlers(be: Backend): Handlers {
     'ws.export': async ({ ref }: { ref?: string } = {}) => {
       // any workspace can be exported; one that isn't open is read without opening it in the app
       const p = ref ? be.manager.resolve(ref) : undefined;
-      const other = p && be.store && resolvePath(p) !== resolvePath(be.store.root) ? WorkspaceStore.open(p) : undefined;
+      const other = p && be.store && !samePath(p, be.store.root) ? WorkspaceStore.open(p) : undefined; // the open one by any name is read as it is open
       try {
         const store = other ?? be.ws;
         const bundle = store.exportBundle();

@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { basename, isAbsolute, join, resolve } from 'node:path';
 import { parseYaml, yaml } from '../util/lazy-yaml.js';
 import { ApsError } from '../errors.js';
+import { isInside } from '../storage/fsutil.js';
 import { slugify } from '../util/ids.js';
 import { deref } from '../util/json-ref.js';
 
@@ -696,7 +697,7 @@ export function readSourceFile(url: string, opts: { workspace?: string; baseDir?
   const isUrl = /^[a-z][a-z0-9+.-]*:\/\//i.test(url) && !/^file:/i.test(url);
   const candidates: string[] = [];
   if (!isUrl && clean) {
-    if (isAbsolute(clean) && opts.workspace && resolve(clean).startsWith(resolve(opts.workspace))) candidates.push(clean);
+    if (isAbsolute(clean) && opts.workspace && isInside(opts.workspace, clean)) candidates.push(clean);
     if (opts.baseDir) candidates.push(resolve(opts.baseDir, clean));
     if (opts.workspace) candidates.push(resolve(opts.workspace, clean));
   }
@@ -706,8 +707,8 @@ export function readSourceFile(url: string, opts: { workspace?: string; baseDir?
   if (opts.workspace && opts.name && /^[\w.-]+$/.test(opts.name))
     for (const ext of ['json', 'yaml', 'yml', 'openapi.json', 'openapi.yaml', 'openapi.yml']) candidates.push(join(opts.workspace, 'specs', `${opts.name}.${ext}`));
   for (const c of candidates) {
-    // only files inside the workspace or next to the Arazzo file
-    const inside = [opts.workspace, opts.baseDir].some((root) => root && resolve(c).startsWith(resolve(root)));
+    // only files inside the workspace or next to the Arazzo file (as named or really: a folder beside it, e.g. ws-2, is not inside ws)
+    const inside = [opts.workspace, opts.baseDir].some((root) => root && isInside(root, c));
     if (inside && existsSync(c)) {
       try {
         return readFileSync(c, 'utf8');

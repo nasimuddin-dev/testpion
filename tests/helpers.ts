@@ -1,4 +1,4 @@
-import { cpSync, mkdtempSync, rmSync } from 'node:fs';
+import { cpSync, mkdtempSync, realpathSync, rmSync, symlinkSync, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
@@ -6,14 +6,24 @@ import { type ExecServices, McpManager, MemorySecretStore, ProviderRegistry, Red
 
 /** What every test needs and used to write itself: a temp folder, a copy of an example, the CLI, fake services. */
 
-/** A temp folder, removed by `cleanup` (best effort: Windows may hold a file for a moment). */
-export function tempDir(prefix = 'tp-test-'): { dir: string; cleanup(): void } {
-  const dir = mkdtempSync(join(tmpdir(), prefix));
+/**
+ * A temp folder, removed by `cleanup` (best effort: Windows may hold a file for a moment). With `alias`, `dir` names it
+ * through a link (a junction on Windows, a symlink elsewhere) and `real` is where it really is — what macOS does to
+ * every temp folder (/var → /private/var): the workspace path a test passes and the path the file system, the current
+ * folder of a child process and fs.realpath report then differ, on every platform's CI.
+ */
+export function tempDir(prefix = 'tp-test-', o: { alias?: boolean } = {}): { dir: string; real: string; cleanup(): void } {
+  const made = mkdtempSync(join(tmpdir(), prefix));
+  const real = realpathSync(made);
+  const dir = o.alias ? `${made}-alias` : made;
+  if (o.alias) symlinkSync(real, dir, process.platform === 'win32' ? 'junction' : 'dir');
   return {
     dir,
+    real,
     cleanup: () => {
       try {
-        rmSync(dir, { recursive: true, force: true, maxRetries: 3 });
+        if (o.alias) unlinkSync(dir); // the link only, never through it
+        rmSync(real, { recursive: true, force: true, maxRetries: 3 });
       } catch {
         /* left for the system's temp cleanup */
       }

@@ -122,6 +122,7 @@ import {
   requireEnvironment,
   assertProductionStep,
   isDataChangingMethod,
+  samePath,
 } from '@testpion/core';
 import { appHandlers } from './handlers/app.js';
 import { workspaceHandlers } from './handlers/workspace.js';
@@ -346,7 +347,7 @@ export class Backend {
       // the files it adds are the app's own (copyOwned: no "changed on disk" for them)
       const added = addTemplateAdditions(dir, mine.path);
       this.examplesAdded = added;
-      if (added.length && this.store?.root === mine.path) this.host.emit('data.changed', { method: 'ws.import' });
+      if (added.length && this.store && samePath(this.store.root, mine.path)) this.host.emit('data.changed', { method: 'ws.import' });
       this.settings = this.manager.saveSettings({ ...this.settings, examplesOfferedVersion: ENGINE_VERSION });
       if (added.length) this.logger.info(`Added to the examples workspace: ${added.join(', ')}`);
     } catch (e) {
@@ -423,7 +424,7 @@ export class Backend {
   openStore(path: string): void {
     // the new workspace opens first: when it is refused (not a TestPion folder) the open one stays as it was
     const next = WorkspaceStore.open(path);
-    if (this.store && this.store.root !== next.root) this.terminals?.dispose('workspace');
+    if (this.store && !samePath(this.store.root, next.root)) this.terminals?.dispose('workspace'); // the same folder by another name keeps them
     this.store?.close();
     for (const s of this.mcpSessions.values()) void s.close();
     this.mcpSessions.clear();

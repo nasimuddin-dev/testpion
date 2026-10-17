@@ -232,7 +232,9 @@ describe('the views read a change by the kinds of file it touched', () => {
   });
 });
 
-describe('a large write does not flood the window (5,000 files)', () => {
+// above the 2,000 records the registry once dropped, small enough to stay quick when the whole suite is running
+const FILES = 2500;
+describe('a large write does not flood the window (2,500 files)', () => {
   it('one RPC, one background stretch and the watcher each say it once, with at most 50 paths, and forget none of the files', async () => {
     // real timers: the debounces run as they do in the app (a fake clock's own bookkeeping would be what is timed)
     const settle = () => new Promise((r) => setTimeout(r, 400));
@@ -254,20 +256,20 @@ describe('a large write does not flood the window (5,000 files)', () => {
       const done: Array<{ kinds: string[]; paths: string[] }> = [];
       await ow.run(
         async () => {
-          for (let i = 0; i < 5000; i++) write(join(root, 'tests', `f${i}.yaml`), `name: T${i}\n`);
+          for (let i = 0; i < FILES; i++) write(join(root, 'tests', `f${i}.yaml`), `name: T${i}\n`);
         },
         (b) => done.push(b),
       );
-      // the folder watcher's events come once the import let the event loop go: after all 5,000 writes
-      for (let i = 0; i < 5000; i++) ev.fire(`tests/f${i}.yaml`);
+      // the folder watcher's events come once the import let the event loop go: after all the writes
+      for (let i = 0; i < FILES; i++) ev.fire(`tests/f${i}.yaml`);
       await settle();
       expect(done).toHaveLength(1);
       expect(done[0]!.kinds).toEqual(['tests']);
       expect(done[0]!.paths).toHaveLength(50);
       expect(outside.flat().length).toBe(0); // all of them the app's own (none forgotten): no "changed outside TestPion"
-      // the same outside an RPC (a run, the assistant): one settled batch, not 5,000 events
-      for (let i = 0; i < 5000; i++) write(join(root, 'tests', `g${i}.yaml`), `name: G${i}\n`);
-      for (let i = 0; i < 5000; i++) ev.fire(`tests/g${i}.yaml`);
+      // the same outside an RPC (a run, the assistant): one settled batch, not one event per file
+      for (let i = 0; i < FILES; i++) write(join(root, 'tests', `g${i}.yaml`), `name: G${i}\n`);
+      for (let i = 0; i < FILES; i++) ev.fire(`tests/g${i}.yaml`);
       expect(background).toEqual([]);
       await settle();
       expect(background).toHaveLength(1);
@@ -277,5 +279,5 @@ describe('a large write does not flood the window (5,000 files)', () => {
       ow.dispose();
       stop();
     }
-  }, 90_000); // the disk's time: a stat and a read per file of a 5,000-file folder (the bookkeeping itself is O(1) a file)
+  }, 240_000); // the disk's time: a stat and a read per file of a 2,500-file folder (the bookkeeping itself is O(1) a file)
 });

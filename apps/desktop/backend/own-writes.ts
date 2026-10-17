@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { isAbsolute, relative, sep } from 'node:path';
-import { changeKind, onOwnWrite, type WorkspaceChangeKind } from '@testpion/core';
+import { sep } from 'node:path';
+import { changeKind, onOwnWrite, relativeInside, type WorkspaceChangeKind } from '@testpion/core';
 
 /** Workspace files the app itself wrote, as the folder watcher would describe them (GIT-103). */
 export interface OwnWriteBatch {
@@ -40,8 +40,9 @@ export class OwnWrites {
   private inside(abs: string): string | undefined {
     const root = this.root();
     if (!root) return undefined;
-    const rel = relative(root, abs);
-    if (!rel || rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel)) return undefined;
+    // as named or really: a write may name the workspace by its real path while it is open through a link
+    const rel = relativeInside(root, abs);
+    if (!rel) return undefined;
     const p = rel.split(sep).join('/');
     return changeKind(p) ? p : undefined;
   }

@@ -11,6 +11,7 @@ import {
   getTlsTrust,
   clearTokenCache,
   FEEDBACK_EMAIL,
+  samePath,
 } from '@testpion/core';
 import { existsSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -86,9 +87,10 @@ export function appHandlers(be: Backend): Handlers {
     },
     /** Show a workspace folder in the file manager. Only folders of known workspaces: opening a path runs it if it's a program. */
     'app.openPath': ({ path }: { path: string }) => {
-      const known = [be.ws.root, ...be.manager.list().map((w) => w.path)].map((p) => resolve(p));
+      const known = [be.ws.root, ...be.manager.list().map((w) => w.path)];
       const target = resolve(String(path));
-      if (!known.includes(target) || !existsSync(target) || !statSync(target).isDirectory()) throw new ApsError('ValidationError', 'Only workspace folders can be opened');
+      // a known folder by any name (a link to it, its real path)
+      if (!known.some((p) => samePath(p, target)) || !existsSync(target) || !statSync(target).isDirectory()) throw new ApsError('ValidationError', 'Only workspace folders can be opened');
       return be.host.openPath?.(target);
     },
   };

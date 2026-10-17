@@ -1,6 +1,6 @@
 import { chmodSync, existsSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
-import { atomicWrite } from './fsutil.js';
+import { atomicWrite, realPathOf } from './fsutil.js';
 
 /** The files that make a workspace folder git-ready (GIT-102); see git-ready.ts and planning/git-integration.md. */
 
@@ -59,9 +59,12 @@ export function writeGitFiles(root: string): string[] {
   return out;
 }
 
-/** Whether `root` is inside a git repository (a `.git` here or in a parent folder). */
+/**
+ * Whether `root` is inside a git repository (a `.git` here or in a parent folder of its real path: git finds the
+ * repository of the folder a link leads to, not of the folders above the link).
+ */
 export function isInGitRepository(root: string): boolean {
-  let dir = root;
+  let dir = realPathOf(root);
   for (let i = 0; i < 64; i++) {
     if (existsSync(join(dir, '.git'))) return true;
     const up = join(dir, '..');
@@ -78,7 +81,9 @@ const HOOK_MARK = '# testpion-secret-guard';
  * is not TestPion's is never overwritten: the message says how to add the check to it.
  */
 export function installPreCommitHook(root: string, cli?: string): { installed: boolean; path?: string; message: string } {
-  let dir = root;
+  // up from the real folder, as git looks (see isInGitRepository); the hook's path to the workspace is from there too
+  const real = realPathOf(root);
+  let dir = real;
   let gitDir: string | undefined;
   for (let i = 0; i < 64 && !gitDir; i++) {
     const g = join(dir, '.git');
@@ -94,7 +99,7 @@ export function installPreCommitHook(root: string, cli?: string): { installed: b
   }
   if (!gitDir) return { installed: false, message: `Not a git repository: run  git init  in ${root} first.` };
   const hook = join(gitDir, 'hooks', 'pre-commit');
-  const rel = relative(dir, root).split(sep).join('/') || '.';
+  const rel = relative(dir, real).split(sep).join('/') || '.';
   const script = [
     '#!/bin/sh',
     HOOK_MARK,

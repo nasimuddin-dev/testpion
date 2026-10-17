@@ -14,8 +14,8 @@ import type * as FS from 'node:fs';
 import { createHash } from 'node:crypto';
 import { createRequire, syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
-import { isAbsolute, join, relative, resolve, sep } from 'node:path';
-import { defaultAppDir } from '@testpion/core';
+import { join, relative, resolve, sep } from 'node:path';
+import { defaultAppDir, isInside, relativeInside } from '@testpion/core';
 
 /** The file system module as CommonJS sees it: its functions can be replaced (and syncBuiltinESMExports passes that on to every `import { … } from 'node:fs'`). */
 const fs = createRequire(import.meta.url)('node:fs') as typeof FS;
@@ -52,10 +52,9 @@ let state: State | undefined;
 export const dryRunActive = () => !!state;
 
 const norm = (p: string) => (process.platform === 'win32' ? resolve(p).toLowerCase() : resolve(p));
-const inside = (child: string, parent: string) => {
-  const r = relative(norm(parent), norm(child));
-  return r === '' || (!r.startsWith('..') && !isAbsolute(r));
-};
+// as named or really (`relativeInside`): the sandbox and a copied workspace are in the temp folder, which macOS names
+// through a link (/var → /private/var), and a command may name a file of either by its real path
+const inside = (child: string, parent: string) => isInside(parent, child, { orSame: true });
 
 /** Where a write to `p` goes: itself (inside the sandbox or the temp folder), or a mirror inside the sandbox. */
 function target(p: FS.PathLike | number): FS.PathLike | number {
@@ -63,7 +62,7 @@ function target(p: FS.PathLike | number): FS.PathLike | number {
   const abs = resolve(String(p));
   if (inside(abs, state.sandbox)) return p;
   const real = [...state.copies.keys()].find((r) => inside(abs, r));
-  if (real) return join(state.copies.get(real)!, relative(real, abs));
+  if (real) return join(state.copies.get(real)!, relativeInside(real, abs, { orSame: true })!);
   if (state.temps.some((t) => inside(abs, t))) return p;
   const mirror = join(state.sandbox, 'outside', abs.replace(/^([A-Za-z]):/, '$1').replace(/^[\\/]+/, ''));
   state.outside.set(mirror, abs);
@@ -187,7 +186,8 @@ export function startDryRun(): void {
 export function dryRunWorkspace(real: string): string {
   if (!state) return real;
   const r = resolve(real);
-  const known = [...state.copies.entries()].find(([k]) => norm(k) === norm(r));
+  // the same folder by another name (a link to it) is the same copy
+  const known = [...state.copies.entries()].find(([k]) => norm(k) === norm(r) || relativeInside(k, r, { orSame: true }) === '');
   if (known) return known[1];
   const copy = join(state.sandbox, `ws-${state.copies.size}`);
   copyTree(r, copy);
