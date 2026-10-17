@@ -7,6 +7,7 @@ import { runAgain } from '../lib/run-again';
 import { askAboutProblem, type Problem } from '../lib/problems';
 import { timeAgo } from '../lib/format';
 import { RowMenu } from './TreeParts';
+import { flakyTestItem, triageRunItem } from './ai/ai-analysis';
 import { LABEL } from '../lib/vocabulary';
 import { cx, type MenuItem } from './ui';
 
@@ -31,7 +32,10 @@ export function problemActions(p: Problem): MenuItem[] {
     { label: LABEL.open, icon: <ChevronRight size={14} />, onSelect: () => void openRef(p.ref) },
     ...(p.kind === 'run' && p.ref.kind === 'run' ? [{ label: LABEL.runAgain, icon: <Play size={14} />, onSelect: () => void runAgain(p.ref.runId!) }] : []),
     ...(p.kind === 'monitor' && p.ref.monitorId ? [{ label: 'Run now', icon: <Play size={14} />, onSelect: () => runMonitor(p.ref.monitorId!) }] : []),
-    { label: 'Ask AI', icon: <Sparkles size={14} />, separator: true, onSelect: () => askAboutProblem(p) },
+    // a failed run (the latest, or a failing monitor's): explain and fix its failures; a flaky test: why
+    ...((p.kind === 'run' || p.kind === 'monitor') && p.ref.runId ? [triageRunItem(p.ref.runId, { separator: true })] : []),
+    ...(p.kind === 'flaky' && (p.ref as { testId?: string }).testId ? [flakyTestItem((p.ref as { testId: string }).testId, { separator: true })] : []),
+    { label: 'Ask AI', icon: <Sparkles size={14} />, separator: !((p.kind === 'run' || p.kind === 'monitor') && p.ref.runId) && p.kind !== 'flaky', onSelect: () => askAboutProblem(p) },
   ];
 }
 

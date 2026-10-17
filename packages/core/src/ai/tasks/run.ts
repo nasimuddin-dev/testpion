@@ -25,6 +25,7 @@ import { verificationProblems, verifyItems, type StoredResponse } from '../verif
 import { aiTask, listAiTasks, type AiTaskDef, type AiTaskInput } from './registry.js';
 import { contextOfItem } from '../item-context.js';
 import { formatReference } from '../flow-format.js';
+import { loadScriptApi } from '../script-reference.js';
 import type { EngineContext } from '../../engine.js';
 import type { AppSettings } from '../../model/types.js';
 
@@ -256,13 +257,16 @@ export async function runAiTask(deps: AiRunDeps, req: AiTaskRequest): Promise<Ai
   if (req.path?.trim() && deps.store) req = { ...req, path: proposedTestFilePath(deps.store, req.path) };
   if (req.item && deps.store) {
     // a task with its own reading of an item (a flow from a folder) builds its context itself; the rest share item-context.ts
-    const ic = own?.prepare ? await own.prepare(deps.store, req.item, { path: req.path }) : await contextOfItem(deps.store, req.item);
+    // the privacy level is the task's to know: an analysis leaves out what metadata may not hold (failure messages with values)
+    const ic = own?.prepare ? await own.prepare(deps.store, req.item, { path: req.path, privacy: aiPrivacyOf(deps.settings, req.privacy) }) : await contextOfItem(deps.store, req.item);
     itemContext = ic.context;
     label = ic.label;
     local = 'local' in ic ? ic.local : undefined;
     req = { ...req, response: req.response ?? ic.response, previous: req.previous ?? ('previous' in ic ? (ic.previous as StoredResponse | undefined) : undefined), path: req.path ?? ('path' in ic ? (ic.path as string | undefined) : undefined) };
     if (ic.collection && !deps.collection) deps = { ...deps, collection: ic.collection };
   }
+  // the tp.* reference is read from the sandbox once per process (before the messages are composed)
+  if (own && [own.format].flat().includes('script')) await loadScriptApi();
   const { def, provider, model, preview, maxOutputTokens } = prepareAiTask(deps, req, itemContext);
   const { messages, ...summary } = preview;
   const base = { task: def.id, taskVersion: def.version, title: def.title, provider: provider.config.name, model, aiGenerated: true as const };
@@ -288,11 +292,19 @@ export async function runAiTask(deps: AiRunDeps, req: AiTaskRequest): Promise<Ai
     signal: deps.signal,
   };
   /** The answer as proposal items, verified; cached per answer so the repair check and the result share the work. */
+  let proposeNotes: string[] = [];
   const itemsOf = async (answer: { text: string; code: string; value?: unknown }): Promise<{ items: ProposalItem[]; problems: string[] }> => {
     if (!def.propose) return { items: [], problems: [] };
     let drafts;
+    // what the task could not make of the answer and the model can correct (a fix naming text that is not in the file):
+    // repair turns send it back like a failing verifier's problem
+    let proposeProblems: string[] = [];
     try {
-      drafts = def.propose(answer, input);
+      const out = def.propose(answer, input);
+      // a task may say what it could not make of the answer (a fix whose text is not in the file …)
+      drafts = Array.isArray(out) ? out : out.items;
+      proposeNotes = Array.isArray(out) ? [] : (out.notes ?? []);
+      proposeProblems = Array.isArray(out) ? [] : (out.problems ?? []);
     } catch (e) {
       return { items: [], problems: [normalizeError(e).message] };
     }
@@ -306,7 +318,7 @@ export async function runAiTask(deps: AiRunDeps, req: AiTaskRequest): Promise<Ai
           /* a new file */
         }
     await verifyItems(items, def.verifiers ?? [], verifyCtx);
-    return { items, problems: verificationProblems(items) };
+    return { items, problems: [...proposeProblems, ...verificationProblems(items)] };
   };
   try {
     let text = '';
@@ -393,14 +405,15 @@ export async function runAiTask(deps: AiRunDeps, req: AiTaskRequest): Promise<Ai
       }
     }
     const cost = estimateCost(deps.settings.pricing ?? [], provider.config, modelUsed, usage).cost;
-    if (items.length) {
+    let described: ReturnType<NonNullable<AiTaskDef['describe']>> = {};
+    try {
+      described = value !== undefined && def.describe ? def.describe(value, items, input) : {};
+    } catch {
+      /* a description is a courtesy: the items stand on their own */
+    }
+    // an analysis is a proposal even when it changes nothing (its findings: the API regressed, a token expired)
+    if (items.length || described.findings?.length) {
       const now = Date.now();
-      let described: ReturnType<NonNullable<AiTaskDef['describe']>> = {};
-      try {
-        described = value !== undefined && def.describe ? def.describe(value, items) : {};
-      } catch {
-        /* a description is a courtesy: the items stand on their own */
-      }
       proposal = {
         schemaVersion: 1,
         id: newProposalId(),
@@ -416,8 +429,9 @@ export async function runAiTask(deps: AiRunDeps, req: AiTaskRequest): Promise<Ai
                 .slice(0, 1200) || undefined
             : undefined),
         assumptions: (described.assumptions ?? []).filter((a) => typeof a === 'string' && a.trim()).slice(0, 20),
-        ...(described.notes?.length || fixes.length ? { notes: [...fixes, ...(described.notes ?? [])].slice(0, 30) } : {}),
+        ...(described.notes?.length || fixes.length || proposeNotes.length ? { notes: [...fixes, ...proposeNotes, ...(described.notes ?? [])].slice(0, 30) } : {}),
         items,
+        ...(described.findings?.length ? { findings: described.findings } : {}),
         provider: provider.config.name,
         model: modelUsed,
         surface: deps.surface,

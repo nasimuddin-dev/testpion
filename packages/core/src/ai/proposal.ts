@@ -15,7 +15,7 @@ import { noteProposalOutcome, type AiSurface } from '../storage/ai-usage.js';
 import { shortId } from '../util/ids.js';
 import { checkedTestFilePath } from '../storage/test-path.js';
 
-export type ProposalItemKind = 'file' | 'flow' | 'assertion' | 'script' | 'request' | 'patch' | 'text';
+export type ProposalItemKind = 'file' | 'flow' | 'assertion' | 'script' | 'request' | 'patch' | 'variable' | 'text';
 
 /** What a verifier said about an item: `pass` (checked and fine), `fail`, `warn`, `skip` (could not check). */
 export interface VerificationBadge {
@@ -46,6 +46,30 @@ export interface ProposalItem {
   selected: boolean;
   /** Safer forms a verifier offers (a check that pins a changing value → exists / type / regex); the review can switch to one. */
   alternatives?: Array<{ label: string; after: string; data?: unknown }>;
+  /** The finding it fixes (`Proposal.findings`: a cause of failures, a flaky pattern). */
+  finding?: string;
+}
+
+/**
+ * What an analysing task found (a cause behind failed results, why a test is flaky), with its evidence: shown above
+ * the items that fix it. A finding without items is an explanation only (the API regressed, a token expired).
+ */
+export interface ProposalFinding {
+  id: string;
+  title: string;
+  /** api-regression, stale-test, auth, environment, test-data, flaky, timing … (the task's own words). */
+  kind: string;
+  /** 0–1, the model's own. */
+  confidence?: number;
+  explanation?: string;
+  /** Facts behind it, each linking what it is about when it can. */
+  evidence: Array<{ text: string; ref?: ItemRef }>;
+  /** How many results it explains. */
+  count?: number;
+  /** The results it explains (for "Rerun the affected tests"), at most a few thousand. */
+  resultIds?: string[];
+  /** The deterministic groups it covers. */
+  groups?: string[];
 }
 
 export interface ProposalUndo {
@@ -54,6 +78,8 @@ export interface ProposalUndo {
   file?: { path: string; before: string | null };
   /** request: the node before (null: it did not exist) in its collection. */
   node?: { collectionId: string; nodeId: string; parentId?: string; before: unknown | null };
+  /** variable: its value in the environment before (null: it was not there). */
+  variable?: { environment: string; key: string; before: string | null };
 }
 
 export interface Proposal {
@@ -80,7 +106,23 @@ export interface Proposal {
   request?: { question?: string; item?: ItemRef; hint?: string; privacy?: string; path?: string };
   /** Problems the model's answer still had after the repairs (shown, never hidden). */
   problems?: string[];
+  /** What it found (an analysing task: triage, flaky analysis), with the items that fix each. */
+  findings?: ProposalFinding[];
+  /** Attempts to fix: the items applied, then the tests run again (`attemptFix`), newest last. */
+  attempts?: ProposalAttempt[];
   applied?: { at: string; items: string[]; undo: ProposalUndo[]; undone?: string };
+}
+
+/** One "Attempt to fix": what ran how often, and the verdict. */
+export interface ProposalAttempt {
+  at: string;
+  items: string[];
+  runs: number;
+  passed: number;
+  /** stable: passed every time; flaky: some runs failed; failing: none passed. */
+  verdict: 'stable' | 'flaky' | 'failing';
+  /** The failures of the runs that failed (the first few). */
+  failures?: string[];
 }
 
 export const PROPOSAL_STATUSES: ReadonlyArray<Proposal['status']> = ['open', 'applied', 'discarded'];

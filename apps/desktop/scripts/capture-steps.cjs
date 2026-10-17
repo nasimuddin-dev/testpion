@@ -919,4 +919,130 @@ module.exports = async function run(win) {
   await tab('Usage');
   await until(`__cap.one('[data-ai-feature-usage] table') && /generate-assertions/.test(__cap.screen('[data-ai-feature-usage]'))`, 'the AI features usage');
   await shot('ai-feature-usage');
+
+  // ---------------------------------------------------------------- Explain and fix failures (triage), Why is this flaky?
+  // (last of all: they change a saved request and add a test file). A collection run passes, then fails because its
+  // check pins the id the server gave the new patient; a test that reads a background job before it is done fails, and
+  // passes only after retries, a few runs in a row (flaky). The offline model's scripted answers name that result.
+  const API = 'http://127.0.0.1:4010';
+  const finished = async (runId, what) => {
+    await until(`await window.aps.invoke('runs.summary', { runId: ${J(runId)} })`, what, 90000);
+    return invoke('runs.summary', { runId });
+  };
+  const token = (await (await fetch(`${API}/auth/token`, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: 'client_id=demo&client_secret=demo-secret&grant_type=client_credentials' })).json()).access_token;
+  // the id the server gives the next patient: one registered now says where its counter is
+  const probe = await (await fetch(`${API}/patients`, { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: J({ name: 'Pepper', species: 'cat', ownerId: '456' }) })).json();
+  const nextId = String(Number(probe.id) + 1);
+  const vet = await invoke('col.get', { id: 'veterinary-api' });
+  const findItem = (items, id) => {
+    for (const i of items) {
+      if (i.id === id) return i;
+      const f = i.items && findItem(i.items, id);
+      if (f) return f;
+    }
+  };
+  const create = findItem(vet.items, 'req-create');
+  create.assertions = [...(create.assertions ?? []), { type: 'equals', path: '$.id', expected: nextId }];
+  await invoke('col.save', vet);
+  const checkIndex = create.assertions.length - 1;
+  const runCreate = async () => finished((await invoke('col.run', { collectionId: 'veterinary-api', selection: ['req-token', 'req-create'], name: 'Veterinary API', environment: 'Development' })).runId, 'the collection run');
+  const passing = await runCreate();
+  if (passing.failed || passing.errors) throw new Error(`the first run of Create patient should pass: ${J(passing)}`);
+  const failing = await runCreate();
+  if (failing.failed !== 1 || failing.errors) throw new Error(`the second run of Create patient should fail (the pinned id): ${J(failing)}`);
+  const failed = (await invoke('runs.results', { runId: failing.runId, status: 'failed' })).items[0];
+  if (!failed) throw new Error('no failed result in the triage run');
+  const nowId = String(Number(nextId) + 1);
+  const TRIAGE = {
+    summary: 'Create patient pins the id of the new patient, which the server makes up.',
+    causes: [
+      {
+        groups: ['g1'],
+        kind: 'stale-test',
+        title: "The new patient's id is pinned",
+        explanation: `The check expects id "${nextId}"; the server gave the new patient "${nowId}" because the last passing run registered "${nextId}". The status is still 201: the API works, the expected id is out of date.`,
+        confidence: 0.8,
+        evidence: [`$.id is "${nowId}" in the failing response, "${nextId}" in the last passing one`, 'the status is 201 in both'],
+        fix: { type: 'check', result: failed.id, checkIndex, replacement: { type: 'equals', path: '$.id', expected: nowId } },
+      },
+    ],
+  };
+  // the flaky test: Start the report, then Read it (running twice, then done); with retries it passes
+  await nav('Tests');
+  await addTestFile(
+    'jobs/report.yaml',
+    `# Starts the monthly report job and reads its result.
+name: Monthly report
+defaults:
+  type: http
+tests:
+  - id: start
+    name: Start the report
+    method: POST
+    url: "{{baseUrl}}/jobs"
+    extract: { jobId: $.id }
+    assertions:
+      - { type: status, expected: 201 }
+  - id: result
+    name: Read the report
+    dependsOn: start
+    method: GET
+    url: "{{baseUrl}}/jobs/{{jobId}}"
+    assertions:
+      - { type: status, expected: 200 }
+      - { type: equals, path: $.status, expected: done }
+`,
+  );
+  for (const retries of [0, 2, 0, 2, 0, 2]) await finished((await invoke('tests.run', { paths: ['jobs/report.yaml'], name: 'Monthly report', retries, environment: 'Development' })).runId, 'the report run');
+  const FLAKY = {
+    pattern: 'timing',
+    title: 'The report is read before the job has finished',
+    explanation: 'Every failing run read the job while it was still "running"; the passing runs read it once it was "done", after retries. The job finishes on its own a moment later: the test reads too early.',
+    confidence: 0.9,
+    evidence: ['$.status is "running" in every failing run and "done" in every passing one', 'it passed only after a retry'],
+    fix: { type: 'step', set: { until: { if: "$.status == 'done'", every: '200ms', timeout: '10s' } } },
+  };
+  const providers = (await invoke('ai.providers')).filter((p) => !p.builtIn).map(({ hasKey: _k, needsKey: _n, ...p }) => p);
+  const demo = providers.find((p) => p.id === 'demo-ai');
+  const rules = JSON.parse(demo.headers.find((h) => h.key === 'x-mock-rules').value);
+  demo.headers = [{ key: 'x-mock-rules', value: J([{ match: '"groups"', response: J(TRIAGE) }, { match: '"signals"', response: J(FLAKY) }, ...rules]) }];
+  await invoke('ai.saveProviders', { providers });
+  // the window starts again, so the Tests view lists the runs made above (the workspace and the profile stay)
+  const reloaded = new Promise((r) => win.webContents.once('did-finish-load', r));
+  win.webContents.reload();
+  await reloaded;
+  await js(HELPERS);
+  await until(`document.body.innerText.includes('Veterinary API (example)') && __cap.one('nav [aria-label="Tests"]')`, 'the workspace to open again', 30000);
+  park();
+  await nav('Tests');
+
+  // Runs ▸ right-click the failed run ▸ Explain and fix failures with AI…: the groups and the estimate
+  await clickOn(`__cap.all('main [role=tab]').filter((x) => __cap.text(x).startsWith('Runs')).pop()`, 'the Runs tab');
+  const failedRow = `__cap.one('[data-run-row="${failing.runId}"]')`;
+  await until(failedRow, 'the failed run in Runs');
+  await js(`(() => { const r = ${failedRow}; const b = r.getBoundingClientRect(); r.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: b.left + 40, clientY: b.top + 10, button: 2 })); return true; })()`);
+  await click('Explain and fix failures with AI…', '[role=menuitem]');
+  await until(`__cap.one('[data-ai-analysis="triage"]') && /failure/.test(__cap.text(__cap.one('[data-ai-analysis-subject]'))) && /tokens in/.test(__cap.text(__cap.one('[data-ai-analysis-estimate]')))`, 'the triage dialog with its estimate', 20000);
+  await shot('ai-triage-dialog');
+  // Explain and fix: the cause with its evidence, the fix verified (it follows an API change) and TestPion's safer form
+  await clickOn(`__cap.one('[role=dialog] [data-ai-analyse]')`, 'Explain and fix');
+  await until(`__cap.one('[data-proposal] [data-finding]') && __cap.one('[data-proposal] [data-proposal-safer]')`, 'the triage review with its finding and the safer form', 30000);
+  await shot('ai-triage-review');
+  await clickOn(`__cap.all('[role=dialog] button').find((b) => __cap.text(b) === 'Close')`, 'Close');
+  await until(`!__cap.one('[data-proposal]')`, 'the review to close');
+
+  // Problems ▸ the flaky test ▸ Why is this flaky? ▸ Analyse ▸ Attempt to fix: the pattern, the signature, the verdict
+  await clickSel('[data-status=problems]', 'the Problems count');
+  const flakyRow = `__cap.all('[data-problem="flaky"]').find((r) => __cap.text(r).includes('Read the report'))`;
+  await until(flakyRow, 'the flaky test in Problems');
+  await js(`(() => { const r = ${flakyRow}; const b = r.getBoundingClientRect(); r.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: b.left + 40, clientY: b.top + 8, button: 2 })); return true; })()`);
+  await click('Why is this flaky?', '[role=menuitem]');
+  await until(`__cap.one('[data-ai-analysis="flaky"]') && /tokens in/.test(__cap.text(__cap.one('[data-ai-analysis-estimate]')))`, 'the flaky dialog with its estimate', 20000);
+  await clickOn(`__cap.one('[role=dialog] [data-ai-analyse]')`, 'Analyse');
+  await until(`__cap.one('[data-proposal] [data-finding]') && __cap.one('[data-attempt-fix]:not([disabled])')`, 'the flaky review', 30000);
+  await clickSel('[data-attempt-fix]', 'Attempt to fix');
+  await until(`__cap.one('[data-attempt-verdict="stable"]') && /passed 5\\/5/.test(__cap.text(__cap.one('[data-attempt-verdict]')))`, 'the verdict of the attempt', 90000);
+  await shot('ai-flaky-review');
+  await clickOn(`__cap.all('[role=dialog] button').find((b) => __cap.text(b) === 'Close')`, 'Close');
+  await until(`!__cap.one('[data-proposal]')`, 'the review to close');
 };

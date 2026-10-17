@@ -9,11 +9,14 @@ import { checkLabel, type ItemRef } from '@testpion/shared';
 import type { CheckConfig, Collection } from '../../model/types.js';
 import type { WorkspaceStore } from '../../storage/workspace.js';
 import type { StoredResponse } from '../verify.js';
-import type { AiTier } from '../ai-settings.js';
+import type { AiPrivacy, AiTier } from '../ai-settings.js';
 import { parseGeneratedRequest } from '../assist.js';
-import type { ProposalItem } from '../proposal.js';
+import type { ProposalFinding, ProposalItem } from '../proposal.js';
 import { TASK_INSTRUCTIONS } from './prompts.js';
 import { quoteTemplateValues } from '../yaml-repair.js';
+import type { FormatKind } from '../flow-format.js';
+import { describeTriage, prepareTriage, proposeTriage, TRIAGE_SCHEMA } from '../triage.js';
+import { describeFlaky, FLAKY_SCHEMA, prepareFlaky, proposeFlaky } from '../flaky.js';
 import { describeFlow, FLOW_PLAN_SCHEMA, FLOW_VERIFIERS, prepareFlowContext, proposeFlow } from '../flow-from-collection.js';
 
 export type AiTaskOutput = { kind: 'markdown' } | { kind: 'code'; language: 'yaml' | 'json' | 'javascript' | 'graphql' | 'text' } | { kind: 'json'; schema: Record<string, unknown> };
@@ -73,7 +76,7 @@ export interface AiTaskDef {
   /** The names (never values) of the variables in scope are added to the context. */
   variableNames?: boolean;
   /** Turns the answer into proposal items; a task without one answers only (an explanation). */
-  propose?(answer: { text: string; code: string; value?: unknown }, input: AiTaskInput): DraftItem[];
+  propose?(answer: { text: string; code: string; value?: unknown }, input: AiTaskInput): DraftItem[] | { items: DraftItem[]; notes?: string[]; problems?: string[] };
   /** The verifiers (verify.ts) its items go through. */
   verifiers?: string[];
   /** Repair turns when verification fails (default 2; 0 for prose). */
@@ -81,13 +84,13 @@ export interface AiTaskDef {
   /** Makes a code answer safe before it is verified (an unquoted {{ in YAML quoted); what it fixed goes into the proposal's notes. */
   normalize?(code: string): { code: string; notes: string[] };
   /** The test-file format reference added to its instruction (flow-format.ts, made from the schema and the check registry): the whole format, or the checks alone. */
-  format?: 'flow' | 'checks';
+  format?: FormatKind | FormatKind[];
   /** Other ids it answers to (`suggest-assertions` for generate-assertions). */
   aliases?: string[];
   /** Reads its own context for a workspace item (else the generic item context, item-context.ts). */
-  prepare?(store: WorkspaceStore, item: ItemRef, o: { path?: string }): Promise<PreparedItem> | PreparedItem;
-  /** The summary, assumptions and notes of a JSON task's proposal (what the review shows above the items). */
-  describe?(value: unknown, items: ProposalItem[]): { summary?: string; assumptions?: string[]; notes?: string[] };
+  prepare?(store: WorkspaceStore, item: ItemRef, o: { path?: string; privacy: AiPrivacy }): Promise<PreparedItem> | PreparedItem;
+  /** The summary, assumptions, notes and findings of a JSON task's proposal (what the review shows above the items). */
+  describe?(value: unknown, items: ProposalItem[], input: AiTaskInput): { summary?: string; assumptions?: string[]; notes?: string[]; findings?: ProposalFinding[] };
 }
 
 const slug = (s: string) =>
@@ -330,7 +333,8 @@ export const AI_TASKS: readonly AiTaskDef[] = [
       checksOfValue(a.value).map((c) => ({ kind: 'assertion', title: checkLabel(c), after: toYaml([c]).trim(), language: 'yaml', data: c, ...(requestOf(input) ? { target: requestOf(input) } : {}) })),
   }),
   T('generate-pm-tests', {
-    version: 3,
+    version: 4,
+    format: 'script',
     aliases: ['generate-tests'],
     title: 'Write tp tests',
     description: 'tp.test checks for a response as JSON, one test per item, each run in the sandbox against the response (tp.* only, never pm.*).',
@@ -394,6 +398,41 @@ export const AI_TASKS: readonly AiTaskDef[] = [
     prepare: (store, item, o) => prepareFlowContext(store, item, o),
     propose: proposeFlow,
     describe: describeFlow,
+  }),
+  T('triage-run', {
+    version: 2,
+    format: ['checks', 'script'],
+    title: 'Explain and fix failures',
+    description:
+      "A failed run's failures grouped by likely cause (one cause may explain many), each with evidence (the failing step, request and response, the failed check, what changed since the last passing run), a confidence and a fix — a check to change, an edit of the test, a variable to set, or none (the API regressed: a bug report) — verified against the failing and the last passing response before it is offered.",
+    tier: 'large',
+    output: { kind: 'json', schema: TRIAGE_SCHEMA },
+    context: 'item: run:<runId> or run:last (its failures grouped: same check, status and endpoint; representatives with their evidence and last passing run)',
+    contextTokens: 10_000,
+    sectionBudgets: { groups: 9000 },
+    maxTokens: 4000,
+    verifiers: ['fix'],
+    prepare: (store, item, o) => prepareTriage(store, item, o),
+    propose: proposeTriage,
+    describe: describeTriage,
+  }),
+  T('analyze-flaky', {
+    version: 2,
+    // the whole test-file format: a fix changes a step (until:, a check) and must stay valid YAML
+    format: ['flow', 'script'],
+    title: 'Why is this flaky?',
+    description:
+      "A flaky test's pass/fail history with the failing outputs: the pattern (timing, ordering, shared state, a time-dependent value, an external dependency, a rate limit, a data collision) with evidence, and a fix that makes it stable without hiding a failure (a wait with until:, a stable check, isolated data; a retry only as a last resort; never quarantine), verified; Attempt to fix applies it and runs the test again.",
+    tier: 'large',
+    output: { kind: 'json', schema: FLAKY_SCHEMA },
+    context: 'item: test-case:<testId> (a flaky test as flaky_tests names it) or test:<path>[:<step>]',
+    contextTokens: 8000,
+    sectionBudgets: { history: 3000, samples: 3500 },
+    maxTokens: 3000,
+    verifiers: ['fix'],
+    prepare: (store, item, o) => prepareFlaky(store, item, o),
+    propose: proposeFlaky,
+    describe: describeFlaky,
   }),
   T('suggest-coverage-tests', {
     version: 3,

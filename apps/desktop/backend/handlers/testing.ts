@@ -182,7 +182,7 @@ export function testingHandlers(be: Backend): Handlers {
       const plan = runAgainPlan(finishedRun(be.ws, runId), resultIds);
       const env = environment ?? plan.environment;
       return plan.kind === 'collection'
-        ? be.startCollectionRun({ collectionId: plan.collectionId, selection: plan.selection, iterations: plan.iterations, environment: env, name: plan.name })
+        ? be.startCollectionRun({ collectionId: plan.collectionId, selection: plan.selection, iterations: plan.iterations, environment: env, name: plan.name, rerun: plan.rerun })
         : be.startTestRun({ paths: plan.paths, ids: plan.ids, grep: plan.grep, tags: plan.tags, environment: env, name: plan.name });
     },
     // WF-09: a run as a CI target (the Run in CI dialog preselected with it) and the CLI command that runs it here

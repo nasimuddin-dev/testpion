@@ -114,6 +114,12 @@ export interface FlowGenerateRequest {
   onAccept?(text: string): Promise<boolean>;
 }
 
+/**
+ * An AI analysis (AI-2 / AI-5): "Explain and fix failures with AI" on a failed run, or "Why is this flaky?" on a flaky
+ * test. The dialog shows what is analysed and the estimate, runs it, and opens the findings with their fixes in the review.
+ */
+export type AiAnalysisRequest = { kind: 'triage'; runId: string; title?: string } | { kind: 'flaky'; testId: string; title?: string };
+
 export interface DialogButton {
   id: string;
   label: string;
@@ -178,6 +184,8 @@ interface AppState {
   assistant?: AssistantRequest;
   /** The "Generate integration flow with AI" dialog (AI-1). */
   flowGenerate?: FlowGenerateRequest;
+  /** Explain and fix failures (AI-2) / Why is this flaky? (AI-5). */
+  aiAnalysis?: AiAnalysisRequest;
   shortcutsOpen?: boolean;
   /** The "Run in CI" dialog, with what to run preselected. */
   ci?: CiRequest;

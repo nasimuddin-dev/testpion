@@ -15,6 +15,14 @@ import { shortId } from '../util/ids.js';
 import { noteProposalOutcome } from '../storage/ai-usage.js';
 import { checkedTestFilePath } from '../storage/test-path.js';
 import { getProposal, saveProposal, type Proposal, type ProposalItem, type ProposalUndo } from './proposal.js';
+import { findEnvironment, setEnvironmentVariables, unsetEnvironmentVariables } from '../storage/env-edit.js';
+
+/** The text a fix was made from (`data.fix.base`): a file or script that changed since is not overwritten. */
+function assertUnchanged(item: ProposalItem, current: string | null | undefined): void {
+  const base = (item.data as { fix?: { base?: string } } | undefined)?.fix?.base;
+  if (base !== undefined && (current ?? '').replace(/\r\n/g, '\n') !== base.replace(/\r\n/g, '\n'))
+    throw new ApsError('ConfigurationError', `"${item.title}": it changed since the proposal was made`, { suggestions: ['Run the analysis again, so the change is made from what is there now.'] });
+}
 
 export interface ApplyResult {
   id: string;
@@ -64,6 +72,7 @@ function applyItem(store: WorkspaceStore, item: ProposalItem): ProposalUndo {
       } catch {
         before = null;
       }
+      assertUnchanged(item, before);
       store.writeTestFile(path, item.after.endsWith('\n') ? item.after : `${item.after}\n`);
       return { item: item.id, file: { path, before } };
     }
@@ -73,13 +82,25 @@ function applyItem(store: WorkspaceStore, item: ProposalItem): ProposalUndo {
       const { c, at } = requestTarget(store, item);
       const before = clone(at.node);
       const node = at.node as SavedHttpRequest;
-      if (item.kind === 'assertion') {
+      const replace = (item.data as { replace?: { index: number; was: CheckConfig }; check?: CheckConfig } | undefined)?.replace;
+      if (item.kind === 'assertion' && replace) {
+        // one check replaced (a fix): the one it was made from, where it was, or the same check elsewhere in the list
+        const to = (item.data as { check?: CheckConfig }).check;
+        if (!to || typeof to.type !== 'string') throw new ApsError('ValidationError', `"${item.title}" holds no check`);
+        const list = [...(node.assertions ?? [])];
+        const same = (c: unknown) => JSON.stringify(c) === JSON.stringify(replace.was);
+        const at = same(list[replace.index]) ? replace.index : list.findIndex(same);
+        if (at < 0) throw new ApsError('ConfigurationError', `"${item.title}": the check it replaces is no longer there`, { suggestions: ['Run the analysis again, so the change is made from what is there now.'] });
+        list[at] = to;
+        node.assertions = list;
+      } else if (item.kind === 'assertion') {
         const checks = (Array.isArray(item.data) ? item.data : [item.data]) as CheckConfig[];
         if (!checks.every((x) => x && typeof x === 'object' && typeof x.type === 'string')) throw new ApsError('ValidationError', `"${item.title}" holds no check`);
         node.assertions = [...(node.assertions ?? []), ...checks];
       } else if (item.kind === 'script') {
         const d = item.data as { phase?: string; mode?: string } | undefined;
         const phase = d?.phase === 'pre' ? 'preRequestScript' : 'testScript';
+        assertUnchanged(item, node[phase]);
         const current = node[phase]?.trimEnd() ?? '';
         // one test per item: added after the script's own tests (once); a whole script replaces it
         node[phase] = d?.mode === 'append' && current ? (current.includes(item.after.trim()) ? current : `${current}\n\n${item.after.trim()}\n`) : item.after;
@@ -107,6 +128,16 @@ function applyItem(store: WorkspaceStore, item: ProposalItem): ProposalUndo {
       (folder?.node.kind === 'folder' ? folder.node.items : c.items).push(node);
       store.saveCollection(c);
       return { item: item.id, node: { collectionId: c.id, nodeId: node.id, parentId: folder?.node.id, before: null } };
+    }
+    case 'variable': {
+      // a non-secret value of the run's environment (a secret variable is refused by setEnvironmentVariables)
+      const d = item.data as { environment?: string; key?: string; value?: string } | undefined;
+      if (!d?.environment || !d.key || typeof d.value !== 'string') throw new ApsError('ValidationError', `"${item.title}" names no environment variable`);
+      const env = findEnvironment(store, d.environment);
+      if (!env) throw new ApsError('ConfigurationError', `"${item.title}": there is no environment "${d.environment}" any more`);
+      const was = env.variables.find((v) => v.key === d.key);
+      setEnvironmentVariables(store, d.environment, { [d.key]: d.value });
+      return { item: item.id, variable: { environment: d.environment, key: d.key, before: was ? String(was.value ?? '') : null } };
     }
     default:
       throw new ApsError('ValidationError', `"${item.title}" is text to read or copy; there is nothing to apply`);
@@ -155,7 +186,11 @@ export function undoProposal(store: WorkspaceStore, id: string): { id: string; r
   for (const u of p.applied.undo) if (u.file) checkedTestFilePath(store.path('tests'), u.file.path);
   let restored = 0;
   for (const u of [...p.applied.undo].reverse()) {
-    if (u.file) {
+    if (u.variable) {
+      if (u.variable.before === null) unsetEnvironmentVariables(store, u.variable.environment, [u.variable.key]);
+      else setEnvironmentVariables(store, u.variable.environment, { [u.variable.key]: u.variable.before });
+      restored++;
+    } else if (u.file) {
       const { rel, abs } = checkedTestFilePath(store.path('tests'), u.file.path);
       if (u.file.before === null) {
         if (existsSync(abs)) store.deleteTestFile(rel);

@@ -18,7 +18,9 @@ import {
   productionAllowed,
   productionAskOf,
   productionRefusal,
+  getProposal,
   runTests,
+  saveProposal,
   saveMonitor,
   setProductionAllowedByDefault,
   WorkspaceManager,
@@ -29,10 +31,13 @@ import {
 import { withProductionConsent, type Tool } from '../../packages/core/src/mcp-server/tool.js';
 import { productionAskText } from '../../packages/shared/src/index.js';
 import { runCli, tempDir } from '../helpers.js';
+import { addRun, httpResult } from '../ai/run-fixtures.js';
 
 // WF-06: one production guard for every send and run path: the backend boundary (every RPC method that sends or runs),
 // the engine (every data-changing step of a context made for production), the MCP server and the CLI.
 const tmp = tempDir('tp-prodguard-');
+const JOBS = 'name: Jobs\ntests:\n  - id: job-done\n    name: Job is done\n    url: "{{base}}/job"\n    assertions:\n      - { type: status, expected: 200 }\n';
+const FLAKY_PROPOSAL = 'ai-flakyprod01';
 let server: Server;
 let base = '';
 const hits: string[] = [];
@@ -63,6 +68,34 @@ beforeAll(async () => {
       { kind: 'http', id: 'create', name: 'Create', request: { method: 'POST', url: '{{base}}/create', headers: [] } },
       { kind: 'graphql', id: 'mut', name: 'Mutate', request: { endpoint: '{{base}}/graphql', query: 'mutation { add }' } },
     ],
+  } as never);
+  // AI-5: a flaky test whose runs were in Production, and its analysis: Attempt to fix applies the fix and runs it there
+  s.writeTestFile('flaky/jobs.yaml', JOBS);
+  const file = join(s.path('tests'), 'flaky', 'jobs.yaml');
+  await addRun(s, {
+    id: 'run-flaky',
+    startedAt: '2026-10-10T10:00:00.000Z',
+    environment: 'Production',
+    origin: { kind: 'tests', paths: ['flaky/jobs.yaml'] },
+    results: [httpResult({ id: 'job-done', name: 'Job is done', url: `${base}/job`, status: 200, file, checks: [{ name: 'status', passed: true }] })],
+  });
+  const now = new Date();
+  saveProposal(s, {
+    schemaVersion: 1,
+    id: FLAKY_PROPOSAL,
+    task: 'analyze-flaky',
+    taskVersion: 1,
+    title: 'Why "Job is done" is flaky',
+    assumptions: [],
+    items: [{ id: 'i1', kind: 'file', title: 'Rename the step', path: 'flaky/jobs.yaml', before: JOBS, after: JOBS.replace('Job is done', 'Job is done (fixed)'), verification: [], selected: true }],
+    provider: 'mock',
+    model: 'mock',
+    surface: 'app',
+    createdAt: now.toISOString(),
+    expiresAt: new Date(now.getTime() + 86_400_000).toISOString(),
+    status: 'open',
+    usage: { inputTokens: 0, outputTokens: 0 },
+    request: { item: { kind: 'test-case', testId: 'job-done' } },
   } as never);
   s.close();
 });
@@ -180,6 +213,7 @@ describe('the backend boundary: every send and run method', () => {
     'load.start': { config: { target: { kind: 'http', request: { method: 'GET', url: '{{base}}' } } }, environment: 'Production' },
     'flows.webhooks.start': { environment: 'Production' },
     'monitor.save': { monitor: { name: 'Prod check', collectionId: 'shop', environment: 'Production', everyMinutes: 60, enabled: false } },
+    'ai.attemptFix': { id: FLAKY_PROPOSAL },
   };
 
   it('every method that sends or runs is guarded (a new one must be added to the guard, or listed here as not sending)', () => {
@@ -327,6 +361,36 @@ describe('the backend boundary: every send and run method', () => {
     expect(((await be.invoke('monitor.save', { monitor: { ...m, id: saved.id, environment: 'Dev' } })) as { allowProduction?: boolean }).allowProduction).toBeUndefined();
     await expect(be.invoke('monitor.save', { monitor: { ...m, id: saved.id } })).rejects.toMatchObject({ details: { code: 'PRODUCTION_CONFIRMATION' } });
     await be.invoke('monitor.delete', { id: saved.id });
+  });
+
+  it('Attempt to fix (AI-5) asks before running a flaky test in production; refused, nothing is applied or sent', async () => {
+    const be = backend();
+    hits.length = 0;
+    const e = await be.invoke('ai.attemptFix', { id: FLAKY_PROPOSAL, times: 3 }).catch((x) => x);
+    expect(productionAskOf(e)).toMatchObject({ environment: 'Production', run: true, action: 'Attempt to fix Job is done: run it 3 times' });
+    expect(hits).toEqual([]);
+    expect(be.ws.readTestFile('flaky/jobs.yaml')).toBe(JOBS);
+    expect(getProposal(be.ws, FLAKY_PROPOSAL).status).toBe('open');
+    // the MCP server started without --allow-production refuses it the same way as run_tests, before applying
+    const srv = createTestPionMcpServer({ store: be.ws, secrets: new MemorySecretStore(), settings: new WorkspaceManager(join(tmp.dir, 'mcp-home')).loadSettings() });
+    const [a, b] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: 'test', version: '1' });
+    await srv.connect(a);
+    await client.connect(b);
+    try {
+      const r = (await client.callTool({ name: 'ai_attempt_fix', arguments: { id: FLAKY_PROPOSAL, times: 2, confirm: true } })) as { isError?: boolean; content: Array<{ text: string }> };
+      expect(r.isError).toBe(true);
+      expect(r.content[0]!.text).toMatch(/"Production" is a production environment.*--allow-production/);
+    } finally {
+      await client.close();
+    }
+    expect(hits).toEqual([]);
+    expect(be.ws.readTestFile('flaky/jobs.yaml')).toBe(JOBS);
+    // with the window's consent: applied, then run there
+    const ok = (await be.invoke('ai.attemptFix', { id: FLAKY_PROPOSAL, times: 3, allowProduction: true })) as { attempt: { verdict: string; runs: number } };
+    expect(ok.attempt).toMatchObject({ verdict: 'stable', runs: 3 });
+    expect(hits).toEqual(['GET /job', 'GET /job', 'GET /job']);
+    expect(be.ws.readTestFile('flaky/jobs.yaml')).toMatch(/Job is done \(fixed\)/);
   });
 
   it('a monitor without consent runs its reads on its schedule but not its writes', async () => {

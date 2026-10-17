@@ -125,6 +125,7 @@ export const CONFIRM_TOOLS: Record<string, { when?(a: Args): boolean; describe(a
   debugger_session: { when: (a) => a.action === 'open' && a.append !== true, describe: (a) => `replace the captured exchanges with the session file ${q(a.path)}` },
   ai_apply_proposal: { when: (a) => a.dryRun !== true, describe: (a) => `apply the AI proposal ${q(a.id)}${Array.isArray(a.items) ? ` (items ${a.items.join(', ')})` : ''}: write its test files and change the requests it names`, preview: (a) => ({ ...a, dryRun: true }) },
   ai_undo_proposal: { describe: (a) => `undo the AI proposal ${q(a.id)}: put back the files and requests it replaced` },
+  ai_attempt_fix: { describe: (a) => `apply the flaky-test fix ${q(a.id)} (change the test) and run the test ${typeof a.times === 'number' ? a.times : 5} times (its requests are sent)` },
   agents_init: {
     when: (a) => a.force === true,
     describe: () => 'repair broken testpion markers in the agent files (the text between stray markers is replaced)',

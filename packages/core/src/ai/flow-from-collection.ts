@@ -163,7 +163,7 @@ export function flowSourceRef(store: WorkspaceStore, o: { collection: string; fo
   const full = store.getCollection(c.id);
   const f = findFolder(full.items, o.folder);
   if (!f)
-    throw new ApsError('ConfigurationError', `No folder "${o.folder}" in ${full.name}`, { suggestions: ['Give its name, its path (Orders/Refunds) or its id (testpion list-requests shows them).'] });
+    throw new ApsError('ConfigurationError', `No folder "${o.folder}" in ${full.name}`, { suggestions: ['Give its name, its path (Orders/Refunds) or its id (testpion requests <collection> lists them).'] });
   return { kind: 'folder', collectionId: c.id, folderId: f.folder.id };
 }
 

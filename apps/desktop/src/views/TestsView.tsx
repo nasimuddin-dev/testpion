@@ -8,6 +8,7 @@ import { useExternalChange } from '../lib/external-change';
 import { touchesFiles, type DataChangedEvent } from '../lib/data-changed';
 import { LABEL } from '../lib/vocabulary';
 import { runCiMenuItems } from '../lib/run-ci';
+import { triageRunItem } from '../components/ai/ai-analysis';
 import { noteClosedTabs } from '../lib/closed-tabs';
 import { ItemBreadcrumb, type Crumb } from '../components/ItemBreadcrumb';
 import { setDragRefs } from '../lib/drag-ref';
@@ -1001,7 +1002,11 @@ function RunList({ runs, active, onSelect, onOverview, onRerunFailed }: { runs: 
                 open={menuFor === r.id}
                 onOpenChange={(o) => setMenuFor(o ? r.id : undefined)}
                 onOpen={() => onSelect(r.id)}
-                runItems={[...(onRerunFailed && r.failed + r.errors > 0 ? [{ label: LABEL.rerunFailed, icon: <RotateCcw size={14} />, onSelect: () => onRerunFailed(r.id) }] : []), ...runCiMenuItems(r.id)]}
+                runItems={[
+                  ...(onRerunFailed && r.failed + r.errors > 0 ? [{ label: LABEL.rerunFailed, icon: <RotateCcw size={14} />, onSelect: () => onRerunFailed(r.id) }] : []),
+                  ...runCiMenuItems(r.id),
+                  ...(r.failed + r.errors > 0 ? [triageRunItem(r.id, { title: r.name, separator: true })] : []),
+                ]}
                 configItems={[
                   {
                     label: 'Export report…',

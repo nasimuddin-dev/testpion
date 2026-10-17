@@ -36,7 +36,7 @@ export function resultSourceRefs(store: Pick<WorkspaceStore, 'path'>, result: { 
 /** What running a run again starts: the same test files (or only some results), or the same collection run (or some of its requests). */
 export type RunAgainPlan =
   | { kind: 'tests'; paths: string[]; ids?: string[]; grep?: string; tags?: string[]; environment?: string; name: string }
-  | { kind: 'collection'; collectionId: string; selection?: string[]; iterations?: number; environment?: string; name: string };
+  | { kind: 'collection'; collectionId: string; selection?: string[]; iterations?: number; rerun?: boolean; environment?: string; name: string };
 
 /**
  * How to run `summary` again: as it ran (its origin), or only `resultIds`. A run recorded before runs kept their origin
@@ -52,6 +52,8 @@ export function runAgainPlan(summary: RunSummary, resultIds?: string[]): RunAgai
       collectionId: origin.collectionId,
       selection: only ? [...new Set(only.map(requestIdOfResult))] : origin.selection,
       iterations: only ? undefined : origin.iterations,
+      // some requests again: the earlier ones they need (a token request) run first as setup
+      ...(only || origin.rerun ? { rerun: true } : {}),
       environment: summary.environment,
       name,
     };

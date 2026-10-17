@@ -105,6 +105,7 @@ import {
   APP_CLAUDE_ID,
   runAiTask,
   aiRunDeps,
+  type AiRunDeps,
   type AiTaskRequest,
   type AiTaskResult,
   APP_CLAUDE_SECRET,
@@ -129,6 +130,7 @@ import { requestsHandlers } from './handlers/requests.js';
 import { mcpHandlers } from './handlers/mcp.js';
 import { aiHandlers } from './handlers/ai.js';
 import { aiTaskHandlers } from './handlers/ai-tasks.js';
+import { aiTriageHandlers } from './handlers/ai-triage.js';
 import { testingHandlers } from './handlers/testing.js';
 import { monitorHandlers, runMonitorNow } from './handlers/monitors.js';
 import { grpcHandlers } from './handlers/grpc.js';
@@ -645,7 +647,7 @@ export class Backend {
    */
   private buildHandlers(): Handlers {
     const all: Handlers = {};
-    for (const group of [appHandlers, workspaceHandlers, collectionsHandlers, requestsHandlers, grpcHandlers, mcpHandlers, aiHandlers, aiTaskHandlers, testingHandlers, monitorHandlers, agentHandlers, feedbackHandlers, gitHandlers, debuggerHandlers, debuggerRulesHandlers, externalSecretsHandlers, fuzzHandlers, flowDebugHandlers, debuggerFlowHandlers, debuggerReverseHandlers, flowDeployHandlers, terminalHandlers, flowScaleHandlers, evalMatrixHandlers]) {
+    for (const group of [appHandlers, workspaceHandlers, collectionsHandlers, requestsHandlers, grpcHandlers, mcpHandlers, aiHandlers, aiTaskHandlers, aiTriageHandlers, testingHandlers, monitorHandlers, agentHandlers, feedbackHandlers, gitHandlers, debuggerHandlers, debuggerRulesHandlers, externalSecretsHandlers, fuzzHandlers, flowDebugHandlers, debuggerFlowHandlers, debuggerReverseHandlers, flowDeployHandlers, terminalHandlers, flowScaleHandlers, evalMatrixHandlers]) {
       for (const [name, fn] of Object.entries(group(this))) {
         if (name in all) throw new Error(`RPC method ${name} is defined twice`);
         // the parameters are checked first; a TypeError from inside becomes an InternalError naming the method
@@ -1099,6 +1101,15 @@ export class Backend {
    * `assistant.deltas` and `ai.cancel` stops it.
    */
   async assistant(p: AiTaskRequest & { environment?: string; requestId?: string }): Promise<AiTaskResult> {
+    return this.withAiDeps(p, (deps) => runAiTask(deps, p));
+  }
+
+  /**
+   * The AI runner's dependencies for one call from the window: the engine context of its environment, a cancel handle
+   * (`ai.cancel` with `requestId`) and streamed text on `assistant.deltas`. Every AI handler (tasks, triage, flaky
+   * analysis) goes through it, so the app's Claude provider without its key is said the same way everywhere.
+   */
+  async withAiDeps<T>(p: { environment?: string; requestId?: string; provider?: string; dryRun?: boolean }, fn: (deps: AiRunDeps) => Promise<T>): Promise<T> {
     // the app's Claude provider without its key: say so (the window offers Settings ▸ AI assistant)
     const uses = [this.settings.assistantProvider, this.settings.ai?.small?.provider, this.settings.ai?.large?.provider];
     if (!p.provider && uses.includes(APP_CLAUDE_ID) && !this.appClaudeKey())
@@ -1109,11 +1120,12 @@ export class Backend {
     this.controllers.set(id, ctrl);
     const deltas = this.batched<unknown>('assistant.deltas', 40);
     try {
-      const r = await runAiTask(aiRunDeps({ ctx, settings: this.settings, store: this.ws, surface: 'app', signal: ctrl.signal, onDelta: p.requestId && !p.dryRun ? (d) => deltas.push({ id, delta: d }) : undefined }), p);
+      const r = await fn(aiRunDeps({ ctx, settings: this.settings, store: this.ws, surface: 'app', signal: ctrl.signal, onDelta: p.requestId && !p.dryRun ? (d) => deltas.push({ id, delta: d }) : undefined }));
       deltas.flush();
       return r;
     } finally {
       this.controllers.delete(id);
+      await ctx.dispose();
     }
   }
 
@@ -1217,11 +1229,12 @@ export class Backend {
     if (!count) throw new ApsError('ValidationError', 'Nothing to run: the selection has no requests');
     const folder = p.selection?.length === 1 ? findNodeName(collection.items, p.selection[0]!) : undefined;
     const name = p.name ?? (folder ? `${collection.name} / ${folder}` : collection.name);
-    return this.startRun(name, (async function* () {})(), { ...p, concurrency: 1, retries: 0, origin: { kind: 'collection', collectionId: p.collectionId, selection: p.selection, iterations: p.iterations } }, async (o) =>
+    return this.startRun(name, (async function* () {})(), { ...p, concurrency: 1, retries: 0, origin: { kind: 'collection', collectionId: p.collectionId, selection: p.selection, iterations: p.iterations, ...(p.rerun ? { rerun: true } : {}) } }, async (o) =>
       runCollection({
         ...o,
         collection,
         selection: p.selection,
+        rerun: p.rerun,
         iterations: p.iterations,
         data: p.dataPath ? await this.readRunData(p.dataPath, p.dataQuery, p.environment) : undefined,
         delayMs: p.delayMs,

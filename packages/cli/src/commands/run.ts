@@ -134,6 +134,7 @@ export function registerRunCommands(program: Command): void {
     .option('--log-level <level>', 'ERROR | WARN | INFO | DEBUG | TRACE (secrets are always redacted)')
     .option('--watch', 'run again whenever the collection, an environment or the data file changes (until Ctrl+C)')
     .option('--rerun-failed [runId]', 'only the requests that failed in a run of this collection (default: the last run)')
+    .option('--triage', 'after a failed run: group the failures by likely cause and, with an AI model set up, explain them with verified fixes (triage.md, a "Triage (AI)" report section); never changes the exit code')
     .option('--otlp <url>', 'send the traces to an OpenTelemetry collector (OTLP/HTTP); default: OTEL_EXPORTER_OTLP_ENDPOINT')
     .option('--otlp-header <key:value...>', 'headers for the collector (also OTEL_EXPORTER_OTLP_HEADERS)')
     .action(async (ref: string, o: CollectionCliOptions & { watch?: boolean }) => {

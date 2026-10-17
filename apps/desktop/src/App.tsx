@@ -51,6 +51,7 @@ const DIALOG_FALLBACK = 'fixed bottom-9 left-1/2 -translate-x-1/2 z-[60] w-[min(
 const ShortcutsDialog = lazy(async () => ({ default: (await import('./components/ShortcutsDialog')).ShortcutsDialog }));
 const CiDialog = lazy(async () => ({ default: (await import('./components/CiDialog')).CiDialog }));
 const FlowGenerateDialog = lazy(async () => ({ default: (await import('./components/ai/FlowGenerateDialog')).FlowGenerateDialog }));
+const AiAnalysisDialog = lazy(async () => ({ default: (await import('./components/ai/AiAnalysisDialog')).AiAnalysisDialog }));
 const RecordDialog = lazy(async () => ({ default: (await import('./components/RecordDialog')).RecordDialog }));
 const FeedbackDialog = lazy(async () => ({ default: (await import('./components/FeedbackDialog')).FeedbackDialog }));
 const VariableUsagesDialog = lazy(async () => ({ default: (await import('./components/VariableUsagesDialog')).VariableUsagesDialog }));
@@ -192,6 +193,7 @@ export default function App() {
   const searchOpen = useApp((s) => s.searchOpen);
   const ci = useApp((s) => s.ci);
   const flowGenerate = useApp((s) => s.flowGenerate);
+  const aiAnalysis = useApp((s) => s.aiAnalysis);
   const openapiDiff = useApp((s) => s.openapiDiff);
   const apiCoverage = useApp((s) => s.apiCoverage);
   const explorerOpen = useApp((s) => s.explorerOpen);
@@ -532,6 +534,14 @@ export default function App() {
             <FlowGenerateDialog request={flowGenerate} onClose={() => useApp.getState().set({ flowGenerate: undefined })} />
           </Suspense>,
           close({ flowGenerate: undefined }),
+        )}
+      {aiAnalysis &&
+        guard(
+          'AI analysis',
+          <Suspense fallback={null}>
+            <AiAnalysisDialog key={aiAnalysis.kind === 'triage' ? aiAnalysis.runId : aiAnalysis.testId} request={aiAnalysis} onClose={() => useApp.getState().set({ aiAnalysis: undefined })} />
+          </Suspense>,
+          close({ aiAnalysis: undefined }),
         )}
       {ci &&
         guard(

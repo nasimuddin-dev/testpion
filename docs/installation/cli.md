@@ -28,7 +28,7 @@ Or run it without installing, which suits CI jobs and one-off runs:
 npx testpion run-collection collection.postman_collection.json -e staging.json
 ```
 
-Pin a version in CI (`npx testpion@0.48.0 …`) so a new release doesn't change a pipeline unannounced. In a Node.js project, `npm install --save-dev testpion` keeps the version in `package.json`.
+Pin a version in CI (`npx testpion@0.49.0 …`) so a new release doesn't change a pipeline unannounced. In a Node.js project, `npm install --save-dev testpion` keeps the version in `package.json`.
 
 ## Install from source
 

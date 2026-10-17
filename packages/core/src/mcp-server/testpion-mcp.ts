@@ -1352,7 +1352,7 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
     ...scaleTools({ store, secrets, settings, redactor, checkEnvironment }),
     ...deployTools({ store }),
     ...evalAgentTools({ store }),
-    ...aiTools({ store, secrets, settings }),
+    ...aiTools({ store, secrets, settings, checkEnvironment }),
     ...workspaceEditTools({
       store,
       redactor,

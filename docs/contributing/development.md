@@ -28,7 +28,7 @@ A new AI task is an entry in `packages/core/src/ai/tasks/registry.ts` (its promp
 AI_EVAL_LIVE=1 TESTPION_AI_PROVIDER=ollama TESTPION_AI_MODEL=llama3.2 npx vitest run tests/ai   # prints a scorecard per task
 ```
 
-The UI plans and the documentation screenshots use the offline mock with scripted answers (`x-mock-rules` on a mock provider: a regular expression on the last user message and the answer); see `apps/desktop/e2e/plans/ai-flow-from-collection.cjs` and `apps/desktop/scripts/capture-steps.cjs`. See [AI features](/ai-testing/ai-features#the-prompts-are-tested-for-contributors).
+The UI plans and the documentation screenshots use the offline mock with scripted answers (`x-mock-rules` on a mock provider: a regular expression on the last user message and the answer); see `apps/desktop/e2e/plans/ai-flow-from-collection.cjs`, `ai-triage.cjs` and `apps/desktop/scripts/capture-steps.cjs` (which also seeds a failed collection run and a flaky test's history for the triage and flaky shots). Runs for the triage and flaky golden cases are written with `tests/ai/run-fixtures.ts`. See [AI features](/ai-testing/ai-features#the-prompts-are-tested-for-contributors).
 
 ## Hardening of the packaged app
 

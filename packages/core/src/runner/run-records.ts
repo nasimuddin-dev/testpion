@@ -50,7 +50,18 @@ export async function recordRun(store: Pick<WorkspaceStore, 'meta'>, summary: Ru
 /** The summary of a finished run, or undefined while it runs (or when it never finished). */
 export function readRunSummary(store: Pick<WorkspaceStore, 'runDir'>, runId: string): RunSummary | undefined {
   const f = join(store.runDir(runId), 'summary.json');
-  return existsSync(f) ? (JSON.parse(readFileSync(f, 'utf8')) as RunSummary) : undefined;
+  if (!existsSync(f)) return undefined;
+  // a damaged file (an edit, a disk error, a copy cut short) is said as such, never as a JSON parser's internal error
+  const damaged = () =>
+    new ApsError('ConfigurationError', `The summary of run ${runId} cannot be read (its summary.json is damaged)`, { suggestions: ['Run the tests again for a new run (the app\'s Runs list shows the runs).'] });
+  let s: unknown;
+  try {
+    s = JSON.parse(readFileSync(f, 'utf8'));
+  } catch {
+    throw damaged();
+  }
+  if (!s || typeof s !== 'object' || Array.isArray(s) || typeof (s as { runId?: unknown }).runId !== 'string') throw damaged();
+  return s as RunSummary;
 }
 
 /** What changed between two finished runs: the earlier one is the baseline the later one is compared with. */

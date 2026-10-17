@@ -4,7 +4,7 @@ import { dynamicValue } from '../vars/dynamic.js';
 import { deref, typeOf as schemaType } from '../util/json-ref.js';
 
 /**
- * Test data for data-driven runs (`testpion datasets generate`, the Datasets view's Generate, `generate_dataset`):
+ * Test data for data-driven runs (`testpion generate-data`, the Datasets view's Generate, `generate_dataset`):
  * rows made from a JSON schema (an OpenAPI request body's, or one written by hand), each field filled by what its
  * name and schema say it is: an email, a first name, a city, a price, a date, a UUID, a value of its enum, a number in
  * its range, text within its length. Saved as CSV or JSON in the workspace's datasets/ folder.

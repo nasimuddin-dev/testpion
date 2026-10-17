@@ -59,7 +59,7 @@ TestPion writes the pipeline file for you, like Postman's *Run in CI*. It works 
 
 The pipeline does four things:
 
-1. Installs the TestPion CLI from its GitHub repository, pinned to your TestPion version (for example `v0.48.0`), so runs are reproducible.
+1. Installs the TestPion CLI from its GitHub repository, pinned to your TestPion version (for example `v0.49.0`), so runs are reproducible.
 2. Runs the tests with the `console`, `junit` and `html` reports.
 3. Publishes `junit.xml` as test results, where the CI system supports it.
 4. Keeps the reports as build artifacts.
@@ -72,7 +72,7 @@ A failing test fails the build. The file never contains secret values. Instead, 
 
 ### Pipelines against production
 
-A pipeline that runs against an environment marked as [production](/api-testing/environments#production) runs its reads (GET, HEAD, OPTIONS, GraphQL queries, gRPC reads), but every data-changing step fails with *"… is a production environment: POST … needs confirmation"* unless the run line has `--allow-production` (`testpion test`, `run`, `run-collection`, `send`, `load`, `eval run`, `serve flows` and `monitor add / run / start` take it). So a smoke run against production needs nothing. For a pipeline that has to write, tick **Allow data-changing requests to the production environment** in the CI dialog (it shows, for any suite, collection or test files, when the environment is marked production), run `testpion ci … --allow-production`, or pass `allowProduction: true` to `ci_config`; the GitHub Action takes `allow-production: true`.
+A pipeline that runs against an environment marked as [production](/api-testing/environments#production) runs its reads (GET, HEAD, OPTIONS, GraphQL queries, gRPC reads), but every data-changing step fails with *"… is a production environment: POST … needs confirmation"* unless the run line has `--allow-production` (`testpion test`, `run`, `run-collection`, `send`, `load`, `eval run`, `serve flows`, `monitor add / run / start` and `ai attempt-fix` take it). So a smoke run against production needs nothing. For a pipeline that has to write, tick **Allow data-changing requests to the production environment** in the CI dialog (it shows, for any suite, collection or test files, when the environment is marked production), run `testpion ci … --allow-production`, or pass `allowProduction: true` to `ci_config`; the GitHub Action takes `allow-production: true`.
 
 ## Integration tests: start the system first
 
@@ -86,7 +86,7 @@ From version 0.44.0 the CLI is on npm, so a pipeline can run it with `npx`; pin 
 # GitHub Actions
 - uses: actions/setup-node@v4
   with: { node-version: 24 }
-- run: npx testpion@0.48.0 run -w . --suite regression -e Staging -r console junit html -o test-results
+- run: npx testpion@0.49.0 run -w . --suite regression -e Staging -r console junit html -o test-results
 ```
 
 The generated files still install the CLI from the repository, which works for any version:
@@ -95,7 +95,7 @@ The generated files still install the CLI from the repository, which works for a
 # GitHub Actions
 - uses: actions/setup-node@v4
   with: { node-version: 24 }
-- run: git clone --depth 1 --branch v0.48.0 https://github.com/nasimuddin-dev/testpion.git "$RUNNER_TEMP/testpion" && cd "$RUNNER_TEMP/testpion" && npm ci && npm run build -w @testpion/shared -w @testpion/core -w @testpion/cli
+- run: git clone --depth 1 --branch v0.49.0 https://github.com/nasimuddin-dev/testpion.git "$RUNNER_TEMP/testpion" && cd "$RUNNER_TEMP/testpion" && npm ci && npm run build -w @testpion/shared -w @testpion/core -w @testpion/cli
 - run: node "$RUNNER_TEMP/testpion/packages/cli/bin/testpion.js" run -w . --suite regression -e Staging -r console junit html -o test-results
   env:
     TESTPION_SECRET_PROVIDER_OPENAI_APIKEY: ${{ secrets.OPENAI_API_KEY }}
@@ -105,6 +105,8 @@ The generated files still install the CLI from the repository, which works for a
 ```
 
 To run a collection instead, use `run-collection "My API" -w . -e Staging -r console junit -o test-results`. For GitLab, Azure DevOps and Jenkins, publish `test-results/junit.xml` with `reports: junit`, *PublishTestResults* or the `junit` step.
+
+**Explain the failures in the log:** add `--triage` to the run line. After a run with failures, TestPion groups them by likely cause and, with an AI model set up for the job (`TESTPION_AI_PROVIDER` and its key, or a model on the runner), explains each with evidence and a verified fix; it writes `test-results/triage.md` and `triage.json` and adds a *Triage (AI)* section to the JUnit, HTML and Markdown reports. The exit code stays the run's. See [Explain the failures in the job](/test-runner/integration-testing#explain-the-failures-in-the-job).
 
 ## API coverage
 
@@ -152,7 +154,7 @@ Either side can be a file or an http(s) link. `--json` prints the result for scr
 `testpion openapi-lint` checks OpenAPI / Swagger documents for mistakes that break tools and clients, and for gaps that make an API hard to use. It exits `1` on errors, so a pipeline can stop a broken spec before it is published:
 
 ```yaml
-- run: npx testpion@0.48.0 openapi-lint specs/ --fail-on error
+- run: npx testpion@0.49.0 openapi-lint specs/ --fail-on error
 ```
 
 ```text

@@ -106,7 +106,7 @@ describe('run again', () => {
     const s = await finished(again.runId);
     expect(s.total).toBe(1);
     expect(hits).toEqual(['GET /fail']);
-    expect(s.origin).toEqual({ kind: 'collection', collectionId: 'c1', selection: ['bad'] });
+    expect(s.origin).toEqual({ kind: 'collection', rerun: true, collectionId: 'c1', selection: ['bad'] });
   });
 
   it('a test run: one step again, or "last" as it ran', async () => {

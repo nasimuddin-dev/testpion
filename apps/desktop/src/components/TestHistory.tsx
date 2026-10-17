@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AiAction } from './ai/AiAction';
+import { startAiAnalysis } from './ai/ai-analysis';
 import { call } from '../api';
 import { openRef } from '../lib/open-ref';
 import { formatMs, plural, timeAgo } from '../lib/format';
@@ -65,6 +66,15 @@ export function TestHistory({ id, name, runId }: { id: string; name: string; run
               runs: points.map((p) => ({ when: p.startedAt, status: p.status, latencyMs: p.latencyMs, attempts: p.attempts, environment: p.environment, failedChecks: p.failures })),
             },
           })} />
+          {flips > 1 && (
+            <AiAction
+              className="ml-2"
+              label="Why is this flaky?"
+              hint="Ask the AI why this test passes and fails (its results across runs and a failing and a passing response are sent, masked), with a verified fix and Attempt to fix"
+              request={{ task: 'analyze-flaky', title: `Why "${name}" is flaky`, context: {}, item: { kind: 'test-case', testId: id } }}
+              open={() => startAiAnalysis({ kind: 'flaky', testId: id, title: name })}
+            />
+          )}
         </div>
       )}
       {timed.length > 1 && (

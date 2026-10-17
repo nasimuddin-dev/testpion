@@ -244,7 +244,7 @@ export function collectionsHandlers(be: Backend): Handlers {
       const r = be.ws.failedTestIds(runId);
       if (!r.ids.length) throw new ApsError('ValidationError', 'Nothing failed in that run');
       const c = be.ws.getCollection(collectionId);
-      return be.startCollectionRun({ collectionId, selection: r.ids, environment, name: `Failed requests of ${c.name}` });
+      return be.startCollectionRun({ collectionId, selection: r.ids, environment, name: `Failed requests of ${c.name}`, rerun: true });
     },
     /** Which requests set and use each variable of a collection, in run order, with likely mistakes flagged. */
     'col.variableFlow': ({ collectionId }: { collectionId: string }) => {

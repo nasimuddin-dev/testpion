@@ -236,6 +236,21 @@ export const TOOL_DOCS: Record<string, ToolDoc> = {
     whenNot: 'To write CRUD flows without a model, use `generate_flows`; to design one yourself, read the requests (`list_requests`, `get_request`) and use `write_test_file`. Apply the proposal with `ai_apply_proposal`.',
     example: { collection: 'Veterinary API', folder: 'Patients', hint: 'also test pagination' },
   },
+  ai_triage_run: {
+    when: "Use it when the user wants TestPion's own model to explain a failed run and propose fixes (their key or a local model): causes with evidence and verified fixes, as a proposal.",
+    whenNot: 'To read failures yourself, use `recent_failures`, `run_breakdown` and `test_history`; to apply the fixes, use `ai_apply_proposal` after the user agrees.',
+    example: { run: 'last', privacy: 'metadata' },
+  },
+  ai_analyze_flaky: {
+    when: "Use it when the user asks why a test is flaky (flaky_tests names them) and wants TestPion's model to explain it and propose a verified fix.",
+    whenNot: 'To list flaky tests, use `flaky_tests`; to read one test across runs yourself, use `test_history`. To apply and prove the fix, use `ai_attempt_fix`.',
+    example: { item: 'test-case:jobs:job-is-done' },
+  },
+  ai_attempt_fix: {
+    when: 'Use it after the user agreed to a flaky-test fix from `ai_analyze_flaky`: it applies the fix and runs the test 5 times for a stability verdict.',
+    whenNot: 'Never without the user seeing the fix. For a triage proposal use `ai_apply_proposal`, then run the tests again.',
+    example: { id: 'ai-k3x9q2', times: 5 },
+  },
   ai_proposals: {
     when: 'Use it to list the open AI proposals, or read one in full (items, before/after, verification) before applying it.',
     whenNot: 'To make a new proposal, use `ai_run_task`.',

@@ -25,6 +25,11 @@ export interface RunOptions {
   tests: AsyncIterable<TestCase> | Iterable<TestCase>;
   setup?: TestCase[];
   teardown?: TestCase[];
+  /**
+   * Steps (by result id) that only prepare others (a collection rerun's token request): their results are reported
+   * with `metadata.setup` but do not count toward the run's totals.
+   */
+  isSetup?: (id: string) => boolean;
   concurrency?: number;
   retries?: number;
   retryDelayMs?: number;
@@ -129,17 +134,31 @@ function deferred(): Deferred {
   return { promise, resolve };
 }
 
+/**
+ * A line of results.jsonl that is a result (an object with its id and status; checks a list when given, else none):
+ * every reader (history, triage, flaky analysis, reports) can rely on the shape, whatever a damaged or edited file holds.
+ */
+function asResult(v: unknown): TestResult | undefined {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return undefined;
+  const r = v as Partial<TestResult>;
+  if (typeof r.id !== 'string' || typeof r.status !== 'string') return undefined;
+  if (r.checks !== undefined && !Array.isArray(r.checks)) return undefined;
+  return (Array.isArray(r.checks) ? r : { ...r, checks: [] }) as TestResult;
+}
+
 export async function readResultsFile(path: string): Promise<AsyncGenerator<TestResult>> {
   async function* gen() {
     if (!existsSync(path)) return;
     const rl = createInterface({ input: createReadStream(path, 'utf8'), crlfDelay: Infinity });
     for await (const line of rl) {
       if (!line.trim()) continue;
+      let r: TestResult | undefined;
       try {
-        yield JSON.parse(line) as TestResult;
+        r = asResult(JSON.parse(line));
       } catch {
         /* partially written last line after a crash — ignore */
       }
+      if (r) yield r; // anything else (null, a number, an object that is not a result) is not a result: skipped
     }
   }
   return gen();
@@ -198,7 +217,7 @@ export async function runTests(opts: RunOptions): Promise<RunSummary> {
     for await (const r of await readResultsFile(opts.resultsFile)) {
       done.add(r.id);
       statusById.set(r.id, r.status);
-      agg.add(r);
+      if (r.metadata?.setup !== true) agg.add(r);
     }
   }
   let out: WriteStream | undefined;
@@ -284,8 +303,9 @@ export async function runTests(opts: RunOptions): Promise<RunSummary> {
   };
 
   const record = async (r: TestResult, trace?: Trace) => {
+    if (opts.isSetup?.(r.id)) r = { ...r, metadata: { ...(r.metadata ?? {}), setup: true } };
     const redacted = opts.services.redactor.redact(r);
-    agg.add(redacted);
+    if (redacted.metadata?.setup !== true) agg.add(redacted);
     statusById.set(r.id, r.status);
     dep(r.id).resolve(r.status);
     await write(redacted);

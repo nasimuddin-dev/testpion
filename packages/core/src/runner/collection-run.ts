@@ -3,6 +3,7 @@ import { ApsError } from '../errors.js';
 import { sleep } from '../util/concurrency.js';
 import { runTests, type RunEvent, type RunOptions } from './runner.js';
 import type { DatasetRecord } from './datasets.js';
+import { namesSetByScripts, scriptsOf, templatedText, templateVariables } from '@testpion/shared';
 
 /** A runnable request in a collection, with its folder path and effective auth. */
 export interface CollectionRequestRef {
@@ -35,6 +36,33 @@ export function collectionRequests(collection: Collection, selection?: string[])
   };
   walk(collection.items, [], [], collection.auth, false);
   return out;
+}
+
+/**
+ * The setup a rerun of some requests needs: the earlier requests (collection order) whose scripts set a variable the
+ * rerun ones use (`{{token}}` in their URL, headers, body, auth or assertions), and in turn what those need. A variable
+ * a request's own scripts set, or one set by a request that runs anyway, needs nothing more. Returns request ids in
+ * collection order, none of them in `selection`.
+ */
+export function rerunSetupRequests(collection: Collection, selection: string[]): string[] {
+  const all = collectionRequests(collection);
+  const sets = all.map((r) => namesSetByScripts(scriptsOf(r.node).join('\n')));
+  const uses = all.map((r, i) => templateVariables(templatedText({ request: r.node.request, auth: r.auth, assertions: r.node.assertions })).filter((n) => !sets[i]!.has(n)));
+  const running = new Set(collectionRequests(collection, selection).map((r) => r.id));
+  const setup = new Set<string>();
+  const queue = all.map((r, i) => (running.has(r.id) ? i : -1)).filter((i) => i >= 0);
+  while (queue.length) {
+    const i = queue.shift()!;
+    for (const name of uses[i]!) {
+      // the latest request before this one that sets it
+      let j = i - 1;
+      while (j >= 0 && !sets[j]!.has(name)) j--;
+      if (j < 0 || running.has(all[j]!.id) || setup.has(all[j]!.id)) continue;
+      setup.add(all[j]!.id);
+      queue.push(j);
+    }
+  }
+  return all.filter((r) => setup.has(r.id)).map((r) => r.id);
 }
 
 /** The folders around a request, outermost first ([] for a top-level request or an unknown id). */
@@ -104,6 +132,12 @@ export interface CollectionRunOptions extends Omit<RunOptions, 'tests' | 'concur
    * after its requests in every iteration, with the iteration's data row as variables.
    */
   realtime?: TestCase[];
+  /**
+   * The selection is a rerun of failed requests: the earlier requests they need (`rerunSetupRequests`, e.g. the one
+   * whose script sets the token) run first as setup. Setup results are reported (`metadata.setup`, named `[setup] …`)
+   * but do not count toward the run's totals.
+   */
+  rerun?: boolean;
 }
 
 /**
@@ -113,7 +147,8 @@ export interface CollectionRunOptions extends Omit<RunOptions, 'tests' | 'concur
  */
 export async function runCollection(opts: CollectionRunOptions): Promise<RunSummary> {
   const { collection, selection, data, delayMs = 0 } = opts;
-  const refs = collectionRequests(collection, selection);
+  const setupIds = new Set(opts.rerun && selection?.length ? rerunSetupRequests(collection, selection) : []);
+  const refs = collectionRequests(collection, setupIds.size ? [...selection!, ...setupIds] : selection);
   const realtime = opts.realtime ?? [];
   if (!refs.length && !realtime.length) throw new ApsError('ValidationError', 'Nothing to run: the selection has no requests');
   const iterations = Math.max(1, opts.iterations ?? (data?.length || 1));
@@ -160,7 +195,7 @@ export async function runCollection(opts: CollectionRunOptions): Promise<RunSumm
         const n = (seen.get(ref.id) ?? 0) + 1;
         seen.set(ref.id, n);
         const id = `${ref.id}@${it + 1}${n > 1 ? `#${n}` : ''}`;
-        const label = [...ref.path, ref.name].join(' / ');
+        const label = `${setupIds.has(ref.id) ? '[setup] ' : ''}${[...ref.path, ref.name].join(' / ')}`;
         const done = waitFor(id);
         yield collectionRequestToTest(collection, ref, { id, name: iterations > 1 ? `#${it + 1} ${label}` : label, data: row });
         const result = await done;
@@ -191,6 +226,7 @@ export async function runCollection(opts: CollectionRunOptions): Promise<RunSumm
       name: opts.name,
       tests: tests(),
       concurrency: 1,
+      ...(setupIds.size ? { isSetup: (id: string) => setupIds.has(id.replace(/@\d+(#\d+)?$/, '')) } : {}),
       onEvent,
       onStop: () => {
         onAbort();

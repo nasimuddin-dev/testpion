@@ -25,7 +25,7 @@ A monitor on an environment marked as [production](/api-testing/environments#pro
 - the last result, the success rate and the median run time;
 - when it runs next;
 - a bar per recent run (height is the run time, red for a failure);
-- a list of runs. **Open run** shows the requests and checks in the Tests view.
+- a list of runs. **Open run** shows the requests and checks in the Tests view; a failed run's ⋯ there (and the failing monitor in the **Problems** panel) has **Explain and fix failures with AI…**, which groups its failures by cause and proposes verified fixes ([triage](/ai-testing/ai-features#explain-and-fix-failures-triage)).
 
 **Run now** runs it immediately. **Pause** stops the schedule until you resume it.
 

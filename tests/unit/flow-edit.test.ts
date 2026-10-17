@@ -182,6 +182,44 @@ describe('applyFlowEdit', () => {
     expect(d.tests[2]).toMatchObject({ id: 'who-am-i-copy', name: 'Who am I copy', dependsOn: ['login'] });
   });
 
+  it('changes only the edited step: flow lists, quoting, comments and spacing elsewhere stay byte for byte (LF and CRLF)', () => {
+    const before = [
+      '# jobs',
+      'name: Jobs',
+      'tests:',
+      '  - id: start',
+      "    url: 'http://api/jobs'   # single quotes, two spaces",
+      '    method: POST',
+      '    assertions: [{type: status, expected: 201}]',
+      '    extract: {job: $.id}',
+      '',
+      '  - id: read',
+      '    url: "http://api/jobs/{{job}}"',
+      '    dependsOn: [start]',
+      '    assertions:',
+      '      - { type: equals, path: $.status, expected: done }',
+      '  - id: after',
+      '    url: http://api/after',
+      '    assertions: [{type: status, expected: 200}, {type: header, name: x-id}]',
+      '',
+    ].join('\n');
+    const at = (t: string) => t.indexOf('  - id: read');
+    const end = (t: string) => t.indexOf('  - id: after');
+    for (const nl of ['\n', '\r\n']) {
+      const text = before.replace(/\n/g, nl);
+      // the flaky fix: a wait on the step that reads the job, and a check changed (the AI fixes go through updateStep)
+      const r = edit(text, { op: 'updateStep', id: 'read', set: { until: "$.status == 'done'", assertions: [{ type: 'equals', path: '$.status', expected: 'finished' }] } }).text;
+      expect(r.slice(0, at(r))).toBe(text.slice(0, at(text)));
+      expect(r.slice(end(r))).toBe(text.slice(end(text)));
+      expect(parse(r).tests[1]).toMatchObject({ until: "$.status == 'done'", assertions: [{ type: 'equals', path: '$.status', expected: 'finished' }], dependsOn: ['start'] });
+      expect(r.includes('\r\n')).toBe(nl === '\r\n');
+      if (nl === '\r\n') expect(r.replace(/\r\n/g, '')).not.toMatch(/\n/);
+      // a value changed in place: only that value
+      const v = edit(text, { op: 'updateStep', id: 'after', set: { url: 'http://api/later' } }).text;
+      expect(v).toBe(text.replace('url: http://api/after', 'url: http://api/later'));
+    }
+  });
+
   it('starts an empty file, and turns a single test into a tests: list', () => {
     const empty = edit('', { op: 'addStep', step: { name: 'Health', type: 'http', method: 'GET', url: 'http://h/health' } });
     expect(doc(empty.text).tests).toEqual([{ id: 'health', name: 'Health', type: 'http', method: 'GET', url: 'http://h/health' }]);

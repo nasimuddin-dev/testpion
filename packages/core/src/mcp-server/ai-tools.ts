@@ -7,6 +7,7 @@ import type { SecretStore } from '../storage/secrets.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { parseItemRef, toItemRef } from '@testpion/shared';
 import { str, type Tool } from './tool.js';
+import { aiTriageTools } from './ai-triage-tools.js';
 
 /** An item as an agent passes it: a ref object, a testpion:// link or `kind:id…`. */
 const itemArg = (v: unknown) => {
@@ -29,7 +30,18 @@ const forAgent = (p: Proposal) => ({ ...p, items: p.items.map((i) => ({ ...i, be
  * these are for clients that want TestPion's configured model (the user's key or a local model). A task only
  * proposes: `ai_run_task` returns a proposal with an id, `ai_apply_proposal` (a separate, confirmed call) writes it.
  */
-export function aiTools({ store, secrets, settings }: { store: WorkspaceStore; secrets: SecretStore; settings: AppSettings }): Tool[] {
+export function aiTools({
+  store,
+  secrets,
+  settings,
+  checkEnvironment,
+}: {
+  store: WorkspaceStore;
+  secrets: SecretStore;
+  settings: AppSettings;
+  /** The server's check of an environment a tool runs in (ai_attempt_fix); see aiTriageTools. */
+  checkEnvironment?: (name: string | undefined) => unknown;
+}): Tool[] {
   return [
     {
       name: 'ai_list_tasks',
@@ -192,5 +204,7 @@ export function aiTools({ store, secrets, settings }: { store: WorkspaceStore; s
       inputSchema: { type: 'object', properties: { days: { type: 'number', description: 'The period (default 30)' } } },
       run: (a) => aiUsageSummary(store, { days: Number(a.days) || 30, settings: settings.ai, recent: 20 }),
     },
+    // AI-2 / AI-5: triage a failed run, analyse a flaky test, attempt the fix
+    ...aiTriageTools({ store, secrets, settings, checkEnvironment }),
   ];
 }

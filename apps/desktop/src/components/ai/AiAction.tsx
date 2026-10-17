@@ -35,6 +35,7 @@ export function AiAction({
   hint,
   preview = true,
   onStart,
+  open,
 }: {
   /** Built when used; may read data first (a monitor's per-request numbers). */
   request: AssistantRequest | (() => AssistantRequest | undefined | Promise<AssistantRequest | undefined>);
@@ -48,18 +49,22 @@ export function AiAction({
   preview?: boolean;
   /** Told when the action starts (a dialog closes itself to show the assistant). */
   onStart?(): void;
+  /** An analysis with a dialog of its own (triage, flaky analysis): opened instead of the assistant panel; `request` still gives the estimate and What will be sent. */
+  open?(): void;
 }) {
   const configured = useApp((s) => aiConfigured(s.settings));
   const [previewing, setPreviewing] = useState<AssistantRequest>();
   const [estimate, setEstimate] = useState<string>();
   const asked = useRef(false);
   const build = (): Promise<AssistantRequest | undefined> => Promise.resolve(typeof request === 'function' ? request() : request).catch(() => undefined);
-  const go = () =>
+  const go = () => {
+    if (open) return void (open(), onStart?.());
     void build().then((r) => {
       if (!r) return;
       startAi(r);
       onStart?.();
     });
+  };
   // the estimate is built once, on the first hover (nothing is sent)
   const onHover = () => {
     if (asked.current || !configured) return;
@@ -102,7 +107,8 @@ export function AiAction({
           onSend={(privacy) => {
             const r = previewing;
             setPreviewing(undefined);
-            startAi({ ...r, privacy });
+            if (open) open();
+            else startAi({ ...r, privacy });
             onStart?.();
           }}
         />

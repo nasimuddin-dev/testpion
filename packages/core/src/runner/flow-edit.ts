@@ -12,6 +12,7 @@ import { ApsError } from '../errors.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { requireCollection } from '../storage/env-edit.js';
 import { slugify } from '../util/ids.js';
+import { spliceYaml } from '../util/yaml-splice.js';
 import { isSuiteFile, normalizeTest } from './loader.js';
 import { collectionSteps, TAIL_KEYS } from './flow-steps-from-requests.js';
 import { flowStepOf } from './flow-steps.js';
@@ -145,7 +146,7 @@ function finish(ctx: Ctx, original: string): string {
   if (ctx.file && extname(ctx.file).toLowerCase() === '.json') {
     const indent = /\n( +)\S/.exec(original)?.[1]?.length ?? 2;
     out = JSON.stringify(ctx.doc.toJS(), null, indent) + '\n';
-  } else out = ctx.doc.toString({ lineWidth: 0 });
+  } else out = spliceYaml(original.replace(/\r\n/g, '\n'), ctx.doc, ctx.doc.toString({ lineWidth: 0 })); // only what the edit changed is written anew
   return crlf ? out.replace(/\n/g, '\r\n') : out;
 }
 

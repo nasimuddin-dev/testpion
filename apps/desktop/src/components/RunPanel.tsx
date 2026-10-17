@@ -9,6 +9,7 @@ import { toastError, useApp } from '../store';
 import type { RunSummary, TestResult, Trace } from '../types';
 import { EnvBadge } from './EnvSelect';
 import { runCiMenuItems } from '../lib/run-ci';
+import { triageRunItem } from './ai/ai-analysis';
 import { formatCost, formatMs, plural, timeAgo } from '../lib/format';
 import { CheckList, ErrorPanel, StatusIcon } from './Results';
 import { TraceView } from './TraceView';
@@ -200,7 +201,7 @@ export function RunPanel({ runId, expectedTotal, onRerunFailed, focusName }: { r
               HTML report
             </Button>
             <ExportMenu runId={runId} />
-            <MoreMenu label="Run actions" items={runCiMenuItems(runId)} />
+            <MoreMenu label="Run actions" items={[...runCiMenuItems(runId), ...(s && s.failed + s.errors > 0 ? [triageRunItem(runId, { title: s.name, separator: true })] : [])]} />
             <Button size="sm" icon={<ScanSearch size={12} />} title="Which OpenAPI operations and responses this run exercised" onClick={() => useApp.getState().set({ apiCoverage: { runId } })}>
               API coverage
             </Button>

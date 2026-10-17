@@ -560,7 +560,8 @@ export interface RunSummary {
 export type RunOrigin =
   /** `ids`: only these tests of the files ran (Run again on some results); running it again runs only them again. */
   | { kind: 'tests'; paths: string[]; ids?: string[]; grep?: string; tags?: string[] }
-  | { kind: 'collection'; collectionId: string; selection?: string[]; iterations?: number };
+  /** `rerun`: the selection was failed requests run again, with the earlier requests they need as setup. */
+  | { kind: 'collection'; collectionId: string; selection?: string[]; iterations?: number; rerun?: boolean };
 
 /* ------------------------------------------------------------------ errors */
 

@@ -14,7 +14,20 @@
  * Connections (WebSocket, Socket.IO, MQTT, Kafka, MCP) remember the environment they were opened with: a message sent
  * later goes to that server, whichever environment is active by then.
  */
-import { allowProductionFor, collectionRequests, detectOperation, findMonitor, folderChain, readRunSummary, isDataChangingMethod, isGraphQLMutation, isGrpcReadMethod, productionRefusal, type ProductionAsk } from '@testpion/core';
+import {
+  allowProductionFor,
+  attemptFixTarget,
+  collectionRequests,
+  detectOperation,
+  findMonitor,
+  folderChain,
+  readRunSummary,
+  isDataChangingMethod,
+  isGraphQLMutation,
+  isGrpcReadMethod,
+  productionRefusal,
+  type ProductionAsk,
+} from '@testpion/core';
 import type { Backend } from './backend.js';
 
 type Ask = Omit<ProductionAsk, 'environment'> & { environment?: string };
@@ -63,7 +76,8 @@ function scriptsSend(be: Backend, p: Params): boolean {
 }
 
 /** Every method that sends or runs: what it would do, against which environment. */
-const RULES: Record<string, (be: Backend, p: Params, sessions: Sessions) => Ask | Ask[] | undefined> = {
+type Rule = (be: Backend, p: Params, sessions: Sessions) => Ask | Ask[] | undefined | Promise<Ask | undefined>;
+const RULES: Record<string, Rule> = {
   'http.send': (be, p) => {
     const method = String(p.request?.method ?? 'GET').toUpperCase();
     const scripted = scriptsSend(be, p);
@@ -115,6 +129,12 @@ const RULES: Record<string, (be: Backend, p: Params, sessions: Sessions) => Ask 
     // the consent stays while the environment does
     if (before?.allowProduction && before.environment === m?.environment) return undefined;
     return run(str(m?.environment), `Run the monitor${m?.name ? ` ${m.name}` : ''} on its schedule`);
+  },
+  // AI-5 Attempt to fix: applies a flaky test's fix, then runs the test again in the environment of its runs
+  'ai.attemptFix': async (be, p) => {
+    const t = await attemptFixTarget(be.ws, String(p.id)).catch(() => undefined); // the handler says what is wrong with it
+    const times = Math.min(Math.max(Math.round(Number(p.times) || 5), 1), 20);
+    return t && run(t.rerun.environment, `Attempt to fix ${t.name}: run it ${times} times`);
   },
 };
 
@@ -186,7 +206,7 @@ export async function guardProduction<T>(be: Backend, method: string, params: un
   const rule = Object.hasOwn(RULES, method) ? RULES[method] : undefined;
   let allowed: boolean | undefined;
   if (rule && be.store) {
-    for (const ask of [rule(be, p, sessions) ?? []].flat()) {
+    for (const ask of [(await rule(be, p, sessions)) ?? []].flat()) {
       const env = ask.environment ? be.ws.getEnvironment(ask.environment) : undefined;
       if (!env?.isProduction) continue;
       if (p.allowProduction === true) allowed = true;

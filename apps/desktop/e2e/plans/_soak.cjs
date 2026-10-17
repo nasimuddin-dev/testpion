@@ -14,6 +14,8 @@ const CYCLES = Math.max(1, Number(process.env.SOAK_CYCLES) || 25);
 const SNAP_AT = Number(process.env.SOAK_SNAP_AT ?? 5);
 const DEMO = 'http://127.0.0.1:4010';
 const REQS = Array.from({ length: 10 }, (_, i) => `soak-req-${String(i + 1).padStart(2, '0')}`);
+/** The flaky test: its expected status switched between runs (200 passes, 503 fails), so its history flips. */
+const FLAKY_TEST = (status) => `tests:\n  - id: soak-flaky\n    name: soak flaky\n    url: "${DEMO}/health?flaky=1"\n    assertions:\n      - { type: status, expected: ${status} }\n`;
 
 /** A collection on the local demo server and a test file, written before the app starts. */
 function prepare(ws) {
@@ -53,7 +55,40 @@ function prepare(ws) {
     ],
   };
   const checks = { checks: [{ type: 'status', expected: 200 }, { type: 'exists', path: '$.status' }] };
-  rules.value = JSON.stringify([{ match: '"source"', response: JSON.stringify(plan) }, { match: '127.0.0.1:4010/health', response: JSON.stringify(checks) }, ...JSON.parse(rules.value)]);
+  // AI-2 triage of a failed run (a stale check on /health) and AI-5 "Why is this flaky?" (the flaky test below)
+  const triage = {
+    summary: 'The health endpoint answers "ok" where the test expects "up".',
+    causes: [
+      {
+        groups: ['g1'],
+        kind: 'stale-test',
+        title: 'Health answers "ok" now',
+        explanation: 'The response has status "ok"; the check still expects "up".',
+        confidence: 0.8,
+        evidence: ['$.status is "ok" in the failing response'],
+        fix: { type: 'check', check: { type: 'equals', path: '$.status', expected: 'up' }, newCheck: { type: 'equals', path: '$.status', expected: 'ok' } },
+      },
+    ],
+  };
+  const flaky = { pattern: 'environment', title: 'Fails against another server state', explanation: 'It expects 503 in some runs.', confidence: 0.6, fix: { type: 'none', note: 'Pin the expected status.' } };
+  rules.value = JSON.stringify([
+    // the triage evidence has "groups" (and a "likely" cause per group); the flaky evidence has "likely" only
+    { match: '"groups"', response: JSON.stringify(triage) },
+    { match: '"likely"', response: JSON.stringify(flaky) },
+    { match: '"source"', response: JSON.stringify(plan) },
+    { match: '127.0.0.1:4010/health', response: JSON.stringify(checks) },
+    ...JSON.parse(rules.value),
+  ]);
+  writeFileSync(
+    join(ws, 'collections', 'soak-triage.json'),
+    JSON.stringify({
+      schemaVersion: '1.0',
+      id: 'soak-triage',
+      name: 'Soak triage',
+      items: [{ kind: 'http', id: 'soak-stale', name: 'Health status', request: { method: 'GET', url: `${DEMO}/health`, headers: [] }, assertions: [{ type: 'equals', path: '$.status', expected: 'up' }] }],
+    }),
+  );
+  writeFileSync(join(ws, 'tests', 'soak-flaky.yaml'), FLAKY_TEST(200));
   writeFileSync(pp, JSON.stringify(pc, null, 2));
   const tests = REQS.slice(0, 5).map(
     (name, i) => `  - id: soak-t${i}\n    name: soak test ${i}\n    method: GET\n    url: "${DEMO}/health?t=${i}"\n    assertions:\n      - { type: status, expected: 200 }\n`,
@@ -133,6 +168,20 @@ const setup = [
   ),
   r('soak-expand', `return 'soak rows: ' + (await ensureSoak());`),
   r('soak-data', `const d = await window.aps.invoke('col.uploadDataFile', { name: 'soak-rows.csv', text: 'code\\n200\\n404\\n200\\n' }); return 'data: ' + (d?.path ?? d?.name ?? JSON.stringify(d).slice(0, 80));`),
+  // the flaky test's history: four runs, passing and failing in turn (each to its end)
+  r(
+    'soak-flaky-history',
+    `const statuses = [];
+     for (const [i, status] of [200, 503, 200, 503].entries()) {
+       await window.aps.invoke('tests.write', { path: 'soak-flaky.yaml', content: ${JSON.stringify(FLAKY_TEST(0))}.replace('expected: 0', 'expected: ' + status) });
+       let done = false; const off = window.aps.on('run.finished', () => (done = true));
+       const { runId } = await window.aps.invoke('tests.run', { paths: ['soak-flaky.yaml'], name: 'Soak flaky ' + i });
+       await __t.waitFor(() => done, 20000); off?.();
+       statuses.push((await window.aps.invoke('runs.summary', { runId }))?.passed ? 'pass' : 'fail');
+     }
+     const flaky = await window.aps.invoke('runs.flaky', {}).catch((e) => ({ error: String(e?.message ?? e) }));
+     return 'flaky history: ' + statuses.join(',') + ' | flaky tests: ' + JSON.stringify(flaky).slice(0, 120);`,
+  ),
   // a second workspace (a new one shows Get started with the guided tour), made through the backend; the window stays in the examples
   r(
     'soak-tour-workspace',
@@ -461,6 +510,76 @@ const cycle = (c) => {
        if (chip) { chip.click(); answer = 'answered ' + !!(await __t.waitFor(() => panel()?.querySelector('[data-turn=assistant] [data-answer-model]'), 15000)); }
        await closePanel();
        out.push('assistant ' + answer);
+       await __t.view('Home');
+       return out.join(' | ') + ' | ms ' + ms(t0);`,
+    ),
+    // AI-2 and AI-5 with the offline demo model: a failed run's "Explain and fix failures with AI…" from the runs list
+    // (estimate, explain, the review, Discard), then "Why is this flaky?" from the Problems list (analyse, the result, closed)
+    r(
+      `${p}-triage`,
+      `const t0 = performance.now(); const out = [];
+       const menuItem = (label) => __t.waitFor(() => [...document.querySelectorAll('[role=menuitem]')].find((m) => m.textContent.trim() === label), 3000);
+       const discardReview = async () => {
+         const rv = document.querySelector('[data-proposal]'); if (!rv) return false;
+         [...(rv.closest('[role=dialog]')?.querySelectorAll('button') ?? [])].find((b) => b.textContent.trim() === 'Discard')?.click();
+         return !!(await __t.waitFor(() => !document.querySelector('[data-proposal]') && !document.querySelector('[data-ai-analysis]'), 5000));
+       };
+       // 1. a failed run, triaged and the proposal discarded
+       let done = false; const off = window.aps.on('run.finished', () => (done = true));
+       const { runId } = await window.aps.invoke('col.run', { collectionId: 'soak-triage', keepVariableValues: false });
+       await __t.waitFor(() => done, 20000); off?.();
+       await __t.view('Tests');
+       const runsTab = [...document.querySelectorAll('[role=tablist][aria-label="Sidebar"] [role=tab]')].find((x) => x.offsetParent && x.textContent.trim().startsWith('Runs'));
+       runsTab?.click();
+       const row = await __t.waitFor(() => document.querySelector('[data-run-row="' + runId + '"]'), 6000);
+       let triage = 'no row';
+       if (row) {
+         await __t.real.rightClick(row);
+         const it = await menuItem('Explain and fix failures with AI…');
+         if (it) {
+           await __t.real.click(it);
+           const d = await __t.waitFor(() => document.querySelector('[data-ai-analysis="triage"]'), 4000);
+           const est = await __t.waitFor(() => /tokens in/.test(d?.querySelector('[data-ai-analysis-estimate]')?.textContent ?? ''), 10000);
+           d?.closest('[role=dialog]')?.querySelector('[data-ai-analyse]')?.click();
+           const rv = await __t.waitFor(() => document.querySelector('[data-proposal]'), 20000);
+           const items = rv ? rv.querySelectorAll('[data-proposal-item]').length : 0;
+           triage = 'estimate ' + !!est + ' items ' + items + ' discarded ' + (await discardReview());
+         } else { await __t.esc(); triage = 'no menu item'; }
+       }
+       out.push('triage ' + triage);
+       // the Tests sidebar back on its test files (later steps pick files there)
+       [...document.querySelectorAll('[role=tablist][aria-label="Sidebar"] [role=tab]')].find((x) => x.offsetParent && x.textContent.trim().startsWith('Tests'))?.click();
+       // 2. "Why is this flaky?" from the Problems list: two more runs (passing, failing) keep the test flaky in the
+       // history window however many runs the cycles add
+       for (const status of [200, 503]) {
+         await window.aps.invoke('tests.write', { path: 'soak-flaky.yaml', content: ${JSON.stringify(FLAKY_TEST(0))}.replace('expected: 0', 'expected: ' + status) });
+         let fin = false; const offF = window.aps.on('run.finished', () => (fin = true));
+         await window.aps.invoke('tests.run', { paths: ['soak-flaky.yaml'], name: 'Soak flaky ${c}' });
+         await __t.waitFor(() => fin, 20000); offF?.();
+       }
+       const footer = (k) => document.querySelector('footer [data-status="' + k + '"]');
+       await __t.view('Collections');
+       footer('problems')?.click();
+       const fr = await __t.waitFor(() => document.querySelector('[data-bottom-panel="problems"] [data-problem="flaky"]'), 5000);
+       let flaky = 'no flaky problem';
+       if (fr) {
+         await __t.real.rightClick(fr);
+         const it = await menuItem('Why is this flaky?');
+         if (it) {
+           await __t.real.click(it);
+           const d = await __t.waitFor(() => document.querySelector('[data-ai-analysis="flaky"]'), 4000);
+           const est = await __t.waitFor(() => /tokens in/.test(d?.querySelector('[data-ai-analysis-estimate]')?.textContent ?? ''), 10000);
+           d?.closest('[role=dialog]')?.querySelector('[data-ai-analyse]')?.click();
+           const got = await __t.waitFor(() => document.querySelector('[data-proposal]') || document.querySelector('[data-ai-analysis] [data-finding]') || document.querySelector('[data-ai-analysis-error]'), 20000);
+           const kind = !got ? 'nothing' : got.matches('[data-proposal]') ? 'review' : got.matches('[data-ai-analysis-error]') ? 'error ' + got.textContent.slice(0, 60) : 'findings';
+           let closed;
+           if (kind === 'review') closed = await discardReview();
+           else { await __t.esc(); closed = !!(await __t.waitFor(() => !document.querySelector('[data-ai-analysis]'), 3000)); }
+           flaky = 'estimate ' + !!est + ' ' + kind + ' closed ' + closed;
+         } else { await __t.esc(); flaky = 'no menu item'; }
+       }
+       out.push('flaky ' + flaky);
+       if (document.querySelector('[data-bottom-panel="problems"]')) footer('problems')?.click();
        await __t.view('Home');
        return out.join(' | ') + ' | ms ' + ms(t0);`,
     ),

@@ -61,7 +61,7 @@ export function resolveRunRef(store: Store, ref: string): { runId: string; name:
   }
   const recent = [...new Set(store.meta.listRuns({ limit: 10 }).items.map((x) => x.name))].slice(0, 5);
   throw new ApsError('ConfigurationError', `No finished run "${r}"`, {
-    suggestions: [`Give a run id, "last" or a run's name${recent.length ? ` (recent: ${recent.join(', ')})` : ''}; \`testpion runs --json\` lists them.`],
+    suggestions: [`Give a run id (the app's Runs list shows them), "last" or a run's name${recent.length ? ` (recent: ${recent.join(', ')})` : ''}.`],
   });
 }
 

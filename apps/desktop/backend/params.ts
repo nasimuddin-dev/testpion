@@ -16,6 +16,8 @@ export interface CollectionRunParams {
   /** Save variables set by scripts as current values (Postman's "Keep variable values"). Default true. */
   keepVariableValues?: boolean;
   name?: string;
+  /** The selection is failed requests run again: the earlier requests they need (a token request) run first as setup. */
+  rerun?: boolean;
 }
 
 export interface HttpSendParams {

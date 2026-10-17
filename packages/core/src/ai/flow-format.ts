@@ -10,6 +10,7 @@
 import { checkAliases, checkDocs, checkTypes } from '../eval/checks.js';
 import { testKeys } from '../runner/test-schema.js';
 import type { CheckConfig } from '../model/types.js';
+import { scriptApiIfLoaded, scriptReference } from './script-reference.js';
 
 /** The step keys a flow step uses most whose shape the example does not show (name, method and assertions it does; the rest are in the editor's completion). */
 const STEP_KEYS = ['id', 'type', 'dependsOn', 'url', 'headers', 'auth', 'body', 'extract', 'if', 'when'];
@@ -84,9 +85,23 @@ export function flowFormatReference(): string {
   ].join('\n');
 }
 
-/** The reference a task's instruction gets: the whole format, or the checks alone. */
-export function formatReference(kind: 'flow' | 'checks'): string {
-  return kind === 'flow' ? flowFormatReference() : checksReference();
+export type FormatKind = 'flow' | 'checks' | 'script';
+
+/**
+ * The reference a task's instruction gets: the whole test-file format, the checks alone, the tp.* script API (read from
+ * the sandbox: `loadScriptApi()` must have run, as `runAiTask` does), or several of them.
+ */
+export function formatReference(kind: FormatKind | FormatKind[]): string {
+  const kinds = Array.isArray(kind) ? kind : [kind];
+  return kinds
+    .map((k) => {
+      if (k === 'flow') return flowFormatReference();
+      if (k === 'checks') return kinds.includes('flow') ? '' : checksReference();
+      const api = scriptApiIfLoaded();
+      return api ? scriptReference(api) : '';
+    })
+    .filter(Boolean)
+    .join('\n\n');
 }
 
 /** A lint problem about a check with the right entry shape and the allowed types (see the module comment); others are returned as they are. */

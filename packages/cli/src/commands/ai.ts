@@ -4,6 +4,8 @@ import { readFileSync } from 'node:fs';
 import {
   aiRunDeps,
   aiUsageSummary,
+  analyzeFlaky,
+  isAiSetupError,
   applyProposal,
   discardProposal,
   getProposal,
@@ -14,12 +16,14 @@ import {
   undoProposal,
   WorkspaceManager,
   type AiTaskResult,
+  type FlakyReport,
   type ItemRef,
   type Proposal,
 } from '@testpion/core';
 import { bold, cliContext, CliError, cyan, dim, EXIT, green, printJson, red, withWorkspace, yellow } from '../shared.js';
 import { machine } from '../output.js';
 import { dryRunActive } from '../dry-run.js';
+import { registerAiTriageCommands } from './ai-triage.js';
 
 /** The surface a CLI call is recorded under in the usage ledger: CI when the pipeline says so. */
 const surface = () => (process.env.CI ? 'ci' : 'cli') as 'ci' | 'cli';
@@ -50,9 +54,15 @@ function contextOption(text: string | undefined): Record<string, unknown> | unde
 const badge = (s: string) => (s === 'pass' ? green('✓') : s === 'fail' ? red('✗') : s === 'warn' ? yellow('!') : dim('–'));
 
 /** A proposal for people: its items, each with its verification, and how to apply it. */
-export function printProposal(p: Proposal, o: { applied?: boolean } = {}): void {
+export function printProposal(p: Proposal, o: { applied?: boolean; findings?: boolean } = {}): void {
   console.log(bold(`\nProposal ${p.id}`) + dim(` · ${p.items.length} item${p.items.length === 1 ? '' : 's'} · ${p.provider}/${p.model} · ${p.taskVersion === 0 ? 'made without AI' : 'AI-generated'}, review before applying`));
   if (p.summary && p.task !== 'design-flow') console.log(`  ${p.summary.split('\n')[0]}`);
+  // an analysis: what it found, with the evidence (triage causes, why a test is flaky)
+  for (const f of o.findings === false ? [] : (p.findings ?? [])) {
+    console.log(`  ${bold(f.title)} ${dim(`· ${f.kind}${f.count !== undefined ? ` · ${plural(f.count, 'failure')}` : ''}${typeof f.confidence === 'number' ? ` · ${Math.round(f.confidence * 100)}% sure` : ''}`)}`);
+    if (f.explanation) console.log(`    ${f.explanation.split('\n')[0]}`);
+    for (const e of f.evidence.slice(0, 5)) console.log(dim(`    - ${e.text}`));
+  }
   for (const a of p.assumptions) console.log(dim(`  assumed: ${a}`));
   for (const n of p.notes ?? []) console.log(yellow(`  note: ${n}`));
   for (const i of p.items) {
@@ -85,9 +95,20 @@ export function printPreview(r: AiTaskResult): void {
   console.log(dim('\nNothing was sent (--dry-run).'));
 }
 
+/** A flaky-test analysis made without a model: the finding TestPion computes (the signature, the likely pattern), and why. */
+function printFlakyFinding(r: FlakyReport): void {
+  const f = r.finding;
+  console.log(bold(`Why is this flaky? ${r.name}`) + dim(` · ${f.kind} · made without AI`));
+  if (f.title) console.log(`  ${bold(f.title)}`);
+  if (f.explanation) console.log(`  ${f.explanation.split('\n')[0]}`);
+  for (const e of f.evidence.slice(0, 8)) console.log(dim(`  - ${e.text}`));
+  console.log(yellow(`\nnote: ${r.fallback?.startsWith('No AI model') ? 'no model configured — ' : ''}${r.fallback ?? 'made without AI'}`));
+}
+
 /** `testpion ai …`: the AI tasks from the terminal and CI — run (propose), apply, undo, usage. */
 export function registerAiCommands(program: Command): void {
-  const ai = program.command('ai').description('AI tasks with your own model (or a local one): explain, generate tests and flows as proposals you apply; usage and caps');
+  const ai = program.command('ai').description('AI tasks with your own model (or a local one): explain, generate tests and flows as proposals you apply; triage failed runs, analyse flaky tests; usage and caps');
+  registerAiTriageCommands(ai);
 
   ai.command('tasks')
     .description('list the AI tasks: what each does, its tier (small/large model), its output and whether it proposes changes')
@@ -116,6 +137,7 @@ export function registerAiCommands(program: Command): void {
     .option('--items <ids>', 'with --apply: the items to apply, comma-separated (i1,i3)')
     .option('-e, --environment <name>', 'environment whose variable names (never values) the task may use')
     .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
+    .option('--no-ai', "analyze-flaky: TestPion's own signals (the signature, the likely pattern) without a model (also what you get when none is set up)")
     .option('--json', 'print the result as JSON (for scripts and AI agents)')
     .action(
       (
@@ -136,6 +158,7 @@ export function registerAiCommands(program: Command): void {
           items?: string;
           environment?: string;
           workspace?: string;
+          ai?: boolean;
           json?: boolean;
         },
       ) =>
@@ -144,32 +167,49 @@ export function registerAiCommands(program: Command): void {
           const ctx = cliContext(store, o.environment);
           const human = !o.json && !machine();
           let streamed = false;
+          // prose streams; a JSON answer is shown as what it proposes (its findings and items), not as raw JSON
+          const known = listAiTasks().find((t) => t.id === task || t.aliases?.includes(task));
+          const jsonTask = known?.output === 'json';
+          // the flaky analysis without a model (none set up, or --no-ai): TestPion's own finding, as the app and MCP give it
+          const flaky = known?.id === 'analyze-flaky';
+          const plainFlaky = async (noAi: boolean) => {
+            const report = await analyzeFlaky(aiRunDeps({ ctx, settings, store, surface: surface(), env: process.env }), { item: ref(o.item, '--item'), privacy: o.privacy, hint: o.hint, noAi });
+            if (!human) return printJson({ task: 'analyze-flaky', ...report });
+            printFlakyFinding(report);
+          };
           try {
-            const r = await runAiTask(
-              aiRunDeps({
-                ctx,
-                settings,
-                store,
-                surface: surface(),
-                env: process.env,
-                // prose streams to the terminal as it is written
-                onDelta: human && !o.dryRun ? (d) => ((streamed = true), process.stdout.write(d)) : undefined,
-              }),
-              {
-                task,
-                question: o.question,
-                context: contextOption(o.context),
-                item: ref(o.item, '--item'),
-                privacy: o.privacy,
-                provider: o.provider,
-                model: o.model,
-                hint: o.hint,
-                path: o.path,
-                target: ref(o.target, '--target'),
-                maxTokens: o.maxTokens,
-                dryRun: o.dryRun,
-              },
-            );
+            if (flaky && o.ai === false) return await plainFlaky(true);
+            let r: AiTaskResult;
+            try {
+              r = await runAiTask(
+                aiRunDeps({
+                  ctx,
+                  settings,
+                  store,
+                  surface: surface(),
+                  env: process.env,
+                  // prose streams to the terminal as it is written
+                  onDelta: human && !o.dryRun && !jsonTask ? (d) => ((streamed = true), process.stdout.write(d)) : undefined,
+                }),
+                {
+                  task,
+                  question: o.question,
+                  context: contextOption(o.context),
+                  item: ref(o.item, '--item'),
+                  privacy: o.privacy,
+                  provider: o.provider,
+                  model: o.model,
+                  hint: o.hint,
+                  path: o.path,
+                  target: ref(o.target, '--target'),
+                  maxTokens: o.maxTokens,
+                  dryRun: o.dryRun,
+                },
+              );
+            } catch (e) {
+              if (!flaky || o.dryRun || !isAiSetupError(e)) throw e;
+              return await plainFlaky(false);
+            }
             const applied =
               o.apply && r.proposal
                 ? applyProposal(store, r.proposal.id, {
@@ -184,8 +224,8 @@ export function registerAiCommands(program: Command): void {
             if (invalid) process.exitCode = EXIT.TEST_FAILURE;
             if (!human) return printJson({ ...r, ...(applied ? { applied } : {}) });
             if (r.dryRun) return printPreview(r);
-            if (!streamed) console.log(r.text);
-            else console.log();
+            if (!streamed && !(jsonTask && r.proposal)) console.log(r.text);
+            else if (streamed) console.log();
             // a proposal lists them itself (printProposal)
             if (invalid && !r.proposal?.problems?.length)
               console.log(red(`\nStill invalid after ${plural(r.repairs, 'repair')}:`) + r.problems.slice(0, 8).map((p) => `\n  ${red('✗')} ${p}`).join('') + dim('\n  Review the answer before using it; run it again (--hint) for another.'));

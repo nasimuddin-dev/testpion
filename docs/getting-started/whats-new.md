@@ -1,13 +1,39 @@
 ---
 title: "What's new: how to use it"
-description: "What's new in TestPion 0.48, 0.47 and 0.46, step by step: AI that writes integration flows from a collection, verified checks and tests, what is sent, Local only and cost caps, a calmer rail with More…, your own keyboard shortcuts, compact density, Undo instead of confirmations, JSONPath suggestions and Diff vs previous, a visual flow designer, a Terminal, one production guard, and the behaviour changes to read before upgrading."
+description: "What's new in TestPion 0.49, 0.48, 0.47 and 0.46, step by step: AI that explains and fixes a failed run and finds out why a test is flaky, AI that writes integration flows from a collection, verified checks and tests, what is sent, Local only and cost caps, a calmer rail with More…, your own keyboard shortcuts, compact density, Undo instead of confirmations, JSONPath suggestions and Diff vs previous, a visual flow designer, a Terminal, one production guard, and the behaviour changes to read before upgrading."
 ---
 
 ::: v-pre
 
 # What's new: how to use it
 
-The options added in 0.48, 0.47 and 0.46, each with the steps to use it and a link to the full reference. Where it makes sense, an option also works from the terminal (`testpion …`, with `--json`) and for AI agents (an MCP tool of `testpion mcp-server`). **Read the behaviour changes of [0.48](#behaviour-changes-in-0-48), [0.47](#behaviour-changes-in-0-47) and [0.46](#behaviour-changes-read-before-upgrading) before upgrading.** The 0.45 additions follow [below](#what-was-new-in-0-45); older ones are in the [changelog](/changelog).
+The options added in 0.49, 0.48, 0.47 and 0.46, each with the steps to use it and a link to the full reference. Where it makes sense, an option also works from the terminal (`testpion …`, with `--json`) and for AI agents (an MCP tool of `testpion mcp-server`). **Read the behaviour changes of [0.49](#behaviour-changes-in-0-49), [0.48](#behaviour-changes-in-0-48), [0.47](#behaviour-changes-in-0-47) and [0.46](#behaviour-changes-read-before-upgrading) before upgrading.** The 0.45 additions follow [below](#what-was-new-in-0-45); older ones are in the [changelog](/changelog).
+
+## What's new in 0.49 {#whats-new-in-0-49}
+
+### Behaviour changes in 0.49 {#behaviour-changes-in-0-49}
+- **`testpion run-collection` records what it ran** (on a collection of the workspace): the collection, the requests and folders picked, the iterations. The app's **Run again** and **Run in CI…**, `ci --run last` and the triage now find its saved requests.
+- **Attempt to fix and the triage obey the production guard**: in an environment marked as production, **Attempt to fix** asks first like any run (`testpion ai attempt-fix --allow-production`), and the MCP tool `ai_attempt_fix` refuses it unless the server was started with `--allow-production`.
+- **A fix is not applied over a newer file**: when the test file or saved request changed after a proposal was made, applying it says *it changed since the proposal was made* instead of overwriting your edit.
+- **A damaged run file says so**: a run whose `summary.json` or results cannot be read is named as damaged, with what to do, instead of a parser error.
+
+### Explain and fix a failed run with AI {#ai-triage}
+1. On a failed run, open its ⋯ (or right-click it in **Runs**, or the failed run in **Problems** or Home's *Needs attention*) ▸ **Explain and fix failures with AI…**.
+2. The dialog says how many failures and groups there are (the same failed check, status and endpoint are one group), the model and the token estimate. Add a hint if you like, choose **Metadata only** to send no body values, then **Explain and fix**.
+3. The review lists the **causes** — each with its kind (*test is stale*, *API regression*, *auth* …), a confidence and the evidence: the failing request and response, the failed check, what changed since the test last passed — and the **fixes**, each verified on the failing and the last passing response (*passes now; it follows an API change*). Pick a **Safer:** form when one is offered (TestPion's own update, such as `type $.id = "string"` for an id the server makes up); a bug report has **Copy**.
+4. **Apply selected fixes**, then **Rerun the affected tests** (or **Undo**).
+
+Terminal and CI: `testpion ai triage [--run last] [--privacy metadata] [--no-ai] [--apply]`, and `--triage` on `test`, `run` and `run-collection` (a *Triage* section, `triage.md`, and a *Triage (AI)* section in the reports; the exit code stays the run's). Agents: `ai_triage_run`, then `ai_apply_proposal`. ([Explain and fix failures](/ai-testing/ai-features#explain-and-fix-failures-triage))
+
+### Find out why a test is flaky {#ai-flaky}
+1. A flaky test (it passes and fails without a change) is listed in **Problems**; its ⋯ ▸ **Why is this flaky?** (also in a result's **History** tab when it flipped).
+2. **Analyse**: TestPion reads the test across runs (pass rate, flips, retries, times, statuses) and how its failing responses differ from passing ones; the model names the pattern (*timing*, *shared state*, *rate limit* …) with evidence and a fix — a wait with `until:`, a stable check, isolated data. A retry is only a last resort and is flagged; skipping or quarantining the test is never offered.
+3. **Attempt to fix** applies the fix and runs the test 5 times: *Stable: passed 5/5*, *Still flaky* or *Failing*. **Keep the fix**, or **Undo**.
+
+Terminal: `testpion ai run analyze-flaky --item test:jobs/report.yaml`, then `testpion ai attempt-fix <id>`. Agents: `ai_analyze_flaky`, then `ai_attempt_fix`. ([Why is this flaky?](/ai-testing/ai-features#why-is-this-flaky))
+
+### Generated tests that need fewer repairs {#ai-script-reference}
+**Generate tests** now gives the model the exact `tp.*` script API, read from the script sandbox itself, and a script that misuses it goes back naming the right member (`tp.response.json().id` for a field read from the raw `tp.response.body`, `tp.response.json()` for `pm.response.json()`, `to.be.ok` for `toBeTruthy()`). In the review, what TestPion changed in the model's answer is listed as *notes*. ([The script API, from the sandbox](/ai-testing/ai-features#verification))
 
 ## What's new in 0.48 {#whats-new-in-0-48}
 

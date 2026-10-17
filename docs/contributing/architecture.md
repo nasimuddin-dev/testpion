@@ -25,6 +25,8 @@ packages/core        the engine, host-agnostic (Node): the same code runs in the
   eval/, load/       checks and evaluators, load tests
   ai/                LLM providers, and the AI features: the task registry and runner (tasks/), the context builder (redaction,
                      privacy levels, budgets), structured output, verifiers, proposals (apply / undo) and the AI settings;
+                     the analyses of a failed run (run-evidence, triage) and of a flaky test (flaky, flaky-run), the fix
+                     items they share (fix-items) and the tp.* reference read from the sandbox (script-reference);
                      the usage ledger is storage/ai-usage.ts (see Design ▸ TestPion's own AI features)
   import/            Postman, Insomnia, Bruno, OpenAPI, HAR, cURL/fetch snippets, save-request (secrets to variables)
   scripts/           the tp.* sandbox (QuickJS in WebAssembly): scripts never reach Node

@@ -1,21 +1,24 @@
-import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, CircleDashed, FlaskConical, Play, RefreshCw, ShieldCheck, Trash2, XCircle } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, CircleDashed, Copy, FlaskConical, Play, RefreshCw, ShieldCheck, Trash2, XCircle } from 'lucide-react';
+import { copyText } from '../../lib/clipboard';
+import { useMemo, useState, type ReactNode } from 'react';
 import { call } from '../../api';
 import { toastError, useApp, type AiResponse } from '../../store';
 import type { Proposal, ProposalItem, VerificationBadge } from '@testpion/core';
 import { unifiedDiff } from '@testpion/shared';
 import { DiffText } from '../GitCommitPanel';
 import { Badge, Button, cx, Input, Modal } from '../ui';
+import { Findings } from './Findings';
 
-const KIND_LABEL: Record<ProposalItem['kind'], string> = { file: 'test file', flow: 'flow', assertion: 'check', script: 'script', request: 'request', patch: 'request change', text: 'text' };
+const KIND_LABEL: Record<ProposalItem['kind'], string> = { file: 'test file', flow: 'flow', assertion: 'check', script: 'script', request: 'request', patch: 'request change', variable: 'variable', text: 'text' };
 
 /** One verification badge: the verifier's verdict in words, its detail on hover. */
 export function VerificationBadgeView({ b }: { b: VerificationBadge }) {
   const icon = b.status === 'pass' ? <CheckCircle2 size={11} /> : b.status === 'fail' ? <XCircle size={11} /> : b.status === 'warn' ? <AlertTriangle size={11} /> : <CircleDashed size={11} />;
   return (
-    <span data-verification={b.status} data-verifier={b.verifier}>
-      <Badge tone={b.status === 'pass' ? 'ok' : b.status === 'fail' ? 'bad' : b.status === 'warn' ? 'warn' : 'default'} title={b.detail ? `${b.verifier}: ${b.detail}` : b.verifier}>
-        {icon} {b.label}
+    <span data-verification={b.status} data-verifier={b.verifier} className="inline-flex min-w-0 max-w-full">
+      {/* a long verdict stays on its row (cut, whole on hover) instead of widening the review */}
+      <Badge tone={b.status === 'pass' ? 'ok' : b.status === 'fail' ? 'bad' : b.status === 'warn' ? 'warn' : 'default'} title={`${b.label}${b.detail ? `\n${b.verifier}: ${b.detail}` : ''}`} className="max-w-full min-w-0 overflow-hidden">
+        {icon} <span className="truncate">{b.label}</span>
       </Badge>
     </span>
   );
@@ -27,6 +30,8 @@ export function VerificationBadgeView({ b }: { b: VerificationBadge }) {
  * failing ones start unticked. A check that pins a changing value offers its safer forms (switching checks it again);
  * Run now sends the request again and checks every item against the new response (and the one before it); Try on
  * mock runs a proposed flow against a mock of its collection. Regenerate asks again with a hint; Discard drops it.
+ * An analysis (triage, flaky analysis) shows its findings with their evidence first; its host adds its own actions
+ * (Attempt to fix) and a banner (the stability verdict).
  * Keyboard: Tab through the items, Space ticks one, Enter on a title shows its diff, Ctrl/Cmd+Enter accepts, Esc closes.
  */
 export function ProposalReview({
@@ -38,6 +43,8 @@ export function ProposalReview({
   acceptLabel = 'Accept selected',
   response,
   onRunNow,
+  actions,
+  banner,
 }: {
   proposal: Proposal;
   onAccept(items: ProposalItem[]): void | Promise<void>;
@@ -49,6 +56,10 @@ export function ProposalReview({
   response?: AiResponse;
   /** Send the request again (its editor's own send): the items are checked against the new response. */
   onRunNow?(): Promise<AiResponse | undefined>;
+  /** The host's own footer actions (Attempt to fix), given the ticked items. */
+  actions?(chosen: ProposalItem[], busy: boolean): ReactNode;
+  /** Shown above the findings (a stability verdict, a note). */
+  banner?: ReactNode;
 }) {
   const [proposal, setProposal] = useState(initial);
   const [lastResponse, setLastResponse] = useState(response);
@@ -132,6 +143,7 @@ export function ProposalReview({
               Try on mock
             </Button>
           )}
+          {actions?.(chosen, busy || !!working)}
           <Button onClick={onClose}>Close</Button>
           {applicable.length > 0 && (
             <Button variant="primary" loading={busy} disabled={!chosen.length} onClick={() => void accept()} data-proposal-accept>
@@ -142,8 +154,9 @@ export function ProposalReview({
       }
     >
       <div
-        className="grid gap-3 text-sm"
+        className="grid grid-cols-[minmax(0,1fr)] gap-3 text-sm min-w-0"
         data-proposal={proposal.id}
+        data-proposal-body
         onKeyDown={(e) => {
           if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
             e.preventDefault();
@@ -171,20 +184,29 @@ export function ProposalReview({
             </span>
           )}
         </div>
-        {proposal.summary && <p className="text-muted whitespace-pre-wrap">{proposal.summary}</p>}
+        {banner}
+        {proposal.summary && <p className="text-muted whitespace-pre-wrap break-words">{proposal.summary}</p>}
+        {proposal.findings?.length ? <Findings findings={proposal.findings} fixes={Object.fromEntries(proposal.findings.map((f) => [f.id, proposal.items.filter((i) => i.finding === f.id && i.kind !== 'text').length]))} /> : null}
         {proposal.assumptions.length > 0 && (
-          <ul className="list-disc ml-5 text-xs text-muted">
+          <ul className="list-disc ml-5 text-xs text-muted break-words">
             {proposal.assumptions.map((a) => (
               <li key={a}>Assumed: {a}</li>
             ))}
           </ul>
         )}
         {proposal.problems?.length ? (
-          <div className="rounded-lg border border-warn/40 bg-warn/5 p-2 text-xs" role="note">
+          <div className="rounded-lg border border-warn/40 bg-warn/5 p-2 text-xs break-words" role="note">
             Still wrong after the repairs (shown, not hidden): {proposal.problems.slice(0, 4).join('; ')}
           </div>
         ) : null}
-        <ul className="grid gap-2" aria-label="Proposed changes">
+        {proposal.notes?.length ? (
+          <ul className="list-disc ml-5 text-xs text-muted break-words" aria-label="Notes" data-proposal-notes>
+            {proposal.notes.slice(0, 8).map((n) => (
+              <li key={n}>{n}</li>
+            ))}
+          </ul>
+        ) : null}
+        <ul className="grid grid-cols-[minmax(0,1fr)] gap-2" aria-label="Proposed changes">
           {proposal.items.map((i) => (
             <ItemRow
               key={i.id}
@@ -240,33 +262,39 @@ function ItemRow({
   busy?: boolean;
   onAlternative?(a: NonNullable<ProposalItem['alternatives']>[number]): void;
 }) {
-  const diff = useMemo(() => (open ? unifiedDiff(item.before ?? null, item.after, item.path ?? item.title) : ''), [open, item]);
+  const diff = useMemo(() => (open ? unifiedDiff(item.before ?? null, item.after, item.path ?? KIND_LABEL[item.kind]) : ''), [open, item]);
   return (
-    <li className={cx('rounded-lg border', picked ? 'border-accent/50' : 'border-line')} data-proposal-item={item.id}>
-      <div className="flex items-center gap-2 px-2.5 py-1.5">
+    <li className={cx('rounded-lg border min-w-0', picked ? 'border-accent/50' : 'border-line')} data-proposal-item={item.id}>
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-2.5 py-1.5 min-w-0">
         {item.kind !== 'text' ? <input type="checkbox" checked={picked} onChange={onPick} aria-label={`Apply ${item.title}`} /> : <span className="w-[13px]" />}
-        <button className="flex items-center gap-1 min-w-0 flex-1 text-left hover:text-fg" onClick={onOpen} aria-expanded={open}>
+        <button className="flex items-center gap-1 min-w-0 flex-1 basis-48 text-left hover:text-fg" onClick={onOpen} aria-expanded={open} title={item.title}>
           {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
           <Badge>{KIND_LABEL[item.kind]}</Badge>
           <span className="truncate mono text-xs">{item.title}</span>
         </button>
-        <span className="flex gap-1 flex-wrap justify-end">
+        <span className="flex gap-1 flex-wrap justify-end min-w-0 max-w-full ml-auto">
           {item.verification.map((b, k) => (
             <VerificationBadgeView key={k} b={b} />
           ))}
+          {item.kind === 'text' && (
+            <button className="text-xs text-muted hover:text-fg inline-flex items-center gap-1" onClick={() => void copyText(item.after, item.title)} title="Copy it (a bug report, what to do)" data-proposal-copy={item.id}>
+              <Copy size={11} /> Copy
+            </button>
+          )}
         </span>
       </div>
       {!!item.alternatives?.length && item.verification.some((b) => b.status !== 'pass') && (
-        <div className="flex items-center gap-1.5 flex-wrap px-2.5 pb-1.5 text-xs" data-proposal-safer={item.id}>
+        <div className="flex items-center gap-1.5 flex-wrap px-2.5 pb-1.5 text-xs min-w-0" data-proposal-safer={item.id}>
           <ShieldCheck size={12} className="text-ok" />
           <span className="text-muted">Safer:</span>
           {item.alternatives.map((a) => (
             <button
               key={a.label}
-              className="mono rounded border border-line px-1.5 py-0.5 hover:bg-hover hover:text-fg disabled:opacity-50"
+              className="mono rounded border border-line px-1.5 py-0.5 hover:bg-hover hover:text-fg disabled:opacity-50 max-w-full truncate"
               disabled={busy}
               onClick={() => onAlternative?.(a)}
-              title="Use this check instead (it is checked again)"
+              title={`${a.label}
+Use this check instead (it is checked again)`}
             >
               {a.label}
             </button>
@@ -274,10 +302,10 @@ function ItemRow({
         </div>
       )}
       {open && (
-        <div className="border-t border-line max-h-80 overflow-auto">
+        <div className="border-t border-line max-h-80 overflow-auto min-w-0">
           <DiffText text={diff} />
           {item.verification.some((b) => b.detail) && (
-            <div className="px-3 pb-2 text-xs text-muted whitespace-pre-wrap">
+            <div className="px-3 pb-2 text-xs text-muted whitespace-pre-wrap break-words">
               {item.verification
                 .filter((b) => b.detail)
                 .map((b) => `${b.verifier}: ${b.detail}`)

@@ -7,6 +7,7 @@ import { formatUsd } from '@testpion/shared';
 import {
   ApsError,
   collectionRequests,
+  rerunSetupRequests,
   Logger,
   WorkspaceManager,
   WorkspaceStore,
@@ -52,7 +53,8 @@ import {
   assertProductionStep,
   isDataChangingMethod,
 } from '@testpion/core';
-import { cli, emitEvent, machine, noteError } from './output.js';
+import { cli, emitEvent, machine, noteError, noteWarning } from './output.js';
+import { triageAfterRun } from './run-triage.js';
 import { EXIT, green, red, yellow, dim, bold, cyan, CliError, printJson, collectVar, openWorkspace, cliContext, requireCollection, requireEnvironment, readImport, loadCollectionRef, cleanupFailedRun, readResults } from './shared.js';
 
 export function printResult(r: TestResult, verbose: boolean): void {
@@ -76,6 +78,8 @@ export function printResult(r: TestResult, verbose: boolean): void {
 }
 
 export interface RunCliOptions {
+  /** After a run with failures: group them by likely cause and, with a model, explain them with verified fixes (never changes the exit code). */
+  triage?: boolean;
   workspace?: string;
   environment?: string;
   concurrency?: string;
@@ -231,7 +235,7 @@ export async function finishRun(a: {
   summary: RunSummary;
   outDir: string;
   resultsFile: string;
-  o: Pick<RunCliOptions, 'reporter' | 'baseline' | 'saveBaseline' | 'quiet' | 'failOnRegression'>;
+  o: Pick<RunCliOptions, 'reporter' | 'baseline' | 'saveBaseline' | 'quiet' | 'failOnRegression' | 'triage'>;
   rerun?: string;
   emptyMessage?: string;
 }): Promise<number> {
@@ -239,8 +243,16 @@ export async function finishRun(a: {
   const results = () => readResults(resultsFile);
   const formats = o.reporter.filter((r) => r !== 'console') as ReportFormat[];
   const paths2 = await recordRun(store, summary, outDir, { reports: formats, history: !ephemeral });
+  // --triage: the failures grouped by cause (explained with verified fixes when a model is set up); the exit code is the run's
+  const triage = o.triage && !ephemeral ? await triageAfterRun({ store, summary, outDir, reports: paths2, quiet: o.quiet }) : undefined;
+  if (o.triage && ephemeral) {
+    // a run outside a workspace is not recorded, so there is nothing to triage: said, never silently ignored
+    const w = 'triage needs a workspace (-w); nothing recorded';
+    console.error(yellow(`warning: ${w}`));
+    noteWarning(w);
+  }
   // --jsonl: the run's summary and report files are the result envelope's data
-  if (machine()) printJson({ summary, reports: paths2, outDir });
+  if (machine()) printJson({ summary, reports: paths2, outDir, ...(triage ? { triage } : {}) });
 
   let regressionFailed = false;
   if (o.baseline) {
@@ -283,7 +295,7 @@ export async function finishRun(a: {
   return summary.failed + summary.errors > 0 || (o.failOnRegression && regressionFailed) ? EXIT.TEST_FAILURE : EXIT.SUCCESS;
 }
 
-export interface CollectionCliOptions extends Pick<RunCliOptions, 'workspace' | 'environment' | 'bail' | 'timeout' | 'reporter' | 'out' | 'var' | 'baseline' | 'saveBaseline' | 'failOnRegression' | 'trace' | 'verbose' | 'quiet' | 'logLevel' | 'otlp' | 'otlpHeader' | 'rerunFailed'> {
+export interface CollectionCliOptions extends Pick<RunCliOptions, 'workspace' | 'environment' | 'bail' | 'timeout' | 'reporter' | 'out' | 'var' | 'baseline' | 'saveBaseline' | 'failOnRegression' | 'trace' | 'verbose' | 'quiet' | 'logLevel' | 'otlp' | 'otlpHeader' | 'rerunFailed' | 'triage'> {
   iterationData?: string;
   iterationQuery?: string;
   iterationCount?: string;
@@ -373,7 +385,11 @@ export async function executeCollectionRun(ref: string, o: CollectionCliOptions)
       .map((r) => r.node.id);
     if (!selection.length) throw new CliError(`No ${[...wanted].join(' / ')} requests to run in "${collection.name}"`, EXIT.CONFIG_ERROR);
   }
-  if (rerun && !o.quiet) console.log(dim(`Re-running ${rerun.ids.length} failed request${rerun.ids.length === 1 ? '' : 's'} of ${rerun.runId}`));
+  if (rerun && !o.quiet) {
+    // the earlier requests they need (the one whose script sets the token) run first, as setup
+    const setup = rerunSetupRequests(collection, selection ?? []).length;
+    console.log(dim(`Re-running ${rerun.ids.length} failed request${rerun.ids.length === 1 ? '' : 's'} of ${rerun.runId}${setup ? ` (and ${setup} earlier request${setup === 1 ? '' : 's'} they need, as setup)` : ''}`));
+  }
   let data: DatasetRecord[] | undefined;
   if (o.iterationData) {
     // a database (postgres://…, mysql://… or env:NAME holding the URL) is read as it is; a file is relative to here
@@ -431,6 +447,7 @@ export async function executeCollectionRun(ref: string, o: CollectionCliOptions)
       runId,
       collection,
       selection,
+      rerun: !!rerun,
       // the collection's gRPC calls and connections (a workspace collection; a collection file has none)
       realtime: fromFile ? undefined : collectionRealtimeTests(store, collection, selection),
       data,
@@ -481,7 +498,9 @@ export async function executeCollectionRun(ref: string, o: CollectionCliOptions)
   }
   const reporter = [...(o.reporters?.length ? o.reporters : o.reporter)];
   if (o.reporterJunitExport && !reporter.includes('junit')) reporter.push('junit');
-  const code = await finishRun({ store, ephemeral, summary, outDir, resultsFile, o: { ...o, reporter }, emptyMessage: 'No requests ran.' });
+  // a workspace collection's run says what it ran (Run again, Run in CI and --triage find its saved requests by it)
+  const origin = !fromFile && !fromUrl && !ephemeral ? { kind: 'collection' as const, collectionId: collection.id, ...(selection?.length ? { selection } : {}), ...(iterations ? { iterations } : {}), ...(rerun ? { rerun: true } : {}) } : undefined;
+  const code = await finishRun({ store, ephemeral, summary: origin && !summary.origin ? { ...summary, origin } : summary, outDir, resultsFile, o: { ...o, reporter }, emptyMessage: 'No requests ran.' });
   if (o.reporterJunitExport) {
     const target = resolve(o.reporterJunitExport);
     writeFileSync(target, readFileSync(join(outDir, 'junit.xml')));
@@ -722,6 +741,7 @@ export function runOptions(cmd: Command): Command {
     .option('--log-level <level>', 'ERROR | WARN | INFO | DEBUG | TRACE (secrets are always redacted)')
     .option('--watch', 'run again whenever a test, collection, environment or data file changes (until Ctrl+C)')
     .option('--rerun-failed [runId]', 'only the tests that failed or errored in a run (default: the last one)')
+    .option('--triage', 'after a failed run: group the failures by likely cause and, with an AI model set up, explain them with verified fixes (triage.md, a "Triage (AI)" report section); never changes the exit code')
     .option('--from <step>', 'one flow file: run this step (id or name) and the steps after it, the steps before it taken from --seed-run (default: the latest run of the file)')
     .option('--to <step>', 'one flow file: run this step with only the steps it waits for')
     .option('--seed-run <runId>', "one flow file: the earlier run whose variables and responses seed the steps before --from; alone, replays that run from its first failing step (see testpion flow runs)")

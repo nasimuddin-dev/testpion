@@ -506,7 +506,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: nasimuddin-dev/testpion@v0.48.0
+      - uses: nasimuddin-dev/testpion@v0.49.0
         with:
           workspace: api-tests
           suite: integration
@@ -527,8 +527,34 @@ Inputs: `workspace`, one of `suite` / `collection` (+ `folder`) / `tests`, `envi
 | `report.html` | People: every step with its request, response, checks and timing |
 | `results.jsonl`, `summary.json` | Scripts and agents; `testpion report` re-generates the other formats from it |
 | `data-run.json`, `env-matrix.json` | A flow run once per data row or in several environments: the CLI's JSON envelope, with the rows (or the matrix) and the summary in `.data` (`jq '.data.summary' test-results/data-run.json`) |
+| `triage.md`, `triage.json` | With `--triage`, after a failed run: the failures grouped by likely cause and, with a model, explained with verified fixes ([below](#explain-the-failures-in-the-job)) |
 
 Exit codes: `0` all passed, `1` a test failed, `2` a configuration problem, `3` the run could not execute (the system never answered, for example).
+
+### Explain the failures in the job
+
+Add `--triage` to the run line (`testpion test`, `run` or `run-collection`, in a workspace): after a run with failures, TestPion groups them by likely cause — the same failed check, status and endpoint — and, with an AI model set up for the job, explains each cause with its evidence and a fix it verified against the failing and the last passing response. The job log gets a *Triage* section, `triage.md` and `triage.json` are written beside the reports, and the JUnit (`<system-out>`), HTML and Markdown reports get a *Triage (AI)* section when a model answered. Nothing is changed in your tests (a fix is a proposal to apply on your computer: `testpion ai apply <id>`, or the app's review), and **the exit code stays the run's**: a failed test still fails the build, and a triage that cannot be made is only a warning.
+
+```yaml
+- run: npx testpion@0.49.0 run -w . --suite integration -e Staging -r console junit html -o test-results --triage
+  env:
+    TESTPION_AI_PROVIDER: anthropic                     # or ollama on the runner; without a model: the grouping only
+    TESTPION_AI_MODEL_LARGE: claude-sonnet-5-5
+    ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+```
+
+Failure bodies are masked before anything is sent (secrets, tokens, personal data); to send no body values at all, run `npx testpion@0.49.0 ai triage --run last --privacy metadata` as a step after the tests instead (`if: failure()`). See [Explain and fix failures](/ai-testing/ai-features#explain-and-fix-failures-triage) for what you get, the privacy levels and the cost caps.
+
+The reusable GitHub Action above has no triage input yet and writes no job summary, so `triage.md` is not shown on the run's page. To triage with the Action, add a step after it (the Action records the run in the workspace, so `--run last` finds it):
+
+```yaml
+- if: failure()
+  run: npx testpion@0.49.0 ai triage -w api-tests --run last > triage.md; cat triage.md >> "$GITHUB_STEP_SUMMARY"
+  env:
+    TESTPION_AI_PROVIDER: anthropic
+    TESTPION_AI_MODEL_LARGE: claude-sonnet-5-5
+    ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+```
 
 ## Pull requests: tests plus what changed
 
@@ -539,7 +565,7 @@ With the workspace in git, the same job can comment on a pull request with what 
 - **Per-environment data:** keep base URLs and credentials in environments; `-e Staging` in CI, *Development* on a laptop. Secrets are never in the files.
 - **Independent flows:** every flow creates what it needs and deletes it at the end; use dynamic values for names so two runs never collide. A `concurrency` of 1 for flows that share records.
 - **Contract + integration:** `testpion coverage` after the run says which operations of the OpenAPI document the flows exercised, with `--min` as a gate.
-- **Flaky steps:** `retries` in the suite masks them; `flaky_tests` (the app's Runs view, the MCP tool) finds them so they get fixed instead.
+- **Flaky steps:** `retries` in the suite masks them; `flaky_tests` (the app's Runs view and Problems panel, the MCP tool) finds them, and [Why is this flaky?](/ai-testing/ai-features#why-is-this-flaky) names the pattern and a fix (a wait with `until:`, a stable check, isolated data) that **Attempt to fix** proves by running the test 5 times.
 - **Data-driven:** a dataset (CSV, JSON, JSONL, SQLite) runs a flow once per row (`testpion test <file> --data`, see [Once per data row](#once-per-data-row)) or a collection once per row (`testpion run-collection -d`), for many accounts or inputs.
 - **Production:** a pipeline whose environment is marked as production needs `--allow-production` on the run line for its data-changing steps (reads run without it); see [Production](/api-testing/environments#production).
 

@@ -115,7 +115,7 @@ Every command that takes `--json` prints **one envelope** on stdout, whatever ha
 |---|---|
 | `-w, --workspace` | Workspace name or directory (default: nearest `workspace.json`). |
 | `-e, --environment` | Environment name. |
-| `--allow-production` | Allow data-changing requests (POST, PUT, PATCH, DELETE, mutations …) to an environment marked as production; without it they fail with *needs confirmation* and reads still run. Also for `send`, `run-collection`, `load`, `eval run`, `serve flows` and `monitor add / run / start`. See [Production](/api-testing/environments#production). |
+| `--allow-production` | Allow data-changing requests (POST, PUT, PATCH, DELETE, mutations …) to an environment marked as production; without it they fail with *needs confirmation* and reads still run. Also for `send`, `run-collection`, `load`, `eval run`, `serve flows`, `monitor add / run / start` and `ai attempt-fix`. See [Production](/api-testing/environments#production). |
 | `-c, --concurrency` | Parallel workers. |
 | `--retries`, `--timeout` | Retries per failing test; per-test timeout in ms. |
 | `-r, --reporter` | `console junit json html markdown` |
@@ -129,6 +129,7 @@ Every command that takes `--json` prints **one envelope** on stdout, whatever ha
 | `--log-level` | Enable debug logging; secrets stay redacted. |
 | `--watch` | Run again whenever a test, collection, environment or data file in the workspace (or the given paths) changes, until Ctrl+C. Results and reports the run writes don't count as changes. |
 | `--rerun-failed [runId]` | Run only the tests that failed or errored in a run (default: the last one). In the app: **Rerun failed** on a finished run; **Run again** (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd> for the last run) runs the whole run again as it ran. |
+| `--triage` | After a run with failures: the failures grouped by likely cause and — with an [AI model set up](/ai-testing/ai-features#set-up-a-model) — explained with verified fixes, printed as a *Triage* section and written to `triage.md` / `triage.json` beside the results; the JUnit, HTML and Markdown reports get a *Triage (AI)* section when a model answered. Never changes the exit code. Also for `run-collection`. See [Explain and fix failures](/ai-testing/ai-features#explain-and-fix-failures-triage). |
 | `--from <step>` | One flow file: run this step and the steps after it; the steps before it are seeded from `--seed-run` (default: the latest run of the file that has them). In the app: **Run from here**. |
 | `--to <step>` | One flow file: run this step with only the steps it waits for. In the app: **Run to here**. |
 | `--seed-run <runId>` | One flow file: the run whose variables and responses seed the steps before `--from`; alone, replays that run from its first failing step (see `testpion flow runs`). |
@@ -210,7 +211,7 @@ testpion requests "Veterinary API" --health   # plus latest status, median time 
 
 ## `run-collection`
 
-Runs a collection one request at a time, in order, with its `tp.*` scripts, like Postman's Collection Runner or Newman. `<collection>` is a collection name or id in the workspace, a collection file (TestPion or Postman v2.1 JSON), or an http(s) link to one (e.g. a collection published in a repository). A collection file runs in a temporary workspace, so your own workspace isn't changed.
+Runs a collection one request at a time, in order, with its `tp.*` scripts, like Postman's Collection Runner or Newman. `<collection>` is a collection name or id in the workspace, a collection file (TestPion or Postman v2.1 JSON), or an http(s) link to one (e.g. a collection published in a repository). A collection file runs in a temporary workspace, so your own workspace isn't changed (its results go to `./testpion-results/<runId>`). A run of a workspace collection is recorded in the workspace's history with what it ran — the collection, the requests and folders picked, the iterations — so the app's **Run again** and **Run in CI…**, `ci --run last`, `--rerun-failed` and the [triage](/ai-testing/ai-features#explain-and-fix-failures-triage) (`--triage`, `ai triage`) find its saved requests.
 
 ```bash
 # a collection in the workspace
@@ -229,7 +230,7 @@ testpion run-collection api.postman_collection.json -e staging.postman_environme
 | `-n, --iteration-count` | Number of iterations (default: the number of data rows, or 1). |
 | `--delay-request <ms>` | Pause between requests. |
 | `--watch` | Run again whenever the collection, an environment or the data file changes, until Ctrl+C. |
-| `--rerun-failed [runId]` | Run only the requests that failed in a run of this collection (default: the last run). |
+| `--rerun-failed [runId]` | Run only the requests that failed in a run of this collection (default: the last run). The earlier requests they need run first, marked `[setup]`: those whose scripts set a `{{variable}}` the failed ones use (a token), and what those need in turn. Their results are reported (failures too) but do not count toward the rerun's totals or exit code. A value set another way (by hand, a collection script) is not looked for: give it with `--env-var`. |
 | `--folder <name...>` | Only run these folders or requests, by name or id (repeatable). |
 | `--bail`, `--timeout` | Stop after the first failure; per-request timeout in ms. |
 | `--cookie-jar <file>` | Start with the cookies in this JSON file (TestPion format or a Newman cookie jar). |
@@ -240,6 +241,7 @@ testpion run-collection api.postman_collection.json -e staging.postman_environme
 | `-k, --insecure` | Don't verify TLS certificates (development servers only). |
 | `--suppress-exit-code` | Exit `0` even when tests fail (configuration errors still exit `2`). |
 | `--reporter-junit-export <file>` | Also write the JUnit report to this file. |
+| `--triage` | After a run with failures (of a workspace collection): the failures grouped by likely cause and, with a model, explained with verified fixes; `triage.md` / `triage.json` beside the results. Never changes the exit code. |
 | `-w`, `-r`, `-o`, `--var`, `--trace`, `--baseline` … | Same as `test`. |
 
 **Coming from Newman?** Most command lines work after replacing `newman run` with `testpion run-collection`: `-e`, `-g`, `-d`, `-n`, `--folder`, `--env-var`, `--global-var`, `--delay-request`, `--timeout-request`, `--bail`, `-k`, `--export-environment`, `--export-globals`, `--suppress-exit-code`, `--reporters` and `--reporter-junit-export` mean the same.
@@ -480,6 +482,8 @@ TestPion's own [AI tasks](/ai-testing/ai-features) from the terminal and CI, wit
 |---|---|
 | `ai tasks` | The tasks: id, title, tier, output, whether it proposes changes, verifiers. |
 | `ai run <task>` | Run a task. Context from `--item <ref>` (`request:<c>:<r>`, `history:<id>`, `run:<id>[:<resultId>]` (`run:last`: the newest finished run, the rule of `ci --run last`), `test:<path>`, `flow:<path>`, `spec:<path>`, `collection:<id>`, `folder:<c>:<f>`) and/or `--context <json\|@file>`; `-q` the question; `--privacy full\|metadata\|names`; `--hint`; `--path` where a test file goes; `--target` where a request goes; `--max-tokens`; `-e` environment (variable names only). Prints the answer (streamed) and, for a generating task, a **proposal** with each item's verification. `--dry-run` prints what would be sent and sends nothing. `--apply [--items i1,i3]` applies at once. |
+| `ai triage` | Explain and fix a failed run's failures (`--run <id\|last>`, default `last`: the newest finished run with failures): grouped by cause, each with evidence, a confidence and a fix verified against the failing and the last passing response, as a proposal (nothing changes before `--apply` or `ai apply`). `--privacy full\|metadata\|names`, `--hint`, `--provider` / `--model`, `--no-ai` (the grouping alone; also what you get, with exit code `0`, when no model is set up), `--dry-run`, `--apply [--items i1,i3]`, `--json`. See [Explain and fix failures](/ai-testing/ai-features#explain-and-fix-failures-triage). |
+| `ai attempt-fix <id>` | A flaky-test analysis (`ai run analyze-flaky --item test:<path>[:<step>]` or `test-case:<testId>`): apply its fix (the ticked items, or `--items`) and run the test `--times` times (default 5, 1–20); prints *Stable: passed 5/5*, *Still flaky* or *Failing*, kept with the proposal (exit code `0` whatever the verdict: `--json` has `attempt.verdict`; `ai undo <id>` puts the test back); in an environment marked as production its data-changing requests need `--allow-production`. See [Why is this flaky?](/ai-testing/ai-features#why-is-this-flaky) |
 | `ai apply <id>` | Apply a proposal's ticked items (or `--items`). Takes the generic `--dry-run` (lists the files it would write; nothing changes). |
 | `ai undo <id>` | Put back what an applied proposal replaced. |
 | `ai discard <id>` | Discard a proposal. |
@@ -492,9 +496,14 @@ testpion ai run generate-assertions --item request:veterinary-api:req-get --dry-
 testpion ai run explain-error --context @error.json --privacy metadata --provider ollama
 testpion ai run design-flow -q "create a patient, read it back" --path flows/patients.yaml --json | jq -r .data.proposal.id
 testpion ai apply ai-mvbu2qjg9a3b644187 --json
+testpion ai triage --privacy metadata --dry-run          # the last failed run: its groups, and what would be sent
+testpion ai triage --run last --apply                     # causes, verified fixes, applied (then rerun the affected tests)
+testpion test tests/ --triage                             # CI: a Triage section after a failed run; the exit code is the run's
+testpion ai run analyze-flaky --item test:jobs/report.yaml    # why a test is flaky, with a verified fix (--no-ai, or no model: TestPion's own finding)
+testpion ai attempt-fix ai-mvckdy5ve28aa50ec9 --times 5   # apply it, run the test 5 times: Stable: passed 5/5
 ```
 
-`suggest-assertions` is an alias of `generate-assertions`, `generate-tests` of `generate-pm-tests`. With `--item request:<c>:<r>`, suggested checks and tests are verified against the request's latest response in History (sent from the app); without one each item says *no response to check against*. `ai run --json` returns `{ task, taskVersion, provider, model, text, truncated, finishReason, problems, repairs, calls, usage, ms, preview, proposal?, applied? }`; `preview` is what was (or, with `--dry-run`, would be) sent: the model, privacy level, sections, masks and estimate (and the messages on a dry run). Exit code `2` when no model is set up (`ConfigurationError`, *The AI assistant is off*), Local only refuses the provider, or a cap refuses the call — nothing was sent. Exit code `1` (envelope `status: "failed"`) when the answer is still invalid after the repairs: `problems` lists why (without `--json` they are printed under the answer). With the global `--dry-run`, `ai apply` prints *would apply …* and the files it would change, nothing else. See [AI features](/ai-testing/ai-features#from-the-terminal-agents-and-ci).
+`suggest-assertions` is an alias of `generate-assertions`, `generate-tests` of `generate-pm-tests`. A task that answers in JSON (`triage-run`, `analyze-flaky` …) is printed as its proposal — the findings with their evidence, then the items — not as the raw JSON. With `--item request:<c>:<r>`, suggested checks and tests are verified against the request's latest response in History (sent from the app); without one each item says *no response to check against*. `ai run --json` returns `{ task, taskVersion, provider, model, text, truncated, finishReason, problems, repairs, calls, usage, ms, preview, proposal?, applied? }`; `preview` is what was (or, with `--dry-run`, would be) sent: the model, privacy level, sections, masks and estimate (and the messages on a dry run). Exit code `2` when no model is set up (`ConfigurationError`, *The AI assistant is off*) — except `analyze-flaky`, which then prints TestPion's own finding (the signature, the likely pattern, *note: no model configured*) and exits `0`, as with `--no-ai` (`--json`: `{ task, testId, name, signals, runs, finding, ai: false, fallback }`) — Local only refuses the provider, or a cap refuses the call — nothing was sent. Exit code `1` (envelope `status: "failed"`) when the answer is still invalid after the repairs: `problems` lists why (without `--json` they are printed under the answer). With the global `--dry-run`, `ai apply` prints *would apply …* and the files it would change, nothing else. See [AI features](/ai-testing/ai-features#from-the-terminal-agents-and-ci).
 
 ## `eval compare` and `eval matrix`
 

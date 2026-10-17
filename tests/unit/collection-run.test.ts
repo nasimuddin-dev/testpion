@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { fakeServices, tempDir } from '../helpers.js';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { collectionRequests, runCollection, runTests, VariableScope, type Collection, type ExecServices, type RunEvent, type TestCase, type TestResult } from '../../packages/core/src/index.js';
+import { collectionRequests, rerunSetupRequests, runCollection, runTests, VariableScope, type Collection, type ExecServices, type RunEvent, type TestCase, type TestResult } from '../../packages/core/src/index.js';
 
 let server: Server;
 let base: string;
@@ -93,6 +93,46 @@ describe('collection runner', () => {
     // the token set by the first request's script is sent by the next one through inherited auth
     expect(seen[1]!.auth).toBe('Bearer tok-123');
     expect(results[1]!.checks.map((c) => c.name)).toEqual(['collection test', 'uses row']);
+  });
+
+  it('a rerun of failed requests runs the earlier requests they need first, as setup that does not count', async () => {
+    // "Get pet" uses {{accessToken}} through the collection's bearer auth; only "Token"'s script sets it
+    expect(rerunSetupRequests(collection(), ['r-pet'])).toEqual(['r-token']);
+    expect(rerunSetupRequests(collection(), ['r-token', 'r-pet'])).toEqual([]); // it runs anyway
+    expect(rerunSetupRequests(collection(), ['r-token'])).toEqual([]);
+    seen.length = 0;
+    const results: TestResult[] = [];
+    const summary = await runCollection({
+      name: 'rerun',
+      collection: collection(),
+      selection: ['r-pet'],
+      rerun: true,
+      services: services(),
+      onEvent: (e: RunEvent) => void (e.type === 'test-end' && results.push(e.result)),
+    });
+    expect(seen.map((s) => s.url.split('/')[1])).toEqual(['token', 'pets']);
+    expect(seen[1]!.auth).toBe('Bearer tok-123');
+    expect(results.map((r) => [r.name, r.metadata?.setup ?? false])).toEqual([
+      ['[setup] Auth / Token', true],
+      ['Pets / Get pet', false],
+    ]);
+    // the totals are the rerun's: the setup request is reported, not counted
+    expect(summary.total).toBe(1);
+    // without rerun only the selection runs (the token is missing)
+    seen.length = 0;
+    await runCollection({ name: 'plain', collection: collection(), selection: ['r-pet'], services: services() });
+    expect(seen.map((s) => s.url.split('/')[1])).toEqual(['pets']);
+  });
+
+  it('a rerun counts a failed setup request out of the totals but reports it', async () => {
+    const c = collection();
+    c.testScript = undefined;
+    (c.items[0] as any).items[0].testScript = "pm.environment.set('accessToken', 'x'); pm.test('token ok', () => pm.expect(1).to.equal(2));";
+    const results: TestResult[] = [];
+    const summary = await runCollection({ name: 'rerun', collection: c, selection: ['r-pet'], rerun: true, services: services(), onEvent: (e: RunEvent) => void (e.type === 'test-end' && results.push(e.result)) });
+    expect(results[0]).toMatchObject({ status: 'failed', metadata: { setup: true } });
+    const counted = results.filter((r) => !r.metadata?.setup);
+    expect(summary).toMatchObject({ total: 1, failed: counted.filter((r) => r.status === 'failed').length });
   });
 
   it('follows setNextRequest and stops on null', async () => {

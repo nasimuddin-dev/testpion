@@ -17,6 +17,7 @@ import { normalizeError } from '../errors.js';
 import type { ProposalItem, VerificationBadge } from './proposal.js';
 import { explainYamlError } from './yaml-repair.js';
 import { explainCheckProblem } from './flow-format.js';
+import { loadScriptApi, scriptApiProblems } from './script-reference.js';
 
 /** A response a proposal was made for (the one on screen, or the latest in the history). */
 export interface StoredResponse {
@@ -96,6 +97,10 @@ const UNSTABLE = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-
 const GENERATED_FIELD = /(^|[.[\]'"])(id|uuid|guid|[a-z]+Id|[a-z]+_id|created\w*|updated\w*|modified\w*|\w*[tT]imestamp|\w*[tT]ime|\w*At|date|\w*[tT]oken|nonce|etag|requestId|traceId)['"\]]*$/;
 const PINNING = /^(equals|eq|exact-match|json-path)$/i;
 
+/** A check that pins a value the server makes up (a time, an id, a token): it breaks on the next response. */
+export const pinsGeneratedValue = (c: CheckConfig): boolean =>
+  PINNING.test(c.type) && c.path !== undefined && ((typeof c.expected === 'string' && UNSTABLE.test(c.expected)) || GENERATED_FIELD.test(String(c.path)));
+
 const checkContext = (r: StoredResponse) => ({ testType: 'http' as const, status: r.status, headers: r.headers, body: parseBody(r.body), text: r.body ?? '', latencyMs: r.latencyMs });
 
 /** A check's stable forms: the field is there, has the type, or (a time or an id) has its format. */
@@ -164,8 +169,15 @@ const POSTMAN_API = /(^|[^\w$.])(pm|postman)\s*\.\s*[A-Za-z_$]/;
  * previous response when there is one: a test that passes now but failed before depends on a value that changes.
  */
 export async function verifyScript(code: string, response: StoredResponse | undefined, previous?: StoredResponse): Promise<VerificationBadge> {
-  if (POSTMAN_API.test(code.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '')))
-    return { verifier: 'script', status: 'fail', label: 'uses pm.* / postman.*', detail: 'TestPion scripts use tp.* (tp.test, tp.expect, tp.response, tp.variables); pm.* is only for Postman compatibility.' };
+  // the API as the sandbox has it: each misuse with what to write instead (that is what a repair turn sends back)
+  const misuse = scriptApiProblems(code, await loadScriptApi());
+  if (misuse.length)
+    return {
+      verifier: 'script',
+      status: 'fail',
+      label: POSTMAN_API.test(code.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '')) ? 'uses pm.* / postman.*' : 'misuses the tp.* script API',
+      detail: misuse.slice(0, 6).join('\n'),
+    };
   // the response time is there only when the response it was written for has one (the editor's, History's); else the test cannot be proven
   if (response && response.latencyMs === undefined && /\bresponseTime\b|\bto\.have\.responseTime\b/.test(code))
     return { verifier: 'script', status: 'fail', label: 'reads the response time, which the response it was written for does not have', detail: 'Leave the timing out, or send the request again and generate the tests from that response.' };
