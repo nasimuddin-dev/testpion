@@ -34,6 +34,8 @@ export function VirtualList<T>({
   scrollParent = false,
   keepIndex,
   name = 'VirtualList',
+  role,
+  label,
 }: {
   items: T[];
   rowHeight: number;
@@ -49,6 +51,9 @@ export function VirtualList<T>({
   keepIndex?: number;
   /** Names the list in the development report of a repeated key. */
   name?: string;
+  /** The list's role for screen readers (`tree` when its rows are tree items) and its name. */
+  role?: string;
+  label?: string;
 }) {
   // rows follow the density (Settings ▸ Appearance): the given height is the comfortable one
   const rowHeight = scaledRow(givenRowHeight, useDensity());
@@ -135,7 +140,7 @@ export function VirtualList<T>({
   ));
   if (scrollParent)
     return (
-      <div ref={ref} className={`relative${className ? ` ${className}` : ''}`} style={{ height: items.length * rowHeight, contain: CONTAIN }} data-virtual-list={name} data-vl-drawn={rows.length}>
+      <div ref={ref} className={`relative${className ? ` ${className}` : ''}`} style={{ height: items.length * rowHeight, contain: CONTAIN }} data-virtual-list={name} data-vl-drawn={rows.length} role={role} aria-label={label}>
         {rows}
       </div>
     );
@@ -146,6 +151,8 @@ export function VirtualList<T>({
       style={{ contain: CONTAIN }}
       data-virtual-list={name}
       data-vl-drawn={rows.length}
+      role={role}
+      aria-label={label}
       onScroll={(e) => {
         pendingScrollTop.current = e.currentTarget.scrollTop;
         // Scrolling can emit far more events than frames. Coalescing updates

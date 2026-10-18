@@ -1,5 +1,5 @@
 import { Check, History, KeyRound, Plus } from 'lucide-react';
-import { NodeMenu } from './TreeParts';
+import { NodeMenu, TreeBadge } from './TreeParts';
 import { saveAsTest } from '../lib/save-test';
 import { useEffect, useMemo, useState } from 'react';
 import { call } from '../api';
@@ -129,7 +129,7 @@ export function HistoryPane({ kind = 'http', onOpen, noun = 'Requests you send' 
                 onClick={() => open(r.item)}
                 onKeyDown={(ev) => ((ev.key === 'F10' && ev.shiftKey) || ev.key === 'ContextMenu') && (ev.preventDefault(), setMenuFor(r.item.id))}
               >
-                {r.item.method && <span className={cx('mono method-badge text-[0.64rem] font-bold w-12 shrink-0', `method-${r.item.method}`)}>{r.item.method}</span>}
+                {r.item.method && <TreeBadge label={r.item.method} className={`method-${r.item.method}`} />}
                 <span className="truncate flex-1">{kind === 'http' ? (r.item.url ?? r.item.name) : r.item.name}</span>
                 {r.item.status !== undefined && <Badge tone={statusTone(r.item.status)}>{r.item.status}</Badge>}
               </button>

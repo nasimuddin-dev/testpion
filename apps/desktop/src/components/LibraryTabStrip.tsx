@@ -1,8 +1,9 @@
-import { Plus } from 'lucide-react';
+import { Plus, type LucideIcon } from 'lucide-react';
 import type { ItemRef } from '@testpion/shared';
 import type { LibraryTab } from '../lib/library-tabs';
 import { DocTabStrip } from './DocTabStrip';
 import { noteClosedTabs } from '../lib/closed-tabs';
+import { Empty } from './ui';
 
 /**
  * WF-19: the tab strip of a view whose items are saved (Load tests, Evaluations, AI prompts, Environments, Debugger
@@ -68,5 +69,14 @@ export function LibraryTabStrip({
         )
       }
     />
+  );
+}
+
+/** What a tab view shows when its last tab was closed: the same in every view (Evaluations, Load tests, Playground). */
+export function NoOpenItems({ icon: Icon, title, onNew, newLabel, children }: { icon: LucideIcon; title: string; onNew(): void; newLabel: string; children: React.ReactNode }) {
+  return (
+    <Empty icon={<Icon size={28} />} title={title} actions={[{ label: newLabel, icon: <Plus size={13} />, onClick: onNew }]}>
+      {children}
+    </Empty>
   );
 }

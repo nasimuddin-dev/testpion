@@ -95,6 +95,40 @@ export function TreeHeader({
 /** Ask for a new folder's name. */
 export const askFolderName = async () => (await promptText('New folder', { message: 'Folder name', okLabel: 'Create' }))?.trim() || undefined;
 
+const SHORT_METHOD: Record<string, string> = { DELETE: 'DEL', OPTIONS: 'OPT' };
+
+/**
+ * THE badge: the type label in front of every row of every tree, list and tab (GET, POST, GQL, gRPC, WS, MCP, AI, API,
+ * CSV …): one pill of one width everywhere, so names line up and the space between the label and the name is the same
+ * on every row. Long labels are cut to five letters; the full word is the tooltip. Colours come from KIND_COLOR (a
+ * kind) or `method-<METHOD>` (an HTTP method).
+ */
+export const TreeBadge = memo(function TreeBadge({ label, className }: { label: string; className?: string }) {
+  const text = SHORT_METHOD[label.toUpperCase()] ?? label.slice(0, 5);
+  return (
+    <span className={cx('mono method-badge text-[0.64rem] font-bold w-[2.375rem] shrink-0 text-center', className)} title={label}>
+      {text}
+    </span>
+  );
+});
+
+/**
+ * The colour of each kind of item in badges and icons (styles.css: one `--k-*` token per kind, dark and light): the
+ * one place the tree files take a kind's colour from.
+ */
+export const KIND_COLOR = {
+  graphql: 'kind-graphql',
+  grpc: 'kind-grpc',
+  websocket: 'kind-ws',
+  soap: 'kind-soap',
+  api: 'kind-api',
+  script: 'kind-script',
+  mcp: 'kind-mcp',
+  agent: 'kind-agent',
+  ai: 'kind-ai',
+  dataset: 'kind-dataset',
+} as const;
+
 /** "Move to folder" in an item's menu: each folder, a new one, or the top level. */
 export function moveToFolderItem({ folders, current, move }: { folders: string[]; current?: string; move(folder: string | undefined): unknown }): MenuItem {
   const others = folders.filter((f) => f !== current);
@@ -105,7 +139,7 @@ export function moveToFolderItem({ folders, current, move }: { folders: string[]
     items: [
       ...others.map((f) => ({ label: f, icon: <Folder size={14} />, onSelect: () => void move(f) })),
       {
-        label: 'New folder…',
+        label: LABEL.newFolder,
         icon: <FolderPlus size={14} />,
         separator: others.length > 0,
         onSelect: async () => {
@@ -197,8 +231,56 @@ export function InlineRename({ value, onCommit, onCancel, validate, label = 'Nam
   );
 }
 
-/** Put the keyboard back on a row after an inline rename (rows carry data-rename-id). */
-export const focusRow = (id: string) => requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-rename-id="${CSS.escape(id)}"]`)?.focus());
+/**
+ * Put the keyboard back on a row (rows carry data-rename-id = their node id): after an inline rename, after a delete
+ * (the row next to the deleted one), after Undo (the restored row). The row may still be on its way (a list reloads
+ * over RPC after an undo): it is looked for over the next second, and focused once it is there.
+ */
+export function focusRow(id: string, tries = 60): void {
+  if (typeof document === 'undefined' || typeof requestAnimationFrame !== 'function') return;
+  const look = (left: number) =>
+    requestAnimationFrame(() => {
+      const row = document.querySelector<HTMLElement>(`[data-rename-id="${CSS.escape(id)}"]`);
+      if (row) row.focus();
+      else if (left > 0) look(left - 1);
+    });
+  look(tries);
+}
+
+/**
+ * The row the keyboard should land on once `row` is deleted: the next visible row of its tree, else the one before it
+ * (the row's node id, for focusRow); called before the delete, while the row is still there.
+ */
+export function neighbourRowId(row: HTMLElement): string | undefined {
+  const host = row.closest<HTMLElement>('[role="tree"]') ?? row.closest<HTMLElement>('[data-explorer-area], main') ?? document.body;
+  const rows = [...host.querySelectorAll<HTMLElement>('[data-tree-row]')].filter((r) => r.offsetParent);
+  const at = rows.indexOf(row);
+  if (at < 0) return undefined;
+  // the rows inside a deleted folder go with it: the first row after it that is not deeper than it
+  const level = Number(row.getAttribute('aria-level') ?? 0);
+  const next = rows.slice(at + 1).find((r) => Number(r.getAttribute('aria-level') ?? 0) <= level) ?? rows[at - 1];
+  return next?.dataset.renameId;
+}
+
+/**
+ * After a delete that `row` asked for: once the row is gone (the delete is an RPC: the list reloads after it), the
+ * keyboard goes to its neighbour instead of nowhere (the window's body). Looks for a few seconds; a delete that did not
+ * happen (an error, a dialog cancelled) leaves the focus alone.
+ */
+export function keepFocusAfterDelete(row: HTMLElement, neighbour = neighbourRowId(row)): void {
+  if (!neighbour) return;
+  let left = 180;
+  const check = () => {
+    if (!row.isConnected || !row.offsetParent) {
+      // only when nothing else took the keyboard meanwhile (the user clicked elsewhere, a field opened)
+      const a = document.activeElement;
+      if (!a || a === document.body || !a.isConnected) focusRow(neighbour);
+      return;
+    }
+    if (left-- > 0) requestAnimationFrame(check);
+  };
+  requestAnimationFrame(check);
+}
 
 /**
  * The keyboard in every tree and list (put it on the container's onKeyDown): ↑ ↓ move between rows, Home / End jump to
@@ -268,32 +350,27 @@ export function treeKeys(e: React.KeyboardEvent<HTMLElement>): void {
 let typed = '';
 let typedAt = -Infinity;
 
-/** The kind of a row (gRPC, WS, MQTT, MCP, API …), in the same small badge as a request's method; colours match the editor tabs. */
-export const KindBadge = memo(function KindBadge({ text, cls }: { text: string; cls: string }) {
-  return <span className={cx('mono text-[0.6rem] font-bold w-8 inline-block', cls)}>{text}</span>;
-});
-
-/** What a test (or a test file, by its folder: rest/ → HTTP …) is, as KindBadge text and colour: the Tests tree, its tabs and the flow diagram share it. */
+/** What a test (or a test file, by its folder: rest/ → HTTP …) is, as TreeBadge text and colour: the Tests tree, its tabs and the flow diagram share it. */
 export const TEST_KINDS: Record<string, [string, string]> = {
   rest: ['HTTP', 'text-ok'],
   http: ['HTTP', 'text-ok'],
-  soap: ['SOAP', 'text-[#0ea5e9]'],
-  graphql: ['GQL', 'text-[#e535ab]'],
-  grpc: ['gRPC', 'text-[#2ea99e]'],
-  websocket: ['WS', 'text-[#d97706]'],
-  mqtt: ['MQTT', 'text-[#d97706]'],
-  kafka: ['KFK', 'text-[#d97706]'],
-  mcp: ['MCP', 'text-accent'],
-  ai: ['AI', 'text-judge'],
-  llm: ['AI', 'text-judge'],
-  rag: ['RAG', 'text-judge'],
-  agent: ['AGT', 'text-judge'],
+  soap: ['SOAP', KIND_COLOR.soap],
+  graphql: ['GQL', KIND_COLOR.graphql],
+  grpc: ['gRPC', KIND_COLOR.grpc],
+  websocket: ['WS', KIND_COLOR.websocket],
+  mqtt: ['MQTT', KIND_COLOR.websocket],
+  kafka: ['KFK', KIND_COLOR.websocket],
+  mcp: ['MCP', KIND_COLOR.mcp],
+  ai: ['AI', KIND_COLOR.ai],
+  llm: ['AI', KIND_COLOR.ai],
+  rag: ['RAG', KIND_COLOR.ai],
+  agent: ['AGT', KIND_COLOR.agent],
   delay: ['WAIT', 'text-muted'],
   condition: ['IF', 'text-warn'],
-  script: ['JS', 'text-[#ca8a04]'],
+  script: ['JS', KIND_COLOR.script],
   flow: ['FLOW', 'text-accent'],
   log: ['LOG', 'text-muted'],
-  set: ['SET', 'text-[#0891b2]'],
+  set: ['SET', KIND_COLOR.mcp],
   assert: ['CHK', 'text-ok'],
 };
 

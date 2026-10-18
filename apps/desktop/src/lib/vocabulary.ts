@@ -29,7 +29,8 @@ export const LABEL = {
   saveAsTest: 'Save as test…',
   createTestFileFromCollection: 'Create test file from collection…',
   createTestFileFromFolder: 'Create test file from folder…',
-  newFolder: 'New folder',
+  /** Asks for the folder's name (the ellipsis says so, as every item that opens a dialog). */
+  newFolder: 'New folder…',
   /** The submenu of the other request kinds a collection can hold. */
   newRequest: 'New request',
   import: 'Import…',

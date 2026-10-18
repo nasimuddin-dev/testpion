@@ -1,7 +1,7 @@
 import { KeyRound, Plus, Save, Sparkles } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { PROVIDER_KINDS, PROVIDER_PRESETS, providerNeedsKey } from '@testpion/shared';
-import { CountPill, NodeMenu, withRefDefaults } from '../../components/TreeParts';
+import { CountPill, treeKeys, withRefDefaults } from '../../components/TreeParts';
 import { TreeRowShell } from '../../components/TreeRowShell';
 import { buildNodeMenu, type NodeMenuCtx } from '../../lib/node-menu';
 import { deleteWithUndo } from '../../lib/undo-delete';
@@ -9,7 +9,7 @@ import { asError, call } from '../../api';
 import { toastError, useApp } from '../../store';
 import type { ProviderConfig } from '../../types';
 import { uid } from '../../lib/format';
-import { Badge, Button, cx, Empty, Field, Input, menuKeys, PageHeader, Select, Split } from '../../components/ui';
+import { Badge, Button, Empty, Field, Input, PageHeader, Select, Split } from '../../components/ui';
 
 /** kind, label, default base URL: the shared table, in the shape this view reads. */
 const KINDS: Array<[ProviderConfig['kind'], string, string]> = PROVIDER_KINDS.map((k) => [k.kind, k.label, k.baseUrl]);
@@ -73,7 +73,9 @@ export function Providers({ providers, onSaved, focus }: { providers: ProviderCo
   const removeProvider = (x: ProviderConfig) => {
     const before = list;
     return deleteWithUndo({
-      what: `the provider "${x.name}"`,
+      kind: 'provider',
+      name: x.name,
+      focus: `providers:${x.id}`,
       note: 'Tests and prompts that use it fail until you choose another provider',
       run: async () => {
         const next = before.filter((y) => y.id !== x.id);
@@ -87,7 +89,6 @@ export function Providers({ providers, onSaved, focus }: { providers: ProviderCo
       },
     });
   };
-  const [menuFor, setMenuFor] = useState<string>();
   /** A provider's menu (lib/node-menu.ts): a built-in one lives in Settings; the others duplicate and delete (with Undo). */
   const providerMenu = (x: ProviderConfig): NodeMenuCtx =>
     (x as { builtIn?: boolean }).builtIn
@@ -108,35 +109,26 @@ export function Providers({ providers, onSaved, focus }: { providers: ProviderCo
   };
   return (
     <Split id="ai-providers" sidebar initial={26}>
-      <div className="h-full flex flex-col bg-panel/50">
+      <div className="h-full flex flex-col bg-panel/50" onKeyDown={treeKeys}>
         <TreeRowShell kind="section:provider" nodeId="providers:section" label="Providers" header className="mx-0 pl-3 shrink-0" ctx={() => ({ create: [{ label: 'Add provider', icon: <Plus size={14} />, onSelect: addProvider }], on: {} })}>
           <span className="text-[0.82rem] font-semibold truncate">Providers</span>
           {list.length > 0 && <CountPill n={list.length} />}
         </TreeRowShell>
-        <div className="flex-1 overflow-auto pb-2">
+        <div className="flex-1 overflow-auto pb-2" role="tree" aria-label="Providers">
           {list.map((x) => (
-            <div
-              key={x.id}
-              className={cx('group flex items-center gap-1 mx-1 pl-3 pr-1 rounded-md cursor-pointer transition-colors', sel === x.id ? 'bg-accent-soft' : 'hover:bg-hover', menuFor === x.id && sel !== x.id && 'bg-hover')}
-              onClick={() => setSel(x.id)}
-              onContextMenu={(e) => {
-                e.preventDefault();
-                setMenuFor(x.id);
-              }}
-            >
-              <button className="flex-1 min-w-0 py-1.5 text-left" data-tree-row onKeyDown={(e) => menuKeys(buildNodeMenu('provider', withRefDefaults(providerMenu(x))))(e)}>
-                <div className="text-sm flex items-center gap-2">
+            <TreeRowShell key={x.id} kind="provider" nodeId={`providers:${x.id}`} label={x.name} tall active={sel === x.id} onClick={() => setSel(x.id)} onOpen={() => setSel(x.id)} ctx={() => providerMenu(x)} className="pl-3">
+              <span className="flex-1 min-w-0">
+                <span className="text-sm flex items-center gap-2">
                   <span className="truncate">{x.name}</span>
                   {x.hasKey && <KeyRound size={11} className="text-warn shrink-0" aria-label="API key stored" />}
                   {(x as { builtIn?: boolean }).builtIn && <Badge>Settings</Badge>}
-                </div>
-                <div className="text-xs text-muted truncate">
+                </span>
+                <span className="block text-xs text-muted truncate">
                   {KINDS.find((k) => k[0] === x.kind)?.[1]}
                   {!x.hasKey && x.needsKey && <span className="text-warn"> · needs an API key</span>}
-                </div>
-              </button>
-              <NodeMenu kind="provider" label={x.name} ctx={() => providerMenu(x)} open={menuFor === x.id} onOpenChange={(o) => setMenuFor(o ? x.id : undefined)} />
-            </div>
+                </span>
+              </span>
+            </TreeRowShell>
           ))}
         </div>
       </div>

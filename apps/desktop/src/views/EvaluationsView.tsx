@@ -1,5 +1,5 @@
 import { useLibraryTabs } from '../lib/library-tabs';
-import { LibraryTabStrip } from '../components/LibraryTabStrip';
+import { LibraryTabStrip, NoOpenItems } from '../components/LibraryTabStrip';
 import { ItemBreadcrumb } from '../components/ItemBreadcrumb';
 import { refMenu } from '../components/RefLink';
 import { RunMiniBar, RunsOverview, type RunRow } from '../components/RunsOverview';
@@ -68,7 +68,7 @@ const EDITOR_LANGUAGE = { json: 'json', jsonl: 'jsonl', csv: 'csv', md: 'markdow
 
 export function EvaluationsView() {
   // WF-19: open evaluations are tabs (each its own draft; a single click in the list opens a preview tab)
-  const tabs = useLibraryTabs<Draft>('eval', drafts);
+  const tabs = useLibraryTabs<Draft>('eval', drafts, { canBeEmpty: true });
   const d = tabs.d;
   const setD = tabs.setD;
   const [providers, setProviders] = useState<ProviderConfig[]>([]);
@@ -242,6 +242,11 @@ export function EvaluationsView() {
       newLabel="New evaluation"
     />
     <div className="flex-1 min-h-0">
+    {tabs.empty ? (
+      <NoOpenItems icon={FlaskConical} title="No open evaluations" newLabel="New evaluation" onNew={() => tabs.newTab(drafts.defaults)}>
+        Open a saved evaluation from the list, or start a new one.
+      </NoOpenItems>
+    ) : (
     <Split id="eval-main" initial={42}>
       <div className="h-full flex flex-col">
         {/* WF-11: Evaluations › folder › evaluation, like every item view */}
@@ -469,6 +474,7 @@ export function EvaluationsView() {
         )}
       </div>
     </Split>
+    )}
     </div>
     </div>
     </Split>

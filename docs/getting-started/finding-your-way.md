@@ -122,21 +122,21 @@ The menus of every kind, as the app builds them ("New …" stands for the kind's
 
 | Node | create | open | tree | run | share | tools | git | edit | danger |
 |---|---|---|---|---|---|---|---|---|---|
-| Collection | New …, New folder |  | Expand all, Collapse all | Run collection | Copy link, Export ▸ | Monitor on a schedule…, Run in CI…, Create test file from collection…, Generate integration flow with AI…, Settings, runner & docs, Convert scripts to tp.* | History in git… | Rename, Duplicate | Delete… |
+| Collection | New …, New folder… |  | Expand all, Collapse all | Run collection | Copy link, Export ▸ | Monitor on a schedule…, Run in CI…, Create test file from collection…, Generate integration flow with AI…, Settings, runner & docs, Convert scripts to tp.* | History in git… | Rename, Duplicate | Delete… |
 | Protocol group (REST, SOAP …) of a collection | New … |  | Expand all, Collapse all | Run collection |  |  |  |  |  |
-| Folder of a collection | New …, New folder |  | Expand all, Collapse all | Run folder | Copy link | Monitor on a schedule…, Run in CI…, Create test file from folder…, Generate integration flow with AI…, Edit folder (scripts, variables, auth) |  | Rename, Duplicate, Move to… | Delete… |
+| Folder of a collection | New …, New folder… |  | Expand all, Collapse all | Run folder | Copy link | Monitor on a schedule…, Run in CI…, Create test file from folder…, Generate integration flow with AI…, Edit folder (scripts, variables, auth) |  | Rename, Duplicate, Move to… | Delete… |
 | Request (HTTP, SOAP, GraphQL) |  | Open, Open in new tab |  |  | Copy link, Copy as ▸ | Monitor on a schedule…, Save as test… | History in git… | Rename, Duplicate, Move to…, Add to favorites | Delete… |
 | Folder of gRPC calls or connections |  |  | Expand all, Collapse all |  |  |  |  | Rename folder | Delete folder… |
 | Saved gRPC call |  | Open, Open in new tab |  |  | Copy link, Copy as grpcurl | Save as test… |  | Rename, Duplicate, Move to collection ▸ | Delete… |
 | Saved WebSocket / MQTT / Kafka connection |  | Open, Open in new tab |  |  | Copy link, Copy URL | Save as test… |  | Rename, Duplicate, Move to collection ▸ | Delete… |
 | Favorites section |  |  | Expand all, Collapse all |  |  |  |  |  |  |
-| MCP servers section | New …, New folder | Open MCP inspector | Expand all, Collapse all |  |  |  |  |  |  |
+| MCP servers section | New …, New folder… | Open MCP inspector | Expand all, Collapse all |  |  |  |  |  |  |
 | Folder of MCP servers | New … |  | Expand all, Collapse all |  |  |  |  | Rename folder | Delete folder… |
 | MCP server |  | Open, Open in new tab |  | Connect, Disconnect | Copy link, Copy MCP config | Settings… |  | Rename, Duplicate, Move to folder ▸ | Delete… |
-| API definitions section | New …, New folder | Open API definitions | Expand all, Collapse all |  |  |  |  |  |  |
+| API definitions section | New …, New folder… | Open API definitions | Expand all, Collapse all |  |  |  |  |  |  |
 | Folder of API definitions | New … |  | Expand all, Collapse all |  |  |  |  | Rename folder | Delete folder… |
 | API definition |  | Open, Reveal file |  | Lint, API coverage, Compare versions | Copy link, Copy path | Generate tests…, Generate integration flows… |  | Rename, Move to folder ▸ | Delete… |
-| Datasets section | New …, New folder, Generate test data… |  | Expand all, Collapse all |  |  |  |  |  |  |
+| Datasets section | New …, New folder…, Generate test data… |  | Expand all, Collapse all |  |  |  |  |  |  |
 | Folder of datasets | New … |  | Expand all, Collapse all |  |  |  |  | Rename folder | Delete folder… |
 | Dataset |  | Open, Reveal file, Preview |  | Run a collection with it | Copy link, Copy path | Use in a test |  | Rename, Duplicate, Move to folder ▸ | Delete… |
 | The sidebar’s blank area | New …, Import… | Recently deleted… | Expand all, Collapse all |  |  | Run in CI… |  |  |  |

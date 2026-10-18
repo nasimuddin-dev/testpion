@@ -166,9 +166,10 @@ describe('virtual list window', () => {
     const src = (f: string) => readFileSync(join(__dirname, '..', '..', 'apps', 'desktop', 'src', 'components', f), 'utf8');
     expect(src('VirtualList.tsx')).toMatch(/contain: CONTAIN/);
     expect(src('ui.tsx')).toMatch(/export \{ VirtualList \} from '\.\/VirtualList'/);
-    const tree = src('CollectionTree.tsx');
+    // the rows (CollectionTreeRows.tsx) are drawn by the tree (CollectionTree.tsx): every row names its node
+    const tree = src('CollectionTree.tsx') + src('CollectionTreeRows.tsx');
     // no row is named by its node id alone any more
     expect(tree).not.toMatch(/data-node-id=\{n\.id\}|data-rename-id=\{n\.id\}|menuFor === n\.id|keyOf=\{rowKey\}/);
-    expect((tree.match(/data-node-id=/g) ?? []).length).toBeGreaterThanOrEqual(7);
+    expect((tree.match(/nodeId=|data-node-id=/g) ?? []).length).toBeGreaterThanOrEqual(7);
   });
 });

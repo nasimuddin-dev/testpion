@@ -1,6 +1,7 @@
 import { ArchiveRestore, ChevronsDownUp, Database, Download, FileCode2, FilePlus2, FolderPlus, Layers, PanelLeftClose, Plug, Plus, RefreshCw, Star, Upload } from 'lucide-react';
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { call, on } from '../api';
+import { touchesFiles, type DataChangedEvent, type FileKind } from '../lib/data-changed';
 import { confirmAction, promptText, toastError, useApp } from '../store';
 import { deleteMcpServerWithUndo, deleteWithUndo, putBack, restoreDeleted } from '../lib/undo-delete';
 import type { Collection, CollectionNode, Library, LibraryItem, McpServerConfig } from '../types';
@@ -15,8 +16,8 @@ import { SIDEBAR_TRASH_KINDS, TrashDialog } from './TrashDialog';
 import { fullCollection, refreshCollections, useCollectionTree } from '../lib/collections-store';
 import { ImportModal } from '../views/rest/dialogs';
 import { isDocView, useDocs } from '../lib/docs';
-import { cx, IconButton, Input, Menu } from './ui';
-import { focusRow, KindBadge, treeKeys } from './TreeParts';
+import { IconButton, Input, Menu } from './ui';
+import { focusRow, KIND_COLOR, TreeBadge, treeKeys } from './TreeParts';
 import { usePersisted } from '../lib/sticky';
 import { copyText } from '../lib/clipboard';
 import { datasetBadge, datasetYaml } from '../lib/datasets';
@@ -42,6 +43,21 @@ import { EmptyHint, FolderedRows, folderKey, folderNames, ItemRow, moveToFolderS
 const NONE: SavedItem[] = [];
 /** The reveal key of an intent: its nonce, unless it asks not to unfold the tree (opened from the explorer itself). */
 const revealKeyOf = (i: { nonce: number; payload?: unknown } | undefined) => (i && !(i.payload as { noReveal?: boolean } | undefined)?.noReveal ? i.nonce : undefined);
+
+/** The explorer's lists, by what a change touches (lib/data-changed.ts kinds): each reloads only for its own changes. */
+type ListPart = 'library' | 'mcp' | 'specs' | 'datasets';
+const PART_KINDS: Array<[ListPart, FileKind[]]> = [
+  ['library', ['library']],
+  ['mcp', ['mcp']],
+  ['specs', ['specs']],
+  // the datasets/ folder is watched with the tests
+  ['datasets', ['tests']],
+];
+const ALL_PARTS: ReadonlySet<ListPart> = new Set(PART_KINDS.map(([p]) => p));
+const LIBRARY: ReadonlySet<ListPart> = new Set(['library']);
+const MCP: ReadonlySet<ListPart> = new Set(['mcp']);
+const SPECS: ReadonlySet<ListPart> = new Set(['specs']);
+const DATASETS: ReadonlySet<ListPart> = new Set(['datasets']);
 
 /** A file of the workspace's datasets/ folder, as datasets.list answers. */
 interface DatasetRow {
@@ -184,41 +200,55 @@ export function Explorer() {
   });
   const openRequestId = tabItem ?? navItem;
 
-  /** The explorer's own lists; the collections too when asked (on a change the shared list refreshes them itself). */
-  const load = useCallback(async (withCollections = true) => {
+  /**
+   * The explorer's own lists, or the part of them that changed (`what`: the saved gRPC calls and connections and
+   * every folder library, the MCP servers, the API definitions, the datasets); the collections too when asked (on a
+   * change the shared list refreshes them itself).
+   */
+  const load = useCallback(async (withCollections = true, what: ReadonlySet<ListPart> = ALL_PARTS) => {
     const quiet = <T,>(p: Promise<T>, fallback: T) => p.catch(() => fallback);
     const empty: Library<unknown> = { folders: [], items: [] };
+    const lib = (kind: string, when: ListPart) => (what.has(when) ? quiet(call<Library<unknown>>('lib.get', { kind }), empty) : undefined);
     const [, g, w, s, sp, mf, sf, ds, df] = await Promise.all([
       withCollections ? refreshCollections() : undefined,
-      quiet(call<Library<unknown>>('lib.get', { kind: 'grpc' }), empty),
-      quiet(call<Library<unknown>>('lib.get', { kind: 'websocket' }), empty),
-      quiet(call<Array<McpServerConfig & { connected?: boolean }>>('mcp.servers'), []),
-      quiet(call<string[]>('openapi.specs', { includeAsync: true }), []),
-      quiet(call<Library<unknown>>('lib.get', { kind: 'mcp-folders' }), empty),
-      quiet(call<Library<unknown>>('lib.get', { kind: 'spec-folders' }), empty),
-      quiet(call<DatasetRow[]>('datasets.list'), []),
-      quiet(call<Library<unknown>>('lib.get', { kind: 'dataset-folders' }), empty),
+      lib('grpc', 'library'),
+      lib('websocket', 'library'),
+      what.has('mcp') ? quiet(call<Array<McpServerConfig & { connected?: boolean }>>('mcp.servers'), []) : undefined,
+      what.has('specs') ? quiet(call<string[]>('openapi.specs', { includeAsync: true }), []) : undefined,
+      lib('mcp-folders', 'library'),
+      lib('spec-folders', 'library'),
+      what.has('datasets') ? quiet(call<DatasetRow[]>('datasets.list'), []) : undefined,
+      lib('dataset-folders', 'library'),
     ]);
-    setGrpc(g.items.map(({ data: _, ...i }) => i));
+    if (g) setGrpc(g.items.map(({ data: _, ...i }) => i));
     const wsBadge = (d: unknown) => ((d as { mode?: string })?.mode === 'kafka' ? 'KAFKA' : (d as { mode?: string })?.mode === 'mqtt' ? 'MQTT' : (d as { mode?: string })?.mode === 'socketio' ? 'SIO' : 'WS');
-    setSockets(w.items.map(({ data, ...i }) => ({ ...i, badge: wsBadge(data) })));
-    setServers(s);
-    setSpecs(sp);
-    setMcpFolders(mf.folders);
-    setSpecFolders(sf);
-    setDatasets([...ds].sort((a, b) => a.name.localeCompare(b.name)));
-    setDatasetFolders(df);
+    if (w) setSockets(w.items.map(({ data, ...i }) => ({ ...i, badge: wsBadge(data) })));
+    if (s) setServers(s);
+    if (sp) setSpecs(sp);
+    if (mf) setMcpFolders(mf.folders);
+    if (sf) setSpecFolders(sf);
+    if (ds) setDatasets([...ds].sort((a, b) => a.name.localeCompare(b.name)));
+    if (df) setDatasetFolders(df);
   }, []);
   useEffect(() => {
     void load();
   }, [load, ws?.id]);
-  // saving anything (in any view), or connecting an MCP server, refreshes the lists
-  // (coalesced: a run or an import saves many things in a row, one reload follows the last of them)
+  // saving anything (in any view) refreshes the lists it touched (lib/data-changed.ts says which kinds of file a
+  // change wrote; an MCP server connecting or disconnecting is an `mcp.*` call that writes nothing), coalesced: a run
+  // or an import saves many things in a row, one reload follows the last of them
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
-    const off = on('data.changed', () => {
+    let parts = new Set<ListPart>();
+    const off = on<DataChangedEvent>('data.changed', (e) => {
+      for (const [part, kinds] of PART_KINDS) if (touchesFiles(e, kinds)) parts.add(part);
+      if (e?.method?.startsWith('mcp.')) parts.add('mcp');
+      if (!parts.size) return;
       clearTimeout(timer);
-      timer = setTimeout(() => void load(false), 120);
+      timer = setTimeout(() => {
+        const what = parts;
+        parts = new Set();
+        void load(false, what);
+      }, 120);
     });
     return () => {
       clearTimeout(timer);
@@ -292,7 +322,7 @@ export function Explorer() {
   const datasetAction = async (fn: () => Promise<unknown>) => {
     try {
       await fn();
-      await load(false);
+      await load(false, DATASETS);
     } catch (e) {
       toastError(e);
     }
@@ -307,10 +337,12 @@ export function Explorer() {
   };
   const deleteDataset = (d: DatasetRow) =>
     deleteWithUndo({
-      what: `datasets/${d.name}`,
+      kind: 'dataset',
+      name: d.name,
+      trash: true,
+      focus: `datasets:${d.name}`,
       run: () => datasetAction(() => call('datasets.delete', { name: d.name })),
       undo: () => datasetAction(() => restoreDeleted('dataset', d.name)),
-      note: 'Recently deleted keeps it for 30 days',
     });
   /** The server, saved gRPC call, connection, API definition or dataset being renamed in place. */
   const [renaming, setRenaming] = useState<string>();
@@ -329,7 +361,7 @@ export function Explorer() {
     try {
       const lib = await call<Library<unknown>>('lib.get', { kind });
       await call('lib.save', { kind, library: { folders: lib.folders, items: fn(lib.items) } });
-      await load(false);
+      await load(false, LIBRARY);
     } catch (e) {
       toastError(e);
     }
@@ -363,7 +395,8 @@ export function Explorer() {
       delete: () => {
         const was = new Set<string>();
         void deleteWithUndo({
-          what: `the folder "${folder}"`,
+          kind: 'folder',
+          name: folder,
           note: `Its ${kind === 'grpc' ? 'gRPC calls' : 'connections'} moved to the top level`,
           run: () => editLibrary(kind, (items) => items.map((i) => (i.folder === folder ? (was.add(i.id), { ...i, folder: undefined }) : i))),
           undo: () => editLibrary(kind, (items) => items.map((i) => (was.has(i.id) && !i.folder ? { ...i, folder } : i))),
@@ -390,7 +423,9 @@ export function Explorer() {
           // the whole saved item (its request and settings) and its place, to put it back as it was
           let removed: { item: LibraryItem<unknown>; at: number } | undefined;
           void deleteWithUndo({
-            what: `${kind === 'grpc' ? 'the gRPC call' : 'the connection'} "${item.name}"`,
+            kind: kind === 'grpc' ? 'grpc-call' : 'ws-connection',
+            name: item.name,
+            focus: `${item.collectionId ?? ''}:${kind}:${item.id}`,
             run: async () => {
               closeTabsFor([item.id]);
               await editLibrary(kind, (items) => {
@@ -409,7 +444,7 @@ export function Explorer() {
   const editServers = async (fn: (list: McpServerConfig[]) => McpServerConfig[]) => {
     try {
       await call('mcp.saveServers', { servers: fn(servers.map(({ connected: _c, ...s }) => s as McpServerConfig)) });
-      await load(false);
+      await load(false, MCP);
     } catch (e) {
       toastError(e);
     }
@@ -419,7 +454,7 @@ export function Explorer() {
     try {
       const lib = await call<Library<unknown>>('lib.get', { kind });
       await call('lib.save', { kind, library: fn(lib) });
-      await load(false);
+      await load(false, LIBRARY);
     } catch (e) {
       toastError(e);
     }
@@ -460,14 +495,14 @@ export function Explorer() {
       on: {
         open: () => void openRef(ref),
         openNewTab: () => void openRef(ref, { newTab: true }),
-        ...(s.connected ? { disconnect: () => void call('mcp.disconnect', { serverId: s.id }).then(() => load(false), toastError) } : { connect: () => intent('mcp', { serverId: s.id, connect: true }) }),
+        ...(s.connected ? { disconnect: () => void call('mcp.disconnect', { serverId: s.id }).then(() => load(false, MCP), toastError) } : { connect: () => intent('mcp', { serverId: s.id, connect: true }) }),
         copyMcpConfig: () => void copyText(JSON.stringify({ mcpServers: { [s.name]: config } }, null, 2), 'the MCP config (.mcp.json, claude_desktop_config.json)'),
         settings: () => intent('mcp', { serverId: s.id, tab: 'settings' }),
         rename: () => setRenaming(s.id),
         duplicate: () => void editServers((list) => list.flatMap((x) => (x.id === s.id ? [x, { ...x, id: uid('mcp-'), name: `${x.name} copy` }] : [x]))),
         move: moveToFolderSubmenu(mcpOps, servers, s.id, s.folder),
         // at once, with Undo (Recently deleted keeps it: its place in the list comes back, a connected server reconnects)
-        delete: () => void deleteMcpServerWithUndo(s, { after: () => load(false) }),
+        delete: () => void deleteMcpServerWithUndo(s, { after: () => load(false, MCP) }),
       },
       disabled: config ? {} : { copyMcpConfig: 'A mock server runs inside TestPion: there is no config for another app' },
     };
@@ -493,16 +528,18 @@ export function Explorer() {
         delete: () => {
           let trashId: string | undefined;
           void deleteWithUndo({
-            what: path,
-            note: 'Recently deleted keeps it for 30 days',
+            kind: 'spec',
+            name: path,
+            trash: true,
+            focus: `specs:${path}`,
             run: async () => {
               closeTabsFor([path]);
               trashId = (await call<{ trashId: string }>('openapi.spec.delete', { path })).trashId;
-              await load(false);
+              await load(false, SPECS);
             },
             undo: async () => {
               if (trashId) await call('trash.restore', { id: trashId });
-              await load(false);
+              await load(false, SPECS);
             },
           });
         },
@@ -551,7 +588,9 @@ export function Explorer() {
           void fullCollection(c).then(
             (whole) =>
               deleteWithUndo({
-                what: `the request "${n.name}"`,
+                kind: 'request',
+                name: n.name,
+                focus: `favorites:fav-${scopedNodeId(c.id, n.id)}`,
                 run: async () => {
                   closeTabsFor([n.id]);
                   await saveCollection({ ...whole, items: mapNodes(whole.items, (x) => (x.id === n.id ? null : x)) });
@@ -586,8 +625,9 @@ export function Explorer() {
         folderMenu: (folder) => savedLatest.current.savedFolderMenu('websocket', folder),
       },
     ],
+    // (not `renaming`: the tree shows the renamed item by its `extraRenaming` prop; rename() reads savedLatest)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [grpcByCollection, socketsByCollection, grpc, sockets, renaming],
+    [grpcByCollection, socketsByCollection, grpc, sockets],
   );
   const newOfCategory = (c: Collection, cat: RequestCategory) => {
     if (cat === 'grpc' || cat === 'websocket') return intent(cat, { newDoc: true, collectionId: c.id });
@@ -688,14 +728,9 @@ export function Explorer() {
                 key={`fav-${scopedNodeId(c.id, n.id)}`}
                 kind="request"
                 nodeId={`favorites:fav-${scopedNodeId(c.id, n.id)}`}
-                icon={
-                  <span className={cx('mono method-badge text-[0.6rem] font-bold w-8 inline-block', n.kind === 'http' ? `method-${n.request.method}` : 'text-[#e535ab]')}>
-                    {(n.kind === 'http' ? n.request.method : 'GQL').slice(0, 5)}
-                  </span>
-                }
+                icon={<TreeBadge label={n.kind === 'http' ? n.request.method : 'GQL'} className={n.kind === 'http' ? `method-${n.request.method}` : KIND_COLOR.graphql} />}
                 label={n.name}
                 sub={c.name}
-                title={`${n.name} (${c.name})`}
                 active={openRequestId === n.id}
                 onClick={() => void openRef({ kind: 'request', collectionId: c.id, requestId: n.id }, { noReveal: true })}
                 ctx={() => favoriteMenu(c, n)}
@@ -711,6 +746,7 @@ export function Explorer() {
               filter={shownFilter}
               categorize
               extraGroups={extraGroups}
+              extraRenaming={renaming}
               collapseAll={collapseAll}
               expandAll={expandAll}
               revealKey={revealKey}
@@ -755,10 +791,9 @@ export function Explorer() {
                   kind="mcp-server"
                   nodeId={`mcp:${s.id}`}
                   indent={inFolder}
-                  icon={<KindBadge text="MCP" cls={s.connected ? 'text-ok' : 'text-accent'} />}
+                  icon={<TreeBadge label="MCP" className={s.connected ? 'text-ok' : KIND_COLOR.mcp} />}
                   label={s.name}
                   sub={s.connected ? 'connected' : s.transport === 'streamable-http' ? 'http' : s.transport}
-                  title={`${s.name} (${s.connected ? 'connected' : 'not connected'})`}
                   active={openRequestId === s.id}
                   onClick={() => void openRef({ kind: 'mcp-server', serverId: s.id })}
                   ctx={() => serverMenu(s)}
@@ -801,15 +836,14 @@ export function Explorer() {
                   kind="spec"
                   nodeId={`specs:${s}`}
                   indent={inFolder}
-                  icon={<KindBadge text="API" cls="text-[#8b5cf6]" />}
+                  icon={<TreeBadge label="API" className={KIND_COLOR.api} />}
                   label={s.replace(/^specs\//, '')}
-                  title={s}
                   active={openRequestId === s}
                   onClick={() => void openRef({ kind: 'spec', path: s })}
                   ctx={() => specMenu(s, folder)}
                   rename={renamer(s, `specs:${s}`, (to) =>
                     call<{ path: string }>('openapi.spec.rename', { path: s, to: to.replace(/^.*\//, '') }).then(
-                      () => load(false),
+                      () => load(false, SPECS),
                       toastError,
                     ),
                   )}
@@ -854,10 +888,9 @@ export function Explorer() {
                   kind="dataset"
                   nodeId={`datasets:${d.name}`}
                   indent={inFolder}
-                  icon={<KindBadge text={datasetBadge(d.format).text} cls={datasetBadge(d.format).cls} />}
+                  icon={<TreeBadge label={datasetBadge(d.format).text} className={datasetBadge(d.format).cls} />}
                   label={d.name}
                   sub={d.rows !== undefined ? plural(d.rows, 'row') : d.tables ? plural(d.tables.length, 'table') : undefined}
-                  title={`datasets/${d.name} (${d.format}${d.rows !== undefined ? `, ${plural(d.rows, 'row')}` : ''})`}
                   active={openRequestId === d.name}
                   onClick={() => void openRef({ kind: 'dataset', name: d.name })}
                   ctx={() => datasetMenu(d, d.folder)}
@@ -879,7 +912,7 @@ export function Explorer() {
           onClose={() => setGeneratingData(false)}
           onDone={(g) => {
             setGeneratingData(false);
-            void load(false);
+            void load(false, DATASETS);
             intent('dataset', { dataset: g.path.replace(/^datasets\//, '') });
           }}
         />

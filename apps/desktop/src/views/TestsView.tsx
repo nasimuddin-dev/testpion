@@ -1,4 +1,4 @@
-import { Bot, FileCode2, FilePlus2, FileSpreadsheet, Folder, History, KeyRound, Layers, Play, Save, ShieldCheck, Trash2, Workflow } from 'lucide-react';
+import { Bot, FileCode2, FilePlus2, FileSpreadsheet, History, KeyRound, Layers, Play, Save, ShieldCheck, Trash2, Workflow } from 'lucide-react';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { asError, call, on } from '../api';
@@ -19,7 +19,7 @@ import { ExposeFlowDialog } from '../components/ExposeFlowDialog';
 import { RunWithDataDialog } from '../components/RunWithDataDialog';
 import { ScaleRunPanel } from '../components/FlowScaleGrids';
 import { SidebarShell } from '../components/SidebarShell';
-import { treeKeys } from '../components/TreeParts';
+import { focusRow, treeKeys } from '../components/TreeParts';
 import { TreeRowShell } from '../components/TreeRowShell';
 import { useAreaMenu } from '../components/AreaMenu';
 import { useTreeOpen } from '../lib/tree-state';
@@ -36,14 +36,9 @@ import { dataLanguageOf } from '../data-languages';
 import { Badge, Button, Empty, IconButton, Input, SectionTitle, Spinner, Split, VirtualList } from '../components/ui';
 import { DocTabStrip } from '../components/DocTabStrip';
 import { RunList } from './TestsRunsList';
-import { NoTestFiles, TestFileBadge, TestTreeRow } from './TestsTreeRows';
+import { NoTestFiles, TestFileBadge, TestFileTree, type TestNode, type TestsHost } from './TestsTreeRows';
 
-interface Node {
-  name: string;
-  path: string;
-  kind: 'file' | 'dir';
-  children?: Node[];
-}
+type Node = TestNode;
 
 const TEMPLATES: Record<string, string> = {
   http: `name: Health check
@@ -167,14 +162,44 @@ export function TestsView() {
   // filter the tree by file or folder path (matching folders stay open)
   const [treeFilter, setTreeFilter] = useState('');
   const tf = treeFilter.trim().toLowerCase();
-  const filterTree = (nodes: Node[]): Node[] =>
-    !tf ? nodes : nodes.flatMap((n) => (n.kind === 'dir' ? ((c) => (c.length ? [{ ...n, children: c }] : []))(filterTree(n.children ?? [])) : n.path.toLowerCase().includes(tf) ? [n] : []));
   // which folders of the tree are open: the workspace's tree state (lib/tree-state), kept across restarts
   const [open, setOpen] = useTreeOpen('tests');
   // every file opens in its own tab (like requests): `file` is the one on screen, the others keep their edits here
   const [file, setFile] = useState<string>();
-  const [content, setContent] = useState('');
-  const [saved, setSaved] = useState('');
+  // the live text of the file on screen is not view state (every keystroke would re-render the whole view, tree and
+  // tabs included): the editor keeps it, `contentRef` mirrors it, and the view knows only whether it differs from
+  // what is saved (`dirty`); `editorValue` is what the view last put into the editor (a file shown, an outside change)
+  const contentRef = useRef('');
+  const [editorValue, setEditorValue] = useState('');
+  const [saved, setSavedState] = useState('');
+  const savedRef = useRef('');
+  const [dirty, setDirty] = useState(false);
+  const dirtyRef = useRef(false);
+  const isDirty = () => contentRef.current !== savedRef.current;
+  const syncDirty = () => {
+    const d = isDirty();
+    if (d !== dirtyRef.current) {
+      dirtyRef.current = d;
+      setDirty(d);
+    }
+  };
+  /** The saved text of the file on screen (after a save, after keeping one's own edits over an outside change). */
+  const setSaved = (text: string) => {
+    savedRef.current = text;
+    setSavedState(text);
+    syncDirty();
+  };
+  /** The editor shows this text (a file opened or shown, a change from the designer or from outside): both texts. */
+  const showText = (content: string, savedText: string) => {
+    contentRef.current = content;
+    setEditorValue(content);
+    // the same text as the editor was last given, with edits typed since: the editor would keep the edits
+    const model = editorRef.current?.getModel();
+    if (model && !model.isDisposed() && model.getValue() !== content) model.pushEditOperations([], [{ range: model.getFullModelRange(), text: content }], () => null);
+    setSaved(savedText);
+  };
+  /** What the editor holds now, for the buffers. */
+  const current = () => ({ content: contentRef.current, saved: savedRef.current });
   const [openFiles, setOpenFiles] = useState<string[]>([]);
   const buffers = useRef<Record<string, { content: string; saved: string }>>({});
   const [preview, setPreview] = useState<{ tests: Array<{ id?: string; name: string; type: string; tags?: string[] }>; suite?: { name: string; tests: string[] } } | { error: string }>();
@@ -190,7 +215,7 @@ export function TestsView() {
   useEffect(() => setScaleId(undefined), [runId]);
   /** The dialog runs the file as saved: pending edits are saved first. */
   const openScaling = async (path: string, initial: 'data' | 'matrix') => {
-    if (file && content !== saved) await save();
+    if (file && isDirty()) await save();
     setScaling({ file: path, initial });
   };
   // the latest result of each test in the previewed file
@@ -218,11 +243,10 @@ export function TestsView() {
     // the file on screen: only its Editor tab (reloading its buffer would drop what was typed since it was stored)
     if (path && path === file) return setTab('editor');
     // the live text of the file being left is kept, always
-    if (file && openFilesRef.current.includes(file)) buffers.current[file] = { content, saved };
+    if (file && openFilesRef.current.includes(file)) buffers.current[file] = current();
     const b = path ? buffers.current[path] : undefined;
     setFile(path);
-    setContent(b?.content ?? '');
-    setSaved(b?.saved ?? '');
+    showText(b?.content ?? '', b?.saved ?? '');
     setTab('editor');
     if (path) call('tests.preview', { path }).then(setPreview, (e) => setPreview({ error: asError(e).message }));
     else setPreview(undefined);
@@ -231,11 +255,6 @@ export function TestsView() {
   openFilesRef.current = openFiles;
   const fileRef = useRef(file);
   fileRef.current = file;
-  // what the open file holds now, for the outside-change check (it runs outside a render)
-  const contentRef = useRef(content);
-  contentRef.current = content;
-  const savedRef = useRef(saved);
-  savedRef.current = saved;
   const tabRef = useRef(tab);
   tabRef.current = tab;
   // the file as a flow (the Flow tab): its steps with the latest run's result of each; a run that finishes recolours it
@@ -313,7 +332,7 @@ export function TestsView() {
   }, [openFiles]);
   const openStep = (s: FlowStep) => {
     setFlowSel(s.id);
-    revealLine.current = stepLine(content, s.name) ?? s.line;
+    revealLine.current = stepLine(contentRef.current, s.name) ?? s.line;
     setRevealAsk((n) => n + 1);
     if (flow && !('error' in flow) && flow.run) {
       setRunId(flow.run.runId);
@@ -330,7 +349,7 @@ export function TestsView() {
   const openFile = async (path: string) => {
     if (openFilesRef.current.includes(path)) return path === file ? setTab('editor') : show(path);
     const text = await call<string>('tests.read', { path });
-    if (file) buffers.current[file] = { content, saved };
+    if (file) buffers.current[file] = current();
     buffers.current[path] = { content: text, saved: text };
     setOpenFiles((o) => (o.includes(path) ? o : [...o, path]));
     openFilesRef.current = [...openFilesRef.current, path];
@@ -340,7 +359,7 @@ export function TestsView() {
   const closeFile = async (path: string, ask = true) => {
     // the file on screen now (several closes in a row each change it: the state of this render would be stale)
     const active = fileRef.current;
-    const b = path === active ? { content, saved } : buffers.current[path];
+    const b = path === active ? current() : buffers.current[path];
     if (ask && b && b.content !== b.saved && !(await confirmAction({ title: 'Unsaved changes', message: `tests/${path} has unsaved changes.`, detail: 'Close it and discard them? Save with Ctrl+S to keep them.', confirmLabel: 'Discard changes', danger: true }))) return;
     // Ctrl+Shift+T opens it again
     noteClosedTabs([{ ref: { kind: 'test', path }, label: path.split('/').pop() ?? path }]);
@@ -354,8 +373,7 @@ export function TestsView() {
       const nb = next ? buffers.current[next] : undefined;
       fileRef.current = next;
       setFile(next);
-      setContent(nb?.content ?? '');
-      setSaved(nb?.saved ?? '');
+      showText(nb?.content ?? '', nb?.saved ?? '');
       if (next) call('tests.preview', { path: next }).then(setPreview, (e) => setPreview({ error: asError(e).message }));
       else setPreview(undefined);
     }
@@ -372,6 +390,7 @@ export function TestsView() {
   };
   const save = async () => {
     if (!file) return;
+    const content = contentRef.current;
     await call('tests.write', { path: file, content });
     setSaved(content);
     call('tests.preview', { path: file }).then(setPreview, (e) => setPreview({ error: asError(e).message }));
@@ -382,7 +401,7 @@ export function TestsView() {
    * the file's pins) and stays on the Flow tab (`stay`).
    */
   const run = async (paths: string[], name?: string, o: { ids?: string[]; stay?: boolean; flow?: FlowRunRequest } = {}): Promise<string | undefined> => {
-    if (file && content !== saved) await save();
+    if (file && isDirty()) await save();
     try {
       const r = o.flow
         ? await call<{ runId: string }>('tests.flowRun', { file: paths[0], environment: env, concurrency: opts.concurrency, retries: opts.retries, ...o.flow })
@@ -415,8 +434,7 @@ export function TestsView() {
     const model = fileRef.current === r.file ? undefined : modelOf(r.file);
     if (model && model.getValue() !== r.text) model.pushEditOperations([], [{ range: model.getFullModelRange(), text: r.text }], () => null);
     if (fileRef.current === r.file) {
-      setContent(r.text);
-      setSaved(r.text);
+      showText(r.text, r.text);
       setFlow(r.flow);
       call('tests.preview', { path: r.file }).then(setPreview, (e) => setPreview({ error: asError(e).message }));
     }
@@ -512,8 +530,7 @@ export function TestsView() {
     },
     take: (key, text) => {
       if (key === fileRef.current) {
-        setContent(text);
-        setSaved(text);
+        showText(text, text);
         if (tabRef.current === 'flow') loadFlow(key);
         call('tests.preview', { path: key }).then(setPreview, (e) => setPreview({ error: asError(e).message }));
       } else buffers.current[key] = { content: text, saved: text };
@@ -524,10 +541,8 @@ export function TestsView() {
     },
   });
 
-  /** Rename or move a test file (its path inside tests/). */
-  const renameFile = async (path: string) => {
-    const to = (await promptText('Rename test file', { message: 'File path inside tests/', value: path, okLabel: 'Rename' }))?.trim();
-    if (!to || to === path) return;
+  /** Move a test file to another path inside tests/ (a rename, or a move to another folder); its tab follows. */
+  const movePath = async (path: string, to: string) => {
     try {
       await call('tests.write', { path: to, content: await call<string>('tests.read', { path }) });
       await call('tests.delete', { path });
@@ -536,6 +551,22 @@ export function TestsView() {
     } catch (e) {
       toastError(e);
     }
+  };
+  /** Rename or move a test file from its tab (its path inside tests/: a path can move it, which a name can't). */
+  const renameFile = async (path: string) => {
+    const to = (await promptText('Rename test file', { message: 'File path inside tests/', value: path, okLabel: 'Rename' }))?.trim();
+    if (to && to !== path) await movePath(path, to);
+  };
+  /** The test file being renamed in place in the tree (F2, or Rename in its menu). */
+  const [renamingPath, setRenamingPath] = useState<string>();
+  const finishRename = async (n: Node, name?: string) => {
+    setRenamingPath(undefined);
+    const dir = n.path.includes('/') ? n.path.slice(0, n.path.lastIndexOf('/') + 1) : '';
+    const to = name?.trim().replace(/^\/+/, '');
+    if (to && to !== n.name) {
+      await movePath(n.path, `${dir}${to}`);
+      focusRow(`tests:${dir}${to}`);
+    } else focusRow(`tests:${n.path}`);
   };
   const duplicateFile = async (path: string) => {
     const to = path.replace(/(\.suite)?\.(ya?ml|json)$/i, (m) => ` copy${m}`);
@@ -554,7 +585,10 @@ export function TestsView() {
     if (files.length > 200 && !(await confirmAction({ title: 'Delete the folder', message: `Delete tests/${n.path} and the ${files.length} files in it? This cannot be undone.`, confirmLabel: 'Delete', danger: true }))) return;
     let kept: Array<{ path: string; content: string }> = [];
     await deleteWithUndo({
-      what: `tests/${n.path}${dir ? ` (${plural(files.length, 'file')})` : ''}`,
+      kind: dir ? 'folder' : 'test',
+      name: n.path,
+      note: dir ? `${plural(files.length, 'file')} went with it` : undefined,
+      focus: dir ? `tests:dir:${n.path}` : `tests:${n.path}`,
       run: async () => {
         kept = files.length <= 200 ? await Promise.all(files.map(async (path) => ({ path, content: await call<string>('tests.read', { path }) }))) : [];
         await call('tests.delete', { path: n.path });
@@ -572,15 +606,13 @@ export function TestsView() {
   };
   /** Expose as MCP tool…: the dialog writes the file, so the editor's pending edits go first; afterwards the editor shows the file as written. */
   const exposeFile = async (path: string) => {
-    if (file === path && content !== saved) await save();
+    if (file === path && isDirty()) await save();
     setExposing(path);
   };
   const exposed = async (path: string) => {
     const text = await call<string>('tests.read', { path });
-    if (file === path) {
-      setContent(text);
-      setSaved(text);
-    } else if (buffers.current[path] && buffers.current[path]!.content === buffers.current[path]!.saved) buffers.current[path] = { content: text, saved: text };
+    if (file === path) showText(text, text);
+    else if (buffers.current[path] && buffers.current[path]!.content === buffers.current[path]!.saved) buffers.current[path] = { content: text, saved: text };
     if (file === path) call('tests.preview', { path }).then(setPreview, (e) => setPreview({ error: asError(e).message }));
     // the designer's Start node and Deploy panel show what the file is exposed as
     if (file === path && tab === 'flow') loadFlow(path);
@@ -614,7 +646,7 @@ export function TestsView() {
         copyPath: () => void copyText(`tests/${n.path}`, 'the path'),
         ...(test ? { copyCli: () => void copyText(`testpion test "tests/${n.path}"`, 'the command') } : {}),
         ...(test ? { monitor: () => useApp.getState().openIntent('monitors', { create: { testFile: n.path } }), ci: () => useApp.getState().set({ ci: { tests: [n.path] } }), exposeMcp: () => void exposeFile(n.path) } : {}),
-        rename: () => void renameFile(n.path),
+        rename: () => setRenamingPath(n.path),
         duplicate: () => void duplicateFile(n.path),
         delete: () => void deletePath(n),
       },
@@ -676,40 +708,17 @@ export function TestsView() {
     },
   });
   const testsArea = useAreaMenu('section:test', testsMenu, 'Tests');
-
-  const renderTree = (nodes: Node[], depth = 0): React.ReactNode =>
-    nodes.map((n) =>
-      n.kind === 'dir' ? (
-        <div key={n.path}>
-          <TestTreeRow
-            kind="folder:test"
-            nodeId={`tests:dir:${n.path}`}
-            depth={depth}
-            label={n.name}
-            icon={<Folder size={13} className="text-muted shrink-0" />}
-            expanded={!!tf || (open[n.path] ?? true)}
-            onClick={() => setOpen((o) => ({ ...o, [n.path]: !(o[n.path] ?? true) }))}
-            onRun={() => void run([n.path], n.path)}
-            ctx={() => folderMenu(n)}
-          />
-          {(tf || (open[n.path] ?? true)) && renderTree(n.children ?? [], depth + 1)}
-        </div>
-      ) : (
-        <TestTreeRow
-          key={n.path}
-          kind="test"
-          nodeId={`tests:${n.path}`}
-          depth={depth}
-          label={n.name}
-          active={file === n.path}
-          icon={<TestFileBadge path={n.path} />}
-          onClick={() => void openFile(n.path)}
-          onRun={isTestFile(n.name) ? () => void run([n.path], n.path) : undefined}
-          ctx={() => fileMenu(n)}
-          dragRef={isTestFile(n.name) && !/\.suite\./.test(n.name) ? { kind: 'test', path: n.path } : undefined}
-        />
-      ),
-    );
+  // what the tree's rows call, through one ref that is always current (the tree and its rows are memoized)
+  const host = useRef<TestsHost>(null!);
+  host.current = {
+    openFile: (path) => void openFile(path),
+    run: (paths, name) => void run(paths, name),
+    toggle: (path) => setOpen((o) => ({ ...o, [path]: !(o[path] ?? true) })),
+    fileMenu,
+    folderMenu,
+    isTestFile,
+    finishRename: (n, name) => void finishRename(n, name),
+  };
 
   return (
     <>
@@ -735,7 +744,7 @@ export function TestsView() {
                 )}
                 {testsArea.menu}
                 <div className="flex-1 overflow-auto" onContextMenu={testsArea.onContextMenu}>
-                  {tree.length ? (tf && !filterTree(tree).length ? <p className="px-3 py-4 text-sm text-muted text-center">No test files match this filter.</p> : renderTree(filterTree(tree))) : <NoTestFiles onNew={() => void newFile('http')} />}
+                  {tree.length ? <TestFileTree tree={tree} filter={tf} open={open} file={file} renaming={renamingPath} host={host} /> : <NoTestFiles onNew={() => void newFile('http')} />}
                   {/* a blank strip after the last file, always there to right-click (the tree's menu), as in the explorer */}
                   <div className="min-h-16" aria-hidden />
                 </div>
@@ -804,7 +813,7 @@ export function TestsView() {
                   title: p.split('/').pop() ?? p,
                   tooltip: `tests/${p}`,
                   badge: <TestFileBadge path={p} />,
-                  dirty: p === file ? content !== saved : buffers.current[p] ? buffers.current[p]!.content !== buffers.current[p]!.saved : false,
+                  dirty: p === file ? dirty : buffers.current[p] ? buffers.current[p]!.content !== buffers.current[p]!.saved : false,
                   rename: 'dialog' as const,
                   data: p,
                 }))
@@ -816,7 +825,7 @@ export function TestsView() {
             tab !== 'run' &&
             file && (
               <>
-                <Button size="sm" icon={<Save size={12} />} onClick={save} disabled={content === saved}>
+                <Button size="sm" icon={<Save size={12} />} onClick={save} disabled={!dirty}>
                   Save
                 </Button>
                 <Button size="sm" variant="primary" icon={<Play size={12} />} onClick={() => run([file], file)}>
@@ -847,7 +856,7 @@ export function TestsView() {
           const parts = file.split('/');
           const step = tab === 'flow' && flowSel && flow && !('error' in flow) ? flow.steps.find((s) => s.id === flowSel) : undefined;
           const crumbs: Crumb[] = [{ label: 'Tests', view: 'tests' }, ...parts.slice(0, -1).map((label) => ({ label })), ...(step ? [{ label: parts[parts.length - 1]!, ref: { kind: 'test' as const, path: file } }] : [])];
-          return <ItemBreadcrumb crumbs={crumbs} name={step ? step.name : parts[parts.length - 1]!} dirty={content !== saved} />;
+          return <ItemBreadcrumb crumbs={crumbs} name={step ? step.name : parts[parts.length - 1]!} dirty={dirty} />;
         })()}
         <div className="flex-1 min-h-0">
           {/* ONE editor for every open file (a model each, the editor swaps them): it stays mounted, hidden, while the
@@ -858,8 +867,12 @@ export function TestsView() {
                   <CodeEditor
                     language={dataLanguageOf(file)}
                     path={`tests/${file}`}
-                    value={content}
-                    onChange={setContent}
+                    value={editorValue}
+                    // each keystroke: the mirror and, when it flips, whether the file has unsaved changes (nothing else re-renders)
+                    onChange={(v) => {
+                      contentRef.current = v;
+                      syncDirty();
+                    }}
                     onMount={(ed, monaco) => {
                       editorRef.current = ed;
                       monacoRef.current = monaco;
@@ -928,7 +941,7 @@ export function TestsView() {
                   flow={flow}
                   onEdited={flowEdited}
                   beforeEdit={async () => {
-                    if (content !== saved) await save();
+                    if (isDirty()) await save();
                   }}
                   onRun={(o) => run([file], undefined, { stay: true, flow: o ?? {} })}
                   onOpenStep={openStep}

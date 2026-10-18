@@ -37,7 +37,7 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
   "collection": [
     [
       "New …",
-      "New folder",
+      "New folder…",
     ],
     [
       "Expand all",
@@ -185,7 +185,7 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
   "folder": [
     [
       "New …",
-      "New folder",
+      "New folder…",
     ],
     [
       "Expand all",
@@ -595,7 +595,7 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
   "section:dataset": [
     [
       "New …",
-      "New folder",
+      "New folder…",
       "Generate test data…",
     ],
     [
@@ -614,7 +614,7 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
   "section:evaluation": [
     [
       "New …",
-      "New folder",
+      "New folder…",
     ],
     [
       "Expand all",
@@ -624,7 +624,7 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
   "section:load-test": [
     [
       "New …",
-      "New folder",
+      "New folder…",
     ],
     [
       "Expand all",
@@ -634,7 +634,7 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
   "section:mcp-server": [
     [
       "New …",
-      "New folder",
+      "New folder…",
     ],
     [
       "Open MCP inspector",
@@ -647,7 +647,7 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
   "section:monitor": [
     [
       "New …",
-      "New folder",
+      "New folder…",
     ],
     [
       "Expand all",
@@ -657,7 +657,7 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
   "section:prompt": [
     [
       "New …",
-      "New folder",
+      "New folder…",
     ],
     [
       "Expand all",
@@ -672,7 +672,7 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
   "section:spec": [
     [
       "New …",
-      "New folder",
+      "New folder…",
     ],
     [
       "Open API definitions",

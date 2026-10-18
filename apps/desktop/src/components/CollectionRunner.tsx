@@ -8,8 +8,9 @@ import { RunPanel } from './RunPanel';
 import { GenerateDataDialog } from './GenerateDataDialog';
 import { RunsOverview, type RunRow } from './RunsOverview';
 import { hasNativeDialogs, pickTextFile } from '../lib/files';
-import { LinkButton, Badge, Button, cx, Empty, Field, Input, Modal, MoreMenu, Select, Split, Toggle, Textarea } from './ui';
+import { LinkButton, Badge, Button, Empty, Field, Input, Modal, MoreMenu, Select, Split, Toggle, Textarea } from './ui';
 import { RefLink } from './RefLink';
+import { KIND_COLOR, TreeBadge } from './TreeParts';
 import { EnvBadge, EnvSelect } from './EnvSelect';
 import { runCiMenuItems } from '../lib/run-ci';
 
@@ -430,14 +431,7 @@ export function CollectionRunner({ collection, folderId, onFolderChange, dataPat
                         setUnchecked(next);
                       }}
                     />
-                    <span
-                      className={cx(
-                        'mono method-badge text-[0.64rem] font-bold w-10 shrink-0',
-                        r.kind === 'http' ? `method-${r.method}` : r.kind === 'grpc' ? 'text-[#2ea99e]' : r.kind === 'websocket' ? 'text-[#d97706]' : 'text-[#e535ab]',
-                      )}
-                    >
-                      {r.method.slice(0, 5)}
-                    </span>
+                    <TreeBadge label={r.method} className={r.kind === 'http' ? `method-${r.method}` : r.kind === 'grpc' ? KIND_COLOR.grpc : r.kind === 'websocket' ? KIND_COLOR.websocket : KIND_COLOR.graphql} />
                     {/* the request itself, one click away (WF-08); a click on the name opens it, the row's box picks it */}
                     <RefLink to={r.kind === 'grpc' || r.kind === 'websocket' ? { kind: 'saved', library: r.kind, itemId: r.id } : { kind: 'request', collectionId: collection.id, requestId: r.id }} icon={false} className="text-fg" title={`Open ${r.name}`}>
                       {r.name}

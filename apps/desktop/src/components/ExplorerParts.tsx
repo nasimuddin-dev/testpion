@@ -1,11 +1,11 @@
 import { Plus } from 'lucide-react';
-import { useState, type ReactNode } from 'react';
+import { memo, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import type { ItemRef } from '@testpion/shared';
 import { promptText } from '../store';
 import { deleteWithUndo } from '../lib/undo-delete';
 import type { NodeKind, NodeMenuCtx } from '../lib/node-menu';
 import { LABEL } from '../lib/vocabulary';
-import { useTreeOpen } from '../lib/tree-state';
+import { treeKey, useTreeOpen } from '../lib/tree-state';
 import { restoreFolder } from './FolderList';
 import { TreeRowShell } from './TreeRowShell';
 import { CLOSED_ICON, CountPill, FOLDER_ICON, OPEN_ICON, focusRow, moveToFolderItem } from './TreeParts';
@@ -27,7 +27,7 @@ export function useOpenSections() {
 export type OpenSections = ReturnType<typeof useOpenSections>;
 
 /** The key of a section's folder in the explorer's tree state. */
-export const folderKey = (section: string, name: string) => `${section}:folder:${name}`;
+export const folderKey = (section: string, name: string) => treeKey(section, 'folder', name);
 
 /** A collapsible section: its header is the section's node (+ New …, New folder, Expand all, Collapse all, its tools). */
 export function Section({
@@ -55,7 +55,8 @@ export function Section({
 }) {
   const open = forceOpen || sections.isOpen(id, def);
   return (
-    <div className="border-b border-line/60" data-tree-section={id}>
+    // a tree of its own for screen readers: the header is its first item, what it holds a group under it
+    <div className="border-b border-line/60" data-tree-section={id} role="tree" aria-label={title}>
       <div className="sticky top-0 bg-panel z-10">
         <TreeRowShell kind={kind} nodeId={`section:${id}`} label={title} header expanded={open} onClick={() => sections.toggle(id, def)} ctx={menu} className="mx-0.5 pl-1">
           {open ? OPEN_ICON : CLOSED_ICON}
@@ -64,7 +65,11 @@ export function Section({
           {count !== undefined && count > 0 && <CountPill n={count} />}
         </TreeRowShell>
       </div>
-      {open && <div className="pb-2">{children}</div>}
+      {open && (
+        <div className="pb-2" role="group">
+          {children}
+        </div>
+      )}
     </div>
   );
 }
@@ -83,7 +88,6 @@ export function ItemRow({
   icon,
   label,
   sub,
-  title,
   active,
   indent,
   onClick,
@@ -96,7 +100,6 @@ export function ItemRow({
   icon?: ReactNode;
   label: string;
   sub?: ReactNode;
-  title?: string;
   active?: boolean;
   indent?: boolean;
   onClick(): void;
@@ -109,7 +112,7 @@ export function ItemRow({
       kind={kind}
       nodeId={nodeId}
       label={label}
-      title={title}
+      depth={indent ? 2 : 1}
       active={active}
       onClick={onClick}
       onOpen={onClick}
@@ -151,7 +154,8 @@ export async function renameFolderIn(ops: FolderOps, name: string, next: string)
 /** Delete a folder at once, with Undo: its items move to the top level, and come back into it. */
 export function deleteFolderIn(ops: FolderOps, name: string, itemNoun: string) {
   return deleteWithUndo({
-    what: `the folder "${name}"`,
+    kind: 'folder',
+    name,
     note: `Its ${itemNoun}s moved to the top level`,
     run: async () => {
       const was = new Set<string>();
@@ -202,60 +206,95 @@ export function FolderedRows<T extends { id: string; folder?: string }>({
   row(item: T, inFolder: boolean): ReactNode;
 }) {
   const [renaming, setRenaming] = useState<string>();
-  const names = folderNames(ops, items);
+  // what a folder row calls, through one ref that is always current: the rows are memoized
+  const host = useRef<FolderHost>(null!);
+  host.current = { ops, sections, itemNoun, create, setRenaming };
+  // the items of each folder, grouped once (not one pass over the items per folder)
+  const { names, byFolder, top } = useMemo(() => {
+    const names = folderNames(ops, items);
+    const known = new Set(names);
+    const byFolder = new Map<string, T[]>(names.map((n) => [n, []]));
+    const top: T[] = [];
+    for (const i of items) (i.folder && known.has(i.folder) ? byFolder.get(i.folder)! : top).push(i);
+    return { names, byFolder, top };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ops.folders, items]);
   return (
     <>
       {names.map((name) => {
-        const inside = items.filter((i) => i.folder === name);
+        const inside = byFolder.get(name) ?? [];
         if (filtering && !inside.length) return null;
         const key = folderKey(section, name);
         const isOpen = filtering || sections.isOpen(key, true);
         return (
           <div key={key}>
-            <TreeRowShell
-              kind={kind as NodeKind}
-              nodeId={key}
-              label={name}
-              expanded={isOpen}
-              onClick={() => sections.toggle(key, true)}
-              className="pl-5"
-              rename={
-                renaming === name
-                  ? {
-                      value: name,
-                      label: 'Folder name',
-                      done: (to) => {
-                        setRenaming(undefined);
-                        if (to && to !== name) void renameFolderIn(ops, name, to);
-                        focusRow(folderKey(section, to || name));
-                      },
-                    }
-                  : undefined
-              }
-              ctx={() => ({
-                name,
-                create: create?.(name),
-                on: {
-                  expandAll: () => sections.set([key], true),
-                  collapseAll: () => sections.set([key], false),
-                  rename: () => setRenaming(name),
-                  delete: () => void deleteFolderIn(ops, name, itemNoun),
-                },
-              })}
-            >
-              {isOpen ? OPEN_ICON : CLOSED_ICON}
-              {FOLDER_ICON}
-              <span className="truncate flex-1">{name}</span>
-              <CountPill n={inside.length} />
-            </TreeRowShell>
-            {isOpen && (inside.length ? inside.map((i) => row(i, true)) : <p className="pl-10 py-1 text-xs text-muted">Empty folder</p>)}
+            <SectionFolderRow kind={kind as NodeKind} section={section} name={name} count={inside.length} open={isOpen} renaming={renaming === name} host={host} />
+            {isOpen && (
+              <div role="group">
+                {inside.length ? inside.map((i) => row(i, true)) : <p className="pl-10 py-1 text-xs text-muted">Empty folder</p>}
+              </div>
+            )}
           </div>
         );
       })}
-      {items.filter((i) => !i.folder || !names.includes(i.folder)).map((i) => row(i, false))}
+      {top.map((i) => row(i, false))}
     </>
   );
 }
+
+/** What a section's folder rows need from their section (through a ref that is always current). */
+interface FolderHost {
+  ops: FolderOps;
+  sections: OpenSections;
+  itemNoun: string;
+  create?(folder: string): NodeMenuCtx['create'];
+  setRenaming(name: string | undefined): void;
+}
+
+/** A folder of a section: its chevron, name and count; renamed in place. Memoized: only its own props re-render it. */
+const SectionFolderRow = memo(function SectionFolderRow({ kind, section, name, count, open, renaming, host }: { kind: NodeKind; section: string; name: string; count: number; open: boolean; renaming: boolean; host: RefObject<FolderHost> }) {
+  const h = () => host.current;
+  const key = folderKey(section, name);
+  return (
+    <TreeRowShell
+      kind={kind}
+      nodeId={key}
+      label={name}
+      depth={1}
+      expanded={open}
+      onClick={() => h().sections.toggle(key, true)}
+      className="pl-5"
+      rename={
+        renaming
+          ? {
+              value: name,
+              label: 'Folder name',
+              done: (to) => {
+                h().setRenaming(undefined);
+                if (to && to !== name) void renameFolderIn(h().ops, name, to);
+                focusRow(folderKey(section, to || name));
+              },
+            }
+          : undefined
+      }
+      ctx={() => ({
+        name,
+        create: h().create?.(name),
+        on: {
+          expandAll: () => h().sections.set([key], true),
+          collapseAll: () => h().sections.set([key], false),
+          rename: () => h().setRenaming(name),
+          delete: () => void deleteFolderIn(h().ops, name, h().itemNoun),
+        },
+      })}
+    >
+      {open ? OPEN_ICON : CLOSED_ICON}
+      {FOLDER_ICON}
+      <span className="truncate flex-1">{name}</span>
+      <CountPill n={count} />
+    </TreeRowShell>
+  );
+});
 
 /** What a section is for, and a button to start, when it's empty. */
 export function EmptyHint({ text, action, onAction }: { text: string; action: string; onAction(): void }) {

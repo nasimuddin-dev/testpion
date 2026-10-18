@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { BarChart3 } from 'lucide-react';
-import { cx, Input } from '../components/ui';
-import { NodeMenu } from '../components/TreeParts';
+import { BarChart3, History } from 'lucide-react';
+import { Empty, Input } from '../components/ui';
+import { treeKeys } from '../components/TreeParts';
+import { TreeRowShell } from '../components/TreeRowShell';
 import { RunMiniBar, type RunRow } from '../components/RunsOverview';
 import { EnvBadge } from '../components/EnvSelect';
 import { TYPE_ICON } from '../components/ProblemList';
@@ -11,15 +12,17 @@ import { saveRunReport } from '../components/output/run-specs';
 import { timeAgo } from '../lib/format';
 import { copyRunCommand, runInCi } from '../lib/run-ci';
 
-/** The Tests view's list of runs: each row the `run` kind's node, with the one menu (lib/node-menu.ts). */
+/** The Tests view's list of runs: each row the `run` kind's node on the one row (TreeRowShell), with the one menu (lib/node-menu.ts). */
 export function RunList({ runs, active, onSelect, onOverview, onRerunFailed }: { runs: RunRow[]; active?: string; onSelect(id: string): void; onOverview?(): void; onRerunFailed?(id: string): void }) {
-  // the row whose menu is open (its ⋯, or a right-click on the row): the shared item menu (TreeParts NodeMenu)
-  const [menuFor, setMenuFor] = useState<string>();
   // filter by name / environment, and only the runs where something failed
   const [query, setQuery] = useState('');
   const [failedOnly, setFailedOnly] = useState(false);
   const q = query.toLowerCase();
   const shown = runs.filter((r) => (!failedOnly || r.failed + r.errors > 0) && (!q || `${r.name} ${r.environment ?? ''}`.toLowerCase().includes(q)));
+  const clearFilter = () => {
+    setQuery('');
+    setFailedOnly(false);
+  };
   return (
     <div className="h-full flex flex-col min-h-0">
       {onOverview && (
@@ -35,21 +38,39 @@ export function RunList({ runs, active, onSelect, onOverview, onRerunFailed }: {
           </label>
         </div>
       )}
-      <div className="flex-1 min-h-0 overflow-auto">
+      {/* the keyboard moves between the runs like in every list (↑ ↓, Home / End, Shift+F10 for the menu) */}
+      <div className="flex-1 min-h-0 overflow-auto py-1" role="tree" aria-label="Runs" onKeyDown={treeKeys}>
         {shown.map((r) => (
-          <div
+          <TreeRowShell
             key={r.id}
-            className={cx('group flex items-start border-b border-line/60', active === r.id ? 'bg-accent/10' : 'hover:bg-hover')}
-            data-run-row={r.id}
-            onContextMenu={(e) => {
-              e.preventDefault();
-              setMenuFor(r.id);
-            }}
+            kind="run"
+            nodeId={`runs:${r.id}`}
+            label={r.name}
+            tall
+            active={active === r.id}
+            onClick={() => onSelect(r.id)}
+            onOpen={() => onSelect(r.id)}
+            attrs={{ 'data-run-row': r.id }}
+            className="pl-3"
+            ctx={() => ({
+              ref: { kind: 'run', runId: r.id },
+              name: r.name,
+              on: {
+                open: () => onSelect(r.id),
+                ...(onRerunFailed ? { rerunFailed: () => onRerunFailed(r.id) } : {}),
+                exportReport: () => void saveRunReport({ id: r.id, name: r.name }),
+                copyCli: () => void copyRunCommand(r.id),
+                copyRunId: () => void copyText(r.id, 'Run id'),
+                ci: () => void runInCi(r.id),
+                ...(r.failed + r.errors > 0 ? { triage: () => startAiAnalysis({ kind: 'triage', runId: r.id, title: r.name }) } : {}),
+              },
+              disabled: r.failed + r.errors > 0 ? {} : { rerunFailed: 'Nothing failed in this run' },
+            })}
           >
-            <button onClick={() => onSelect(r.id)} className="flex-1 min-w-0 text-left pl-3 py-2">
-              <div className="text-sm truncate">{r.name}</div>
+            <span className="flex-1 min-w-0">
+              <span className="block text-sm truncate">{r.name}</span>
               <RunMiniBar r={r} />
-              <div className="text-xs text-muted flex gap-2">
+              <span className="text-xs text-muted flex gap-2">
                 <span className={r.failed + r.errors ? 'text-bad' : 'text-ok'}>
                   {r.passed}/{r.total}
                 </span>
@@ -68,34 +89,20 @@ export function RunList({ runs, active, onSelect, onOverview, onRerunFailed }: {
                 )}
                 {r.environment && <EnvBadge name={r.environment} className="max-w-32" />}
                 <span className="ml-auto">{timeAgo(r.startedAt)}</span>
-              </div>
-            </button>
-            <div className="pt-1.5 pr-1">
-              <NodeMenu
-                kind="run"
-                label={r.name}
-                open={menuFor === r.id}
-                onOpenChange={(o) => setMenuFor(o ? r.id : undefined)}
-                ctx={() => ({
-                  ref: { kind: 'run', runId: r.id },
-                  name: r.name,
-                  on: {
-                    open: () => onSelect(r.id),
-                    ...(onRerunFailed ? { rerunFailed: () => onRerunFailed(r.id) } : {}),
-                    exportReport: () => void saveRunReport({ id: r.id, name: r.name }),
-                    copyCli: () => void copyRunCommand(r.id),
-                    copyRunId: () => void copyText(r.id, 'Run id'),
-                    ci: () => void runInCi(r.id),
-                    ...(r.failed + r.errors > 0 ? { triage: () => startAiAnalysis({ kind: 'triage', runId: r.id, title: r.name }) } : {}),
-                  },
-                  disabled: r.failed + r.errors > 0 ? {} : { rerunFailed: 'Nothing failed in this run' },
-                })}
-              />
-            </div>
-          </div>
+              </span>
+            </span>
+          </TreeRowShell>
         ))}
-        {!runs.length && <div className="p-3 text-sm text-muted">No runs yet</div>}
-        {runs.length > 0 && !shown.length && <div className="p-3 text-sm text-muted">No runs match</div>}
+        {!runs.length && (
+          <Empty icon={<History size={22} />} title="No runs yet">
+            Run a test file (▶ on its row, or <b>Run all tests</b>) and its results are listed here.
+          </Empty>
+        )}
+        {runs.length > 0 && !shown.length && (
+          <Empty title="No runs match" actions={[{ label: 'Clear filter', onClick: clearFilter, primary: false }]}>
+            No run has this name or environment{failedOnly ? ' with a failure' : ''}.
+          </Empty>
+        )}
       </div>
     </div>
   );

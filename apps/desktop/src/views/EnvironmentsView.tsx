@@ -18,7 +18,8 @@ import { EnvCompare } from '../components/EnvCompare';
 import { EnvMatrix } from '../components/EnvMatrix';
 import { TrashDialog } from '../components/TrashDialog';
 import { Badge, Button, Callout, cx, Empty, Field, Input, Menu, MoreMenu, Split, Tabs, Toggle } from '../components/ui';
-import { CountPill, focusRow, InlineRename, NodeMenu, treeKeys, withRefDefaults } from '../components/TreeParts';
+import type { NodeMenuCtx } from '../lib/node-menu';
+import { CountPill, focusRow, treeKeys, withRefDefaults } from '../components/TreeParts';
 import { buildNodeMenu } from '../lib/node-menu';
 import { TreeRowShell } from '../components/TreeRowShell';
 import { refreshEnvironments, useEnvironments } from '../lib/environments-store';
@@ -54,7 +55,7 @@ export function EnvironmentsView() {
       toastError(e);
     }
   };
-  const tabs = useLibraryTabs<Environment | null>('environments', envDrafts);
+  const tabs = useLibraryTabs<Environment | null>('environments', envDrafts, { canBeEmpty: true });
   const sel = tabs.active.savedId;
   /** Open an environment: in its tab, or the preview tab (a single click in the list), or a new tab. */
   const setSel = (id: string | undefined, o: { preview?: boolean } = {}) => id && tabs.open(id, null, o);
@@ -85,7 +86,10 @@ export function EnvironmentsView() {
   /** At once, with Undo in the message (the environment and its secret values come back from Recently deleted). */
   const deleteEnv = (env: Environment) =>
     deleteWithUndo({
-      what: `the environment "${env.name}"`,
+      kind: 'environment',
+      name: env.name,
+      trash: true,
+      focus: `env:${env.id}`,
       run: async () => {
         await call('env.delete', { id: env.id });
         closeTabsOf(env.id);
@@ -97,15 +101,13 @@ export function EnvironmentsView() {
         await load();
         await useApp.getState().refreshWorkspace();
       },
-      note: 'Recently deleted keeps it for 30 days',
     });
-  const [menuFor, setMenuFor] = useState<string>();
   /** The environment being renamed in place (F2, or Rename in its menu). */
   const [renamingEnv, setRenamingEnv] = useState<string>();
   /** Rename from the list: the active environment (chosen by name) stays active, and the open one keeps its unsaved edits. */
   const renameEnv = async (env: Environment, name?: string) => {
     setRenamingEnv(undefined);
-    focusRow(env.id);
+    focusRow(`env:${env.id}`);
     if (!name) return;
     try {
       reordering.current = true;
@@ -198,6 +200,21 @@ export function EnvironmentsView() {
     else if (p?.tab === 'collection') (setScope('collection'), setColVarsFor(p.collectionId));
   });
 
+  /** An environment's menu (lib/node-menu.ts builds it): open, make active, rename, duplicate, history, delete with Undo. */
+  const envMenu = (e: Environment): NodeMenuCtx => ({
+    ref: { kind: 'environment', environmentId: e.id },
+    name: e.name,
+    repo: !!git.status?.repository,
+    on: {
+      open: () => setSel(e.id),
+      makeActive: () => void useApp.getState().setEnvironment(e.name),
+      rename: () => setRenamingEnv(e.id),
+      duplicate: () => void duplicateEnv(e),
+      historyInGit: () => setHistoryOf({ id: e.id, name: e.name }),
+      delete: () => void deleteEnv(e),
+    },
+    disabled: activeEnv === e.name ? { makeActive: 'It is the active environment' } : e.problem ? { makeActive: 'Its file cannot be read' } : {},
+  });
   // new variables of a saved environment, offered to the others (AlsoAddDialog)
   const [alsoFor, setAlsoFor] = useState<{ from: string; keys: string[] }>();
   const rows: KeyValue[] = (draft?.variables ?? []).map((v) => ({ ...v, value: v.secret ? secretValues[v.key] ?? '' : v.value }));
@@ -255,77 +272,53 @@ export function EnvironmentsView() {
                 <span className="text-[0.82rem] font-semibold truncate">Environments</span>
                 {envs.length > 0 && <CountPill n={envs.length} />}
               </TreeRowShell>
-              {envs.map((e, i) => (
-                <div
-                  key={e.id}
-                  draggable={renamingEnv !== e.id}
-                  onContextMenu={(ev) => {
-                    ev.preventDefault();
-                    setMenuFor(e.id);
-                  }}
-                  onDragStart={(ev) => {
-                    setDragId(e.id);
-                    ev.dataTransfer.effectAllowed = 'move';
-                  }}
-                  onDragOver={(ev) => {
-                    if (!dragId || dragId === e.id) return;
-                    ev.preventDefault();
-                    setDropAt(i);
-                  }}
-                  onDragLeave={() => setDropAt((d) => (d === i ? undefined : d))}
-                  onDrop={(ev) => {
-                    ev.preventDefault();
-                    if (dragId) void move(dragId, i);
-                  }}
-                  onDragEnd={() => (setDragId(undefined), setDropAt(undefined))}
-                  className={cx(
-                    'group flex items-center gap-1 h-8 mx-1 pl-3 pr-1 rounded-md cursor-grab active:cursor-grabbing transition-colors',
-                    sel === e.id ? 'bg-accent-soft' : 'hover:bg-hover',
-                    menuFor === e.id && sel !== e.id && 'bg-hover',
-                    dragId === e.id && 'opacity-50',
-                    dropAt === i && 'shadow-[inset_0_2px_0_var(--accent)]',
-                  )}
-                >
-                  {renamingEnv === e.id ? (
-                    <div className="flex-1 min-w-0 flex items-center gap-2 text-sm">
-                      <span className="w-2 h-2 rounded-full shrink-0" style={{ background: e.color ?? (e.isProduction ? 'var(--bad)' : 'var(--ok)') }} />
-                      <InlineRename
-                        value={e.name}
-                        label="Environment name"
-                        validate={(name) => (envs.some((x) => x.id !== e.id && x.name.toLowerCase() === name.toLowerCase()) ? 'Another environment has this name' : undefined)}
-                        onCommit={(name) => void renameEnv(e, name)}
-                        onCancel={() => void renameEnv(e)}
-                      />
-                    </div>
-                  ) : (
-                  <button
-                    className="flex-1 min-w-0 flex items-center gap-2 text-left text-sm"
-                    title="Drag (or Alt+↑/↓) to reorder · F2 renames · Delete deletes"
-                    data-tree-row
-                    data-rename-id={e.id}
+              <div className="flex-1 overflow-auto" role="tree" aria-label="Environments">
+                {envs.map((e, i) => (
+                  <TreeRowShell
+                    key={e.id}
+                    kind="environment"
+                    nodeId={`env:${e.id}`}
+                    label={e.name}
+                    active={sel === e.id}
                     onClick={() => {
                       setSel(e.id, { preview: true });
                       useApp.getState().markPlace('environments', { environmentId: e.id });
                     }}
-                    onDoubleClick={() => setSel(e.id)}
+                    onOpen={() => setSel(e.id)}
+                    ctx={() => envMenu(e)}
+                    rename={
+                      renamingEnv === e.id
+                        ? {
+                            value: e.name,
+                            label: 'Environment name',
+                            validate: (name) => (envs.some((x) => x.id !== e.id && x.name.toLowerCase() === name.toLowerCase()) ? 'Another environment has this name' : undefined),
+                            done: (name) => void renameEnv(e, name),
+                          }
+                        : undefined
+                    }
+                    // dragged onto another row it moves there (the order is the one every environment picker uses); Alt+↑/↓ too
+                    drag={[{ kind: 'environment', environmentId: e.id }]}
+                    onDragStart={() => setDragId(e.id)}
+                    onDragEnd={() => (setDragId(undefined), setDropAt(undefined))}
+                    drop={{
+                      onDragOver: (ev) => {
+                        if (!dragId || dragId === e.id) return;
+                        ev.preventDefault();
+                        setDropAt(i);
+                      },
+                      onDragLeave: () => setDropAt((d) => (d === i ? undefined : d)),
+                      onDrop: (ev) => {
+                        ev.preventDefault();
+                        if (dragId) void move(dragId, i);
+                      },
+                      over: dropAt === i ? 'before' : undefined,
+                    }}
                     onKeyDown={(ev) => {
-                      if (ev.key === 'F2') {
-                        ev.preventDefault();
-                        return setRenamingEnv(e.id);
-                      }
-                      if (ev.key === 'Delete') {
-                        ev.preventDefault();
-                        return void deleteEnv(e);
-                      }
-                      if ((ev.key === 'F10' && ev.shiftKey) || ev.key === 'ContextMenu') {
-                        ev.preventDefault();
-                        ev.stopPropagation();
-                        return setMenuFor(e.id);
-                      }
                       if (!ev.altKey || (ev.key !== 'ArrowUp' && ev.key !== 'ArrowDown')) return;
                       ev.preventDefault();
                       void move(e.id, ev.key === 'ArrowUp' ? i - 1 : i + 1);
                     }}
+                    className={cx('pl-3 cursor-grab active:cursor-grabbing', dragId === e.id && 'opacity-50')}
                   >
                     <span className="w-2 h-2 rounded-full shrink-0" style={{ background: e.color ?? (e.isProduction ? 'var(--bad)' : 'var(--ok)') }} />
                     <span className="truncate">{String(e.name)}</span>
@@ -335,32 +328,13 @@ export function EnvironmentsView() {
                         <TriangleAlert size={13} aria-label="Cannot be read" />
                       </span>
                     ) : (
-                      <span className="ml-auto"><CountPill n={e.variables?.length ?? 0} /></span>
+                      <span className="ml-auto">
+                        <CountPill n={e.variables?.length ?? 0} />
+                      </span>
                     )}
-                  </button>
-                  )}
-                  <NodeMenu
-                    kind="environment"
-                    label={e.name}
-                    open={menuFor === e.id}
-                    onOpenChange={(o) => setMenuFor(o ? e.id : undefined)}
-                    ctx={() => ({
-                      ref: { kind: 'environment', environmentId: e.id },
-                      name: e.name,
-                      repo: !!git.status?.repository,
-                      on: {
-                        open: () => setSel(e.id),
-                        makeActive: () => void useApp.getState().setEnvironment(e.name),
-                        rename: () => setRenamingEnv(e.id),
-                        duplicate: () => void duplicateEnv(e),
-                        historyInGit: () => setHistoryOf({ id: e.id, name: e.name }),
-                        delete: () => void deleteEnv(e),
-                      },
-                      disabled: activeEnv === e.name ? { makeActive: 'It is the active environment' } : e.problem ? { makeActive: 'Its file cannot be read' } : {},
-                    })}
-                  />
-                </div>
-              ))}
+                  </TreeRowShell>
+                ))}
+              </div>
             </div>
             <div className="h-full flex flex-col min-w-0">
             <LibraryTabStrip
