@@ -1,18 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { cpSync, existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
-import {
-  CAPABILITIES,
-  ITEM_KINDS,
-  KIND_IDS,
-  KIND_INFO,
-  kindOfPath,
-  kindOfRef,
-  liveKinds,
-  watchKindOfPath,
-  type ItemRef,
-  type KindId,
-} from '@testpion/shared';
+import { CAPABILITIES, ITEM_KINDS, KIND_IDS, KIND_INFO, kindOfPath, kindOfRef, liveKinds, watchKindOfPath, type ItemRef, type KindId } from '@testpion/shared';
 import { WorkspaceSearch, WorkspaceStore, kind, kinds, resolveItemRef, type RunSummary } from '../../packages/core/src/index.js';
 import { refTarget } from '../../apps/desktop/src/lib/ref-target';
 import { tempDir } from '../helpers';
@@ -72,7 +61,18 @@ beforeAll(() => {
   cpSync(FIXTURE, store.root, { recursive: true });
   store.meta.addHistory({ id: 'h1', timestamp: '2026-01-01T00:00:00.000Z', kind: 'http', name: 'GET pets history', method: 'GET', url: 'https://x/pets', status: 200 });
   store.meta.addTrace({ id: 'tr1', name: 'pets trace', kind: 'http', status: 'ok', startTime: 0, durationMs: 1, spanCount: 1, path: 'traces/tr1.json' });
-  const run = { runId: 'run-1', name: 'pets run', startedAt: '2026-01-01T00:00:00.000Z', finishedAt: '2026-01-01T00:00:01.000Z', durationMs: 1, total: 1, passed: 1, failed: 0, skipped: 0, errors: 0 } as RunSummary;
+  const run = {
+    runId: 'run-1',
+    name: 'pets run',
+    startedAt: '2026-01-01T00:00:00.000Z',
+    finishedAt: '2026-01-01T00:00:01.000Z',
+    durationMs: 1,
+    total: 1,
+    passed: 1,
+    failed: 0,
+    skipped: 0,
+    errors: 0,
+  } as RunSummary;
   store.meta.addRun(run, store.path('runs', 'run-1'));
   cpSync(join(FIXTURE, 'baselines'), store.path('runs', 'run-1'), { recursive: true });
 });
@@ -126,7 +126,8 @@ describe('the item-kind registry is complete', () => {
     const late: string[] = [];
     for (const k of Object.values(KIND_INFO)) {
       if (k.since && minor(k.since) <= minor(version)) late.push(`${k.id}: since ${k.since}`);
-      for (const [cap, state] of Object.entries(k.capabilities)) if (state !== true && 'planned' in state && minor(state.planned) <= minor(version)) late.push(`${k.id}.${cap}: planned for ${state.planned}`);
+      for (const [cap, state] of Object.entries(k.capabilities))
+        if (state !== true && 'planned' in state && minor(state.planned) <= minor(version)) late.push(`${k.id}.${cap}: planned for ${state.planned}`);
     }
     expect(late).toEqual([]);
   });
@@ -238,7 +239,12 @@ describe('no kind switches outside the registry', () => {
     'apps/desktop/src/lib/open-ref.ts': '0.53: open-ref side effects per kind through the UI half',
     'apps/desktop/src/components/RefLink.tsx': '0.53: RefLink icons from KIND_INFO.icon',
   };
-  const PATTERNS = [/switch \((ref|r)\.kind\)\s*{\s*case '(request|collection|saved|spec|dataset|test|mcp-server)'/, /case 'mcp-server':/, /\/\^(collections|environments|library)\\\//, /\/\^\((collections|environments|library)\|/];
+  const PATTERNS = [
+    /switch \((ref|r)\.kind\)\s*{\s*case '(request|collection|saved|spec|dataset|test|mcp-server)'/,
+    /case 'mcp-server':/,
+    /\/\^(collections|environments|library)\\\//,
+    /\/\^\((collections|environments|library)\|/,
+  ];
   const scan = (dir: string, out: string[] = []): string[] => {
     for (const e of readdirSync(dir)) {
       const p = join(dir, e);

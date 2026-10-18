@@ -94,4 +94,10 @@ export const fileIn = (store: WorkspaceStore, base: string, rel: string): string
 };
 
 export const ok = (ref: ItemRef, label: string, detail?: string): RefResolution => ({ ok: true, ref, label, ...(detail ? { detail } : {}) });
-export const missing = (ref: ItemRef, message: string, next?: { label: string; ref?: ItemRef; view?: string }): RefResolution => ({ ok: false, ref, reason: 'missing', message, ...(next ? { next } : {}) });
+export const missing = (ref: ItemRef, message: string, next?: { label: string; ref?: ItemRef; view?: string }): RefResolution => ({
+  ok: false,
+  ref,
+  reason: 'missing',
+  message,
+  ...(next ? { next } : {}),
+});

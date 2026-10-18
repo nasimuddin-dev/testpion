@@ -73,6 +73,7 @@ exports[`the item-kind registry is complete > every capability is declared; a na
   "collection": {
     "favorite": "favorites are saved requests (one click away in the sidebar)",
     "move": "collections are the top level of the tree",
+    "open": "a collection opens as its settings page (Settings, runner & docs)",
     "open-new-tab": "it opens in one place, not in editor tabs",
   },
   "dataset": {
@@ -82,6 +83,7 @@ exports[`the item-kind registry is complete > every capability is declared; a na
     "flow": "integration flows are generated from collections and folders",
     "monitor": "monitors run collections and test files on a schedule",
     "open-new-tab": "it opens in one place, not in editor tabs",
+    "run": "a dataset drives a run (Run a collection with it)",
     "test-file": "test files are created from requests, collections and calls",
   },
   "debugger-rules": {
@@ -179,6 +181,7 @@ exports[`the item-kind registry is complete > every capability is declared; a na
   },
   "folder": {
     "favorite": "favorites are saved requests (one click away in the sidebar)",
+    "open": "a folder opens its settings with Edit folder",
     "open-new-tab": "it opens in one place, not in editor tabs",
     "search": "found through the requests it holds",
     "trash": "restored from the collection snapshot by Undo",
@@ -269,6 +272,7 @@ exports[`the item-kind registry is complete > every capability is declared; a na
     "container": "an item, not a folder: it holds nothing",
     "favorite": "favorites are saved requests (one click away in the sidebar)",
     "flow": "integration flows are generated from collections and folders",
+    "run": "a server is connected (Connect), not run",
   },
   "metric": {
     "ci": "CI runs collections and test files",
@@ -394,7 +398,6 @@ exports[`the item-kind registry is complete > every capability is declared; a na
     "watch": "watched as its collection file",
   },
   "run": {
-    "ci": "a record of something that happened: it is kept or cleared, not edited",
     "container": "a record holds nothing to expand",
     "duplicate": "a record of something that happened: it is kept or cleared, not edited",
     "export": "records export as reports (HAR, HTML, JUnit), not bundles",
@@ -438,6 +441,7 @@ exports[`the item-kind registry is complete > every capability is declared; a na
     "monitor": "monitors run collections and test files on a schedule",
     "open-new-tab": "it opens in one place, not in editor tabs",
     "run": "nothing to run: it is used by what runs",
+    "test-file": "tests come from an API definition with Generate tests…",
   },
   "test": {
     "container": "an item, not a folder: it holds nothing",

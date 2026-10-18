@@ -218,7 +218,8 @@ describe('kind equivalence (REG-1 snapshots; unchanged by the registry adapters)
   });
 
   it('mergeWorkspaceTexts over the merge matrix', () => {
-    const col = (url: string, name = 'API') => JSON.stringify({ schemaVersion: '1.0', id: 'api', name, version: 0, variables: [], updatedAt: '', items: [{ kind: 'http', id: 'r1', name: 'R', request: { method: 'GET', url } }] });
+    const col = (url: string, name = 'API') =>
+      JSON.stringify({ schemaVersion: '1.0', id: 'api', name, version: 0, variables: [], updatedAt: '', items: [{ kind: 'http', id: 'r1', name: 'R', request: { method: 'GET', url } }] });
     const env = (v: string) => JSON.stringify({ id: 'e', name: 'E', variables: [{ key: 'a', value: v, enabled: true }] });
     const lib = (name: string, folders: string[] = []) => JSON.stringify({ schemaVersion: '1.0', folders, items: [{ id: 'i', name, data: {} }] });
     const cases: Array<[string, string, string, string]> = [

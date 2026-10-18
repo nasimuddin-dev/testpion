@@ -12,7 +12,9 @@ const stateText = (s: KindDescription['capabilities'][string]) => (s === true ? 
 export function registerKindsCommand(program: Command): void {
   program
     .command('kinds [kind]')
-    .description('list the kinds of item a workspace holds (collections, requests, test files, API definitions, datasets, MCP servers, monitors …) and what each offers: open, link, rename, move, delete with undo, run, monitor, CI, export …')
+    .description(
+      'list the kinds of item a workspace holds (collections, requests, test files, API definitions, datasets, MCP servers, monitors …) and what each offers: open, link, rename, move, delete with undo, run, monitor, CI, export …',
+    )
     .option('-w, --workspace <nameOrPath>', 'add facts about this workspace (default: the nearest workspace.json, if any)')
     .option('--all', 'also the kinds registered ahead of their release')
     .option('--json', 'print { kinds: [{ id, label, ref, storage, opens, capabilities, can, facets }], workspace } as JSON')
@@ -23,7 +25,11 @@ export function registerKindsCommand(program: Command): void {
         if (name) {
           const k = report.kinds[0]!;
           console.log(`${bold(k.label)} ${dim(`(${k.id}${k.aliases.length ? `; also ${k.aliases.join(', ')}` : ''})`)}`);
-          console.log(dim(`stored: ${k.storage.layout}${'dir' in k.storage ? ` in ${k.storage.dir}/` : 'file' in k.storage ? ` in ${k.storage.file}` : 'library' in k.storage ? ` in library/${k.storage.library}.json` : ''}`));
+          console.log(
+            dim(
+              `stored: ${k.storage.layout}${'dir' in k.storage ? ` in ${k.storage.dir}/` : 'file' in k.storage ? ` in ${k.storage.file}` : 'library' in k.storage ? ` in library/${k.storage.library}.json` : ''}`,
+            ),
+          );
           for (const [cap, s] of Object.entries(k.capabilities)) console.log(`  ${cap.padEnd(14)} ${stateText(s)}`);
           return;
         }
