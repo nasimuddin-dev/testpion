@@ -3,8 +3,9 @@
 const { withExpect } = require('../lib.cjs');
 
 const H = `
-  const bar = () => [...document.querySelectorAll('[data-json-expand-all], [data-json-collapse-all]')].filter((b) => b.offsetParent);
-  const state = () => bar().map((b) => b.hasAttribute('data-json-expand-all') ? 'expand' : 'collapse').join(',');
+  const bar = () => [...document.querySelectorAll('main [data-expand-collapse]')].filter((b) => b.offsetParent);
+  const side = () => [...document.querySelectorAll('aside [data-expand-collapse]')].filter((b) => b.offsetParent);
+  const state = () => bar().map((b) => b.getAttribute('data-expand-collapse')).join(',');
   const rows = () => document.querySelectorAll('main [role=treeitem], main [data-json-row]').length;
 `;
 const step = (name, body) => [name, `(async () => { ${H} ${body} })()`];
@@ -24,10 +25,19 @@ const steps = [
      const s1 = state(); bar()[0].click(); await __t.sleep(500);
      return s0 + ' → ' + s1 + ' → ' + state();`,
   ),
+  // the explorer has the same toggle (not a separate Collapse all): Collapse all first (a tree that is usually open), then the other after each press
+  step(
+    'explorer-same-toggle',
+    `const s = side(); if (s.length !== 1) return 'buttons: ' + s.length;
+     const first = s[0].getAttribute('data-expand-collapse'); s[0].click(); await __t.sleep(700);
+     const second = side()[0]?.getAttribute('data-expand-collapse'); side()[0]?.click(); await __t.sleep(700);
+     return first + ' → ' + second + ' → ' + side()[0]?.getAttribute('data-expand-collapse');`,
+  ),
 ];
 
 module.exports = withExpect(steps, {
   'open-and-send': /^buttons: 1 \((expand|collapse)\)$/,
   'one-button': /^one button$/,
+  'explorer-same-toggle': /^collapse → expand → collapse$/,
   'flips-both-ways': /^(expand|collapse) → (?!\1)(expand|collapse) → \1$/,
 });

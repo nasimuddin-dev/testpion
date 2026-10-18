@@ -1,4 +1,4 @@
-import { ArchiveRestore, ChevronsDownUp, Database, Download, FileCode2, FilePlus2, FolderPlus, Layers, PanelLeftClose, Plug, Plus, RefreshCw, Star, Upload } from 'lucide-react';
+import { ArchiveRestore, Database, Download, FileCode2, FilePlus2, FolderPlus, Layers, PanelLeftClose, Plug, Plus, RefreshCw, Star, Upload } from 'lucide-react';
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { call, on } from '../api';
 import { touchesFiles, type DataChangedEvent, type FileKind } from '../lib/data-changed';
@@ -17,6 +17,7 @@ import { fullCollection, refreshCollections, useCollectionTree } from '../lib/co
 import { ImportModal } from '../views/rest/dialogs';
 import { isDocView, useDocs } from '../lib/docs';
 import { IconButton, Input, Menu } from './ui';
+import { ExpandCollapseToggle } from './ExpandCollapseToggle';
 import { focusRow, KIND_COLOR, TreeBadge, treeKeys } from './TreeParts';
 import { usePersisted } from '../lib/sticky';
 import { copyText } from '../lib/clipboard';
@@ -700,9 +701,7 @@ export function Explorer() {
       </div>
       <div className="p-2 shrink-0 flex items-center gap-1">
         <Input className="flex-1 min-w-0 h-7 min-h-7 text-sm" placeholder="Filter" aria-label="Filter requests, connections, servers and definitions" value={filter} onChange={(e) => setFilter(e.target.value)} />
-        <IconButton label="Collapse all" className="h-7 w-7 shrink-0" onClick={() => (sections.set(everySection(), false), setCollapseAll((n) => n + 1))}>
-          <ChevronsDownUp size={14} />
-        </IconButton>
+        <ExpandCollapseToggle start="collapse" onExpand={() => (sections.set(everySection(), true), setExpandAll((n) => n + 1))} onCollapse={() => (sections.set(everySection(), false), setCollapseAll((n) => n + 1))} />
         <IconButton label="Recently deleted" className="h-7 w-7 shrink-0" onClick={() => setTrashOpen(true)}>
           <ArchiveRestore size={14} />
         </IconButton>

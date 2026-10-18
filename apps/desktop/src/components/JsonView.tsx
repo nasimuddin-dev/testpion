@@ -1,10 +1,11 @@
 import { detectLanguage, highlight as syntaxTokens, type CodeLanguage } from '../lib/highlight';
-import { Camera, ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, ChevronUp, CircleCheck, Copy, Equal, ListChecks, ListOrdered, Search, Shapes, Variable, WrapText } from 'lucide-react';
+import { Camera, ChevronDown, ChevronRight, ChevronUp, CircleCheck, Copy, Equal, ListChecks, ListOrdered, Search, Shapes, Variable, WrapText } from 'lucide-react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { JSONPath } from 'jsonpath-plus';
 import { cx, IconButton, Input, Menu, useDebounced, VirtualList, type MenuItem } from './ui';
 import { SuggestInput } from './SuggestInput';
 import { OutputToolbar } from './output/OutputToolbar';
+import { ExpandCollapseToggle } from './ExpandCollapseToggle';
 import { jsonPathProblem, jsonPaths, rootedJsonPath, suggestJsonPaths } from '../lib/json-paths';
 import { copyText } from '../lib/clipboard';
 import { plural } from '../lib/format';
@@ -193,15 +194,7 @@ export function JsonTree({ data: full, query, onAssert: assertOnFull, onSaveVari
       <OutputToolbar
         tools={
           <>
-            {allOpen ? (
-              <IconButton label="Collapse all" className="h-6 w-6" onClick={() => setExpanded(new Set(['$']))} data-json-collapse-all>
-                <ChevronsDownUp size={13} />
-              </IconButton>
-            ) : (
-              <IconButton label="Expand all" className="h-6 w-6" onClick={expandAll} data-json-expand-all>
-                <ChevronsUpDown size={13} />
-              </IconButton>
-            )}
+            <ExpandCollapseToggle size={13} className="h-6 w-6" canExpand={!allOpen} canCollapse={expanded.size > 1} onExpand={expandAll} onCollapse={() => setExpanded(new Set(['$']))} />
           </>
         }
         filter={

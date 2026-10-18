@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- The JSON tree's two buttons, Expand all and Collapse all, are one toggle: it offers Expand all until everything is open, then Collapse all.
+- Expand all and Collapse all are one toggle button, the same in the JSON tree and the explorer: it offers one, then the other after each press (the right-click menus keep both as items).
 - **The same row in every list**: collections, environments, AI providers, History entries and the Tests view's runs are now the one row the other trees use. <kbd>Shift</kbd>+<kbd>F10</kbd> and the menu key open the menu, <kbd>F2</kbd> renames, <kbd>Delete</kbd> deletes (with Undo), <kbd>*</kbd> expands, <kbd>Enter</kbd> opens, arrows, <kbd>Home</kbd>/<kbd>End</kbd> and typing a name move between rows. The runs list had no keyboard at all before.
 - **The keyboard stays where you were**: after deleting a row (key or menu) the focus moves to the next row, and Undo puts it on the restored row.
 - **One badge everywhere**: HTTP methods, protocols and file types (GET, GQL, gRPC, WS, MCP, AI, API, CSV …) are the same pill of the same width in the explorer, the Tests tree, History, the Runner and the Home view, in one colour per protocol that follows the light and dark themes.
