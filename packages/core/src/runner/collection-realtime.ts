@@ -1,3 +1,4 @@
+import { liveKinds } from '@testpion/shared';
 import type { Collection, CollectionNode, GrpcTest, KeyValue, LibraryItem, TestCase, WebSocketTest } from '../model/types.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 
@@ -117,8 +118,12 @@ export function savedConnectionToTest(item: LibraryItem<SavedConnection>, collec
   };
 }
 
-/** Library kinds whose items can belong to a collection. */
-export const COLLECTION_ITEM_KINDS = ['grpc', 'websocket'] as const;
+/** The libraries of a collection's own items: gRPC calls and connections. */
+export type CollectionItemLibrary = 'grpc' | 'websocket';
+/** Library kinds whose items can belong to a collection: the registry's library kinds whose parent is a collection. */
+export const COLLECTION_ITEM_KINDS = liveKinds()
+  .filter((k) => k.parent === 'collection' && k.storage.layout === 'library')
+  .map((k) => k.library) as readonly CollectionItemLibrary[];
 
 /**
  * A collection's gRPC calls and connections, for a TestPion collection file (`savedItems`): sharing the

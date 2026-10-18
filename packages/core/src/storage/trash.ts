@@ -6,6 +6,7 @@ import { shortId, slugify } from '../util/ids.js';
 import type { WorkspaceStore } from './workspace.js';
 import { readJson, renameOwned, writeJson } from './fsutil.js';
 import { COLLECTION_ITEM_KINDS } from '../runner/collection-realtime.js';
+import { kindsWith, type KindId } from '@testpion/shared';
 
 /**
  * Recently deleted collections, environments, datasets, API definitions (specs/) and MCP servers. Deleting moves the
@@ -14,7 +15,8 @@ import { COLLECTION_ITEM_KINDS } from '../runner/collection-realtime.js';
  * collection's gRPC calls and connections stay in the library, hidden, and come back with it; purged, they are deleted
  * with it. An MCP server keeps its id and its place in the list; an API definition its path.
  */
-export type TrashKind = 'collection' | 'environment' | 'dataset' | 'spec' | 'mcp-server';
+/** The kinds whose `trash` capability is true in the item-kind registry (each needs a KindDef below). */
+export type TrashKind = Extract<KindId, 'collection' | 'environment' | 'dataset' | 'spec' | 'mcp-server'>;
 export const TRASH_DAYS = 30;
 
 export interface TrashItem {
@@ -160,7 +162,9 @@ const KINDS: Record<TrashKind, KindDef> = {
   },
 };
 
-const TRASH_KINDS = Object.keys(KINDS) as TrashKind[];
+/** The registry's kinds with the `trash` capability, in its order; each one must have its KindDef here. */
+const TRASH_KINDS = kindsWith('trash').map((k) => k.id) as TrashKind[];
+for (const k of TRASH_KINDS) if (!KINDS[k]) throw new Error(`The kind ${k} has the trash capability but no trash entry`);
 
 /** The kinds Recently deleted keeps, in words ("collections, environments, … and MCP servers"), for help texts. */
 export function trashKindsText(): string {
