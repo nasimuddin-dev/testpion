@@ -195,7 +195,7 @@ export function RunPanel({ runId, expectedTotal, onRerunFailed, focusName }: { r
           {!done && progress.running > 0 && <span className="text-muted text-xs">{progress.running} running</span>}
         </span>
         {s?.environment && <EnvBadge name={s.environment} className="text-xs max-w-48" />}
-        <OutputActions spec={spec} className="flex-wrap">
+        <OutputActions spec={spec} wrap>
           {done && (
           <>
             {onRerunFailed && s && s.failed + s.errors > 0 && (

@@ -255,6 +255,9 @@ describe('file names', () => {
 
   it('prefixes Windows reserved device names, with or without an extension', () => {
     for (const n of ['CON', 'con.txt', 'PRN.json', 'aux', 'NUL.tar.gz', 'COM1', 'lpt9.csv']) expect(sanitizeFileName(n), n).toBe(`_${n}`);
+    for (const n of ['CONIN$', 'conout$.txt']) expect(sanitizeFileName(n), n).toBe(`_${n}`);
+    // Windows ignores trailing spaces before the extension: still the device
+    expect(sanitizeFileName('CON .txt')).toBe('_CON.txt');
     expect(sanitizeFileName('console.txt')).toBe('console.txt');
     expect(sanitizeFileName('COM10.txt')).toBe('COM10.txt');
   });
@@ -271,6 +274,16 @@ describe('file names', () => {
 
   it('keeps right-to-left text and NFC-normalises', () => {
     expect(sanitizeFileName('تقرير.html')).toBe('تقرير.html');
+    // macOS hands out decomposed (NFD) names: the same name, NFC, whatever the source
+    expect(sanitizeFileName('résumé.pdf')).toBe('résumé.pdf');
+    // ':' is a separator on macOS (Finder) and reserved on Windows
+    expect(sanitizeFileName('10:30 report.md')).toBe('10-30 report.md');
+  });
+
+  it('drops invisible bidi and zero-width characters that disguise the extension, keeps ZWJ emoji', () => {
+    expect(sanitizeFileName('invoice‮fdp.exe')).toBe('invoicefdp.exe');
+    expect(sanitizeFileName('a​b⁦c⁩﻿.txt')).toBe('abc.txt');
+    expect(sanitizeFileName('👨‍👩‍👧.json')).toBe('👨‍👩‍👧.json');
     expect(sanitizeFileName('é.txt')).toBe('é.txt');
   });
 

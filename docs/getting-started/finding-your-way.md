@@ -54,7 +54,7 @@ In **History**, select an entry and choose **Open** (or double-click it): it ope
 
 ## Console, Traces and History
 
-They name each other. A Console line (expand it) links to the saved request it was sent from, its History entry, its trace and, for a run's request, the run at that result; **Open as request** opens what was sent in its editor. A trace's header names its request and History entry (or its run). History's menu opens the request and the trace.
+They name each other. A Console line (expand it) links to the saved request it was sent from, its History entry, its trace and, for a run's request, the run at that result; **Open as request** opens what was sent in its editor. A trace's header names its request and History entry (or its run). History's menu opens the request and the trace. The Console's down arrow saves its lines (as text or JSON Lines), always with secrets masked.
 
 ## The Git view
 
@@ -93,6 +93,10 @@ Results that name an item carry a `ref`, the same object everywhere: MCP tool re
 | `capture` | `name` | a Debugger capture session saved as `debugger/<name>.har`, opened in the Debugger |
 
 The `resolve_ref` MCP tool says whether a ref still exists, its name, and the `testpion://` link that opens it in the app; when it is gone, why and what to open instead (`next`).
+
+## Save what you see {#save-what-you-see}
+
+Every response and result keeps its **down arrow** in the same place: the right end of its bar, after the view's own tools, with **Copy** before it and **▾** (the other formats) after it. That holds for a response's tabs, gRPC, GraphQL, message logs, MCP tool results, run results, timelines, grids, load results, the evaluation matrix, and the bottom panel's Console, Logs, Terminal and Problems. <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> saves the one nearest to where you last clicked; the palette's **Download Output…** and **File ▸ Download Output…** open its formats. A **Redacted** mark beside it means secrets are masked in the file. See [Save and export results](/getting-started/save-and-export-results).
 
 ## Menus and shortcuts
 

@@ -36,6 +36,7 @@ Switching to another workspace closes the terminals (they ran in the old workspa
 - **Copy**: selecting text copies it; <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd> copies too. <kbd>Ctrl</kbd>+<kbd>C</kbd> goes to the shell (it stops the running command).
 - **Paste**: <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd>, or right-click (right-click copies instead when text is selected).
 - **Links**: web addresses open in your browser; a path in the workspace opens what it is: `tests/smoke.yaml:12` the test file in **Tests**, `specs/…` the API definition, `datasets/…` the dataset, `collections/<id>.json` the collection, any other file in **Git**. Absolute paths inside the workspace folder work too.
+- **Save the transcript**: the down arrow at the right end of the bar saves what the shown terminal holds (its scrollback as text) through the **Save as** dialog, and **Copy** beside it copies it. Tokens, passwords and Authorization headers are masked (the **Redacted** mark); **▾ ▸ Include secrets…** keeps them after you confirm. See [Save and export results](/getting-started/save-and-export-results).
 - **Clear** (eraser) empties the screen; **Kill** (bin) ends the shell and closes its terminal. Keys typed in a terminal (<kbd>Ctrl</kbd>+<kbd>K</kbd>, <kbd>Ctrl</kbd>+<kbd>R</kbd> …) go to the shell, not to the app.
 - The terminals keep running, and keep their output, while you look at the Console or Logs or close the panel.
 

@@ -18,6 +18,7 @@ subscription OnPatientUpdated($id: ID!) {
 - **Protocols:** both in use are offered and the server picks one: `graphql-transport-ws` (the graphql-ws library, used by Apollo Server 4, GraphQL Yoga, Hasura …) and the older `graphql-ws` (subscriptions-transport-ws). The one in use is shown above the events.
 - **Auth:** the Auth tab and Headers are sent with the WebSocket handshake. For servers that read credentials from the first message instead, put them in the **Connection** tab: it's the `connection_init` payload, e.g. `{ "authorization": "Bearer {{token}}" }`.
 - Variables and `{{variables}}` work as for queries. Secret values are masked in the event list.
+- **Save the events:** the down arrow on the events' bar saves every event kept as JSON Lines or JSON ([Save and export results](/getting-started/save-and-export-results)).
 
 ## In test files and collection runs
 

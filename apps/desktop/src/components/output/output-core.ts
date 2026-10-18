@@ -42,6 +42,11 @@ export interface OutputSpec {
   environment?: string;
   /** It came from a production environment (said in the menu and the toast). */
   production?: boolean;
+  /**
+   * What the window holds is already masked (e.g. a code snippet generated without "Show secrets"): "Include secrets…"
+   * could not put anything back, so it is not offered. It can only take the item away, never weaken the backend's policy.
+   */
+  masked?: boolean;
 }
 
 export const formatKey = (f: OutputFormatSpec) => f.key ?? f.format;
@@ -141,7 +146,7 @@ export async function saveOutput(spec: OutputSpec, f: OutputFormatSpec, opts: { 
 export async function saveWithSecrets(spec: OutputSpec, f: OutputFormatSpec, key?: string): Promise<void> {
   const ok = await confirmAction({
     title: 'Include secrets in the file?',
-    message: `The ${spec.what} is saved with the values that are masked by default: Authorization and cookie headers, tokens, API keys and the values of secret variables. Anyone with the file can use them.`,
+    message: `Saving the ${spec.what} keeps the values that are masked by default: Authorization and cookie headers, tokens, API keys and the values of secret variables. Anyone with the file can use them.`,
     confirmLabel: 'Save with secrets',
     danger: true,
   });
@@ -176,14 +181,15 @@ export async function copyOutput(spec: OutputSpec, f: OutputFormatSpec): Promise
 
 /** Each mounted control, by its button: what Ctrl+Shift+S and the palette run. */
 const controls = new Map<HTMLElement, { download(): void; openMenu(): void }>();
-let lastTarget: Element | null = null;
+/** Where the person last clicked or focused: weakly held, so a panel closed since is not kept alive by it. */
+let lastTarget: WeakRef<Element> | undefined;
 let tracking = false;
 
 function track(): void {
   if (tracking) return;
   tracking = true;
   const note = (e: Event) => {
-    if (e.target instanceof Element) lastTarget = e.target;
+    if (e.target instanceof Element) lastTarget = new WeakRef(e.target);
   };
   document.addEventListener('pointerdown', note, true);
   document.addEventListener('focusin', note, true);
@@ -201,7 +207,8 @@ const visible = (el: HTMLElement) => el.isConnected && !el.closest('[hidden], [a
 function focusedControl(): { download(): void; openMenu(): void } | undefined {
   const shown = [...controls.entries()].filter(([b]) => visible(b));
   if (!shown.length) return undefined;
-  for (let el = lastTarget?.isConnected ? lastTarget : null; el; el = el.parentElement) {
+  const last = lastTarget?.deref();
+  for (let el: Element | null = last?.isConnected ? last : null; el; el = el.parentElement) {
     const near = shown.find(([b]) => el!.contains(b));
     if (near) return near[1];
   }

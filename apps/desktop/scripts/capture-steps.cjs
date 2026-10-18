@@ -1055,6 +1055,123 @@ tests:
   await clickOn(`__cap.all('[role=dialog] button').find((b) => __cap.text(b) === 'Close')`, 'Close');
   await until(`!__cap.one('[data-proposal]')`, 'the review to close');
 
+  // ---------------------------------------------------------------- save and export every output (0.51): the down arrow
+  // The Save as dialog answers with a file in a folder that names nobody (the message shows the path); the files are
+  // removed afterwards.
+  {
+    const { dialog } = require('electron');
+    const saveDir = process.platform === 'win32' ? join(process.env.PUBLIC || 'C:\\Users\\Public', 'Documents') : '/tmp';
+    const savedFiles = [];
+    const realSaveDialog = dialog.showSaveDialog;
+    dialog.showSaveDialog = async (a, b) => {
+      const filePath = join(saveDir, require('node:path').basename(String((b ?? a)?.defaultPath ?? 'output.txt')));
+      savedFiles.push(filePath);
+      return { canceled: false, filePath };
+    };
+    /** Open an output's ▾ and wait for these formats in it. */
+    const formatsMenu = async (id, expect) => {
+      await clickOn(`__cap.one('[data-output-formats="${id}"]:not([disabled])')`, `the ▾ of ${id}`);
+      await until(`(() => { const m = __cap.all('[role=menu] [role=menuitem]').map((x) => __cap.text(x)); return ${J(expect)}.every((e) => m.some((t) => t.startsWith(e))); })()`, `the formats of ${id}`);
+    };
+    const closeMenu = async () => {
+      await js(`__cap.key('Escape'); true`);
+      await until(`!__cap.all('[role=menu]').length`, 'the menu to close');
+    };
+    const closeToasts = async () => {
+      await js(`__cap.all('[data-sonner-toast] [aria-label="Close toast"]').forEach((c) => c.click()); true`);
+      await until(`!__cap.all('[data-sonner-toast]').length`, 'the messages to close', 15000);
+    };
+    const holdToast = (hold) =>
+      js(`(() => { const t = __cap.one('[data-sonner-toast]'); t?.dispatchEvent(new MouseEvent(${J(hold ? 'mouseover' : 'mouseout')}, { bubbles: true, relatedTarget: ${hold ? 'null' : 'document.body'} })); return true; })()`);
+    try {
+      // the console in the bottom panel: saved with secrets masked (the Redacted mark, no Include secrets…)
+      await nav('Tests');
+      if (!(await js(`!!__cap.one('[data-bottom-tab=console]')`))) await clickSel('[data-status=problems]', 'the Problems count');
+      await clickSel('[data-bottom-tab=console]', 'the Console tab');
+      await until(`__cap.one('[data-output-control="console"] [data-output-redacted]') && __cap.one('[data-output-download="console"]:not([disabled])')`, 'the console with its Redacted mark');
+      await shot('output-console-redacted');
+      await clickSel('[data-bottom-panel] button[aria-label="Close panel"]', 'Close panel');
+      await until(`!__cap.one('[data-bottom-panel]')`, 'the bottom panel to close');
+
+      // a run's results: HTML report, JSON, JUnit, Markdown, CSV, ZIP (what replaced Export ▾)
+      await clickOn(`__cap.all('main [role=tab]').filter((x) => __cap.text(x).startsWith('Runs')).pop()`, 'the Runs tab');
+      await clickOn(allRun, 'the run of all tests in Runs');
+      await until(`__cap.one('[data-output-download="run.results"]:not([disabled])')`, 'the run results with their down arrow');
+      await formatsMenu('run.results', ['HTML report', 'JSON results', 'JUnit XML', 'Markdown summary', 'Results (CSV)', 'All reports (ZIP)']);
+      await shot('output-run-results');
+      await closeMenu();
+
+      // the JWT tab: redacted by default, ▾ ▸ Include secrets… asks first
+      await nav('Collections');
+      await showExplorer();
+      await openRequest('Get access token');
+      await sendAndWait();
+      await responseTab('JWT');
+      await until(`__cap.screen().includes('Decoded locally') && __cap.one('[data-output-control="response.jwt"] [data-output-redacted]')`, 'the decoded token with its Redacted mark');
+      await formatsMenu('response.jwt', ['JSON', 'Include secrets']);
+      await clickOn(`__cap.all('[role=menu] [role=menuitem]').find((m) => __cap.text(m).startsWith('Include secrets'))`, 'Include secrets…');
+      await clickOn(`__cap.all('[role=menu]').find((m) => !__cap.text(m).includes('Include secrets'))?.querySelector('[role=menuitem]')`, 'JSON in the Include secrets… menu');
+      const confirm = `__cap.all('[role=dialog], [role=alertdialog]').find((d) => __cap.text(d).includes('Include secrets in the file?'))`;
+      await until(confirm, 'the Include secrets confirmation');
+      await shot('output-include-secrets');
+      await clickOn(`[...(${confirm}).querySelectorAll('button')].find((b) => __cap.text(b) === 'Cancel')`, 'Cancel');
+      await until(`!(${confirm})`, 'the confirmation to close');
+
+      // the response body's ▾: JSON pretty or minified, the raw bytes, the table as CSV or TSV, HAR
+      await openRequest('List patients');
+      await sendAndWait();
+      await click('Pretty', 'main [role=radio]');
+      await until(`__cap.screen().includes('"total"')`, 'the JSON tree');
+      await formatsMenu('response.body', ['JSON (pretty)', 'JSON (minified)', 'Raw body', 'Table as CSV', 'Table as TSV', 'HAR']);
+      await shot('output-format-menu');
+      await closeMenu();
+
+      // a click on the arrow saves the default format: the message says where, with Show in folder and Open
+      await clickOn(`__cap.one('[data-output-download="response.body"]:not([disabled])')`, 'the down arrow of the response body');
+      await until(`__cap.all('[data-sonner-toast]').some((t) => /^Response body saved to /.test(__cap.text(t)) && /Show in folder/.test(__cap.text(t)))`, 'the message after saving');
+      await holdToast(true);
+      await shot('output-saved-toast', { toasts: true });
+      await holdToast(false);
+      await closeToasts();
+
+      // the timeline's ▾: JSON, HAR with timings, Markdown
+      await responseTab('Timeline');
+      await until(`__cap.screen().includes('waiting (TTFB)')`, 'the timeline');
+      await formatsMenu('response.timeline', ['JSON', 'HAR (with timings)', 'Markdown']);
+      await shot('output-timeline-menu');
+      await closeMenu();
+      await responseTab('Body');
+
+      // gRPC: the response, metadata and trailers in one ▾ (server reflection of the demo PetService)
+      await js(`(() => { const p = __cap.one('[aria-label="New tab"]'); p.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, pointerType: 'mouse' })); return true; })()`);
+      await click('gRPC', '[role=menuitem]');
+      const target = `__cap.one('main input[aria-label="gRPC server"]')`;
+      await until(target, 'the gRPC editor');
+      await js(`__cap.input(${target}, '127.0.0.1:4014'); true`);
+      const reflect = `__cap.all('main button').find((b) => __cap.text(b) === 'Use server reflection' && !b.disabled)`;
+      await until(`${reflect} || ((__cap.all('main [role=tab]').find((x) => /proto|definition|service/i.test(__cap.text(x))))?.click(), false)`, 'Use server reflection');
+      await clickOn(reflect, 'Use server reflection');
+      const method = `__cap.one('main select[aria-label="Method"]')`;
+      await until(`[...${method}.options].some((o) => /GetPet$/.test(o.value))`, 'the methods from reflection', 20000);
+      await js(`__cap.input(${method}, [...${method}.options].find((o) => /GetPet$/.test(o.value)).value); true`);
+      await until(`/GetPet$/.test(${method}.value)`, 'GetPet chosen');
+      await js(`(() => { const ed = window.__monaco?.editor.getEditors().find((e) => e.getDomNode()?.offsetParent && e.getDomNode().closest('main')); ed?.setValue('{ "id": "1" }'); return true; })()`);
+      await click('Invoke', 'main button');
+      await until(`__cap.one('[data-output-download="grpc.response"]:not([disabled])') && __cap.screen().includes('Byron')`, 'the gRPC response', 20000);
+      await formatsMenu('grpc.response', ['Response (JSON)', 'Metadata (JSON)', 'Metadata (CSV)', 'Trailers (JSON)', 'Trailers (CSV)', 'Everything']);
+      await shot('output-grpc-menu');
+      await closeMenu();
+      // the gRPC tab closed again, so the shots after these show the request editors as before
+      await clickSel('[aria-label="Close New gRPC request"]', 'the close button of the gRPC tab');
+      await until(`!__cap.one('[aria-label="Close New gRPC request"]')`, 'the gRPC tab to close');
+      await clickOn(`__cap.all('[role=tablist][aria-label="Open requests"] [role=tab]').find((t) => __cap.text(t).includes('Get patient'))`, 'the Get patient tab');
+      await until(`__cap.all('[role=tablist][aria-label="Open requests"] [role=tab][aria-selected="true"]').some((t) => __cap.text(t).includes('Get patient'))`, 'the Get patient tab on screen');
+    } finally {
+      dialog.showSaveDialog = realSaveDialog;
+      for (const f of savedFiles) require('node:fs').rmSync(f, { force: true });
+    }
+  }
+
   // ---------------------------------------------------------------- nothing lost, nothing leaked (0.50)
   await nav('Collections');
   await showExplorer();

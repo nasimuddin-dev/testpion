@@ -8,7 +8,7 @@ import { Badge, cx, IconButton, Input, Segmented, statusTone } from './ui';
 import { useEventLog } from '../lib/use-rpc';
 import { RelatedRefs } from './RefLink';
 import { outputFileName, type ItemRef } from '@testpion/shared';
-import { OutputActions } from './output/OutputFrame';
+import { OutputActions, OutputBarStart } from './output/OutputFrame';
 import type { OutputSpec } from './output/output-core';
 
 export interface ConsoleEntry {
@@ -90,7 +90,8 @@ export function ConsolePanel() {
 
   return (
     <>
-      <div className="flex items-center gap-2 px-3 h-8 border-b border-line text-xs shrink-0">
+      <div className="flex items-center gap-2 px-3 h-8 border-b border-line text-xs shrink-0 min-w-0 overflow-clip whitespace-nowrap">
+        <OutputBarStart>
         <Segmented
           label="Show"
           size="xs"
@@ -103,9 +104,10 @@ export function ConsolePanel() {
           ]}
         />
         <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filter by URL, status or log text" aria-label="Filter console" className="h-6 min-h-0 text-xs w-64" />
-        <span className="text-muted">
+        <span className="text-muted truncate min-w-0">
           {shown.length} of {entries.length} · secrets are redacted
         </span>
+        </OutputBarStart>
         <OutputActions spec={spec}>
           <IconButton
             label="Clear console"

@@ -38,6 +38,14 @@ Reflection `v1` is used, with `v1alpha` as a fallback. A server without reflecti
 
 Streamed responses appear **as they arrive**, one row per message with its arrival time. Click a row to see the message in full. **Stop** cancels the call and keeps the messages received so far (status `CANCELLED`).
 
+## Save the response {#save-the-response}
+
+The down arrow at the right end of the **Response** / **Metadata** / **Trailers** tab bar saves the tab you are on: the response as JSON (a stream's messages as JSON Lines), the metadata or the trailers as JSON or CSV. Its **▾** lists them all, and **Everything (JSON)** writes the response, metadata and trailers in one file; **Copy** sits before it. See [Save and export results](/getting-started/save-and-export-results).
+
+<figure class="aps-screenshot">
+  <img src="/images/output-grpc-menu.jpg" alt="A gRPC call's response with the down arrow's ▾ menu open: Response (JSON), Metadata (JSON), Metadata (CSV), Trailers (JSON), Trailers (CSV) and Everything (JSON)" width="1440" height="900" loading="lazy">
+</figure>
+
 ## Messages
 
 Messages use the JSON form of the proto fields, keeping their original names (`owner_id`):

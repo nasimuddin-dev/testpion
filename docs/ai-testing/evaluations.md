@@ -88,6 +88,8 @@ Run the same dataset through several variants (a saved evaluation per prompt or 
 
 The backend keeps the matrix and the window asks for the rows on screen, so 5,000 cases × 10 variants scroll as fast as 50.
 
+**Save the matrix.** The down arrow at the right end of the matrix's bar saves every case as it is filtered and sorted now (each variant's status, score and change) as CSV, JSON, Markdown or a self-contained HTML table; the backend writes the rows page by page, so a big matrix never passes through the window. A run's own results have the same arrow (HTML report, JSON, JUnit, Markdown, CSV, ZIP). See [Save and export results](/getting-started/save-and-export-results).
+
 From the terminal and CI, `eval compare` exits `1` when more cases regressed than allowed:
 
 ```bash

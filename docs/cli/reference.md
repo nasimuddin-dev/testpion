@@ -109,6 +109,12 @@ Every command that takes `--json` prints **one envelope** on stdout, whatever ha
 
 `testpion agent-info` prints its JSON as before (it has no `--json`).
 
+## Results as files {#results-as-files}
+
+The commands that already write files: `test`, `run-collection` and `eval run` (`-o, --out <dir>` and `-r` for the JUnit, JSON, HTML and Markdown reports), `report` (reports from a `results.jsonl`), `load --json <file>`, `history export-har -o <file>`, `debug -o <file.har>`, `flow report <file> --html <out>`, `export` / `workspace export` and `docs -o`. Anything else prints to stdout, so `testpion send … > body.json` keeps a body.
+
+**Coming in release B (not in 0.51):** `--out <file> --format …` on every command that prints a result, with the formats and redaction of the app's down arrow ([Save and export results](/getting-started/save-and-export-results)), and MCP tools that save a big result into the workspace's `exports/` folder.
+
 ## `test` / `run` options
 
 | Option | Description |

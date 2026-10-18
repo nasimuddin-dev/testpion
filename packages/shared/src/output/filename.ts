@@ -3,7 +3,14 @@
  * Pure string work (no path module): the name is never a path, whatever the platform.
  */
 
-const RESERVED = /^(con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³])(\..*)?$/i;
+const RESERVED = /^(con|prn|aux|nul|conin\$|conout\$|com[1-9¹²³]|lpt[1-9¹²³])(\..*)?$/i;
+/**
+ * Invisible format characters that make a name read differently from what it is: bidi overrides and isolates (U+202E
+ * turns `invoice‮fdp.exe` into "invoiceexe.pdf" on screen), marks, zero-width space, word joiner and BOM. ZWJ / ZWNJ
+ * stay: emoji sequences and Persian or Indic words need them.
+ */
+// eslint-disable-next-line no-misleading-character-class
+const INVISIBLE = /[​‎‏‪-‮⁠-⁤⁦-⁩﻿]/g;
 const MAX_BASE_BYTES = 120;
 const MAX_NAME_BYTES = 200;
 
@@ -22,11 +29,14 @@ function cutBytes(s: string, max: number): string {
 
 /**
  * A safe file name: no path separators, reserved characters or control characters (each run becomes one `-`), no
- * leading / trailing spaces or dots (Windows drops a trailing dot), Windows' reserved device names prefixed with `_`,
+ * invisible bidi / zero-width characters, no leading / trailing spaces or dots (Windows drops a trailing dot), Windows'
+ * reserved device names (CON, NUL, COM1, CONIN$ …, also with an extension or trailing spaces) prefixed with `_`,
  * NFC-normalised, the base at most 120 UTF-8 bytes and the whole name at most 200 (the extension is always kept).
  */
 export function sanitizeFileName(name: string, fallback = 'output'): string {
-  let s = String(name ?? '').normalize('NFC');
+  let s = String(name ?? '')
+    .normalize('NFC')
+    .replace(INVISIBLE, '');
   // eslint-disable-next-line no-control-regex
   s = s.replace(/[<>:"/\\|?*\u0000-\u001F\u007F]+/g, '-');
   s = s.replace(/\s+/g, ' ').replace(/-{2,}/g, '-');

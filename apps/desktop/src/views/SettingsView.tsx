@@ -133,7 +133,7 @@ export function SettingsView() {
               <Field label="Default timeout (ms)">
                 <Input type="number" value={s.defaultTimeoutMs} onChange={(e) => set({ defaultTimeoutMs: Number(e.target.value) })} />
               </Field>
-              <Field label="Maximum response preview (MB)" hint="Larger bodies are streamed to disk and truncated in the viewer; use “Save response” for the full payload.">
+              <Field label="Maximum response preview (MB)" hint="Larger bodies are streamed to disk and truncated in the viewer; use the download arrow on the response bar for the full payload.">
                 <Input type="number" step="0.5" value={s.maxPreviewBytes / 1024 / 1024} onChange={(e) => set({ maxPreviewBytes: Math.max(0.1, Number(e.target.value)) * 1024 * 1024 })} />
               </Field>
               <Field label="Log level" hint="Secrets are redacted at every level, so DEBUG/TRACE are safe to enable.">

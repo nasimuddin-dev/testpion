@@ -40,7 +40,7 @@ import { refIcon } from './RefLink';
 import { openRef } from '../lib/open-ref';
 import { rankPalette } from '../lib/palette-rank';
 import { outputFileName, toItemRef } from '@testpion/shared';
-import { OutputActions } from './output/OutputFrame';
+import { OutputActions, OutputBarStart } from './output/OutputFrame';
 import type { OutputSpec } from './output/output-core';
 // xterm and the terminals load with the Terminal tab, the first time it opens
 const TerminalPanel = lazy(() => import('./TerminalPanel'));
@@ -315,8 +315,10 @@ function AppLogs() {
   );
   return (
     <>
-      <div className="flex items-center gap-2 px-3 h-7 border-b border-line text-xs shrink-0">
-        <span className="text-muted">Application logs · secrets are always redacted</span>
+      <div className="flex items-center gap-2 px-3 h-7 border-b border-line text-xs shrink-0 min-w-0 overflow-clip whitespace-nowrap">
+        <OutputBarStart>
+          <span className="text-muted truncate min-w-0">Application logs · secrets are always redacted</span>
+        </OutputBarStart>
         <OutputActions spec={spec}>
           <select className="bg-transparent" value={level} onChange={(e) => setLevel(e.target.value)} aria-label="Log level">
             {['ALL', 'ERROR', 'WARN', 'INFO', 'DEBUG', 'TRACE'].map((l) => (

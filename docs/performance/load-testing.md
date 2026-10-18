@@ -13,6 +13,8 @@ Every finished load test is kept in the workspace (`runs/load/history.jsonl`, th
 
 LLM targets also report tokens per second, input and output tokens, estimated cost, time to first token, time between tokens and total generation time.
 
+**Save the results.** The down arrow at the right end of the results' bar saves them as JSON (the configuration, the pass rules and every number); its **▾** has CSV tables (per request, or per step for a flow, status codes, per second), one self-contained HTML page with all the tables, and Markdown. See [Save and export results](/getting-started/save-and-export-results).
+
 **Environment:** the **Environment** field picks what a load test runs against ([the same picker everywhere](/getting-started/finding-your-way#the-environment-the-same-way-everywhere), **PRODUCTION** in red); it starts on the active environment. The result's header shows the environment the run used as a badge, and `testpion load --json` / `load_test` name the `environment`.
 
 **Safeguards:** by default, only localhost and private-network hosts can be targeted. Remote hosts require an explicit opt-in (**Allow remote hosts**, `--allow-remote`) and a confirmation. A load test against an environment marked as production asks first, with the same question as every send and run ([Production](/api-testing/environments#production)): the Load view no longer has a production switch of its own. From the terminal it needs `--allow-production` for data-changing requests. The number of virtual users is capped in Settings. Only load test systems you own or are authorised to test.

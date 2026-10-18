@@ -27,6 +27,8 @@ function prepare(ws) {
     request: { method: 'GET', url: `${DEMO}${paths[i]}`, headers: [{ key: 'Accept', value: 'application/json', enabled: true }] },
   }));
   items.push({ kind: 'http', id: 'soak-large', name: 'soak-large', request: { method: 'GET', url: `${DEMO}/large?mb=2`, headers: [] } });
+  // saved with the down arrow every cycle: big enough (20 MB) for the progress toast and its Cancel
+  items.push({ kind: 'http', id: 'soak-big', name: 'soak-big', request: { method: 'GET', url: `${DEMO}/large?mb=20`, headers: [] } });
   // deleted and brought back with the undo message every cycle
   items.push({ kind: 'http', id: 'soak-undo', name: 'soak-undo', request: { method: 'GET', url: `${DEMO}/health?undo=1`, headers: [] } });
   // a saved Debugger session, opened in a tab of its own every cycle
@@ -248,6 +250,48 @@ const cycle = (c) => {
        await closeAll();
        return 'modes ' + seen.join(',') + ' | response ' + !!ok + ' | ms ' + ms(t0);`,
     ),
+    // the down arrow (planning/output-export.md): its ▾ menu opened and closed, a save to the stubbed dialog, a cancelled
+    // dialog, a 20 MB save with progress cancelled from its toast; no toast, listener or job may be left behind
+    r(
+      `${p}-output`,
+      `await ensureSoak(); if (!(await openReq('soak-big'))) return 'NO TAB';
+       const t0 = performance.now(); const out = [];
+       const dl = () => vis('[data-output-download="response.body"]')[0];
+       const toasts = () => [...document.querySelectorAll('[data-sonner-toast]')];
+       const closeToasts = async () => { for (const t of document.querySelectorAll('[data-sonner-toast] [aria-label="Close toast"]')) t.click(); await __t.waitFor(() => !toasts().length, 3000); };
+       // the tab's Send is ready (its editor mounted) before it is clicked; then the response of this send, not a stale one
+       const send = await __t.waitFor(() => button('Send') && !button('Send').disabled && button('Send'), 8000);
+       if (!send) { await closeAll(); return 'NO SEND BUTTON'; }
+       send.click();
+       if (!(await __t.waitFor(() => dl() && !dl().disabled && button('Send') && !button('Send').disabled, 60000))) { await closeAll(); return 'NO RESPONSE'; }
+       await closeToasts();
+       await __t.real.click(vis('[data-output-formats="response.body"]')[0]);
+       out.push('menu ' + !!(await __t.waitFor(() => vis('[role=menuitem]').length > 0, 3000)));
+       await __t.real.key('Escape'); await __t.waitFor(() => !vis('[role=menu]').length, 2000);
+       // a save, cancelled from its progress toast (or its ✕ beside the arrow) once it has started
+       await __t.real.click(dl());
+       const cancel = await __t.waitFor(() => toasts().map((t) => t.querySelector('button[data-button]')).find((b) => b?.textContent.trim() === 'Cancel') ?? vis('[data-output-cancel]')[0], 15000);
+       if (cancel) cancel.click();
+       const cancelled = await __t.waitFor(() => toasts().some((t) => /Saving was cancelled/.test(t.textContent)) || (dl() && !dl().disabled && !vis('[data-output-cancel]').length), 20000);
+       out.push('big save cancelled ' + !!cancel + ' ' + !!cancelled);
+       await __t.waitFor(() => dl() && !dl().disabled, 20000); await closeToasts();
+       // a save to the stub, to the end (the default format)
+       await __t.real.click(dl());
+       out.push('saved ' + !!(await __t.waitFor(() => toasts().some((t) => / saved to /.test(t.textContent)), 60000)));
+       await closeToasts();
+       return out.join(' | ') + ' | ms ' + ms(t0);`,
+    ),
+    [`${p}-output-arm-cancel`, `main:process.env.E2E_STUB_SAVE_KEEP = process.env.E2E_STUB_SAVE; process.env.E2E_STUB_SAVE = 'CANCEL'; return 'armed';`, false],
+    r(
+      `${p}-output-dialog-cancelled`,
+      `const dl = () => vis('[data-output-download="response.body"]')[0];
+       if (!dl()) { await closeAll(); return 'NO CONTROL'; }
+       await __t.real.click(dl()); await __t.waitFor(() => !dl()?.disabled, 5000); await __t.sleep(300);
+       const left = [...document.querySelectorAll('[data-sonner-toast]')].length;
+       await closeAll();
+       return 'dialog cancelled, toasts ' + left;`,
+    ),
+    [`${p}-output-disarm`, `main:process.env.E2E_STUB_SAVE = process.env.E2E_STUB_SAVE_KEEP; return 'restored';`, false],
     // every rail view once
     r(
       `${p}-views`,
@@ -711,6 +755,8 @@ const steps = [...setup];
 for (let c = 1; c <= CYCLES; c++) steps.push(...cycle(c));
 // the AI surfaces use the examples' offline demo model (no network, no key)
 steps.settings = { assistantProvider: 'demo', assistantModel: 'demo' };
+// the down arrow's saves go to this file (the Save-as dialog is stubbed)
+steps.env = (out) => ({ E2E_STUB_SAVE: join(process.env.SOAK_OUT || out, 'soak-output.out') });
 steps.prepare = (ws, out) => {
   prepare(ws);
   if (process.env.SOAK_OUT) mkdirSync(process.env.SOAK_OUT, { recursive: true });

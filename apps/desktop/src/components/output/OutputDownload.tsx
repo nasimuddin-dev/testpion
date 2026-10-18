@@ -48,8 +48,8 @@ export function OutputDownload({ spec: given }: { spec: OutputSpec }) {
   const job = running.get(key) ?? running.get(spec.id);
   const info = outputSurface(spec.id);
   const redactedByDefault = info?.redaction === 'redacted-default';
-  // the console and the log never hold the secrets: "Include secrets…" would save the same masked file
-  const canIncludeSecrets = redactedByDefault && !info?.capturedRedacted;
+  // the console, the log, run reports, traces … never hold the secrets: "Include secrets…" would save the same masked file
+  const canIncludeSecrets = redactedByDefault && !info?.capturedRedacted && !spec.masked;
   const disabled = !!spec.empty || !spec.formats.length;
   const preferred = () => lastFormat(live.current) ?? defaultFormat(live.current);
   const save = (f: OutputFormatSpec | undefined) => {
@@ -107,7 +107,7 @@ export function OutputDownload({ spec: given }: { spec: OutputSpec }) {
           content={
             canIncludeSecrets
               ? 'Saved and copied with secrets masked (tokens, passwords, Authorization headers). ▾ Include secrets… to keep them.'
-              : 'Secrets are masked as they are captured (tokens, passwords, Authorization headers): they are never kept, so never saved.'
+              : 'Secrets are masked before this output is built (tokens, passwords, Authorization headers), so it is always saved and copied without them.'
           }
         >
           <span className="inline-flex items-center gap-0.5 text-[0.7rem] text-muted px-1" data-output-redacted>

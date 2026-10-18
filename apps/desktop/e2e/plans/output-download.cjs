@@ -254,6 +254,62 @@ const steps = [
      const labels = all.every((b) => /^Download /.test(b.getAttribute('aria-label') ?? '') || /^Saving /.test(b.getAttribute('aria-label') ?? ''));
      return 'controls: ' + (all.length >= 2) + ' | one look: ' + (shapes.size === 1) + ' | one size: ' + (sizes.size <= 1) + ' | last in its bar: ' + last + ' | labelled: ' + labels;`,
   ),
+  // the smallest window (960 × 700), comfortable and compact, with the right side panel pinned too: on every surface the
+  // down arrow, ▾ and Copy are whole, inside the window, not clipped by their bar or a container, and nothing covers them
+  // (the point under each one's centre is that button). A container query once clipped the control only after a real run.
+  ['small-window', `main:const { BrowserWindow } = require('electron'); const w = BrowserWindow.getAllWindows()[0]; w.setContentSize(960, 700); await new Promise((r) => setTimeout(r, 1500)); return 'size ' + w.getContentSize().join('x');`, false],
+  step(
+    'controls-fit-at-960',
+    `const check = (b, mode, where) => {
+       const id = b.getAttribute('data-output-download'); const box = b.closest('[data-output-control]');
+       const bad = [];
+       for (const el of [b, box?.querySelector('[data-output-formats]'), box?.querySelector('[data-output-copy]')]) {
+         if (!el) { bad.push('part missing'); continue; }
+         const r = el.getBoundingClientRect();
+         if (r.width < 12 || r.height < 12) bad.push('tiny ' + Math.round(r.width) + 'x' + Math.round(r.height));
+         if (r.left < 0 || r.top < 0 || r.right > innerWidth + 0.5 || r.bottom > innerHeight + 0.5) bad.push('outside the window');
+         for (let a = el.parentElement; a && a !== document.body; a = a.parentElement) {
+           const cs = getComputedStyle(a);
+           if (cs.overflowX === 'visible' && cs.overflowY === 'visible') continue;
+           const ar = a.getBoundingClientRect();
+           if (r.left < ar.left - 0.5 || r.right > ar.right + 0.5 || r.top < ar.top - 0.5 || r.bottom > ar.bottom + 0.5) { bad.push('clipped by ' + a.tagName.toLowerCase() + '.' + String(a.className).split(' ').slice(0, 3).join('.')); break; }
+         }
+         const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+         if (!hit || !el.contains(hit)) bad.push('covered by ' + (hit ? hit.tagName.toLowerCase() + '.' + String(hit.className).split(' ').slice(0, 2).join('.') : 'nothing'));
+       }
+       return { mode, id, where, bad: [...new Set(bad)] };
+     };
+     const shown = () => vis('[data-output-download]');
+     const all = [];
+     const pass = async (mode) => {
+       await clearToasts(); await __t.real.move({ x: innerWidth / 2, y: 4 });
+       await __t.view('Tests'); await __t.sleep(600);
+       for (const b of shown()) all.push(check(b, mode, 'Tests'));
+       await __t.requests(); await __t.sleep(400);
+       for (const t of vis('[role=tablist][aria-label="Open requests"] [role=tab]')) {
+         t.click(); await __t.sleep(700);
+         const label = t.textContent.trim().slice(0, 16);
+         const strip = vis('main [role=tablist]').find((l) => l.parentElement.querySelector('[data-output-actions]'));
+         const tabs = strip ? [...strip.querySelectorAll('[role=tab]')].filter((x) => /^(Body|Headers|Response|Metadata|Trailers)/.test(x.textContent.trim())) : [];
+         if (!tabs.length) for (const b of shown()) all.push(check(b, mode, label));
+         for (const rt of tabs) { rt.click(); await __t.sleep(500); for (const b of shown()) all.push(check(b, mode, label + ' ▸ ' + rt.textContent.trim().replace(/\\d+$/, ''))); }
+       }
+     };
+     const panel = () => vis('[data-pinnable-panel="right"]')[0];
+     await pass('comfortable');
+     document.documentElement.dataset.density = 'compact'; await __t.sleep(500);
+     await pass('compact');
+     document.documentElement.dataset.density = 'comfortable'; await __t.sleep(300);
+     // pin the right side panel (Info / Assistant): the content gets 400 px narrower
+     if (panel()?.getAttribute('data-pinned') !== 'true') { panel()?.querySelector('button[aria-expanded]')?.click(); await __t.sleep(500); panel()?.querySelector('[data-pin-toggle]')?.click(); await __t.sleep(800); }
+     const pinned = panel()?.getAttribute('data-pinned') === 'true';
+     await pass('pinned');
+     if (pinned) { panel()?.querySelector('[data-pin-toggle]')?.click(); await __t.sleep(500); }
+     const problems = all.filter((x) => x.bad.length).map((x) => x.mode + ' ' + x.where + ' ' + x.id + ': ' + x.bad.join(', '));
+     const surfaces = new Set(all.map((x) => x.id + '@' + x.where.replace(/ ▸ (Body|Headers)$/, ' ▸ $1')));
+     return 'checked: ' + all.length + ' | surfaces: ' + new Set(all.map((x) => x.id)).size + ' | places: ' + surfaces.size + ' | problems: ' + (problems.length ? [...new Set(problems)].slice(0, 12).join(' ; ') : 'none') + ' | pinned: ' + pinned + ' || ' + [...surfaces].join(', ');`,
+  ),
+  ['window-back', `main:const { BrowserWindow } = require('electron'); const w = BrowserWindow.getAllWindows()[0]; w.setContentSize(1440, 900); await new Promise((r) => setTimeout(r, 1200)); return 'size ' + w.getContentSize().join('x');`, false],
   ['clean-up', `(async () => { await window.aps.invoke('tests.delete', { path: '${TEST_FILE}' }).catch(() => undefined); return 'done'; })()`, false],
 ];
 
@@ -295,6 +351,15 @@ module.exports = withExpect(
     'console-redacted-file': /^request listed: true \| token in file: false$/,
     'console-no-include-secrets': /^include secrets offered: false \| formats: 2$/,
     'every-control-looks-the-same': /^controls: true \| one look: true \| one size: true \| last in its bar: true \| labelled: true$/,
+    // the content size comes back rounded to the display's scale (961 at 125 %)
+    'small-window': /^size 9(59|60|61)x(699|700|701)$/,
+    'controls-fit-at-960': (r) => {
+      const m = /^checked: (\d+) \| surfaces: (\d+) \| places: (\d+) \| problems: none \| pinned: true \|\|/.exec(r);
+      if (!m) return 'a control is clipped, covered or outside the window (or the panel did not pin)';
+      // 8 places (REST body + headers, gRPC response / metadata / trailers, the WebSocket log, run results, the console) × 3 passes
+      return Number(m[3]) >= 8 && Number(m[1]) >= 24 ? true : `too few controls checked (${m[1]} in ${m[3]} places)`;
+    },
+    'window-back': /^size 14(39|40|41)x(899|900|901)$/,
   },
   { env: (out) => ({ E2E_STUB_SAVE: join(out, 'output.out') }) },
 );

@@ -352,6 +352,8 @@ testpion test tests/signup.yaml --data postgres://… --data-query "SELECT email
 
 A row where nothing ran (every step was skipped, e.g. the steps wait for a step in another file) is **skipped**, and a data run or matrix whose rows or environments all skipped is **skipped**, not passed: in the grid, `flow runs`, the MCP tools and the CLI, which exits 1 for it (`--allow-skipped`: 0).
 
+**Save the grid.** The down arrow at the right end of the grid's bar saves every row (its status, time, failing step, error and values) as CSV, JSON or a self-contained HTML table; the rows are written page by page from the run, so a 10,000-row data run never passes through the window, and its values are masked like the rest of the run. The environment matrix and the list of data runs have the same arrow. See [Save and export results](/getting-started/save-and-export-results).
+
 ### In several environments
 
 **Run in several environments…** (same menu, or the **In several environments** choice of the dialog) runs the flow once in each environment you tick and shows a matrix: a column per environment with its status and time, a row per step with its status and milliseconds in each, steps whose status differs marked **≠**, and under it every value the flow extracted (or its `output:`) per environment, the ones that differ highlighted. Click a cell for that step's result in that environment.
@@ -367,7 +369,7 @@ In the **Load** view pick **Test file (a flow)** as the target (`testpion load -
 
 ### Run timeline and critical path
 
-Every run has a **Timeline** tab next to **Charts**: one bar per step from its start to its end, the wait before it (dashed, from the step that held it up), lanes **L1**, **L2** … for steps that ran at the same time, and the **critical path** outlined: the chain of steps, each held up by the one before, that decided when the run ended. Hover a bar for its numbers, click it to open its result. The header gives the total, the critical path's running and waiting time, how many steps ran at once and the slowest step. **Save as HTML** writes the same picture as one self-contained file (no scripts, nothing from the network; light and dark) to attach to a ticket or a pull request.
+Every run has a **Timeline** tab next to **Charts**: one bar per step from its start to its end, the wait before it (dashed, from the step that held it up), lanes **L1**, **L2** … for steps that ran at the same time, and the **critical path** outlined: the chain of steps, each held up by the one before, that decided when the run ended. Hover a bar for its numbers, click it to open its result. The header gives the total, the critical path's running and waiting time, how many steps ran at once and the slowest step. The **down arrow** at the right end of its bar saves the same picture as one self-contained HTML file (no scripts, nothing from the network; light and dark) to attach to a ticket or a pull request, or the timeline's data as JSON ([Save and export results](/getting-started/save-and-export-results)).
 
 ```bash
 testpion flow report rest/checkout.yaml                          # the latest run as text, critical path marked
@@ -506,7 +508,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: nasimuddin-dev/testpion@v0.50.0
+      - uses: nasimuddin-dev/testpion@v0.51.0
         with:
           workspace: api-tests
           suite: integration
@@ -536,20 +538,20 @@ Exit codes: `0` all passed, `1` a test failed, `2` a configuration problem, `3` 
 Add `--triage` to the run line (`testpion test`, `run` or `run-collection`, in a workspace): after a run with failures, TestPion groups them by likely cause — the same failed check, status and endpoint — and, with an AI model set up for the job, explains each cause with its evidence and a fix it verified against the failing and the last passing response. The job log gets a *Triage* section, `triage.md` and `triage.json` are written beside the reports, and the JUnit (`<system-out>`), HTML and Markdown reports get a *Triage (AI)* section when a model answered. Nothing is changed in your tests (a fix is a proposal to apply on your computer: `testpion ai apply <id>`, or the app's review), and **the exit code stays the run's**: a failed test still fails the build, and a triage that cannot be made is only a warning.
 
 ```yaml
-- run: npx testpion@0.50.0 run -w . --suite integration -e Staging -r console junit html -o test-results --triage
+- run: npx testpion@0.51.0 run -w . --suite integration -e Staging -r console junit html -o test-results --triage
   env:
     TESTPION_AI_PROVIDER: anthropic                     # or ollama on the runner; without a model: the grouping only
     TESTPION_AI_MODEL_LARGE: claude-sonnet-5-5
     ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 ```
 
-Failure bodies are masked before anything is sent (secrets, tokens, personal data); to send no body values at all, run `npx testpion@0.50.0 ai triage --run last --privacy metadata` as a step after the tests instead (`if: failure()`). See [Explain and fix failures](/ai-testing/ai-features#explain-and-fix-failures-triage) for what you get, the privacy levels and the cost caps.
+Failure bodies are masked before anything is sent (secrets, tokens, personal data); to send no body values at all, run `npx testpion@0.51.0 ai triage --run last --privacy metadata` as a step after the tests instead (`if: failure()`). See [Explain and fix failures](/ai-testing/ai-features#explain-and-fix-failures-triage) for what you get, the privacy levels and the cost caps.
 
 The reusable GitHub Action above has no triage input yet and writes no job summary, so `triage.md` is not shown on the run's page. To triage with the Action, add a step after it (the Action records the run in the workspace, so `--run last` finds it):
 
 ```yaml
 - if: failure()
-  run: npx testpion@0.50.0 ai triage -w api-tests --run last > triage.md; cat triage.md >> "$GITHUB_STEP_SUMMARY"
+  run: npx testpion@0.51.0 ai triage -w api-tests --run last > triage.md; cat triage.md >> "$GITHUB_STEP_SUMMARY"
   env:
     TESTPION_AI_PROVIDER: anthropic
     TESTPION_AI_MODEL_LARGE: claude-sonnet-5-5

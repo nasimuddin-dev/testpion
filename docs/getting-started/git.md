@@ -161,7 +161,7 @@ jobs:
         with: { fetch-depth: 0 }   # the base branch, for the diff
       - uses: actions/setup-node@v4
         with: { node-version: 24 }
-      - run: git clone --depth 1 --branch v0.50.0 https://github.com/nasimuddin-dev/testpion.git "$RUNNER_TEMP/testpion" && cd "$RUNNER_TEMP/testpion" && npm ci && npm run build -w @testpion/shared -w @testpion/core -w @testpion/cli
+      - run: git clone --depth 1 --branch v0.51.0 https://github.com/nasimuddin-dev/testpion.git "$RUNNER_TEMP/testpion" && cd "$RUNNER_TEMP/testpion" && npm ci && npm run build -w @testpion/shared -w @testpion/core -w @testpion/cli
       - name: What the pull request changes
         run: |
           T="node $RUNNER_TEMP/testpion/packages/cli/bin/testpion.js"
@@ -189,7 +189,7 @@ api-tests:
   image: node:24
   rules: [{ if: $CI_PIPELINE_SOURCE == "merge_request_event" }]
   script:
-    - git clone --depth 1 --branch v0.50.0 https://github.com/nasimuddin-dev/testpion.git /tmp/testpion && (cd /tmp/testpion && npm ci && npm run build -w @testpion/shared -w @testpion/core -w @testpion/cli)
+    - git clone --depth 1 --branch v0.51.0 https://github.com/nasimuddin-dev/testpion.git /tmp/testpion && (cd /tmp/testpion && npm ci && npm run build -w @testpion/shared -w @testpion/core -w @testpion/cli)
     - git fetch origin "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"
     - node /tmp/testpion/packages/cli/bin/testpion.js diff "origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME" HEAD --markdown -w api-tests | tee changes.md
     - node /tmp/testpion/packages/cli/bin/testpion.js run -w api-tests -e Staging -r console junit -o test-results

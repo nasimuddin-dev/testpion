@@ -15,6 +15,7 @@ Enter the endpoint (variables allowed), then write the operation in the Monaco e
 - **Save** (<kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>S</kbd>) keeps the request in a [collection](/api-testing/collections), in the same dialog as an HTTP request. **Test** (or **Save as test…** in the **⋯** at the end of the breadcrumb line) writes it as a test file under `tests/graphql`.
 - On an environment marked as **production**, a mutation asks before it is sent; queries run without asking ([Production](/api-testing/environments#production)).
 - Responses appear as a JSON tree. GraphQL `errors` are counted and can be asserted on.
+- **Save the response:** the down arrow at the right end of the response's tab bar saves it as pretty or minified JSON, the raw bytes as received or (when it holds a list) the table as CSV; **Copy** sits before it. See [Save and export results](/getting-started/save-and-export-results).
 - **Code** shows the call as code (cURL, fetch, Python, Go and more): the JSON `POST` with the query, variables and operation name, with `{{variables}}` resolved.
 - Subscriptions run over WebSocket (`graphql-transport-ws` and `graphql-ws`): see [subscriptions](./subscriptions.md).
 - The schema explorer's **Build** writes a whole operation for a root field (see [schema explorer](./schema-explorer.md#build-an-operation)).

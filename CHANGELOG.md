@@ -1,27 +1,35 @@
 # Changelog
 
-## Unreleased
+## 0.51.0 — 2026-10-17
+
+Save and export every output: every response and result now has the same down arrow at the right end of its bar, with Copy beside it and ▾ for the other formats, so anything TestPion shows can be kept as a file, safely. ([What's new in 0.51](/getting-started/whats-new#whats-new-in-0-51))
+
+### Behaviour changes: what works differently (read before upgrading)
+- **One down arrow replaces the old per-view buttons.** The run results' **Export ▾**, the response's **Save response**, the run timeline's **Save as HTML**, the MCP tool result's **Copy result** / **Save result** and the generated code's **Copy** are gone: the arrow at the right end of the same bar saves the same files (and more formats), and **Copy** sits beside it. A runs list's **Export report…** and the palette's **Export Results** now save the HTML report through the **Save as** dialog. ([Save and export results](/getting-started/save-and-export-results))
+- **Saved logs are always redacted.** The console, the application log, run reports, traces, the response's cURL, the flow timeline, data-run and matrix grids and the HTTP Debugger's HAR are masked when they are recorded, so they are saved and copied without secrets and have no **Include secrets…** (the **Redacted** mark's tooltip says why). Decoded JWTs, the terminal transcript and generated code (with **Show secrets** on) still hold their secrets: they are saved masked by default, and **▾ ▸ Include secrets…** keeps them after you confirm.
+- **<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> saves the output you are in** (rebindable as *Download the focused output* in **Settings ▸ Keyboard**).
 
 ### Save and export every output
-- **One down arrow on every response and result** at the right end of its bar. It covers:
-  - every tab of the REST/SOAP response: body (raw, pretty, table, HTML, XML, HAR), headers, cookies, JWT, timeline, checks, stream, trace, history and cURL
+- **One down arrow on every response and result**, at the right end of its bar. It covers:
+  - every tab of the REST/SOAP response: body (raw bytes as received, JSON pretty or minified, the table as CSV or TSV, HTML, XML, text, HAR), headers, cookies (also `cookies.txt` for `curl -b`), JWT, timeline (JSON, HAR with timings, Markdown), checks (JSON, JUnit, Markdown), stream, trace, server-sent events, history and cURL
   - GraphQL responses and subscriptions
-  - the gRPC response, metadata and trailers
-  - WebSocket, Socket.IO, MQTT and Kafka message logs, and server-sent events
+  - the gRPC response, messages, metadata and trailers (each as JSON, metadata and trailers also as CSV, or everything in one JSON)
+  - WebSocket, Socket.IO, MQTT and Kafka message logs
   - MCP tool results and generated code
-  - run results (HTML, JSON, JUnit, Markdown, CSV, ZIP), which replace the old **Export ▾**
-  - the flow run timeline, data-run and matrix grids, load results and the evaluation matrix
-  - the console, application log, terminal, Problems and the HTTP Debugger session
+  - run results (HTML report, JSON, JUnit, Markdown, CSV, ZIP of them all)
+  - the flow run timeline (self-contained HTML), data-run and matrix grids, load results and the evaluation matrix
+  - the console, the application log, the terminal, Problems and the HTTP Debugger session (HAR)
 - **How it works:**
-  - **Click** saves the default format (or the one you chose last), **▾** chooses another, and **Copy** sits beside it.
-  - Files are saved through the OS **Save as** dialog, in the folder you last used for that kind of output, then a message offers **Show in folder** and **Open**. The browser version downloads them.
-  - <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> (rebindable), the palette's **Download Output…** and **File ▸ Download Output…** work too. ([Save and export results](/getting-started/save-and-export-results))
-- **Secrets:** logs and reports are saved redacted by default, with a **Redacted** mark and a confirmed **Include secrets…**. Response bodies are saved as they are, with a notice when one looks like it holds a credential or comes from a production environment.
-- **Big outputs:** big bodies and long result lists are streamed from disk into the file, never through the window. Saves show progress with **Cancel** and never leave a half-written file.
-- **Safe files:** CSV files guard against spreadsheet formula injection, and file names are safe on every OS (Windows reserved names included).
+  - **Click** saves the default format (or the one you chose last on that kind of output), **▾** chooses another or **Copy as** another text format, and **Copy** sits beside it.
+  - Files are saved through the OS **Save as** dialog, in the folder you last used for that kind of output in the workspace, with names such as `GET-patients-2026-10-17-1405-200.json`; then a message offers **Show in folder** and **Open**. The browser version downloads them (up to 100 MB).
+  - <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd>, the palette's **Download Output…** and **File ▸ Download Output…** work too.
+- **Secrets:** log-like outputs are saved redacted by default, with a **Redacted** mark; **Include secrets…** (confirmed, for that one file) is offered only where the data still holds the secrets. Response bodies are saved as they are, with a notice when one looks like it holds a credential or comes from a production environment.
+- **Big outputs:** big bodies (a 50 MB body is re-indented as it is read) and long grids (a 10,000-row data run) are streamed from disk into the file, never through the window. Saves over 5 MB show progress with **Cancel**, and a cancelled or failed save leaves no half-written file (it is written as `.part` and renamed).
+- **Safe files:** CSV files guard against spreadsheet formula injection, and file names are safe on every OS (Windows reserved names such as `CON` or `NUL`, and invisible direction-changing characters, are taken care of).
+- **Not yet:** `--out` / `--format` on every CLI result command, MCP tools that save results to a file, and a down arrow on History, Traces, AI results, Git diffs, lint reports, charts and monitors come in a later release.
 
 ### Fixes
-- **HTTP Debugger:** **Export as HAR** saves through the Save as dialog again. It called a backend method that did not exist, so it always fell back to a browser download.
+- **HTTP Debugger:** **Export as HAR…** saves through the Save as dialog again. It called a backend method that did not exist, so it always fell back to a browser download.
 - **JSON tree toolbar:** **Expand all** is no longer cut off, and the JSONPath filter is no longer squeezed against the hint. Expand and collapse are now icon buttons, and the hint moved behind an ⓘ.
 
 ## 0.50.0 — 2026-10-17

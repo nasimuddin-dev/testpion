@@ -11,7 +11,8 @@ Select a tool to see its description, input and output schemas and annotations. 
 
 - **Arguments:** use the form generated from the input schema, or switch to raw JSON. **Generate args** asks the assistant for example arguments.
 - **Execute:** shows the content blocks (text, JSON, images), `structuredContent`, `isError` and latency.
-- **Display:** show the output **Pretty** (JSON as a tree, images inline), **Raw** (searchable text) or as rendered **Markdown**; **Copy** and **Save** the result.
+- **Display:** show the output **Pretty** (JSON as a tree, images inline), **Raw** (searchable text) or as rendered **Markdown**.
+- **Save the result:** the down arrow at the right end of the result's bar saves it as JSON, Markdown (when the result is text) or text, and **Copy** sits before it ([Save and export results](/getting-started/save-and-export-results)).
 - Results stay while the app runs: each tool keeps its last result, arguments and assertions, also when you switch tabs, servers or views.
 - **Assertions:** `status: success|error`, JSONPath checks against `structuredContent`, or the parsed text content.
 - **Save as test…:** writes the call with its assertions as a YAML test to `tests/mcp/` (the toast has **Run now** and **Open test file**; History's right-click menu has the same for an earlier call):

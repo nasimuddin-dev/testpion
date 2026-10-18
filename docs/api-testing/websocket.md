@@ -15,6 +15,8 @@ The **WebSocket** editor connects to a `ws://` or `wss://` server, sends message
 
 The message log lists sent (↗), received (↙) and connection (ⓘ) messages with their time. The *Connected* message says how long the connection took and where the time went: DNS lookup, TCP connect and TLS handshake (on a new connection) and the upgrade handshake. Its header counts the messages and bytes in each direction and draws a sparkline of messages per second over the last minute. Filter it by text or direction, and click a message to see it in full (JSON as a tree). Connecting, sending and closing also appear in the [console](./rest.md#console).
 
+**Save the log:** the down arrow at the right end of the message log's bar saves every message kept (not only the filtered ones) as JSON Lines, CSV, text or JSON, the same for Socket.IO, MQTT and Kafka; **Copy** sits before it. A CSV cell that a spreadsheet would run as a formula is written as text. See [Save and export results](/getting-started/save-and-export-results).
+
 On an environment marked as **production**, a message sent over an open WebSocket, Socket.IO, MQTT or Kafka connection asks first ([Production](/api-testing/environments#production)); from the CLI, a run that sends one needs `--allow-production`.
 
 ## Socket.IO

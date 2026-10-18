@@ -13,7 +13,7 @@ import { terminalLinks } from '../lib/terminal-links';
 import { openRef } from '../lib/open-ref';
 import { afterScopeChange, scopedKey } from '../lib/ws-scope';
 import { cx, Empty, IconButton, Select } from './ui';
-import { OutputActions } from './output/OutputFrame';
+import { OutputActions, OutputBarStart } from './output/OutputFrame';
 import type { OutputSpec } from './output/output-core';
 
 /**
@@ -515,51 +515,53 @@ export default function TerminalPanel() {
 
   return (
     <>
-      <div className="flex items-center gap-1 px-2 h-8 border-b border-line text-xs shrink-0 min-w-0" data-terminal-strip="">
-        <div role="tablist" aria-label="Terminals" className="flex items-center gap-1 min-w-0 overflow-x-auto [scrollbar-width:none]">
-          {sessions.map((s, i) => (
-            <span key={s.id} className={cx('group flex items-center rounded-md shrink-0', s.id === active ? 'bg-hover text-fg' : 'text-muted hover:text-fg')}>
-              <button
-                role="tab"
-                aria-selected={s.id === active}
-                data-terminal-tab={s.id}
-                className={cx('pl-2 pr-1 h-6 font-medium flex items-center gap-1', s.exitCode !== undefined && 'line-through opacity-70')}
-                title={`${s.label} · ${s.cwd}${s.exitCode !== undefined ? ` · exited (${s.exitCode})` : ''}`}
-                onClick={() => useTerminals.setState({ active: s.id })}
-              >
-                <SquareTerminal size={12} />
+      <div className="flex items-center gap-1 px-2 h-8 border-b border-line text-xs shrink-0 min-w-0 overflow-clip" data-terminal-strip="">
+        <OutputBarStart className="gap-1">
+          <div role="tablist" aria-label="Terminals" className="flex items-center gap-1 min-w-0 overflow-x-auto [scrollbar-width:none]">
+            {sessions.map((s, i) => (
+              <span key={s.id} className={cx('group flex items-center rounded-md shrink-0', s.id === active ? 'bg-hover text-fg' : 'text-muted hover:text-fg')}>
+                <button
+                  role="tab"
+                  aria-selected={s.id === active}
+                  data-terminal-tab={s.id}
+                  className={cx('pl-2 pr-1 h-6 font-medium flex items-center gap-1', s.exitCode !== undefined && 'line-through opacity-70')}
+                  title={`${s.label} · ${s.cwd}${s.exitCode !== undefined ? ` · exited (${s.exitCode})` : ''}`}
+                  onClick={() => useTerminals.setState({ active: s.id })}
+                >
+                  <SquareTerminal size={12} />
+                  {s.label}
+                  {sessions.filter((x) => x.label === s.label).length > 1 ? ` ${sessions.filter((x, j) => x.label === s.label && j <= i).length}` : ''}
+                </button>
+                <IconButton label={`Close ${s.label}`} className={cx('h-5 w-5', s.id === active ? 'opacity-70' : 'opacity-0 group-hover:opacity-100')} onClick={() => kill(s.id)}>
+                  <X size={11} />
+                </IconButton>
+              </span>
+            ))}
+          </div>
+          <IconButton label="New terminal" onClick={() => void create()} disabled={!shells?.available}>
+            <Plus size={13} />
+          </IconButton>
+          <Select
+            aria-label="Shell of new terminals"
+            className="h-6 min-h-0 text-xs w-auto py-0"
+            value={chosen ?? ''}
+            onChange={(e) => {
+              setShell(e.target.value);
+              const key = scopedKey(SHELL_KEY);
+              try {
+                if (key) localStorage.setItem(key, e.target.value);
+              } catch {
+                /* private storage */
+              }
+            }}
+          >
+            {(shells?.shells ?? []).map((s) => (
+              <option key={s.id} value={s.id} title={s.path}>
                 {s.label}
-                {sessions.filter((x) => x.label === s.label).length > 1 ? ` ${sessions.filter((x, j) => x.label === s.label && j <= i).length}` : ''}
-              </button>
-              <IconButton label={`Close ${s.label}`} className={cx('h-5 w-5', s.id === active ? 'opacity-70' : 'opacity-0 group-hover:opacity-100')} onClick={() => kill(s.id)}>
-                <X size={11} />
-              </IconButton>
-            </span>
-          ))}
-        </div>
-        <IconButton label="New terminal" onClick={() => void create()} disabled={!shells?.available}>
-          <Plus size={13} />
-        </IconButton>
-        <Select
-          aria-label="Shell of new terminals"
-          className="h-6 min-h-0 text-xs w-auto py-0"
-          value={chosen ?? ''}
-          onChange={(e) => {
-            setShell(e.target.value);
-            const key = scopedKey(SHELL_KEY);
-            try {
-              if (key) localStorage.setItem(key, e.target.value);
-            } catch {
-              /* private storage */
-            }
-          }}
-        >
-          {(shells?.shells ?? []).map((s) => (
-            <option key={s.id} value={s.id} title={s.path}>
-              {s.label}
-            </option>
-          ))}
-        </Select>
+              </option>
+            ))}
+          </Select>
+        </OutputBarStart>
         <OutputActions spec={spec}>
           <IconButton label="Clear terminal" disabled={!activeLive} onClick={() => (activeLive?.term.clear(), activeLive?.term.focus())}>
             <Eraser size={13} />

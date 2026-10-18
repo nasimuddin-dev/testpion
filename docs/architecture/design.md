@@ -245,6 +245,7 @@ Shared primitives live in `apps/desktop/src/components/ui.tsx` (Radix UI + Tailw
 | `Empty` | Every empty state: an accent icon, one sentence, and the next action. |
 | `Split` (`sidebar`) | Resizable panes; the sidebar pane gets the panel surface. |
 | `Tooltip`, `IconButton` | Every icon-only button has a label and a tooltip. |
+| `OutputActions`, `OutputHeader` (`components/output/`) | The right end of every response or result bar: the surface's own tools, then **Copy**, the **down arrow** and **▾**, always last and always the same size. A surface describes what it shows (an `OutputSpec`) and never builds its own save button. |
 
 ## Core architecture
 
@@ -298,6 +299,14 @@ Shared primitives live in `apps/desktop/src/components/ui.tsx` (Radix UI + Tailw
 </figure>
 
 More detail: [Architecture overview](./overview.md) and [Execution engine](./execution-engine.md).
+
+### Saving outputs
+
+Every download goes one way ([Save and export results](/getting-started/save-and-export-results)):
+
+- **One registry** in `packages/shared/src/output/`: `formats.ts` (every format, its extension and MIME type, and the pure builders: pretty JSON, JSON Lines, CSV with the formula-injection guard, Markdown and HTML tables, JUnit, HAR, `cookies.txt`, ZIP, a streaming JSON pretty-printer), `filename.ts` (safe, descriptive file names) and `surfaces.ts` (every output that can be saved: its formats, its secrets policy, whether it ships or comes in a later release). The window, the backend, the docs and a completeness test read the same list.
+- **The window** (`apps/desktop/src/components/output/`) describes each output as an `OutputSpec`: small formats are built from what it already shows, big ones are named by a `source` (a spooled response body, a run, the console, a grid) and never pass through it. `OutputDownload` is the one control; <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> runs the one nearest to the focus.
+- **The backend** (`apps/desktop/backend/handlers/output.ts`: `output.save`, `output.copy`, `output.cancel`, `output.reveal`) checks the surface and format against the registry, applies its secrets policy itself (never the caller's word), streams a source from disk into `<name>.part` with progress and cancel, renames it when complete, and remembers the folder per workspace and kind of output. In the browser and the cloud version the same call returns the file for the browser to download (up to 100 MB).
 
 ## The life of a request
 

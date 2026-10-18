@@ -272,7 +272,8 @@ export function Tabs<T extends string>({ tabs, value, onChange, className, right
           }
         />
       )}
-      {right && <div className="ml-auto flex items-center gap-1 pl-2 pr-2 shrink-0">{right}</div>}
+      {/* an output's actions (OutputActions) may shrink down to its download control: they clip their own tools first */}
+      {right && <div className="ml-auto flex items-center gap-1 pl-2 pr-2 shrink-0 [&:has(>[data-output-actions])]:shrink [&:has(>[data-output-actions])]:min-w-0">{right}</div>}
     </div>
   );
 }

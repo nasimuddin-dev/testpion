@@ -27,6 +27,17 @@ A workspace export (`<name>.testpion.json`, **Export ▸ Workspace…** or `test
   <img src="/images/export-workspace-toast.jpg" alt="The message after a workspace export lists each secret it replaced: the Development environment clientSecret and the Petstore MCP server Authorization header, now {{clientSecret}} and {{PETSTORE_MCP_AUTHORIZATION}}" width="1440" height="900" loading="lazy">
 </figure>
 
+## Saved files {#saved-files}
+
+The **down arrow** on every response and result writes a file only where you choose it in the **Save as** dialog (or a browser download); nothing is uploaded. What the file holds depends on the output ([Save and export results](/getting-started/save-and-export-results#secrets)):
+
+- **Redacted, always:** the console, the application log, run results and reports, request traces, the flow run timeline, data-run and matrix grids, the cURL tab and the HTTP Debugger's HAR. Their values are masked as they are recorded, by the redactor above (Authorization and cookie headers, tokens and API keys by their shape, credential query parameters, the values of secret variables), so the file cannot hold them and there is no **Include secrets…**. **Copy** gives the same masked text.
+- **Redacted by default:** decoded JWTs, the terminal transcript and generated code with **Show secrets** on. They show a **Redacted** mark; **▾ ▸ Include secrets…** keeps the secrets in that one file, after you confirm (*Anyone with the file can use them*).
+- **As received:** a response body (and its headers, cookies, stream, events and history), GraphQL and gRPC responses, message logs and MCP tool results are your own data and are saved as they are. When one looks like it holds a credential (a bearer token, an `access_token` field, a secret variable's value) the message after saving says so, and an output of an environment marked as production says that too.
+- **Nothing secret:** timings, checks, load results, the evaluation matrix and Problems.
+
+The backend applies these rules from one list of outputs, never from what the window asks: an output that is always redacted is saved masked even when asked otherwise. The folder you last used is remembered per workspace and kind of output in the app's own data folder, never in the workspace (so not in git). A file is written as `<name>.part` and renamed when complete, so a cancelled save leaves nothing behind.
+
 ## AI features
 
 TestPion's own AI features (explain, suggest checks, write tests or a flow, explain and fix a failed run, find out why a test is flaky) send a context only when you start one, only to the model you chose, and redacted more strictly than logs: besides the rules above, credentials found by their shape in any text (JWTs, `Bearer` / `Basic` credentials, private keys, provider API keys, `?access_token=` and similar) and personal data (e-mail addresses, phone numbers, card numbers, IBANs) are masked. **What will be sent…** shows the exact messages first; *Metadata only* and *Names only* send less, and **Local only** refuses any model that is not on this computer. Variable names may be sent, values never. See [AI features: privacy, cost and review](/ai-testing/ai-features#what-is-sent-and-how-to-see-it-first).

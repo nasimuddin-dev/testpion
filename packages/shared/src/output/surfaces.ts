@@ -19,8 +19,12 @@ export interface OutputSurfaceInfo {
   default: OutputFormatId;
   redaction: OutputRedaction;
   /**
-   * Its secrets are masked when they are captured (the console and the application log keep only redacted values), so
-   * there is nothing to include: the control shows the Redacted mark but no "Include secrets…".
+   * Its secrets are masked before the output is built (when they are captured, or by the producer itself), so there is
+   * nothing to include: the control shows the Redacted mark but no "Include secrets…". The console and the application
+   * log keep only redacted values; a run's results and reports are redacted as each result is recorded (runner.ts),
+   * traces as their spans are recorded (Tracer), the response pane's cURL by `http.code`, data-run rows and matrix
+   * values by the scale runner, and the Debugger's HAR by `exchangesToHar` (also for saved sessions, which are stored
+   * sanitized).
    */
   capturedRedacted?: true;
   /** The CLI command that writes the same output (release B adds --out / --format everywhere). */
@@ -54,7 +58,7 @@ const B = { state: { planned: 'release B' } } as const;
 
 export const OUTPUT_SURFACES: readonly OutputSurfaceInfo[] = [
   // the response of a request (REST, SOAP), one per tab of the response pane
-  s('response.body', 'Response body', ['raw', 'json', 'json-min', 'csv', 'tsv', 'html', 'xml', 'text', 'har', 'md'], 'raw-notice', { cli: 'send -o' }),
+  s('response.body', 'Response body', ['raw', 'json', 'json-min', 'csv', 'tsv', 'html', 'xml', 'text', 'har', 'md'], 'raw-notice', { cli: 'send --json' }),
   s('response.headers', 'Response headers', ['json', 'csv', 'text'], 'raw-notice'),
   s('response.cookies', 'Response cookies', ['json', 'csv', 'cookies-txt'], 'raw-notice'),
   s('response.jwt', 'Decoded JWTs', ['json'], 'redacted-default'),
@@ -62,9 +66,9 @@ export const OUTPUT_SURFACES: readonly OutputSurfaceInfo[] = [
   s('response.tests', 'Response checks', ['json', 'junit', 'md'], 'none'),
   s('response.stream', 'Response stream', ['text'], 'raw-notice'),
   s('response.events', 'Server-sent events', ['jsonl', 'csv', 'text'], 'raw-notice'),
-  s('response.trace', 'Request trace', ['json'], 'redacted-default'),
+  s('response.trace', 'Request trace', ['json'], 'redacted-default', { capturedRedacted: true }),
   s('response.history', 'Response history', ['json', 'csv'], 'raw-notice'),
-  s('response.curl', 'cURL command', ['curl', 'text'], 'redacted-default'),
+  s('response.curl', 'cURL command', ['curl', 'text'], 'redacted-default', { capturedRedacted: true }),
   // the other protocols
   s('graphql.response', 'GraphQL response', ['json', 'json-min', 'raw', 'csv'], 'raw-notice'),
   s('graphql.events', 'GraphQL subscription events', ['jsonl', 'json'], 'raw-notice'),
@@ -73,9 +77,9 @@ export const OUTPUT_SURFACES: readonly OutputSurfaceInfo[] = [
   s('mcp.tool-result', 'MCP tool result', ['json', 'md', 'text'], 'raw-notice'),
   s('code.generated', 'Generated code', ['text'], 'redacted-default'),
   // runs and results
-  s('run.results', 'Run results', ['html', 'json', 'junit', 'md', 'csv', 'zip'], 'redacted-default', { cli: 'run-collection -o / -r' }),
-  s('flow.timeline', 'Flow run timeline', ['html', 'json'], 'redacted-default', { cli: 'flow report --html' }),
-  s('flow.grid', 'Flow data / scale / matrix rows', ['csv', 'json', 'html'], 'redacted-default'),
+  s('run.results', 'Run results', ['html', 'json', 'junit', 'md', 'csv', 'zip'], 'redacted-default', { cli: 'run-collection -o / -r', capturedRedacted: true }),
+  s('flow.timeline', 'Flow run timeline', ['html', 'json'], 'redacted-default', { cli: 'flow report --html', capturedRedacted: true }),
+  s('flow.grid', 'Flow data / scale / matrix rows', ['csv', 'json', 'html'], 'redacted-default', { capturedRedacted: true }),
   s('load.results', 'Load test results', ['json', 'csv', 'html', 'md'], 'none', { cli: 'load --json' }),
   s('eval.matrix', 'Evaluation matrix', ['csv', 'json', 'md', 'html'], 'none'),
   // logs
@@ -83,7 +87,7 @@ export const OUTPUT_SURFACES: readonly OutputSurfaceInfo[] = [
   s('logs', 'Application log', ['text', 'jsonl'], 'redacted-default', { capturedRedacted: true }),
   s('terminal', 'Terminal transcript', ['text'], 'redacted-default'),
   s('problems', 'Problems', ['md', 'json', 'csv'], 'none'),
-  s('debugger.session', 'HTTP Debugger session', ['har', 'json', 'csv'], 'redacted-default', { cli: 'debug -o' }),
+  s('debugger.session', 'HTTP Debugger session', ['har', 'json', 'csv'], 'redacted-default', { cli: 'debug -o', capturedRedacted: true }),
   // release B
   s('history', 'History', ['har', 'csv', 'json'], 'redacted-default', B),
   s('traces', 'Traces', ['json'], 'redacted-default', B),

@@ -1,13 +1,51 @@
 ---
 title: "What's new: how to use it"
-description: "What's new in TestPion 0.50, 0.49, 0.48, 0.47 and 0.46, step by step: workspace exports with everything and no secrets, imports that list what to check, AI that explains and fixes a failed run and finds out why a test is flaky, AI that writes integration flows from a collection, verified checks and tests, what is sent, Local only and cost caps, a calmer rail with More…, your own keyboard shortcuts, compact density, Undo instead of confirmations, JSONPath suggestions and Diff vs previous, a visual flow designer, a Terminal, one production guard, and the behaviour changes to read before upgrading."
+description: "What's new in TestPion 0.51, 0.50, 0.49, 0.48, 0.47 and 0.46, step by step: one down arrow that saves every response and result (JSON, CSV, HTML, HAR, JUnit, ZIP …) with secrets masked, workspace exports with everything and no secrets, imports that list what to check, AI that explains and fixes a failed run and finds out why a test is flaky, AI that writes integration flows from a collection, verified checks and tests, what is sent, Local only and cost caps, a calmer rail with More…, your own keyboard shortcuts, compact density, Undo instead of confirmations, JSONPath suggestions and Diff vs previous, a visual flow designer, a Terminal, one production guard, and the behaviour changes to read before upgrading."
 ---
 
 ::: v-pre
 
 # What's new: how to use it
 
-The options added in 0.50, 0.49, 0.48, 0.47 and 0.46, each with the steps to use it and a link to the full reference. Where it makes sense, an option also works from the terminal (`testpion …`, with `--json`) and for AI agents (an MCP tool of `testpion mcp-server`). **Read the behaviour changes of [0.50](#behaviour-changes-in-0-50), [0.49](#behaviour-changes-in-0-49), [0.48](#behaviour-changes-in-0-48), [0.47](#behaviour-changes-in-0-47) and [0.46](#behaviour-changes-read-before-upgrading) before upgrading.** The 0.45 additions follow [below](#what-was-new-in-0-45); older ones are in the [changelog](/changelog).
+The options added in 0.51, 0.50, 0.49, 0.48, 0.47 and 0.46, each with the steps to use it and a link to the full reference. Where it makes sense, an option also works from the terminal (`testpion …`, with `--json`) and for AI agents (an MCP tool of `testpion mcp-server`). **Read the behaviour changes of [0.51](#behaviour-changes-in-0-51), [0.50](#behaviour-changes-in-0-50), [0.49](#behaviour-changes-in-0-49), [0.48](#behaviour-changes-in-0-48), [0.47](#behaviour-changes-in-0-47) and [0.46](#behaviour-changes-read-before-upgrading) before upgrading.** The 0.45 additions follow [below](#what-was-new-in-0-45); older ones are in the [changelog](/changelog).
+
+## What's new in 0.51: save and export every output {#whats-new-in-0-51}
+
+0.51 lets you keep anything TestPion shows as a file: every response and result has the same down arrow, in the same place, with the formats that make sense for it, and logs are saved without their secrets.
+
+- **One down arrow on every response and result**: the response body and every response tab, GraphQL, gRPC, WebSocket, Socket.IO, MQTT and Kafka logs, MCP tool results, generated code, run results, the flow timeline, data-run grids, load results, the evaluation matrix, the console, the log, the terminal, Problems and the HTTP Debugger ([steps](#save-any-output)).
+- **The formats each output needs**: JSON, JSON Lines, CSV, TSV, Markdown, HTML, XML, HAR, cURL, JUnit, `cookies.txt`, ZIP and the raw bytes as received ([what you can save](/getting-started/save-and-export-results#what-you-can-save)).
+- **Secrets stay out of saved logs**: a **Redacted** mark, and a confirmed **Include secrets…** only where the data still holds them ([details](#save-secrets)).
+- **Big outputs never slow the window**: a 50 MB body or a 10,000-row grid goes from disk straight into the file, with progress and **Cancel**.
+- **Fixed**: the HTTP Debugger's **Export as HAR…** saves through the Save as dialog again, and the JSON tree's **Expand all** is no longer cut off.
+
+### Behaviour changes in 0.51 {#behaviour-changes-in-0-51}
+- **The old Export and Save buttons are gone; the down arrow replaces them.** The run results' **Export ▾**, the response's **Save response** (in its ⋯ menu), the run timeline's **Save as HTML**, the MCP tool result's **Copy result** and **Save result** icons and the generated code's **Copy** button: the arrow at the right end of the same bar saves the same files (and more formats), and **Copy** sits beside it. A runs list's **Export report…** and the palette's **Export Results** now save the HTML report through the **Save as** dialog.
+- **Console and log saves are always redacted.** The console, the application log, run reports, traces, the cURL tab, the flow timeline, data-run and matrix grids and the Debugger's HAR are masked as they are recorded, so their files never hold a secret and their ▾ has no **Include secrets…**.
+- **The HTTP Debugger's Export as HAR… opens the Save as dialog** (it used to fall back to a browser download), and its file is sanitized like a saved session.
+- **<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> saves the output you are in.** Rebind it (*Download the focused output*) in **Settings ▸ Keyboard** if you used it for something else.
+- **Not in 0.51 yet:** the CLI's `--out <file> --format …` on every result command, MCP tools that save results to a file, and a down arrow on History, Traces, AI answers, Git diffs, lint reports, charts and monitors.
+
+### Save any response or result {#save-any-output}
+1. Open a response or a result. At the right end of its bar you find **Copy**, the **down arrow** and **▾**, the same in every view.
+2. **Click the arrow** to save in the default format, or the one you chose last on that kind of output. Open **▾** to choose another (each with its extension) or **Copy as** another text format.
+3. The **Save as** dialog opens in the folder you last used for that kind of output in this workspace, with a name such as `GET-patients-2026-10-17-1405-200.json`. The message after saving has **Show in folder** and **Open**.
+4. <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> saves the output nearest to where you last clicked; the palette's **Download Output…** and **File ▸ Download Output…** open its format menu.
+
+<figure class="aps-screenshot">
+  <img src="/images/output-format-menu.jpg" alt="A REST response's Body tab with the down arrow's ▾ menu open: JSON (pretty), JSON (minified), Raw body, Table as CSV, Table as TSV and HAR" width="1440" height="900" loading="lazy">
+</figure>
+
+Run results save as an HTML report, JSON, JUnit XML, Markdown, CSV or a ZIP of them all; a response's timeline as HAR with timings; gRPC metadata and trailers as JSON or CSV. ([Save and export results](/getting-started/save-and-export-results))
+
+### Secrets in saved files {#save-secrets}
+1. Logs and reports show a **Redacted** mark beside the arrow: Authorization and cookie headers, tokens, API keys and the values of secret variables are masked in the file and in **Copy**.
+2. Where the data still holds the secrets (decoded JWTs, the terminal transcript, generated code with **Show secrets** on), **▾ ▸ Include secrets…** saves them after you confirm, for that one file.
+3. A response body is saved as it is: when it looks like it holds a credential, or comes from a production environment, the message says so.
+
+<figure class="aps-screenshot">
+  <img src="/images/output-include-secrets.jpg" alt="The question Include secrets in the file? over a response's JWT tab: the decoded tokens are saved with the values masked by default, with Cancel and Save with secrets" width="1440" height="900" loading="lazy">
+</figure>
 
 ## What's new in 0.50: nothing lost, nothing leaked {#whats-new-in-0-50}
 
@@ -76,17 +114,6 @@ Terminal: `testpion import openapi.yaml -w <workspace>` keeps both and prints th
 <figure class="aps-screenshot">
   <img src="/images/examples-sidebar.jpg" alt="The TestPion Examples workspace in the Collections sidebar: each example collection listed once, Live streams (SSE) open with its three requests" width="1440" height="900" loading="lazy">
 </figure>
-
-## New since 0.49 {#new-since-0-49}
-
-### Save any response or result {#save-any-output}
-1. Every response and result has the same **down arrow** at the right end of its bar. This covers the response body and every response tab, gRPC, GraphQL, WebSocket, MQTT and Kafka logs, MCP tool results, run results, timelines, data-run grids, load results, the evaluation matrix, the console, the log, the terminal, Problems and the HTTP Debugger.
-2. **Click it** to save in the default format, or open **▾** to choose one: JSON, CSV, HTML, Markdown, HAR, JUnit, ZIP, raw bytes and more. The **Save as** dialog opens in the folder you last used, and the message after saving has **Show in folder** and **Open**.
-3. **Copy** sits next to the arrow.
-4. **Logs and reports are saved with secrets masked.** Choose **▾ ▸ Include secrets…** to keep them. TestPion asks first.
-5. <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> saves the output you are in.
-
-Big bodies and long result lists are written straight from disk, with progress and **Cancel**. ([Save and export results](/getting-started/save-and-export-results))
 
 ## What's new in 0.49 {#whats-new-in-0-49}
 
@@ -308,7 +335,7 @@ To run it on a schedule instead, a monitor can now run a test file: `testpion mo
 1. Open a flow in **Tests**, right-click its tab ▸ **Run with data…** (or the table icon next to **Run**), pick a CSV / JSON / JSONL file, a SQLite database or a database URL with a query, and **Run per row**: the flow runs once per row with the row's columns as variables (`{{email}}`, `{{$row.email}}`, `{{$index}}`). The **Runs** tab shows a grid of rows (status, time, failing step, values), live; **Failed** filters, a row opens its steps. `testpion test <file> --data users.csv [--json]`.
 2. **Run in several environments…** ticks dev, staging, prod … and shows step × environment with the steps and values that differ marked. `testpion test <file> --env-matrix dev,staging`.
 3. In **Load**, pick **Test file (a flow)** as the target: every virtual user runs the whole flow; results per step and per run of the flow. `testpion load --test-file <file>`.
-4. Any run's **Timeline** tab draws each step's bar, the waits and the **critical path**; **Save as HTML** writes it as one file to share. `testpion flow report <file> --html out.html`.
+4. Any run's **Timeline** tab draws each step's bar, the waits and the **critical path**; the down arrow at the right end of its bar saves it as one HTML file to share (or its data as JSON). `testpion flow report <file> --html out.html`.
 
 Agents: `flow_data_run`, `flow_env_matrix`, `flow_scale_result`, `flow_timeline`, and `load_test` with `test_file`. [Run a flow at scale](/test-runner/integration-testing#run-a-flow-at-scale)
 

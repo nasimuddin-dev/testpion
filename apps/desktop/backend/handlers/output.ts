@@ -14,7 +14,7 @@
  */
 import { createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { once } from 'node:events';
 import { ApsError, maskSensitiveText, type Redactor } from '@testpion/core';
 import {
@@ -95,6 +95,34 @@ function folders(be: Backend) {
       }
     },
   };
+}
+
+/**
+ * Where a save is written before it is renamed onto `dest`: `<name>.part` beside it, or a short hidden name in the same
+ * folder when `<name>.part` would pass the 255-byte name limit of macOS / Linux (a name typed in the dialog may be that
+ * long). Same folder, so the rename never crosses a volume.
+ */
+export function partPathFor(dest: string): string {
+  const name = basename(dest);
+  if (Buffer.byteLength(`${name}.part`) <= 255) return `${dest}.part`;
+  return join(dirname(dest), `.testpion-${process.pid}-${Date.now().toString(36)}.part`);
+}
+
+/** A file-system failure of a save as a message a person can act on (the folder, not a stack). */
+function writeError(e: unknown, dest: string): unknown {
+  const code = (e as { code?: string })?.code;
+  const where = dirname(dest);
+  const name = basename(dest);
+  if (code === 'EACCES' || code === 'EPERM' || code === 'EROFS')
+    return new ApsError('ConfigurationError', `Cannot write ${name}: permission denied in ${where}`, {
+      suggestions: ['Choose another folder, or close the program that has the file open.'],
+    });
+  if (code === 'EBUSY') return new ApsError('ConfigurationError', `Cannot replace ${name}: it is open in another program`, { suggestions: ['Close it there, or save under another name.'] });
+  if (code === 'ENOSPC' || code === 'EDQUOT')
+    return new ApsError('ConfigurationError', `Not enough disk space to save ${name} in ${where}`, { suggestions: ['Free some space, or choose another drive.'] });
+  if (code === 'ENAMETOOLONG') return new ApsError('ValidationError', `The file name or path is too long: ${name}`, { suggestions: ['Choose a shorter name or folder.'] });
+  if (code === 'ENOENT' || code === 'ENOTDIR') return new ApsError('ConfigurationError', `The folder ${where} is no longer there`, { suggestions: ['Choose another folder.'] });
+  return e;
 }
 
 async function* one(x: Buffer | string): Chunks {
@@ -397,6 +425,8 @@ export function outputHandlers(be: Backend): Handlers {
     'output.save': async (p: SaveParams) => {
       const { info, fmt } = check(p);
       const jobId = p.jobId && /^[\w-]{1,64}$/.test(p.jobId) ? p.jobId : `out-${Date.now().toString(36)}-${++seq}`;
+      // one save per job: a second one with the same id would take over the first one's Cancel and progress
+      if (jobs.has(jobId)) throw new ApsError('ValidationError', `output.save: job ${jobId} is already running`);
       const ctrl = new AbortController();
       jobs.set(jobId, ctrl);
       try {
@@ -419,7 +449,7 @@ export function outputHandlers(be: Backend): Handlers {
           be.host.emit('output.progress', { jobId, bytes, total: built.total });
         };
         const write = async (dest: string) => {
-          const part = `${dest}.part`;
+          const part = partPathFor(dest);
           const out = createWriteStream(part);
           const failed = new Promise<never>((_, reject) => out.on('error', reject));
           failed.catch(() => undefined);
@@ -437,8 +467,14 @@ export function outputHandlers(be: Backend): Handlers {
             renameSync(part, dest);
           } catch (e) {
             out.destroy();
-            rmSync(part, { force: true });
-            throw e;
+            // closed before it is removed: an open handle can keep the name (or fail the removal) on some file systems
+            if (!out.closed) await once(out, 'close').catch(() => undefined);
+            try {
+              rmSync(part, { force: true });
+            } catch {
+              // a .part that cannot be removed (the folder became read-only) must not hide why the save failed
+            }
+            throw writeError(e, dest);
           }
           progress(true);
         };
@@ -513,7 +549,10 @@ export function outputHandlers(be: Backend): Handlers {
       if (!path || !existsSync(path)) throw new ApsError('ConfigurationError', 'The saved file is no longer there');
       if (open) {
         if (!be.host.openPath) throw new ApsError('ConfigurationError', 'Files can only be opened from the desktop app');
-        await be.host.openPath(path);
+        // Electron's shell.openPath answers with an error message (no app for the type …) instead of throwing
+        const failed = await be.host.openPath(path);
+        if (typeof failed === 'string' && failed)
+          throw new ApsError('ConfigurationError', `Could not open ${basename(path)}: ${failed}`, { suggestions: ['Use Show in folder and open it from there.'] });
       } else if (be.host.showItemInFolder) be.host.showItemInFolder(path);
       else if (be.host.openPath) await be.host.openPath(dirname(path));
       else throw new ApsError('ConfigurationError', 'Files can only be shown from the desktop app');

@@ -122,10 +122,18 @@ The status, duration, size, headers, cookies and a timeline are always shown. Th
 - **Preview** renders HTML in a sandboxed frame.
 - **JWT** appears when the body or a header holds a JSON Web Token (an `access_token`, `id_token` or `Authorization` value): its header and claims, when it was issued and when it expires (*expires in 58 min*, or *expired 2 h ago*). The signature is not verified. A `jwt` check (see [Assertions](/test-runner/assertions)) tests the same in a test; `testpion jwt <token>` and the `decode_jwt` MCP tool decode one outside the app.
 
-The full body is streamed to `payloads/` on disk. The viewer only holds a preview, 2 MB by default and configurable in Settings. Larger bodies show a *truncated* badge; **Save response** exports the complete file.
+The full body is streamed to `payloads/` on disk. The viewer only holds a preview, 2 MB by default and configurable in Settings. Larger bodies show a *truncated* badge; the **down arrow** at the right end of the response's tab bar saves the complete body from disk ([Save the response](#save-the-response)).
 
 <figure class="aps-screenshot">
   <img src="/images/rest-jwt.jpg" alt="The JWT tab of a token response: the token's algorithm, when it expires, its header and claims, and when it was issued and expires" width="1440" height="900" loading="lazy">
+</figure>
+
+### Save the response {#save-the-response}
+
+Every tab of the response has the same **down arrow** at the right end of the response's tab bar, with **Copy** before it and **▾** after it. A click saves the tab you are on: the body as pretty JSON (or the raw bytes as received, the table as CSV or TSV, HAR), the headers, the cookies (also as `cookies.txt` for `curl -b`), the decoded JWTs, the timeline as HAR with timings, the checks as JUnit XML, the stream, the trace, the events, the history or the cURL command. The **Save as** dialog suggests a name such as `GET-patients-2026-10-17-1405-200.json` (or the server's `Content-Disposition` name for the raw body). <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> does the same from the keyboard. The decoded JWTs are saved with the tokens masked unless you choose **▾ ▸ Include secrets…**; the body is saved as it is. While **Diff vs previous** is open, the Body tab shows the comparison and has no arrow: close the diff to save the body. Every format: [Save and export results](/getting-started/save-and-export-results).
+
+<figure class="aps-screenshot">
+  <img src="/images/output-timeline-menu.jpg" alt="A response's Timeline tab with the down arrow's ▾ menu open: JSON, HAR (with timings) and Markdown" width="1440" height="900" loading="lazy">
 </figure>
 
 ## Compare across environments
@@ -171,6 +179,7 @@ A `text/event-stream` response (live feeds, notifications, streaming LLM APIs) i
 - **Stop** ends the stream and keeps the events received so far, marked *stopped*.
 - When the response ends, it opens on the **Events** tab. The raw text is on **Body**.
 - Up to 10,000 events are kept per response.
+- The down arrow on the **Events** tab's bar saves every event kept (not only the filtered ones) as JSON Lines, CSV or `text/event-stream` text.
 - AI agents using [`testpion mcp-server`](/cli/reference#mcp-server) get the parsed events from `send_request`.
 
 ## Diff vs previous {#diff-vs-previous}
@@ -190,6 +199,7 @@ For a saved request, the response panel has a **History** tab: every response yo
 
 - Above the list, a **Response time** chart shows the recent responses oldest to newest, with the median, p95 and slowest time; failed responses are red dots. Hover a point for details, click it to open that response.
 - Click a response to view its body.
+- The down arrow on the History tab's bar saves the list as JSON or CSV.
 - To see what changed, tick two responses and click **Compare selected**, or use the compare button on a row to compare it with the response before it.
 - The comparison shows the status and time change, then the **body** field by field: each change is listed with its JSON path (`$.items[2]`, `$.total` …) as **added**, **removed**, **changed** or a **type** change. Text bodies get a line-by-line diff.
 - It also shows **header** changes. Headers that change on every response (`date`, request ids and similar) are hidden behind a link, so they don't hide real differences.
@@ -357,7 +367,7 @@ The **Console** is Postman's console: a log of every request with its script out
 - `console.log`, `console.info`, `console.warn` and `console.error` output from pre-request and test scripts appears under its request, marked `pre ›` or `test ›`.
 - Click a request sent from a tab to expand it and see the request and response headers and bodies (up to 16,000 characters each).
 - An expanded line links to what it belongs to: the saved request it was sent from, its **History entry**, its **Trace**, and for a run's request the **Run** (at that result). **Open as request** opens what was sent in its editor.
-- **All / Errors / With logs** and the filter box narrow the list. The trash button clears it. The console keeps the last 500 requests until the app closes and is never written to disk.
+- **All / Errors / With logs** and the filter box narrow the list. The trash button clears it. The console keeps the last 500 requests until the app closes and is never written to disk, unless you save it: the down arrow at the right end of its bar saves the lines as text or JSON Lines, always with secrets masked ([Save and export results](/getting-started/save-and-export-results)).
 - Everything is redacted before it reaches the console: sensitive headers, sensitive JSON fields, known secret values, and values you typed into sensitive headers or body fields, even when a server echoes them back.
 
 See also [authentication](./authentication.md), [environments](./environments.md) and [collections](./collections.md).

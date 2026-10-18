@@ -74,7 +74,8 @@ const steps = [
 ];
 
 module.exports = withExpect(steps, {
-  'open-and-search': /^rows: true \| found: Command palette \(Quick Open at >\) \| palette keys: Ctrl\+K$/,
+  // the search reads the descriptions too: Download Output's mentions the palette (0.51)
+  'open-and-search': /^rows: true \| found: Command palette \(Quick Open at >\) \/ Download the output you are in [^|]*the command palette has Download Output… for the other formats \| palette keys: Ctrl\+K$/,
   'rebind-palette': /^Press keys… \| now: Ctrl\+Shift\+P \| saved: \{"palette":"Mod\+Shift\+P"\}$/,
   'new-keys-work': /^Ctrl\+K opens: false \| Ctrl\+Shift\+P opens: true \(.*command/i,
   'conflict-and-take-over': /^Search the workspace: Ctrl\+P is already “Quick Open”\. \|\| search: Ctrl\+P \| quick open: Ctrl\+Shift\+F$/,

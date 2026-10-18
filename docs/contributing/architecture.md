@@ -37,12 +37,17 @@ packages/core        the engine, host-agnostic (Node): the same code runs in the
   net/               the production guard (one rule for every host), private-network guards
   mcp-server/        the workspace as MCP tools for agents: tool.ts (a tool), tool-contract.ts (paging, response_format, confirm, output schemas) and tool-docs.ts (when / when not / example), one module per subject, testpion-mcp.ts composes them
   index.ts           the public surface: everything the CLI and the app may use
+packages/shared      pure, browser-safe code for every host; output/ is the one registry of downloads: formats.ts (formats
+                     and builders), filename.ts (safe names), csv-write.ts (the formula guard), surfaces.ts (every output that
+                     can be saved, its formats and secrets policy; tests/unit/output-surfaces.test.ts keeps it complete)
 packages/cli         commands over core (commands/*.ts); every --json is one envelope (output.ts), exit codes 0 / 1 / 2 / 3
 apps/desktop
   backend/           the app's RPC handlers over core (handlers/*.ts, one file per subject); backend.ts wires them and owns long-running state;
                      production-guard.ts checks every sending or running call against production environments
   electron/          the window, menu, updater, preload (the context bridge), --mcp-server and --merge-driver modes
-  src/               the renderer (React): talks to the backend only through api.ts (RPC); from core it takes types only
+  src/               the renderer (React): talks to the backend only through api.ts (RPC); from core it takes types only;
+                     components/output/ is the down arrow (OutputActions / OutputHeader): a new output describes itself as
+                     an OutputSpec there and its id in surfaces.ts, and the backend's handlers/output.ts writes the file
   e2e/               the UI regression suite (plans/*.cjs) and the profiler plan
 docs/                the published site; planning/ is internal
 ```

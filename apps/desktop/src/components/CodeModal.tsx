@@ -54,8 +54,9 @@ export function CodeModal({ request, collectionId, requestId, onClose }: { reque
   const spec = useMemo<OutputSpec>(() => {
     const name = outputFileName({ method: request.method, name: `${urlNamePart(request.url) ?? 'request'}-${lang}`, stamp: false, ext: '' });
     const [ext, label] = CODE_FILES[current?.syntax ?? ''] ?? ['txt', 'Text file (.txt)'];
-    return { id: 'code.generated', what: 'code snippet', name, environment: env, empty: code ? undefined : 'Generating the code…', formats: [{ format: 'text', label, fileName: `${name}.${ext}`, build: () => (code.endsWith('\n') ? code : `${code}\n`) }] };
-  }, [code, lang, current?.syntax, request.method, request.url, env]);
+    // without "Show secrets" http.code masked the snippet already: nothing for "Include secrets…" to put back
+    return { id: 'code.generated', what: 'code snippet', name, environment: env, masked: !reveal, empty: code ? undefined : 'Generating the code…', formats: [{ format: 'text', label, fileName: `${name}.${ext}`, build: () => (code.endsWith('\n') ? code : `${code}\n`) }] };
+  }, [code, lang, current?.syntax, request.method, request.url, env, reveal]);
   return (
     <Modal
       title="Code snippet"
