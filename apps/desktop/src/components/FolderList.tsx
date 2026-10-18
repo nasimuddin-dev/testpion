@@ -258,7 +258,8 @@ export function FolderList({
               </div>
             );
           })}
-        <div {...dropProps(null)} className={cx(dropTarget === null && 'bg-accent-soft/60')}>
+        {/* the top level is a drop target too (its 'over' is the highlight below, not an attribute) */}
+        <div {...(({ over: _over, ...props }) => props)(dropProps(null))} className={cx(dropTarget === null && 'bg-accent-soft/60')}>
           {top.map((it) => row(it, false))}
           {!items.length && !allFolders.length && (
             <>
