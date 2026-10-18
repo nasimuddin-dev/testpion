@@ -619,7 +619,27 @@ export function TestsView() {
       },
     };
   };
-  /** A folder's menu: new test file here, expand or collapse it, run it, run it in CI, delete it (Undo). */
+  /** Rename or move a folder of test files (its path inside tests/): every file goes to the new path; never onto another folder. */
+  const renameFolder = async (n: Node) => {
+    const to = (await promptText('Rename folder', { message: 'Folder path inside tests/', value: n.path, okLabel: 'Rename' }))?.trim().replace(/^\/+|\/+$/g, '');
+    if (!to || to === n.path) return;
+    const taken = (nodes: Node[]): boolean => nodes.some((x) => x.path === to || taken(x.children ?? []));
+    if (taken(tree)) return void useApp.getState().toast(`tests/${to} exists already`, 'warning');
+    const files: string[] = [];
+    const walk = (x: Node) => (x.kind === 'file' ? files.push(x.path) : (x.children ?? []).forEach(walk));
+    walk(n);
+    try {
+      // the files first, then the old folder: a failure in between leaves a copy, never a loss
+      for (const p of files) await call('tests.write', { path: `${to}${p.slice(n.path.length)}`, content: await call<string>('tests.read', { path: p }) });
+      await call('tests.delete', { path: n.path });
+      for (const p of files) renameOpen(p, `${to}${p.slice(n.path.length)}`);
+      setOpen((o) => ({ ...o, [to]: o[n.path] ?? true }));
+      await loadTree();
+    } catch (e) {
+      toastError(e);
+    }
+  };
+  /** A folder's menu: new test file here, expand or collapse it, run it, run it in CI, rename it, delete it (Undo). */
   const folderMenu = (n: Node): NodeMenuCtx => ({
     name: n.name,
     create: [{ label: 'New test file here', icon: <FilePlus2 size={14} />, onSelect: () => void newFile('http', n.path) }],
@@ -628,6 +648,7 @@ export function TestsView() {
       collapseAll: () => setDirs(dirsUnder(n), false),
       run: () => void run([n.path], n.path),
       ci: () => useApp.getState().set({ ci: { tests: [n.path] } }),
+      rename: () => void renameFolder(n),
       delete: () => void deletePath(n),
     },
   });

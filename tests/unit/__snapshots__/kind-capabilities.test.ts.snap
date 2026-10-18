@@ -176,6 +176,7 @@ exports[`the item-kind registry is complete > every capability is declared; a na
     "container": "an item, not a folder: it holds nothing",
     "favorite": "favorites are saved requests (one click away in the sidebar)",
     "flow": "it is a flow already",
+    "open-new-tab": "every test file opens in a tab of its own",
     "search": "found as its test file",
     "test-file": "it is a test file already",
   },
@@ -411,6 +412,7 @@ exports[`the item-kind registry is complete > every capability is declared; a na
     "move": "a record of something that happened: it is kept or cleared, not edited",
     "open-new-tab": "records open in their own view",
     "rename": "a record of something that happened: it is kept or cleared, not edited",
+    "run": "a run is repeated with Rerun failed, or by running what it ran",
     "secret-scan": "records are local, never committed or exported",
     "test-file": "a record of something that happened: it is kept or cleared, not edited",
     "trash": "records are not kept in Recently deleted",
@@ -447,6 +449,7 @@ exports[`the item-kind registry is complete > every capability is declared; a na
     "container": "an item, not a folder: it holds nothing",
     "favorite": "favorites are saved requests (one click away in the sidebar)",
     "flow": "opened as a flow in the canvas (a flow file)",
+    "open-new-tab": "every test file opens in a tab of its own",
     "test-file": "it is a test file already",
   },
   "test-case": {

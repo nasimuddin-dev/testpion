@@ -304,7 +304,7 @@ export const KIND_LIST: readonly ItemKindInfo[] = [
     sample: 'tests/smoke/login.yaml',
     capabilities: {
       ...FILE_ITEM,
-      'open-new-tab': true,
+      'open-new-tab': { na: 'every test file opens in a tab of its own' },
       run: true,
       monitor: true,
       ci: true,
@@ -331,7 +331,7 @@ export const KIND_LIST: readonly ItemKindInfo[] = [
     git: { merge: 'text' },
     capabilities: {
       ...FILE_ITEM,
-      'open-new-tab': true,
+      'open-new-tab': { na: 'every test file opens in a tab of its own' },
       run: true,
       monitor: true,
       ci: true,
@@ -704,7 +704,7 @@ export const KIND_LIST: readonly ItemKindInfo[] = [
     opens: { view: 'tests' },
     watch: 'none',
     git: { merge: 'none', ignored: true },
-    capabilities: { ...RECORD, run: true, delete: true, ci: true },
+    capabilities: { ...RECORD, run: { na: 'a run is repeated with Rerun failed, or by running what it ran' }, delete: true, ci: true },
   },
   {
     id: 'history',

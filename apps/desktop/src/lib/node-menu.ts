@@ -48,16 +48,25 @@ export function nodeCapabilities(kind: NodeKind): Capabilities {
       delete: true,
       duplicate: { planned: '0.53' },
       move: { planned: '0.53' },
-      run: base.run === true ? true : NA('its items do not run'),
-      ci: base.ci === true ? true : NA('its items do not run in CI'),
+      // a folder of test files runs (and runs in CI) as one; a library's folder is a way to sort its items
+      run: base.run === true && KIND_INFO[baseKind(kind)].folders === 'dirs' ? true : NA('its items run one by one'),
+      ci: base.ci === true && KIND_INFO[baseKind(kind)].folders === 'dirs' ? true : NA('its items run in CI one by one'),
       export: { planned: '0.53' },
     };
   if (kind === 'category') return { ...all(NA('a group of one protocol’s requests in a collection')), container: true, run: true };
   return { ...all(NA('favorites gather requests from every collection')), container: true };
 }
 
-/** Whether a node kind's items have folders (New folder applies). */
-const hasFolders = (kind: NodeKind) => kind !== 'category' && kind !== 'favorites' && KIND_INFO[baseKind(kind)].folders !== 'none';
+/**
+ * Whether New folder applies: an item that holds folders (a collection, a folder: `nodes`), or a section whose list
+ * keeps virtual folders (MCP servers, API definitions, datasets, library items). Those folders are one level deep, and a
+ * test file's folder is made by its path (New test file here), so a list's folder has no New folder of its own.
+ */
+function hasFolders(kind: NodeKind): boolean {
+  if (kind === 'category' || kind === 'favorites' || kind.startsWith('folder:')) return false;
+  const f = KIND_INFO[baseKind(kind)].folders;
+  return kind.startsWith('section:') ? typeof f === 'object' : f === 'nodes';
+}
 
 /** The actions of a node kind: the shared ones, then the kind's own ones, each group in this order. */
 function actionsOf(kind: NodeKind): ActionDef[] {
@@ -110,15 +119,25 @@ export const NODE_KINDS: readonly NodeKind[] = [
   'favorites',
 ];
 
+/**
+ * Whether a node offers New … items: a section, or a container — not Favorites, and not a folder of gRPC calls or
+ * connections (those are made in their editor, in a collection).
+ */
+const createsHere = (kind: NodeKind) =>
+  kind.startsWith('section:') || (nodeCapabilities(kind).container === true && kind !== 'favorites' && !(kind.startsWith('folder:') && KIND_INFO[baseKind(kind)].parent === 'collection'));
+
 /** A context that offers every action (the shape of a kind's menu: what it can show at most). */
 export function fullCtx(kind: NodeKind): NodeMenuCtx {
   const on: Record<string, NodeMenuCtx['on'][string]> = {};
   const noop = () => undefined;
   for (const def of actionsOf(kind)) if (!def.contextual) on[def.id] = noop;
-  // a list's folders and a gRPC call's collections are submenus
+  // submenus as the views give them: a list's folders and a gRPC call's collections (Move to), a request's code forms
+  // (Copy as), a collection's export choices (Export)
   const info = KIND_INFO[baseKind(kind)];
   if (typeof info.folders === 'object' || kind === 'grpc-call' || kind === 'ws-connection') on.move = [];
-  return { on, repo: true, create: kind.startsWith('section:') || (nodeCapabilities(kind).container === true && kind !== 'favorites') ? [{ label: 'New …', onSelect: noop }] : [] };
+  if (on.copyAs) on.copyAs = [];
+  if (kind === 'collection') on.export = [];
+  return { on, repo: true, create: createsHere(kind) ? [{ label: 'New …', onSelect: noop }] : [] };
 }
 
 /** The labels of a kind's menu, group by group, with every action offered (tests, the docs table). */

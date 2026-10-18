@@ -20,5 +20,5 @@ export const EXPLORER_ACTIONS: readonly ActionDef[] = [
   { id: 'preview', group: 'open', label: LABEL.preview, icon: Eye, kinds: ['dataset'] },
   { id: 'runWithDataset', group: 'run', label: LABEL.runWithDataset, icon: Play, kinds: ['dataset'] },
   { id: 'useInTest', group: 'tools', label: LABEL.useInTest, icon: Wand2, kinds: ['dataset'] },
-  { id: 'generateData', group: 'create', label: LABEL.generateData, icon: Sparkles, kinds: ['section:dataset', 'folder:dataset'] },
+  { id: 'generateData', group: 'create', label: LABEL.generateData, icon: Sparkles, kinds: ['section:dataset'] },
 ];

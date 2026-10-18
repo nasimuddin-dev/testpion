@@ -683,11 +683,14 @@ export const CollectionTree = memo(function CollectionTree({
         </span>
       </button>
       <NodeMenu
-        kind={r.key.includes(':websocket:') ? 'folder:ws-connection' : 'folder:grpc-call'}
+        kind={r.g.cat === 'websocket' ? 'folder:ws-connection' : 'folder:grpc-call'}
         label={`folder ${r.folder}`}
         open={menuFor === r.key}
         onOpenChange={(o) => setMenuFor(o ? r.key : undefined)}
-        ctx={() => ({ on: { expandAll: () => setOpen((o) => ({ ...o, [r.key]: true })), collapseAll: () => setOpen((o) => ({ ...o, [r.key]: false })) } })}
+        ctx={() => {
+          const own = r.g.folderMenu?.(r.folder);
+          return { ...own, on: { ...own?.on, expandAll: () => setOpen((o) => ({ ...o, [r.key]: true })), collapseAll: () => setOpen((o) => ({ ...o, [r.key]: false })) } };
+        }}
       />
     </div>
   );

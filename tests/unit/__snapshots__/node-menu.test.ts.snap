@@ -48,7 +48,7 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
     ],
     [
       "Copy link",
-      "Export…",
+      "Export ▸",
     ],
     [
       "Monitor on a schedule…",
@@ -161,7 +161,6 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
   "flow": [
     [
       "Open",
-      "Open in new tab",
       "Reveal file",
     ],
     [
@@ -217,8 +216,6 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
   "folder:dataset": [
     [
       "New …",
-      "New folder",
-      "Generate test data…",
     ],
     [
       "Expand all",
@@ -234,14 +231,10 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
   "folder:evaluation": [
     [
       "New …",
-      "New folder",
     ],
     [
       "Expand all",
       "Collapse all",
-    ],
-    [
-      "Run folder",
     ],
     [
       "Rename folder",
@@ -251,10 +244,6 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
     ],
   ],
   "folder:grpc-call": [
-    [
-      "New …",
-      "New folder",
-    ],
     [
       "Expand all",
       "Collapse all",
@@ -269,14 +258,10 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
   "folder:load-test": [
     [
       "New …",
-      "New folder",
     ],
     [
       "Expand all",
       "Collapse all",
-    ],
-    [
-      "Run folder",
     ],
     [
       "Rename folder",
@@ -288,7 +273,6 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
   "folder:mcp-server": [
     [
       "New …",
-      "New folder",
     ],
     [
       "Expand all",
@@ -304,14 +288,10 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
   "folder:monitor": [
     [
       "New …",
-      "New folder",
     ],
     [
       "Expand all",
       "Collapse all",
-    ],
-    [
-      "Run folder",
     ],
     [
       "Rename folder",
@@ -323,7 +303,6 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
   "folder:prompt": [
     [
       "New …",
-      "New folder",
     ],
     [
       "Expand all",
@@ -339,7 +318,6 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
   "folder:spec": [
     [
       "New …",
-      "New folder",
     ],
     [
       "Expand all",
@@ -355,7 +333,6 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
   "folder:test": [
     [
       "New …",
-      "New folder",
     ],
     [
       "Expand all",
@@ -375,10 +352,6 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
     ],
   ],
   "folder:ws-connection": [
-    [
-      "New …",
-      "New folder",
-    ],
     [
       "Expand all",
       "Collapse all",
@@ -555,7 +528,7 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
     ],
     [
       "Copy link",
-      "Copy as",
+      "Copy as ▸",
     ],
     [
       "Monitor on a schedule…",
@@ -579,7 +552,6 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
       "Open",
     ],
     [
-      "Run",
       "Rerun failed",
     ],
     [
@@ -607,7 +579,6 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
   "section:collection": [
     [
       "New …",
-      "New folder",
       "Import…",
     ],
     [
@@ -714,7 +685,6 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
   "section:test": [
     [
       "New …",
-      "New folder",
     ],
     [
       "Expand all",
@@ -753,7 +723,6 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
   "test": [
     [
       "Open",
-      "Open in new tab",
       "Reveal file",
     ],
     [

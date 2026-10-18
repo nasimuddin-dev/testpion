@@ -45,7 +45,7 @@ export type ItemRef =
   /** A collection's mock server. */
   | { kind: 'mock'; collectionId: string }
   | { kind: 'certificate'; host: string }
-  /** A Debugger capture session saved as a HAR file (debugger/sessions/<name>.har): opens in the Debugger. */
+  /** A Debugger capture session saved as a HAR file (debugger/<name>.har): opens in the Debugger. */
   | { kind: 'capture'; name: string }
   /** A changed file in the Git view: its path in the workspace; `line` the line a link pointed at (1-based, as text). */
   | { kind: 'git-file'; path: string; line?: string }

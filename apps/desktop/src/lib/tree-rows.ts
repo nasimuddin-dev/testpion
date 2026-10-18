@@ -19,6 +19,8 @@ export interface ExtraGroup {
   onOpen(id: string): void;
   /** What its menu can do (lib/node-menu.ts builds the menu from it, only while open). */
   menu?(id: string): NodeMenuCtx;
+  /** What a folder's menu can do (rename it, delete it: its items move to the top level). */
+  folderMenu?(folder: string): NodeMenuCtx;
   /** Rename an item in place (F2, or Rename in its menu). */
   rename?(id: string): { editing: boolean; start(): void; done(name?: string): void };
 }
@@ -30,7 +32,7 @@ export type TreeRow =
   | { t: 'folder'; key: string; c: Collection; n: CollectionFolder; depth: number; open: boolean }
   | { t: 'req'; key: string; c: Collection; n: Exclude<CollectionNode, CollectionFolder>; depth: number }
   | { t: 'example'; key: string; c: Collection; n: SavedHttpRequest; ex: { id: string; name: string; status: number }; depth: number }
-  | { t: 'xfolder'; key: string; folder: string; count: number; open: boolean; depth: number }
+  | { t: 'xfolder'; key: string; folder: string; count: number; open: boolean; depth: number; g: ExtraGroup }
   | { t: 'xitem'; key: string; g: ExtraGroup; i: ExtraGroup['items'][number]; depth: number; from?: string }
   | { t: 'empty'; key: string; c: Collection };
 
@@ -87,7 +89,7 @@ export function buildTreeRows({ collections, open, filter, favoritesOnly = false
       const key = `${from ?? ''}:${g.cat}:folder:${folder}`;
       const isOpen = !!f || (open[key] ?? true);
       const inside = shown.filter((i) => (i.folder ?? '') === folder);
-      if (folder) out.push({ t: 'xfolder', key, folder, count: inside.length, open: isOpen, depth });
+      if (folder) out.push({ t: 'xfolder', key, folder, count: inside.length, open: isOpen, depth, g });
       if (isOpen || !folder) for (const i of inside) out.push({ t: 'xitem', key: `${from ?? ''}:${g.cat}:${i.id}`, g, i, depth: depth + (folder ? 1 : 0), from });
     }
   };

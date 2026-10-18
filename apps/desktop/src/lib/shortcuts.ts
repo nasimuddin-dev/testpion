@@ -102,8 +102,11 @@ function rows(views: string[]): Array<{ title: string; rows: Row[] }> {
         { fixed: ['↑', '↓'], text: 'Move between rows' },
         { fixed: ['→', '←'], text: 'Expand or collapse a collection, category or folder' },
         { fixed: ['F2'], text: 'Rename the focused item in place (request, folder, collection, tab, environment, monitor …); Enter saves, Esc cancels' },
-        { fixed: ['Delete'], text: 'Delete the focused request or folder (Undo in the message)' },
-        { fixed: ['Enter'], text: 'Open the focused request' },
+        { fixed: ['Delete'], text: 'Delete the focused item: request, folder, collection, server, API definition, dataset, saved item … (Undo in the message)' },
+        { fixed: ['Enter'], text: 'Open the focused item' },
+        { fixed: ['Shift+F10', 'Menu key'], text: 'Open the focused row’s menu (the same as its ⋯ and its right-click)' },
+        { fixed: ['*'], text: 'Expand everything inside the focused collection, folder or section' },
+        { fixed: ['a … z'], text: 'Jump to the next row whose name starts with what you type' },
       ],
     },
     {

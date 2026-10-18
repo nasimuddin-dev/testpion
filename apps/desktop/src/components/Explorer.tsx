@@ -352,6 +352,25 @@ export function Explorer() {
       toastError(e);
     }
   };
+  /** A folder of saved gRPC calls or connections: rename it, or delete it (its items move to the top level, Undo puts them back). */
+  const savedFolderMenu = (kind: 'grpc' | 'websocket', folder: string): NodeMenuCtx => ({
+    name: folder,
+    on: {
+      rename: async () => {
+        const to = (await promptText(LABEL.renameFolder, { message: 'Folder name', value: folder, okLabel: 'Rename' }))?.trim();
+        if (to && to !== folder) await editLibrary(kind, (items) => items.map((i) => (i.folder === folder ? { ...i, folder: to } : i)));
+      },
+      delete: () => {
+        const was = new Set<string>();
+        void deleteWithUndo({
+          what: `the folder "${folder}"`,
+          note: `Its ${kind === 'grpc' ? 'gRPC calls' : 'connections'} moved to the top level`,
+          run: () => editLibrary(kind, (items) => items.map((i) => (i.folder === folder ? (was.add(i.id), { ...i, folder: undefined }) : i))),
+          undo: () => editLibrary(kind, (items) => items.map((i) => (was.has(i.id) && !i.folder ? { ...i, folder } : i))),
+        });
+      },
+    },
+  });
   const renameSaved = (kind: 'grpc' | 'websocket', id: string): RowRename => renamer(id, id, (name) => editLibrary(kind, (items) => items.map((i) => (i.id === id ? { ...i, name } : i))));
   /** The menu of a gRPC call or connection: the same groups as a request's (open, copy, test file, rename, duplicate, move, delete). */
   const savedMenu = (kind: 'grpc' | 'websocket', item: SavedItem): NodeMenuCtx => {
@@ -546,8 +565,8 @@ export function Explorer() {
   };
 
   // the tree is memoized: its saved items change only with these lists (or a rename in place); menus read the latest
-  const savedLatest = useRef({ savedMenu, renameSaved });
-  savedLatest.current = { savedMenu, renameSaved };
+  const savedLatest = useRef({ savedMenu, renameSaved, savedFolderMenu });
+  savedLatest.current = { savedMenu, renameSaved, savedFolderMenu };
   const extraGroups = useCallback(
     (c: Collection): ExtraGroup[] => [
       {
@@ -556,6 +575,7 @@ export function Explorer() {
         onOpen: (id) => void openRef({ kind: 'saved', library: 'grpc', itemId: id }),
         menu: (id) => savedLatest.current.savedMenu('grpc', grpc.find((i) => i.id === id)!),
         rename: (id) => savedLatest.current.renameSaved('grpc', id),
+        folderMenu: (folder) => savedLatest.current.savedFolderMenu('grpc', folder),
       },
       {
         cat: 'websocket',
@@ -563,6 +583,7 @@ export function Explorer() {
         onOpen: (id) => void openRef({ kind: 'saved', library: 'websocket', itemId: id }),
         menu: (id) => savedLatest.current.savedMenu('websocket', sockets.find((i) => i.id === id)!),
         rename: (id) => savedLatest.current.renameSaved('websocket', id),
+        folderMenu: (folder) => savedLatest.current.savedFolderMenu('websocket', folder),
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
