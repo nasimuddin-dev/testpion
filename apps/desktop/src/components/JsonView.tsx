@@ -167,7 +167,8 @@ export function JsonTree({ data: full, query, onAssert: assertOnFull, onSaveVari
     else s.add(p);
     setExpanded(s);
   };
-  const expandAll = () => {
+  /** Every node that can open (up to the cap), as Expand all opens them. */
+  const everyNode = (): Set<string> => {
     const s = new Set<string>();
     let n = 0;
     const walk = (v: unknown, p: string) => {
@@ -177,8 +178,14 @@ export function JsonTree({ data: full, query, onAssert: assertOnFull, onSaveVari
       for (const [k, x] of Object.entries(v)) walk(x, childPath(p, v, k));
     };
     walk(data, '$');
-    setExpanded(s);
+    return s;
   };
+  const expandAll = () => setExpanded(everyNode());
+  // one toggle: it offers Expand all until everything is open, then Collapse all
+  const allOpen = useMemo(() => {
+    for (const p of everyNode()) if (!expanded.has(p)) return false;
+    return true;
+  }, [data, expanded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="h-full flex flex-col min-h-0 overflow-x-clip">
@@ -186,12 +193,15 @@ export function JsonTree({ data: full, query, onAssert: assertOnFull, onSaveVari
       <OutputToolbar
         tools={
           <>
-            <IconButton label="Expand all" className="h-6 w-6" onClick={expandAll} data-json-expand-all>
-              <ChevronsUpDown size={13} />
-            </IconButton>
-            <IconButton label="Collapse all" className="h-6 w-6" onClick={() => setExpanded(new Set(['$']))} data-json-collapse-all>
-              <ChevronsDownUp size={13} />
-            </IconButton>
+            {allOpen ? (
+              <IconButton label="Collapse all" className="h-6 w-6" onClick={() => setExpanded(new Set(['$']))} data-json-collapse-all>
+                <ChevronsDownUp size={13} />
+              </IconButton>
+            ) : (
+              <IconButton label="Expand all" className="h-6 w-6" onClick={expandAll} data-json-expand-all>
+                <ChevronsUpDown size={13} />
+              </IconButton>
+            )}
           </>
         }
         filter={
