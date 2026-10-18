@@ -45,7 +45,8 @@ const steps = [
 ];
 
 module.exports = withExpect(steps, {
-  'history-row': /^Open \| Open trace \| Save as test… \| Delete…$/,
+  // one menu function (lib/node-menu.ts): open · share (Copy link) · tools · danger
+  'history-row': /^Open \| Open trace \| Copy link \| Save as test… \| Delete…$/,
   'traces-row': /^Open( \| Open run)? \| Copy link$/,
   'rail-shortcut': /^view: tests$/,
   'shortcuts-list': /^Go to a view in the rail's order: 1 Home, 2 Collections, 3 Tests, 4 Environments, 5 History \| terminal listed: true$/,
