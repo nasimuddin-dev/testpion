@@ -1,9 +1,10 @@
 import { execFile } from 'node:child_process';
 import { existsSync, realpathSync, writeFileSync } from 'node:fs';
+import { mergeModeOfPath } from '@testpion/shared';
 import { mergeWorkspaceTexts, requestParts, type MergeConflict, type MergeResolutions } from './merge.js';
 
-/** The files TestPion merges by meaning (collections, environments, library), not by lines. */
-const MERGED_BY_MEANING = /^(collections|environments|library)\/[^/]+\.json$/;
+/** The files TestPion merges by meaning (collections, environments, library files), not by lines: the registry says. */
+const mergedByMeaning = (path: string) => mergeModeOfPath(path) !== undefined;
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { ApsError } from '../errors.js';
 
@@ -603,7 +604,7 @@ export async function gitDefaultBranch(ws: string): Promise<string> {
  */
 export async function gitResolve(ws: string, path: string, side: 'ours' | 'theirs', resolutions?: MergeResolutions): Promise<void> {
   const [base, ours, theirs] = await conflictStages(ws, path);
-  const merged = MERGED_BY_MEANING.test(path)
+  const merged = mergedByMeaning(path)
     ? resolutions
       ? mergeWorkspaceTexts(base, ours, theirs, resolutions, path)
       : // the side kept on a conflict is the merge's "ours": swap the sides to prefer theirs
@@ -634,7 +635,7 @@ export interface ConflictDetail {
 /** What conflicts in one file (GIT-302), part by part, for the side-by-side view. */
 export async function gitConflictDetail(ws: string, path: string): Promise<ConflictDetail> {
   const [base, ours, theirs] = await conflictStages(ws, path);
-  const merged = MERGED_BY_MEANING.test(path) ? mergeWorkspaceTexts(base, ours, theirs, {}, path) : undefined;
+  const merged = mergedByMeaning(path) ? mergeWorkspaceTexts(base, ours, theirs, {}, path) : undefined;
   if (!merged) return { path, collection: false, items: [] };
   return {
     path,

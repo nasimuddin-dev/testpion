@@ -2,7 +2,9 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { collectionFileContent } from '../storage/workspace.js';
 import type { Collection } from '../model/types.js';
-import { kindOfPath, libraryOfPath } from '@testpion/shared';
+import { mergeModeOfPath } from '@testpion/shared';
+
+export { mergeModeOfPath } from '@testpion/shared';
 
 /**
  * Merging collection files by meaning (GIT-301): two people who change different requests of one collection never
@@ -173,18 +175,6 @@ function mergeLibraryTexts(baseText: string, oursText: string, theirsText: strin
   for (const i of items) if (typeof (i as Obj).folder === 'string' && (i as Obj).folder) folders.add((i as Obj).folder as string);
   const fields = mergeFields(without(base, 'folders'), without(ours, 'folders'), without(theirs, 'folders'), 'library', 'library', ctx);
   return { text: JSON.stringify({ ...fields, folders: [...folders].sort((a, b) => a.localeCompare(b)), items }, null, 2) + '\n', conflicts: ctx.conflicts, items: ctx.items };
-}
-
-/**
- * How the registry says a workspace file merges by meaning: a collection, an environment, or a library file (any
- * library/<name>.json); undefined for a file of another kind (the shape of the text decides then).
- */
-export function mergeModeOfPath(path: string): 'collection' | 'environment' | 'library' | undefined {
-  const k = kindOfPath(path, { raw: true });
-  if (k?.id && k.kind === 'collection') return 'collection';
-  if (k?.id && k.kind === 'environment') return 'environment';
-  if (libraryOfPath(path, { raw: true })) return 'library';
-  return undefined;
 }
 
 /**

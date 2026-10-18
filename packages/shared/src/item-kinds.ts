@@ -550,6 +550,7 @@ const kinds: ItemKindInfo[] = [
     sample: 'packages/helpers.js',
     capabilities: {
       ...FILE_ITEM,
+      open: { na: 'edited in Settings, where the packages are listed' },
       link: { na: 'used by name in scripts (tp.require)' },
       duplicate: { na: 'one module per name' },
       move: { na: 'packages have no folders' },
@@ -728,6 +729,7 @@ const kinds: ItemKindInfo[] = [
     sample: 'debugger/rules.json',
     capabilities: {
       ...FILE_ITEM,
+      open: { na: 'edited in the Debugger, in its rules panel' },
       link: { na: 'one rule list per workspace' },
       rename: { na: 'one rule list per workspace' },
       duplicate: { na: 'one rule list per workspace' },
@@ -786,7 +788,7 @@ const kinds: ItemKindInfo[] = [
   { id: 'history', ref: 'history', aliases: ['history-entry'], label: 'History entry', plural: 'History', icon: 'history', storage: { layout: 'record', where: 'meta' }, folders: 'none', opens: { view: 'history' }, watch: 'none', git: { merge: 'none', ignored: true }, capabilities: { ...RECORD, delete: true, 'test-file': true } },
   { id: 'trace', ref: 'trace', aliases: ['traces'], label: 'Trace', plural: 'Traces', icon: 'activity', storage: { layout: 'record', where: 'traces' }, folders: 'none', opens: { view: 'traces' }, watch: 'none', git: { merge: 'none', ignored: true }, capabilities: RECORD },
   { id: 'exchange', ref: 'exchange', aliases: [], label: 'Captured exchange', plural: 'Captured exchanges', icon: 'arrow-left-right', storage: { layout: 'record', where: 'memory' }, folders: 'none', opens: { view: 'debugger' }, watch: 'none', git: { merge: 'none', ignored: true }, capabilities: { ...RECORD, search: { na: 'filtered in the Debugger grid' } } },
-  { id: 'proposal', aliases: ['ai-proposal'], label: 'AI proposal', plural: 'AI proposals', icon: 'sparkles', storage: { layout: 'record', where: 'local' }, folders: 'none', opens: { dialog: 'proposal' }, watch: 'none', git: { merge: 'none', ignored: true }, capabilities: { ...RECORD, link: { na: 'opened from its review dialog' }, delete: { na: 'proposals expire' }, search: { na: 'opened from its review dialog' } } },
+  { id: 'proposal', aliases: ['ai-proposal'], label: 'AI proposal', plural: 'AI proposals', icon: 'sparkles', storage: { layout: 'record', where: 'local' }, folders: 'none', opens: { dialog: 'proposal' }, watch: 'none', git: { merge: 'none', ignored: true }, capabilities: { ...RECORD, open: { na: 'shown by the review dialog that made it' }, link: { na: 'opened from its review dialog' }, delete: { na: 'proposals expire' }, search: { na: 'opened from its review dialog' } } },
   { id: 'variable', ref: 'variable', aliases: ['var'], label: 'Variable', plural: 'Variables', icon: 'braces', searchLabel: 'Variable', storage: { layout: 'ref-only' }, folders: 'none', opens: { view: 'environments' }, watch: 'none', git: { merge: 'none' }, capabilities: { ...REF_ONLY, search: true } },
   { id: 'test-case', ref: 'test-case', aliases: [], label: 'Test', plural: 'Tests', icon: 'check-circle', storage: { layout: 'ref-only' }, folders: 'none', opens: { view: 'tests' }, watch: 'none', git: { merge: 'none' }, capabilities: REF_ONLY },
   { id: 'certificate', ref: 'certificate', aliases: ['cert'], label: 'Certificate', plural: 'Certificates', icon: 'shield-check', storage: { layout: 'ref-only' }, folders: 'none', opens: { view: 'settings' }, watch: 'none', git: { merge: 'none' }, capabilities: REF_ONLY },
@@ -899,6 +901,19 @@ export function kindOfPath(path: string, opts: { raw?: boolean } = {}): { kind: 
     default:
       return undefined;
   }
+}
+
+/**
+ * How a workspace file merges by meaning (git merge driver, conflict screen): a collection, an environment, or a library
+ * file (library/<name>.json); undefined for a file git merges line by line. MCP servers, providers, rules and the
+ * workspace file join in 0.57 (planning/master-roadmap.md §1.7 row 10).
+ */
+export function mergeModeOfPath(path: string): 'collection' | 'environment' | 'library' | undefined {
+  const k = kindOfPath(path, { raw: true });
+  if (k?.id && k.kind === 'collection') return 'collection';
+  if (k?.id && k.kind === 'environment') return 'environment';
+  if (libraryOfPath(path, { raw: true })) return 'library';
+  return undefined;
 }
 
 /** The `data.changed` kind (today's strings) of a changed workspace file; the folder watcher sorts changes with it. */

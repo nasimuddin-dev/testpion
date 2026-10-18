@@ -15,7 +15,7 @@ import { GitConflictDialog } from '../components/GitConflictDialog';
 import { ChangeMark } from '../components/ChangeMark';
 import { RowMenu } from '../components/TreeParts';
 import { LABEL } from '../lib/vocabulary';
-import { refOfWorkspacePath } from '@testpion/shared';
+import { mergeModeOfPath, refOfWorkspacePath } from '@testpion/shared';
 
 export interface GitFile {
   path: string;
@@ -790,7 +790,7 @@ function ConflictPanel({ files, note, onDone }: { files: GitFile[]; /** What a P
             <ChangeMark change="conflicted" />
             <span className="font-mono text-xs truncate">{f.path}</span>
             <span className="ml-auto flex gap-1">
-              {/^(collections|environments|library)\/[^/]+\.json$/.test(f.path) && (
+              {mergeModeOfPath(f.path) && (
                 <Button size="sm" variant="primary" onClick={() => setComparing(f.path)} title="See each conflicting request side by side and choose per request">
                   Compare…
                 </Button>
