@@ -1,4 +1,4 @@
-import { Activity, RefreshCw, Send, Boxes, Copy } from 'lucide-react';
+import { Activity, RefreshCw, Send } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { call, on } from '../api';
 import { persisted, toastError, useApp } from '../store';
@@ -9,10 +9,9 @@ import type { Trace } from '../types';
 import { formatMs, plural, timeAgo } from '../lib/format';
 import { TraceView } from '../components/TraceView';
 import { DurationBar } from '../components/charts';
-import { Badge, Button, cx, Empty, IconButton, Input, Modal, Select, Split, VirtualList, type MenuItem } from '../components/ui';
-import { RowMenu } from '../components/TreeParts';
-import { LABEL } from '../lib/vocabulary';
-import { refOpenLabel } from '@testpion/shared';
+import { Badge, Button, cx, Empty, IconButton, Input, Modal, Select, Split, VirtualList } from '../components/ui';
+import { NodeMenu } from '../components/TreeParts';
+import type { NodeMenuCtx } from '../lib/node-menu';
 import { openRef, copyRefLink } from '../lib/open-ref';
 
 interface TraceMeta {
@@ -87,11 +86,11 @@ export function TracesView() {
   const [trace, setTrace] = useState<Trace | null>();
   // a trace's menu (right-click or ⋯): open · its run · copy link
   const [menuFor, setMenuFor] = useState<string>();
-  const traceMenu = (t: TraceMeta): MenuItem[] => [
-    { label: LABEL.open, icon: <Activity size={14} />, onSelect: () => setSel(t.id) },
-    ...(t.runId ? [{ label: refOpenLabel({ kind: 'run' }), icon: <Boxes size={14} />, onSelect: () => void openRef({ kind: 'run', runId: t.runId! }) }] : []),
-    { label: 'Copy link', icon: <Copy size={14} />, separator: true, onSelect: () => void copyRefLink({ kind: 'trace', traceId: t.id }) },
-  ];
+  const traceMenu = (t: TraceMeta): NodeMenuCtx => ({
+    ref: { kind: 'trace', traceId: t.id },
+    name: t.name,
+    on: { open: () => setSel(t.id), ...(t.runId ? { openRun: () => void openRef({ kind: 'run', runId: t.runId! }) } : {}), copyLink: () => void copyRefLink({ kind: 'trace', traceId: t.id }) },
+  });
   const load = useCallback(
     async (reset = true) => {
       const r = await call<{ items: TraceMeta[]; total: number }>('traces.list', { query: query || undefined, kind: kind || undefined, failed: errorsOnly || undefined, limit: 200, offset: reset ? 0 : items.length });
@@ -151,7 +150,7 @@ export function TracesView() {
                   setMenuFor(t.id);
                 }}
               >
-              <button onClick={() => setSel(t.id)} className="w-full h-full text-left pl-3 pr-8 flex flex-col justify-center">
+              <button onClick={() => setSel(t.id)} onKeyDown={(ev) => ((ev.key === 'F10' && ev.shiftKey) || ev.key === 'ContextMenu') && (ev.preventDefault(), setMenuFor(t.id))} className="w-full h-full text-left pl-3 pr-8 flex flex-col justify-center">
                 <div className="flex items-center gap-2 text-sm">
                   <span className={cx('w-1.5 h-1.5 rounded-full', t.status === 'ok' ? 'bg-ok' : 'bg-bad')} />
                   <span className="truncate min-w-0" title={t.name}>{t.name}</span>
@@ -166,7 +165,7 @@ export function TracesView() {
                 </div>
               </button>
               <span className="absolute right-1 top-1/2 -translate-y-1/2">
-                <RowMenu label={t.name} items={menuFor === t.id ? traceMenu(t) : []} open={menuFor === t.id} onOpenChange={(o) => setMenuFor(o ? t.id : undefined)} />
+                <NodeMenu kind="trace" label={t.name} ctx={() => traceMenu(t)} open={menuFor === t.id} onOpenChange={(o) => setMenuFor(o ? t.id : undefined)} />
               </span>
               </div>
             )}

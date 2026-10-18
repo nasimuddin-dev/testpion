@@ -8,7 +8,7 @@ import { railOrder, railShortcut, railTarget } from '../../apps/desktop/src/lib/
 const SRC = join(__dirname, '../../apps/desktop/src');
 const files = (dir: string): string[] => readdirSync(dir).flatMap((f) => (statSync(join(dir, f)).isDirectory() ? files(join(dir, f)) : /\.tsx?$/.test(f) ? [join(dir, f)] : []));
 /** Files other work owns right now (WF-13 left their call sites as they are; see the plan's Built note). */
-const NOT_YET = new Set(['components/RunPanel.tsx', 'views/TestsView.tsx']);
+const NOT_YET = new Set(['components/RunPanel.tsx']);
 
 describe('vocabulary', () => {
   it('the retired words are gone from menus, buttons and the palette', () => {
@@ -32,6 +32,32 @@ describe('vocabulary', () => {
     }
     expect(found).toEqual([]);
     expect(LABEL.delete).toBe('Delete…');
+  });
+
+  it('tree and list menus are built by lib/node-menu.ts only: no menu literals in the views that show nodes', () => {
+    // the files whose rows are nodes (MENU-1…3): their menus come from buildNodeMenu, labels from LABEL
+    const NODE_VIEWS = [
+      'components/CollectionTree.tsx',
+      'components/Explorer.tsx',
+      'components/ExplorerParts.tsx',
+      'components/FolderList.tsx',
+      'components/SidebarPanes.tsx',
+      'components/TreeRowShell.tsx',
+      'views/MonitorsView.tsx',
+      'views/LoadView.tsx',
+      'views/EvaluationsView.tsx',
+      'views/ai/Playground.tsx',
+      'views/TestsView.tsx',
+      'views/TestsRunsList.tsx',
+      'views/TestsTreeRows.tsx',
+      'views/HistoryView.tsx',
+      'views/TracesView.tsx',
+      'views/EnvironmentsView.tsx',
+      'views/ai/Providers.tsx',
+    ];
+    const LITERAL = /label: (['"])(Open|Open in new tab|Rename|Rename folder|Duplicate|Delete|Delete…|Delete folder…|Move to…|Move to folder|Expand all|Collapse all|Expand|Collapse|Copy link|Run|Run now|Run folder|Run collection|Monitor on a schedule…|Run in CI…|History in git…|Make active|Edit|Pause|Resume|Settings)\1/;
+    const found = NODE_VIEWS.filter((rel) => LITERAL.test(readFileSync(join(SRC, rel), 'utf8')));
+    expect(found).toEqual([]);
   });
 
   it('one menu order', () => {

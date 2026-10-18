@@ -1,7 +1,6 @@
-import { ChevronDown, ChevronRight, Folder, FolderInput, FolderOpen, FolderPlus, MoreHorizontal, Pencil, Plus, Trash2 } from 'lucide-react';
-import { memo, useEffect, useRef, useState, type HTMLAttributes, type ReactNode } from 'react';
+import { ChevronDown, ChevronRight, Folder, FolderInput, FolderOpen, FolderPlus, MoreHorizontal, Plus } from 'lucide-react';
+import { memo, useEffect, useRef, useState, type ReactNode } from 'react';
 import { promptText } from '../store';
-import { deleteWithUndo } from '../lib/undo-delete';
 import { cx, Menu, rowActionClass, type MenuItem } from './ui';
 import { LABEL } from '../lib/vocabulary';
 import { buildNodeMenu, type NodeKind, type NodeMenuCtx } from '../lib/node-menu';
@@ -91,119 +90,6 @@ export function TreeHeader({
       {items.length > 0 && <RowMenu label={title} items={items} open={open} onOpenChange={setOpen} header />}
     </div>
   );
-}
-
-/** A folder row: chevron, folder icon, name, count and ⋯ (also on right-click); drop props make it a drop target. */
-export function TreeFolderRow({
-  name,
-  count,
-  open,
-  onToggle,
-  menu,
-  dropTarget,
-  className,
-  onRename,
-  ...rest
-}: { name: string; count: number; open: boolean; onToggle(): void; menu: MenuItem[]; dropTarget?: boolean; onRename?(to: string): unknown } & Omit<HTMLAttributes<HTMLDivElement>, 'onToggle'>) {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const key = `folder:${name}`;
-  // with onRename, "Rename folder" in the menu (and F2) renames in place instead of asking in a dialog
-  const items = onRename ? menu.map((m) => (m.label === LABEL.renameFolder ? { ...m, onSelect: () => setEditing(true) } : m)) : menu;
-  return (
-    <div
-      {...rest}
-      className={cx(
-        'group flex items-center h-8 text-sm rounded-md mx-1 pr-1 transition-colors',
-        dropTarget ? 'bg-accent-soft ring-1 ring-accent' : 'hover:bg-hover',
-        menuOpen && 'bg-hover',
-        className ?? 'pl-2',
-      )}
-      onContextMenu={(e) => {
-        e.preventDefault();
-        setMenuOpen(true);
-      }}
-    >
-      {editing ? (
-        <div className="flex items-center gap-1 flex-1 min-w-0">
-          {open ? OPEN_ICON : CLOSED_ICON}
-          {FOLDER_ICON}
-          <InlineRename
-            value={name}
-            label="Folder name"
-            onCommit={(to) => {
-              setEditing(false);
-              void onRename?.(to);
-              focusRow(`folder:${to}`);
-            }}
-            onCancel={() => {
-              setEditing(false);
-              focusRow(key);
-            }}
-          />
-        </div>
-      ) : (
-        <button
-          className="flex items-center gap-1 flex-1 min-w-0 text-left"
-          onClick={onToggle}
-          onKeyDown={(e) => {
-            if (e.key === 'F2' && onRename) {
-              e.preventDefault();
-              setEditing(true);
-            }
-          }}
-          aria-expanded={open}
-          data-tree-row
-          data-rename-id={key}
-          title={onRename ? 'F2 renames' : undefined}
-        >
-          {open ? OPEN_ICON : CLOSED_ICON}
-          {FOLDER_ICON}
-          <span className="truncate flex-1">{name}</span>
-          <CountPill n={count} />
-        </button>
-      )}
-      <RowMenu label={`folder ${name}`} items={items} open={menuOpen} onOpenChange={setMenuOpen} />
-    </div>
-  );
-}
-
-/** A folder's menu, the same in every tree: new item here, rename, delete (its items move to the top level). */
-export function folderMenuItems({
-  name,
-  itemNoun = 'item',
-  addLabel,
-  onAdd,
-  rename,
-  remove,
-}: {
-  name: string;
-  itemNoun?: string;
-  addLabel?: string;
-  onAdd?(): void;
-  rename(to: string): unknown;
-  /** Remove the folder (its items move to the top level); returns what puts it back. */
-  remove(): unknown;
-}): MenuItem[] {
-  return [
-    ...(onAdd ? [{ label: `${addLabel ?? 'New'} here`, icon: <Plus size={14} />, onSelect: onAdd }] : []),
-    {
-      label: LABEL.renameFolder,
-      icon: <Pencil size={14} />,
-      onSelect: async () => {
-        const to = (await promptText('Rename folder', { message: 'Folder name', value: name, okLabel: 'Rename' }))?.trim();
-        if (to && to !== name) await rename(to);
-      },
-    },
-    {
-      label: LABEL.deleteFolder,
-      icon: <Trash2 size={14} />,
-      danger: true,
-      separator: true,
-      // at once, with Undo in the message: nothing is lost (its items move to the top level)
-      onSelect: () => void deleteWithUndo({ what: `the folder "${name}"`, run: remove, note: `Its ${itemNoun}s moved to the top level` }),
-    },
-  ];
 }
 
 /** Ask for a new folder's name. */

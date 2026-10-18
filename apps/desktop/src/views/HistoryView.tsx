@@ -1,5 +1,5 @@
 import { CompareView, type Compared } from '../components/ResponseHistory';
-import { Download, FileText, History, RotateCcw, Trash2, Waypoints } from 'lucide-react';
+import { Download, History, RotateCcw, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { asError, call } from '../api';
 import { confirmAction, useApp, toastError } from '../store';
@@ -9,11 +9,11 @@ import { formatBytes, formatMs, groupByDay } from '../lib/format';
 import { DurationBar } from '../components/charts';
 import { finishSave, type SaveResult } from '../lib/files';
 import { JsonTree } from '../components/JsonView';
-import { Badge, Button, cx, Empty, Input, menuKeys, Select, Split, statusTone, VirtualList, type MenuItem } from '../components/ui';
-import { RowMenu } from '../components/TreeParts';
-import { saveAsTestItem } from '../lib/save-test';
-import { refOpenLabel, type ItemRef } from '@testpion/shared';
-import { LABEL } from '../lib/vocabulary';
+import { Badge, Button, cx, Empty, Input, menuKeys, Select, Split, statusTone, VirtualList } from '../components/ui';
+import { NodeMenu } from '../components/TreeParts';
+import { buildNodeMenu, type NodeMenuCtx } from '../lib/node-menu';
+import { saveAsTest } from '../lib/save-test';
+import { type ItemRef } from '@testpion/shared';
 import { setDragRefs } from '../lib/drag-ref';
 
 interface Entry {
@@ -182,14 +182,19 @@ export function HistoryView() {
   };
   // one menu for an entry, on its row (right-click, ⋯) and above its details: open · related items · test · delete
   const [menuFor, setMenuFor] = useState<string>();
-  const entryMenu = (e: Entry): MenuItem[] => [
-    { label: 'Open', icon: <RotateCcw size={14} />, onSelect: () => reopen(e) },
-    ...(e.collectionId && e.requestId ? [{ label: refOpenLabel({ kind: 'request' }), icon: <FileText size={14} />, onSelect: () => void openRef({ kind: 'request', collectionId: e.collectionId!, requestId: e.requestId! }) }] : []),
-    ...(e.traceId ? [{ label: refOpenLabel({ kind: 'trace' }), icon: <Waypoints size={14} />, onSelect: () => void openRef({ kind: 'trace', traceId: e.traceId! }) }] : []),
-    // a capture session is not a request: nothing to save as a test (its collection or flow is where tests come from)
-    ...(e.capture ? [] : [saveAsTestItem({ ref: { kind: 'history', historyId: e.id }, name: e.name }, { separator: true })]),
-    { label: LABEL.delete, icon: <Trash2 size={14} />, danger: true, separator: true, onSelect: () => void remove(e) },
-  ];
+  /** An entry's menu (lib/node-menu.ts builds it; the details header shows it without Open, which is the details themselves). */
+  const entryMenu = (e: Entry, o: { details?: boolean } = {}): NodeMenuCtx => ({
+    ref: { kind: 'history', historyId: e.id },
+    name: e.name,
+    on: {
+      ...(o.details ? {} : { open: () => reopen(e) }),
+      ...(e.collectionId && e.requestId ? { openRequest: () => void openRef({ kind: 'request', collectionId: e.collectionId!, requestId: e.requestId! }) } : {}),
+      ...(e.traceId ? { openTrace: () => void openRef({ kind: 'trace', traceId: e.traceId! }) } : {}),
+      // a capture session is not a request: nothing to save as a test (its collection or flow is where tests come from)
+      ...(e.capture ? {} : { testFile: () => void saveAsTest({ ref: { kind: 'history', historyId: e.id }, name: e.name }) }),
+      delete: () => void remove(e),
+    },
+  });
   return (
     <Split id="history" initial={45}>
       <div className="h-full flex flex-col">
@@ -255,7 +260,7 @@ export function HistoryView() {
                 // dragged onto a flow canvas: this entry (with the one it is compared with)
                 onDragStart={(ev) => setDragRefs(ev, (pair && (pair.before.id === e.id || pair.after.id === e.id) ? [pair.before, pair.after] : [e]).map((x) => ({ kind: 'history' as const, historyId: x.id })), e.name)}
                 onDoubleClick={() => reopen(e)}
-                onClick={(ev) => pick(e, ev)} onKeyDown={menuKeys(menuFor === e.id ? entryMenu(e) : [{ label: LABEL.delete, onSelect: () => void remove(e) }])} className="w-full h-full text-left pl-3 pr-8 flex flex-col justify-center">
+                onClick={(ev) => pick(e, ev)} onKeyDown={(ev) => ((ev.key === 'F10' && ev.shiftKey) || ev.key === 'ContextMenu' ? (ev.preventDefault(), setMenuFor(e.id)) : menuKeys(buildNodeMenu('history', entryMenu(e)))(ev))} className="w-full h-full text-left pl-3 pr-8 flex flex-col justify-center">
                 <div className="flex items-center gap-2 text-sm">
                   {e.method && <span className={cx('mono method-badge text-[0.64rem] font-bold w-14 shrink-0', `method-${e.method}`)}>{e.method}</span>}
                   {!e.method && <Badge>{e.kind}</Badge>}
@@ -285,7 +290,7 @@ export function HistoryView() {
                 </div>
               </button>
               <span className="absolute right-1 top-1/2 -translate-y-1/2">
-                <RowMenu label={e.name} items={menuFor === e.id ? entryMenu(e) : []} open={menuFor === e.id} onOpenChange={(o) => setMenuFor(o ? e.id : undefined)} />
+                <NodeMenu kind="history" label={e.name} ctx={() => entryMenu(e)} open={menuFor === e.id} onOpenChange={(o) => setMenuFor(o ? e.id : undefined)} />
               </span>
               </div>
               );
@@ -325,7 +330,7 @@ export function HistoryView() {
                 <Button size="sm" variant="primary" icon={<RotateCcw size={12} />} onClick={() => reopen(sel)}>
                   Open
                 </Button>
-                <RowMenu label={sel.name} items={entryMenu(sel).slice(1)} header />
+                <NodeMenu kind="history" label={sel.name} ctx={() => entryMenu(sel, { details: true })} header />
               </div>
             </div>
             <TimingStrip timing={(sel.responseMeta as { timing?: Timing } | undefined)?.timing} />

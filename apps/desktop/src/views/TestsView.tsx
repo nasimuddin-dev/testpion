@@ -1,4 +1,4 @@
-import { BarChart3, Bot, ChevronDown, ChevronRight, CopyPlus, FileCode2, FilePlus2, FileSpreadsheet, Folder, History, KeyRound, Layers, Pencil, Play, Save, ShieldCheck, Trash2, Workflow } from 'lucide-react';
+import { Bot, FileCode2, FilePlus2, FileSpreadsheet, Folder, History, KeyRound, Layers, Play, Save, ShieldCheck, Trash2, Workflow } from 'lucide-react';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { asError, call, on } from '../api';
@@ -7,33 +7,35 @@ import { useIntent, useSaveShortcut } from '../hooks';
 import { useExternalChange } from '../lib/external-change';
 import { touchesFiles, type DataChangedEvent } from '../lib/data-changed';
 import { LABEL } from '../lib/vocabulary';
-import { copyRunCommand, runInCi } from '../lib/run-ci';
-import { startAiAnalysis } from '../components/ai/ai-analysis';
 import { noteClosedTabs } from '../lib/closed-tabs';
 import { ItemBreadcrumb, type Crumb } from '../components/ItemBreadcrumb';
-import { setDragRefs } from '../lib/drag-ref';
-import { timeAgo } from '../lib/format';
+import { plural, timeAgo } from '../lib/format';
 import { StatusIcon } from '../components/Results';
 import { CodeEditor } from '../components/CodeEditor';
 import type { OnMount } from '@monaco-editor/react';
-import { RunMiniBar, RunsOverview, type RunRow } from '../components/RunsOverview';
+import { RunsOverview, type RunRow } from '../components/RunsOverview';
 import { RunPanel } from '../components/RunPanel';
 import { ExposeFlowDialog } from '../components/ExposeFlowDialog';
 import { RunWithDataDialog } from '../components/RunWithDataDialog';
 import { ScaleRunPanel } from '../components/FlowScaleGrids';
 import { SidebarShell } from '../components/SidebarShell';
-import { KindBadge, NodeMenu, RowMenu, TEST_KINDS, TreeHeader, treeKeys } from '../components/TreeParts';
+import { treeKeys } from '../components/TreeParts';
+import { TreeRowShell } from '../components/TreeRowShell';
+import { useAreaMenu } from '../components/AreaMenu';
+import { useTreeOpen } from '../lib/tree-state';
+import { deleteWithUndo } from '../lib/undo-delete';
+import type { NodeMenuCtx } from '../lib/node-menu';
 import { copyText } from '../lib/clipboard';
 import { FlowDiagram } from '../components/FlowDiagram';
 import { FlowDesigner, type DesignerFlow, type FlowEditAnswer, type FlowRunRequest } from '../components/FlowDesigner';
-import { stepLine, type FlowStep, type ItemRef } from '@testpion/shared';
+import { stepLine, type FlowStep } from '@testpion/shared';
 import { EnvironmentsPane } from '../components/SidebarPanes';
 import { finishSave, type SaveResult } from '../lib/files';
 import { dataLanguageOf } from '../data-languages';
-import { Badge, Button, cx, Empty, IconButton, Input, rowActionClass, SectionTitle, Spinner, Split, VirtualList, type MenuItem } from '../components/ui';
-import { EnvBadge } from '../components/EnvSelect';
-import { TYPE_ICON } from '../components/ProblemList';
+import { Badge, Button, Empty, IconButton, Input, SectionTitle, Spinner, Split, VirtualList } from '../components/ui';
 import { DocTabStrip } from '../components/DocTabStrip';
+import { RunList } from './TestsRunsList';
+import { NoTestFiles, TestFileBadge, TestTreeRow } from './TestsTreeRows';
 
 interface Node {
   name: string;
@@ -166,7 +168,8 @@ export function TestsView() {
   const tf = treeFilter.trim().toLowerCase();
   const filterTree = (nodes: Node[]): Node[] =>
     !tf ? nodes : nodes.flatMap((n) => (n.kind === 'dir' ? ((c) => (c.length ? [{ ...n, children: c }] : []))(filterTree(n.children ?? [])) : n.path.toLowerCase().includes(tf) ? [n] : []));
-  const [open, setOpen] = useState<Record<string, boolean>>({});
+  // which folders of the tree are open: the workspace's tree state (lib/tree-state), kept across restarts
+  const [open, setOpen] = useTreeOpen('tests');
   // every file opens in its own tab (like requests): `file` is the one on screen, the others keep their edits here
   const [file, setFile] = useState<string>();
   const [content, setContent] = useState('');
@@ -417,8 +420,9 @@ export function TestsView() {
       call('tests.preview', { path: r.file }).then(setPreview, (e) => setPreview({ error: asError(e).message }));
     }
   };
-  const newFile = async (kind: string) => {
-    const name = await promptText('New test file', { message: 'File path inside tests/ (e.g. rest/health.yaml)', okLabel: 'Create', value: kind === 'suite' ? 'regression.suite.yaml' : kind === 'flow' ? 'rest/new-flow.yaml' : `${kind === 'http' ? 'rest' : kind === 'llm' ? 'ai' : kind === 'mqtt' || kind === 'kafka' ? 'websocket' : kind}/new-test.yaml` });
+  const newFile = async (kind: string, folder?: string) => {
+    const suggested = kind === 'suite' ? 'regression.suite.yaml' : kind === 'flow' ? 'rest/new-flow.yaml' : `${kind === 'http' ? 'rest' : kind === 'llm' ? 'ai' : kind === 'mqtt' || kind === 'kafka' ? 'websocket' : kind}/new-test.yaml`;
+    const name = await promptText('New test file', { message: 'File path inside tests/ (e.g. rest/health.yaml)', okLabel: 'Create', value: folder ? `${folder}/${suggested.split('/').pop()}` : suggested });
     if (!name) return;
     await call('tests.write', { path: name, content: TEMPLATES[kind] });
     await loadTree();
@@ -537,12 +541,33 @@ export function TestsView() {
     await call('tests.write', { path: to, content: await call<string>('tests.read', { path }) });
     await loadTree();
   };
+  /**
+   * Delete a test file or a folder at once, with Undo (the files' text is kept until the message goes); a folder of more
+   * files than an undo should hold asks first instead.
+   */
   const deletePath = async (n: Node) => {
     const dir = n.kind === 'dir';
-    if (!(await confirmAction({ title: dir ? 'Delete folder' : 'Delete test file', message: `Delete tests/${n.path}${dir ? ' and every file in it' : ''}?`, confirmLabel: 'Delete', danger: true }))) return;
-    await call('tests.delete', { path: n.path });
-    for (const p of openFilesRef.current.filter((p) => p === n.path || p.startsWith(`${n.path}/`))) await closeFile(p, false);
-    await loadTree();
+    const files: string[] = [];
+    const walk = (x: Node) => (x.kind === 'file' ? files.push(x.path) : (x.children ?? []).forEach(walk));
+    walk(n);
+    if (files.length > 200 && !(await confirmAction({ title: 'Delete the folder', message: `Delete tests/${n.path} and the ${files.length} files in it? This cannot be undone.`, confirmLabel: 'Delete', danger: true }))) return;
+    let kept: Array<{ path: string; content: string }> = [];
+    await deleteWithUndo({
+      what: `tests/${n.path}${dir ? ` (${plural(files.length, 'file')})` : ''}`,
+      run: async () => {
+        kept = files.length <= 200 ? await Promise.all(files.map(async (path) => ({ path, content: await call<string>('tests.read', { path }) }))) : [];
+        await call('tests.delete', { path: n.path });
+        for (const p of openFilesRef.current.filter((p) => p === n.path || p.startsWith(`${n.path}/`))) await closeFile(p, false);
+        await loadTree();
+      },
+      undo:
+        files.length <= 200
+        ? async () => {
+            for (const f of kept) await call('tests.write', f);
+            await loadTree();
+          }
+        : undefined,
+    });
   };
   /** Expose as MCP tool…: the dialog writes the file, so the editor's pending edits go first; afterwards the editor shows the file as written. */
   const exposeFile = async (path: string) => {
@@ -569,49 +594,97 @@ export function TestsView() {
       toastError(e);
     }
   };
-  const nodeMenu = (n: Node): MenuItem[] =>
-    n.kind === 'dir'
-      ? [
-          { label: 'Run folder', icon: <Play size={14} />, onSelect: () => void run([n.path], n.path) },
-          { label: 'Delete folder', icon: <Trash2 size={14} />, danger: true, separator: true, onSelect: () => void deletePath(n) },
-        ]
-      : [
-          { label: 'Open', icon: <FileCode2 size={14} />, onSelect: () => void openFile(n.path) },
-          ...(/\.(ya?ml|json)$/.test(n.name) ? [{ label: 'Run', icon: <Play size={14} />, onSelect: () => void run([n.path], n.path) }] : []),
-          ...(/\.(ya?ml|json)$/.test(n.name) ? [{ label: 'Expose as MCP tool…', icon: <Bot size={14} />, onSelect: () => void exposeFile(n.path) }] : []),
-          ...(/\.(ya?ml|json)$/.test(n.name) && !/\.suite\./.test(n.name) ? [{ label: 'Export as Arazzo…', icon: <Workflow size={14} />, onSelect: () => void exportArazzo(n.path) }] : []),
-          { label: 'Rename', icon: <Pencil size={14} />, separator: true, onSelect: () => void renameFile(n.path) },
-          { label: 'Duplicate', icon: <CopyPlus size={14} />, onSelect: () => void duplicateFile(n.path) },
-          { label: LABEL.delete, icon: <Trash2 size={14} />, danger: true, separator: true, onSelect: () => void deletePath(n) },
-        ];
+  /** Every folder path under (and including) a folder of the tree: its Expand all and Collapse all. */
+  const dirsUnder = (n: Node): string[] => (n.kind === 'dir' ? [n.path, ...(n.children ?? []).flatMap(dirsUnder)] : []);
+  const setDirs = (paths: string[], to: boolean) => setOpen((o) => ({ ...o, ...Object.fromEntries(paths.map((p) => [p, to])) }));
+  const isTestFile = (name: string) => /\.(ya?ml|json)$/.test(name);
+  /** A test file's menu (lib/node-menu.ts builds it: the same groups as every other row). */
+  const fileMenu = (n: Node): NodeMenuCtx => {
+    const test = isTestFile(n.name);
+    const suite = /\.suite\./.test(n.name);
+    return {
+      ref: { kind: 'test', path: n.path },
+      name: n.name,
+      on: {
+        open: () => void openFile(n.path),
+        revealFile: () => void call('workspace.revealFile', { path: `tests/${n.path}` }).catch(toastError),
+        ...(test ? { run: () => void run([n.path], n.path) } : {}),
+        ...(test && !suite ? { runWithData: () => void openScaling(n.path, 'data'), runInEnvironments: () => void openScaling(n.path, 'matrix'), exportArazzo: () => void exportArazzo(n.path) } : {}),
+        copyPath: () => void copyText(`tests/${n.path}`, 'the path'),
+        ...(test ? { copyCli: () => void copyText(`testpion test "tests/${n.path}"`, 'the command') } : {}),
+        ...(test ? { monitor: () => useApp.getState().openIntent('monitors', { create: { testFile: n.path } }), ci: () => useApp.getState().set({ ci: { tests: [n.path] } }), exposeMcp: () => void exposeFile(n.path) } : {}),
+        rename: () => void renameFile(n.path),
+        duplicate: () => void duplicateFile(n.path),
+        delete: () => void deletePath(n),
+      },
+    };
+  };
+  /** A folder's menu: new test file here, expand or collapse it, run it, run it in CI, delete it (Undo). */
+  const folderMenu = (n: Node): NodeMenuCtx => ({
+    name: n.name,
+    create: [{ label: 'New test file here', icon: <FilePlus2 size={14} />, onSelect: () => void newFile('http', n.path) }],
+    on: {
+      expandAll: () => setDirs(dirsUnder(n), true),
+      collapseAll: () => setDirs(dirsUnder(n), false),
+      run: () => void run([n.path], n.path),
+      ci: () => useApp.getState().set({ ci: { tests: [n.path] } }),
+      delete: () => void deletePath(n),
+    },
+  });
+  /** The tree's header (and its blank area): every kind of new test file, expand or collapse everything, Run in CI. */
+  const testsMenu = (): NodeMenuCtx => ({
+    create: (
+      [
+        ['http', 'New HTTP test'],
+        ['graphql', 'New GraphQL test'],
+        ['grpc', 'New gRPC test'],
+        ['websocket', 'New WebSocket test'],
+        ['mqtt', 'New MQTT test'],
+        ['kafka', 'New Kafka test'],
+        ['mcp', 'New MCP test'],
+        ['llm', 'New AI test'],
+        ['flow', 'New flow (designer)'],
+        ['suite', 'New suite'],
+      ] as const
+    ).map(([kind, label]) => ({ label, icon: kind === 'suite' ? <Layers size={14} /> : kind === 'flow' ? <Workflow size={14} /> : <FilePlus2 size={14} />, onSelect: () => void newFile(kind) })),
+    on: {
+      expandAll: () => setDirs(tree.flatMap(dirsUnder), true),
+      collapseAll: () => setDirs(tree.flatMap(dirsUnder), false),
+      ci: () => useApp.getState().set({ ci: {} }),
+    },
+  });
+  const testsArea = useAreaMenu('section:test', testsMenu, 'Tests');
 
   const renderTree = (nodes: Node[], depth = 0): React.ReactNode =>
     nodes.map((n) =>
       n.kind === 'dir' ? (
         <div key={n.path}>
           <TestTreeRow
+            kind="folder:test"
+            nodeId={`tests:dir:${n.path}`}
             depth={depth}
             label={n.name}
             icon={<Folder size={13} className="text-muted shrink-0" />}
             expanded={!!tf || (open[n.path] ?? true)}
-            onClick={() => setOpen({ ...open, [n.path]: !(open[n.path] ?? true) })}
+            onClick={() => setOpen((o) => ({ ...o, [n.path]: !(o[n.path] ?? true) }))}
             onRun={() => void run([n.path], n.path)}
-            menu={nodeMenu(n)}
+            ctx={() => folderMenu(n)}
           />
           {(tf || (open[n.path] ?? true)) && renderTree(n.children ?? [], depth + 1)}
         </div>
       ) : (
         <TestTreeRow
           key={n.path}
+          kind="test"
+          nodeId={`tests:${n.path}`}
           depth={depth}
           label={n.name}
           active={file === n.path}
           icon={<TestFileBadge path={n.path} />}
           onClick={() => void openFile(n.path)}
-          onRun={/\.(ya?ml|json)$/.test(n.name) ? () => void run([n.path], n.path) : undefined}
-          menu={nodeMenu(n)}
-          onRename={() => void renameFile(n.path)}
-          dragRef={/\.(ya?ml|json)$/.test(n.name) && !/\.suite\./.test(n.name) ? { kind: 'test', path: n.path } : undefined}
+          onRun={isTestFile(n.name) ? () => void run([n.path], n.path) : undefined}
+          ctx={() => fileMenu(n)}
+          dragRef={isTestFile(n.name) && !/\.suite\./.test(n.name) ? { kind: 'test', path: n.path } : undefined}
         />
       ),
     );
@@ -628,31 +701,16 @@ export function TestsView() {
             icon: <ShieldCheck size={13} />,
             render: () => (
               <>
-                <TreeHeader
-                  title="Tests"
-                  addLabel="New test file"
-                  addItems={(
-                    [
-                      ['http', 'New HTTP test'],
-                      ['graphql', 'New GraphQL test'],
-                      ['grpc', 'New gRPC test'],
-                      ['websocket', 'New WebSocket test'],
-                      ['mqtt', 'New MQTT test'],
-                      ['kafka', 'New Kafka test'],
-                      ['mcp', 'New MCP test'],
-                      ['llm', 'New AI test'],
-                      ['flow', 'New flow (designer)'],
-                      ['suite', 'New suite'],
-                    ] as const
-                  ).map(([kind, label], i) => ({ label, icon: kind === 'suite' ? <Layers size={14} /> : kind === 'flow' ? <Workflow size={14} /> : <FilePlus2 size={14} />, separator: i === 7 || i === 8, onSelect: () => void newFile(kind) }))}
-                  menu={[{ label: 'Run in CI…', icon: <Workflow size={14} />, onSelect: () => useApp.getState().set({ ci: {} }) }]}
-                />
+                <TreeRowShell kind="section:test" nodeId="tests:section" label="Tests" header ctx={testsMenu} className="mx-0 pl-3 shrink-0">
+                  <span className="text-[0.82rem] font-semibold truncate">Tests</span>
+                </TreeRowShell>
                 {tree.length > 0 && (
                   <div className="px-2 pb-2">
                     <Input className="w-full h-7 min-h-7 text-sm" placeholder="Filter test files" aria-label="Filter test files" value={treeFilter} onChange={(e) => setTreeFilter(e.target.value)} />
                   </div>
                 )}
-                <div className="flex-1 overflow-auto" onKeyDown={treeKeys}>{tree.length ? (tf && !filterTree(tree).length ? <p className="px-3 py-4 text-sm text-muted text-center">No test files match this filter.</p> : renderTree(filterTree(tree))) : <NoTestFiles onNew={() => void newFile('http')} />}</div>
+                {testsArea.menu}
+                <div className="flex-1 overflow-auto" onKeyDown={treeKeys} onContextMenu={testsArea.onContextMenu}>{tree.length ? (tf && !filterTree(tree).length ? <p className="px-3 py-4 text-sm text-muted text-center">No test files match this filter.</p> : renderTree(filterTree(tree))) : <NoTestFiles onNew={() => void newFile('http')} />}</div>
                 <div className="border-t border-line p-2 flex flex-col gap-2">
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     <label className="flex flex-col gap-0.5">
@@ -705,7 +763,7 @@ export function TestsView() {
           }}
           onRename={(t) => void renameFile(t.data!)}
           extraItems={({ data: p }) => [
-            { label: 'Run', icon: <Play size={13} />, onSelect: () => void run([p!], p!) },
+            { label: LABEL.run, icon: <Play size={13} />, onSelect: () => void run([p!], p!) },
             { label: 'Expose as MCP tool…', icon: <Bot size={13} />, disabled: !/\.(ya?ml|json)$/.test(p!), onSelect: () => void exposeFile(p!) },
             { label: 'Run with data…', icon: <FileSpreadsheet size={13} />, disabled: !/\.(ya?ml|json)$/.test(p!) || /\.suite\./.test(p!), onSelect: () => void openScaling(p!, 'data') },
             { label: LABEL.runInEnvironments, icon: <Layers size={13} />, disabled: !/\.(ya?ml|json)$/.test(p!) || /\.suite\./.test(p!), onSelect: () => void openScaling(p!, 'matrix') },
@@ -937,180 +995,3 @@ export function TestsView() {
     </>
   );
 }
-
-function RunList({ runs, active, onSelect, onOverview, onRerunFailed }: { runs: RunRow[]; active?: string; onSelect(id: string): void; onOverview?(): void; onRerunFailed?(id: string): void }) {
-  // the row whose menu is open (its ⋯, or a right-click on the row): the shared item menu (TreeParts NodeMenu)
-  const [menuFor, setMenuFor] = useState<string>();
-  // filter by name / environment, and only the runs where something failed
-  const [query, setQuery] = useState('');
-  const [failedOnly, setFailedOnly] = useState(false);
-  const q = query.toLowerCase();
-  const shown = runs.filter((r) => (!failedOnly || r.failed + r.errors > 0) && (!q || `${r.name} ${r.environment ?? ''}`.toLowerCase().includes(q)));
-  return (
-    <div className="h-full flex flex-col min-h-0">
-      {onOverview && (
-        <button className="flex items-center gap-1.5 px-3 py-1.5 border-b border-line text-xs text-accent hover:bg-hover text-left" onClick={onOverview}>
-          <BarChart3 size={12} /> Overview of all runs
-        </button>
-      )}
-      {runs.length > 3 && (
-        <div className="flex items-center gap-2 px-2 py-1.5 border-b border-line">
-          <Input className="h-7 min-h-7 text-sm flex-1 min-w-0" placeholder="Filter runs" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Filter runs" />
-          <label className="flex items-center gap-1 text-xs text-muted whitespace-nowrap">
-            <input type="checkbox" checked={failedOnly} onChange={(e) => setFailedOnly(e.target.checked)} /> Failed
-          </label>
-        </div>
-      )}
-      <div className="flex-1 min-h-0 overflow-auto">
-        {shown.map((r) => (
-          <div
-            key={r.id}
-            className={cx('group flex items-start border-b border-line/60', active === r.id ? 'bg-accent/10' : 'hover:bg-hover')}
-            data-run-row={r.id}
-            onContextMenu={(e) => {
-              e.preventDefault();
-              setMenuFor(r.id);
-            }}
-          >
-            <button onClick={() => onSelect(r.id)} className="flex-1 min-w-0 text-left pl-3 py-2">
-              <div className="text-sm truncate">{r.name}</div>
-              <RunMiniBar r={r} />
-              <div className="text-xs text-muted flex gap-2">
-                <span className={r.failed + r.errors ? 'text-bad' : 'text-ok'}>
-                  {r.passed}/{r.total}
-                </span>
-                {/* failures (a check did not hold) apart from errors (it could not run), as the Problems panel tells them apart */}
-                {r.failed > 0 && (
-                  <span className="inline-flex items-center gap-0.5 text-bad" title="Failures: checks that did not hold" data-run-failures={r.failed}>
-                    {TYPE_ICON.failure}
-                    {r.failed} failed
-                  </span>
-                )}
-                {r.errors > 0 && (
-                  <span className="inline-flex items-center gap-0.5 text-bad" title="Errors: could not run (network, TLS, timeout or a script)" data-run-errors={r.errors}>
-                    {TYPE_ICON.error}
-                    {r.errors} error{r.errors === 1 ? '' : 's'}
-                  </span>
-                )}
-                {r.environment && <EnvBadge name={r.environment} className="max-w-32" />}
-                <span className="ml-auto">{timeAgo(r.startedAt)}</span>
-              </div>
-            </button>
-            <div className="pt-1.5 pr-1">
-              <NodeMenu
-                kind="run"
-                label={r.name}
-                open={menuFor === r.id}
-                onOpenChange={(o) => setMenuFor(o ? r.id : undefined)}
-                ctx={() => ({
-                  ref: { kind: 'run', runId: r.id },
-                  name: r.name,
-                  on: {
-                    open: () => onSelect(r.id),
-                    ...(onRerunFailed ? { rerunFailed: () => onRerunFailed(r.id) } : {}),
-                    exportReport: () => void call<SaveResult>('runs.exportReport', { runId: r.id, format: 'html' }).then((x) => finishSave(x, 'Report'), toastError),
-                    copyCli: () => void copyRunCommand(r.id),
-                    copyRunId: () => void copyText(r.id, 'Run id'),
-                    ci: () => void runInCi(r.id),
-                    ...(r.failed + r.errors > 0 ? { triage: () => startAiAnalysis({ kind: 'triage', runId: r.id, title: r.name }) } : {}),
-                  },
-                  disabled: r.failed + r.errors > 0 ? {} : { rerunFailed: 'Nothing failed in this run' },
-                })}
-              />
-            </div>
-          </div>
-        ))}
-        {!runs.length && <div className="p-3 text-sm text-muted">No runs yet</div>}
-        {runs.length > 0 && !shown.length && <div className="p-3 text-sm text-muted">No runs match</div>}
-      </div>
-    </div>
-  );
-}
-
-function TestFileBadge({ path }: { path: string }) {
-  if (/\.suite\.ya?ml$/i.test(path)) return <KindBadge text="SUITE" cls="text-judge" />;
-  const kind = TEST_KINDS[path.split('/')[0]!.toLowerCase()];
-  if (kind && path.includes('/')) return <KindBadge text={kind[0]} cls={kind[1]} />;
-  return <KindBadge text={/\.json$/i.test(path) ? 'JSON' : /\.csv$/i.test(path) ? 'CSV' : 'YAML'} cls="text-muted" />;
-}
-
-/** A row of the test file tree, like the collection tree's: folder (chevron) or file, ▶ run and ⋯ (also on right-click). */
-/** F2 renames a file: its path, in a dialog (a path can move it to another folder, which an in-place name can't). */
-function TestTreeRow({
-  depth,
-  label,
-  icon,
-  expanded,
-  active,
-  onClick,
-  onRun,
-  menu,
-  onRename,
-  dragRef,
-}: {
-  depth: number;
-  label: string;
-  icon: React.ReactNode;
-  expanded?: boolean;
-  active?: boolean;
-  onClick(): void;
-  onRun?(): void;
-  menu: MenuItem[];
-  onRename?(): void;
-  /** What a drag of the row carries (a test file: dropped on a flow canvas, it becomes a sub-flow step). */
-  dragRef?: ItemRef;
-}) {
-  const [menuOpen, setMenuOpen] = useState(false);
-  return (
-    <div
-      className={cx('group flex items-center gap-0.5 h-8 text-sm rounded-md mx-1 pr-1 transition-colors', active ? 'bg-accent-soft text-fg' : 'hover:bg-hover', menuOpen && !active && 'bg-hover')}
-      style={{ paddingLeft: (expanded === undefined ? 22 : 6) + depth * 12 }}
-      onContextMenu={(e) => {
-        e.preventDefault();
-        setMenuOpen(true);
-      }}
-    >
-      <button
-        className="flex items-center gap-1.5 flex-1 min-w-0 text-left"
-        onClick={onClick}
-        onKeyDown={(e) => {
-          if (e.key === 'F2' && onRename) {
-            e.preventDefault();
-            onRename();
-          }
-        }}
-        aria-expanded={expanded}
-        draggable={!!dragRef}
-        onDragStart={dragRef ? (e) => setDragRefs(e, [dragRef], label) : undefined}
-        data-tree-row
-        title={onRename ? 'F2 renames' : undefined}
-      >
-        {expanded !== undefined && (expanded ? <ChevronDown size={13} className="text-muted shrink-0 -mr-0.5" /> : <ChevronRight size={13} className="text-muted shrink-0 -mr-0.5" />)}
-        {icon}
-        <span className="truncate">{label}</span>
-      </button>
-      {onRun && (
-        <IconButton label={`Run ${label}`} className={rowActionClass()} onClick={onRun}>
-          <Play size={12} />
-        </IconButton>
-      )}
-      <RowMenu label={label} items={menu} open={menuOpen} onOpenChange={setMenuOpen} />
-    </div>
-  );
-}
-
-/** The Tests view before any test file: what a test is, and the ways to get one. */
-function NoTestFiles({ onNew }: { onNew(): void }) {
-  return (
-    <Empty
-      title="No test files"
-      actions={[
-        { label: 'New test file', icon: <FilePlus2 size={12} />, onClick: onNew },
-        { label: 'Generate from an API definition', icon: <Workflow size={12} />, onClick: () => useApp.getState().openIntent('apidef', {}) },
-      ]}
-    >
-      A test is a YAML file in tests/: a request (HTTP, GraphQL, gRPC, WebSocket, MCP or AI) and its checks, or a whole flow. Create one, generate a first suite from an API definition, or save one from a request tab, the MCP view or AI Lab.
-    </Empty>
-  );
-}
-

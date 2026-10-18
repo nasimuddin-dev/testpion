@@ -597,6 +597,8 @@ export function Explorer() {
       create: [{ label: 'New collection', icon: <FolderPlus size={14} />, onSelect: () => void newCollection() }, ...newRequestItems()],
       on: {
         import: importDefinition,
+        recentlyDeleted: () => setTrashOpen(true),
+        ci: () => useApp.getState().set({ ci: {} }),
         expandAll: () => (sections.set(everySection(), true), setExpandAll((n) => n + 1)),
         collapseAll: () => (sections.set(everySection(), false), setCollapseAll((n) => n + 1)),
       },

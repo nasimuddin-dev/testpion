@@ -32,7 +32,14 @@ export function baseKind(kind: NodeKind): KindId {
 export function nodeCapabilities(kind: NodeKind): Capabilities {
   if ((KIND_INFO as Record<string, unknown>)[kind]) return KIND_INFO[kind as KindId].capabilities;
   const base = KIND_INFO[baseKind(kind)].capabilities;
-  if (kind.startsWith('section:')) return { ...all(NA('a section header holds a list, it is not an item')), container: true, import: base.import };
+  if (kind.startsWith('section:'))
+    return {
+      ...all(NA('a section header holds a list, it is not an item')),
+      // a list of folders, or a tree, expands; a flat list (environments, providers) has nothing to expand
+      container: KIND_INFO[baseKind(kind)].folders !== 'none' ? true : NA('a flat list: nothing to expand or collapse'),
+      import: base.import,
+      ci: base.ci === true ? true : NA('its items do not run in CI'),
+    };
   if (kind.startsWith('folder:'))
     return {
       ...all(NA('a folder of a list, not an item')),
@@ -42,6 +49,7 @@ export function nodeCapabilities(kind: NodeKind): Capabilities {
       duplicate: { planned: '0.53' },
       move: { planned: '0.53' },
       run: base.run === true ? true : NA('its items do not run'),
+      ci: base.ci === true ? true : NA('its items do not run in CI'),
       export: { planned: '0.53' },
     };
   if (kind === 'category') return { ...all(NA('a group of one protocol’s requests in a collection')), container: true, run: true };
@@ -96,7 +104,7 @@ export function buildNodeMenu(kind: NodeKind, ctx: NodeMenuCtx): MenuItem[] {
 /** Every node kind a menu is built for (tests, docs, `testpion menus --json` later). */
 export const NODE_KINDS: readonly NodeKind[] = [
   ...KIND_IDS.filter((k) => !KIND_INFO[k].since),
-  ...(['collection', 'mcp-server', 'spec', 'dataset', 'test', 'prompt', 'load-test', 'evaluation', 'monitor', 'environment'] as const).map((k) => `section:${k}` as const),
+  ...(['collection', 'mcp-server', 'spec', 'dataset', 'test', 'prompt', 'load-test', 'evaluation', 'monitor', 'environment', 'provider'] as const).map((k) => `section:${k}` as const),
   ...(['mcp-server', 'spec', 'dataset', 'grpc-call', 'ws-connection', 'test', 'prompt', 'load-test', 'evaluation', 'monitor'] as const).map((k) => `folder:${k}` as const),
   'category',
   'favorites',
@@ -110,7 +118,7 @@ export function fullCtx(kind: NodeKind): NodeMenuCtx {
   // a list's folders and a gRPC call's collections are submenus
   const info = KIND_INFO[baseKind(kind)];
   if (typeof info.folders === 'object' || kind === 'grpc-call' || kind === 'ws-connection') on.move = [];
-  return { on, repo: true, create: nodeCapabilities(kind).container === true && kind !== 'favorites' ? [{ label: 'New …', onSelect: noop }] : [] };
+  return { on, repo: true, create: kind.startsWith('section:') || (nodeCapabilities(kind).container === true && kind !== 'favorites') ? [{ label: 'New …', onSelect: noop }] : [] };
 }
 
 /** The labels of a kind's menu, group by group, with every action offered (tests, the docs table). */

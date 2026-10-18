@@ -167,6 +167,7 @@ export function EvaluationsView() {
             render: () => (
               <FolderList
                 id="eval-saved"
+                kind="evaluation"
                 title="Saved evaluations"
                 itemNoun="evaluation"
                 addLabel="Save current evaluation"
@@ -176,16 +177,14 @@ export function EvaluationsView() {
                 onOpen={(id) => void openSaved(id)}
                 onAdd={(folder) => void saveEval(true, folder)}
                 ops={saved.ops}
-                itemMenu={(id) => [
-                  {
-                    label: 'Run',
-                    icon: <Play size={13} />,
-                    onSelect: () =>
+                itemActions={(id) => ({
+                  on: {
+                    run: () =>
                       void openSaved(id).then((it) => {
                         if (it) void runDraft({ ...drafts.load(), ...it.data, name: it.name });
                       }),
                   },
-                ]}
+                })}
                 items={savedItems}
                 empty={
                   <Empty title="No saved evaluations" actions={[{ label: 'Save this evaluation', icon: <Save size={13} />, onClick: () => void saveEval(true) }]}>

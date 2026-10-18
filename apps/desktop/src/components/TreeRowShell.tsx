@@ -37,15 +37,19 @@ export interface TreeRowShellProps {
   drop?: { onDragOver(e: DragEvent): void; onDragLeave?(): void; onDrop(e: DragEvent): void; over?: boolean };
   /** The change mark slot (git: A, M, D …), at the end of the row. */
   mark?: ReactNode;
+  /** A row's quick action buttons (Run …), before its ⋯ (each also in the menu). */
+  actions?: ReactNode;
   /** A section header: taller, the ⋯ faintly visible. */
   header?: boolean;
+  /** A row of two lines (a name and a subtitle): its height follows its content. */
+  tall?: boolean;
   className?: string;
   style?: CSSProperties;
   /** A tooltip for the row's button. */
   title?: string;
 }
 
-export function TreeRowShell({ kind, ctx, nodeId, label, children, onClick, onOpen, active, expanded, rename, drag, drop, mark, header, className, style, title }: TreeRowShellProps) {
+export function TreeRowShell({ kind, ctx, nodeId, label, children, onClick, onOpen, active, expanded, rename, drag, drop, mark, actions, header, tall, className, style, title }: TreeRowShellProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   /** Run the row's menu item with this label (a key does what the menu does, or nothing). */
   const runItem = (test: (label: string) => boolean): boolean => {
@@ -76,7 +80,7 @@ export function TreeRowShell({ kind, ctx, nodeId, label, children, onClick, onOp
       data-node-kind={kind}
       className={cx(
         'group flex items-center rounded-md mx-1 pr-1 transition-colors',
-        header ? 'h-9' : 'h-8',
+        header ? 'h-9' : tall ? 'min-h-8' : 'h-8',
         drop?.over ? 'bg-accent-soft ring-1 ring-accent' : active ? 'bg-accent-soft' : menuOpen ? 'bg-hover' : 'hover:bg-hover',
         className,
       )}
@@ -105,7 +109,7 @@ export function TreeRowShell({ kind, ctx, nodeId, label, children, onClick, onOp
         </div>
       ) : (
         <button
-          className="flex items-center gap-2 flex-1 min-w-0 h-full text-sm text-left"
+          className={cx('flex items-center gap-2 flex-1 min-w-0 text-sm text-left', tall ? 'py-1.5' : 'h-full')}
           onClick={onClick}
           onDoubleClick={onOpen}
           onKeyDown={keys}
@@ -119,6 +123,7 @@ export function TreeRowShell({ kind, ctx, nodeId, label, children, onClick, onOp
         </button>
       )}
       {mark && <span className="shrink-0 ml-1">{mark}</span>}
+      {actions}
       <NodeMenu kind={kind} label={label} header={header} open={menuOpen} onOpenChange={setMenuOpen} ctx={ctx} />
     </div>
   );

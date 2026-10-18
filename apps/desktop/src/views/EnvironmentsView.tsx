@@ -1,4 +1,4 @@
-import { ArchiveRestore, ArrowLeftRight, Check, Copy, Grid3x3, Download, FileJson, FileText, History, KeyRound, Pencil, Save, ScanSearch, Trash2, TriangleAlert } from 'lucide-react';
+import { Plus, ArrowLeftRight, Grid3x3, Download, FileJson, FileText, KeyRound, Save, ScanSearch, TriangleAlert } from 'lucide-react';
 import { SecretRefsLine } from '../components/SecretRefsLine';
 import { useGit } from '../lib/git';
 import { GitItemHistory } from '../components/GitItemHistory';
@@ -18,11 +18,12 @@ import { EnvCompare } from '../components/EnvCompare';
 import { EnvMatrix } from '../components/EnvMatrix';
 import { TrashDialog } from '../components/TrashDialog';
 import { Badge, Button, Callout, cx, Empty, Field, Input, Menu, MoreMenu, Split, Tabs, Toggle } from '../components/ui';
-import { CountPill, focusRow, InlineRename, RowMenu, TreeHeader, treeKeys } from '../components/TreeParts';
+import { CountPill, focusRow, InlineRename, NodeMenu, treeKeys, withRefDefaults } from '../components/TreeParts';
+import { buildNodeMenu } from '../lib/node-menu';
+import { TreeRowShell } from '../components/TreeRowShell';
 import { refreshEnvironments, useEnvironments } from '../lib/environments-store';
 import { downloadContent } from '../lib/files';
 import { AlsoAddDialog } from '../components/AlsoAddTo';
-import { LABEL } from '../lib/vocabulary';
 
 /**
  * WF-19: open environments are tabs (the one tab model: a single click in the list opens a preview tab, double-click
@@ -243,13 +244,17 @@ export function EnvironmentsView() {
         {scope === 'environment' && (
           <Split id="envs" sidebar initial={22}>
             <div className="h-full flex flex-col bg-panel/50" onKeyDown={treeKeys}>
-              <TreeHeader
-                title="Environments"
-                count={envs.length}
-                addLabel="New environment"
-                onAdd={() => void newEnvironment()}
-                menu={[{ label: 'Recently deleted…', icon: <ArchiveRestore size={14} />, onSelect: () => setTrashOpen(true) }]}
-              />
+              <TreeRowShell
+                kind="section:environment"
+                nodeId="environments:section"
+                label="Environments"
+                header
+                className="mx-0 pl-3 shrink-0"
+                ctx={() => ({ create: [{ label: 'New environment', icon: <Plus size={14} />, onSelect: () => void newEnvironment() }], on: { recentlyDeleted: () => setTrashOpen(true) } })}
+              >
+                <span className="text-[0.82rem] font-semibold truncate">Environments</span>
+                {envs.length > 0 && <CountPill n={envs.length} />}
+              </TreeRowShell>
               {envs.map((e, i) => (
                 <div
                   key={e.id}
@@ -295,7 +300,7 @@ export function EnvironmentsView() {
                   ) : (
                   <button
                     className="flex-1 min-w-0 flex items-center gap-2 text-left text-sm"
-                    title="Drag (or Alt+↑/↓) to reorder · F2 renames"
+                    title="Drag (or Alt+↑/↓) to reorder · F2 renames · Delete deletes"
                     data-tree-row
                     data-rename-id={e.id}
                     onClick={() => {
@@ -307,6 +312,15 @@ export function EnvironmentsView() {
                       if (ev.key === 'F2') {
                         ev.preventDefault();
                         return setRenamingEnv(e.id);
+                      }
+                      if (ev.key === 'Delete') {
+                        ev.preventDefault();
+                        return void deleteEnv(e);
+                      }
+                      if ((ev.key === 'F10' && ev.shiftKey) || ev.key === 'ContextMenu') {
+                        ev.preventDefault();
+                        ev.stopPropagation();
+                        return setMenuFor(e.id);
                       }
                       if (!ev.altKey || (ev.key !== 'ArrowUp' && ev.key !== 'ArrowDown')) return;
                       ev.preventDefault();
@@ -325,17 +339,25 @@ export function EnvironmentsView() {
                     )}
                   </button>
                   )}
-                  <RowMenu
+                  <NodeMenu
+                    kind="environment"
                     label={e.name}
                     open={menuFor === e.id}
                     onOpenChange={(o) => setMenuFor(o ? e.id : undefined)}
-                    items={[
-                      { label: 'Make active', icon: <Check size={14} />, disabled: activeEnv === e.name, onSelect: () => void useApp.getState().setEnvironment(e.name) },
-                      { label: 'Rename', icon: <Pencil size={14} />, separator: true, onSelect: () => setRenamingEnv(e.id) },
-                      { label: 'Duplicate', icon: <Copy size={14} />, onSelect: () => void duplicateEnv(e) },
-                      ...(git.status?.repository ? [{ label: 'History in git…', icon: <History size={14} />, onSelect: () => setHistoryOf({ id: e.id, name: e.name }) }] : []),
-                      { label: LABEL.delete, icon: <Trash2 size={14} />, danger: true, separator: true, onSelect: () => void deleteEnv(e) },
-                    ]}
+                    ctx={() => ({
+                      ref: { kind: 'environment', environmentId: e.id },
+                      name: e.name,
+                      repo: !!git.status?.repository,
+                      on: {
+                        open: () => setSel(e.id),
+                        makeActive: () => void useApp.getState().setEnvironment(e.name),
+                        rename: () => setRenamingEnv(e.id),
+                        duplicate: () => void duplicateEnv(e),
+                        historyInGit: () => setHistoryOf({ id: e.id, name: e.name }),
+                        delete: () => void deleteEnv(e),
+                      },
+                      disabled: activeEnv === e.name ? { makeActive: 'It is the active environment' } : e.problem ? { makeActive: 'Its file cannot be read' } : {},
+                    })}
                   />
                 </div>
               ))}
@@ -403,11 +425,15 @@ export function EnvironmentsView() {
                     </Button>
                     <MoreMenu
                       label="More environment actions"
-                      items={[
-                        { label: 'Duplicate', icon: <Copy size={14} />, onSelect: () => void duplicateEnv(draft) },
-                        ...(git.status?.repository ? [{ label: 'History in git…', icon: <History size={14} />, onSelect: () => setHistoryOf({ id: draft.id, name: draft.name }) }] : []),
-                        { label: 'Delete environment', icon: <Trash2 size={14} />, danger: true, separator: true, onSelect: () => void deleteEnv(draft) },
-                      ]}
+                      // the environment's own menu (lib/node-menu.ts), without Open and Make active: this page is it
+                      items={buildNodeMenu(
+                        'environment',
+                        withRefDefaults({
+                          ref: { kind: 'environment', environmentId: draft.id },
+                          repo: !!git.status?.repository,
+                          on: { duplicate: () => void duplicateEnv(draft), historyInGit: () => setHistoryOf({ id: draft.id, name: draft.name }), delete: () => void deleteEnv(draft) },
+                        }),
+                      )}
                     />
                   </div>
                 </div>

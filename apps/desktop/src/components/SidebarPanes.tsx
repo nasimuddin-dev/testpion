@@ -1,5 +1,6 @@
-import { Check, History, KeyRound, Pencil, Plus } from 'lucide-react';
-import { RowMenu } from './TreeParts';
+import { Check, History, KeyRound, Plus } from 'lucide-react';
+import { NodeMenu } from './TreeParts';
+import { saveAsTest } from '../lib/save-test';
 import { useEffect, useMemo, useState } from 'react';
 import { call } from '../api';
 import { promptText, useApp } from '../store';
@@ -12,6 +13,7 @@ export function EnvironmentsPane() {
   const ws = useApp((s) => s.workspace);
   const env = useApp((s) => s.environment);
   const [filter, setFilter] = useState('');
+  const [menuFor, setMenuFor] = useState<string>();
   const envs = (ws?.environments ?? []).filter((e) => !filter || e.name.toLowerCase().includes(filter.toLowerCase()));
   const create = async () => {
     const name = (await promptText('New environment', { message: 'Environment name', placeholder: 'Staging', okLabel: 'Create', icon: <KeyRound size={18} /> }))?.trim();
@@ -36,8 +38,13 @@ export function EnvironmentsPane() {
           {!env && <Check size={13} />}
         </button>
         {envs.map((e) => (
-          <div key={e.id} className={cx('group flex items-center gap-2 mx-1 rounded-md px-3 h-8 text-sm transition-colors', e.name === env ? 'bg-accent-soft text-accent' : 'hover:bg-hover')}>
+          <div
+            key={e.id}
+            className={cx('group flex items-center gap-2 mx-1 rounded-md px-3 h-8 text-sm transition-colors', e.name === env ? 'bg-accent-soft text-accent' : menuFor === e.id ? 'bg-hover' : 'hover:bg-hover')}
+            onContextMenu={(ev) => (ev.preventDefault(), setMenuFor(e.id))}
+          >
             <button
+              onKeyDown={(ev) => ((ev.key === 'F10' && ev.shiftKey) || ev.key === 'ContextMenu') && (ev.preventDefault(), setMenuFor(e.id))}
               className={cx('flex-1 flex items-center gap-2 text-left min-w-0', e.problem && 'text-bad cursor-not-allowed')}
               disabled={!!e.problem}
               onClick={() => useApp.getState().setEnvironment(e.name)}
@@ -48,12 +55,17 @@ export function EnvironmentsPane() {
               {e.isProduction && <Badge tone="bad">prod</Badge>}
               {e.name === env && <Check size={13} className="ml-auto shrink-0" />}
             </button>
-            <RowMenu
+            <NodeMenu
+              kind="environment"
               label={e.name}
-              items={[
-                { label: 'Make active', icon: <Check size={14} />, disabled: e.name === env, onSelect: () => useApp.getState().setEnvironment(e.name) },
-                { label: 'Edit', icon: <Pencil size={14} />, onSelect: () => void openRef({ kind: 'environment', environmentId: e.id }) },
-              ]}
+              open={menuFor === e.id}
+              onOpenChange={(o) => setMenuFor(o ? e.id : undefined)}
+              ctx={() => ({
+                ref: { kind: 'environment', environmentId: e.id },
+                name: e.name,
+                on: { open: () => void openRef({ kind: 'environment', environmentId: e.id }), makeActive: () => useApp.getState().setEnvironment(e.name) },
+                disabled: e.name === env ? { makeActive: 'It is the active environment' } : e.problem ? { makeActive: 'Its file cannot be read' } : {},
+              })}
             />
           </div>
         ))}
@@ -92,6 +104,8 @@ export function HistoryPane({ kind = 'http', onOpen, noun = 'Requests you send' 
     return () => (clearTimeout(t), off());
   }, [filter, kind]);
   const rows = useMemo(() => groupByDay(items, (h) => h.timestamp), [items]);
+  const [menuFor, setMenuFor] = useState<string>();
+  const open = (item: HistoryItem) => (onOpen ? onOpen(item) : void openRef({ kind: 'history', historyId: item.id }));
   return (
     <div className="flex-1 flex flex-col min-h-0">
       <div className="px-2 pb-2">
@@ -104,16 +118,29 @@ export function HistoryPane({ kind = 'http', onOpen, noun = 'Requests you send' 
               {r.header}
             </div>
           ) : (
-            <button
+            <div
               key={r.item.id}
-              className="w-[calc(100%-0.5rem)] mx-1 rounded-md flex items-center gap-2 px-2 h-8 text-sm text-left hover:bg-hover transition-colors"
-              title={r.item.url}
-              onClick={() => (onOpen ? onOpen(r.item) : void openRef({ kind: 'history', historyId: r.item.id }))}
+              className={cx('group mx-1 rounded-md flex items-center pr-1 transition-colors', menuFor === r.item.id ? 'bg-hover' : 'hover:bg-hover')}
+              onContextMenu={(ev) => (ev.preventDefault(), setMenuFor(r.item.id))}
             >
-              {r.item.method && <span className={cx('mono method-badge text-[0.64rem] font-bold w-12 shrink-0', `method-${r.item.method}`)}>{r.item.method}</span>}
-              <span className="truncate flex-1">{kind === 'http' ? (r.item.url ?? r.item.name) : r.item.name}</span>
-              {r.item.status !== undefined && <Badge tone={statusTone(r.item.status)}>{r.item.status}</Badge>}
-            </button>
+              <button
+                className="flex-1 min-w-0 flex items-center gap-2 px-2 h-8 text-sm text-left"
+                title={r.item.url}
+                onClick={() => open(r.item)}
+                onKeyDown={(ev) => ((ev.key === 'F10' && ev.shiftKey) || ev.key === 'ContextMenu') && (ev.preventDefault(), setMenuFor(r.item.id))}
+              >
+                {r.item.method && <span className={cx('mono method-badge text-[0.64rem] font-bold w-12 shrink-0', `method-${r.item.method}`)}>{r.item.method}</span>}
+                <span className="truncate flex-1">{kind === 'http' ? (r.item.url ?? r.item.name) : r.item.name}</span>
+                {r.item.status !== undefined && <Badge tone={statusTone(r.item.status)}>{r.item.status}</Badge>}
+              </button>
+              <NodeMenu
+                kind="history"
+                label={r.item.name}
+                open={menuFor === r.item.id}
+                onOpenChange={(o) => setMenuFor(o ? r.item.id : undefined)}
+                ctx={() => ({ ref: { kind: 'history', historyId: r.item.id }, name: r.item.name, on: { open: () => open(r.item), testFile: () => void saveAsTest({ ref: { kind: 'history', historyId: r.item.id }, name: r.item.name }) } })}
+              />
+            </div>
           ),
         )}
         {!items.length && (

@@ -1,4 +1,4 @@
-import { Bot, CheckCircle2, Copy, Download, ExternalLink, FileText, Pause, Pencil, Play, RotateCcw, Sparkles, Terminal, Workflow } from 'lucide-react';
+import { ArchiveRestore, Bot, CheckCircle2, Copy, Download, ExternalLink, FileText, Pause, Pencil, Play, RotateCcw, Sparkles, Terminal, Workflow } from 'lucide-react';
 import type { ActionDef } from '../node-menu-actions';
 import { LABEL } from '../vocabulary';
 
@@ -23,4 +23,5 @@ export const LIST_ACTIONS: readonly ActionDef[] = [
   { id: 'openTrace', group: 'open', label: LABEL.openTrace, icon: FileText, kinds: ['history'] },
   { id: 'openRun', group: 'open', label: LABEL.openRun, icon: ExternalLink, kinds: ['trace'] },
   { id: 'makeActive', group: 'run', label: LABEL.makeActive, icon: CheckCircle2, kinds: ['environment'] },
+  { id: 'recentlyDeleted', group: 'open', label: LABEL.recentlyDeleted, icon: ArchiveRestore, kinds: ['section:environment', 'section:collection'] },
 ];

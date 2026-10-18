@@ -166,6 +166,7 @@ export function Playground({ providers, onSetUp }: { providers: ProviderConfig[]
           render: () => (
             <FolderList
               id="ai-saved"
+              kind="prompt"
               title="Saved prompts"
               itemNoun="prompt"
               addLabel="Save current prompt"

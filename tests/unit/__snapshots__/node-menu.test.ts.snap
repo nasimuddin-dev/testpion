@@ -365,6 +365,9 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
       "Run folder",
     ],
     [
+      "Run in CI…",
+    ],
+    [
       "Rename folder",
     ],
     [
@@ -608,8 +611,14 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
       "Import…",
     ],
     [
+      "Recently deleted…",
+    ],
+    [
       "Expand all",
       "Collapse all",
+    ],
+    [
+      "Run in CI…",
     ],
   ],
   "section:dataset": [
@@ -628,8 +637,7 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
       "New …",
     ],
     [
-      "Expand all",
-      "Collapse all",
+      "Recently deleted…",
     ],
   ],
   "section:evaluation": [
@@ -685,6 +693,11 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
       "Collapse all",
     ],
   ],
+  "section:provider": [
+    [
+      "New …",
+    ],
+  ],
   "section:spec": [
     [
       "New …",
@@ -706,6 +719,9 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
     [
       "Expand all",
       "Collapse all",
+    ],
+    [
+      "Run in CI…",
     ],
   ],
   "spec": [
