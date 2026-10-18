@@ -154,6 +154,31 @@ export function extensionForMime(contentType: string | undefined): string {
   return 'bin';
 }
 
+/**
+ * Extensions an OS runs on a double-click (Windows: programs, scripts, shortcuts, installers, registry and setup files;
+ * macOS: .app and .command; shells: .sh). A name a server chose must never save as one.
+ */
+export const LAUNCHER_EXTENSIONS: ReadonlySet<string> = new Set([
+  'exe', 'com', 'bat', 'cmd', 'ps1', 'psm1', 'vbs', 'vbe', 'js', 'jse', 'wsf', 'wsh', 'hta', 'scr', 'lnk', 'msi', 'msp', 'mst', 'pif', 'reg', 'inf', 'url', 'app', 'command', 'sh', 'cpl', 'msc', 'jar', 'appx', 'msix',
+]);
+
+/** The extension of a file name (without the dot, lower case; a trailing dot or a space after the dot is no extension), or ''. */
+export const fileExtension = (name: string): string => /\.([\w-]{1,16})\s*$/.exec(name)?.[1]?.toLowerCase() ?? '';
+
+/**
+ * A download name a server suggested (Content-Disposition), made safe to double-click: a launcher extension
+ * (`report.cmd`, `setup.exe`, `lib.js`) gets the Content-Type's extension appended (`report.cmd.txt`, `setup.exe.bin`),
+ * so what is saved is what it is, a document, and the file manager opens it as one. When the Content-Type's own
+ * extension is a launcher too (`text/javascript`), `txt` or `bin` is used. Other names are returned as they are.
+ */
+export function safeDownloadName(name: string, contentType?: string): string {
+  if (!LAUNCHER_EXTENSIONS.has(fileExtension(name))) return name;
+  const mimeExt = extensionForMime(contentType);
+  const mime = (contentType ?? '').split(';')[0]!.trim().toLowerCase();
+  const add = LAUNCHER_EXTENSIONS.has(mimeExt) ? (mime.startsWith('text/') ? 'txt' : 'bin') : mimeExt;
+  return sanitizeFileName(`${name.replace(/[\s.]+$/g, '')}.${add}`);
+}
+
 /** `name.ext`, or `name-2.ext`, `name-3.ext` … when `taken` says the name is used (where no dialog asks before replacing). */
 export function uniqueFileName(name: string, taken: (n: string) => boolean): string {
   if (!taken(name)) return name;

@@ -27,6 +27,12 @@ export interface OutputSurfaceInfo {
    * sanitized).
    */
   capturedRedacted?: true;
+  /**
+   * The backend sources this surface may be built from (`output.save` with a `source`): what binds a source to the
+   * surface's policy, so a caller cannot pair the console (redacted) with a surface whose policy is `none`. A surface
+   * without any is only ever saved from content the window built.
+   */
+  sources?: readonly OutputSource['kind'][];
   /** The CLI command that writes the same output (release B adds --out / --format everywhere). */
   cli?: string;
   /** true: shipped (the panel is marked and has the control); planned: comes in that release. */
@@ -58,7 +64,7 @@ const B = { state: { planned: 'release B' } } as const;
 
 export const OUTPUT_SURFACES: readonly OutputSurfaceInfo[] = [
   // the response of a request (REST, SOAP), one per tab of the response pane
-  s('response.body', 'Response body', ['raw', 'json', 'json-min', 'csv', 'tsv', 'html', 'xml', 'text', 'har', 'md'], 'raw-notice', { cli: 'send --json' }),
+  s('response.body', 'Response body', ['raw', 'json', 'json-min', 'csv', 'tsv', 'html', 'xml', 'text', 'har', 'md'], 'raw-notice', { cli: 'send --json', sources: ['response'] }),
   s('response.headers', 'Response headers', ['json', 'csv', 'text'], 'raw-notice'),
   s('response.cookies', 'Response cookies', ['json', 'csv', 'cookies-txt'], 'raw-notice'),
   s('response.jwt', 'Decoded JWTs', ['json'], 'redacted-default'),
@@ -70,24 +76,24 @@ export const OUTPUT_SURFACES: readonly OutputSurfaceInfo[] = [
   s('response.history', 'Response history', ['json', 'csv'], 'raw-notice'),
   s('response.curl', 'cURL command', ['curl', 'text'], 'redacted-default', { capturedRedacted: true }),
   // the other protocols
-  s('graphql.response', 'GraphQL response', ['json', 'json-min', 'raw', 'csv'], 'raw-notice'),
+  s('graphql.response', 'GraphQL response', ['json', 'json-min', 'raw', 'csv'], 'raw-notice', { sources: ['response'] }),
   s('graphql.events', 'GraphQL subscription events', ['jsonl', 'json'], 'raw-notice'),
   s('grpc.response', 'gRPC response, metadata and trailers', ['json', 'jsonl', 'csv'], 'raw-notice'),
   s('ws.log', 'Message log (WebSocket, Socket.IO, MQTT, Kafka)', ['jsonl', 'csv', 'text', 'json'], 'raw-notice'),
   s('mcp.tool-result', 'MCP tool result', ['json', 'md', 'text'], 'raw-notice'),
   s('code.generated', 'Generated code', ['text'], 'redacted-default'),
   // runs and results
-  s('run.results', 'Run results', ['html', 'json', 'junit', 'md', 'csv', 'zip'], 'redacted-default', { cli: 'run-collection -o / -r', capturedRedacted: true }),
-  s('flow.timeline', 'Flow run timeline', ['html', 'json'], 'redacted-default', { cli: 'flow report --html', capturedRedacted: true }),
-  s('flow.grid', 'Flow data / scale / matrix rows', ['csv', 'json', 'html'], 'redacted-default', { capturedRedacted: true }),
+  s('run.results', 'Run results', ['html', 'json', 'junit', 'md', 'csv', 'zip'], 'redacted-default', { cli: 'run-collection -o / -r', capturedRedacted: true, sources: ['run'] }),
+  s('flow.timeline', 'Flow run timeline', ['html', 'json'], 'redacted-default', { cli: 'flow report --html', capturedRedacted: true, sources: ['flow-timeline'] }),
+  s('flow.grid', 'Flow data / scale / matrix rows', ['csv', 'json', 'html'], 'redacted-default', { capturedRedacted: true, sources: ['grid'] }),
   s('load.results', 'Load test results', ['json', 'csv', 'html', 'md'], 'none', { cli: 'load --json' }),
-  s('eval.matrix', 'Evaluation matrix', ['csv', 'json', 'md', 'html'], 'none'),
+  s('eval.matrix', 'Evaluation matrix', ['csv', 'json', 'md', 'html'], 'none', { sources: ['grid'] }),
   // logs
-  s('console', 'Console', ['text', 'jsonl'], 'redacted-default', { capturedRedacted: true }),
-  s('logs', 'Application log', ['text', 'jsonl'], 'redacted-default', { capturedRedacted: true }),
+  s('console', 'Console', ['text', 'jsonl'], 'redacted-default', { capturedRedacted: true, sources: ['console'] }),
+  s('logs', 'Application log', ['text', 'jsonl'], 'redacted-default', { capturedRedacted: true, sources: ['logs'] }),
   s('terminal', 'Terminal transcript', ['text'], 'redacted-default'),
   s('problems', 'Problems', ['md', 'json', 'csv'], 'none'),
-  s('debugger.session', 'HTTP Debugger session', ['har', 'json', 'csv'], 'redacted-default', { cli: 'debug -o', capturedRedacted: true }),
+  s('debugger.session', 'HTTP Debugger session', ['har', 'json', 'csv'], 'redacted-default', { cli: 'debug -o', capturedRedacted: true, sources: ['debugger'] }),
   // release B
   s('history', 'History', ['har', 'csv', 'json'], 'redacted-default', B),
   s('traces', 'Traces', ['json'], 'redacted-default', B),

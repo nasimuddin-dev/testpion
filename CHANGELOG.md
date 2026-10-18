@@ -5,6 +5,14 @@
 - Every click on a request in the explorer opens it in a tab of its own and shows it (it no longer replaces the tab you had); a request that is already open is just shown.
 - Closing the last tab of Evaluations, Load tests, the AI Playground or Environments now closes it: the view says nothing is open and offers a button for a new one, as the request editors do.
 - A request you sent keeps its tab and its response until you close the tab: a single click on another request opens a new tab instead of replacing it (a preview tab is still replaced while nothing was sent from it). The same for a prompt run in the Playground.
+### Download and export: safer, and no slower for big outputs
+- **Open after a save is for documents only**: a raw body, an HTML page, a shell script, or any file whose name ends in something the OS would run (`.exe`, `.cmd`, `.js`, `.lnk` …) is shown in its folder instead; the toast offers Open only when it applies.
+- **A server's download name never runs on a double-click**: a Content-Disposition name with a launcher extension gets the Content-Type's extension appended (`report.cmd` saves as `report.cmd.txt`, `setup.exe` as `setup.exe.bin`).
+- **Deeply nested JSON lays out in bounded space**: the indent stops growing past 64 levels and the layout stops past 512; a body that would still grow past 8× its size stops the save with a message (save it as Raw body instead) rather than fill the disk.
+- **A link inside the workspace cannot carry a read or write outside it**: paths are checked by where they really lead, a payload is read only when it is a plain file under `payloads/` (a response body, History compare), and a source is accepted only for the output it belongs to (the console's lines cannot be saved under the timeline's no-redaction policy).
+- **Workspace export reads datasets field by field**: a CSV column named `password`, a JSON, JSON Lines or YAML property holding a secret becomes a `{{variable}}` and is listed; files no scan can read (binary, a dataset that does not parse) are named in the summary as exported as is.
+- **Importing a workspace export never replays the file's own notes**; what the import skipped is said in TestPion's words. Objects in an export or an Insomnia import cannot set a prototype through a `__proto__` key.
+- **Big saves stream end to end**: a data run or evaluation matrix as JSON, HTML or Markdown is written page by page like CSV, a run's ZIP entry by entry, and reports recorded masked are no longer parsed and masked a second time.
 
 ## 0.52.0 — 2026-10-17
 

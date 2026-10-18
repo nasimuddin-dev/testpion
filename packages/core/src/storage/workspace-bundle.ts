@@ -137,6 +137,8 @@ export function exportWorkspaceBundle(store: WorkspaceStore): WorkspaceBundle {
   };
   walk(store.testTree());
   const files: BundleFile[] = [];
+  /** Files that went out as they are: binary ones, and datasets that could not be read field by field. */
+  const unscanned: string[] = [];
   const collect = (rel: string) => {
     const abs = store.path(...rel.split('/'));
     for (const e of readdirSync(abs, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
@@ -149,11 +151,21 @@ export function exportWorkspaceBundle(store: WorkspaceStore): WorkspaceBundle {
         const buf = take(r, join(abs, e.name));
         if (!buf) continue;
         const enc = encode(buf);
-        files.push({ path: r, size: buf.length, ...enc, ...(enc.encoding === 'utf8' ? { content: strip.text('file', r, 'content', enc.content) } : {}) });
+        if (enc.encoding === 'utf8') {
+          // a dataset is read field by field (a password column, a token property); the rest is text with shapes in it
+          if (r.startsWith('datasets/')) {
+            const d = strip.datasetFile(r, enc.content);
+            enc.content = d.text;
+            if (!d.parsed) unscanned.push(r);
+          } else enc.content = strip.text('file', r, 'content', enc.content);
+        } else unscanned.push(r);
+        files.push({ path: r, size: buf.length, ...enc });
       }
     }
   };
   for (const folder of BUNDLE_FILE_FOLDERS) if (existsSync(store.path(folder))) collect(folder);
+  // said once, so "secret values are never exported" is not claimed for bytes no scan has read
+  if (unscanned.length) notes.push(`Exported as is (not scanned for secrets): ${unscanned.slice(0, 20).join(', ')}${unscanned.length > 20 ? ` and ${unscanned.length - 20} more` : ''}.`);
   const ws = store.workspace;
   return {
     format: 'testpion-workspace',
@@ -219,6 +231,7 @@ export function exportSummary(b: WorkspaceBundle): ExportSummary {
 /** What importing an export did: the new workspace, what was skipped (notes) and the values to fill in. */
 export interface BundleImportResult {
   store: WorkspaceStore;
+  /** What this import skipped, in its own words (never the export's `notes`, which anyone could have written). */
   notes: string[];
   /** Variables the export replaced or left blank (secrets): `name (where)`, to set in the new workspace. */
   valuesNeeded: string[];
@@ -318,7 +331,9 @@ function fillImportedWorkspace(store: WorkspaceStore, bundle: WorkspaceBundle, w
   for (const e of bundle.environments ?? []) store.saveEnvironment(e);
   store.saveProviders(bundle.providers ?? []);
   store.saveMcpServers(bundle.mcpServers ?? []);
-  const notes = [...(Array.isArray(bundle.notes) ? bundle.notes.filter((n): n is string => typeof n === 'string') : [])];
+  // the export's own notes are not replayed: a file from anywhere would speak in the app's voice. What this import
+  // skipped is noted here, from what it did.
+  const notes: string[] = [];
   for (const [kind, lib] of Object.entries(bundle.library ?? {})) {
     if (!isObject(lib)) {
       notes.push(`Skipped the saved items of kind "${kind}": not an object.`);

@@ -11,6 +11,7 @@ import {
   objectsToCsv,
   objectsToTsv,
   outputFileName,
+  safeDownloadName,
   toCsv,
   urlNamePart,
 } from '@testpion/shared';
@@ -49,7 +50,8 @@ export function bodyFormats(r: HttpResponseData, ctx: ResponseContext): OutputFo
   const base = responseBaseName(r, ctx.method);
   const ext = extensionForMime(r.contentType);
   const disposition = fileNameFromContentDisposition(header(r, 'content-disposition'));
-  const rawName = disposition ? (/\.\w{1,16}$/.test(disposition) ? disposition : `${disposition}.${ext}`) : `${base}.${ext}`;
+  // the server's name is kept, but never as something a double-click runs (report.cmd saves as report.cmd.txt)
+  const rawName = disposition ? safeDownloadName(/\.\w{1,16}$/.test(disposition) ? disposition : `${disposition}.${ext}`, r.contentType) : `${base}.${ext}`;
   const spooled = r.payloadPath ? { kind: 'response' as const, payloadPath: r.payloadPath } : undefined;
   const isJson = r.json !== undefined || (/json/i.test(r.contentType) && !!spooled);
   const isXml = /xml/i.test(r.contentType);

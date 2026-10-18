@@ -205,29 +205,46 @@ describe('output.save', () => {
     expect(existsSync(`${d}.part`)).toBe(false);
   }, 60_000);
 
-  it('a run’s reports and results as a ZIP', async () => {
+  it('a run’s reports and results as a ZIP, written entry by entry (the reports were recorded masked: they are not parsed again)', async () => {
     const runDir = be.ws.runDir('run-zip');
     mkdirSync(runDir, { recursive: true });
     writeFileSync(join(runDir, 'report.html'), '<p>report</p>');
-    writeFileSync(join(runDir, 'report.json'), `{"auth":"${TOKEN}"}`);
+    writeFileSync(join(runDir, 'report.json'), '{"auth":"***"}');
     writeFileSync(
       join(runDir, 'results.jsonl'),
       JSON.stringify({ id: 'r1', name: '=cmd', type: 'http', status: 'passed', startedAt: '2026-10-17T10:00:00Z', durationMs: 5, attempts: 1, checks: [] }) + '\n',
     );
     const d = dest('run.zip');
-    await save({ surface: 'run.results', format: 'zip', suggestedName: 'run.zip', source: { kind: 'run', runId: 'run-zip' } });
+    events.length = 0;
+    const r = await save({ surface: 'run.results', format: 'zip', suggestedName: 'run.zip', source: { kind: 'run', runId: 'run-zip' } });
     const zip = readFileSync(d);
     const text = zip.toString('latin1');
     expect(text).toContain('report.html');
     expect(text).toContain('results.csv');
     expect(text).toContain("'=cmd");
-    expect(text).not.toContain('abc123def456ghi789jkl');
+    expect(text).toContain('{"auth":"***"}');
+    expect(r.redacted).toBe(true);
+    // a well-formed archive: three local headers, three central entries, the end record counts them
+    expect(text.split('PK\u0003\u0004').length - 1).toBe(3);
+    expect(zip.readUInt16LE(zip.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06])) + 10)).toBe(3);
+    expect(r.bytes).toBe(zip.length);
     await expect(save({ surface: 'run.results', format: 'zip', suggestedName: 'x', source: { kind: 'run', runId: '../../x' } })).rejects.toThrow(/unknown run/);
+  });
+
+  it('a source is accepted only for a surface built from it: no borrowing another surface’s policy', async () => {
+    dest('bound.json');
+    // the timeline's policy is none; the console's is redacted: the pair is refused, whatever the caller says
+    await expect(save({ surface: 'response.timeline', format: 'json', suggestedName: 'x.json', source: { kind: 'console' } })).rejects.toThrow(/unknown source console for Response timeline/);
+    await expect(save({ surface: 'response.headers', format: 'json', suggestedName: 'x.json', source: { kind: 'response', payloadPath: 'x' } })).rejects.toThrow(/unknown source response for Response headers/);
+    await expect(save({ surface: 'eval.matrix', format: 'csv', suggestedName: 'x.csv', source: { kind: 'logs' } })).rejects.toThrow(/unknown source logs/);
+    await expect(be.invoke('output.copy', { surface: 'load.results', format: 'json', source: { kind: 'run', runId: 'run-zip' } })).rejects.toThrow(/unknown source run/);
+    for (const s of OUTPUT_SURFACES) for (const k of s.sources ?? []) expect(['response', 'run', 'flow-timeline', 'console', 'logs', 'debugger', 'grid'], `${s.id} ${k}`).toContain(k);
   });
 
   it('Show in folder and Open take the job, never a path', async () => {
     const d = dest('shown.json');
     const r = await save({ surface: 'response.body', format: 'json', suggestedName: 'shown.json', content: { text: '{}' } });
+    expect(r.canOpen).toBe(true);
     await be.invoke('output.reveal', { jobId: r.jobId });
     expect(revealed.at(-1)).toBe(d);
     await expect(be.invoke('output.reveal', { jobId: 'unknown-job' })).rejects.toThrow(/no longer there/);
@@ -238,8 +255,90 @@ describe('output.save', () => {
     } finally {
       openFails = '';
     }
-    await be.invoke('output.reveal', { jobId: r.jobId, open: true });
+    expect(await be.invoke('output.reveal', { jobId: r.jobId, open: true })).toEqual({ ok: true, opened: true });
   });
+
+  it('Open is for documents only: raw bytes, HTML, a script, or a launcher name are shown in their folder instead', async () => {
+    const cases: Array<[string, string, string]> = [
+      ['response.body', 'raw', 'report.cmd'],
+      ['response.body', 'raw', 'invoice.pdf.exe'],
+      ['response.body', 'html', 'page.html'],
+      ['response.curl', 'curl', 'send.sh'],
+      // a document format saved under a launcher name typed in the dialog is still a launcher to a double-click
+      ['response.headers', 'json', 'headers.js'],
+    ];
+    for (const [surface, format, name] of cases) {
+      const d = dest(`open/${name}`);
+      const r = await save({ surface, format, suggestedName: name, content: { text: 'x' } });
+      expect(r.canOpen, name).toBe(false);
+      expect(r.canReveal, name).toBe(true);
+      revealed.length = 0;
+      expect(await be.invoke('output.reveal', { jobId: r.jobId, open: true })).toEqual({ ok: true, opened: false });
+      expect(revealed, name).toEqual([d]);
+    }
+    for (const [surface, format, name] of [
+      ['response.headers', 'csv', 'headers.csv'],
+      ['response.body', 'text', 'body.txt'],
+      ['run.results', 'md', 'report.md'],
+    ] as Array<[string, string, string]>) {
+      dest(`open/${name}`);
+      expect((await save({ surface, format, suggestedName: name, content: { text: 'x' } })).canOpen, name).toBe(true);
+    }
+  });
+
+  it('a grid saves as JSON, HTML and Markdown page by page, the same bytes as one document', async () => {
+    const real = be.handlers['tests.scaleRows'];
+    const rows = (p: { offset: number; limit: number }) =>
+      Array.from({ length: Math.max(0, Math.min(p.limit, 1_234 - p.offset)) }, (_, i) => ({ index: p.offset + i, status: 'passed', durationMs: 1, startedAt: 't', values: { name: `row ${p.offset + i}`, note: '<b>&</b>|x' } }));
+    be.handlers['tests.scaleRows'] = async (p: { offset: number; limit: number }) => ({ rows: rows(p), matched: 1_234, total: 1_234 });
+    try {
+      const all = rows({ offset: 0, limit: 1_234 });
+      const cols = ['row', 'status', 'durationMs', 'startedAt', 'failedStep', 'error', 'name', 'note'];
+      const objects = all.map((r) => ({ row: r.index, status: r.status, durationMs: r.durationMs, startedAt: r.startedAt, failedStep: '', error: '', name: r.values.name, note: r.values.note }));
+      const src = { kind: 'grid', grid: 'scale-rows', params: { id: 'x' } };
+      const j = dest('grid/rows.json');
+      const rj = await save({ surface: 'flow.grid', format: 'json', suggestedName: 'rows.json', source: src });
+      const json = readFileSync(j, 'utf8');
+      expect(json).toBe(JSON.stringify(objects, null, 2) + '\n');
+      expect(rj.bytes).toBe(Buffer.byteLength(json));
+      const h = dest('grid/rows.html');
+      await save({ surface: 'flow.grid', format: 'html', suggestedName: 'rows.html', source: src });
+      const html = readFileSync(h, 'utf8');
+      expect(html.startsWith('<!doctype html>')).toBe(true);
+      expect(html.trimEnd().endsWith('</html>')).toBe(true);
+      expect(html.split('<tr>').length - 1).toBe(1_235);
+      expect(html).toContain('&lt;b&gt;&amp;&lt;/b&gt;|x');
+      expect(html).toContain(cols.map((c) => `<th>${c}</th>`).join(''));
+      const m = dest('grid/rows.md');
+      await save({ surface: 'eval.matrix', format: 'md', suggestedName: 'rows.md', source: src });
+      const md = readFileSync(m, 'utf8');
+      expect(md.split('\n')[0]).toBe(`| ${cols.join(' | ')} |`);
+      expect(md.split('\n').length).toBe(1_234 + 3);
+      expect(md).toContain('<b>&</b>\\|x');
+    } finally {
+      be.handlers['tests.scaleRows'] = real!;
+    }
+  });
+
+  it('a body of nothing but [ is laid out in bounded space; one that would grow past 8× stops the save', async () => {
+    const brackets = join(root, 'payloads', 'resp-brackets.bin');
+    writeFileSync(brackets, '['.repeat(100_000));
+    const d = dest('brackets.json');
+    const r = await save({ surface: 'response.body', format: 'json', suggestedName: 'brackets.json', source: { kind: 'response', payloadPath: brackets, part: 'pretty' } });
+    // ~512 lines of at most 64 levels of indent, then the rest as it came: linear in the input, never 100,000² bytes
+    expect(r.bytes).toBeLessThan(400_000);
+    expect(readFileSync(d, 'utf8').split('[').length - 1).toBe(100_000);
+    // 64 levels deep and a million short values: every value gets a 128-space line, 65× the input. Not a document: refused
+    const deep = join(root, 'payloads', 'resp-deep.bin');
+    writeFileSync(deep, '['.repeat(64) + '1,'.repeat(500_000) + '1' + ']'.repeat(64));
+    const e = dest('deep.json');
+    await expect(save({ surface: 'response.body', format: 'json', suggestedName: 'deep.json', source: { kind: 'response', payloadPath: deep, part: 'pretty' } })).rejects.toThrow(/nested too deep/);
+    expect(existsSync(e)).toBe(false);
+    expect(existsSync(`${e}.part`)).toBe(false);
+    // the same body is fine as raw bytes
+    dest('deep.raw');
+    expect((await save({ surface: 'response.body', format: 'raw', suggestedName: 'deep.raw', source: { kind: 'response', payloadPath: deep } })).bytes).toBe(64 + 1_000_001 + 64);
+  }, 60_000);
 
   it('without a native dialog (browser, cloud) the bytes come back to download', async () => {
     const r = (await web.invoke('output.save', { surface: 'response.headers', format: 'csv', suggestedName: 'h.csv', content: { text: 'a,b\r\n' } })) as Record<string, any>;

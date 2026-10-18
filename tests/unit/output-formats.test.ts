@@ -2,23 +2,36 @@ import { describe, expect, it } from 'vitest';
 import {
   createJsonMinifier,
   createJsonPrettyPrinter,
+  createZipWriter,
   crc32,
   csvField,
   csvRecords,
   extensionForMime,
+  fileExtension,
   fileNameFromContentDisposition,
   guardCsvCell,
   harFromExchange,
+  HTML_DOCUMENT_TAIL,
+  HTML_TABLE_TAIL,
   htmlDocument,
+  htmlDocumentHead,
+  htmlTableHead,
+  htmlTableRows,
+  JSON_INDENT_MAX_DEPTH,
+  JSON_PRETTY_MAX_DEPTH,
   jsonLines,
   jsonPretty,
   junitXml,
+  LAUNCHER_EXTENSIONS,
   markdownTable,
+  markdownTableHead,
+  markdownTableRows,
   netscapeCookies,
   objectsToCsv,
   OUTPUT_FORMATS,
   OUTPUT_SURFACES,
   outputFileName,
+  safeDownloadName,
   sanitizeFileName,
   toCsv,
   uniqueFileName,
@@ -142,6 +155,35 @@ describe('JSON', () => {
     out += p.end();
     expect(out).toBe(JSON.stringify(JSON.parse(big), null, 2) + '\n');
   });
+
+  it('the re-indenter caps the indent at 64 levels and stops laying out past 512: linear in the input, still the same JSON', () => {
+    const pretty = (text: string, size = 7) => {
+      const p = createJsonPrettyPrinter();
+      let out = '';
+      for (let i = 0; i < text.length; i += size) out += p.push(text.slice(i, i + size));
+      return out + p.end();
+    };
+    // 100,000 opening brackets: a quadratic layout would write 5 GB; this stays a few hundred KB whatever the chunking
+    const brackets = '['.repeat(100_000);
+    for (const size of [1, 7, 4096]) {
+      const out = pretty(brackets, size);
+      expect(out.length, `chunks of ${size}`).toBeLessThan(brackets.length + JSON_PRETTY_MAX_DEPTH * (2 * JSON_INDENT_MAX_DEPTH + 2) + 2);
+      expect(out.split('[').length - 1).toBe(100_000);
+    }
+    // 100 deep: valid, parses to the same value, no line deeper than 64 levels of indent
+    const deep = '['.repeat(100) + '{"a":[1,2]}' + ']'.repeat(100);
+    const out = pretty(deep);
+    expect(JSON.parse(out)).toEqual(JSON.parse(deep));
+    expect(Math.max(...out.split('\n').map((l) => l.length - l.trimStart().length))).toBe(2 * JSON_INDENT_MAX_DEPTH);
+    expect(out.split('\n').length).toBeGreaterThan(200);
+    // 600 deep: laid out to 512, then as it came, and still the same value; what follows the deep part is untouched too
+    const deeper = '{"deep":' + '['.repeat(600) + '1' + ']'.repeat(600) + ',"after":{"x":1}}';
+    const out2 = pretty(deeper);
+    expect(JSON.parse(out2)).toEqual(JSON.parse(deeper));
+    expect(out2).toContain(']]]]]]]],"after":{"x":1}}');
+    // the layout up to the limit is the usual one (chunk boundaries make no difference)
+    expect(pretty(deeper, 1)).toBe(pretty(deeper, 1000));
+  });
 });
 
 describe('documents', () => {
@@ -235,6 +277,40 @@ describe('ZIP', () => {
   it('crc32 matches the standard check value', () => {
     expect(crc32(new TextEncoder().encode('123456789'))).toBe(0xcbf43926);
   });
+
+  it('the entry-by-entry writer gives the same archive as zipFiles, each entry as its header and bytes', () => {
+    const date = new Date(2026, 9, 17, 10, 30, 0);
+    const files = [
+      { name: 'report.html', data: '<p>hi</p>', date },
+      { name: 'results.csv', data: new Uint8Array([97, 44, 98, 13, 10]), date },
+    ];
+    const w = createZipWriter();
+    const parts = files.flatMap((f) => w.add(f.name, f.data, f.date));
+    expect(parts.length).toBe(4);
+    expect(new TextDecoder().decode(parts[0]!.subarray(30))).toBe('report.html');
+    expect(parts[3]).toBe(files[1]!.data); // the bytes themselves, not a copy
+    expect(Buffer.concat([...parts, w.end()]).equals(Buffer.from(zipFiles(files)))).toBe(true);
+    const empty = createZipWriter().end();
+    expect(empty.length).toBe(22);
+    expect(Buffer.from(empty).readUInt32LE(0)).toBe(0x06054b50);
+  });
+});
+
+describe('documents in parts', () => {
+  it('the HTML head, table head, rows and tails joined are htmlDocument; the Markdown head and rows are markdownTable', () => {
+    const columns = ['name', 'note'];
+    const rows = [
+      ['a', '<b>&</b>'],
+      ['b', 'x|y\nz'],
+    ];
+    const at = '2026-10-17T10:00:00Z';
+    expect(htmlDocumentHead('Data run', { generatedAt: at }) + htmlTableHead(columns) + htmlTableRows(columns, rows.slice(0, 1)) + htmlTableRows(columns, rows.slice(1)) + HTML_TABLE_TAIL + HTML_DOCUMENT_TAIL).toBe(
+      htmlDocument('Data run', [{ table: { columns, rows } }], { generatedAt: at }),
+    );
+    expect(htmlTableRows(columns, rows)).toBe('<tr><td>a</td><td>&lt;b&gt;&amp;&lt;/b&gt;</td></tr>\n<tr><td>b</td><td>x|y\nz</td></tr>\n');
+    expect(markdownTableHead(columns) + markdownTableRows(columns, rows.slice(0, 1)) + markdownTableRows(columns, rows.slice(1))).toBe(markdownTable(columns, rows));
+    expect(markdownTableRows(columns, rows.slice(1))).toBe('| b | x\\|y<br>z |\n');
+  });
 });
 
 describe('file names', () => {
@@ -309,6 +385,22 @@ describe('file names', () => {
     expect(uniqueFileName('a.json', (n) => taken.has(n))).toBe('a-3.json');
     expect(uniqueFileName('b.json', (n) => taken.has(n))).toBe('b.json');
   });
+
+  it('a server’s name with a launcher extension gets the Content-Type’s extension, so a double-click opens a document', () => {
+    expect(safeDownloadName('report.cmd', 'text/plain')).toBe('report.cmd.txt');
+    expect(safeDownloadName('setup.exe', 'application/octet-stream')).toBe('setup.exe.bin');
+    expect(safeDownloadName('invoice.pdf.EXE', 'application/pdf')).toBe('invoice.pdf.EXE.pdf');
+    expect(safeDownloadName('run.ps1 ', 'application/json')).toBe('run.ps1.json');
+    expect(safeDownloadName('app.lnk', undefined)).toBe('app.lnk.bin');
+    for (const ext of ['bat', 'vbs', 'js', 'jse', 'wsf', 'wsh', 'hta', 'scr', 'msi', 'msp', 'pif', 'reg', 'inf', 'url', 'app', 'command', 'sh', 'com'])
+      expect(fileExtension(safeDownloadName(`x.${ext}`, 'application/octet-stream')), ext).toBe('bin');
+    // the Content-Type's own extension can be a launcher (JavaScript): text/… becomes txt, anything else bin
+    expect(safeDownloadName('lib.js', 'text/javascript')).toBe('lib.js.txt');
+    expect(safeDownloadName('lib.js', 'application/javascript')).toBe('lib.js.bin');
+    // documents keep their names
+    for (const name of ['report.pdf', 'data.json', 'page.html', 'photo.jpg', 'archive.zip', 'README', 'notes.txt']) expect(safeDownloadName(name, 'application/octet-stream')).toBe(name);
+    expect(LAUNCHER_EXTENSIONS.has('exe') && !LAUNCHER_EXTENSIONS.has('pdf')).toBe(true);
+  });
 });
 
 describe('the surfaces registry', () => {
@@ -327,5 +419,22 @@ describe('the surfaces registry', () => {
     const policy = Object.fromEntries(OUTPUT_SURFACES.map((s) => [s.id, s.redaction]));
     for (const id of ['console', 'logs', 'terminal', 'run.results', 'debugger.session', 'response.trace', 'response.curl']) expect(policy[id], id).toBe('redacted-default');
     for (const id of ['response.body', 'grpc.response', 'graphql.response', 'ws.log']) expect(policy[id], id).toBe('raw-notice');
+  });
+
+  it('every backend source belongs to the surfaces built from it, and to no surface with another policy', () => {
+    const sources = Object.fromEntries(OUTPUT_SURFACES.filter((s) => s.sources).map((s) => [s.id, [...s.sources!]]));
+    expect(sources).toEqual({
+      'response.body': ['response'],
+      'graphql.response': ['response'],
+      'run.results': ['run'],
+      'flow.timeline': ['flow-timeline'],
+      'flow.grid': ['grid'],
+      'eval.matrix': ['grid'],
+      console: ['console'],
+      logs: ['logs'],
+      'debugger.session': ['debugger'],
+    });
+    // a redacted source (the console, the log, a run) is never offered by a surface whose policy is none
+    for (const s of OUTPUT_SURFACES) if (s.redaction === 'none') for (const k of s.sources ?? []) expect(['grid'], `${s.id} ${k}`).toContain(k);
   });
 });
