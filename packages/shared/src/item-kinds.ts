@@ -126,6 +126,8 @@ export interface ItemKindInfo {
   size?: { gitWarnBytes?: number; bundleEmbedBytes?: number; gitLfsBytes?: number; gitRefuseBytes?: number };
   /** Registered ahead of its release (rag-target, metric): left out of every derived table until then. */
   since?: `0.${number}`;
+  /** The id kindOfPath finds in a path is the ItemRef's own id (refOfWorkspacePath makes the ref from the path). */
+  pathRef?: boolean;
   /** A path of this kind in tests/fixtures/kinds/workspace (the completeness test checks kindOfPath on it). */
   sample?: string;
   capabilities: Capabilities;
@@ -422,6 +424,7 @@ const kinds: ItemKindInfo[] = [
     opens: { view: 'tests' },
     watch: { legacy: 'tests', canonical: 'test' },
     git: { merge: 'text' },
+    pathRef: true,
     sample: 'tests/smoke/login.yaml',
     capabilities: {
       ...FILE_ITEM,
@@ -478,6 +481,7 @@ const kinds: ItemKindInfo[] = [
     watch: { legacy: 'tests', canonical: 'dataset' },
     git: { merge: 'text' },
     size: { gitWarnBytes: 5 * 1024 * 1024, bundleEmbedBytes: 10 * 1024 * 1024, gitLfsBytes: 50 * 1024 * 1024, gitRefuseBytes: 100 * 1024 * 1024 },
+    pathRef: true,
     sample: 'datasets/users.csv',
     capabilities: { ...FILE_ITEM, move: true, trash: true, run: true, versioned: true },
   },
@@ -494,6 +498,7 @@ const kinds: ItemKindInfo[] = [
     opens: { view: 'apidef' },
     watch: { legacy: 'specs', canonical: 'spec' },
     git: { merge: 'text' },
+    pathRef: true,
     sample: 'specs/petstore.yaml',
     capabilities: {
       ...FILE_ITEM,
