@@ -200,6 +200,7 @@ export type { ImportFormat } from '@testpion/shared';
 export * from './storage/current-values.js';
 export * from './storage/env-compare.js';
 export * from './storage/trash.js';
+export * from './storage/kind-files.js';
 export * from './storage/loose-requests.js';
 export * from './storage/examples.js';
 
