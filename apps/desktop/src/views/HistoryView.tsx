@@ -9,12 +9,12 @@ import { formatBytes, formatMs, groupByDay } from '../lib/format';
 import { DurationBar } from '../components/charts';
 import { finishSave, type SaveResult } from '../lib/files';
 import { JsonTree } from '../components/JsonView';
-import { Badge, Button, cx, Empty, Input, menuKeys, Select, Split, statusTone, VirtualList } from '../components/ui';
-import { NodeMenu } from '../components/TreeParts';
-import { buildNodeMenu, type NodeMenuCtx } from '../lib/node-menu';
+import { Badge, Button, Empty, Input, Select, Split, statusTone, VirtualList } from '../components/ui';
+import { NodeMenu, TreeBadge, treeKeys } from '../components/TreeParts';
+import { TreeRowShell } from '../components/TreeRowShell';
+import type { NodeMenuCtx } from '../lib/node-menu';
 import { saveAsTest } from '../lib/save-test';
 import { type ItemRef } from '@testpion/shared';
-import { setDragRefs } from '../lib/drag-ref';
 
 interface Entry {
   id: string;
@@ -181,7 +181,6 @@ export function HistoryView() {
     void load(true);
   };
   // one menu for an entry, on its row (right-click, ⋯) and above its details: open · related items · test · delete
-  const [menuFor, setMenuFor] = useState<string>();
   /** An entry's menu (lib/node-menu.ts builds it; the details header shows it without Open, which is the details themselves). */
   const entryMenu = (e: Entry, o: { details?: boolean } = {}): NodeMenuCtx => ({
     ref: { kind: 'history', historyId: e.id },
@@ -197,7 +196,7 @@ export function HistoryView() {
   });
   return (
     <Split id="history" initial={45}>
-      <div className="h-full flex flex-col">
+      <div className="h-full flex flex-col" onKeyDown={treeKeys}>
         <div className="flex gap-2 p-2 border-b border-line">
           <Input className="flex-1" placeholder="Search history (name, URL, method, status)" value={query} onChange={(e) => setQuery(e.target.value)} />
           <Select value={kind} onChange={(e) => setKind(e.target.value)} aria-label="Kind">
@@ -238,6 +237,8 @@ export function HistoryView() {
             className="flex-1"
             items={rows}
             rowHeight={44}
+            role="tree"
+            label="History"
             onEndReached={items.length < total ? () => void load(false) : undefined}
             render={(row) => {
               if ('header' in row)
@@ -247,52 +248,51 @@ export function HistoryView() {
                   </div>
                 );
               const e = row.item;
+              // the one row (TreeRowShell): click selects, double-click or Enter opens, Ctrl/⌘+click compares, keys and ⋯ open its menu
               return (
-              <div
-                className={cx('group relative w-full h-full border-b border-line/60', sel?.id === e.id || pair?.before.id === e.id || pair?.after.id === e.id ? 'bg-accent/10' : menuFor === e.id ? 'bg-hover' : 'hover:bg-hover')}
-                onContextMenu={(ev) => {
-                  ev.preventDefault();
-                  setMenuFor(e.id);
-                }}
-              >
-              <button
-                draggable
-                // dragged onto a flow canvas: this entry (with the one it is compared with)
-                onDragStart={(ev) => setDragRefs(ev, (pair && (pair.before.id === e.id || pair.after.id === e.id) ? [pair.before, pair.after] : [e]).map((x) => ({ kind: 'history' as const, historyId: x.id })), e.name)}
-                onDoubleClick={() => reopen(e)}
-                onClick={(ev) => pick(e, ev)} onKeyDown={(ev) => ((ev.key === 'F10' && ev.shiftKey) || ev.key === 'ContextMenu' ? (ev.preventDefault(), setMenuFor(e.id)) : menuKeys(buildNodeMenu('history', entryMenu(e)))(ev))} className="w-full h-full text-left pl-3 pr-8 flex flex-col justify-center">
-                <div className="flex items-center gap-2 text-sm">
-                  {e.method && <span className={cx('mono method-badge text-[0.64rem] font-bold w-14 shrink-0', `method-${e.method}`)}>{e.method}</span>}
-                  {!e.method && <Badge>{e.kind}</Badge>}
-                  <span className="truncate" data-history-capture={e.capture ? e.capture.result : undefined}>
-                    {e.capture ? e.name : (e.url ?? e.name)}
+                <TreeRowShell
+                  kind="history"
+                  nodeId={`history:${e.id}`}
+                  label={e.name}
+                  tall
+                  active={sel?.id === e.id || pair?.before.id === e.id || pair?.after.id === e.id}
+                  onClick={(ev) => pick(e, ev)}
+                  onOpen={() => reopen(e)}
+                  ctx={() => entryMenu(e)}
+                  // dragged onto a flow canvas: this entry (with the one it is compared with)
+                  drag={(pair && (pair.before.id === e.id || pair.after.id === e.id) ? [pair.before, pair.after] : [e]).map((x) => ({ kind: 'history' as const, historyId: x.id }))}
+                  className="h-full pl-3 border-b border-line/60"
+                >
+                  <span className="flex-1 min-w-0">
+                    <span className="flex items-center gap-2 text-sm">
+                      {e.method && <TreeBadge label={e.method} className={`method-${e.method}`} />}
+                      {!e.method && <Badge>{e.kind}</Badge>}
+                      <span className="truncate" data-history-capture={e.capture ? e.capture.result : undefined}>
+                        {e.capture ? e.name : (e.url ?? e.name)}
+                      </span>
+                      {e.status !== undefined && (
+                        <span className="ml-auto">
+                          <Badge tone={statusTone(e.status)}>{e.status}</Badge>
+                        </span>
+                      )}
+                    </span>
+                    <span className="text-xs text-muted flex gap-2">
+                      <span>{new Date(e.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                      {e.durationMs !== undefined && (
+                        <span className="inline-flex items-center gap-1.5">
+                          <DurationBar ms={e.durationMs} max={maxMs} bad={statusTone(e.status) === 'bad'} />
+                          {formatMs(e.durationMs)}
+                        </span>
+                      )}
+                      {e.size !== undefined && <span>{formatBytes(e.size)}</span>}
+                      {e.capture && (
+                        <span className="truncate">
+                          {e.capture.sources.includes('reverse') ? (e.capture.sources.length > 1 ? 'proxy + reverse proxy' : 'reverse proxy') : 'proxy'} · {e.capture.hosts.join(', ') || 'no host'}
+                        </span>
+                      )}
+                    </span>
                   </span>
-                  {e.status !== undefined && (
-                    <span className="ml-auto">
-                      <Badge tone={statusTone(e.status)}>{e.status}</Badge>
-                    </span>
-                  )}
-                </div>
-                <div className="text-xs text-muted flex gap-2">
-                  <span>{new Date(e.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                  {e.durationMs !== undefined && (
-                    <span className="inline-flex items-center gap-1.5">
-                      <DurationBar ms={e.durationMs} max={maxMs} bad={statusTone(e.status) === 'bad'} />
-                      {formatMs(e.durationMs)}
-                    </span>
-                  )}
-                  {e.size !== undefined && <span>{formatBytes(e.size)}</span>}
-                  {e.capture && (
-                    <span className="truncate">
-                      {e.capture.sources.includes('reverse') ? (e.capture.sources.length > 1 ? 'proxy + reverse proxy' : 'reverse proxy') : 'proxy'} · {e.capture.hosts.join(', ') || 'no host'}
-                    </span>
-                  )}
-                </div>
-              </button>
-              <span className="absolute right-1 top-1/2 -translate-y-1/2">
-                <NodeMenu kind="history" label={e.name} ctx={() => entryMenu(e)} open={menuFor === e.id} onOpenChange={(o) => setMenuFor(o ? e.id : undefined)} />
-              </span>
-              </div>
+                </TreeRowShell>
               );
             }}
           />

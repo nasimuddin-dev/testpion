@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- **The same row in every list**: collections, environments, AI providers, History entries and the Tests view's runs are now the one row the other trees use. <kbd>Shift</kbd>+<kbd>F10</kbd> and the menu key open the menu, <kbd>F2</kbd> renames, <kbd>Delete</kbd> deletes (with Undo), <kbd>*</kbd> expands, <kbd>Enter</kbd> opens, arrows, <kbd>Home</kbd>/<kbd>End</kbd> and typing a name move between rows. The runs list had no keyboard at all before.
+- **The keyboard stays where you were**: after deleting a row (key or menu) the focus moves to the next row, and Undo puts it on the restored row.
+- **One badge everywhere**: HTTP methods, protocols and file types (GET, GQL, gRPC, WS, MCP, AI, API, CSV …) are the same pill of the same width in the explorer, the Tests tree, History, the Runner and the Home view, in one colour per protocol that follows the light and dark themes.
+- **Screen readers** hear the trees as trees: each row is an item with its level, whether it is open and whether it is selected.
+- **One delete message**: "Deleted the (kind) “name”" with the same Recently deleted note wherever the item went there (collections, environments, API definitions, datasets, MCP servers).
+- **Row tooltips** show the full name only when the name is cut; test files rename in place (<kbd>F2</kbd>, Rename); the **New folder…** item has its ellipsis everywhere.
+- **Empty states**: the Tests view with no test files shows an icon, and the runs list says "No runs yet" (and "No runs match", with Clear filter) with a next step.
+- **Faster**: typing in a test file no longer redraws the test file tree (a thousand files draw only the rows on screen), the Collections filter works each name out once per keystroke, Expand all writes the saved tree state once, and the explorer reloads only the list a change touched.
+
 - Every click on a request in the explorer opens it in a tab of its own and shows it (it no longer replaces the tab you had); a request that is already open is just shown.
 - Closing the last tab of Evaluations, Load tests, the AI Playground or Environments now closes it: the view says nothing is open and offers a button for a new one, as the request editors do.
 - A request you sent keeps its tab and its response until you close the tab: a single click on another request opens a new tab instead of replacing it (a preview tab is still replaced while nothing was sent from it). The same for a prompt run in the Playground.

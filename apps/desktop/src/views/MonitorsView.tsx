@@ -202,7 +202,7 @@ export function MonitorsView() {
     await load();
   };
   /** At once, with Undo in the message (the same as the list's Delete). */
-  const remove = (m: MonitorRow) => deleteWithUndo({ what: `the monitor "${m.name}"`, run: () => monitorOps.deleteItem(m.id), note: 'Its past runs stay in the Tests view' });
+  const remove = (m: MonitorRow) => deleteWithUndo({ kind: 'monitor', name: m.name, run: () => monitorOps.deleteItem(m.id), note: 'Its past runs stay in the Tests view' });
 
   const newDraft = (): MonitorDraft => ({ name: '', collectionId: collections[0]?.id ?? '', everyMinutes: 15, enabled: true, environment: useApp.getState().environment });
   /** Change the monitors library directly (folders): monitors keep their data, only folders change. */

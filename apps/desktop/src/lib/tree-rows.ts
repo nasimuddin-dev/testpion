@@ -1,6 +1,7 @@
 import type { Collection, CollectionFolder, CollectionNode, SavedHttpRequest } from '../types';
 import type { NodeMenuCtx } from './node-menu-actions';
-import { hasCategory, isEmptyFolder, matchesCollectionNode, requestCategory, countCategory, type RequestCategory } from './collection-filter';
+import { hasCategory, isEmptyFolder, matchIndex, requestCategory, countCategory, type RequestCategory } from './collection-filter';
+import { treeKey } from './tree-state';
 
 /**
  * The rows of the Collections tree (CollectionTree), as a pure function of the collections and what is open: the
@@ -37,11 +38,15 @@ export type TreeRow =
   | { t: 'empty'; key: string; c: Collection };
 
 /** A node of a collection, named so that no other collection's node has the same name: `<collection id>:<node id>`. */
-export const scopedNodeId = (collectionId: string, nodeId: string) => `${collectionId}:${nodeId}`;
+export const scopedNodeId = (collectionId: string, nodeId: string) => treeKey(collectionId, nodeId);
 
 /** The open/closed key of a folder, and of a request's examples (scoped; the keys of older versions are still read). */
 export const folderOpenKey = (collectionId: string, folderId: string) => scopedNodeId(collectionId, folderId);
-export const examplesOpenKey = (collectionId: string, requestId: string) => `${scopedNodeId(collectionId, requestId)}:examples`;
+export const examplesOpenKey = (collectionId: string, requestId: string) => treeKey(scopedNodeId(collectionId, requestId), 'examples');
+/** The open/closed key of a collection's protocol category (REST, SOAP, GraphQL, gRPC, WebSocket). */
+export const categoryOpenKey = (collectionId: string, cat: RequestCategory) => treeKey(collectionId, 'cat', cat);
+/** The open/closed key of a folder of saved gRPC calls or connections shown under a collection. */
+export const extraFolderOpenKey = (collectionId: string | undefined, cat: 'grpc' | 'websocket', folder: string) => treeKey(collectionId ?? '', cat, 'folder', folder);
 /** Whether a scoped key is open: the scoped key wins; the unscoped key an older version saved is the fallback. */
 export const isOpenKey = (open: Record<string, boolean>, scoped: string, legacy: string): boolean | undefined => open[scoped] ?? open[legacy];
 
@@ -59,9 +64,10 @@ export interface TreeRowsInput {
 
 /** Every row that shows (the open collections, categories and folders), in order. */
 export function buildTreeRows({ collections, open, filter, favoritesOnly = false, categorize = false, extraGroups }: TreeRowsInput): TreeRow[] {
-  const f = filter?.toLowerCase();
+  const f = filter?.trim().toLowerCase() || undefined;
   const out: TreeRow[] = [];
-  const matches = (n: CollectionNode) => matchesCollectionNode(n, filter, favoritesOnly);
+  // whether each node of the collection being added matches (one bottom-up pass per collection and query, cached)
+  let matches: (n: CollectionNode) => boolean = () => true;
   // in a category, a folder shows when it holds requests of that category (empty folders: the first category)
   const inScope = (n: CollectionNode, scope?: { cat: RequestCategory; first: boolean }) =>
     !scope || (n.kind === 'folder' ? hasCategory(n.items, scope.cat) || (scope.first && isEmptyFolder(n)) : requestCategory(n) === scope.cat);
@@ -86,11 +92,11 @@ export function buildTreeRows({ collections, open, filter, favoritesOnly = false
     const folders = [...new Set(shown.map((i) => i.folder ?? ''))].sort((a, b) => (a === '' ? -1 : b === '' ? 1 : a.localeCompare(b)));
     for (const folder of folders) {
       // a folder of saved gRPC calls / connections: the same row as a collection's folders
-      const key = `${from ?? ''}:${g.cat}:folder:${folder}`;
+      const key = extraFolderOpenKey(from, g.cat, folder);
       const isOpen = !!f || (open[key] ?? true);
       const inside = shown.filter((i) => (i.folder ?? '') === folder);
       if (folder) out.push({ t: 'xfolder', key, folder, count: inside.length, open: isOpen, depth, g });
-      if (isOpen || !folder) for (const i of inside) out.push({ t: 'xitem', key: `${from ?? ''}:${g.cat}:${i.id}`, g, i, depth: depth + (folder ? 1 : 0), from });
+      if (isOpen || !folder) for (const i of inside) out.push({ t: 'xitem', key: treeKey(from ?? '', g.cat, i.id), g, i, depth: depth + (folder ? 1 : 0), from });
     }
   };
   /** A collection's contents: grouped by category when it holds more than one kind of request. */
@@ -104,7 +110,7 @@ export function buildTreeRows({ collections, open, filter, favoritesOnly = false
       return;
     }
     cats.forEach((cat, i) => {
-      const key = `${c.id}:cat:${cat}`;
+      const key = categoryOpenKey(c.id, cat);
       const isOpen = !!f || (open[key] ?? true);
       const scope = { cat, first: i === 0 };
       if (f && !c.items.some((n) => matches(n) && inScope(n, scope))) return;
@@ -112,7 +118,7 @@ export function buildTreeRows({ collections, open, filter, favoritesOnly = false
       if (isOpen) addNodes(c, c.items, 2, scope);
     });
     for (const g of extras) {
-      const key = `${c.id}:cat:${g.cat}`;
+      const key = categoryOpenKey(c.id, g.cat);
       const isOpen = !!f || (open[key] ?? true);
       if (f && !g.items.some(extraShown)) continue;
       out.push({ t: 'cat', key, c, cat: g.cat, count: g.items.length, open: isOpen });
@@ -120,6 +126,7 @@ export function buildTreeRows({ collections, open, filter, favoritesOnly = false
     }
   };
   for (const c of collections) {
+    matches = f || favoritesOnly ? matchIndex(c.items, f, favoritesOnly) : () => true;
     const extras = (extraGroups?.(c) ?? []).filter((g) => g.items.length);
     // grouped by category, collections start folded: the workspace lists them, expanding shows the categories
     // a collection opens when the user opens it (or something is revealed in it), not because its request is open
@@ -128,7 +135,7 @@ export function buildTreeRows({ collections, open, filter, favoritesOnly = false
     out.push({ t: 'col', key: c.id, c, open: isOpen });
     if (!isOpen) continue;
     addContents(c, extras);
-    if (!f && !favoritesOnly && !c.problem && !c.items.length && !extras.length) out.push({ t: 'empty', key: `${c.id}:empty`, c });
+    if (!f && !favoritesOnly && !c.problem && !c.items.length && !extras.length) out.push({ t: 'empty', key: treeKey(c.id, 'empty'), c });
   }
   return out;
 }

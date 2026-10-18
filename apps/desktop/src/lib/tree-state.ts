@@ -1,5 +1,5 @@
 import { useCallback, useSyncExternalStore } from 'react';
-import { afterScopeChange, scopedKey } from './ws-scope';
+import { afterScopeChange, beforeScopeChange, scopedKey } from './ws-scope';
 
 /**
  * Which folders, collections and sections are open, for every tree and list (planning/menus-uniform.md §3): one store
@@ -80,7 +80,11 @@ function load(): State {
   return state;
 }
 
-function save(): void {
+/** A write is pending (several changes in one task — Expand all over many collections — are written once). */
+let pending = false;
+function flush(): void {
+  if (!pending) return;
+  pending = false;
   const k = scopedKey(KEY);
   const s = storage();
   if (!k || !s || !state) return;
@@ -90,8 +94,23 @@ function save(): void {
     /* storage unavailable: kept for this session */
   }
 }
+function save(): void {
+  if (pending) return;
+  pending = true;
+  // after the current task: the state is serialised once, however many changes this task made (JSON.stringify of every
+  // tree and a synchronous localStorage.setItem per change were the cost of Expand all); a workspace switch in between
+  // writes it first (beforeScopeChange), so the old workspace's state never lands in the new one's store
+  queueMicrotask(flush);
+}
+
+/**
+ * The key of a node in a tree's record, from its parts (`treeKey('col-1', 'cat', 'rest')` = `col-1:cat:rest`): one
+ * scheme for every tree (the record itself is the scope: `collections`, `explorer`, `list:<id>`, `tests`).
+ */
+export const treeKey = (...parts: Array<string | number>): string => parts.join(':');
 
 const emit = () => listeners.forEach((l) => l());
+beforeScopeChange(flush);
 afterScopeChange(() => {
   state = undefined;
   emit();

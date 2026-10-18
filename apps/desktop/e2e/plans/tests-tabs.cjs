@@ -11,6 +11,8 @@ const step = (name, body) => [name, `(async () => { ${H} ${body} })()`];
 
 const steps = [
   step('open-three', `await __t.view('Tests'); await __t.sleep(1000); for (const f of ['httpbin.yaml', 'countries.yaml', 'echo.yaml']) if (!(await openRow(f))) return 'NO ROW ' + f; return state();`),
+  // THE badge (TreeBadge): every badge of the Tests tree is one pill of one width, whatever it says (HTTP, GQL, WS, AI, SUITE …)
+  step('badges-same-width', `const w = [...new Set([...document.querySelectorAll('[data-node-id^="tests:"] .method-badge')].filter((b) => b.offsetParent).map((b) => Math.round(b.getBoundingClientRect().width)))]; const n = document.querySelectorAll('[data-node-id^="tests:"] .method-badge').length; return 'badges: ' + (n > 3) + ' | widths: ' + w.join(',');`),
   step('reopen-one', `await openRow('httpbin.yaml'); return state();`),
   step('close-active', `const t = tabs().find((x) => x.getAttribute('aria-selected') === 'true'); t.querySelector('[aria-label^="Close"]').click(); await __t.sleep(700); return state();`),
   step('runs-tab-stays', `return 'runs tab: ' + tabs().some((t) => t.textContent.trim().startsWith('Runs'));`),
@@ -18,6 +20,7 @@ const steps = [
 
 module.exports = withExpect(steps, {
   'open-three': /^HTTPhttpbin\.yaml \/ GQLcountries\.yaml \/ \*WSecho\.yaml \/ Runs/,
+  'badges-same-width': /^badges: true \| widths: \d+$/,
   'reopen-one': /^\*HTTPhttpbin\.yaml \/ GQLcountries\.yaml \/ WSecho\.yaml \/ Runs/,
   'close-active': /^\*GQLcountries\.yaml \/ WSecho\.yaml \/ Runs/,
   'runs-tab-stays': /^runs tab: true$/,

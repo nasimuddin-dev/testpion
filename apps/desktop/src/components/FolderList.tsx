@@ -1,5 +1,5 @@
 import { FolderPlus, Plus } from 'lucide-react';
-import { useMemo, useState, type DragEvent, type ReactNode } from 'react';
+import { memo, useMemo, useRef, useState, type DragEvent, type ReactNode, type RefObject } from 'react';
 import { KIND_INFO, savedItemRef, toItemRef, type ItemRef, type KindId } from '@testpion/shared';
 import { deleteWithUndo, putBack } from '../lib/undo-delete';
 import { Button, cx, Input } from './ui';
@@ -7,7 +7,7 @@ import { closeTabsFor } from './EditorTabs';
 import { askFolderName, CLOSED_ICON, CountPill, focusRow, FOLDER_ICON, moveToFolderItem, OPEN_ICON, treeKeys } from './TreeParts';
 import { TreeRowShell } from './TreeRowShell';
 import { useAreaMenu } from './AreaMenu';
-import { useTreeOpen } from '../lib/tree-state';
+import { treeKey, useTreeOpen } from '../lib/tree-state';
 import { openRef } from '../lib/open-ref';
 import { REF_MIME } from '../lib/drag-ref';
 import type { NodeKind, NodeMenuCtx } from '../lib/node-menu';
@@ -93,7 +93,7 @@ export function FolderList({
   const finishRename = (itemId: string, name?: string) => {
     setRenaming(undefined);
     if (name) void ops.renameItem(itemId, name);
-    focusRow(`${id}:${itemId}`);
+    focusRow(treeKey(id, itemId));
   };
   // filter by name, subtitle or folder (like the REST collection tree)
   const [q, setQ] = useState('');
@@ -102,7 +102,15 @@ export function FolderList({
   const [dropTarget, setDropTarget] = useState<string | null>();
   const isOpen = (f: string) => opened[f] ?? true;
   const toggle = (f: string) => setOpened((o) => ({ ...o, [f]: !(o[f] ?? true) }));
-  const allFolders = [...new Set([...folders, ...items.map((i) => i.folder).filter((f): f is string => !!f)])].sort((a, b) => a.localeCompare(b));
+  const allFolders = useMemo(() => [...new Set([...folders, ...items.map((i) => i.folder).filter((f): f is string => !!f)])].sort((a, b) => a.localeCompare(b)), [folders, items]);
+  // the shown items of each folder, grouped once (not one pass over the items per folder), and the ones in none
+  const { byFolder, top } = useMemo(() => {
+    const byFolder = new Map<string, FolderListItem[]>(allFolders.map((f) => [f, []]));
+    const top: FolderListItem[] = [];
+    for (const i of shown) (i.folder && byFolder.has(i.folder) ? byFolder.get(i.folder)! : top).push(i);
+    return { byFolder, top };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allFolders, items, ql]);
   const library = KIND_INFO[kind].library;
   const refOf = (itemId: string): ItemRef => (kind === 'mcp-server' ? { kind: 'mcp-server', serverId: itemId } : savedItemRef(library!, itemId));
 
@@ -132,7 +140,7 @@ export function FolderList({
         rename: () => setRenaming(it.id),
         ...(ops.duplicateItem ? { duplicate: () => void ops.duplicateItem!(it.id) } : {}),
         move: moveToFolderItem({ folders: allFolders, current: it.folder, move: (f) => moveTo(it.id, f) }).items!,
-        delete: () => void deleteWithUndo({ what: `${itemNoun} "${it.name}"`, run: () => ops.deleteItem(it.id) }),
+        delete: () => void deleteWithUndo({ kind, name: it.name, focus: treeKey(id, rowKey.get(it) ?? it.id), run: () => ops.deleteItem(it.id) }),
         ...own?.on,
       },
       disabled: own?.disabled,
@@ -146,7 +154,7 @@ export function FolderList({
       collapseAll: () => setOpened((o) => ({ ...o, [f]: false })),
       rename: () => setRenaming(`folder:${f}`),
       // at once, with Undo in the message: nothing is lost (its items move to the top level)
-      delete: () => void deleteWithUndo({ what: `the folder "${f}"`, run: () => ops.deleteFolder(f), note: `Its ${itemNoun}s moved to the top level` }),
+      delete: () => void deleteWithUndo({ kind: 'folder', name: f, run: () => ops.deleteFolder(f), note: `Its ${itemNoun}s moved to the top level` }),
     },
   });
 
@@ -177,39 +185,16 @@ export function FolderList({
     over: dropTarget === folder,
   });
 
-  const row = (it: FolderListItem, nested: boolean) => (
-    <TreeRowShell
-      key={rowKey.get(it) ?? it.id}
-      kind={kind}
-      nodeId={`${id}:${rowKey.get(it) ?? it.id}`}
-      label={it.name}
-      tall={!!it.subtitle}
-      active={selected === it.id}
-      onClick={() => renaming !== it.id && onSelect(it.id)}
-      onOpen={() => renaming !== it.id && (onOpen ?? onSelect)(it.id)}
-      ctx={() => itemCtx(it)}
-      drag={[refOf(it.id)]}
-      rename={renaming === it.id ? { value: it.name, done: (name) => finishRename(it.id, name) } : undefined}
-      className={nested ? 'pl-9' : 'pl-3'}
-      title={`${it.name} · Enter opens · F2 renames · Delete deletes`}
-    >
-      <span className="flex-1 min-w-0">
-        <span className="flex items-center gap-2">
-          {it.icon && <span className="shrink-0 grid place-items-center w-3.5">{it.icon}</span>}
-          <span className="truncate">{it.name}</span>
-          {it.badge && <span className="ml-auto shrink-0">{it.badge}</span>}
-        </span>
-        {it.subtitle && <span className={cx('block text-xs text-muted truncate', !!it.icon && 'pl-[1.375rem]')}>{it.subtitle}</span>}
-      </span>
-    </TreeRowShell>
-  );
+  // what the rows call, through one ref that is always current: the rows are memoized
+  const host = useRef<ListHost>(null!);
+  host.current = { kind, onSelect, onOpen, itemCtx, refOf, finishRename };
+  const row = (it: FolderListItem, nested: boolean) => <FolderListRow key={rowKey.get(it) ?? it.id} it={it} nodeId={treeKey(id, rowKey.get(it) ?? it.id)} nested={nested} active={selected === it.id} renaming={renaming === it.id} host={host} />;
 
   const area = useAreaMenu(`section:${kind}` as NodeKind, headerCtx, title);
-  const top = shown.filter((i) => !i.folder);
   return (
     // the keyboard moves through the header and the rows as one list (↑ from the first row reaches the header)
-    <div className="h-full flex flex-col min-h-0" onKeyDown={treeKeys}>
-      <TreeRowShell kind={`section:${kind}` as NodeKind} nodeId={`${id}:section`} label={title} header ctx={headerCtx} className="mx-0 pl-3 shrink-0">
+    <div className="h-full flex flex-col min-h-0" onKeyDown={treeKeys} role="tree" aria-label={title}>
+      <TreeRowShell kind={`section:${kind}` as NodeKind} nodeId={treeKey(id, 'section')} label={title} header ctx={headerCtx} className="mx-0 pl-3 shrink-0">
         <span className="text-[0.82rem] font-semibold truncate">{title}</span>
         {items.length > 0 && <CountPill n={items.length} />}
       </TreeRowShell>
@@ -220,15 +205,15 @@ export function FolderList({
       )}
       <div className="flex-1 overflow-auto pb-2" onContextMenu={area.onContextMenu}>
         {allFolders
-          .filter((f) => !ql || shown.some((i) => i.folder === f))
+          .filter((f) => !ql || byFolder.get(f)?.length)
           .map((f) => {
-            const inFolder = shown.filter((i) => i.folder === f);
+            const inFolder = byFolder.get(f) ?? [];
             const open = !!ql || isOpen(f);
             return (
               <div key={`folder:${f}`}>
                 <TreeRowShell
                   kind={`folder:${kind}` as NodeKind}
-                  nodeId={`${id}:folder:${f}`}
+                  nodeId={treeKey(id, 'folder', f)}
                   label={f}
                   expanded={open}
                   onClick={() => toggle(f)}
@@ -243,7 +228,7 @@ export function FolderList({
                           done: (to) => {
                             setRenaming(undefined);
                             if (to && to !== f) void ops.renameFolder(f, to);
-                            focusRow(`${id}:folder:${to || f}`);
+                            focusRow(treeKey(id, 'folder', to || f));
                           },
                         }
                       : undefined
@@ -254,8 +239,12 @@ export function FolderList({
                   <span className="truncate flex-1">{f}</span>
                   <CountPill n={inFolder.length} />
                 </TreeRowShell>
-                {open && inFolder.map((it) => row(it, true))}
-                {open && !inFolder.length && <div className="pl-9 py-1 text-xs text-muted">Empty folder: drag a {itemNoun} here or use Move to folder.</div>}
+                {open && (
+                  <div role="group">
+                    {inFolder.map((it) => row(it, true))}
+                    {!inFolder.length && <div className="pl-9 py-1 text-xs text-muted">Empty folder: drag a {itemNoun} here or use Move to folder.</div>}
+                  </div>
+                )}
               </div>
             );
           })}
@@ -283,6 +272,46 @@ export function FolderList({
     </div>
   );
 }
+
+/** What a row needs from its list, through a ref that is always current. */
+interface ListHost {
+  kind: FolderListKind;
+  onSelect(id: string): void;
+  onOpen?(id: string): void;
+  itemCtx(it: FolderListItem): NodeMenuCtx;
+  refOf(itemId: string): ItemRef;
+  finishRename(itemId: string, name?: string): void;
+}
+
+/** One item of the list (a name, with its icon, badge and subtitle). Memoized: only its own props re-render it. */
+const FolderListRow = memo(function FolderListRow({ it, nodeId, nested, active, renaming, host }: { it: FolderListItem; nodeId: string; nested: boolean; active: boolean; renaming: boolean; host: RefObject<ListHost> }) {
+  const h = () => host.current;
+  return (
+    <TreeRowShell
+      kind={h().kind}
+      nodeId={nodeId}
+      label={it.name}
+      depth={nested ? 1 : 0}
+      tall={!!it.subtitle}
+      active={active}
+      onClick={() => !renaming && h().onSelect(it.id)}
+      onOpen={() => !renaming && (h().onOpen ?? h().onSelect)(it.id)}
+      ctx={() => h().itemCtx(it)}
+      drag={[h().refOf(it.id)]}
+      rename={renaming ? { value: it.name, done: (name) => h().finishRename(it.id, name) } : undefined}
+      className={nested ? 'pl-9' : 'pl-3'}
+    >
+      <span className="flex-1 min-w-0">
+        <span className="flex items-center gap-2">
+          {it.icon && <span className="shrink-0 grid place-items-center w-3.5">{it.icon}</span>}
+          <span className="truncate">{it.name}</span>
+          {it.badge && <span className="ml-auto shrink-0">{it.badge}</span>}
+        </span>
+        {it.subtitle && <span className={cx('block text-xs text-muted truncate', !!it.icon && 'pl-[1.375rem]')}>{it.subtitle}</span>}
+      </span>
+    </TreeRowShell>
+  );
+});
 
 /** FolderListOps for a Library (lib.get / lib.save) held in state: every change is saved. */
 export function libraryOps<T>(

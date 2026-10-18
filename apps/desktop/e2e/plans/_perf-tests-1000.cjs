@@ -27,6 +27,13 @@ function prepare(ws) {
   mkdirSync(join(ws, 'tests', 'perf'), { recursive: true });
   writeFileSync(join(ws, 'tests', 'perf', 'big-500.yaml'), testFile(500));
   writeFileSync(join(ws, 'tests', 'perf', 'big-1000.yaml'), testFile(1000));
+  // a thousand small test files: the tree draws only the rows on screen, and an editor keystroke never re-renders it
+  mkdirSync(join(ws, 'tests', 'zmany'), { recursive: true });
+  for (let i = 0; i < 1000; i++) writeFileSync(join(ws, 'tests', 'zmany', `case-${String(i).padStart(4, '0')}.yaml`), `name: Case ${i}
+type: http
+method: GET
+url: "http://127.0.0.1:4010/health?case=${i}"
+`);
 }
 
 const painted = `(async () => { await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))); })`;
@@ -131,5 +138,30 @@ const steps = [
     })()`,
     true,
   ],
+  [
+    // a keystroke in the editor with a 1,000-file tree beside it: the editor's text is not view state, so nothing but the
+    // editor (and the tab's dirty mark, once) renders; budget < 50 ms from the key to the next frame
+    'tree-1000-editor-keystroke',
+    `(async () => { ${METER}
+      await __t.view('Tests'); await __t.sleep(500);
+      const f = treeRow('big-500.yaml'); if (f) { f.click(); await __t.sleep(1200); }
+      const ed = window.__monaco?.editor.getEditors().find((e) => e.getDomNode()?.offsetParent); if (!ed) return 'NO EDITOR';
+      ed.focus(); ed.setPosition({ lineNumber: 1, column: 1 });
+      const times = [];
+      for (const ch of 'abcdefghijklmnop') { const t = performance.now(); ed.trigger('perf', 'type', { text: ch }); await new Promise((r) => requestAnimationFrame(r)); times.push(Math.round(performance.now() - t)); }
+      ed.trigger('perf', 'undo', null);
+      return 'tree rows: ' + Number(document.querySelector('aside [data-tree-rows]')?.getAttribute('data-tree-rows')) + ' | drawn: ' + document.querySelectorAll('aside [data-tree-row]').length + ' | max keystroke ms: ' + Math.max(...times) + ' | keystroke ms: ' + times.join(',') + loaf();
+    })()`,
+    true,
+  ],
 ];
-module.exports = withExpect(steps, {}, { prepare });
+module.exports = withExpect(
+  steps,
+  {
+    'tree-1000-editor-keystroke': (r) => {
+      const m = /max keystroke ms: (\d+)/.exec(r);
+      return m && Number(m[1]) < 50 ? undefined : 'slow or wrong: ' + r;
+    },
+  },
+  { prepare },
+);

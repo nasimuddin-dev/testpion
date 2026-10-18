@@ -1,22 +1,49 @@
+import { KIND_INFO, type KindId } from '@testpion/shared';
 import { call } from '../api';
 import { toastError, useApp } from '../store';
 import { closeTabsFor } from '../components/EditorTabs';
+import { focusRow } from '../components/TreeParts';
+
+/** The note of a delete that went to Recently deleted (the one wording, after every such message). */
+export const TRASH_NOTE = 'Recently deleted keeps it for 30 days';
+
+/** What the message calls an item of a kind: "the MCP server", "the API definition", "the test file", "the folder". */
+export function deletedNoun(kind: KindId): string {
+  // the registry's label, lower-cased unless it starts with an acronym (API definition, MCP server, gRPC call, AI provider)
+  return `the ${KIND_INFO[kind].label.replace(/^[A-Z](?=[a-z])/, (m) => m.toLowerCase())}`;
+}
 
 /**
  * Deletes that can be taken back (lib/undo.ts): no "Are you sure?" first; the item goes at once and the message says
  * so with Undo (8 s, Ctrl/Cmd+Z). Deletes that cannot be undone (git branches, secrets, cookies, history, runs, the
- * workspace, Delete for good) keep their confirmation. One helper, so every list behaves the same.
+ * workspace, Delete for good) keep their confirmation. One helper, so every list behaves the same: the message is
+ * "Deleted the <kind> “name”" from the item kinds registry (lib/node-menu.ts names rows the same way), the Recently
+ * deleted note is one constant, and Undo puts the keyboard back on the restored row.
  */
-export async function deleteWithUndo(o: {
-  /** What is deleted, as the message names it ("request “List pets”"). */
-  what: string;
-  /** The delete itself (an RPC); it may return the undo (a list's ops know how to put their item back). */
-  run(): unknown;
-  /** Puts it back the way the delete took it (the same RPC with the snapshot, or Recently deleted's restore). */
-  undo?(): unknown;
-  /** Where else it can be found again ("Recently deleted keeps it for 30 days"), after the message. */
-  note?: string;
-}): Promise<boolean> {
+export async function deleteWithUndo(
+  o: {
+    /** The delete itself (an RPC); it may return the undo (a list's ops know how to put their item back). */
+    run(): unknown;
+    /** Puts it back the way the delete took it (the same RPC with the snapshot, or Recently deleted's restore). */
+    undo?(): unknown;
+    /** It went to Recently deleted: the message says so (TRASH_NOTE). */
+    trash?: boolean;
+    /** Where else it can be found again, or what happened to what it held, after the message. */
+    note?: string;
+    /** The row's `data-node-id`: after Undo the keyboard is back on it (the row that had it is gone). */
+    focus?: string;
+  } & (
+    | {
+        /** What is deleted: its kind (the message's noun comes from the registry) and its name. */
+        kind: KindId;
+        name: string;
+      }
+    | {
+        /** What is deleted, in words, where it is not an item of a kind ("the example “200 OK”"). */
+        what: string;
+      }
+  ),
+): Promise<boolean> {
   let undo = o.undo;
   try {
     const r = await o.run();
@@ -26,9 +53,11 @@ export async function deleteWithUndo(o: {
     return false;
   }
   const back = undo;
-  useApp.getState().toast(`Deleted ${o.what}${o.note ? `. ${o.note}` : ''}`, 'info', undefined, {
-    undo: back,
-    restored: `Restored ${o.what}`,
+  const what = 'what' in o ? o.what : `${deletedNoun(o.kind)} "${o.name}"`;
+  const notes = [o.trash ? TRASH_NOTE : undefined, o.note].filter(Boolean);
+  useApp.getState().toast(`Deleted ${what}${notes.map((n) => `. ${n}`).join('')}`, 'info', undefined, {
+    undo: back && (o.focus ? async () => (await back(), focusRow(o.focus!)) : back),
+    restored: `Restored ${what}`,
   });
   return true;
 }
@@ -60,8 +89,9 @@ export function putBack<T extends { id: string }>(list: T[], item: T, index: num
 export function deleteMcpServerWithUndo(server: { id: string; name: string }, o: { after(): unknown }): Promise<boolean> {
   let gone: { trashId: string; connected: boolean } | undefined;
   return deleteWithUndo({
-    what: `the MCP server "${server.name}"`,
-    note: 'Recently deleted keeps it for 30 days',
+    kind: 'mcp-server',
+    name: server.name,
+    trash: true,
     run: async () => {
       gone = await call<{ trashId: string; connected: boolean }>('mcp.deleteServer', { serverId: server.id });
       closeTabsFor([server.id]);
@@ -71,6 +101,8 @@ export function deleteMcpServerWithUndo(server: { id: string; name: string }, o:
       if (!gone) return;
       const back = await call<{ id: string }>('trash.restore', { id: gone.trashId });
       await o.after();
+      // the keyboard back on its row (by the id the restore answered: a taken id gets a new one)
+      focusRow(`mcp:${back.id}`);
       if (!gone.connected) return;
       const app = useApp.getState();
       await call('mcp.connect', { serverId: back.id, environment: app.environment }).then(

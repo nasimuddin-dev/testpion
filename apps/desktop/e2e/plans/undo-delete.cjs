@@ -43,12 +43,22 @@ const steps = [
      const msg = await __t.waitFor(() => toastText(/Deleted the request "Undo two"/), 3000);
      return 'dialogs: ' + dialogs() + ' | message: ' + !!msg + ' | items: ' + (await items());`,
   ),
+  // the keyboard moves to the next row when the focused one is deleted (not to the window's body)
+  s(
+    'focus-after-delete',
+    `const a = document.activeElement; return 'on a row: ' + (a?.hasAttribute('data-tree-row') === true) + ' | row: ' + a?.getAttribute('data-row-name');`,
+  ),
   s(
     'ctrl-z-restores',
     `document.body.focus(); (document.activeElement)?.blur?.();
      await __t.real.key('z', { ctrl: true }); await __t.sleep(1500);
      const ok = await __t.waitFor(() => toastText(/Restored the request "Undo two"/), 3000);
      return 'restored: ' + !!ok + ' | items: ' + (await items());`,
+  ),
+  // Undo puts the keyboard on the restored row
+  s(
+    'focus-after-undo',
+    `await __t.waitFor(() => document.activeElement?.getAttribute('data-row-name') === 'Undo two', 3000); return 'row: ' + document.activeElement?.getAttribute('data-row-name');`,
   ),
   s(
     'ctrl-z-in-a-field-is-text',
@@ -82,6 +92,8 @@ module.exports = withExpect(
   steps,
   {
     'delete-request-key': /^dialogs: 0 \| message: true \| items: u-1,u-3$/,
+    'focus-after-delete': /^on a row: true \| row: Undo three$/,
+    'focus-after-undo': /^row: Undo two$/,
     'ctrl-z-restores': /^restored: true \| items: u-1,u-2,u-3$/,
     'ctrl-z-in-a-field-is-text': /^after Ctrl\+Z in the filter: u-1,u-2 \| after Undo: u-1,u-2,u-3$/,
     'environment-undo': /^dialogs: 0 \| gone: true \| back with its id: true$/,

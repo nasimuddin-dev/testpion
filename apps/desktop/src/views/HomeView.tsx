@@ -20,6 +20,7 @@ import { shouldAutoStart, useTour } from '../lib/tour';
 import { GuidedTour } from '../components/GuidedTour';
 import { openRef } from '../lib/open-ref';
 import { refIcon } from '../components/RefLink';
+import { TreeBadge } from '../components/TreeParts';
 import { ITEM_KIND_LABEL, itemRefKey } from '@testpion/shared';
 
 /** The newest history entry and the count: whether requests were sent since Home last loaded. */
@@ -369,7 +370,7 @@ export function HomeView() {
                   className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-left hover:bg-hover"
                   onClick={() => (h.kind === 'http' && h.request ? open('rest', { request: h.request as HttpRequestSpec, name: h.name }) : open('history', { historyId: h.id }))}
                 >
-                  <span className={cx('mono method-badge text-[0.64rem] font-bold w-14 shrink-0', h.method && `method-${h.method}`)}>{h.method ?? h.kind}</span>
+                  <TreeBadge label={h.method ?? h.kind} className={h.method && `method-${h.method}`} />
                   <span className="truncate flex-1">{h.url ?? h.name}</span>
                   {h.status !== undefined && <Badge tone={statusTone(h.status)}>{h.status}</Badge>}
                   <span className="text-xs text-muted shrink-0 w-16 text-right">{timeAgo(h.timestamp)}</span>

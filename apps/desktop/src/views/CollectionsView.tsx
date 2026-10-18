@@ -316,7 +316,9 @@ export function CollectionsView() {
                     icon={<Trash2 size={12} />}
                     onClick={() =>
                       void deleteWithUndo({
-                        what: `the collection "${draft.name}"`,
+                        kind: 'collection',
+                        name: draft.name,
+                        trash: true,
                         run: async () => {
                           await call('col.delete', { id: draft.id });
                           closeTabsFor(draft.items.flatMap(subtreeIds));
@@ -327,7 +329,6 @@ export function CollectionsView() {
                           await restoreDeleted('collection', draft.id);
                           await load();
                         },
-                        note: 'Recently deleted keeps it for 30 days',
                       })
                     }
                   />
