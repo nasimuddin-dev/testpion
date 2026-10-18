@@ -2,6 +2,7 @@ import { call } from './api';
 import { promptText, toastError, useApp } from './store';
 import { openRef } from './lib/open-ref';
 import { reopenClosedTab } from './lib/closed-tabs';
+import { downloadFocusedOutput } from './components/output/output-core';
 import { downloadContent, hasNativeDialogs } from './lib/files';
 import { exportWorkspace } from './lib/workspace-export';
 import { plural, uid } from './lib/format';
@@ -34,7 +35,8 @@ export type MenuCommand =
   | 'settings'
   | 'feedback'
   | 'open-recent'
-  | 'reopen-closed-tab';
+  | 'reopen-closed-tab'
+  | 'download-output';
 
 
 export async function runMenuCommand(cmd: MenuCommand): Promise<void> {
@@ -50,6 +52,9 @@ export async function runMenuCommand(cmd: MenuCommand): Promise<void> {
         return s.set({ paletteOpen: true, paletteQuery: '' });
       case 'reopen-closed-tab':
         return void reopenClosedTab();
+      // File ▸ Download Output…: the format menu of the output nearest to the focus
+      case 'download-output':
+        return downloadFocusedOutput(true);
       case 'new-graphql':
         return s.setView('graphql');
       case 'new-grpc':

@@ -29,8 +29,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { call } from '../api';
 import { confirmAction, persisted, promptText, toastError, useApp } from '../store';
 import { Badge, Button, cx, Empty, Input, Menu, PageHeader, Select, Split, Tabs, type MenuItem } from '../components/ui';
-import { formatBytes, formatMs } from '@testpion/shared';
-import { downloadContent, finishSave, pickBinaryFile, pickTextFile, type SaveResult } from '../lib/files';
+import { formatBytes, formatMs, outputFileName } from '@testpion/shared';
+import { pickBinaryFile, pickTextFile } from '../lib/files';
+import { OutputActions } from '../components/output/OutputFrame';
+import { defaultFormat, saveOutput, type OutputSpec } from '../components/output/output-core';
 import {
   CertificateDialog,
   ConnectionsView,
@@ -246,14 +248,6 @@ export function DebuggerView() {
       void load();
     }
   };
-  const exportHar = async () => {
-    const har = await call<unknown>('debug.har');
-    const text = JSON.stringify(har, null, 2);
-    const name = `debugger-${new Date().toISOString().slice(0, 10)}.har`;
-    const r = await call<SaveResult>('app.saveText', { name, text }).catch(() => null);
-    if (r) finishSave(r, 'HAR file');
-    else downloadContent(name, text, { type: 'application/json' });
-  };
   const saveSession = async () => {
     const name = await promptText('Save the session', {
       message: 'A name for this capture; it is saved as a HAR file in the workspace (debugger/, never committed).',
@@ -417,6 +411,18 @@ export function DebuggerView() {
     ...(capture?.shells ?? []).map<MenuItem>((s) => ({ label: `Copy the lines for ${s.shell}`, icon: <Copy size={14} />, onSelect: () => void startThen(() => void copyText(s.lines, `the lines for ${s.shell}`)) })),
     { label: `Proxy port… (${port})`, icon: <Settings2 size={14} />, separator: true, disabled: !!status?.running, onSelect: () => void changePort() },
   ];
+  // the session shown (the live capture, or the saved one open): the backend builds it from debug.har, secrets masked by default
+  const outputSpec: OutputSpec = {
+    id: 'debugger.session',
+    what: 'debugger session',
+    name: outputFileName({ name: viewing ? `debugger-${viewing}` : 'debugger-session', ext: '' }),
+    formats: [
+      { format: 'har', source: { kind: 'debugger' }, default: true },
+      { format: 'json', source: { kind: 'debugger' } },
+      { format: 'csv', source: { kind: 'debugger' } },
+    ],
+    empty: rows.length ? undefined : 'No exchanges captured',
+  };
   const sessionItems: MenuItem[] = [
     { label: 'Save session…', icon: <Save size={14} />, disabled: !rows.length, onSelect: () => void saveSession() },
     ...sessions.map<MenuItem>((s) => ({
@@ -426,7 +432,7 @@ export function DebuggerView() {
     })),
     { label: 'Import a HAR file…', icon: <Upload size={14} />, onSelect: () => void importHar() },
     { label: 'Import a Fiddler session (.saz)…', icon: <Upload size={14} />, onSelect: () => void importSaz() },
-    { label: 'Export as HAR…', icon: <Download size={14} />, disabled: !rows.length, onSelect: () => void exportHar() },
+    { label: 'Export as HAR…', icon: <Download size={14} />, disabled: !rows.length, onSelect: () => void saveOutput(outputSpec, defaultFormat(outputSpec)) },
     { label: 'Clear the session', icon: <Trash2 size={14} />, danger: true, disabled: !status?.exchanges, shortcut: 'Ctrl+E', onSelect: () => void clear() },
   ];
 
@@ -725,17 +731,19 @@ export function DebuggerView() {
                       </Button>
                     }
                   />
-                  <button
-                    type="button"
-                    className="ml-auto flex items-center gap-1 text-xs text-muted hover:text-fg"
-                    onClick={() => openDock('filter')}
-                    title="Filter Out and Capture Only rules on"
-                    data-filter-rule-count
-                  >
-                    <Filter size={12} /> {(rules?.rules ?? []).filter((r) => r.enabled && (r.kind === 'ignore' || r.kind === 'only')).length}
-                  </button>
+                  <OutputActions spec={outputSpec}>
+                    <button
+                      type="button"
+                      className="flex items-center gap-1 text-xs text-muted hover:text-fg"
+                      onClick={() => openDock('filter')}
+                      title="Filter Out and Capture Only rules on"
+                      data-filter-rule-count
+                    >
+                      <Filter size={12} /> {(rules?.rules ?? []).filter((r) => r.enabled && (r.kind === 'ignore' || r.kind === 'only')).length}
+                    </button>
+                  </OutputActions>
                 </div>
-                <div className="flex-1 min-h-0">
+                <div className="flex-1 min-h-0" data-output="debugger.session">
                   <Split id="debugger" direction="vertical" initial={58} collapsedSecond={side === 'incoming' ? !incomingSel : !sel}>
                     <div className="h-full flex flex-col min-h-0">
                       {side === 'incoming' ? (

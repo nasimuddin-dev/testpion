@@ -61,6 +61,7 @@ const docsSidebar = [
       { text: 'Your first request', link: '/getting-started/first-request' },
       { text: 'Finding your way around', link: '/getting-started/finding-your-way' },
       { text: 'Keyboard shortcuts', link: '/getting-started/keyboard-shortcuts' },
+      { text: 'Save and export results', link: '/getting-started/save-and-export-results' },
       { text: 'Examples workspace', link: '/getting-started/examples' },
       { text: 'Workspaces', link: '/getting-started/workspaces' },
       { text: 'Import fidelity', link: '/getting-started/import-fidelity' },

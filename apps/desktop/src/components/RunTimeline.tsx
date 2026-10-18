@@ -1,11 +1,11 @@
-import { FileDown, GanttChart } from 'lucide-react';
+import { GanttChart } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { timelineSvg, type FlowTimeline } from '@testpion/shared';
+import { outputFileName, timelineSvg, type FlowTimeline } from '@testpion/shared';
 import { asError, call } from '../api';
-import { toastError } from '../store';
 import { formatMs } from '../lib/format';
-import { finishSave, type SaveResult } from '../lib/files';
-import { Button, Empty, Metric, MetricGrid, Spinner } from './ui';
+import { Empty, Metric, MetricGrid, Spinner } from './ui';
+import { OutputActions } from './output/OutputFrame';
+import type { OutputSpec } from './output/output-core';
 
 interface TimelineAnswer {
   file?: string;
@@ -29,7 +29,7 @@ const THEME = {
 } as React.CSSProperties;
 
 /**
- * A run as a timeline (shared `timelineSvg`, the same picture `Save as HTML` writes): each step's bar from its start to
+ * A run as a timeline (shared `timelineSvg`, the same picture its HTML download holds): each step's bar from its start to
  * its end, the wait before it, steps that ran at the same time (L1, L2 …), the critical path outlined; hover a bar for
  * its numbers, click it to open the step's result. Of a flow file's run (`file`) or of a whole run.
  */
@@ -47,6 +47,20 @@ export function RunTimeline({ runId, file, onPickStep }: { runId: string; file?:
     };
   }, [runId, file]);
   const svg = useMemo(() => (t && !('error' in t) ? timelineSvg(t.timeline) : ''), [t]);
+  // the down arrow: a self-contained HTML page (no network needed to open it) or the timeline's data
+  const spec = useMemo<OutputSpec>(() => {
+    const source = { kind: 'flow-timeline' as const, runId, ...(file ? { file } : {}) };
+    const name = t && !('error' in t) ? t.name : undefined;
+    return {
+      id: 'flow.timeline',
+      what: 'run timeline',
+      name: outputFileName({ name: `timeline-${name ?? runId}`, ext: '' }),
+      formats: [
+        { format: 'html', label: 'HTML timeline', source, default: true },
+        { format: 'json', label: 'Timeline data (JSON)', source },
+      ],
+    };
+  }, [runId, file, t]);
   if (!t)
     return (
       <div className="p-4">
@@ -62,7 +76,7 @@ export function RunTimeline({ runId, file, onPickStep }: { runId: string; file?:
   const tl = t.timeline;
   const crit = tl.criticalPath.map((id) => tl.bars.find((b) => b.id === id)?.name ?? id);
   return (
-    <div className="h-full flex flex-col min-h-0" data-run-timeline={runId}>
+    <div className="h-full flex flex-col min-h-0" data-run-timeline={runId} data-output="flow.timeline">
       <div className="flex items-start gap-2 p-2 border-b border-line">
         <MetricGrid compact className="flex-1">
           <Metric label="Total" value={formatMs(tl.totalMs)} />
@@ -71,15 +85,7 @@ export function RunTimeline({ runId, file, onPickStep }: { runId: string; file?:
           <Metric label="Most at once" value={tl.lanes} />
           {tl.slowest[0] && <Metric label="Slowest step" value={formatMs(tl.slowest[0].durationMs)} sub={tl.slowest[0].name} />}
         </MetricGrid>
-        <Button
-          size="sm"
-          icon={<FileDown size={12} />}
-          data-timeline-save-html
-          title="A self-contained HTML file (no network needed to open it) to share"
-          onClick={() => void call<SaveResult>('tests.flowTimelineHtml', { runId, ...(file ? { file } : {}) }).then((r) => finishSave(r, 'Timeline'), toastError)}
-        >
-          Save as HTML
-        </Button>
+        <OutputActions spec={spec} />
       </div>
       <div className="px-3 py-1.5 text-xs text-muted border-b border-line truncate" title={crit.join(' → ')}>
         <span className="font-medium text-fg/80">Critical path:</span> {crit.join(' → ')}

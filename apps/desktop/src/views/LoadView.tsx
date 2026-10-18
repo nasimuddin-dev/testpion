@@ -23,6 +23,9 @@ import { LoadHistory } from '../components/LoadHistory';
 import type { NormalizedError } from '../api';
 import { useCollectionTree } from '../lib/collections-store';
 import { EnvBadge, EnvSelect } from '../components/EnvSelect';
+import { htmlDocument, jsonPretty, markdownTable, outputFileName, toCsv, type HtmlSection } from '@testpion/shared';
+import { OutputActions } from '../components/output/OutputFrame';
+import type { OutputSpec } from '../components/output/output-core';
 
 interface Snapshot {
   elapsedSec: number;
@@ -45,6 +48,42 @@ interface Snapshot {
   /** A flow target: its runs (how many, failed, how long a run took). */
   iteration?: { count: number; failed: number; latency: LatencyStats };
   http?: { ttfb: LatencyStats; newConnections: number; reused: number; setupMs?: number };
+}
+
+/** The tables of a load test's results (what the results view shows): the summary, per request, status codes, per second. */
+function loadTables(s: Snapshot, checked?: Array<{ expr: string; actual?: number; passed: boolean; percent?: boolean }>) {
+  const lat = (l: LatencyStats) => [l.count, l.min, l.mean, l.p50, l.p90, l.p95, l.p99, l.max];
+  const latCols = ['count', 'minMs', 'meanMs', 'p50Ms', 'p90Ms', 'p95Ms', 'p99Ms', 'maxMs'];
+  const summary: Array<[string, unknown]> = [
+    ['elapsedSec', s.elapsedSec],
+    ['requests', s.requests],
+    ['errors', s.errors],
+    ['errorRate', s.errorRate],
+    ['connectionFailures', s.connectionFailures],
+    ['throughputPerSec', s.throughput],
+    ['bytes', s.bytes],
+    ['p50Ms', s.latency.p50],
+    ['p90Ms', s.latency.p90],
+    ['p95Ms', s.latency.p95],
+    ['p99Ms', s.latency.p99],
+    ...(s.ai
+      ? ([
+          ['tokensPerSec', s.ai.tokensPerSec],
+          ['inputTokens', s.ai.inputTokens],
+          ['outputTokens', s.ai.outputTokens],
+          ['ttftP50Ms', s.ai.ttft.p50],
+          ['ttftP95Ms', s.ai.ttft.p95],
+          ['costUsd', s.ai.costUsd ?? ''],
+        ] as Array<[string, unknown]>)
+      : []),
+  ];
+  return {
+    summary: { columns: ['metric', 'value'], rows: summary },
+    checks: checked?.length ? { columns: ['rule', 'actual', 'passed'], rows: checked.map((c) => [c.expr, c.actual === undefined ? '' : `${c.actual}${c.percent ? '%' : ''}`, c.passed]) } : undefined,
+    perRequest: s.perRequest?.length ? { columns: ['request', 'requests', 'errors', ...latCols], rows: s.perRequest.map((p) => [p.name, p.requests, p.errors, ...lat(p.latency)]) } : undefined,
+    codes: { columns: ['status', 'count'], rows: Object.entries(s.statusCodes) },
+    series: { columns: ['second', 'rps', 'p95Ms', 'errors', 'vus'], rows: s.series.map((x) => [x.t, x.rps, x.p95, x.errors, x.vus]) },
+  };
 }
 
 /** Folders of a collection (with their path), for picking part of it. */
@@ -236,6 +275,38 @@ export function LoadView() {
   }, [startWhenReady, d]);
   const collection = collections.find((c) => c.id === (d.collectionId || collections[0]?.id));
   const s = snap;
+  // the down arrow of the results: the summary the view holds (small), as data, tables, a page or Markdown
+  const spec = useMemo<OutputSpec>(() => {
+    const title = current?.name ?? 'Load test';
+    const tables = () => loadTables(s!, checked);
+    const verdict = s?.done ? (checked?.length ? (checked.every((c) => c.passed) ? 'passed' : 'failed') : 'finished') : undefined;
+    return {
+      id: 'load.results',
+      what: 'load test results',
+      name: outputFileName({ name: `load-${title}`, status: verdict, ext: '' }),
+      environment: ranIn?.name,
+      formats: [
+        { format: 'json', build: () => jsonPretty({ name: title, environment: ranIn?.name, target: d.kind, config: { virtualUsers: d.vus, durationSec: d.duration, rampUpSec: d.rampUp, rampDownSec: d.rampDown }, thresholds: checked, results: s }) },
+        ...(s?.perRequest?.length ? [{ key: 'csv', format: 'csv' as const, label: s.iteration ? 'Per step (CSV)' : 'Per request (CSV)', build: () => { const t = tables().perRequest!; return toCsv([t.columns, ...t.rows]); } }] : []),
+        { key: 'csv-codes', format: 'csv', label: 'Status codes (CSV)', build: () => { const t = tables().codes; return toCsv([t.columns, ...t.rows]); } },
+        { key: 'csv-series', format: 'csv', label: 'Per second (CSV)', build: () => { const t = tables().series; return toCsv([t.columns, ...t.rows]); } },
+        { format: 'html', build: () => {
+          const t = tables();
+          const sections: HtmlSection[] = [{ title: 'Summary', table: t.summary }];
+          if (t.checks) sections.push({ title: 'Pass if', table: t.checks });
+          if (t.perRequest) sections.push({ title: s?.iteration ? 'Per step' : 'Per request', table: t.perRequest });
+          sections.push({ title: 'Status codes', table: t.codes }, { title: 'Per second', table: t.series });
+          return htmlDocument(title, sections, { subtitle: ranIn?.name ? `environment ${ranIn.name}` : undefined, generatedAt: new Date().toISOString() });
+        } },
+        { format: 'md', build: () => {
+          const t = tables();
+          const part = (h: string, x: { columns: string[]; rows: unknown[][] }) => `## ${h}\n\n${markdownTable(x.columns, x.rows)}`;
+          return [`# ${title}\n`, part('Summary', t.summary), t.checks && part('Pass if', t.checks), t.perRequest && part(s?.iteration ? 'Per step' : 'Per request', t.perRequest), part('Status codes', t.codes)].filter(Boolean).join('\n');
+        } },
+      ],
+      empty: s ? (s.done ? undefined : 'The load test is still running') : 'Start a load test first',
+    };
+  }, [s, checked, current?.name, ranIn?.name, d.kind, d.vus, d.duration, d.rampUp, d.rampDown]);
   return (
     <Split id="load-sidebar" sidebar initial={18} min={12}>
       <SidebarShell
@@ -469,20 +540,22 @@ export function LoadView() {
       <div className="h-full overflow-auto">
         {error && <ErrorPanel error={error} />}
         {s ? (
-          <div className="p-3 flex flex-col gap-3">
+          <div className="p-3 flex flex-col gap-3" data-output="load.results">
             <div className="flex items-center gap-2">
               <Badge tone={s.done ? 'ok' : 'accent'}>{s.done ? 'finished' : 'running'}</Badge>
               {ranIn && <EnvBadge name={ranIn.name} className="text-sm" />}
               <span className="text-sm text-muted">
                 {s.elapsedSec}s elapsed · {s.activeVUs} active VUs
               </span>
-              {s.done && (
-                <AiAction variant="ghost" className="ml-auto" label="Analyze with AI" request={() => {
-                    const { series, ...summary } = s;
-                    return { task: 'analyze-load', title: 'Load test analysis', context: { config: { virtualUsers: d.vus, durationSec: d.duration, rampUpSec: d.rampUp, target: d.kind }, results: summary, lastSeconds: series.slice(-30) } };
-                  }}
-                />
-              )}
+              <OutputActions spec={spec}>
+                {s.done && (
+                  <AiAction variant="ghost" label="Analyze with AI" request={() => {
+                      const { series, ...summary } = s;
+                      return { task: 'analyze-load', title: 'Load test analysis', context: { config: { virtualUsers: d.vus, durationSec: d.duration, rampUpSec: d.rampUp, target: d.kind }, results: summary, lastSeconds: series.slice(-30) } };
+                    }}
+                  />
+                )}
+              </OutputActions>
             </div>
             {s.done && checked && (
               <Callout tone={checked.every((c) => c.passed) ? 'ok' : 'bad'} block className="rounded-md p-2 text-sm flex flex-wrap items-center gap-2">

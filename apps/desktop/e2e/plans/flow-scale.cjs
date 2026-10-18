@@ -105,8 +105,9 @@ const steps = [
   ),
   step(
     'save-timeline-as-html',
-    `const b = vis('[data-timeline-save-html]')[0]; if (!b) return 'NO BUTTON'; b.click();
-     const t = await __t.waitFor(() => [...document.querySelectorAll('[data-sonner-toast]')].map((x) => x.textContent.trim()).find((x) => /Timeline saved to/.test(x)), 5000);
+    `// the shared down arrow of the timeline (its default format is the HTML page)
+     const b = vis('[data-run-timeline] [data-output-download="flow.timeline"]')[0]; if (!b) return 'NO BUTTON'; b.click();
+     const t = await __t.waitFor(() => [...document.querySelectorAll('[data-sonner-toast]')].map((x) => x.textContent.trim()).find((x) => /timeline saved to/i.test(x)), 5000);
      return t ?? 'no toast';`,
   ),
   step(
@@ -154,7 +155,7 @@ module.exports = withExpect(
     'failed-row-opens-its-steps': /^row 1 \| steps: health,status \| result shown: true$/,
     'matrix-of-two-environments': /^columns: E2E scale dev=passed,E2E scale stage=failed \| differ: status$/,
     'timeline-renders': /^bars: health\*,status\* \| critical path text: true$/,
-    'save-timeline-as-html': /Timeline saved to .*timeline\.html/,
+    'save-timeline-as-html': /timeline saved to .*timeline\.html/i,
     'ten-thousand-rows-stay-responsive': /^last row: 9999 \| passed: 10000 \| rows in the DOM: few \| longest frame: under 250 ms \| measured: /,
     'clean-up': /^done$/,
   },

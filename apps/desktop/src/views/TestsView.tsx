@@ -29,6 +29,7 @@ import { FlowDesigner, type DesignerFlow, type FlowEditAnswer, type FlowRunReque
 import { stepLine, type FlowStep, type ItemRef } from '@testpion/shared';
 import { EnvironmentsPane } from '../components/SidebarPanes';
 import { finishSave, type SaveResult } from '../lib/files';
+import { saveRunReport } from '../components/output/run-specs';
 import { dataLanguageOf } from '../data-languages';
 import { Badge, Button, cx, Empty, IconButton, Input, rowActionClass, SectionTitle, Spinner, Split, VirtualList, type MenuItem } from '../components/ui';
 import { EnvBadge } from '../components/EnvSelect';
@@ -470,7 +471,7 @@ export function TestsView() {
     if (p?.runCurrent && file) void run([file], file);
     if (p?.exportLatest) {
       const latest = runs[0];
-      if (latest) void call<SaveResult>('runs.exportReport', { runId: latest.id, format: 'html' }).then((r) => finishSave(r, 'Report'));
+      if (latest) void saveRunReport({ id: latest.id, name: latest.name });
       else useApp.getState().toast('No runs to export yet');
     }
   });
@@ -1011,7 +1012,7 @@ function RunList({ runs, active, onSelect, onOverview, onRerunFailed }: { runs: 
                   {
                     label: 'Export report…',
                     icon: <FileBarChart size={14} />,
-                    onSelect: () => void call<SaveResult>('runs.exportReport', { runId: r.id, format: 'html' }).then((x) => finishSave(x, 'Report'), toastError),
+                    onSelect: () => void saveRunReport({ id: r.id, name: r.name }),
                   },
                 ]}
                 copyItems={[{ label: 'Copy run id', icon: <Copy size={14} />, onSelect: () => void copyText(r.id, 'Run id') }]}

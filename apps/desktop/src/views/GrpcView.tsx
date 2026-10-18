@@ -23,6 +23,9 @@ import { plural } from '../lib/format';
 import { saveAsTestFile, saveAsTestMenuItem } from '../lib/save-test';
 import { copyText } from '../lib/clipboard';
 import { useExternalChange } from '../lib/external-change';
+import { jsonLines, jsonPretty, outputFileName, toCsv } from '@testpion/shared';
+import { OutputActions } from '../components/output/OutputFrame';
+import type { OutputSpec } from '../components/output/output-core';
 
 interface ProtoFile {
   name: string;
@@ -258,6 +261,48 @@ export function GrpcView() {
   const selectedData = selected !== undefined ? streamRows[selected]?.data : undefined;
   const statusTone = result ? (result.code === 0 ? 'ok' : result.streamStopped ? 'warn' : 'bad') : 'default';
   const example = useMemo(() => (current ? JSON.stringify(current.example) : ''), [current]);
+  // the down arrow of the response: the response, the streamed messages, metadata, trailers, or all of it (the open tab's part first)
+  const outputSpec = useMemo<OutputSpec>(() => {
+    const method = (result?.method || d.method).split('/').pop() || 'call';
+    const name = (part?: string) => outputFileName({ name: ['grpc', method, part].filter(Boolean).join('-'), status: result?.codeName, ext: '' });
+    const messages = result?.messages ?? [];
+    const response = result ? (result.response !== undefined ? result.response : messages.length ? messages.map((m) => m.data) : null) : null;
+    const pairs = (rows: Array<[string, string]>) => rows.map(([name, value]) => ({ name, value }));
+    return {
+      id: 'grpc.response',
+      what: 'gRPC response',
+      name: name(),
+      environment: env,
+      empty: sending ? 'The call is still running' : !result ? 'Invoke the method first' : undefined,
+      formats: result
+        ? [
+            { key: 'response', format: 'json', label: 'Response (JSON)', default: resTab === 'response', build: () => jsonPretty(response) },
+            ...(messages.length ? [{ key: 'messages', format: 'jsonl' as const, label: 'Messages (JSON Lines)', fileName: `${name('messages')}.jsonl`, build: () => jsonLines(messages) }] : []),
+            { key: 'metadata-json', format: 'json', label: 'Metadata (JSON)', default: resTab === 'metadata', fileName: `${name('metadata')}.json`, build: () => jsonPretty(pairs(result.metadata)) },
+            { key: 'metadata-csv', format: 'csv', label: 'Metadata (CSV)', fileName: `${name('metadata')}.csv`, build: () => toCsv([['name', 'value'], ...result.metadata]) },
+            { key: 'trailers-json', format: 'json', label: 'Trailers (JSON)', default: resTab === 'trailers', fileName: `${name('trailers')}.json`, build: () => jsonPretty(pairs(result.trailers)) },
+            { key: 'trailers-csv', format: 'csv', label: 'Trailers (CSV)', fileName: `${name('trailers')}.csv`, build: () => toCsv([['name', 'value'], ...result.trailers]) },
+            {
+              key: 'everything',
+              format: 'json',
+              label: 'Everything (JSON)',
+              fileName: `${name('all')}.json`,
+              build: () =>
+                jsonPretty({
+                  target: result.target,
+                  method: result.method,
+                  status: { code: result.code, codeName: result.codeName, details: result.details },
+                  durationMs: result.durationMs,
+                  response: result.response,
+                  messages,
+                  metadata: pairs(result.metadata),
+                  trailers: pairs(result.trailers),
+                }),
+            },
+          ]
+        : [],
+    };
+  }, [result, sending, d.method, resTab, env]);
 
   // this editor's tab in the shared tab strip
   const saveTest = () => {
@@ -532,8 +577,9 @@ export function GrpcView() {
                     { id: 'metadata', label: 'Metadata', badge: result?.metadata.length },
                     { id: 'trailers', label: 'Trailers', badge: result?.trailers.length },
                   ]}
+                  right={<OutputActions spec={outputSpec} />}
                 />
-                <div className="flex-1 min-h-0 flex flex-col">
+                <div className="flex-1 min-h-0 flex flex-col" data-output="grpc.response">
                   {resTab === 'response' &&
                     (streamRows.length || current?.serverStreaming ? (
                       <Split id="grpc-stream" direction="vertical" initial={55}>

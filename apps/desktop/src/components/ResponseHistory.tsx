@@ -5,6 +5,9 @@ import { formatBytes, formatMs, plural, timeAgo } from '../lib/format';
 import { JsonTree, RawView } from './JsonView';
 import { LatencyTrend } from './LatencyTrend';
 import { LinkButton, Badge, Button, cx, Empty, IconButton, Spinner, statusTone } from './ui';
+import { jsonPretty, outputFileName, toCsv } from '@testpion/shared';
+import { OutputHeader } from './output/OutputFrame';
+import type { OutputSpec } from './output/output-core';
 
 interface Entry {
   id: string;
@@ -98,16 +101,30 @@ export function ResponseHistory({ requestId, latestId }: { requestId: string; la
     );
 
   const sorted = (ids: string[]) => [...ids].sort((a, b) => entries.findIndex((e) => e.id === b) - entries.findIndex((e) => e.id === a));
+  // the down arrow: the list of earlier responses (when, status, time, size)
+  const list = entries.map((e) => ({ id: e.id, timestamp: e.timestamp, status: e.status, durationMs: e.durationMs, size: e.size }));
+  const spec: OutputSpec = {
+    id: 'response.history',
+    what: 'response history',
+    name: outputFileName({ name: 'response-history', ext: '' }),
+    formats: [
+      { format: 'json', build: () => jsonPretty(list) },
+      { format: 'csv', build: () => toCsv([['id', 'timestamp', 'status', 'durationMs', 'size'], ...list.map((e) => [e.id, e.timestamp, e.status ?? '', e.durationMs ?? '', e.size ?? ''])]) },
+    ],
+  };
 
   return (
-    <div className="h-full flex min-h-0">
+    <div className="h-full flex min-h-0" data-output="response.history">
       <div className="w-72 shrink-0 border-r border-line flex flex-col min-h-0">
-        <div className="flex items-center gap-1 px-2 h-9 border-b border-line text-xs text-muted shrink-0">
-          <span className="flex-1">{plural(entries.length, 'response')} · pick two to compare</span>
-          <IconButton label="Refresh" className="h-7 w-7" onClick={load}>
-            <RefreshCw size={13} />
-          </IconButton>
-        </div>
+        <OutputHeader
+          spec={spec}
+          left={<span className="truncate min-w-0 text-xs text-muted">{plural(entries.length, 'response')} · pick two to compare</span>}
+          actions={
+            <IconButton label="Refresh" className="h-7 w-7" onClick={load}>
+              <RefreshCw size={13} />
+            </IconButton>
+          }
+        />
         <LatencyTrend entries={entries} onPick={(id) => void view(id)} />
         <div className="flex-1 overflow-auto">
           {entries.map((e, i) => (

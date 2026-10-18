@@ -77,6 +77,17 @@ Terminal: `testpion import openapi.yaml -w <workspace>` keeps both and prints th
   <img src="/images/examples-sidebar.jpg" alt="The TestPion Examples workspace in the Collections sidebar: each example collection listed once, Live streams (SSE) open with its three requests" width="1440" height="900" loading="lazy">
 </figure>
 
+## New since 0.49 {#new-since-0-49}
+
+### Save any response or result {#save-any-output}
+1. Every response and result has the same **down arrow** at the right end of its bar. This covers the response body and every response tab, gRPC, GraphQL, WebSocket, MQTT and Kafka logs, MCP tool results, run results, timelines, data-run grids, load results, the evaluation matrix, the console, the log, the terminal, Problems and the HTTP Debugger.
+2. **Click it** to save in the default format, or open **▾** to choose one: JSON, CSV, HTML, Markdown, HAR, JUnit, ZIP, raw bytes and more. The **Save as** dialog opens in the folder you last used, and the message after saving has **Show in folder** and **Open**.
+3. **Copy** sits next to the arrow.
+4. **Logs and reports are saved with secrets masked.** Choose **▾ ▸ Include secrets…** to keep them. TestPion asks first.
+5. <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> saves the output you are in.
+
+Big bodies and long result lists are written straight from disk, with progress and **Cancel**. ([Save and export results](/getting-started/save-and-export-results))
+
 ## What's new in 0.49 {#whats-new-in-0-49}
 
 ### Behaviour changes in 0.49 {#behaviour-changes-in-0-49}
