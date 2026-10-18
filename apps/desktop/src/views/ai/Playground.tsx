@@ -87,6 +87,7 @@ export function Playground({ providers, onSetUp }: { providers: ProviderConfig[]
     const id = uid('ai-');
     const tab = tabs.active.id;
     idRef.current = id;
+    tabs.keep(tab); // a run has a result to come back to: its tab stays (a preview tab is replaced by the next click)
     setRunning({ id, tab });
     setStream('');
     setResultOf(tab, undefined);

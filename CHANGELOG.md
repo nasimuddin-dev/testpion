@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- A request you sent keeps its tab and its response until you close the tab: a single click on another request opens a new tab instead of replacing it (a preview tab is still replaced while nothing was sent from it). The same for a prompt run in the Playground.
+
 ## 0.52.0 — 2026-10-17
 
 One registry, one menu: every kind of item a workspace holds is declared once (what it is called, where it is stored and opens, what it can do), and every tree and list row's menu is built from it by one function. ([What's new in 0.52](/getting-started/whats-new#whats-new-in-0-52))

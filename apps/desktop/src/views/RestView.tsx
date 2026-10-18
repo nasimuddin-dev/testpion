@@ -238,6 +238,8 @@ export function RestView() {
   const send = async () => {
     const id = uid('send-');
     const tabId = tab.id;
+    // a request that was sent has a response to come back to: its tab stays (a preview tab is replaced by the next click)
+    if (tab.preview) setTabs((ts) => ts.map((x) => (x.id === tabId ? { ...x, preview: false } : x)));
     setSending((s) => ({ ...s, [tabId]: id }));
     streams.current[id] = '';
     useApp.getState().setActivity(id, `Sending ${tab.request.method} ${tab.name}`);

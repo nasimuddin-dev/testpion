@@ -97,6 +97,30 @@ const steps = [
      const again = (await preview('Custom headers')) ? 'ok' : 'NO ROW';
      return previewed + ' → ' + label() + (again === 'ok' ? '' : ' | ' + again);`,
   ),
+  // a request that was sent keeps its tab (and its response) until it is closed: the next click opens another tab
+  step(
+    'sent-request-stays',
+    `const http = () => [...document.querySelectorAll('[role=tablist][aria-label="Open requests"] [role=tab]')].filter((t) => /^(GET|POST|PUT|PATCH|DELETE)/.test(t.textContent.trim()));
+     await __t.requests(); await __t.sleep(500);
+     for (const t of http()) { t.dispatchEvent(new MouseEvent('auxclick', { bubbles: true, button: 1 })); await __t.sleep(150); }
+     const f = document.querySelector('aside input[placeholder^="Filter"]');
+     const set = (v) => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(f, v); f.dispatchEvent(new Event('input', { bubbles: true })); };
+     const preview = async (n) => {
+       set(n); await __t.sleep(900);
+       const r = [...document.querySelectorAll('aside [data-tree-row]')].find((b) => b.offsetParent && b.getAttribute('aria-expanded') === null && b.textContent.trim().endsWith(n));
+       if (r) { await __t.real.click(r); await __t.sleep(1000); }
+       return !!r;
+     };
+     if (!(await preview('Custom headers'))) return 'NO ROW';
+     const before = http().some((t) => t.hasAttribute('data-preview'));
+     const send = [...document.querySelectorAll('button')].find((b) => b.offsetParent && /^Send$/.test(b.textContent.trim()));
+     if (!send) return 'NO SEND';
+     await __t.real.click(send); await __t.sleep(1500);
+     const after = http().some((t) => t.hasAttribute('data-preview'));
+     if (!(await preview('GET with query parameters'))) return 'NO ROW 2';
+     set(''); await __t.sleep(300);
+     return 'preview before send: ' + before + ', after: ' + after + ', tabs: ' + http().length;`,
+  ),
   // saved prompts: the same tabs; the Model comparison has its own prompt
   step(
     'prompts-preview-and-own-compare',
@@ -163,6 +187,7 @@ module.exports = withExpect(
     'double-click-keeps': /^E2E load B, E2E load A\(preview\)$/,
     'each-tab-its-own-edits': /^A: http:\/\/127\.0\.0\.1:4010\/health\?a \| B: http:\/\/127\.0\.0\.1:4010\/health\?edited$/,
     'evaluations-has-tabs': /^strip: true$/,
+    'sent-request-stays': /^preview before send: true, after: false, tabs: 2$/,
     'requests-preview': /^GET with query parameters\(preview\) → GET with query parameters, Custom headers\(preview\)$/,
     'prompts-preview-and-own-compare': /^Summarise a text\(preview\) \| compare has its own prompt: true$/,
     'environments-tabs-keep-edits': /^E2E staging, Public APIs\(preview\) → E2E staging, Public APIs \| other tab: E2E staging \| kept edit: Public APIs edited$/,
