@@ -1,0 +1,4 @@
+{
+  "schemaVersion": "1.0",
+  "servers": [{ "id": "weather", "name": "Weather mock", "transport": "mock", "mockFile": "mocks/weather.mcp-mock.yaml" }]
+}

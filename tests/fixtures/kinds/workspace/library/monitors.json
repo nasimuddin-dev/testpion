@@ -1,0 +1,1 @@
+{ "schemaVersion": "1.0", "folders": [], "items": [{ "id": "mon-pets", "name": "Pets monitor", "data": { "collectionId": "api", "everyMinutes": 60, "enabled": false } }] }

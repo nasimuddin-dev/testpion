@@ -1,0 +1,3555 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`kind equivalence (REG-1 snapshots; unchanged by the registry adapters) > changeKind, refOfWorkspacePath and touchesFiles over 60 paths 1`] = `
+[
+  [
+    "collections/api.json",
+    "collections",
+    null,
+  ],
+  [
+    "collections/sub/api.json",
+    "collections",
+    null,
+  ],
+  [
+    "collections/readme.md",
+    "collections",
+    null,
+  ],
+  [
+    "collections/",
+    "collections",
+    null,
+  ],
+  [
+    "environments/staging.json",
+    "environments",
+    null,
+  ],
+  [
+    "environments/old/staging.json",
+    "environments",
+    null,
+  ],
+  [
+    "workspace.json",
+    "workspace",
+    null,
+  ],
+  [
+    "mcp-servers.json",
+    "mcp",
+    null,
+  ],
+  [
+    "providers.json",
+    "providers",
+    null,
+  ],
+  [
+    "tests/smoke/login.yaml",
+    "tests",
+    {
+      "kind": "test",
+      "path": "smoke/login.yaml",
+    },
+  ],
+  [
+    "tests/smoke/login.yml",
+    "tests",
+    {
+      "kind": "test",
+      "path": "smoke/login.yml",
+    },
+  ],
+  [
+    "tests/flows/checkout.json",
+    "tests",
+    {
+      "kind": "test",
+      "path": "flows/checkout.json",
+    },
+  ],
+  [
+    "tests/all.suite.yaml",
+    "tests",
+    {
+      "kind": "test",
+      "path": "all.suite.yaml",
+    },
+  ],
+  [
+    "tests/notes.txt",
+    "tests",
+    null,
+  ],
+  [
+    "tests/sub/",
+    "tests",
+    null,
+  ],
+  [
+    "tests/",
+    "tests",
+    null,
+  ],
+  [
+    "datasets/users.csv",
+    "tests",
+    {
+      "kind": "dataset",
+      "name": "users.csv",
+    },
+  ],
+  [
+    "datasets/nested/cases.jsonl",
+    "tests",
+    {
+      "kind": "dataset",
+      "name": "nested/cases.jsonl",
+    },
+  ],
+  [
+    "datasets/db.sqlite",
+    "tests",
+    {
+      "kind": "dataset",
+      "name": "db.sqlite",
+    },
+  ],
+  [
+    "datasets/inline-x.csv",
+    "tests",
+    {
+      "kind": "dataset",
+      "name": "inline-x.csv",
+    },
+  ],
+  [
+    "datasets/sub/",
+    "tests",
+    {
+      "kind": "dataset",
+      "name": "sub/",
+    },
+  ],
+  [
+    "specs/petstore.yaml",
+    "specs",
+    {
+      "kind": "spec",
+      "path": "specs/petstore.yaml",
+    },
+  ],
+  [
+    "specs/asyncapi/events.yaml",
+    "specs",
+    {
+      "kind": "spec",
+      "path": "specs/asyncapi/events.yaml",
+    },
+  ],
+  [
+    "specs/readme.md",
+    "specs",
+    {
+      "kind": "spec",
+      "path": "specs/readme.md",
+    },
+  ],
+  [
+    "library/grpc.json",
+    "library",
+    null,
+  ],
+  [
+    "library/websocket.json",
+    "library",
+    null,
+  ],
+  [
+    "library/ai-prompts.json",
+    "library",
+    null,
+  ],
+  [
+    "library/load-tests.json",
+    "library",
+    null,
+  ],
+  [
+    "library/evaluations.json",
+    "library",
+    null,
+  ],
+  [
+    "library/monitors.json",
+    "library",
+    null,
+  ],
+  [
+    "library/rag-targets.json",
+    "library",
+    null,
+  ],
+  [
+    "library/mcp-folders.json",
+    "library",
+    null,
+  ],
+  [
+    "library/spec-folders.json",
+    "library",
+    null,
+  ],
+  [
+    "library/dataset-folders.json",
+    "library",
+    null,
+  ],
+  [
+    "library/unknown.json",
+    "library",
+    null,
+  ],
+  [
+    "protos/greeter.proto",
+    "other",
+    null,
+  ],
+  [
+    "packages/helpers.js",
+    "other",
+    null,
+  ],
+  [
+    "mocks/weather.mcp-mock.yaml",
+    "other",
+    null,
+  ],
+  [
+    "metrics/politeness.yaml",
+    "other",
+    null,
+  ],
+  [
+    "debugger/rules.json",
+    "other",
+    null,
+  ],
+  [
+    "debugger/morning capture.har",
+    "other",
+    null,
+  ],
+  [
+    "baselines/pets.json",
+    null,
+    null,
+  ],
+  [
+    "runs/run-1/results.jsonl",
+    null,
+    null,
+  ],
+  [
+    "traces/t1.json",
+    null,
+    null,
+  ],
+  [
+    "payloads/p1.bin",
+    null,
+    null,
+  ],
+  [
+    "reports/r.html",
+    null,
+    null,
+  ],
+  [
+    "trash/collections/1--api.json",
+    null,
+    null,
+  ],
+  [
+    ".local/ai/proposals/p1.json",
+    null,
+    null,
+  ],
+  [
+    ".git/HEAD",
+    null,
+    null,
+  ],
+  [
+    "node_modules/x/index.js",
+    null,
+    null,
+  ],
+  [
+    "database.sqlite",
+    null,
+    null,
+  ],
+  [
+    "database.sqlite-wal",
+    null,
+    null,
+  ],
+  [
+    "metadata.jsonl",
+    null,
+    null,
+  ],
+  [
+    ".template-offered.json",
+    null,
+    null,
+  ],
+  [
+    "collections/api.json.tmp-12-ab12cd",
+    null,
+    null,
+  ],
+  [
+    "collections/api.json~",
+    null,
+    null,
+  ],
+  [
+    "tests/.login.yaml.swp",
+    null,
+    null,
+  ],
+  [
+    "README.md",
+    "other",
+    null,
+  ],
+  [
+    "./tests/smoke/login.yaml",
+    "other",
+    {
+      "kind": "test",
+      "path": "smoke/login.yaml",
+    },
+  ],
+  [
+    "tests\\smoke\\login.yaml",
+    "other",
+    {
+      "kind": "test",
+      "path": "smoke/login.yaml",
+    },
+  ],
+]
+`;
+
+exports[`kind equivalence (REG-1 snapshots; unchanged by the registry adapters) > changeKind, refOfWorkspacePath and touchesFiles over 60 paths 2`] = `
+[
+  [
+    "collections",
+    [
+      "collections",
+    ],
+  ],
+  [
+    "environments",
+    [
+      "environments",
+    ],
+  ],
+  [
+    "tests",
+    [
+      "tests",
+    ],
+  ],
+  [
+    "library",
+    [
+      "library",
+    ],
+  ],
+  [
+    "mcp",
+    [
+      "mcp",
+    ],
+  ],
+  [
+    "providers",
+    [
+      "providers",
+    ],
+  ],
+  [
+    "workspace",
+    [
+      "collections",
+      "environments",
+      "tests",
+      "library",
+      "mcp",
+      "providers",
+      "workspace",
+      "specs",
+      "other",
+    ],
+  ],
+  [
+    "specs",
+    [
+      "specs",
+    ],
+  ],
+  [
+    "other",
+    [
+      "other",
+    ],
+  ],
+]
+`;
+
+exports[`kind equivalence (REG-1 snapshots; unchanged by the registry adapters) > describeGitChanges over a scripted repo (a commit, then edits to every tracked kind) 1`] = `
+[
+  [
+    "collections/api.json",
+    "modified",
+  ],
+  [
+    "datasets/users.csv",
+    "deleted",
+  ],
+  [
+    "environments/prod.json",
+    "untracked",
+  ],
+  [
+    "environments/staging.json",
+    "modified",
+  ],
+  [
+    "library/grpc.json",
+    "modified",
+  ],
+  [
+    "library/load-tests.json",
+    "modified",
+  ],
+  [
+    "library/monitors.json",
+    "modified",
+  ],
+  [
+    "mcp-servers.json",
+    "modified",
+  ],
+  [
+    "protos/greeter.proto",
+    "deleted",
+  ],
+  [
+    "protos/hello.proto",
+    "untracked",
+  ],
+  [
+    "specs/petstore.yaml",
+    "modified",
+  ],
+  [
+    "tests/flows/checkout.yaml",
+    "modified",
+  ],
+]
+`;
+
+exports[`kind equivalence (REG-1 snapshots; unchanged by the registry adapters) > describeGitChanges over a scripted repo (a commit, then edits to every tracked kind) 2`] = `
+[
+  {
+    "change": "changed",
+    "collectionId": "api",
+    "details": [
+      "URL",
+    ],
+    "file": "collections/api.json",
+    "itemId": "r1",
+    "itemKind": "http",
+    "kind": "collection",
+    "ref": {
+      "collectionId": "api",
+      "kind": "request",
+      "requestId": "r1",
+    },
+    "title": "Kinds API ▸ Pets ▸ List pets",
+  },
+  {
+    "change": "changed",
+    "collectionId": "api",
+    "details": [
+      "name",
+    ],
+    "file": "collections/api.json",
+    "itemId": "g1",
+    "itemKind": "graphql",
+    "kind": "collection",
+    "ref": {
+      "collectionId": "api",
+      "kind": "request",
+      "protocol": "graphql",
+      "requestId": "g1",
+    },
+    "title": "Kinds API ▸ Pets query 2",
+  },
+  {
+    "change": "removed",
+    "details": [],
+    "file": "datasets/users.csv",
+    "kind": "other",
+    "ref": {
+      "kind": "git-file",
+      "path": "datasets/users.csv",
+    },
+    "title": "datasets/users.csv",
+  },
+  {
+    "change": "added",
+    "details": [
+      "0 variables",
+    ],
+    "file": "environments/prod.json",
+    "kind": "environment",
+    "ref": {
+      "environmentId": "prod",
+      "kind": "environment",
+    },
+    "title": "environment Prod",
+  },
+  {
+    "change": "changed",
+    "details": [
+      "changed baseUrl",
+    ],
+    "file": "environments/staging.json",
+    "kind": "environment",
+    "ref": {
+      "environmentId": "staging",
+      "kind": "environment",
+    },
+    "title": "environment Staging",
+  },
+  {
+    "change": "renamed",
+    "details": [
+      "renamed from Say hello",
+    ],
+    "file": "library/grpc.json",
+    "itemId": "g-call",
+    "itemKind": "grpc",
+    "kind": "library",
+    "ref": {
+      "itemId": "g-call",
+      "kind": "saved",
+      "library": "grpc",
+    },
+    "title": "gRPC call Say hi",
+  },
+  {
+    "change": "removed",
+    "details": [],
+    "file": "library/load-tests.json",
+    "itemId": "lt-pets",
+    "itemKind": "load-tests",
+    "kind": "library",
+    "ref": {
+      "itemId": "lt-pets",
+      "kind": "saved",
+      "library": "load-tests",
+    },
+    "title": "Load test Pets load",
+  },
+  {
+    "change": "changed",
+    "details": [
+      "settings",
+    ],
+    "file": "library/monitors.json",
+    "itemId": "mon-pets",
+    "itemKind": "monitors",
+    "kind": "library",
+    "ref": {
+      "kind": "monitor",
+      "monitorId": "mon-pets",
+    },
+    "title": "Monitor Pets monitor",
+  },
+  {
+    "change": "changed",
+    "details": [],
+    "file": "mcp-servers.json",
+    "kind": "other",
+    "ref": {
+      "kind": "git-file",
+      "path": "mcp-servers.json",
+    },
+    "title": "mcp-servers.json",
+  },
+  {
+    "change": "removed",
+    "details": [],
+    "file": "protos/greeter.proto",
+    "kind": "other",
+    "ref": {
+      "kind": "git-file",
+      "path": "protos/greeter.proto",
+    },
+    "title": "protos/greeter.proto",
+  },
+  {
+    "change": "added",
+    "details": [],
+    "file": "protos/hello.proto",
+    "kind": "other",
+    "ref": {
+      "kind": "git-file",
+      "path": "protos/hello.proto",
+    },
+    "title": "protos/hello.proto",
+  },
+  {
+    "change": "changed",
+    "details": [],
+    "file": "specs/petstore.yaml",
+    "kind": "other",
+    "ref": {
+      "kind": "git-file",
+      "path": "specs/petstore.yaml",
+    },
+    "title": "specs/petstore.yaml",
+  },
+  {
+    "change": "changed",
+    "details": [],
+    "file": "tests/flows/checkout.yaml",
+    "kind": "test",
+    "ref": {
+      "kind": "flow",
+      "path": "flows/checkout.yaml",
+    },
+    "title": "tests/flows/checkout.yaml",
+  },
+]
+`;
+
+exports[`kind equivalence (REG-1 snapshots; unchanged by the registry adapters) > labels and views 1`] = `
+{
+  "COLLECTION_ITEM_KINDS": [
+    "grpc",
+    "websocket",
+  ],
+  "ITEM_KINDS": [
+    "request",
+    "collection",
+    "folder",
+    "saved",
+    "monitor",
+    "environment",
+    "variable",
+    "test",
+    "flow",
+    "test-case",
+    "run",
+    "history",
+    "trace",
+    "exchange",
+    "mcp-server",
+    "provider",
+    "spec",
+    "dataset",
+    "mock",
+    "certificate",
+    "capture",
+    "git-file",
+    "doc",
+  ],
+  "ITEM_KIND_LABEL": {
+    "capture": "Capture session",
+    "certificate": "Certificate",
+    "collection": "Collection",
+    "dataset": "Dataset",
+    "doc": "Documentation",
+    "environment": "Environment",
+    "exchange": "Captured exchange",
+    "flow": "Flow",
+    "folder": "Folder",
+    "git-file": "Changed file",
+    "history": "History entry",
+    "mcp-server": "MCP server",
+    "mock": "Mock server",
+    "monitor": "Monitor",
+    "provider": "AI provider",
+    "request": "Request",
+    "run": "Run",
+    "saved": "Saved item",
+    "spec": "API definition",
+    "test": "Test file",
+    "test-case": "Test",
+    "trace": "Trace",
+    "variable": "Variable",
+  },
+  "LIBRARY_LABEL": {
+    "ai-prompts": "Prompt",
+    "evaluations": "Evaluation",
+    "grpc": "gRPC call",
+    "load-tests": "Load test",
+    "monitors": "Monitor",
+    "websocket": "Connection",
+  },
+  "LIBRARY_VIEW": {
+    "ai-prompts": "ai",
+    "evaluations": "evaluations",
+    "grpc": "grpc",
+    "load-tests": "load",
+    "monitors": "monitors",
+    "websocket": "websocket",
+  },
+  "PROTOCOL_VIEW": {
+    "graphql": "graphql",
+    "grpc": "grpc",
+    "http": "rest",
+    "soap": "rest",
+    "websocket": "websocket",
+  },
+  "trash": "collections, environments, datasets, API definitions and MCP servers",
+}
+`;
+
+exports[`kind equivalence (REG-1 snapshots; unchanged by the registry adapters) > labels and views 2`] = `
+[
+  "request",
+  "request",
+  "request",
+  "collection",
+  "collection",
+  "collection",
+  "collection",
+  "folder",
+  "gRPC call",
+  "connection",
+  "prompt",
+  "load test",
+  "evaluation",
+  "monitor",
+  "saved item",
+  "saved item",
+  "monitor",
+  "environment",
+  "environment",
+  "environment",
+  "environment",
+  "environment",
+  "variable",
+  "variable",
+  "variable",
+  "test file",
+  "test file",
+  "flow",
+  "test",
+  "run",
+  "run",
+  "history entry",
+  "trace",
+  "captured exchange",
+  "MCP server",
+  "AI provider",
+  "API definition",
+  "dataset",
+  "dataset",
+  "mock server",
+  "certificate",
+  "capture session",
+  "changed file",
+  "documentation",
+]
+`;
+
+exports[`kind equivalence (REG-1 snapshots; unchanged by the registry adapters) > mergeWorkspaceTexts over the merge matrix 1`] = `
+[
+  [
+    "collection, different parts",
+    {
+      "conflicts": [],
+      "items": [],
+      "text": "{
+  "schemaVersion": "1.0",
+  "id": "api",
+  "name": "API 2",
+  "variables": [],
+  "items": [
+    {
+      "kind": "http",
+      "id": "r1",
+      "name": "R",
+      "request": {
+        "method": "GET",
+        "url": "y"
+      }
+    }
+  ]
+}
+",
+    },
+  ],
+  [
+    "collection, same part",
+    {
+      "conflicts": [
+        "API ▸ R: changed on both sides",
+      ],
+      "items": [
+        {
+          "base": {
+            "id": "r1",
+            "kind": "http",
+            "name": "R",
+            "request": {
+              "method": "GET",
+              "url": "x",
+            },
+          },
+          "key": "item:r1",
+          "kind": "changed-both",
+          "ours": {
+            "id": "r1",
+            "kind": "http",
+            "name": "R",
+            "request": {
+              "method": "GET",
+              "url": "y",
+            },
+          },
+          "theirs": {
+            "id": "r1",
+            "kind": "http",
+            "name": "R",
+            "request": {
+              "method": "GET",
+              "url": "z",
+            },
+          },
+          "where": "API ▸ R",
+        },
+      ],
+      "text": "{
+  "schemaVersion": "1.0",
+  "id": "api",
+  "name": "API",
+  "variables": [],
+  "items": [
+    {
+      "kind": "http",
+      "id": "r1",
+      "name": "R",
+      "request": {
+        "method": "GET",
+        "url": "y"
+      }
+    }
+  ]
+}
+",
+    },
+  ],
+  [
+    "environment",
+    {
+      "conflicts": [],
+      "items": [],
+      "text": "{
+  "id": "e",
+  "name": "E",
+  "variables": [
+    {
+      "key": "a",
+      "value": "2",
+      "enabled": true
+    }
+  ]
+}
+",
+    },
+  ],
+  [
+    "environment conflict",
+    {
+      "conflicts": [
+        "environment E ▸ {{a}}: changed on both sides",
+      ],
+      "items": [
+        {
+          "base": {
+            "enabled": true,
+            "id": "var:a",
+            "key": "a",
+            "name": "{{a}}",
+            "value": "1",
+          },
+          "key": "var:a",
+          "kind": "changed-both",
+          "ours": {
+            "enabled": true,
+            "id": "var:a",
+            "key": "a",
+            "name": "{{a}}",
+            "value": "2",
+          },
+          "theirs": {
+            "enabled": true,
+            "id": "var:a",
+            "key": "a",
+            "name": "{{a}}",
+            "value": "3",
+          },
+          "where": "environment E ▸ {{a}}",
+        },
+      ],
+      "text": "{
+  "id": "e",
+  "name": "E",
+  "variables": [
+    {
+      "key": "a",
+      "value": "2",
+      "enabled": true
+    }
+  ]
+}
+",
+    },
+  ],
+  [
+    "library",
+    {
+      "conflicts": [],
+      "items": [],
+      "text": "{
+  "schemaVersion": "1.0",
+  "folders": [
+    "F"
+  ],
+  "items": [
+    {
+      "id": "i",
+      "name": "b",
+      "data": {}
+    }
+  ]
+}
+",
+    },
+  ],
+  [
+    "library conflict",
+    {
+      "conflicts": [
+        "library ▸ b: changed on both sides",
+      ],
+      "items": [
+        {
+          "base": {
+            "data": {},
+            "id": "i",
+            "name": "a",
+          },
+          "key": "item:i",
+          "kind": "changed-both",
+          "ours": {
+            "data": {},
+            "id": "i",
+            "name": "b",
+          },
+          "theirs": {
+            "data": {},
+            "id": "i",
+            "name": "c",
+          },
+          "where": "library ▸ b",
+        },
+      ],
+      "text": "{
+  "schemaVersion": "1.0",
+  "folders": [],
+  "items": [
+    {
+      "id": "i",
+      "name": "b",
+      "data": {}
+    }
+  ]
+}
+",
+    },
+  ],
+  [
+    "not JSON",
+    null,
+  ],
+  [
+    "an array",
+    null,
+  ],
+  [
+    "empty base",
+    {
+      "conflicts": [
+        "API ▸ R: changed on both sides",
+      ],
+      "items": [
+        {
+          "base": undefined,
+          "key": "item:r1",
+          "kind": "changed-both",
+          "ours": {
+            "id": "r1",
+            "kind": "http",
+            "name": "R",
+            "request": {
+              "method": "GET",
+              "url": "y",
+            },
+          },
+          "theirs": {
+            "id": "r1",
+            "kind": "http",
+            "name": "R",
+            "request": {
+              "method": "GET",
+              "url": "z",
+            },
+          },
+          "where": "API ▸ R",
+        },
+      ],
+      "text": "{
+  "schemaVersion": "1.0",
+  "id": "api",
+  "name": "API",
+  "variables": [],
+  "items": [
+    {
+      "kind": "http",
+      "id": "r1",
+      "name": "R",
+      "request": {
+        "method": "GET",
+        "url": "y"
+      }
+    }
+  ]
+}
+",
+    },
+  ],
+]
+`;
+
+exports[`kind equivalence (REG-1 snapshots; unchanged by the registry adapters) > refOfChange for every kind of change 1`] = `
+[
+  {
+    "collectionId": "api",
+    "kind": "collection",
+  },
+  {
+    "collectionId": "api",
+    "folderId": "f1",
+    "kind": "folder",
+  },
+  {
+    "collectionId": "api",
+    "kind": "request",
+    "protocol": "graphql",
+    "requestId": "g1",
+  },
+  {
+    "collectionId": "api",
+    "kind": "request",
+    "requestId": "r1",
+  },
+  {
+    "kind": "flow",
+    "path": "smoke/login.yaml",
+  },
+  {
+    "kind": "flow",
+    "path": "flows/checkout.yaml",
+    "step": "pay",
+  },
+  {
+    "kind": "test",
+    "path": "all.suite.yaml",
+  },
+  {
+    "kind": "git-file",
+    "path": "tests/notes.txt",
+  },
+  {
+    "kind": "git-file",
+    "path": "specs/petstore.yaml",
+  },
+]
+`;
+
+exports[`kind equivalence (REG-1 snapshots; unchanged by the registry adapters) > refTarget for one ref of every kind, with every option 1`] = `
+[
+  [
+    {
+      "payload": {
+        "collectionId": "api",
+        "requestId": "r1",
+      },
+      "view": "rest",
+    },
+    {
+      "payload": {
+        "collectionId": "api",
+        "newDoc": true,
+        "requestId": "r1",
+      },
+      "view": "rest",
+    },
+    {
+      "payload": {
+        "collectionId": "api",
+        "noReveal": true,
+        "requestId": "r1",
+      },
+      "view": "rest",
+    },
+    {
+      "payload": {
+        "collectionId": "api",
+        "preview": true,
+        "requestId": "r1",
+      },
+      "view": "rest",
+    },
+    {
+      "payload": {
+        "collectionId": "api",
+        "newDoc": true,
+        "noReveal": true,
+        "preview": true,
+        "requestId": "r1",
+      },
+      "view": "rest",
+    },
+  ],
+  [
+    {
+      "payload": {
+        "collectionId": "api",
+        "requestId": "g1",
+      },
+      "view": "graphql",
+    },
+    {
+      "payload": {
+        "collectionId": "api",
+        "newDoc": true,
+        "requestId": "g1",
+      },
+      "view": "graphql",
+    },
+    {
+      "payload": {
+        "collectionId": "api",
+        "noReveal": true,
+        "requestId": "g1",
+      },
+      "view": "graphql",
+    },
+    {
+      "payload": {
+        "collectionId": "api",
+        "preview": true,
+        "requestId": "g1",
+      },
+      "view": "graphql",
+    },
+    {
+      "payload": {
+        "collectionId": "api",
+        "newDoc": true,
+        "noReveal": true,
+        "preview": true,
+        "requestId": "g1",
+      },
+      "view": "graphql",
+    },
+  ],
+  [
+    {
+      "payload": {
+        "collectionId": "api",
+        "requestId": "s1",
+      },
+      "view": "rest",
+    },
+    {
+      "payload": {
+        "collectionId": "api",
+        "newDoc": true,
+        "requestId": "s1",
+      },
+      "view": "rest",
+    },
+    {
+      "payload": {
+        "collectionId": "api",
+        "noReveal": true,
+        "requestId": "s1",
+      },
+      "view": "rest",
+    },
+    {
+      "payload": {
+        "collectionId": "api",
+        "preview": true,
+        "requestId": "s1",
+      },
+      "view": "rest",
+    },
+    {
+      "payload": {
+        "collectionId": "api",
+        "newDoc": true,
+        "noReveal": true,
+        "preview": true,
+        "requestId": "s1",
+      },
+      "view": "rest",
+    },
+  ],
+  [
+    {
+      "payload": {
+        "collectionId": "api",
+      },
+      "view": "collections",
+    },
+    {
+      "payload": {
+        "collectionId": "api",
+        "newDoc": true,
+      },
+      "view": "collections",
+    },
+    {
+      "payload": {
+        "collectionId": "api",
+      },
+      "view": "collections",
+    },
+    {
+      "payload": {
+        "collectionId": "api",
+      },
+      "view": "collections",
+    },
+    {
+      "payload": {
+        "collectionId": "api",
+        "newDoc": true,
+      },
+      "view": "collections",
+    },
+  ],
+  [
+    {
+      "payload": {
+        "collectionId": "api",
+        "run": true,
+      },
+      "view": "collections",
+    },
+    {
+      "payload": {
+        "collectionId": "api",
+        "newDoc": true,
+        "run": true,
+      },
+      "view": "collections",
+    },
+    {
+      "payload": {
+        "collectionId": "api",
+        "run": true,
+      },
+      "view": "collections",
+    },
+    {
+      "payload": {
+        "collectionId": "api",
+        "run": true,
+      },
+      "view": "collections",
+    },
+    {
+      "payload": {
+        "collectionId": "api",
+        "newDoc": true,
+        "run": true,
+      },
+      "view": "collections",
+    },
+  ],
+  [
+    {
+      "payload": {
+        "collectionId": "api",
+        "mock": true,
+      },
+      "view": "collections",
+    },
+    {
+      "payload": {
+        "collectionId": "api",
+        "mock": true,
+        "newDoc": true,
+      },
+      "view": "collections",
+    },
+    {
+      "payload": {
+        "collectionId": "api",
+        "mock": true,
+      },
+      "view": "collections",
+    },
+    {
+      "payload": {
+        "collectionId": "api",
+        "mock": true,
+      },
+      "view": "collections",
+    },
+    {
+      "payload": {
+        "collectionId": "api",
+        "mock": true,
+        "newDoc": true,
+      },
+      "view": "collections",
+    },
+  ],
+  [
+    {
+      "payload": {
+        "collectionId": "api",
+        "tab": "variables",
+      },
+      "view": "collections",
+    },
+    {
+      "payload": {
+        "collectionId": "api",
+        "newDoc": true,
+        "tab": "variables",
+      },
+      "view": "collections",
+    },
+    {
+      "payload": {
+        "collectionId": "api",
+        "tab": "variables",
+      },
+      "view": "collections",
+    },
+    {
+      "payload": {
+        "collectionId": "api",
+        "tab": "variables",
+      },
+      "view": "collections",
+    },
+    {
+      "payload": {
+        "collectionId": "api",
+        "newDoc": true,
+        "tab": "variables",
+      },
+      "view": "collections",
+    },
+  ],
+  [
+    {
+      "payload": {
+        "collectionId": "api",
+        "folderId": "f1",
+      },
+      "view": "collections",
+    },
+    {
+      "payload": {
+        "collectionId": "api",
+        "folderId": "f1",
+        "newDoc": true,
+      },
+      "view": "collections",
+    },
+    {
+      "payload": {
+        "collectionId": "api",
+        "folderId": "f1",
+      },
+      "view": "collections",
+    },
+    {
+      "payload": {
+        "collectionId": "api",
+        "folderId": "f1",
+      },
+      "view": "collections",
+    },
+    {
+      "payload": {
+        "collectionId": "api",
+        "folderId": "f1",
+        "newDoc": true,
+      },
+      "view": "collections",
+    },
+  ],
+  [
+    {
+      "payload": {
+        "savedId": "g-call",
+      },
+      "view": "grpc",
+    },
+    {
+      "payload": {
+        "newDoc": true,
+        "savedId": "g-call",
+      },
+      "view": "grpc",
+    },
+    {
+      "payload": {
+        "savedId": "g-call",
+      },
+      "view": "grpc",
+    },
+    {
+      "payload": {
+        "savedId": "g-call",
+      },
+      "view": "grpc",
+    },
+    {
+      "payload": {
+        "newDoc": true,
+        "savedId": "g-call",
+      },
+      "view": "grpc",
+    },
+  ],
+  [
+    {
+      "payload": {
+        "savedId": "ws-echo",
+      },
+      "view": "websocket",
+    },
+    {
+      "payload": {
+        "newDoc": true,
+        "savedId": "ws-echo",
+      },
+      "view": "websocket",
+    },
+    {
+      "payload": {
+        "savedId": "ws-echo",
+      },
+      "view": "websocket",
+    },
+    {
+      "payload": {
+        "savedId": "ws-echo",
+      },
+      "view": "websocket",
+    },
+    {
+      "payload": {
+        "newDoc": true,
+        "savedId": "ws-echo",
+      },
+      "view": "websocket",
+    },
+  ],
+  [
+    {
+      "payload": {
+        "savedId": "p-greet",
+      },
+      "view": "ai",
+    },
+    {
+      "payload": {
+        "newDoc": true,
+        "savedId": "p-greet",
+      },
+      "view": "ai",
+    },
+    {
+      "payload": {
+        "savedId": "p-greet",
+      },
+      "view": "ai",
+    },
+    {
+      "payload": {
+        "savedId": "p-greet",
+      },
+      "view": "ai",
+    },
+    {
+      "payload": {
+        "newDoc": true,
+        "savedId": "p-greet",
+      },
+      "view": "ai",
+    },
+  ],
+  [
+    {
+      "payload": {
+        "savedId": "lt-pets",
+      },
+      "view": "load",
+    },
+    {
+      "payload": {
+        "newDoc": true,
+        "savedId": "lt-pets",
+      },
+      "view": "load",
+    },
+    {
+      "payload": {
+        "savedId": "lt-pets",
+      },
+      "view": "load",
+    },
+    {
+      "payload": {
+        "savedId": "lt-pets",
+      },
+      "view": "load",
+    },
+    {
+      "payload": {
+        "newDoc": true,
+        "savedId": "lt-pets",
+      },
+      "view": "load",
+    },
+  ],
+  [
+    {
+      "payload": {
+        "savedId": "ev-tone",
+      },
+      "view": "evaluations",
+    },
+    {
+      "payload": {
+        "newDoc": true,
+        "savedId": "ev-tone",
+      },
+      "view": "evaluations",
+    },
+    {
+      "payload": {
+        "savedId": "ev-tone",
+      },
+      "view": "evaluations",
+    },
+    {
+      "payload": {
+        "savedId": "ev-tone",
+      },
+      "view": "evaluations",
+    },
+    {
+      "payload": {
+        "newDoc": true,
+        "savedId": "ev-tone",
+      },
+      "view": "evaluations",
+    },
+  ],
+  [
+    {
+      "payload": {
+        "monitorId": "mon-pets",
+      },
+      "view": "monitors",
+    },
+    {
+      "payload": {
+        "monitorId": "mon-pets",
+        "newDoc": true,
+      },
+      "view": "monitors",
+    },
+    {
+      "payload": {
+        "monitorId": "mon-pets",
+      },
+      "view": "monitors",
+    },
+    {
+      "payload": {
+        "monitorId": "mon-pets",
+      },
+      "view": "monitors",
+    },
+    {
+      "payload": {
+        "monitorId": "mon-pets",
+        "newDoc": true,
+      },
+      "view": "monitors",
+    },
+  ],
+  [
+    null,
+    null,
+    null,
+    null,
+    null,
+  ],
+  [
+    null,
+    null,
+    null,
+    null,
+    null,
+  ],
+  [
+    {
+      "payload": {
+        "monitorId": "mon-pets",
+      },
+      "view": "monitors",
+    },
+    {
+      "payload": {
+        "monitorId": "mon-pets",
+        "newDoc": true,
+      },
+      "view": "monitors",
+    },
+    {
+      "payload": {
+        "monitorId": "mon-pets",
+      },
+      "view": "monitors",
+    },
+    {
+      "payload": {
+        "monitorId": "mon-pets",
+      },
+      "view": "monitors",
+    },
+    {
+      "payload": {
+        "monitorId": "mon-pets",
+        "newDoc": true,
+      },
+      "view": "monitors",
+    },
+  ],
+  [
+    {
+      "payload": {
+        "environmentId": "staging",
+      },
+      "view": "environments",
+    },
+    {
+      "payload": {
+        "environmentId": "staging",
+        "newDoc": true,
+      },
+      "view": "environments",
+    },
+    {
+      "payload": {
+        "environmentId": "staging",
+      },
+      "view": "environments",
+    },
+    {
+      "payload": {
+        "environmentId": "staging",
+      },
+      "view": "environments",
+    },
+    {
+      "payload": {
+        "environmentId": "staging",
+        "newDoc": true,
+      },
+      "view": "environments",
+    },
+  ],
+  [
+    {
+      "payload": {
+        "tab": "globals",
+      },
+      "view": "environments",
+    },
+    {
+      "payload": {
+        "newDoc": true,
+        "tab": "globals",
+      },
+      "view": "environments",
+    },
+    {
+      "payload": {
+        "tab": "globals",
+      },
+      "view": "environments",
+    },
+    {
+      "payload": {
+        "tab": "globals",
+      },
+      "view": "environments",
+    },
+    {
+      "payload": {
+        "newDoc": true,
+        "tab": "globals",
+      },
+      "view": "environments",
+    },
+  ],
+  [
+    {
+      "payload": {
+        "tab": "workspace",
+      },
+      "view": "environments",
+    },
+    {
+      "payload": {
+        "newDoc": true,
+        "tab": "workspace",
+      },
+      "view": "environments",
+    },
+    {
+      "payload": {
+        "tab": "workspace",
+      },
+      "view": "environments",
+    },
+    {
+      "payload": {
+        "tab": "workspace",
+      },
+      "view": "environments",
+    },
+    {
+      "payload": {
+        "newDoc": true,
+        "tab": "workspace",
+      },
+      "view": "environments",
+    },
+  ],
+  [
+    {
+      "payload": {
+        "collectionId": "api",
+        "tab": "collection",
+      },
+      "view": "environments",
+    },
+    {
+      "payload": {
+        "collectionId": "api",
+        "newDoc": true,
+        "tab": "collection",
+      },
+      "view": "environments",
+    },
+    {
+      "payload": {
+        "collectionId": "api",
+        "tab": "collection",
+      },
+      "view": "environments",
+    },
+    {
+      "payload": {
+        "collectionId": "api",
+        "tab": "collection",
+      },
+      "view": "environments",
+    },
+    {
+      "payload": {
+        "collectionId": "api",
+        "newDoc": true,
+        "tab": "collection",
+      },
+      "view": "environments",
+    },
+  ],
+  [
+    {
+      "payload": {},
+      "view": "environments",
+    },
+    {
+      "payload": {
+        "newDoc": true,
+      },
+      "view": "environments",
+    },
+    {
+      "payload": {},
+      "view": "environments",
+    },
+    {
+      "payload": {},
+      "view": "environments",
+    },
+    {
+      "payload": {
+        "newDoc": true,
+      },
+      "view": "environments",
+    },
+  ],
+  [
+    {
+      "payload": {
+        "environmentId": "staging",
+        "variable": "baseUrl",
+      },
+      "view": "environments",
+    },
+    {
+      "payload": {
+        "environmentId": "staging",
+        "newDoc": true,
+        "variable": "baseUrl",
+      },
+      "view": "environments",
+    },
+    {
+      "payload": {
+        "environmentId": "staging",
+        "variable": "baseUrl",
+      },
+      "view": "environments",
+    },
+    {
+      "payload": {
+        "environmentId": "staging",
+        "variable": "baseUrl",
+      },
+      "view": "environments",
+    },
+    {
+      "payload": {
+        "environmentId": "staging",
+        "newDoc": true,
+        "variable": "baseUrl",
+      },
+      "view": "environments",
+    },
+  ],
+  [
+    {
+      "payload": {
+        "environmentId": "staging",
+        "variable": "nope",
+      },
+      "view": "environments",
+    },
+    {
+      "payload": {
+        "environmentId": "staging",
+        "newDoc": true,
+        "variable": "nope",
+      },
+      "view": "environments",
+    },
+    {
+      "payload": {
+        "environmentId": "staging",
+        "variable": "nope",
+      },
+      "view": "environments",
+    },
+    {
+      "payload": {
+        "environmentId": "staging",
+        "variable": "nope",
+      },
+      "view": "environments",
+    },
+    {
+      "payload": {
+        "environmentId": "staging",
+        "newDoc": true,
+        "variable": "nope",
+      },
+      "view": "environments",
+    },
+  ],
+  [
+    {
+      "dialog": "variableUsages",
+      "key": "baseUrl",
+    },
+    {
+      "dialog": "variableUsages",
+      "key": "baseUrl",
+    },
+    {
+      "dialog": "variableUsages",
+      "key": "baseUrl",
+    },
+    {
+      "dialog": "variableUsages",
+      "key": "baseUrl",
+    },
+    {
+      "dialog": "variableUsages",
+      "key": "baseUrl",
+    },
+  ],
+  [
+    {
+      "payload": {
+        "path": "smoke/login.yaml",
+      },
+      "view": "tests",
+    },
+    {
+      "payload": {
+        "newDoc": true,
+        "path": "smoke/login.yaml",
+      },
+      "view": "tests",
+    },
+    {
+      "payload": {
+        "path": "smoke/login.yaml",
+      },
+      "view": "tests",
+    },
+    {
+      "payload": {
+        "path": "smoke/login.yaml",
+      },
+      "view": "tests",
+    },
+    {
+      "payload": {
+        "newDoc": true,
+        "path": "smoke/login.yaml",
+      },
+      "view": "tests",
+    },
+  ],
+  [
+    {
+      "payload": {
+        "line": 3,
+        "path": "smoke/login.yaml",
+        "step": "Login",
+      },
+      "view": "tests",
+    },
+    {
+      "payload": {
+        "line": 3,
+        "newDoc": true,
+        "path": "smoke/login.yaml",
+        "step": "Login",
+      },
+      "view": "tests",
+    },
+    {
+      "payload": {
+        "line": 3,
+        "path": "smoke/login.yaml",
+        "step": "Login",
+      },
+      "view": "tests",
+    },
+    {
+      "payload": {
+        "line": 3,
+        "path": "smoke/login.yaml",
+        "step": "Login",
+      },
+      "view": "tests",
+    },
+    {
+      "payload": {
+        "line": 3,
+        "newDoc": true,
+        "path": "smoke/login.yaml",
+        "step": "Login",
+      },
+      "view": "tests",
+    },
+  ],
+  [
+    {
+      "payload": {
+        "flow": true,
+        "path": "flows/checkout.yaml",
+        "step": "pay",
+      },
+      "view": "tests",
+    },
+    {
+      "payload": {
+        "flow": true,
+        "newDoc": true,
+        "path": "flows/checkout.yaml",
+        "step": "pay",
+      },
+      "view": "tests",
+    },
+    {
+      "payload": {
+        "flow": true,
+        "path": "flows/checkout.yaml",
+        "step": "pay",
+      },
+      "view": "tests",
+    },
+    {
+      "payload": {
+        "flow": true,
+        "path": "flows/checkout.yaml",
+        "step": "pay",
+      },
+      "view": "tests",
+    },
+    {
+      "payload": {
+        "flow": true,
+        "newDoc": true,
+        "path": "flows/checkout.yaml",
+        "step": "pay",
+      },
+      "view": "tests",
+    },
+  ],
+  [
+    {
+      "payload": {
+        "testId": "t1",
+      },
+      "view": "tests",
+    },
+    {
+      "payload": {
+        "newDoc": true,
+        "testId": "t1",
+      },
+      "view": "tests",
+    },
+    {
+      "payload": {
+        "testId": "t1",
+      },
+      "view": "tests",
+    },
+    {
+      "payload": {
+        "testId": "t1",
+      },
+      "view": "tests",
+    },
+    {
+      "payload": {
+        "newDoc": true,
+        "testId": "t1",
+      },
+      "view": "tests",
+    },
+  ],
+  [
+    {
+      "payload": {
+        "runId": "run-1",
+      },
+      "view": "tests",
+    },
+    {
+      "payload": {
+        "newDoc": true,
+        "runId": "run-1",
+      },
+      "view": "tests",
+    },
+    {
+      "payload": {
+        "runId": "run-1",
+      },
+      "view": "tests",
+    },
+    {
+      "payload": {
+        "runId": "run-1",
+      },
+      "view": "tests",
+    },
+    {
+      "payload": {
+        "newDoc": true,
+        "runId": "run-1",
+      },
+      "view": "tests",
+    },
+  ],
+  [
+    {
+      "payload": {
+        "resultId": "res-1",
+        "runId": "run-1",
+      },
+      "view": "tests",
+    },
+    {
+      "payload": {
+        "newDoc": true,
+        "resultId": "res-1",
+        "runId": "run-1",
+      },
+      "view": "tests",
+    },
+    {
+      "payload": {
+        "resultId": "res-1",
+        "runId": "run-1",
+      },
+      "view": "tests",
+    },
+    {
+      "payload": {
+        "resultId": "res-1",
+        "runId": "run-1",
+      },
+      "view": "tests",
+    },
+    {
+      "payload": {
+        "newDoc": true,
+        "resultId": "res-1",
+        "runId": "run-1",
+      },
+      "view": "tests",
+    },
+  ],
+  [
+    {
+      "payload": {
+        "historyId": "h1",
+      },
+      "view": "history",
+    },
+    {
+      "payload": {
+        "historyId": "h1",
+        "newDoc": true,
+      },
+      "view": "history",
+    },
+    {
+      "payload": {
+        "historyId": "h1",
+      },
+      "view": "history",
+    },
+    {
+      "payload": {
+        "historyId": "h1",
+      },
+      "view": "history",
+    },
+    {
+      "payload": {
+        "historyId": "h1",
+        "newDoc": true,
+      },
+      "view": "history",
+    },
+  ],
+  [
+    {
+      "payload": {
+        "traceId": "tr1",
+      },
+      "view": "traces",
+    },
+    {
+      "payload": {
+        "newDoc": true,
+        "traceId": "tr1",
+      },
+      "view": "traces",
+    },
+    {
+      "payload": {
+        "traceId": "tr1",
+      },
+      "view": "traces",
+    },
+    {
+      "payload": {
+        "traceId": "tr1",
+      },
+      "view": "traces",
+    },
+    {
+      "payload": {
+        "newDoc": true,
+        "traceId": "tr1",
+      },
+      "view": "traces",
+    },
+  ],
+  [
+    {
+      "payload": {
+        "exchangeId": "x1",
+      },
+      "view": "debugger",
+    },
+    {
+      "payload": {
+        "exchangeId": "x1",
+        "newDoc": true,
+      },
+      "view": "debugger",
+    },
+    {
+      "payload": {
+        "exchangeId": "x1",
+      },
+      "view": "debugger",
+    },
+    {
+      "payload": {
+        "exchangeId": "x1",
+      },
+      "view": "debugger",
+    },
+    {
+      "payload": {
+        "exchangeId": "x1",
+        "newDoc": true,
+      },
+      "view": "debugger",
+    },
+  ],
+  [
+    {
+      "payload": {
+        "serverId": "weather",
+      },
+      "view": "mcp",
+    },
+    {
+      "payload": {
+        "newDoc": true,
+        "serverId": "weather",
+      },
+      "view": "mcp",
+    },
+    {
+      "payload": {
+        "serverId": "weather",
+      },
+      "view": "mcp",
+    },
+    {
+      "payload": {
+        "serverId": "weather",
+      },
+      "view": "mcp",
+    },
+    {
+      "payload": {
+        "newDoc": true,
+        "serverId": "weather",
+      },
+      "view": "mcp",
+    },
+  ],
+  [
+    {
+      "payload": {
+        "providerId": "demo",
+      },
+      "view": "ai",
+    },
+    {
+      "payload": {
+        "newDoc": true,
+        "providerId": "demo",
+      },
+      "view": "ai",
+    },
+    {
+      "payload": {
+        "providerId": "demo",
+      },
+      "view": "ai",
+    },
+    {
+      "payload": {
+        "providerId": "demo",
+      },
+      "view": "ai",
+    },
+    {
+      "payload": {
+        "newDoc": true,
+        "providerId": "demo",
+      },
+      "view": "ai",
+    },
+  ],
+  [
+    {
+      "payload": {
+        "spec": "specs/petstore.yaml",
+      },
+      "view": "apidef",
+    },
+    {
+      "payload": {
+        "newDoc": true,
+        "spec": "specs/petstore.yaml",
+      },
+      "view": "apidef",
+    },
+    {
+      "payload": {
+        "spec": "specs/petstore.yaml",
+      },
+      "view": "apidef",
+    },
+    {
+      "payload": {
+        "spec": "specs/petstore.yaml",
+      },
+      "view": "apidef",
+    },
+    {
+      "payload": {
+        "newDoc": true,
+        "spec": "specs/petstore.yaml",
+      },
+      "view": "apidef",
+    },
+  ],
+  [
+    {
+      "payload": {
+        "dataset": "users.csv",
+      },
+      "view": "dataset",
+    },
+    {
+      "payload": {
+        "dataset": "users.csv",
+        "newDoc": true,
+      },
+      "view": "dataset",
+    },
+    {
+      "payload": {
+        "dataset": "users.csv",
+      },
+      "view": "dataset",
+    },
+    {
+      "payload": {
+        "dataset": "users.csv",
+      },
+      "view": "dataset",
+    },
+    {
+      "payload": {
+        "dataset": "users.csv",
+        "newDoc": true,
+      },
+      "view": "dataset",
+    },
+  ],
+  [
+    {
+      "payload": {
+        "dataset": "nested/cases.jsonl",
+      },
+      "view": "dataset",
+    },
+    {
+      "payload": {
+        "dataset": "nested/cases.jsonl",
+        "newDoc": true,
+      },
+      "view": "dataset",
+    },
+    {
+      "payload": {
+        "dataset": "nested/cases.jsonl",
+      },
+      "view": "dataset",
+    },
+    {
+      "payload": {
+        "dataset": "nested/cases.jsonl",
+      },
+      "view": "dataset",
+    },
+    {
+      "payload": {
+        "dataset": "nested/cases.jsonl",
+        "newDoc": true,
+      },
+      "view": "dataset",
+    },
+  ],
+  [
+    {
+      "payload": {
+        "collectionId": "api",
+        "mock": true,
+      },
+      "view": "collections",
+    },
+    {
+      "payload": {
+        "collectionId": "api",
+        "mock": true,
+        "newDoc": true,
+      },
+      "view": "collections",
+    },
+    {
+      "payload": {
+        "collectionId": "api",
+        "mock": true,
+      },
+      "view": "collections",
+    },
+    {
+      "payload": {
+        "collectionId": "api",
+        "mock": true,
+      },
+      "view": "collections",
+    },
+    {
+      "payload": {
+        "collectionId": "api",
+        "mock": true,
+        "newDoc": true,
+      },
+      "view": "collections",
+    },
+  ],
+  [
+    {
+      "payload": {
+        "host": "api.example.com",
+        "tab": "certificates",
+      },
+      "view": "settings",
+    },
+    {
+      "payload": {
+        "host": "api.example.com",
+        "newDoc": true,
+        "tab": "certificates",
+      },
+      "view": "settings",
+    },
+    {
+      "payload": {
+        "host": "api.example.com",
+        "tab": "certificates",
+      },
+      "view": "settings",
+    },
+    {
+      "payload": {
+        "host": "api.example.com",
+        "tab": "certificates",
+      },
+      "view": "settings",
+    },
+    {
+      "payload": {
+        "host": "api.example.com",
+        "newDoc": true,
+        "tab": "certificates",
+      },
+      "view": "settings",
+    },
+  ],
+  [
+    {
+      "payload": {
+        "session": "morning capture",
+      },
+      "view": "debugger",
+    },
+    {
+      "payload": {
+        "newDoc": true,
+        "session": "morning capture",
+      },
+      "view": "debugger",
+    },
+    {
+      "payload": {
+        "session": "morning capture",
+      },
+      "view": "debugger",
+    },
+    {
+      "payload": {
+        "session": "morning capture",
+      },
+      "view": "debugger",
+    },
+    {
+      "payload": {
+        "newDoc": true,
+        "session": "morning capture",
+      },
+      "view": "debugger",
+    },
+  ],
+  [
+    {
+      "payload": {
+        "file": "collections/api.json",
+        "line": 4,
+      },
+      "view": "git",
+    },
+    {
+      "payload": {
+        "file": "collections/api.json",
+        "line": 4,
+        "newDoc": true,
+      },
+      "view": "git",
+    },
+    {
+      "payload": {
+        "file": "collections/api.json",
+        "line": 4,
+      },
+      "view": "git",
+    },
+    {
+      "payload": {
+        "file": "collections/api.json",
+        "line": 4,
+      },
+      "view": "git",
+    },
+    {
+      "payload": {
+        "file": "collections/api.json",
+        "line": 4,
+        "newDoc": true,
+      },
+      "view": "git",
+    },
+  ],
+  [
+    {
+      "external": "https://testpion.dev/getting-started/finding-your-way",
+    },
+    {
+      "external": "https://testpion.dev/getting-started/finding-your-way",
+    },
+    {
+      "external": "https://testpion.dev/getting-started/finding-your-way",
+    },
+    {
+      "external": "https://testpion.dev/getting-started/finding-your-way",
+    },
+    {
+      "external": "https://testpion.dev/getting-started/finding-your-way",
+    },
+  ],
+]
+`;
+
+exports[`kind equivalence (REG-1 snapshots; unchanged by the registry adapters) > resolveItemRef over the fixture workspace 1`] = `
+[
+  {
+    "detail": "Kinds API / Pets / List pets",
+    "label": "List pets",
+    "ok": true,
+    "ref": {
+      "collectionId": "api",
+      "kind": "request",
+      "protocol": "http",
+      "requestId": "r1",
+    },
+  },
+  {
+    "detail": "Kinds API / Pets query",
+    "label": "Pets query",
+    "ok": true,
+    "ref": {
+      "collectionId": "api",
+      "kind": "request",
+      "protocol": "graphql",
+      "requestId": "g1",
+    },
+  },
+  {
+    "detail": "Kinds API / Pets / Soap call",
+    "label": "Soap call",
+    "ok": true,
+    "ref": {
+      "collectionId": "api",
+      "kind": "request",
+      "protocol": "soap",
+      "requestId": "s1",
+    },
+  },
+  {
+    "label": "Kinds API",
+    "ok": true,
+    "ref": {
+      "collectionId": "api",
+      "kind": "collection",
+    },
+  },
+  {
+    "label": "Kinds API",
+    "ok": true,
+    "ref": {
+      "collectionId": "api",
+      "kind": "collection",
+      "tab": "run",
+    },
+  },
+  {
+    "label": "Kinds API",
+    "ok": true,
+    "ref": {
+      "collectionId": "api",
+      "kind": "collection",
+      "tab": "mock",
+    },
+  },
+  {
+    "label": "Kinds API",
+    "ok": true,
+    "ref": {
+      "collectionId": "api",
+      "kind": "collection",
+      "tab": "variables",
+    },
+  },
+  {
+    "detail": "Kinds API / Pets",
+    "label": "Pets",
+    "ok": true,
+    "ref": {
+      "collectionId": "api",
+      "folderId": "f1",
+      "kind": "folder",
+    },
+  },
+  {
+    "detail": "gRPC call",
+    "label": "Say hello",
+    "ok": true,
+    "ref": {
+      "itemId": "g-call",
+      "kind": "saved",
+      "library": "grpc",
+    },
+  },
+  {
+    "detail": "Connection",
+    "label": "Echo socket",
+    "ok": true,
+    "ref": {
+      "itemId": "ws-echo",
+      "kind": "saved",
+      "library": "websocket",
+    },
+  },
+  {
+    "detail": "Prompt",
+    "label": "Greeting prompt",
+    "ok": true,
+    "ref": {
+      "itemId": "p-greet",
+      "kind": "saved",
+      "library": "ai-prompts",
+    },
+  },
+  {
+    "detail": "Load test",
+    "label": "Pets load",
+    "ok": true,
+    "ref": {
+      "itemId": "lt-pets",
+      "kind": "saved",
+      "library": "load-tests",
+    },
+  },
+  {
+    "detail": "Evaluation",
+    "label": "Tone evaluation",
+    "ok": true,
+    "ref": {
+      "itemId": "ev-tone",
+      "kind": "saved",
+      "library": "evaluations",
+    },
+  },
+  {
+    "detail": "Monitor",
+    "label": "Pets monitor",
+    "ok": true,
+    "ref": {
+      "kind": "monitor",
+      "monitorId": "mon-pets",
+    },
+  },
+  {
+    "message": "That saved item is no longer saved in this workspace (deleted, or in another workspace).",
+    "next": {
+      "label": "Search the workspace",
+      "view": "search",
+    },
+    "ok": false,
+    "reason": "missing",
+    "ref": {
+      "itemId": "rt-1",
+      "kind": "saved",
+      "library": "rag-targets",
+    },
+  },
+  {
+    "message": "That saved item is no longer saved in this workspace (deleted, or in another workspace).",
+    "next": {
+      "label": "Search the workspace",
+      "view": "search",
+    },
+    "ok": false,
+    "reason": "missing",
+    "ref": {
+      "itemId": "x",
+      "kind": "saved",
+      "library": "unknown-lib",
+    },
+  },
+  {
+    "detail": "Monitor",
+    "label": "Pets monitor",
+    "ok": true,
+    "ref": {
+      "kind": "monitor",
+      "monitorId": "mon-pets",
+    },
+  },
+  {
+    "detail": "Environment",
+    "label": "Staging",
+    "ok": true,
+    "ref": {
+      "environmentId": "staging",
+      "kind": "environment",
+    },
+  },
+  {
+    "label": "Globals",
+    "ok": true,
+    "ref": {
+      "kind": "environment",
+      "scope": "globals",
+    },
+  },
+  {
+    "label": "Workspace variables",
+    "ok": true,
+    "ref": {
+      "kind": "environment",
+      "scope": "workspace",
+    },
+  },
+  {
+    "label": "Collection variables",
+    "ok": true,
+    "ref": {
+      "collectionId": "api",
+      "kind": "environment",
+      "scope": "collection",
+    },
+  },
+  {
+    "label": "Environments",
+    "ok": true,
+    "ref": {
+      "kind": "environment",
+    },
+  },
+  {
+    "detail": "Variable in Staging",
+    "label": "baseUrl",
+    "ok": true,
+    "ref": {
+      "environmentId": "staging",
+      "key": "baseUrl",
+      "kind": "variable",
+    },
+  },
+  {
+    "message": ""nope" is no longer a variable of Staging.",
+    "next": {
+      "label": "Open Staging",
+      "ref": {
+        "environmentId": "staging",
+        "kind": "environment",
+      },
+    },
+    "ok": false,
+    "reason": "missing",
+    "ref": {
+      "environmentId": "staging",
+      "key": "nope",
+      "kind": "variable",
+    },
+  },
+  {
+    "detail": "Variable",
+    "label": "baseUrl",
+    "ok": true,
+    "ref": {
+      "key": "baseUrl",
+      "kind": "variable",
+    },
+  },
+  {
+    "detail": "tests/smoke/login.yaml",
+    "label": "login.yaml",
+    "ok": true,
+    "ref": {
+      "kind": "test",
+      "path": "smoke/login.yaml",
+    },
+  },
+  {
+    "detail": "tests/smoke/login.yaml",
+    "label": "login.yaml",
+    "ok": true,
+    "ref": {
+      "kind": "test",
+      "line": "3",
+      "path": "smoke/login.yaml",
+      "step": "Login",
+    },
+  },
+  {
+    "detail": "tests/flows/checkout.yaml",
+    "label": "checkout.yaml",
+    "ok": true,
+    "ref": {
+      "kind": "flow",
+      "path": "flows/checkout.yaml",
+      "step": "pay",
+    },
+  },
+  {
+    "detail": "Test",
+    "label": "t1",
+    "ok": true,
+    "ref": {
+      "kind": "test-case",
+      "testId": "t1",
+    },
+  },
+  {
+    "detail": "Run",
+    "label": "run-1",
+    "ok": true,
+    "ref": {
+      "kind": "run",
+      "runId": "run-1",
+    },
+  },
+  {
+    "detail": "Run",
+    "label": "run-1",
+    "ok": true,
+    "ref": {
+      "kind": "run",
+      "resultId": "res-1",
+      "runId": "run-1",
+    },
+  },
+  {
+    "detail": "http · 2026-01-01T00:00:00.000Z",
+    "label": "GET pets",
+    "ok": true,
+    "ref": {
+      "historyId": "h1",
+      "kind": "history",
+    },
+  },
+  {
+    "detail": "Trace",
+    "label": "pets trace",
+    "ok": true,
+    "ref": {
+      "kind": "trace",
+      "traceId": "tr1",
+    },
+  },
+  {
+    "detail": "Captured exchange",
+    "label": "x1",
+    "ok": true,
+    "ref": {
+      "exchangeId": "x1",
+      "kind": "exchange",
+    },
+  },
+  {
+    "detail": "MCP server",
+    "label": "Weather mock",
+    "ok": true,
+    "ref": {
+      "kind": "mcp-server",
+      "serverId": "weather",
+    },
+  },
+  {
+    "detail": "AI provider",
+    "label": "Demo model",
+    "ok": true,
+    "ref": {
+      "kind": "provider",
+      "providerId": "demo",
+    },
+  },
+  {
+    "detail": "specs/petstore.yaml",
+    "label": "petstore.yaml",
+    "ok": true,
+    "ref": {
+      "kind": "spec",
+      "path": "specs/petstore.yaml",
+    },
+  },
+  {
+    "detail": "datasets/users.csv",
+    "label": "users.csv",
+    "ok": true,
+    "ref": {
+      "kind": "dataset",
+      "name": "users.csv",
+    },
+  },
+  {
+    "detail": "datasets/nested/cases.jsonl",
+    "label": "nested/cases.jsonl",
+    "ok": true,
+    "ref": {
+      "kind": "dataset",
+      "name": "nested/cases.jsonl",
+    },
+  },
+  {
+    "label": "Kinds API",
+    "ok": true,
+    "ref": {
+      "collectionId": "api",
+      "kind": "mock",
+    },
+  },
+  {
+    "detail": "Certificate",
+    "label": "api.example.com",
+    "ok": true,
+    "ref": {
+      "host": "api.example.com",
+      "kind": "certificate",
+    },
+  },
+  {
+    "detail": "debugger/morning capture.har",
+    "label": "morning capture",
+    "ok": true,
+    "ref": {
+      "kind": "capture",
+      "name": "morning capture",
+    },
+  },
+  {
+    "detail": "Changed file",
+    "label": "collections/api.json",
+    "ok": true,
+    "ref": {
+      "kind": "git-file",
+      "line": "4",
+      "path": "collections/api.json",
+    },
+  },
+  {
+    "detail": "Documentation",
+    "label": "https://testpion.dev/getting-started/finding-your-way",
+    "ok": true,
+    "ref": {
+      "kind": "doc",
+      "url": "https://testpion.dev/getting-started/finding-your-way",
+    },
+  },
+  {
+    "message": "It is no longer in the collection "Kinds API" (deleted or moved to another collection).",
+    "next": {
+      "label": "Open Kinds API",
+      "ref": {
+        "collectionId": "api",
+        "kind": "collection",
+      },
+    },
+    "ok": false,
+    "reason": "missing",
+    "ref": {
+      "collectionId": "api",
+      "kind": "request",
+      "requestId": "gone",
+    },
+  },
+  {
+    "message": "Its collection is no longer in this workspace (deleted, or in another workspace).",
+    "next": {
+      "label": "Search the workspace",
+      "view": "search",
+    },
+    "ok": false,
+    "reason": "missing",
+    "ref": {
+      "collectionId": "gone",
+      "kind": "request",
+      "requestId": "r1",
+    },
+  },
+  {
+    "message": "It is no longer in the collection "Kinds API" (deleted or moved to another collection).",
+    "next": {
+      "label": "Open Kinds API",
+      "ref": {
+        "collectionId": "api",
+        "kind": "collection",
+      },
+    },
+    "ok": false,
+    "reason": "missing",
+    "ref": {
+      "collectionId": "api",
+      "folderId": "r1",
+      "kind": "folder",
+    },
+  },
+  {
+    "message": "It is no longer in the collection "Kinds API" (deleted or moved to another collection).",
+    "next": {
+      "label": "Open Kinds API",
+      "ref": {
+        "collectionId": "api",
+        "kind": "collection",
+      },
+    },
+    "ok": false,
+    "reason": "missing",
+    "ref": {
+      "collectionId": "api",
+      "kind": "request",
+      "requestId": "f1",
+    },
+  },
+  {
+    "message": "That collection is no longer in this workspace (deleted, or in another workspace).",
+    "next": {
+      "label": "Open Collections",
+      "view": "collections",
+    },
+    "ok": false,
+    "reason": "missing",
+    "ref": {
+      "collectionId": "gone",
+      "kind": "collection",
+    },
+  },
+  {
+    "message": "That collection is no longer in this workspace (deleted, or in another workspace).",
+    "next": {
+      "label": "Open Collections",
+      "view": "collections",
+    },
+    "ok": false,
+    "reason": "missing",
+    "ref": {
+      "collectionId": "gone",
+      "kind": "mock",
+    },
+  },
+  {
+    "message": "That grpc call is no longer saved in this workspace (deleted, or in another workspace).",
+    "next": {
+      "label": "Search the workspace",
+      "view": "search",
+    },
+    "ok": false,
+    "reason": "missing",
+    "ref": {
+      "itemId": "gone",
+      "kind": "saved",
+      "library": "grpc",
+    },
+  },
+  {
+    "message": "That saved item is no longer saved in this workspace (deleted, or in another workspace).",
+    "next": {
+      "label": "Search the workspace",
+      "view": "search",
+    },
+    "ok": false,
+    "reason": "missing",
+    "ref": {
+      "itemId": "x",
+      "kind": "saved",
+      "library": "Bad Lib",
+    },
+  },
+  {
+    "message": "That monitor no longer exists (deleted, or in another workspace).",
+    "next": {
+      "label": "Open Monitors",
+      "view": "monitors",
+    },
+    "ok": false,
+    "reason": "missing",
+    "ref": {
+      "kind": "monitor",
+      "monitorId": "gone",
+    },
+  },
+  {
+    "message": "That environment no longer exists (deleted or renamed in another workspace).",
+    "next": {
+      "label": "Open Environments",
+      "view": "environments",
+    },
+    "ok": false,
+    "reason": "missing",
+    "ref": {
+      "environmentId": "gone",
+      "kind": "environment",
+    },
+  },
+  {
+    "message": "The environment of that variable no longer exists.",
+    "next": {
+      "label": "Open Environments",
+      "view": "environments",
+    },
+    "ok": false,
+    "reason": "missing",
+    "ref": {
+      "environmentId": "gone",
+      "key": "x",
+      "kind": "variable",
+    },
+  },
+  {
+    "message": "tests/gone.yaml is no longer there (deleted, renamed or moved).",
+    "next": {
+      "label": "Open Tests",
+      "view": "tests",
+    },
+    "ok": false,
+    "reason": "missing",
+    "ref": {
+      "kind": "test",
+      "path": "gone.yaml",
+    },
+  },
+  {
+    "message": "tests/flows/gone.yaml is no longer there (deleted, renamed or moved).",
+    "next": {
+      "label": "Open Tests",
+      "view": "tests",
+    },
+    "ok": false,
+    "reason": "missing",
+    "ref": {
+      "kind": "flow",
+      "path": "flows/gone.yaml",
+    },
+  },
+  {
+    "message": "That run is no longer kept (deleted, cleaned up, or from another workspace).",
+    "next": {
+      "label": "Open the runs",
+      "view": "tests",
+    },
+    "ok": false,
+    "reason": "missing",
+    "ref": {
+      "kind": "run",
+      "runId": "gone",
+    },
+  },
+  {
+    "message": "That run is no longer kept (deleted, cleaned up, or from another workspace).",
+    "next": {
+      "label": "Open the runs",
+      "view": "tests",
+    },
+    "ok": false,
+    "reason": "missing",
+    "ref": {
+      "kind": "run",
+      "runId": "../x",
+    },
+  },
+  {
+    "message": "That history entry is gone (cleared, or from another workspace).",
+    "next": {
+      "label": "Open History",
+      "view": "history",
+    },
+    "ok": false,
+    "reason": "missing",
+    "ref": {
+      "historyId": "gone",
+      "kind": "history",
+    },
+  },
+  {
+    "message": "That trace is gone (cleared, or from another workspace).",
+    "next": {
+      "label": "Open Traces",
+      "view": "traces",
+    },
+    "ok": false,
+    "reason": "missing",
+    "ref": {
+      "kind": "trace",
+      "traceId": "gone",
+    },
+  },
+  {
+    "message": "That MCP server is no longer set up in this workspace.",
+    "next": {
+      "label": "Open MCP",
+      "view": "mcp",
+    },
+    "ok": false,
+    "reason": "missing",
+    "ref": {
+      "kind": "mcp-server",
+      "serverId": "gone",
+    },
+  },
+  {
+    "message": "That AI provider is no longer set up.",
+    "next": {
+      "label": "Open AI providers",
+      "view": "ai",
+    },
+    "ok": false,
+    "reason": "missing",
+    "ref": {
+      "kind": "provider",
+      "providerId": "gone",
+    },
+  },
+  {
+    "message": "specs/gone.yaml is no longer there (deleted or renamed).",
+    "next": {
+      "label": "Search the workspace",
+      "view": "search",
+    },
+    "ok": false,
+    "reason": "missing",
+    "ref": {
+      "kind": "spec",
+      "path": "specs/gone.yaml",
+    },
+  },
+  {
+    "message": "datasets/users.csv is no longer there (deleted or renamed).",
+    "next": {
+      "label": "Search the workspace",
+      "view": "search",
+    },
+    "ok": false,
+    "reason": "missing",
+    "ref": {
+      "kind": "spec",
+      "path": "datasets/users.csv",
+    },
+  },
+  {
+    "message": "datasets/gone.csv is no longer there (deleted or renamed).",
+    "next": {
+      "label": "Search the workspace",
+      "view": "search",
+    },
+    "ok": false,
+    "reason": "missing",
+    "ref": {
+      "kind": "dataset",
+      "name": "gone.csv",
+    },
+  },
+  {
+    "message": "The capture session gone is no longer saved (deleted or renamed).",
+    "next": {
+      "label": "Open the Debugger",
+      "view": "debugger",
+    },
+    "ok": false,
+    "reason": "missing",
+    "ref": {
+      "kind": "capture",
+      "name": "gone",
+    },
+  },
+]
+`;
+
+exports[`kind equivalence (REG-1 snapshots; unchanged by the registry adapters) > resolveItemRef over the fixture workspace 2`] = `
+{
+  "message": "That is not a link to something in TestPion",
+  "ok": false,
+  "reason": "invalid",
+  "ref": {
+    "kind": "nope",
+  },
+}
+`;
+
+exports[`kind equivalence (REG-1 snapshots; unchanged by the registry adapters) > search hits for five queries 1`] = `
+[
+  [
+    "pets",
+    [
+      {
+        "id": "g1",
+        "kind": "graphql",
+        "ref": {
+          "collectionId": "api",
+          "kind": "request",
+          "protocol": "graphql",
+          "requestId": "g1",
+        },
+        "score": 61,
+        "subtitle": "GraphQL · Kinds API",
+        "title": "Pets query",
+      },
+      {
+        "id": "specs/petstore.yaml",
+        "kind": "spec",
+        "ref": {
+          "kind": "spec",
+          "path": "specs/petstore.yaml",
+        },
+        "score": 61,
+        "subtitle": "API definition · specs/petstore.yaml",
+        "title": "petstore.yaml",
+      },
+      {
+        "id": "load-tests:lt-pets",
+        "kind": "saved",
+        "ref": {
+          "itemId": "lt-pets",
+          "kind": "saved",
+          "library": "load-tests",
+        },
+        "score": 61,
+        "subtitle": "Saved load test",
+        "title": "Pets load",
+      },
+      {
+        "id": "monitors:mon-pets",
+        "kind": "saved",
+        "ref": {
+          "itemId": "mon-pets",
+          "kind": "saved",
+          "library": "monitors",
+        },
+        "score": 61,
+        "subtitle": "Monitor · every 60 min",
+        "title": "Pets monitor",
+      },
+      {
+        "id": "r1",
+        "kind": "request",
+        "ref": {
+          "collectionId": "api",
+          "kind": "request",
+          "protocol": "http",
+          "requestId": "r1",
+        },
+        "score": 11,
+        "subtitle": "GET {{baseUrl}}/pets · Kinds API / Pets",
+        "title": "List pets",
+      },
+      {
+        "id": "h1",
+        "kind": "history",
+        "ref": {
+          "historyId": "h1",
+          "kind": "history",
+        },
+        "score": 0.5,
+        "subtitle": "History · GET https://x/pets · 200",
+        "title": "GET pets",
+      },
+      {
+        "id": "tr1",
+        "kind": "trace",
+        "ref": {
+          "kind": "trace",
+          "traceId": "tr1",
+        },
+        "score": 0.4,
+        "subtitle": "Trace · http · ok",
+        "title": "pets trace",
+      },
+    ],
+  ],
+  [
+    "hello",
+    [
+      {
+        "id": "grpc:g-call",
+        "kind": "saved",
+        "ref": {
+          "itemId": "g-call",
+          "kind": "saved",
+          "library": "grpc",
+        },
+        "score": 11,
+        "subtitle": "Saved gRPC request · Greeter/Hello",
+        "title": "Say hello",
+      },
+      {
+        "id": "ai-prompts:p-greet",
+        "kind": "saved",
+        "ref": {
+          "itemId": "p-greet",
+          "kind": "saved",
+          "library": "ai-prompts",
+        },
+        "score": 1,
+        "subtitle": "Saved prompt · Drafts · demo",
+        "title": "Greeting prompt",
+      },
+    ],
+  ],
+  [
+    "staging",
+    [
+      {
+        "id": "staging",
+        "kind": "environment",
+        "ref": {
+          "environmentId": "staging",
+          "kind": "environment",
+        },
+        "score": 161,
+        "subtitle": "Environment · 1 variable",
+        "title": "Staging",
+      },
+      {
+        "id": "staging:baseUrl",
+        "kind": "environment-variable",
+        "ref": {
+          "environmentId": "staging",
+          "key": "baseUrl",
+          "kind": "variable",
+        },
+        "score": 1,
+        "subtitle": "Variable in Staging",
+        "title": "baseUrl",
+      },
+    ],
+  ],
+  [
+    "users",
+    [
+      {
+        "id": "users.csv",
+        "kind": "dataset",
+        "ref": {
+          "kind": "dataset",
+          "name": "users.csv",
+        },
+        "score": 61,
+        "subtitle": "Dataset · datasets/users.csv",
+        "title": "users.csv",
+      },
+    ],
+  ],
+  [
+    "monitor",
+    [
+      {
+        "id": "monitors:mon-pets",
+        "kind": "saved",
+        "ref": {
+          "itemId": "mon-pets",
+          "kind": "saved",
+          "library": "monitors",
+        },
+        "score": 11,
+        "subtitle": "Monitor · every 60 min",
+        "title": "Pets monitor",
+      },
+    ],
+  ],
+]
+`;

@@ -1,0 +1,7 @@
+name: Checkout flow
+steps:
+  - id: pay
+    name: Pay
+    request:
+      method: POST
+      url: "{{baseUrl}}/pay"

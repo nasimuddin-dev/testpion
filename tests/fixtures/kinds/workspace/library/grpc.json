@@ -1,0 +1,1 @@
+{ "schemaVersion": "1.0", "folders": [], "items": [{ "id": "g-call", "name": "Say hello", "collectionId": "api", "data": { "target": "localhost:50051", "method": "Greeter/Hello" } }] }

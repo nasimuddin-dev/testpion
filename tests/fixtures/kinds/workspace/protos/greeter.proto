@@ -1,0 +1,4 @@
+syntax = "proto3";
+service Greeter { rpc Hello (Req) returns (Res); }
+message Req { string name = 1; }
+message Res { string text = 1; }

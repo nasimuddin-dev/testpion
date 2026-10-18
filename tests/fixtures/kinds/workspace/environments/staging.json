@@ -1,0 +1,5 @@
+{
+  "id": "staging",
+  "name": "Staging",
+  "variables": [{ "key": "baseUrl", "value": "https://staging.example.com", "enabled": true }]
+}
