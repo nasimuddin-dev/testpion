@@ -54,7 +54,7 @@ export function EnvironmentsView() {
       toastError(e);
     }
   };
-  const tabs = useLibraryTabs<Environment | null>('environments', envDrafts);
+  const tabs = useLibraryTabs<Environment | null>('environments', envDrafts, { canBeEmpty: true });
   const sel = tabs.active.savedId;
   /** Open an environment: in its tab, or the preview tab (a single click in the list), or a new tab. */
   const setSel = (id: string | undefined, o: { preview?: boolean } = {}) => id && tabs.open(id, null, o);

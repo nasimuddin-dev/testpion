@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Every click on a request in the explorer opens it in a tab of its own and shows it (it no longer replaces the tab you had); a request that is already open is just shown.
+- Closing the last tab of Evaluations, Load tests, the AI Playground or Environments now closes it: the view says nothing is open and offers a button for a new one, as the request editors do.
 - A request you sent keeps its tab and its response until you close the tab: a single click on another request opens a new tab instead of replacing it (a preview tab is still replaced while nothing was sent from it). The same for a prompt run in the Playground.
 
 ## 0.52.0 — 2026-10-17
