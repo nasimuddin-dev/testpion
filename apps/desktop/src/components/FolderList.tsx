@@ -4,7 +4,7 @@ import { deleteWithUndo, putBack } from '../lib/undo-delete';
 import { Button, cx, Input, type MenuItem } from './ui';
 import { closeTabsFor } from './EditorTabs';
 import { askFolderName, focusRow, folderMenuItems, InlineRename, moveToFolderItem, RowMenu, TreeFolderRow, TreeHeader, treeKeys } from './TreeParts';
-import { usePersisted } from '../lib/sticky';
+import { useTreeOpen } from '../lib/tree-state';
 import { LABEL } from '../lib/vocabulary';
 import { uniqueKeys } from '../lib/unique-keys';
 
@@ -32,8 +32,6 @@ export interface FolderListOps {
 
 /** What puts a deleted item or folder back. */
 export type Undo = () => unknown;
-
-const collapsedKey = (id: string) => `aps.folders.${id}`;
 
 /**
  * Sidebar list with folders, like the REST collections: collapsible folders, New folder, rename, move to
@@ -72,7 +70,8 @@ export function FolderList({
   itemNoun?: string;
   empty?: ReactNode;
 }) {
-  const [collapsed, setCollapsed] = usePersisted<Record<string, boolean>>(collapsedKey(id), {});
+  // which folders are open: the workspace's tree state (lib/tree-state), one record per list
+  const [opened, setOpened] = useTreeOpen(`list:${id}`);
   // one key per row even if two items share an id (a hand-edited or older library file): React never merges them
   const rowKey = useMemo(() => {
     const keys = uniqueKeys(items, (it) => it.id, `FolderList ${id}`);
@@ -91,7 +90,8 @@ export function FolderList({
   const ql = q.trim().toLowerCase();
   const shown = ql ? items.filter((i) => [i.name, i.folder ?? '', typeof i.subtitle === 'string' ? i.subtitle : ''].some((t) => t.toLowerCase().includes(ql))) : items;
   const [dropTarget, setDropTarget] = useState<string | null>();
-  const toggle = (f: string) => setCollapsed((c) => ({ ...c, [f]: !c[f] }));
+  const isOpen = (f: string) => opened[f] ?? true;
+  const toggle = (f: string) => setOpened((o) => ({ ...o, [f]: !(o[f] ?? true) }));
   const allFolders = [...new Set([...folders, ...items.map((i) => i.folder).filter((f): f is string => !!f)])].sort((a, b) => a.localeCompare(b));
 
   const newFolder = async () => {
@@ -184,7 +184,7 @@ export function FolderList({
       <div className="flex-1 overflow-auto pb-2" onKeyDown={treeKeys}>
         {allFolders.filter((f) => !ql || shown.some((i) => i.folder === f)).map((f) => {
           const inFolder = shown.filter((i) => i.folder === f);
-          const open = !!ql || !collapsed[f];
+          const open = !!ql || isOpen(f);
           return (
             <div key={`folder:${f}`}>
               <TreeFolderRow {...dropProps(f)} dropTarget={dropTarget === f} name={f} count={inFolder.length} open={open} onToggle={() => toggle(f)} menu={folderMenu(f)} onRename={(to) => ops.renameFolder(f, to)} />

@@ -19,6 +19,7 @@ import { isDocView, useDocs } from '../lib/docs';
 import { Button, cx, IconButton, Input, Menu, menuKeys, type MenuItem } from './ui';
 import { askFolderName, focusRow, folderMenuItems, InlineRename, KindBadge, moveToFolderItem, RowMenu, TreeFolderRow, treeKeys } from './TreeParts';
 import { usePersisted } from '../lib/sticky';
+import { useTreeOpen } from '../lib/tree-state';
 import { copyText } from '../lib/clipboard';
 import { datasetBadge } from '../lib/datasets';
 import { GenerateDataDialog } from './GenerateDataDialog';
@@ -34,11 +35,12 @@ import { LABEL } from '../lib/vocabulary';
  * AI prompts, evaluations and load tests live in their own views.
  */
 
-const openKey = 'aps.explorer.sections.v2';
+/** Which sections and folders of the explorer are open: the workspace's tree state (lib/tree-state). */
 function useOpenSections() {
-  const [open, setOpen] = usePersisted<Record<string, boolean>>(openKey, {});
+  const [open, setOpen] = useTreeOpen('explorer');
   const toggle = (id: string, def: boolean) => setOpen((o) => ({ ...o, [id]: !(o[id] ?? def) }));
-  return { isOpen: (id: string, def = true) => open[id] ?? def, toggle };
+  const set = (keys: string[], to: boolean) => setOpen((o) => ({ ...o, ...Object.fromEntries(keys.map((k) => [k, to])) }));
+  return { isOpen: (id: string, def = true) => open[id] ?? def, toggle, set };
 }
 
 /** A collapsible section: icon, title, count, a + that creates that kind of item and a ⋯ menu (also on right-click), like a collection row. */

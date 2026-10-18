@@ -23,7 +23,7 @@ import { matchesCollectionNode, requestCategory, type RequestCategory } from '..
 // the tree's data operations live in lib/collection-nodes (re-exported: views import them from here)
 export { mapNodes, findNode, addToFolder, insertBefore, folderIdsTo, withNewIds, duplicateNode } from '../lib/collection-nodes';
 import { mapNodes, findNode, addToFolder, insertBefore, folderIdsTo, withNewIds, duplicateNode, moveIntoCollection, nodeIdsExcept } from '../lib/collection-nodes';
-import { usePersisted } from '../lib/sticky';
+import { useTreeOpen } from '../lib/tree-state';
 import { saveAsTest } from '../lib/save-test';
 import { openRef } from '../lib/open-ref';
 import { deferDrop, setDragRefs, useDragSession } from '../lib/drag-ref';
@@ -401,7 +401,8 @@ export const CollectionTree = memo(function CollectionTree({
       useApp.getState().toast(`Couldn't convert the scripts: ${asError(e).message}`, 'error');
     }
   };
-  const [open, setOpen] = usePersisted<Record<string, boolean>>('aps.tree.open', {});
+  // which collections, categories and folders are open: the workspace's tree state (lib/tree-state)
+  const [open, setOpen] = useTreeOpen('collections');
   // flips what is shown: an item open by default (a category, the collection of the open request) closes on the first click
   const toggle = (id: string, shown: boolean) => {
     setOpen((o) => ({ ...o, [id]: !shown }));
