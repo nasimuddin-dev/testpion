@@ -190,6 +190,7 @@ export * from './storage/workspace-bundle.js';
 export * from './storage/bundle-secrets.js';
 export * from './storage/search.js';
 export * from './storage/item-refs.js';
+export * from './kinds/index.js';
 export * from './storage/item-info.js';
 export * from './storage/onboarding.js';
 export { ITEM_KINDS, ITEM_KIND_LABEL, ITEM_REF_FIELDS, LIBRARY_LABEL, toItemRef, itemRefKey, itemRefUrl, parseItemRef, parseItemRefUrl, savedItemRef, historyProtocol } from '@testpion/shared';
