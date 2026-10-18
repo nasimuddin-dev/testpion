@@ -12,13 +12,18 @@
  * - Environments and workspace variables: a secret-named or secret-shaped value that is not marked secret is blanked and
  *   marked secret (its value then goes to the secret store, never a file). Secret variables are blank already.
  * - Providers: a literal API key becomes `{{$secret.provider.<id>.apiKey}}`.
- * - Saved items (library), tests and files (specs/, datasets/, mocks/, protos/): `{key, value}` rows and secret-named
- *   properties; high-confidence shapes in text (a connection string's password, a provider key).
+ * - Saved items (library), tests and files (specs/, mocks/, protos/): `{key, value}` rows and secret-named properties;
+ *   high-confidence shapes in text (a connection string's password, a provider key).
+ * - Datasets (datasets/): read field by field (a CSV column named `password`, a JSON / YAML property); a file that does
+ *   not parse is scanned as text and the export says it went out as it is.
  */
+import { csvRecords, toCsv } from '@testpion/shared';
 import type { AuthConfig, Collection, CollectionNode, Environment, KeyValue, McpServerConfig, ProviderConfig } from '../model/types.js';
 import { literalAuthSecrets } from '../eval/security.js';
 import { classifySecret, confidenceAtLeast, isNonSecretKey, isSecretKey, isSecretReference, replaceSecretValues } from '../security/secrets.js';
 import { variableNameFor } from './git-guard.js';
+import { safeKey } from '../util/safe-key.js';
+import { parseYaml, stringifyYaml } from '../util/lazy-yaml.js';
 
 export type ReplacedSecretKind = 'mcp-server' | 'collection' | 'environment' | 'workspace' | 'provider' | 'library' | 'test' | 'file';
 
@@ -78,6 +83,57 @@ export class SecretStripper {
   }
 
   /**
+   * A dataset file (datasets/: CSV, TSV, JSON, JSON Lines or YAML), read field by field: a CSV column with a secret name
+   * (`password`) or a secret-shaped cell, a JSON / YAML property that is one, becomes a `{{variable}}` (one per distinct
+   * value) and is listed. The text comes back unchanged when nothing was replaced (a plain `id,name` file stays byte for
+   * byte); a file that does not parse is only scanned for high-confidence shapes, and `parsed: false` lets the export say
+   * it went out as it is. Other folders' files are text (a spec, a proto) where a field-by-field read would mistake a
+   * schema's `password: string` for a credential: they keep the shape scan.
+   */
+  datasetFile(path: string, text: string): { text: string; parsed: boolean } {
+    const item = path;
+    const ext = /\.([a-z0-9]+)$/i.exec(path)?.[1]?.toLowerCase();
+    const before = this.replaced.length;
+    const cell = (key: string, value: string, where: string) => {
+      const v = classifySecret(key, value);
+      return v && confidenceAtLeast(v.confidence, 'medium') ? this.swap('file', item, where, variableNameFor(key), value) : value;
+    };
+    try {
+      if (ext === 'csv' || ext === 'tsv') {
+        const delimiter = ext === 'tsv' ? '\t' : ',';
+        const records = csvRecords(text, delimiter);
+        const header = records[0] ?? [];
+        let changed = false;
+        const rows = records.map((r, i) =>
+          i === 0 ? r : r.map((c, j) => {
+            const k = header[j];
+            const y = k ? cell(k, c, `${k} (row ${i + 1})`) : c;
+            if (y !== c) changed = true;
+            return y;
+          }),
+        );
+        // the file is written again only when a cell changed: the guard off, so the values stay as they were typed
+        return { text: changed ? toCsv(rows, { delimiter, guard: false }) : text, parsed: true };
+      }
+      if (ext === 'json') {
+        const v = this.data('file', item, JSON.parse(text));
+        return { text: this.replaced.length > before ? JSON.stringify(v, null, 2) + '\n' : text, parsed: true };
+      }
+      if (ext === 'jsonl' || ext === 'ndjson') {
+        const lines = text.split('\n').map((l, i) => (l.trim() ? JSON.stringify(this.data('file', item, JSON.parse(l), `line ${i + 1}`)) : l));
+        return { text: this.replaced.length > before ? lines.join('\n') : text, parsed: true };
+      }
+      if (ext === 'yaml' || ext === 'yml') {
+        const v = this.data('file', item, parseYaml(text));
+        return { text: this.replaced.length > before ? stringifyYaml(v) : text, parsed: true };
+      }
+    } catch {
+      // not the shape its name says (a broken file, a CSV with stray quotes): scanned as text below, and said so
+    }
+    return { text: this.text('file', item, 'content', text), parsed: false };
+  }
+
+  /**
    * Name/value pairs in whichever shape a file holds them, each value passed through `fn`, given back in the same shape:
    * `[{ key, value }]` rows (TestPion), or a `{ name: value }` object (stdio `env`, and headers as other tools and
    * hand-edited files write them). A lone string is scanned as text; anything else that is not a pair is kept as it is.
@@ -98,6 +154,7 @@ export class SecretStripper {
     if (v && typeof v === 'object') {
       let out: Record<string, unknown> | undefined;
       for (const [k, x] of Object.entries(v as Record<string, unknown>)) {
+        if (!safeKey(k)) continue; // `__proto__` assigned onto the copy would set its prototype, not a header
         const y = typeof x === 'string' ? fn(k, x) : this.data(kind, item, x, `${part}.${k}`);
         if (y !== x) (out ??= { ...(v as Record<string, unknown>) })[k] = y;
       }
@@ -159,6 +216,7 @@ export class SecretStripper {
     }
     const out: Record<string, unknown> = {};
     for (const [k, x] of Object.entries(v as Record<string, unknown>)) {
+      if (!safeKey(k)) continue; // an imported `__proto__` key must never become the copy's prototype
       const p = path ? `${path}.${k}` : k;
       if (k === 'body') out[k] = x;
       else if (typeof x === 'string' && x && isSecretKey(k) && !isSecretReference(x)) out[k] = this.swap(kind, item, p, variableNameFor(k), x);

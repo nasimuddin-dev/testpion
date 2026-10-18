@@ -1,5 +1,6 @@
 import type { CollectionFolder, CollectionNode, KeyValue } from '../model/types.js';
 import { DYNAMIC_VARIABLES } from '../vars/dynamic.js';
+import { safeKey } from '../util/safe-key.js';
 
 /**
  * Insomnia's template tags (https://developer.konghq.com/insomnia/template-tags/) in an imported request, as
@@ -196,7 +197,12 @@ function mapString(st: State, s: string, at: Place): string {
 function walk(st: State, v: unknown, at: Place): unknown {
   if (typeof v === 'string') return mapString(st, v, at);
   if (Array.isArray(v)) return v.map((x) => walk(st, x, at));
-  if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v as Any).map(([k, x]) => [k, walk(st, x, at)]));
+  if (v && typeof v === 'object')
+    return Object.fromEntries(
+      Object.entries(v as Any)
+        .filter(([k]) => safeKey(k))
+        .map(([k, x]) => [k, walk(st, x, at)]),
+    );
   return v;
 }
 

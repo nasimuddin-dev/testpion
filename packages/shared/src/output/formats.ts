@@ -56,10 +56,16 @@ export const jsonMin = (v: unknown): string => JSON.stringify(v) ?? 'null';
 /** One JSON value per line (a list's items; anything else is one line). */
 export const jsonLines = (items: unknown): string => (Array.isArray(items) ? items : [items]).map((i) => JSON.stringify(i) ?? 'null').join('\n') + '\n';
 
+const mdCell = (v: unknown) => (v === null || v === undefined ? '' : typeof v === 'string' ? v : JSON.stringify(v)).replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\r?\n/g, '<br>');
+
+/** The header and rule of a Markdown table (`markdownTableRows` adds the rows, page by page for a big grid). */
+export const markdownTableHead = (columns: string[]): string => `| ${columns.map(mdCell).join(' | ')} |\n| ${columns.map(() => '---').join(' | ')} |\n`;
+/** Rows of a Markdown table, one line each (pipes and line breaks in cells escaped). */
+export const markdownTableRows = (columns: string[], rows: ReadonlyArray<ReadonlyArray<unknown>>): string => rows.map((r) => `| ${columns.map((_, i) => mdCell(r[i])).join(' | ')} |\n`).join('');
+
 /** A table as GitHub-flavoured Markdown (pipes and line breaks in cells escaped). */
 export function markdownTable(columns: string[], rows: ReadonlyArray<ReadonlyArray<unknown>>): string {
-  const cell = (v: unknown) => (v === null || v === undefined ? '' : typeof v === 'string' ? v : JSON.stringify(v)).replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\r?\n/g, '<br>');
-  return [`| ${columns.map(cell).join(' | ')} |`, `| ${columns.map(() => '---').join(' | ')} |`, ...rows.map((r) => `| ${columns.map((_, i) => cell(r[i])).join(' | ')} |`)].join('\n') + '\n';
+  return markdownTableHead(columns) + markdownTableRows(columns, rows);
 }
 
 /** Objects as a Markdown table. */
@@ -92,18 +98,24 @@ export type HtmlSection = { title?: string } & ({ table: { columns: string[]; ro
  * "Download ▸ HTML" writes. Every value is escaped; `html` sections must already be safe (built from escaped parts).
  */
 export function htmlDocument(title: string, sections: HtmlSection[], opts: { subtitle?: string; generatedAt?: string } = {}): string {
-  const cell = (v: unknown) => escHtml(v === null || v === undefined ? '' : typeof v === 'string' ? v : JSON.stringify(v));
   const body = sections
     .map((s) => {
       const h = s.title ? `<h2>${escHtml(s.title)}</h2>\n` : '';
-      if ('table' in s)
-        return `${h}<table><thead><tr>${s.table.columns.map((c) => `<th>${cell(c)}</th>`).join('')}</tr></thead><tbody>\n${s.table.rows
-          .map((r) => `<tr>${s.table.columns.map((_, i) => `<td>${cell(r[i])}</td>`).join('')}</tr>`)
-          .join('\n')}\n</tbody></table>`;
+      if ('table' in s) return h + htmlTableHead(s.table.columns) + htmlTableRows(s.table.columns, s.table.rows) + HTML_TABLE_TAIL;
       if ('pre' in s) return `${h}<pre>${escHtml(s.pre)}</pre>`;
       return h + s.html;
     })
     .join('\n');
+  return htmlDocumentHead(title, opts) + body + HTML_DOCUMENT_TAIL;
+}
+
+/*
+ * The same page in parts, for a table too big to be one string (a 100,000-row data run is written page by page):
+ * head, the table's head, its rows as they come, the table's tail, the page's tail. `htmlDocument` is these joined.
+ */
+
+/** Everything before the sections (doctype, CSP, styles, the title and subtitle). */
+export function htmlDocumentHead(title: string, opts: { subtitle?: string; generatedAt?: string } = {}): string {
   const sub = [opts.subtitle, opts.generatedAt ? `generated ${opts.generatedAt}` : ''].filter(Boolean).join(' · ');
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -111,10 +123,17 @@ export function htmlDocument(title: string, sections: HtmlSection[], opts: { sub
 <title>${escHtml(title)}</title>
 <style>${PAGE_CSS}</style></head><body><main>
 <h1>${escHtml(title)}</h1>
-${sub ? `<p class="sub">${escHtml(sub)}</p>\n` : ''}${body}
-</main></body></html>
-`;
+${sub ? `<p class="sub">${escHtml(sub)}</p>\n` : ''}`;
 }
+export const HTML_DOCUMENT_TAIL = '\n</main></body></html>\n';
+
+const htmlCell = (v: unknown) => escHtml(v === null || v === undefined ? '' : typeof v === 'string' ? v : JSON.stringify(v));
+/** The opening of a table with its header row. */
+export const htmlTableHead = (columns: string[]): string => `<table><thead><tr>${columns.map((c) => `<th>${htmlCell(c)}</th>`).join('')}</tr></thead><tbody>\n`;
+/** Rows of a table, every value escaped, one line each. */
+export const htmlTableRows = (columns: string[], rows: ReadonlyArray<ReadonlyArray<unknown>>): string =>
+  rows.map((r) => `<tr>${columns.map((_, i) => `<td>${htmlCell(r[i])}</td>`).join('')}</tr>\n`).join('');
+export const HTML_TABLE_TAIL = '</tbody></table>';
 
 /** Objects as a one-table HTML page. */
 export const objectsToHtml = (title: string, objects: ReadonlyArray<unknown>, columns?: string[]): string => {
@@ -247,20 +266,30 @@ export function netscapeCookies(
 
 /* ------------------------------------------------------------------ streaming pretty JSON */
 
+/** Nesting past this is not indented further: every deeper level is written at this indent. */
+export const JSON_INDENT_MAX_DEPTH = 64;
+/** Nesting past this is not re-indented at all: the rest of the text is passed through as it is. */
+export const JSON_PRETTY_MAX_DEPTH = 512;
+
 /**
  * Re-indents JSON text as it streams in (no parse, no copy of the whole value): the backend pretty-prints a 50 MB body
  * chunk by chunk. For valid JSON the output equals `JSON.stringify(JSON.parse(text), null, 2)` (numbers are kept as
- * written). Invalid input comes out re-indented as far as it goes.
+ * written) up to JSON_INDENT_MAX_DEPTH levels; deeper levels keep that indent, so the output grows with the input,
+ * never with the square of its depth (a body of a million `[` would otherwise write a terabyte of spaces). Past
+ * JSON_PRETTY_MAX_DEPTH the text is passed through untouched: still the same JSON, just not laid out. Invalid input
+ * comes out re-indented as far as it goes.
  */
 export function createJsonPrettyPrinter(indent = '  '): { push(chunk: string): string; end(): string } {
   let depth = 0;
   let inString = false;
   let escape = false;
+  let through = false;
   // an opened { or [ waits for its next character: closed at once it prints {} / []
   let pendingOpen = '';
-  const nl = () => '\n' + indent.repeat(depth);
+  const nl = () => '\n' + indent.repeat(Math.min(depth, JSON_INDENT_MAX_DEPTH));
   return {
     push(chunk: string): string {
+      if (through) return chunk;
       let out = '';
       for (let i = 0; i < chunk.length; i++) {
         const c = chunk[i]!;
@@ -281,6 +310,11 @@ export function createJsonPrettyPrinter(indent = '  '): { push(chunk: string): s
           out += pendingOpen;
           pendingOpen = '';
           depth++;
+          if (depth > JSON_PRETTY_MAX_DEPTH) {
+            // too deep to be a document anyone reads laid out: the rest goes through as it came
+            through = true;
+            return out + chunk.slice(i);
+          }
           out += nl();
         }
         if (c === '{' || c === '[') pendingOpen = c;
@@ -299,7 +333,7 @@ export function createJsonPrettyPrinter(indent = '  '): { push(chunk: string): s
     end(): string {
       const rest = pendingOpen;
       pendingOpen = '';
-      return rest + '\n';
+      return through ? '' : rest + '\n';
     },
   };
 }
@@ -347,65 +381,83 @@ export function crc32(data: Uint8Array, crc = 0): number {
 }
 
 /**
- * Files as a ZIP archive (stored, no compression: reports are small and this stays a few lines with no dependency).
- * Names are UTF-8 (flag bit 11); a name is a relative path with forward slashes.
+ * A ZIP archive written entry by entry (stored, no compression: reports are small and this stays a few lines with no
+ * dependency). `add` gives back the chunks to write for one file (its local header, then its bytes: the size and CRC
+ * are known per file, so nothing waits for the whole archive); only the central directory is kept until `end`. Names
+ * are UTF-8 (flag bit 11); a name is a relative path with forward slashes.
  */
-export function zipFiles(files: ReadonlyArray<{ name: string; data: Uint8Array | string; date?: Date }>): Uint8Array {
+export function createZipWriter(): { add(name: string, data: Uint8Array | string, date?: Date): Uint8Array[]; end(): Uint8Array } {
   const enc = new TextEncoder();
-  const locals: Uint8Array[] = [];
   const centrals: Uint8Array[] = [];
   let offset = 0;
-  for (const f of files) {
-    const name = enc.encode(f.name.replace(/\\/g, '/').replace(/^\/+/, ''));
-    const data = typeof f.data === 'string' ? enc.encode(f.data) : f.data;
-    const crc = crc32(data);
-    const d = f.date ?? new Date();
-    const dosTime = (d.getHours() << 11) | (d.getMinutes() << 5) | Math.floor(d.getSeconds() / 2);
-    const dosDate = ((Math.max(1980, d.getFullYear()) - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate();
-    const local = new Uint8Array(30 + name.length);
-    const lv = new DataView(local.buffer);
-    lv.setUint32(0, 0x04034b50, true);
-    lv.setUint16(4, 20, true);
-    lv.setUint16(6, 0x0800, true);
-    lv.setUint16(8, 0, true);
-    lv.setUint16(10, dosTime, true);
-    lv.setUint16(12, dosDate, true);
-    lv.setUint32(14, crc, true);
-    lv.setUint32(18, data.length, true);
-    lv.setUint32(22, data.length, true);
-    lv.setUint16(26, name.length, true);
-    lv.setUint16(28, 0, true);
-    local.set(name, 30);
-    const central = new Uint8Array(46 + name.length);
-    const cv = new DataView(central.buffer);
-    cv.setUint32(0, 0x02014b50, true);
-    cv.setUint16(4, 20, true);
-    cv.setUint16(6, 20, true);
-    cv.setUint16(8, 0x0800, true);
-    cv.setUint16(10, 0, true);
-    cv.setUint16(12, dosTime, true);
-    cv.setUint16(14, dosDate, true);
-    cv.setUint32(16, crc, true);
-    cv.setUint32(20, data.length, true);
-    cv.setUint32(24, data.length, true);
-    cv.setUint16(28, name.length, true);
-    cv.setUint32(42, offset, true);
-    central.set(name, 46);
-    locals.push(local, data);
-    centrals.push(central);
-    offset += local.length + data.length;
-  }
-  const centralSize = centrals.reduce((n, c) => n + c.length, 0);
-  const end = new Uint8Array(22);
-  const ev = new DataView(end.buffer);
-  ev.setUint32(0, 0x06054b50, true);
-  ev.setUint16(8, files.length, true);
-  ev.setUint16(10, files.length, true);
-  ev.setUint32(12, centralSize, true);
-  ev.setUint32(16, offset, true);
-  const out = new Uint8Array(offset + centralSize + 22);
+  return {
+    add(fileName, bytes, date) {
+      const name = enc.encode(fileName.replace(/\\/g, '/').replace(/^\/+/, ''));
+      const data = typeof bytes === 'string' ? enc.encode(bytes) : bytes;
+      const crc = crc32(data);
+      const d = date ?? new Date();
+      const dosTime = (d.getHours() << 11) | (d.getMinutes() << 5) | Math.floor(d.getSeconds() / 2);
+      const dosDate = ((Math.max(1980, d.getFullYear()) - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate();
+      const local = new Uint8Array(30 + name.length);
+      const lv = new DataView(local.buffer);
+      lv.setUint32(0, 0x04034b50, true);
+      lv.setUint16(4, 20, true);
+      lv.setUint16(6, 0x0800, true);
+      lv.setUint16(8, 0, true);
+      lv.setUint16(10, dosTime, true);
+      lv.setUint16(12, dosDate, true);
+      lv.setUint32(14, crc, true);
+      lv.setUint32(18, data.length, true);
+      lv.setUint32(22, data.length, true);
+      lv.setUint16(26, name.length, true);
+      lv.setUint16(28, 0, true);
+      local.set(name, 30);
+      const central = new Uint8Array(46 + name.length);
+      const cv = new DataView(central.buffer);
+      cv.setUint32(0, 0x02014b50, true);
+      cv.setUint16(4, 20, true);
+      cv.setUint16(6, 20, true);
+      cv.setUint16(8, 0x0800, true);
+      cv.setUint16(10, 0, true);
+      cv.setUint16(12, dosTime, true);
+      cv.setUint16(14, dosDate, true);
+      cv.setUint32(16, crc, true);
+      cv.setUint32(20, data.length, true);
+      cv.setUint32(24, data.length, true);
+      cv.setUint16(28, name.length, true);
+      cv.setUint32(42, offset, true);
+      central.set(name, 46);
+      centrals.push(central);
+      offset += local.length + data.length;
+      return [local, data];
+    },
+    end() {
+      const centralSize = centrals.reduce((n, c) => n + c.length, 0);
+      const out = new Uint8Array(centralSize + 22);
+      let p = 0;
+      for (const c of centrals) {
+        out.set(c, p);
+        p += c.length;
+      }
+      const ev = new DataView(out.buffer, p);
+      ev.setUint32(0, 0x06054b50, true);
+      ev.setUint16(8, centrals.length, true);
+      ev.setUint16(10, centrals.length, true);
+      ev.setUint32(12, centralSize, true);
+      ev.setUint32(16, offset, true);
+      return out;
+    },
+  };
+}
+
+/** Files as one ZIP archive in memory (`createZipWriter` for one written as it is built). */
+export function zipFiles(files: ReadonlyArray<{ name: string; data: Uint8Array | string; date?: Date }>): Uint8Array {
+  const zip = createZipWriter();
+  const parts = files.flatMap((f) => zip.add(f.name, f.data, f.date));
+  parts.push(zip.end());
+  const out = new Uint8Array(parts.reduce((n, c) => n + c.length, 0));
   let p = 0;
-  for (const part of [...locals, ...centrals, end]) {
+  for (const part of parts) {
     out.set(part, p);
     p += part.length;
   }

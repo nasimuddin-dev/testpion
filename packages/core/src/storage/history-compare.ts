@@ -1,8 +1,8 @@
-import { closeSync, existsSync, openSync, readSync, statSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { closeSync, openSync, readSync } from 'node:fs';
 import type { HistoryEntry } from '../model/types.js';
 import { ApsError } from '../errors.js';
 import { diffResponses, type ResponseDiff } from '../report/response-diff.js';
+import { plainFileInside } from './fsutil.js';
 import type { WorkspaceStore } from './workspace.js';
 
 const MAX_BODY = 2 * 1024 * 1024;
@@ -13,9 +13,9 @@ export function historyResponse(store: WorkspaceStore, h: HistoryEntry): { heade
   let body: string | undefined;
   let truncated = false;
   const p = h.payloadPath;
-  // only files inside this workspace's payloads folder are read
-  if (p && resolve(p).startsWith(resolve(store.path('payloads'))) && existsSync(p)) {
-    const size = statSync(p).size;
+  // only plain files really inside this workspace's payloads folder are read (never through a link)
+  const size = typeof p === 'string' ? plainFileInside(store.path('payloads'), p) : undefined;
+  if (p && size !== undefined) {
     const fd = openSync(p, 'r');
     try {
       const buf = Buffer.alloc(Math.min(size, MAX_BODY));

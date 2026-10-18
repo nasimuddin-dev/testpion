@@ -184,15 +184,14 @@ export class WorkspaceStore {
   }
 
   /**
-   * Guard against path traversal for user-supplied relative paths. An absolute path is fine when it is inside `base`
-   * as given or really (a workspace opened through a link, named by the other path: see `relativeInside`); the answer
-   * is then named under `base` as the workspace names it, so paths made relative to the workspace stay right.
+   * Guard against path traversal for user-supplied relative paths. An absolute path is fine when it is really inside
+   * `base` (a workspace opened through a link, named by the other path: see `relativeInside`); a path that only names
+   * the workspace but leads elsewhere through a link inside it is refused, so no name is taken on its spelling alone.
+   * The answer is named under `base` as the workspace names it, so paths made relative to the workspace stay right.
    */
   safePath(rel: string, base = this.root): string {
     const root = resolve(base);
-    const p = resolve(root, rel);
-    if (p === root || p.startsWith(root + sep)) return p;
-    const inside = relativeInside(root, p, { orSame: true });
+    const inside = relativeInside(root, resolve(root, rel), { orSame: true });
     if (inside === undefined) throw new ApsError('ValidationError', `Path escapes the workspace: ${rel}`);
     return join(root, inside);
   }

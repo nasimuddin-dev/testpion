@@ -1,4 +1,4 @@
-import { closeSync, copyFileSync, cpSync, fsyncSync, mkdirSync, openSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync, writeSync } from 'node:fs';
+import { closeSync, copyFileSync, cpSync, fsyncSync, lstatSync, mkdirSync, openSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync, writeSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { createHash, randomBytes } from 'node:crypto';
 import { ApsError } from '../errors.js';
@@ -18,6 +18,47 @@ export function endAndClose(stream: NodeJS.WritableStream & { closed?: boolean; 
 }
 
 /**
+ * The real path of each folder, looked up once and kept for a short while: a containment check (`relativeInside`) and
+ * an own-write key (`ownKey`) both ask for the real path of a folder on the way to a file, and the same few hundred
+ * folders come up over and over (a run's results, a flow's steps, every save). Only folders are kept, never files: a
+ * file is the last name of most paths and costs one `lstat` to tell a link from a plain file; a kept entry expires so a
+ * folder swapped for a junction after it was seen is noticed within seconds, not for the life of the process.
+ */
+const realDirs = new Map<string, { real: string; at: number }>();
+const REAL_DIR_TTL_MS = 10_000;
+
+/**
+ * The real path of `p` when it exists, resolved through every link on the way (one that leads nowhere counts as
+ * missing); undefined when it does not. The last name is told apart with `lstat`: a link is resolved in full, a plain
+ * file is its folder's real path with its name, a folder is looked up and remembered.
+ */
+function realOf(p: string): string | undefined {
+  const hit = realDirs.get(p);
+  if (hit && Date.now() - hit.at < REAL_DIR_TTL_MS) return hit.real;
+  let st: import('node:fs').Stats;
+  try {
+    st = lstatSync(p);
+  } catch {
+    return undefined;
+  }
+  try {
+    if (st.isSymbolicLink()) return realpathSync(p);
+    if (!st.isDirectory()) {
+      const dir = dirname(p);
+      if (dir === p) return p;
+      const real = realOf(dir);
+      return real === undefined ? undefined : join(real, basename(p));
+    }
+    const real = realpathSync(p);
+    if (realDirs.size > 4096) realDirs.clear();
+    realDirs.set(p, { real, at: Date.now() });
+    return real;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * `p` (absolute, or from the current folder) with every link on the way resolved: the real path of its nearest folder
  * that exists, with the rest appended (a file about to be written is where its folder really is).
  */
@@ -25,32 +66,34 @@ export function realPathOf(p: string): string {
   let dir = resolve(p);
   const rest: string[] = [];
   for (;;) {
-    try {
-      return join(realpathSync(dir), ...rest.reverse());
-    } catch {
-      const up = dirname(dir);
-      if (up === dir) return resolve(p); // nothing of it exists (another drive that is gone): as given
-      rest.push(basename(dir));
-      dir = up;
-    }
+    const real = realOf(dir);
+    if (real !== undefined) return join(real, ...rest.reverse());
+    const up = dirname(dir);
+    if (up === dir) return resolve(p); // nothing of it exists (another drive that is gone): as given
+    rest.push(basename(dir));
+    dir = up;
   }
 }
 
+const relativeWithin = (a: string, b: string, orSame: boolean | undefined) => {
+  const rel = relative(a, b);
+  if (rel === '') return orSame ? '' : undefined;
+  return rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel) ? undefined : rel;
+};
+
 /**
  * `child` relative to `parent` when it is inside it (`''` when it is `parent` itself and `orSame`), else undefined.
- * Paths that name it as given count, and so do their real paths (BOTH sides resolved): a workspace reached through a
- * link (macOS /var → /private/var and /tmp → /private/tmp, a junction, a linked home folder) is still itself, whichever
- * way each path names it. Windows paths ignore case (path.relative does). The one containment check for paths a write
- * is guarded by.
+ * The real paths decide (BOTH sides resolved): a workspace reached through a link (macOS /var → /private/var and /tmp
+ * → /private/tmp, a junction, a linked home folder) is still itself, whichever way each path names it; and a path that
+ * names the workspace but leads elsewhere through a link inside it (a junction under payloads/, a linked spec) is
+ * outside, however it is spelled. The answer is named as the path names it when that is under `parent` too, else as
+ * it really is. Windows paths ignore case (path.relative does). The one containment check for paths a write is guarded
+ * by.
  */
 export function relativeInside(parent: string, child: string, o: { orSame?: boolean } = {}): string | undefined {
-  const within = (a: string, b: string) => {
-    const rel = relative(a, b);
-    if (rel === '') return o.orSame ? '' : undefined;
-    return rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel) ? undefined : rel;
-  };
-  const as = within(resolve(parent), resolve(child));
-  return as !== undefined ? as : within(realPathOf(parent), realPathOf(child));
+  const really = relativeWithin(realPathOf(parent), realPathOf(child), o.orSame);
+  if (really === undefined) return undefined;
+  return relativeWithin(resolve(parent), resolve(child), o.orSame) ?? really;
 }
 
 export const isInside = (parent: string, child: string, o: { orSame?: boolean } = {}): boolean => relativeInside(parent, child, o) !== undefined;
@@ -59,20 +102,40 @@ export const isInside = (parent: string, child: string, o: { orSame?: boolean } 
 export const samePath = (a: string, b: string): boolean => relativeInside(a, b, { orSame: true }) === '';
 
 /**
+ * The size of `file` when it is a plain file really inside `parent` (a recorded payload, a spooled body), else
+ * undefined: a link is refused even when it points inside (what a read of a named file is guarded by, so a link put
+ * under payloads/ never has the file it points to read out).
+ */
+export function plainFileInside(parent: string, file: string): number | undefined {
+  let st: import('node:fs').Stats;
+  try {
+    st = lstatSync(file);
+  } catch {
+    return undefined;
+  }
+  if (!st.isFile() || !isInside(parent, file)) return undefined;
+  return st.size;
+}
+
+/**
  * Whether a path names `target`: as written (`\` and `/` alike, case aside — how recorded result files were always
  * compared), or really (both resolved, as `relativeInside`): a run that resolved its files from the current folder (a
  * real path) and a workspace opened through a link name one file two ways. For the many results of a run: the real
- * path of each name is looked up once.
+ * path of `target` is looked up once, when the first name needs it, and the real path of each name once.
  */
 export function pathMatcher(target: string): (p: string | undefined) => boolean {
   const norm = (p: string) => p.replace(/\\/g, '/').toLowerCase();
   const want = norm(target);
   const seen = new Map<string, boolean>();
+  let realWant: string | undefined;
   return (p) => {
     if (!p) return false;
     if (norm(p) === want) return true;
     let same = seen.get(p);
-    if (same === undefined) seen.set(p, (same = samePath(target, p)));
+    if (same === undefined) {
+      realWant ??= realPathOf(target);
+      seen.set(p, (same = relativeWithin(realWant, realPathOf(p), true) === ''));
+    }
     return same;
   };
 }
@@ -95,25 +158,16 @@ const ownWriteListeners = new Set<(path: string) => void>();
 /**
  * The key of a path in the own-writes registry: its real path (its folder's, with its name), so a write and the
  * watcher's event agree however each names the workspace — through a link (macOS /tmp and /var, a junction) or really
- * (a path from the current folder, a real path made for a write). Each folder's real path is looked up once (a few
- * thousand are remembered): a write costs one map lookup, not a walk of every folder on its path.
+ * (a path from the current folder, a real path made for a write). Each folder's real path is looked up once (`realOf`
+ * remembers a few thousand): a write costs one map lookup, not a walk of every folder on its path.
  */
-const realDirs = new Map<string, string>();
 function ownKey(path: string): string {
   const abs = resolve(path);
   const dir = dirname(abs);
   if (dir === abs) return abs;
-  let real = realDirs.get(dir);
-  if (real === undefined) {
-    try {
-      real = realpathSync(dir);
-    } catch {
-      return realPathOf(abs); // its folder is gone too (a removed folder's file): the nearest folder that exists
-    }
-    if (realDirs.size > 4096) realDirs.clear();
-    realDirs.set(dir, real);
-  }
-  return join(real, basename(abs));
+  const real = realOf(dir);
+  // its folder is gone too (a removed folder's file), or is a file: the nearest folder that exists
+  return real === undefined ? realPathOf(abs) : join(real, basename(abs));
 }
 
 /** The content fingerprint the watcher compares: `hash:<size>:<sha1>`. */

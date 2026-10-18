@@ -5,42 +5,31 @@
  *   desktop (opened in the folder last used for that kind of output in this workspace), or returned for the browser to
  *   download (browser, cloud). Content the window built (small: a table, the headers) comes as `content`; big or
  *   backend-held output comes as a `source` (a spooled response body, a run's reports, the console, a data run's rows)
- *   and is streamed into the file here: it never passes through the window.
+ *   and is streamed into the file here (output-sources.ts): it never passes through the window.
  * - The file is written to `<name>.part` and renamed when complete, so a cancel or a failure leaves no half file.
  * - `output.progress` events tell the window how far a big save is; `output.cancel` stops it.
- * - Secrets: the surface's policy comes from OUTPUT_SURFACES, never from the caller. Log-like outputs are redacted
- *   unless `includeSecrets` (the window asks first); a raw body is saved as is, with a notice when it looks like it holds
- *   a credential.
+ * - Secrets: the surface's policy comes from OUTPUT_SURFACES, never from the caller (nor the source: a surface names
+ *   the sources it is built from). Log-like outputs are redacted unless `includeSecrets` (the window asks first); a raw
+ *   body is saved as is, with a notice when it looks like it holds a credential.
+ * - Open after a save (`output.reveal` with `open`) is for documents only: a file of a format the OS would run or hand
+ *   to a browser is shown in its folder instead, whatever the window asks.
  */
-import { createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { createWriteStream, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { once } from 'node:events';
 import { ApsError, maskSensitiveText, type Redactor } from '@testpion/core';
-import {
-  COPY_LIMIT,
-  OUTPUT_FORMATS,
-  createJsonMinifier,
-  createJsonPrettyPrinter,
-  htmlDocument,
-  isOutputFormatId,
-  jsonLines,
-  markdownTable,
-  outputSurface,
-  sanitizeFileName,
-  toCsv,
-  zipFiles,
-  type OutputFormatId,
-  type OutputSource,
-} from '@testpion/shared';
+import { COPY_LIMIT, LAUNCHER_EXTENSIONS, OUTPUT_FORMATS, fileExtension, isOutputFormatId, outputSurface, sanitizeFileName, type OutputFormatId, type OutputSource } from '@testpion/shared';
 import type { Backend, Handlers } from '../backend.js';
-import type { ConsoleEntry } from '../console-log.js';
+import { SAMPLE_BYTES, buildSource, one, type Built } from './output-sources.js';
 
 /** Content the window built: at most this much (bigger outputs are sources, streamed here). */
 const CONTENT_LIMIT = 16 * 1024 * 1024;
-/** How much of a raw output is looked at for the "looks like it holds a secret" notice. */
-const SAMPLE_BYTES = 1024 * 1024;
-const REPORT_FILES: Record<string, string> = { html: 'report.html', md: 'report.md', junit: 'junit.xml', json: 'report.json' };
+/**
+ * Formats "Open" after a save may hand to the OS: documents an editor or viewer shows. Not raw bytes (whatever the
+ * server called them), not HTML (a browser would run its scripts from a file: URL) and not a shell script.
+ */
+const OPENABLE_FORMATS: ReadonlySet<OutputFormatId> = new Set<OutputFormatId>(['json', 'json-min', 'jsonl', 'text', 'csv', 'csv-excel', 'tsv', 'md', 'xml', 'har', 'junit', 'diff', 'png', 'svg', 'zip', 'cookies-txt']);
 
 interface SaveParams {
   surface: string;
@@ -52,18 +41,6 @@ interface SaveParams {
   includeSecrets?: boolean;
   jobId?: string;
   environment?: string;
-}
-
-/** What is written: chunks, as they come (a source streams; content is one chunk). */
-type Chunks = AsyncIterable<Buffer | string>;
-
-interface Built {
-  chunks: Chunks;
-  /** Bytes, when known before writing (progress). */
-  total?: number;
-  /** A sample of the output's text, for the raw-notice check. */
-  sample?: () => string | Promise<string>;
-  redacted: boolean;
 }
 
 /** Last folder used, per workspace and kind of output (`<appDir>/output-folders.json`, never in the workspace's git). */
@@ -125,10 +102,6 @@ function writeError(e: unknown, dest: string): unknown {
   return e;
 }
 
-async function* one(x: Buffer | string): Chunks {
-  yield x;
-}
-
 /** Mask header values with a sensitive name in `Name: value` lines and curl `-H 'Name: value'` arguments. */
 function maskHeaderLines(text: string, redactor: Redactor): string {
   return text
@@ -169,215 +142,29 @@ export function secretNotice(sample: string, redactor: Redactor): string | undef
   return `Contains what looks like a credential (${[...kinds].slice(0, 3).join(', ')}). Saved as is.`;
 }
 
-const consoleLine = (e: ConsoleEntry) =>
-  [e.time, e.kind ?? 'http', e.method, e.url, e.status ?? '', e.durationMs !== undefined ? `${e.durationMs} ms` : '', e.error ? `error: ${e.error}` : ''].filter((x) => x !== '').join(' ') +
-  e.logs.map((l) => `\n    [${l.phase}] ${l.message}`).join('');
+/**
+ * Whether a saved file may be opened with the OS: a document format, under a name no OS runs (the dialog lets a person
+ * type any name; a launcher extension on a document is still a launcher to a double-click).
+ */
+export const canOpenSaved = (path: string, format: OutputFormatId): boolean => OPENABLE_FORMATS.has(format) && !LAUNCHER_EXTENSIONS.has(fileExtension(basename(path)));
 
-/** Rows of a big grid, page by page through its own RPC (the window shows the same pages). */
-async function* gridRows(be: Backend, src: Extract<OutputSource, { kind: 'grid' }>, signal: AbortSignal): AsyncGenerator<{ columns?: string[]; rows: unknown[][]; total?: number }> {
-  const method = src.grid === 'scale-rows' ? 'tests.scaleRows' : src.grid === 'eval-matrix' ? 'eval.matrix' : undefined;
-  if (!method) throw new ApsError('ValidationError', `output.save: unknown grid ${String(src.grid)}`);
-  const limit = 500;
-  for (let offset = 0; ; offset += limit) {
-    if (signal.aborted) return;
-    const page = (await be.handlers[method]!({ ...src.params, offset, limit })) as { rows: Array<Record<string, unknown>>; matched?: number; total?: number; columns?: Array<{ label: string }> };
-    if (src.grid === 'eval-matrix') {
-      const cols = page.columns ?? [];
-      yield {
-        columns: ['case', 'tags', ...cols.flatMap((c) => [`${c.label} status`, `${c.label} score`, `${c.label} change`])],
-        rows: page.rows.map((r) => {
-          const cells = (r.cells as Array<{ status?: string; score?: number; change?: string }>) ?? [];
-          return [r.name, ((r.tags as string[]) ?? []).join(' '), ...cols.flatMap((_, i) => [cells[i]?.status ?? '', cells[i]?.score ?? '', cells[i]?.change ?? ''])];
-        }),
-        total: page.total,
-      };
-    } else {
-      const valueKeys = [...new Set(page.rows.flatMap((r) => Object.keys((r.values as Record<string, unknown>) ?? {})))];
-      yield {
-        columns: ['row', 'status', 'durationMs', 'startedAt', 'failedStep', 'error', ...valueKeys],
-        rows: page.rows.map((r) => [
-          r.index,
-          r.status,
-          r.durationMs,
-          r.startedAt,
-          r.failedStepName ?? r.failedStep ?? '',
-          r.error ?? '',
-          ...valueKeys.map((k) => (r.values as Record<string, unknown>)?.[k]),
-        ]),
-        total: page.matched ?? page.total,
-      };
-    }
-    if (page.rows.length < limit) return;
-  }
-}
-
-/** A run's results as CSV rows. */
-async function runCsv(be: Backend, runId: string): Promise<string> {
-  const rows: unknown[][] = [['name', 'status', 'type', 'file', 'durationMs', 'attempts', 'checksPassed', 'checks', 'error', 'startedAt']];
-  for await (const r of be.results(runId))
-    rows.push([r.name, r.status, r.type, r.file ?? '', r.durationMs, r.attempts, r.checks.filter((c) => c.passed).length, r.checks.length, r.error?.message ?? '', r.startedAt]);
-  return toCsv(rows);
-}
-
-function checkRunId(runId: unknown): string {
-  if (typeof runId !== 'string' || !/^[\w.-]{1,120}$/.test(runId)) throw new ApsError('ValidationError', 'output.save: unknown run');
-  return runId;
-}
-
-/** Build a format of a source: chunks to write (streamed for the big ones). */
-async function buildSource(be: Backend, src: OutputSource, format: OutputFormatId, redact: (t: string) => string, redacted: boolean, signal: AbortSignal): Promise<Built> {
-  const text = (t: string): Built => {
-    const out = redact(t);
-    return { chunks: one(out), total: Buffer.byteLength(out), sample: () => t.slice(0, SAMPLE_BYTES), redacted: redacted && out !== t };
-  };
-  switch (src.kind) {
-    case 'response': {
-      // resolved first: a prefix test alone would accept payloads/../../anything
-      if (typeof src.payloadPath !== 'string' || !be.ws.isInside(src.payloadPath, 'payloads') || !existsSync(src.payloadPath))
-        throw new ApsError('ValidationError', 'The response body is no longer on disk', { suggestions: ['Send the request again.'] });
-      const path = src.payloadPath;
-      const size = statSync(path).size;
-      const sample = () => {
-        const buf = Buffer.alloc(Math.min(size, SAMPLE_BYTES));
-        const fd = createReadStream(path, { start: 0, end: Math.max(0, buf.length - 1) });
-        return new Promise<string>((resolve) => {
-          const parts: Buffer[] = [];
-          fd.on('data', (c) => parts.push(c as Buffer));
-          fd.on('end', () => resolve(Buffer.concat(parts).toString('utf8')));
-          fd.on('error', () => resolve(''));
-        });
-      };
-      if (src.part === 'pretty' && (format === 'json' || format === 'json-min')) {
-        // a 50 MB body is re-indented as it is read: no parse, no copy of the whole value
-        async function* pretty(): Chunks {
-          const p: { push(c: string): string; end?(): string } = format === 'json' ? createJsonPrettyPrinter() : createJsonMinifier();
-          const stream = createReadStream(path, { encoding: 'utf8', highWaterMark: 256 * 1024 });
-          for await (const chunk of stream) {
-            if (signal.aborted) return stream.destroy();
-            yield p.push(chunk as string);
-          }
-          if (p.end) yield p.end();
-        }
-        return { chunks: pretty(), total: size, sample, redacted: false };
-      }
-      async function* raw(): Chunks {
-        const stream = createReadStream(path, { highWaterMark: 512 * 1024 });
-        for await (const chunk of stream) {
-          if (signal.aborted) return stream.destroy();
-          yield chunk as Buffer;
-        }
-      }
-      return { chunks: raw(), total: size, sample, redacted: false };
-    }
-    case 'run': {
-      const runId = checkRunId(src.runId);
-      const dir = be.ws.runDir(runId);
-      if (format === 'csv') return text(await runCsv(be, runId));
-      if (format === 'zip') {
-        const files: Array<{ name: string; data: string }> = [];
-        for (const name of Object.values(REPORT_FILES)) {
-          const p = join(dir, name);
-          if (existsSync(p)) files.push({ name, data: redact(readFileSync(p, 'utf8')) });
-        }
-        files.push({ name: 'results.csv', data: redact(await runCsv(be, runId)) });
-        const zip = Buffer.from(zipFiles(files));
-        return { chunks: one(zip), total: zip.length, redacted };
-      }
-      const name = REPORT_FILES[format];
-      if (!name) throw new ApsError('ValidationError', `output.save: a run has no ${format} report`);
-      const p = join(dir, name);
-      if (!existsSync(p))
-        throw new ApsError('ConfigurationError', `Run ${runId} has no ${OUTPUT_FORMATS[format].label} report`, {
-          suggestions: ['Reports are written when a run finishes: run it again if it was stopped.'],
-        });
-      return text(readFileSync(p, 'utf8'));
-    }
-    case 'flow-timeline': {
-      const { flowRunTimelineHtml } = await import('@testpion/core');
-      if (format === 'html') {
-        const h = await flowRunTimelineHtml(be.ws, src.file, src.runId);
-        return text(h.html);
-      }
-      const t = await be.handlers['tests.flowTimeline']!({ file: src.file, runId: src.runId });
-      return text(JSON.stringify(t, null, 2) + '\n');
-    }
-    case 'console': {
-      const entries = be.consoleBuffer;
-      return text(format === 'jsonl' ? jsonLines(entries) : entries.map(consoleLine).join('\n') + '\n');
-    }
-    case 'logs': {
-      const recs = be.logBuffer;
-      return text(
-        format === 'jsonl'
-          ? jsonLines(recs)
-          : recs.map((r) => `${r.time} ${r.level.toUpperCase()} [${r.scope}] ${r.message}${r.data === undefined ? '' : ` ${JSON.stringify(r.data)}`}`).join('\n') + '\n',
-      );
-    }
-    case 'debugger': {
-      const har = (await be.handlers['debug.har']!({})) as {
-        log: { entries: Array<{ startedDateTime: string; time: number; request: { method: string; url: string }; response: { status: number; content?: { size?: number; mimeType?: string } } }> };
-      };
-      if (format === 'csv')
-        return text(
-          toCsv([
-            ['started', 'method', 'url', 'status', 'timeMs', 'size', 'mimeType'],
-            ...har.log.entries.map((e) => [
-              e.startedDateTime,
-              e.request.method,
-              e.request.url,
-              e.response.status,
-              Math.round(e.time),
-              e.response.content?.size ?? '',
-              e.response.content?.mimeType ?? '',
-            ]),
-          ]),
-        );
-      return text(JSON.stringify(format === 'json' ? har.log.entries : har, null, 2) + '\n');
-    }
-    case 'grid': {
-      // rows come page by page and are written as they come (a 10,000-row data run never is one string)
-      let columns: string[] | undefined;
-      const all: unknown[][] = [];
-      const pages = gridRows(be, src, signal);
-      if (format === 'csv') {
-        async function* csv(): Chunks {
-          for await (const p of pages) {
-            const head = !columns;
-            columns ??= p.columns ?? [];
-            yield redact(toCsv(head ? [columns, ...p.rows] : p.rows));
-          }
-          if (!columns) yield '';
-        }
-        return { chunks: csv(), redacted };
-      }
-      for await (const p of pages) {
-        columns ??= p.columns ?? [];
-        all.push(...p.rows);
-      }
-      const cols = columns ?? [];
-      if (format === 'html')
-        return text(htmlDocument(src.grid === 'eval-matrix' ? 'Evaluation matrix' : 'Data run', [{ table: { columns: cols, rows: all } }], { generatedAt: new Date().toISOString() }));
-      if (format === 'md') return text(markdownTable(cols, all));
-      return text(
-        JSON.stringify(
-          all.map((r) => Object.fromEntries(cols.map((c, i) => [c, r[i]]))),
-          null,
-          2,
-        ) + '\n',
-      );
-    }
-    default:
-      throw new ApsError('ValidationError', `output.save: unknown source ${String((src as { kind?: unknown }).kind)}`);
-  }
-}
-
-/** The surface and format of a call, checked against OUTPUT_SURFACES (the policy is the registry's, never the caller's). */
+/**
+ * The surface, format and source of a call, checked against OUTPUT_SURFACES (the policy is the registry's, never the
+ * caller's: a source is accepted only for a surface that names it, so no surface's policy is borrowed for another's data).
+ */
 function check(p: { surface: string; format: string; content?: unknown; source?: unknown }) {
   const info = outputSurface(p.surface);
   if (!info) throw new ApsError('ValidationError', `output.save: unknown surface ${p.surface}`);
   if (!isOutputFormatId(p.format) || !info.formats.includes(p.format))
     throw new ApsError('ValidationError', `output.save: ${info.label} cannot be saved as ${p.format}`, { suggestions: [`Use one of: ${info.formats.join(', ')}`] });
   if (!p.content === !p.source) throw new ApsError('ValidationError', 'output.save: give content or a source');
+  if (p.source) {
+    const kind = (p.source as { kind?: unknown })?.kind;
+    if (typeof kind !== 'string' || !info.sources?.includes(kind as OutputSource['kind']))
+      throw new ApsError('ValidationError', `output.save: unknown source ${String(kind)} for ${info.label}`, {
+        suggestions: info.sources?.length ? [`${info.label} is built from: ${info.sources.join(', ')}`] : [`${info.label} is saved from its content`],
+      });
+  }
   return { info, format: p.format, fmt: OUTPUT_FORMATS[p.format] };
 }
 
@@ -394,7 +181,10 @@ async function prepare(be: Backend, p: SaveParams, signal: AbortSignal): Promise
   // a surface whose secrets are masked at capture (console, log) has none to include: it is always redacted
   const redacting = info.redaction === 'redacted-default' && (!p.includeSecrets || !!info.capturedRedacted);
   const redact = redacting ? (t: string) => redactOutputText(t, format, redactor) : identity;
-  if (!p.content) return { built: await buildSource(be, p.source!, format, redact, redacting, signal), redactor, redacting };
+  // a source masked at capture (a run's reports, the Debugger's HAR) holds nothing left to mask: the builders skip the
+  // second pass (output-sources.ts). Content the window sent is masked whatever the surface says: the backend never
+  // takes the window's word for what is in it.
+  if (!p.content) return { built: await buildSource(be, p.source!, format, redact, redacting, signal, redacting && !!info.capturedRedacted), redactor, redacting };
   if (typeof p.content.text === 'string') {
     const original = p.content.text;
     if (original.length > CONTENT_LIMIT) throw new ApsError('ValidationError', 'output.save: the content is too large to send; save it from its source');
@@ -413,8 +203,8 @@ const identity = (t: string) => t;
 
 export function outputHandlers(be: Backend): Handlers {
   const jobs = new Map<string, AbortController>();
-  /** Files saved in this session, by job (for Show in folder / Open: the window never sends a path). */
-  const saved = new Map<string, string>();
+  /** Files saved in this session, by job, with the format they hold (for Show in folder / Open: the window never sends a path). */
+  const saved = new Map<string, { path: string; format: OutputFormatId }>();
   const remember = folders(be);
   let seq = 0;
 
@@ -423,7 +213,7 @@ export function outputHandlers(be: Backend): Handlers {
     'output.formats': () => ({ formats: OUTPUT_FORMATS }),
 
     'output.save': async (p: SaveParams) => {
-      const { info, fmt } = check(p);
+      const { info, format, fmt } = check(p);
       const jobId = p.jobId && /^[\w-]{1,64}$/.test(p.jobId) ? p.jobId : `out-${Date.now().toString(36)}-${++seq}`;
       // one save per job: a second one with the same id would take over the first one's Cancel and progress
       if (jobs.has(jobId)) throw new ApsError('ValidationError', `output.save: job ${jobId} is already running`);
@@ -501,7 +291,7 @@ export function outputHandlers(be: Backend): Handlers {
         }
         if (r.path) {
           remember.set(kind, dirname(r.path));
-          saved.set(jobId, r.path);
+          saved.set(jobId, { path: r.path, format });
           if (saved.size > 50) saved.delete(saved.keys().next().value!);
         }
         if (!r.path && !r.download) return { jobId, cancelled: true };
@@ -513,7 +303,7 @@ export function outputHandlers(be: Backend): Handlers {
           redacted: built.redacted || (redacting && fmt.text),
           notice,
           canReveal: !!r.path && !!(be.host.showItemInFolder || be.host.openPath),
-          canOpen: !!r.path && !!be.host.openPath,
+          canOpen: !!r.path && !!be.host.openPath && canOpenSaved(r.path, format),
         };
       } finally {
         jobs.delete(jobId);
@@ -543,20 +333,27 @@ export function outputHandlers(be: Backend): Handlers {
       return { cancelled: !!c };
     },
 
-    /** Show a file saved in this session in the file manager, or open it (`open`). */
+    /**
+     * Show a file saved in this session in the file manager, or open it (`open`). Opening is decided here, from the
+     * format that was saved: a file the OS would run or a browser would show is shown in its folder instead
+     * (`opened: false`), whatever the window asked.
+     */
     'output.reveal': async ({ jobId, open }: { jobId: string; open?: boolean }) => {
-      const path = saved.get(jobId);
-      if (!path || !existsSync(path)) throw new ApsError('ConfigurationError', 'The saved file is no longer there');
-      if (open) {
+      const file = saved.get(jobId);
+      if (!file || !existsSync(file.path)) throw new ApsError('ConfigurationError', 'The saved file is no longer there');
+      const { path } = file;
+      if (open && canOpenSaved(path, file.format)) {
         if (!be.host.openPath) throw new ApsError('ConfigurationError', 'Files can only be opened from the desktop app');
         // Electron's shell.openPath answers with an error message (no app for the type …) instead of throwing
         const failed = await be.host.openPath(path);
         if (typeof failed === 'string' && failed)
           throw new ApsError('ConfigurationError', `Could not open ${basename(path)}: ${failed}`, { suggestions: ['Use Show in folder and open it from there.'] });
-      } else if (be.host.showItemInFolder) be.host.showItemInFolder(path);
+        return { ok: true, opened: true };
+      }
+      if (be.host.showItemInFolder) be.host.showItemInFolder(path);
       else if (be.host.openPath) await be.host.openPath(dirname(path));
       else throw new ApsError('ConfigurationError', 'Files can only be shown from the desktop app');
-      return { ok: true };
+      return { ok: true, opened: false };
     },
   };
 }
