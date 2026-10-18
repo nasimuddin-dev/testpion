@@ -35,7 +35,7 @@ describe('vocabulary', () => {
   });
 
   it('one menu order', () => {
-    expect(MENU_GROUPS).toEqual(['create', 'open', 'run', 'test', 'configure', 'copy', 'organize', 'delete']);
+    expect(MENU_GROUPS).toEqual(['create', 'open', 'tree', 'run', 'share', 'tools', 'git', 'edit', 'danger']);
   });
 
   it('Ctrl+Alt+n follows the rail: Collections second, the request editors not numbered', () => {

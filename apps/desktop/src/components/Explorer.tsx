@@ -1,4 +1,4 @@
-import { ArchiveRestore, ChevronDown, ChevronRight, ChevronsDownUp, Copy, CopyPlus, Database, Download, ExternalLink, FileCode2, FolderInput, FolderPlus, GitCompare, Layers, PanelLeftClose, Pencil, Play, Plug, Plus, RefreshCw, ScanSearch, Star, Trash2, Unplug, Upload, Wand2 } from 'lucide-react';
+import { ArchiveRestore, ChevronDown, ChevronRight, ChevronsDownUp, CopyPlus, Database, Download, ExternalLink, FileCode2, FolderPlus, GitCompare, Layers, PanelLeftClose, Pencil, Play, Plug, Plus, RefreshCw, ScanSearch, Star, Trash2, Unplug, Upload, Wand2 } from 'lucide-react';
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { call, on } from '../api';
 import { promptText, toastError, useApp } from '../store';
@@ -23,7 +23,8 @@ import { copyText } from '../lib/clipboard';
 import { datasetBadge } from '../lib/datasets';
 import { GenerateDataDialog } from './GenerateDataDialog';
 import { useStableCallbacks } from '../hooks';
-import { saveAsTestItem } from '../lib/save-test';
+import { saveAsTest } from '../lib/save-test';
+import type { NodeMenuCtx } from '../lib/node-menu';
 import { LABEL } from '../lib/vocabulary';
 
 /**
@@ -400,6 +401,8 @@ export function Explorer() {
     [],
   );
   const [exporting, setExporting] = useState(false);
+  /** The collection a collection menu's Export ▸ Export… chose (the dialog opens on it). */
+  const [exportFor, setExportFor] = useState<string>();
   // Recently deleted: what this sidebar's deletes moved there (collections, datasets, API definitions, MCP servers)
   const [trashOpen, setTrashOpen] = useState(false);
   const importDefinition = () => setImporting(true);
@@ -493,49 +496,39 @@ export function Explorer() {
       focusRow(id);
     },
   });
-  const moveMenu = (kind: 'grpc' | 'websocket', item: SavedItem): MenuItem[] => [
-    { label: LABEL.open, icon: <ExternalLink size={14} />, onSelect: () => void openRef({ kind: 'saved', library: kind, itemId: item.id }) },
-    saveAsTestItem({ ref: { kind: 'saved', library: kind, itemId: item.id }, name: item.name }, { separator: true }),
-    { label: kind === 'grpc' ? 'Copy as grpcurl' : 'Copy URL', icon: <Copy size={14} />, separator: true, onSelect: () => void copySaved(kind, item.id) },
-    {
-      label: 'Rename',
-      icon: <Pencil size={14} />,
-      onSelect: () => setRenaming(item.id),
-    },
-    {
-      label: 'Duplicate',
-      icon: <CopyPlus size={14} />,
-      onSelect: () => void editLibrary(kind, (items) => items.flatMap((i) => (i.id === item.id ? [i, { ...i, id: uid('lib-'), name: `${i.name} copy`, updatedAt: new Date().toISOString() }] : [i]))),
-    },
-    {
-      label: 'Move to',
-      icon: <FolderInput size={14} />,
-      onSelect: () => undefined,
-      items: collections.filter((c) => c.id !== item.collectionId).map((c) => ({ label: c.name, onSelect: () => void moveItem(kind, item.id, c.id) })),
-    },
-    {
-      label: LABEL.delete,
-      icon: <Trash2 size={14} />,
-      danger: true,
-      separator: true,
-      onSelect: () => {
-        // the whole saved item (its request and settings) and its place, to put it back as it was
-        let removed: { item: LibraryItem<unknown>; at: number } | undefined;
-        void deleteWithUndo({
-          what: `${kind === 'grpc' ? 'the gRPC call' : 'the connection'} "${item.name}"`,
-          run: async () => {
-            closeTabsFor([item.id]);
-            await editLibrary(kind, (items) => {
-              const at = items.findIndex((i) => i.id === item.id);
-              if (at >= 0) removed = { item: items[at]!, at };
-              return items.filter((i) => i.id !== item.id);
-            });
-          },
-          undo: () => removed && editLibrary(kind, (items) => putBack(items, removed!.item, removed!.at)),
-        });
+  /** The menu of a gRPC call or connection: the same groups as a request's (open, copy, test file, rename, duplicate, move, delete). */
+  const savedMenu = (kind: 'grpc' | 'websocket', item: SavedItem): NodeMenuCtx => {
+    const ref = { kind: 'saved' as const, library: kind, itemId: item.id };
+    return {
+      ref,
+      name: item.name,
+      on: {
+        open: () => void openRef(ref),
+        openNewTab: () => void openRef(ref, { newTab: true }),
+        ...(kind === 'grpc' ? { copyGrpcurl: () => void copySaved(kind, item.id) } : { copyUrl: () => void copySaved(kind, item.id) }),
+        testFile: () => void saveAsTest({ ref, name: item.name }),
+        rename: () => setRenaming(item.id),
+        duplicate: () => void editLibrary(kind, (items) => items.flatMap((i) => (i.id === item.id ? [i, { ...i, id: uid('lib-'), name: `${i.name} copy`, updatedAt: new Date().toISOString() }] : [i]))),
+        move: collections.filter((c) => c.id !== item.collectionId).map((c) => ({ label: c.name, onSelect: () => void moveItem(kind, item.id, c.id) })),
+        delete: () => {
+          // the whole saved item (its request and settings) and its place, to put it back as it was
+          let removed: { item: LibraryItem<unknown>; at: number } | undefined;
+          void deleteWithUndo({
+            what: `${kind === 'grpc' ? 'the gRPC call' : 'the connection'} "${item.name}"`,
+            run: async () => {
+              closeTabsFor([item.id]);
+              await editLibrary(kind, (items) => {
+                const at = items.findIndex((i) => i.id === item.id);
+                if (at >= 0) removed = { item: items[at]!, at };
+                return items.filter((i) => i.id !== item.id);
+              });
+            },
+            undo: () => removed && editLibrary(kind, (items) => putBack(items, removed!.item, removed!.at)),
+          });
+        },
       },
-    },
-  ];
+    };
+  };
   /** Change the MCP server list (rename, duplicate, delete). */
   const editServers = async (fn: (list: McpServerConfig[]) => McpServerConfig[]) => {
     try {
@@ -660,22 +653,22 @@ export function Explorer() {
   const withMove = (menu: MenuItem[], move: MenuItem) => (menu[menu.length - 1]?.danger ? [...menu.slice(0, -1), move, menu[menu.length - 1]!] : [...menu, move]);
 
   // the tree is memoized: its saved items change only with these lists (or a rename in place); menus read the latest
-  const savedLatest = useRef({ moveMenu, renameSaved });
-  savedLatest.current = { moveMenu, renameSaved };
+  const savedLatest = useRef({ savedMenu, renameSaved });
+  savedLatest.current = { savedMenu, renameSaved };
   const extraGroups = useCallback(
     (c: Collection): ExtraGroup[] => [
       {
         cat: 'grpc',
         items: grpcByCollection.get(c.id) ?? NONE,
         onOpen: (id) => void openRef({ kind: 'saved', library: 'grpc', itemId: id }),
-        menu: (id) => savedLatest.current.moveMenu('grpc', grpc.find((i) => i.id === id)!),
+        menu: (id) => savedLatest.current.savedMenu('grpc', grpc.find((i) => i.id === id)!),
         rename: (id) => savedLatest.current.renameSaved('grpc', id),
       },
       {
         cat: 'websocket',
         items: socketsByCollection.get(c.id) ?? NONE,
         onOpen: (id) => void openRef({ kind: 'saved', library: 'websocket', itemId: id }),
-        menu: (id) => savedLatest.current.moveMenu('websocket', sockets.find((i) => i.id === id)!),
+        menu: (id) => savedLatest.current.savedMenu('websocket', sockets.find((i) => i.id === id)!),
         rename: (id) => savedLatest.current.renameSaved('websocket', id),
       },
     ],
@@ -699,6 +692,7 @@ export function Explorer() {
       void saveCollection({ ...c, items: addToFolder(c.items, folderId, node) }).then(() => openRef({ kind: 'request', collectionId: c.id, requestId: node.id, protocol: 'http' }));
     },
     onSettings: (c: Collection) => void openRef({ kind: 'collection', collectionId: c.id }),
+    onExport: (c: Collection) => (setExportFor(c.id), setExporting(true)),
   });
 
   return (
@@ -893,7 +887,7 @@ export function Explorer() {
       )}
       {importing && <ImportModal onClose={() => setImporting(false)} onDone={() => void load()} />}
       {trashOpen && <TrashDialog kinds={SIDEBAR_TRASH_KINDS} onClose={() => setTrashOpen(false)} onRestored={() => void load()} />}
-      {exporting && <ExportDialog collections={collections.map((c) => ({ id: c.id, name: c.name }))} onClose={() => setExporting(false)} />}
+      {exporting && <ExportDialog collections={collections.map((c) => ({ id: c.id, name: c.name }))} initial={exportFor} onClose={() => (setExporting(false), setExportFor(undefined))} />}
     </aside>
   );
 }

@@ -1,4 +1,4 @@
-import { BarChart3, Bot, ChevronDown, ChevronRight, Copy, CopyPlus, FileBarChart, RotateCcw, FileCode2, FilePlus2, FileSpreadsheet, Folder, History, KeyRound, Layers, Pencil, Play, Save, ShieldCheck, Trash2, Workflow } from 'lucide-react';
+import { BarChart3, Bot, ChevronDown, ChevronRight, CopyPlus, FileCode2, FilePlus2, FileSpreadsheet, Folder, History, KeyRound, Layers, Pencil, Play, Save, ShieldCheck, Trash2, Workflow } from 'lucide-react';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { asError, call, on } from '../api';
@@ -7,8 +7,8 @@ import { useIntent, useSaveShortcut } from '../hooks';
 import { useExternalChange } from '../lib/external-change';
 import { touchesFiles, type DataChangedEvent } from '../lib/data-changed';
 import { LABEL } from '../lib/vocabulary';
-import { runCiMenuItems } from '../lib/run-ci';
-import { triageRunItem } from '../components/ai/ai-analysis';
+import { copyRunCommand, runInCi } from '../lib/run-ci';
+import { startAiAnalysis } from '../components/ai/ai-analysis';
 import { noteClosedTabs } from '../lib/closed-tabs';
 import { ItemBreadcrumb, type Crumb } from '../components/ItemBreadcrumb';
 import { setDragRefs } from '../lib/drag-ref';
@@ -998,23 +998,24 @@ function RunList({ runs, active, onSelect, onOverview, onRerunFailed }: { runs: 
             </button>
             <div className="pt-1.5 pr-1">
               <NodeMenu
+                kind="run"
                 label={r.name}
                 open={menuFor === r.id}
                 onOpenChange={(o) => setMenuFor(o ? r.id : undefined)}
-                onOpen={() => onSelect(r.id)}
-                runItems={[
-                  ...(onRerunFailed && r.failed + r.errors > 0 ? [{ label: LABEL.rerunFailed, icon: <RotateCcw size={14} />, onSelect: () => onRerunFailed(r.id) }] : []),
-                  ...runCiMenuItems(r.id),
-                  ...(r.failed + r.errors > 0 ? [triageRunItem(r.id, { title: r.name, separator: true })] : []),
-                ]}
-                configItems={[
-                  {
-                    label: 'Export report…',
-                    icon: <FileBarChart size={14} />,
-                    onSelect: () => void call<SaveResult>('runs.exportReport', { runId: r.id, format: 'html' }).then((x) => finishSave(x, 'Report'), toastError),
+                ctx={() => ({
+                  ref: { kind: 'run', runId: r.id },
+                  name: r.name,
+                  on: {
+                    open: () => onSelect(r.id),
+                    ...(onRerunFailed ? { rerunFailed: () => onRerunFailed(r.id) } : {}),
+                    exportReport: () => void call<SaveResult>('runs.exportReport', { runId: r.id, format: 'html' }).then((x) => finishSave(x, 'Report'), toastError),
+                    copyCli: () => void copyRunCommand(r.id),
+                    copyRunId: () => void copyText(r.id, 'Run id'),
+                    ci: () => void runInCi(r.id),
+                    ...(r.failed + r.errors > 0 ? { triage: () => startAiAnalysis({ kind: 'triage', runId: r.id, title: r.name }) } : {}),
                   },
-                ]}
-                copyItems={[{ label: 'Copy run id', icon: <Copy size={14} />, onSelect: () => void copyText(r.id, 'Run id') }]}
+                  disabled: r.failed + r.errors > 0 ? {} : { rerunFailed: 'Nothing failed in this run' },
+                })}
               />
             </div>
           </div>

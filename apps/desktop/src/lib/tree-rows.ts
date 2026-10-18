@@ -1,5 +1,5 @@
 import type { Collection, CollectionFolder, CollectionNode, SavedHttpRequest } from '../types';
-import type { MenuItem } from '../components/ui';
+import type { NodeMenuCtx } from './node-menu-actions';
 import { hasCategory, isEmptyFolder, matchesCollectionNode, requestCategory, countCategory, type RequestCategory } from './collection-filter';
 
 /**
@@ -17,7 +17,8 @@ export interface ExtraGroup {
   cat: 'grpc' | 'websocket';
   items: Array<{ id: string; name: string; folder?: string; badge?: string }>;
   onOpen(id: string): void;
-  menu?(id: string): MenuItem[];
+  /** What its menu can do (lib/node-menu.ts builds the menu from it, only while open). */
+  menu?(id: string): NodeMenuCtx;
   /** Rename an item in place (F2, or Rename in its menu). */
   rename?(id: string): { editing: boolean; start(): void; done(name?: string): void };
 }
