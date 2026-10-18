@@ -110,7 +110,7 @@ export function buildNodeMenu(kind: NodeKind, ctx: NodeMenuCtx): MenuItem[] {
   return out;
 }
 
-/** Every node kind a menu is built for (tests, docs, `testpion menus --json` later). */
+/** Every node kind a menu is built for (the tests and the docs table; a CLI and MCP view of the shapes comes in 0.53). */
 export const NODE_KINDS: readonly NodeKind[] = [
   ...KIND_IDS.filter((k) => !KIND_INFO[k].since),
   ...(['collection', 'mcp-server', 'spec', 'dataset', 'test', 'prompt', 'load-test', 'evaluation', 'monitor', 'environment', 'provider'] as const).map((k) => `section:${k}` as const),

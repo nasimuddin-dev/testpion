@@ -51,6 +51,7 @@ export const LIST_TOOLS: Record<string, { field?: string }> = {
   flow_runs: {},
   test_history: { field: 'runs' },
   debugger_exchanges: { field: 'exchanges' },
+  list_kinds: { field: 'kinds' },
 };
 
 /** Tools that can return a lot (bodies, results of a run, documents): they take `response_format`. */
