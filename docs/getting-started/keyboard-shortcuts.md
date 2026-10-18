@@ -67,7 +67,10 @@ Your keys are this computer's (the app's `settings.json`, `keybindings`), and th
 | <kbd>→</kbd> / <kbd>←</kbd> | Expand or collapse a collection, category or folder. |
 | <kbd>Enter</kbd> | Open the focused item. |
 | <kbd>F2</kbd> | Rename it. |
-| <kbd>Delete</kbd> | **Delete…** the focused request or folder (**Undo** in the message). |
+| <kbd>Delete</kbd> | **Delete…** the focused item: a request, folder, collection, MCP server, API definition, dataset, saved item, monitor, test file … (**Undo** in the message). |
+| <kbd>Shift</kbd>+<kbd>F10</kbd> / the menu key | Open the focused row's menu: the same as its ⋯ and its right-click, in every tree and list. |
+| <kbd>*</kbd> | **Expand all** inside the focused collection, folder or section. |
+| Letters | Jump to the next row whose name starts with what you type. |
 | <kbd>↑</kbd> / <kbd>↓</kbd> or <kbd>J</kbd> / <kbd>K</kbd> | Move through a run's results. |
 | <kbd>Esc</kbd> | Close a menu or dialog. |
 

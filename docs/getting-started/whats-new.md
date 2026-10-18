@@ -7,7 +7,33 @@ description: "What's new in TestPion 0.50, 0.49, 0.48, 0.47 and 0.46, step by st
 
 # What's new: how to use it
 
-The options added in 0.50, 0.49, 0.48, 0.47 and 0.46, each with the steps to use it and a link to the full reference. Where it makes sense, an option also works from the terminal (`testpion …`, with `--json`) and for AI agents (an MCP tool of `testpion mcp-server`). **Read the behaviour changes of [0.50](#behaviour-changes-in-0-50), [0.49](#behaviour-changes-in-0-49), [0.48](#behaviour-changes-in-0-48), [0.47](#behaviour-changes-in-0-47) and [0.46](#behaviour-changes-read-before-upgrading) before upgrading.** The 0.45 additions follow [below](#what-was-new-in-0-45); older ones are in the [changelog](/changelog).
+The options added in 0.52, 0.50, 0.49, 0.48, 0.47 and 0.46, each with the steps to use it and a link to the full reference. Where it makes sense, an option also works from the terminal (`testpion …`, with `--json`) and for AI agents (an MCP tool of `testpion mcp-server`). **Read the behaviour changes of [0.52](#behaviour-changes-in-0-52), [0.50](#behaviour-changes-in-0-50), [0.49](#behaviour-changes-in-0-49), [0.48](#behaviour-changes-in-0-48), [0.47](#behaviour-changes-in-0-47) and [0.46](#behaviour-changes-read-before-upgrading) before upgrading.** The 0.45 additions follow [below](#what-was-new-in-0-45); older ones are in the [changelog](/changelog).
+
+## What's new in 0.52: one registry, one menu {#whats-new-in-0-52}
+
+Every row of every tree and list now has the same menu, built by one function from what its kind can do: the menu of an MCP server, an API definition, a dataset, a saved gRPC call, a prompt, a monitor or a test file has the same groups, the same words and the same keys as a collection's.
+
+- **One menu everywhere, in one order**: create · open · tree (Expand all, Collapse all) · run · share · tools · git · edit · danger, with a line between groups. An action a row can't do isn't shown; one it can't do right now is greyed out with a tooltip saying why ([steps](#one-menu)).
+- **Expand all and Collapse all on every container**: collections, protocol groups, folders, the MCP servers, API definitions and Datasets sections and their folders, the folders of saved gRPC calls and of every list; and on the Tests tree. What is open is kept per workspace, across restarts.
+- **The keyboard opens a row's menu**: <kbd>Shift</kbd>+<kbd>F10</kbd> or the menu key, in every tree and list; <kbd>F2</kbd> renames, <kbd>Delete</kbd> deletes (with Undo), <kbd>*</kbd> expands everything inside, and typing a name jumps to it.
+- **API definitions can be renamed and deleted** (with Undo, back in their folder), and have **Lint**, **Generate tests…**, **Generate integration flows…**, **Reveal file** and **Copy path** in their menu.
+- **Datasets get folders** (kept in `library/dataset-folders.json`: the files never move, so `datasets/…` paths in tests stay the same), **Preview**, **Use in a test**, **Reveal file** and **Copy path**.
+- **For AI agents**: `testpion kinds --json` and the MCP tool `list_kinds` say what every kind of item offers, and why an action never applies to one.
+
+### Behaviour changes in 0.52 {#behaviour-changes-in-0-52}
+- **Run moved after Expand all / Collapse all** in the collection and folder menus (the groups are now create · open · tree · run · …). The items kept their names.
+- **A collection's other request kinds are under New request ▸** (GraphQL, SOAP, gRPC, WebSocket & MQTT), so the menu stays short; **New HTTP request** is still first.
+- **Copy as ▸**: a request's **Copy URL**, **cURL (bash)**, **cURL (cmd)**, **PowerShell**, **fetch** and **More code snippets…** are in one submenu.
+- **Convert scripts to pm.\* moved to Export ▸ For Postman (pm.\*)…** in the collection menu: TestPion writes `tp.*`, and `pm.*` is for Postman. **Convert scripts to tp.\*** stays in the menu.
+- **Deleting an AI provider, a test file or a folder of test files no longer asks first**: it goes at once with **Undo** (a folder of more than 200 files still asks).
+- **Folders and lists remember what is open per workspace** (the explorer's sections, every list's folders and the Tests tree): opening another workspace no longer shows the first one's open folders. What you had open moves into the first workspace you open after the update.
+
+### One menu for every row {#one-menu}
+1. Right-click any row, or click its **⋯** (or press <kbd>Shift</kbd>+<kbd>F10</kbd> on it): the menu is the same three ways.
+2. A container's menu starts with what it can make (**New …**, **New folder**), then **Expand all** and **Collapse all** for everything inside it.
+3. **Copy link** copies the item's `testpion://open` link; paste it anywhere, and it opens the item in the app.
+4. Right-click the blank part of the sidebar for the workspace's menu (new collection or request, **Import…**, **Recently deleted…**, expand or collapse everything), or of a list for that list's menu.
+5. Every kind's menu is in [Menus](/getting-started/finding-your-way#menus).
 
 ## What's new in 0.50: nothing lost, nothing leaked {#whats-new-in-0-50}
 
