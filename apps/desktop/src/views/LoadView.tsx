@@ -1,6 +1,6 @@
 import { useLibraryTabs } from '../lib/library-tabs';
 import { AiAction } from '../components/ai/AiAction';
-import { LibraryTabStrip } from '../components/LibraryTabStrip';
+import { LibraryTabStrip, NoOpenItems } from '../components/LibraryTabStrip';
 import { ItemBreadcrumb } from '../components/ItemBreadcrumb';
 import { refMenu } from '../components/RefLink';
 import { AlertTriangle, Bookmark, Gauge, KeyRound, Play, Save, Square } from 'lucide-react';
@@ -124,7 +124,7 @@ const drafts = persisted('load', {
 
 export function LoadView() {
   // WF-19: open load tests are tabs (each its own draft; a single click in the list opens a preview tab)
-  const tabs = useLibraryTabs('load', drafts);
+  const tabs = useLibraryTabs('load', drafts, { canBeEmpty: true });
   const d = tabs.d;
   const setD = tabs.setD;
   const [providers, setProviders] = useState<ProviderConfig[]>([]);
@@ -367,6 +367,11 @@ export function LoadView() {
       newLabel="New load test"
     />
     <div className="flex-1 min-h-0">
+    {tabs.empty ? (
+      <NoOpenItems icon={Gauge} title="No open load tests" newLabel="New load test" onNew={() => tabs.newTab(drafts.defaults)}>
+        Open a saved load test from the list, or start a new one.
+      </NoOpenItems>
+    ) : (
     <Split id="load-main" initial={34}>
       <div className="h-full overflow-auto p-3 pt-1 flex flex-col gap-3">
         {/* WF-11: Load tests › folder › load test, like every item view; the header keeps Save */}
@@ -657,6 +662,7 @@ export function LoadView() {
         )}
       </div>
     </Split>
+    )}
     </div>
     </div>
     </Split>

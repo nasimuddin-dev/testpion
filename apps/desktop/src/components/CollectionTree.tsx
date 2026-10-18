@@ -987,8 +987,7 @@ const RequestRow = memo(function RequestRow({
       ) : (
         <button
           className="flex items-center gap-1.5 flex-1 min-w-0 text-left pl-4"
-          onClick={() => x().onOpen(c, n, { preview: true })}
-          onDoubleClick={() => x().onOpen(c, n)}
+          onClick={() => x().onOpen(c, n)}
           onKeyDown={(e) => x().rowKeys(c, n)(e)}
           data-tree-row
           data-rename-id={sid}

@@ -16,6 +16,8 @@ export interface LibraryTab {
 export interface TabsState {
   tabs: LibraryTab[];
   active: string;
+  /** Every tab was closed (a view that can show nothing: its tab strip is empty and it says so). `main` is kept as the next new tab. */
+  empty?: boolean;
 }
 
 /**
@@ -54,7 +56,7 @@ const draftKeyOf = (group: string, id: string) => `${group}${id === 'main' ? '' 
  * single click replaces it; double-click or an edit keeps it), and the open tabs kept per workspace (draft-store,
  * which is scoped). The view's `d` is the active tab's draft.
  */
-export function useLibraryTabs<D>(group: string, drafts: Drafts<D>, opts: { keepFirst?: boolean } = {}) {
+export function useLibraryTabs<D>(group: string, drafts: Drafts<D>, opts: { keepFirst?: boolean; canBeEmpty?: boolean } = {}) {
   const stateKey = `tabs:${group}`;
   const read = (): TabsState => {
     const s = loadDraft<TabsState>(stateKey);
@@ -97,24 +99,27 @@ export function useLibraryTabs<D>(group: string, drafts: Drafts<D>, opts: { keep
   };
   /** A new, unsaved tab with this draft. */
   const newTab = (data: D) => {
-    const id = uid('t');
+    // after closing every tab, the new one takes the hidden `main` tab
+    const id = stRef.current.empty ? 'main' : uid('t');
     draftsOf(id).save(data);
-    update((x) => ({ tabs: [...x.tabs, { id }], active: id }));
+    if (id === cur.id) setCur({ id, d: data });
+    update((x) => (x.empty ? { tabs: [{ id }], active: id } : { tabs: [...x.tabs, { id }], active: id }));
   };
   const select = (id: string) => update((x) => ({ ...x, active: id }));
   /** Close tabs (their drafts go); closing the last leaves one fresh tab. */
   const close = (ids: string[], fresh: D) => {
     for (const id of ids) dropDraft(draftKeyOf(group, id));
     const next = closeTabs(stRef.current, ids);
-    // every tab closed: one fresh tab
+    // every tab closed: one fresh tab, or (a view that can be empty) none, with a fresh one waiting
     if (stRef.current.tabs.every((t) => ids.includes(t.id))) {
       draftsOf('main').save(fresh);
       if (cur.id === 'main') setCur({ id: 'main', d: fresh });
+      if (opts.canBeEmpty) return update(() => ({ ...next, empty: true }));
     }
     update(() => next);
   };
   /** The active tab now shows this saved item (after Save, or Save as). */
   const setSaved = (savedId: string | undefined) => update((x) => ({ ...x, tabs: x.tabs.map((t) => (t.id === x.active ? { ...t, savedId, preview: false } : t)) }));
 
-  return { tabs: st.tabs, active: tab, d: cur.d, setD, open, newTab, select, close, keep, setSaved };
+  return { tabs: st.empty ? [] : st.tabs, empty: !!st.empty, active: tab, d: cur.d, setD, open, newTab, select, close, keep, setSaved };
 }

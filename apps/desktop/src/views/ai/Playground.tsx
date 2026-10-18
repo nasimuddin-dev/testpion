@@ -15,7 +15,7 @@ import { CheckList, ErrorPanel } from '../../components/Results';
 import { Button, Empty, LinkButton, Metric, Split, Tabs } from '../../components/ui';
 import { ChatResult, SavedPrompt, drafts, type Draft, ModelPicker, Params, responseFormat, parseExpected, PromptEditor, NoProviders } from './common';
 import { useLibraryTabs } from '../../lib/library-tabs';
-import { LibraryTabStrip } from '../../components/LibraryTabStrip';
+import { LibraryTabStrip, NoOpenItems } from '../../components/LibraryTabStrip';
 
 import { refOfWorkspacePath } from '@testpion/shared';
 import { saveAsTest as saveAsTestShared, saveAsTestLabel } from '../../lib/save-test';
@@ -24,7 +24,7 @@ type PlayResult = ChatResult | { error: NormalizedError };
 export function Playground({ providers, onSetUp }: { providers: ProviderConfig[]; onSetUp(): void }) {
   // WF-19: open prompts are tabs (each its own draft; a single click in Saved opens a preview tab), kept per workspace;
   // the Model comparison has its own draft (common.tsx useCompareDraft)
-  const tabs = useLibraryTabs<Draft>('ai', drafts);
+  const tabs = useLibraryTabs<Draft>('ai', drafts, { canBeEmpty: true });
   const d = tabs.d;
   const setD = tabs.setD;
   const set = (p: Partial<Draft>) => setD((x) => ({ ...x, ...p }));
@@ -229,6 +229,11 @@ export function Playground({ providers, onSetUp }: { providers: ProviderConfig[]
         </div>
       </div>
       <div className="flex-1 min-h-0">
+        {tabs.empty ? (
+          <NoOpenItems icon={Sparkles} title="No open prompts" newLabel="New prompt" onNew={() => tabs.newTab(drafts.defaults)}>
+            Open a saved prompt from the list, or start a new one.
+          </NoOpenItems>
+        ) : (
         <Split id="ai-play" initial={50}>
           <div className="h-full flex flex-col">
             <div className="p-2 border-b border-line">
@@ -312,6 +317,7 @@ export function Playground({ providers, onSetUp }: { providers: ProviderConfig[]
             )}
           </div>
         </Split>
+        )}
       </div>
     </div>
     </Split>

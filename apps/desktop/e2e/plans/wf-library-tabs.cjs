@@ -72,54 +72,40 @@ const steps = [
     `await __t.view('Evaluations'); await __t.sleep(800);
      return 'strip: ' + !!document.querySelector('[role=tablist][aria-label="Open evaluations"]');`,
   ),
-  // HTTP requests: a click in the explorer previews (the next click replaces it), a double-click keeps it
+  // closing the last tab shows that nothing is open (and a button for a new one), as in the request editors
   step(
-    'requests-preview',
+    'last-tab-closes',
+    `await __t.view('Evaluations'); await __t.sleep(600);
+     const strip = () => [...document.querySelectorAll('[role=tablist][aria-label="Open evaluations"] [role=tab]')];
+     for (const t of strip()) { t.dispatchEvent(new MouseEvent('auxclick', { bubbles: true, button: 1 })); await __t.sleep(300); }
+     const empty = !!(await __t.waitFor(() => /No open evaluations/.test(document.body.innerText), 3000));
+     const none = strip().length;
+     const btn = [...document.querySelectorAll('main button, button')].find((b) => b.offsetParent && /^New evaluation$/.test(b.textContent.trim()));
+     if (btn) { btn.click(); await __t.sleep(600); }
+     return 'empty: ' + empty + ', tabs: ' + none + ', new: ' + !!btn + ' → tabs: ' + strip().length + ', editor: ' + !!document.querySelector('[aria-label="Evaluation name"]');`,
+  ),
+  // HTTP requests: a click in the explorer opens the request in a tab of its own (never replacing another) and shows it;
+  // a request already open is shown, not opened again
+  step(
+    'requests-open-in-tabs',
     `const http = () => [...document.querySelectorAll('[role=tablist][aria-label="Open requests"] [role=tab]')].filter((t) => /^(GET|POST|PUT|PATCH|DELETE)/.test(t.textContent.trim()));
-     const label = () => http().map((t) => t.textContent.trim().replace(/^(GET|POST|PUT|PATCH|DELETE)/, '') + (t.hasAttribute('data-preview') ? '(preview)' : '')).join(', ');
+     const label = () => http().map((t) => t.textContent.trim().replace(/^(GET|POST|PUT|PATCH|DELETE)/, '') + (t.hasAttribute('data-preview') ? '(preview)' : '') + (t.getAttribute('aria-selected') === 'true' ? '*' : '')).join(', ');
      await __t.requests(); await __t.sleep(500);
      // start from no request tabs
      for (const t of http()) { t.dispatchEvent(new MouseEvent('auxclick', { bubbles: true, button: 1 })); await __t.sleep(150); }
-     // a single real click on the request's row in the explorer (filtered to it): a preview tab
      const f = document.querySelector('aside input[placeholder^="Filter"]');
      const set = (v) => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(f, v); f.dispatchEvent(new Event('input', { bubbles: true })); };
-     const preview = async (n) => {
-       set(n); await __t.sleep(900);
-       const r = [...document.querySelectorAll('aside [data-tree-row]')].find((b) => b.offsetParent && b.getAttribute('aria-expanded') === null && b.textContent.trim().endsWith(n));
-       if (r) { await __t.real.click(r); await __t.sleep(1200); }
-       set(''); await __t.sleep(400);
-       return !!r;
-     };
-     for (const n of ['Custom headers', 'GET with query parameters']) if (!(await preview(n))) return 'NO ROW ' + n;
-     const previewed = label();
-     const kept = http().find((t) => t.hasAttribute('data-preview')); if (!kept) return 'NO PREVIEW TAB: ' + previewed;
-     await __t.real.dblclick(kept); await __t.sleep(400);
-     const again = (await preview('Custom headers')) ? 'ok' : 'NO ROW';
-     return previewed + ' → ' + label() + (again === 'ok' ? '' : ' | ' + again);`,
-  ),
-  // a request that was sent keeps its tab (and its response) until it is closed: the next click opens another tab
-  step(
-    'sent-request-stays',
-    `const http = () => [...document.querySelectorAll('[role=tablist][aria-label="Open requests"] [role=tab]')].filter((t) => /^(GET|POST|PUT|PATCH|DELETE)/.test(t.textContent.trim()));
-     await __t.requests(); await __t.sleep(500);
-     for (const t of http()) { t.dispatchEvent(new MouseEvent('auxclick', { bubbles: true, button: 1 })); await __t.sleep(150); }
-     const f = document.querySelector('aside input[placeholder^="Filter"]');
-     const set = (v) => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(f, v); f.dispatchEvent(new Event('input', { bubbles: true })); };
-     const preview = async (n) => {
+     const click = async (n) => {
        set(n); await __t.sleep(900);
        const r = [...document.querySelectorAll('aside [data-tree-row]')].find((b) => b.offsetParent && b.getAttribute('aria-expanded') === null && b.textContent.trim().endsWith(n));
        if (r) { await __t.real.click(r); await __t.sleep(1000); }
+       set(''); await __t.sleep(400);
        return !!r;
      };
-     if (!(await preview('Custom headers'))) return 'NO ROW';
-     const before = http().some((t) => t.hasAttribute('data-preview'));
-     const send = [...document.querySelectorAll('button')].find((b) => b.offsetParent && /^Send$/.test(b.textContent.trim()));
-     if (!send) return 'NO SEND';
-     await __t.real.click(send); await __t.sleep(1500);
-     const after = http().some((t) => t.hasAttribute('data-preview'));
-     if (!(await preview('GET with query parameters'))) return 'NO ROW 2';
-     set(''); await __t.sleep(300);
-     return 'preview before send: ' + before + ', after: ' + after + ', tabs: ' + http().length;`,
+     for (const n of ['Custom headers', 'GET with query parameters']) if (!(await click(n))) return 'NO ROW ' + n;
+     const two = label();
+     if (!(await click('Custom headers'))) return 'NO ROW again';
+     return two + ' → ' + label();`,
   ),
   // saved prompts: the same tabs; the Model comparison has its own prompt
   step(
@@ -187,8 +173,8 @@ module.exports = withExpect(
     'double-click-keeps': /^E2E load B, E2E load A\(preview\)$/,
     'each-tab-its-own-edits': /^A: http:\/\/127\.0\.0\.1:4010\/health\?a \| B: http:\/\/127\.0\.0\.1:4010\/health\?edited$/,
     'evaluations-has-tabs': /^strip: true$/,
-    'sent-request-stays': /^preview before send: true, after: false, tabs: 2$/,
-    'requests-preview': /^GET with query parameters\(preview\) → GET with query parameters, Custom headers\(preview\)$/,
+    'last-tab-closes': /^empty: true, tabs: 0, new: true → tabs: 1, editor: true$/,
+    'requests-open-in-tabs': /^Custom headers, GET with query parameters\* → Custom headers\*, GET with query parameters$/,
     'prompts-preview-and-own-compare': /^Summarise a text\(preview\) \| compare has its own prompt: true$/,
     'environments-tabs-keep-edits': /^E2E staging, Public APIs\(preview\) → E2E staging, Public APIs \| other tab: E2E staging \| kept edit: Public APIs edited$/,
     'debugger-session-tab': /^tabs: Live capture, e2e-session \| rows: true \| bar: true \| live untouched: true$/,
