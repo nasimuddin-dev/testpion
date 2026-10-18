@@ -5,6 +5,7 @@ import { basename } from 'node:path';
 import {
   ApsError,
   listTrash,
+  removeItem,
   restoreFromTrash,
   purgeTrash,
   compareEnvironments,
@@ -282,7 +283,8 @@ export function workspaceHandlers(be: Backend): Handlers {
     },
     /** Variables of one environment added to others where they are missing (after adding new ones in the Environments view). */
     'vars.addToEnvironments': ({ from, keys, to, copy }: { from: string; keys: string[]; to: string[]; copy?: boolean }) => addVariablesToEnvironments(be.ws, from, keys, to, { copy, secrets: be.secrets }),
-    'env.delete': ({ id }: { id: string }) => be.ws.deleteEnvironment(id),
+    /** Delete an environment to Recently deleted (the kind's `ops` facet; its secret values stay in the secret store). */
+    'env.delete': ({ id }: { id: string }) => removeItem(be.ws, { kind: 'environment', environmentId: id }),
     /** Recently deleted items, every kind of the trash (storage/trash.ts KINDS), 30 days. */
     'trash.list': () => listTrash(be.ws),
     'trash.restore': ({ id }: { id: string }) => restoreFromTrash(be.ws, id),

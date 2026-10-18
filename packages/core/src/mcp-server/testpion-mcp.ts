@@ -38,31 +38,15 @@ import { reflectServer } from '../protocols/grpc/reflection.js';
 import { runRealtimeExchange, type RealtimeExchange } from '../protocols/realtime.js';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { checkedTestFilePath } from '../storage/test-path.js';
-import { workspaceEditTools } from './workspace-edit-tools.js';
-import { gitTools } from './git-tools.js';
-import { openApiTools } from './openapi-tools.js';
-import { debuggerTools } from './debugger-tools.js';
-import { historyTools } from './history-tools.js';
-import { refTools } from './ref-tools.js';
-import { kindTools } from './kind-tools.js';
-import { flowGraphTools, planFlowRun } from './flow-graph-tools.js';
-import { deployTools } from './deploy-tools.js';
+import { planFlowRun } from './flow-graph-tools.js';
 import { flowTools } from './flow-tools.js';
-import { scaleTools } from './scale-tools.js';
-import { evalAgentTools } from './eval-agent-tools.js';
+import { moduleTools } from './tools/index.js';
 import { contractCallResult, elicitationConfirmer, isContractResult, withToolContract, type Confirmer } from './tool-contract.js';
 import { TOOL_DOCS } from './tool-docs.js';
 
-import { mockTools } from './mock-tools.js';
-import { datasetTools } from './dataset-tools.js';
-import { arazzoTools } from './arazzo-tools.js';
-import { recordingTools } from './recording-tools.js';
-import { aiTools } from './ai-tools.js';
 import type { DebuggerExchange } from '../debugger/proxy.js';
 import { str, withEnvironmentSecrets, withProductionConsent, type Tool } from './tool.js';
 import { MINIMAL_TOOLS, searchTool } from './search-tools.js';
-import { commandLine, isCommandTrusted } from '../storage/trust.js';
-import { McpSession } from '../protocols/mcp/client.js';
 import { runCollection } from '../runner/collection-run.js';
 import { readDataset, type DatasetRecord } from '../runner/datasets.js';
 import { dbKindOf } from '../runner/db-datasets.js';
@@ -1342,52 +1326,8 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
         }
       },
     },
-    ...historyTools({ store, redactor, findCollection, findRequest }),
-    ...refTools({ store }),
-    ...kindTools({ store }),
-    ...mockTools({ store }),
-    ...datasetTools({ store }),
-    ...arazzoTools({ store }),
-    ...gitTools({ store, findCollection, redactor }),
-    ...openApiTools({ store, readSpecRef: readSpec, context: (environment) => createEngineContext({ store, secrets, settings, environment }) }),
-    ...debuggerTools({ redactor, store, session: captured }),
-    ...recordingTools({ store, redactor, secrets, session: captured }),
-    ...flowGraphTools({ store }),
-    ...scaleTools({ store, secrets, settings, redactor, checkEnvironment }),
-    ...deployTools({ store }),
-    ...evalAgentTools({ store }),
-    ...aiTools({ store, secrets, settings, checkEnvironment }),
-    ...workspaceEditTools({
-      store,
-      redactor,
-      collections,
-      findCollection,
-      findRequest,
-      // the workspace's MCP servers, with the environment's variables; a stdio server only when the user allowed its command
-      mcpSession: async (ref) => {
-        const ctx = createEngineContext({ store, secrets, settings });
-        const r = ref.toLowerCase();
-        const cfg = ctx.services.mcpServers.find((x) => x.id.toLowerCase() === r) ?? ctx.services.mcpServers.find((x) => x.name.toLowerCase() === r);
-        if (!cfg) {
-          await ctx.dispose();
-          throw new ApsError('ConfigurationError', `No MCP server "${ref}" in the workspace. Available: ${ctx.services.mcpServers.map((x) => x.name).join(', ') || 'none'}`);
-        }
-        if (cfg.transport === 'stdio' && !isCommandTrusted(store, cfg.command, cfg.args ?? [])) {
-          await ctx.dispose();
-          throw new ApsError('ConfigurationError', `"${cfg.name}" is a program (${commandLine(cfg.command, cfg.args ?? [])}) the user has not allowed to run from here`, {
-            suggestions: ['Ask the user to open the server in TestPion (MCP view), press Connect and choose "Always for this workspace"; then try again.'],
-          });
-        }
-        const session = new McpSession(cfg, ctx.redactor, { cookieJar: ctx.services.cookieJar });
-        await session.connect(30_000);
-        const close = session.close.bind(session);
-        session.close = async () => {
-          await close();
-          await ctx.dispose();
-        };
-        return session;
-      },
-    }),
+    // the tools of every module (tools/index.ts): a new tool goes there, never here
+    ...moduleTools({ store, secrets, settings, redactor, collections, findCollection, findRequest, readSpec, captured, checkEnvironment }),
   ];
   // list_flows and one tool per flow with an expose: block (flow-tools.ts); a flow never shadows a built-in tool
   all.push(...flowTools({ store, secrets, settings, redactor, checkEnvironment }).filter((t) => !all.some((x) => x.name === t.name)));

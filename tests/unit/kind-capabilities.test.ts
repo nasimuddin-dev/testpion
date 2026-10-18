@@ -1,8 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { cpSync, existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
-import { CAPABILITIES, ITEM_KINDS, KIND_IDS, KIND_INFO, kindOfPath, kindOfRef, liveKinds, watchKindOfPath, type ItemRef, type KindId } from '@testpion/shared';
-import { WorkspaceSearch, WorkspaceStore, kind, kinds, resolveItemRef, type RunSummary } from '../../packages/core/src/index.js';
+import { CAPABILITIES, ITEM_KINDS, ITEM_REF_FIELDS, KIND_IDS, KIND_INFO, kindOfPath, kindOfRef, liveKinds, refOfWorkspacePath, watchKindOfPath, type ItemRef, type KindId } from '@testpion/shared';
+import { WorkspaceSearch, WorkspaceStore, kind, kinds, removeItem, resolveItemRef, restoreItem, type RunSummary } from '../../packages/core/src/index.js';
+import { RPC_PARAMS } from '../../apps/desktop/backend/rpc-params.js';
 import { refTarget } from '../../apps/desktop/src/lib/ref-target';
 import { tempDir } from '../helpers';
 
@@ -143,6 +144,28 @@ describe('the item-kind registry is complete', () => {
     }
   });
 
+  it('kindOfPath is built from the registry’s storage: the sample path of a kind with a ref round-trips to its sample ref', () => {
+    for (const k of liveKinds()) {
+      if (!k.sample || !k.ref || k.storage.layout === 'library' || k.storage.layout === 'single-file' || k.storage.layout === 'items-in-file') continue;
+      const found = kindOfPath(k.sample);
+      expect(found?.kind, k.sample).toBe(k.id);
+      const ref = SAMPLE_REF[k.id] as Record<string, string> | undefined;
+      // the id the path gives is the ref's first id (a collection's id, a test file's path inside tests/, a spec's workspace path …)
+      if (ref && k.ref === ref.kind) expect(found?.id, k.sample).toBe(ref[ITEM_REF_FIELDS[k.ref][0]!.replace(/\?$/, '')]);
+      if (k.pathRef) expect(refOfWorkspacePath(k.sample), k.sample).toEqual(SAMPLE_REF[k.id]);
+    }
+    // a folder path names the kind without an item; a file the kind's glob does not match too
+    expect(kindOfPath('tests/')).toEqual({ kind: 'test' });
+    expect(kindOfPath('tests/notes.txt')).toEqual({ kind: 'test' });
+    expect(kindOfPath('collections/sub/api.json')).toEqual({ kind: 'collection' });
+    expect(kindOfPath('debugger/rules.json')).toEqual({ kind: 'debugger-rules' });
+    expect(kindOfPath('debugger/x.har')).toEqual({ kind: 'capture', id: 'x' });
+    expect(kindOfPath('packages/helpers.js')).toEqual({ kind: 'script-package', id: 'helpers' });
+    expect(kindOfPath('specs/asyncapi/events.yaml')).toEqual({ kind: 'spec', id: 'specs/asyncapi/events.yaml' });
+    expect(kindOfPath('runs/run-1/results.jsonl')).toEqual({ kind: 'run', id: 'run-1' });
+    expect(kindOfPath('README.md')).toBeUndefined();
+  });
+
   it('watch: a change to the sample is reported as the kind’s watch kind', () => {
     for (const k of liveKinds()) {
       if (k.capabilities.watch !== true || !k.sample) continue;
@@ -221,6 +244,30 @@ describe('the item-kind registry is complete', () => {
       expect(back.id, k.id).toBe(id);
       expect(resolveItemRef(store, SAMPLE_REF[k.id]).ok, `${k.id} does not resolve after restore`).toBe(true);
     }
+  });
+
+  it('every kind with trash is reachable through the one generic remove / restore (RPC item.remove / item.restore, CLI item, MCP delete_item)', () => {
+    expect(RPC_PARAMS['item.remove']).toEqual({ ref: 'x' });
+    expect(RPC_PARAMS['item.restore']).toEqual({ trashId: 's' });
+    for (const k of liveKinds()) {
+      if (k.capabilities.trash !== true) continue;
+      const ref = SAMPLE_REF[k.id]!;
+      const gone = removeItem(store, ref);
+      expect(gone, k.id).toMatchObject({ kind: k.id, id: TRASH_IDS[k.id], ref });
+      expect(gone.name, k.id).not.toBe('');
+      expect(gone.trashId.startsWith(`${k.id}/`), k.id).toBe(true);
+      expect(resolveItemRef(store, ref).ok, `${k.id} still resolves after removeItem`).toBe(false);
+      // the string forms of a ref work too (what the CLI and MCP get)
+      expect(() => removeItem(store, `${k.id}:nope`)).toThrow();
+      const back = restoreItem(store, gone.trashId);
+      expect(back, k.id).toMatchObject({ kind: k.id, id: TRASH_IDS[k.id], ref });
+      expect(resolveItemRef(store, ref).ok, `${k.id} does not resolve after restoreItem`).toBe(true);
+    }
+    // a kind without the trash capability says why instead of deleting
+    expect(() => removeItem(store, SAMPLE_REF.test)).toThrow(/Test file: cannot be deleted to Recently deleted \(planned for 0\.53\)/);
+    expect(() => removeItem(store, SAMPLE_REF.request)).toThrow(/Request: cannot be deleted/);
+    expect(() => removeItem(store, 'nonsense')).toThrow(/Not a ref/);
+    expect(() => restoreItem(store, 'nope/1--x.json')).toThrow(/Not a trash entry/);
   });
 });
 

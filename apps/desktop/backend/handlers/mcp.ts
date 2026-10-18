@@ -20,7 +20,7 @@ import {
   mcpToolUsage,
   atomicWrite,
   saveTest,
-  trashMcpServer,
+  removeItem,
 } from '@testpion/core';
 import type { Backend, Handlers } from '../backend.js';
 import { commandLine, forgetTrustedCommands, isCommandTrusted, trustCommand, trustedCommands } from '@testpion/core';
@@ -210,9 +210,9 @@ export function mcpHandlers(be: Backend): Handlers {
      */
     'mcp.deleteServer': async ({ serverId }: { serverId: string }) => {
       const connected = !!be.mcpSessions.get(serverId)?.connected;
-      const { trashId, server } = trashMcpServer(be.ws, serverId);
+      const { trashId, id, name } = removeItem(be.ws, { kind: 'mcp-server', serverId });
       await be.handlers['mcp.disconnect']!({ serverId });
-      return { trashId, id: server.id, name: server.name, connected };
+      return { trashId, id, name, connected };
     },
     'mcp.events': ({ serverId }: { serverId: string }) => be.mcpSessions.get(serverId)?.events ?? [],
     'mcp.call': async ({ serverId, tool, args, assertions }: { serverId: string; tool: string; args: Record<string, unknown>; assertions?: CheckConfig[] }) => {

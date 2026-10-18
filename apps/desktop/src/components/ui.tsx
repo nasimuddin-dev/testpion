@@ -593,7 +593,8 @@ function MenuItems({ items: given }: { items: MenuItem[] }) {
             {/* every row keeps the icon column so labels line up */}
             {(it.icon || icons) && <span className={cx('shrink-0 grid place-items-center w-4', it.danger ? 'text-bad' : 'text-muted')}>{it.icon}</span>}
             <span className="flex-1 truncate">{it.label}</span>
-            {it.shortcut && <span className="text-xs text-muted">{it.shortcut}</span>}
+            {/* the key as a hint drawn by CSS (menu-shortcut): the item's text stays its label alone */}
+            {it.shortcut && <span className="text-xs text-muted menu-shortcut" data-shortcut={it.shortcut} />}
           </>
         );
         return (

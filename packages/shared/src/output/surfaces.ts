@@ -4,6 +4,7 @@
  * the policy, never trusting the window's word for it), the docs and the completeness test read this one list.
  */
 import type { OutputFormatId } from './formats.js';
+import type { GridSourceId } from './grid-sources.js';
 
 /**
  * - `redacted-default`: log-like output; secrets are masked unless the person confirms "Include secrets…".
@@ -12,8 +13,15 @@ import type { OutputFormatId } from './formats.js';
  */
 export type OutputRedaction = 'redacted-default' | 'raw-notice' | 'none';
 
-export interface OutputSurfaceInfo {
-  id: string;
+/** A surface's id: one of OUTPUT_SURFACES (the `data-output` marker, OutputSpec.id, the `surface` of output.save). */
+export type OutputSurfaceId = (typeof SURFACES)[number]['id'];
+
+export interface OutputSurfaceInfo extends SurfaceFields {
+  id: OutputSurfaceId;
+}
+
+/** A surface without its id (what the list below declares; the id is each entry's literal). */
+interface SurfaceFields {
   label: string;
   formats: readonly OutputFormatId[];
   default: OutputFormatId;
@@ -49,9 +57,9 @@ export type OutputSource =
   | { kind: 'console' }
   | { kind: 'logs' }
   | { kind: 'debugger' }
-  | { kind: 'grid'; grid: 'scale-rows' | 'eval-matrix'; params: Record<string, unknown> };
+  | { kind: 'grid'; grid: GridSourceId; params: Record<string, unknown> };
 
-const s = (id: string, label: string, formats: OutputFormatId[], redaction: OutputRedaction, extra: Partial<OutputSurfaceInfo> = {}): OutputSurfaceInfo => ({
+const s =<I extends string>(id: I, label: string, formats: OutputFormatId[], redaction: OutputRedaction, extra: Partial<SurfaceFields> = {}): SurfaceFields & { id: I } => ({
   id,
   label,
   formats,
@@ -62,7 +70,7 @@ const s = (id: string, label: string, formats: OutputFormatId[], redaction: Outp
 });
 const B = { state: { planned: 'release B' } } as const;
 
-export const OUTPUT_SURFACES: readonly OutputSurfaceInfo[] = [
+const SURFACES = [
   // the response of a request (REST, SOAP), one per tab of the response pane
   s('response.body', 'Response body', ['raw', 'json', 'json-min', 'csv', 'tsv', 'html', 'xml', 'text', 'har', 'md'], 'raw-notice', { cli: 'send --json', sources: ['response'] }),
   s('response.headers', 'Response headers', ['json', 'csv', 'text'], 'raw-notice'),
@@ -109,9 +117,11 @@ export const OUTPUT_SURFACES: readonly OutputSurfaceInfo[] = [
   s('monitor.runs', 'Monitor runs', ['csv', 'json'], 'none', B),
   s('runs.overview', 'Runs overview and test history', ['csv', 'json'], 'none', B),
   s('settings.diagnostics', 'Settings diagnostics', ['text', 'json'], 'redacted-default', B),
-];
+] as const;
 
-const BY_ID = new Map(OUTPUT_SURFACES.map((x) => [x.id, x]));
+export const OUTPUT_SURFACES: readonly OutputSurfaceInfo[] = SURFACES;
+
+const BY_ID = new Map<string, OutputSurfaceInfo>(OUTPUT_SURFACES.map((x) => [x.id, x]));
 
 /** The surface with this id, or undefined. */
 export const outputSurface = (id: string): OutputSurfaceInfo | undefined => BY_ID.get(id);

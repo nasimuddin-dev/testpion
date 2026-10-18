@@ -129,6 +129,16 @@ export interface ItemKindInfo {
   since?: `0.${number}`;
   /** The id kindOfPath finds in a path is the ItemRef's own id (refOfWorkspacePath makes the ref from the path). */
   pathRef?: boolean;
+  /**
+   * What kindOfPath takes as the id of a raw document: the path inside the kind's folder (default), the whole workspace
+   * path (`path`: an API definition's `specs/x.yaml`), or the file name without its extension (`stem`: a package, a
+   * capture session).
+   */
+  pathId?: 'path' | 'stem';
+  /** Every file in the kind's folder is one (the glob only says what opens): kindOfPath names any path under it. */
+  anyFile?: true;
+  /** Shown as a list (or tree) of its own in a view, with a section header that has a menu (New …, Expand all …). */
+  listed?: true;
   /** A path of this kind in tests/fixtures/kinds/workspace (the completeness test checks kindOfPath on it). */
   sample?: string;
   capabilities: Capabilities;
@@ -141,6 +151,9 @@ export const KIND_IDS = kinds.map((k) => k.id) as readonly KindId[];
 /** Kinds that are live in this version (not registered ahead of their release). */
 export const liveKinds = (): ItemKindInfo[] => kinds.filter((k) => !k.since);
 
+/** The kind with this id, or undefined for any other string (a node kind, a name): no cast needed at the call site. */
+export const kindInfoOf = (id: string): ItemKindInfo | undefined => (KIND_INFO as Record<string, ItemKindInfo | undefined>)[id];
+
 /** Whether a capability is supported and implemented (`true`), never a `na` or a `planned`. */
 export const can = (kind: KindId, cap: Capability): boolean => KIND_INFO[kind]?.capabilities[cap] === true;
 
@@ -152,7 +165,7 @@ export function kindByName(name: string): ItemKindInfo | undefined {
   const n = String(name ?? '')
     .trim()
     .toLowerCase();
-  return (KIND_INFO as Record<string, ItemKindInfo>)[n] ?? kinds.find((k) => k.aliases.includes(n));
+  return kindInfoOf(n) ?? kinds.find((k) => k.aliases.includes(n));
 }
 
 /** The kind of a library's items (grpc → grpc-call, monitors → monitor); live kinds only. */
@@ -161,7 +174,7 @@ export const kindOfLibrary = (library: string): ItemKindInfo | undefined => live
 /** The registry kind of an ItemRef ('saved' by its library); undefined for a library this version doesn't know. */
 export function kindOfRef(ref: Pick<ItemRef, 'kind'> & { library?: string }): ItemKindInfo | undefined {
   if (ref.kind === 'saved') return kinds.find((k) => k.library === ref.library && (k.ref === 'saved' || k.ref === 'monitor'));
-  return (KIND_INFO as Record<string, ItemKindInfo>)[ref.kind];
+  return kindInfoOf(ref.kind);
 }
 
 /** The label of a ref kind that names no single kind (a library item of an unknown library). */
@@ -190,18 +203,54 @@ export function libraryOfPath(path: string, opts: { raw?: boolean } = {}): strin
   return /^library\/([a-z0-9-]+)\.json$/.exec(p)?.[1];
 }
 
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** A storage glob (`**\/*.{yaml,yml}`, `*.js`, `**\/*`) as a regular expression over a path inside the kind's folder. */
+function globRegExp(glob: string): RegExp {
+  let re = '';
+  for (let i = 0; i < glob.length; i++) {
+    const c = glob[i]!;
+    if (c === '*' && glob[i + 1] === '*' && glob[i + 2] === '/') {
+      re += '(?:.*/)?';
+      i += 2;
+    } else if (c === '*') re += '[^/]*';
+    else if (c === '{') {
+      const end = glob.indexOf('}', i);
+      re += `(?:${glob
+        .slice(i + 1, end)
+        .split(',')
+        .map(escapeRe)
+        .join('|')})`;
+      i = end;
+    } else re += escapeRe(c);
+  }
+  return new RegExp(`^${re}$`, 'i');
+}
+const globs = new Map<KindId, RegExp>();
+const globOf = (k: ItemKindInfo, glob: string): RegExp => {
+  let re = globs.get(k.id);
+  if (!re) globs.set(k.id, (re = globRegExp(glob)));
+  return re;
+};
+
+/** The kinds a path is matched against, in the registry's order: a variant (a flow) is stored as its base kind. */
+const storedKinds = kinds.filter((k) => !k.variantOf);
+
 /**
- * The kind of a workspace path, lexically (no file is read, `/` and `\` alike): `id` when the path names one item, as
- * its ItemRef names it (a collection's id, a test file's path inside tests/, a spec's workspace path, a dataset's name
- * under datasets/). Undefined for a path that belongs to no kind. `raw`: the path is already relative with `/` (the
- * folder watcher's), so it is taken as it is.
+ * The kind of a workspace path, lexically (no file is read, `/` and `\` alike), from what each kind's `storage`
+ * declares: `id` when the path names one item, as its ItemRef names it (a collection's id, a test file's path inside
+ * tests/, a spec's workspace path, a dataset's name under datasets/). Undefined for a path that belongs to no kind.
+ * `raw`: the path is already relative with `/` (the folder watcher's), so it is taken as it is. The records without a
+ * storage folder of their own (runs, traces, AI proposals) are the explicit tail.
  */
 export function kindOfPath(path: string, opts: { raw?: boolean } = {}): { kind: KindId; id?: string } | undefined {
   const p = opts.raw ? path : normal(path);
-  if (p === 'workspace.json') return { kind: 'workspace' };
-  if (p === 'mcp-servers.json') return { kind: 'mcp-server' };
-  if (p === 'providers.json') return { kind: 'provider' };
-  if (p === 'debugger/rules.json') return { kind: 'debugger-rules' };
+  const withId = (kind: KindId, id: string | undefined) => (id ? { kind, id } : { kind });
+  // one file: the workspace file, a list kept in one file (MCP servers, providers), the Debugger rules
+  for (const k of storedKinds) {
+    const s = k.storage;
+    if ((s.layout === 'single-file' || s.layout === 'items-in-file') && p === s.file) return { kind: k.id };
+  }
   const lib = libraryOfPath(p, { raw: true });
   if (lib) {
     const k = kinds.find((x) => x.storage.layout === 'library' && x.storage.library === lib);
@@ -211,30 +260,19 @@ export function kindOfPath(path: string, opts: { raw?: boolean } = {}): { kind: 
   if (slash < 0) return undefined;
   const top = p.slice(0, slash);
   const rest = p.slice(slash + 1);
-  const withId = (kind: KindId, id: string | undefined) => (id ? { kind, id } : { kind });
+  for (const k of storedKinds) {
+    const s = k.storage;
+    if (s.layout === 'file-per-item' && s.dir === top) {
+      // one item per file directly in the folder, named by its id
+      const ext = rest.includes('/') ? undefined : s.ext.find((e) => rest.endsWith(e));
+      return withId(k.id, ext ? rest.slice(0, -ext.length) : undefined);
+    }
+    if (s.layout === 'raw-document' && s.dir === top) {
+      if (!rest || (!k.anyFile && !globOf(k, s.glob).test(rest))) return { kind: k.id };
+      return withId(k.id, k.pathId === 'path' ? p : k.pathId === 'stem' ? rest.replace(/\.[^./]+$/, '') : rest);
+    }
+  }
   switch (top) {
-    case 'collections':
-      return withId('collection', /^([^/]+)\.json$/.exec(rest)?.[1]);
-    case 'environments':
-      return withId('environment', /^([^/]+)\.json$/.exec(rest)?.[1]);
-    case 'tests':
-      return withId('test', rest && /\.(ya?ml|json)$/i.test(rest) ? rest : undefined);
-    case 'datasets':
-      return withId('dataset', rest || undefined);
-    case 'specs':
-      return withId('spec', rest ? p : undefined);
-    case 'protos':
-      return withId('proto', rest || undefined);
-    case 'packages':
-      return withId('script-package', /^[^/]+\.js$/.test(rest) ? rest.slice(0, -3) : undefined);
-    case 'mocks':
-      return withId('mcp-mock', /^[^/]+\.mcp-mock\.ya?ml$/i.test(rest) ? rest : undefined);
-    case 'metrics':
-      return withId('metric', /^[^/]+\.ya?ml$/i.test(rest) ? rest.replace(/\.ya?ml$/i, '') : undefined);
-    case 'debugger':
-      return withId('capture', /^[^/]+\.har$/i.test(rest) ? rest.slice(0, -4) : undefined);
-    case 'baselines':
-      return withId('baseline', rest || undefined);
     case 'runs':
       return withId('run', /^([^/]+)/.exec(rest)?.[1]);
     case 'traces':

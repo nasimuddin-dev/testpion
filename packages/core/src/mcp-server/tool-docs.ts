@@ -470,6 +470,16 @@ export const TOOL_DOCS: Record<string, ToolDoc> = {
     whenNot: 'To find items by text, use `search_workspace`.',
     example: { ref: 'run:run-abc123' },
   },
+  delete_item: {
+    when: 'Use it to delete a collection, environment, dataset, API definition or MCP server the user no longer wants; it goes to Recently deleted, and `restore_item` brings it back.',
+    whenNot: 'For a request or folder of a collection, use `delete_request`; `list_kinds` says which kinds have the `trash` capability.',
+    example: { ref: 'environment:staging-old', confirm: true },
+  },
+  restore_item: {
+    when: 'Use it to put back an item `delete_item` deleted (its `trashId`), or one listed by `testpion trash list`.',
+    whenNot: 'To undo `delete_request`, save the returned item again with `save_request`.',
+    example: { trash_id: 'environment/1760700000000--staging-old.json' },
+  },
 
   // ── MCP servers and mocks ──────────────────────────────────────────────
   mock_tools: {

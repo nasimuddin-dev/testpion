@@ -13,6 +13,12 @@
 - **Workspace export reads datasets field by field**: a CSV column named `password`, a JSON, JSON Lines or YAML property holding a secret becomes a `{{variable}}` and is listed; files no scan can read (binary, a dataset that does not parse) are named in the summary as exported as is.
 - **Importing a workspace export never replays the file's own notes**; what the import skipped is said in TestPion's words. Objects in an export or an Insomnia import cannot set a prototype through a `__proto__` key.
 - **Big saves stream end to end**: a data run or evaluation matrix as JSON, HTML or Markdown is written page by page like CSV, a run's ZIP entry by entry, and reports recorded masked are no longer parsed and masked a second time.
+### Menus
+- **Key hints in every row menu**: Open <kbd>Enter</kbd>, Rename <kbd>F2</kbd>, Delete… <kbd>Del</kbd>, Expand all <kbd>*</kbd> are shown beside the items that the keys run (the menu itself opens with <kbd>Shift</kbd>+<kbd>F10</kbd>); the docs' menu table shows them too.
+
+### For AI agents and scripts
+- **`testpion item delete <ref>` / `item restore <id>`** (`--json`), the MCP tools **`delete_item`** / **`restore_item`** and the RPC `item.remove` / `item.restore`: one delete-to-Recently-deleted and restore for every kind with the `trash` capability (collections, environments, datasets, API definitions, MCP servers), by ref (`environment:staging`, `spec:specs/x.yaml`, a `testpion://open` link, `{kind, …ids}`); the app's own Delete… with Undo goes through the same function. A kind without it answers with the reason.
+- **`testpion kinds --json` / `list_kinds` / `kinds.list` add `nodes`**: the menu of every row a kind has in the app (its row, section header and folders), group by group, with each action's id, label key and key.
 
 ## 0.52.0 — 2026-10-17
 

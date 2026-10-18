@@ -1,6 +1,5 @@
-import { KIND_INFO } from '@testpion/shared';
+import { KIND_INFO, MENU_GROUPS } from '@testpion/shared';
 import { baseKind, fullCtx, nodeMenuGroups, type NodeKind } from './node-menu';
-import { MENU_GROUPS } from './vocabulary';
 
 /**
  * The docs' table of every node menu (docs/getting-started/finding-your-way.md, "Menus"): generated from the same
@@ -40,8 +39,8 @@ export const DOC_NODES: ReadonlyArray<[NodeKind, string]> = [
   ['provider', 'AI provider'],
 ];
 
-/** One cell: a group's items, a submenu with ▸. */
-const cell = (items: Array<{ label: string; items?: unknown }>) => items.map((i) => (i.items ? `${i.label} ▸` : i.label)).join(', ') || '';
+/** One cell: a group's items, a submenu with ▸, the key that runs an item after it. */
+const cell = (items: Array<{ label: string; items?: unknown; shortcut?: string }>) => items.map((i) => `${i.items ? `${i.label} ▸` : i.label}${i.shortcut ? ` <kbd>${i.shortcut}</kbd>` : ''}`).join(', ') || '';
 
 /** The Markdown table: one row per node, one column per group (in MENU_GROUPS order); "New …" stands for the kind's new items. */
 export function nodeMenuTable(): string {

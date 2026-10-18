@@ -122,6 +122,7 @@ export const KIND_LIST: readonly ItemKindInfo[] = [
     opens: { view: 'collections' },
     watch: { legacy: 'collections', canonical: 'collection' },
     git: { merge: 'by-id' },
+    listed: true,
     sample: 'collections/api.json',
     capabilities: {
       ...FILE_ITEM,
@@ -251,6 +252,7 @@ export const KIND_LIST: readonly ItemKindInfo[] = [
     opens: { view: 'environments' },
     watch: { legacy: 'environments', canonical: 'environment' },
     git: { merge: 'by-id' },
+    listed: true,
     sample: 'environments/staging.json',
     capabilities: {
       ...FILE_ITEM,
@@ -300,6 +302,7 @@ export const KIND_LIST: readonly ItemKindInfo[] = [
     opens: { view: 'tests' },
     watch: { legacy: 'tests', canonical: 'test' },
     git: { merge: 'text' },
+    listed: true,
     pathRef: true,
     sample: 'tests/smoke/login.yaml',
     capabilities: {
@@ -357,7 +360,9 @@ export const KIND_LIST: readonly ItemKindInfo[] = [
     watch: { legacy: 'tests', canonical: 'dataset' },
     git: { merge: 'text' },
     size: { gitWarnBytes: 5 * 1024 * 1024, bundleEmbedBytes: 10 * 1024 * 1024, gitLfsBytes: 50 * 1024 * 1024, gitRefuseBytes: 100 * 1024 * 1024 },
+    listed: true,
     pathRef: true,
+    anyFile: true,
     sample: 'datasets/users.csv',
     capabilities: { ...FILE_ITEM, move: true, trash: true, run: { na: 'a dataset drives a run (Run a collection with it)' }, versioned: true },
   },
@@ -374,7 +379,10 @@ export const KIND_LIST: readonly ItemKindInfo[] = [
     opens: { view: 'apidef' },
     watch: { legacy: 'specs', canonical: 'spec' },
     git: { merge: 'text' },
+    listed: true,
     pathRef: true,
+    pathId: 'path',
+    anyFile: true,
     sample: 'specs/petstore.yaml',
     capabilities: {
       ...FILE_ITEM,
@@ -399,6 +407,7 @@ export const KIND_LIST: readonly ItemKindInfo[] = [
     opens: 'none',
     watch: { legacy: 'other', canonical: 'proto' },
     git: { merge: 'text' },
+    anyFile: true,
     sample: 'protos/greeter.proto',
     capabilities: {
       ...FILE_ITEM,
@@ -423,6 +432,7 @@ export const KIND_LIST: readonly ItemKindInfo[] = [
     opens: { view: 'settings' },
     watch: { legacy: 'other', canonical: 'script-package' },
     git: { merge: 'text' },
+    pathId: 'stem',
     sample: 'packages/helpers.js',
     capabilities: {
       ...FILE_ITEM,
@@ -447,6 +457,7 @@ export const KIND_LIST: readonly ItemKindInfo[] = [
     opens: { view: 'mcp' },
     watch: { legacy: 'mcp', canonical: 'mcp-server' },
     git: { merge: 'by-id' },
+    listed: true,
     sample: 'mcp-servers.json',
     capabilities: {
       ...FILE_ITEM,
@@ -495,6 +506,7 @@ export const KIND_LIST: readonly ItemKindInfo[] = [
     opens: { view: 'ai' },
     watch: { legacy: 'providers', canonical: 'provider' },
     git: { merge: 'by-id' },
+    listed: true,
     sample: 'providers.json',
     capabilities: { ...FILE_ITEM, rename: { na: 'renamed in its settings' }, move: { na: 'providers have no folders' } },
   },
@@ -512,6 +524,7 @@ export const KIND_LIST: readonly ItemKindInfo[] = [
     opens: { view: 'ai' },
     watch: { legacy: 'library', canonical: 'prompt' },
     git: { merge: 'by-id' },
+    listed: true,
     sample: 'library/ai-prompts.json',
     capabilities: { ...LIBRARY_ITEM, 'test-file': { planned: '0.53' } },
   },
@@ -529,6 +542,7 @@ export const KIND_LIST: readonly ItemKindInfo[] = [
     opens: { view: 'load' },
     watch: { legacy: 'library', canonical: 'load-test' },
     git: { merge: 'by-id' },
+    listed: true,
     sample: 'library/load-tests.json',
     capabilities: { ...LIBRARY_ITEM, run: true, ci: { planned: '0.53' } },
   },
@@ -546,6 +560,7 @@ export const KIND_LIST: readonly ItemKindInfo[] = [
     opens: { view: 'evaluations' },
     watch: { legacy: 'library', canonical: 'evaluation' },
     git: { merge: 'by-id' },
+    listed: true,
     sample: 'library/evaluations.json',
     capabilities: { ...LIBRARY_ITEM, run: true, ci: { planned: '0.53' }, monitor: { planned: '0.53' } },
   },
@@ -563,6 +578,7 @@ export const KIND_LIST: readonly ItemKindInfo[] = [
     opens: { view: 'monitors' },
     watch: { legacy: 'library', canonical: 'monitor' },
     git: { merge: 'by-id' },
+    listed: true,
     sample: 'library/monitors.json',
     capabilities: { ...LIBRARY_ITEM, run: true },
   },
@@ -609,6 +625,7 @@ export const KIND_LIST: readonly ItemKindInfo[] = [
     watch: { legacy: 'other', canonical: 'metric' },
     git: { merge: 'text' },
     since: '0.61',
+    pathId: 'stem',
     sample: 'metrics/politeness.yaml',
     capabilities: {
       ...FILE_ITEM,
@@ -659,6 +676,7 @@ export const KIND_LIST: readonly ItemKindInfo[] = [
     opens: { view: 'debugger' },
     watch: { legacy: 'other', canonical: 'capture' },
     git: { merge: 'text', ignored: true },
+    pathId: 'stem',
     sample: 'debugger/morning capture.har',
     capabilities: {
       ...FILE_ITEM,
@@ -683,6 +701,7 @@ export const KIND_LIST: readonly ItemKindInfo[] = [
     opens: 'none',
     watch: 'none',
     git: { merge: 'none', ignored: true },
+    anyFile: true,
     sample: 'baselines/pets.json',
     capabilities: {
       ...RECORD,

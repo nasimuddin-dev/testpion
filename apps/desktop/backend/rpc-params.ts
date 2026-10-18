@@ -146,6 +146,8 @@ export const RPC_PARAMS: Record<string, ParamSpec> = {
   'kafka.connect': { url: 's', reads: 'a?' },
   'lib.save': { kind: 's', library: 'o' },
   'kinds.list': { kind: 's?', all: 'b?' },
+  'item.remove': { ref: 'x' },
+  'item.restore': { trashId: 's' },
   'workspace.revealFile': { path: 's' },
   'openapi.spec.rename': { path: 's', to: 's' },
   'openapi.spec.delete': { path: 's' },

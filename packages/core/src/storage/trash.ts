@@ -6,7 +6,7 @@ import { shortId, slugify } from '../util/ids.js';
 import type { WorkspaceStore } from './workspace.js';
 import { readJson, renameOwned, writeJson } from './fsutil.js';
 import { COLLECTION_ITEM_KINDS } from '../runner/collection-realtime.js';
-import { kindsWith, type KindId } from '@testpion/shared';
+import { KIND_INFO, kindsWith, type KindId } from '@testpion/shared';
 
 /**
  * Recently deleted collections, environments, datasets, API definitions (specs/) and MCP servers. Deleting moves the
@@ -31,11 +31,10 @@ export interface TrashItem {
   size: number;
 }
 
-/** What one kind of trashed item is: where its entries live, and how one is listed and put back. */
+/** What one kind of trashed item is: how one is listed and put back (where its entries live comes from the registry's storage). */
 interface KindDef {
   /** What the items are called, plural ("API definitions"): help texts list the kinds from here. */
   label: string;
-  dir: string;
   /** An entry's file name after `<time>--`: JSON files for items saved as JSON, the file itself for datasets and specs. */
   entry: RegExp;
   describe(store: WorkspaceStore, path: string, name: string): Pick<TrashItem, 'itemId' | 'name' | 'size'>;
@@ -78,7 +77,6 @@ function specRelOf(name: string): string {
 const KINDS: Record<TrashKind, KindDef> = {
   collection: {
     label: 'collections',
-    dir: 'collections',
     entry: /^(.+)\.json$/,
     describe: (_s, path, name) => {
       const data = readJson<Record<string, unknown>>(path);
@@ -102,7 +100,6 @@ const KINDS: Record<TrashKind, KindDef> = {
   },
   environment: {
     label: 'environments',
-    dir: 'environments',
     entry: /^(.+)\.json$/,
     describe: (_s, path, name) => {
       const data = readJson<Record<string, unknown>>(path);
@@ -118,7 +115,6 @@ const KINDS: Record<TrashKind, KindDef> = {
   // a dataset keeps its own name and extension (users.csv)
   dataset: {
     label: 'datasets',
-    dir: 'datasets',
     entry: /^(.+)$/,
     describe: (_s, path, name) => ({ itemId: name, name, size: statSync(path).size }),
     restore: (store, path, name) => {
@@ -129,7 +125,6 @@ const KINDS: Record<TrashKind, KindDef> = {
   // an API definition keeps its path under specs/ (asyncapi/x.yaml), encoded as one file name
   spec: {
     label: 'API definitions',
-    dir: 'specs',
     entry: /^(.+)$/,
     describe: (_s, path, name) => {
       const rel = `specs/${specRelOf(name)}`;
@@ -144,7 +139,6 @@ const KINDS: Record<TrashKind, KindDef> = {
   // an MCP server: its config and its place in the list (it goes back there)
   'mcp-server': {
     label: 'MCP servers',
-    dir: 'mcp-servers',
     entry: /^(.+)\.json$/,
     describe: (_s, path, name) => {
       const { server } = readJson<{ server: McpServerConfig }>(path);
@@ -173,7 +167,13 @@ export function trashKindsText(): string {
 }
 const ENTRY_ID = new RegExp(`^(${TRASH_KINDS.join('|')})\\/(\\d+--[^/\\\\]+)$`);
 
-const trashDir = (store: WorkspaceStore, kind?: TrashKind) => (kind ? store.path('trash', KINDS[kind].dir) : store.path('trash'));
+/** Where a kind's entries live under trash/: the kind's storage folder (collections/, datasets/ …), or its file's name for a kind kept as a list in one file (mcp-servers). */
+function trashDirOf(kind: TrashKind): string {
+  const s = KIND_INFO[kind].storage;
+  return 'dir' in s ? s.dir : 'file' in s ? s.file.replace(/\.json$/, '') : kind;
+}
+
+const trashDir = (store: WorkspaceStore, kind?: TrashKind) => (kind ? store.path('trash', trashDirOf(kind)) : store.path('trash'));
 
 /** The trash folder for a kind, made (with the .gitignore that keeps the trash out of commits) when needed. */
 function ensureTrashDir(store: WorkspaceStore, kind: TrashKind): string {
