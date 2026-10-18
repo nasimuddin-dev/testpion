@@ -44,6 +44,7 @@ import { openApiTools } from './openapi-tools.js';
 import { debuggerTools } from './debugger-tools.js';
 import { historyTools } from './history-tools.js';
 import { refTools } from './ref-tools.js';
+import { kindTools } from './kind-tools.js';
 import { flowGraphTools, planFlowRun } from './flow-graph-tools.js';
 import { deployTools } from './deploy-tools.js';
 import { flowTools } from './flow-tools.js';
@@ -1343,6 +1344,7 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
     },
     ...historyTools({ store, redactor, findCollection, findRequest }),
     ...refTools({ store }),
+    ...kindTools({ store }),
     ...mockTools({ store }),
     ...datasetTools({ store }),
     ...arazzoTools({ store }),

@@ -1,3 +1,5 @@
+import type { WatchKind } from '@testpion/shared';
+
 /**
  * What a `data.changed` event says changed, for views that list workspace files. Every change to the workspace's files
  * says which kinds of file it touched (`kinds`, as the backend's folder watcher sorts them): an RPC that wrote files
@@ -5,7 +7,7 @@
  * the app (`method: 'disk'`) alike. Events without `kinds` wrote no file the watcher would report (a run's results, a
  * connection) — except the ones that replace everything at once (opening a workspace, git).
  */
-export type FileKind = 'collections' | 'environments' | 'tests' | 'library' | 'mcp' | 'providers' | 'workspace' | 'specs' | 'other';
+export type FileKind = WatchKind;
 
 export interface DataChangedEvent {
   method?: string;

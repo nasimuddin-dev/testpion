@@ -11,13 +11,14 @@ const step = (name, body) => [name, `(async () => { ${H} ${body} })()`];
 const steps = [
   step('explorer', `await __t.requests(); await __t.sleep(600); return await walk('aside', ['ArrowDown', 'ArrowDown', 'ArrowRight', 'ArrowDown', 'ArrowLeft', 'End', 'Home']);`),
   step('ailab-list', `await __t.view('AI Lab'); await __t.sleep(800); return await walk('main', ['ArrowDown', 'ArrowDown', 'End', 'ArrowUp', 'Home']);`),
-  step('tests-tree', `await __t.view('Tests'); await __t.sleep(800); return await walk('main', ['ArrowDown', 'ArrowDown', 'ArrowLeft', 'ArrowDown', 'End']);`),
+  step('tests-tree', `await __t.view('Tests'); await __t.sleep(800); return await walk('main', ['ArrowDown', 'ArrowDown', 'ArrowDown', 'ArrowLeft', 'ArrowDown', 'End']);`),
   step('environments', `await __t.view('Environments'); await __t.sleep(800); return await walk('main', ['ArrowDown', 'End', 'Home']);`),
 ];
 
 module.exports = withExpect(steps, {
   explorer: /ArrowRight→HTTP basics.*ArrowDown→HTTPREST17/,
   'ailab-list': /End→Haiku/,
-  'tests-tree': /ArrowLeft→ai \| ArrowDown→graphql/,
+  // the header is a row of the tree too (TreeRowShell): ↓ from it reaches the first folder
+  'tests-tree': /^Tests \| ArrowDown→\w.*ArrowLeft→ai \| ArrowDown→graphql/,
   environments: /Public APIs/,
 });

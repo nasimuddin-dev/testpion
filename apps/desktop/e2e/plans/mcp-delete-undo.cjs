@@ -6,8 +6,10 @@
 const { withExpect, step, OPEN_RECENTLY_DELETED } = require('../lib.cjs');
 
 const H = `
-  const toastText = (re) => [...document.querySelectorAll('[data-sonner-toast]')].map((t) => t.textContent.trim()).find((t) => re.test(t));
-  const toastButton = (re, label) => [...document.querySelectorAll('[data-sonner-toast]')].find((t) => re.test(t.textContent))?.querySelector('button[data-button]:not([data-cancel])') ?? [...document.querySelectorAll('[data-sonner-toast] button')].find((b) => b.textContent.trim() === label);
+  // the toasts on screen (one on its way out, data-removed, is not: a delete repeated replaces its message)
+  const toasts = () => [...document.querySelectorAll('[data-sonner-toast]:not([data-removed="true"])')];
+  const toastText = (re) => toasts().map((t) => t.textContent.trim()).find((t) => re.test(t));
+  const toastButton = (re, label) => toasts().find((t) => re.test(t.textContent))?.querySelector('button[data-button]:not([data-cancel])') ?? toasts().flatMap((t) => [...t.querySelectorAll('button')]).find((b) => b.textContent.trim() === label);
   const dialogs = () => document.querySelectorAll('[role=dialog], [role=alertdialog]').length;
   const order = async () => (await window.aps.invoke('mcp.servers')).map((s) => s.id + (s.folder ? '@' + s.folder : '')).join(',');
   const serverRow = () => document.querySelector('[data-node-id="mcp:deepwiki"] [data-tree-row]');
@@ -67,10 +69,14 @@ const steps = [
   // the MCP tab's ⋯ ▸ Delete… is the same Delete as the sidebar's: Recently deleted, Undo back in its place
   s(
     'mcp-tab-delete-undo',
-    `const d = await deleteFromTab(); if (d !== 'ok') return d;
-     const msg = await __t.waitFor(() => toastText(/Deleted the MCP server "DeepWiki"/), 3000);
+    `const before = new Set(toasts());
+     const d = await deleteFromTab(); if (d !== 'ok') return d;
+     // this delete's own message (the last step's may still be on screen until this one replaces it)
+     const mine = () => toasts().find((t) => !before.has(t) && /Deleted the MCP server "DeepWiki"/.test(t.textContent));
+     const msg = (await __t.waitFor(mine, 3000))?.textContent.trim();
      const gone = await __t.waitFor(async () => !(await order()).includes('deepwiki'), 3000);
-     const b = await __t.waitFor(() => toastButton(/Deleted the MCP server "DeepWiki"/, 'Undo'), 3000); if (!b) return 'NO UNDO BUTTON';
+     const b = await __t.waitFor(() => mine()?.querySelector('button[data-button]:not([data-cancel])'), 3000); if (!b) return 'NO UNDO BUTTON';
+     await __t.sleep(400); // the message has settled (it slides in): the click lands on its Undo
      await __t.real.click(b);
      const back = await __t.waitFor(() => toastText(/Restored the MCP server "DeepWiki"/), 4000);
      await __t.waitFor(serverRow, 3000);

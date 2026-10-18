@@ -1,9 +1,11 @@
-import { ChevronDown, ChevronRight, Folder, FolderInput, FolderOpen, FolderPlus, MoreHorizontal, Pencil, Plus, Trash2, AlarmClock, ChevronsDownUp, ChevronsUpDown, CopyPlus, ExternalLink, FilePlus2, FolderCog, History, Play, Star, SquareArrowOutUpRight } from 'lucide-react';
-import { memo, useEffect, useRef, useState, type HTMLAttributes, type ReactNode } from 'react';
+import { ChevronDown, ChevronRight, Folder, FolderInput, FolderOpen, FolderPlus, MoreHorizontal, Plus } from 'lucide-react';
+import { memo, useEffect, useRef, useState, type ReactNode } from 'react';
 import { promptText } from '../store';
-import { deleteWithUndo } from '../lib/undo-delete';
 import { cx, Menu, rowActionClass, type MenuItem } from './ui';
 import { LABEL } from '../lib/vocabulary';
+import { buildNodeMenu, type NodeKind, type NodeMenuCtx } from '../lib/node-menu';
+import { copyText } from '../lib/clipboard';
+import { itemRefUrl } from '@testpion/shared';
 
 /*
  * The parts every sidebar tree is made of (the explorer, monitors, load tests, saved prompts …), so they all look
@@ -16,14 +18,23 @@ export const OPEN_ICON = <ChevronDown size={13} className="text-muted shrink-0" 
 export const CLOSED_ICON = <ChevronRight size={13} className="text-muted shrink-0" />;
 export const FOLDER_ICON = <Folder size={13} className="text-muted shrink-0" />;
 
-/** The ⋯ button of a row: opens its menu (a right-click on the row opens the same one). */
-export function RowMenu({ label, items, open, onOpenChange, header }: { label: string; items: MenuItem[]; open?: boolean; onOpenChange?(open: boolean): void; header?: boolean }) {
+/**
+ * The ⋯ button of a row: opens its menu (a right-click on the row opens the same one). `items` may be a function: the
+ * menu is then built only while it is open (a tree of thousands of rows holds no menus).
+ */
+export function RowMenu({ label, items, open, onOpenChange, header }: { label: string; items: MenuItem[] | (() => MenuItem[]); open?: boolean; onOpenChange?(open: boolean): void; header?: boolean }) {
+  const [own, setOwn] = useState(false);
+  const isOpen = open ?? own;
+  const setOpen = (v: boolean) => {
+    if (open === undefined) setOwn(v);
+    onOpenChange?.(v);
+  };
   return (
     <Menu
       width={230}
-      open={open}
-      onOpenChange={onOpenChange}
-      items={items}
+      open={isOpen}
+      onOpenChange={setOpen}
+      items={isOpen ? (typeof items === 'function' ? items() : items) : []}
       trigger={
         <button aria-label={`More actions for ${label}`} className={rowActionClass(header)} onClick={(e) => e.stopPropagation()}>
           {MORE_ICON}
@@ -81,119 +92,6 @@ export function TreeHeader({
   );
 }
 
-/** A folder row: chevron, folder icon, name, count and ⋯ (also on right-click); drop props make it a drop target. */
-export function TreeFolderRow({
-  name,
-  count,
-  open,
-  onToggle,
-  menu,
-  dropTarget,
-  className,
-  onRename,
-  ...rest
-}: { name: string; count: number; open: boolean; onToggle(): void; menu: MenuItem[]; dropTarget?: boolean; onRename?(to: string): unknown } & Omit<HTMLAttributes<HTMLDivElement>, 'onToggle'>) {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const key = `folder:${name}`;
-  // with onRename, "Rename folder" in the menu (and F2) renames in place instead of asking in a dialog
-  const items = onRename ? menu.map((m) => (m.label === 'Rename folder' ? { ...m, onSelect: () => setEditing(true) } : m)) : menu;
-  return (
-    <div
-      {...rest}
-      className={cx(
-        'group flex items-center h-8 text-sm rounded-md mx-1 pr-1 transition-colors',
-        dropTarget ? 'bg-accent-soft ring-1 ring-accent' : 'hover:bg-hover',
-        menuOpen && 'bg-hover',
-        className ?? 'pl-2',
-      )}
-      onContextMenu={(e) => {
-        e.preventDefault();
-        setMenuOpen(true);
-      }}
-    >
-      {editing ? (
-        <div className="flex items-center gap-1 flex-1 min-w-0">
-          {open ? OPEN_ICON : CLOSED_ICON}
-          {FOLDER_ICON}
-          <InlineRename
-            value={name}
-            label="Folder name"
-            onCommit={(to) => {
-              setEditing(false);
-              void onRename?.(to);
-              focusRow(`folder:${to}`);
-            }}
-            onCancel={() => {
-              setEditing(false);
-              focusRow(key);
-            }}
-          />
-        </div>
-      ) : (
-        <button
-          className="flex items-center gap-1 flex-1 min-w-0 text-left"
-          onClick={onToggle}
-          onKeyDown={(e) => {
-            if (e.key === 'F2' && onRename) {
-              e.preventDefault();
-              setEditing(true);
-            }
-          }}
-          aria-expanded={open}
-          data-tree-row
-          data-rename-id={key}
-          title={onRename ? 'F2 renames' : undefined}
-        >
-          {open ? OPEN_ICON : CLOSED_ICON}
-          {FOLDER_ICON}
-          <span className="truncate flex-1">{name}</span>
-          <CountPill n={count} />
-        </button>
-      )}
-      <RowMenu label={`folder ${name}`} items={items} open={menuOpen} onOpenChange={setMenuOpen} />
-    </div>
-  );
-}
-
-/** A folder's menu, the same in every tree: new item here, rename, delete (its items move to the top level). */
-export function folderMenuItems({
-  name,
-  itemNoun = 'item',
-  addLabel,
-  onAdd,
-  rename,
-  remove,
-}: {
-  name: string;
-  itemNoun?: string;
-  addLabel?: string;
-  onAdd?(): void;
-  rename(to: string): unknown;
-  /** Remove the folder (its items move to the top level); returns what puts it back. */
-  remove(): unknown;
-}): MenuItem[] {
-  return [
-    ...(onAdd ? [{ label: `${addLabel ?? 'New'} here`, icon: <Plus size={14} />, onSelect: onAdd }] : []),
-    {
-      label: 'Rename folder',
-      icon: <Pencil size={14} />,
-      onSelect: async () => {
-        const to = (await promptText('Rename folder', { message: 'Folder name', value: name, okLabel: 'Rename' }))?.trim();
-        if (to && to !== name) await rename(to);
-      },
-    },
-    {
-      label: 'Delete folder',
-      icon: <Trash2 size={14} />,
-      danger: true,
-      separator: true,
-      // at once, with Undo in the message: nothing is lost (its items move to the top level)
-      onSelect: () => void deleteWithUndo({ what: `the folder "${name}"`, run: remove, note: `Its ${itemNoun}s moved to the top level` }),
-    },
-  ];
-}
-
 /** Ask for a new folder's name. */
 export const askFolderName = async () => (await promptText('New folder', { message: 'Folder name', okLabel: 'Create' }))?.trim() || undefined;
 
@@ -201,7 +99,7 @@ export const askFolderName = async () => (await promptText('New folder', { messa
 export function moveToFolderItem({ folders, current, move }: { folders: string[]; current?: string; move(folder: string | undefined): unknown }): MenuItem {
   const others = folders.filter((f) => f !== current);
   return {
-    label: 'Move to folder',
+    label: LABEL.moveToFolder,
     icon: <FolderInput size={14} />,
     onSelect: () => undefined,
     items: [
@@ -318,6 +216,16 @@ export function treeKeys(e: React.KeyboardEvent<HTMLElement>): void {
     next.focus();
     next.scrollIntoView({ block: 'nearest' });
   };
+  if ((e.key === 'F10' && e.shiftKey) || e.key === 'ContextMenu') {
+    // the keyboard's right-click: the focused row's menu (its ⋯ button), the same menu a right-click opens
+    const host = row.closest<HTMLElement>('[data-node-id], [data-tree-section]') ?? row.parentElement;
+    const button = host?.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]');
+    if (button) {
+      e.preventDefault();
+      button.click();
+    }
+    return;
+  }
   if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
     const all = rows();
     go(all[all.indexOf(row) + (e.key === 'ArrowDown' ? 1 : -1)]);
@@ -342,8 +250,23 @@ export function treeKeys(e: React.KeyboardEvent<HTMLElement>): void {
   else if ((e.key === 'ArrowRight' && row.getAttribute('aria-expanded') === 'false') || (e.key === 'ArrowLeft' && row.getAttribute('aria-expanded') === 'true')) {
     e.preventDefault();
     row.click();
+  } else if (e.key.length === 1 && e.key !== '*' && e.key !== ' ' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    // typeahead: letters typed in a row jump to the next row whose name starts with them (as in a file tree)
+    const now = e.timeStamp;
+    typed = now - typedAt < 700 ? typed + e.key.toLowerCase() : e.key.toLowerCase();
+    typedAt = now;
+    const all = rows();
+    const at = all.indexOf(row);
+    const name = (r: HTMLElement) => (r.dataset.rowName ?? r.textContent ?? '').trim().toLowerCase();
+    // the same letter again moves on to the next match; more letters refine the current one
+    const start = typed.length > 1 ? at : at + 1;
+    const next = [...all.slice(start), ...all.slice(0, start)].find((r) => name(r).startsWith(typed));
+    go(next);
   }
 }
+/** What was typed in a tree (typeahead), and when (the event's time: no timer). */
+let typed = '';
+let typedAt = -Infinity;
 
 /** The kind of a row (gRPC, WS, MQTT, MCP, API …), in the same small badge as a request's method; colours match the editor tabs. */
 export const KindBadge = memo(function KindBadge({ text, cls }: { text: string; cls: string }) {
@@ -375,118 +298,16 @@ export const TEST_KINDS: Record<string, [string, string]> = {
 };
 
 /**
- * The item menu of every tree and list row (WF-13): groups in one order, create · open · run · test · configure · copy ·
- * organize · delete (lib/vocabulary.ts MENU_GROUPS), each after a separator, with one word per action (LABEL). A row's
- * right-click opens the same menu (controlled `open`).
+ * The ⋯ menu of every tree and list node (lib/node-menu.ts builds it, in one group order everywhere). `ctx` is read
+ * only when the menu opens, so a closed row holds no menu. A row's right-click opens the same menu (controlled `open`).
  */
-export function NodeMenu({
-  onEdit,
-  onRename,
-  onDelete,
-  onNewRequest,
-  onNewFolder,
-  onDuplicate,
-  onMove,
-  onToggleFavorite,
-  favorite,
-  onHistory,
-  onRun,
-  runLabel = 'Run',
-  onMonitor,
-  onExpandAll,
-  onCollapseAll,
-  onOpen,
-  onOpenNewTab,
-  copyItems,
-  otherNew,
-  runItems,
-  testItems,
-  configItems,
-  open,
-  onOpenChange,
-  newRequestLabel = 'New HTTP request',
-  header,
-  label,
-}: {
-  newRequestLabel?: string;
-  /** On a header row (a collection): the button stays faintly visible, like the + beside it. */
-  header?: boolean;
-  /** What the menu is for (named on the button). */
-  label?: string;
-  onEdit?(): void;
-  onRename?(): void;
-  onDelete?(): void;
-  onNewRequest?(): void;
-  onNewFolder?(): void;
-  onDuplicate?(): void;
-  /** Move to another folder or collection. */
-  onMove?(): void;
-  onToggleFavorite?(): void;
-  favorite?: boolean;
-  /** Its versions in git (when the workspace is in git). */
-  onHistory?(): void;
-  onRun?(): void;
-  runLabel?: string;
-  /** Expand / collapse everything inside it (collections and folders). */
-  onExpandAll?(): void;
-  onCollapseAll?(): void;
-  /** Run it on a schedule (opens Monitors with a new monitor). */
-  onMonitor?(): void;
-  /** Open the request (in a tab). */
-  onOpen?(): void;
-  /** Open it in a tab of its own. */
-  onOpenNewTab?(): void;
-  /** Copy URL / Copy as cURL … (requests only). */
-  copyItems?: MenuItem[];
-  /** The other kinds of request it can create (after the first New item). */
-  otherNew?: MenuItem[];
-  /** More ways to run it (after Run and Monitor). */
-  runItems?: MenuItem[];
-  /** Save it as a test (WF-07): its own group, after run. */
-  testItems?: MenuItem[];
-  /** Its settings and tools (after Edit folder). */
-  configItems?: MenuItem[];
-  /** Controlled open state, so a right-click on the row can open the menu. */
-  open?: boolean;
-  onOpenChange?(open: boolean): void;
-}) {
-  // a row's menu is built only while it is open: a tree of hundreds of rows renders hundreds of these
-  const [own, setOwn] = useState(false);
-  const isOpen = open ?? own;
-  const setOpen = (v: boolean) => (open === undefined ? setOwn(v) : onOpenChange?.(v));
-  const build = (): MenuItem[] => {
-    // groups, each after a separator, in one order for every row: create (first: this menu is also the row's only
-    // button) · open · run · test · configure · copy · organize · delete
-    const groups: MenuItem[][] = [];
-    const group = (...g: Array<MenuItem | undefined>) => groups.push(g.filter((x): x is MenuItem => !!x));
-    const item = (label: string, icon: React.ReactNode, fn?: () => void, extra: Partial<MenuItem> = {}): MenuItem | undefined => (fn ? { label, icon, onSelect: fn, ...extra } : undefined);
-    group(item(newRequestLabel, <FilePlus2 size={14} />, onNewRequest), ...(otherNew ?? []), item('New folder', <FolderPlus size={14} />, onNewFolder));
-    group(item(LABEL.open, <ExternalLink size={14} />, onOpen), item(LABEL.openNewTab, <SquareArrowOutUpRight size={14} />, onOpenNewTab), item('History in git…', <History size={14} />, onHistory));
-    group(item('Expand all', <ChevronsUpDown size={14} />, onExpandAll), item('Collapse all', <ChevronsDownUp size={14} />, onCollapseAll));
-    group(item(runLabel, <Play size={14} />, onRun), item('Monitor on a schedule…', <AlarmClock size={14} />, onMonitor), ...(runItems ?? []));
-    group(...(testItems ?? []));
-    group(item('Edit folder (scripts, variables, auth)', <FolderCog size={14} />, onEdit), ...(configItems ?? []));
-    group(...(copyItems ?? []));
-    group(
-      item('Rename', <Pencil size={14} />, onRename),
-      item('Duplicate', <CopyPlus size={14} />, onDuplicate),
-      item('Move to…', <FolderInput size={14} />, onMove),
-      item(favorite ? 'Remove from favorites' : 'Add to favorites', <Star size={14} />, onToggleFavorite),
-    );
-    group(item(LABEL.delete, <Trash2 size={14} />, onDelete, { danger: true }));
-    return groups.filter((g) => g.length).flatMap((g, i) => g.map((it, j) => (i > 0 && j === 0 ? { ...it, separator: true } : it)));
-  };
-  return (
-    <Menu
-      items={isOpen ? build() : []}
-      width={230}
-      open={isOpen}
-      onOpenChange={setOpen}
-      trigger={
-        <button aria-label={label ? `More actions for ${label}` : 'More actions'} className={rowActionClass(header)}>
-          <MoreHorizontal size={14} />
-        </button>
-      }
-    />
-  );
+export function NodeMenu({ kind, ctx, open, onOpenChange, header, label }: { kind: NodeKind; ctx: () => NodeMenuCtx; open?: boolean; onOpenChange?(open: boolean): void; header?: boolean; label?: string }) {
+  return <RowMenu label={label ?? 'this item'} items={() => buildNodeMenu(kind, withRefDefaults(ctx()))} open={open} onOpenChange={onOpenChange} header={header} />;
+}
+
+/** What every node with an ItemRef can do without the view's help: Copy link (its testpion:// link). */
+export function withRefDefaults(c: NodeMenuCtx): NodeMenuCtx {
+  if (!c.ref || c.on.copyLink) return c;
+  const ref = c.ref;
+  return { ...c, on: { ...c.on, copyLink: () => copyText(itemRefUrl(ref), 'the link') } };
 }

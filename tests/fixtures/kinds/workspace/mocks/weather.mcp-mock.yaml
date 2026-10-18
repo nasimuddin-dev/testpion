@@ -1,0 +1,5 @@
+name: Weather
+tools:
+  - name: forecast
+    description: Forecast
+    response: { text: sunny }

@@ -1,8 +1,9 @@
 import { RecentRuns } from '../components/charts';
 import { AiAction } from '../components/ai/AiAction';
-import { AlarmClock, ExternalLink, Folder, KeyRound, Pause, Pencil, Play, Plus, Trash2 } from 'lucide-react';
+import { AlarmClock, Folder, KeyRound, Pause, Pencil, Play, Plus, Trash2 } from 'lucide-react';
 import { DocTabStrip } from '../components/DocTabStrip';
 import { noteClosedTabs } from '../lib/closed-tabs';
+import { LABEL } from '../lib/vocabulary';
 import { ItemBreadcrumb } from '../components/ItemBreadcrumb';
 import { refMenu } from '../components/RefLink';
 import { SidebarShell } from '../components/SidebarShell';
@@ -24,7 +25,6 @@ import { Badge, Button, cx, Empty, Field, Input, Metric, MetricGrid, ModalOrPane
 import { useCollectionTree } from '../lib/collections-store';
 import { VarInput } from '../components/VarInput';
 import { useExternalChange } from '../lib/external-change';
-import { LABEL } from '../lib/vocabulary';
 import { EnvBadge, EnvSelect } from '../components/EnvSelect';
 
 /** The tab of a monitor being created (not saved yet, so no id). */
@@ -265,6 +265,7 @@ export function MonitorsView() {
             render: () => (
               <FolderList
                 id="monitors"
+                kind="monitor"
                 title="Monitors"
                 itemNoun="monitor"
                 addLabel={collections.length ? 'New monitor' : 'Create a collection first'}
@@ -280,14 +281,12 @@ export function MonitorsView() {
                   badge: m.enabled ? <RecentRuns statuses={m.recent ?? []} /> : <Badge>paused</Badge>,
                   subtitle: `${targetName(m)}${m.enabled ? ` · ${m.schedule}` : ''}${m.uptime7d !== undefined ? ` · ${m.uptime7d}% (7 days)` : ''}${m.lastResult ? ` · ${timeAgo(m.lastResult.startedAt)}` : ''}`,
                 }))}
-                itemMenu={(id) => {
+                itemActions={(id) => {
                   const m = rows.find((x) => x.id === id)!;
-                  return [
-                    { label: LABEL.open, icon: <ExternalLink size={14} />, onSelect: () => openTab(id) },
-                    { label: 'Edit', icon: <Pencil size={14} />, onSelect: () => (openTab(id), setEditing(m)) },
-                    { label: 'Run now', icon: <Play size={14} />, disabled: busy.includes(id) || m.running, onSelect: () => void run(m) },
-                    { label: m.enabled ? 'Pause' : 'Resume', icon: <AlarmClock size={14} />, onSelect: () => void toggle(m) },
-                  ];
+                  return {
+                    on: { edit: () => (openTab(id), setEditing(m)), run: () => void run(m), ...(m.enabled ? { pause: () => void toggle(m) } : { resume: () => void toggle(m) }) },
+                    disabled: busy.includes(id) || m.running ? { run: 'It is running now' } : {},
+                  };
                 }}
                 ops={monitorOps}
                 empty={
@@ -343,7 +342,7 @@ export function MonitorsView() {
               closeTabs(ids.filter((id) => id !== NEW_TAB));
             }}
             onRename={(t, name) => name && name !== t.title && void update(t.id, { name })}
-            extraItems={({ id, data: m }) => [{ label: 'Run now', icon: <Play size={13} />, disabled: !m || busy.includes(id) || m.running, onSelect: () => m && void run(m) }]}
+            extraItems={({ id, data: m }) => [{ label: LABEL.runNow, icon: <Play size={13} />, disabled: !m || busy.includes(id) || m.running, onSelect: () => m && void run(m) }]}
           />
         )}
         <div className="flex-1 min-h-0 overflow-auto">

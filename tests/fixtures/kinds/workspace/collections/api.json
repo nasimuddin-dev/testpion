@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "1.0",
+  "id": "api",
+  "name": "Kinds API",
+  "version": 0,
+  "variables": [],
+  "updatedAt": "",
+  "items": [
+    {
+      "kind": "folder",
+      "id": "f1",
+      "name": "Pets",
+      "items": [
+        { "kind": "http", "id": "r1", "name": "List pets", "request": { "method": "GET", "url": "{{baseUrl}}/pets" }, "assertions": [] },
+        { "kind": "http", "id": "s1", "name": "Soap call", "request": { "method": "POST", "url": "{{baseUrl}}/soap", "headers": [{ "key": "SOAPAction", "value": "x", "enabled": true }] }, "assertions": [] }
+      ]
+    },
+    { "kind": "graphql", "id": "g1", "name": "Pets query", "request": { "endpoint": "{{baseUrl}}/graphql", "query": "query { pets { id } }", "variables": "", "headers": [] }, "assertions": [] }
+  ]
+}

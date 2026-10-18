@@ -1,6 +1,6 @@
 import { readdirSync, statSync, type Dirent } from 'node:fs';
 import { join } from 'node:path';
-import type { ItemRef } from '@testpion/shared';
+import { kindOfLibrary, type ItemRef } from '@testpion/shared';
 import type { CollectionNode } from '../model/types.js';
 import type { TestFileNode, WorkspaceStore } from './workspace.js';
 import { listSpecs } from '../openapi/spec-files.js';
@@ -122,16 +122,18 @@ export class WorkspaceSearch {
     };
     walkTests(this.store.testTree());
     // saved WebSocket connections, gRPC requests, AI prompts … (library/<kind>.json)
-    const labels: Record<string, string> = { websocket: 'Saved connection', grpc: 'Saved gRPC request', 'ai-prompts': 'Saved prompt', monitors: 'Monitor', 'load-tests': 'Saved load test', evaluations: 'Saved evaluation' };
+    // (the registry's library kinds that can be found: each one's search label)
     for (const kind of this.store.libraryKinds()) {
-      if (!labels[kind]) continue;
+      const info = kindOfLibrary(kind);
+      const label = info?.capabilities.search === true ? info.searchLabel : undefined;
+      if (!label) continue;
       docs.push(
         ...this.cached(this.store.path('library', `${kind}.json`), () =>
           this.store.getLibrary<Record<string, unknown>>(kind).items.map((i) => {
             const d = i.data ?? {};
             const detail = String(d.url ?? d.method ?? d.model ?? (kind === 'monitors' && typeof d.everyMinutes === 'number' ? `every ${d.everyMinutes} min` : ''));
             return {
-              hit: { kind: 'saved' as const, id: `${kind}:${i.id}`, title: i.name, subtitle: `${labels[kind]}${i.folder ? ` · ${i.folder}` : ''}${detail ? ` · ${detail}` : ''}`, ref: { kind: 'saved', library: kind, itemId: i.id } },
+              hit: { kind: 'saved' as const, id: `${kind}:${i.id}`, title: i.name, subtitle: `${label}${i.folder ? ` · ${i.folder}` : ''}${detail ? ` · ${detail}` : ''}`, ref: { kind: 'saved', library: kind, itemId: i.id } },
               text: `${i.name} ${i.folder ?? ''} ${detail} ${String(d.target ?? '')} ${String(d.prompt ?? '').slice(0, 2000)} ${String(d.event ?? '')}`,
             };
           }),

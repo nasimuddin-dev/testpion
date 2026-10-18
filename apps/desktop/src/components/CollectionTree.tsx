@@ -1,27 +1,12 @@
-import { generateFlowItem } from './ai/flow-generate';
-import {
-  Plus,
-  Workflow,
-  Braces,
-  ChevronDown,
-  Undo2,
-  Wand2,
-  ChevronRight,
-  Code2,
-  FilePlus2,
-  Link2,
-  Play,
-  SquareTerminal,
-  Star,
-  Terminal,
-  TerminalSquare,
-  Settings2,
-} from 'lucide-react';
+import { startFlowGenerate } from './ai/flow-generate';
+import { Plus, ChevronDown, ChevronRight, Download, FilePlus2, Star, Undo2 } from 'lucide-react';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
-import type { Collection, CollectionFolder, CollectionNode, SavedHttpRequest } from '../types';
+import type { Collection, CollectionFolder, CollectionNode } from '../types';
 import { asError, call, on } from '../api';
-import { Button, cx, Menu, menuKeys, rowActionClass, VirtualList, type MenuItem } from './ui';
-import { CLOSED_ICON, CountPill, focusRow, FOLDER_ICON, InlineRename, MORE_ICON, OPEN_ICON, NodeMenu } from './TreeParts';
+import { Button, cx, menuKeys, VirtualList } from './ui';
+import { CLOSED_ICON, CountPill, focusRow, FOLDER_ICON, InlineRename, OPEN_ICON, NodeMenu } from './TreeParts';
+import { buildNodeMenu, type NodeMenuCtx } from '../lib/node-menu';
+import { LABEL } from '../lib/vocabulary';
 import { confirmAction, promptText, toastError, useApp } from '../store';
 import { deleteWithUndo, restoreDeleted } from '../lib/undo-delete';
 import { MoveDialog, subtreeIds } from './MoveDialog';
@@ -37,8 +22,9 @@ import { matchesCollectionNode, requestCategory, type RequestCategory } from '..
 // the tree's data operations live in lib/collection-nodes (re-exported: views import them from here)
 export { mapNodes, findNode, addToFolder, insertBefore, folderIdsTo, withNewIds, duplicateNode } from '../lib/collection-nodes';
 import { mapNodes, findNode, addToFolder, insertBefore, folderIdsTo, withNewIds, duplicateNode, moveIntoCollection, nodeIdsExcept } from '../lib/collection-nodes';
-import { usePersisted } from '../lib/sticky';
-import { saveAsTestItem } from '../lib/save-test';
+import { useTreeOpen } from '../lib/tree-state';
+import { requestCopyItems } from '../lib/request-copy';
+import { saveAsTest } from '../lib/save-test';
 import { openRef } from '../lib/open-ref';
 import { deferDrop, setDragRefs, useDragSession } from '../lib/drag-ref';
 import { savedItemRef } from '@testpion/shared';
@@ -125,6 +111,7 @@ export const CollectionTree = memo(function CollectionTree({
   onNewRequest,
   onRun,
   onSettings,
+  onExport,
   filter,
   favoritesOnly = false,
   onMoved,
@@ -134,6 +121,7 @@ export const CollectionTree = memo(function CollectionTree({
   onNewOfCategory,
   onDropSaved,
   collapseAll,
+  expandAll,
   revealKey,
   revealId,
 }: {
@@ -147,6 +135,8 @@ export const CollectionTree = memo(function CollectionTree({
   onRun?(c: Collection, folderId?: string): void;
   /** Open a collection's settings (variables, auth, scripts, runner, docs, mock): shown in its menu. */
   onSettings?(c: Collection): void;
+  /** Export a collection (the export dialog, with this collection chosen): Export ▸ in its menu. */
+  onExport?(c: Collection): void;
   filter?: string;
   /** Show starred requests while retaining their containing folders for context. */
   favoritesOnly?: boolean;
@@ -164,6 +154,8 @@ export const CollectionTree = memo(function CollectionTree({
   onDropSaved?(kind: 'grpc' | 'websocket', id: string, collectionId: string): void;
   /** Changes (1, 2 …) fold every collection and folder. */
   collapseAll?: number;
+  /** Changes (1, 2 …) unfold every collection, category and folder (the explorer's Expand all). */
+  expandAll?: number;
   /** Changes whenever something is opened: the open request is revealed again (even if it was already open). */
   revealKey?: number;
   /** With revealKey: reveal this collection, folder, request or saved item instead of the open request. */
@@ -220,7 +212,10 @@ export const CollectionTree = memo(function CollectionTree({
   const deleteNode = async (c: Collection, n: CollectionNode) => removeWithUndo(c, n);
   /** F2 renames and Delete deletes the focused request or folder (like a file tree). */
   const rowKeys = (c: Collection, n: CollectionNode) => (e: React.KeyboardEvent) => {
-    if (e.key === 'F2') {
+    if (e.key === '*' && n.kind === 'folder') {
+      e.preventDefault();
+      setSubtree(c, n, true);
+    } else if (e.key === 'F2') {
       e.preventDefault();
       void renameNode(c, n);
     } else if (e.key === 'Delete') {
@@ -357,25 +352,6 @@ export const CollectionTree = memo(function CollectionTree({
       useApp.getState().toast(`Moved "${n.name}" to ${to.name}${folderId ? ` › ${findNode(to.items, folderId)?.name ?? ''}` : ''}`, 'success', { ref: n.kind === 'folder' ? { kind: 'folder', collectionId: to.id, folderId: n.id } : { kind: 'request', collectionId: to.id, requestId: n.id } });
     }, toastError);
   };
-  /** Copy a saved request as its URL or as code, with variables resolved from the active environment. */
-  const copyAs = async (c: Collection, shown: SavedHttpRequest, language: string, what: string) => {
-    try {
-      const n = wholeNode(await fullCollection(c), shown);
-      const r = await call<{ text: string; containsSecrets: boolean }>('http.copyCode', { request: n.request, environment: useApp.getState().environment, collectionId: c.id, requestId: n.id, language });
-      await navigator.clipboard.writeText(r.text);
-      useApp.getState().toast(`Copied ${what}${r.containsSecrets ? ' (it includes secret values such as tokens)' : ''}`, 'success');
-    } catch (e) {
-      useApp.getState().toast(`Couldn't copy: ${asError(e).message}`, 'error');
-    }
-  };
-  const copyMenu = (c: Collection, n: SavedHttpRequest): MenuItem[] => [
-    { label: 'Copy URL', icon: <Link2 size={14} />, onSelect: () => void copyAs(c, n, 'url', 'the URL') },
-    { label: 'Copy as cURL (bash)', icon: <Terminal size={14} />, onSelect: () => void copyAs(c, n, 'curl', 'as cURL (bash)') },
-    { label: 'Copy as cURL (cmd)', icon: <SquareTerminal size={14} />, onSelect: () => void copyAs(c, n, 'curl-windows', 'as cURL (cmd)') },
-    { label: 'Copy as PowerShell', icon: <TerminalSquare size={14} />, onSelect: () => void copyAs(c, n, 'powershell', 'as PowerShell') },
-    { label: 'Copy as fetch', icon: <Braces size={14} />, onSelect: () => void copyAs(c, n, 'fetch', 'as fetch') },
-    { label: 'More code snippets…', icon: <Code2 size={14} />, onSelect: () => useApp.getState().openIntent('rest', { collectionId: c.id, requestId: n.id, showCode: true }) },
-  ];
   /** Rewrite the collection's scripts between Postman's pm.* and TestPion's tp.* (both always work). */
   const convertScripts = async (c: Collection, to: 'tp' | 'pm') => {
     const from = to === 'tp' ? 'pm' : 'tp';
@@ -409,7 +385,8 @@ export const CollectionTree = memo(function CollectionTree({
       useApp.getState().toast(`Couldn't convert the scripts: ${asError(e).message}`, 'error');
     }
   };
-  const [open, setOpen] = usePersisted<Record<string, boolean>>('aps.tree.open', {});
+  // which collections, categories and folders are open: the workspace's tree state (lib/tree-state)
+  const [open, setOpen] = useTreeOpen('collections');
   // flips what is shown: an item open by default (a category, the collection of the open request) closes on the first click
   const toggle = (id: string, shown: boolean) => {
     setOpen((o) => ({ ...o, [id]: !shown }));
@@ -424,6 +401,11 @@ export const CollectionTree = memo(function CollectionTree({
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [collapseAll]);
+  useEffect(() => {
+    if (!expandAll) return;
+    for (const c of collections) setSubtree(c, undefined, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expandAll]);
   /**
    * Expand or collapse everything inside a collection (its categories, folders and saved-item folders), or inside one
    * folder: the collection or folder itself opens or closes with it (a folder of requests only would otherwise not change).
@@ -440,6 +422,99 @@ export const CollectionTree = memo(function CollectionTree({
     setOpen((o) => {
       return { ...o, ...Object.fromEntries(keys.map((k) => [k, shown])), [folder ? folderOpenKey(c.id, folder.id) : c.id]: shown };
     });
+  };
+  /** Open or close one protocol category of a collection, and every folder in the collection with it. */
+  const setCategory = (c: Collection, key: string, shown: boolean) => {
+    const keys: string[] = [key];
+    const walk = (nodes: CollectionNode[]) => nodes.forEach((n) => n.kind === 'folder' && (keys.push(folderOpenKey(c.id, n.id)), walk(n.items)));
+    walk(c.items);
+    setOpen((o) => ({ ...o, ...Object.fromEntries(keys.map((k) => [k, shown])) }));
+  };
+  const newFolderIn = (c: Collection, folderId?: string) => async () => {
+    const name = await promptText('New folder', { message: 'Folder name', okLabel: 'Create' });
+    if (name) change(c, (c) => ({ ...c, items: addToFolder(c.items, folderId, { kind: 'folder', id: uid('fld-'), name, items: [] } as CollectionFolder) }));
+  };
+  /** A collection's menu: what this tree can do with it (lib/node-menu.ts decides which of these the menu shows, in which order). */
+  const collectionMenu = (c: Collection): NodeMenuCtx => {
+    const ref = { kind: 'collection' as const, collectionId: c.id };
+    const others = onNewOfCategory ? (['graphql', 'soap', 'grpc', 'websocket'] as const).map((cat) => ({ label: newRequestOf(cat), icon: <FilePlus2 size={14} />, onSelect: () => onNewOfCategory(c, cat) })) : [];
+    return {
+      ref,
+      name: c.name,
+      repo: canHistory,
+      // the other kinds of request fold into New request ▸ (the menu stays short)
+      create: [{ label: newRequestLabel ?? 'New HTTP request', icon: <FilePlus2 size={14} />, onSelect: () => newRequest(c) }, ...(others.length ? [{ label: LABEL.newRequest, icon: <FilePlus2 size={14} />, onSelect: () => undefined, items: others }] : [])],
+      on: {
+        newFolder: newFolderIn(c),
+        expandAll: () => setSubtree(c, undefined, true),
+        collapseAll: () => setSubtree(c, undefined, false),
+        ...(onRun ? { run: () => onRun(c) } : {}),
+        // Export ▸ the export dialog, or the scripts as Postman's pm.* (TestPion itself writes tp.*)
+        export: [
+          ...(onExport ? [{ label: LABEL.export, icon: <Download size={14} />, onSelect: () => onExport(c) }] : []),
+          { label: LABEL.forPostman, icon: <Undo2 size={14} />, onSelect: () => void convertScripts(c, 'pm') },
+        ],
+        monitor: () => useApp.getState().openIntent('monitors', { create: { collectionId: c.id } }),
+        ci: () => useApp.getState().set({ ci: { collection: c.id } }),
+        testFile: () => void saveAsTest({ ref, name: c.name }),
+        flow: () => startFlowGenerate({ source: { collectionId: c.id }, mode: 'collection' }),
+        ...(onSettings ? { collectionSettings: () => onSettings(c) } : {}),
+        convertScripts: () => void convertScripts(c, 'tp'),
+        historyInGit: () => setHistoryFor({ c }),
+        rename: () => setRenaming(c.id),
+        duplicate: () => void duplicateCollection(c),
+        delete: () => void deleteCollection(c),
+      },
+    };
+  };
+  /** A folder's menu: the same groups as its collection's, for what is inside it. */
+  const folderMenu = (c: Collection, n: CollectionFolder): NodeMenuCtx => {
+    const ref = { kind: 'folder' as const, collectionId: c.id, folderId: n.id };
+    return {
+      ref,
+      name: n.name,
+      repo: canHistory,
+      create: [{ label: newRequestLabel ?? 'New HTTP request', icon: <FilePlus2 size={14} />, onSelect: () => newRequest(c, n.id) }],
+      on: {
+        newFolder: newFolderIn(c, n.id),
+        expandAll: () => setSubtree(c, n, true),
+        collapseAll: () => setSubtree(c, n, false),
+        ...(onRun ? { run: () => onRun(c, n.id) } : {}),
+        monitor: () => useApp.getState().openIntent('monitors', { create: { collectionId: c.id, selection: [n.id] } }),
+        ci: () => useApp.getState().set({ ci: { collection: c.id, folders: [n.id] } }),
+        testFile: () => void saveAsTest({ ref, name: n.name }),
+        flow: () => startFlowGenerate({ source: { collectionId: c.id, folderId: n.id }, mode: 'collection' }),
+        editFolder: () => void fullCollection(c).then((whole) => setEditing({ c: whole, folder: wholeNode(whole, n) }), toastError),
+        rename: () => void renameNode(c, n),
+        duplicate: () => change(c, (c) => ({ ...c, items: duplicateNode(c.items, n.id, (x) => ({ ...withNewIds(x), name: `${x.name} copy` })) })),
+        move: () => setMoving({ c, n }),
+        delete: () => void deleteNode(c, n),
+      },
+    };
+  };
+  /** A request's menu. */
+  const requestMenu = (c: Collection, n: Exclude<CollectionNode, CollectionFolder>): NodeMenuCtx => {
+    const ref = { kind: 'request' as const, collectionId: c.id, requestId: n.id };
+    return {
+      ref,
+      name: n.name,
+      repo: canHistory,
+      favorite: !!n.favorite,
+      on: {
+        open: () => onOpen(c, n),
+        openNewTab: () => void openRef(ref, { newTab: true }),
+        // Copy as ▸ the URL and the code forms (HTTP requests)
+        ...(n.kind === 'http' ? { copyAs: requestCopyItems(c, n) } : {}),
+        monitor: () => useApp.getState().openIntent('monitors', { create: { collectionId: c.id, selection: [n.id] } }),
+        testFile: () => void saveAsTest({ ref, name: n.name }),
+        historyInGit: () => setHistoryFor({ c, n }),
+        rename: () => void renameNode(c, n),
+        duplicate: () => change(c, (c) => ({ ...c, items: duplicateNode(c.items, n.id, (y) => ({ ...y, id: uid('req-'), name: `${y.name} copy` })) })),
+        move: () => setMoving({ c, n }),
+        favorite: () => change(c, (c) => ({ ...c, items: mapNodes(c.items, (y) => (y.id === n.id && y.kind !== 'folder' ? { ...y, favorite: !y.favorite } : y)) })),
+        delete: () => void deleteNode(c, n),
+      },
+    };
   };
   const [editing, setEditing] = useState<{ c: Collection; folder: CollectionFolder }>();
   const f = filter?.toLowerCase();
@@ -501,7 +576,7 @@ export const CollectionTree = memo(function CollectionTree({
     finishRename,
     renameNode,
     deleteNode,
-    copyMenu,
+    requestMenu,
     setMenuFor,
     setMoving,
     setHistoryFor,
@@ -538,6 +613,7 @@ export const CollectionTree = memo(function CollectionTree({
             onKeyDown={rowKeys(c, n)}
             data-tree-row
             data-rename-id={sid}
+            data-row-name={n.name}
             aria-expanded={isOpen}
             title="F2 renames · Delete deletes"
           >
@@ -551,25 +627,11 @@ export const CollectionTree = memo(function CollectionTree({
           </button>
         )}
         <NodeMenu
+          kind="folder"
+          label={`folder ${n.name}`}
           open={menuFor === sid}
           onOpenChange={(o) => setMenuFor(o ? sid : undefined)}
-          onEdit={() => void fullCollection(c).then((whole) => setEditing({ c: whole, folder: wholeNode(whole, n) }), toastError)}
-          onExpandAll={() => setSubtree(c, n, true)}
-          onCollapseAll={() => setSubtree(c, n, false)}
-          onMove={() => setMoving({ c, n })}
-          onRename={() => void renameNode(c, n)}
-          onDuplicate={() => change(c, (c) => ({ ...c, items: duplicateNode(c.items, n.id, (x) => ({ ...withNewIds(x), name: `${x.name} copy` })) }))}
-          onDelete={() => void deleteNode(c, n)}
-          onNewRequest={() => newRequest(c, n.id)}
-          newRequestLabel={newRequestLabel}
-          onRun={onRun && (() => onRun(c, n.id))}
-          runLabel="Run folder"
-          onMonitor={() => useApp.getState().openIntent('monitors', { create: { collectionId: c.id, selection: [n.id] } })}
-          testItems={[saveAsTestItem({ ref: { kind: 'folder', collectionId: c.id, folderId: n.id }, name: n.name }), generateFlowItem({ collectionId: c.id, folderId: n.id })]}
-          onNewFolder={async () => {
-            const name = await promptText('New folder', { message: 'Folder name', okLabel: 'Create' });
-            if (name) change(c, (c) => ({ ...c, items: addToFolder(c.items, n.id, { kind: 'folder', id: uid('fld-'), name, items: [] } as CollectionFolder) }));
-          }}
+          ctx={() => folderMenu(c, n)}
         />
       </div>
     );
@@ -577,12 +639,11 @@ export const CollectionTree = memo(function CollectionTree({
 
   const categoryRow = (r: Extract<TreeRow, { t: 'cat' }>) => {
     const { c, cat, count, key, open: isOpen } = r;
-    // the same menu as every other row (right-click or ⋯): create here, run the collection, fold
-    const items = (): MenuItem[] => [
-      ...(onNewOfCategory ? [{ label: newRequestOf(cat), icon: <FilePlus2 size={14} />, onSelect: () => onNewOfCategory(c, cat) }] : []),
-      ...(onRun ? [{ label: 'Run collection', icon: <Play size={14} />, onSelect: () => onRun(c) }] : []),
-      { label: isOpen ? 'Collapse' : 'Expand', icon: isOpen ? <ChevronRight size={14} /> : <ChevronDown size={14} />, separator: true, onSelect: () => toggle(key, isOpen) },
-    ];
+    // the same menu as every other row (right-click or ⋯): create here, fold, run the collection
+    const ctx = (): NodeMenuCtx => ({
+      create: onNewOfCategory ? [{ label: newRequestOf(cat), icon: <FilePlus2 size={14} />, onSelect: () => onNewOfCategory(c, cat) }] : [],
+      on: { expandAll: () => setCategory(c, key, true), collapseAll: () => setCategory(c, key, false), ...(onRun ? { run: () => onRun(c) } : {}) },
+    });
     return (
       <div
         data-node-id={key}
@@ -600,24 +661,19 @@ export const CollectionTree = memo(function CollectionTree({
           <span className="truncate font-medium">{CATEGORY_META[cat].label}</span>
           <span className="text-[0.7rem] px-1.5 rounded-full bg-panel2 text-muted tabular-nums">{count}</span>
         </button>
-        <Menu
-          width={230}
-          open={menuFor === key}
-          onOpenChange={(o) => setMenuFor(o ? key : undefined)}
-          items={menuFor === key ? items() : []}
-          trigger={
-            <button aria-label={`More actions for ${CATEGORY_META[cat].label}`} className={rowActionClass()}>
-              {MORE_ICON}
-            </button>
-          }
-        />
+        <NodeMenu kind="category" label={CATEGORY_META[cat].label} open={menuFor === key} onOpenChange={(o) => setMenuFor(o ? key : undefined)} ctx={ctx} />
       </div>
     );
   };
 
-  /** A folder of saved gRPC calls / connections: the same row as a collection's folders. */
+  /** A folder of saved gRPC calls / connections: the same row (and menu) as a collection's folders. */
   const extraFolderRow = (r: Extract<TreeRow, { t: 'xfolder' }>) => (
-    <div data-node-id={r.key} className="group flex items-center h-8 text-sm rounded-md mx-1 hover:bg-hover pr-1 transition-colors" style={{ paddingLeft: 8 + r.depth * 12 }}>
+    <div
+      data-node-id={r.key}
+      className={cx('group flex items-center h-8 text-sm rounded-md mx-1 pr-1 transition-colors', menuFor === r.key ? 'bg-hover' : 'hover:bg-hover')}
+      style={{ paddingLeft: 8 + r.depth * 12 }}
+      onContextMenu={(e) => (e.preventDefault(), setMenuFor(r.key))}
+    >
       <button className="flex items-center gap-1 flex-1 min-w-0 text-left" onClick={() => toggle(r.key, r.open)} aria-expanded={r.open} data-tree-row>
         {r.open ? OPEN_ICON : CLOSED_ICON}
         {FOLDER_ICON}
@@ -626,6 +682,16 @@ export const CollectionTree = memo(function CollectionTree({
           <CountPill n={r.count} />
         </span>
       </button>
+      <NodeMenu
+        kind={r.g.cat === 'websocket' ? 'folder:ws-connection' : 'folder:grpc-call'}
+        label={`folder ${r.folder}`}
+        open={menuFor === r.key}
+        onOpenChange={(o) => setMenuFor(o ? r.key : undefined)}
+        ctx={() => {
+          const own = r.g.folderMenu?.(r.folder);
+          return { ...own, on: { ...own?.on, expandAll: () => setOpen((o) => ({ ...o, [r.key]: true })), collapseAll: () => setOpen((o) => ({ ...o, [r.key]: false })) } };
+        }}
+      />
     </div>
   );
 
@@ -660,29 +726,18 @@ export const CollectionTree = memo(function CollectionTree({
                 e.preventDefault();
                 return rn.start();
               }
-              if (g.menu) menuKeys(g.menu(i.id))?.(e);
+              if (g.menu) menuKeys(buildNodeMenu(g.cat === 'grpc' ? 'grpc-call' : 'ws-connection', g.menu(i.id)))?.(e);
             }}
             title={i.name}
             data-tree-row
             data-rename-id={i.id}
+            data-row-name={i.name}
           >
             <TreeBadge label={i.badge ?? CATEGORY_META[g.cat].badge} className={CATEGORY_META[g.cat].cls} />
             <span className="truncate">{i.name}</span>
           </button>
         )}
-        {g.menu && (
-          <Menu
-            width={230}
-            open={menuFor === i.id}
-            onOpenChange={(o) => setMenuFor(o ? i.id : undefined)}
-            trigger={
-              <button aria-label={`More actions for ${i.name}`} className={rowActionClass()}>
-                {MORE_ICON}
-              </button>
-            }
-            items={menuFor === i.id ? g.menu(i.id) : []}
-          />
-        )}
+        {g.menu && <NodeMenu kind={g.cat === 'grpc' ? 'grpc-call' : 'ws-connection'} label={i.name} open={menuFor === i.id} onOpenChange={(o) => setMenuFor(o ? i.id : undefined)} ctx={() => g.menu!(i.id)} />}
       </div>
     );
   };
@@ -710,15 +765,23 @@ export const CollectionTree = memo(function CollectionTree({
             className="flex items-center gap-1 flex-1 min-w-0 text-left font-medium"
             onClick={() => toggle(c.id, isOpen)}
             onKeyDown={(e) => {
-              if (e.key === 'F2' && !c.problem) {
+              if (c.problem) return;
+              if (e.key === '*') {
+                e.preventDefault();
+                setSubtree(c, undefined, true);
+              } else if (e.key === 'F2') {
                 e.preventDefault();
                 setRenaming(c.id);
+              } else if (e.key === 'Delete') {
+                e.preventDefault();
+                void deleteCollection(c);
               }
             }}
             aria-expanded={isOpen}
             data-tree-row
             data-rename-id={c.id}
-            title={c.problem ? undefined : 'F2 renames'}
+            data-row-name={c.name}
+            title={c.problem ? undefined : 'F2 renames · Delete deletes · * expands all'}
           >
             {isOpen ? OPEN_ICON : CLOSED_ICON}
             <span className={cx('truncate', c.problem && 'text-bad')} title={c.problem}>
@@ -738,36 +801,7 @@ export const CollectionTree = memo(function CollectionTree({
           </button>
         )}
         {!c.problem && (
-          <NodeMenu
-            label={c.name}
-            open={menuFor === c.id}
-            onOpenChange={(o) => setMenuFor(o ? c.id : undefined)}
-            onRename={() => setRenaming(c.id)}
-            onExpandAll={() => setSubtree(c, undefined, true)}
-            onCollapseAll={() => setSubtree(c, undefined, false)}
-            onDuplicate={() => void duplicateCollection(c)}
-            onDelete={() => void deleteCollection(c)}
-            onHistory={canHistory ? () => setHistoryFor({ c }) : undefined}
-            otherNew={
-              onNewOfCategory ? (['graphql', 'soap', 'grpc', 'websocket'] as const).map((cat) => ({ label: newRequestOf(cat), icon: <FilePlus2 size={14} />, onSelect: () => onNewOfCategory(c, cat) })) : undefined
-            }
-            runItems={[{ label: 'Run in CI…', icon: <Workflow size={14} />, onSelect: () => useApp.getState().set({ ci: { collection: c.id } }) }]}
-            configItems={[
-              ...(onSettings ? [{ label: 'Settings, runner & docs', icon: <Settings2 size={14} />, onSelect: () => onSettings(c) }] : []),
-              { label: 'Convert scripts to tp.*', icon: <Wand2 size={14} />, onSelect: () => void convertScripts(c, 'tp') },
-              { label: 'Convert scripts to pm.*', icon: <Undo2 size={14} />, onSelect: () => void convertScripts(c, 'pm') },
-            ]}
-            onNewRequest={() => newRequest(c)}
-            newRequestLabel={newRequestLabel}
-            onRun={onRun && (() => onRun(c))}
-            runLabel="Run collection"
-            onMonitor={() => useApp.getState().openIntent('monitors', { create: { collectionId: c.id } })}
-            testItems={[saveAsTestItem({ ref: { kind: 'collection', collectionId: c.id }, name: c.name }), generateFlowItem({ collectionId: c.id })]}
-            onNewFolder={async () => {
-              const name = await promptText('New folder', { message: 'Folder name', okLabel: 'Create' });
-              if (name) change(c, (c) => ({ ...c, items: [...c.items, { kind: 'folder', id: uid('fld-'), name, items: [] }] }));
-            }}
-          />
+          <NodeMenu kind="collection" label={c.name} header open={menuFor === c.id} onOpenChange={(o) => setMenuFor(o ? c.id : undefined)} ctx={() => collectionMenu(c)} />
         )}
       </div>
     );
@@ -797,7 +831,6 @@ export const CollectionTree = memo(function CollectionTree({
             examplesOpen={!!isOpenKey(open, examplesOpenKey(r.c.id, r.n.id), `${r.n.id}:examples`)}
             dropMode={dropAt?.id === r.key ? dropAt.mode : undefined}
             gitMark={git.items.get(r.n.id)}
-            canHistory={canHistory}
             ctx={ctx}
           />
         );
@@ -873,7 +906,7 @@ interface RowContext {
   finishRename(c: Collection, id: string, name?: string): void;
   renameNode(c: Collection, n: CollectionNode): void;
   deleteNode(c: Collection, n: CollectionNode): Promise<void>;
-  copyMenu(c: Collection, n: SavedHttpRequest): MenuItem[];
+  requestMenu(c: Collection, n: Exclude<CollectionNode, CollectionFolder>): NodeMenuCtx;
   setMenuFor(id: string | undefined): void;
   setMoving(m: { c: Collection; n: CollectionNode } | undefined): void;
   setHistoryFor(h: { c: Collection; n?: CollectionNode } | undefined): void;
@@ -894,7 +927,6 @@ const RequestRow = memo(function RequestRow({
   examplesOpen,
   dropMode,
   gitMark,
-  canHistory,
   ctx,
 }: {
   c: Collection;
@@ -906,7 +938,6 @@ const RequestRow = memo(function RequestRow({
   examplesOpen: boolean;
   dropMode?: 'before' | 'into';
   gitMark?: string;
-  canHistory: boolean;
   ctx: React.RefObject<RowContext>;
 }) {
   const x = () => ctx.current;
@@ -961,6 +992,7 @@ const RequestRow = memo(function RequestRow({
           onKeyDown={(e) => x().rowKeys(c, n)(e)}
           data-tree-row
           data-rename-id={sid}
+          data-row-name={n.name}
           title="Enter opens · F2 renames · Delete deletes"
         >
           <TreeBadge label={method} className={n.kind === 'http' ? `method-${method}` : 'text-[#e535ab]'} />
@@ -969,21 +1001,7 @@ const RequestRow = memo(function RequestRow({
           {gitMark && <ChangeMark change={gitMark} className="ml-auto" />}
         </button>
       )}
-      <NodeMenu
-        open={menuOpen}
-        onOpenChange={(o) => x().setMenuFor(o ? sid : undefined)}
-        onOpen={() => x().onOpen(c, n)}
-        onOpenNewTab={() => void openRef({ kind: 'request', collectionId: c.id, requestId: n.id }, { newTab: true })}
-        testItems={menuOpen ? [saveAsTestItem({ ref: { kind: 'request', collectionId: c.id, requestId: n.id }, name: n.name })] : undefined}
-        copyItems={menuOpen && n.kind === 'http' ? x().copyMenu(c, n) : undefined}
-        onRename={() => void x().renameNode(c, n)}
-        onDelete={() => void x().deleteNode(c, n)}
-        onDuplicate={() => x().change(c, (c) => ({ ...c, items: duplicateNode(c.items, n.id, (y) => ({ ...y, id: uid('req-'), name: `${y.name} copy` })) }))}
-        onMove={() => x().setMoving({ c, n })}
-        onToggleFavorite={() => x().change(c, (c) => ({ ...c, items: mapNodes(c.items, (y) => (y.id === n.id && y.kind !== 'folder' ? { ...y, favorite: !y.favorite } : y)) }))}
-        favorite={!!n.favorite}
-        onHistory={canHistory ? () => x().setHistoryFor({ c, n }) : undefined}
-      />
+      <NodeMenu kind="request" label={n.name} open={menuOpen} onOpenChange={(o) => x().setMenuFor(o ? sid : undefined)} ctx={() => x().requestMenu(c, n)} />
     </div>
   );
 });

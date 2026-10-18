@@ -129,6 +129,6 @@ module.exports = withExpect(steps, {
   'file-tab-edits-and-saves': /^save enabled: true \| saved: true \| counts: 8 rows · 3 columns \| sidebar: true \| ctrl\+s: true \| restored: 7 rows · 3 columns$/,
   'run-a-collection-with-this-dataset': /^tab: .*Run.* \| data: true \| rows: true$/,
   'new-csv-from-the-section-menu':
-    /^menu: New CSV \| New JSONL \| Generate test data… \| (Collapse|Expand) \| row: CSVe2e-users\.csv0 rows \| opened: true \| file tab: true$/,
+    /^menu: New CSV \| New JSONL \| New folder \| Generate test data… \| Expand all \| Collapse all \| row: CSVe2e-users\.csv0 rows \| opened: true \| file tab: true$/,
   'duplicate-rename-delete': /^copy: true \| renamed: true \| gone: true \| trash: e2e-people\.csv$/,
 });

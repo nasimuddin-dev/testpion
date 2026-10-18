@@ -1,6 +1,7 @@
 /**
  * WF-13: one word for one action, in every menu, toolbar and palette. Menus use these, and a unit test keeps the
- * retired variants out of the window's code.
+ * retired variants out of the window's code. Node menus (every tree and list row) are built by lib/node-menu.ts from
+ * these labels only.
  */
 export const LABEL = {
   /** Open an item where it lives. */
@@ -10,21 +11,108 @@ export const LABEL = {
   openAsRequest: 'Open as request',
   /** Show an item's row in the Collections explorer without opening it. */
   revealInSidebar: 'Reveal in sidebar',
+  /** Show an item's file in the system's file manager. */
+  revealFile: 'Reveal file',
   run: 'Run',
   runAgain: 'Run again',
   rerunFailed: 'Rerun failed',
+  runCollection: 'Run collection',
+  runFolder: 'Run folder',
   /** A run, a collection or test files as a CI pipeline (the Run in CI dialog). */
   runInCi: 'Run in CI…',
   /** The `testpion` command that does the same from a terminal. */
   copyCliCommand: 'Copy CLI command',
   /** One flow run in each environment picked, compared step by step (an environment matrix). */
   runInEnvironments: 'Run in several environments…',
-  /** Deleting asks first. */
+  monitor: 'Monitor on a schedule…',
+  generateFlow: 'Generate integration flow with AI…',
+  saveAsTest: 'Save as test…',
+  createTestFileFromCollection: 'Create test file from collection…',
+  createTestFileFromFolder: 'Create test file from folder…',
+  newFolder: 'New folder',
+  /** The submenu of the other request kinds a collection can hold. */
+  newRequest: 'New request',
+  import: 'Import…',
+  expandAll: 'Expand all',
+  collapseAll: 'Collapse all',
+  copyLink: 'Copy link',
+  /** The submenu of a request's code forms (cURL, PowerShell, fetch …). */
+  copyAs: 'Copy as',
+  copyPath: 'Copy path',
+  copyGrpcurl: 'Copy as grpcurl',
+  copyUrl: 'Copy URL',
+  export: 'Export…',
+  /** The Export submenu (its items open the export dialog or say what they export). */
+  exportSubmenu: 'Export',
+  /** Export ▸ the scripts rewritten to Postman's pm.* (TestPion writes tp.*; pm.* only for Postman). */
+  forPostman: 'For Postman (pm.*)…',
+  convertScriptsTp: 'Convert scripts to tp.*',
+  settings: 'Settings…',
+  historyInGit: 'History in git…',
+  rename: 'Rename',
+  renameFolder: 'Rename folder',
+  duplicate: 'Duplicate',
+  /** Move to another folder or collection (a dialog); "Move to folder" is the submenu of a list's folders. */
+  moveTo: 'Move to…',
+  moveToFolder: 'Move to folder',
+  moveToCollection: 'Move to collection',
+  addFavorite: 'Add to favorites',
+  removeFavorite: 'Remove from favorites',
+  // the actions of one kind (lib/node-menu-kinds/*)
+  editFolder: 'Edit folder (scripts, variables, auth)',
+  collectionSettings: 'Settings, runner & docs',
+  connect: 'Connect',
+  disconnect: 'Disconnect',
+  copyMcpConfig: 'Copy MCP config',
+  openMcpInspector: 'Open MCP inspector',
+  openApiDefinitions: 'Open API definitions',
+  lint: 'Lint',
+  apiCoverage: 'API coverage',
+  compareVersions: 'Compare versions',
+  generateTests: 'Generate tests…',
+  generateFlows: 'Generate integration flows…',
+  preview: 'Preview',
+  runWithDataset: 'Run a collection with it',
+  useInTest: 'Use in a test',
+  generateData: 'Generate test data…',
+  edit: 'Edit',
+  runNow: 'Run now',
+  pause: 'Pause',
+  resume: 'Resume',
+  runWithData: 'Run with data…',
+  exposeMcp: 'Expose as MCP tool…',
+  exportArazzo: 'Export as Arazzo…',
+  exportReport: 'Export report…',
+  copyRunId: 'Copy run id',
+  triageWithAi: 'Explain and fix failures with AI…',
+  openRequest: 'Open request',
+  openTrace: 'Open trace',
+  openRun: 'Open run',
+  makeActive: 'Make active',
+  recentlyDeleted: 'Recently deleted…',
+  /** Deleting puts the item in Recently deleted (or asks first where nothing can bring it back). */
   delete: 'Delete…',
+  deleteFolder: 'Delete folder…',
 } as const;
 
 /** Words that were used for the same actions and are not anymore (the unit test fails on them). */
-export const RETIRED_LABELS = ['Open in tab', 'Edit & Submit', 'Save as test file…', 'View trace', 'Re-run failed', 'Run this in CI…', 'Run in environments…', 'Remove server…'];
+export const RETIRED_LABELS = [
+  'Open in tab',
+  'Edit & Submit',
+  'Save as test file…',
+  'View trace',
+  'Re-run failed',
+  'Run this in CI…',
+  'Run in environments…',
+  'Remove server…',
+  'Move to',
+  'Delete folder',
+  'Convert scripts to pm.*',
+];
 
-/** The groups of an item's menu, in this order everywhere (TreeParts `NodeMenu`, every list's ⋯ and right-click). */
-export const MENU_GROUPS = ['create', 'open', 'run', 'test', 'configure', 'copy', 'organize', 'delete'] as const;
+/**
+ * The groups of every node menu, in this order everywhere (lib/node-menu.ts enforces it): create · open · tree (Expand
+ * all, Collapse all) · run · share · tools · git · edit · danger.
+ */
+export const MENU_GROUPS = ['create', 'open', 'tree', 'run', 'share', 'tools', 'git', 'edit', 'danger'] as const;
+export type MenuGroup = (typeof MENU_GROUPS)[number];

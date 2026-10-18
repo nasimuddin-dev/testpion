@@ -27,7 +27,7 @@ For scripts and agents: `testpion requests "My API" --health --json` in the CLI 
 
 To keep frequently used endpoints close at hand, choose **Add to favorites** from a REST or GraphQL request's **⋯** menu (or right-click). The request gets a star in the tree and appears in the **Favorites** section at the top of the explorer, with its collection's name; click it to open it, or use its menu to remove it. Favorites are stored with the request in the collection JSON.
 
-To open or fold a whole collection or folder at once, use **Expand all** / **Collapse all** in its **⋯** menu (the explorer's **Collapse all** button folds every collection).
+To open or fold a whole collection, folder or section at once, use **Expand all** / **Collapse all** in its **⋯** menu (or <kbd>*</kbd> on the focused row): every container has them, from a collection and its protocol groups to the folders of MCP servers, API definitions and datasets, and the explorer's **Collapse all** button folds everything. Which ones are open is kept per workspace.
 
 ## Request menu
 
@@ -36,18 +36,20 @@ Right-click a request in the tree, or click its **⋯** button:
 | Item | What it does |
 |---|---|
 | **Open** / **Open in new tab** | Open the request (in its tab, or a tab of its own). |
-| **History in git…** | The request's versions in git (when the workspace is in git). |
+| **Copy link** | Its `testpion://open` link (paste it in a chat or a ticket: it opens the request in the app). |
+| **Copy as ▸** | **Copy URL** (with `{{variables}}` resolved from the active environment), **cURL (bash)**, **cURL (cmd)**, **PowerShell**, **fetch**: a runnable command or code, like the browser's *Copy as …*, with variables resolved and inherited auth applied (`fetch` code also runs in Node.js 18+); **More code snippets…** opens the code generator (Python requests and httpx, Go, Java, Kotlin, C#, Dart, HTTPie and more). |
+| **Monitor on a schedule…** | A monitor that runs this request on a schedule. |
 | **Save as test…** | The request as a test file in **Tests**, to run with the test runner and in CI (also `testpion test from-request "Collection/Folder/Request"`). |
+| **History in git…** | The request's versions in git (when the workspace is in git). |
 | **Rename**, **Duplicate**, **Add to favorites** | Manage the request. |
 | **Move to…** | Move it to another folder, or to a folder of another collection. Open tabs follow it. You can also drag it: onto a request to place it before that one, onto a folder to put it inside, or onto a collection's name for its top level. |
-| **Copy URL** | The URL with `{{variables}}` resolved from the active environment. |
-| **Copy as cURL (bash)**, **cURL (cmd)**, **PowerShell**, **fetch** | A runnable command or code, like the browser's *Copy as …*, with variables resolved and inherited auth applied. `fetch` code also runs in Node.js 18+. |
-| **More code snippets…** | Open the request with the code generator (Python requests and httpx, Go, Java, Kotlin, C#, Dart, HTTPie and more). |
 | **Delete…** | Delete the request at once (also <kbd>Delete</kbd> on a focused row). The message that follows has **Undo** for 8 seconds, and <kbd>Ctrl</kbd>+<kbd>Z</kbd> outside a text field does the same: the request comes back with its id, in its place ([Deleting and Undo](/getting-started/finding-your-way#deleting-and-undo)). |
 
-Copied commands include the request's real header and token values, so they run as they are, like Postman's *Copy as cURL*. When they do, the confirmation message says so. Folders have their own menu (**New HTTP request**, **New folder**, **Expand all** / **Collapse all**, **Run folder**, **Monitor on a schedule…**, **Create test file from folder…**, **Edit folder (scripts, variables, auth)**, **Rename**, **Duplicate**, **Move to…**, **Delete…**), and so do collections (with **Run collection**, **Run in CI…**, **Create test file from collection…** and **Settings, runner & docs**). Every menu lists its items in the same order: create · open · run · test · configure · copy · organize · delete ([Menus and shortcuts](/getting-started/finding-your-way#menus-and-shortcuts)).
+Copied commands include the request's real header and token values, so they run as they are, like Postman's *Copy as cURL*. When they do, the confirmation message says so.
 
-A saved gRPC call or connection has a shorter menu: **Open**, **Save as test…**, **Copy as grpcurl** (or **Copy URL**), **Rename**, **Duplicate**, **Move to** (another collection) and **Delete…**; drag it onto another collection to move it there.
+Folders have their own menu (**New HTTP request**, **New folder**, **Expand all** / **Collapse all**, **Run folder**, **Copy link**, **Monitor on a schedule…**, **Run in CI…**, **Create test file from folder…**, **Generate integration flow with AI…**, **Edit folder (scripts, variables, auth)**, **Rename**, **Duplicate**, **Move to…**, **Delete…**), and so do collections: **New HTTP request** and **New request ▸** (GraphQL, SOAP, gRPC, WebSocket & MQTT), **New folder**, **Expand all** / **Collapse all**, **Run collection**, **Copy link**, **Export ▸** (the export dialog, or **For Postman (pm.\*)…**: the scripts rewritten with Postman's `pm.*`), **Monitor on a schedule…**, **Run in CI…**, **Create test file from collection…**, **Generate integration flow with AI…**, **Settings, runner & docs**, **Convert scripts to tp.\***, **History in git…**, **Rename**, **Duplicate** and **Delete…** (also <kbd>Delete</kbd> on the focused row). Every menu of every tree and list lists its items in the same order: create · open · tree · run · share · tools · git · edit · danger ([Menus](/getting-started/finding-your-way#menus)).
+
+A saved gRPC call or connection has the same groups: **Open**, **Open in new tab**, **Copy link**, **Copy as grpcurl** (or **Copy URL**), **Save as test…**, **Rename**, **Duplicate**, **Move to collection ▸** and **Delete…**; drag it onto another collection to move it there. Its folder has **Expand all** / **Collapse all**, **Rename folder** and **Delete folder…** (its calls move to the top level, with **Undo**).
 
 ## Tidy up
 

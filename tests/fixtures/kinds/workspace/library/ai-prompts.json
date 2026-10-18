@@ -1,0 +1,1 @@
+{ "schemaVersion": "1.0", "folders": ["Drafts"], "items": [{ "id": "p-greet", "name": "Greeting prompt", "folder": "Drafts", "data": { "prompt": "Say hello", "model": "demo" } }] }

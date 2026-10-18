@@ -97,7 +97,7 @@ const PAGE = `(() => {
   const btn = (o) => o.button ?? 'left';
   const bits = (b) => (b === 'right' ? 2 : b === 'middle' ? 4 : 1);
   const run = async (build) => { try { return await send(build()); } catch (e) { return 'ERR ' + e.message; } };
-  const KEYS = { Enter: [13, 'Enter', '\\r'], Escape: [27, 'Escape'], Delete: [46, 'Delete'], Backspace: [8, 'Backspace'], Tab: [9, 'Tab'], ArrowUp: [38, 'ArrowUp'], ArrowDown: [40, 'ArrowDown'], ArrowLeft: [37, 'ArrowLeft'], ArrowRight: [39, 'ArrowRight'], Home: [36, 'Home'], End: [35, 'End'], F2: [113, 'F2'], F8: [119, 'F8'], F9: [120, 'F9'], F10: [121, 'F10'], ' ': [32, 'Space', ' '] };
+  const KEYS = { Enter: [13, 'Enter', '\\r'], Escape: [27, 'Escape'], Delete: [46, 'Delete'], Backspace: [8, 'Backspace'], Tab: [9, 'Tab'], ArrowUp: [38, 'ArrowUp'], ArrowDown: [40, 'ArrowDown'], ArrowLeft: [37, 'ArrowLeft'], ArrowRight: [39, 'ArrowRight'], Home: [36, 'Home'], End: [35, 'End'], F2: [113, 'F2'], F8: [119, 'F8'], F9: [120, 'F9'], F10: [121, 'F10'], ContextMenu: [93, 'ContextMenu'], ' ': [32, 'Space', ' '] };
   const keyEv = (key, o = {}) => {
     let vk, code, text;
     if (KEYS[key]) [vk, code, text] = KEYS[key];

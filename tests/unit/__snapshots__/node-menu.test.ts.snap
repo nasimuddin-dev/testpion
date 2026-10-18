@@ -1,0 +1,807 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
+{
+  "baseline": [],
+  "capture": [
+    [
+      "Open",
+      "Reveal file",
+    ],
+    [
+      "Copy link",
+      "Copy path",
+      "Export…",
+    ],
+  ],
+  "category": [
+    [
+      "New …",
+    ],
+    [
+      "Expand all",
+      "Collapse all",
+    ],
+    [
+      "Run collection",
+    ],
+  ],
+  "certificate": [
+    [
+      "Open",
+    ],
+    [
+      "Copy link",
+    ],
+  ],
+  "collection": [
+    [
+      "New …",
+      "New folder",
+    ],
+    [
+      "Expand all",
+      "Collapse all",
+    ],
+    [
+      "Run collection",
+    ],
+    [
+      "Copy link",
+      "Export ▸",
+    ],
+    [
+      "Monitor on a schedule…",
+      "Run in CI…",
+      "Create test file from collection…",
+      "Generate integration flow with AI…",
+      "Settings, runner & docs",
+      "Convert scripts to tp.*",
+    ],
+    [
+      "History in git…",
+    ],
+    [
+      "Rename",
+      "Duplicate",
+    ],
+    [
+      "Delete…",
+    ],
+  ],
+  "dataset": [
+    [
+      "Open",
+      "Reveal file",
+      "Preview",
+    ],
+    [
+      "Run a collection with it",
+    ],
+    [
+      "Copy link",
+      "Copy path",
+    ],
+    [
+      "Use in a test",
+    ],
+    [
+      "Rename",
+      "Duplicate",
+      "Move to folder ▸",
+    ],
+    [
+      "Delete…",
+    ],
+  ],
+  "debugger-rules": [],
+  "doc": [
+    [
+      "Open",
+    ],
+    [
+      "Copy link",
+    ],
+  ],
+  "environment": [
+    [
+      "Open",
+    ],
+    [
+      "Make active",
+    ],
+    [
+      "Copy link",
+    ],
+    [
+      "History in git…",
+    ],
+    [
+      "Rename",
+      "Duplicate",
+    ],
+    [
+      "Delete…",
+    ],
+  ],
+  "evaluation": [
+    [
+      "Open",
+      "Open in new tab",
+    ],
+    [
+      "Run",
+    ],
+    [
+      "Copy link",
+    ],
+    [
+      "Rename",
+      "Duplicate",
+      "Move to folder ▸",
+    ],
+    [
+      "Delete…",
+    ],
+  ],
+  "exchange": [
+    [
+      "Open",
+    ],
+    [
+      "Copy link",
+    ],
+  ],
+  "favorites": [
+    [
+      "Expand all",
+      "Collapse all",
+    ],
+  ],
+  "flow": [
+    [
+      "Open",
+      "Reveal file",
+    ],
+    [
+      "Run",
+    ],
+    [
+      "Copy link",
+      "Copy path",
+    ],
+    [
+      "Monitor on a schedule…",
+      "Run in CI…",
+    ],
+    [
+      "Rename",
+      "Duplicate",
+    ],
+    [
+      "Delete…",
+    ],
+  ],
+  "folder": [
+    [
+      "New …",
+      "New folder",
+    ],
+    [
+      "Expand all",
+      "Collapse all",
+    ],
+    [
+      "Run folder",
+    ],
+    [
+      "Copy link",
+    ],
+    [
+      "Monitor on a schedule…",
+      "Run in CI…",
+      "Create test file from folder…",
+      "Generate integration flow with AI…",
+      "Edit folder (scripts, variables, auth)",
+    ],
+    [
+      "Rename",
+      "Duplicate",
+      "Move to…",
+    ],
+    [
+      "Delete…",
+    ],
+  ],
+  "folder:dataset": [
+    [
+      "New …",
+    ],
+    [
+      "Expand all",
+      "Collapse all",
+    ],
+    [
+      "Rename folder",
+    ],
+    [
+      "Delete folder…",
+    ],
+  ],
+  "folder:evaluation": [
+    [
+      "New …",
+    ],
+    [
+      "Expand all",
+      "Collapse all",
+    ],
+    [
+      "Rename folder",
+    ],
+    [
+      "Delete folder…",
+    ],
+  ],
+  "folder:grpc-call": [
+    [
+      "Expand all",
+      "Collapse all",
+    ],
+    [
+      "Rename folder",
+    ],
+    [
+      "Delete folder…",
+    ],
+  ],
+  "folder:load-test": [
+    [
+      "New …",
+    ],
+    [
+      "Expand all",
+      "Collapse all",
+    ],
+    [
+      "Rename folder",
+    ],
+    [
+      "Delete folder…",
+    ],
+  ],
+  "folder:mcp-server": [
+    [
+      "New …",
+    ],
+    [
+      "Expand all",
+      "Collapse all",
+    ],
+    [
+      "Rename folder",
+    ],
+    [
+      "Delete folder…",
+    ],
+  ],
+  "folder:monitor": [
+    [
+      "New …",
+    ],
+    [
+      "Expand all",
+      "Collapse all",
+    ],
+    [
+      "Rename folder",
+    ],
+    [
+      "Delete folder…",
+    ],
+  ],
+  "folder:prompt": [
+    [
+      "New …",
+    ],
+    [
+      "Expand all",
+      "Collapse all",
+    ],
+    [
+      "Rename folder",
+    ],
+    [
+      "Delete folder…",
+    ],
+  ],
+  "folder:spec": [
+    [
+      "New …",
+    ],
+    [
+      "Expand all",
+      "Collapse all",
+    ],
+    [
+      "Rename folder",
+    ],
+    [
+      "Delete folder…",
+    ],
+  ],
+  "folder:test": [
+    [
+      "New …",
+    ],
+    [
+      "Expand all",
+      "Collapse all",
+    ],
+    [
+      "Run folder",
+    ],
+    [
+      "Run in CI…",
+    ],
+    [
+      "Rename folder",
+    ],
+    [
+      "Delete folder…",
+    ],
+  ],
+  "folder:ws-connection": [
+    [
+      "Expand all",
+      "Collapse all",
+    ],
+    [
+      "Rename folder",
+    ],
+    [
+      "Delete folder…",
+    ],
+  ],
+  "git-file": [
+    [
+      "Open",
+    ],
+    [
+      "Copy link",
+    ],
+  ],
+  "grpc-call": [
+    [
+      "Open",
+      "Open in new tab",
+    ],
+    [
+      "Copy link",
+      "Copy as grpcurl",
+    ],
+    [
+      "Save as test…",
+    ],
+    [
+      "Rename",
+      "Duplicate",
+      "Move to collection ▸",
+    ],
+    [
+      "Delete…",
+    ],
+  ],
+  "history": [
+    [
+      "Open",
+      "Open request",
+      "Open trace",
+    ],
+    [
+      "Copy link",
+    ],
+    [
+      "Save as test…",
+    ],
+    [
+      "Delete…",
+    ],
+  ],
+  "load-test": [
+    [
+      "Open",
+      "Open in new tab",
+    ],
+    [
+      "Run",
+    ],
+    [
+      "Copy link",
+    ],
+    [
+      "Rename",
+      "Duplicate",
+      "Move to folder ▸",
+    ],
+    [
+      "Delete…",
+    ],
+  ],
+  "mcp-mock": [],
+  "mcp-server": [
+    [
+      "Open",
+      "Open in new tab",
+    ],
+    [
+      "Connect",
+      "Disconnect",
+    ],
+    [
+      "Copy link",
+      "Copy MCP config",
+    ],
+    [
+      "Settings…",
+    ],
+    [
+      "Rename",
+      "Duplicate",
+      "Move to folder ▸",
+    ],
+    [
+      "Delete…",
+    ],
+  ],
+  "mock": [
+    [
+      "Open",
+    ],
+    [
+      "Copy link",
+    ],
+  ],
+  "monitor": [
+    [
+      "Open",
+      "Open in new tab",
+      "Edit",
+    ],
+    [
+      "Run now",
+      "Pause",
+      "Resume",
+    ],
+    [
+      "Copy link",
+    ],
+    [
+      "Rename",
+      "Duplicate",
+      "Move to folder ▸",
+    ],
+    [
+      "Delete…",
+    ],
+  ],
+  "prompt": [
+    [
+      "Open",
+      "Open in new tab",
+    ],
+    [
+      "Copy link",
+    ],
+    [
+      "Rename",
+      "Duplicate",
+      "Move to folder ▸",
+    ],
+    [
+      "Delete…",
+    ],
+  ],
+  "proposal": [],
+  "proto": [],
+  "provider": [
+    [
+      "Open",
+    ],
+    [
+      "Copy link",
+    ],
+    [
+      "Settings…",
+    ],
+    [
+      "Duplicate",
+    ],
+    [
+      "Delete…",
+    ],
+  ],
+  "request": [
+    [
+      "Open",
+      "Open in new tab",
+    ],
+    [
+      "Copy link",
+      "Copy as ▸",
+    ],
+    [
+      "Monitor on a schedule…",
+      "Save as test…",
+    ],
+    [
+      "History in git…",
+    ],
+    [
+      "Rename",
+      "Duplicate",
+      "Move to…",
+      "Add to favorites",
+    ],
+    [
+      "Delete…",
+    ],
+  ],
+  "run": [
+    [
+      "Open",
+    ],
+    [
+      "Rerun failed",
+    ],
+    [
+      "Copy link",
+      "Copy CLI command",
+      "Copy run id",
+      "Export report…",
+    ],
+    [
+      "Run in CI…",
+      "Explain and fix failures with AI…",
+    ],
+    [
+      "Delete…",
+    ],
+  ],
+  "script-package": [
+    [
+      "Rename",
+    ],
+    [
+      "Delete…",
+    ],
+  ],
+  "section:collection": [
+    [
+      "New …",
+      "Import…",
+    ],
+    [
+      "Recently deleted…",
+    ],
+    [
+      "Expand all",
+      "Collapse all",
+    ],
+    [
+      "Run in CI…",
+    ],
+  ],
+  "section:dataset": [
+    [
+      "New …",
+      "New folder",
+      "Generate test data…",
+    ],
+    [
+      "Expand all",
+      "Collapse all",
+    ],
+  ],
+  "section:environment": [
+    [
+      "New …",
+    ],
+    [
+      "Recently deleted…",
+    ],
+  ],
+  "section:evaluation": [
+    [
+      "New …",
+      "New folder",
+    ],
+    [
+      "Expand all",
+      "Collapse all",
+    ],
+  ],
+  "section:load-test": [
+    [
+      "New …",
+      "New folder",
+    ],
+    [
+      "Expand all",
+      "Collapse all",
+    ],
+  ],
+  "section:mcp-server": [
+    [
+      "New …",
+      "New folder",
+    ],
+    [
+      "Open MCP inspector",
+    ],
+    [
+      "Expand all",
+      "Collapse all",
+    ],
+  ],
+  "section:monitor": [
+    [
+      "New …",
+      "New folder",
+    ],
+    [
+      "Expand all",
+      "Collapse all",
+    ],
+  ],
+  "section:prompt": [
+    [
+      "New …",
+      "New folder",
+    ],
+    [
+      "Expand all",
+      "Collapse all",
+    ],
+  ],
+  "section:provider": [
+    [
+      "New …",
+    ],
+  ],
+  "section:spec": [
+    [
+      "New …",
+      "New folder",
+    ],
+    [
+      "Open API definitions",
+    ],
+    [
+      "Expand all",
+      "Collapse all",
+    ],
+  ],
+  "section:test": [
+    [
+      "New …",
+    ],
+    [
+      "Expand all",
+      "Collapse all",
+    ],
+    [
+      "Run in CI…",
+    ],
+  ],
+  "spec": [
+    [
+      "Open",
+      "Reveal file",
+    ],
+    [
+      "Lint",
+      "API coverage",
+      "Compare versions",
+    ],
+    [
+      "Copy link",
+      "Copy path",
+    ],
+    [
+      "Generate tests…",
+      "Generate integration flows…",
+    ],
+    [
+      "Rename",
+      "Move to folder ▸",
+    ],
+    [
+      "Delete…",
+    ],
+  ],
+  "test": [
+    [
+      "Open",
+      "Reveal file",
+    ],
+    [
+      "Run",
+      "Run with data…",
+      "Run in several environments…",
+    ],
+    [
+      "Copy link",
+      "Copy path",
+      "Copy CLI command",
+      "Export as Arazzo…",
+    ],
+    [
+      "Monitor on a schedule…",
+      "Run in CI…",
+      "Expose as MCP tool…",
+    ],
+    [
+      "Rename",
+      "Duplicate",
+    ],
+    [
+      "Delete…",
+    ],
+  ],
+  "test-case": [
+    [
+      "Open",
+    ],
+    [
+      "Copy link",
+    ],
+  ],
+  "trace": [
+    [
+      "Open",
+      "Open run",
+    ],
+    [
+      "Copy link",
+    ],
+  ],
+  "variable": [
+    [
+      "Open",
+    ],
+    [
+      "Copy link",
+    ],
+  ],
+  "workspace": [
+    [
+      "Open",
+    ],
+    [
+      "Copy link",
+    ],
+  ],
+  "ws-connection": [
+    [
+      "Open",
+      "Open in new tab",
+    ],
+    [
+      "Copy link",
+      "Copy URL",
+    ],
+    [
+      "Save as test…",
+    ],
+    [
+      "Rename",
+      "Duplicate",
+      "Move to collection ▸",
+    ],
+    [
+      "Delete…",
+    ],
+  ],
+}
+`;

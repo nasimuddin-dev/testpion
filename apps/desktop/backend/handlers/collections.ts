@@ -1,7 +1,7 @@
 /** RPC handlers: Collections (requests, folders, examples, import/export) and their mock servers. */
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, relative, sep } from 'node:path';
-import { importFileFilters, atomicWrite, writeOwned, renameOwned, copyOwned, ApsError, dbKindOf, redactDbUrl, isSqliteDataset, collectionVariableFlow, listWorkspaceDatasets, appendDatasetRow, readDataset, readWorkspaceDataset, moveToTrash, sqliteTables, fetchImportText, bruFilesToBrunoExport, collectionToBru, importIntoWorkspace, diffOpenApi, lintOpenApi, openApiOutline, asyncApiOutline, workspaceApiCoverage, apiCoverageMarkdown, collectionSecurityFindings, definedVariableNames, listSpecs, findBodySchema, readSpecRef, type SpecRef, collectionToOpenApiText, collectionToHttpFile, collectionToAsyncApi, generateWorkspaceDataset, replaceInCollection, moveCollectionVariablesToEnvironments, tidyCollection, applyTidy, type ReplaceField, writeTestsFromSpec, writeFlows, exampleFromResponse, startMockServer, collectionMarkdown, collectionHtml, exportPostmanCollection, withRequestExamples, type SavedExample, convertCollectionScripts, importRequestSnippet, isRequestSnippet, type Collection, collectionSavedItems, duplicateCollection, shortId, collectionTreeOf, replaceSpecWithImported } from '@testpion/core';
+import { importFileFilters, copyFolderEntry, moveFolderEntry, atomicWrite, writeOwned, renameOwned, copyOwned, ApsError, dbKindOf, redactDbUrl, isSqliteDataset, collectionVariableFlow, listWorkspaceDatasets, appendDatasetRow, readDataset, readWorkspaceDataset, moveToTrash, sqliteTables, fetchImportText, bruFilesToBrunoExport, collectionToBru, importIntoWorkspace, diffOpenApi, lintOpenApi, openApiOutline, asyncApiOutline, workspaceApiCoverage, apiCoverageMarkdown, collectionSecurityFindings, definedVariableNames, listSpecs, findBodySchema, readSpecRef, type SpecRef, collectionToOpenApiText, collectionToHttpFile, collectionToAsyncApi, generateWorkspaceDataset, replaceInCollection, moveCollectionVariablesToEnvironments, tidyCollection, applyTidy, type ReplaceField, writeTestsFromSpec, writeFlows, exampleFromResponse, startMockServer, collectionMarkdown, collectionHtml, exportPostmanCollection, withRequestExamples, type SavedExample, convertCollectionScripts, importRequestSnippet, isRequestSnippet, type Collection, collectionSavedItems, duplicateCollection, shortId, collectionTreeOf, replaceSpecWithImported } from '@testpion/core';
 import type { Backend, Handlers, CollectionRunParams } from '../backend.js';
 import { countDatasetRecords, datasetFormatOfName } from '@testpion/shared';
 import { recordIncoming } from './debugger.js';
@@ -308,6 +308,8 @@ export function collectionsHandlers(be: Backend): Handlers {
       if (existsSync(dest)) throw new ApsError('ValidationError', `datasets/${datasetName(dest)} exists already`);
       mkdirSync(dirname(dest), { recursive: true });
       renameOwned(file, dest);
+      // its virtual folder goes with it (library/dataset-folders.json names datasets by their name)
+      moveFolderEntry(be.ws, 'dataset-folders', datasetName(file), datasetName(dest));
       be.host.emit('data.changed', { kind: 'datasets' });
       return { name: datasetName(dest), path: dest };
     },
@@ -319,6 +321,7 @@ export function collectionsHandlers(be: Backend): Handlers {
       let dest = `${m[1]}-copy${m[2] ?? ''}`;
       for (let i = 2; existsSync(dest); i++) dest = `${m[1]}-copy-${i}${m[2] ?? ''}`;
       copyOwned(file, dest);
+      copyFolderEntry(be.ws, 'dataset-folders', datasetName(file), datasetName(dest));
       be.host.emit('data.changed', { kind: 'datasets' });
       return { name: datasetName(dest), path: dest };
     },

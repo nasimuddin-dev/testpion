@@ -319,6 +319,7 @@ export function LoadView() {
             render: () => (
               <FolderList
                 id="load-saved"
+                kind="load-test"
                 title="Saved load tests"
                 itemNoun="load test"
                 addLabel="Save current load test"
@@ -328,7 +329,7 @@ export function LoadView() {
                 onOpen={(savedItem) => void openSaved(savedItem)}
                 onAdd={(folder) => void saveLoad(true, folder)}
                 ops={saved.ops}
-                itemMenu={(savedItem) => [{ label: 'Run', icon: <Play size={13} />, disabled: !!id, onSelect: () => void openSaved(savedItem, true) }]}
+                itemActions={(savedItem) => ({ on: { run: () => void openSaved(savedItem, true) }, disabled: id ? { run: 'A load test is running: stop it first' } : {} })}
                 items={saved.lib.items.map((i) => {
                   const target = i.data.kind === 'http' ? `${i.data.method} ${i.data.url}` : i.data.kind;
                   return {

@@ -235,6 +235,8 @@ interface AppState {
 }
 
 let toastId = 0;
+/** The toast with Undo shown for each message: the same message again replaces it (its Undo is the newer delete's). */
+const undoToastFor = new Map<string, string>();
 
 /** A toast action as a button; one about an item opens it through openRef (loaded on first use: open-ref imports this store). */
 function toastButton(a: ToastAction): { label: string; onClick(): void } {
@@ -369,6 +371,13 @@ export const useApp = create<AppState>((set, get) => ({
     const sonnerId = `t${id}`;
     // Undo comes first, before any other action (Open …)
     const undo = opts?.undo;
+    // the same delete twice (deleted, restored, deleted again): one message with the newer Undo, never two alike
+    if (undo) {
+      const before = undoToastFor.get(text);
+      if (before) sonner.dismiss(before);
+      undoToastFor.set(text, sonnerId);
+      setTimeout(() => undoToastFor.get(text) === sonnerId && undoToastFor.delete(text), 8000);
+    }
     const undoButton = undo && {
       label: 'Undo',
       onClick: offerUndo(

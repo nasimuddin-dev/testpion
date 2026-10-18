@@ -1,0 +1,8 @@
+{
+  "schemaVersion": "1.0",
+  "id": "ws-kinds",
+  "name": "Kinds",
+  "variables": [{ "key": "appName", "value": "Kinds", "enabled": true }],
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "updatedAt": "2026-01-01T00:00:00.000Z"
+}

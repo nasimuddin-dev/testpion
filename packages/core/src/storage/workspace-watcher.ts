@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync, statSync, watch } from 'node:fs';
 import { join, sep } from 'node:path';
+import { watchKindOfPath, type WatchKind } from '@testpion/shared';
 import { forgetOwnWrite, ownWrite } from './fsutil.js';
 
 /**
@@ -9,7 +10,8 @@ import { forgetOwnWrite, ownWrite } from './fsutil.js';
  * the file (fsutil `ownWrite`), never by the time, so an outside change right after a save is still reported. Changes
  * arrive in batches (a pull touches many files at once).
  */
-export type WorkspaceChangeKind = 'collections' | 'environments' | 'tests' | 'library' | 'mcp' | 'providers' | 'workspace' | 'specs' | 'other';
+/** The kind of file a change touched: the item-kind registry's watch kinds (`data.changed` `kinds`). */
+export type WorkspaceChangeKind = WatchKind;
 
 export interface WorkspaceChange {
   /** Path inside the workspace, with forward slashes. */
@@ -20,18 +22,11 @@ export interface WorkspaceChange {
 const IGNORED_TOP = new Set(['runs', 'traces', 'payloads', 'reports', 'baselines', 'trash', '.local', '.git', 'node_modules']);
 const IGNORED_FILE = /(^|\/)(database\.sqlite.*|metadata\.jsonl|\.template-offered\.json)$|\.tmp-\d+-[0-9a-f]+$|~$|\.swp$/;
 
+/** What a changed file is (results, local state and temp files: nothing); the registry says which kind it belongs to. */
 export function changeKind(path: string): WorkspaceChangeKind | undefined {
   const top = path.split('/')[0]!;
   if (IGNORED_TOP.has(top) || IGNORED_FILE.test(path)) return undefined;
-  if (top === 'collections') return 'collections';
-  if (top === 'environments') return 'environments';
-  if (top === 'tests' || top === 'datasets') return 'tests';
-  if (top === 'library') return 'library';
-  if (top === 'specs') return 'specs';
-  if (path === 'mcp-servers.json') return 'mcp';
-  if (path === 'providers.json') return 'providers';
-  if (path === 'workspace.json') return 'workspace';
-  return 'other';
+  return watchKindOfPath(path, { raw: true });
 }
 
 /** A running watch: call it to stop; `adopt()` takes the folder as it is now as known (see below). */

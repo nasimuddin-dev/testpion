@@ -32,6 +32,29 @@ Save and export every output: every response and result now has the same down ar
 - **HTTP Debugger:** **Export as HAR…** saves through the Save as dialog again. It called a backend method that did not exist, so it always fell back to a browser download.
 - **JSON tree toolbar:** **Expand all** is no longer cut off, and the JSONPath filter is no longer squeezed against the hint. Expand and collapse are now icon buttons, and the hint moved behind an ⓘ.
 
+One registry, one menu: every kind of item a workspace holds is declared once (what it is called, where it is stored and opens, what it can do), and every tree and list row's menu is built from it by one function. ([What's new in 0.52](/getting-started/whats-new#whats-new-in-0-52))
+
+### Behaviour changes: what works differently (read before upgrading)
+- **One menu order everywhere**: create · open · tree · run · share · tools · git · edit · danger. **Run moved after Expand all / Collapse all** in the collection and folder menus; the items kept their names.
+- **New request ▸** holds a collection's other request kinds (GraphQL, SOAP, gRPC, WebSocket & MQTT); **Copy as ▸** holds a request's Copy URL, cURL, PowerShell, fetch and code snippets.
+- **Convert scripts to pm.\* is now Export ▸ For Postman (pm.\*)…** in the collection menu (TestPion writes `tp.*`; `pm.*` is for Postman).
+- **AI providers, test files and folders of test files delete with Undo** instead of a confirmation (a folder of more than 200 files still asks).
+- **What is open in trees and lists is kept per workspace** (the explorer's sections and folders, every list's folders, the Tests tree), across restarts; the open state of earlier versions moves into the first workspace opened.
+
+### Menus
+- **Expand all and Collapse all on every container and section header**: protocol groups, folders of saved gRPC calls and connections (which now have a menu: rename, delete with Undo), the MCP servers, API definitions and Datasets sections and their folders, the folders of monitors, prompts, load tests and evaluations, the Tests tree and its folders.
+- **The same row everywhere**: ⋯, right-click, <kbd>Shift</kbd>+<kbd>F10</kbd> and the menu key open the same menu; <kbd>F2</kbd> renames, <kbd>Delete</kbd> deletes (with Undo), <kbd>*</kbd> expands everything inside, typing a name jumps to it. Environments get a right-click menu in the sidebar pane, the History pane a menu.
+- **Copy link** on every item with a link (collections, folders, requests, saved items, servers, API definitions, datasets, test files, runs …).
+- **API definitions**: Rename (in their folder), Delete with Undo (back in their folder), Lint, Generate tests…, Generate integration flows…, Reveal file, Copy path.
+- **Datasets**: virtual folders (`library/dataset-folders.json`; files never move), Preview, Use in a test, Reveal file, Copy path; rename and duplicate keep a dataset's folder.
+- **MCP servers**: Open in new tab, Copy link, Copy MCP config (`.mcp.json` / `claude_desktop_config.json`).
+- **Requests**: Monitor on a schedule…; folders: Run in CI…, Copy link; test folders: New test file here, Run in CI…, Rename folder.
+- **The blank area** of the sidebar opens the workspace's menu; of a list, that list's menu.
+- **List rows carry their item** when dragged (onto a flow canvas, into a folder), like the explorer's rows.
+
+### For AI agents and scripts
+- **`testpion kinds [kind] [--json]`** and the MCP tool **`list_kinds`** (and RPC `kinds.list`): every kind, its `ref` shape, storage, where it opens and every capability as `true`, `{ na: why }` or `{ planned: release }`.
+
 ## 0.50.0 — 2026-10-17
 
 Nothing is lost, nothing leaks: a workspace export now holds everything a workspace needs and never a secret, every import says what it could not bring over instead of guessing, and nothing you delete or import over is gone for good. ([What's new in 0.50](/getting-started/whats-new#whats-new-in-0-50))

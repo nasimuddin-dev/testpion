@@ -7,7 +7,7 @@ const H = `
   const rows = () => [...document.querySelectorAll('aside [data-tree-row]')].filter((b) => b.offsetParent);
   const treeRow = (name) => rows().find((b) => b.getAttribute('data-rename-id') !== 'fav-' && b.textContent.trim().replace(/^(GET|POST|PUT|PATCH|DELETE)/, '') === name && !b.closest('[data-section="favorites"]'));
   const favSection = () => [...document.querySelectorAll('aside button')].find((b) => b.offsetParent && /^Favorites\\d*$/.test(b.textContent.trim()));
-  const favRows = () => rows().filter((b) => (b.getAttribute('data-rename-id') ?? '').startsWith('fav-'));
+  const favRows = () => rows().filter((b) => (b.getAttribute('data-rename-id') ?? '').includes('fav-'));
   const menuOf = async (row) => { row.parentElement.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 200, clientY: 300 })); return await __t.waitFor(() => { const m = [...document.querySelectorAll('[role=menuitem]')]; return m.length ? m : undefined; }, 2000); };
 `;
 const step = (name, body) => [name, `(async () => { ${H} ${body} })()`];
@@ -16,7 +16,7 @@ const steps = [
   step(
     'add-to-favorites',
     `await __t.requests(); for (const t of ['HTTP basics', 'REST17', 'Requests & responses10']) { await __t.expand(t); await __t.sleep(200); }
-     const r = rows().find((b) => b.textContent.trim().endsWith('Custom headers') && !(b.getAttribute('data-rename-id') ?? '').startsWith('fav-')); if (!r) return 'NO ROW';
+     const r = rows().find((b) => b.textContent.trim().endsWith('Custom headers') && !(b.getAttribute('data-rename-id') ?? '').includes('fav-')); if (!r) return 'NO ROW';
      const before = !!favSection();
      const items = await menuOf(r); const add = items?.find((m) => m.textContent.trim() === 'Add to favorites'); if (!add) return 'NO MENU ' + (items ?? []).map((m) => m.textContent.trim()).join('|');
      add.click(); await __t.sleep(1200);
@@ -30,6 +30,8 @@ const steps = [
   step(
     'favorite-keeps-tree-still',
     `document.querySelector('aside [aria-label="Collapse all"]').click(); await __t.sleep(600);
+     // Collapse all folds everything in the explorer, the Favorites section too (menus-uniform §3): unfold it again
+     const fs = favSection(); if (fs?.getAttribute('aria-expanded') === 'false') { fs.click(); await __t.sleep(300); }
      const list = document.querySelector('aside .overflow-auto'); const top = list?.scrollTop ?? 0;
      const before = rows().length;
      [...document.querySelectorAll('[role=tablist][aria-label="Open requests"] [role=tab]')].forEach(() => {});

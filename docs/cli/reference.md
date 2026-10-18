@@ -26,6 +26,7 @@ testpion vars move <c> --to <envs> Move collection variables into environments (
 testpion tidy <collection>     Duplicate requests, typed-in hosts, empty folders, unused variables (--remove-* fixes)
 testpion replace <c> <find> <with> Find and replace across a collection's requests (preview; --apply saves)
 testpion agent-info               What an AI agent needs to use TestPion here, as JSON (workspace, commands, exit codes, MCP setup)
+testpion kinds [kind]            The kinds of item a workspace holds and what each offers (open, rename, delete with undo, run, CI …), with why an action never applies (--json)
 testpion open <ref>              Open an item in the TestPion app by its ref (a testpion://open link, the JSON "ref" of --json output, or kind:id); checked first (--json, --print)
 testpion tests-from-spec <spec> Write a first test suite from an API definition (examples and invalid requests)
 testpion integration-suite <spec|collection> Write an integration suite: a flow per resource (create, read, update, list, delete), the login first
@@ -720,6 +721,18 @@ testpion scripts convert --to tp -w my-workspace --collection "Checkout API"
 ```
 
 Rewrites collection, folder and request scripts written for Postman to TestPion's `tp.*` (or back to Postman's name with `--to pm`). Both names always run in TestPion; only code changes, not strings or comments, and scripts that declare their own `tp` are skipped and listed.
+
+## `kinds`
+
+Every kind of item a workspace holds (the item-kind registry the app's menus are built from) and what each one offers. Without a kind, one line per kind with the capabilities it has; with one (an id or an alias: `mcp-server`, `library:grpc`, `test-file`), every capability: `yes`, `no (why it never applies)` or `planned for 0.5x`.
+
+```bash
+testpion kinds
+testpion kinds spec
+testpion kinds --json            # { kinds: [{ id, label, ref, library, aliases, storage, folders, opens, capabilities, can, facets }], workspace }
+```
+
+`--all` adds the kinds registered ahead of their release (RAG targets, custom metrics). The MCP tool `list_kinds` answers the same.
 
 ## `open`
 

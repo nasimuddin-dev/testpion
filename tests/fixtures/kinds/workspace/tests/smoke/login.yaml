@@ -1,0 +1,6 @@
+name: Login works
+tests:
+  - name: Login
+    request:
+      method: GET
+      url: "{{baseUrl}}/login"

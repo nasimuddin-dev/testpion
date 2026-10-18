@@ -1,12 +1,15 @@
-import { CopyPlus, KeyRound, Plus, Save, Settings2, Sparkles, Trash2 } from 'lucide-react';
+import { KeyRound, Plus, Save, Sparkles } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { PROVIDER_KINDS, PROVIDER_PRESETS, providerNeedsKey } from '@testpion/shared';
-import { RowMenu, TreeHeader } from '../../components/TreeParts';
+import { CountPill, NodeMenu, withRefDefaults } from '../../components/TreeParts';
+import { TreeRowShell } from '../../components/TreeRowShell';
+import { buildNodeMenu, type NodeMenuCtx } from '../../lib/node-menu';
+import { deleteWithUndo } from '../../lib/undo-delete';
 import { asError, call } from '../../api';
-import { confirmAction, toastError, useApp } from '../../store';
+import { toastError, useApp } from '../../store';
 import type { ProviderConfig } from '../../types';
 import { uid } from '../../lib/format';
-import { Badge, Button, cx, Empty, Field, Input, PageHeader, Select, Split, type MenuItem } from '../../components/ui';
+import { Badge, Button, cx, Empty, Field, Input, menuKeys, PageHeader, Select, Split } from '../../components/ui';
 
 /** kind, label, default base URL: the shared table, in the shape this view reads. */
 const KINDS: Array<[ProviderConfig['kind'], string, string]> = PROVIDER_KINDS.map((k) => [k.kind, k.label, k.baseUrl]);
@@ -66,22 +69,30 @@ export function Providers({ providers, onSaved, focus }: { providers: ProviderCo
     setList([...list, { ...rest, id, name: `${x.name} copy` }]);
     setSel(id);
   };
-  /** Remove a provider and save the list at once. */
-  const removeProvider = async (x: ProviderConfig) => {
-    if (!(await confirmAction({ title: 'Remove provider', message: `Remove the provider "${x.name}"?`, detail: 'Tests and prompts that use it will fail until you choose another provider.', confirmLabel: 'Remove provider', danger: true }))) return;
-    const next = list.filter((y) => y.id !== x.id);
-    setList(next);
-    if (sel === x.id) setSel(next[0]?.id);
-    await save(next);
+  /** Delete a provider at once, with Undo (the list as it was comes back; a stored API key stays in the secret store). */
+  const removeProvider = (x: ProviderConfig) => {
+    const before = list;
+    return deleteWithUndo({
+      what: `the provider "${x.name}"`,
+      note: 'Tests and prompts that use it fail until you choose another provider',
+      run: async () => {
+        const next = before.filter((y) => y.id !== x.id);
+        setList(next);
+        if (sel === x.id) setSel(next[0]?.id);
+        await save(next);
+      },
+      undo: async () => {
+        setList(before);
+        await save(before);
+      },
+    });
   };
   const [menuFor, setMenuFor] = useState<string>();
-  const providerMenu = (x: ProviderConfig): MenuItem[] =>
+  /** A provider's menu (lib/node-menu.ts): a built-in one lives in Settings; the others duplicate and delete (with Undo). */
+  const providerMenu = (x: ProviderConfig): NodeMenuCtx =>
     (x as { builtIn?: boolean }).builtIn
-      ? [{ label: 'Open Settings', icon: <Settings2 size={14} />, onSelect: () => useApp.getState().setView('settings') }]
-      : [
-          { label: 'Duplicate', icon: <CopyPlus size={14} />, onSelect: () => duplicateProvider(x) },
-          { label: 'Remove provider', icon: <Trash2 size={14} />, danger: true, separator: true, onSelect: () => void removeProvider(x) },
-        ];
+      ? { name: x.name, on: { open: () => setSel(x.id), settings: () => useApp.getState().setView('settings') } }
+      : { ref: { kind: 'provider', providerId: x.id }, name: x.name, on: { open: () => setSel(x.id), duplicate: () => duplicateProvider(x), delete: () => void removeProvider(x) } };
   const test = async () => {
     if (!p) return;
     setTesting(true);
@@ -98,7 +109,10 @@ export function Providers({ providers, onSaved, focus }: { providers: ProviderCo
   return (
     <Split id="ai-providers" sidebar initial={26}>
       <div className="h-full flex flex-col bg-panel/50">
-        <TreeHeader title="Providers" count={list.length} addLabel="Add provider" onAdd={addProvider} />
+        <TreeRowShell kind="section:provider" nodeId="providers:section" label="Providers" header className="mx-0 pl-3 shrink-0" ctx={() => ({ create: [{ label: 'Add provider', icon: <Plus size={14} />, onSelect: addProvider }], on: {} })}>
+          <span className="text-[0.82rem] font-semibold truncate">Providers</span>
+          {list.length > 0 && <CountPill n={list.length} />}
+        </TreeRowShell>
         <div className="flex-1 overflow-auto pb-2">
           {list.map((x) => (
             <div
@@ -110,7 +124,7 @@ export function Providers({ providers, onSaved, focus }: { providers: ProviderCo
                 setMenuFor(x.id);
               }}
             >
-              <button className="flex-1 min-w-0 py-1.5 text-left" data-tree-row>
+              <button className="flex-1 min-w-0 py-1.5 text-left" data-tree-row onKeyDown={(e) => menuKeys(buildNodeMenu('provider', withRefDefaults(providerMenu(x))))(e)}>
                 <div className="text-sm flex items-center gap-2">
                   <span className="truncate">{x.name}</span>
                   {x.hasKey && <KeyRound size={11} className="text-warn shrink-0" aria-label="API key stored" />}
@@ -121,7 +135,7 @@ export function Providers({ providers, onSaved, focus }: { providers: ProviderCo
                   {!x.hasKey && x.needsKey && <span className="text-warn"> · needs an API key</span>}
                 </div>
               </button>
-              <RowMenu label={x.name} items={providerMenu(x)} open={menuFor === x.id} onOpenChange={(o) => setMenuFor(o ? x.id : undefined)} />
+              <NodeMenu kind="provider" label={x.name} ctx={() => providerMenu(x)} open={menuFor === x.id} onOpenChange={(o) => setMenuFor(o ? x.id : undefined)} />
             </div>
           ))}
         </div>
@@ -160,7 +174,8 @@ export function Providers({ providers, onSaved, focus }: { providers: ProviderCo
                 </>
               }
               menuLabel="More provider actions"
-              menu={providerMenu(p)}
+              // the page's own menu: the provider's, without Open (this is it)
+              menu={buildNodeMenu('provider', withRefDefaults({ ...providerMenu(p), on: { ...providerMenu(p).on, open: undefined } }))}
             />
             <div className="grid grid-cols-2 gap-3">
               <Field label="Name">

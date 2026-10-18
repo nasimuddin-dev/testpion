@@ -1,0 +1,1 @@
+{ "schemaVersion": "1.0", "folders": [], "items": [{ "id": "ws-echo", "name": "Echo socket", "collectionId": "api", "data": { "url": "wss://echo.example.com" } }] }

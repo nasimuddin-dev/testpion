@@ -1,0 +1,1 @@
+{ "schemaVersion": "1.0", "folders": [], "items": [{ "id": "ev-tone", "name": "Tone evaluation", "data": { "dataset": "nested/cases.jsonl" } }] }

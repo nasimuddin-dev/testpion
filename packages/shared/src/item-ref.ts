@@ -7,6 +7,8 @@
  * whether one still exists, and what it is called, with `resolveItemRef` (core).
  */
 
+import { KIND_INFO, SAVED_ITEM_LABEL, kindOfPath, liveKinds, type KindId } from './item-kinds.js';
+
 /** The protocol of a request: which editor opens it. */
 export type RequestProtocol = 'http' | 'soap' | 'graphql' | 'grpc' | 'websocket';
 
@@ -43,7 +45,7 @@ export type ItemRef =
   /** A collection's mock server. */
   | { kind: 'mock'; collectionId: string }
   | { kind: 'certificate'; host: string }
-  /** A Debugger capture session saved as a HAR file (debugger/sessions/<name>.har): opens in the Debugger. */
+  /** A Debugger capture session saved as a HAR file (debugger/<name>.har): opens in the Debugger. */
   | { kind: 'capture'; name: string }
   /** A changed file in the Git view: its path in the workspace; `line` the line a link pointed at (1-based, as text). */
   | { kind: 'git-file'; path: string; line?: string }
@@ -81,42 +83,13 @@ export const ITEM_REF_FIELDS: Readonly<Record<ItemKind, readonly string[]>> = {
 
 export const ITEM_KINDS = Object.keys(ITEM_REF_FIELDS) as ItemKind[];
 
-/** What each kind is called, for people ("Request", "Test file" …). */
-export const ITEM_KIND_LABEL: Readonly<Record<ItemKind, string>> = {
-  request: 'Request',
-  collection: 'Collection',
-  folder: 'Folder',
-  saved: 'Saved item',
-  monitor: 'Monitor',
-  environment: 'Environment',
-  variable: 'Variable',
-  test: 'Test file',
-  flow: 'Flow',
-  'test-case': 'Test',
-  run: 'Run',
-  history: 'History entry',
-  trace: 'Trace',
-  exchange: 'Captured exchange',
-  'mcp-server': 'MCP server',
-  provider: 'AI provider',
-  spec: 'API definition',
-  dataset: 'Dataset',
-  mock: 'Mock server',
-  certificate: 'Certificate',
-  capture: 'Capture session',
-  'git-file': 'Changed file',
-  doc: 'Documentation',
-};
+/** What each kind is called, for people ("Request", "Test file" …): the item-kind registry's labels. */
+export const ITEM_KIND_LABEL: Readonly<Record<ItemKind, string>> = Object.fromEntries(
+  ITEM_KINDS.map((k) => [k, k === 'saved' ? SAVED_ITEM_LABEL : KIND_INFO[k as KindId].label]),
+) as Record<ItemKind, string>;
 
-/** Library kinds and what one of their items is. */
-export const LIBRARY_LABEL: Readonly<Record<string, string>> = {
-  grpc: 'gRPC call',
-  websocket: 'Connection',
-  'ai-prompts': 'Prompt',
-  'load-tests': 'Load test',
-  evaluations: 'Evaluation',
-  monitors: 'Monitor',
-};
+/** Library kinds and what one of their items is (the registry's library kinds; folder libraries are no items). */
+export const LIBRARY_LABEL: Readonly<Record<string, string>> = Object.fromEntries(liveKinds().flatMap((k) => (k.library ? [[k.library, k.label]] : [])));
 
 /** What one item of a ref's kind is called inside a sentence: "run", "test file", "gRPC call", "MCP server". */
 export function refNoun(ref: Pick<ItemRef, 'kind'> & { library?: string }): string {
@@ -130,12 +103,11 @@ export function refNoun(ref: Pick<ItemRef, 'kind'> & { library?: string }): stri
  * dataset, an API definition; undefined for anything else. "Saved tests/rest/x.yaml" toasts open what they saved.
  */
 export function refOfWorkspacePath(path: string): ItemRef | undefined {
-  const p = String(path ?? '').replace(/\\/g, '/').replace(/^\.?\//, '');
-  const m = /^(tests|datasets|specs)\/(.+)$/.exec(p);
-  if (!m) return undefined;
-  if (m[1] === 'tests') return /\.(ya?ml|json)$/i.test(m[2]!) ? { kind: 'test', path: m[2]! } : undefined;
-  if (m[1] === 'datasets') return { kind: 'dataset', name: m[2]! };
-  return { kind: 'spec', path: p };
+  const k = kindOfPath(path);
+  const info = k?.id ? KIND_INFO[k.kind] : undefined;
+  if (!info?.pathRef || !info.ref) return undefined;
+  // the path's id is the ref's first id (a test file's path in tests/, a dataset's name, a spec's workspace path)
+  return toItemRef({ kind: info.ref, [ITEM_REF_FIELDS[info.ref][0]!]: k!.id });
 }
 
 /** The one label of an action that opens a ref elsewhere (WF-13): "Open run", "Open monitor", "Open test file". */

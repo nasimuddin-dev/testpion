@@ -1,0 +1,4 @@
+{
+  "schemaVersion": "1.0",
+  "providers": [{ "id": "demo", "name": "Demo model", "kind": "mock", "baseUrl": "mock://local", "defaultModel": "demo" }]
+}
