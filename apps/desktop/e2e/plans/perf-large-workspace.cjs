@@ -65,6 +65,27 @@ const steps = [
     })()`,
   ],
   [
+    // MENU-1: a row's menu is built only while it opens: on the expanded big tree, the time from the right-click until the
+    // menu is in the page (best of three, never one sample), and until it is painted
+    'open-a-menu',
+    `(async () => {
+      const close = async () => { document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); await __t.waitFor(() => !document.querySelector('[role=menu]'), 1500); };
+      const builds = []; const paints = [];
+      for (let i = 0; i < 3; i++) {
+        const rows = [...document.querySelectorAll('aside [data-node-id] [data-tree-row]')].filter((b) => b.offsetParent && /Request \\d+ of folder/.test(b.textContent));
+        const row = rows[(i * 7) % Math.max(1, rows.length)]?.parentElement; if (!row) return 'NO ROW';
+        const t0 = performance.now();
+        row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 200, clientY: 300 }));
+        for (const end = performance.now() + 2000; !document.querySelector('[role=menu]') && performance.now() < end; ) await new Promise((r) => requestAnimationFrame(r));
+        builds.push(performance.now() - t0);
+        await ${painted}();
+        paints.push(performance.now() - t0);
+        await close();
+      }
+      return 'menu open ms: ' + Math.round(Math.min(...builds)) + ' | painted ms: ' + Math.round(Math.min(...paints)) + ' | rows: ' + document.querySelector('aside [data-tree-rows]')?.getAttribute('data-tree-rows');
+    })()`,
+  ],
+  [
     'filter-tree',
     `(async () => {
       const input = document.querySelector('aside input[aria-label^="Filter"]');
@@ -131,6 +152,8 @@ module.exports = withExpect(
   steps,
   {
     'open-and-expand': (r) => (SCALE > 1 || /^rows: 5\d\d \|/.test(r)) && num(r, 'expand') < 1500 ? undefined : 'slow or wrong: ' + r,
+    // the two-frame floor is 33 ms (memory ui-perf-profiling): the menu itself must be in the page within it
+    'open-a-menu': (r) => num(r, 'menu open') <= 33 && num(r, 'painted') < 100 ? undefined : 'slow: ' + r,
     'filter-tree': (r) => num(r, 'max keystroke') < 200 ? undefined : 'slow: ' + r,
     'open-tabs-and-type': (r) => (SCALE > 1 || /^tabs: 1[23] \|/.test(r)) && num(r, 'open 12') < 1500 && num(r, 'max keystroke') < 150 && num(r, '10 switches') < 1200 ? undefined : 'slow or wrong: ' + r,
     'save-and-refresh': (r) => num(r, 'save to tree') < 3000 ? undefined : 'slow: ' + r,
