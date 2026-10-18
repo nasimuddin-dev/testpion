@@ -32,7 +32,7 @@ function prepare(ws) {
 const H = `
   const strip = () => [...document.querySelectorAll('[role=tablist][aria-label="Open load tests"] [role=tab]')];
   const names = () => strip().map((t) => t.textContent.trim() + (t.hasAttribute('data-preview') ? '(preview)' : '')).join(', ');
-  const item = (n) => [...document.querySelectorAll('[data-tree-row]')].find((r) => r.getAttribute('aria-label') === n);
+  const item = (n) => [...document.querySelectorAll('[data-tree-row]')].find((r) => r.getAttribute('data-row-name') === n);
   const url = () => [...document.querySelectorAll('main input')].find((i) => /4010\\/health/.test(i.value))?.value;
   const setVal = (el, v) => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, v); el.dispatchEvent(new Event('input', { bubbles: true })); };
 `;

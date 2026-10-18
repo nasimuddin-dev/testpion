@@ -508,7 +508,7 @@ module.exports = withExpect(steps, {
   'real-double-click-opens-a-step': /^editor at: - \{ id: teapot, name: Brew some tea/,
   'canvas-edit-before-an-outside-change': /^saved: true \| undo: true$/,
   'canvas-shows-the-outside-change': /^new step: true \| undo cleared: true \| told: true$/,
-  'run-row-right-click-menu': /^menu: Open,(Rerun failed,)?Run in CI…,Copy CLI command,Export report…,Copy run id$/,
+  'run-row-right-click-menu': /^menu: Open,(Rerun failed,)?Copy link,Copy CLI command,Copy run id,Export report…,Run in CI…$/,
   'editor-has-unsaved-edits': /^dirty: true$/,
   'keep-or-take-is-asked': /^asked: Keep mine \/ Take the new version \| taken: true \| my edit dropped: true$/,
 });

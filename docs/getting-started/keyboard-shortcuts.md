@@ -65,6 +65,7 @@ Your keys are this computer's (the app's `settings.json`, `keybindings`), and th
 | Keys | What it does |
 |---|---|
 | <kbd>↑</kbd> / <kbd>↓</kbd> | Move between rows. |
+| <kbd>Home</kbd> / <kbd>End</kbd> | Go to the first or last row. |
 | <kbd>→</kbd> / <kbd>←</kbd> | Expand or collapse a collection, category or folder. |
 | <kbd>Enter</kbd> | Open the focused item. |
 | <kbd>F2</kbd> | Rename it. |

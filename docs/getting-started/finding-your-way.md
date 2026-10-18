@@ -112,7 +112,7 @@ The items come in groups, always in this order, with a line between groups:
 6. **tools** — Monitor on a schedule…, Run in CI…, Create test file…, Generate integration flow with AI…, Settings…
 7. **git** — History in git… (when the workspace is in git)
 8. **edit** — Rename, Duplicate, Move to…, Add to / Remove from favorites
-9. **danger** — Delete… (always last; it goes at once, with **Undo**)
+9. **danger** — Delete… (always last; where what is deleted can be brought back it goes at once, with **Undo**, and a folder of more than 200 test files still asks first)
 
 An item a kind doesn't have is not shown; one that applies but can't run right now is shown greyed out, and its tooltip says why. The keys run the same items: <kbd>F2</kbd> Rename, <kbd>Delete</kbd> Delete…, <kbd>*</kbd> Expand all, <kbd>Enter</kbd> Open; typing a name's first letters jumps to the next row that starts with them. Which folders and sections are open is kept per workspace, across restarts.
 

@@ -14,13 +14,13 @@ const H = `
 const step = (name, body) => [name, `(async () => { ${H} ${body} })()`];
 const steps = [
   step('monitors', `await __t.view('Monitors'); await __t.sleep(800); return names(/./);`),
-  step('monitor-f2', `const i = await f2('Public APIs health'); if (!i) return 'NO INPUT'; await type(i, 'API health X'); return names(/health/) + ' | focus on: ' + (document.activeElement?.getAttribute('aria-label') ?? '');`),
+  step('monitor-f2', `const i = await f2('Public APIs health'); if (!i) return 'NO INPUT'; await type(i, 'API health X'); return names(/health/) + ' | focus on: ' + (document.activeElement?.getAttribute('data-row-name') ?? '');`),
   step('monitor-esc-blank', `let i = await f2('API health X'); setVal(i, 'NOPE'); key(i, 'Escape'); await __t.sleep(500); i = await f2('API health X'); setVal(i, ''); key(i, 'Enter'); await __t.sleep(300); const alert = document.querySelector('[role=alert]')?.textContent; key(input(), 'Escape'); await __t.sleep(400); return names(/health|NOPE/) + ' | blank: ' + alert;`),
   step('monitor-menu-back', `const r = row('API health X'); r.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 200, clientY: 200 })); await __t.sleep(600); [...document.querySelectorAll('[role=menuitem]')].find((x) => x.textContent.trim() === 'Rename')?.click(); await __t.sleep(700); const i = input(); if (!i) return 'NO INPUT'; await type(i, 'Public APIs health'); return names(/health/);`),
   step('monitor-enter-opens', `const r = row('Public APIs health'); r.focus(); key(r, 'Enter'); await __t.sleep(1000); return 'tab: ' + visible('main [role=tab][aria-selected="true"]').map((t) => t.textContent.trim()).join('') + ' | heading: ' + (visible('main h2')[0]?.textContent ?? '');`),
   step('ailab-prompt-f2', `await __t.view('AI Lab'); await __t.sleep(800); const i = await f2('Summarise a text'); if (!i) return 'NO INPUT: ' + names(/./); await type(i, 'Summarise X'); const back = await f2('Summarise X'); await type(back, 'Summarise a text'); return names(/Summarise/);`),
   step('ailab-folder-f2', `const i = await f2('Offline demo model'); if (!i) return 'NO INPUT'; await type(i, 'Demo model'); const n1 = names(/Demo model|Offline demo/); const j = await f2('Demo model'); await type(j, 'Offline demo model'); return n1 + ' -> ' + names(/Demo model|Offline demo/) + ' | prompts still: ' + names(/Classify intent|Summarise a text/);`),
-  step('click-selects', `const r = row('Classify intent'); r.click(); await __t.sleep(800); return 'selected: ' + (visible('[data-tree-row].bg-accent-soft')[0]?.textContent.trim().slice(0, 30) ?? 'none');`),
+  step('click-selects', `const r = row('Classify intent'); r.click(); await __t.sleep(800); return 'selected: ' + (visible('[data-node-id].bg-accent-soft')[0]?.textContent.trim().slice(0, 30) ?? 'none');`),
 ];
 
 module.exports = withExpect(steps, {

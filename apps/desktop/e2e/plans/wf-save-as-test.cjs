@@ -113,7 +113,7 @@ module.exports = withExpect(
     'open-test-file': /^view: tests \| shows the file: true$/,
     'folder-menu': /^Saved tests\/http-basics[\w-]*\/e2e-requests-and-responses\.yaml \(\d+ tests\) \| buttons: (Open test file \/ Run now|Run now \/ Open test file)$/,
     'editor-menu': /^menu: Save as test… \| Saved tests\/rest\/e2e-from-the-editor\.yaml/,
-    'history-menu': /^menu: Open \| (Open request \| )?Open trace \| Save as test… \| Delete… \| Saved tests\/rest\/e2e-from-history\.yaml/,
+    'history-menu': /^menu: Open \| (Open request \| )?Open trace \| Copy link \| Save as test… \| Delete… \| Saved tests\/rest\/e2e-from-history\.yaml/,
     'monitor-toast-opens-run': /^Monitor "E2E down monitor" .* \| button: Open run \| view: tests$/,
   },
   { prepare },

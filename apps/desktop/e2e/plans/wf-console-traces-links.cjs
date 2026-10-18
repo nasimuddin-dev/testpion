@@ -79,7 +79,7 @@ module.exports = withExpect(
     'console-entry-links': /^links: E2E links health \| History entry \| Trace \| Open as request$/,
     'console-opens-trace': /^view: traces \| trace links: E2E links health \| History entry \| Open as request$/,
     'trace-opens-history': /^view: history \| selected: true$/,
-    'history-menu-links': /^menu: Open request \| Open trace \| Save as test… \| Delete… \| view: rest$/,
+    'history-menu-links': /^menu: Open request \| Open trace \| Copy link \| Save as test… \| Delete… \| view: rest$/,
   },
   { prepare },
 );

@@ -7,7 +7,7 @@ const H = `
   const row = (txt) => visible('main [data-tree-row]').find((b) => b.querySelector('.truncate')?.textContent.trim() === txt);
   const key = (el, k) => el.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }));
   const input = () => (document.activeElement?.tagName === 'INPUT' && document.activeElement.getAttribute('aria-label') === 'Environment name' ? document.activeElement : null);
-  const names = () => visible('main [data-tree-row]').map((b) => b.textContent.trim()).join(' / ');
+  const names = () => visible('main [data-tree-row]').filter((b) => !b.closest('[data-node-kind^="section:"]')).map((b) => b.textContent.trim()).join(' / ');
   const active = () => { const e = document.querySelector('header button[aria-label="Environment"]'); if (!e) return 'NO PICKER'; const t = e.textContent.trim(); return t === 'No environment' ? '(none)' : t; };
   const f2 = async (txt) => { const r = row(txt); if (!r) return null; r.focus(); key(r, 'F2'); await __t.sleep(400); return input(); };
   const menu = async (txt, label) => { row(txt).parentElement.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 200, clientY: 200 })); await __t.sleep(600); [...document.querySelectorAll('[role=menuitem]')].find((x) => x.textContent.trim() === label)?.click(); await __t.sleep(900); };

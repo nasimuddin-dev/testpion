@@ -26,6 +26,14 @@ s = open(p, encoding='utf8', newline='').read()
 nl = '\r\n' if '\r\n' in s else '\n'
 body = open(entry_file, encoding='utf8').read().strip('\n')
 entry = f'## {new} — {datetime.date.today().isoformat()}\n\n{body}\n\n'.replace('\n', nl)
+# a '## Unreleased' section (notes kept between releases) is replaced by the new entry; its body is used when entry.md is empty
+u = s.find('## Unreleased')
+if u >= 0:
+    end = s.index(f'## {old}')
+    kept = s[u + len('## Unreleased'):end].strip()
+    if not body.strip() and kept:
+        entry = f'## {new} — {datetime.date.today().isoformat()}\n\n{kept}\n\n'.replace('\n', nl)
+    s = s[:u] + s[end:]
 i = s.index(f'## {old}')
 s = s[:i] + entry + s[i:]
 open(p, 'w', encoding='utf8', newline='').write(s)
