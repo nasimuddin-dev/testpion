@@ -605,11 +605,11 @@ export async function gitResolve(ws: string, path: string, side: 'ours' | 'their
   const [base, ours, theirs] = await conflictStages(ws, path);
   const merged = MERGED_BY_MEANING.test(path)
     ? resolutions
-      ? mergeWorkspaceTexts(base, ours, theirs, resolutions)
+      ? mergeWorkspaceTexts(base, ours, theirs, resolutions, path)
       : // the side kept on a conflict is the merge's "ours": swap the sides to prefer theirs
         side === 'ours'
-        ? mergeWorkspaceTexts(base, ours, theirs)
-        : mergeWorkspaceTexts(base, theirs, ours)
+        ? mergeWorkspaceTexts(base, ours, theirs, {}, path)
+        : mergeWorkspaceTexts(base, theirs, ours, {}, path)
     : undefined;
   if (merged) writeFileSync(resolve(ws, path), merged.text);
   else await runGit(ws, ['checkout', `--${side}`, '--', path]);
@@ -634,7 +634,7 @@ export interface ConflictDetail {
 /** What conflicts in one file (GIT-302), part by part, for the side-by-side view. */
 export async function gitConflictDetail(ws: string, path: string): Promise<ConflictDetail> {
   const [base, ours, theirs] = await conflictStages(ws, path);
-  const merged = MERGED_BY_MEANING.test(path) ? mergeWorkspaceTexts(base, ours, theirs) : undefined;
+  const merged = MERGED_BY_MEANING.test(path) ? mergeWorkspaceTexts(base, ours, theirs, {}, path) : undefined;
   if (!merged) return { path, collection: false, items: [] };
   return {
     path,

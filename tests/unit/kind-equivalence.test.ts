@@ -233,6 +233,9 @@ describe('kind equivalence (REG-1 snapshots; unchanged by the registry adapters)
       ['empty base', '', col('y'), col('z')],
     ];
     expect(cases.map(([name, b, o, th]) => [name, mergeWorkspaceTexts(b, o, th) ?? null])).toMatchSnapshot();
+    // the file's kind (the registry) picks the same merge as the shape of its text did
+    const pathOf = (name: string) => (name.startsWith('environment') ? 'environments/e.json' : name.startsWith('library') ? 'library/grpc.json' : 'collections/api.json');
+    for (const [name, b, o, th] of cases) expect([name, mergeWorkspaceTexts(b, o, th, {}, pathOf(name)) ?? null]).toEqual([name, mergeWorkspaceTexts(b, o, th) ?? null]);
   });
 
   it('refOfChange for every kind of change', () => {

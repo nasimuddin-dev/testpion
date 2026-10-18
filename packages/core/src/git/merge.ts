@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { collectionFileContent } from '../storage/workspace.js';
 import type { Collection } from '../model/types.js';
+import { kindOfPath, libraryOfPath } from '@testpion/shared';
 
 /**
  * Merging collection files by meaning (GIT-301): two people who change different requests of one collection never
@@ -174,10 +175,29 @@ function mergeLibraryTexts(baseText: string, oursText: string, theirsText: strin
   return { text: JSON.stringify({ ...fields, folders: [...folders].sort((a, b) => a.localeCompare(b)), items }, null, 2) + '\n', conflicts: ctx.conflicts, items: ctx.items };
 }
 
-/** Any workspace file TestPion merges by meaning: a collection, an environment or a library file (undefined: git merges lines). */
-export function mergeWorkspaceTexts(baseText: string, oursText: string, theirsText: string, resolutions: MergeResolutions = {}): MergeResult | undefined {
+/**
+ * How the registry says a workspace file merges by meaning: a collection, an environment, or a library file (any
+ * library/<name>.json); undefined for a file of another kind (the shape of the text decides then).
+ */
+export function mergeModeOfPath(path: string): 'collection' | 'environment' | 'library' | undefined {
+  const k = kindOfPath(path, { raw: true });
+  if (k?.id && k.kind === 'collection') return 'collection';
+  if (k?.id && k.kind === 'environment') return 'environment';
+  if (libraryOfPath(path, { raw: true })) return 'library';
+  return undefined;
+}
+
+/**
+ * Any workspace file TestPion merges by meaning: a collection, an environment or a library file (undefined: git merges
+ * lines). With the file's `path`, its kind decides how (the registry); without one, the shape of the text.
+ */
+export function mergeWorkspaceTexts(baseText: string, oursText: string, theirsText: string, resolutions: MergeResolutions = {}, path?: string): MergeResult | undefined {
   const ours = parseObj(oursText);
   if (!ours) return undefined;
+  const mode = path === undefined ? undefined : mergeModeOfPath(path);
+  if (mode === 'environment' && Array.isArray(ours.variables)) return mergeEnvironmentTexts(baseText, oursText, theirsText, resolutions);
+  if (mode === 'library' && Array.isArray(ours.folders)) return mergeLibraryTexts(baseText, oursText, theirsText, resolutions);
+  if (mode === 'collection') return mergeCollectionTexts(baseText, oursText, theirsText, resolutions);
   if (Array.isArray(ours.variables) && !Array.isArray(ours.items)) return mergeEnvironmentTexts(baseText, oursText, theirsText, resolutions);
   // a library file has a folders list (a collection's folders are items)
   if (Array.isArray(ours.folders) && Array.isArray(ours.items)) return mergeLibraryTexts(baseText, oursText, theirsText, resolutions);
