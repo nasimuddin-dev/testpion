@@ -5,8 +5,9 @@ import * as DialogPrimitive from '@radix-ui/react-dialog';
 import * as MenuPrimitive from '@radix-ui/react-dropdown-menu';
 import * as SwitchPrimitive from '@radix-ui/react-switch';
 import * as TooltipPrimitive from '@radix-ui/react-tooltip';
-import { ChevronDown, ChevronRight, ChevronsRight, Loader2, MoreHorizontal, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, Loader2, MoreHorizontal, X } from 'lucide-react';
 import { iconForLabel, textOf } from './action-icons';
+import { TabOverflow } from './TabOverflow';
 
 // icons drawn in every tab and menu row, made once (React skips an element it has already rendered)
 const TAB_CLOSE_ICON = <X size={12} />;
@@ -193,9 +194,13 @@ export function Toggle({ checked, onChange, label, title }: { checked: boolean; 
 
 /** A tab strip. A tab with `onClose` has a × (and middle-click closes it), like the request tabs; `title` names it in full. */
 export function Tabs<T extends string>({ tabs, value, onChange, className, right }: { tabs: Array<{ id: NoInfer<T>; label: ReactNode; badge?: ReactNode; title?: string; onClose?(): void }>; value: T; onChange(v: NoInfer<T>): void; className?: string; right?: ReactNode }) {
-  // tabs that don't fit (a narrow pane, side by side) stay reachable: » lists them, the wheel scrolls, the chosen one is in view
+  // tabs that don't fit (a narrow pane, side by side) stay reachable: the count button lists them, the wheel scrolls,
+  // the chosen one is in view. A tab only partly in the box counts as not shown and is not drawn (data-overflow): a
+  // strip never shows a cut-off name next to the count of the tabs it hides.
   const listRef = useRef<HTMLDivElement>(null);
   const [hiddenTabs, setHiddenTabs] = useState<string[]>([]);
+  const valueRef = useRef(value);
+  valueRef.current = value;
   useEffect(() => {
     const el = listRef.current;
     if (!el) return;
@@ -203,7 +208,15 @@ export function Tabs<T extends string>({ tabs, value, onChange, className, right
       // the usual case, every tab fits: one comparison, no rectangle per tab (and no re-render)
       if (el.scrollWidth <= el.clientWidth + 1) return setHiddenTabs((cur) => (cur.length ? [] : cur));
       const box = el.getBoundingClientRect();
-      const next = [...el.querySelectorAll<HTMLElement>('[role=tab]')].filter((b) => { const r = b.getBoundingClientRect(); return r.right > box.right + 1 || r.left < box.left - 1; }).map((b) => b.dataset.tabId ?? '');
+      const outside = [...el.querySelectorAll<HTMLElement>('[role=tab]')].filter((b) => { const r = b.getBoundingClientRect(); return r.right > box.right + 1 || r.left < box.left - 1; });
+      // the chosen tab is never the one hidden: a pane that shrank around it scrolls it whole into view (then measures again)
+      const active = outside.find((b) => b.dataset.tabId === valueRef.current);
+      if (active && active.offsetWidth <= el.clientWidth) {
+        const before = el.scrollLeft;
+        active.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+        if (el.scrollLeft !== before) return;
+      }
+      const next = outside.map((b) => b.dataset.tabId ?? '');
       setHiddenTabs((cur) => (cur.length === next.length && cur.every((x, i) => x === next[i]) ? cur : next));
     };
     // the observer measures once as it starts, and again whenever the strip's size changes
@@ -223,13 +236,14 @@ export function Tabs<T extends string>({ tabs, value, onChange, className, right
       onWheel={(e) => {
         if (e.deltaY && listRef.current && listRef.current.scrollWidth > listRef.current.clientWidth) listRef.current.scrollLeft += e.deltaY;
       }}
-      className={cx('flex items-center gap-1 px-2 min-h-10 min-w-0 flex-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden', hiddenTabs.length > 0 && '[mask-image:linear-gradient(to_right,black_calc(100%-24px),transparent)]')}
+      className="flex items-center gap-1 px-2 min-h-10 min-w-0 flex-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
       {tabs.map((t) => (
         <button
           key={t.id}
           role="tab"
           data-tab-id={t.id}
+          data-overflow={hiddenTabs.includes(t.id) || undefined}
           aria-selected={value === t.id}
           title={t.title}
           onClick={() => onChange(t.id)}
@@ -237,7 +251,7 @@ export function Tabs<T extends string>({ tabs, value, onChange, className, right
             if (e.button === 1 && t.onClose) (e.preventDefault(), t.onClose());
           }}
           className={cx(
-            'group relative px-2.5 h-10 text-sm whitespace-nowrap flex items-center gap-1.5 transition-colors duration-150',
+            'group relative px-2.5 h-10 text-sm whitespace-nowrap flex items-center gap-1.5 transition-colors duration-150 data-[overflow]:invisible',
             'after:absolute after:left-2 after:right-2 after:bottom-0 after:h-0.5 after:rounded-full after:transition-colors after:duration-200',
             value === t.id ? 'text-fg font-medium after:bg-[image:var(--brand-gradient)]' : 'text-muted hover:text-fg after:bg-transparent hover:after:bg-line-strong',
           )}
@@ -260,16 +274,13 @@ export function Tabs<T extends string>({ tabs, value, onChange, className, right
       ))}
     </div>
       {hiddenTabs.length > 0 && (
-        <Menu
-          align="end"
+        <TabOverflow
+          className="mx-1"
           width={220}
-          items={tabs.map((t) => ({ label: `${value === t.id ? '✓ ' : ''}${typeof t.label === 'string' ? t.label : t.id}${t.badge ? ` (${t.badge})` : ''}`, onSelect: () => onChange(t.id) }))}
-          trigger={
-            <button aria-label={`All tabs (${hiddenTabs.length} not shown)`} title={`${hiddenTabs.length} more`} className="shrink-0 mx-1 h-7 px-1.5 rounded-md text-xs text-muted hover:text-fg hover:bg-hover data-[state=open]:bg-hover inline-flex items-center gap-0.5">
-              <ChevronsRight size={14} />
-              {hiddenTabs.length}
-            </button>
-          }
+          count={hiddenTabs.length}
+          label={`All tabs (${hiddenTabs.length} not shown)`}
+          items={tabs.map((t) => ({ id: t.id, label: `${typeof t.label === 'string' ? t.label : t.id}${t.badge ? ` (${t.badge})` : ''}`, active: value === t.id }))}
+          onSelect={(id) => onChange(id as T)}
         />
       )}
       {/* an output's actions (OutputActions) may shrink down to its download control: they clip their own tools first */}

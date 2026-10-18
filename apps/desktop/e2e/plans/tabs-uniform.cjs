@@ -10,6 +10,20 @@ const H = `
   const menuOf = async (tab) => { await __t.esc(); tab.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 400, clientY: 60 })); await __t.waitFor(() => document.querySelector('[role=menuitem]'), 2000); await __t.sleep(150); return vis('[role=menuitem]').map((m) => m.textContent.trim().replace(/(F2|Middle-click)$/, '') + (m.getAttribute('aria-disabled') === 'true' || m.hasAttribute('data-disabled') ? ' (off)' : '')).join(' | '); };
   const pick = async (label) => { vis('[role=menuitem]').find((m) => m.textContent.trim().startsWith(label))?.click(); await __t.sleep(1000); };
   const openRow = async (name) => { const r = [...document.querySelectorAll('[data-tree-row]')].find((b) => b.offsetParent && b.textContent.trim().includes(name)); if (!r) return false; r.click(); await __t.sleep(900); return true; };
+  const painted = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  /** The request editor's own tab strip (the one with Params): its tabs drawn, hidden, cut, and its overflow button. */
+  const strip = () => {
+    const list = vis('main [role=tablist]').find((l) => [...l.querySelectorAll('[role=tab]')].some((t) => t.textContent.trim().startsWith('Params')));
+    if (!list) return 'NO STRIP';
+    const box = list.getBoundingClientRect();
+    const all = [...list.querySelectorAll('[role=tab]')];
+    const hidden = all.filter((t) => t.hasAttribute('data-overflow'));
+    const shown = all.filter((t) => !t.hasAttribute('data-overflow'));
+    const cut = shown.filter((t) => { const r = t.getBoundingClientRect(); return r.left < box.left - 1 || r.right > box.right + 1; }).map((t) => t.textContent.trim());
+    const drawn = hidden.filter((t) => getComputedStyle(t).visibility !== 'hidden').map((t) => t.textContent.trim());
+    const more = list.parentElement.querySelector('[data-tab-overflow]');
+    return 'density ' + document.documentElement.dataset.density + ' | tabs ' + all.length + ' | shown ' + shown.length + ' | hidden ' + hidden.length + ' | cut: ' + (cut.join(',') || 'none') + ' | drawn though hidden: ' + (drawn.join(',') || 'none') + ' | button: ' + (more ? more.getAttribute('aria-label') + ' = ' + more.textContent.trim() : 'none');
+  };
 `;
 const step = (name, body) => [name, `(async () => { ${H} ${body} })()`];
 
@@ -51,6 +65,11 @@ const steps = [
     'requests-menu-same',
     `await __t.requests(); await __t.sleep(500); if (!document.querySelector('[role=tablist][aria-label="Open requests"] [role=tab]')) { await __t.find('Custom headers'); await __t.sleep(1200); } return await __t.tabMenu();`,
   ),
+  // the request editor's strip (Params, Authorization, Headers, Body … Settings) in a pane too narrow for all of them:
+  // a tab only partly in view is not drawn and is counted by the overflow button, so no cut-off name ("Exar…") stands
+  // next to it; the same at compact density, where more tabs are partial
+  step('editor-strip-compact', `await __t.esc(); document.documentElement.dataset.density = 'compact'; await painted(); await __t.sleep(400); return strip();`),
+  step('editor-strip-comfortable', `document.documentElement.dataset.density = 'comfortable'; await painted(); await __t.sleep(400); return strip();`),
 ];
 
 module.exports = withExpect(steps, {
@@ -67,4 +86,16 @@ module.exports = withExpect(steps, {
   'prompts-tab-menu': /^Rename \(off\) \| Close tab \| Close other tabs \(off\) \| Close tabs to the right \(off\) \| Close all tabs \| Reopen closed tab( \(off\))?$/,
   'live-capture-tab-is-fixed': /^menu: false \| close button: false$/,
   'requests-menu-same': /Rename \| Close tab \| Close other tabs \| Close tabs to the right \| Close all tabs \| Reopen closed tab( \(off\))?$/,
+  'editor-strip-compact': noCutTab('compact'),
+  'editor-strip-comfortable': noCutTab('comfortable'),
 });
+
+/** No tab drawn is cut, no hidden tab is drawn, and the button counts exactly the hidden ones (there are some: the editor is side by side with the response). */
+function noCutTab(density) {
+  return (r) => {
+    const m = new RegExp(`^density ${density} \\| tabs (\\d+) \\| shown (\\d+) \\| hidden (\\d+) \\| cut: none \\| drawn though hidden: none \\| button: All tabs \\((\\d+) not shown\\) = (\\d+)$`).exec(r);
+    if (!m) return 'a cut or drawn-though-hidden tab, or no overflow button: ' + r;
+    const [, tabs, shown, hidden, counted, onButton] = m.map(Number);
+    return hidden > 0 && shown + hidden === tabs && counted === hidden && onButton === hidden ? true : 'the counts disagree: ' + r;
+  };
+}

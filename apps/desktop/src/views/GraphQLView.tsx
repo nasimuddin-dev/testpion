@@ -418,7 +418,7 @@ export function GraphQLView() {
     void saveAsTestFile(d.name || selectedOp?.name || 'GraphQL query', { kind: 'graphql', endpoint: d.endpoint, query: d.query, variables, operationName: operations.length > 1 ? selectedOp?.name : undefined, headers: d.headers, auth: d.auth }, d.assertions);
   };
   const renameTabTo = (name: string) => setD((x) => ({ ...x, name }));
-  useSingleEditorTab('graphql', { title: tabTitle(d.name, NEW_TAB_TITLE.graphql), badge: 'GQL', badgeClass: 'text-[#e535ab]', item: d.requestId, onRenameTo: renameTabTo, onSaveAsTest: saveTest });
+  useSingleEditorTab('graphql', { title: tabTitle(d.name, NEW_TAB_TITLE.graphql), badge: 'GQL', badgeClass: 'kind-graphql', item: d.requestId, onRenameTo: renameTabTo, onSaveAsTest: saveTest });
   return (
     <div className="h-full flex flex-col" data-collection-id={d.collectionId}>
       {/* narrow windows: the secondary buttons show icons only (their tooltips name them), so the endpoint keeps its room */}

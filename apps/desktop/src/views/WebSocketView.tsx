@@ -345,7 +345,7 @@ export function WebSocketView() {
   const title = current?.name ?? tabTitle ?? NEW_TAB_TITLE[d.mode === 'kafka' ? 'kafka' : d.mode === 'mqtt' ? 'mqtt' : d.mode === 'socketio' ? 'socketio' : 'websocket'];
   // a saved connection is renamed in the workspace; a new tab just gets the title
   const renameTabTo = async (name: string) => (current ? saved.put({ ...current, name }) : setTabTitle(name));
-  useSingleEditorTab('websocket', { title, badge: d.mode === 'kafka' ? 'KAFKA' : d.mode === 'mqtt' ? 'MQTT' : d.mode === 'socketio' ? 'SIO' : 'WS', badgeClass: 'text-[#d97706]', item: savedId, onRenameTo: renameTabTo, onSaveAsTest: saveTest });
+  useSingleEditorTab('websocket', { title, badge: d.mode === 'kafka' ? 'KAFKA' : d.mode === 'mqtt' ? 'MQTT' : d.mode === 'socketio' ? 'SIO' : 'WS', badgeClass: 'kind-ws', item: savedId, onRenameTo: renameTabTo, onSaveAsTest: saveTest });
   return (
     <div className="h-full flex flex-col min-w-0">
       <RequestBreadcrumb collectionId={current?.collectionId ?? collectionId} folder={current?.folder} name={title} onSave={() => void save()} actions={[saveAsTestMenuItem(saveTest)]} />

@@ -1,9 +1,11 @@
 import { CheckCircle2 } from 'lucide-react';
 import { useMemo } from 'react';
 import { jsonPretty, markdownTable, objectsToCsv, outputFileName } from '@testpion/shared';
+import { plural } from '../lib/format';
 import { useProblems, type Problem } from '../lib/problems';
 import { ProblemList } from './ProblemList';
 import { OutputActions } from './output/OutputFrame';
+import { OutputHint } from './output/OutputToolbar';
 import type { OutputSpec } from './output/output-core';
 import { Empty } from './ui';
 
@@ -34,10 +36,11 @@ export function ProblemsPanel() {
     <>
       <div className="flex items-center gap-3 px-3 h-7 border-b border-line text-xs text-muted shrink-0">
         <span>
-          {failures} failure{failures === 1 ? '' : 's'} · {errors} error{errors === 1 ? '' : 's'} · {problems.length - failures - errors} warning{problems.length - failures - errors === 1 ? '' : 's'}
+          {plural(failures, 'failure')} · {plural(errors, 'error')} · {plural(problems.length - failures - errors, 'warning')}
         </span>
+        {/* the keys behind the ⓘ (the same hint as every output bar's): as text they were the first thing clipped in a narrow pane */}
         <OutputActions spec={spec}>
-          <span>F8 / Shift+F8: next / previous</span>
+          <OutputHint hint="F8 / Shift+F8: next / previous problem" />
         </OutputActions>
       </div>
       <div className="flex-1 overflow-auto px-1 py-1" data-output="problems">

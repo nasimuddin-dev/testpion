@@ -11,10 +11,11 @@ export function datasetBadge(format: string): { text: string; cls: string } {
       return { text: 'JSONL', cls: 'text-warn' };
     case 'json':
       return { text: 'JSON', cls: 'text-warn' };
+    // the dataset kind's own colour (styles.css --k-dataset); CSV and JSON keep the status tones they had
     case 'markdown':
-      return { text: 'MD', cls: 'text-[#8b5cf6]' };
+      return { text: 'MD', cls: 'kind-dataset' };
     case 'sqlite':
-      return { text: 'DB', cls: 'text-[#0ea5e9]' };
+      return { text: 'DB', cls: 'kind-dataset' };
     default:
       return { text: 'DATA', cls: 'text-muted' };
   }

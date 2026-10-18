@@ -226,7 +226,7 @@ export const DebuggerGrid = memo(function DebuggerGrid({
             )}
             {e.tls && TLS_ICON}
             {e.kind === 'tunnel' ? `${e.host}  (HTTPS tunnel)` : e.url}
-            {e.grpc && <span className="ml-1 text-[10px] font-bold text-[#e535ab]">gRPC</span>}
+            {e.grpc && <span className="ml-1 text-[10px] font-bold kind-grpc">gRPC</span>}
             {!!e.frameCount && (
               <span className="ml-1">
                 <Badge>{e.frameCount} msg</Badge>
