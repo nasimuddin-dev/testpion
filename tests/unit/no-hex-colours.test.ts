@@ -27,9 +27,6 @@ const HEX_UTILITY = /\b(?:text|bg|border|ring|fill|stroke|from|to|via|outline|de
 
 /** The files that still carry a hex utility, each with why it is not done yet (the tree and explorer rows are moved to the tokens with the tree work). */
 const NOT_YET: Record<string, string> = {
-  'components/CollectionTree.tsx': 'tree rows: the protocol badges move to .kind-* with the tree work',
-  'components/TreeParts.tsx': 'tree rows: KIND_BADGES move to .kind-* with the tree work',
-  'components/Explorer.tsx': 'explorer rows: the API and GraphQL badges move to .kind-* with the tree work',
   'components/Shell.tsx': 'the brand mark on the light theme: a fixed navy behind the logo, not a kind colour',
 };
 

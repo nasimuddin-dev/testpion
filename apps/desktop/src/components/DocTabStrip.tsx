@@ -3,7 +3,7 @@ import { reopenClosedTab, useClosedTabs } from '../lib/closed-tabs';
 import { LABEL } from '../lib/vocabulary';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { cx, Menu, type MenuItem } from './ui';
-import { InlineRename } from './TreeParts';
+import { InlineRename, TreeBadge } from './TreeParts';
 import { TabOverflow } from './TabOverflow';
 
 /**
@@ -256,7 +256,7 @@ export function DocTabStrip<D = unknown>({ tabs: given, activeId, label, onSelec
               {t.pinned && <Pin size={11} className="shrink-0 text-muted" aria-label="Pinned" />}
               {t.badge !== undefined &&
                 t.badge !== null &&
-                (typeof t.badge === 'string' ? <span className={cx('mono method-badge text-[0.62rem] font-bold shrink-0', t.badgeClass)}>{t.badge}</span> : t.badge)}
+                (typeof t.badge === 'string' ? <TreeBadge label={t.badge} className={t.badgeClass} /> : t.badge)}
               {editingTab === t.id ? (
                 <InlineRename
                   value={t.title}
@@ -320,7 +320,7 @@ export function DocTabStrip<D = unknown>({ tabs: given, activeId, label, onSelec
             id: t.id,
             label: `${t.title}${t.dirty ? ' •' : ''}`,
             active: t.id === activeId,
-            icon: typeof t.badge === 'string' ? <span className={cx('mono method-badge text-[0.6rem] font-bold w-11', t.badgeClass)}>{t.badge}</span> : t.badge,
+            icon: typeof t.badge === 'string' ? <TreeBadge label={t.badge} className={t.badgeClass} /> : t.badge,
           }))}
           onSelect={(id) => {
             const t = tabs.find((x) => x.id === id);
