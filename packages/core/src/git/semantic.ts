@@ -4,7 +4,14 @@ import type { Collection, CollectionNode, Environment } from '../model/types.js'
 import { assertGitRev, gitLog, gitShow, realFolder, runGit, type GitCommit, type GitFile } from './git.js';
 import { requestParts } from './merge.js';
 import { flowChanges, flowItemParts, isFlowFile } from './flow-diff.js';
-import { LIBRARY_LABEL, savedItemRef, type ItemRef } from '@testpion/shared';
+import { LIBRARY_LABEL, kindOfPath, libraryOfPath, savedItemRef, watchKindOfPath, type ItemRef, type KindId } from '@testpion/shared';
+
+/** The registry kind of a workspace path (lexical; git's paths are relative with `/`). */
+const kindAt = (path: string) => kindOfPath(path, { raw: true });
+/** Whether the path is one item file of a kind (collections/<id>.json, environments/<id>.json). */
+const isItemFile = (path: string, kind: KindId) => kindAt(path)?.kind === kind && !!kindAt(path)?.id;
+/** The old group of a file that is not read item by item: test files, library files, anything else. */
+const fileGroup = (path: string): SemanticChange['kind'] => (kindAt(path)?.kind === 'test' ? 'test' : watchKindOfPath(path, { raw: true }) === 'library' ? 'library' : 'other');
 
 /**
  * Changes said by what they mean (GIT-205): "Payments ▸ Create invoice: URL and 2 headers changed" rather than
@@ -36,8 +43,9 @@ export function refOfChange(c: SemanticChange): ItemRef {
     if (c.itemKind === 'folder') return { kind: 'folder', collectionId: c.collectionId, folderId: c.itemId };
     return { kind: 'request', collectionId: c.collectionId, requestId: c.itemId, ...(c.itemKind === 'graphql' ? { protocol: 'graphql' as const } : {}) };
   }
-  if (c.file.startsWith('tests/') && /\.(ya?ml|json)$/i.test(c.file)) {
-    const path = c.file.slice('tests/'.length);
+  const at = kindAt(c.file);
+  if (at?.kind === 'test' && at.id) {
+    const path = at.id;
     return isFlowFile(c.file) ? { kind: 'flow', path, ...(c.itemId ? { step: c.itemId } : {}) } : { kind: 'test', path };
   }
   return { kind: 'git-file', path: c.file };
@@ -51,7 +59,7 @@ interface LibraryFile {
 
 /** A library file (library/<kind>.json: saved gRPC calls, connections, prompts, monitors …) item by item. */
 function libraryChanges(file: string, beforeText: string | undefined, afterText: string | undefined): SemanticChange[] | undefined {
-  const kind = /^library\/([a-z0-9-]+)\.json$/.exec(file)?.[1];
+  const kind = libraryOfPath(file, { raw: true });
   if (!kind) return undefined;
   const before = beforeText === undefined ? { items: [] } : parse<LibraryFile>(beforeText);
   const after = afterText === undefined ? { items: [] } : parse<LibraryFile>(afterText);
@@ -175,16 +183,16 @@ export async function describeGitChanges(ws: string, files: GitFile[]): Promise<
       }
     };
     if (f.state === 'conflicted') {
-      out.push({ file: f.path, kind: f.path.startsWith('collections/') ? 'collection' : f.path.startsWith('environments/') ? 'environment' : 'other', change: 'conflicted', title: f.path, details: ['changed on both sides'] });
+      out.push({ file: f.path, kind: kindAt(f.path)?.kind === 'collection' ? 'collection' : kindAt(f.path)?.kind === 'environment' ? 'environment' : 'other', change: 'conflicted', title: f.path, details: ['changed on both sides'] });
       continue;
     }
     const head = f.state === 'untracked' || f.state === 'added' ? undefined : await gitShow(ws, f.from ?? f.path);
-    if (/^collections\/[^/]+\.json$/.test(f.path)) out.push(...collectionChanges(f.path, parse<Collection>(head), parse<Collection>(read())));
-    else if (/^environments\/[^/]+\.json$/.test(f.path)) out.push(...environmentChanges(f.path, parse<Environment>(head), parse<Environment>(read())));
+    if (isItemFile(f.path, 'collection')) out.push(...collectionChanges(f.path, parse<Collection>(head), parse<Collection>(read())));
+    else if (isItemFile(f.path, 'environment')) out.push(...environmentChanges(f.path, parse<Environment>(head), parse<Environment>(read())));
     else if (isFlowFile(f.path) && f.state !== 'renamed' && flowChanges(f.path, head, read())) out.push(...flowChanges(f.path, head, read())!);
     else if (f.state !== 'renamed' && libraryChanges(f.path, head, read())) out.push(...libraryChanges(f.path, head, read())!);
     else {
-      const kind = f.path.startsWith('tests/') ? 'test' : f.path.startsWith('library/') ? 'library' : 'other';
+      const kind = fileGroup(f.path);
       const change = f.state === 'untracked' || f.state === 'added' ? 'added' : f.state === 'deleted' ? 'removed' : f.state === 'renamed' ? 'renamed' : 'changed';
       out.push({ file: f.path, kind, change, title: f.path, details: f.state === 'renamed' && f.from ? [`was ${f.from}`] : [] });
     }
@@ -230,12 +238,12 @@ export async function describeRevChanges(ws: string, from: string, to?: string):
   for (const f of files) {
     const before = f.status === 'A' ? undefined : await gitShow(ws, f.from ?? f.path, from);
     const after = f.status === 'D' ? undefined : to ? await gitShow(ws, f.path, to) : readOrUndefined(join(ws, f.path));
-    if (/^collections\/[^/]+\.json$/.test(f.path)) result.push(...collectionChanges(f.path, parse<Collection>(before), parse<Collection>(after)));
-    else if (/^environments\/[^/]+\.json$/.test(f.path)) result.push(...environmentChanges(f.path, parse<Environment>(before), parse<Environment>(after)));
+    if (isItemFile(f.path, 'collection')) result.push(...collectionChanges(f.path, parse<Collection>(before), parse<Collection>(after)));
+    else if (isItemFile(f.path, 'environment')) result.push(...environmentChanges(f.path, parse<Environment>(before), parse<Environment>(after)));
     else if (isFlowFile(f.path) && f.status !== 'R' && flowChanges(f.path, before, after)) result.push(...flowChanges(f.path, before, after)!);
     else if (f.status !== 'R' && libraryChanges(f.path, before, after)) result.push(...libraryChanges(f.path, before, after)!);
     else {
-      const kind = f.path.startsWith('tests/') ? 'test' : f.path.startsWith('library/') ? 'library' : 'other';
+      const kind = fileGroup(f.path);
       result.push({ file: f.path, kind, change: f.status === 'A' ? 'added' : f.status === 'D' ? 'removed' : f.status === 'R' ? 'renamed' : 'changed', title: f.path, details: f.from ? [`was ${f.from}`] : [] });
     }
   }
@@ -315,7 +323,7 @@ export async function describeItemDiff(ws: string, file: string, itemId?: string
       const y = a ? (a[part] ?? '') : undefined;
       return { part, before: x, after: y, differs: x !== y };
     });
-  if (/^collections\/[^/]+\.json$/.test(file)) {
+  if (isItemFile(file, 'collection')) {
     const bc = parse<Collection>(before);
     const ac = parse<Collection>(after);
     if (itemId) {
@@ -336,7 +344,7 @@ export async function describeItemDiff(ws: string, file: string, itemId?: string
       c && { Name: c.name, Description: c.description ?? '', Auth: c.auth ? JSON.stringify(c.auth, null, 2) : '', Variables: (c.variables ?? []).map((v) => `${v.enabled === false ? '// ' : ''}${v.key}: ${v.value}`).join('\n'), 'Pre-request script': c.preRequestScript ?? '', 'Test script': c.testScript ?? '' };
     return { title: `collection ${ac?.name ?? bc?.name ?? file}`, parts: rows(settings(bc), settings(ac)) };
   }
-  if (/^environments\/[^/]+\.json$/.test(file)) {
+  if (isItemFile(file, 'environment')) {
     const be = parse<Environment>(before);
     const ae = parse<Environment>(after);
     const vars = (e: Environment | undefined) =>
