@@ -4,10 +4,11 @@
  * 9,000-request workspace as in an empty one.
  */
 import { existsSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import type { ItemRef, RefResolution, RequestProtocol } from '@testpion/shared';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import type { CollectionNode } from '../model/types.js';
+import { readJson } from '../storage/fsutil.js';
 
 export interface Indexed {
   mtime: number;
@@ -81,6 +82,47 @@ export function libraryIndex(store: WorkspaceStore, library: string): Indexed | 
     name: library,
     byId: new Map(store.getLibrary<Record<string, unknown>>(library).items.map((i) => [i.id, { name: i.name, kind: library, path: i.folder ? [i.folder] : [] }])),
   }));
+}
+
+/**
+ * An environment's name and variable keys (as `var:<key>` ids), from its own file (found by its id's slug, never by
+ * reading every environment); undefined when there is no such environment. An unreadable file still names it, as the
+ * list does.
+ */
+export function environmentIndex(store: WorkspaceStore, environmentId: string): Indexed | undefined {
+  let rel: string;
+  try {
+    rel = store.environmentFileOf(environmentId);
+  } catch {
+    return undefined;
+  }
+  const file = join(store.root, rel);
+  const index = indexed(file, () => {
+    const base = basename(rel, '.json');
+    const byId: Indexed['byId'] = new Map();
+    try {
+      const e = readJson<{ id?: unknown; name?: unknown; variables?: unknown }>(file);
+      const id = typeof e.id === 'string' && e.id ? e.id : base;
+      byId.set(id, { name: typeof e.name === 'string' && e.name ? e.name : id, kind: 'environment', path: [] });
+      if (Array.isArray(e.variables)) for (const v of e.variables) if (v && typeof v === 'object' && typeof (v as { key?: unknown }).key === 'string') byId.set(`var:${(v as { key: string }).key}`, { name: (v as { key: string }).key, kind: 'variable', path: [] });
+      return { name: typeof e.name === 'string' && e.name ? e.name : id, byId };
+    } catch {
+      byId.set(base, { name: base, kind: 'environment', path: [] });
+      return { name: base, byId };
+    }
+  });
+  // the file found by name (environmentFileOf falls back to it) is not this id's
+  return index && index.byId.get(environmentId)?.kind === 'environment' ? index : undefined;
+}
+
+/** The ids of a list kept in one workspace file (mcp-servers.json `servers`, providers.json `providers`); undefined without the file. */
+export function fileListIndex(store: WorkspaceStore, file: string, key: string): Indexed | undefined {
+  return indexed(store.path(file), () => {
+    const list = readJson<Record<string, unknown>>(store.path(file), {})[key];
+    const byId: Indexed['byId'] = new Map();
+    if (Array.isArray(list)) for (const it of list) if (it && typeof it === 'object' && typeof (it as { id?: unknown }).id === 'string') byId.set((it as { id: string }).id, { name: String((it as { name?: unknown }).name ?? (it as { id: string }).id), kind: key, path: [] });
+    return { name: file, byId };
+  });
 }
 
 /** The file `rel` inside `base` when it exists and is a file (never outside `base`). */

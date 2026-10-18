@@ -251,6 +251,10 @@ textarea,
    unlayered rules beat layered utilities, which silently disabled text-* classes on every button. */
 /* Component classes live in the components layer so Tailwind utilities on the same element win. */
 @layer components {
+/* a menu item's key hint (ui.tsx Menu): drawn from the attribute, so the item's text is its label alone */
+.menu-shortcut::after {
+  content: attr(data-shortcut);
+}
 /* rendered Markdown (collection and request docs) */
 .markdown {
   line-height: 1.6;

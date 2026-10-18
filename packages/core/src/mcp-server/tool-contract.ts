@@ -101,6 +101,7 @@ const q = (v: unknown) => JSON.stringify(String(v ?? ''));
  */
 export const CONFIRM_TOOLS: Record<string, { when?(a: Args): boolean; describe(a: Args): string; preview?(a: Args): Args }> = {
   delete_request: { describe: (a) => `delete the request ${q(a.request)} of the collection ${q(a.collection)} (it goes to no trash: git or a backup brings it back)` },
+  delete_item: { describe: (a) => `delete ${typeof a.ref === 'string' ? q(a.ref) : JSON.stringify(a.ref ?? '')} to Recently deleted (restore_item puts it back for 30 days)` },
   flow_remove_step: { describe: (a) => `remove the step ${q(a.id)} from tests/${String(a.file ?? '')} (steps that wait for it lose that dependency)` },
   git_resolve: { describe: (a) => `overwrite the conflicted file ${q(a.path)} with ${a.side ? `"${String(a.side)}"` : 'the chosen sides'} (the other side's changes in it are dropped)` },
   git_sync: { describe: () => 'pull (merging the remote changes into the workspace files) and push the local commits' },

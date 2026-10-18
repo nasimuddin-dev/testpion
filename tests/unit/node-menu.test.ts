@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { KIND_INFO, liveKinds, type Capability, type KindId } from '@testpion/shared';
+import { KIND_ACTIONS, KIND_INFO, STANDARD_ACTIONS, folderNodeKinds, liveKinds, nodeMenuShapeOf, nodeMenusOf, sectionNodeKinds, type Capability, type KindId } from '@testpion/shared';
 import { MAX_MENU_ITEMS, MENU_GROUPS, NODE_KINDS, baseKind, buildNodeMenu, fullCtx, nodeCapabilities, nodeMenuGroups, nodeMenuShape, type NodeKind } from '../../apps/desktop/src/lib/node-menu';
+import { ACTION_ICONS } from '../../apps/desktop/src/lib/node-menu-actions';
 import { LABEL } from '../../apps/desktop/src/lib/vocabulary';
 
 /**
@@ -163,6 +164,59 @@ describe('node menus', () => {
 
   it('a shape per kind (any change to a menu shows here)', () => {
     expect(Object.fromEntries(NODE_KINDS.map((k) => [k, nodeMenuShape(k)]))).toMatchSnapshot();
+  });
+
+  it('section and folder nodes come from the registry: every live kind with folders has a folder node, every listed kind a section node', () => {
+    // today's ten folder kinds and eleven section kinds, derived, not listed
+    expect(folderNodeKinds().map((k) => k.id)).toEqual(['grpc-call', 'ws-connection', 'test', 'dataset', 'spec', 'mcp-server', 'prompt', 'load-test', 'evaluation', 'monitor']);
+    expect(sectionNodeKinds().map((k) => k.id)).toEqual(['collection', 'environment', 'test', 'dataset', 'spec', 'mcp-server', 'provider', 'prompt', 'load-test', 'evaluation', 'monitor']);
+    for (const k of liveKinds()) {
+      const folders = typeof k.folders === 'object' || (k.folders === 'dirs' && !k.variantOf && k.opens !== 'none');
+      expect(NODE_KINDS.includes(`folder:${k.id}`), `folder:${k.id}`).toBe(folders);
+      expect(NODE_KINDS.includes(`section:${k.id}`), `section:${k.id}`).toBe(!!k.listed);
+      // a listed kind with virtual folders or a tree has both nodes
+      if (k.listed && (typeof k.folders === 'object' || k.folders === 'dirs') && !k.variantOf) expect(NODE_KINDS, k.id).toEqual(expect.arrayContaining([`folder:${k.id}`, `section:${k.id}`]));
+    }
+    // nothing registered ahead of its release
+    expect(NODE_KINDS.filter((n) => KIND_INFO[baseKind(n)].since)).toEqual([]);
+  });
+
+  it('the action tables are complete for the window: every label key is in LABEL, every icon name has a component, every id is unique', () => {
+    const ids = new Set<string>();
+    for (const a of [...STANDARD_ACTIONS, ...KIND_ACTIONS]) {
+      expect(ids.has(a.id), `${a.id} twice`).toBe(false);
+      ids.add(a.id);
+      if (a.icon) expect(ACTION_ICONS[a.icon], `${a.id}: no icon ${a.icon}`).toBeTruthy();
+      if (typeof a.label === 'string') expect(LABEL[a.label], `${a.id}: no LABEL.${a.label}`).toBeTruthy();
+    }
+    // the label functions too, over every node kind and context
+    for (const kind of NODE_KINDS)
+      for (const g of nodeMenuGroups(kind, fullCtx(kind)))
+        for (const i of g.items) expect(labels.has(i.label) || i.label === 'New …', `${kind}: ${i.label}`).toBe(true);
+  });
+
+  it('the keys that run an item are declared once and shown beside it (Enter, F2, Del, *), in the window and for agents', () => {
+    const shortcuts = Object.fromEntries(STANDARD_ACTIONS.filter((a) => 'shortcut' in a).map((a) => [a.id, a.shortcut]));
+    expect(shortcuts).toEqual({ open: 'Enter', expandAll: '*', rename: 'F2', delete: 'Del' });
+    const items = flat('request');
+    expect(items.find((i) => i.label === LABEL.open)?.shortcut).toBe('Enter');
+    expect(items.find((i) => i.label === LABEL.rename)?.shortcut).toBe('F2');
+    expect(items.find((i) => i.label === LABEL.delete)?.shortcut).toBe('Del');
+    expect(flat('collection').find((i) => i.label === LABEL.expandAll)?.shortcut).toBe('*');
+    const shape = nodeMenuShapeOf('request');
+    expect(shape.groups.find((g) => g.group === 'danger')?.actions).toEqual([{ id: 'delete', label: 'delete', shortcut: 'Del' }]);
+  });
+
+  it('the menu shape for agents (list_kinds nodes) mirrors the window’s menu, with label keys and submenus', () => {
+    for (const kind of NODE_KINDS) {
+      const shape = nodeMenuShapeOf(kind);
+      const groups = nodeMenuGroups(kind, fullCtx(kind)).filter((g) => g.items.some((i) => i.label !== 'New …'));
+      expect(shape.groups.map((g) => g.group), kind).toEqual(groups.map((g) => g.group));
+      for (const [i, g] of shape.groups.entries()) expect(g.actions.map((a) => `${LABEL[a.label]}${a.submenu ? ' ▸' : ''}`), `${kind} ${g.group}`).toEqual(groups[i]!.items.filter((it) => it.label !== 'New …').map((it) => `${it.label}${it.items ? ' ▸' : ''}`));
+      expect(shape.creates, kind).toBe(nodeMenuGroups(kind, fullCtx(kind))[0]!.items.some((i) => i.label === 'New …'));
+    }
+    expect(nodeMenusOf('request').map((n) => n.node)).toEqual(['request', 'category', 'favorites']);
+    expect(nodeMenusOf('mcp-server').map((n) => n.node)).toEqual(['mcp-server', 'section:mcp-server', 'folder:mcp-server']);
   });
 
   it('builds a menu in well under a millisecond per kind', () => {

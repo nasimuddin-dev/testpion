@@ -58,7 +58,7 @@ export const LABEL = {
   moveToCollection: 'Move to collection',
   addFavorite: 'Add to favorites',
   removeFavorite: 'Remove from favorites',
-  // the actions of one kind (lib/node-menu-kinds/*)
+  // the actions of one kind (packages/shared/src/node-menu.ts, KIND_ACTIONS)
   editFolder: 'Edit folder (scripts, variables, auth)',
   collectionSettings: 'Settings, runner & docs',
   connect: 'Connect',
@@ -112,7 +112,7 @@ export const RETIRED_LABELS = [
 
 /**
  * The groups of every node menu, in this order everywhere (lib/node-menu.ts enforces it): create · open · tree (Expand
- * all, Collapse all) · run · share · tools · git · edit · danger.
+ * all, Collapse all) · run · share · tools · git · edit · danger. Declared once, in @testpion/shared (the CLI and MCP
+ * print the same shapes).
  */
-export const MENU_GROUPS = ['create', 'open', 'tree', 'run', 'share', 'tools', 'git', 'edit', 'danger'] as const;
-export type MenuGroup = (typeof MENU_GROUPS)[number];
+export { MENU_GROUPS, type MenuGroup } from '@testpion/shared';

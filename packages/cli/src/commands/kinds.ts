@@ -17,7 +17,7 @@ export function registerKindsCommand(program: Command): void {
     )
     .option('-w, --workspace <nameOrPath>', 'add facts about this workspace (default: the nearest workspace.json, if any)')
     .option('--all', 'also the kinds registered ahead of their release')
-    .option('--json', 'print { kinds: [{ id, label, ref, storage, opens, capabilities, can, facets }], workspace } as JSON')
+    .option('--json', 'print { kinds: [{ id, label, ref, storage, opens, capabilities, can, facets, nodes: the menus of its rows, sections and folders }], workspace } as JSON')
     .action((name: string | undefined, o: { workspace?: string; all?: boolean; json?: boolean }) =>
       withWorkspace(o.workspace, (store, ephemeral) => {
         const report = describeKinds({ kind: name, all: o.all }, ephemeral ? undefined : store);

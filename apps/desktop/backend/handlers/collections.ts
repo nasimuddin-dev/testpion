@@ -1,7 +1,7 @@
 /** RPC handlers: Collections (requests, folders, examples, import/export) and their mock servers. */
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, relative, sep } from 'node:path';
-import { importFileFilters, copyFolderEntry, moveFolderEntry, atomicWrite, writeOwned, renameOwned, copyOwned, ApsError, dbKindOf, redactDbUrl, isSqliteDataset, collectionVariableFlow, listWorkspaceDatasets, appendDatasetRow, readDataset, readWorkspaceDataset, moveToTrash, sqliteTables, fetchImportText, bruFilesToBrunoExport, collectionToBru, importIntoWorkspace, diffOpenApi, lintOpenApi, openApiOutline, asyncApiOutline, workspaceApiCoverage, apiCoverageMarkdown, collectionSecurityFindings, definedVariableNames, listSpecs, findBodySchema, readSpecRef, type SpecRef, collectionToOpenApiText, collectionToHttpFile, collectionToAsyncApi, generateWorkspaceDataset, replaceInCollection, moveCollectionVariablesToEnvironments, tidyCollection, applyTidy, type ReplaceField, writeTestsFromSpec, writeFlows, exampleFromResponse, startMockServer, collectionMarkdown, collectionHtml, exportPostmanCollection, withRequestExamples, type SavedExample, convertCollectionScripts, importRequestSnippet, isRequestSnippet, type Collection, collectionSavedItems, duplicateCollection, shortId, collectionTreeOf, replaceSpecWithImported } from '@testpion/core';
+import { importFileFilters, copyFolderEntry, moveFolderEntry, atomicWrite, writeOwned, renameOwned, copyOwned, ApsError, dbKindOf, redactDbUrl, isSqliteDataset, collectionVariableFlow, listWorkspaceDatasets, appendDatasetRow, readDataset, readWorkspaceDataset, removeItem, sqliteTables, fetchImportText, bruFilesToBrunoExport, collectionToBru, importIntoWorkspace, diffOpenApi, lintOpenApi, openApiOutline, asyncApiOutline, workspaceApiCoverage, apiCoverageMarkdown, collectionSecurityFindings, definedVariableNames, listSpecs, findBodySchema, readSpecRef, type SpecRef, collectionToOpenApiText, collectionToHttpFile, collectionToAsyncApi, generateWorkspaceDataset, replaceInCollection, moveCollectionVariablesToEnvironments, tidyCollection, applyTidy, type ReplaceField, writeTestsFromSpec, writeFlows, exampleFromResponse, startMockServer, collectionMarkdown, collectionHtml, exportPostmanCollection, withRequestExamples, type SavedExample, convertCollectionScripts, importRequestSnippet, isRequestSnippet, type Collection, collectionSavedItems, duplicateCollection, shortId, collectionTreeOf, replaceSpecWithImported } from '@testpion/core';
 import type { Backend, Handlers, CollectionRunParams } from '../backend.js';
 import { countDatasetRecords, datasetFormatOfName } from '@testpion/shared';
 import { recordIncoming } from './debugger.js';
@@ -60,10 +60,11 @@ export function collectionsHandlers(be: Backend): Handlers {
     'mock.status': ({ collectionId }: { collectionId: string }) => be.mockInfo(collectionId),
     /** Copy a collection with its folders, requests, gRPC calls and connections (new ids throughout). */
     'col.duplicate': ({ id }: { id: string }) => duplicateCollection(be.ws, id, () => shortId('n-')),
+    /** Delete a collection to Recently deleted (the kind's `ops` facet; its mock server stops first). */
     'col.delete': ({ id }: { id: string }) => {
       void be.mocks.get(id)?.close();
       be.mocks.delete(id);
-      return be.ws.deleteCollection(id);
+      return removeItem(be.ws, { kind: 'collection', collectionId: id });
     },
     /** Save a response as an example of a saved request (sensitive headers and values are masked). */
     'col.addExample': (p: { collectionId: string; requestId: string; name: string; environment?: string; response: Parameters<typeof exampleFromResponse>[0]; request?: SavedExample['request'] }) => {
@@ -325,11 +326,10 @@ export function collectionsHandlers(be: Backend): Handlers {
       be.host.emit('data.changed', { kind: 'datasets' });
       return { name: datasetName(dest), path: dest };
     },
-    /** Delete a dataset: it goes to the workspace's trash (Recently deleted) for 30 days. */
+    /** Delete a dataset: it goes to the workspace's trash (Recently deleted) for 30 days, through the kind's `ops` facet. */
     'datasets.delete': ({ name }: { name: string }) => {
       const file = datasetFile(name);
-      if (!existsSync(file)) throw new ApsError('ValidationError', `No dataset datasets/${name}`);
-      moveToTrash(be.ws, 'dataset', file);
+      removeItem(be.ws, { kind: 'dataset', name: datasetName(file) });
       be.host.emit('data.changed', { kind: 'datasets' });
       return { name: datasetName(file) };
     },

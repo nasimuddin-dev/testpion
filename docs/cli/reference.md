@@ -26,7 +26,8 @@ testpion vars move <c> --to <envs> Move collection variables into environments (
 testpion tidy <collection>     Duplicate requests, typed-in hosts, empty folders, unused variables (--remove-* fixes)
 testpion replace <c> <find> <with> Find and replace across a collection's requests (preview; --apply saves)
 testpion agent-info               What an AI agent needs to use TestPion here, as JSON (workspace, commands, exit codes, MCP setup)
-testpion kinds [kind]            The kinds of item a workspace holds and what each offers (open, rename, delete with undo, run, CI …), with why an action never applies (--json)
+testpion kinds [kind]            The kinds of item a workspace holds and what each offers (open, rename, delete with undo, run, CI …), with why an action never applies, and the menus of its rows (--json)
+testpion item delete|restore <ref|id> -w   Delete any item to Recently deleted by its ref (collection:<id>, environment:<id>, dataset:<name>, spec:specs/<path>, mcp-server:<id>), or put one back (--json)
 testpion open <ref>              Open an item in the TestPion app by its ref (a testpion://open link, the JSON "ref" of --json output, or kind:id); checked first (--json, --print)
 testpion tests-from-spec <spec> Write a first test suite from an API definition (examples and invalid requests)
 testpion integration-suite <spec|collection> Write an integration suite: a flow per resource (create, read, update, list, delete), the login first
@@ -729,10 +730,23 @@ Every kind of item a workspace holds (the item-kind registry the app's menus are
 ```bash
 testpion kinds
 testpion kinds spec
-testpion kinds --json            # { kinds: [{ id, label, ref, library, aliases, storage, folders, opens, capabilities, can, facets }], workspace }
+testpion kinds --json            # { kinds: [{ id, label, ref, library, aliases, storage, folders, opens, capabilities, can, facets, nodes }], workspace }
 ```
 
 `--all` adds the kinds registered ahead of their release (RAG targets, custom metrics). The MCP tool `list_kinds` answers the same.
+
+`nodes` is the menu of every row the kind has in the app (the item's row, its section header, its folders; a request's also the protocol group's and Favorites'), as the app builds it: `{ node, creates, groups: [{ group, actions: [{ id, label, shortcut?, submenu? }] }] }`, the groups in the order create · open · tree · run · share · tools · git · edit · danger, `label` the key of the app's vocabulary (`rename`, `moveToFolder`, `delete` …), `shortcut` the key that runs it on a focused row (<kbd>Enter</kbd> open, <kbd>F2</kbd> rename, <kbd>Del</kbd> delete, <kbd>*</kbd> expand all), `creates` whether the node offers New … items. The same table is in [Finding your way around](/getting-started/finding-your-way#menus).
+
+## `item`
+
+```bash
+testpion item delete environment:staging-old -w my-workspace         # to Recently deleted; prints the trash id
+testpion item delete 'spec:specs/petstore.yaml' -w my-workspace --json   # { trashId, ref, kind, id, name }
+testpion item delete '{"kind":"mcp-server","serverId":"weather"}' -w .
+testpion item restore 'environment/1760700000000--staging-old.json' -w my-workspace
+```
+
+Deletes any item to Recently deleted by its ref — the short form `kind:id` (`collection:<id>`, `environment:<id>`, `dataset:<name>`, `spec:specs/<path>`, `mcp-server:<id>`), a `testpion://open` link or the JSON of a `ref` field — and puts one back by the trash id `item delete` printed (or `trash list` lists). One function for every kind with the `trash` capability (`testpion kinds`): the same as the app's Delete… with Undo and the MCP tools `delete_item` / `restore_item`. A kind without it (a test file, a request) is refused with the reason; requests and folders of a collection are edited in the app or with MCP `delete_request`. `restore` gives an item whose id or name is taken again a new id and "(restored)" after its name; a dataset or API definition whose name is taken goes back as `name-restored.ext`.
 
 ## `open`
 

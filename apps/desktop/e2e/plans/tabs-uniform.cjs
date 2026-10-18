@@ -55,15 +55,16 @@ const steps = [
 
 module.exports = withExpect(steps, {
   'tests-open-three': /^HTTPhttpbin\.yaml \/ GQLcountries\.yaml \/ \*WSecho\.yaml \/ Flow \/ Runs/,
-  'tests-tab-menu': /^Run \| Expose as MCP tool… \| Run with data… \| Run in several environments… \| Rename \| Close tab \| Close other tabs \| Close tabs to the right \| Close all tabs \| Reopen closed tabCtrl\+Shift\+T( \(off\))?$/,
+  'tests-tab-menu': /^Run \| Expose as MCP tool… \| Run with data… \| Run in several environments… \| Rename \| Close tab \| Close other tabs \| Close tabs to the right \| Close all tabs \| Reopen closed tab( \(off\))?$/,
   'tests-close-others': /^\*GQLcountries\.yaml \/ Flow \/ Runs/,
   'tests-fixed-tabs-have-no-menu': /^menu: false$/,
   'tests-close-all': /^\*Editor \/ Runs/,
-  'monitors-tab-menu': /^tabs: 1 \| Run now \| Rename \| Close tab \| Close other tabs \(off\) \| Close tabs to the right \(off\) \| Close all tabs \| Reopen closed tabCtrl\+Shift\+T( \(off\))?$/,
+  // key hints (F2, Middle-click, Ctrl+Shift+T) are drawn by CSS: a menu item's text is its label alone
+  'monitors-tab-menu': /^tabs: 1 \| Run now \| Rename \| Close tab \| Close other tabs \(off\) \| Close tabs to the right \(off\) \| Close all tabs \| Reopen closed tab( \(off\))?$/,
   'monitors-close-others-disabled': /^one tab, close others disabled: true \| tabs: 1$/,
   'monitors-close-all': /^left: 0$/,
-  'environments-tab-menu': /^Rename \(off\) \| Close tab \| Close other tabs \(off\) \| Close tabs to the right \(off\) \| Close all tabs \| Reopen closed tabCtrl\+Shift\+T( \(off\))?$/,
-  'prompts-tab-menu': /^Rename \(off\) \| Close tab \| Close other tabs \(off\) \| Close tabs to the right \(off\) \| Close all tabs \| Reopen closed tabCtrl\+Shift\+T( \(off\))?$/,
+  'environments-tab-menu': /^Rename \(off\) \| Close tab \| Close other tabs \(off\) \| Close tabs to the right \(off\) \| Close all tabs \| Reopen closed tab( \(off\))?$/,
+  'prompts-tab-menu': /^Rename \(off\) \| Close tab \| Close other tabs \(off\) \| Close tabs to the right \(off\) \| Close all tabs \| Reopen closed tab( \(off\))?$/,
   'live-capture-tab-is-fixed': /^menu: false \| close button: false$/,
-  'requests-menu-same': /RenameF2 \| Close tabMiddle-click \| Close other tabs \| Close tabs to the right \| Close all tabs \| Reopen closed tabCtrl\+Shift\+T( \(off\))?$/,
+  'requests-menu-same': /Rename \| Close tab \| Close other tabs \| Close tabs to the right \| Close all tabs \| Reopen closed tab( \(off\))?$/,
 });

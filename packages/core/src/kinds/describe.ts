@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { ApsError } from '../errors.js';
-import { KIND_IDS, KIND_INFO, kindByName, type CapabilityState, type ItemKindInfo, type KindId } from '@testpion/shared';
+import { KIND_IDS, KIND_INFO, kindByName, liveKinds, nodeMenusOf, type CapabilityState, type ItemKindInfo, type KindId, type NodeMenuShape } from '@testpion/shared';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { kind } from './registry.js';
 
@@ -26,6 +26,11 @@ export interface KindDescription {
   can: string[];
   /** The engine facets this version has for it (resolve, ops). */
   facets: string[];
+  /**
+   * The menus of its nodes as the app builds them (the item's row, its section header, its folders; a request's also
+   * the protocol group's and Favorites'): the groups in order, each action's id, label key and key.
+   */
+  nodes: NodeMenuShape[];
 }
 
 export interface KindsReport {
@@ -53,6 +58,7 @@ const describe = (info: ItemKindInfo): KindDescription => {
       .filter(([, s]) => s === true)
       .map(([c]) => c),
     facets: (['resolve', 'ops'] as const).filter((f) => !!def[f]),
+    nodes: nodeMenusOf(info.id),
   };
 };
 
@@ -62,7 +68,7 @@ const describe = (info: ItemKindInfo): KindDescription => {
  * ahead of their release.
  */
 export function describeKinds(o: { kind?: string; all?: boolean } = {}, store?: WorkspaceStore): KindsReport {
-  let list = KIND_IDS.map((id) => KIND_INFO[id]).filter((k) => o.all || !k.since);
+  let list = o.all ? KIND_IDS.map((id) => KIND_INFO[id]) : liveKinds();
   if (o.kind) {
     const k = kindByName(o.kind);
     if (!k) throw new ApsError('ValidationError', `Unknown kind "${o.kind}"`, { suggestions: [`Kinds: ${KIND_IDS.join(', ')}`] });

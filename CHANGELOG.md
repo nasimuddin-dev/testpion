@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Menus
+- **Key hints in every row menu**: Open <kbd>Enter</kbd>, Rename <kbd>F2</kbd>, Delete… <kbd>Del</kbd>, Expand all <kbd>*</kbd> are shown beside the items that the keys run (the menu itself opens with <kbd>Shift</kbd>+<kbd>F10</kbd>); the docs' menu table shows them too.
+
+### For AI agents and scripts
+- **`testpion item delete <ref>` / `item restore <id>`** (`--json`), the MCP tools **`delete_item`** / **`restore_item`** and the RPC `item.remove` / `item.restore`: one delete-to-Recently-deleted and restore for every kind with the `trash` capability (collections, environments, datasets, API definitions, MCP servers), by ref (`environment:staging`, `spec:specs/x.yaml`, a `testpion://open` link, `{kind, …ids}`); the app's own Delete… with Undo goes through the same function. A kind without it answers with the reason.
+- **`testpion kinds --json` / `list_kinds` / `kinds.list` add `nodes`**: the menu of every row a kind has in the app (its row, section header and folders), group by group, with each action's id, label key and key.
+
 ## 0.52.0 — 2026-10-17
 
 One registry, one menu: every kind of item a workspace holds is declared once (what it is called, where it is stored and opens, what it can do), and every tree and list row's menu is built from it by one function. ([What's new in 0.52](/getting-started/whats-new#whats-new-in-0-52))
