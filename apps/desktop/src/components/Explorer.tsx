@@ -1,13 +1,12 @@
-import { ArchiveRestore, ChevronDown, ChevronRight, ChevronsDownUp, CopyPlus, Database, Download, ExternalLink, FileCode2, FolderPlus, GitCompare, Layers, PanelLeftClose, Pencil, Play, Plug, Plus, RefreshCw, ScanSearch, Star, Trash2, Unplug, Upload, Wand2 } from 'lucide-react';
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { ArchiveRestore, ChevronsDownUp, Database, Download, FileCode2, FilePlus2, FolderPlus, Layers, PanelLeftClose, Plug, Plus, RefreshCw, Star, Upload } from 'lucide-react';
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { call, on } from '../api';
-import { promptText, toastError, useApp } from '../store';
-import { restoreFolder } from './FolderList';
+import { confirmAction, promptText, toastError, useApp } from '../store';
 import { deleteMcpServerWithUndo, deleteWithUndo, putBack, restoreDeleted } from '../lib/undo-delete';
 import type { Collection, CollectionNode, Library, LibraryItem, McpServerConfig } from '../types';
 import { plural, uid } from '../lib/format';
-import { addToFolder, CollectionTree, mapNodes, type ExtraGroup } from './CollectionTree';
-import { openRef } from '../lib/open-ref';
+import { addToFolder, CollectionTree, duplicateNode, mapNodes, type ExtraGroup } from './CollectionTree';
+import { openRef, revealInSidebar } from '../lib/open-ref';
 import { scopedNodeId } from '../lib/tree-rows';
 import type { RequestCategory } from '../lib/collection-filter';
 import { closeTabsFor, newRequestItems, useEditorTabsStore } from './EditorTabs';
@@ -16,161 +15,29 @@ import { SIDEBAR_TRASH_KINDS, TrashDialog } from './TrashDialog';
 import { fullCollection, refreshCollections, useCollectionTree } from '../lib/collections-store';
 import { ImportModal } from '../views/rest/dialogs';
 import { isDocView, useDocs } from '../lib/docs';
-import { Button, cx, IconButton, Input, Menu, menuKeys, type MenuItem } from './ui';
-import { askFolderName, focusRow, folderMenuItems, InlineRename, KindBadge, moveToFolderItem, RowMenu, TreeFolderRow, treeKeys } from './TreeParts';
+import { cx, IconButton, Input, Menu } from './ui';
+import { focusRow, KindBadge, treeKeys } from './TreeParts';
 import { usePersisted } from '../lib/sticky';
-import { useTreeOpen } from '../lib/tree-state';
 import { copyText } from '../lib/clipboard';
-import { datasetBadge } from '../lib/datasets';
+import { datasetBadge, datasetYaml } from '../lib/datasets';
 import { GenerateDataDialog } from './GenerateDataDialog';
 import { useStableCallbacks } from '../hooks';
 import { saveAsTest } from '../lib/save-test';
 import type { NodeMenuCtx } from '../lib/node-menu';
 import { LABEL } from '../lib/vocabulary';
+import { requestCopyItems } from '../lib/request-copy';
+import { generateFlows } from '../lib/files';
+import { generateSpecTests } from './ApiPreviewPanel';
+import { useAreaMenu } from './AreaMenu';
+import { EmptyHint, FolderedRows, folderKey, folderNames, ItemRow, moveToFolderSubmenu, newFolderIn, Section, useOpenSections, type FolderOps, type RowRename } from './ExplorerParts';
 
 /**
  * The Collections explorer: the one sidebar of the request editors. The workspace lists its collections;
  * expanding one shows what it holds by category (REST, SOAP, GraphQL, gRPC, WebSocket & MQTT). MCP servers,
  * API definitions and datasets belong to the whole workspace and follow the collections. Environments, monitors,
- * AI prompts, evaluations and load tests live in their own views.
+ * AI prompts, evaluations and load tests live in their own views. Every header, folder and row is a node of its kind
+ * with the one menu (lib/node-menu.ts) on the one row (TreeRowShell).
  */
-
-/** Which sections and folders of the explorer are open: the workspace's tree state (lib/tree-state). */
-function useOpenSections() {
-  const [open, setOpen] = useTreeOpen('explorer');
-  const toggle = (id: string, def: boolean) => setOpen((o) => ({ ...o, [id]: !(o[id] ?? def) }));
-  const set = (keys: string[], to: boolean) => setOpen((o) => ({ ...o, ...Object.fromEntries(keys.map((k) => [k, to])) }));
-  return { isOpen: (id: string, def = true) => open[id] ?? def, toggle, set };
-}
-
-/** A collapsible section: icon, title, count, a + that creates that kind of item and a ⋯ menu (also on right-click), like a collection row. */
-function Section({
-  id,
-  title,
-  icon,
-  count,
-  addLabel,
-  onAdd,
-  menu,
-  children,
-  def = true,
-  sections,
-  forceOpen,
-}: {
-  id: string;
-  title: string;
-  icon: ReactNode;
-  count?: number;
-  addLabel?: string;
-  onAdd?(): void;
-  menu?: MenuItem[];
-  children: ReactNode;
-  def?: boolean;
-  sections: ReturnType<typeof useOpenSections>;
-  forceOpen?: boolean;
-}) {
-  const open = forceOpen || sections.isOpen(id, def);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const items: MenuItem[] = [
-    ...(onAdd ? [{ label: addLabel ?? 'New', icon: <Plus size={14} />, onSelect: onAdd }] : []),
-    ...(menu ?? []),
-    { label: open ? 'Collapse' : 'Expand', icon: open ? <ChevronRight size={14} /> : <ChevronDown size={14} />, onSelect: () => sections.toggle(id, def), separator: true },
-  ];
-  return (
-    <div className="border-b border-line/60" data-tree-section={id}>
-      <div
-        className={cx('group flex items-center gap-0.5 h-9 pl-1.5 pr-1 sticky top-0 bg-panel z-10', menuOpen && 'bg-hover')}
-        onContextMenu={(e) => {
-          e.preventDefault();
-          setMenuOpen(true);
-        }}
-      >
-        <button className="flex items-center gap-1.5 flex-1 min-w-0 text-left" onClick={() => sections.toggle(id, def)} aria-expanded={open} data-tree-row>
-          {open ? <ChevronDown size={13} className="text-muted shrink-0" /> : <ChevronRight size={13} className="text-muted shrink-0" />}
-          <span className="text-muted shrink-0">{icon}</span>
-          <span className="text-[0.82rem] font-semibold truncate">{title}</span>
-          {count !== undefined && count > 0 && <span className="text-[0.7rem] px-1.5 rounded-full bg-panel2 text-muted tabular-nums">{count}</span>}
-        </button>
-        <RowMenu label={title} items={items} open={menuOpen} onOpenChange={setMenuOpen} header />
-      </div>
-      {open && <div className="pb-2">{children}</div>}
-    </div>
-  );
-}
-
-/** Renaming a row in place: whether it is being renamed, and how to start and finish. */
-interface RowRename {
-  editing: boolean;
-  start(): void;
-  done(name?: string): void;
-}
-
-/**
- * A row of a library section. `scope` (the section: favorites, mcp, specs, datasets) and `id` name it in the whole
- * sidebar (`data-node-id` = `<scope>:<id>`), like the Collections tree's rows (lib/tree-rows).
- */
-function Row({ id, scope, icon, label, sub, onClick, title, active, menu, indent, rename }: { id?: string; scope?: string; icon?: ReactNode; label: string; sub?: ReactNode; onClick(): void; title?: string; active?: boolean; menu?: MenuItem[]; indent?: boolean; rename?: RowRename }) {
-  const [menuOpen, setMenuOpen] = useState(false);
-  return (
-    <div
-      data-node-id={id === undefined ? undefined : scope ? `${scope}:${id}` : id}
-      className={cx('group mx-1 flex items-center rounded-md pr-1 transition-colors', active ? 'bg-accent-soft' : menuOpen ? 'bg-hover' : 'hover:bg-hover')}
-      onContextMenu={(e) => {
-        if (!menu) return;
-        e.preventDefault();
-        setMenuOpen(true);
-      }}
-    >
-      {rename?.editing ? (
-        <div className={cx('flex-1 min-w-0 flex items-center gap-2 h-8 pr-1 text-sm', indent ? 'pl-10' : 'pl-6')}>
-          {icon && <span className="text-muted shrink-0">{icon}</span>}
-          <InlineRename value={label} onCommit={(name) => rename.done(name)} onCancel={() => rename.done()} />
-        </div>
-      ) : (
-        <button
-          title={title ?? label}
-          onClick={onClick}
-          onKeyDown={(e) => {
-            if (e.key === 'F2' && rename) {
-              e.preventDefault();
-              return rename.start();
-            }
-            menuKeys(menu)?.(e);
-          }}
-          data-tree-row
-          data-rename-id={id}
-          className={cx('flex-1 min-w-0 flex items-center gap-2 h-8 pr-1 text-sm text-left', indent ? 'pl-10' : 'pl-6')}
-        >
-          {icon && <span className="text-muted shrink-0">{icon}</span>}
-          <span className="truncate flex-1">{label}</span>
-          {sub && <span className="text-xs text-muted truncate max-w-[45%]">{sub}</span>}
-        </button>
-      )}
-      {menu && <RowMenu label={label} items={menu} open={menuOpen} onOpenChange={setMenuOpen} />}
-    </div>
-  );
-}
-
-/** Folders of a section's items: the folder names (kept even when empty), and which folder each item is in. */
-interface FolderOps {
-  folders: string[];
-  /** Change the folder names (new, rename, remove). */
-  setFolders(fn: (folders: string[]) => string[]): Promise<void>;
-  /** Change which folder items are in: (item id, its folder) → its new folder. */
-  assign(fn: (id: string, folder: string | undefined) => string | undefined): Promise<void>;
-}
-
-/** What a section is for, and a button to start, when it's empty. */
-function EmptyHint({ text, action, onAction }: { text: string; action: string; onAction(): void }) {
-  return (
-    <div className="px-6 py-1.5 flex flex-col items-start gap-1.5">
-      <p className="text-xs text-muted leading-snug">{text}</p>
-      <Button size="sm" icon={<Plus size={12} />} onClick={onAction}>
-        {action}
-      </Button>
-    </div>
-  );
-}
 
 const NONE: SavedItem[] = [];
 /** The reveal key of an intent: its nonce, unless it asks not to unfold the tree (opened from the explorer itself). */
@@ -219,6 +86,13 @@ function newNode(cat: RequestCategory): CollectionNode | undefined {
       assertions: [],
     };
   if (cat === 'graphql') return { kind: 'graphql', id: uid('gql-'), name: 'New GraphQL request', request: { endpoint: '{{baseUrl}}/graphql', query: 'query {\n  \n}', variables: '', headers: [] }, assertions: [] };
+  return undefined;
+}
+
+/** An MCP server as an agent's config file holds it (.mcp.json, claude_desktop_config.json): values as saved, {{variables}} unresolved. */
+function mcpConfigOf(s: McpServerConfig): Record<string, unknown> | undefined {
+  if (s.transport === 'stdio') return { command: s.command, ...(s.args?.length ? { args: s.args } : {}), ...(s.env && Object.keys(s.env).length ? { env: s.env } : {}) };
+  if ('url' in s && s.url) return { type: s.transport === 'sse' ? 'sse' : 'http', url: s.url, ...('headers' in s && s.headers?.length ? { headers: Object.fromEntries(s.headers.filter((h) => h.enabled !== false).map((h) => [h.key, h.value])) } : {}) };
   return undefined;
 }
 
@@ -293,9 +167,11 @@ export function Explorer() {
   const [servers, setServers] = useState<Array<McpServerConfig & { connected?: boolean }>>([]);
   const [specs, setSpecs] = useState<string[]>([]);
   const [datasets, setDatasets] = useState<DatasetRow[]>([]);
-  // folders of the MCP servers (a server keeps its own folder; empty folders are kept here) and of the API definitions (path → folder)
+  // folders of the MCP servers (a server keeps its own folder; empty folders are kept here), of the API definitions and
+  // of the datasets (virtual: path → folder, the files never move)
   const [mcpFolders, setMcpFolders] = useState<string[]>([]);
   const [specFolders, setSpecFolders] = useState<Library<unknown>>({ folders: [], items: [] });
+  const [datasetFolders, setDatasetFolders] = useState<Library<unknown>>({ folders: [], items: [] });
   // the request that's open (as recorded for Back / Forward) is highlighted in the tree
   // (or, for a tab restored at start-up, the item its active tab shows)
   const navItem = useApp((s) => (s.nav.current.payload?.requestId ?? s.nav.current.payload?.savedId) as string | undefined);
@@ -312,7 +188,7 @@ export function Explorer() {
   const load = useCallback(async (withCollections = true) => {
     const quiet = <T,>(p: Promise<T>, fallback: T) => p.catch(() => fallback);
     const empty: Library<unknown> = { folders: [], items: [] };
-    const [, g, w, s, sp, mf, sf, ds] = await Promise.all([
+    const [, g, w, s, sp, mf, sf, ds, df] = await Promise.all([
       withCollections ? refreshCollections() : undefined,
       quiet(call<Library<unknown>>('lib.get', { kind: 'grpc' }), empty),
       quiet(call<Library<unknown>>('lib.get', { kind: 'websocket' }), empty),
@@ -321,6 +197,7 @@ export function Explorer() {
       quiet(call<Library<unknown>>('lib.get', { kind: 'mcp-folders' }), empty),
       quiet(call<Library<unknown>>('lib.get', { kind: 'spec-folders' }), empty),
       quiet(call<DatasetRow[]>('datasets.list'), []),
+      quiet(call<Library<unknown>>('lib.get', { kind: 'dataset-folders' }), empty),
     ]);
     setGrpc(g.items.map(({ data: _, ...i }) => i));
     const wsBadge = (d: unknown) => ((d as { mode?: string })?.mode === 'kafka' ? 'KAFKA' : (d as { mode?: string })?.mode === 'mqtt' ? 'MQTT' : (d as { mode?: string })?.mode === 'socketio' ? 'SIO' : 'WS');
@@ -330,6 +207,7 @@ export function Explorer() {
     setMcpFolders(mf.folders);
     setSpecFolders(sf);
     setDatasets([...ds].sort((a, b) => a.name.localeCompare(b.name)));
+    setDatasetFolders(df);
   }, []);
   useEffect(() => {
     void load();
@@ -381,6 +259,7 @@ export function Explorer() {
   // Import and Export open here, without leaving the request editors
   const [importing, setImporting] = useState(false);
   const [collapseAll, setCollapseAll] = useState(0);
+  const [expandAll, setExpandAll] = useState(0);
   // reveal the opened request in the tree when it was opened from elsewhere (search, history, a link): not when it was
   // opened from the explorer itself (e.g. Favorites), which would unfold its collection under the user's hand
   // (watched, not subscribed to: the explorer keeps only this key, so an intent that reveals nothing re-renders nothing)
@@ -433,20 +312,16 @@ export function Explorer() {
       undo: () => datasetAction(() => restoreDeleted('dataset', d.name)),
       note: 'Recently deleted keeps it for 30 days',
     });
-  const datasetMenu = (d: DatasetRow): MenuItem[] => [
-    { label: LABEL.open, icon: <ExternalLink size={14} />, onSelect: () => void openRef({ kind: 'dataset', name: d.name }) },
-    { label: 'Run a collection with it', icon: <Play size={14} />, onSelect: () => intent('collections', { run: true, dataPath: d.path }) },
-    { label: 'Rename', icon: <Pencil size={14} />, separator: true, onSelect: () => setRenaming(d.name) },
-    { label: 'Duplicate', icon: <CopyPlus size={14} />, onSelect: () => void datasetAction(() => call('datasets.duplicate', { name: d.name })) },
-    { label: LABEL.delete, icon: <Trash2 size={14} />, danger: true, separator: true, onSelect: () => void deleteDataset(d) },
-  ];
-  const renameDataset = (name: string): RowRename => ({
-    editing: renaming === name,
-    start: () => setRenaming(name),
-    done: (to) => {
+  /** The server, saved gRPC call, connection, API definition or dataset being renamed in place. */
+  const [renaming, setRenaming] = useState<string>();
+  /** Rename in place: the row's field, then `apply` (an RPC), then the keyboard back on the row. */
+  const renamer = (id: string, nodeId: string, apply: (name: string) => unknown): RowRename => ({
+    editing: renaming === id,
+    start: () => setRenaming(id),
+    done: (name) => {
       setRenaming(undefined);
-      if (to && to !== name) void datasetAction(() => call('datasets.rename', { name, to }));
-      focusRow(name);
+      if (name) void apply(name);
+      focusRow(nodeId);
     },
   });
   /** Change a saved gRPC call / connection list (move, rename, duplicate, delete): the one place that loads, edits and saves it. */
@@ -461,7 +336,6 @@ export function Explorer() {
   };
   /** Move a saved gRPC call / connection to another collection. */
   const moveItem = (kind: 'grpc' | 'websocket', id: string, collectionId: string) => editLibrary(kind, (items) => items.map((i) => (i.id === id ? { ...i, collectionId } : i)));
-  /** The menu of a gRPC call or connection: the same actions as a request's (open, rename, duplicate, move, delete). */
   /** Copy a saved gRPC call as a grpcurl command, or a connection's URL ({{variables}} resolved). */
   const copySaved = async (kind: 'grpc' | 'websocket', id: string) => {
     try {
@@ -478,26 +352,7 @@ export function Explorer() {
       toastError(e);
     }
   };
-  /** The server, saved gRPC call or connection being renamed in place. */
-  const [renaming, setRenaming] = useState<string>();
-  const renameSaved = (kind: 'grpc' | 'websocket', id: string): RowRename => ({
-    editing: renaming === id,
-    start: () => setRenaming(id),
-    done: (name) => {
-      setRenaming(undefined);
-      if (name) void editLibrary(kind, (items) => items.map((i) => (i.id === id ? { ...i, name } : i)));
-      focusRow(id);
-    },
-  });
-  const renameServer = (id: string): RowRename => ({
-    editing: renaming === id,
-    start: () => setRenaming(id),
-    done: (name) => {
-      setRenaming(undefined);
-      if (name) void editServers((list) => list.map((x) => (x.id === id ? { ...x, name } : x)));
-      focusRow(id);
-    },
-  });
+  const renameSaved = (kind: 'grpc' | 'websocket', id: string): RowRename => renamer(id, id, (name) => editLibrary(kind, (items) => items.map((i) => (i.id === id ? { ...i, name } : i))));
   /** The menu of a gRPC call or connection: the same groups as a request's (open, copy, test file, rename, duplicate, move, delete). */
   const savedMenu = (kind: 'grpc' | 'websocket', item: SavedItem): NodeMenuCtx => {
     const ref = { kind: 'saved' as const, library: kind, itemId: item.id };
@@ -531,7 +386,7 @@ export function Explorer() {
       },
     };
   };
-  /** Change the MCP server list (rename, duplicate, delete). */
+  /** Change the MCP server list (rename, duplicate, move to a folder). */
   const editServers = async (fn: (list: McpServerConfig[]) => McpServerConfig[]) => {
     try {
       await call('mcp.saveServers', { servers: fn(servers.map(({ connected: _c, ...s }) => s as McpServerConfig)) });
@@ -540,31 +395,8 @@ export function Explorer() {
       toastError(e);
     }
   };
-  /** The menu of an MCP server: open, connect, rename, duplicate, delete. */
-  const serverMenu = (s: McpServerConfig & { connected?: boolean }): MenuItem[] => [
-    { label: LABEL.open, icon: <ExternalLink size={14} />, onSelect: () => void openRef({ kind: 'mcp-server', serverId: s.id }) },
-    s.connected
-      ? { label: 'Disconnect', icon: <Unplug size={14} />, onSelect: () => void call('mcp.disconnect', { serverId: s.id }).then(load, toastError) }
-      : { label: 'Connect', icon: <Plug size={14} />, onSelect: () => intent('mcp', { serverId: s.id, connect: true }) },
-    { label: 'Settings', icon: <Pencil size={14} />, onSelect: () => intent('mcp', { serverId: s.id, tab: 'settings' }) },
-    {
-      label: 'Rename',
-      icon: <Pencil size={14} />,
-      separator: true,
-      onSelect: () => setRenaming(s.id),
-    },
-    { label: 'Duplicate', icon: <CopyPlus size={14} />, onSelect: () => void editServers((list) => list.flatMap((x) => (x.id === s.id ? [x, { ...x, id: uid('mcp-'), name: `${x.name} copy` }] : [x]))) },
-    {
-      label: LABEL.delete,
-      icon: <Trash2 size={14} />,
-      danger: true,
-      separator: true,
-      // at once, with Undo (Recently deleted keeps it: its place in the list comes back, a connected server reconnects)
-      onSelect: () => void deleteMcpServerWithUndo(s, { after: () => load(false) }),
-    },
-  ];
-  /** Change a folders library (the folder names, and for API definitions which folder each one is in), read fresh so steps in a row see each other. */
-  const editFolderLib = async (kind: 'mcp-folders' | 'spec-folders', fn: (lib: Library<unknown>) => Pick<Library<unknown>, 'folders' | 'items'>) => {
+  /** Change a folders library (the folder names, and which folder each item is in), read fresh so steps in a row see each other. */
+  const editFolderLib = async (kind: 'mcp-folders' | 'spec-folders' | 'dataset-folders', fn: (lib: Library<unknown>) => Pick<Library<unknown>, 'folders' | 'items'>) => {
     try {
       const lib = await call<Library<unknown>>('lib.get', { kind });
       await call('lib.save', { kind, library: fn(lib) });
@@ -574,85 +406,144 @@ export function Explorer() {
     }
   };
   const specFolderOf = new Map(specFolders.items.map((i) => [i.id, i.folder]));
+  const datasetFolderOf = new Map(datasetFolders.items.map((i) => [i.id, i.folder]));
   const mcpOps: FolderOps = {
     folders: mcpFolders,
     setFolders: (fn) => editFolderLib('mcp-folders', (lib) => ({ folders: fn(lib.folders), items: [] })),
     assign: (fn) => editServers((list) => list.map((s) => ({ ...s, folder: fn(s.id, s.folder) || undefined }))),
   };
-  const specOps: FolderOps = {
-    folders: specFolders.folders,
-    setFolders: (fn) => editFolderLib('spec-folders', (lib) => ({ folders: fn(lib.folders), items: lib.items })),
+  /** The folders of files the user keeps (API definitions, datasets): a library naming each file by its path. */
+  const pathFolderOps = (kind: 'spec-folders' | 'dataset-folders', lib: Library<unknown>, paths: string[]): FolderOps => ({
+    folders: lib.folders,
+    setFolders: (fn) => editFolderLib(kind, (l) => ({ folders: fn(l.folders), items: l.items })),
     assign: (fn) =>
-      editFolderLib('spec-folders', (lib) => {
-        const now = new Map(lib.items.map((i) => [i.id, i.folder]));
-        return { folders: lib.folders, items: specs.map((p) => ({ id: p, name: p, folder: fn(p, now.get(p)) || undefined, data: null })).filter((i) => i.folder) };
+      editFolderLib(kind, (l) => {
+        const now = new Map(l.items.map((i) => [i.id, i.folder]));
+        return { folders: l.folders, items: paths.map((p) => ({ id: p, name: p, folder: fn(p, now.get(p)) || undefined, data: null })).filter((i) => i.folder) };
       }),
-  };
-  /** All folder names of a section: the kept ones and the ones its items are in. */
-  const folderNames = (ops: FolderOps, items: Array<{ folder?: string }>) => [...new Set([...ops.folders, ...items.map((i) => i.folder).filter((x): x is string => !!x)])].sort((a, b) => a.localeCompare(b));
-  const newFolder = async (ops: FolderOps) => {
-    const name = await askFolderName();
-    if (name) await ops.setFolders((fs) => [...fs, name]);
-  };
-  /** The ⋯ menu of a folder (the shared one): rename it, or delete it (its items move to the top level). */
-  const renameFolder = async (ops: FolderOps, name: string, next: string) => {
-    await ops.assign((_, folder) => (folder === name ? next : folder));
-    await ops.setFolders((fs) => fs.map((x) => (x === name ? next : x)));
-  };
-  const folderMenu = (ops: FolderOps, name: string, itemNoun: string, addLabel: string, onAdd: () => void): MenuItem[] =>
-    folderMenuItems({
-      name,
-      itemNoun,
-      addLabel,
-      onAdd,
-      rename: (next) => renameFolder(ops, name, next),
-      remove: async () => {
-        const was = new Set<string>();
-        const at = ops.folders.indexOf(name);
-        await ops.assign((id, folder) => (folder === name ? (was.add(id), undefined) : folder));
-        await ops.setFolders((fs) => fs.filter((x) => x !== name));
-        // the undo: the folder back in its place, and the items that were in it
-        return async () => {
-          await ops.setFolders((fs) => restoreFolder(fs, name, at));
-          await ops.assign((id, folder) => (was.has(id) && !folder ? name : folder));
-        };
-      },
-    });
-  /** "Move to folder" in an item's menu (the shared one). */
-  const moveToFolder = (ops: FolderOps, all: Array<{ folder?: string }>, itemId: string, current: string | undefined): MenuItem => ({
-    ...moveToFolderItem({
-      folders: folderNames(ops, all),
-      current,
-      move: async (to) => {
-        if (to && !ops.folders.includes(to)) await ops.setFolders((fs) => [...fs, to]);
-        await ops.assign((id, folder) => (id === itemId ? to : folder));
-      },
-    }),
-    separator: true,
   });
-  /** A section's items in their folders (like a collection's), then the ones in none. */
-  const renderFoldered = <T extends { id: string; folder?: string }>(section: string, items: T[], ops: FolderOps, menuOf: (name: string) => MenuItem[], row: (item: T, inFolder: boolean) => ReactNode) => {
-    const names = folderNames(ops, items);
-    return (
-      <>
-        {names.map((name) => {
-          const inside = items.filter((i) => i.folder === name);
-          if (f && !inside.length) return null;
-          const key = `${section}:folder:${name}`;
-          const isOpen = !!f || sections.isOpen(key, true);
-          return (
-            <div key={key}>
-              <TreeFolderRow className="pl-5" name={name} count={inside.length} open={isOpen} onToggle={() => sections.toggle(key, true)} menu={menuOf(name)} onRename={(to) => renameFolder(ops, name, to)} />
-              {isOpen && (inside.length ? inside.map((i) => row(i, true)) : <p className="pl-10 py-1 text-xs text-muted">Empty folder</p>)}
-            </div>
-          );
-        })}
-        {items.filter((i) => !i.folder || !names.includes(i.folder)).map((i) => row(i, false))}
-      </>
-    );
+  const specOps = pathFolderOps('spec-folders', specFolders, specs);
+  const datasetOps = pathFolderOps('dataset-folders', datasetFolders, datasets.map((d) => d.name));
+  /** The keys of a section and its folders (its Expand all and Collapse all). */
+  const sectionKeys = (section: string, ops: FolderOps, items: Array<{ folder?: string }>) => [section, ...folderNames(ops, items).map((n) => folderKey(section, n))];
+  const sectionTree = (section: string, ops: FolderOps, items: Array<{ folder?: string }>) => ({
+    expandAll: () => sections.set(sectionKeys(section, ops, items), true),
+    collapseAll: () => sections.set(sectionKeys(section, ops, items), false),
+  });
+
+  /** The menu of an MCP server: open, connect, copy its config, settings, rename, duplicate, move to a folder, delete (Undo). */
+  const serverMenu = (s: McpServerConfig & { connected?: boolean }): NodeMenuCtx => {
+    const ref = { kind: 'mcp-server' as const, serverId: s.id };
+    const config = mcpConfigOf(s);
+    return {
+      ref,
+      name: s.name,
+      on: {
+        open: () => void openRef(ref),
+        openNewTab: () => void openRef(ref, { newTab: true }),
+        ...(s.connected ? { disconnect: () => void call('mcp.disconnect', { serverId: s.id }).then(() => load(false), toastError) } : { connect: () => intent('mcp', { serverId: s.id, connect: true }) }),
+        copyMcpConfig: () => void copyText(JSON.stringify({ mcpServers: { [s.name]: config } }, null, 2), 'the MCP config (.mcp.json, claude_desktop_config.json)'),
+        settings: () => intent('mcp', { serverId: s.id, tab: 'settings' }),
+        rename: () => setRenaming(s.id),
+        duplicate: () => void editServers((list) => list.flatMap((x) => (x.id === s.id ? [x, { ...x, id: uid('mcp-'), name: `${x.name} copy` }] : [x]))),
+        move: moveToFolderSubmenu(mcpOps, servers, s.id, s.folder),
+        // at once, with Undo (Recently deleted keeps it: its place in the list comes back, a connected server reconnects)
+        delete: () => void deleteMcpServerWithUndo(s, { after: () => load(false) }),
+      },
+      disabled: config ? {} : { copyMcpConfig: 'A mock server runs inside TestPion: there is no config for another app' },
+    };
   };
-  /** An item's menu with "Move to folder" before Delete / Remove (or at the end). */
-  const withMove = (menu: MenuItem[], move: MenuItem) => (menu[menu.length - 1]?.danger ? [...menu.slice(0, -1), move, menu[menu.length - 1]!] : [...menu, move]);
+  /** The menu of an API definition: open, lint, coverage, compare, copy, generate tests or flows, rename, move, delete (Undo). */
+  const specMenu = (path: string, folder: string | undefined): NodeMenuCtx => {
+    const ref = { kind: 'spec' as const, path };
+    const isAsync = path.startsWith('specs/asyncapi/');
+    return {
+      ref,
+      name: path,
+      on: {
+        open: () => intent('apidef', { spec: path, tab: 'definition' }),
+        revealFile: () => void call('workspace.revealFile', { path }).catch(toastError),
+        lint: () => intent('apidef', { spec: path, tab: 'lint' }),
+        apiCoverage: () => intent('apidef', { spec: path, tab: 'coverage' }),
+        compareVersions: () => intent('apidef', { spec: path, tab: 'compare' }),
+        copyPath: () => void copyText(path, 'the path'),
+        generateTests: () => void generateSpecTests(path),
+        generateFlows: () => void generateFlows({ path }, confirmAction),
+        rename: () => setRenaming(path),
+        move: moveToFolderSubmenu(specOps, specFolders.items, path, folder),
+        delete: () => {
+          let trashId: string | undefined;
+          void deleteWithUndo({
+            what: path,
+            note: 'Recently deleted keeps it for 30 days',
+            run: async () => {
+              closeTabsFor([path]);
+              trashId = (await call<{ trashId: string }>('openapi.spec.delete', { path })).trashId;
+              await load(false);
+            },
+            undo: async () => {
+              if (trashId) await call('trash.restore', { id: trashId });
+              await load(false);
+            },
+          });
+        },
+      },
+      disabled: isAsync ? { lint: 'Lint reads OpenAPI documents', apiCoverage: 'API coverage reads OpenAPI documents', compareVersions: 'Compare versions reads OpenAPI documents' } : {},
+    };
+  };
+  /** The menu of a dataset: open, preview, run a collection with it, copy, use in a test, rename, duplicate, move, delete (Undo). */
+  const datasetMenu = (d: DatasetRow, folder: string | undefined): NodeMenuCtx => ({
+    ref: { kind: 'dataset', name: d.name },
+    name: d.name,
+    on: {
+      open: () => void openRef({ kind: 'dataset', name: d.name }),
+      revealFile: () => void call('workspace.revealFile', { path: `datasets/${d.name}` }).catch(toastError),
+      preview: () => intent('dataset', { dataset: d.name, tab: 'preview' }),
+      runWithDataset: () => intent('collections', { run: true, dataPath: d.path }),
+      copyPath: () => void copyText(`datasets/${d.name}`, 'the path'),
+      useInTest: () => void copyText(datasetYaml(d.name), 'the dataset block for a test file'),
+      rename: () => setRenaming(d.name),
+      duplicate: () => void datasetAction(() => call('datasets.duplicate', { name: d.name })),
+      move: moveToFolderSubmenu(datasetOps, datasetFolders.items, d.name, folder),
+      delete: () => void deleteDataset(d),
+    },
+  });
+  /** A favorite is a request: the request's menu (no variant), with what the explorer can do from here. */
+  const favoriteMenu = (c: Collection, n: Extract<CollectionNode, { kind: 'http' | 'graphql' }>): NodeMenuCtx => {
+    const ref = { kind: 'request' as const, collectionId: c.id, requestId: n.id };
+    return {
+      ref,
+      name: n.name,
+      favorite: true,
+      on: {
+        open: () => void openRef(ref, { noReveal: true }),
+        openNewTab: () => void openRef(ref, { newTab: true, noReveal: true }),
+        revealInSidebar: () => revealInSidebar(ref),
+        ...(n.kind === 'http' ? { copyAs: requestCopyItems(c, n) } : {}),
+        monitor: () => intent('monitors', { create: { collectionId: c.id, selection: [n.id] } }),
+        testFile: () => void saveAsTest({ ref, name: n.name }),
+        rename: async () => {
+          const name = (await promptText(LABEL.rename, { message: 'Request name', value: n.name, okLabel: 'Rename' }))?.trim();
+          if (name && name !== n.name) await editCollection(c, (w) => ({ ...w, items: mapNodes(w.items, (x) => (x.id === n.id ? { ...x, name } : x)) }));
+        },
+        duplicate: () => void editCollection(c, (w) => ({ ...w, items: duplicateNode(w.items, n.id, (y) => ({ ...y, id: uid('req-'), name: `${y.name} copy` })) })),
+        favorite: () => void editCollection(c, (w) => ({ ...w, items: mapNodes(w.items, (x) => (x.id === n.id && x.kind !== 'folder' ? { ...x, favorite: false } : x)) })),
+        delete: () =>
+          void fullCollection(c).then(
+            (whole) =>
+              deleteWithUndo({
+                what: `the request "${n.name}"`,
+                run: async () => {
+                  closeTabsFor([n.id]);
+                  await saveCollection({ ...whole, items: mapNodes(whole.items, (x) => (x.id === n.id ? null : x)) });
+                },
+                undo: () => saveCollection(whole),
+              }),
+            toastError,
+          ),
+      },
+    };
+  };
 
   // the tree is memoized: its saved items change only with these lists (or a rename in place); menus read the latest
   const savedLatest = useRef({ savedMenu, renameSaved });
@@ -697,6 +588,22 @@ export function Explorer() {
     onExport: (c: Collection) => (setExportFor(c.id), setExporting(true)),
   });
 
+  /** Everything in the explorer, folded or unfolded: every collection and folder, every section and its folders. */
+  const everySection = () => [...sectionKeys('mcp', mcpOps, servers), ...sectionKeys('specs', specOps, specFolders.items), ...sectionKeys('datasets', datasetOps, datasetFolders.items), 'favorites'];
+  // the blank part of the sidebar: the workspace's menu (new collection or request, import, expand or collapse everything)
+  const area = useAreaMenu(
+    'section:collection',
+    () => ({
+      create: [{ label: 'New collection', icon: <FolderPlus size={14} />, onSelect: () => void newCollection() }, ...newRequestItems()],
+      on: {
+        import: importDefinition,
+        expandAll: () => (sections.set(everySection(), true), setExpandAll((n) => n + 1)),
+        collapseAll: () => (sections.set(everySection(), false), setCollapseAll((n) => n + 1)),
+      },
+    }),
+    ws?.name ?? 'Workspace',
+  );
+
   return (
     <aside aria-label="Collections explorer" style={{ width }} className="relative shrink-0 border-r border-line bg-panel flex flex-col min-h-0">
       {handle}
@@ -730,24 +637,34 @@ export function Explorer() {
       </div>
       <div className="p-2 shrink-0 flex items-center gap-1">
         <Input className="flex-1 min-w-0 h-7 min-h-7 text-sm" placeholder="Filter" aria-label="Filter requests, connections, servers and definitions" value={filter} onChange={(e) => setFilter(e.target.value)} />
-        <IconButton label="Collapse all" className="h-7 w-7 shrink-0" onClick={() => setCollapseAll((n) => n + 1)}>
+        <IconButton label="Collapse all" className="h-7 w-7 shrink-0" onClick={() => (sections.set(everySection(), false), setCollapseAll((n) => n + 1))}>
           <ChevronsDownUp size={14} />
         </IconButton>
         <IconButton label="Recently deleted" className="h-7 w-7 shrink-0" onClick={() => setTrashOpen(true)}>
           <ArchiveRestore size={14} />
         </IconButton>
       </div>
-      {/* keyboard, like a file tree: ↑ ↓ move between rows, → expands, ← collapses (Enter opens, F2 renames, Delete deletes) */}
-      <div className="flex-1 overflow-auto" onKeyDown={treeKeys}>
+      {/* keyboard, like a file tree: ↑ ↓ move between rows, → expands, ← collapses (Enter opens, F2 renames, Delete deletes, Shift+F10 the menu) */}
+      <div className="flex-1 overflow-auto" onKeyDown={treeKeys} onContextMenu={area.onContextMenu} data-explorer-area>
         {/* favorite requests from every collection, one click away (⋯ ▸ Add to favorites on a request) */}
         {favorites.length > 0 && (
-          <Section id="favorites" title="Favorites" icon={<Star size={14} />} count={favorites.length} sections={sections} def forceOpen={!!f && shownFavorites.length > 0}>
+          <Section
+            id="favorites"
+            kind="favorites"
+            title="Favorites"
+            icon={<Star size={14} />}
+            count={favorites.length}
+            sections={sections}
+            def
+            forceOpen={!!f && shownFavorites.length > 0}
+            menu={() => ({ on: { expandAll: () => sections.set(['favorites'], true), collapseAll: () => sections.set(['favorites'], false) } })}
+          >
             {shownFavorites.map(({ c, n }) => (
-              <Row
+              <ItemRow
                 // a favourite is a request of one collection: two collections may hold the same request id
                 key={`fav-${scopedNodeId(c.id, n.id)}`}
-                id={`fav-${scopedNodeId(c.id, n.id)}`}
-                scope="favorites"
+                kind="request"
+                nodeId={`favorites:fav-${scopedNodeId(c.id, n.id)}`}
                 icon={
                   <span className={cx('mono method-badge text-[0.6rem] font-bold w-8 inline-block', n.kind === 'http' ? `method-${n.request.method}` : 'text-[#e535ab]')}>
                     {(n.kind === 'http' ? n.request.method : 'GQL').slice(0, 5)}
@@ -758,15 +675,7 @@ export function Explorer() {
                 title={`${n.name} (${c.name})`}
                 active={openRequestId === n.id}
                 onClick={() => void openRef({ kind: 'request', collectionId: c.id, requestId: n.id }, { noReveal: true })}
-                menu={[
-                  { label: LABEL.open, icon: <ExternalLink size={14} />, onSelect: () => void openRef({ kind: 'request', collectionId: c.id, requestId: n.id }, { noReveal: true }) },
-                  {
-                    label: 'Remove from favorites',
-                    icon: <Star size={14} />,
-                    separator: true,
-                    onSelect: () => void editCollection(c, (c) => ({ ...c, items: mapNodes(c.items, (x) => (x.id === n.id && x.kind !== 'folder' ? { ...x, favorite: false } : x)) })),
-                  },
-                ]}
+                ctx={() => favoriteMenu(c, n)}
               />
             ))}
           </Section>
@@ -780,6 +689,7 @@ export function Explorer() {
               categorize
               extraGroups={extraGroups}
               collapseAll={collapseAll}
+              expandAll={expandAll}
               revealKey={revealKey}
               revealId={revealId}
               activeRequestId={openRequestId}
@@ -792,50 +702,98 @@ export function Explorer() {
           </div>
         )}
 
-        <Section id="mcp" title="MCP servers" icon={<Plug size={14} />} count={servers.length} sections={sections} def={servers.length > 0} forceOpen={!!f && shownServers.length > 0} addLabel="Add an MCP server" onAdd={() => intent('mcp', { addServer: true })} menu={[{ label: 'New folder', icon: <FolderPlus size={14} />, onSelect: () => void newFolder(mcpOps) }, { label: 'Open MCP inspector', icon: <ExternalLink size={14} />, onSelect: () => intent('mcp', {}) }]}>
+        <Section
+          id="mcp"
+          kind="section:mcp-server"
+          title="MCP servers"
+          icon={<Plug size={14} />}
+          count={servers.length}
+          sections={sections}
+          def={servers.length > 0}
+          forceOpen={!!f && shownServers.length > 0}
+          menu={() => ({
+            create: [{ label: 'Add an MCP server', icon: <Plus size={14} />, onSelect: () => intent('mcp', { addServer: true }) }],
+            on: { newFolder: () => void newFolderIn(mcpOps), openMcpInspector: () => intent('mcp', {}), ...sectionTree('mcp', mcpOps, servers) },
+          })}
+        >
           {servers.length || mcpFolders.length ? (
-            renderFoldered('mcp', shownServers, mcpOps, (name) => folderMenu(mcpOps, name, 'server', 'Add an MCP server', () => intent('mcp', { addServer: true })), (s, inFolder) => (
-              <Row
-                key={s.id}
-                scope="mcp"
-                indent={inFolder}
-                icon={<KindBadge text="MCP" cls={s.connected ? 'text-ok' : 'text-accent'} />}
-                label={s.name}
-                sub={s.connected ? 'connected' : s.transport === 'streamable-http' ? 'http' : s.transport}
-                title={`${s.name} (${s.connected ? 'connected' : 'not connected'})`}
-                active={openRequestId === s.id}
-                onClick={() => void openRef({ kind: 'mcp-server', serverId: s.id })}
-                menu={withMove(serverMenu(s), moveToFolder(mcpOps, servers, s.id, s.folder))}
-                id={s.id}
-                rename={renameServer(s.id)}
-              />
-            ))
+            <FolderedRows
+              section="mcp"
+              kind="folder:mcp-server"
+              items={shownServers}
+              ops={mcpOps}
+              sections={sections}
+              filtering={!!f}
+              itemNoun="server"
+              create={() => [{ label: 'Add an MCP server here', icon: <Plus size={14} />, onSelect: () => intent('mcp', { addServer: true }) }]}
+              row={(s, inFolder) => (
+                <ItemRow
+                  key={s.id}
+                  kind="mcp-server"
+                  nodeId={`mcp:${s.id}`}
+                  indent={inFolder}
+                  icon={<KindBadge text="MCP" cls={s.connected ? 'text-ok' : 'text-accent'} />}
+                  label={s.name}
+                  sub={s.connected ? 'connected' : s.transport === 'streamable-http' ? 'http' : s.transport}
+                  title={`${s.name} (${s.connected ? 'connected' : 'not connected'})`}
+                  active={openRequestId === s.id}
+                  onClick={() => void openRef({ kind: 'mcp-server', serverId: s.id })}
+                  ctx={() => serverMenu(s)}
+                  rename={renamer(s.id, `mcp:${s.id}`, (name) => editServers((list) => list.map((x) => (x.id === s.id ? { ...x, name } : x))))}
+                  drag={[{ kind: 'mcp-server', serverId: s.id }]}
+                />
+              )}
+            />
           ) : (
             <EmptyHint text="MCP servers to inspect and test: a local command, Streamable HTTP, SSE or a mock." action="Add server" onAction={() => intent('mcp', { addServer: true })} />
           )}
         </Section>
 
-        <Section id="specs" title="API definitions" icon={<FileCode2 size={14} />} count={specs.length} sections={sections} def={specs.length > 0} forceOpen={!!f && shownSpecs.length > 0} addLabel="Import an OpenAPI document" onAdd={importDefinition} menu={[{ label: 'New folder', icon: <FolderPlus size={14} />, onSelect: () => void newFolder(specOps) }, { label: 'Open API definitions', icon: <ExternalLink size={14} />, onSelect: () => intent('apidef', {}) }]}>
+        <Section
+          id="specs"
+          kind="section:spec"
+          title="API definitions"
+          icon={<FileCode2 size={14} />}
+          count={specs.length}
+          sections={sections}
+          def={specs.length > 0}
+          forceOpen={!!f && shownSpecs.length > 0}
+          menu={() => ({
+            create: [{ label: 'Import an OpenAPI document', icon: <Upload size={14} />, onSelect: importDefinition }],
+            on: { newFolder: () => void newFolderIn(specOps), openApiDefinitions: () => intent('apidef', {}), ...sectionTree('specs', specOps, specFolders.items) },
+          })}
+        >
           {specs.length || specFolders.folders.length ? (
-            renderFoldered('specs', shownSpecs.map((p) => ({ id: p, folder: specFolderOf.get(p) })), specOps, (name) => folderMenu(specOps, name, 'API definition', 'Import an OpenAPI document', importDefinition), ({ id: s, folder }, inFolder) => (
-              <Row
-                key={s}
-                id={s}
-                scope="specs"
-                indent={inFolder}
-                icon={<KindBadge text="API" cls="text-[#8b5cf6]" />}
-                label={s.replace(/^specs\//, '')}
-                title={s}
-                active={openRequestId === s}
-                onClick={() => void openRef({ kind: 'spec', path: s })}
-                menu={[
-                  { label: LABEL.open, icon: <ExternalLink size={14} />, onSelect: () => intent('apidef', { spec: s, tab: 'definition' }) },
-                  { label: 'API coverage', icon: <ScanSearch size={14} />, onSelect: () => intent('apidef', { spec: s, tab: 'coverage' }) },
-                  { label: 'Compare versions', icon: <GitCompare size={14} />, onSelect: () => intent('apidef', { spec: s, tab: 'compare' }) },
-                  moveToFolder(specOps, specFolders.items, s, folder),
-                ]}
-              />
-            ))
+            <FolderedRows
+              section="specs"
+              kind="folder:spec"
+              items={shownSpecs.map((p) => ({ id: p, folder: specFolderOf.get(p) }))}
+              ops={specOps}
+              sections={sections}
+              filtering={!!f}
+              itemNoun="API definition"
+              row={({ id: s, folder }, inFolder) => (
+                <ItemRow
+                  key={s}
+                  kind="spec"
+                  nodeId={`specs:${s}`}
+                  indent={inFolder}
+                  icon={<KindBadge text="API" cls="text-[#8b5cf6]" />}
+                  label={s.replace(/^specs\//, '')}
+                  title={s}
+                  active={openRequestId === s}
+                  onClick={() => void openRef({ kind: 'spec', path: s })}
+                  ctx={() => specMenu(s, folder)}
+                  rename={renamer(s, `specs:${s}`, (to) =>
+                    call<{ path: string }>('openapi.spec.rename', { path: s, to: to.replace(/^.*\//, '') }).then(
+                      () => load(false),
+                      toastError,
+                    ),
+                  )}
+                  drag={[{ kind: 'spec', path: s }]}
+                />
+              )}
+            />
           ) : (
             <EmptyHint text="OpenAPI documents: importing one keeps it here for contract checks, API coverage and comparing versions." action="Import OpenAPI" onAction={importDefinition} />
           )}
@@ -843,40 +801,56 @@ export function Explorer() {
 
         <Section
           id="datasets"
+          kind="section:dataset"
           title="Datasets"
           icon={<Database size={14} />}
           count={datasets.length}
           sections={sections}
           def={datasets.length > 0}
           forceOpen={!!f && shownDatasets.length > 0}
-          addLabel="New CSV"
-          onAdd={() => void newDataset('csv')}
-          menu={[
-            { label: 'New JSONL', icon: <Plus size={14} />, onSelect: () => void newDataset('jsonl') },
-            { label: 'Generate test data…', icon: <Wand2 size={14} />, onSelect: () => setGeneratingData(true) },
-          ]}
+          menu={() => ({
+            create: [
+              { label: 'New CSV', icon: <FilePlus2 size={14} />, onSelect: () => void newDataset('csv') },
+              { label: 'New JSONL', icon: <FilePlus2 size={14} />, onSelect: () => void newDataset('jsonl') },
+            ],
+            on: { newFolder: () => void newFolderIn(datasetOps), generateData: () => setGeneratingData(true), ...sectionTree('datasets', datasetOps, datasetFolders.items) },
+          })}
         >
-          {datasets.length ? (
-            shownDatasets.map((d) => (
-              <Row
-                key={d.name}
-                scope="datasets"
-                icon={<KindBadge text={datasetBadge(d.format).text} cls={datasetBadge(d.format).cls} />}
-                label={d.name}
-                sub={d.rows !== undefined ? plural(d.rows, 'row') : d.tables ? plural(d.tables.length, 'table') : undefined}
-                title={`datasets/${d.name} (${d.format}${d.rows !== undefined ? `, ${plural(d.rows, 'row')}` : ''})`}
-                active={openRequestId === d.name}
-                onClick={() => void openRef({ kind: 'dataset', name: d.name })}
-                menu={datasetMenu(d)}
-                id={d.name}
-                rename={renameDataset(d.name)}
-              />
-            ))
+          {datasets.length || datasetFolders.folders.length ? (
+            <FolderedRows
+              section="datasets"
+              kind="folder:dataset"
+              items={shownDatasets.map((d) => ({ ...d, id: d.name, folder: datasetFolderOf.get(d.name) }))}
+              ops={datasetOps}
+              sections={sections}
+              filtering={!!f}
+              itemNoun="dataset"
+              row={(d, inFolder) => (
+                <ItemRow
+                  key={d.name}
+                  kind="dataset"
+                  nodeId={`datasets:${d.name}`}
+                  indent={inFolder}
+                  icon={<KindBadge text={datasetBadge(d.format).text} cls={datasetBadge(d.format).cls} />}
+                  label={d.name}
+                  sub={d.rows !== undefined ? plural(d.rows, 'row') : d.tables ? plural(d.tables.length, 'table') : undefined}
+                  title={`datasets/${d.name} (${d.format}${d.rows !== undefined ? `, ${plural(d.rows, 'row')}` : ''})`}
+                  active={openRequestId === d.name}
+                  onClick={() => void openRef({ kind: 'dataset', name: d.name })}
+                  ctx={() => datasetMenu(d, d.folder)}
+                  rename={renamer(d.name, `datasets:${d.name}`, (to) => datasetAction(() => call('datasets.rename', { name: d.name, to })))}
+                  drag={[{ kind: 'dataset', name: d.name }]}
+                />
+              )}
+            />
           ) : (
             <EmptyHint text="Data files (CSV, JSONL, JSON, Markdown tables, SQLite) that drive collection runs and tests, in the workspace's datasets folder." action="New CSV" onAction={() => void newDataset('csv')} />
           )}
         </Section>
+        {/* the blank rest of the sidebar takes the workspace's menu too */}
+        <div className="min-h-16" aria-hidden />
       </div>
+      {area.menu}
       {generatingData && (
         <GenerateDataDialog
           onClose={() => setGeneratingData(false)}

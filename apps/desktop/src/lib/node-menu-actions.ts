@@ -92,7 +92,8 @@ const testFileLabel = (_c: NodeMenuCtx, k: NodeKind) => (k === 'folder' ? LABEL.
 /** The shared actions, in their order inside each group (kind actions follow the shared ones of their group). */
 export const STANDARD_ACTIONS: readonly ActionDef[] = [
   { id: 'newFolder', group: 'create', label: LABEL.newFolder, icon: FolderPlus, cap: 'container' },
-  { id: 'import', group: 'create', label: LABEL.import, icon: Upload, cap: 'import' },
+  // Import… on a section's create group (per container in 0.53, EX-A2)
+  { id: 'import', group: 'create', label: LABEL.import, icon: Upload, cap: 'import', appliesTo: (k) => k.startsWith('section:') },
   { id: 'open', group: 'open', label: LABEL.open, icon: ExternalLink, cap: 'open' },
   { id: 'openNewTab', group: 'open', label: LABEL.openNewTab, icon: SquareArrowOutUpRight, cap: 'open-new-tab' },
   { id: 'revealInSidebar', group: 'open', label: LABEL.revealInSidebar, icon: LocateFixed, cap: 'open', contextual: true },

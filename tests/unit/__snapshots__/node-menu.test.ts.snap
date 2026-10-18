@@ -83,7 +83,7 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
       "Copy path",
     ],
     [
-      "Use in a test…",
+      "Use in a test",
     ],
     [
       "Rename",
@@ -599,6 +599,17 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
     ],
     [
       "Delete…",
+    ],
+  ],
+  "section:collection": [
+    [
+      "New …",
+      "New folder",
+      "Import…",
+    ],
+    [
+      "Expand all",
+      "Collapse all",
     ],
   ],
   "section:dataset": [

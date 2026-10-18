@@ -135,6 +135,7 @@ export const KIND_LIST: readonly ItemKindInfo[] = [
       'test-file': true,
       flow: true,
       export: true,
+      import: true,
       versioned: true,
       'git-history': true,
     },

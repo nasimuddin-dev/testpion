@@ -364,8 +364,23 @@ export function treeKeys(e: React.KeyboardEvent<HTMLElement>): void {
   else if ((e.key === 'ArrowRight' && row.getAttribute('aria-expanded') === 'false') || (e.key === 'ArrowLeft' && row.getAttribute('aria-expanded') === 'true')) {
     e.preventDefault();
     row.click();
+  } else if (e.key.length === 1 && e.key !== '*' && e.key !== ' ' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    // typeahead: letters typed in a row jump to the next row whose name starts with them (as in a file tree)
+    const now = e.timeStamp;
+    typed = now - typedAt < 700 ? typed + e.key.toLowerCase() : e.key.toLowerCase();
+    typedAt = now;
+    const all = rows();
+    const at = all.indexOf(row);
+    const name = (r: HTMLElement) => (r.dataset.rowName ?? r.textContent ?? '').trim().toLowerCase();
+    // the same letter again moves on to the next match; more letters refine the current one
+    const start = typed.length > 1 ? at : at + 1;
+    const next = [...all.slice(start), ...all.slice(0, start)].find((r) => name(r).startsWith(typed));
+    go(next);
   }
 }
+/** What was typed in a tree (typeahead), and when (the event's time: no timer). */
+let typed = '';
+let typedAt = -Infinity;
 
 /** The kind of a row (gRPC, WS, MQTT, MCP, API …), in the same small badge as a request's method; colours match the editor tabs. */
 export const KindBadge = memo(function KindBadge({ text, cls }: { text: string; cls: string }) {

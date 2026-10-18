@@ -73,7 +73,7 @@ export const LABEL = {
   generateFlows: 'Generate integration flows…',
   preview: 'Preview',
   runWithDataset: 'Run a collection with it',
-  useInTest: 'Use in a test…',
+  useInTest: 'Use in a test',
   generateData: 'Generate test data…',
   edit: 'Edit',
   runNow: 'Run now',

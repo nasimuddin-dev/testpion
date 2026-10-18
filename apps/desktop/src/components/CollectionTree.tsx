@@ -1,13 +1,12 @@
 import { startFlowGenerate } from './ai/flow-generate';
-import { Plus, Braces, ChevronDown, ChevronRight, Code2, Download, FilePlus2, Link2, SquareTerminal, Star, Terminal, TerminalSquare, Undo2 } from 'lucide-react';
+import { Plus, ChevronDown, ChevronRight, Download, FilePlus2, Star, Undo2 } from 'lucide-react';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
-import type { Collection, CollectionFolder, CollectionNode, SavedHttpRequest } from '../types';
+import type { Collection, CollectionFolder, CollectionNode } from '../types';
 import { asError, call, on } from '../api';
-import { Button, cx, VirtualList, type MenuItem } from './ui';
+import { Button, cx, menuKeys, VirtualList } from './ui';
 import { CLOSED_ICON, CountPill, focusRow, FOLDER_ICON, InlineRename, OPEN_ICON, NodeMenu } from './TreeParts';
 import { buildNodeMenu, type NodeMenuCtx } from '../lib/node-menu';
 import { LABEL } from '../lib/vocabulary';
-import { menuKeys } from './ui';
 import { confirmAction, promptText, toastError, useApp } from '../store';
 import { deleteWithUndo, restoreDeleted } from '../lib/undo-delete';
 import { MoveDialog, subtreeIds } from './MoveDialog';
@@ -24,6 +23,7 @@ import { matchesCollectionNode, requestCategory, type RequestCategory } from '..
 export { mapNodes, findNode, addToFolder, insertBefore, folderIdsTo, withNewIds, duplicateNode } from '../lib/collection-nodes';
 import { mapNodes, findNode, addToFolder, insertBefore, folderIdsTo, withNewIds, duplicateNode, moveIntoCollection, nodeIdsExcept } from '../lib/collection-nodes';
 import { useTreeOpen } from '../lib/tree-state';
+import { requestCopyItems } from '../lib/request-copy';
 import { saveAsTest } from '../lib/save-test';
 import { openRef } from '../lib/open-ref';
 import { deferDrop, setDragRefs, useDragSession } from '../lib/drag-ref';
@@ -121,6 +121,7 @@ export const CollectionTree = memo(function CollectionTree({
   onNewOfCategory,
   onDropSaved,
   collapseAll,
+  expandAll,
   revealKey,
   revealId,
 }: {
@@ -153,6 +154,8 @@ export const CollectionTree = memo(function CollectionTree({
   onDropSaved?(kind: 'grpc' | 'websocket', id: string, collectionId: string): void;
   /** Changes (1, 2 …) fold every collection and folder. */
   collapseAll?: number;
+  /** Changes (1, 2 …) unfold every collection, category and folder (the explorer's Expand all). */
+  expandAll?: number;
   /** Changes whenever something is opened: the open request is revealed again (even if it was already open). */
   revealKey?: number;
   /** With revealKey: reveal this collection, folder, request or saved item instead of the open request. */
@@ -349,25 +352,6 @@ export const CollectionTree = memo(function CollectionTree({
       useApp.getState().toast(`Moved "${n.name}" to ${to.name}${folderId ? ` › ${findNode(to.items, folderId)?.name ?? ''}` : ''}`, 'success', { ref: n.kind === 'folder' ? { kind: 'folder', collectionId: to.id, folderId: n.id } : { kind: 'request', collectionId: to.id, requestId: n.id } });
     }, toastError);
   };
-  /** Copy a saved request as its URL or as code, with variables resolved from the active environment. */
-  const copyAs = async (c: Collection, shown: SavedHttpRequest, language: string, what: string) => {
-    try {
-      const n = wholeNode(await fullCollection(c), shown);
-      const r = await call<{ text: string; containsSecrets: boolean }>('http.copyCode', { request: n.request, environment: useApp.getState().environment, collectionId: c.id, requestId: n.id, language });
-      await navigator.clipboard.writeText(r.text);
-      useApp.getState().toast(`Copied ${what}${r.containsSecrets ? ' (it includes secret values such as tokens)' : ''}`, 'success');
-    } catch (e) {
-      useApp.getState().toast(`Couldn't copy: ${asError(e).message}`, 'error');
-    }
-  };
-  const copyMenu = (c: Collection, n: SavedHttpRequest): MenuItem[] => [
-    { label: LABEL.copyUrl, icon: <Link2 size={14} />, onSelect: () => void copyAs(c, n, 'url', 'the URL') },
-    { label: 'cURL (bash)', icon: <Terminal size={14} />, onSelect: () => void copyAs(c, n, 'curl', 'as cURL (bash)') },
-    { label: 'cURL (cmd)', icon: <SquareTerminal size={14} />, onSelect: () => void copyAs(c, n, 'curl-windows', 'as cURL (cmd)') },
-    { label: 'PowerShell', icon: <TerminalSquare size={14} />, onSelect: () => void copyAs(c, n, 'powershell', 'as PowerShell') },
-    { label: 'fetch', icon: <Braces size={14} />, onSelect: () => void copyAs(c, n, 'fetch', 'as fetch') },
-    { label: 'More code snippets…', icon: <Code2 size={14} />, onSelect: () => useApp.getState().openIntent('rest', { collectionId: c.id, requestId: n.id, showCode: true }) },
-  ];
   /** Rewrite the collection's scripts between Postman's pm.* and TestPion's tp.* (both always work). */
   const convertScripts = async (c: Collection, to: 'tp' | 'pm') => {
     const from = to === 'tp' ? 'pm' : 'tp';
@@ -417,6 +401,11 @@ export const CollectionTree = memo(function CollectionTree({
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [collapseAll]);
+  useEffect(() => {
+    if (!expandAll) return;
+    for (const c of collections) setSubtree(c, undefined, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expandAll]);
   /**
    * Expand or collapse everything inside a collection (its categories, folders and saved-item folders), or inside one
    * folder: the collection or folder itself opens or closes with it (a folder of requests only would otherwise not change).
@@ -515,7 +504,7 @@ export const CollectionTree = memo(function CollectionTree({
         open: () => onOpen(c, n),
         openNewTab: () => void openRef(ref, { newTab: true }),
         // Copy as ▸ the URL and the code forms (HTTP requests)
-        ...(n.kind === 'http' ? { copyAs: copyMenu(c, n) } : {}),
+        ...(n.kind === 'http' ? { copyAs: requestCopyItems(c, n) } : {}),
         monitor: () => useApp.getState().openIntent('monitors', { create: { collectionId: c.id, selection: [n.id] } }),
         testFile: () => void saveAsTest({ ref, name: n.name }),
         historyInGit: () => setHistoryFor({ c, n }),
@@ -624,6 +613,7 @@ export const CollectionTree = memo(function CollectionTree({
             onKeyDown={rowKeys(c, n)}
             data-tree-row
             data-rename-id={sid}
+            data-row-name={n.name}
             aria-expanded={isOpen}
             title="F2 renames · Delete deletes"
           >
@@ -738,6 +728,7 @@ export const CollectionTree = memo(function CollectionTree({
             title={i.name}
             data-tree-row
             data-rename-id={i.id}
+            data-row-name={i.name}
           >
             <TreeBadge label={i.badge ?? CATEGORY_META[g.cat].badge} className={CATEGORY_META[g.cat].cls} />
             <span className="truncate">{i.name}</span>
@@ -786,6 +777,7 @@ export const CollectionTree = memo(function CollectionTree({
             aria-expanded={isOpen}
             data-tree-row
             data-rename-id={c.id}
+            data-row-name={c.name}
             title={c.problem ? undefined : 'F2 renames · Delete deletes · * expands all'}
           >
             {isOpen ? OPEN_ICON : CLOSED_ICON}
@@ -997,6 +989,7 @@ const RequestRow = memo(function RequestRow({
           onKeyDown={(e) => x().rowKeys(c, n)(e)}
           data-tree-row
           data-rename-id={sid}
+          data-row-name={n.name}
           title="Enter opens · F2 renames · Delete deletes"
         >
           <TreeBadge label={method} className={n.kind === 'http' ? `method-${method}` : 'text-[#e535ab]'} />

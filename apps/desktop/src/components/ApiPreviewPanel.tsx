@@ -119,7 +119,7 @@ function Operation({ op }: { op: OutlineOperation }) {
 
 /** An API definition as its readers see it: the operations by tag, each with its parameters, body and responses, and Open as request. */
 /** Write the first test suite from the definition: a file per tag, each operation's example and one invalid request. */
-async function generateTests(spec: string) {
+export async function generateSpecTests(spec: string) {
   const ok = await confirmAction({
     title: 'Generate tests from this definition?',
     message: `A test file per tag under tests/, with each operation's example (its documented status, the OpenAPI contract, latency) and one invalid request that must get a 4xx, and a suite that runs them. Test files that exist are kept.`,
@@ -162,7 +162,7 @@ export function ApiPreviewPanel({ outline, error, spec }: { outline?: ApiOutline
               }
               width={300}
               items={[
-                { label: 'A test per operation (example + an invalid request)', icon: <FlaskConical size={14} />, onSelect: () => void generateTests(spec) },
+                { label: 'A test per operation (example + an invalid request)', icon: <FlaskConical size={14} />, onSelect: () => void generateSpecTests(spec) },
                 { label: 'Integration flows (create, read, update, list, delete)', icon: <Workflow size={14} />, onSelect: () => void generateFlows({ path: spec }, confirmAction) },
               ]}
             />
