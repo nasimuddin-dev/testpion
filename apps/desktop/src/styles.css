@@ -61,6 +61,17 @@
   --m-put: oklch(0.52 0.2 260);
   --m-patch: oklch(0.52 0.22 300);
   --m-delete: oklch(0.56 0.22 25);
+  /* item-kind colours (badges, tabs, icons): one token per kind, never a hex in a component */
+  --k-graphql: oklch(0.58 0.24 340);
+  --k-grpc: oklch(0.56 0.12 185);
+  --k-ws: oklch(0.6 0.16 60);
+  --k-soap: oklch(0.56 0.14 240);
+  --k-api: oklch(0.55 0.2 290);
+  --k-script: oklch(0.6 0.15 90);
+  --k-mcp: oklch(0.55 0.13 210);
+  --k-agent: oklch(0.55 0.17 320);
+  --k-ai: oklch(0.56 0.18 275);
+  --k-dataset: oklch(0.55 0.12 160);
 }
 
 [data-theme='dark'] {
@@ -103,6 +114,16 @@
   --m-put: oklch(0.75 0.13 250);
   --m-patch: oklch(0.76 0.14 300);
   --m-delete: oklch(0.72 0.17 22);
+  --k-graphql: oklch(0.78 0.2 340);
+  --k-grpc: oklch(0.8 0.12 185);
+  --k-ws: oklch(0.82 0.14 70);
+  --k-soap: oklch(0.78 0.12 240);
+  --k-api: oklch(0.78 0.15 290);
+  --k-script: oklch(0.82 0.14 95);
+  --k-mcp: oklch(0.8 0.11 210);
+  --k-agent: oklch(0.78 0.14 320);
+  --k-ai: oklch(0.78 0.14 275);
+  --k-dataset: oklch(0.8 0.11 160);
 }
 
 @theme inline {
@@ -421,6 +442,17 @@ input[type='range'] {
 .method-PATCH { color: var(--m-patch); }
 .method-DELETE { color: var(--m-delete); }
 .method-HEAD, .method-OPTIONS { color: var(--muted); }
+/* kind colours: the same class on a badge, a tab or an icon */
+.kind-graphql { color: var(--k-graphql); }
+.kind-grpc { color: var(--k-grpc); }
+.kind-ws { color: var(--k-ws); }
+.kind-soap { color: var(--k-soap); }
+.kind-api { color: var(--k-api); }
+.kind-script { color: var(--k-script); }
+.kind-mcp { color: var(--k-mcp); }
+.kind-agent { color: var(--k-agent); }
+.kind-ai { color: var(--k-ai); }
+.kind-dataset { color: var(--k-dataset); }
 /* compact coloured pill for methods in lists and tabs */
 .method-badge {
   display: inline-block;
