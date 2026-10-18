@@ -145,6 +145,7 @@ export const RPC_PARAMS: Record<string, ParamSpec> = {
   'http.send': { request: 'o', id: 's?', name: 's?', preRequestScript: 's?', testScript: 's?', assertions: 'a?' },
   'kafka.connect': { url: 's', reads: 'a?' },
   'lib.save': { kind: 's', library: 'o' },
+  'kinds.list': { kind: 's?', all: 'b?' },
   'load.start': { config: 'o', collection: 'o?' },
   'load.thresholds': { rules: 'sa', snapshot: 'o' },
   'mcp.deleteServer': { serverId: 's' },

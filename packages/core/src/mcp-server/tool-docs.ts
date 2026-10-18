@@ -460,6 +460,11 @@ export const TOOL_DOCS: Record<string, ToolDoc> = {
     example: { query: 'patients', limit: 20 },
     narrow: 'Use a more specific `query`, lower `limit`, or page with `cursor`.',
   },
+  list_kinds: {
+    when: 'Use it to learn what an item of a kind offers (rename, move, delete with undo, run, monitor, CI, export …) and how its ref looks, before acting on one.',
+    whenNot: 'To find items, use `search_workspace`; to check one ref, use `resolve_ref`.',
+    example: { kind: 'mcp-server' },
+  },
   resolve_ref: {
     when: 'Use it to check that a `ref` from another tool still exists, get its name and app link, or the nearest thing if gone.',
     whenNot: 'To find items by text, use `search_workspace`.',
