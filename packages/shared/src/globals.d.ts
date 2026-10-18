@@ -5,3 +5,7 @@ declare class TextDecoder {
   constructor(label?: string);
   decode(input?: Uint8Array): string;
 }
+declare function btoa(data: string): string;
+declare class TextEncoder {
+  encode(input?: string): Uint8Array;
+}

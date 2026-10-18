@@ -359,6 +359,7 @@ function startBackend(): void {
     examplesDir: app.isPackaged ? join(process.resourcesPath, 'examples', 'public-workspace') : join(__dirname, '..', '..', '..', 'examples', 'public-workspace'),
     openExternal: (url) => shell.openExternal(url),
     openPath: (p) => shell.openPath(p),
+    showItemInFolder: (p) => shell.showItemInFolder(p),
     // agents start this app with --mcp-server (from source: electron plus the app folder)
     mcpCommand: app.isPackaged ? { command: process.execPath, args: [] } : { command: process.execPath, args: [app.getAppPath()] },
     // the Terminal panel's shells (node-pty loads at the first terminal)

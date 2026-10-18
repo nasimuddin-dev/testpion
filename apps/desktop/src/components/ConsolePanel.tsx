@@ -7,7 +7,9 @@ import { formatBytes, formatMs } from '../lib/format';
 import { Badge, cx, IconButton, Input, Segmented, statusTone } from './ui';
 import { useEventLog } from '../lib/use-rpc';
 import { RelatedRefs } from './RefLink';
-import type { ItemRef } from '@testpion/shared';
+import { outputFileName, type ItemRef } from '@testpion/shared';
+import { OutputActions } from './output/OutputFrame';
+import type { OutputSpec } from './output/output-core';
 
 export interface ConsoleEntry {
   id: string;
@@ -63,6 +65,21 @@ export function ConsolePanel() {
     if (stick.current) bottom.current?.scrollIntoView({ block: 'end' });
   }, [shown.length]);
 
+  // the whole console buffer (the backend's, redacted by default), not only the filtered rows
+  const spec = useMemo<OutputSpec>(
+    () => ({
+      id: 'console',
+      what: 'console',
+      name: outputFileName({ name: 'console', ext: '' }),
+      formats: [
+        { format: 'text', source: { kind: 'console' }, default: true },
+        { format: 'jsonl', source: { kind: 'console' } },
+      ],
+      empty: entries.length ? undefined : 'The console is empty',
+    }),
+    [entries.length],
+  );
+
   const toggle = (key: string) =>
     setOpen((s) => {
       const n = new Set(s);
@@ -89,20 +106,22 @@ export function ConsolePanel() {
         <span className="text-muted">
           {shown.length} of {entries.length} · secrets are redacted
         </span>
-        <IconButton
-          label="Clear console"
-          className="ml-auto"
-          onClick={() => {
-            void call('console.clear').catch(toastError);
-            setEntries([]);
-            setOpen(new Set());
-          }}
-        >
-          <Trash2 size={13} />
-        </IconButton>
+        <OutputActions spec={spec}>
+          <IconButton
+            label="Clear console"
+            onClick={() => {
+              void call('console.clear').catch(toastError);
+              setEntries([]);
+              setOpen(new Set());
+            }}
+          >
+            <Trash2 size={13} />
+          </IconButton>
+        </OutputActions>
       </div>
       <div
         className="flex-1 overflow-auto text-[0.8rem]"
+        data-output="console"
         onScroll={(e) => {
           const el = e.currentTarget;
           stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24;

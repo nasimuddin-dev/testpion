@@ -39,7 +39,9 @@ import { ConsolePanel } from './ConsolePanel';
 import { refIcon } from './RefLink';
 import { openRef } from '../lib/open-ref';
 import { rankPalette } from '../lib/palette-rank';
-import { toItemRef } from '@testpion/shared';
+import { outputFileName, toItemRef } from '@testpion/shared';
+import { OutputActions } from './output/OutputFrame';
+import type { OutputSpec } from './output/output-core';
 // xterm and the terminals load with the Terminal tab, the first time it opens
 const TerminalPanel = lazy(() => import('./TerminalPanel'));
 import { WorkspaceMenu } from './WorkspaceMenu';
@@ -297,17 +299,33 @@ function AppLogs() {
   const [logs] = useEventLog<{ time: string; level: string; scope: string; message: string; data?: unknown }>('log', 500, 'logs.recent');
   const [level, setLevel] = useState('ALL');
   const shown = logs.filter((l) => level === 'ALL' || l.level === level);
+  // the application log the backend holds (redacted by default), whatever the level filter shows
+  const spec = useMemo<OutputSpec>(
+    () => ({
+      id: 'logs',
+      what: 'application log',
+      name: outputFileName({ name: 'application-log', ext: '' }),
+      formats: [
+        { format: 'text', source: { kind: 'logs' }, default: true },
+        { format: 'jsonl', source: { kind: 'logs' } },
+      ],
+      empty: logs.length ? undefined : 'The application log is empty',
+    }),
+    [logs.length],
+  );
   return (
     <>
       <div className="flex items-center gap-2 px-3 h-7 border-b border-line text-xs shrink-0">
         <span className="text-muted">Application logs · secrets are always redacted</span>
-        <select className="ml-auto bg-transparent" value={level} onChange={(e) => setLevel(e.target.value)} aria-label="Log level">
-          {['ALL', 'ERROR', 'WARN', 'INFO', 'DEBUG', 'TRACE'].map((l) => (
-            <option key={l}>{l}</option>
-          ))}
-        </select>
+        <OutputActions spec={spec}>
+          <select className="bg-transparent" value={level} onChange={(e) => setLevel(e.target.value)} aria-label="Log level">
+            {['ALL', 'ERROR', 'WARN', 'INFO', 'DEBUG', 'TRACE'].map((l) => (
+              <option key={l}>{l}</option>
+            ))}
+          </select>
+        </OutputActions>
       </div>
-      <div className="flex-1 overflow-auto mono text-[0.8rem] px-3 py-1">
+      <div className="flex-1 overflow-auto mono text-[0.8rem] px-3 py-1" data-output="logs">
         {shown.map((l, i) => (
           <div key={i} className="whitespace-pre-wrap">
             <span className="text-muted">{l.time.slice(11, 23)}</span> <span className={cx(l.level === 'ERROR' && 'text-bad', l.level === 'WARN' && 'text-warn')}>{l.level.padEnd(5)}</span> {l.message}

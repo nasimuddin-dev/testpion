@@ -7,6 +7,10 @@ import { Badge, Button, cx, Empty, Input, Split, VirtualList } from './ui';
 import { JsonTree, RawView } from './JsonView';
 import { prettyBody } from '../lib/pretty';
 import { plural } from '../lib/format';
+import { outputFileName } from '@testpion/shared';
+import { OutputHeader } from './output/OutputFrame';
+import { sseFormats } from './output/response-specs';
+import type { OutputSpec } from './output/output-core';
 
 const ROW = 30;
 
@@ -14,7 +18,7 @@ const ROW = 30;
  * Server-Sent Events, one row per event (time, type, id, data), like Postman's event stream view.
  * Live while the stream is open (with Stop); a selected event shows its data in full (JSON as a tree).
  */
-export function SseEvents({ events, live, onStop, stopped, dropped, stateKey }: { events: SseEvent[]; live?: boolean; onStop?(): void; stopped?: boolean; dropped?: number; /** Keeps the selected event when the live list gives way to the finished response (the request tab's id). */ stateKey?: string }) {
+export function SseEvents({ events, live, onStop, stopped, dropped, stateKey, outputName }: { events: SseEvent[]; live?: boolean; onStop?(): void; stopped?: boolean; dropped?: number; /** Keeps the selected event when the live list gives way to the finished response (the request tab's id). */ stateKey?: string; /** The download's file name without extension (default: events-<time>). */ outputName?: string }) {
   const [filter, setFilter] = useState('');
   const own = useId();
   const [selected, setSelected] = useSticky<number | undefined>(`sse.selected.${stateKey ?? own}`, undefined);
@@ -33,29 +37,43 @@ export function SseEvents({ events, live, onStop, stopped, dropped, stateKey }: 
       return undefined;
     }
   }, [sel]);
+  // the down arrow: every event received (not only the filtered ones)
+  const spec = useMemo<OutputSpec>(
+    () => ({ id: 'response.events', what: 'server-sent events', name: outputName ?? outputFileName({ name: 'events', ext: '' }), empty: events.length ? undefined : 'No events yet', formats: sseFormats(events) }),
+    [events, outputName],
+  );
 
   return (
-    <div className="h-full flex flex-col min-h-0">
-      <div className="flex items-center gap-2 px-3 h-9 border-b border-line shrink-0 text-sm">
-        {live ? (
-          <span className="flex items-center gap-1.5 text-accent">
-            <Radio size={14} className="animate-pulse" /> Receiving events
-          </span>
-        ) : (
-          <span className="text-muted">Event stream</span>
-        )}
-        <Badge tone="accent">{plural(events.length, 'event')}</Badge>
-        <ArrivalSpark times={events.map((e) => e.atMs)} />
-        {types > 1 && <span className="text-xs text-muted">{types} types</span>}
-        {stopped && <Badge tone="warn" title="You stopped the stream; these are the events received until then.">stopped</Badge>}
-        {!!dropped && <Badge tone="warn" title="Only the first 10,000 events are kept.">{dropped} not kept</Badge>}
-        <Input className="ml-auto h-7 w-48 text-xs" placeholder="Filter type, id or data" value={filter} onChange={(e) => setFilter(e.target.value)} aria-label="Filter events" />
-        {live && onStop && (
-          <Button size="sm" variant="danger" icon={<Square size={11} />} onClick={onStop}>
-            Stop
-          </Button>
-        )}
-      </div>
+    <div className="h-full flex flex-col min-h-0" data-output="response.events">
+      <OutputHeader
+        spec={spec}
+        left={
+          <>
+            {live ? (
+              <span className="flex items-center gap-1.5 text-accent">
+                <Radio size={14} className="animate-pulse" /> Receiving events
+              </span>
+            ) : (
+              <span className="text-muted">Event stream</span>
+            )}
+            <Badge tone="accent">{plural(events.length, 'event')}</Badge>
+            <ArrivalSpark times={events.map((e) => e.atMs)} />
+            {types > 1 && <span className="text-xs text-muted">{types} types</span>}
+            {stopped && <Badge tone="warn" title="You stopped the stream; these are the events received until then.">stopped</Badge>}
+            {!!dropped && <Badge tone="warn" title="Only the first 10,000 events are kept.">{dropped} not kept</Badge>}
+          </>
+        }
+        actions={
+          <>
+            <Input className="field-sm h-7 w-48 text-xs" placeholder="Filter type, id or data" value={filter} onChange={(e) => setFilter(e.target.value)} aria-label="Filter events" />
+            {live && onStop && (
+              <Button size="sm" variant="danger" icon={<Square size={11} />} onClick={onStop}>
+                Stop
+              </Button>
+            )}
+          </>
+        }
+      />
       {!events.length ? (
         <Empty icon={<Radio size={26} />} title={live ? 'Connected, waiting for the first event' : 'No events'}>
           {live ? 'Events appear here as the server sends them.' : 'The stream closed without a complete event.'}

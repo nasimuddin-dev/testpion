@@ -31,6 +31,7 @@ import { FlowDesigner, type DesignerFlow, type FlowEditAnswer, type FlowRunReque
 import { stepLine, type FlowStep } from '@testpion/shared';
 import { EnvironmentsPane } from '../components/SidebarPanes';
 import { finishSave, type SaveResult } from '../lib/files';
+import { saveRunReport } from '../components/output/run-specs';
 import { dataLanguageOf } from '../data-languages';
 import { Badge, Button, Empty, IconButton, Input, SectionTitle, Spinner, Split, VirtualList } from '../components/ui';
 import { DocTabStrip } from '../components/DocTabStrip';
@@ -474,7 +475,7 @@ export function TestsView() {
     if (p?.runCurrent && file) void run([file], file);
     if (p?.exportLatest) {
       const latest = runs[0];
-      if (latest) void call<SaveResult>('runs.exportReport', { runId: latest.id, format: 'html' }).then((r) => finishSave(r, 'Report'));
+      if (latest) void saveRunReport({ id: latest.id, name: latest.name });
       else useApp.getState().toast('No runs to export yet');
     }
   });

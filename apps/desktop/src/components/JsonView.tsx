@@ -1,9 +1,10 @@
 import { detectLanguage, highlight as syntaxTokens, type CodeLanguage } from '../lib/highlight';
-import { Camera, ChevronDown, ChevronRight, ChevronUp, CircleCheck, Copy, Equal, ListChecks, ListOrdered, Search, Shapes, Variable, WrapText } from 'lucide-react';
+import { Camera, ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, ChevronUp, CircleCheck, Copy, Equal, ListChecks, ListOrdered, Search, Shapes, Variable, WrapText } from 'lucide-react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { JSONPath } from 'jsonpath-plus';
 import { cx, IconButton, Input, Menu, useDebounced, VirtualList, type MenuItem } from './ui';
 import { SuggestInput } from './SuggestInput';
+import { OutputToolbar } from './output/OutputToolbar';
 import { jsonPathProblem, jsonPaths, rootedJsonPath, suggestJsonPaths } from '../lib/json-paths';
 import { copyText } from '../lib/clipboard';
 import { plural } from '../lib/format';
@@ -151,7 +152,7 @@ export function JsonTree({ data: full, query, onAssert: assertOnFull, onSaveVari
           .forEach(([k, x]) =>
             walk(x, k, childPath(path, v, k), depth + 1, `${access}${Array.isArray(v) ? `[${k}]` : /^[A-Za-z_$][\w$]*$/.test(k) ? `.${k}` : `[${JSON.stringify(k)}]`}`, embedded),
           );
-        if (entries.length > limit) out.push({ depth: depth + 1, path: `${path}#more`, value: `… ${entries.length - limit} more items (use Raw view / Save response)`, expandable: false });
+        if (entries.length > limit) out.push({ depth: depth + 1, path: `${path}#more`, value: `… ${entries.length - limit} more items (use the Raw view, or Download the body)`, expandable: false });
         out.push({ depth, path: `${path}#close`, value: undefined, expandable: false, closing: Array.isArray(v) ? ']' : '}' });
       }
     };
@@ -180,18 +181,23 @@ export function JsonTree({ data: full, query, onAssert: assertOnFull, onSaveVari
   };
 
   return (
-    <div className="h-full flex flex-col min-h-0">
+    <div className="h-full flex flex-col min-h-0 overflow-x-clip">
       {/* wraps in a narrow column (the JWT tab's Header): the filter goes under the buttons instead of over its neighbour */}
-      <div className="@container flex flex-wrap items-center gap-x-2 gap-y-1 px-2 py-1 text-xs text-muted shrink-0 whitespace-nowrap">
-        <button className="hover:text-fg" onClick={expandAll}>
-          Expand all
-        </button>
-        <button className="hover:text-fg" onClick={() => setExpanded(new Set(['$']))}>
-          Collapse all
-        </button>
-        <span className="flex flex-1 min-w-24 max-w-72 ml-2">
+      <OutputToolbar
+        tools={
+          <>
+            <IconButton label="Expand all" className="h-6 w-6" onClick={expandAll} data-json-expand-all>
+              <ChevronsUpDown size={13} />
+            </IconButton>
+            <IconButton label="Collapse all" className="h-6 w-6" onClick={() => setExpanded(new Set(['$']))} data-json-collapse-all>
+              <ChevronsDownUp size={13} />
+            </IconButton>
+          </>
+        }
+        filter={
           <SuggestInput
-            className="h-6 text-xs mono"
+            className="field-sm text-xs mono"
+            listClassName="max-w-[min(32rem,100%)]!"
             placeholder="Filter with JSONPath, e.g. $.items[*].name"
             aria-label="Filter with JSONPath"
             value={filter}
@@ -200,22 +206,20 @@ export function JsonTree({ data: full, query, onAssert: assertOnFull, onSaveVari
             suggest={(v) => suggestJsonPaths(paths, v)}
             onKeyDown={(e) => e.key === 'Escape' && filter && (e.preventDefault(), setFilter(''))}
           />
-        </span>
-        {filtered && (
-          <span data-filter-count className={filtered.error ? 'text-bad' : ''} title={filtered.error}>
-            {filtered.error ? `Not a valid JSONPath: ${filtered.error}` : `${(filtered.data ?? []).length} match${(filtered.data ?? []).length === 1 ? '' : 'es'}`}
-          </span>
-        )}
-        <span className="ml-auto hidden @2xl:inline truncate">
-          {filtered
+        }
+        status={filtered && (filtered.error ? `Not a valid JSONPath: ${filtered.error}` : `${(filtered.data ?? []).length} match${(filtered.data ?? []).length === 1 ? '' : 'es'}`)}
+        statusTitle={filtered?.error}
+        statusTone={filtered?.error ? 'bad' : undefined}
+        hint={
+          filtered
             ? 'Showing the matches as a list'
             : onAssert
               ? onSaveVariable
                 ? 'Click a key to copy its JSONPath, save it to a variable or check it'
                 : 'Click a key to copy its JSONPath or turn it into an assertion'
-              : 'Click a key to copy its JSONPath'}
-        </span>
-      </div>
+              : 'Click a key to copy its JSONPath'
+        }
+      />
       <VirtualList
         className="flex-1 mono text-[0.9em]"
         items={rows}

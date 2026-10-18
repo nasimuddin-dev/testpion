@@ -150,6 +150,7 @@ import { terminalHandlers, createTerminals, type TerminalHost, type TerminalMana
 import { flowDeployHandlers, stopFlowWebhooks } from './handlers/flow-deploy.js';
 import { flowScaleHandlers, cancelScaleRuns } from './handlers/flow-scale.js';
 import { evalMatrixHandlers } from './handlers/eval-matrix.js';
+import { outputHandlers } from './handlers/output.js';
 import { kindHandlers } from './handlers/kinds.js';
 import { checkRpcParams, guardHandler } from './rpc-params.js';
 import { forgetProductionSessions, guardProduction } from './production-guard.js';
@@ -174,6 +175,8 @@ export interface BackendHost {
   saveDialog?(opts: { defaultPath?: string; filters?: Array<{ name: string; extensions: string[] }> }): Promise<string | undefined>;
   openDialog?(opts: { directory?: boolean; filters?: Array<{ name: string; extensions: string[] }> }): Promise<string | undefined>;
   openPath?(path: string): void | Promise<unknown>;
+  /** Show a saved file in the system's file manager (desktop only). */
+  showItemInFolder?(path: string): void;
   /** The examples workspace shipped with the app (copied into the data folder on first launch). */
   examplesDir?: string;
   /** Don't run monitors on their schedule (tests, one-off tools). */
@@ -520,18 +523,19 @@ export class Backend {
   async saveOrDownload(
     name: string,
     filters: Array<{ name: string; extensions: string[] }> | undefined,
-    write: (dest: string) => void,
-    read: () => Buffer,
+    write: (dest: string) => void | Promise<void>,
+    read: () => Buffer | Promise<Buffer>,
+    opts: { defaultPath?: string; type?: string } = {},
   ): Promise<{ path?: string; download?: { name: string; content: string; encoding: 'base64'; type: string } }> {
     if (this.host.saveDialog) {
-      const dest = await this.host.saveDialog({ defaultPath: name, filters });
+      const dest = await this.host.saveDialog({ defaultPath: opts.defaultPath ?? name, filters });
       if (!dest) return {};
-      write(dest);
+      await write(dest);
       return { path: dest };
     }
-    const data = read();
-    if (data.length > 100 * 1024 * 1024) throw new ApsError('ValidationError', 'The file is larger than 100 MB and can only be saved from the desktop app');
-    return { download: { name, content: data.toString('base64'), encoding: 'base64', type: 'application/octet-stream' } };
+    const data = await read();
+    if (data.length > 100 * 1024 * 1024) throw new ApsError('ValidationError', 'The file is larger than 100 MB and can only be saved from the desktop app', { suggestions: ['Use the desktop app, or the CLI (testpion … -o <file>), for files this big.'] });
+    return { download: { name, content: data.toString('base64'), encoding: 'base64', type: opts.type ?? 'application/octet-stream' } };
   }
 
   /** A visualization page (for the host's isolated origin), or undefined. */
@@ -649,7 +653,7 @@ export class Backend {
    */
   private buildHandlers(): Handlers {
     const all: Handlers = {};
-    for (const group of [appHandlers, workspaceHandlers, collectionsHandlers, requestsHandlers, grpcHandlers, mcpHandlers, aiHandlers, aiTaskHandlers, aiTriageHandlers, testingHandlers, monitorHandlers, agentHandlers, feedbackHandlers, gitHandlers, debuggerHandlers, debuggerRulesHandlers, externalSecretsHandlers, fuzzHandlers, flowDebugHandlers, debuggerFlowHandlers, debuggerReverseHandlers, flowDeployHandlers, terminalHandlers, flowScaleHandlers, evalMatrixHandlers, kindHandlers]) {
+    for (const group of [appHandlers, workspaceHandlers, collectionsHandlers, requestsHandlers, grpcHandlers, mcpHandlers, aiHandlers, aiTaskHandlers, aiTriageHandlers, testingHandlers, monitorHandlers, agentHandlers, feedbackHandlers, gitHandlers, debuggerHandlers, debuggerRulesHandlers, externalSecretsHandlers, fuzzHandlers, flowDebugHandlers, debuggerFlowHandlers, debuggerReverseHandlers, flowDeployHandlers, terminalHandlers, flowScaleHandlers, evalMatrixHandlers, outputHandlers, kindHandlers]) {
       for (const [name, fn] of Object.entries(group(this))) {
         if (name in all) throw new Error(`RPC method ${name} is defined twice`);
         // the parameters are checked first; a TypeError from inside becomes an InternalError naming the method

@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+### Save and export every output
+- **One down arrow on every response and result** at the right end of its bar. It covers:
+  - every tab of the REST/SOAP response: body (raw, pretty, table, HTML, XML, HAR), headers, cookies, JWT, timeline, checks, stream, trace, history and cURL
+  - GraphQL responses and subscriptions
+  - the gRPC response, metadata and trailers
+  - WebSocket, Socket.IO, MQTT and Kafka message logs, and server-sent events
+  - MCP tool results and generated code
+  - run results (HTML, JSON, JUnit, Markdown, CSV, ZIP), which replace the old **Export ▾**
+  - the flow run timeline, data-run and matrix grids, load results and the evaluation matrix
+  - the console, application log, terminal, Problems and the HTTP Debugger session
+- **How it works:**
+  - **Click** saves the default format (or the one you chose last), **▾** chooses another, and **Copy** sits beside it.
+  - Files are saved through the OS **Save as** dialog, in the folder you last used for that kind of output, then a message offers **Show in folder** and **Open**. The browser version downloads them.
+  - <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> (rebindable), the palette's **Download Output…** and **File ▸ Download Output…** work too. ([Save and export results](/getting-started/save-and-export-results))
+- **Secrets:** logs and reports are saved redacted by default, with a **Redacted** mark and a confirmed **Include secrets…**. Response bodies are saved as they are, with a notice when one looks like it holds a credential or comes from a production environment.
+- **Big outputs:** big bodies and long result lists are streamed from disk into the file, never through the window. Saves show progress with **Cancel** and never leave a half-written file.
+- **Safe files:** CSV files guard against spreadsheet formula injection, and file names are safe on every OS (Windows reserved names included).
+
+### Fixes
+- **HTTP Debugger:** **Export as HAR** saves through the Save as dialog again. It called a backend method that did not exist, so it always fell back to a browser download.
+- **JSON tree toolbar:** **Expand all** is no longer cut off, and the JSONPath filter is no longer squeezed against the hint. Expand and collapse are now icon buttons, and the hint moved behind an ⓘ.
+
 One registry, one menu: every kind of item a workspace holds is declared once (what it is called, where it is stored and opens, what it can do), and every tree and list row's menu is built from it by one function. ([What's new in 0.52](/getting-started/whats-new#whats-new-in-0-52))
 
 ### Behaviour changes: what works differently (read before upgrading)

@@ -32,6 +32,9 @@ import { ResponseSplit } from '../components/ResponseSplit';
 import { saveAsTestFile, saveAsTestMenuItem } from '../lib/save-test';
 import { currentCollectionTree, refreshCollections, useCollectionTree } from '../lib/collections-store';
 import { useExternalChange } from '../lib/external-change';
+import { extensionForMime, jsonLines, jsonMin, jsonPretty, objectsToCsv, outputFileName } from '@testpion/shared';
+import { OutputActions, OutputHeader } from '../components/output/OutputFrame';
+import type { OutputFormatSpec, OutputSpec } from '../components/output/output-core';
 
 interface SchemaType {
   name: string;
@@ -206,6 +209,39 @@ export function GraphQLView() {
   };
 
   const selectedOp = operations.find((o) => o.name === d.operationName) ?? operations[0];
+
+  // the down arrow of the response (JSON, minified, the raw body, the table) and of a subscription's events
+  const outputName = (part: string | undefined, status?: number) => outputFileName({ name: ['graphql', selectedOp?.name || d.name || 'operation', part].filter(Boolean).join('-'), status, ext: '' });
+  const responseSpec = useMemo<OutputSpec | undefined>(() => {
+    const r = result?.response;
+    if (!r) return undefined;
+    const spooled = r.payloadPath ? { kind: 'response' as const, payloadPath: r.payloadPath } : undefined;
+    const fromSpool = !!spooled && (r.truncated || r.json === undefined);
+    const table = tableRowsOf(r.json);
+    const formats: OutputFormatSpec[] = [];
+    if (r.json !== undefined || (spooled && /json/i.test(r.contentType)))
+      formats.push(
+        { key: 'json', format: 'json', label: 'JSON (pretty)', default: resTab === 'response', ...(fromSpool ? { source: { ...spooled!, part: 'pretty' as const } } : { build: () => jsonPretty(r.json) }) },
+        { key: 'json-min', format: 'json-min', ...(fromSpool ? { source: { ...spooled!, part: 'pretty' as const } } : { build: () => jsonMin(r.json) }) },
+      );
+    formats.push({ key: 'raw', format: 'raw', label: 'Raw body (as received)', default: resTab === 'raw', fileName: `${outputName(undefined, r.status)}.${extensionForMime(r.contentType)}`, ...(spooled ? { source: { ...spooled, part: 'body' as const } } : { build: () => r.bodyPreview }) });
+    if (table) formats.push({ key: 'csv', format: 'csv', label: 'Table as CSV', default: resTab === 'table', build: () => objectsToCsv(table.rows) });
+    return { id: 'graphql.response', what: 'GraphQL response', name: outputName(undefined, r.status), environment: env, formats, empty: r.bodyPreview || r.payloadPath ? undefined : 'The response is empty' };
+  }, [result, resTab, env, selectedOp?.name, d.name]); // eslint-disable-line react-hooks/exhaustive-deps
+  const eventsSpec = useMemo<OutputSpec>(
+    () => ({
+      id: 'graphql.events',
+      what: 'subscription events',
+      name: outputName('events'),
+      environment: env,
+      empty: events?.length ? undefined : 'No events yet',
+      formats: [
+        { format: 'jsonl', build: () => jsonLines(events ?? []) },
+        { format: 'json', build: () => jsonPretty(events ?? []) },
+      ],
+    }),
+    [events, env, selectedOp?.name, d.name], // eslint-disable-line react-hooks/exhaustive-deps
+  );
 
   // Code snippets: a GraphQL call is a JSON POST ({{variables}} are resolved by the snippet generator)
   const [showCode, setShowCode] = useState(false);
@@ -511,11 +547,17 @@ export function GraphQLView() {
             <div className="h-full flex flex-col min-h-0">
               {events && !result?.error ? (
                 <div className="h-full flex flex-col min-h-0">
-                  <div className="flex items-center gap-2 px-3 h-9 border-b border-line text-sm shrink-0">
-                    <Badge tone={subscription ? 'ok' : 'default'}>{subscription ? 'subscribed' : 'ended'}</Badge>
-                    {subscription?.protocol && <span className="text-xs text-muted mono">{subscription.protocol}</span>}
-                    <span className="text-muted ml-auto">{events.filter((e) => e.type === 'next').length} events</span>
-                  </div>
+                  <OutputHeader
+                    spec={eventsSpec}
+                    left={
+                      <>
+                        <Badge tone={subscription ? 'ok' : 'default'}>{subscription ? 'subscribed' : 'ended'}</Badge>
+                        {subscription?.protocol && <span className="text-xs text-muted mono">{subscription.protocol}</span>}
+                        <span className="text-muted">{events.filter((e) => e.type === 'next').length} events</span>
+                      </>
+                    }
+                  />
+                  <div className="flex-1 min-h-0" data-output="graphql.events">
                   <Split id="gql-sub-events" direction="vertical" initial={45}>
                     <div className="h-full overflow-auto">
                       {events.map((e, i) => (
@@ -528,6 +570,7 @@ export function GraphQLView() {
                     </div>
                     <div className="h-full overflow-auto">{eventSel !== undefined && events[eventSel]?.data !== undefined ? <JsonTree data={events[eventSel]!.data} /> : <Empty title="Select an event" />}</div>
                   </Split>
+                  </div>
                 </div>
               ) : result?.error ? (
                 <ErrorPanel error={result.error} context={{ endpoint: d.endpoint, query: d.query }} />
@@ -547,8 +590,9 @@ export function GraphQLView() {
                       { id: 'raw', label: 'Raw' },
                       { id: 'tests', label: 'Tests', badge: result.checks?.length },
                     ]}
+                    right={responseSpec && <OutputActions spec={responseSpec} />}
                   />
-                  <div className="flex-1 min-h-0">
+                  <div className="flex-1 min-h-0" data-output="graphql.response">
                     {resTab === 'response' && (result.response.json !== undefined ? <JsonTree data={result.response.json} onAssert={(a) => (set({ assertions: [...d.assertions, a as never] }), useApp.getState().toast(`Added a check on ${a.path} (Tests tab)`, 'success'))} onSaveVariable={(v) => void saveResponseVariable(v, env, d.testScript).then((testScript) => testScript !== undefined && set({ testScript }))} /> : <RawView text={result.response.bodyPreview} />)}
                     {resTab === 'raw' && <RawView text={result.response.bodyPreview} />}
                     {resTab === 'table' && (() => {

@@ -9,6 +9,7 @@ import { comboOf, commandFor, isTextCombo } from './shortcuts';
 import { focusTerminal, newTerminal } from './terminal';
 import { getRail, goToRail } from './use-rail';
 import { hasUndo, undoLatest } from './undo';
+import { downloadFocusedOutput } from '../components/output/output-core';
 
 /** What each app-wide command does (lib/shortcuts.ts names them); `false`: nothing to do here, the key goes on. */
 const RUN: Record<string, () => void | false> = {
@@ -21,6 +22,8 @@ const RUN: Record<string, () => void | false> = {
   'rerun-last': () => void runAgain('last'),
   // WF-10: whichever strip it was in
   'reopen-tab': () => void reopenClosedTab(),
+  // the down arrow of the output nearest to the focus (a response, a run, the console)
+  'download-output': () => downloadFocusedOutput(),
   back: () => useApp.getState().goBack(),
   forward: () => useApp.getState().goForward(),
   'toggle-explorer': () => {

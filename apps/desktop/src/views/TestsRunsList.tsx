@@ -1,7 +1,5 @@
 import { useState } from 'react';
 import { BarChart3 } from 'lucide-react';
-import { call } from '../api';
-import { toastError } from '../store';
 import { cx, Input } from '../components/ui';
 import { NodeMenu } from '../components/TreeParts';
 import { RunMiniBar, type RunRow } from '../components/RunsOverview';
@@ -9,7 +7,7 @@ import { EnvBadge } from '../components/EnvSelect';
 import { TYPE_ICON } from '../components/ProblemList';
 import { startAiAnalysis } from '../components/ai/ai-analysis';
 import { copyText } from '../lib/clipboard';
-import { finishSave, type SaveResult } from '../lib/files';
+import { saveRunReport } from '../components/output/run-specs';
 import { timeAgo } from '../lib/format';
 import { copyRunCommand, runInCi } from '../lib/run-ci';
 
@@ -84,7 +82,7 @@ export function RunList({ runs, active, onSelect, onOverview, onRerunFailed }: {
                   on: {
                     open: () => onSelect(r.id),
                     ...(onRerunFailed ? { rerunFailed: () => onRerunFailed(r.id) } : {}),
-                    exportReport: () => void call<SaveResult>('runs.exportReport', { runId: r.id, format: 'html' }).then((x) => finishSave(x, 'Report'), toastError),
+                    exportReport: () => void saveRunReport({ id: r.id, name: r.name }),
                     copyCli: () => void copyRunCommand(r.id),
                     copyRunId: () => void copyText(r.id, 'Run id'),
                     ci: () => void runInCi(r.id),

@@ -9,6 +9,9 @@ import type { TestResult } from '../types';
 import type { RunRow } from './RunsOverview';
 import { ResultDetail } from './RunPanel';
 import { Badge, Button, cx, Empty, Input, Segmented, Select, Split, VirtualList } from './ui';
+import { outputFileName } from '@testpion/shared';
+import { OutputActions } from './output/OutputFrame';
+import type { OutputSpec } from './output/output-core';
 
 type Filter = NonNullable<EvalMatrixQuery['filter']>;
 type Sort = NonNullable<EvalMatrixQuery['sort']>;
@@ -245,6 +248,22 @@ export function EvalMatrix({ runs: all }: { runs: RunRow[] }) {
   // other runs make other rows: an open case belongs to the matrix it was opened in
   const columnsKey = `${columns.join(',')}|${base}`;
   useEffect(() => setSel(undefined), [columnsKey]);
+  // the down arrow: every case of the matrix as it is filtered and sorted now, paged by the backend (never in the window)
+  const spec = useMemo<OutputSpec>(() => {
+    const source = { kind: 'grid' as const, grid: 'eval-matrix' as const, params };
+    return {
+      id: 'eval.matrix',
+      what: 'evaluation matrix',
+      name: outputFileName({ name: `eval-matrix${filter === 'all' ? '' : `-${filter}`}`, ext: '' }),
+      formats: [
+        { format: 'csv', source },
+        { format: 'json', source },
+        { format: 'md', source },
+        { format: 'html', source },
+      ],
+      empty: !params.runs.length ? 'No finished evaluation runs yet' : total ? undefined : 'No cases match',
+    };
+  }, [params, filter, total]);
   const sortBy = (k: number) => setSort((s) => (s.by === 'score' && s.column === k ? { ...s, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { by: 'score', column: k, dir: 'asc' }));
 
   if (!runs.length)
@@ -255,7 +274,7 @@ export function EvalMatrix({ runs: all }: { runs: RunRow[] }) {
     );
 
   const table = (
-    <div className="h-full flex flex-col min-h-0" data-eval-matrix data-cases={meta?.cases ?? ''} data-total={total} data-baseline={meta?.baseline?.[0]?.runId ?? ''} data-filter={filter}>
+    <div className="h-full flex flex-col min-h-0" data-eval-matrix data-cases={meta?.cases ?? ''} data-total={total} data-baseline={meta?.baseline?.[0]?.runId ?? ''} data-filter={filter} data-output="eval.matrix">
       {/* the variants and the baseline */}
       <div className="flex flex-wrap items-center gap-1.5 px-2 py-1.5 border-b border-line text-xs">
         <span className="text-muted mr-1">Variants</span>
@@ -368,7 +387,9 @@ export function EvalMatrix({ runs: all }: { runs: RunRow[] }) {
           <option value="failures:asc">Most failures first</option>
           {sort.column !== undefined && <option value="column">By {cols[sort.column]?.label ?? 'a column'}</option>}
         </Select>
-        <span className="ml-auto text-xs text-muted tabular-nums">{meta ? `${plural(total, 'case')}${total !== meta.cases ? ` of ${meta.cases}` : ''}` : 'Loading…'}</span>
+        <OutputActions spec={spec}>
+          <span className="text-xs text-muted tabular-nums">{meta ? `${plural(total, 'case')}${total !== meta.cases ? ` of ${meta.cases}` : ''}` : 'Loading…'}</span>
+        </OutputActions>
       </div>
       {error && <div className="px-3 py-1.5 text-xs text-bad border-b border-line">{error}</div>}
       <div className="flex-1 min-h-0 overflow-x-auto">

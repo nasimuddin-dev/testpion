@@ -629,7 +629,7 @@ export function RestView() {
               <ErrorPanel error={result.error} context={{ request: { method: tab.request.method, url: tab.request.url } }} />
             </div>
           ) : result?.response ? (
-            <ResponseViewer eventsKey={tab.id} response={result.response} checks={result.checks} traceId={result.traceId} curl={result.curl} stream={result.stream} scriptLogs={result.scriptLogs} visualizer={result.visualizer} requestId={tab.requestId} historyId={result.historyId} onSuggestAssertions={suggest} onAddAssertion={addAssertion} onUpdateSnapshot={updateSnapshot} onSaveVariable={(v) => void saveVariable(v)} onSaveExample={() => void saveExample()} onGenerateTests={generateTests && (() => void generateTests())} onExplain={explain} />
+            <ResponseViewer eventsKey={tab.id} method={tab.request.method} environment={env} response={result.response} checks={result.checks} traceId={result.traceId} curl={result.curl} stream={result.stream} scriptLogs={result.scriptLogs} visualizer={result.visualizer} requestId={tab.requestId} historyId={result.historyId} onSuggestAssertions={suggest} onAddAssertion={addAssertion} onUpdateSnapshot={updateSnapshot} onSaveVariable={(v) => void saveVariable(v)} onSaveExample={() => void saveExample()} onGenerateTests={generateTests && (() => void generateTests())} onExplain={explain} />
           ) : (
             <Empty icon={<Send size={28} />} title="Send a request to see the response">
               Press <b>Ctrl+Enter</b> to send. Variables like <span className="var-token mono">{'{{baseUrl}}'}</span> resolve from the active environment.

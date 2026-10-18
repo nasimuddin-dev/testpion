@@ -351,6 +351,15 @@ textarea,
   box-shadow: var(--elev-sm);
   transition: border-color 0.15s, box-shadow 0.15s, background-color 0.15s;
 }
+/* a small field for toolbars (the JSON filter, log filters): its own height instead of fighting min-height with h-6 */
+.field.field-sm {
+  min-height: var(--control-h-sm, 24px);
+  height: var(--control-h-sm, 24px);
+  padding: 0 calc(var(--control-px) - 2px);
+}
+:root[data-density='compact'] .field.field-sm {
+  --control-h-sm: 22px;
+}
 .field:hover:not(:disabled):not(:focus) {
   border-color: color-mix(in srgb, var(--muted) 45%, var(--line-strong));
 }
