@@ -49,6 +49,19 @@ const steps = [
      await filter('');
      return titles();`,
   ),
+  // the strip's count button is the same overflow control as every tab strip's: it lists every open tab, the active one ticked
+  step(
+    'all-open-tabs-menu',
+    `const more = [...document.querySelectorAll('[data-tab-overflow][aria-label="All open tabs"]')].find((b) => b.offsetParent); if (!more) return 'NO BUTTON';
+     const active = tabs().find((t) => t.getAttribute('aria-selected') === 'true')?.textContent.trim();
+     more.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, pointerType: 'mouse' }));
+     await __t.waitFor(() => document.querySelector('[role=menuitem]'), 2000); await __t.sleep(200);
+     const items = [...document.querySelectorAll('[role=menuitem]')];
+     const ticked = items.filter((m) => m.querySelector('svg.lucide-check')).map((m) => m.textContent.trim());
+     const first = items[0]; const firstLabel = first.textContent.trim(); first.click(); await __t.sleep(800);
+     const now = tabs().find((t) => t.getAttribute('aria-selected') === 'true')?.textContent.trim();
+     return 'count: ' + more.textContent.trim() + ' of ' + tabs().length + ' | items: ' + items.length + ' | ticked: ' + ticked.join(',') + ' | active was: ' + active + ' | picked: ' + firstLabel + ' | active now: ' + now;`,
+  ),
   step('close-all-from-websocket-again', `return await closeAllFrom('Postman echo');`),
   step('reopen-websocket-only', `await __t.requests(); await filter('Postman echo'); await openRow('Postman echo'); await filter(''); return titles();`),
 ];
@@ -61,6 +74,15 @@ module.exports = withExpect(steps, {
   'open-new-connected-websocket': /Custom headers.*WSNew WebSocket request \| connected: true$/,
   'close-all-from-connected-websocket': /^tabs left: 0$/,
   'open-every-kind': /Custom headers.*Country by code.*Add two numbers.*Postman echo.*Weather.*petstore/,
+  'all-open-tabs-menu': (r) => {
+    const m = /^count: (\d+) of (\d+) \| items: (\d+) \| ticked: (.*) \| active was: (.*) \| picked: (.*) \| active now: (.*)$/.exec(r);
+    if (!m) return 'no count button or menu: ' + r;
+    const [, count, open, items, ticked, was, picked, now] = m;
+    if (count !== open || items !== open) return 'the menu does not list every open tab: ' + r;
+    // a tab's text is its badge (GET, GQL …) then its title; the ticked row is the title alone, the other rows badge then title
+    if (ticked.includes(',') || !ticked || !was.includes(ticked)) return 'the active tab is not the one ticked: ' + r;
+    return now && now.includes(picked) ? true : 'picking a row did not select its tab: ' + r;
+  },
   'close-all-from-websocket-again': /^tabs left: 0$/,
   // a closed tab doesn't come back with the next one
   'reopen-websocket-only': /^WSPostman echo \(JSON\)$/,

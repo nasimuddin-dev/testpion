@@ -614,14 +614,25 @@ export { iconForLabel };
 function DialogView({ d }: { d: DialogRequest }) {
   const [value, setValue] = useState(d.input?.value ?? '');
   const primary = d.buttons.find((b) => b.variant === 'primary' || b.variant === 'danger');
-  const tone = DIALOG_TONES[d.tone ?? (d.input ? 'question' : d.buttons.length > 1 ? 'question' : 'info')];
+  const toneId = d.tone ?? (d.input ? 'question' : d.buttons.length > 1 ? 'question' : 'info');
+  const tone = DIALOG_TONES[toneId];
+  // Enter answers the primary button of a question; a danger dialog (Delete for good, a branch deleted) starts on
+  // Cancel, so a key pressed a moment too early never destroys anything. The text field of an input dialog has the focus.
+  const focused = d.input ? undefined : toneId === 'danger' ? (d.buttons.find((b) => b.id === d.cancelId) ?? primary) : primary;
+  // the dialog's focus trap moves the focus to its first control (the ✕) once mounted, over `autoFocus`, so say it again after
+  const focusRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!focused) return;
+    const id = requestAnimationFrame(() => focusRef.current?.focus());
+    return () => cancelAnimationFrame(id);
+  }, [focused]);
   return (
     <Modal
       title={d.title}
       onClose={() => d.resolve(d.cancelId, value)}
       width={d.input ? 460 : 520}
       footer={d.buttons.map((b) => (
-        <Button key={b.id} variant={b.variant ?? 'default'} icon={b.icon ?? iconForLabel(b.label, b.variant)} autoFocus={!d.input && b === primary} disabled={!!d.input && b === primary && !value.trim()} onClick={() => d.resolve(b.id, value)}>
+        <Button key={b.id} ref={b === focused ? focusRef : undefined} variant={b.variant ?? 'default'} icon={b.icon ?? iconForLabel(b.label, b.variant)} autoFocus={b === focused} disabled={!!d.input && b === primary && !value.trim()} onClick={() => d.resolve(b.id, value)}>
           {b.label}
         </Button>
       ))}

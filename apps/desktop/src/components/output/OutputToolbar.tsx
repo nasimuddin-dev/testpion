@@ -1,6 +1,21 @@
 import type { ReactNode } from 'react';
 import { Info } from 'lucide-react';
-import { cx, IconButton } from '../ui';
+import { cx, Tooltip } from '../ui';
+
+/**
+ * The ⓘ of an output bar: a hint shown on hover and focus, the one way in every output (the JSON tree's toolbar, the
+ * Problems panel). Not a button: it does nothing when pressed, so it is announced as what it is, an image named by
+ * its hint; `tabIndex` lets the keyboard reach it.
+ */
+export function OutputHint({ hint, className }: { hint: string; className?: string }) {
+  return (
+    <Tooltip content={hint}>
+      <span role="img" aria-label={hint} tabIndex={0} className={cx('inline-flex items-center justify-center rounded-md h-6 w-6 text-muted hover:text-fg focus-visible:text-fg outline-none', className)} data-output-hint>
+        <Info size={13} />
+      </span>
+    </Tooltip>
+  );
+}
 
 /**
  * The tool row inside an output view (the JSON tree's Expand / Collapse / filter): view tools as icon buttons on the
@@ -38,11 +53,7 @@ export function OutputToolbar({
       )}
       <div className="ml-auto flex items-center gap-0.5 shrink-0">
         {right}
-        {hint && (
-          <IconButton label={hint} className="h-6 w-6" data-output-hint>
-            <Info size={13} />
-          </IconButton>
-        )}
+        {hint && <OutputHint hint={hint} />}
       </div>
     </div>
   );

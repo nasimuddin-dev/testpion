@@ -433,7 +433,7 @@ export function CollectionRunner({ collection, folderId, onFolderChange, dataPat
                     <span
                       className={cx(
                         'mono method-badge text-[0.64rem] font-bold w-10 shrink-0',
-                        r.kind === 'http' ? `method-${r.method}` : r.kind === 'grpc' ? 'text-[#2ea99e]' : r.kind === 'websocket' ? 'text-[#d97706]' : 'text-[#e535ab]',
+                        r.kind === 'http' ? `method-${r.method}` : r.kind === 'grpc' ? 'kind-grpc' : r.kind === 'websocket' ? 'kind-ws' : 'kind-graphql',
                       )}
                     >
                       {r.method.slice(0, 5)}

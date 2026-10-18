@@ -344,8 +344,8 @@ export function EditorTabStrip() {
       onRename={(t, name) => (name !== undefined ? t.data!.onRenameTo?.(name) : t.data!.onRename?.())}
       onKeep={(t) => t.data!.onKeep?.()}
       extraItems={({ data: t }) => [
-        { label: t!.pinned ? 'Unpin tab' : 'Pin tab', icon: t!.pinned ? <PinOff size={13} /> : <Pin size={13} />, disabled: !t!.onTogglePin, onSelect: () => t!.onTogglePin?.() },
-        { label: 'Duplicate tab', icon: <Copy size={13} />, disabled: !t!.onDuplicate, onSelect: () => t!.onDuplicate?.() },
+        { label: t!.pinned ? LABEL.unpinTab : LABEL.pinTab, icon: t!.pinned ? <PinOff size={13} /> : <Pin size={13} />, disabled: !t!.onTogglePin, onSelect: () => t!.onTogglePin?.() },
+        { label: LABEL.duplicateTab, icon: <Copy size={13} />, disabled: !t!.onDuplicate, onSelect: () => t!.onDuplicate?.() },
         ((ref) => ({ label: LABEL.revealInSidebar, icon: <PanelLeft size={13} />, disabled: !ref, onSelect: () => revealInSidebar(ref) }))(refOfEditorItem(t!.view, t!.item)),
         saveAsTestMenuItem(t!.onSaveAsTest),
       ]}

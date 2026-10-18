@@ -93,6 +93,20 @@ export const LABEL = {
   /** Deleting puts the item in Recently deleted (or asks first where nothing can bring it back). */
   delete: 'Delete…',
   deleteFolder: 'Delete folder…',
+  // every tab strip's menu (DocTabStrip, plus what EditorTabs adds)
+  keepOpen: 'Keep open',
+  closeTab: 'Close tab',
+  closeOtherTabs: 'Close other tabs',
+  closeTabsToRight: 'Close tabs to the right',
+  closeAllTabs: 'Close all tabs',
+  reopenClosedTab: 'Reopen closed tab',
+  pinTab: 'Pin tab',
+  unpinTab: 'Unpin tab',
+  duplicateTab: 'Duplicate tab',
+  // the down arrow of every output (OutputDownload)
+  includeSecrets: 'Include secrets…',
+  fromProductionEnvironment: 'From the production environment',
+  chooseDownloadFormat: 'Choose a download format',
 } as const;
 
 /** Words that were used for the same actions and are not anymore (the unit test fails on them). */

@@ -1,8 +1,10 @@
-import { ArrowRightToLine, ChevronDown, ChevronLeft, ChevronRight, ListX, Pencil, Pin, RotateCcw, SquareX, X } from 'lucide-react';
+import { ArrowRightToLine, ChevronLeft, ChevronRight, ListX, Pencil, Pin, RotateCcw, SquareX, X } from 'lucide-react';
 import { reopenClosedTab, useClosedTabs } from '../lib/closed-tabs';
+import { LABEL } from '../lib/vocabulary';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { cx, Menu, type MenuItem } from './ui';
 import { InlineRename } from './TreeParts';
+import { TabOverflow } from './TabOverflow';
 
 /**
  * One tab of a document strip: a request, a test file, a monitor. The strip draws it from this model alone; what
@@ -94,16 +96,16 @@ export function DocTabStrip<D = unknown>({ tabs: given, activeId, label, onSelec
     const right = tabs.slice(i + 1).filter(closable);
     const all = tabs.filter(closable);
     return [
-      ...(t.preview && onKeep ? [{ label: 'Keep open', icon: <Pin size={13} />, shortcut: 'Double-click', onSelect: () => onKeep(t) }] : []),
+      ...(t.preview && onKeep ? [{ label: LABEL.keepOpen, icon: <Pin size={13} />, shortcut: 'Double-click', onSelect: () => onKeep(t) }] : []),
       ...(extraItems?.(t) ?? []),
-      { label: 'Rename', icon: <Pencil size={13} />, shortcut: 'F2', disabled: !t.rename || !onRename, onSelect: () => startRename(t) },
-      { label: 'Close tab', icon: <X size={13} />, separator: true, shortcut: 'Middle-click', disabled: !closable(t), onSelect: () => close([t]) },
-      { label: 'Close other tabs', icon: <SquareX size={13} />, disabled: !others.length, onSelect: () => close(others) },
-      { label: 'Close tabs to the right', icon: <ArrowRightToLine size={13} />, disabled: !right.length, onSelect: () => close(right) },
-      { label: 'Close all tabs', icon: <ListX size={13} />, disabled: !all.length, onSelect: () => close(all) },
+      { label: LABEL.rename, icon: <Pencil size={13} />, shortcut: 'F2', disabled: !t.rename || !onRename, onSelect: () => startRename(t) },
+      { label: LABEL.closeTab, icon: <X size={13} />, separator: true, shortcut: 'Middle-click', disabled: !closable(t), onSelect: () => close([t]) },
+      { label: LABEL.closeOtherTabs, icon: <SquareX size={13} />, disabled: !others.length, onSelect: () => close(others) },
+      { label: LABEL.closeTabsToRight, icon: <ArrowRightToLine size={13} />, disabled: !right.length, onSelect: () => close(right) },
+      { label: LABEL.closeAllTabs, icon: <ListX size={13} />, disabled: !all.length, onSelect: () => close(all) },
       // the same in every strip: the tab closed last in this workspace (a request, a monitor …), whichever strip it was in
       {
-        label: 'Reopen closed tab',
+        label: LABEL.reopenClosedTab,
         title: closedLast ? `Reopen ${closedLast.label}` : 'No closed tab to reopen',
         separator: true,
         icon: <RotateCcw size={13} />,
@@ -309,24 +311,21 @@ export function DocTabStrip<D = unknown>({ tabs: given, activeId, label, onSelec
       <span className="ml-auto" />
       {actions && <div className="flex items-center gap-1 pl-2 pr-1.5 mb-1 shrink-0">{actions}</div>}
       {countMenu && tabs.length > 1 && (
-        <Menu
-          align="end"
+        <TabOverflow
+          className="mr-1.5 mb-1"
           width={300}
+          count={tabs.length}
+          label="All open tabs"
           items={tabs.map((t) => ({
+            id: t.id,
             label: `${t.title}${t.dirty ? ' •' : ''}`,
+            active: t.id === activeId,
             icon: typeof t.badge === 'string' ? <span className={cx('mono method-badge text-[0.6rem] font-bold w-11', t.badgeClass)}>{t.badge}</span> : t.badge,
-            onSelect: () => onSelect(t),
           }))}
-          trigger={
-            <button
-              aria-label="All open tabs"
-              title="All open tabs"
-              className="mr-1.5 mb-1 shrink-0 inline-flex items-center gap-1 h-7 px-2 rounded-md text-xs font-medium text-muted border border-line bg-bg hover:text-fg hover:bg-hover data-[state=open]:text-fg data-[state=open]:bg-hover"
-            >
-              {tabs.length}
-              <ChevronDown size={13} />
-            </button>
-          }
+          onSelect={(id) => {
+            const t = tabs.find((x) => x.id === id);
+            if (t) onSelect(t);
+          }}
         />
       )}
     </div>

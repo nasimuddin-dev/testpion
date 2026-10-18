@@ -141,7 +141,7 @@ export function ApiDefinitionView() {
 
   const info = useMemo(() => infoOf(saved), [saved]);
   const name = spec?.replace(/^specs\//, '');
-  useSingleEditorTab('apidef', spec ? { title: name!, badge: isAsync ? 'ASYNC' : 'API', badgeClass: 'text-[#8b5cf6]', item: spec, dirty } : undefined);
+  useSingleEditorTab('apidef', spec ? { title: name!, badge: isAsync ? 'ASYNC' : 'API', badgeClass: 'kind-api', item: spec, dirty } : undefined);
 
   if (!spec)
     return (

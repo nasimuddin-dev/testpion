@@ -3,7 +3,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { call } from '../api';
 import { confirmAction, toastError, useApp } from '../store';
 import { plural, timeAgo } from '../lib/format';
-import { Button, Empty, IconButton, Modal, Tooltip } from './ui';
+import { Button, Empty, IconButton, Modal } from './ui';
 
 export interface TrashItem {
   id: string;
@@ -84,11 +84,9 @@ export function TrashDialog({ kinds, onClose, onRestored }: { kinds?: readonly T
               <Button size="sm" icon={<RotateCcw size={13} />} onClick={() => void restore(it)}>
                 Restore
               </Button>
-              <Tooltip content="Delete for good">
-                <IconButton label="Delete for good" onClick={() => void purge(it)}>
-                  <Trash2 size={14} />
-                </IconButton>
-              </Tooltip>
+              <IconButton label="Delete for good" onClick={() => void purge(it)}>
+                <Trash2 size={14} />
+              </IconButton>
             </li>
           ))}
         </ul>

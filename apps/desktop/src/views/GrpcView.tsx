@@ -319,7 +319,7 @@ export function GrpcView() {
   const title = currentSaved?.name ?? tabTitle ?? NEW_TAB_TITLE.grpc;
   // a saved call is renamed in the workspace; a new tab just gets the title
   const renameTabTo = async (name: string) => (currentSaved ? saved.put({ ...currentSaved, name }) : setTabTitle(name));
-  useSingleEditorTab('grpc', { title, badge: 'gRPC', badgeClass: 'text-[#2ea99e]', item: savedId, onRenameTo: renameTabTo, onSaveAsTest: d.method ? saveTest : undefined });
+  useSingleEditorTab('grpc', { title, badge: 'gRPC', badgeClass: 'kind-grpc', item: savedId, onRenameTo: renameTabTo, onSaveAsTest: d.method ? saveTest : undefined });
   return (
     <div className="h-full flex flex-col min-w-0">
       <RequestBreadcrumb collectionId={currentSaved?.collectionId ?? collectionId} folder={currentSaved?.folder} name={title} onSave={() => void saveRequest()} actions={[saveAsTestMenuItem(d.method ? saveTest : undefined)]} />

@@ -3,6 +3,11 @@
 ## Unreleased
 
 - A request you sent keeps its tab and its response until you close the tab: a single click on another request opens a new tab instead of replacing it (a preview tab is still replaced while nothing was sent from it). The same for a prompt run in the Playground.
+- **A delete-for-good dialog starts on Cancel**: Enter no longer confirms "Delete for good" (Recently deleted), "Delete the folder" or a git branch delete; press the button, or Tab to it. Question dialogs still answer Enter with their primary button.
+- **Tab strips never show a cut-off tab**: in a pane too narrow for every tab (the request editor side by side with the response, compact density), a tab only partly in view is hidden and counted by the strip's overflow button; the request editor's strip and the document strips (open requests, test files, monitors) share one overflow control, with the active tab ticked.
+- **One tooltip style**: why an output's Copy / Download is off, and the ⓘ hint of an output bar (the Problems panel's F8 / Shift+F8 keys, which were plain text clipped in a narrow pane), are the same tooltip as every button's.
+- **Kind colours are tokens**: the GraphQL, gRPC, WebSocket, API definition and dataset badges in tabs, the runner and the Debugger use the kind's colour token, the same in both themes.
+- The output control (Copy / Download / ▾) does less work on every render: its menu and the format it remembers are kept between renders (the console re-renders on every event).
 
 ## 0.52.0 — 2026-10-17
 
