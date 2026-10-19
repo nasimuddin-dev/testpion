@@ -64,7 +64,18 @@ const steps = [
      if (!(await closeAt('Open test files', t0))) return 'NO ✕';
      return 'closable tabs ' + before + ' → ' + strip('Open test files').filter((t) => t.querySelector('button[aria-label^="Close "]')).length;`,
   ),
-  step('requests', `await __t.requests(); await __t.sleep(700); const L = 'Open requests'; const before = strip(L).length; if (!before) return 'NO TABS'; if (!(await closeAt(L, 0))) return 'NO ✕'; return 'tabs ' + before + ' → ' + strip(L).length;`),
+  // request tabs of every kind: ✕ on each in turn, down to the single one, then that one: nothing is left and the editor says so
+  step(
+    'requests',
+    `await __t.requests(); await __t.sleep(700); const L = 'Open requests';
+     const before = strip(L).length; if (!before) return 'NO TABS';
+     if (!(await closeAt(L, 0))) return 'NO ✕';
+     const afterFirst = strip(L).length;
+     let guard = 0; while (strip(L).length > 1 && guard++ < 30) if (!(await closeAt(L, strip(L).length - 1))) return 'NO ✕ loop';
+     const single = strip(L).length;
+     if (!(await closeAt(L, 0))) return 'NO ✕ single';
+     return 'tabs ' + before + ' → ' + afterFirst + ' | single: ' + single + ' → ' + strip(L).length + ' | ' + (/No open requests/.test(document.body.innerText) ? 'empty state' : 'NO empty state');`,
+  ),
 ];
 
 module.exports = withExpect(steps, {
@@ -74,5 +85,5 @@ module.exports = withExpect(steps, {
   environments: /^tabs 1 → 0 \| empty state$/,
   monitors: /^tabs 1 → 0$/,
   'test-files': /^closable tabs 1 → 0$/,
-  requests: /^tabs (\d+) → (?!\1$)\d+$/,
+  requests: /^tabs \d+ → \d+ \| single: 1 → 0 \| empty state$/,
 });
