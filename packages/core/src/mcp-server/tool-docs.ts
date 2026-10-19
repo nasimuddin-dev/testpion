@@ -573,6 +573,12 @@ export const TOOL_DOCS: Record<string, ToolDoc> = {
     whenNot: 'To prepare a commit, use `git_propose_commit`; for conflicts, use `git_conflicts`.',
     example: { confirm: true },
   },
+  git_changes: {
+    when: 'Use it to list what changed since the last commit item by item, named like the app: "MCP server Weather", "Dataset users.csv: 12 rows added", "Prompt Greeting".',
+    whenNot: 'For the branch and ahead / behind counts use `git_status`; for one item side by side or between two commits use `git_diff`.',
+    example: { kind: 'mcp-server' },
+    narrow: 'Give `kind` or `file`, lower `limit`, or page with `cursor`.',
+  },
   git_diff: {
     when: 'Use it to see what changed by meaning: requests, variables and flow steps added, changed or removed.',
     whenNot: 'For the list of changed files, use `git_status`; for API spec changes, use `openapi_diff`.',

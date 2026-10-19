@@ -472,6 +472,11 @@ exports[`kind equivalence (REG-1 snapshots; unchanged by the registry adapters) 
   {
     "change": "changed",
     "collectionId": "api",
+    "containers": [
+      "folder|api|f1",
+      "collection|api|",
+      "section|collection",
+    ],
     "details": [
       "URL",
     ],
@@ -479,6 +484,7 @@ exports[`kind equivalence (REG-1 snapshots; unchanged by the registry adapters) 
     "itemId": "r1",
     "itemKind": "http",
     "kind": "collection",
+    "kindId": "request",
     "ref": {
       "collectionId": "api",
       "kind": "request",
@@ -489,6 +495,10 @@ exports[`kind equivalence (REG-1 snapshots; unchanged by the registry adapters) 
   {
     "change": "changed",
     "collectionId": "api",
+    "containers": [
+      "collection|api|",
+      "section|collection",
+    ],
     "details": [
       "name",
     ],
@@ -496,6 +506,7 @@ exports[`kind equivalence (REG-1 snapshots; unchanged by the registry adapters) 
     "itemId": "g1",
     "itemKind": "graphql",
     "kind": "collection",
+    "kindId": "request",
     "ref": {
       "collectionId": "api",
       "kind": "request",
@@ -506,22 +517,32 @@ exports[`kind equivalence (REG-1 snapshots; unchanged by the registry adapters) 
   },
   {
     "change": "removed",
-    "details": [],
+    "containers": [
+      "section|dataset",
+    ],
+    "details": [
+      "1 row",
+    ],
     "file": "datasets/users.csv",
-    "kind": "other",
+    "kind": "dataset",
+    "kindId": "dataset",
     "ref": {
-      "kind": "git-file",
-      "path": "datasets/users.csv",
+      "kind": "dataset",
+      "name": "users.csv",
     },
-    "title": "datasets/users.csv",
+    "title": "Dataset users.csv",
   },
   {
     "change": "added",
+    "containers": [
+      "section|environment",
+    ],
     "details": [
       "0 variables",
     ],
     "file": "environments/prod.json",
     "kind": "environment",
+    "kindId": "environment",
     "ref": {
       "environmentId": "prod",
       "kind": "environment",
@@ -530,11 +551,15 @@ exports[`kind equivalence (REG-1 snapshots; unchanged by the registry adapters) 
   },
   {
     "change": "changed",
+    "containers": [
+      "section|environment",
+    ],
     "details": [
       "changed baseUrl",
     ],
     "file": "environments/staging.json",
     "kind": "environment",
+    "kindId": "environment",
     "ref": {
       "environmentId": "staging",
       "kind": "environment",
@@ -543,6 +568,10 @@ exports[`kind equivalence (REG-1 snapshots; unchanged by the registry adapters) 
   },
   {
     "change": "renamed",
+    "containers": [
+      "collection|api|",
+      "section|collection",
+    ],
     "details": [
       "renamed from Say hello",
     ],
@@ -550,6 +579,7 @@ exports[`kind equivalence (REG-1 snapshots; unchanged by the registry adapters) 
     "itemId": "g-call",
     "itemKind": "grpc",
     "kind": "library",
+    "kindId": "grpc-call",
     "ref": {
       "itemId": "g-call",
       "kind": "saved",
@@ -559,11 +589,15 @@ exports[`kind equivalence (REG-1 snapshots; unchanged by the registry adapters) 
   },
   {
     "change": "removed",
+    "containers": [
+      "section|load-test",
+    ],
     "details": [],
     "file": "library/load-tests.json",
     "itemId": "lt-pets",
     "itemKind": "load-tests",
     "kind": "library",
+    "kindId": "load-test",
     "ref": {
       "itemId": "lt-pets",
       "kind": "saved",
@@ -573,6 +607,9 @@ exports[`kind equivalence (REG-1 snapshots; unchanged by the registry adapters) 
   },
   {
     "change": "changed",
+    "containers": [
+      "section|monitor",
+    ],
     "details": [
       "settings",
     ],
@@ -580,6 +617,7 @@ exports[`kind equivalence (REG-1 snapshots; unchanged by the registry adapters) 
     "itemId": "mon-pets",
     "itemKind": "monitors",
     "kind": "library",
+    "kindId": "monitor",
     "ref": {
       "kind": "monitor",
       "monitorId": "mon-pets",
@@ -587,59 +625,90 @@ exports[`kind equivalence (REG-1 snapshots; unchanged by the registry adapters) 
     "title": "Monitor Pets monitor",
   },
   {
-    "change": "changed",
-    "details": [],
+    "change": "renamed",
+    "containers": [
+      "section|mcp-server",
+    ],
+    "details": [
+      "renamed from Weather mock",
+    ],
     "file": "mcp-servers.json",
-    "kind": "other",
+    "itemId": "weather",
+    "itemKind": "mcp-server",
+    "kind": "mcp-server",
+    "kindId": "mcp-server",
     "ref": {
-      "kind": "git-file",
-      "path": "mcp-servers.json",
+      "kind": "mcp-server",
+      "serverId": "weather",
     },
-    "title": "mcp-servers.json",
+    "title": "MCP server Weather",
   },
   {
     "change": "removed",
+    "containers": [
+      "section|proto",
+    ],
     "details": [],
     "file": "protos/greeter.proto",
-    "kind": "other",
+    "kind": "proto",
+    "kindId": "proto",
     "ref": {
       "kind": "git-file",
       "path": "protos/greeter.proto",
     },
-    "title": "protos/greeter.proto",
+    "title": "Proto file greeter.proto",
   },
   {
     "change": "added",
+    "containers": [
+      "section|proto",
+    ],
     "details": [],
     "file": "protos/hello.proto",
-    "kind": "other",
+    "kind": "proto",
+    "kindId": "proto",
     "ref": {
       "kind": "git-file",
       "path": "protos/hello.proto",
     },
-    "title": "protos/hello.proto",
+    "title": "Proto file hello.proto",
   },
   {
     "change": "changed",
-    "details": [],
+    "containers": [
+      "section|spec",
+    ],
+    "details": [
+      "1 line added",
+      "1 line removed",
+    ],
     "file": "specs/petstore.yaml",
-    "kind": "other",
+    "kind": "spec",
+    "kindId": "spec",
     "ref": {
-      "kind": "git-file",
+      "kind": "spec",
       "path": "specs/petstore.yaml",
     },
-    "title": "specs/petstore.yaml",
+    "title": "API definition petstore.yaml",
   },
   {
     "change": "changed",
-    "details": [],
+    "containers": [
+      "folder|test|flows",
+      "section|test",
+    ],
+    "details": [
+      "1 line added",
+      "1 line removed",
+    ],
     "file": "tests/flows/checkout.yaml",
     "kind": "test",
+    "kindId": "test",
     "ref": {
-      "kind": "flow",
+      "kind": "test",
       "path": "flows/checkout.yaml",
     },
-    "title": "tests/flows/checkout.yaml",
+    "title": "Test file flows/checkout.yaml",
   },
 ]
 `;

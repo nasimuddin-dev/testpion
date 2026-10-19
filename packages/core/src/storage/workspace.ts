@@ -15,6 +15,7 @@ import type { Baseline } from '../report/regression.js';
 import { moveToTrash } from './trash.js';
 import { markTemplateInstalled } from './template-update.js';
 import { writeGitFiles } from './git-files.js';
+import { collectionFileValue, environmentFileValue, libraryFileValue, mcpServersFileValue, normalizeText, providersFileValue, workspaceFileValue } from './stable-files.js';
 import { adoptLooseRequests, describeAdoption, type AdoptedRequests } from './loose-requests.js';
 import { exportWorkspaceBundle, importWorkspaceBundle, type WorkspaceBundle } from './workspace-bundle.js';
 
@@ -95,6 +96,8 @@ export const SCRIPT_PACKAGE_NAME = /^(@[A-Za-z0-9][\w.-]*\/)?[A-Za-z0-9][\w.-]*$
 export class WorkspaceStore {
   readonly meta: MetaStore;
   private ws: Workspace;
+  /** The time stamp workspace.json holds: it changes when the file is replaced or renamed, not with each edit of its variables. */
+  private fileUpdatedAt: string;
   readonly migrationsApplied: string[] = [];
   /** gRPC calls and connections that were in no collection, moved into one when the workspace was opened. */
   adoptedRequests?: AdoptedRequests;
@@ -104,6 +107,7 @@ export class WorkspaceStore {
     ws: Workspace,
   ) {
     this.ws = ws;
+    this.fileUpdatedAt = ws.updatedAt;
     for (const d of ['collections', 'environments', 'tests', 'datasets', 'traces', 'payloads', 'reports', 'runs', 'baselines']) mkdirSync(join(root, d), { recursive: true });
     this.meta = openMetaStore(root);
   }
@@ -113,7 +117,7 @@ export class WorkspaceStore {
     mkdirSync(root, { recursive: true });
     const now = new Date().toISOString();
     const ws: Workspace = { schemaVersion: SCHEMA_VERSION, id: shortId('ws-'), name, variables: [], createdAt: now, updatedAt: now };
-    writeJson(join(root, 'workspace.json'), ws);
+    writeJson(join(root, 'workspace.json'), workspaceFileValue(ws));
     // ready for git from the start: results and local state ignored, the same line endings everywhere
     writeGitFiles(root);
     const store = new WorkspaceStore(root, ws);
@@ -136,7 +140,7 @@ export class WorkspaceStore {
     if (applied.length) {
       // keep a backup of the pre-migration file
       atomicWrite(`${file}.bak-${original.schemaVersion ?? '0.9'}`, JSON.stringify(original, null, 2));
-      writeJson(file, ws);
+      writeJson(file, workspaceFileValue(ws));
     }
     const store = new WorkspaceStore(root, ws as unknown as Workspace);
     store.migrationsApplied.push(...applied);
@@ -165,6 +169,7 @@ export class WorkspaceStore {
   reloadWorkspaceFile(): Workspace {
     try {
       this.ws = { ...readJson<Workspace>(join(this.root, 'workspace.json')), id: this.ws.id };
+      this.fileUpdatedAt = this.ws.updatedAt;
     } catch {
       /* a broken file mid-write: keep what we had */
     }
@@ -172,10 +177,9 @@ export class WorkspaceStore {
   }
 
   updateWorkspace(patch: Partial<Omit<Workspace, 'schemaVersion' | 'id' | 'createdAt'>>): Workspace {
-    const before = this.ws.updatedAt;
     this.ws = { ...this.ws, ...patch, updatedAt: new Date().toISOString() };
     // the file keeps its time stamp: a change of the workspace variables is not also a change of a date line
-    writeJson(join(this.root, 'workspace.json'), { ...this.ws, updatedAt: before });
+    writeJson(join(this.root, 'workspace.json'), workspaceFileValue({ ...this.ws, updatedAt: this.fileUpdatedAt }));
     return this.ws;
   }
 
@@ -374,7 +378,7 @@ export class WorkspaceStore {
     };
     const sorted = [...envs].sort((a, b) => rank(a) - rank(b));
     sorted.forEach((e, order) => {
-      if (e.order !== order && !e.problem) writeJson(this.path('environments', `${slugify(e.id)}.json`), { ...e, order });
+      if (e.order !== order && !e.problem) writeJson(this.path('environments', `${slugify(e.id)}.json`), environmentFileValue({ ...e, order }));
     });
     return this.listEnvironments();
   }
@@ -402,7 +406,7 @@ export class WorkspaceStore {
       if (order === undefined) delete clean.order;
       else clean.order = order;
     }
-    writeJson(this.path('environments', `${slugify(env.id)}.json`), clean);
+    writeJson(this.path('environments', `${slugify(env.id)}.json`), environmentFileValue(clean));
     return clean;
   }
 
@@ -422,7 +426,7 @@ export class WorkspaceStore {
         throw new ApsError('ValidationError', `Provider "${p.name}" has a literal API key; store it as a secret instead`, {
           suggestions: ['Use {{$secret.provider.<id>.apiKey}} or {{$env.NAME}}.'],
         });
-    writeJson(this.path('providers.json'), { schemaVersion: SCHEMA_VERSION, providers });
+    writeJson(this.path('providers.json'), providersFileValue({ schemaVersion: SCHEMA_VERSION, providers }));
   }
 
   getMcpServers(): McpServerConfig[] {
@@ -442,7 +446,7 @@ export class WorkspaceStore {
   }
 
   saveMcpServers(servers: McpServerConfig[]): void {
-    writeJson(this.path('mcp-servers.json'), { schemaVersion: SCHEMA_VERSION, servers });
+    writeJson(this.path('mcp-servers.json'), mcpServersFileValue({ schemaVersion: SCHEMA_VERSION, servers }));
   }
 
   /* saved items with folders (WebSocket connections, AI prompts, MCP server folders …), one file per kind */
@@ -455,7 +459,7 @@ export class WorkspaceStore {
     const folders = [...new Set([...(lib.folders ?? []), ...lib.items.map((i) => i.folder).filter((f): f is string => !!f)])].sort((a, b) => a.localeCompare(b));
     const next: Library<T> = { schemaVersion: SCHEMA_VERSION, folders, items: lib.items.map((i) => ({ ...i, id: i.id || shortId('lib-'), name: i.name || 'Untitled' })) };
     mkdirSync(this.path('library'), { recursive: true });
-    writeJson(this.libraryPath(kind), next);
+    writeJson(this.libraryPath(kind), libraryFileValue(next));
     return next;
   }
 
@@ -483,7 +487,7 @@ export class WorkspaceStore {
   }
 
   writeTestFile(rel: string, content: string): void {
-    atomicWrite(this.safePath(rel, this.path('tests')), content);
+    atomicWrite(this.safePath(rel, this.path('tests')), /\.ya?ml$/i.test(rel) ? normalizeText(content) : content);
   }
 
   deleteTestFile(rel: string): void {
@@ -723,7 +727,7 @@ export class WorkspaceManager {
     });
     const w = readJson<Workspace>(join(dest, 'workspace.json'));
     const next = { ...w, id: shortId('ws-'), name: newName, updatedAt: new Date().toISOString() };
-    writeJson(join(dest, 'workspace.json'), next);
+    writeJson(join(dest, 'workspace.json'), workspaceFileValue(next));
     return { id: next.id, name: newName, path: dest, updatedAt: next.updatedAt };
   }
 
@@ -778,7 +782,7 @@ export class WorkspaceManager {
     if (!name.trim()) throw new ApsError('ValidationError', 'The workspace name is empty');
     const file = join(p, 'workspace.json');
     const w = { ...readJson<Workspace>(file), name: name.trim(), updatedAt: new Date().toISOString() };
-    writeJson(file, w);
+    writeJson(file, workspaceFileValue(w));
     return { id: w.id, name: w.name, path: p, updatedAt: w.updatedAt };
   }
 
@@ -815,17 +819,5 @@ interface LocalMeta {
   collections: Record<string, { version: number; updatedAt: string }>;
 }
 
-/** The first keys of a collection file, in this order; any others follow, sorted (stable files for git). */
-const COLLECTION_KEY_ORDER = ['schemaVersion', 'id', 'name', 'description', 'variables', 'auth', 'preRequestScript', 'testScript', 'items'];
-
-/** What a collection file holds: no `version` / `updatedAt` (they are this computer's, see LocalMeta), keys in a fixed order. */
-export function collectionFileContent(c: Collection): Record<string, unknown> {
-  const { version: _v, updatedAt: _u, ...rest } = c as Collection & Record<string, unknown>;
-  void _v;
-  void _u;
-  const known = COLLECTION_KEY_ORDER.filter((k) => k in rest);
-  const others = Object.keys(rest)
-    .filter((k) => !COLLECTION_KEY_ORDER.includes(k))
-    .sort();
-  return Object.fromEntries([...known, ...others].map((k) => [k, (rest as Record<string, unknown>)[k]]));
-}
+/** What a collection file holds: no `version` / `updatedAt` (they are this computer's, see LocalMeta), keys in the stable order (stable-files.ts). */
+export const collectionFileContent = (c: Collection): Record<string, unknown> => collectionFileValue(c) as Record<string, unknown>;

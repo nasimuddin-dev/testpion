@@ -116,7 +116,7 @@ export function Providers({ providers, onSaved, focus }: { providers: ProviderCo
         </TreeRowShell>
         <div className="flex-1 overflow-auto pb-2" role="tree" aria-label="Providers">
           {list.map((x) => (
-            <TreeRowShell key={x.id} kind="provider" nodeId={`providers:${x.id}`} label={x.name} tall active={sel === x.id} onClick={() => setSel(x.id)} onOpen={() => setSel(x.id)} ctx={() => providerMenu(x)} className="pl-3">
+            <TreeRowShell key={x.id} kind="provider" nodeId={`providers:${x.id}`} label={x.name} tall active={sel === x.id} onClick={() => setSel(x.id)} onOpen={() => setSel(x.id)} ctx={() => providerMenu(x)} git={{ kind: 'provider', providerId: x.id }} className="pl-3">
               <span className="flex-1 min-w-0">
                 <span className="text-sm flex items-center gap-2">
                   <span className="truncate">{x.name}</span>

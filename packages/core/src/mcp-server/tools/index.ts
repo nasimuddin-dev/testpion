@@ -25,6 +25,7 @@ import { scaleTools } from '../scale-tools.js';
 import type { Tool } from '../tool.js';
 import { workspaceEditTools, type EditToolsDeps } from '../workspace-edit-tools.js';
 import { itemTools } from './item-tools.js';
+import { gitItemTools } from './git-item-tools.js';
 
 /** What the tool modules need from the server: the workspace, its secrets and settings, and the lookups the server shares. */
 export interface ModuleToolDeps {
@@ -59,6 +60,7 @@ export function moduleTools(d: ModuleToolDeps): Tool[] {
     ...datasetTools({ store }),
     ...arazzoTools({ store }),
     ...gitTools({ store, findCollection, redactor }),
+    ...gitItemTools({ store }),
     ...openApiTools({ store, readSpecRef: d.readSpec, context: (environment) => createEngineContext({ store, secrets, settings, environment }) }),
     ...debuggerTools({ redactor, store, session: d.captured }),
     ...recordingTools({ store, redactor, secrets, session: d.captured }),

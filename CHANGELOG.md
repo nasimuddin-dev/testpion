@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+Everything under Git, release A: every kind of item is written in one stable form, every changed row and section header shows a change mark, and the Git view names a change by its item instead of its file.
+
+- **Stable files for every kind.** Collections, environments, workspace settings, library files (saved gRPC calls, connections, prompts, load tests, evaluations, monitors), MCP servers, AI providers and the HTTP Debugger's rules are written with a fixed key order (the same on every computer), LF line endings, one final newline and no volatile field (a library item no longer carries `updatedAt`; workspace.json keeps its own time stamp when only its variables change). Saving twice, or from another key order, leaves the same bytes. A test file keeps your text and only gets LF and a final newline. Older files are read as they are and written in the stable form the next time their item is saved; nothing is rewritten when a workspace opens.
+- **A change mark on every row.** Requests, folders, collections, saved gRPC calls and connections, environments, test files and flows, MCP servers, AI providers, prompts, load tests, evaluations, monitors, API definitions and datasets show **M / A / D / R / !** on their own row when git sees a change; a folder and a section header (*MCP servers*, *Datasets* …) show how many changes are inside. One mechanism: a row says what it is (`git` on the shared tree row) and the mark follows.
+- **The Git view lists changes by item.** *MCP server Weather: URL*, *AI provider OpenAI: model*, *Prompt Greeting: moved, settings*, *API definition petstore.json: 2 operations added, 1 breaking change*, *Dataset users.csv: 12 rows added, column dob removed*, *Workspace settings: variables (added region)*, with the kind's icon, Compare for every kind (secret values are hidden), and the file as muted text (Stage and Discard still act on the file). The down arrow of the list saves the changes as Markdown by item or as a patch.
+- **`testpion git status --by-item [--kind <kind…>] --json`** and the MCP tool **`git_changes`** return the same rows (kind, change, details, ref, link, file, staged).
+- **Merging**: the lists of MCP servers and AI providers merge server by server (`mcp-servers.json merge=testpion`, `providers.json merge=testpion`); `workspace.json.bak-*` and `*.tmp-*` files are ignored by the generated `.gitignore`. The order of keys no longer makes a difference between two versions of a file.
+- Unreleased registry: `versioned` is now true for saved gRPC calls, connections, prompts, load tests, evaluations, monitors, MCP servers and AI providers.
+
 ## 0.53.1 — 2026-10-18
 
 Checks only, nothing changes in the app: the registry's "planned" capabilities that were due in 0.53 are re-planned for 0.54 (they are not built yet), and a test that compared a file name in another letter case now agrees with how macOS treats it.

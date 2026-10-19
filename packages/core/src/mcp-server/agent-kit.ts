@@ -115,7 +115,7 @@ Workspace: **${o.workspace}**. TestPion is an API client and test runner (REST, 
 | Save what the user pasted | \`parse_request_snippet\`, \`save_request\` (secrets become {{variables}}) |
 | Performance | \`response_time_stats\`, \`collection_timing\`, \`load_test\` (local APIs only), \`load_history\` |
 | Contracts | \`import_definition\`, \`api_coverage\`, \`openapi_diff\`, \`openapi_lint\`, \`openapi_outline\`, \`api_fuzz\`, \`collection_openapi\` |
-| Git | \`git_status\`, \`git_diff\` (changes by meaning, or between two commits), \`git_log\`, \`git_propose_commit\` (stages and proposes; a person commits), \`git_sync\` (pull & push in one step; returns conflicts instead of pushing) |
+| Git | \`git_status\`, \`git_changes\` (what changed, item by item: \`MCP server Weather\`, \`Dataset users.csv\`), \`git_diff\` (changes by meaning, or between two commits), \`git_log\`, \`git_propose_commit\` (stages and proposes; a person commits), \`git_sync\` (pull & push in one step; returns conflicts instead of pushing) |
 | Change the workspace | \`update_request\` (URL, headers, body, scripts of a saved request), \`move_request\`, \`delete_request\`, \`create_collection\`, \`create_folder\`, \`set_collection_variable\` |
 | Test an MCP server | \`list_mcp_servers\`, \`mcp_server_tools\` (what it offers), \`mcp_call_tool\` (call a tool and read the result), \`mock_tools\` (the tools of a mock file: a toolset designed before the server exists) |
 

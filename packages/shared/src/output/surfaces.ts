@@ -102,6 +102,8 @@ const SURFACES = [
   s('terminal', 'Terminal transcript', ['text'], 'redacted-default'),
   s('problems', 'Problems', ['md', 'json', 'csv'], 'none'),
   s('debugger.session', 'HTTP Debugger session', ['har', 'json', 'csv'], 'redacted-default', { cli: 'debug -o', capturedRedacted: true, sources: ['debugger'] }),
+  // the workspace's uncommitted changes: by item (Markdown), or as a patch (the files as they would be committed: a notice when one holds a secret)
+  s('git.diff', 'Git changes', ['md', 'diff'], 'raw-notice', { cli: 'git status --by-item --json' }),
   // release B
   s('history', 'History', ['har', 'csv', 'json'], 'redacted-default', B),
   s('traces', 'Traces', ['json'], 'redacted-default', B),
@@ -110,7 +112,6 @@ const SURFACES = [
   s('mcp.prompt', 'MCP prompt output', ['json', 'md'], 'raw-notice', B),
   s('mcp.trace', 'MCP protocol trace', ['jsonl'], 'redacted-default', B),
   s('ai.answers', 'AI answers, proposals and analyses', ['md', 'json'], 'redacted-default', B),
-  s('git.diff', 'Git changes', ['diff', 'md'], 'none', B),
   s('api.reports', 'API lint, fuzz, coverage, security and OpenAPI diff reports', ['md', 'json'], 'none', B),
   s('chart', 'Charts', ['png', 'svg', 'csv'], 'none', B),
   s('env.matrix', 'Environment matrix and compare', ['csv', 'md', 'json'], 'redacted-default', B),
