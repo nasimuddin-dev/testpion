@@ -31,18 +31,38 @@ export async function dataSource(deps: OutputDeps, src: DataSource, format: Outp
       const q = { query: src.query || undefined, kind: src.historyKind || undefined, failed: src.failed || undefined, limit: cap(src.limit, 500) };
       if (format === 'har') return json(historyToHar(store, store.meta.listHistory(q).items, redactor));
       const items = store.meta.listHistory({ ...q, brief: true }).items;
-      const rows = items.map((h) => ({ time: h.timestamp, kind: h.kind, name: h.name, method: h.method ?? '', url: h.url ? redactor.redactUrl(h.url) : '', status: h.status ?? '', durationMs: h.durationMs ?? '', size: h.size ?? '' }));
+      const rows = items.map((h) => ({
+        time: h.timestamp,
+        kind: h.kind,
+        name: h.name,
+        method: h.method ?? '',
+        url: h.url ? redactor.redactUrl(h.url) : '',
+        status: h.status ?? '',
+        durationMs: h.durationMs ?? '',
+        size: h.size ?? '',
+      }));
       return format === 'csv' ? toCsv([['time', 'kind', 'name', 'method', 'url', 'status', 'durationMs', 'size'], ...rows.map((r) => Object.values(r))]) : json(rows);
     }
     case 'traces': {
-      const ids = src.ids?.length ? src.ids.slice(0, MAX_ROWS) : store.meta.listTraces({ query: src.query || undefined, kind: src.traceKind || undefined, failed: src.failed || undefined, limit: cap(src.limit, 100) }).items.map((t) => t.id);
+      const ids = src.ids?.length
+        ? src.ids.slice(0, MAX_ROWS)
+        : store.meta.listTraces({ query: src.query || undefined, kind: src.traceKind || undefined, failed: src.failed || undefined, limit: cap(src.limit, 100) }).items.map((t) => t.id);
       const traces = ids.map((id) => store.loadTrace(id)).filter((t): t is NonNullable<typeof t> => !!t);
       return json(tracesToOtlp(traces, { redactor, resource: { 'testpion.workspace': store.workspace.name } }));
     }
     case 'monitor-runs': {
       const want = String(src.monitor ?? '').toLowerCase();
       const m = listMonitors(store).find((x) => x.id.toLowerCase() === want || x.name.toLowerCase() === want);
-      if (!m) throw new ApsError('ConfigurationError', `No monitor "${String(src.monitor)}"`, { suggestions: [`Monitors: ${listMonitors(store).map((x) => x.name).join(', ') || 'none'}`] });
+      if (!m)
+        throw new ApsError('ConfigurationError', `No monitor "${String(src.monitor)}"`, {
+          suggestions: [
+            `Monitors: ${
+              listMonitors(store)
+                .map((x) => x.name)
+                .join(', ') || 'none'
+            }`,
+          ],
+        });
       const results = monitorResults(store, m.id, cap(src.limit, 100));
       if (format === 'json') return json(results);
       return toCsv([
@@ -52,7 +72,18 @@ export async function dataSource(deps: OutputDeps, src: DataSource, format: Outp
     }
     case 'runs-overview': {
       const runs = store.meta.listRuns({ query: src.query || undefined, limit: cap(src.limit, 200) }).items;
-      const rows = runs.map((r) => ({ id: r.id, name: r.name, startedAt: r.startedAt, durationMs: r.durationMs, total: r.total, passed: r.passed, failed: r.failed, skipped: r.skipped, errors: r.errors, environment: r.environment ?? '' }));
+      const rows = runs.map((r) => ({
+        id: r.id,
+        name: r.name,
+        startedAt: r.startedAt,
+        durationMs: r.durationMs,
+        total: r.total,
+        passed: r.passed,
+        failed: r.failed,
+        skipped: r.skipped,
+        errors: r.errors,
+        environment: r.environment ?? '',
+      }));
       return format === 'csv' ? toCsv([['id', 'name', 'startedAt', 'durationMs', 'total', 'passed', 'failed', 'skipped', 'errors', 'environment'], ...rows.map((r) => Object.values(r))]) : json(rows);
     }
     case 'workspace-report':

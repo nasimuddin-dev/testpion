@@ -38,7 +38,21 @@ export function diagnosticsOutputSpec(d: Diagnostics): OutputSpec {
         key: 'json',
         format: 'json',
         label: 'Diagnostics (JSON)',
-        build: () => jsonPretty({ app: d.appVersion, engine: d.version, electron: d.electron, node: d.node, platform: d.platform, metadataStore: d.metaBackend, secretStorage: d.secretBackend, workspace: diagnosticsText(d).split('\n')[3]?.replace(/^Workspace: /, ''), theme: d.theme, proxy: d.proxy }),
+        build: () =>
+          jsonPretty({
+            app: d.appVersion,
+            engine: d.version,
+            electron: d.electron,
+            node: d.node,
+            platform: d.platform,
+            metadataStore: d.metaBackend,
+            secretStorage: d.secretBackend,
+            workspace: diagnosticsText(d)
+              .split('\n')[3]
+              ?.replace(/^Workspace: /, ''),
+            theme: d.theme,
+            proxy: d.proxy,
+          }),
       },
     ],
   };

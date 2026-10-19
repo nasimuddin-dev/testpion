@@ -255,7 +255,8 @@ const identity = (t: string) => t;
 
 /** What the app holds and a CLI or an MCP server does not: said when a source needs it. */
 function needs<T>(have: T | undefined, what: string): T {
-  if (have === undefined) throw new ApsError('ConfigurationError', `${what} only exists in the running TestPion app`, { suggestions: ['Save it from the app, or use the command that records it to a file.'] });
+  if (have === undefined)
+    throw new ApsError('ConfigurationError', `${what} only exists in the running TestPion app`, { suggestions: ['Save it from the app, or use the command that records it to a file.'] });
   return have;
 }
 
@@ -292,7 +293,13 @@ export async function buildSource(
     case 'console':
       return logSource(needs(deps.consoleEntries, 'The console')(), format, consoleLine, redact, redacted);
     case 'logs':
-      return logSource(needs(deps.logEntries, 'The application log')(), format, (r) => `${r.time} ${r.level.toUpperCase()} [${r.scope}] ${r.message}${r.data === undefined ? '' : ` ${JSON.stringify(r.data)}`}`, redact, redacted);
+      return logSource(
+        needs(deps.logEntries, 'The application log')(),
+        format,
+        (r) => `${r.time} ${r.level.toUpperCase()} [${r.scope}] ${r.message}${r.data === undefined ? '' : ` ${JSON.stringify(r.data)}`}`,
+        redact,
+        redacted,
+      );
     case 'debugger': {
       const har = await needs(deps.har, "The Debugger's session")();
       if (format === 'csv')

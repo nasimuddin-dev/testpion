@@ -73,4 +73,3 @@ export async function collectBuilt(built: Built, limit: number): Promise<{ bytes
   }
   return { bytes: Buffer.concat(parts), truncated: total > size, total };
 }
-

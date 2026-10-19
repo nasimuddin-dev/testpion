@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Download and export, release B: every output, and the same bytes from the command line and for AI agents
+
+- **The rest of the outputs have the down arrow**: History (HAR, CSV, JSON), Traces (OTLP JSON), a Debugger exchange (raw text, HAR, each body as the file it is; the grid's "Request body…" and "Response body…" now use the Save as dialog), MCP resources, prompts and the protocol trace, the AI Playground answer, a model comparison, an analysis's findings and a proposal under review, Git changes (patch or Markdown), the API reports (lint, fuzzing, coverage, the security review, the comparison of two versions), every chart (PNG, SVG when the plot is a drawing), the environment matrix and the comparison of two environments, a monitor's runs, the runs list, the workspace report on Home, collection documentation and Settings ▸ About's diagnostics. Redaction is the registry's: outputs masked when they are recorded never offer **Include secrets…**.
+- **`testpion output <output> --format <format> --out <file>`** saves any output that is built from the workspace (`--list` shows them), and `--out` / `--format` work on `send`, `history list`, `monitor results`, `git diff` and `eval matrix`. The file is byte for byte what the app saves (one set of builders in the engine, used by the window, the CLI and MCP).
+- **MCP `save_output`**: the same outputs for an AI agent, returned inline or written to a new file inside the workspace (never over an existing file or a definition). Secrets stay masked.
+- Checks: the output registry's `cli` field is a command that exists (tested), and the output save no longer calls other handlers by name.
+
 ## 0.53.1 — 2026-10-18
 
 Checks only, nothing changes in the app: the registry's "planned" capabilities that were due in 0.53 are re-planned for 0.54 (they are not built yet), and a test that compared a file name in another letter case now agrees with how macOS treats it.

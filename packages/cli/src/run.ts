@@ -56,7 +56,7 @@ import {
 import { cli, emitEvent, machine, noteError, noteWarning } from './output.js';
 import { triageAfterRun } from './run-triage.js';
 import { EXIT, green, red, yellow, dim, bold, cyan, CliError, printJson, collectVar, openWorkspace, cliContext, requireCollection, requireEnvironment, readImport, loadCollectionRef, cleanupFailedRun, readResults } from './shared.js';
-import { formatForFile, saveResponseBody, savedLine } from './output-save.js';
+import { saveResponseBody, savedLine, sendFormat } from './output-save.js';
 
 export function printResult(r: TestResult, verbose: boolean): void {
   // --jsonl: each result is an event line
@@ -517,7 +517,7 @@ export async function executeSend(
   o: { workspace?: string; environment?: string; method: string; header?: string[]; data?: string; include?: boolean; fail?: boolean; json?: boolean; out?: string; format?: string },
 ): Promise<number> {
   // a format the body cannot be saved in is told before the request is sent
-  if (o.out) formatForFile('response.body', o.out, o.format);
+  if (o.out) sendFormat(o.format);
   const settings = new WorkspaceManager().loadSettings();
   const isUrl = /^(https?:\/\/|\{\{)/i.test(target);
   // the workspace as every command finds it (-w, else the nearest one up from here), also for a URL: its

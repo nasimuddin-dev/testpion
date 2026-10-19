@@ -74,7 +74,15 @@ export function registerOutputCommand(program: Command): void {
         historyId: o.historyId as string | undefined,
       };
       await withWorkspace(o.workspace as string | undefined, async (store) => {
-        const saved = await saveSurface({ store, surface, format: o.format as string | undefined, params, out: o.out as string | undefined, includeSecrets: o.includeSecrets === true, environment: o.environment as string | undefined });
+        const saved = await saveSurface({
+          store,
+          surface,
+          format: o.format as string | undefined,
+          params,
+          out: o.out as string | undefined,
+          includeSecrets: o.includeSecrets === true,
+          environment: o.environment as string | undefined,
+        });
         if (o.json) printJson(saved);
         else if (saved.path) console.log(savedLine(saved));
       });

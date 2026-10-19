@@ -55,7 +55,9 @@ export function outputTools({ store, redactor }: { store: WorkspaceStore; redact
           staged: { type: 'boolean', description: 'git.diff: the staged changes only' },
           days: { type: 'number', description: 'workspace.report: days of activity (1 to 90)' },
           history_id: str('response.body, graphql.response: a History entry whose saved response body is the output'),
-          save_to: str('Write a new file here instead of returning the content: a path inside the workspace (e.g. exports/run.csv). It must not exist, and must not be a definition (collections/, environments/, tests/ …) or a program/launcher file'),
+          save_to: str(
+            'Write a new file here instead of returning the content: a path inside the workspace (e.g. exports/run.csv). It must not exist, and must not be a definition (collections/, environments/, tests/ …) or a program/launcher file',
+          ),
         },
         required: ['surface'],
       },
@@ -111,7 +113,9 @@ export function outputTools({ store, redactor }: { store: WorkspaceStore; redact
         const got = await collectBuilt(r.built, limit);
         const note = got.truncated ? { truncated: true, note: `Cut at ${limit} bytes of ${got.total}: use save_to to write the whole file.` } : {};
         // a cut multi-byte character is dropped, not half-written
-        return fmt.text ? { ...head, bytes: got.total, text: got.bytes.toString('utf8').replace(/�$/, ''), ...note } : { ...head, bytes: got.total, encoding: 'base64', base64: got.bytes.toString('base64'), ...note };
+        return fmt.text
+          ? { ...head, bytes: got.total, text: got.bytes.toString('utf8').replace(/�$/, ''), ...note }
+          : { ...head, bytes: got.total, encoding: 'base64', base64: got.bytes.toString('base64'), ...note };
       },
     },
   ];

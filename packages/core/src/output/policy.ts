@@ -51,7 +51,10 @@ export function secretNotice(sample: string, redactor: Redactor): string | undef
  * The surface, format and source of a call, checked against OUTPUT_SURFACES (the policy is the registry's, never the
  * caller's: a source is accepted only for a surface that names it, so no surface's policy is borrowed for another's data).
  */
-export function checkOutput(p: { surface: string; format: string; content?: unknown; source?: unknown }, who = 'output.save'): { info: OutputSurfaceInfo; format: OutputFormatId; fmt: (typeof OUTPUT_FORMATS)[OutputFormatId] } {
+export function checkOutput(
+  p: { surface: string; format: string; content?: unknown; source?: unknown },
+  who = 'output.save',
+): { info: OutputSurfaceInfo; format: OutputFormatId; fmt: (typeof OUTPUT_FORMATS)[OutputFormatId] } {
   const info = outputSurface(p.surface);
   if (!info) throw new ApsError('ValidationError', `${who}: unknown surface ${p.surface}`);
   if (!isOutputFormatId(p.format) || !info.formats.includes(p.format))

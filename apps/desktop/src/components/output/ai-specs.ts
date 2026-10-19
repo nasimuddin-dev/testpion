@@ -75,7 +75,10 @@ export function compareOutputSpec(results: AnswerLike[], providerName: (id: stri
         default: true,
         build: () =>
           `# Model comparison\n\nMeasurements only: there is no universal ranking.\n\n${rows
-            .map((r) => `## ${r.model}\n\n- Latency: ${r.latencyMs} ms\n- Time to first token: ${r.firstTokenMs} ms\n- Tokens in / out: ${r.inputTokens} / ${r.outputTokens}\n- Est. cost: ${r.costUsd}\n- Valid JSON: ${r.validJson}\n- Schema valid: ${r.schemaValid}\n- Checks passed: ${r.checksPassed}\n\n\`\`\`\n${String(r.output).trimEnd()}\n\`\`\`\n`)
+            .map(
+              (r) =>
+                `## ${r.model}\n\n- Latency: ${r.latencyMs} ms\n- Time to first token: ${r.firstTokenMs} ms\n- Tokens in / out: ${r.inputTokens} / ${r.outputTokens}\n- Est. cost: ${r.costUsd}\n- Valid JSON: ${r.validJson}\n- Schema valid: ${r.schemaValid}\n- Checks passed: ${r.checksPassed}\n\n\`\`\`\n${String(r.output).trimEnd()}\n\`\`\`\n`,
+            )
             .join('\n')}`,
       },
       { key: 'csv', format: 'csv', label: 'Measurements (CSV)', build: () => objectsToCsv(rows) },
@@ -113,7 +116,11 @@ export function findingsOutputSpec(findings: ProposalFinding[], title: string): 
 
 /** A proposal under review: the document of what the model proposes, the same as JSON, or the changes as one patch. */
 export function proposalOutputSpec(p: Proposal): OutputSpec {
-  const patch = () => p.items.map((i) => unifiedDiff(i.before ?? null, i.after, i.path ?? i.title)).filter(Boolean).join('\n');
+  const patch = () =>
+    p.items
+      .map((i) => unifiedDiff(i.before ?? null, i.after, i.path ?? i.title))
+      .filter(Boolean)
+      .join('\n');
   return {
     id: 'ai.proposals',
     what: 'proposal',

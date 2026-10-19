@@ -14,7 +14,12 @@ export interface ResourceContent {
 /** A resource read: each content item as the file it is (text as text, a blob as its bytes), under the server's mime type. */
 export function resourceOutputSpec(server: string, contents: ResourceContent[]): OutputSpec {
   const name = (c: ResourceContent) => {
-    const last = c.uri.replace(/[?#].*$/, '').split(/[/:]/).filter(Boolean).pop() || 'resource';
+    const last =
+      c.uri
+        .replace(/[?#].*$/, '')
+        .split(/[/:]/)
+        .filter(Boolean)
+        .pop() || 'resource';
     const given = /\.\w{1,16}$/.test(last) ? last : `${last}.${extensionForMime(c.mimeType ?? (c.blob ? 'application/octet-stream' : 'text/plain'))}`;
     return safeDownloadName(given, c.mimeType ?? '');
   };

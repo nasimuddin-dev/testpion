@@ -71,7 +71,9 @@ export async function saveSurface(o: {
     }
     return { surface: o.surface, format, path, bytes, redacted: r.built.redacted || (r.redacting && OUTPUT_FORMATS[format].text), notice: r.notice };
   } catch (e) {
-    throw e instanceof ApsError && (e.kind === 'ValidationError' || e.kind === 'ConfigurationError') ? new CliError(`${e.message}${e.suggestions.length ? `\n  → ${e.suggestions.join(' ')}` : ''}`, EXIT.CONFIG_ERROR) : e;
+    throw e instanceof ApsError && (e.kind === 'ValidationError' || e.kind === 'ConfigurationError')
+      ? new CliError(`${e.message}${e.suggestions.length ? `\n  → ${e.suggestions.join(' ')}` : ''}`, EXIT.CONFIG_ERROR)
+      : e;
   } finally {
     await ctx?.dispose();
   }
@@ -87,7 +89,7 @@ export function savedLine(s: SavedOutput): string {
 export function addOutputOptions(cmd: Command, surface: string): Command {
   const info = outputSurface(surface)!;
   const has = (flag: string) => cmd.options.some((x) => x.long === flag);
-  if (!has('--out')) cmd.option('--out <file>', `write the ${info.label.toLowerCase()} to a file instead (format from the extension, or --format)`);
+  if (!has('--out')) cmd.option('--out <file>', `write the ${info.label.toLowerCase()} to a file instead (format from the extension, or --format; send: the body as received)`);
   if (!has('--format')) cmd.option('--format <format>', `with --out: ${info.formats.join(' | ')} (default ${info.default})`);
   if (!has('--include-secrets') && info.redaction === 'redacted-default' && !info.capturedRedacted) cmd.option('--include-secrets', 'with --out: keep the secrets that are masked by default');
   return cmd;
@@ -100,8 +102,16 @@ const jsonText = (body: string, pretty: boolean) => (pretty ? JSON.stringify(JSO
  * (`json`) or minified (`json-min`). The other formats of the response body (CSV, HAR …) are saved from a History entry:
  * `testpion output response.body --history-id <id>`.
  */
+export function sendFormat(asked: string | undefined): OutputFormatId {
+  // like curl -o: the bytes as received, unless a format is asked for (the file name does not choose)
+  const format = asked ? formatForFile('response.body', undefined, asked) : 'raw';
+  if (!['raw', 'text', 'html', 'xml', 'json', 'json-min'].includes(format))
+    throw new CliError(`send saves the body as raw, text, html, xml, json or json-min. For ${format}: testpion output response.body --history-id <id> --format ${format}`, EXIT.CONFIG_ERROR);
+  return format;
+}
+
 export async function saveResponseBody(body: string, o: { out: string; format?: string }): Promise<SavedOutput> {
-  const format = formatForFile('response.body', o.out, o.format);
+  const format = sendFormat(o.format);
   let text = body;
   if (format === 'json' || format === 'json-min') {
     try {
@@ -109,8 +119,7 @@ export async function saveResponseBody(body: string, o: { out: string; format?: 
     } catch {
       throw new CliError(`The response is not JSON, so it cannot be saved as ${format}. Use --format raw.`, EXIT.CONFIG_ERROR);
     }
-  } else if (!['raw', 'text', 'html', 'xml'].includes(format))
-    throw new CliError(`send saves the body as raw, text, html, xml, json or json-min. For ${format}: testpion output response.body --history-id <id> --format ${format}`, EXIT.CONFIG_ERROR);
+  }
   const path = resolve(o.out);
   mkdirSync(dirname(path), { recursive: true });
   await writeChunks(one(text), path);

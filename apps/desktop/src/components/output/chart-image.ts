@@ -42,7 +42,11 @@ function cardSvg(card: HTMLElement): { svg: string; width: number; height: numbe
   clone.style.setProperty('background-color', bg);
   clone.style.setProperty('margin', '0');
   const html = new XMLSerializer().serializeToString(clone);
-  return { svg: `<svg xmlns="${SVG_NS}" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><foreignObject x="0" y="0" width="${width}" height="${height}">${html}</foreignObject></svg>`, width, height };
+  return {
+    svg: `<svg xmlns="${SVG_NS}" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><foreignObject x="0" y="0" width="${width}" height="${height}">${html}</foreignObject></svg>`,
+    width,
+    height,
+  };
 }
 
 /** The card as PNG bytes (at the screen's pixel ratio, at most 2×). */

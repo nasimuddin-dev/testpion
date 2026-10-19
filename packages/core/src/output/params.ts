@@ -66,7 +66,12 @@ export function listOutputSurfaces(): Array<Record<string, unknown>> {
       default: s.default,
       redaction: s.redaction,
       includeSecrets: s.redaction === 'redacted-default' && !s.capturedRedacted,
-      params: p.params.map((name) => ({ name, option: `--${name.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`)}`, mcp: name.replace(/[A-Z]/g, (m) => `_${m.toLowerCase()}`), required: !!p.required?.includes(name) })),
+      params: p.params.map((name) => ({
+        name,
+        option: `--${name.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`)}`,
+        mcp: name.replace(/[A-Z]/g, (m) => `_${m.toLowerCase()}`),
+        required: !!p.required?.includes(name),
+      })),
       hint: p.hint,
     };
   });

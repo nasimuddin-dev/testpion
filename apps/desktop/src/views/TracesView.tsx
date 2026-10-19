@@ -147,14 +147,16 @@ export function TracesView() {
           <IconButton label="Refresh" onClick={() => load(true)}>
             <RefreshCw size={14} />
           </IconButton>
+        </div>
+        {otlpOpen && <OtlpDialog ids={items.map((t) => t.id)} selected={sel} onClose={() => setOtlpOpen(false)} />}
+        <div className="flex items-center gap-2 px-3 min-h-8 min-w-0">
+          <span className="text-xs text-muted truncate min-w-0">{plural(total, 'trace')}</span>
           <OutputActions spec={spec}>
             <IconButton label="Send to OpenTelemetry (OTLP)" onClick={() => setOtlpOpen(true)}>
               <Send size={14} />
             </IconButton>
           </OutputActions>
         </div>
-        {otlpOpen && <OtlpDialog ids={items.map((t) => t.id)} selected={sel} onClose={() => setOtlpOpen(false)} />}
-        <div className="text-xs text-muted px-3 py-1">{plural(total, 'trace')}</div>
         {items.length ? (
           <VirtualList
             className="flex-1"

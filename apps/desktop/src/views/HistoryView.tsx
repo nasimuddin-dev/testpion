@@ -229,7 +229,6 @@ export function HistoryView() {
           <label className="flex items-center gap-1 text-xs text-muted whitespace-nowrap" title="Only responses that failed: 4xx/5xx, transport errors, non-OK gRPC codes, MCP tool errors">
             <input type="checkbox" checked={failedOnly} onChange={(e) => setFailedOnly(e.target.checked)} /> Failed
           </label>
-          <OutputActions spec={spec} />
           <Button
             variant="ghost"
             icon={<Trash2 size={13} />}
@@ -242,7 +241,11 @@ export function HistoryView() {
             Clear
           </Button>
         </div>
-        <div className="text-xs text-muted px-3 py-1">{total.toLocaleString()} {total === 1 ? 'entry' : 'entries'} · grouped by day · double-click to open · Ctrl+click another to compare</div>
+        {/* the count and the download share a row: the filter bar above has no room for the control in a narrow list */}
+        <div className="flex items-center gap-2 px-3 min-h-8 min-w-0">
+          <span className="text-xs text-muted truncate min-w-0">{total.toLocaleString()} {total === 1 ? 'entry' : 'entries'} · grouped by day · double-click to open · Ctrl+click another to compare</span>
+          <OutputActions spec={spec} />
+        </div>
         <StatusMix items={items} />
         {items.length ? (
           <VirtualList

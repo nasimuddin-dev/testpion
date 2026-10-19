@@ -12,7 +12,11 @@ import { OUTPUT_SURFACES, outputSurface } from '../../packages/shared/src/index.
  */
 const program = buildProgram();
 const all = (c: Command): Command[] => [c, ...c.commands.flatMap(all)];
-const commands = new Map(all(program).filter((c) => c !== program).map((c) => [commandPath(program, c), c]));
+const commands = new Map(
+  all(program)
+    .filter((c) => c !== program)
+    .map((c) => [commandPath(program, c), c]),
+);
 const has = (c: Command, flag: string) => c.options.some((o) => o.long === flag);
 
 describe('output surfaces and the CLI', () => {

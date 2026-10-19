@@ -24,13 +24,17 @@ beforeAll(() => {
     store.meta.addHistory({ id, timestamp: ts, kind: 'http', name: `req ${id}`, method: 'GET', url: `http://127.0.0.1/${id}`, status, durationMs: 12, size: 5, ...extra } as never);
   h('h1', '2026-10-18T10:00:00.000Z', 200);
   h('h2', '2026-10-18T11:00:00.000Z', 500, { url: 'http://127.0.0.1/x?api_key=sk-LEAK-0123456789abcdef' });
-  store.meta.addRun({ runId: 'run-a', name: 'Smoke', startedAt: '2026-10-18T09:00:00.000Z', durationMs: 5, total: 3, passed: 2, failed: 1, skipped: 0, errors: 0 } as never, store.path('runs', 'run-a'));
+  store.meta.addRun(
+    { runId: 'run-a', name: 'Smoke', startedAt: '2026-10-18T09:00:00.000Z', durationMs: 5, total: 3, passed: 2, failed: 1, skipped: 0, errors: 0 } as never,
+    store.path('runs', 'run-a'),
+  );
   store.saveTrace({ traceId: 'a'.repeat(32), name: 'GET /pets', startTime: Date.now(), endTime: Date.now() + 5, status: 'ok', spans: [] }, 'http');
   mkdirSync(store.path('tests'), { recursive: true });
   writeFileSync(store.path('tests', 'm.yaml'), 'name: m\nsteps: []\n');
   saveMonitor(store, { id: 'mon1', name: 'Smoke monitor', testFile: 'm.yaml', everyMinutes: 15, enabled: true });
   mkdirSync(store.path('runs', 'monitors'), { recursive: true });
-  const r = (i: number, status: string) => JSON.stringify({ monitorId: 'mon1', runId: `r${i}`, startedAt: `2026-10-18T0${i}:00:00.000Z`, durationMs: 100 * i, status, total: 2, passed: 2, failed: 0, errors: 0, p95Ms: 40 });
+  const r = (i: number, status: string) =>
+    JSON.stringify({ monitorId: 'mon1', runId: `r${i}`, startedAt: `2026-10-18T0${i}:00:00.000Z`, durationMs: 100 * i, status, total: 2, passed: 2, failed: 0, errors: 0, p95Ms: 40 });
   writeFileSync(store.path('runs', 'monitors', 'mon1.jsonl'), [r(1, 'passed'), r(2, 'failed')].join('\n') + '\n');
 });
 afterAll(() => {
@@ -63,6 +67,14 @@ describe('list sources', () => {
     await expect(build('monitor.runs', 'csv', { kind: 'monitor-runs', monitor: 'nope' })).rejects.toThrow(/No monitor "nope"/);
   });
 
+  it('the workspace report is one HTML page with no script, and traces can be filtered by kind', async () => {
+    const html = await build('workspace.report', 'html', { kind: 'workspace-report', days: 7 });
+    expect(html.trimStart().toLowerCase().startsWith('<!doctype html')).toBe(true);
+    expect(html).not.toMatch(/<script/i);
+    const none = JSON.parse(await build('traces', 'json', { kind: 'traces', traceKind: 'llm' }));
+    expect(JSON.stringify(none.resourceSpans ?? [])).not.toContain('GET /pets');
+  });
+
   it('the workspace changes as a patch and as Markdown', async () => {
     if (!(await gitVersion())) return;
     const root = store.root;
@@ -83,7 +95,21 @@ describe('the policy is the registry’s', () => {
     await expect(prepareSource(deps(), { surface: 'response.headers', format: 'json', source: { kind: 'history' } }, new AbortController().signal)).rejects.toThrow(/unknown source history/);
     await expect(prepareSource(deps(), { surface: 'history', format: 'zip', source: { kind: 'history' } }, new AbortController().signal)).rejects.toThrow(/cannot be saved as zip/);
     const kinds = new Set(OUTPUT_SURFACES.flatMap((s) => s.sources ?? []));
-    expect([...kinds].sort()).toEqual(['console', 'debugger', 'flow-timeline', 'git-diff', 'grid', 'history', 'logs', 'monitor-runs', 'response', 'run', 'runs-overview', 'traces', 'workspace-report']);
+    expect([...kinds].sort()).toEqual([
+      'console',
+      'debugger',
+      'flow-timeline',
+      'git-diff',
+      'grid',
+      'history',
+      'logs',
+      'monitor-runs',
+      'response',
+      'run',
+      'runs-overview',
+      'traces',
+      'workspace-report',
+    ]);
   });
 
   it('the app’s console and Debugger session are the app’s: a workspace alone says so', async () => {
@@ -93,7 +119,10 @@ describe('the policy is the registry’s', () => {
 
   it('masks a secret in a redacted surface unless it is masked at capture; the host’s console is built from its deps', async () => {
     const secret = new Redactor();
-    const d = { ...storeOutputDeps(store, secret), consoleEntries: () => [{ time: 't', method: 'GET', url: 'http://x/?a=1', status: 200, logs: [{ phase: 'test', message: 'Bearer abc123def456ghi789jkl' }] }] };
+    const d = {
+      ...storeOutputDeps(store, secret),
+      consoleEntries: () => [{ time: 't', method: 'GET', url: 'http://x/?a=1', status: 200, logs: [{ phase: 'test', message: 'Bearer abc123def456ghi789jkl' }] }],
+    };
     const r = await prepareSource(d, { surface: 'console', format: 'text', source: { kind: 'console' } }, new AbortController().signal);
     const text = (await collectBuilt(r.built, 1e6)).bytes.toString('utf8');
     expect(text).toContain('GET http://x/?a=1 200');
