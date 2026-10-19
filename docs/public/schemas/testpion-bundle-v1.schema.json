@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://testpion.dev/schemas/testpion-bundle-v1.schema.json",
+  "title": "TestPion bundle manifest, format version 1",
+  "description": "The manifest.json of a .testpion.zip, and the top-level fields of a .testpion.json (which adds an `entries` object: name -> { encoding: 'utf8' | 'base64', content }). Readers refuse a higher formatVersion, skip an item of a kind they do not know, and ignore fields they do not know.",
+  "type": "object",
+  "required": ["format", "formatVersion", "items"],
+  "properties": {
+    "format": { "const": "testpion-bundle" },
+    "formatVersion": { "type": "integer", "minimum": 1 },
+    "createdBy": { "type": "object", "properties": { "app": { "type": "string" }, "version": { "type": "string" } } },
+    "createdAt": { "type": "string" },
+    "title": { "type": "string", "maxLength": 200 },
+    "root": {
+      "description": "What the person picked; the rest came in because something picked uses it.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/ref" }
+    },
+    "items": { "type": "array", "maxItems": 20000, "items": { "$ref": "#/$defs/item" } },
+    "edges": {
+      "description": "The dependency graph (display only): who uses whom.",
+      "type": "array",
+      "items": { "type": "object", "required": ["from", "to"], "properties": { "from": { "type": "string" }, "to": { "type": "string" }, "via": { "type": "string" } } }
+    },
+    "missing": {
+      "description": "Used by an item but not in the bundle.",
+      "type": "array",
+      "items": { "type": "object", "required": ["from", "to"], "properties": { "from": { "type": "string" }, "to": { "type": "string" }, "reason": { "type": "string" } } }
+    },
+    "requires": {
+      "type": "object",
+      "properties": {
+        "secrets": { "description": "Variables a secret was replaced by: set them after the import.", "type": "array", "items": { "type": "object", "required": ["name"], "properties": { "name": { "type": "string" }, "where": { "type": "string" } } } },
+        "osEnv": { "description": "Environment variables the datasets read (connectionEnv).", "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "flags": {
+      "type": "object",
+      "properties": {
+        "scripts": { "type": "integer", "minimum": 0 },
+        "production": { "description": "Names of environments marked production.", "type": "array", "items": { "type": "string" } },
+        "strippedSecrets": { "type": "integer", "minimum": 0 },
+        "stdioServers": { "description": "Names of MCP servers that start a program.", "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "notes": { "type": "array", "items": { "type": "string" } }
+  },
+  "$defs": {
+    "kind": {
+      "enum": ["collection", "environment", "test", "spec", "dataset", "proto", "script-package", "mcp-server", "mcp-mock", "provider", "grpc-call", "ws-connection", "prompt", "load-test", "evaluation", "monitor"]
+    },
+    "ref": { "type": "object", "required": ["kind", "id"], "properties": { "kind": { "$ref": "#/$defs/kind" }, "id": { "type": "string" } } },
+    "item": {
+      "type": "object",
+      "required": ["kind", "id", "name"],
+      "properties": {
+        "kind": { "type": "string", "description": "One of the kinds above; an item of another kind is skipped with a warning." },
+        "id": { "type": "string", "description": "An id (collection, environment, MCP server, saved item) or the workspace path of a file (tests/…, specs/…, datasets/…, protos/…, mocks/…, packages/…)." },
+        "name": { "type": "string" },
+        "mode": { "enum": ["embed", "reference"], "description": "reference: only the description travels (a dataset over the embed limit)." },
+        "entry": { "type": "string", "description": "The entry holding the content (absent with mode reference)." },
+        "sha256": { "type": "string", "pattern": "^[0-9a-fA-F]{64}$" },
+        "size": { "type": "integer", "minimum": 0 },
+        "summary": { "type": "object", "additionalProperties": { "type": ["string", "number"] } }
+      },
+      "if": { "properties": { "mode": { "const": "reference" } }, "required": ["mode"] },
+      "else": { "required": ["entry", "sha256"] }
+    }
+  }
+}

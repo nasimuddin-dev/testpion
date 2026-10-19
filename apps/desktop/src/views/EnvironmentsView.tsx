@@ -407,7 +407,7 @@ export function EnvironmentsView() {
                           ref: { kind: 'environment', environmentId: draft.id },
                           repo: !!git.status?.repository,
                           on: { duplicate: () => void duplicateEnv(draft), historyInGit: () => setHistoryOf({ id: draft.id, name: draft.name }), delete: () => void deleteEnv(draft) },
-                        }),
+                        }, 'environment'),
                       )}
                     />
                   </div>

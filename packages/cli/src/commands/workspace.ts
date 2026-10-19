@@ -68,7 +68,7 @@ export function registerWorkspaceCommands(program: Command): void {
       s.close();
     });
   ws.command('export')
-    .description('one JSON file with everything a workspace defines (specs/, datasets/, mocks/ and protos/ too); secret values are replaced by {{variables}}, never exported')
+    .description('one JSON file with everything a workspace defines (specs/, datasets/, mocks/ and protos/ too); secret values are replaced by {{variables}}, never exported. `testpion export --all` writes a bundle instead (preview, conflicts and Undo on import); this file stays for two more releases')
     .argument('<nameOrPath>')
     .option('-o, --output <file>', 'the file to write (default: <workspace name>.testpion.json)')
     .option('--json', 'print what was exported, replaced (replaced: [{kind, item, field, variable}]) and left out (notes) as JSON')

@@ -496,6 +496,33 @@ export const TOOL_DOCS: Record<string, ToolDoc> = {
     example: { trash_id: 'environment/1760700000000--staging-old.json' },
   },
 
+  // ── Bundles: move work between workspaces ──────────────────────────────
+  export_bundle: {
+    when: 'Use it to hand a collection, a section or the whole workspace to someone else or another workspace in one file: a collection with `uses: true` takes its environments, API definitions, datasets, MCP servers, mocks and tests with it.',
+    whenNot: 'For one collection in Postman, OpenAPI or Bruno form, use `collection_openapi` or the app’s Export; for a response, `export_traces`.',
+    example: { items: ['collection:clinic'], uses: true },
+  },
+  describe_bundle: {
+    when: 'Use it to see what a bundle file holds and what it needs before importing it.',
+    whenNot: 'To see what importing would change here, use `import_bundle_preview`.',
+    example: { file: '.local/exports/clinic.testpion.zip' },
+  },
+  import_bundle_preview: {
+    when: 'Use it before any import of a bundle: it lists what is new, what is already here and what conflicts, and gives the `plan_id` the apply needs.',
+    whenNot: 'To only read the bundle, use `describe_bundle`; foreign formats (Postman, OpenAPI …) go through `import_definition`.',
+    example: { file: '.local/exports/clinic.testpion.zip' },
+  },
+  import_bundle_apply: {
+    when: 'Use it after the user has seen the preview and chose how conflicts go: it writes the items and keeps a journal for `undo_import`.',
+    whenNot: 'Never without a `plan_id` from `import_bundle_preview` and the user’s yes.',
+    example: { plan_id: 'plan-1a2b3c4d5e6f', on_conflict: 'keep-both', confirm: true },
+  },
+  undo_import: {
+    when: 'Use it to take back an import that was not wanted; without `import_id` it lists the imports that can be undone.',
+    whenNot: 'To undo a single delete, use `restore_item`.',
+    example: { import_id: 'imp-1a2b3c4d5e6f', confirm: true },
+  },
+
   // ── MCP servers and mocks ──────────────────────────────────────────────
   mock_tools: {
     when: 'Use it to read the tools an MCP mock file defines and the commands that serve it.',

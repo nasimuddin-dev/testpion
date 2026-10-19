@@ -42,6 +42,7 @@ import { registerAiCommands } from './commands/ai.js';
 import { registerKindsCommand } from './commands/kinds.js';
 import { registerItemCommand } from './commands/item.js';
 import { registerOutputCommand } from './commands/output.js';
+import { registerBundleCommands } from './commands/bundle.js';
 
 /** The commands that send to APIs with an environment (by their path): they take --allow-production. */
 export const SENDING_COMMANDS = new Set(['test', 'run', 'run-collection', 'load', 'send', 'monitor add', 'monitor run', 'monitor start', 'eval run', 'serve flows', 'ai attempt-fix']);
@@ -81,6 +82,7 @@ export function buildProgram(): Command {
   registerTestFromCommand(program);
   registerAiCommands(program);
   registerKindsCommand(program);
+  registerBundleCommands(program);
   registerItemCommand(program);
   registerOutputCommand(program);
 

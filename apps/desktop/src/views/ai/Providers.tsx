@@ -167,7 +167,7 @@ export function Providers({ providers, onSaved, focus }: { providers: ProviderCo
               }
               menuLabel="More provider actions"
               // the page's own menu: the provider's, without Open (this is it)
-              menu={buildNodeMenu('provider', withRefDefaults({ ...providerMenu(p), on: { ...providerMenu(p).on, open: undefined } }))}
+              menu={buildNodeMenu('provider', withRefDefaults({ ...providerMenu(p), on: { ...providerMenu(p).on, open: undefined } }, 'provider'))}
             />
             <div className="grid grid-cols-2 gap-3">
               <Field label="Name">

@@ -24,6 +24,7 @@ import { refTools } from '../ref-tools.js';
 import { scaleTools } from '../scale-tools.js';
 import type { Tool } from '../tool.js';
 import { workspaceEditTools, type EditToolsDeps } from '../workspace-edit-tools.js';
+import { bundleTools } from './bundle-tools.js';
 import { itemTools } from './item-tools.js';
 import { outputTools } from './output-tools.js';
 import { gitItemTools } from './git-item-tools.js';
@@ -58,6 +59,7 @@ export function moduleTools(d: ModuleToolDeps): Tool[] {
     ...kindTools({ store }),
     ...itemTools({ store }),
     ...outputTools({ store, redactor }),
+    ...bundleTools({ store }),
     ...mockTools({ store }),
     ...datasetTools({ store }),
     ...arazzoTools({ store }),

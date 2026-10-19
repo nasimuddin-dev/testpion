@@ -94,7 +94,7 @@ export function TreeRowShell({ kind, ctx, nodeId, label, children, onClick, onOp
   };
   /** Run the row's menu item with this label (a key does what the menu does, or nothing). */
   const runItem = (test: (label: string) => boolean): boolean => {
-    const it = buildNodeMenu(kind, withRefDefaults(menuCtx())).find((i) => !i.disabled && !i.items && test(i.label));
+    const it = buildNodeMenu(kind, withRefDefaults(menuCtx(), kind)).find((i) => !i.disabled && !i.items && test(i.label));
     if (!it) return false;
     it.onSelect();
     return true;

@@ -4,6 +4,7 @@ import { promptText } from '../store';
 import { cx, Menu, rowActionClass, type MenuItem } from './ui';
 import { LABEL } from '../lib/vocabulary';
 import { buildNodeMenu, type NodeKind, type NodeMenuCtx } from '../lib/node-menu';
+import { transferActions } from '../lib/transfer';
 import { copyText } from '../lib/clipboard';
 import { itemRefUrl } from '@testpion/shared';
 
@@ -379,12 +380,16 @@ export const TEST_KINDS: Record<string, [string, string]> = {
  * only when the menu opens, so a closed row holds no menu. A row's right-click opens the same menu (controlled `open`).
  */
 export function NodeMenu({ kind, ctx, open, onOpenChange, header, label }: { kind: NodeKind; ctx: () => NodeMenuCtx; open?: boolean; onOpenChange?(open: boolean): void; header?: boolean; label?: string }) {
-  return <RowMenu label={label ?? 'this item'} items={() => buildNodeMenu(kind, withRefDefaults(ctx()))} open={open} onOpenChange={onOpenChange} header={header} />;
+  return <RowMenu label={label ?? 'this item'} items={() => buildNodeMenu(kind, withRefDefaults(ctx(), kind))} open={open} onOpenChange={onOpenChange} header={header} />;
 }
 
-/** What every node with an ItemRef can do without the view's help: Copy link (its testpion:// link). */
-export function withRefDefaults(c: NodeMenuCtx): NodeMenuCtx {
-  if (!c.ref || c.on.copyLink) return c;
+/**
+ * What every node can do without the view's help: Copy link (its testpion:// link) for a node with an ItemRef, and
+ * Export… / Import… (lib/transfer.ts) for the kinds that have them; a view's own handler wins.
+ */
+export function withRefDefaults(c: NodeMenuCtx, kind: NodeKind): NodeMenuCtx {
+  const transfer = transferActions(kind, c);
   const ref = c.ref;
-  return { ...c, on: { ...c.on, copyLink: () => copyText(itemRefUrl(ref), 'the link') } };
+  const link = ref && !c.on.copyLink ? { copyLink: () => copyText(itemRefUrl(ref), 'the link') } : {};
+  return { ...c, on: { ...transfer, ...link, ...c.on } };
 }

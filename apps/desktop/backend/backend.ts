@@ -154,6 +154,7 @@ import { flowScaleHandlers, cancelScaleRuns } from './handlers/flow-scale.js';
 import { evalMatrixHandlers } from './handlers/eval-matrix.js';
 import { outputHandlers } from './handlers/output.js';
 import { kindHandlers } from './handlers/kinds.js';
+import { bundleHandlers } from './handlers/bundle.js';
 import { checkRpcParams, guardHandler } from './rpc-params.js';
 import { forgetProductionSessions, guardProduction } from './production-guard.js';
 import { VizPages } from './viz-pages.js';
@@ -657,7 +658,7 @@ export class Backend {
    */
   private buildHandlers(): Handlers {
     const all: Handlers = {};
-    for (const group of [appHandlers, workspaceHandlers, collectionsHandlers, requestsHandlers, grpcHandlers, mcpHandlers, aiHandlers, aiTaskHandlers, aiTriageHandlers, aiSpecHandlers, testingHandlers, monitorHandlers, agentHandlers, feedbackHandlers, gitHandlers, debuggerHandlers, debuggerRulesHandlers, externalSecretsHandlers, fuzzHandlers, flowDebugHandlers, debuggerFlowHandlers, debuggerReverseHandlers, flowDeployHandlers, terminalHandlers, flowScaleHandlers, evalMatrixHandlers, outputHandlers, kindHandlers]) {
+    for (const group of [appHandlers, workspaceHandlers, collectionsHandlers, requestsHandlers, grpcHandlers, mcpHandlers, aiHandlers, aiTaskHandlers, aiTriageHandlers, aiSpecHandlers, testingHandlers, monitorHandlers, agentHandlers, feedbackHandlers, gitHandlers, debuggerHandlers, debuggerRulesHandlers, externalSecretsHandlers, fuzzHandlers, flowDebugHandlers, debuggerFlowHandlers, debuggerReverseHandlers, flowDeployHandlers, terminalHandlers, flowScaleHandlers, evalMatrixHandlers, outputHandlers, kindHandlers, bundleHandlers]) {
       for (const [name, fn] of Object.entries(group(this))) {
         if (name in all) throw new Error(`RPC method ${name} is defined twice`);
         // the parameters are checked first; a TypeError from inside becomes an InternalError naming the method

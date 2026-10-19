@@ -201,6 +201,10 @@ interface AppState {
   ci?: CiRequest;
   /** The "Compare OpenAPI versions" dialog. */
   openapiDiff?: boolean;
+  /** The Export bundle dialog (lib/transfer.ts): what to export. */
+  exportBundle?: import('./lib/transfer').ExportRequest;
+  /** The Import bundle dialog (lib/transfer.ts): a section limits it to that kind. */
+  importBundle?: import('./lib/transfer').ImportRequest;
   /** The API coverage dialog; `runId` preselects a run. */
   apiCoverage?: { runId?: string; spec?: string };
   /** The "Variable usages" dialog, with the variable to show (true: none chosen yet). */
