@@ -97,7 +97,7 @@ const steps = [
       const bar = await __t.waitFor(() => [...document.querySelectorAll('footer button')].map((b) => b.textContent.trim()).find((t) => /^main.*•/.test(t)), 4000);
       await __t.requests(); await __t.expand('HTTP basics (httpbin)'); await __t.expand('Requests & responses');
       const row = [...document.querySelectorAll('aside [data-tree-row]')].find((b) => b.offsetParent && b.textContent.includes('GET with query parameters'));
-      const mark = row?.querySelector('[title="Changed"]')?.textContent;
+      const mark = (row?.closest('[data-node-id]') ?? row)?.querySelector('[title="Changed"]')?.textContent;
       return 'git view: ' + (line ?? 'NONE') + ' | status bar: ' + (bar ?? 'NONE') + ' | explorer mark: ' + (mark ?? 'NONE');
     })()`,
   ],

@@ -242,7 +242,7 @@ const steps = [
      await __t.real.click(vis('[data-output-formats="console"]')[0]);
      const items = await __t.waitFor(() => { const m = vis('[role=menuitem]').map((x) => x.textContent.trim()); return m.length ? m : null; }, 3000); if (!items) return 'NO MENU';
      await __t.real.key('Escape'); await __t.sleep(200);
-     return 'include secrets offered: ' + items.some((l) => l.startsWith('Include secrets')) + ' | formats: ' + items.filter((l) => /^(Text|JSON Lines)\./.test(l)).length;`,
+     return 'include secrets offered: ' + items.some((l) => l.startsWith('Include secrets')) + ' | formats: ' + items.filter((l) => /^(Text|JSON Lines)$/.test(l)).length;`,
   ),
   // one control, one look: the same buttons, size and icon in every bar
   step(
