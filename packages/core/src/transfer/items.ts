@@ -82,7 +82,12 @@ export interface ItemAdapter {
 export function canonicalJson(value: unknown): Buffer {
   const sort = (v: unknown): unknown => {
     if (Array.isArray(v)) return v.map(sort);
-    if (v && typeof v === 'object') return Object.fromEntries(Object.keys(v as object).sort().map((k) => [k, sort((v as Record<string, unknown>)[k])]));
+    if (v && typeof v === 'object')
+      return Object.fromEntries(
+        Object.keys(v as object)
+          .sort()
+          .map((k) => [k, sort((v as Record<string, unknown>)[k])]),
+      );
     return v;
   };
   return Buffer.from(JSON.stringify(sort(value), null, 2) + '\n', 'utf8');

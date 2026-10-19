@@ -96,7 +96,8 @@ export function writeZip(entries: readonly ZipEntry[]): Buffer {
   end.writeUInt16LE(entries.length, 10);
   end.writeUInt32LE(cdBuf.length, 12);
   end.writeUInt32LE(offset, 16);
-  if (offset + cdBuf.length > 0xfffffff0 || entries.length >= 0xffff) throw new ApsError('ValidationError', 'The bundle is too large for one zip (4 GB or 65,535 files): export fewer items, or datasets by reference');
+  if (offset + cdBuf.length > 0xfffffff0 || entries.length >= 0xffff)
+    throw new ApsError('ValidationError', 'The bundle is too large for one zip (4 GB or 65,535 files): export fewer items, or datasets by reference');
   return Buffer.concat([...parts, cdBuf, end]);
 }
 

@@ -49,8 +49,14 @@ const validId = (id: string) => /^imp-[a-z0-9]{6,40}$/.test(id);
 export class JournalWriter implements JournalSink {
   readonly journal: ImportJournal;
   private readonly dir: string;
-  constructor(private readonly store: WorkspaceStore, title: string) {
-    const importId = `imp-${shortId('').slice(0, 12).toLowerCase().replace(/[^a-z0-9]/g, 'x')}`;
+  constructor(
+    private readonly store: WorkspaceStore,
+    title: string,
+  ) {
+    const importId = `imp-${shortId('')
+      .slice(0, 12)
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, 'x')}`;
     this.journal = { importId, at: new Date().toISOString(), title, files: [], items: [] };
     this.dir = dirOf(store, importId);
   }
@@ -88,7 +94,8 @@ export interface UndoResult {
 }
 
 function readJournal(store: WorkspaceStore, importId: string): ImportJournal {
-  if (!validId(importId)) throw new ApsError('ValidationError', `"${String(importId).slice(0, 40)}" is not an import id`, { suggestions: ['`testpion import --list` prints the imports that can be undone'] });
+  if (!validId(importId))
+    throw new ApsError('ValidationError', `"${String(importId).slice(0, 40)}" is not an import id`, { suggestions: ['`testpion import --list` prints the imports that can be undone'] });
   const f = `${dirOf(store, importId)}/journal.json`;
   if (!existsSync(f)) throw new ApsError('ValidationError', `No import ${importId} in this workspace`, { suggestions: ['`testpion import --list` prints the imports that can be undone'] });
   return JSON.parse(readFileSync(f, 'utf8')) as ImportJournal;

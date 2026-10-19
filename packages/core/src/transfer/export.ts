@@ -11,7 +11,8 @@ import { assemble, serialize, wantsZip, type BundlePart } from './container.js';
 import { DATASET_EMBED_BYTES, itemKey, type BundleItem, type BundleKindId, type BundleManifest, type ParsedBundle } from './format.js';
 import { noun } from './items.js';
 import { adapter, ALL_BUNDLE_KINDS } from './registry.js';
-import { everythingRefs, uniqueRefs, type BundleRef } from './selection.js';
+import { everythingRefs, uniqueRefs } from './selection.js';
+import type { BundleRef } from './types.js';
 import { collectUses } from './uses.js';
 
 export interface BuildOptions {
@@ -75,7 +76,11 @@ export function buildBundle(store: WorkspaceStore, selection: readonly BundleRef
   };
 
   if (selection !== 'all')
-    for (const r of roots) if (!adapter(r.kind).snapshot(store, r.id, new SecretStripper())) throw new ApsError('ValidationError', `No ${noun(adapter(r.kind).label)} "${r.id}" in this workspace`, { suggestions: ['`testpion export --section <kind>` lists nothing by itself: use `testpion kinds` for the kinds and the app for the names'] });
+    for (const r of roots)
+      if (!adapter(r.kind).snapshot(store, r.id, new SecretStripper()))
+        throw new ApsError('ValidationError', `No ${noun(adapter(r.kind).label)} "${r.id}" in this workspace`, {
+          suggestions: ['`testpion export --section <kind>` lists nothing by itself: use `testpion kinds` for the kinds and the app for the names'],
+        });
 
   let refs: BundleRef[] = roots;
   let edges: BundleManifest['edges'] = [];
@@ -113,7 +118,9 @@ export function buildBundle(store: WorkspaceStore, selection: readonly BundleRef
     if (isTextual(snap.data)) for (const m of snap.data.toString('utf8').matchAll(/connectionEnv["']?\s*:\s*["']?([A-Za-z_][A-Za-z0-9_]*)/g)) osEnv.add(m[1]!);
     if (r.kind === 'dataset' && (datasets === 'reference' || (datasets === 'auto' && snap.data.length > embedBytes))) {
       parts.push({ item: { ...item, summary: { ...item.summary, bytes: snap.data.length } } });
-      notes.push(`Dataset ${snap.id} (${mb(snap.data.length)}) travels by reference: the file is not in the bundle. Copy it to the other workspace by hand${datasets === 'auto' ? ', or export with datasets embedded' : ''}.`);
+      notes.push(
+        `Dataset ${snap.id} (${mb(snap.data.length)}) travels by reference: the file is not in the bundle. Copy it to the other workspace by hand${datasets === 'auto' ? ', or export with datasets embedded' : ''}.`,
+      );
       continue;
     }
     parts.push({ item, data: snap.data });
@@ -124,7 +131,8 @@ export function buildBundle(store: WorkspaceStore, selection: readonly BundleRef
   const replaced = strip.replaced;
   const secrets = [...new Map(replaced.map((x) => [x.variable, { name: x.variable, where: `${x.item}, ${x.field}` }])).values()];
   const first = roots.length === 1 ? parts.find((p) => p.item.kind === roots[0]!.kind && p.item.id === roots[0]!.id)?.item.name : undefined;
-  const title = opts.title ?? (first ? (opts.uses ? `${first} (with everything it uses)` : first) : selection === 'all' ? `${store.workspace.name}` : `${parts.length} items from ${store.workspace.name}`);
+  const title =
+    opts.title ?? (first ? (opts.uses ? `${first} (with everything it uses)` : first) : selection === 'all' ? `${store.workspace.name}` : `${parts.length} items from ${store.workspace.name}`);
   const bundle: ParsedBundle = assemble(
     {
       title,
@@ -143,9 +151,18 @@ export function buildBundle(store: WorkspaceStore, selection: readonly BundleRef
 
   const counts: Partial<Record<BundleKindId, number>> = {};
   for (const i of bundle.manifest.items) counts[i.kind] = (counts[i.kind] ?? 0) + 1;
-  const lines = [`Exported ${bundle.manifest.items.length} item${bundle.manifest.items.length === 1 ? '' : 's'}: ${(Object.entries(counts) as Array<[BundleKindId, number]>).map(([k, n]) => label(k, n)).join(', ')}.`];
-  if (replaced.length) lines.push(`Replaced ${replaced.length} secret${replaced.length === 1 ? '' : 's'} with variables: ${secrets.map((s) => `{{${s.name}}}`).join(', ')}. Set them in the other workspace.`);
-  if (missing.length) lines.push(`Named but not in the workspace (${missing.length}): ${missing.slice(0, 5).map((m) => m.to).join(', ')}${missing.length > 5 ? ' …' : ''}.`);
+  const lines = [
+    `Exported ${bundle.manifest.items.length} item${bundle.manifest.items.length === 1 ? '' : 's'}: ${(Object.entries(counts) as Array<[BundleKindId, number]>).map(([k, n]) => label(k, n)).join(', ')}.`,
+  ];
+  if (replaced.length)
+    lines.push(`Replaced ${replaced.length} secret${replaced.length === 1 ? '' : 's'} with variables: ${secrets.map((s) => `{{${s.name}}}`).join(', ')}. Set them in the other workspace.`);
+  if (missing.length)
+    lines.push(
+      `Named but not in the workspace (${missing.length}): ${missing
+        .slice(0, 5)
+        .map((m) => m.to)
+        .join(', ')}${missing.length > 5 ? ' …' : ''}.`,
+    );
   lines.push(...notes);
   return { bytes, format, fileName: bundleFileName(title, format), manifest: bundle.manifest, counts, replaced, notes, lines };
 }

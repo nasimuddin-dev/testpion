@@ -11,7 +11,7 @@ import type { WorkspaceStore } from '../storage/workspace.js';
 import { LIBRARY_OF, RAW_ROOT, itemKey, type BundleEdge, type BundleKindId, type BundleManifest } from './format.js';
 import { adapter, ALL_BUNDLE_KINDS } from './registry.js';
 import type { Listed } from './items.js';
-import type { BundleRef } from './selection.js';
+import type { BundleRef } from './types.js';
 
 export interface UsesResult {
   refs: BundleRef[];
@@ -139,7 +139,15 @@ export function collectUses(store: WorkspaceStore, roots: readonly BundleRef[], 
       const needed = templateVariables(text).filter((v) => !own.has(v) && !wsVars.has(v));
       for (const e of envs) {
         const defined = needed.filter((n) => e.variables.some((v) => v.key === n));
-        if (defined.length) use(from, { kind: 'environment', id: e.id }, `defines ${defined.slice(0, 3).map((d) => `{{${d}}}`).join(', ')}${defined.length > 3 ? ' …' : ''}`);
+        if (defined.length)
+          use(
+            from,
+            { kind: 'environment', id: e.id },
+            `defines ${defined
+              .slice(0, 3)
+              .map((d) => `{{${d}}}`)
+              .join(', ')}${defined.length > 3 ? ' …' : ''}`,
+          );
       }
     }
   }

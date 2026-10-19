@@ -4,47 +4,17 @@
  * whole workspace. Each becomes a `{ kind, id }` of the bundle; an item that is not in the workspace is an error that
  * says what is, never an empty bundle.
  */
-import { kindByName, kindOfLibrary, type ItemRef } from '@testpion/shared';
+import { kindByName } from '@testpion/shared';
 import { ApsError } from '../errors.js';
 import { itemRefOf } from '../kinds/ops.js';
+import { bundleRefOfItemRef } from '../kinds/transfer-refs.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { ALL_BUNDLE_KINDS, adapter, bundleKindOf, normalizeId } from './registry.js';
-import { type BundleKindId, itemKey } from './format.js';
+import { itemKey } from './format.js';
+import type { BundleRef } from './types.js';
 
-export interface BundleRef {
-  kind: BundleKindId;
-  id: string;
-}
-
-/** The bundle item an ItemRef names; undefined for a ref that is no exportable item (a run, a history entry …). */
-export function bundleRefOfItemRef(ref: ItemRef): BundleRef | undefined {
-  switch (ref.kind) {
-    case 'collection':
-      return { kind: 'collection', id: ref.collectionId };
-    case 'environment':
-      return ref.environmentId ? { kind: 'environment', id: ref.environmentId } : undefined;
-    case 'test':
-    case 'flow':
-      return { kind: 'test', id: normalizeId('test', ref.path) };
-    case 'spec':
-      return { kind: 'spec', id: normalizeId('spec', ref.path) };
-    case 'dataset':
-      return { kind: 'dataset', id: normalizeId('dataset', ref.name) };
-    case 'mcp-server':
-      return { kind: 'mcp-server', id: ref.serverId };
-    case 'provider':
-      return { kind: 'provider', id: ref.providerId };
-    case 'monitor':
-      return { kind: 'monitor', id: ref.monitorId };
-    case 'saved': {
-      const k = kindOfLibrary(ref.library);
-      const b = k && bundleKindOf(k.id);
-      return b ? { kind: b, id: ref.itemId } : undefined;
-    }
-    default:
-      return undefined;
-  }
-}
+export type { BundleRef };
+export { bundleRefOfItemRef };
 
 /** One selector as a bundle ref. A bare word is a collection (by id or name), as `testpion export <collection>` always took. */
 export function parseSelector(store: WorkspaceStore, selector: unknown): BundleRef {
@@ -68,7 +38,9 @@ export function parseSelector(store: WorkspaceStore, selector: unknown): BundleR
   }
   const c = store.listCollections().find((x) => !x.problem && (x.id === text || x.name.toLowerCase() === text.toLowerCase()));
   if (c) return { kind: 'collection', id: c.id };
-  throw new ApsError('ValidationError', `Nothing to export for "${text.slice(0, 80)}"`, { suggestions: ['Use kind:id, e.g. collection:<id>, spec:specs/<path>, dataset:<name>, mcp-server:<id>', 'A bare word is a collection name or id'] });
+  throw new ApsError('ValidationError', `Nothing to export for "${text.slice(0, 80)}"`, {
+    suggestions: ['Use kind:id, e.g. collection:<id>, spec:specs/<path>, dataset:<name>, mcp-server:<id>', 'A bare word is a collection name or id'],
+  });
 }
 
 /** Every item of one section (a kind, by id or alias: `datasets`, `mcp`, `specs`, `collection` …). */

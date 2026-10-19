@@ -36,7 +36,11 @@ export function entryNameFor(kind: BundleKindId, id: string, taken: Set<string>)
     return n;
   }
   const dir = JSON_DIR[kind] ?? `library/${LIBRARY_OF[kind] ?? kind}`;
-  const base = id.replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^\.+/, '').slice(0, 100) || 'item';
+  const base =
+    id
+      .replace(/[^A-Za-z0-9._-]+/g, '_')
+      .replace(/^\.+/, '')
+      .slice(0, 100) || 'item';
   let name = `${dir}/${base}.json`;
   for (let i = 2; taken.has(name.toLowerCase()); i++) name = `${dir}/${base}-${i}.json`;
   taken.add(name.toLowerCase());
@@ -69,7 +73,16 @@ export function assemble(meta: ManifestMeta, parts: BundlePart[], source: Parsed
 
 /** A short README for a person who opens the zip: never read on import. */
 function readme(m: BundleManifest): string {
-  const lines = [`# ${m.title}`, '', `A TestPion bundle (format ${m.formatVersion}), made by ${m.createdBy.app} ${m.createdBy.version} on ${m.createdAt}.`, '', 'Import it in TestPion with Import…, or `testpion import <file> --preview`.', '', '## Items', ''];
+  const lines = [
+    `# ${m.title}`,
+    '',
+    `A TestPion bundle (format ${m.formatVersion}), made by ${m.createdBy.app} ${m.createdBy.version} on ${m.createdAt}.`,
+    '',
+    'Import it in TestPion with Import…, or `testpion import <file> --preview`.',
+    '',
+    '## Items',
+    '',
+  ];
   for (const i of m.items) lines.push(`- ${i.kind}: ${i.name}${i.mode === 'reference' ? ' (by reference: the file is not included)' : ''}`);
   if (m.requires.secrets.length) lines.push('', '## Fill in after import', '', ...m.requires.secrets.map((s) => `- ${s.name} (${s.where})`));
   if (m.notes.length) lines.push('', '## Notes', '', ...m.notes.map((n) => `- ${n}`));

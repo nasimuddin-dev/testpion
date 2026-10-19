@@ -27,7 +27,9 @@ export function rememberBundle(store: WorkspaceStore, bundle: ParsedBundle): str
 export function recallBundle(store: WorkspaceStore, planId: string): ParsedBundle {
   const p = plans.get(String(planId ?? ''));
   if (!p || Date.now() - p.at > TTL_MS || p.root !== store.root) {
-    throw new ApsError('ValidationError', `No import plan "${String(planId).slice(0, 40)}" (it expired, or it is for another workspace)`, { suggestions: ['Preview the bundle again to get a new plan id'] });
+    throw new ApsError('ValidationError', `No import plan "${String(planId).slice(0, 40)}" (it expired, or it is for another workspace)`, {
+      suggestions: ['Preview the bundle again to get a new plan id'],
+    });
   }
   return p.bundle;
 }

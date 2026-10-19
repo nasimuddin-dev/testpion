@@ -72,7 +72,12 @@ export function legacyToBundle(raw: Record<string, unknown>): ParsedBundle {
       root: [],
       edges: [],
       missing: [],
-      requires: { secrets: objects(raw.replaced).filter((r) => typeof r.variable === 'string').map((r) => ({ name: String(r.variable).slice(0, 120), where: `${String(r.item ?? '').slice(0, 150)} ${String(r.field ?? '').slice(0, 100)}`.trim() })), osEnv: [] },
+      requires: {
+        secrets: objects(raw.replaced)
+          .filter((r) => typeof r.variable === 'string')
+          .map((r) => ({ name: String(r.variable).slice(0, 120), where: `${String(r.item ?? '').slice(0, 150)} ${String(r.field ?? '').slice(0, 100)}`.trim() })),
+        osEnv: [],
+      },
       flags: { scripts: 0, production: [], strippedSecrets: 0, stdioServers: [] },
       notes: ['Read from a workspace export made by an earlier version of TestPion.'],
     },

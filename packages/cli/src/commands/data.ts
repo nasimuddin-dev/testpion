@@ -6,6 +6,7 @@ import { Command, Option } from 'commander';
 import { WorkspaceManager, formatDuration, importRequestSnippet, ciConfig, ciTargetOfRun, finishedRun, compareEnvironments, environmentMatrix, compareRequestAcrossEnvironments, collectionRequests, type CiProvider, convertCollectionScripts, isRequestSnippet, Redactor, collectionMarkdown, collectionHtml, exportPostmanCollection, exportPostmanEnvironment, fetchImportText, readBrunoFolder, collectionToBru, type Environment, bundleWsdl, isWsdl, importIntoWorkspace, diffOpenApi, lintOpenApi, OPENAPI_LINT_RULES, type OpenApiLintSeverity, type OpenApiLintResult, workspaceApiCoverage, apiCoverageMarkdown, securityLint, collectionSecurityFindings, type SecurityFinding, listSpecs, unusedVariables, definedVariableNames, findEnvironment, setEnvironmentVariables, addVariablesToEnvironments, unsetEnvironmentVariables, variableFlow, collectionToOpenApiText, variableUsages, renameVariable, collectionSavedItems, listWorkspaceDatasets, appendDatasetRow, readWorkspaceDataset, workspaceReportHtml, collectionVariableFlow, loadHistory, workspaceStorage, deleteRunsBefore, listCertificates, workspaceAttention, decodeJwt, describeExpiry, recordCertificate, checkCertificate, detectFormat, resolveArazzoSources, keepPmApplies } from '@testpion/core';
 import { EXIT, green, red, yellow, dim, bold, CliError, printJson, findWorkspaceUp, withWorkspace, warnProblems, cliSecrets, cliContext, requireCollection, requireEnvironment, loadCollectionRef, readDefinition } from '../shared.js';
 import { requireInteractive } from '../contract.js';
+import { isBundleFile, runBundleExport, runBundleImport, wantsBundleExport } from './bundle.js';
 
 export function registerDataCommands(program: Command): void {
   program
@@ -531,13 +532,22 @@ export function registerDataCommands(program: Command): void {
     });
   program
     .command('export')
-    .description('export a collection as a Postman v2.1 collection (default), TestPion JSON, an OpenAPI 3.1 document (--format openapi), a Bruno collection folder (--format bruno --out <folder>) an .http file (--format http) or its connections as AsyncAPI 3.0 (--format asyncapi)\n<collection> is a collection name or id in the workspace, or a collection file to convert')
-    .argument('<collection>', 'collection name or id, a file, or an http(s) link')
+    .description('export a collection as a Postman v2.1 collection (default), TestPion JSON, an OpenAPI 3.1 document (--format openapi), a Bruno collection folder (--format bruno --out <folder>) an .http file (--format http) or its connections as AsyncAPI 3.0 (--format asyncapi)\n<collection> is a collection name or id in the workspace, or a collection file to convert\nA TestPion bundle (.testpion.zip / .testpion.json) holds any items: kind:id items (collection:<id> spec:specs/<path> dataset:<name> mcp-server:<id> ...), --section <kind>, or --all; --uses adds what they use (a collection: its environments, API definitions, datasets, MCP servers, mocks, protos, tests, flows). Secret values are never in it.')
+    .argument('[refs...]', 'collection name or id, a file, or an http(s) link; for a bundle: the items as kind:id')
     .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
-    .addOption(new Option('-f, --format <format>', 'output format').choices(['postman', 'testpion', 'openapi', 'bruno', 'http', 'asyncapi']).default('postman'))
+    .addOption(new Option('-f, --format <format>', 'output format').choices(['postman', 'testpion', 'openapi', 'bruno', 'http', 'asyncapi', 'bundle']).default('postman'))
     .option('--json', 'with --format openapi: JSON instead of YAML')
-    .option('-o, --out <file>', 'write to this file instead of stdout')
-    .action(async (ref: string, o: { workspace?: string; format: 'postman' | 'testpion' | 'openapi' | 'bruno' | 'http' | 'asyncapi'; json?: boolean; out?: string }) => {
+    .option('-o, --out <file>', 'write to this file instead of stdout (a bundle: <title>.testpion.zip in the current folder; .zip or .json picks the form)')
+    .option('--section <kind>', 'a bundle of every item of one kind (collection, environment, spec, dataset, test, mcp-server, mcp-mock, proto, script-package, prompt, load-test, evaluation, monitor, grpc-call, ws-connection, provider)')
+    .option('--all', 'a bundle of the whole workspace (AI providers only with --providers)')
+    .option('--uses', 'a bundle: add everything the items use')
+    .option('--datasets <mode>', 'a bundle: embed, reference or auto (embed up to 10 MB, bigger by reference; default)')
+    .option('--providers', 'a bundle: include AI providers in a whole-workspace or section export')
+    .option('--title <text>', 'a bundle: its title')
+    .action(async (refs: string[], o: { workspace?: string; format: 'postman' | 'testpion' | 'openapi' | 'bruno' | 'http' | 'asyncapi' | 'bundle'; json?: boolean; out?: string; section?: string; all?: boolean; uses?: boolean; datasets?: 'auto' | 'embed' | 'reference'; providers?: boolean; title?: string }) => {
+      if (wantsBundleExport(refs, o)) return runBundleExport(refs, o);
+      if (refs.length !== 1) throw new CliError('Give one collection (name, id, file or link) to export in this format; several items go in a bundle (kind:id items, --format bundle)', EXIT.CONFIG_ERROR);
+      const ref = refs[0]!;
       const c = await loadCollectionRef(ref, o.workspace);
       if (o.format === 'bruno') {
         // a folder like the one Bruno keeps in git; the workspace's environments go to environments/ (secret values never)
@@ -616,8 +626,15 @@ export function registerDataCommands(program: Command): void {
   program
     .command('import')
     .description('import OpenAPI/Swagger, Postman, Insomnia, Bruno, Hoppscotch, HAR, .env or collection files, Arazzo workflows (as flow files under tests/arazzo/), or a copied cURL / fetch / PowerShell request, into a workspace')
-    .argument('<file>', 'file to import, a Bruno collection folder, an http(s) link to download (OpenAPI URL, GitHub file, Postman API link), or - to read stdin (e.g. a cURL command from the clipboard)')
+    .argument('[file]', 'file to import, a Bruno collection folder, an http(s) link to download (OpenAPI URL, GitHub file, Postman API link), or - to read stdin (e.g. a cURL command from the clipboard); a TestPion bundle (.testpion.zip / .testpion.json, or a workspace export) is previewed and merged with your choices')
     .requiredOption('-w, --workspace <nameOrPath>')
+    .option('--preview', 'a bundle: only say what importing would do (new, identical, conflict per item); nothing is written')
+    .option('--on-conflict <choice>', 'a bundle: when an item is already here: keep-both (default; the new one is renamed), replace (yours is replaced; --undo restores it) or skip')
+    .option('--only <kinds>', 'a bundle: import only these kinds or kind:id items (comma separated)')
+    .option('--decisions <file>', 'a bundle: a JSON file of "kind:id": "keep-both" | "replace" | "skip" for single items')
+    .option('--max-size <mb>', 'a bundle: refuse a file larger than this many megabytes')
+    .option('--undo <importId>', 'take back a bundle import (what it made is removed, what it replaced is restored)')
+    .option('--list', 'list the bundle imports that can be undone')
     .option('--collection <name>', 'for a cURL / fetch / PowerShell request: the collection to add it to (created if needed)', 'Imported')
     .option('--folder <path>', 'for a request: folder path inside the collection, e.g. "Auth / Tokens"')
     .option('--name <name>', 'for a request: its name (default: method and path)')
@@ -626,8 +643,10 @@ export function registerDataCommands(program: Command): void {
     .option('--keep-pm', "for Postman / Insomnia: keep pm.* in scripts (default: they are converted to TestPion's tp.*; pm.* runs either way)")
     .option('--fetch-sources', 'for Arazzo: download OpenAPI source descriptions given as http(s) URLs (default: only files next to the Arazzo file or in the workspace, e.g. specs/)')
     .option('--json', 'print the result as JSON (for scripts and AI agents)')
-    .action((file: string, o) =>
-      withWorkspace(o.workspace, async (store) => {
+    .action(async (file: string | undefined, o) => {
+      if (o.undo || o.list || (file && file !== '-' && isBundleFile(file))) return runBundleImport(file, o);
+      if (!file) throw new CliError('Give a file to import (or --undo <importId> / --list for a bundle import)', EXIT.CONFIG_ERROR);
+      return withWorkspace(o.workspace, async (store) => {
         const link = /^https?:\/\//i.test(file) ? await fetchImportText(file) : undefined;
         // a folder is a Bruno collection (bruno.json and .bru files)
         const folder = !link && file !== '-' && existsSync(file) && statSync(file).isDirectory();
@@ -672,8 +691,8 @@ export function registerDataCommands(program: Command): void {
           if (notes.length > 20) console.log(yellow(`  … and ${notes.length - 20} more (--json lists them all)`));
           if (r.secretsToSet?.length) console.log(yellow(`Secret values were not saved (set them in the app, or as TESTPION_SECRET_* variables): ${r.secretsToSet.join(', ')}`));
         }
-      }),
-    );
+      });
+    });
   program
     .command('scripts')
     .description('script tools')

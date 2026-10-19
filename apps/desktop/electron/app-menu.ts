@@ -68,6 +68,7 @@ function build(a: AppMenuActions): Menu {
         item({ label: 'Open Recent…', i: 'openFolder', click: () => a.menu('open-recent') }),
         sep,
         item({ label: 'Import…', i: 'import', accelerator: 'CmdOrCtrl+O', click: () => a.menu('import') }),
+        item({ label: 'Import Bundle…', i: 'import', click: () => a.menu('import-bundle') }),
         item({
           label: 'Export',
           i: 'export',
@@ -75,6 +76,7 @@ function build(a: AppMenuActions): Menu {
             item({ label: 'Collection (Postman v2.1)…', i: 'exportCollection', click: () => a.menu('export-collection') }),
             item({ label: 'Current Environment…', i: 'environment', click: () => a.menu('export-environment') }),
             item({ label: 'Workspace…', i: 'workspace', click: () => a.menu('export-workspace') }),
+            item({ label: 'Bundle…', i: 'export', click: () => a.menu('export-bundle') }),
           ],
         }),
         sep,

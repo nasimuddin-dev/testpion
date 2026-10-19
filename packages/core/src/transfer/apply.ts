@@ -9,6 +9,7 @@
  */
 import { ApsError } from '../errors.js';
 import type { ItemRef } from '@testpion/shared';
+import { openRefOfBundleItem } from '../kinds/transfer-refs.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { itemKey, type BundleKindId, type ParsedBundle } from './format.js';
 import { JournalWriter, undoImport } from './journal.js';
@@ -48,28 +49,26 @@ export interface ImportOutcome {
 }
 
 /** Order the kinds are written in. */
-const ORDER: BundleKindId[] = ['collection', 'environment', 'mcp-mock', 'spec', 'dataset', 'proto', 'script-package', 'test', 'mcp-server', 'provider', 'grpc-call', 'ws-connection', 'prompt', 'load-test', 'evaluation', 'monitor'];
+const ORDER: BundleKindId[] = [
+  'collection',
+  'environment',
+  'mcp-mock',
+  'spec',
+  'dataset',
+  'proto',
+  'script-package',
+  'test',
+  'mcp-server',
+  'provider',
+  'grpc-call',
+  'ws-connection',
+  'prompt',
+  'load-test',
+  'evaluation',
+  'monitor',
+];
 
 const outcome = (i: PreviewItem, target?: Target, why?: string): ItemOutcome => ({ kind: i.kind, id: i.id, name: i.name, ...(target ? { target } : {}), ...(why ? { why } : {}) });
-
-function openRef(kind: BundleKindId, t: Target): ItemRef | undefined {
-  switch (kind) {
-    case 'collection':
-      return { kind: 'collection', collectionId: t.id };
-    case 'environment':
-      return { kind: 'environment', environmentId: t.id };
-    case 'test':
-      return { kind: 'test', path: t.id.replace(/^tests\//, '') };
-    case 'spec':
-      return { kind: 'spec', path: t.id };
-    case 'dataset':
-      return { kind: 'dataset', name: t.id.replace(/^datasets\//, '') };
-    case 'mcp-server':
-      return { kind: 'mcp-server', serverId: t.id };
-    default:
-      return undefined;
-  }
-}
 
 export function applyImport(store: WorkspaceStore, bundle: ParsedBundle, opts: ApplyOptions = {}): ImportOutcome {
   const preview = previewImport(store, bundle);
@@ -158,7 +157,7 @@ export function applyImport(store: WorkspaceStore, bundle: ParsedBundle, opts: A
 
   const rootKeys = new Set(bundle.manifest.root.map((r) => itemKey(r.kind, r.id)));
   const first = plan.find((x) => rootKeys.has(itemKey(x.p.kind, x.p.id))) ?? plan[0];
-  const open = first ? openRef(first.p.kind, first.target) : undefined;
+  const open = first ? openRefOfBundleItem(first.p.kind, first.target.id) : undefined;
   return {
     importId: journal.journal.importId,
     created,

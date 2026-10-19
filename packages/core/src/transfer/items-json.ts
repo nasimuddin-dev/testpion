@@ -51,7 +51,11 @@ function countRequests(items: unknown): number {
 const collection: ItemAdapter = {
   kind: 'collection',
   label: 'Collection',
-  list: (store) => store.listCollections().filter((c) => !c.problem).map((c) => ({ id: c.id, name: c.name })),
+  list: (store) =>
+    store
+      .listCollections()
+      .filter((c) => !c.problem)
+      .map((c) => ({ id: c.id, name: c.name })),
   snapshot(store, id, strip) {
     let c: Collection;
     try {
@@ -101,7 +105,11 @@ const collection: ItemAdapter = {
 const environment: ItemAdapter = {
   kind: 'environment',
   label: 'Environment',
-  list: (store) => store.listEnvironments().filter((e) => !e.problem).map((e) => ({ id: e.id, name: e.name })),
+  list: (store) =>
+    store
+      .listEnvironments()
+      .filter((e) => !e.problem)
+      .map((e) => ({ id: e.id, name: e.name })),
   snapshot(store, id, strip) {
     const e = store.listEnvironments().find((x) => x.id === id && !x.problem);
     if (!e) return undefined;
@@ -141,7 +149,15 @@ const environment: ItemAdapter = {
 const TRANSPORTS = new Set(['stdio', 'streamable-http', 'sse', 'mock']);
 
 /** Rewrite, add and replace the items of a list: `read` gives the list, `write` saves it whole (once for all writes). */
-function commitList<T extends { id: string; name: string }>(writes: CommitWrite[], read: () => T[], write: (list: T[]) => void, journal: JournalSink, kind: BundleKindId, file: 'mcp-servers' | 'providers', existingId: (w: CommitWrite) => string | undefined) {
+function commitList<T extends { id: string; name: string }>(
+  writes: CommitWrite[],
+  read: () => T[],
+  write: (list: T[]) => void,
+  journal: JournalSink,
+  kind: BundleKindId,
+  file: 'mcp-servers' | 'providers',
+  existingId: (w: CommitWrite) => string | undefined,
+) {
   const list = read();
   for (const w of writes) {
     const v = parseObject(w.data) as unknown as T;
@@ -192,7 +208,15 @@ const mcpServer: ItemAdapter = {
   },
   commit(store, writes, journal) {
     // a program an import brought is never trusted: the trust list is the user's (storage/trust.ts), nothing here touches it
-    commitList<McpServerConfig>(writes, () => store.getMcpServers(), (l) => store.saveMcpServers(l), journal, 'mcp-server', 'mcp-servers', (w) => (w.op === 'replaced' ? w.target.id : undefined));
+    commitList<McpServerConfig>(
+      writes,
+      () => store.getMcpServers(),
+      (l) => store.saveMcpServers(l),
+      journal,
+      'mcp-server',
+      'mcp-servers',
+      (w) => (w.op === 'replaced' ? w.target.id : undefined),
+    );
   },
 };
 
@@ -217,7 +241,15 @@ const provider: ItemAdapter = {
   fresh: (existing, x, taken) => freshTarget(existing, x, taken),
   rewrite: (_item, data) => data,
   commit(store, writes, journal) {
-    commitList<ProviderConfig>(writes, () => store.getProviders(), (l) => store.saveProviders(l), journal, 'provider', 'providers', (w) => (w.op === 'replaced' ? w.target.id : undefined));
+    commitList<ProviderConfig>(
+      writes,
+      () => store.getProviders(),
+      (l) => store.saveProviders(l),
+      journal,
+      'provider',
+      'providers',
+      (w) => (w.op === 'replaced' ? w.target.id : undefined),
+    );
   },
 };
 

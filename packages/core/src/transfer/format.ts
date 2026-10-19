@@ -19,7 +19,24 @@ export const BUNDLE_FORMAT = 'testpion-bundle';
 export const BUNDLE_VERSION = 1;
 
 /** The kinds a bundle can hold: the registry kinds with the export and import capabilities (a flow is a test file). */
-export const BUNDLE_KIND_IDS = ['collection', 'environment', 'test', 'spec', 'dataset', 'proto', 'script-package', 'mcp-server', 'mcp-mock', 'provider', 'grpc-call', 'ws-connection', 'prompt', 'load-test', 'evaluation', 'monitor'] as const;
+export const BUNDLE_KIND_IDS = [
+  'collection',
+  'environment',
+  'test',
+  'spec',
+  'dataset',
+  'proto',
+  'script-package',
+  'mcp-server',
+  'mcp-mock',
+  'provider',
+  'grpc-call',
+  'ws-connection',
+  'prompt',
+  'load-test',
+  'evaluation',
+  'monitor',
+] as const;
 export type BundleKindId = (typeof BUNDLE_KIND_IDS)[number];
 
 export const isBundleKind = (k: unknown): k is BundleKindId => typeof k === 'string' && (BUNDLE_KIND_IDS as readonly string[]).includes(k);
@@ -105,13 +122,26 @@ export const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/;
 export const isPlainId = (id: unknown): id is string => typeof id === 'string' && id.length > 0 && id.length <= 200 && !/[\u0000-\u001f\u007f]/.test(id);
 
 /** A name for display: text, bounded, with no control characters. */
-export const plainName = (v: unknown, fallback: string): string => (typeof v === 'string' && v.trim() ? v.replace(/[\u0000-\u001f\u007f]+/g, ' ').trim().slice(0, 200) : fallback);
+export const plainName = (v: unknown, fallback: string): string =>
+  typeof v === 'string' && v.trim()
+    ? v
+        .replace(/[\u0000-\u001f\u007f]+/g, ' ')
+        .trim()
+        .slice(0, 200)
+    : fallback;
 
 /** The folder each file kind lives in (the root of every id of that kind). */
 export const RAW_ROOT: Partial<Record<BundleKindId, string>> = { test: 'tests', spec: 'specs', dataset: 'datasets', proto: 'protos', 'script-package': 'packages', 'mcp-mock': 'mocks' };
 
 /** The library of each saved-item kind. */
-export const LIBRARY_OF: Partial<Record<BundleKindId, string>> = { 'grpc-call': 'grpc', 'ws-connection': 'websocket', prompt: 'ai-prompts', 'load-test': 'load-tests', evaluation: 'evaluations', monitor: 'monitors' };
+export const LIBRARY_OF: Partial<Record<BundleKindId, string>> = {
+  'grpc-call': 'grpc',
+  'ws-connection': 'websocket',
+  prompt: 'ai-prompts',
+  'load-test': 'load-tests',
+  evaluation: 'evaluations',
+  monitor: 'monitors',
+};
 
 /** Kinds stored as a file of their own that the bundle holds as bytes. */
 export const isRawKind = (k: BundleKindId): boolean => k in RAW_ROOT;
@@ -163,7 +193,8 @@ export function checkManifest(raw: unknown, limits: TransferLimits = TRANSFER_LI
     if (mode === 'embed' && (typeof it.entry !== 'string' || !it.entry)) return refuse(`${key} has no entry`);
     if (mode === 'embed' && (typeof it.sha256 !== 'string' || !/^[0-9a-f]{64}$/i.test(it.sha256))) return refuse(`${key} has no checksum`);
     const summary: Record<string, string | number> = {};
-    if (isObject(it.summary)) for (const [k, s] of Object.entries(it.summary).slice(0, 20)) if (typeof s === 'number' || typeof s === 'string') summary[text(k, 40)] = typeof s === 'string' ? text(s, 200) : s;
+    if (isObject(it.summary))
+      for (const [k, s] of Object.entries(it.summary).slice(0, 20)) if (typeof s === 'number' || typeof s === 'string') summary[text(k, 40)] = typeof s === 'string' ? text(s, 200) : s;
     items.push({
       kind: it.kind,
       id: it.id,
@@ -183,7 +214,13 @@ export function checkManifest(raw: unknown, limits: TransferLimits = TRANSFER_LI
   const req = isObject(raw.requires) ? raw.requires : {};
   const flags = isObject(raw.flags) ? raw.flags : {};
   const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? Math.floor(v) : 0);
-  const strings = (v: unknown, max = 500) => (Array.isArray(v) ? v.slice(0, max).filter((s): s is string => typeof s === 'string').map((s) => text(s, 200)) : []);
+  const strings = (v: unknown, max = 500) =>
+    Array.isArray(v)
+      ? v
+          .slice(0, max)
+          .filter((s): s is string => typeof s === 'string')
+          .map((s) => text(s, 200))
+      : [];
   const created = isObject(raw.createdBy) ? raw.createdBy : {};
   return {
     manifest: {

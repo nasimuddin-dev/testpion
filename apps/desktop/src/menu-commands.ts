@@ -5,6 +5,7 @@ import { reopenClosedTab } from './lib/closed-tabs';
 import { downloadFocusedOutput } from './components/output/output-core';
 import { downloadContent, hasNativeDialogs } from './lib/files';
 import { exportWorkspace } from './lib/workspace-export';
+import { openExportBundle, openImportBundle } from './lib/transfer';
 import { plural, uid } from './lib/format';
 
 /**
@@ -31,6 +32,8 @@ export type MenuCommand =
   | 'export-collection'
   | 'export-environment'
   | 'export-workspace'
+  | 'export-bundle'
+  | 'import-bundle'
   | 'save'
   | 'settings'
   | 'feedback'
@@ -150,6 +153,11 @@ export async function runMenuCommand(cmd: MenuCommand): Promise<void> {
         await exportWorkspace(ws.path);
         return;
       }
+      // File ▸ Export ▸ Bundle…: everything in one file; File ▸ Import Bundle…: the picker, then the preview
+      case 'export-bundle':
+        return openExportBundle({ all: true });
+      case 'import-bundle':
+        return openImportBundle();
       case 'save':
         // the active view saves on Ctrl/Cmd+S; the menu accelerator takes the key, so pass it on
         return void window.dispatchEvent(new KeyboardEvent('keydown', { key: 's', ctrlKey: true, metaKey: navigator.platform.startsWith('Mac'), bubbles: true }));

@@ -14,5 +14,6 @@ export { describeBundle } from './inspect.js';
 export type { BundleDescription } from './inspect.js';
 export { forgetPlan, recallBundle, rememberBundle } from './plans.js';
 export { adapter as bundleAdapter, bundleKindOf, normalizeId as normalizeBundleId } from './registry.js';
-export { bundleRefOfItemRef, everythingRefs, parseSelector, sectionRefs, uniqueRefs } from './selection.js';
-export type { BundleRef } from './selection.js';
+export { everythingRefs, parseSelector, sectionRefs, uniqueRefs } from './selection.js';
+export { bundleRefOfItemRef } from '../kinds/transfer-refs.js';
+export type { BundleRef } from './types.js';

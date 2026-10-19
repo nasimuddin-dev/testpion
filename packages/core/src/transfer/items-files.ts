@@ -102,7 +102,8 @@ function fileAdapter(kind: BundleKindId, label: string): ItemAdapter {
     },
     review(item, data) {
       if (kind === 'script-package') return [`Script package "${item.id.slice('packages/'.length, -3)}" is code: scripts that require it run it (nothing runs on import)`];
-      if (kind === 'test' && /^\s*(?:-\s*)?(?:type:\s*script|script:)/m.test(data.toString('utf8', 0, Math.min(data.length, 2_000_000)))) return [`Test file ${item.id} contains scripts that run when you run it (nothing runs on import)`];
+      if (kind === 'test' && /^\s*(?:-\s*)?(?:type:\s*script|script:)/m.test(data.toString('utf8', 0, Math.min(data.length, 2_000_000))))
+        return [`Test file ${item.id} contains scripts that run when you run it (nothing runs on import)`];
       return [];
     },
     match: (existing, x) => existing.find((e) => e.id.toLowerCase() === x.id.toLowerCase()),
