@@ -734,6 +734,7 @@ export function Explorer() {
                 sub={c.name}
                 active={openRequestId === n.id}
                 onClick={() => void openRef({ kind: 'request', collectionId: c.id, requestId: n.id }, { noReveal: true })}
+                git={{ kind: 'request', collectionId: c.id, requestId: n.id }}
                 ctx={() => favoriteMenu(c, n)}
               />
             ))}
@@ -800,6 +801,7 @@ export function Explorer() {
                   ctx={() => serverMenu(s)}
                   rename={renamer(s.id, `mcp:${s.id}`, (name) => editServers((list) => list.map((x) => (x.id === s.id ? { ...x, name } : x))))}
                   drag={[{ kind: 'mcp-server', serverId: s.id }]}
+                  git={{ kind: 'mcp-server', serverId: s.id }}
                 />
               )}
             />
@@ -849,6 +851,7 @@ export function Explorer() {
                     ),
                   )}
                   drag={[{ kind: 'spec', path: s }]}
+                  git={{ kind: 'spec', path: s }}
                 />
               )}
             />
@@ -897,6 +900,7 @@ export function Explorer() {
                   ctx={() => datasetMenu(d, d.folder)}
                   rename={renamer(d.name, `datasets:${d.name}`, (to) => datasetAction(() => call('datasets.rename', { name: d.name, to })))}
                   drag={[{ kind: 'dataset', name: d.name }]}
+                  git={{ kind: 'dataset', name: d.name }}
                 />
               )}
             />

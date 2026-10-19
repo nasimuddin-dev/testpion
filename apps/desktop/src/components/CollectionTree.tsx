@@ -583,7 +583,6 @@ export const CollectionTree = memo(function CollectionTree({
             renaming={renaming === r.key}
             examplesOpen={!!isOpenKey(open, examplesOpenKey(r.c.id, r.n.id), `${r.n.id}:examples`)}
             dropMode={dropModeOf(r.key)}
-            gitMark={git.items.get(r.n.id)}
             ctx={ctx}
           />
         );

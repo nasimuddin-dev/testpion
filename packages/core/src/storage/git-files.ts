@@ -18,6 +18,9 @@ export const GITIGNORE_LINES = [
   'database.sqlite*',
   'metadata.jsonl',
   '.template-offered.json',
+  // the copy kept when an older workspace file is migrated, and a write that was cut short
+  'workspace.json.bak-*',
+  '*.tmp-*',
 ];
 
 export const GITATTRIBUTES_LINES = [
@@ -30,6 +33,8 @@ export const GITATTRIBUTES_LINES = [
   'collections/*.json merge=testpion',
   'environments/*.json merge=testpion',
   'library/*.json merge=testpion',
+  'mcp-servers.json merge=testpion',
+  'providers.json merge=testpion',
 ];
 
 export interface GitReadyResult {

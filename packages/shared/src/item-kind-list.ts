@@ -103,6 +103,8 @@ const LIBRARY_ITEM: Capabilities = {
   'open-new-tab': true,
   move: true,
   trash: { planned: '0.54' },
+  // a stable file (no save time), a row in the Git view by name and a change mark on its row (release A of planning/git-everything.md)
+  versioned: true,
 };
 
 /* ------------------------------------------------------------------ the kinds */
@@ -465,6 +467,7 @@ export const KIND_LIST: readonly ItemKindInfo[] = [
       move: true,
       trash: true,
       run: { na: 'a server is connected (Connect), not run' },
+      versioned: true,
       'test-file': { planned: '0.54' },
       monitor: { planned: '0.54' },
     },
@@ -508,7 +511,7 @@ export const KIND_LIST: readonly ItemKindInfo[] = [
     git: { merge: 'by-id' },
     listed: true,
     sample: 'providers.json',
-    capabilities: { ...FILE_ITEM, rename: { na: 'renamed in its settings' }, move: { na: 'providers have no folders' } },
+    capabilities: { ...FILE_ITEM, rename: { na: 'renamed in its settings' }, move: { na: 'providers have no folders' }, versioned: true },
   },
   {
     id: 'prompt',

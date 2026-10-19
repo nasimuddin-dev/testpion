@@ -1,9 +1,10 @@
 import { useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react';
-import type { ItemRef } from '@testpion/shared';
+import { baseKind, can, type ItemRef } from '@testpion/shared';
 import { buildNodeMenu, type NodeKind, type NodeMenuCtx } from '../lib/node-menu';
 import { setDragRefs } from '../lib/drag-ref';
 import { LABEL } from '../lib/vocabulary';
 import { InlineRename, keepFocusAfterDelete, neighbourRowId, NodeMenu, withRefDefaults } from './TreeParts';
+import { GitMark, type GitTarget } from './GitMark';
 import { cx } from './ui';
 
 /**
@@ -42,8 +43,10 @@ export interface TreeRowShellProps {
   onDragEnd?(): void;
   /** A drop target: the props of a drop (dragover, drop) and whether something is over it (`'before'`: a line above the row). */
   drop?: { onDragOver(e: DragEvent): void; onDragLeave?(): void; onDrop(e: DragEvent): void; over?: boolean | 'into' | 'before' };
-  /** The change mark slot (git: A, M, D …), at the end of the row. */
+  /** The change mark slot (A, M, D …), at the end of the row, for a mark that is not git's. */
   mark?: ReactNode;
+  /** What the row is, for git's change mark (the item's ref, a folder or a section of a kind): every row of a versioned kind says it. */
+  git?: GitTarget;
   /** A row's quick action buttons (Run …), before its ⋯ (each also in the menu). */
   actions?: ReactNode;
   /** A section header: taller, the ⋯ faintly visible. */
@@ -60,8 +63,16 @@ export interface TreeRowShellProps {
   style?: CSSProperties;
 }
 
-export function TreeRowShell({ kind, ctx, nodeId, label, children, onClick, onOpen, active, expanded, depth, rename, drag, onDragStart, onDragEnd, drop, mark, actions, header, tall, menu = true, onKeyDown, attrs, className, style }: TreeRowShellProps) {
+/** What a row's change mark is about when the row does not say: a section header of a versioned kind counts the changes of its kind. */
+function targetOf(kind: NodeKind, git?: GitTarget): GitTarget | undefined {
+  if (git || !kind.startsWith('section:')) return git;
+  const base = baseKind(kind);
+  return can(base, 'versioned') ? { section: base } : undefined;
+}
+
+export function TreeRowShell({ kind, ctx, nodeId, label, children, onClick, onOpen, active, expanded, depth, rename, drag, onDragStart, onDragEnd, drop, mark, git, actions, header, tall, menu = true, onKeyDown, attrs, className, style }: TreeRowShellProps) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const target = targetOf(kind, git);
   const button = useRef<HTMLButtonElement>(null);
   /** The row's menu context, with Delete… putting the keyboard on the next row once this one is gone. */
   const menuCtx = (): NodeMenuCtx => {
@@ -171,7 +182,12 @@ export function TreeRowShell({ kind, ctx, nodeId, label, children, onClick, onOp
           {children}
         </button>
       )}
-      {mark && <span className="shrink-0 ml-1">{mark}</span>}
+      {(mark || target) && (
+        <span className="shrink-0 ml-1 flex items-center gap-1 empty:hidden">
+          {mark}
+          {target && <GitMark to={target} />}
+        </span>
+      )}
       {actions}
       {menu && <NodeMenu kind={kind} label={label} header={header} open={menuOpen} onOpenChange={setMenuOpen} ctx={menuCtx} />}
     </div>

@@ -277,6 +277,7 @@ export function EnvironmentsView() {
                   <TreeRowShell
                     key={e.id}
                     kind="environment"
+                    git={{ kind: 'environment', environmentId: e.id }}
                     nodeId={`env:${e.id}`}
                     label={e.name}
                     active={sel === e.id}

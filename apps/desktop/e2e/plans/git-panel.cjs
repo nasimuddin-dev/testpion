@@ -92,7 +92,7 @@ const steps = [
       const c = (await window.aps.invoke('col.list')).find((x) => x.id === 'httpbin');
       const walk = (nodes) => nodes.map((n) => n.id === 'hb-get' ? { ...n, request: { ...n.request, url: '{{httpbin}}/anything' } } : n.kind === 'folder' ? { ...n, items: walk(n.items) } : n);
       await window.aps.invoke('col.save', { ...c, items: walk(c.items) });
-      const line = await __t.waitFor(() => [...document.querySelectorAll('[aria-label="Changes"] li li')].map((l) => l.textContent.trim()).find((t) => /GET with query parameters/.test(t)), 6000);
+      const line = await __t.waitFor(() => [...document.querySelectorAll('[aria-label="Changes"] [data-change-item]')].map((l) => l.textContent.trim()).find((t) => /GET with query parameters/.test(t)), 6000);
       // the status bar refreshes on its own (shortly after the save)
       const bar = await __t.waitFor(() => [...document.querySelectorAll('footer button')].map((b) => b.textContent.trim()).find((t) => /^main.*•/.test(t)), 4000);
       await __t.requests(); await __t.expand('HTTP basics (httpbin)'); await __t.expand('Requests & responses');

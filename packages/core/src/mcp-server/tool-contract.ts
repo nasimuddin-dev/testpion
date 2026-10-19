@@ -48,6 +48,7 @@ export const LIST_TOOLS: Record<string, { field?: string }> = {
   search_workspace: {},
   git_log: {},
   git_diff: {},
+  git_changes: { field: 'items' },
   flow_runs: {},
   test_history: { field: 'runs' },
   debugger_exchanges: { field: 'exchanges' },

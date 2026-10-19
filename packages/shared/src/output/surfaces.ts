@@ -124,7 +124,7 @@ const SURFACES = [
   s('ai.compare', 'AI model comparison', ['md', 'csv', 'json'], 'redacted-default', { capturedRedacted: true }),
   s('ai.analysis', 'AI analysis findings (triage, flaky tests)', ['md', 'json'], 'redacted-default', { capturedRedacted: true }),
   s('ai.proposals', 'AI proposal under review', ['md', 'json', 'diff'], 'redacted-default', { capturedRedacted: true }),
-  s('git.diff', 'Git changes', ['diff', 'md'], 'none', { cli: 'git diff', sources: ['git-diff'] }),
+  s('git.diff', 'Git changes', ['diff', 'md'], 'raw-notice', { cli: 'git diff', sources: ['git-diff'] }),
   s('api.reports', 'API lint, fuzz, coverage, security and OpenAPI diff reports', ['md', 'json'], 'redacted-default', { capturedRedacted: true }),
   s('chart', 'Charts', ['png', 'svg'], 'none'),
   s('env.matrix', 'Environment matrix and compare', ['csv', 'md', 'json'], 'redacted-default', { capturedRedacted: true }),

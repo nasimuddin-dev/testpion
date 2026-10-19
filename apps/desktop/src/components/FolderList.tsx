@@ -219,6 +219,7 @@ export function FolderList({
                   onClick={() => toggle(f)}
                   ctx={() => folderCtx(f)}
                   drop={dropProps(f)}
+                  git={{ folder: kind, name: f }}
                   className="pl-2"
                   rename={
                     renaming === `folder:${f}`
@@ -298,6 +299,7 @@ const FolderListRow = memo(function FolderListRow({ it, nodeId, nested, active, 
       onOpen={() => !renaming && (h().onOpen ?? h().onSelect)(it.id)}
       ctx={() => h().itemCtx(it)}
       drag={[h().refOf(it.id)]}
+      git={h().refOf(it.id)}
       rename={renaming ? { value: it.name, done: (name) => h().finishRename(it.id, name) } : undefined}
       className={nested ? 'pl-9' : 'pl-3'}
     >

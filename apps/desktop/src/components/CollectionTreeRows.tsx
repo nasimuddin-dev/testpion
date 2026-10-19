@@ -1,10 +1,10 @@
 import { ChevronDown, ChevronRight, Plus, Star } from 'lucide-react';
 import { memo, type DragEvent, type RefObject } from 'react';
+import { savedItemRef } from '@testpion/shared';
 import type { Collection, CollectionFolder, CollectionNode } from '../types';
 import type { NodeMenuCtx } from '../lib/node-menu';
 import { categoryCounts, type RequestCategory } from '../lib/collection-filter';
 import { examplesOpenKey, folderOpenKey, scopedNodeId, type ExtraGroup, type TreeRow } from '../lib/tree-rows';
-import { ChangeMark } from './ChangeMark';
 import { CLOSED_ICON, CountPill, FOLDER_ICON, KIND_COLOR, OPEN_ICON, TreeBadge } from './TreeParts';
 import { TreeRowShell } from './TreeRowShell';
 import { Button, cx } from './ui';
@@ -68,7 +68,6 @@ export const RequestRow = memo(function RequestRow({
   renaming,
   examplesOpen,
   dropMode,
-  gitMark,
   ctx,
 }: {
   c: Collection;
@@ -78,7 +77,6 @@ export const RequestRow = memo(function RequestRow({
   renaming: boolean;
   examplesOpen: boolean;
   dropMode?: DropMode;
-  gitMark?: string;
   ctx: Ctx;
 }) {
   const x = () => ctx.current;
@@ -106,7 +104,7 @@ export const RequestRow = memo(function RequestRow({
       drop={{ onDragOver: (e) => dropOf().onDragOver(e), onDragLeave: () => dropOf().onDragLeave(), onDrop: (e) => dropOf().onDrop(e), over: dropMode }}
       style={indent(depth, 16)}
       className={cx(examples.length > 0 && 'relative')}
-      mark={gitMark && <ChangeMark change={gitMark} />}
+      git={{ kind: 'request', collectionId: c.id, requestId: n.id }}
     >
       {examples.length > 0 && (
         // in the row's left padding (the row is positioned), where a folder's chevron would be
@@ -153,6 +151,7 @@ export const FolderRow = memo(function FolderRow({ c, n, depth, open, renaming, 
       onDragEnd={() => x().dragEnd()}
       drop={{ onDragOver: (e) => dropOf().onDragOver(e), onDragLeave: () => dropOf().onDragLeave(), onDrop: (e) => dropOf().onDrop(e), over: dropMode }}
       style={indent(depth)}
+      git={{ kind: 'folder', collectionId: c.id, folderId: n.id }}
     >
       {open ? OPEN_ICON : CLOSED_ICON}
       {FOLDER_ICON}
@@ -207,6 +206,7 @@ export const CollectionRow = memo(function CollectionRow({ c, open, renaming, dr
       rename={renaming ? { value: c.name, label: 'Collection name', done: (name) => x().finishRename(c, c.id, name) } : undefined}
       drop={{ onDragOver: (e) => dropOf().onDragOver(e), onDragLeave: () => dropOf().onDragLeave(), onDrop: (e) => dropOf().onDrop(e), over: dropMode }}
       className="pl-1.5 font-medium"
+      git={{ kind: 'collection', collectionId: c.id }}
     >
       {open ? OPEN_ICON : CLOSED_ICON}
       <span className={cx('truncate', c.problem && 'text-bad')} title={c.problem}>
@@ -240,6 +240,7 @@ export const ExtraFolderRow = memo(function ExtraFolderRow({ r, ctx }: { r: Extr
       ctx={() => x().extraFolderMenu(r)}
       onClick={() => x().toggle(r.key, r.open)}
       style={indent(r.depth)}
+      git={{ folder: r.g.cat === 'websocket' ? 'ws-connection' : 'grpc-call', name: r.folder }}
     >
       {r.open ? OPEN_ICON : CLOSED_ICON}
       {FOLDER_ICON}
@@ -273,6 +274,7 @@ export const ExtraItemRow = memo(function ExtraItemRow({ g, i, depth, from, id, 
       onDragStart={(e) => e.dataTransfer.setData(SAVED_ITEM_MIME, JSON.stringify({ kind: g.cat, id: i.id, from }))}
       onDragEnd={() => x().savedDragEnd()}
       style={indent(depth, 16)}
+      git={savedItemRef(g.cat, i.id)}
     >
       <TreeBadge label={i.badge ?? CATEGORY_META[g.cat].badge} className={CATEGORY_META[g.cat].cls} />
       <span className="truncate">{i.name}</span>
