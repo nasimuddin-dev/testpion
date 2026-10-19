@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### RAG testing, first half: connect a system, datasets, the judge, the first metrics
+- **Test a RAG system that runs somewhere else.** AI Lab has a new **RAG** tab: connect an endpoint over HTTP, a streamed answer (server-sent events), WebSocket, gRPC or an MCP tool, with the protocol clients TestPion already has. Ask it one question (**Probe**), then **click** the answer and the list of retrieved documents in its response (and each document's text, id, score and source, token counts, latency): every click writes a JSONPath into the mapping, which stays plain text you can edit, so the same response always gives the same sample. The target is saved in the workspace (`library/rag-targets.json`) like a prompt or an evaluation.
+- **An evaluation of type RAG calls the target** for every question of its dataset (Evaluations ▸ RAG ▸ choose the target), scores each answer, and shows the usual runs, results and matrix. Records are `question`, `reference`, `reference_ids` (the gold documents) and `reference_contexts`; **Import Ragas / DeepEval…** and **Export as…** convert their documented dataset shapes (data only, nothing is executed).
+- **Metrics:** `normalized-match`, `token-f1`, `rouge` (1, 2, L), `context-recall-ids` and `context-precision-ids` need no model; `rag-faithfulness` (the share of the answer's claims the retrieved documents support) and `rag-answer-relevance` ask a judge model claim by claim, with the evidence kept in the result. Latency, tokens and cost of the system under test are scored as before.
+- **The judge is never guessed.** It is the evaluation's Judge, else the AI settings' large model (`--judge provider/model`, `TESTPION_AI_PROVIDER`); without one the run stops before the first question and lists what to configure. Judge calls are the AI task `rag-judge`: counted in AI usage, limited by the daily caps and `--max-judge-cost`, redacted, shown in "What will be sent", and **cached by the content of the prompt**, so running again costs nothing. Local only is enforced.
+- **Terminal and agents:** `testpion rag targets|probe|import|export` (all with `--json`), `eval run --judge … --max-judge-cost …`, and the MCP tools `rag_list_targets`, `rag_probe`, `rag_import_dataset`, `rag_export_dataset`. A demo RAG system for trying it: `node examples/servers/rag-server.mjs`.
+- The **RAG target** is now a real kind of item (rename, duplicate, move to a folder, delete with Undo, search, links).
+
 ## 0.53.1 — 2026-10-18
 
 Checks only, nothing changes in the app: the registry's "planned" capabilities that were due in 0.53 are re-planned for 0.54 (they are not built yet), and a test that compared a file name in another letter case now agrees with how macOS treats it.

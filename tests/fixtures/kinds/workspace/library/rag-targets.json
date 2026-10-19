@@ -1,0 +1,1 @@
+{ "schemaVersion": "1.0", "folders": [], "items": [{ "id": "rag-clinic", "name": "Clinic bot", "data": { "protocol": "http", "step": { "type": "http", "method": "POST", "url": "{{ragUrl}}/query", "json": { "question": "{{question}}" } }, "mapping": { "answer": "$.answer", "contexts": "$.sources[*]", "context": { "text": "$.text", "id": "$.id" } } } }] }

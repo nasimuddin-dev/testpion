@@ -53,6 +53,13 @@ export const CHECK_DEFS: CheckDef[] = [
   { type: 'answer-correctness', label: 'Answer correctness', group: 'RAG', fields: ['expected', 'threshold', 'judge'], hint: "the answer's facts against the reference answer (F1); with a judge, claim by claim" },
   { type: 'answer-relevance', label: 'Answer relevance', group: 'RAG', fields: ['threshold', 'judge'] },
   { type: 'citation', label: 'Citations valid', group: 'RAG', fields: [] },
+  { type: 'normalized-match', label: 'Matches the reference (normalised)', group: 'RAG', fields: ['expected'], hint: 'the answer equals the reference once case, punctuation and articles are ignored (no model); blank: the dataset record’s reference' },
+  { type: 'token-f1', label: 'Token F1 ≥', group: 'RAG', fields: ['expected', 'threshold'], hint: 'words shared with the reference answer, as precision and recall (no model); default threshold 0.5' },
+  { type: 'rouge', label: 'ROUGE-L ≥', group: 'RAG', fields: ['expected', 'threshold'], hint: 'the longest run of words in the same order as the reference (no model); default threshold 0.5' },
+  { type: 'context-recall-ids', label: 'Context recall by id', group: 'RAG', fields: ['threshold'], hint: 'the gold chunk ids (the record’s reference_ids) that were retrieved (no model); default threshold 0.8' },
+  { type: 'context-precision-ids', label: 'Context precision by id', group: 'RAG', fields: ['threshold'], hint: 'the retrieved chunk ids that are gold ids (no model); default threshold 0.5' },
+  { type: 'rag-faithfulness', label: 'Faithfulness (judge)', group: 'RAG', fields: ['threshold'], hint: 'the share of the answer’s claims the retrieved documents support; needs a judge model (evaluation setting); default threshold 0.8' },
+  { type: 'rag-answer-relevance', label: 'Answer relevance (judge)', group: 'RAG', fields: ['threshold'], hint: 'the share of the answer’s statements that are relevant to the question; needs a judge model; default threshold 0.7' },
 ];
 
 function parseExpected(s: string): unknown {

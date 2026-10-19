@@ -119,7 +119,7 @@ export const cliSecrets = () => new ChainSecretStore([new EnvSecretStore()]);
 
 /** An engine context as every command builds it: the workspace, the CLI's secrets, the app settings and an environment. */
 export function cliContext(store: WorkspaceStore, environment?: string, extra: Partial<Omit<ContextOptions, 'store' | 'secrets' | 'settings' | 'environment'>> = {}): EngineContext {
-  return createEngineContext({ store, secrets: cliSecrets(), settings: new WorkspaceManager().loadSettings(), environment, ...extra });
+  return createEngineContext({ store, secrets: cliSecrets(), settings: new WorkspaceManager().loadSettings(), environment, aiEnv: process.env, ...extra });
 }
 
 /** A core lookup that failed ("not found") as the CLI reports it: the message alone, with the configuration exit code. */

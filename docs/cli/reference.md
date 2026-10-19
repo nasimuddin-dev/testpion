@@ -46,6 +46,7 @@ testpion openapi-lint [specs...]     Lint OpenAPI documents: broken $refs, undec
 testpion eval list|run <name>   Evaluations saved in the app: list them, or run one by name (exit 1 on failures)
 testpion eval compare <run> --baseline <run>   Compare an evaluation run with a baseline case by case; exit 1 on regressions (for CI)
 testpion eval matrix <runs...>   Evaluation runs side by side: cases × variants, against a baseline (a page at a time)
+testpion rag targets|probe|import|export   RAG systems under test: list the targets, ask one a question, convert Ragas / DeepEval datasets
 testpion agents init [--targets agents,claude,cursor]   Write or refresh AGENTS.md (and a CLAUDE.md pointer, a Cursor rule) for coding agents
 testpion coverage <spec> -w   API coverage: which OpenAPI operations and responses the runs exercised (--min for CI)
 testpion docs <collection>    Write Markdown (or --html) documentation for a collection
@@ -512,6 +513,20 @@ testpion ai attempt-fix ai-mvckdy5ve28aa50ec9 --times 5   # apply it, run the te
 ```
 
 `suggest-assertions` is an alias of `generate-assertions`, `generate-tests` of `generate-pm-tests`. A task that answers in JSON (`triage-run`, `analyze-flaky` …) is printed as its proposal — the findings with their evidence, then the items — not as the raw JSON. With `--item request:<c>:<r>`, suggested checks and tests are verified against the request's latest response in History (sent from the app); without one each item says *no response to check against*. `ai run --json` returns `{ task, taskVersion, provider, model, text, truncated, finishReason, problems, repairs, calls, usage, ms, preview, proposal?, applied? }`; `preview` is what was (or, with `--dry-run`, would be) sent: the model, privacy level, sections, masks and estimate (and the messages on a dry run). Exit code `2` when no model is set up (`ConfigurationError`, *The AI assistant is off*) — except `analyze-flaky`, which then prints TestPion's own finding (the signature, the likely pattern, *note: no model configured*) and exits `0`, as with `--no-ai` (`--json`: `{ task, testId, name, signals, runs, finding, ai: false, fallback }`) — Local only refuses the provider, or a cap refuses the call — nothing was sent. Exit code `1` (envelope `status: "failed"`) when the answer is still invalid after the repairs: `problems` lists why (without `--json` they are printed under the answer). With the global `--dry-run`, `ai apply` prints *would apply …* and the files it would change, nothing else. See [AI features](/ai-testing/ai-features#from-the-terminal-agents-and-ci).
+
+## `rag` {#rag}
+
+RAG systems under test (AI Lab ▸ RAG; the guide is [RAG testing](/ai-testing/rag)). All four take `--json`.
+
+| Command | What it does |
+|---|---|
+| `rag targets` | The RAG targets of the workspace (protocol, the mapping in a line, what stops one from being called). |
+| `rag probe [target] [question]` | One real question to a target (a saved one, or `--file target.yaml`): the answer, the retrieved contexts with id, score and source, usage and latency, the warnings of the mapping, and with `--raw` the response the mapping reads. `-e` picks the environment; `--allow-production` as for any request that is not a read. |
+| `rag import <file>` | A Ragas or DeepEval dataset (JSON, JSONL or CSV; only data is read) as TestPion records (`question`, `reference`, `reference_contexts`, `reference_ids`, `tags`). `--from ragas\|deepeval\|testpion` (default: found by the columns), `-o` writes JSON Lines, `--format json` an array. Notes on what was left out go to stderr. |
+| `rag export <dataset> --to ragas\|deepeval` | A dataset file, or a saved evaluation by name, as Ragas or DeepEval records. `--run <runId>` adds the answer and retrieved contexts each record got in that run. |
+
+`eval run` of a RAG evaluation checks the target and the judge before it sends the first question, and takes `--judge <provider/model>` and
+`--max-judge-cost <usd>`. Without a usable judge it exits `2` and lists what to configure; the verdicts are cached, so a second run costs nothing.
 
 ## `eval compare` and `eval matrix`
 

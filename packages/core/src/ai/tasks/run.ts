@@ -334,7 +334,7 @@ export async function runAiTask(deps: AiRunDeps, req: AiTaskRequest): Promise<Ai
       provider,
       model,
       maxTokens: maxOutputTokens,
-      temperature: 0.2,
+      temperature: def.temperature ?? 0.2,
       signal: deps.signal,
       onCall: (r: { usage: TokenUsage; model: string }) => (
         (usage = { inputTokens: usage.inputTokens + r.usage.inputTokens, outputTokens: usage.outputTokens + r.usage.outputTokens, totalTokens: usage.totalTokens + r.usage.totalTokens }),

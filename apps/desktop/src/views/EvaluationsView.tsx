@@ -3,7 +3,7 @@ import { LibraryTabStrip, NoOpenItems } from '../components/LibraryTabStrip';
 import { ItemBreadcrumb } from '../components/ItemBreadcrumb';
 import { refMenu } from '../components/RefLink';
 import { RunMiniBar, RunsOverview, type RunRow } from '../components/RunsOverview';
-import { BarChart3, Bookmark, FlaskConical, Grid3x3, History, KeyRound, Play, Save } from 'lucide-react';
+import { BarChart3, Bookmark, Database, FlaskConical, Grid3x3, History, KeyRound, Play, Save } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useSticky } from '../lib/sticky';
 import { useIntent } from '../hooks';
@@ -12,7 +12,10 @@ import { persisted, promptText, toastError, useApp } from '../store';
 import type { CheckConfig, ProviderConfig } from '../types';
 import { templateVars, timeAgo } from '../lib/format';
 import { countDatasetRecords, datasetFormatOf, datasetFormatOfName, previewDatasetRecords } from '@testpion/shared';
-import { pickTextFile } from '../lib/files';
+import { downloadContent, pickTextFile } from '../lib/files';
+import type { RagTarget } from '@testpion/shared';
+import { RagConnectDialog } from '../components/rag/RagConnectDialog';
+import { RAG_JUDGED, RAG_STARTER_DATASET, RAG_STARTER_EVALUATORS } from '../components/rag/starter';
 import { AssertionEditor } from '../components/AssertionEditor';
 import { CodeEditor } from '../components/CodeEditor';
 import { RunPanel } from '../components/RunPanel';
@@ -40,6 +43,11 @@ interface Draft {
   concurrency: number;
   limit?: number;
   retries: number;
+  /** type rag: the RAG target (a library item id) the questions are sent to; without one the contexts written in the dataset are scored. */
+  target?: string;
+  /** type rag with a target: the judge of the judged metrics (unset: the AI settings' large model). */
+  judge?: { provider?: string; model?: string };
+  maxJudgeCostUsd?: number;
 }
 
 const drafts = persisted<Draft>('eval', {
@@ -97,6 +105,34 @@ export function EvaluationsView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const saved = useLibrary<Draft>('evaluations');
+  const ragTargets = useLibrary<RagTarget>('rag-targets');
+  const [connect, setConnect] = useState(false);
+  /** The target the evaluation calls (type rag): its questions go to that system, and the model fields become the judge. */
+  const ragTarget = d.type === 'rag' ? ragTargets.lib.items.find((i) => i.id === d.target) : undefined;
+  const setType = (type: Draft['type']) => {
+    // a new RAG evaluation starts with RAG records and metrics instead of the intent-classification example
+    const untouched = JSON.stringify(d.evaluators) === JSON.stringify(drafts.defaults.evaluators);
+    set({ type, ...(type === 'rag' && untouched ? { evaluators: RAG_STARTER_EVALUATORS, ...(d.dataset === drafts.defaults.dataset ? { dataset: RAG_STARTER_DATASET } : {}) } : {}) });
+  };
+  const importRag = async () => {
+    const f = await pickTextFile('.jsonl,.json,.csv,.tsv,.ndjson');
+    if (!f) return;
+    try {
+      const r = await call<{ from: string; count: number; notes: string[]; text: string }>('rag.convert', { text: f.text, name: f.name });
+      set({ dataset: r.text, datasetFormat: 'jsonl' });
+      useApp.getState().toast(`Imported ${r.count} records (${r.from} format)${r.notes.length ? `. ${r.notes[0]}` : ''}`, r.notes.length ? 'info' : 'success');
+    } catch (e) {
+      toastError(e);
+    }
+  };
+  const exportRag = async (to: 'ragas' | 'deepeval') => {
+    try {
+      const r = await call<{ text: string; count: number }>('rag.convert', { text: d.dataset, name: `dataset.${d.datasetFormat}`, to });
+      downloadContent(`${(d.name || 'dataset').replace(/[^\w.-]+/g, '-')}-${to}.jsonl`, r.text, { type: 'application/x-ndjson' });
+    } catch (e) {
+      toastError(e);
+    }
+  };
   const savedId = tabs.active.savedId;
   const current = saved.lib.items.find((i) => i.id === savedId);
   const dirty = useMemo(() => !!current && JSON.stringify(current.data) !== JSON.stringify(d), [current, d]);
@@ -228,6 +264,7 @@ export function EvaluationsView() {
         ]}
       />
     <div className="h-full flex flex-col min-w-0">
+    {connect && <RagConnectDialog onClose={() => setConnect(false)} onSaved={(id) => void ragTargets.reload().then(() => set({ target: id }))} />}
     <LibraryTabStrip
       label="Open evaluations"
       library="evaluations"
@@ -260,18 +297,52 @@ export function EvaluationsView() {
         <div className="p-2 border-b border-line flex flex-col gap-2">
           <div className="flex gap-2 flex-wrap">
             <Input className="flex-1 min-w-40 font-medium" value={d.name} onChange={(e) => set({ name: e.target.value })} aria-label="Evaluation name" />
-            <Select value={d.type} onChange={(e) => set({ type: e.target.value as Draft['type'] })} aria-label="Evaluation type">
+            <Select value={d.type} onChange={(e) => setType(e.target.value as Draft['type'])} aria-label="Evaluation type">
               <option value="llm">Prompt / LLM</option>
               <option value="rag">RAG</option>
             </Select>
             <Button className="shrink-0" icon={<Save size={13} />} title={current ? `Save changes to "${current.name}"` : 'Save this evaluation to run it again later'} onClick={() => void saveEval()}>
               {current && dirty ? 'Save*' : 'Save'}
             </Button>
-            <Button variant="primary" className="shrink-0" icon={<Play size={13} />} onClick={run} disabled={!count || !d.provider}>
+            <Button variant="primary" className="shrink-0" icon={<Play size={13} />} onClick={run} disabled={!count || (!ragTarget && !d.provider)}>
               Run {count ? `${d.limit ? Math.min(d.limit, count) : count} cases` : ''}
             </Button>
           </div>
+          {d.type === 'rag' && (
+            <div className="flex items-end gap-2" data-rag-target-row>
+              <Field label="RAG target" className="flex-1 min-w-0" hint={ragTarget ? undefined : 'Without a target the contexts and answers written in the dataset are scored.'}>
+                <Select value={d.target ?? ''} onChange={(e) => set({ target: e.target.value || undefined })} aria-label="RAG target" data-rag-target>
+                  <option value="">None: score what the dataset holds</option>
+                  {ragTargets.lib.items.map((i) => (
+                    <option key={i.id} value={i.id}>
+                      {i.name}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Button icon={<Database size={13} />} onClick={() => setConnect(true)} title="Connect a RAG system: request, probe, click-to-map" data-rag-connect-open>
+                Connect…
+              </Button>
+            </div>
+          )}
           {/* two rows, so the fields fit however narrow the pane is */}
+          {ragTarget ? (
+            <div className="grid grid-cols-2 gap-2 [&>*]:min-w-0" data-rag-judge>
+              <Field label="Judge provider" hint="Judged metrics only">
+                <Select value={d.judge?.provider ?? ''} onChange={(e) => set({ judge: { provider: e.target.value || undefined, model: providers.find((p) => p.id === e.target.value)?.defaultModel || undefined } })} aria-label="Judge provider">
+                  <option value="">The AI settings’ large model</option>
+                  {providers.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Field label="Judge model">
+                <Input className="mono" value={d.judge?.model ?? ''} placeholder="the provider’s default" onChange={(e) => set({ judge: { ...d.judge, model: e.target.value || undefined } })} aria-label="Judge model" />
+              </Field>
+            </div>
+          ) : (
           <div className="grid grid-cols-2 gap-2 [&>*]:min-w-0">
             <Field label="Provider">
               <Select value={d.provider} onChange={(e) => set({ provider: e.target.value, model: providers.find((p) => p.id === e.target.value)?.defaultModel ?? '' })}>
@@ -286,6 +357,7 @@ export function EvaluationsView() {
               <Input className="mono" value={d.model} onChange={(e) => set({ model: e.target.value })} />
             </Field>
           </div>
+          )}
           <div className="grid grid-cols-4 gap-2 [&>*]:min-w-0">
             <Field label="Temp.">
               <Input type="number" step="0.1" value={d.temperature ?? ''} onChange={(e) => set({ temperature: e.target.value === '' ? undefined : Number(e.target.value) })} />
@@ -306,12 +378,12 @@ export function EvaluationsView() {
           onChange={setSub}
           tabs={[
             { id: 'dataset', label: 'Dataset', badge: count },
-            { id: 'prompt', label: d.type === 'rag' ? 'Prompt (optional)' : 'Prompt' },
+            ...(ragTarget ? [] : [{ id: 'prompt' as const, label: d.type === 'rag' ? 'Prompt (optional)' : 'Prompt' }]),
             { id: 'evaluators', label: 'Evaluators', badge: d.evaluators.length },
           ]}
         />
         <div className="flex-1 min-h-0">
-          {sub === 'dataset' && (
+          {(sub === 'dataset' || (sub === 'prompt' && ragTarget)) && (
             <div className="h-full flex flex-col">
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-1.5 text-sm border-b border-line">
                 {(['jsonl', 'json', 'csv', 'md'] as const).map((f) => (
@@ -323,6 +395,18 @@ export function EvaluationsView() {
                   expected field
                   <Input className="h-6 min-h-6 w-24 text-xs" value={d.expectedField} onChange={(e) => set({ expectedField: e.target.value })} />
                 </label>
+                {d.type === 'rag' && (
+                  <>
+                    <Button size="sm" onClick={() => void importRag()} title="Read a Ragas or DeepEval dataset file (JSON, JSONL or CSV; only data is read) as TestPion records" data-rag-import>
+                      Import Ragas / DeepEval…
+                    </Button>
+                    <Select className="h-7 min-h-7 py-0 text-xs max-w-32" aria-label="Export the dataset" value="" onChange={(e) => e.target.value && void exportRag(e.target.value as 'ragas' | 'deepeval')}>
+                      <option value="">Export as…</option>
+                      <option value="ragas">Ragas</option>
+                      <option value="deepeval">DeepEval</option>
+                    </Select>
+                  </>
+                )}
                 <Button
                   size="sm"
                   onClick={() =>
@@ -375,7 +459,7 @@ export function EvaluationsView() {
                   <div className="h-full overflow-auto p-2 text-xs">
                     <div className="text-muted mb-1">
                       Preview · {count} records · each record's fields are available as {'{{field}}'} in the prompt and evaluators
-                      {d.type === 'rag' && ' · RAG records need question, contexts [{id,text}] and optionally answer/expected'}
+                      {d.type === 'rag' && (ragTarget ? ' · RAG records: question, reference (the expected answer), reference_ids (the gold document ids), reference_contexts' : ' · RAG records need question, contexts [{id,text}] and optionally answer/expected')}
                     </div>
                     {preview.length > 0 && (
                       <table className="w-full">
@@ -406,7 +490,7 @@ export function EvaluationsView() {
               </div>
             </div>
           )}
-          {sub === 'prompt' && (
+          {sub === 'prompt' && !ragTarget && (
             <div className="h-full flex flex-col">
               <div className="flex items-center gap-3 px-3 py-1.5 text-sm border-b border-line">
                 <label className="flex items-center gap-1">
@@ -430,6 +514,11 @@ export function EvaluationsView() {
               <p className="px-3 pt-3 text-xs text-muted">
                 Deterministic checks are the source of truth for deterministic requirements. Similarity/RAG heuristics are approximate; LLM-judge scores are model-generated and labelled as such.
               </p>
+              {ragTarget && d.evaluators.some((e) => RAG_JUDGED.has(e.type)) && (
+                <Callout tone="accent" className="mx-3 mt-2" data-rag-judge-note>
+                  {d.judge?.provider ? `Judged metrics ask ${providers.find((p) => p.id === d.judge?.provider)?.name ?? d.judge.provider}${d.judge.model ? ` / ${d.judge.model}` : ''}.` : 'Judged metrics ask the AI settings’ large model.'} The run stops before the first question, and says what to configure, when no judge is set. Verdicts are kept: running again costs nothing.
+                </Callout>
+              )}
               <AssertionEditor checks={d.evaluators} onChange={(evaluators) => set({ evaluators })} groups={['Body', 'AI', 'RAG', 'Safety', 'Response']} />
             </div>
           )}

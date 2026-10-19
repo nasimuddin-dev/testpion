@@ -8,10 +8,11 @@ import { Tabs } from '../components/ui';
 import { Playground } from './ai/Playground';
 import { Compare } from './ai/Compare';
 import { Providers } from './ai/Providers';
+import { Rag } from './ai/Rag';
 
 export function AiLabView() {
   // kept while the app runs, so switching tabs or views doesn't lose results
-  const [tab, setTab] = useSticky<'playground' | 'compare' | 'providers' | 'usage'>('ai:tab', 'playground');
+  const [tab, setTab] = useSticky<'playground' | 'compare' | 'rag' | 'providers' | 'usage'>('ai:tab', 'playground');
   const [providers, setProviders] = useState<ProviderConfig[]>();
   const load = useCallback(() => call<ProviderConfig[]>('ai.providers').then(setProviders), []);
   useEffect(() => {
@@ -26,9 +27,15 @@ export function AiLabView() {
   }, [providers, setTab]);
   /** A provider to show (a link such as an error's "Add the key"): selected, its key field focused. */
   const [focusProvider, setFocusProvider] = useState<{ id: string; at: number }>();
+  /** A RAG target to open (a link to it). */
+  const [ragTarget, setRagTarget] = useState<{ id: string; at: number }>();
   useIntent('ai', (p) => {
     if (p?.savedId || p?.prompt) setTab('playground');
     if (p?.tab) setTab(p.tab);
+    if (p?.ragTargetId) {
+      setTab('rag');
+      setRagTarget({ id: p.ragTargetId, at: Date.now() });
+    }
     if (p?.providerId) {
       setTab('providers');
       setFocusProvider({ id: p.providerId, at: Date.now() });
@@ -45,12 +52,14 @@ export function AiLabView() {
           { id: 'providers', label: 'Providers', badge: providers?.length || undefined, title: 'The AI providers prompts are sent to (set up first)' },
           { id: 'playground', label: 'Playground' },
           { id: 'compare', label: 'Model comparison' },
+          { id: 'rag', label: 'RAG', title: 'RAG systems under test: connect an endpoint, map its answer and retrieved documents, then evaluate it in Evaluations' },
           { id: 'usage', label: 'Usage' },
         ]}
       />
       <div className="flex-1 min-h-0">
         {tab === 'playground' && <Playground providers={providers ?? []} onSetUp={() => setTab('providers')} />}
         {tab === 'compare' && <Compare providers={providers ?? []} onSetUp={() => setTab('providers')} />}
+        {tab === 'rag' && <Rag openTarget={ragTarget} />}
         {tab === 'providers' && <Providers providers={providers ?? []} onSaved={load} focus={focusProvider} />}
         {tab === 'usage' && <AiUsage />}
       </div>

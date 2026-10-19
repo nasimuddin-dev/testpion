@@ -39,7 +39,7 @@ export interface FolderListOps {
 export type Undo = () => unknown;
 
 /** The item kinds a FolderList holds (library kinds: their items are in library/<library>.json). */
-export type FolderListKind = Extract<KindId, 'prompt' | 'load-test' | 'evaluation' | 'monitor' | 'mcp-server'>;
+export type FolderListKind = Extract<KindId, 'prompt' | 'load-test' | 'evaluation' | 'monitor' | 'mcp-server' | 'rag-target'>;
 
 /**
  * Sidebar list with folders, like the REST collections: collapsible folders, New folder, rename, move to folder (menu

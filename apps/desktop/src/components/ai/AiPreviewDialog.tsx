@@ -35,17 +35,29 @@ export const taskParams = (req: AssistantRequest, environment?: string, privacy?
  * whether it is local, the privacy level (switchable), each context section with its tokens and how it was fitted,
  * what was masked, and the token and cost estimate. Send goes ahead with the chosen level.
  */
-export function AiPreviewDialog({ request, onSend, onClose }: { request: AssistantRequest; onSend(privacy: AiPrivacy): void; onClose(): void }) {
+export function AiPreviewDialog({
+  request,
+  onSend,
+  onClose,
+  load,
+}: {
+  request: AssistantRequest | { title: string };
+  /** Absent: the dialog only shows (a judge call is shown before a run, sent by the run). */
+  onSend?(privacy: AiPrivacy): void;
+  onClose(): void;
+  /** The preview of a call that is not an AI task of the assistant (a judged RAG metric); the privacy level is then the AI settings'. */
+  load?: () => Promise<AiTaskResult['preview']>;
+}) {
   const env = useApp((s) => s.environment);
-  const [privacy, setPrivacy] = useState<AiPrivacy>(request.privacy ?? useApp.getState().settings?.ai?.privacy ?? 'full');
+  const [privacy, setPrivacy] = useState<AiPrivacy>(('privacy' in request && request.privacy) || useApp.getState().settings?.ai?.privacy || 'full');
   const [preview, setPreview] = useState<AiTaskResult['preview']>();
   const [error, setError] = useState<ReturnType<typeof asError>>();
   useEffect(() => {
     let live = true;
     setPreview(undefined);
     setError(undefined);
-    call<AiTaskResult>('ai.preview', taskParams(request, env, privacy)).then(
-      (r) => live && setPreview(r.preview),
+    (load ? load() : call<AiTaskResult>('ai.preview', taskParams(request as AssistantRequest, env, privacy)).then((r) => r.preview)).then(
+      (r) => live && setPreview(r),
       (e) => live && setError(asError(e)),
     );
     return () => {
@@ -65,18 +77,22 @@ export function AiPreviewDialog({ request, onSend, onClose }: { request: Assista
       width={820}
       footer={
         <>
-          <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" disabled={!preview} onClick={() => onSend(privacy)} data-ai-send>
-            Send
-          </Button>
+          <Button onClick={onClose}>{onSend ? 'Cancel' : 'Close'}</Button>
+          {onSend && (
+            <Button variant="primary" disabled={!preview} onClick={() => onSend(privacy)} data-ai-send>
+              Send
+            </Button>
+          )}
         </>
       }
     >
       <div className="grid gap-3 text-sm" data-ai-preview>
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-muted">Privacy</span>
-          <Segmented label="Privacy level" value={privacy} onChange={(v) => setPrivacy(v as AiPrivacy)} options={PRIVACY_OPTIONS.map((o) => ({ value: o.value, label: o.label, title: o.title }))} />
-        </div>
+        {!load && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-muted">Privacy</span>
+            <Segmented label="Privacy level" value={privacy} onChange={(v) => setPrivacy(v as AiPrivacy)} options={PRIVACY_OPTIONS.map((o) => ({ value: o.value, label: o.label, title: o.title }))} />
+          </div>
+        )}
         {error ? (
           <div className="rounded-lg border border-bad/40 bg-bad/5 p-3 flex items-center gap-3">
             <span className="flex-1">{error.message}</span>
