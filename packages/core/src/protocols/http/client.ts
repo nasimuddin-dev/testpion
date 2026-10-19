@@ -11,6 +11,9 @@ import type { BodyConfig, HttpRequestSpec, HttpResponseData, KeyValue, TimelineP
 import { ApsError, normalizeError } from '../../errors.js';
 import { applyAuth, type AuthContext } from './auth.js';
 import { digestAuthorization, parseDigestChallenge, signAwsV4, signOAuth1 } from './signing.js';
+import { hawkAuthorization } from './hawk.js';
+import { edgeGridAuthorization } from './edgegrid.js';
+import { ntlmAuthenticate, ntlmNegotiate, ntlmTokenOf, parseNtlmChallenge } from './ntlm.js';
 import { isEventStream, SseParser, type SseEvent } from './sse.js';
 import { watchSend } from './socket-timing.js';
 
@@ -76,11 +79,12 @@ subscribe('undici:client:connected', (message) => {
 });
 
 /** Reuse connection pools per TLS / proxy / HTTP version configuration (the app-wide proxy settings apply; see net/proxy.ts). */
-function dispatcherFor(spec: HttpRequestSpec): Dispatcher | undefined {
+function dispatcherFor(spec: HttpRequestSpec, pool?: Record<string, unknown>): Dispatcher | undefined {
   const s = spec.settings ?? {};
-  if (!s.insecure && !s.proxy && !s.clientCert && !s.http1Only && !s.tlsMinVersion && !s.tlsMaxVersion && !s.ciphers?.trim()) return baseDispatcher();
+  // (a pool of its own, e.g. one connection for NTLM, is never shared: see executeHttpAttempt)
+  if (!pool && !s.insecure && !s.proxy && !s.clientCert && !s.http1Only && !s.tlsMinVersion && !s.tlsMaxVersion && !s.ciphers?.trim()) return baseDispatcher();
   const key = JSON.stringify([proxyGeneration(), s.insecure, s.proxy, s.clientCert, !!s.http1Only, s.tlsMinVersion, s.tlsMaxVersion, s.ciphers?.trim()]);
-  let d = dispatchers.get(key);
+  let d = pool ? undefined : dispatchers.get(key);
   if (!d) {
     const connect: Record<string, unknown> = {};
     if (s.insecure) connect.rejectUnauthorized = false;
@@ -93,8 +97,8 @@ function dispatcherFor(spec: HttpRequestSpec): Dispatcher | undefined {
       if (s.clientCert.caPath) connect.ca = readFileSync(s.clientCert.caPath);
       if (s.clientCert.passphrase) connect.passphrase = s.clientCert.passphrase;
     }
-    d = makeDispatcher(connect, s.proxy, s.http1Only ? { allowH2: false } : {});
-    dispatchers.set(key, d);
+    d = makeDispatcher(connect, s.proxy, { ...(s.http1Only ? { allowH2: false } : {}), ...pool });
+    if (!pool) dispatchers.set(key, d);
   }
   return d;
 }
@@ -266,6 +270,16 @@ export async function prepareHttpRequest(spec: HttpRequestSpec, opts: HttpExecOp
     signAwsV4(method, url, headers, sent, spec.auth);
     opts.redactor?.addSecret(headers.get('authorization') ?? undefined);
   }
+  // Hawk and EdgeGrid sign what is sent: a body that is a form or a file (not text or bytes) is left out of the signature
+  const signable = typeof sent === 'string' || Buffer.isBuffer(sent) ? sent : undefined;
+  if (spec.auth?.type === 'hawk') {
+    headers.set('authorization', hawkAuthorization(method, url, signable, headers.get('content-type') ?? '', spec.auth));
+    opts.redactor?.addSecret(headers.get('authorization') ?? undefined);
+  }
+  if (spec.auth?.type === 'edgegrid') {
+    headers.set('authorization', edgeGridAuthorization(method, url, headers, signable, spec.auth));
+    opts.redactor?.addSecret(headers.get('authorization') ?? undefined);
+  }
   return { url, headers, body: sent, bodyPreview: preview, method, explicitCookie };
 }
 
@@ -370,7 +384,22 @@ async function executeHttpOnce(spec: HttpRequestSpec, opts: HttpExecOptions = {}
   }
 }
 
+/**
+ * One attempt. NTLM authenticates a CONNECTION (negotiate, challenge and authenticate are three messages on one socket),
+ * so its requests get a pool of their own with a single connection, closed when the attempt ends.
+ */
 async function executeHttpAttempt(spec: HttpRequestSpec, opts: HttpExecOptions = {}): Promise<{ response: HttpResponseData; prepared: PreparedRequest }> {
+  if (spec.auth?.type !== 'ntlm') return executeHttpAttemptOn(spec, opts);
+  await ensureProxyApplied();
+  const agent = dispatcherFor(spec, { connections: 1, pipelining: 1, allowH2: false, keepAliveTimeout: 5000 });
+  try {
+    return await executeHttpAttemptOn(spec, opts, agent);
+  } finally {
+    void agent?.close().catch(() => undefined);
+  }
+}
+
+async function executeHttpAttemptOn(spec: HttpRequestSpec, opts: HttpExecOptions, pool?: Dispatcher): Promise<{ response: HttpResponseData; prepared: PreparedRequest }> {
   const t0 = performance.now();
   const timeline: TimelinePhase[] = [];
   const mark = (name: string, start: number) => timeline.push({ name, startMs: round(start - t0), durationMs: round(performance.now() - start) });
@@ -396,6 +425,10 @@ async function executeHttpAttempt(spec: HttpRequestSpec, opts: HttpExecOptions =
   let curBody = body;
   let hops = 0;
   let digestAnswered = false;
+  // NTLM: stage 1 sends the negotiate message without the body, stage 2 (after the server's challenge) the real request
+  const ntlm = spec.auth?.type === 'ntlm' ? spec.auth : undefined;
+  let ntlmStage: 0 | 1 | 2 = ntlm ? 1 : 0;
+  if (ntlm) headers.set('authorization', `NTLM ${ntlmNegotiate(ntlm)}`);
   let res;
   // with private networks blocked, every redirect hop is checked here (not followed inside undici)
   const guarded = getNetworkPolicy().blockPrivateNetworks;
@@ -411,13 +444,27 @@ async function executeHttpAttempt(spec: HttpRequestSpec, opts: HttpExecOptions =
     res = await undiciFetch(current, {
       method: curMethod,
       headers: headers as unknown as Record<string, string>,
-      body: curBody as never,
+      body: (ntlmStage === 1 ? undefined : curBody) as never,
       redirect: follow && !jar && !guarded && !custom ? 'follow' : 'manual',
       signal: opts.signal,
-      dispatcher: dispatcherFor(spec),
+      dispatcher: pool ?? dispatcherFor(spec),
       // duplex is required by undici for streamed (Blob/FormData) bodies
       ...({ duplex: 'half' } as object),
     });
+    // NTLM: the server's challenge (message 2) is answered on the same connection; a server that does not challenge
+    // (it needs no auth) keeps this response
+    if (ntlm && ntlmStage === 1) {
+      ntlmStage = 2;
+      const token = res.status === 401 ? ntlmTokenOf(res.headers.get('www-authenticate')) : undefined;
+      if (token) {
+        jar?.storeFromResponse(current, res.headers.getSetCookie());
+        await res.body?.cancel().catch(() => undefined);
+        const answer = ntlmAuthenticate(ntlm, parseNtlmChallenge(token));
+        opts.redactor?.addSecret(answer);
+        headers.set('authorization', `NTLM ${answer}`);
+        continue;
+      }
+    }
     // Digest: answer the server's challenge once, on the same URL
     if (spec.auth?.type === 'digest' && res.status === 401 && !digestAnswered) {
       const challenge = parseDigestChallenge(res.headers.get('www-authenticate'));

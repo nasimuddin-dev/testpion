@@ -72,6 +72,12 @@ function pmAuth(a: AuthConfig | undefined, notes: string[], where: string): PmAu
           addParamsToHeader: a.addTo === 'query' ? 'false' : 'true',
         }),
       };
+    case 'ntlm':
+      return { type: 'ntlm', ntlm: attr({ username: a.username, password: a.password, domain: a.domain, workstation: a.workstation }) };
+    case 'hawk':
+      return { type: 'hawk', hawk: attr({ authId: a.id, authKey: a.key, algorithm: a.algorithm ?? 'sha256', extraData: a.ext, app: a.app, delegation: a.dlg, includePayloadHash: a.includePayloadHash ? 'true' : 'false' }) };
+    case 'edgegrid':
+      return { type: 'edgegrid', edgegrid: attr({ clientToken: a.clientToken, clientSecret: a.clientSecret, accessToken: a.accessToken, headersToSign: a.headersToSign }) };
     case 'awsv4':
       return { type: 'awsv4', awsv4: attr({ accessKey: a.accessKey, secretKey: a.secretKey, region: a.region, service: a.service, sessionToken: a.sessionToken }) };
     case 'headers':

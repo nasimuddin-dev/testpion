@@ -64,7 +64,7 @@ function script(s: string | undefined): string | undefined {
 
 function authMode(a: AuthConfig | undefined): string {
   if (!a) return 'inherit';
-  const map: Record<string, string> = { none: 'none', inherit: 'inherit', bearer: 'bearer', basic: 'basic', digest: 'digest', apiKey: 'apikey', awsv4: 'awsv4', oauth2: 'oauth2' };
+  const map: Record<string, string> = { none: 'none', inherit: 'inherit', bearer: 'bearer', basic: 'basic', digest: 'digest', apiKey: 'apikey', awsv4: 'awsv4', oauth2: 'oauth2', ntlm: 'ntlm', edgegrid: 'akamai-edgegrid' };
   return map[a.type] ?? 'none';
 }
 function authBlock(a: AuthConfig | undefined): string {
@@ -80,6 +80,10 @@ function authBlock(a: AuthConfig | undefined): string {
       return block('auth:apikey', [['key', x.key ?? ''], ['value', x.value ?? ''], ['placement', x.in === 'query' ? 'queryparams' : 'header']]);
     case 'awsv4':
       return block('auth:awsv4', [['accessKeyId', x.accessKey ?? ''], ['secretAccessKey', x.secretKey ?? ''], ['sessionToken', x.sessionToken ?? ''], ['service', x.service ?? ''], ['region', x.region ?? ''], ['profileName', '']]);
+    case 'ntlm':
+      return block('auth:ntlm', [['username', x.username ?? ''], ['password', x.password ?? ''], ['domain', x.domain ?? '']]);
+    case 'edgegrid':
+      return block('auth:akamai-edgegrid', [['client_token', x.clientToken ?? ''], ['client_secret', x.clientSecret ?? ''], ['access_token', x.accessToken ?? ''], ['headers_to_sign', x.headersToSign ?? '']]);
     case 'oauth2':
       return block('auth:oauth2', [['grant_type', x.grantType ?? 'client_credentials'], ['access_token_url', x.tokenUrl ?? ''], ['client_id', x.clientId ?? ''], ['client_secret', x.clientSecret ?? ''], ['scope', x.scope ?? '']]);
     default:

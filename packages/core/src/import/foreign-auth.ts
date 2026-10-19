@@ -83,6 +83,23 @@ function grant(
   return 'authorization_code';
 }
 
+/** NTLM, Hawk and EdgeGrid, which TestPion signs itself: the same mapping for every tool, from the tool's own field names. */
+const ntlm = (f: { username?: unknown; password?: unknown; domain?: unknown; workstation?: unknown }): ForeignAuth =>
+  ok({ type: 'ntlm', username: t(f.username), password: t(f.password), ...(f.domain ? { domain: t(f.domain) } : {}), ...(f.workstation ? { workstation: t(f.workstation) } : {}) });
+const hawk = (f: { id?: unknown; key?: unknown; algorithm?: unknown; ext?: unknown; app?: unknown; dlg?: unknown; payload?: boolean }): ForeignAuth =>
+  ok({
+    type: 'hawk',
+    id: t(f.id),
+    key: t(f.key),
+    algorithm: /sha1/i.test(String(f.algorithm ?? '')) ? 'sha1' : 'sha256',
+    ...(f.ext ? { ext: t(f.ext) } : {}),
+    ...(f.app ? { app: t(f.app) } : {}),
+    ...(f.dlg ? { dlg: t(f.dlg) } : {}),
+    ...(f.payload ? { includePayloadHash: true } : {}),
+  });
+const edgegrid = (f: { clientToken?: unknown; clientSecret?: unknown; accessToken?: unknown; headersToSign?: unknown }): ForeignAuth =>
+  ok({ type: 'edgegrid', clientToken: t(f.clientToken), clientSecret: t(f.clientSecret), accessToken: t(f.accessToken), ...(f.headersToSign ? { headersToSign: t(f.headersToSign) } : {}) });
+
 function postman(a: Any, where: string): ForeignAuth {
   const get = (k: string) => attr(a[a.type], k);
   const opt = (k: string) => get(k) || undefined;
@@ -152,6 +169,12 @@ function postman(a: Any, where: string): ForeignAuth {
         notes,
       );
     }
+    case 'ntlm':
+      return ntlm({ username: get('username'), password: get('password'), domain: get('domain'), workstation: get('workstation') });
+    case 'hawk':
+      return hawk({ id: get('authId'), key: get('authKey'), algorithm: get('algorithm'), ext: get('extraData'), app: get('app'), dlg: get('delegation'), payload: get('includePayloadHash') === 'true' });
+    case 'edgegrid':
+      return edgegrid({ clientToken: get('clientToken'), clientSecret: get('clientSecret'), accessToken: get('accessToken'), headersToSign: get('headersToSign') });
     case 'jwt':
       return jwt('postman', where, {
         algorithm: get('algorithm'),
@@ -211,6 +234,10 @@ function insomnia(a: Any, where: string): ForeignAuth {
         notes,
       );
     }
+    case 'ntlm':
+      return ntlm(a);
+    case 'hawk':
+      return hawk({ id: a.id, key: a.key, algorithm: a.algorithm, ext: a.ext, payload: !!a.validatePayload });
     case 'iam':
       return ok({
         type: 'awsv4',
@@ -270,6 +297,12 @@ function bruno(a: Any, where: string): ForeignAuth {
         },
         notes,
       );
+    }
+    case 'ntlm':
+      return ntlm(a.ntlm ?? {});
+    case 'akamai-edgegrid': {
+      const e = a['akamai-edgegrid'] ?? {};
+      return edgegrid({ clientToken: e.client_token, clientSecret: e.client_secret, accessToken: e.access_token, headersToSign: e.headers_to_sign });
     }
     case 'jwt': {
       const j = a.jwt ?? a;

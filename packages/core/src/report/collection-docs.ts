@@ -47,7 +47,7 @@ function table(title: string, rows: KeyValue[] | undefined, r: Redactor): string
 function authText(a: AuthConfig | undefined): string | undefined {
   if (!a || a.type === 'none') return undefined;
   if (a.type === 'inherit') return 'Inherited from the folder or collection';
-  const names: Record<string, string> = { basic: 'Basic', bearer: 'Bearer token', apiKey: 'API key', jwt: 'JWT', oauth2: 'OAuth 2.0', headers: 'Custom headers', digest: 'Digest', awsv4: 'AWS Signature', oauth1: 'OAuth 1.0' };
+  const names: Record<string, string> = { basic: 'Basic', bearer: 'Bearer token', apiKey: 'API key', jwt: 'JWT', oauth2: 'OAuth 2.0', headers: 'Custom headers', digest: 'Digest', awsv4: 'AWS Signature', oauth1: 'OAuth 1.0', ntlm: 'NTLM', hawk: 'Hawk', edgegrid: 'Akamai EdgeGrid' };
   return names[a.type] ?? a.type;
 }
 

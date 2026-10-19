@@ -14,6 +14,9 @@ const TYPES: Array<{ id: AuthConfig['type']; label: string }> = [
   { id: 'oauth1', label: 'OAuth 1.0' },
   { id: 'awsv4', label: 'AWS Signature' },
   { id: 'digest', label: 'Digest auth' },
+  { id: 'ntlm', label: 'NTLM' },
+  { id: 'hawk', label: 'Hawk' },
+  { id: 'edgegrid', label: 'Akamai EdgeGrid' },
   { id: 'jwt', label: 'JWT (HMAC signed)' },
   { id: 'headers', label: 'Custom headers' },
 ];
@@ -34,6 +37,12 @@ function defaults(type: AuthConfig['type']): AuthConfig {
       return { type, headers: [] };
     case 'digest':
       return { type, username: '', password: '{{password}}' };
+    case 'ntlm':
+      return { type, username: '', password: '{{password}}', domain: '' };
+    case 'hawk':
+      return { type, id: '{{hawkId}}', key: '{{hawkKey}}', algorithm: 'sha256' };
+    case 'edgegrid':
+      return { type, clientToken: '{{edgegridClientToken}}', clientSecret: '{{edgegridClientSecret}}', accessToken: '{{edgegridAccessToken}}' };
     case 'oauth1':
       return { type, consumerKey: '{{consumerKey}}', consumerSecret: '{{consumerSecret}}', token: '{{accessToken}}', tokenSecret: '{{tokenSecret}}', signatureMethod: 'HMAC-SHA1' };
     case 'awsv4':
@@ -50,7 +59,7 @@ export function describeAuth(a: AuthConfig): string {
   const what =
     a.type === 'bearer'
       ? x.token
-      : a.type === 'basic' || a.type === 'digest'
+      : a.type === 'basic' || a.type === 'digest' || a.type === 'ntlm'
         ? x.username
         : a.type === 'apiKey'
           ? `${String(x.key ?? '')} in the ${x.in === 'query' ? 'query' : 'header'}`
@@ -300,6 +309,75 @@ export function AuthEditor({
             <Input className="mono" type="password" value={a.sessionToken ?? ''} onChange={(e) => set({ sessionToken: e.target.value || undefined })} />
           </Field>
           <p className="text-xs text-muted">Signed when the request is sent (method, URL, headers and body), so it stays valid after scripts change the request.</p>
+        </>
+      )}
+      {a.type === 'ntlm' && (
+        <>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Username">
+              <Input value={a.username} onChange={(e) => set({ username: e.target.value })} />
+            </Field>
+            <Field label="Password">
+              <Input type="password" value={a.password} onChange={(e) => set({ password: e.target.value })} />
+            </Field>
+            <Field label="Domain (optional)">
+              <Input value={a.domain ?? ''} onChange={(e) => set({ domain: e.target.value || undefined })} />
+            </Field>
+            <Field label="Workstation (optional)">
+              <Input value={a.workstation ?? ''} onChange={(e) => set({ workstation: e.target.value || undefined })} />
+            </Field>
+          </div>
+          <p className="text-xs text-muted">NTLM v2 handshake (negotiate, challenge, authenticate) on one connection; the first message is sent without the body.</p>
+        </>
+      )}
+      {a.type === 'hawk' && (
+        <>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Hawk ID">
+              <Input className="mono" value={a.id} onChange={(e) => set({ id: e.target.value })} />
+            </Field>
+            <Field label="Hawk key" hint="Reference a secret variable, e.g. {{hawkKey}}">
+              <Input className="mono" type="password" value={a.key} onChange={(e) => set({ key: e.target.value })} />
+            </Field>
+            <Field label="Algorithm">
+              <Select value={a.algorithm ?? 'sha256'} onChange={(e) => set({ algorithm: e.target.value })}>
+                <option value="sha256">sha256</option>
+                <option value="sha1">sha1</option>
+              </Select>
+            </Field>
+            <Field label="Application data (ext)">
+              <Input value={a.ext ?? ''} onChange={(e) => set({ ext: e.target.value || undefined })} />
+            </Field>
+            <Field label="App ID (optional)">
+              <Input value={a.app ?? ''} onChange={(e) => set({ app: e.target.value || undefined })} />
+            </Field>
+            <Field label="Delegated by (optional)">
+              <Input value={a.dlg ?? ''} onChange={(e) => set({ dlg: e.target.value || undefined })} />
+            </Field>
+          </div>
+          <label className="text-sm flex items-center gap-2">
+            <input type="checkbox" checked={!!a.includePayloadHash} onChange={(e) => set({ includePayloadHash: e.target.checked || undefined })} /> Include the payload hash (text bodies)
+          </label>
+          <p className="text-xs text-muted">Signed when the request is sent, with a new nonce and timestamp.</p>
+        </>
+      )}
+      {a.type === 'edgegrid' && (
+        <>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Client token">
+              <Input className="mono" value={a.clientToken} onChange={(e) => set({ clientToken: e.target.value })} />
+            </Field>
+            <Field label="Client secret" hint="Reference a secret variable">
+              <Input className="mono" type="password" value={a.clientSecret} onChange={(e) => set({ clientSecret: e.target.value })} />
+            </Field>
+            <Field label="Access token">
+              <Input className="mono" type="password" value={a.accessToken} onChange={(e) => set({ accessToken: e.target.value })} />
+            </Field>
+            <Field label="Headers to sign (optional)" hint="Comma-separated names">
+              <Input className="mono" value={a.headersToSign ?? ''} onChange={(e) => set({ headersToSign: e.target.value || undefined })} />
+            </Field>
+          </div>
+          <p className="text-xs text-muted">EG1-HMAC-SHA256: signed when the request is sent (the first 128 KB of a POST body are hashed).</p>
         </>
       )}
       {a.type === 'headers' && <KeyValueEditor rows={a.headers} onChange={(headers) => set({ headers })} keyPlaceholder="Header" />}

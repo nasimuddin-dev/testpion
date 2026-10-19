@@ -104,6 +104,7 @@ export function literalAuthSecrets(auth: AuthConfig | undefined): Array<{ label:
       break;
     case 'basic':
     case 'digest':
+    case 'ntlm':
       check('password', 'password', auth.password);
       break;
     case 'apiKey':
@@ -122,6 +123,13 @@ export function literalAuthSecrets(auth: AuthConfig | undefined): Array<{ label:
       break;
     case 'awsv4':
       check('secret key', 'secretKey', auth.secretKey);
+      break;
+    case 'hawk':
+      check('Hawk key', 'key', auth.key);
+      break;
+    case 'edgegrid':
+      check('EdgeGrid client secret', 'clientSecret', auth.clientSecret);
+      check('EdgeGrid access token', 'accessToken', auth.accessToken);
       break;
   }
   return out;

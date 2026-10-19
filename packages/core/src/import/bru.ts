@@ -73,6 +73,10 @@ function authOf(blocks: BruBlock[], mode: string | undefined): Any | undefined {
       return { mode, apikey: get('apikey') };
     case 'awsv4':
       return { mode, awsv4: get('awsv4') };
+    case 'ntlm':
+      return { mode, ntlm: get('ntlm') };
+    case 'akamai-edgegrid':
+      return { mode, 'akamai-edgegrid': get('akamai-edgegrid') };
     case 'oauth2': {
       const o = get('oauth2');
       return { mode, oauth2: { grantType: o.grant_type, accessTokenUrl: o.access_token_url, clientId: o.client_id, clientSecret: o.client_secret, scope: o.scope } };

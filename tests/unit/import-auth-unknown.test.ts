@@ -9,9 +9,9 @@ const flat = (nodes: CollectionNode[]): CollectionNode[] => nodes.flatMap((n) =>
 const byName = (nodes: CollectionNode[], name: string) => flat(nodes).find((n) => n.name === name) as SavedHttpRequest;
 
 const UNKNOWN: Record<ForeignTool, string[]> = {
-  postman: ['hawk', 'ntlm', 'edgegrid', 'asap', 'wsse', 'brand-new-scheme'],
-  insomnia: ['hawk', 'ntlm', 'asap', 'netrc', 'wsse', 'brand-new-scheme'],
-  bruno: ['ntlm', 'wsse', 'akamai-edgegrid', 'hawk', 'brand-new-scheme'],
+  postman: ['asap', 'wsse', 'brand-new-scheme'],
+  insomnia: ['asap', 'netrc', 'wsse', 'brand-new-scheme'],
+  bruno: ['wsse', 'hawk', 'brand-new-scheme'],
   hoppscotch: ['aws-signature', 'hawk', 'akamai-eg', 'brand-new-scheme'],
 };
 
@@ -56,14 +56,14 @@ describe('an unsupported auth scheme is never inherit', () => {
       });
 
   it('names the scheme in the placeholder header', () => {
-    expect(imported('postman', 'hawk').req.request.headers.at(-1)!.key).toBe('X-Imported-Auth-Hawk');
-    expect(imported('postman', 'ntlm').req.request.headers.at(-1)!.key).toBe('X-Imported-Auth-NTLM');
-    expect(imported('bruno', 'akamai-edgegrid').req.request.headers.at(-1)!.key).toBe('X-Imported-Auth-EdgeGrid');
+    expect(imported('postman', 'asap').req.request.headers.at(-1)!.key).toBe('X-Imported-Auth-ASAP');
+    expect(imported('postman', 'wsse').req.request.headers.at(-1)!.key).toBe('X-Imported-Auth-WSSE');
+    expect(imported('hoppscotch', 'akamai-eg').req.request.headers.at(-1)!.key).toBe('X-Imported-Auth-EdgeGrid');
     expect(imported('insomnia', 'brand-new-scheme').req.request.headers.at(-1)!.key).toBe('X-Imported-Auth-Brand-new-scheme');
   });
 
   it('keeps the request’s own headers and adds nothing to a request without auth (it inherits)', () => {
-    const { r } = imported('postman', 'hawk');
+    const { r } = imported('postman', 'asap');
     expect(byName(r.collection!.items, 'Secured').request.headers[0]).toEqual({ key: 'Accept', value: 'application/json', enabled: true });
     const plain = byName(r.collection!.items, 'Plain');
     expect(plain.request.auth).toEqual({ type: 'inherit' });
@@ -73,13 +73,13 @@ describe('an unsupported auth scheme is never inherit', () => {
   it('a folder or collection with an unsupported scheme gets none and a note (no headers to hold a placeholder)', () => {
     const text = JSON.stringify({
       info: { _postman_id: 'p2', name: 'Zoo', schema: 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json' },
-      auth: { type: 'ntlm', ntlm: [] },
-      item: [{ name: 'Edge', auth: { type: 'edgegrid', edgegrid: [] }, item: [{ name: 'Inside', request: { method: 'GET', url: 'https://api.test/z' } }] }],
+      auth: { type: 'asap', asap: [] },
+      item: [{ name: 'Edge', auth: { type: 'wsse', wsse: [] }, item: [{ name: 'Inside', request: { method: 'GET', url: 'https://api.test/z' } }] }],
     });
     const r = importAny(text);
     expect(r.collection!.auth).toEqual({ type: 'none' });
     expect((r.collection!.items[0] as CollectionFolder).auth).toEqual({ type: 'none' });
-    expect(r.notes).toEqual(expect.arrayContaining([expect.stringContaining('"Zoo": Postman auth "ntlm"'), expect.stringContaining('"Edge": Postman auth "edgegrid"')]));
+    expect(r.notes).toEqual(expect.arrayContaining([expect.stringContaining('"Zoo": Postman auth "asap"'), expect.stringContaining('"Edge": Postman auth "wsse"')]));
   });
 });
 
@@ -169,5 +169,24 @@ describe('supported schemes are unchanged', () => {
     expect(a.auth).toMatchObject({ type: 'oauth2', grantType: 'authorization_code' });
     expect(a.notes).toEqual([expect.stringContaining('"Login": Postman OAuth 2 grant "implicit"')]);
     expect(mapForeignAuth('insomnia', { type: 'oauth2', grantType: 'password', accessTokenUrl: 'u', clientId: 'c' }, 'x').notes).toEqual([]);
+  });
+});
+
+// NTLM, Hawk and EdgeGrid are real auth types (the engine signs them): each tool's fields map onto them
+describe('NTLM, Hawk and EdgeGrid map onto TestPion auth', () => {
+  const attrs = (o: Record<string, string>) => Object.entries(o).map(([key, value]) => ({ key, value }));
+  const auth = (text: string) => (byName(importAny(text).collection!.items, 'Secured') as SavedHttpRequest).request.auth;
+  it('Postman', () => {
+    expect(auth(postman('ntlm', attrs({ username: 'u', password: '{{p}}', domain: 'D', workstation: 'W' })))).toEqual({ type: 'ntlm', username: 'u', password: '{{p}}', domain: 'D', workstation: 'W' });
+    expect(auth(postman('hawk', attrs({ authId: 'id1', authKey: '{{k}}', algorithm: 'sha1', extraData: 'e', app: 'a', delegation: 'd', includePayloadHash: 'true' })))).toEqual({
+      type: 'hawk', id: 'id1', key: '{{k}}', algorithm: 'sha1', ext: 'e', app: 'a', dlg: 'd', includePayloadHash: true,
+    });
+    expect(auth(postman('edgegrid', attrs({ clientToken: 'c', clientSecret: 's', accessToken: 'a', headersToSign: 'x-a' })))).toEqual({ type: 'edgegrid', clientToken: 'c', clientSecret: 's', accessToken: 'a', headersToSign: 'x-a' });
+  });
+  it('Insomnia and Bruno', () => {
+    expect(auth(insomnia({ type: 'ntlm', username: 'u', password: 'p' }))).toEqual({ type: 'ntlm', username: 'u', password: 'p' });
+    expect(auth(insomnia({ type: 'hawk', id: 'i', key: 'k', algorithm: 'sha256', ext: 'x' }))).toMatchObject({ type: 'hawk', id: 'i', key: 'k', ext: 'x' });
+    expect(auth(bruno({ mode: 'ntlm', ntlm: { username: 'u', password: 'p', domain: 'd' } }))).toEqual({ type: 'ntlm', username: 'u', password: 'p', domain: 'd' });
+    expect(auth(bruno({ mode: 'akamai-edgegrid', 'akamai-edgegrid': { client_token: 'c', client_secret: 's', access_token: 'a' } }))).toEqual({ type: 'edgegrid', clientToken: 'c', clientSecret: 's', accessToken: 'a' });
   });
 });
