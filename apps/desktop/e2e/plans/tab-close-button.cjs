@@ -64,17 +64,17 @@ const steps = [
      if (!(await closeAt('Open test files', t0))) return 'NO ✕';
      return 'closable tabs ' + before + ' → ' + strip('Open test files').filter((t) => t.querySelector('button[aria-label^="Close "]')).length;`,
   ),
-  // request tabs of every kind: ✕ on each in turn, down to the single one, then that one: nothing is left and the editor says so
+  // request tabs of every kind: ✕ on each closable tab in turn (a pinned tab has none), down to the single one, then that one
   step(
     'requests',
     `await __t.requests(); await __t.sleep(700); const L = 'Open requests';
-     const before = strip(L).length; if (!before) return 'NO TABS';
-     if (!(await closeAt(L, 0))) return 'NO ✕';
-     const afterFirst = strip(L).length;
-     let guard = 0; while (strip(L).length > 1 && guard++ < 30) if (!(await closeAt(L, strip(L).length - 1))) return 'NO ✕ loop';
-     const single = strip(L).length;
-     if (!(await closeAt(L, 0))) return 'NO ✕ single';
-     return 'tabs ' + before + ' → ' + afterFirst + ' | single: ' + single + ' → ' + strip(L).length + ' | ' + (/No open requests/.test(document.body.innerText) ? 'empty state' : 'NO empty state');`,
+     const closable = () => strip(L).map((t, i) => (t.querySelector('button[aria-label^="Close "]') ? i : -1)).filter((i) => i >= 0);
+     const before = closable().length; if (!before) return 'NO TABS';
+     let guard = 0; while (closable().length > 1 && guard++ < 40) if (!(await closeAt(L, closable()[closable().length - 1]))) return 'NO ✕ loop';
+     const single = closable().length;
+     if (!(await closeAt(L, closable()[0]))) return 'NO ✕ single';
+     const left = closable().length;
+     return 'closable ' + before + ' → single: ' + single + ' → ' + left + ' | ' + (strip(L).length ? 'only pinned left' : /No open requests/.test(document.body.innerText) ? 'empty state' : 'NO empty state');`,
   ),
 ];
 
@@ -85,5 +85,5 @@ module.exports = withExpect(steps, {
   environments: /^tabs 1 → 0 \| empty state$/,
   monitors: /^tabs 1 → 0$/,
   'test-files': /^closable tabs 1 → 0$/,
-  requests: /^tabs \d+ → \d+ \| single: 1 → 0 \| empty state$/,
+  requests: /^closable \d+ → single: 1 → 0 \| (empty state|only pinned left)$/,
 });

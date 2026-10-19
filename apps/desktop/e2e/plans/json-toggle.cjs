@@ -3,7 +3,7 @@
 const { withExpect } = require('../lib.cjs');
 
 const H = `
-  const bar = () => [...document.querySelectorAll('main [data-expand-collapse]')].filter((b) => b.offsetParent);
+  const bar = () => [...document.querySelectorAll('[data-expand-collapse]')].filter((b) => b.offsetParent && !b.closest('aside'));
   const side = () => [...document.querySelectorAll('aside [data-expand-collapse]')].filter((b) => b.offsetParent);
   const state = () => bar().map((b) => b.getAttribute('data-expand-collapse')).join(',');
   const rows = () => document.querySelectorAll('main [role=treeitem], main [data-json-row]').length;
@@ -13,7 +13,12 @@ const step = (name, body) => [name, `(async () => { ${H} ${body} })()`];
 const steps = [
   step(
     'open-and-send',
-    `await __t.esc(); await __t.requests(); await __t.open('GET with query parameters'); await __t.sleep(800); await __t.button('Send'); await __t.sleep(5000);
+    `await __t.esc(); await __t.requests(); await __t.sleep(500);
+     const f = document.querySelector('aside input[placeholder^="Filter"]');
+     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(f, 'GET with query parameters'); f.dispatchEvent(new Event('input', { bubbles: true })); await __t.sleep(900);
+     const row = [...document.querySelectorAll('aside [data-tree-row]')].find((b) => b.offsetParent && b.getAttribute('aria-expanded') === null && b.textContent.trim().endsWith('GET with query parameters'));
+     if (!row) return 'NO ROW';
+     await __t.real.click(row); await __t.sleep(1200); await __t.button('Send'); await __t.sleep(5000);
      return 'buttons: ' + bar().length + ' (' + state() + ')';`,
   ),
   // one button, never two
