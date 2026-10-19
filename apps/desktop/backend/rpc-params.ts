@@ -57,7 +57,7 @@ export const RPC_PARAMS: Record<string, ParamSpec> = {
   'col.docs': { id: 's?', collection: 'o?' },
   'col.duplicate': { id: 's' },
   'col.export': { id: 's', format: 's?' },
-  'col.exportDocsHtml': { id: 's?', collection: 'o?' },
+  'col.docsHtml': { id: 's?', collection: 'o?', environment: 's?' },
   'col.get': { id: 's' },
   'col.import': { text: 's', fileName: 's?', keepPm: 'b?' },
   'col.importBrunoFolder': { name: 's?', files: 'a' },

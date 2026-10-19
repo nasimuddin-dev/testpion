@@ -3,6 +3,9 @@ import { call } from '../api';
 import { formatMs, plural } from '../lib/format';
 import { axisMs, ChartCard, chartKeys, ChartTip, PointLine, RecentRuns, Swatch, useWidth } from './charts';
 import { Empty } from './ui';
+import { OutputHeader } from './output/OutputFrame';
+import type { OutputSpec } from './output/output-core';
+import { outputFileName } from '@testpion/shared';
 
 /** A run in a list of runs (runs.list). */
 export interface RunRow {
@@ -225,11 +228,24 @@ function ScoreTrends({ runIds, onSelect }: { runIds: string[]; onSelect?(id: str
 }
 
 /** The runs at a glance (shown when no run is selected): pass rate and duration of the last 40 runs. */
+const RUNS_SOURCE = { kind: 'runs-overview' as const, limit: 500 };
+const RUNS_SPEC: OutputSpec = {
+  id: 'runs.overview',
+  what: 'runs list',
+  name: outputFileName({ name: 'testpion-runs', ext: '' }),
+  formats: [
+    { format: 'csv', label: 'Runs (CSV)', source: RUNS_SOURCE, default: true },
+    { format: 'json', label: 'Runs (JSON)', source: RUNS_SOURCE },
+  ],
+};
+
 export function RunsOverview({ runs, onSelect, hint = 'Click a bar or point, or a run in the list, to see its results.', flaky, scores }: { runs: RunRow[]; onSelect?(id: string): void; hint?: string; flaky?: boolean; scores?: boolean }) {
   const last = runs.slice(0, 40).reverse();
   if (!last.length) return <Empty title="No runs yet">Run tests, a suite or a collection; each run is listed here with its results and charts.</Empty>;
   return (
-    <div className="h-full overflow-auto p-3">
+    <div className="h-full flex flex-col min-h-0" data-output="runs.overview">
+      <OutputHeader spec={RUNS_SPEC} title="Runs at a glance" />
+      <div className="flex-1 min-h-0 overflow-auto p-3">
       <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))' }}>
         <PassRate runs={last} onSelect={onSelect} />
         <RunDurations runs={last} onSelect={onSelect} />
@@ -237,6 +253,7 @@ export function RunsOverview({ runs, onSelect, hint = 'Click a bar or point, or 
       </div>
       {scores && <ScoreTrends runIds={last.map((r) => r.id)} onSelect={onSelect} />}
       <p className="text-xs text-muted mt-3">{hint}</p>
+      </div>
     </div>
   );
 }

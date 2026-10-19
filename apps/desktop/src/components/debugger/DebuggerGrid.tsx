@@ -7,7 +7,7 @@ import { Badge, cx, Empty, Menu, Tabs, VirtualList, type MenuItem } from '../ui'
 import { HIGHLIGHT_CLASS, type Rule, type RuleKind } from '../DebuggerRules';
 import { curlOf, kb, speedOf, toRequest, versionOf, type Exchange, type IncomingRequest } from './model';
 import { saveAsTest, saveAsTestMenuItem } from '../../lib/save-test';
-import { downloadContent } from '../../lib/files';
+import { saveExchangeBody } from '../output/debugger-specs';
 import { setDragRefs } from '../../lib/drag-ref';
 import { useEventLog } from '../../lib/use-rpc';
 import { usePersisted } from '../../lib/sticky';
@@ -29,30 +29,11 @@ const copyWhole = (e: Exchange, what: string, pick: (x: Exchange) => string) =>
     (x) => void copyText(pick(x), what),
     () => undefined,
   );
-/** A body to a file named after the request (bodies kept as text; a binary one is counted, not kept). */
-const EXT: Array<[RegExp, string]> = [
-  [/json/i, 'json'],
-  [/xml/i, 'xml'],
-  [/html/i, 'html'],
-  [/javascript/i, 'js'],
-  [/css/i, 'css'],
-  [/csv/i, 'csv'],
-  [/text/i, 'txt'],
-];
+/** A body through the Save as dialog, named after the request (the shared output writer: bodies are kept as text; a binary one is counted, not kept). */
 async function saveBody(e: Exchange, side: 'request' | 'response') {
   const x = await whole(e).catch(() => undefined);
-  const body = side === 'request' ? x?.requestBody : x?.responseBody;
-  if (body === undefined) return useApp.getState().toast(`The ${side} body was not kept (binary or larger than the capture keeps)`, 'error');
-  const type = (side === 'request' ? x?.requestHeaders['content-type'] : x?.contentType) ?? '';
-  const ext = EXT.find(([re]) => re.test(type))?.[1] ?? 'bin';
-  const base = (() => {
-    try {
-      return new URL(e.url).pathname.split('/').filter(Boolean).pop() || new URL(e.url).hostname;
-    } catch {
-      return 'body';
-    }
-  })().replace(/[^\w.-]+/g, '_');
-  downloadContent(`${base}-${side}.${ext}`, body, { type: type || 'application/octet-stream' });
+  if (!x || (side === 'request' ? x.requestBody : x.responseBody) === undefined) return useApp.getState().toast(`The ${side} body was not kept (binary or larger than the capture keeps)`, 'error');
+  await saveExchangeBody(x, side);
 }
 const headerLines = (h?: Record<string, string>) =>
   Object.entries(h ?? {})

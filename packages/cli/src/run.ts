@@ -56,6 +56,7 @@ import {
 import { cli, emitEvent, machine, noteError, noteWarning } from './output.js';
 import { triageAfterRun } from './run-triage.js';
 import { EXIT, green, red, yellow, dim, bold, cyan, CliError, printJson, collectVar, openWorkspace, cliContext, requireCollection, requireEnvironment, readImport, loadCollectionRef, cleanupFailedRun, readResults } from './shared.js';
+import { formatForFile, saveResponseBody, savedLine } from './output-save.js';
 
 export function printResult(r: TestResult, verbose: boolean): void {
   // --jsonl: each result is an event line
@@ -513,8 +514,10 @@ export async function executeCollectionRun(ref: string, o: CollectionCliOptions)
 /** `testpion send`: one saved request (scripts, auth, checks) or an ad-hoc URL; prints the response like curl. */
 export async function executeSend(
   target: string,
-  o: { workspace?: string; environment?: string; method: string; header?: string[]; data?: string; include?: boolean; fail?: boolean; json?: boolean },
+  o: { workspace?: string; environment?: string; method: string; header?: string[]; data?: string; include?: boolean; fail?: boolean; json?: boolean; out?: string; format?: string },
 ): Promise<number> {
+  // a format the body cannot be saved in is told before the request is sent
+  if (o.out) formatForFile('response.body', o.out, o.format);
   const settings = new WorkspaceManager().loadSettings();
   const isUrl = /^(https?:\/\/|\{\{)/i.test(target);
   // the workspace as every command finds it (-w, else the nearest one up from here), also for a URL: its
@@ -588,6 +591,8 @@ export async function executeSend(
     return EXIT.EXECUTION_ERROR;
   }
   const failed = response.status >= 400 || checks.some((c) => !c.passed);
+  // --out: the body goes to the file (the same writer as the app's Save as…), not to the screen
+  const saved = o.out ? await saveResponseBody(response.body, { out: o.out, format: o.format }) : undefined;
   if (o.json) {
     let body: unknown = response.body;
     try {
@@ -595,7 +600,7 @@ export async function executeSend(
     } catch {
       /* not JSON */
     }
-    printJson({ status: response.status, statusText: response.statusText, url: response.url, durationMs: response.durationMs, timing: response.timing, headers: Object.fromEntries(response.headers), body, checks });
+    printJson({ status: response.status, statusText: response.statusText, url: response.url, durationMs: response.durationMs, timing: response.timing, headers: Object.fromEntries(response.headers), body: saved ? undefined : body, ...(saved ? { saved } : {}), checks });
   } else {
     if (o.include) {
       console.log(bold(`${response.status} ${response.statusText}`) + dim(`  ${response.url} · ${formatDuration(response.durationMs)}`));
@@ -614,7 +619,8 @@ export async function executeSend(
     } catch {
       /* not JSON: as is */
     }
-    process.stdout.write(text.endsWith('\n') ? text : text + '\n');
+    if (saved) console.log(savedLine(saved));
+    else process.stdout.write(text.endsWith('\n') ? text : text + '\n');
     for (const c of checks) console.error(`${c.passed ? green('✓') : red('✗')} ${c.name}${c.passed ? '' : dim(`: ${c.message ?? ''}`)}`);
   }
   return o.fail && failed ? EXIT.TEST_FAILURE : EXIT.SUCCESS;

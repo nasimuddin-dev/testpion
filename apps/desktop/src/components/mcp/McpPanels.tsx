@@ -8,6 +8,8 @@ import { JsonTree } from '../JsonView';
 import { useSticky } from '../../lib/sticky';
 import { ErrorPanel } from '../Results';
 import { Badge, Button, cx, Empty, Field, Input, SectionTitle, Split } from '../ui';
+import { OutputActions } from '../output/OutputFrame';
+import { promptOutputSpec, resourceOutputSpec } from '../output/mcp-specs';
 
 /** The MCP view's Resources and Prompts panels: browse, read and fill in what a server offers. */
 
@@ -130,6 +132,7 @@ export function ResourcesPanel({ serverId, disc }: { serverId: string; disc: Dis
     undefined,
   );
   const [loading, setLoading] = useState(false);
+  const spec = useMemo(() => resourceOutputSpec(serverId, content && !('error' in content) ? content.contents : []), [serverId, content]);
   const read = async (u = uri) => {
     setLoading(true);
     try {
@@ -166,7 +169,7 @@ export function ResourcesPanel({ serverId, disc }: { serverId: string; disc: Dis
           </button>
         ))}
       </div>
-      <div className="h-full flex flex-col">
+      <div className="h-full flex flex-col" data-output="mcp.resource">
         {template && templateParams(template).length > 0 && (
           <div className="flex flex-wrap gap-2 px-2 pt-2 items-center">
             <span className="text-xs text-muted mono">{template}</span>
@@ -204,6 +207,7 @@ export function ResourcesPanel({ serverId, disc }: { serverId: string; disc: Dis
           <Button variant="primary" loading={loading} onClick={() => read()}>
             Read
           </Button>
+          <OutputActions spec={spec} />
         </div>
         {subscribed.has(uri) && updatedAt && <div className="px-3 py-1 text-xs text-accent border-b border-line">Updated by the server at {updatedAt}; read again automatically.</div>}
         <div className="flex-1 min-h-0 overflow-auto flex flex-col">
@@ -262,7 +266,7 @@ export function PromptsPanel({ serverId, prompts }: { serverId: string; prompts:
         ))}
         {!prompts.length && <Empty title="No prompts" />}
       </div>
-      <div className="h-full flex flex-col">
+      <div className="h-full flex flex-col" data-output="mcp.prompt">
         {p && (
           <div className="p-3 border-b border-line flex flex-col gap-2">
             {(p.arguments ?? []).map((a) => (
@@ -292,7 +296,7 @@ export function PromptsPanel({ serverId, prompts }: { serverId: string; prompts:
           ) : 'error' in out ? (
             <ErrorPanel error={out.error} />
           ) : (
-            <PromptMessages out={out} />
+            <PromptMessages out={out} server={serverId} prompt={p?.name ?? ''} />
           )}
         </div>
       </div>
@@ -301,17 +305,20 @@ export function PromptsPanel({ serverId, prompts }: { serverId: string; prompts:
 }
 
 /** A prompt's messages as a conversation (role and text), with the raw JSON one click away. */
-function PromptMessages({ out }: { out: { messages: unknown[]; description?: string } }) {
+function PromptMessages({ out, server, prompt }: { out: { messages: unknown[]; description?: string }; server: string; prompt: string }) {
   const [json, setJson] = useState(false);
+  const spec = useMemo(() => promptOutputSpec(server, prompt, out), [server, prompt, out]);
   const messages = out.messages as Array<{ role: string; content: { type: string; text?: string; resource?: { uri: string; text?: string } } }>;
   return (
     <div className="flex flex-col">
       <div className="flex items-center gap-2 px-3 h-9 border-b border-line text-sm">
         <span className="text-muted">{plural(messages.length, 'message')}</span>
         {out.description && <span className="text-muted truncate">· {out.description}</span>}
-        <Button size="sm" variant="ghost" className="ml-auto" onClick={() => setJson(!json)}>
-          {json ? 'Messages' : 'JSON'}
-        </Button>
+        <OutputActions spec={spec}>
+          <Button size="sm" variant="ghost" onClick={() => setJson(!json)}>
+            {json ? 'Messages' : 'JSON'}
+          </Button>
+        </OutputActions>
       </div>
       {json ? (
         <div className="h-96">

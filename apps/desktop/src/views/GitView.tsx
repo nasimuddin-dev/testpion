@@ -9,6 +9,8 @@ import type { ItemRef } from '@testpion/shared';
 import { useEditorTabsStore } from '../components/EditorTabs';
 import { Badge, Button, Callout, cx, Empty, LinkButton, Menu, MoreMenu, PageHeader, SectionTitle, Spinner, Split, Textarea } from '../components/ui';
 import { DiffText, GitCommitPanel } from '../components/GitCommitPanel';
+import { OutputActions } from '../components/output/OutputFrame';
+import type { OutputSpec } from '../components/output/output-core';
 import { plural } from '../lib/format';
 import { GitItemDiffDialog } from '../components/GitItemDiffDialog';
 import { GitConflictDialog } from '../components/GitConflictDialog';
@@ -113,6 +115,21 @@ export function GitView() {
   // the commit picked in the history: what it changed shows on the right
   const [selectedCommit, setSelectedCommit] = useState<string>();
   const [diff, setDiff] = useState<{ path: string; text: string; line?: number }>();
+  // the uncommitted changes as one patch (or by meaning, as Markdown), and the line diff shown when there is one: built by the backend from the repository
+  const changesSpec = useMemo<OutputSpec>(
+    () => ({
+      id: 'git.diff',
+      what: 'changes',
+      name: 'testpion-changes',
+      formats: [
+        { key: 'patch', format: 'diff', label: 'All changes (patch)', source: { kind: 'git-diff' }, default: true },
+        { key: 'md', format: 'md', label: 'What changed, by meaning (Markdown)', source: { kind: 'git-diff' } },
+        ...(diff ? [{ key: 'file', format: 'diff' as const, label: `${diff.path} (patch)`, source: { kind: 'git-diff' as const, path: diff.path }, fileName: `${diff.path.split('/').pop()}.patch` }] : []),
+      ],
+      empty: status?.files.length ? undefined : 'Nothing changed since the last commit',
+    }),
+    [diff, status?.files.length],
+  );
   // a changed file's menu (right-click or ⋯): open · show the diff · stage · discard
   const [fileMenu, setFileMenu] = useState<string>();
   const [prUrl, setPrUrl] = useState<string>();
@@ -396,10 +413,11 @@ export function GitView() {
       <div className="h-full min-h-0 overflow-auto p-4 grid gap-5 content-start max-w-5xl w-full">
         {status.conflicted && <ConflictPanel files={files.filter((f) => f.state === 'conflicted')} note={syncNote} onDone={() => void load()} />}
 
-        <section>
+        <section data-output="git.diff">
           <SectionTitle
             right={
-              files.length > 0 && (
+              <OutputActions spec={changesSpec}>
+              {files.length > 0 && (
                 <div className="flex gap-1">
                   <Button size="sm" variant="ghost" icon={<Plus size={12} />} onClick={() => void run('stage', () => call('git.stage', { paths: files.map((f) => f.path) }))}>
                     Stage all
@@ -416,7 +434,8 @@ export function GitView() {
                     Discard all
                   </Button>
                 </div>
-              )
+              )}
+              </OutputActions>
             }
           >
             Changes {files.length ? <Badge>{files.length}</Badge> : null}

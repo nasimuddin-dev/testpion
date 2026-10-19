@@ -4,8 +4,10 @@
  * - `output.save` writes a format of a surface (OUTPUT_SURFACES) to a file: through the OS "Save as…" dialog on the
  *   desktop (opened in the folder last used for that kind of output in this workspace), or returned for the browser to
  *   download (browser, cloud). Content the window built (small: a table, the headers) comes as `content`; big or
- *   backend-held output comes as a `source` (a spooled response body, a run's reports, the console, a data run's rows)
- *   and is streamed into the file here (output-sources.ts): it never passes through the window.
+ *   backend-held output comes as a `source` (a spooled response body, a run's reports, the console, a data run's rows,
+ *   History, traces …) and is built by core (packages/core/src/output: the same bytes `testpion output` and MCP
+ *   `save_output` write) and streamed into the file here: it never passes through the window.
+ * - This module keeps what is the window's: dialogs, the last folder, progress, Cancel, Show in folder / Open.
  * - The file is written to `<name>.part` and renamed when complete, so a cancel or a failure leaves no half file.
  * - `output.progress` events tell the window how far a big save is; `output.cancel` stops it.
  * - Secrets: the surface's policy comes from OUTPUT_SURFACES, never from the caller (nor the source: a surface names
@@ -14,14 +16,31 @@
  * - Open after a save (`output.reveal` with `open`) is for documents only: a file of a format the OS would run or hand
  *   to a browser is shown in its folder instead, whatever the window asks.
  */
-import { createWriteStream, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
-import { once } from 'node:events';
-import { ApsError, maskSensitiveText, type Redactor } from '@testpion/core';
-import { COPY_LIMIT, LAUNCHER_EXTENSIONS, OUTPUT_FORMATS, fileExtension, isOutputFormatId, outputSurface, sanitizeFileName, type OutputFormatId, type OutputSource } from '@testpion/shared';
+import {
+  ApsError,
+  SAMPLE_BYTES,
+  checkOutput,
+  isRedacting,
+  one,
+  partPathFor,
+  prepareSource,
+  redactOutputText,
+  secretNotice,
+  storeOutputDeps,
+  writeChunks,
+  type Built,
+  type GridPage,
+  type OutputDeps,
+  type Redactor,
+} from '@testpion/core';
+import { COPY_LIMIT, LAUNCHER_EXTENSIONS, OUTPUT_FORMATS, fileExtension, sanitizeFileName, type OutputFormatId, type OutputSource } from '@testpion/shared';
 import type { Backend, Handlers } from '../backend.js';
-import { SAMPLE_BYTES, buildSource, one, type Built } from './output-sources.js';
+import { scaleRowsPage } from './flow-scale.js';
+
+export { partPathFor };
 
 /** Content the window built: at most this much (bigger outputs are sources, streamed here). */
 const CONTENT_LIMIT = 16 * 1024 * 1024;
@@ -75,102 +94,26 @@ function folders(be: Backend) {
 }
 
 /**
- * Where a save is written before it is renamed onto `dest`: `<name>.part` beside it, or a short hidden name in the same
- * folder when `<name>.part` would pass the 255-byte name limit of macOS / Linux (a name typed in the dialog may be that
- * long). Same folder, so the rename never crosses a volume.
- */
-export function partPathFor(dest: string): string {
-  const name = basename(dest);
-  if (Buffer.byteLength(`${name}.part`) <= 255) return `${dest}.part`;
-  return join(dirname(dest), `.testpion-${process.pid}-${Date.now().toString(36)}.part`);
-}
-
-/** A file-system failure of a save as a message a person can act on (the folder, not a stack). */
-function writeError(e: unknown, dest: string): unknown {
-  const code = (e as { code?: string })?.code;
-  const where = dirname(dest);
-  const name = basename(dest);
-  if (code === 'EACCES' || code === 'EPERM' || code === 'EROFS')
-    return new ApsError('ConfigurationError', `Cannot write ${name}: permission denied in ${where}`, {
-      suggestions: ['Choose another folder, or close the program that has the file open.'],
-    });
-  if (code === 'EBUSY') return new ApsError('ConfigurationError', `Cannot replace ${name}: it is open in another program`, { suggestions: ['Close it there, or save under another name.'] });
-  if (code === 'ENOSPC' || code === 'EDQUOT')
-    return new ApsError('ConfigurationError', `Not enough disk space to save ${name} in ${where}`, { suggestions: ['Free some space, or choose another drive.'] });
-  if (code === 'ENAMETOOLONG') return new ApsError('ValidationError', `The file name or path is too long: ${name}`, { suggestions: ['Choose a shorter name or folder.'] });
-  if (code === 'ENOENT' || code === 'ENOTDIR') return new ApsError('ConfigurationError', `The folder ${where} is no longer there`, { suggestions: ['Choose another folder.'] });
-  return e;
-}
-
-/** Mask header values with a sensitive name in `Name: value` lines and curl `-H 'Name: value'` arguments. */
-function maskHeaderLines(text: string, redactor: Redactor): string {
-  return text
-    .replace(/^([ \t]*)([A-Za-z][\w-]*)([ \t]*:[ \t]*)(\S.*)$/gm, (m, a: string, k: string, sep: string) => (redactor.isSensitiveKey(k) ? `${a}${k}${sep}***` : m))
-    .replace(/(-H\s+['"])([A-Za-z][\w-]*)(:\s*)([^'"]*)(['"])/g, (m, a: string, k: string, sep: string, _v: string, q: string) => (redactor.isSensitiveKey(k) ? `${a}${k}${sep}***${q}` : m));
-}
-
-/** A text output with its secrets masked (known secret values, sensitive field names, credentials by their shape). */
-export function redactOutputText(text: string, format: OutputFormatId, redactor: Redactor): string {
-  let out = text;
-  const json = (s: string, pretty: boolean) => {
-    try {
-      const v = redactor.redact(JSON.parse(s));
-      return pretty ? JSON.stringify(v, null, 2) + (s.endsWith('\n') ? '\n' : '') : JSON.stringify(v);
-    } catch {
-      return s;
-    }
-  };
-  if (format === 'json' || format === 'har') out = json(out, true);
-  else if (format === 'json-min') out = json(out, false);
-  else if (format === 'jsonl')
-    out = out
-      .split('\n')
-      .map((l) => (l.trim() ? json(l, false) : l))
-      .join('\n');
-  else out = maskHeaderLines(out, redactor);
-  return maskSensitiveText(redactor.redactString(out), { pii: false });
-}
-
-/** "Contains what looks like a token (bearer)": what the redactor would have masked in a raw output, or undefined. */
-export function secretNotice(sample: string, redactor: Redactor): string | undefined {
-  const kinds = new Set<string>();
-  maskSensitiveText(sample, { pii: false }, (k) => kinds.add(k));
-  if (redactor.redactString(sample) !== sample) kinds.add('a secret variable value');
-  const field = /"(access_?token|refresh_?token|id_?token|client_?secret|password|api_?key)"\s*:/i.exec(sample);
-  if (field) kinds.add(field[1]!);
-  if (!kinds.size) return undefined;
-  return `Contains what looks like a credential (${[...kinds].slice(0, 3).join(', ')}). Saved as is.`;
-}
-
-/**
  * Whether a saved file may be opened with the OS: a document format, under a name no OS runs (the dialog lets a person
  * type any name; a launcher extension on a document is still a launcher to a double-click).
  */
 export const canOpenSaved = (path: string, format: OutputFormatId): boolean => OPENABLE_FORMATS.has(format) && !LAUNCHER_EXTENSIONS.has(fileExtension(basename(path)));
 
-/**
- * The surface, format and source of a call, checked against OUTPUT_SURFACES (the policy is the registry's, never the
- * caller's: a source is accepted only for a surface that names it, so no surface's policy is borrowed for another's data).
- */
-function check(p: { surface: string; format: string; content?: unknown; source?: unknown }) {
-  const info = outputSurface(p.surface);
-  if (!info) throw new ApsError('ValidationError', `output.save: unknown surface ${p.surface}`);
-  if (!isOutputFormatId(p.format) || !info.formats.includes(p.format))
-    throw new ApsError('ValidationError', `output.save: ${info.label} cannot be saved as ${p.format}`, { suggestions: [`Use one of: ${info.formats.join(', ')}`] });
-  if (!p.content === !p.source) throw new ApsError('ValidationError', 'output.save: give content or a source');
-  if (p.source) {
-    const kind = (p.source as { kind?: unknown })?.kind;
-    if (typeof kind !== 'string' || !info.sources?.includes(kind as OutputSource['kind']))
-      throw new ApsError('ValidationError', `output.save: unknown source ${String(kind)} for ${info.label}`, {
-        suggestions: info.sources?.length ? [`${info.label} is built from: ${info.sources.join(', ')}`] : [`${info.label} is saved from its content`],
-      });
-  }
-  return { info, format: p.format, fmt: OUTPUT_FORMATS[p.format] };
+/** What the builders read from this app: the workspace, plus the console, the log, the Debugger session and a data run in progress. */
+function outputDeps(be: Backend, redactor: Redactor): OutputDeps {
+  return {
+    ...storeOutputDeps(be.ws, redactor),
+    results: (runId) => be.results(runId),
+    scaleRows: (p) => (be.outputProviders.scaleRows ?? ((q) => scaleRowsPage(be, q as never) as unknown as GridPage))(p),
+    consoleEntries: () => be.consoleBuffer,
+    logEntries: () => be.logBuffer,
+    har: be.outputProviders.har,
+  };
 }
 
 /** What a call writes: its content or its source, built, with the surface's secrets policy applied. */
-async function prepare(be: Backend, p: SaveParams, signal: AbortSignal): Promise<{ built: Built; redactor: Redactor; redacting: boolean }> {
-  const { info, format, fmt } = check(p);
+async function prepare(be: Backend, p: SaveParams, signal: AbortSignal): Promise<{ built: Built; redactor: Redactor; redacting: boolean; notice?: string }> {
+  const { info, format, fmt } = checkOutput(p);
   let redactor: Redactor = be.logger.redactor;
   if (p.environment)
     try {
@@ -178,28 +121,33 @@ async function prepare(be: Backend, p: SaveParams, signal: AbortSignal): Promise
     } catch {
       // an environment that cannot be read: the app's redactor still masks names and shapes
     }
-  // a surface whose secrets are masked at capture (console, log) has none to include: it is always redacted
-  const redacting = info.redaction === 'redacted-default' && (!p.includeSecrets || !!info.capturedRedacted);
-  const redact = redacting ? (t: string) => redactOutputText(t, format, redactor) : identity;
-  // a source masked at capture (a run's reports, the Debugger's HAR) holds nothing left to mask: the builders skip the
-  // second pass (output-sources.ts). Content the window sent is masked whatever the surface says: the backend never
-  // takes the window's word for what is in it.
-  if (!p.content) return { built: await buildSource(be, p.source!, format, redact, redacting, signal, redacting && !!info.capturedRedacted), redactor, redacting };
-  if (typeof p.content.text === 'string') {
-    const original = p.content.text;
+  if (p.source) {
+    const r = await prepareSource(outputDeps(be, redactor), { surface: p.surface, format: p.format, source: p.source, includeSecrets: p.includeSecrets }, signal);
+    return { built: r.built, redactor, redacting: r.redacting, notice: r.notice };
+  }
+  const redacting = isRedacting(info, p.includeSecrets);
+  // Content the window sent is masked whatever the surface says: the backend never takes the window's word for what is in it.
+  const redact = redacting ? (t: string) => redactOutputText(t, format, redactor) : (t: string) => t;
+  const content = p.content!;
+  if (typeof content.text === 'string') {
+    const original = content.text;
     if (original.length > CONTENT_LIMIT) throw new ApsError('ValidationError', 'output.save: the content is too large to send; save it from its source');
     const out = fmt.text ? redact(original) : original;
-    return { built: { chunks: one(out), total: Buffer.byteLength(out), sample: () => original.slice(0, SAMPLE_BYTES), redacted: redacting && out !== original }, redactor, redacting };
+    const sample = original.slice(0, SAMPLE_BYTES);
+    return {
+      built: { chunks: one(out), total: Buffer.byteLength(out), sample: () => sample, redacted: redacting && out !== original },
+      redactor,
+      redacting,
+      notice: info.redaction === 'raw-notice' ? secretNotice(sample, redactor) : undefined,
+    };
   }
-  if (typeof p.content.base64 === 'string') {
-    const buf = Buffer.from(p.content.base64, 'base64');
+  if (typeof content.base64 === 'string') {
+    const buf = Buffer.from(content.base64, 'base64');
     if (buf.length > CONTENT_LIMIT) throw new ApsError('ValidationError', 'output.save: the content is too large to send; save it from its source');
     return { built: { chunks: one(buf), total: buf.length, redacted: false }, redactor, redacting };
   }
   throw new ApsError('ValidationError', 'output.save: content needs text or base64');
 }
-
-const identity = (t: string) => t;
 
 export function outputHandlers(be: Backend): Handlers {
   const jobs = new Map<string, AbortController>();
@@ -213,15 +161,14 @@ export function outputHandlers(be: Backend): Handlers {
     'output.formats': () => ({ formats: OUTPUT_FORMATS }),
 
     'output.save': async (p: SaveParams) => {
-      const { info, format, fmt } = check(p);
+      const { info, format, fmt } = checkOutput(p);
       const jobId = p.jobId && /^[\w-]{1,64}$/.test(p.jobId) ? p.jobId : `out-${Date.now().toString(36)}-${++seq}`;
       // one save per job: a second one with the same id would take over the first one's Cancel and progress
       if (jobs.has(jobId)) throw new ApsError('ValidationError', `output.save: job ${jobId} is already running`);
       const ctrl = new AbortController();
       jobs.set(jobId, ctrl);
       try {
-        const { built, redactor, redacting } = await prepare(be, p, ctrl.signal);
-        const notice = info.redaction === 'raw-notice' && built.sample ? secretNotice(await built.sample(), redactor) : undefined;
+        const { built, redacting, notice } = await prepare(be, p, ctrl.signal);
         let name = sanitizeFileName(p.suggestedName);
         if (!/\.[\w]{1,16}$/.test(name)) name = sanitizeFileName(`${name}.${fmt.ext}`);
         const ext = /\.([\w]{1,16})$/.exec(name)?.[1] ?? fmt.ext;
@@ -239,33 +186,13 @@ export function outputHandlers(be: Backend): Handlers {
           be.host.emit('output.progress', { jobId, bytes, total: built.total });
         };
         const write = async (dest: string) => {
-          const part = partPathFor(dest);
-          const out = createWriteStream(part);
-          const failed = new Promise<never>((_, reject) => out.on('error', reject));
-          failed.catch(() => undefined);
-          try {
-            for await (const c of built.chunks) {
-              if (ctrl.signal.aborted) break;
-              const buf = typeof c === 'string' ? Buffer.from(c, 'utf8') : c;
-              bytes += buf.length;
-              if (!out.write(buf)) await Promise.race([once(out, 'drain'), failed]);
+          await writeChunks(built.chunks, dest, {
+            signal: ctrl.signal,
+            onBytes: (n) => {
+              bytes += n;
               progress();
-            }
-            out.end();
-            await Promise.race([once(out, 'close'), failed]);
-            if (ctrl.signal.aborted) throw new ApsError('CancelledError', 'Saving was cancelled');
-            renameSync(part, dest);
-          } catch (e) {
-            out.destroy();
-            // closed before it is removed: an open handle can keep the name (or fail the removal) on some file systems
-            if (!out.closed) await once(out, 'close').catch(() => undefined);
-            try {
-              rmSync(part, { force: true });
-            } catch {
-              // a .part that cannot be removed (the folder became read-only) must not hide why the save failed
-            }
-            throw writeError(e, dest);
-          }
+            },
+          });
           progress(true);
         };
         const read = async () => {
@@ -312,7 +239,7 @@ export function outputHandlers(be: Backend): Handlers {
 
     /** The text of a format, built and redacted like a save (the Copy beside the down arrow); at most 5 MB. */
     'output.copy': async (p: SaveParams) => {
-      const { fmt } = check(p);
+      const { fmt } = checkOutput(p);
       if (!fmt.text) throw new ApsError('ValidationError', `${fmt.label} is not text: download it instead`);
       const ctrl = new AbortController();
       const { built } = await prepare(be, p, ctrl.signal);

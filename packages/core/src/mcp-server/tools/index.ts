@@ -25,6 +25,7 @@ import { scaleTools } from '../scale-tools.js';
 import type { Tool } from '../tool.js';
 import { workspaceEditTools, type EditToolsDeps } from '../workspace-edit-tools.js';
 import { itemTools } from './item-tools.js';
+import { outputTools } from './output-tools.js';
 
 /** What the tool modules need from the server: the workspace, its secrets and settings, and the lookups the server shares. */
 export interface ModuleToolDeps {
@@ -55,6 +56,7 @@ export function moduleTools(d: ModuleToolDeps): Tool[] {
     ...refTools({ store }),
     ...kindTools({ store }),
     ...itemTools({ store }),
+    ...outputTools({ store, redactor }),
     ...mockTools({ store }),
     ...datasetTools({ store }),
     ...arazzoTools({ store }),
