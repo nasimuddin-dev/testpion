@@ -16,6 +16,7 @@ import { noteProposalOutcome } from '../storage/ai-usage.js';
 import { checkedTestFilePath } from '../storage/test-path.js';
 import { getProposal, saveProposal, type Proposal, type ProposalItem, type ProposalUndo } from './proposal.js';
 import { findEnvironment, setEnvironmentVariables, unsetEnvironmentVariables } from '../storage/env-edit.js';
+import { applyTidyOps, type TidyOp } from './tidy-import.js';
 
 /** The text a fix was made from (`data.fix.base`): a file or script that changed since is not overwritten. */
 function assertUnchanged(item: ProposalItem, current: string | null | undefined): void {
@@ -139,6 +140,15 @@ function applyItem(store: WorkspaceStore, item: ProposalItem): ProposalUndo {
       setEnvironmentVariables(store, d.environment, { [d.key]: d.value });
       return { item: item.id, variable: { environment: d.environment, key: d.key, before: was ? String(was.value ?? '') : null } };
     }
+    case 'collection': {
+      // a tidy: its operations on the collection as it is now (renames, moves, variables, chains, drops)
+      const d = item.data as { collectionId?: string; ops?: TidyOp[] } | undefined;
+      if (!d?.collectionId || !Array.isArray(d.ops)) throw new ApsError('ValidationError', `"${item.title}" names no collection to change`);
+      const c = store.getCollection(d.collectionId);
+      const before = clone(c);
+      store.saveCollection(applyTidyOps(c, d.ops));
+      return { item: item.id, collection: { collectionId: c.id, before } };
+    }
     default:
       throw new ApsError('ValidationError', `"${item.title}" is text to read or copy; there is nothing to apply`);
   }
@@ -186,7 +196,10 @@ export function undoProposal(store: WorkspaceStore, id: string): { id: string; r
   for (const u of p.applied.undo) if (u.file) checkedTestFilePath(store.path('tests'), u.file.path);
   let restored = 0;
   for (const u of [...p.applied.undo].reverse()) {
-    if (u.variable) {
+    if (u.collection) {
+      store.saveCollection(u.collection.before as Collection);
+      restored++;
+    } else if (u.variable) {
       if (u.variable.before === null) unsetEnvironmentVariables(store, u.variable.environment, [u.variable.key]);
       else setEnvironmentVariables(store, u.variable.environment, { [u.variable.key]: u.variable.before });
       restored++;

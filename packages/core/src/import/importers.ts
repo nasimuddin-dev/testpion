@@ -75,12 +75,26 @@ export function sampleFromSchema(schema: any, spec: any, depth = 0): unknown {
     case 'array':
       return [sampleFromSchema(schema.items, spec, depth + 1)];
     case 'integer':
-    case 'number':
+    case 'number': {
+      // an example inside the documented range (the document's own limits make the sample valid)
+      const lo = typeof schema.minimum === 'number' ? schema.minimum + (schema.exclusiveMinimum === true ? 1 : 0) : typeof schema.exclusiveMinimum === 'number' ? schema.exclusiveMinimum + 1 : undefined;
+      const hi = typeof schema.maximum === 'number' ? schema.maximum - (schema.exclusiveMaximum === true ? 1 : 0) : typeof schema.exclusiveMaximum === 'number' ? schema.exclusiveMaximum - 1 : undefined;
+      if (lo !== undefined && lo > 0) return lo;
+      if (hi !== undefined && hi < 0) return hi;
       return 0;
+    }
     case 'boolean':
       return false;
-    case 'string':
-      return schema.format === 'date-time' ? new Date(0).toISOString() : schema.format === 'uuid' ? '00000000-0000-0000-0000-000000000000' : schema.format === 'email' ? 'user@example.com' : 'string';
+    case 'string': {
+      if (schema.format === 'date-time') return new Date(0).toISOString();
+      if (schema.format === 'uuid') return '00000000-0000-0000-0000-000000000000';
+      if (schema.format === 'email') return 'user@example.com';
+      // within the documented length
+      let v = 'string';
+      if (typeof schema.minLength === 'number' && v.length < schema.minLength) v = v.padEnd(Math.min(schema.minLength, 10_000), 'x');
+      if (typeof schema.maxLength === 'number' && v.length > schema.maxLength) v = v.slice(0, Math.max(0, schema.maxLength));
+      return v;
+    }
     default:
       return null;
   }
@@ -348,6 +362,15 @@ export function importPostmanEnvironment(text: string): Environment {
 
 /* ------------------------------------------------------------------ HAR */
 
+/** The response a HAR entry recorded, kept as a saved example when it is a small JSON or text body (it lets a tidy chain ids and a mock answer). */
+function harExample(res: any): { examples?: SavedExample[] } {
+  const content = res?.content;
+  const status = Number(res?.status);
+  if (!status || typeof content?.text !== 'string' || content.encoding === 'base64' || content.text.length > 32_768) return {};
+  if (!/json|text|xml/i.test(String(content.mimeType ?? ''))) return {};
+  return { examples: [{ id: shortId('ex-'), name: `Captured ${status}`, status, ...(res.statusText ? { statusText: String(res.statusText) } : {}), headers: [], body: content.text }] };
+}
+
 export function importHar(text: string): { collection: Collection } {
   const d = JSON.parse(text);
   const items: CollectionNode[] = (d.log?.entries ?? []).map((e: any): SavedHttpRequest => {
@@ -370,6 +393,7 @@ export function importHar(text: string): { collection: Collection } {
         body,
       },
       assertions: e.response?.status ? [{ type: 'status', expected: e.response.status }] : undefined,
+      ...harExample(e.response),
     };
   });
   return { collection: newCollection(`HAR import ${new Date().toISOString().slice(0, 10)}`, items) };

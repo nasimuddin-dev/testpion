@@ -60,7 +60,7 @@ export async function reverifyProposal(store: WorkspaceStore, id: string, o: Rev
     it.verification = it.verification.filter((b) => !names.includes(b.verifier));
     // ticked again unless a verifier fails it (the review keeps the person's own ticks)
     it.selected = true;
-    await verifyItems([it], names, { ...ctx, response: o.response, previous: o.previous, collection: collectionOf(store, p, it.data) });
+    await verifyItems([it], names, { store, ...ctx, response: o.response, previous: o.previous, collection: collectionOf(store, p, it.data) });
   }
   return saveProposal(store, p);
 }

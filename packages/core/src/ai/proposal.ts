@@ -15,7 +15,7 @@ import { noteProposalOutcome, type AiSurface } from '../storage/ai-usage.js';
 import { shortId } from '../util/ids.js';
 import { checkedTestFilePath } from '../storage/test-path.js';
 
-export type ProposalItemKind = 'file' | 'flow' | 'assertion' | 'script' | 'request' | 'patch' | 'variable' | 'text';
+export type ProposalItemKind = 'file' | 'flow' | 'assertion' | 'script' | 'request' | 'patch' | 'variable' | 'collection' | 'text';
 
 /** What a verifier said about an item: `pass` (checked and fine), `fail`, `warn`, `skip` (could not check). */
 export interface VerificationBadge {
@@ -78,6 +78,8 @@ export interface ProposalUndo {
   file?: { path: string; before: string | null };
   /** request: the node before (null: it did not exist) in its collection. */
   node?: { collectionId: string; nodeId: string; parentId?: string; before: unknown | null };
+  /** collection: the whole collection before the change (a tidy). */
+  collection?: { collectionId: string; before: unknown };
   /** variable: its value in the environment before (null: it was not there). */
   variable?: { environment: string; key: string; before: string | null };
 }

@@ -258,7 +258,7 @@ export async function runAiTask(deps: AiRunDeps, req: AiTaskRequest): Promise<Ai
   if (req.item && deps.store) {
     // a task with its own reading of an item (a flow from a folder) builds its context itself; the rest share item-context.ts
     // the privacy level is the task's to know: an analysis leaves out what metadata may not hold (failure messages with values)
-    const ic = own?.prepare ? await own.prepare(deps.store, req.item, { path: req.path, privacy: aiPrivacyOf(deps.settings, req.privacy) }) : await contextOfItem(deps.store, req.item);
+    const ic = own?.prepare ? await own.prepare(deps.store, req.item, { path: req.path, privacy: aiPrivacyOf(deps.settings, req.privacy), context: req.context }) : await contextOfItem(deps.store, req.item);
     itemContext = ic.context;
     label = ic.label;
     local = 'local' in ic ? ic.local : undefined;
@@ -290,6 +290,7 @@ export async function runAiTask(deps: AiRunDeps, req: AiTaskRequest): Promise<Ai
     services: deps.services,
     schema: req.schema ?? (req.context?.schema as Record<string, unknown> | undefined),
     signal: deps.signal,
+    store: deps.store,
   };
   /** The answer as proposal items, verified; cached per answer so the repair check and the result share the work. */
   let proposeNotes: string[] = [];
