@@ -15,7 +15,7 @@ const steps = [
   ['menu-folder', `__t.menu('Requests & responses')`],
   ['menu-request', `__t.menu('GET with query parameters')`, false],
   ['rest-breadcrumb', `(async () => { await __t.esc(); return __t.crumb(); })()`, false],
-  ['rest-send', `(async () => { await __t.button('Send'); await __t.sleep(5000); return __t.visibleText(); })()`],
+  ['rest-send', `(async () => { await __t.sendAndWait(); return __t.visibleText(); })()`],
   ['rest-headers', `__t.tab('Headers')`],
   ['rest-body', `__t.tab('Body')`],
   ['rest-scripts', `__t.tab('Scripts')`],
@@ -52,9 +52,10 @@ const steps = [
   ['history', `__t.view('History')`],
   ['traces', `__t.view('Traces')`],
   ['settings', `__t.view('Settings')`],
-  ['timeline-phases', `(async () => { await __t.esc(); await __t.requests(); await __t.open('GET with query parameters'); await __t.sleep(800); await __t.button('Send'); await __t.sleep(5000); await __t.tab('Timeline'); await __t.sleep(600); const t = document.querySelector('main')?.innerText ?? ''; return ['DNS lookup', 'TCP connect', 'TLS handshake', 'waiting (TTFB)', 'Certificate'].map((x) => (t.includes(x) ? x : 'NO ' + x)).join(', '); })()`],
-  ['trace-phases', `(async () => { await __t.tab('Trace'); await __t.sleep(1200); const t = document.querySelector('main')?.innerText ?? ''; return (t.match(/\\d+ spans/)?.[0] ?? 'NO SPANS') + (t.includes('TLS handshake') ? ', TLS span' : ', NO TLS span'); })()`],
-  ['mcp-usage', `(async () => { await __t.esc(); await __t.open('Weather (offline mock)'); await __t.sleep(1000); const ok = await __t.tab('Usage'); await __t.sleep(1200); return ok ? (document.querySelector('main')?.innerText.match(/(CALLS PER TOOL[^\\n]*|No tool calls yet)/i)?.[0] ?? 'NO USAGE') : 'NO USAGE TAB'; })()`],
+  // a public server may answer slowly under load: wait for the send to finish and for the panel to show, never a fixed time
+  ['timeline-phases', `(async () => { await __t.esc(); await __t.requests(); await __t.open('GET with query parameters'); await __t.sleep(800); await __t.sendAndWait(); await __t.tab('Timeline'); await __t.waitFor(() => /(New|Reused) connection/.test(document.querySelector('main')?.innerText ?? ''), 10000); const t = document.querySelector('main')?.innerText ?? ''; const reused = /Reused connection/.test(t); return (reused ? ['Reused connection'] : ['DNS lookup', 'TCP connect', 'TLS handshake']).concat(['waiting (TTFB)', 'Certificate']).map((x) => (t.includes(x) ? x : 'NO ' + x)).join(', '); })()`],
+  ['trace-phases', `(async () => { await __t.tab('Trace'); await __t.waitFor(() => /\\d+ spans/.test(document.querySelector('main')?.innerText ?? ''), 15000); const t = document.querySelector('main')?.innerText ?? ''; return (t.match(/\\d+ spans/)?.[0] ?? 'NO SPANS') + (t.includes('TLS handshake') ? ', TLS span' : ', NO TLS span'); })()`],
+  ['mcp-usage', `(async () => { await __t.esc(); await __t.open('Weather (offline mock)'); await __t.waitFor(() => [...document.querySelectorAll('main [role=tab]')].some((t) => t.offsetParent && t.textContent.trim().startsWith('Usage')), 10000); const ok = await __t.tab('Usage'); const re = /(CALLS PER TOOL[^\\n]*|No tool calls yet)/i; await __t.waitFor(() => re.test(document.querySelector('main')?.innerText ?? ''), 15000); return ok ? (document.querySelector('main')?.innerText.match(re)?.[0] ?? 'NO USAGE') : 'NO USAGE TAB'; })()`],
   ['ai-usage', `(async () => { await __t.view('AI Lab'); await __t.sleep(800); const ok = await __t.tab('Usage'); await __t.sleep(1200); return ok ? (document.querySelector('main')?.innerText.match(/(Prompts run[^]{0,40}|No prompts run yet)/)?.[0]?.split('\\n').join(' ') ?? 'NO USAGE') : 'NO USAGE TAB'; })()`],
   ['home-certificates', `(async () => { await __t.view('Home'); await __t.sleep(1500); const h = [...document.querySelectorAll('main section > header')].find((x) => x.textContent.trim().startsWith('Certificates')); h?.scrollIntoView({ block: 'center' }); await __t.sleep(400); return h ? h.parentElement.innerText.split('\\n').slice(0, 5).join(' | ') : 'NO CERT CARD'; })()`],
   ['home-attention', `(async () => { await __t.view('Home'); await __t.sleep(1500); const s = document.querySelector('main section[aria-label="Needs attention"]'); return s ? s.innerText.split(String.fromCharCode(10)).slice(0, 4).join(' | ') : 'card hidden: nothing needs attention'; })()`],
@@ -67,4 +68,10 @@ const steps = [
   ['a11y', `(async () => { await __t.esc(); const name = (el) => (el.getAttribute('aria-label') || el.getAttribute('title') || el.textContent || '').trim() || (el.labels && [...el.labels].map((l) => l.textContent).join('').trim()) || el.getAttribute('placeholder') || ''; const out = []; for (const v of ['Home', 'Collections', 'Tests', 'Monitors', 'Load', 'AI Lab', 'Evaluations', 'Environments', 'History', 'Traces', 'Settings']) { await __t.view(v); await __t.sleep(900); const bad = [...document.querySelectorAll('button, [role=button], input:not([type=hidden]), select, textarea')].filter((el) => el.offsetParent && !el.closest('[aria-hidden=true]') && !name(el)).length; if (bad) out.push(v + ': ' + bad); } return out.length ? 'UNNAMED ' + out.join(', ') : 'all controls named'; })()`, false],
 ];
 
-module.exports = withExpect(steps, { a11y: /all controls named/ });
+module.exports = withExpect(steps, {
+  a11y: /all controls named/,
+  // the response's own phases (a new connection) or the note that the connection was reused, then the server's answer time
+  'timeline-phases': /^(Reused connection|DNS lookup, TCP connect, TLS handshake), waiting \(TTFB\), Certificate$/,
+  'trace-phases': /^\d+ spans/,
+  'mcp-usage': /^(CALLS PER TOOL|No tool calls yet)/i,
+});

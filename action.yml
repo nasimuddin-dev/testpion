@@ -7,10 +7,12 @@
 #       environment: Staging
 #       start: npm start              # integration tests: start the system under test first (optional)
 #       wait-for: http://127.0.0.1:3000/health
+#       triage: true                  # on failures: group them by cause (and explain them with an AI model, if set up) in the job summary
 #     env:
 #       TESTPION_SECRET_ENV_STAGING_APIKEY: ${{ secrets.STAGING_API_KEY }}   # secret variables, named by `testpion ci`
 #
-# Reports (JUnit, HTML, console) land in `test-results/` and are uploaded as an artifact; a failing test fails the job.
+# Reports (JUnit, HTML, Markdown, console) land in `test-results/` and are uploaded as an artifact; the Markdown report (and the
+# triage, with `triage: true`) is also the job summary; a failing test fails the job.
 name: TestPion tests
 description: Run a TestPion workspace's tests (REST, GraphQL, gRPC, WebSocket, MCP, AI) and publish the reports.
 author: TestPion
@@ -51,6 +53,9 @@ inputs:
   out:
     description: Where the reports go.
     default: test-results
+  triage:
+    description: 'After a failed run, group the failures by likely cause (and, with an AI model set up, explain them) in triage.md and the job summary (true/false; adds --triage).'
+    default: 'false'
   upload:
     description: Upload the reports as an artifact (true/false).
     default: 'true'
@@ -85,16 +90,21 @@ runs:
         CLI="${{ github.action_path }}/packages/cli/bin/testpion.js"
         ENV=""; [ -n "${{ inputs.environment }}" ] && ENV="-e ${{ inputs.environment }}"
         PROD=""; [ "${{ inputs.allow-production }}" = "true" ] && PROD="--allow-production"
+        TRIAGE=""; [ "${{ inputs.triage }}" = "true" ] && TRIAGE="--triage"
         if [ -n "${{ inputs.collection }}" ]; then
           FOLDER=""; [ -n "${{ inputs.folder }}" ] && FOLDER="--folder ${{ inputs.folder }}"
-          node "$CLI" run-collection "${{ inputs.collection }}" -w "${{ inputs.workspace }}" $ENV $FOLDER -r console junit html -o "${{ inputs.out }}" $PROD
+          node "$CLI" run-collection "${{ inputs.collection }}" -w "${{ inputs.workspace }}" $ENV $FOLDER -r console junit html markdown -o "${{ inputs.out }}" $PROD $TRIAGE
         elif [ -n "${{ inputs.suite }}" ]; then
-          node "$CLI" run -w "${{ inputs.workspace }}" --suite "${{ inputs.suite }}" $ENV -r console junit html -o "${{ inputs.out }}" $PROD
+          node "$CLI" run -w "${{ inputs.workspace }}" --suite "${{ inputs.suite }}" $ENV -r console junit html markdown -o "${{ inputs.out }}" $PROD $TRIAGE
         else
           PATHS=""; for t in ${{ inputs.tests }}; do PATHS="$PATHS ${{ inputs.workspace }}/tests/$t"; done
           [ -z "$PATHS" ] && PATHS="${{ inputs.workspace }}/tests"
-          node "$CLI" test $PATHS -w "${{ inputs.workspace }}" $ENV -r console junit html -o "${{ inputs.out }}" $PROD
+          node "$CLI" test $PATHS -w "${{ inputs.workspace }}" $ENV -r console junit html markdown -o "${{ inputs.out }}" $PROD $TRIAGE
         fi
+    - name: Add the results to the job summary
+      if: always()
+      shell: bash
+      run: node "${{ github.action_path }}/scripts/job-summary.mjs" "${{ inputs.out }}"
     - name: Upload the reports
       if: always() && inputs.upload == 'true'
       uses: actions/upload-artifact@v4

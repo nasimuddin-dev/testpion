@@ -12,6 +12,8 @@
 - **`testpion output <output> --format <format> --out <file>`** saves any output that is built from the workspace (`--list` shows them), and `--out` / `--format` work on `send`, `history list`, `monitor results`, `git diff` and `eval matrix`. The file is byte for byte what the app saves (one set of builders in the engine, used by the window, the CLI and MCP).
 - **MCP `save_output`**: the same outputs for an AI agent, returned inline or written to a new file inside the workspace (never over an existing file or a definition). Secrets stay masked.
 - Checks: the output registry's `cli` field is a command that exists (tested), and the output save no longer calls other handlers by name.
+- **A dataset-driven test file can be edited in the Flow view.** A test file with a `dataset:` (one test per record when it runs) is one step on the canvas, labelled "× each row of …", instead of one step per record; moving, editing, connecting, adding or removing steps now writes to the right step instead of failing with "No step … in the flow". A test in a `tests:` list may carry a `dataset:` too, and runs once per record. The step's latest result is the worst of its rows'.
+- **The GitHub Action's job summary** shows the run's Markdown report and, with the new `triage: true` input (adds `--triage`), the failure triage from triage.md.
 
 ## 0.53.1 — 2026-10-18
 
