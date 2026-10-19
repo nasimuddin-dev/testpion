@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { existsSync, mkdirSync, realpathSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, realpathSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Backend } from '../../apps/desktop/backend/backend.js';
 import { WorkspaceStore, isInside, pathMatcher, plainFileInside, realPathOf, relativeInside, samePath } from '../../packages/core/src/index.js';
@@ -71,9 +71,8 @@ describe('relativeInside: the real path decides', () => {
   it('pathMatcher: as written, or really, with the target resolved once', () => {
     const is = pathMatcher(join(root, 'payloads', 'own.bin'));
     expect(is(join(realpathSync(root), 'payloads', 'own.bin'))).toBe(true);
-    // the same file under another spelling of its case: the same file only where the file system ignores case (Windows, the macOS default)
-    const shouted = join(root, 'payloads', 'own.bin').replace(/\\/g, '/').toUpperCase();
-    expect(is(shouted)).toBe(existsSync(shouted));
+    // as written, case is aside on every system (how recorded result files were always compared)
+    expect(is(join(root, 'payloads', 'own.bin').replace(/\\/g, '/').toUpperCase())).toBe(true);
     expect(is(join(root, 'payloads', 'link', 'secret.txt'))).toBe(false);
     expect(is(undefined)).toBe(false);
   });
