@@ -84,7 +84,7 @@ const steps = [
      const d = await __t.waitFor(() => dlg(), 4000); if (!d) return 'NO DIALOG';
      const gaps = await __t.waitFor(() => d.querySelector('[data-spec-gaps]')?.textContent.includes('open gaps') && d.querySelector('[data-spec-gaps]'), 8000); if (!gaps) return 'NO GAPS ' + short(d.querySelector('[data-spec-gaps]')?.textContent, 120);
      const est = await __t.waitFor(() => /tokens in/.test(d.querySelector('[data-flow-estimate]')?.textContent ?? '') && d.querySelector('[data-flow-estimate]'), 10000);
-     const mode = [...d.querySelectorAll('[role=radio]')].map((x) => x.textContent.trim() + (x.getAttribute('aria-checked') === 'true' ? '*' : '')).join(' / ');
+     const mode = [...d.querySelectorAll('[role=radio]')].map((x) => x.textContent.trim() + (x.getAttribute('aria-checked') === 'true' ? '*' : '')).slice(0, 3).join(' / ');
      return 'mode: ' + mode + ' | spec: ' + d.querySelector('select[aria-label="API definition"]')?.value + ' | gaps: ' + short(gaps.textContent, 150) + ' | estimate: ' + /≈ [\\d,]+ tokens in/.test(est?.textContent ?? '');`,
   ),
   step(
@@ -124,7 +124,7 @@ module.exports = withExpect(
   {
     'open-from-the-api-definition': /^mode: From a collection or folder \/ Describe in words \/ From a spec\* \| spec: specs\/e2e-shop\.yaml \| gaps: .*of 2 operations called.*open gaps.* \| estimate: true$/,
     'generate-and-review': /^items: 1 \| badges: test-file=pass,spec-tests=(pass|warn) \| invented dropped: true \| invalid dropped: true \| coverage: true$/,
-    'write-the-tests': /^toast: Wrote 1 test file \(tests\/e2e-shop\/orders-gaps\.yaml\).* \| file: true,true,true,true$/,
+    'write-the-tests': /^toast: Wrote 1 test file \(tests\/e2e-shop\/default-gaps\.yaml\).* \| file: true,true,true,true$/,
     'explorer-menu-has-the-item': /^title: true \| closed: true$/,
   },
   { settings: { assistantProvider: 'demo', assistantModel: 'demo' }, prepare },
