@@ -144,12 +144,12 @@ describe('Bruno .bru files', () => {
     expect(c.items.map((n) => n.name)).toEqual(['Log in', 'Patients']);
     const login = c.items[0] as SavedHttpRequest;
     expect(login.request).toMatchObject({ method: 'POST', url: '{{baseUrl}}/login', body: { type: 'json' }, auth: { type: 'none' } });
-    // disabled headers stay disabled; collection headers are added to every request
+    // disabled headers stay disabled; the collection's headers stay the collection's (every request inherits them)
     expect(login.request.headers).toEqual([
       { key: 'Content-Type', value: 'application/json', enabled: true },
       { key: 'X-Debug', value: '1', enabled: false },
-      { key: 'X-Trace', value: 'from-collection', enabled: true },
     ]);
+    expect(c.headers).toEqual([{ key: 'X-Trace', value: 'from-collection', enabled: true }]);
     expect(login.assertions).toEqual([{ type: 'status', expected: 200 }]);
     // vars:post-response: a runtime variable, written with TestPion's tp.* (bru.setVar's equivalent)
     expect(login.testScript).toContain('tp.collectionVariables.set("token", res.body.token);');

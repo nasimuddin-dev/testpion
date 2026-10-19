@@ -37,6 +37,7 @@ import { openRef } from '../lib/open-ref';
 import type { Collection, CollectionNode } from '../types';
 import { timeAgo, uid, plural } from '../lib/format';
 import { AuthEditor } from '../components/AuthEditor';
+import { InheritedHeaders } from '../components/InheritedHeaders';
 import { ScriptsPanel } from '../components/ScriptsPanel';
 import { CollectionRunner } from '../components/CollectionRunner';
 import { MockPanel } from '../components/MockPanel';
@@ -75,7 +76,7 @@ export function CollectionsView() {
     return () => void (live = false);
   }, [selOutline]);
   const [draft, setDraft] = useState<Collection>();
-  const [tab, setTab] = useState<'overview' | 'requests' | 'variables' | 'auth' | 'scripts' | 'docs' | 'run' | 'mock'>('requests');
+  const [tab, setTab] = useState<'overview' | 'requests' | 'variables' | 'headers' | 'auth' | 'scripts' | 'docs' | 'run' | 'mock'>('requests');
   const [runFolder, setRunFolder] = useState<string>();
   // a dataset chosen before the collection (the sidebar's "Run a collection with it"): the runner starts with it
   const [runData, setRunData] = useState<string>();
@@ -341,6 +342,7 @@ export function CollectionsView() {
                   { id: 'overview', label: 'Overview' },
                   { id: 'requests', label: 'Requests', badge: count(draft.items) },
                   { id: 'variables', label: 'Variables', badge: draft.variables.length },
+                  { id: 'headers', label: 'Headers', badge: draft.headers?.filter((h) => h.key).length || undefined },
                   { id: 'auth', label: 'Authorization' },
                   { id: 'scripts', label: 'Scripts' },
                   { id: 'docs', label: 'Docs' },
@@ -394,6 +396,7 @@ export function CollectionsView() {
                     <KeyValueEditor rows={draft.variables} onChange={(variables) => setDraft({ ...draft, variables })} keyPlaceholder="Variable" />
                   </div>
                 )}
+                {tab === 'headers' && <InheritedHeaders where="collection" rows={draft.headers} onChange={(headers) => setDraft({ ...draft, headers })} />}
                 {tab === 'auth' && (
                   <>
                     <p className="text-xs text-muted px-3 pt-3">Requests with “Inherit” use this auth (folders can override it).</p>

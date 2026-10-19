@@ -40,19 +40,19 @@ describe('Insomnia 5 (YAML)', () => {
     expect(notes).toContain('"Create patient": insomnia.parentFolders has no TestPion equivalent (marked TODO(import) in the script)');
   });
 
-  it('folder: scripts kept, headers flattened into each request with a note', () => {
+  it('folder: scripts and headers kept on the folder (its requests inherit them)', () => {
     const folder = c.items.find((n) => n.name === 'Patients') as CollectionFolder;
     expect(folder.preRequestScript).toBe("console.log('folder pre-request');");
-    expect(list.request.headers).toEqual(expect.arrayContaining([{ key: 'X-Clinic', value: 'north', enabled: true }]));
-    expect(create.request.headers).toEqual(expect.arrayContaining([{ key: 'X-Clinic', value: 'north', enabled: true }]));
-    expect(notes).toContain('Folder "Patients": its header was added to each request inside (TestPion folders have no headers yet)');
+    expect(folder.headers).toEqual([{ key: 'X-Clinic', value: 'north', enabled: true }]);
+    expect(list.request.headers.map((h) => h.key)).not.toContain('X-Clinic');
   });
 
   it('settings.followRedirects off, descriptions from meta, other v5 items noted', () => {
     expect(list.request.settings).toEqual({ followRedirects: false });
     expect(login.description).toBe('Gets a token');
+    // a WebSocket request of a v5 file becomes a connection of the library (not a broken HTTP request)
     expect(flat(c.items).map((n) => n.name)).not.toContain('Patient stream');
-    expect(notes).toContain('"Patient stream": a WebSocket request in an Insomnia 5 file is not imported yet (export it from Insomnia 4 format, or recreate it)');
+    expect((r.savedItems as { websocket?: Array<{ name: string }> }).websocket?.map((w) => w.name)).toEqual(['Patient stream']);
   });
 
   it("uuid, now, timestamp and faker become dynamic variables; {{ _['a-b'] }} a variable", () => {
@@ -98,9 +98,8 @@ describe('Insomnia 5 (YAML)', () => {
     );
   });
 
-  it('hawk auth: none + placeholder (IMP-FIX-1), environments merged, tags in environments mapped', () => {
-    expect(create.request.auth).toEqual({ type: 'none' });
-    expect(create.request.headers).toContainEqual({ key: 'X-Imported-Auth-Hawk', value: 'needs manual setup', enabled: false });
+  it('hawk auth maps to TestPion Hawk, environments merged, tags in environments mapped', () => {
+    expect(create.request.auth).toMatchObject({ type: 'hawk', id: 'vet' });
     expect(r.environments!.map((e) => e.name)).toEqual(['Staging']);
     expect(r.environments![0]!.variables).toEqual(
       expect.arrayContaining([
@@ -132,7 +131,6 @@ describe('Insomnia 4 (JSON)', () => {
       expect.arrayContaining([
         { key: 'Authorization', value: 'Bearer {{insomnia_log_in_token}}', enabled: true },
         { key: 'X-Session', value: '{{insomnia_log_in_x_session}}', enabled: true },
-        { key: 'X-Clinic', value: 'north', enabled: true },
       ]),
     );
     const login = byName(c.items, 'Log in');
@@ -147,14 +145,11 @@ describe('Insomnia 4 (JSON)', () => {
     );
   });
 
-  it('plain JavaScript stays runnable; empty auth inherits; ntlm → none + placeholder', () => {
+  it('plain JavaScript stays runnable; empty auth inherits; ntlm maps to NTLM auth', () => {
     expect(get.preRequestScript).toBe("// plain JavaScript, no insomnia.*\nconst ids = [1, 2, 3];\nfor (const id of ids) console.log('patient', id);");
     expect(byName(c.items, 'Log in').request.auth).toEqual({ type: 'inherit' });
     expect(byName(c.items, 'Log in').request.body).toMatchObject({ content: '{"user": "vet", "apiKey": "{{api-key}}"}' });
-    expect(get.request.auth).toEqual({ type: 'none' });
-    expect(notes).toContain(
-      '"Get patient": Insomnia auth "ntlm" is not supported, so it was set to No auth (not inherited) with a disabled X-Imported-Auth-NTLM header as a reminder: set it up by hand',
-    );
+    expect(get.request.auth).toMatchObject({ type: 'ntlm', username: 'vet' });
   });
 });
 

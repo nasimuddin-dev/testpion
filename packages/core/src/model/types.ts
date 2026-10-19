@@ -667,6 +667,12 @@ export interface CollectionFolder {
   name: string;
   items: CollectionNode[];
   auth?: AuthConfig;
+  /** What the folder is for (shown in the docs; Postman, Insomnia and Bruno folders carry one). */
+  description?: string;
+  /** Headers sent with every request inside (the request's own win; an inner folder's win over an outer one's). */
+  headers?: KeyValue[];
+  /** Request settings the requests inside inherit (their own win). */
+  settings?: HttpSettings;
   /** Folder variables: visible to the requests inside (inner folders win), below request and data variables. */
   variables?: KeyValue[];
   /** Run before the pre-request script of every request inside (after the collection's and outer folders'). */
@@ -685,6 +691,10 @@ export interface Collection {
   version: number;
   variables: KeyValue[];
   auth?: AuthConfig;
+  /** Headers sent with every request of the collection (folders and requests override them). */
+  headers?: KeyValue[];
+  /** Request settings every request of the collection inherits. */
+  settings?: HttpSettings;
   preRequestScript?: string;
   testScript?: string;
   items: CollectionNode[];

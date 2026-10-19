@@ -1,6 +1,7 @@
 import type { AuthConfig, Collection, CollectionFolder, CollectionNode, RunSummary, SavedGraphQLRequest, SavedHttpRequest, TestCase, TestResult } from '../model/types.js';
 import { ApsError } from '../errors.js';
 import { sleep } from '../util/concurrency.js';
+import { inheritedHeaders, withFolderDefaults, withInheritedHeaders } from './folder-defaults.js';
 import { runTests, type RunEvent, type RunOptions } from './runner.js';
 import type { DatasetRecord } from './datasets.js';
 import { namesSetByScripts, scriptsOf, templatedText, templateVariables } from '@testpion/shared';
@@ -110,9 +111,9 @@ export function collectionRequestToTest(collection: Collection, ref: CollectionR
   };
   if (ref.node.kind === 'graphql') {
     const r = ref.node.request;
-    return { ...base, ...scripts, type: 'graphql', endpoint: r.endpoint, query: r.query, graphqlVariables: r.variables, operationName: r.operationName, headers: r.headers, auth: ref.auth ?? r.auth };
+    return { ...base, ...scripts, type: 'graphql', endpoint: r.endpoint, query: r.query, graphqlVariables: r.variables, operationName: r.operationName, headers: withInheritedHeaders(r.headers, inheritedHeaders(collection, ref.folders)), auth: ref.auth ?? r.auth };
   }
-  return { ...base, ...scripts, type: 'http', request: { ...ref.node.request, auth: ref.auth ?? { type: 'none' } } };
+  return { ...base, ...scripts, type: 'http', request: withFolderDefaults({ ...ref.node.request, auth: ref.auth ?? { type: 'none' } }, collection, ref.folders) };
 }
 
 export interface CollectionRunOptions extends Omit<RunOptions, 'tests' | 'concurrency' | 'setup' | 'teardown' | 'resume'> {

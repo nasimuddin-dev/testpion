@@ -6,7 +6,10 @@ import type { WorkspaceStore } from '../storage/workspace.js';
 import { shortId, slugify } from '../util/ids.js';
 import { ApsError } from '../errors.js';
 import { secretKeys, type SecretStore } from '../storage/secrets.js';
-import { detectFormat, importAny } from './importers.js';
+import { detectFormat, importDocument } from './importers.js';
+import { legacyResult } from './pipeline.js';
+import type { ImportReport } from './report.js';
+import { withReceipt, type Created, type ImportReceipt } from './import-receipt.js';
 import { importArazzo, resolveArazzoSourcesLocally } from './arazzo.js';
 import { scriptCompatibility, type ScriptWarning } from '../scripts/compat.js';
 import type { ImportScriptsMode, ImportScriptsSummary } from './import-scripts.js';
@@ -40,6 +43,26 @@ export interface WorkspaceImportResult {
   savedItems?: Record<string, number>;
   /** Arazzo imports: the flow files written (one per workflow), relative to the workspace. */
   flows?: Array<{ path: string; workflowId: string; steps: number }>;
+  /** The compatibility report: per item imported fully / with changes / not imported, and why (the notes above stay for compatibility). */
+  report?: ImportReport;
+  /** What the import created, kept so it can be undone (`undoImport`) and its report opened again (`readImportReport`). */
+  receipt?: ImportReceipt;
+  /** A file with several collections (an export of a Postman account): each one that was saved. */
+  collections?: Array<{ id: string; name: string }>;
+}
+
+/**
+ * Where an import keeps the API definitions it came from (relative to the workspace): an OpenAPI / Swagger / AsyncAPI
+ * document is kept as it was read, a GraphQL schema or an Insomnia design document comes with its own path.
+ */
+export function plannedSpecs(r: { format: string; collection?: Collection; specFile?: { path: string; text: string } }, text: string): Array<{ stem: string; suffix: string; text: string }> {
+  const ext = text.trimStart().startsWith('{') ? 'json' : 'yaml';
+  const out: Array<{ stem: string; suffix: string; text: string }> = [];
+  if (r.collection && (r.format === 'openapi' || r.format === 'swagger')) out.push({ stem: `specs/${slugify(r.collection.name) || 'api'}`, suffix: `.${r.format}.${ext}`, text });
+  if (r.collection && r.format === 'asyncapi') out.push({ stem: `specs/asyncapi/${slugify(r.collection.name) || 'events'}`, suffix: `.${ext}`, text });
+  const m = r.specFile ? /^(.*?)(\.openapi\.(?:json|yaml)|\.graphql)$/.exec(r.specFile.path) : null;
+  if (r.specFile && m) out.push({ stem: m[1]!, suffix: m[2]!, text: r.specFile.text });
+  return out;
 }
 
 /**
@@ -74,7 +97,7 @@ function savedItemsOf(text: string): unknown {
   }
 }
 
-function restoreSavedItems(store: WorkspaceStore, saved: unknown, collectionId: string): Record<string, number> | undefined {
+function restoreSavedItems(store: WorkspaceStore, saved: unknown, collectionId: string, made?: Created['library']): Record<string, number> | undefined {
   if (!saved || typeof saved !== 'object') return undefined;
   const counts: Record<string, number> = {};
   for (const kind of COLLECTION_ITEM_KINDS) {
@@ -93,6 +116,7 @@ function restoreSavedItems(store: WorkspaceStore, saved: unknown, collectionId: 
     if (!added.length) continue;
     store.saveLibrary(kind, { folders: lib.folders, items: [...lib.items, ...added] });
     counts[kind] = added.length;
+    made?.push({ kind, ids: added.map((i) => i.id) });
   }
   return Object.keys(counts).length ? counts : undefined;
 }
@@ -101,6 +125,7 @@ function restoreSavedItems(store: WorkspaceStore, saved: unknown, collectionId: 
  * Import an API definition, collection, environment or HAR file into a workspace (the app's Import,
  * `testpion import`). An OpenAPI / Swagger document is also kept in `specs/`, and every request made
  * from it gets an `openapi` check, so the new collection tests its own contract.
+ * The result carries the compatibility `report` and a `receipt` of what was created (`undoImport` takes it back).
  */
 export function importIntoWorkspace(
   store: WorkspaceStore,
@@ -109,14 +134,26 @@ export function importIntoWorkspace(
   /** `specs`: an API definition whose path holds a different document is kept beside it (`keep-both`, the default: x-2.yaml) or replaces it (the old one goes to the trash). */
   opts: { contractChecks?: boolean; name?: string; secrets?: SecretStore; scripts?: ImportScriptsMode; arazzo?: { baseDir?: string; sources?: Record<string, string> }; specs?: SpecConflict } = {},
 ): WorkspaceImportResult {
-  if (detectFormat(text) === 'arazzo') return importArazzoIntoWorkspace(store, text, opts.arazzo);
+  if (detectFormat(text) === 'arazzo') return withReceipt(store, importArazzoIntoWorkspace(store, text, opts.arazzo), text);
   // node ids never repeat across the workspace's collections: colliding ones are renamed (with a note)
-  const r = importAny(text, { name: opts.name, scripts: opts.scripts, takenIds: workspaceNodeIds(store.listCollections()) });
-  const out: WorkspaceImportResult = { format: r.format, ...(r.scripts ? { scripts: r.scripts } : {}) };
+  const { document, report } = importDocument(text, { name: opts.name, scripts: opts.scripts, takenIds: workspaceNodeIds(store.listCollections()) });
+  const r = legacyResult(document);
+  const out: WorkspaceImportResult = { format: r.format, ...(r.scripts ? { scripts: r.scripts } : {}), report };
+  const made: Created = { collections: [], environments: [], specs: [], flows: [], library: [], secrets: [] };
+  const taken = new Set(store.listCollections().map((c) => c.id));
+  const saveOne = (c: Collection): Collection => {
+    // an import never replaces a collection the workspace already has (a file exported from it, imported again)
+    const clash = taken.has(c.id) || taken.has(slugify(c.id));
+    const saved = store.saveCollection(clash ? { ...c, id: `${slugify(c.name) || 'collection'}-${shortId().slice(-4)}` } : c);
+    taken.add(saved.id);
+    made.collections.push({ id: saved.id, name: saved.name, version: saved.version });
+    return saved;
+  };
   let collection = r.collection;
+  const specs = plannedSpecs(r, text);
   if (collection && (r.format === 'openapi' || r.format === 'swagger')) {
-    const ext = text.trimStart().startsWith('{') ? 'json' : 'yaml';
-    const rel = keepSpec(store, `specs/${slugify(collection.name) || 'api'}`, `.${r.format}.${ext}`, text, opts.specs, out);
+    const rel = keepSpec(store, specs[0]!.stem, specs[0]!.suffix, text, opts.specs, out);
+    made.specs.push(rel);
     if (opts.contractChecks !== false) {
       let added = 0;
       const withCheck = (nodes: CollectionNode[]): CollectionNode[] =>
@@ -131,24 +168,22 @@ export function importIntoWorkspace(
     }
   }
   // an AsyncAPI document is kept for the asyncapi check and tests-from-spec (in specs/asyncapi/, apart from the OpenAPI ones)
-  if (collection && r.format === 'asyncapi') {
-    const ext = text.trimStart().startsWith('{') ? 'json' : 'yaml';
-    keepSpec(store, `specs/asyncapi/${slugify(collection.name) || 'events'}`, `.${ext}`, text, opts.specs, out);
-  }
-  // a GraphQL schema (SDL) is kept in specs/graphql/ (lane C, IMP-FIX-4)
-  if (collection && r.specFile) keepSpec(store, r.specFile.path.replace(/\.graphql$/, ''), '.graphql', r.specFile.text, opts.specs, out);
+  if (collection && r.format === 'asyncapi') made.specs.push(keepSpec(store, specs[0]!.stem, specs[0]!.suffix, text, opts.specs, out));
+  // a GraphQL schema (SDL) or a design document is kept in specs/ (graphql: specs/graphql/<name>.graphql)
+  if (r.specFile) made.specs.push(keepSpec(store, specs.at(-1)!.stem, specs.at(-1)!.suffix, r.specFile.text, opts.specs, out));
   if (collection) {
-    // an import never replaces a collection the workspace already has (a file exported from it, imported again)
-    const ids = new Set(store.listCollections().map((c) => c.id));
-    if (ids.has(collection.id) || ids.has(slugify(collection.id))) collection = { ...collection, id: `${slugify(collection.name) || 'collection'}-${shortId().slice(-4)}` };
-    out.collection = store.saveCollection(collection);
+    out.collection = saveOne(collection);
     // a TestPion collection file (or an Insomnia export) can carry the collection's gRPC calls and connections
     const saved = r.format === 'aps-collection' ? savedItemsOf(text) : r.savedItems;
-    if (saved) out.savedItems = restoreSavedItems(store, saved, out.collection.id);
+    if (saved) out.savedItems = restoreSavedItems(store, saved, out.collection.id, made.library);
     const warnings = scriptCompatibility(collection, (name) => store.readScriptPackage(name) !== undefined);
     if (warnings.length) out.scriptWarnings = warnings;
     if (r.notes?.length) out.notes = [...r.notes, ...(out.notes ?? [])];
   }
+  // more collections in the file (an export of a Postman account): each is saved as its own
+  if (r.collections && r.collections.length > 1) {
+    out.collections = [out.collection!, ...r.collections.slice(1).map(saveOne)].map((c) => ({ id: c.id, name: c.name }));
+  } else if (!collection && r.notes?.length) out.notes = [...r.notes, ...(out.notes ?? [])];
   // an import never replaces an environment the workspace already has: a clash gets a new id and name
   const envs = (r.environments ?? (r.environment ? [r.environment] : [])).map((e) => {
     const taken = store.listEnvironments();
@@ -161,18 +196,21 @@ export function importIntoWorkspace(
   for (const raw of envs) {
     const { originalId, ...e } = raw as Environment & { originalId?: string };
     store.saveEnvironment(e);
+    made.environments.push({ id: e.id, name: e.name });
     // secret values (from a .env file) go to the secret store; without one they are reported, never written
     const values = r.secretValues?.[originalId ?? e.id] ?? {};
     for (const [k, v] of Object.entries(values)) {
-      if (opts.secrets) void opts.secrets.set(secretKeys.envVar(e.id, k), v);
-      else (out.secretsToSet ??= []).push(`${e.name} › ${k}`);
+      if (opts.secrets) {
+        void opts.secrets.set(secretKeys.envVar(e.id, k), v);
+        made.secrets.push({ environment: e.id, key: k });
+      } else (out.secretsToSet ??= []).push(`${e.name} › ${k}`);
     }
   }
   if (envs.length) {
     out.environment = envs[0];
     out.environments = envs;
   }
-  return out;
+  return withReceipt(store, out, text, made);
 }
 
 /** What an import does when an API definition's path already holds a different document. */

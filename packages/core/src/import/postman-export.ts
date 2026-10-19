@@ -1,6 +1,7 @@
 import { toPostmanScript } from '../scripts/aliases.js';
 import { createHash } from 'node:crypto';
-import type { AuthConfig, BodyConfig, CheckConfig, Collection, CollectionNode, Environment, KeyValue, SavedExample, SavedGraphQLRequest, SavedHttpRequest } from '../model/types.js';
+import type { AuthConfig, BodyConfig, CheckConfig, Collection, CollectionNode, Environment, HttpSettings, KeyValue, SavedExample, SavedGraphQLRequest, SavedHttpRequest } from '../model/types.js';
+import { inheritedHeaders, withInheritedHeaders } from '../runner/folder-defaults.js';
 
 /**
  * Export to the Postman v2.1 collection and environment formats, so collections move to and from
@@ -186,9 +187,26 @@ function pmExample(ex: SavedExample, req: SavedHttpRequest): Record<string, unkn
   };
 }
 
-function httpItem(n: SavedHttpRequest, notes: string[]): Record<string, unknown> {
+/** Request settings as Postman's protocolProfileBehavior (the ones both tools have). */
+export function pmBehavior(s: HttpSettings | undefined): Record<string, unknown> | undefined {
+  if (!s) return undefined;
+  const b: Record<string, unknown> = {
+    ...(s.followRedirects === false ? { followRedirects: false } : {}),
+    ...(s.maxRedirects !== undefined ? { maxRedirects: s.maxRedirects } : {}),
+    ...(s.insecure ? { strictSSL: false } : {}),
+    ...(s.disableCookieJar ? { disableCookies: true } : {}),
+    ...(s.followOriginalMethod ? { followOriginalHttpMethod: true } : {}),
+    ...(s.followAuthorizationHeader ? { followAuthorizationHeader: true } : {}),
+    ...(s.removeRefererOnRedirect ? { removeRefererHeaderOnRedirect: true } : {}),
+    ...(s.encodeUrl === false ? { disableUrlEncoding: true } : {}),
+  };
+  return Object.keys(b).length ? b : undefined;
+}
+
+function httpItem(n: SavedHttpRequest, notes: string[], inherited: KeyValue[] = []): Record<string, unknown> {
   const q = n.request;
-  const headers = [...kv(q.headers)];
+  // Postman has no folder or collection headers: they go on each request (the request's own win)
+  const headers = [...kv(withInheritedHeaders(q.headers, inherited))];
   if (q.auth?.type === 'headers') headers.push(...kv(q.auth.headers));
   const cookies = (q.cookies ?? []).filter((c) => c.key && c.enabled !== false);
   if (cookies.length) headers.push({ key: 'Cookie', value: cookies.map((c) => `${c.key}=${c.value}`).join('; ') });
@@ -198,7 +216,7 @@ function httpItem(n: SavedHttpRequest, notes: string[]): Record<string, unknown>
   return {
     name: n.name,
     ...events(n.preRequestScript, n.testScript, statusTests(n.assertions, notes, n.name)),
-    ...(settings.followRedirects === false || settings.insecure ? { protocolProfileBehavior: { ...(settings.followRedirects === false ? { followRedirects: false } : {}), ...(settings.insecure ? { strictSSL: false } : {}) } } : {}),
+    ...(pmBehavior(settings) ? { protocolProfileBehavior: pmBehavior(settings) } : {}),
     request: {
       method: (q.method || 'GET').toUpperCase(),
       header: headers,
@@ -211,7 +229,7 @@ function httpItem(n: SavedHttpRequest, notes: string[]): Record<string, unknown>
   };
 }
 
-function graphqlItem(n: SavedGraphQLRequest, notes: string[]): Record<string, unknown> {
+function graphqlItem(n: SavedGraphQLRequest, notes: string[], inherited: KeyValue[] = []): Record<string, unknown> {
   const q = n.request;
   const auth = pmAuth(q.auth, notes, n.name);
   const variables = q.variables === undefined ? '' : typeof q.variables === 'string' ? q.variables : JSON.stringify(q.variables, null, 2);
@@ -220,7 +238,7 @@ function graphqlItem(n: SavedGraphQLRequest, notes: string[]): Record<string, un
     ...events(n.preRequestScript, n.testScript, statusTests(n.assertions, notes, n.name)),
     request: {
       method: 'POST',
-      header: kv(q.headers),
+      header: kv(withInheritedHeaders(q.headers, inherited)),
       body: { mode: 'graphql', graphql: { query: q.query, variables } },
       url: pmUrl(q.endpoint),
       ...(auth ? { auth } : {}),
@@ -232,14 +250,16 @@ function graphqlItem(n: SavedGraphQLRequest, notes: string[]): Record<string, un
 /** Convert a collection to a Postman v2.1 collection object. */
 export function exportPostmanCollection(c: Collection): { collection: Record<string, unknown>; notes: string[] } {
   const notes: string[] = [];
-  const items = (nodes: CollectionNode[]): Array<Record<string, unknown>> =>
+  const items = (nodes: CollectionNode[], inherited: KeyValue[]): Array<Record<string, unknown>> =>
     nodes.map((n) => {
       if (n.kind === 'folder') {
+        const below = inheritedHeaders({ headers: inherited }, [n]);
+        const behavior = pmBehavior(n.settings);
         const auth = pmAuth(n.auth, notes, n.name);
         const variable = (n.variables ?? []).filter((v) => v.key).map((v) => ({ key: v.key, value: v.value ?? '', type: 'string', ...(v.enabled === false ? { disabled: true } : {}) }));
-        return { name: n.name, item: items(n.items), ...(auth ? { auth } : {}), ...events(n.preRequestScript, n.testScript), ...(variable.length ? { variable } : {}) };
+        return { name: n.name, ...(n.description ? { description: n.description } : {}), item: items(n.items, below), ...(auth ? { auth } : {}), ...events(n.preRequestScript, n.testScript), ...(variable.length ? { variable } : {}), ...(behavior ? { protocolProfileBehavior: behavior } : {}) };
       }
-      return n.kind === 'graphql' ? graphqlItem(n, notes) : httpItem(n, notes);
+      return n.kind === 'graphql' ? graphqlItem(n, notes, inherited) : httpItem(n, notes, inherited);
     });
   const auth = pmAuth(c.auth, notes, c.name);
   const collection = {
@@ -249,7 +269,7 @@ export function exportPostmanCollection(c: Collection): { collection: Record<str
       ...(c.description ? { description: c.description } : {}),
       schema: POSTMAN_SCHEMA,
     },
-    item: items(c.items),
+    item: items(c.items, inheritedHeaders(c, [])),
     ...(auth ? { auth } : {}),
     ...events(c.preRequestScript, c.testScript),
     variable: c.variables.filter((v) => v.key).map((v) => ({ key: v.key, value: v.value ?? '', type: 'string', ...(v.enabled === false ? { disabled: true } : {}) })),

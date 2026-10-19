@@ -21,7 +21,7 @@ describe('10,000-request imports stay under 5 s', () => {
   it('Postman with unsupported auth on every request', () => {
     const item = Array.from({ length: N }, (_, i) => ({
       name: `R${i}`,
-      request: { method: 'GET', url: `https://api.test/r/${i}`, auth: { type: i % 2 ? 'hawk' : 'bearer', hawk: [], bearer: [{ key: 'token', value: 't' }] } },
+      request: { method: 'GET', url: `https://api.test/r/${i}`, auth: { type: i % 2 ? 'asap' : 'bearer', asap: [], bearer: [{ key: 'token', value: 't' }] } },
       event: [{ listen: 'test', script: { exec: ["pm.test('ok', () => pm.response.to.have.status(200));"] } }],
     }));
     const { r, ms } = timed(JSON.stringify({ info: { _postman_id: 'x', name: 'Big', schema: 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json' }, item }));

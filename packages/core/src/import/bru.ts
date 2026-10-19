@@ -53,7 +53,8 @@ export function parseBru(text: string): BruBlock[] {
   return blocks;
 }
 
-const METHODS = ['get', 'post', 'put', 'patch', 'delete', 'options', 'head', 'connect', 'trace'];
+// (`http` is Bruno's block for a custom method: `http { method: PURGE, url: … }`)
+const METHODS = ['get', 'post', 'put', 'patch', 'delete', 'options', 'head', 'connect', 'trace', 'http'];
 
 const dict = (b: BruBlock | undefined) => Object.fromEntries((b?.entries ?? []).map((e) => [e.key, e.value]));
 const nv = (b: BruBlock | undefined) => (b?.entries ?? []).map((e) => ({ name: e.key, value: e.value, enabled: e.enabled }));
@@ -93,7 +94,7 @@ function rootOf(blocks: BruBlock[]): Any {
     request: {
       auth: authOf(blocks, dict(find('auth')).mode),
       headers: nv(find('headers')),
-      vars: { req: nv(find('vars:pre-request')) },
+      vars: { req: nv(find('vars:pre-request')), res: nv(find('vars:post-response')) },
       script: { req: find('script:pre-request')?.text, res: find('script:post-response')?.text },
       tests: find('tests')?.text,
     },
@@ -115,6 +116,7 @@ function bruRequest(text: string, fallbackName: string): Any | undefined {
   if (find('body:json')) body.json = find('body:json')!.text;
   if (find('body:text')) body.text = find('body:text')!.text;
   if (find('body:xml')) body.xml = find('body:xml')!.text;
+  if (find('body:sparql')) body.sparql = find('body:sparql')!.text;
   if (find('body:form-urlencoded')) body.formUrlEncoded = nv(find('body:form-urlencoded'));
   if (find('body:multipart-form'))
     body.multipartForm = find('body:multipart-form')!.entries.map((e) => {
@@ -134,7 +136,9 @@ function bruRequest(text: string, fallbackName: string): Any | undefined {
     seq: Number(meta.seq) || 0,
     request: {
       url: m.url ?? '',
-      method: methodBlock.name.toUpperCase(),
+      method: (methodBlock.name === 'http' ? String(m.method || 'GET') : methodBlock.name).toUpperCase(),
+      ...(find('settings') ? { settings: dict(find('settings')) } : {}),
+      ...(blocks.some((b) => b.name === 'example') ? { examples: blocks.filter((b) => b.name === 'example').map((b) => dict(b)) } : {}),
       headers: nv(find('headers')),
       params,
       body,

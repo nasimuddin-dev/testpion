@@ -1,3 +1,5 @@
+import { convertScript } from './convert/index.js';
+
 /**
  * Bruno's script API (`bru`, `req`, `res`, `test`) over the Postman-style `pm` object, so scripts
  * imported from Bruno run as they are. Loaded (like lodash) only for scripts that use it. Everything
@@ -89,64 +91,13 @@ export const BRUNO_SOURCE = String.raw`
 export const USES_BRUNO = /^\/\/ Bruno script|\bbru\.(get|set|has|delete|interpolate|runner|sleep|setNextRequest)|\bres\.(getBody|getStatus|getHeader|getResponseTime)\b|\breq\.(get|set|delete)[A-Z]\w*\(/m;
 
 /**
- * Bruno's `bru.*` calls that have a TestPion equivalent, as `tp.*` (the import rewrites them: TestPion scripts speak
- * tp.*). `req`, `res`, `test` and `expect` keep running through the shim above. A value is the replacement of
- * `bru.<name>` (the call's own parentheses and arguments follow it), or a whole expression when it ends with `()`.
- */
-const BRU_TO_TP: Record<string, string> = {
-  getEnvVar: 'tp.environment.get',
-  setEnvVar: 'tp.environment.set',
-  hasEnvVar: 'tp.environment.has',
-  deleteEnvVar: 'tp.environment.unset',
-  'getEnvName()': 'tp.environment.name',
-  getGlobalEnvVar: 'tp.globals.get',
-  setGlobalEnvVar: 'tp.globals.set',
-  getVar: 'tp.variables.get',
-  // runtime variables last for the rest of the run, like Bruno's (the shim does the same)
-  setVar: 'tp.collectionVariables.set',
-  hasVar: 'tp.variables.has',
-  deleteVar: 'tp.collectionVariables.unset',
-  getCollectionVar: 'tp.collectionVariables.get',
-  getFolderVar: 'tp.variables.get',
-  getRequestVar: 'tp.variables.get',
-  // .env values are imported as environment variables; secrets too
-  getProcessEnv: 'tp.variables.get',
-  getSecretVar: 'tp.variables.get',
-  interpolate: 'tp.variables.replaceIn',
-  'getRequestName()': 'tp.info.requestName',
-  setNextRequest: 'tp.execution.setNextRequest',
-  'runner.setNextRequest': 'tp.execution.setNextRequest',
-  'runner.skipRequest': 'tp.execution.skipRequest',
-  'runner.stopExecution()': 'tp.execution.setNextRequest(null)',
-};
-/** `bru.*` the shim runs as it is (no rewrite needed, no warning). */
-const BRU_SHIM = new Set(['sleep', 'cwd']);
-
-/**
- * A Bruno script with `bru.*` rewritten to `tp.*` where TestPion has the same thing. Strings and comments are left
- * alone. A `bru.*` call TestPion has nothing for (sendRequest, runRequest, cookies …) gets a `// TODO(import)` line
- * above it and is listed in `warnings`.
+ * A Bruno script with `bru.*` rewritten to `tp.*` where TestPion has the same thing (the table is in convert/coverage.ts).
+ * A `bru.*` call TestPion has nothing for (sendRequest, runRequest, cookies …) gets a `// TODO(import)` line above it
+ * and is listed in `warnings`. The converter itself is scripts/convert (by syntax tree); this is its Bruno entry.
  */
 export function brunoToTp(code: string): { code: string; changed: number; warnings: string[] } {
-  let changed = 0;
-  const warnings = new Set<string>();
-  const out = code.replace(/("(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'|`(?:\\.|[^`\\])*`|\/\/[^\n]*|\/\*[\s\S]*?\*\/)|(?<![\w$.])bru\.((?:runner\.)?\w+)(\(\s*\))?/g, (m, skip: string | undefined, name: string, empty: string | undefined) => {
-    if (skip) return m;
-    const whole = empty !== undefined ? BRU_TO_TP[`${name}()`] : undefined;
-    if (whole) return changed++, whole;
-    const to = BRU_TO_TP[name];
-    if (to) return changed++, `${to}${empty ?? ''}`;
-    if (!BRU_SHIM.has(name)) warnings.add(`bru.${name}`);
-    return m;
-  });
-  if (!warnings.size) return { code: out, changed, warnings: [] };
-  // a TODO above each line that uses an API TestPion doesn't have
-  const lines = out.split('\n').flatMap((l, i, all) => {
-    const used = [...warnings].filter((w) => new RegExp(`(?<![\\w$.])${w.replace('.', '\\.')}\\b`).test(l));
-    // (once: a script imported again keeps its TODO)
-    return used.length && !/^\s*\/\//.test(l) && !/^\s*\/\/ TODO\(import\)/.test(all[i - 1] ?? '') ? [`${/^\s*/.exec(l)![0]}// TODO(import): ${used.join(', ')} has no TestPion equivalent yet: rewrite this line with TestPion's script API (sendRequest, cookies …)`, l] : [l];
-  });
-  return { code: lines.join('\n'), changed, warnings: [...warnings] };
+  const r = convertScript(code, 'bruno');
+  return { code: r.code, changed: r.changes, warnings: [...new Set(r.findings.filter((f) => f.code === 'SCRIPT_API').map((f) => f.api))] };
 }
 
 /** The way back, for a Bruno export of a script that came from Bruno: each `tp.*` of the table as Bruno's `bru.*`. */

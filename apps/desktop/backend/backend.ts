@@ -61,6 +61,9 @@ import {
   type MockServer,
   applyCookieJarOps,
   folderChain,
+  withFolderDefaults,
+  withInheritedHeaders,
+  inheritedHeaders,
   folderVariables,
   scriptRequestSender,
   runTests,
@@ -700,6 +703,8 @@ export class Backend {
         request = { ...request, auth: p.requestId ? inheritedAuthFor(ctx.collection, p.requestId) : ctx.collection.auth };
       // collection-level, folder-level (outer to inner), then request-level pre-request scripts
       const folders = ctx.collection && p.requestId ? folderChain(ctx.collection, p.requestId) : [];
+      // headers and settings of the collection and its folders, under the request's own
+      request = withFolderDefaults(request, ctx.collection, folders);
       const fv = folderVariables(folders);
       if (Object.keys(fv).length) ctx.vars.setScope('request', fv);
       for (const script of [ctx.collection?.preRequestScript, ...folders.map((f) => f.preRequestScript), p.preRequestScript]) {
@@ -889,6 +894,7 @@ export class Backend {
     let request = p.request;
     if ((!request.auth || request.auth.type === 'inherit') && ctx.collection)
       request = { ...request, auth: p.requestId ? inheritedAuthFor(ctx.collection, p.requestId) : ctx.collection.auth };
+    if (ctx.collection) request = withFolderDefaults(request, ctx.collection, p.requestId ? folderChain(ctx.collection, p.requestId) : []);
     const spec = ctx.vars.resolveDeep(request);
     // OAuth would trigger a token request just to show code; show a placeholder header instead
     const auth = spec.auth?.type === 'oauth2' ? undefined : spec.auth;
@@ -928,6 +934,7 @@ export class Backend {
     try {
       // collection, folder (outer to inner) and request pre-request scripts, as for REST requests
       let request = p.request;
+      request = { ...request, headers: withInheritedHeaders(request.headers, inheritedHeaders(ctx.collection, folders)) };
       const fv = folderVariables(folders);
       if (Object.keys(fv).length) ctx.vars.setScope('request', fv);
       for (const script of [ctx.collection?.preRequestScript, ...folders.map((f) => f.preRequestScript), p.preRequestScript]) {

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { CollectionFolder } from '../types';
 import { AuthEditor } from './AuthEditor';
 import { KeyValueEditor } from './KeyValueEditor';
+import { InheritedHeaders } from './InheritedHeaders';
 import { ScriptsPanel } from './ScriptsPanel';
 import { Button, Modal, Tabs } from './ui';
 
@@ -11,7 +12,7 @@ import { Button, Modal, Tabs } from './ui';
  */
 export function FolderEditorBody({ folder, onSave, onClose }: { folder: CollectionFolder; onSave(f: CollectionFolder): void; onClose(): void }) {
   const [draft, setDraft] = useState<CollectionFolder>(folder);
-  const [tab, setTab] = useState<'scripts' | 'variables' | 'auth'>('scripts');
+  const [tab, setTab] = useState<'scripts' | 'variables' | 'headers' | 'auth'>('scripts');
   return (
     <Modal
       title={`Folder: ${folder.name}`}
@@ -30,6 +31,7 @@ export function FolderEditorBody({ folder, onSave, onClose }: { folder: Collecti
                 preRequestScript: draft.preRequestScript?.trim() ? draft.preRequestScript : undefined,
                 testScript: draft.testScript?.trim() ? draft.testScript : undefined,
                 variables: draft.variables?.some((v) => v.key) ? draft.variables.filter((v) => v.key) : undefined,
+                headers: draft.headers?.some((h) => h.key) ? draft.headers.filter((h) => h.key) : undefined,
               });
               onClose();
             }}
@@ -45,6 +47,7 @@ export function FolderEditorBody({ folder, onSave, onClose }: { folder: Collecti
         tabs={[
           { id: 'scripts', label: 'Scripts', badge: (draft.preRequestScript?.trim() ? 1 : 0) + (draft.testScript?.trim() ? 1 : 0) || undefined },
           { id: 'variables', label: 'Variables', badge: draft.variables?.filter((v) => v.key).length || undefined },
+          { id: 'headers', label: 'Headers', badge: draft.headers?.filter((h) => h.key).length || undefined },
           { id: 'auth', label: 'Authorization' },
         ]}
       />
@@ -68,6 +71,11 @@ export function FolderEditorBody({ folder, onSave, onClose }: { folder: Collecti
               Folder variables are visible to the requests inside. Inner folders override outer ones; request and iteration data variables override folder variables.
             </p>
             <KeyValueEditor rows={draft.variables ?? []} onChange={(variables) => setDraft({ ...draft, variables })} keyPlaceholder="Variable" />
+          </div>
+        )}
+        {tab === 'headers' && (
+          <div className="overflow-auto h-full">
+            <InheritedHeaders where="folder" rows={draft.headers} onChange={(headers) => setDraft({ ...draft, headers })} />
           </div>
         )}
         {tab === 'auth' && (

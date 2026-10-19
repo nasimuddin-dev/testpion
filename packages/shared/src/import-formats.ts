@@ -15,6 +15,7 @@ export const IMPORT_FORMATS = {
   'graphql-sdl': ['graphql', 'gql', 'graphqls', 'sdl'],
   insomnia: ['json', 'yaml', 'yml'],
   bruno: ['bru', 'json'],
+  opencollection: ['yml', 'yaml', 'json'],
   hoppscotch: ['json'],
   dotenv: ['env'],
   wsdl: ['wsdl', 'xml'],

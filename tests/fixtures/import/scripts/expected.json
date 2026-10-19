@@ -1,0 +1,355 @@
+{
+  "postman/status code test (docs)": {
+    "code": "tp.test(\"Status code is 200\", function () {\n    tp.response.to.have.status(200);\n});",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "postman/response time (docs)": {
+    "code": "tp.test(\"Response time is less than 200ms\", function () {\n    tp.expect(tp.response.responseTime).to.be.below(200);\n});",
+    "status": "converted",
+    "changes": 3,
+    "apis": []
+  },
+  "postman/json body field": {
+    "code": "const jsonData = tp.response.json();\ntp.test(\"Your test name\", function () {\n    tp.expect(jsonData.value).to.eql(100);\n});",
+    "status": "converted",
+    "changes": 3,
+    "apis": []
+  },
+  "postman/save token to environment": {
+    "code": "var jsonData = tp.response.json();\ntp.environment.set(\"token\", jsonData.token);",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "postman/collection variable from header": {
+    "code": "tp.collectionVariables.set('requestId', tp.response.headers.get('X-Request-Id'));",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "postman/global variable round trip": {
+    "code": "tp.globals.set('count', 1);\nconsole.log(tp.globals.get('count'));",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "postman/pre-request timestamp": {
+    "code": "tp.variables.set('now', new Date().toISOString());",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "postman/set next request": {
+    "code": "if (tp.response.code === 200) {\n    tp.execution.setNextRequest('Get orders');\n} else {\n    tp.execution.setNextRequest(null);\n}",
+    "status": "converted",
+    "changes": 3,
+    "apis": []
+  },
+  "postman/sendRequest with callback": {
+    "code": "tp.sendRequest('https://example.test/health', function (err, res) {\n    tp.test('health ok', function () {\n        tp.expect(err).to.equal(null);\n    });\n});",
+    "status": "converted",
+    "changes": 3,
+    "apis": []
+  },
+  "postman/own pm as a parameter": {
+    "code": "function check(pm) {\n    return pm.value > 1;\n}\ntp.test('uses the global', function () {\n    tp.expect(check({ value: 2 })).to.be.true;\n});",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "postman/pm in strings and comments stays": {
+    "code": "// pm.environment.set in a comment\nconsole.log('pm.response.json() in a string');\nconst re = /pm\\.test/;\ntp.test('x', () => tp.expect(re.test('pm.test')).to.be.true);",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "postman/template literal": {
+    "code": "console.log(`code ${tp.response.code} for ${tp.info.requestName}`);",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "postman/property named pm is not the global": {
+    "code": "const holder = { pm: 1 };\nconsole.log(holder.pm);\ntp.variables.set('a', holder.pm);",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "postman/shorthand property": {
+    "code": "const ctx = { pm: tp, other: 1 };\nctx.pm.variables.set('shorthand', 'yes');",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "postman/cookies and info": {
+    "code": "tp.test('has cookie', function () {\n    tp.expect(tp.cookies.has('session')).to.be.true;\n});\nconsole.log(tp.info.requestName, tp.info.eventName);",
+    "status": "converted",
+    "changes": 5,
+    "apis": []
+  },
+  "postman/iteration data": {
+    "code": "const user = tp.iterationData.get('user');\ntp.variables.set('currentUser', user);",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "postman/visualizer": {
+    "code": "tp.visualizer.set('<p>{{name}}</p>', { name: tp.response.json().name });",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "postman/chai chain assertions": {
+    "code": "tp.test('body', function () {\n    tp.response.to.have.header('Content-Type');\n    tp.response.to.be.json;\n    tp.expect(tp.response.json()).to.have.property('id');\n});",
+    "status": "converted",
+    "changes": 5,
+    "apis": []
+  },
+  "postman/legacy postman.* environment": {
+    "code": "tp.environment.set('token', tp.response.json().token);\nvar saved = tp.environment.get('token');\ntp.environment.unset('stale');",
+    "status": "converted",
+    "changes": 4,
+    "apis": []
+  },
+  "postman/legacy globals": {
+    "code": "tp.globals.set('g', 1);\ntp.globals.unset('old');\ntp.execution.setNextRequest('Next');",
+    "status": "converted",
+    "changes": 3,
+    "apis": []
+  },
+  "postman/legacy tests object": {
+    "code": "tp.test(\"Status code is 200\", function () { tp.expect(tp.response.code === 200).to.be.ok; });\ntp.test(\"Body has id\", function () { tp.expect(tp.response.json().id === 7).to.be.ok; });",
+    "status": "converted",
+    "changes": 6,
+    "apis": []
+  },
+  "postman/legacy response helpers": {
+    "code": "var data = tp.response.json();\nconsole.log(tp.response.responseTime, tp.response.status, tp.response.headers.get('Content-Type'));",
+    "status": "converted",
+    "changes": 4,
+    "apis": []
+  },
+  "postman/environment name": {
+    "code": "console.log(tp.environment.name);",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "postman/async await": {
+    "code": "async function run() {\n    const res = await tp.sendRequest('https://example.test/a');\n    tp.variables.set('a', res.code);\n}\nrun();",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "postman/try catch with err": {
+    "code": "try {\n    tp.response.json();\n} catch (pm) {\n    console.log(pm.message);\n}",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "postman/Postman API without equivalent": {
+    "code": "// TODO(import): pm.datasets has no TestPion equivalent yet: rewrite this line\nconst rows = tp.datasets.query('select 1');\nconsole.log(rows);",
+    "status": "converted",
+    "changes": 1,
+    "apis": [
+      "pm.datasets"
+    ]
+  },
+  "postman/lodash and crypto modules": {
+    "code": "const _ = require('lodash');\nconst sha = require('crypto-js').SHA256(tp.variables.get('v'));\ntp.variables.set('sha', sha.toString());",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "postman/bracket access": {
+    "code": "tp['environment'].set('b', 2);",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "postman/does not parse": {
+    "code": "pm.test('x', function () { ",
+    "status": "kept",
+    "changes": 0,
+    "apis": []
+  },
+  "postman/no postman API at all": {
+    "code": "const total = [1, 2, 3].reduce((a, b) => a + b, 0);\nconsole.log(total);",
+    "status": "unchanged",
+    "changes": 0,
+    "apis": []
+  },
+  "insomnia/environment set": {
+    "code": "tp.environment.set('token', 'abc');",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "insomnia/test with expect": {
+    "code": "tp.test('status', () => {\n    tp.expect(tp.response.code).to.eql(200);\n});",
+    "status": "converted",
+    "changes": 3,
+    "apis": []
+  },
+  "insomnia/response json": {
+    "code": "const body = tp.response.json();\ntp.environment.set('id', body.id);",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "insomnia/base environment": {
+    "code": "tp.environment.set('shared', 1);\nconsole.log(tp.environment.get('shared'));",
+    "status": "converted",
+    "changes": 2,
+    "apis": [
+      "insomnia.baseEnvironment",
+      "insomnia.collectionVariables"
+    ]
+  },
+  "insomnia/variables and info": {
+    "code": "tp.variables.set('v', 1);\nconsole.log(tp.info.requestName);",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "insomnia/request header": {
+    "code": "tp.request.headers.upsert({ key: 'X-A', value: '1' });",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "insomnia/parent folders": {
+    "code": "// TODO(import): Insomnia's parentFolders has no TestPion equivalent: rewrite this line\nconst folder = tp.parentFolders.get('Auth');\nconsole.log(folder);",
+    "status": "converted",
+    "changes": 1,
+    "apis": [
+      "insomnia.parentFolders"
+    ]
+  },
+  "insomnia/request auth update": {
+    "code": "// TODO(import): Insomnia's request.auth.update has no TestPion equivalent: rewrite this line\ntp.request.auth.update({ token: 'x' }, 'bearer');",
+    "status": "converted",
+    "changes": 1,
+    "apis": [
+      "insomnia.request.auth.update"
+    ]
+  },
+  "insomnia/plain javascript": {
+    "code": "const ids = [1, 2];\nfor (const id of ids) console.log(id);",
+    "status": "unchanged",
+    "changes": 0,
+    "apis": []
+  },
+  "insomnia/string and comment mention": {
+    "code": "// insomnia.environment is documented\nconsole.log('insomnia.environment');",
+    "status": "unchanged",
+    "changes": 0,
+    "apis": []
+  },
+  "insomnia/local insomnia variable": {
+    "code": "const insomnia = { fake: true };\nconsole.log(insomnia.fake);",
+    "status": "kept",
+    "changes": 0,
+    "apis": [
+      "insomnia"
+    ]
+  },
+  "bruno/env var round trip": {
+    "code": "const t = tp.environment.get('token');\ntp.environment.set('copy', t);",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "bruno/runtime variables": {
+    "code": "tp.collectionVariables.set('count', 1);\nif (tp.variables.get('count') > 0) console.log('positive');",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "bruno/next request": {
+    "code": "tp.execution.setNextRequest('Get user');\ntp.execution.skipRequest();",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "bruno/stop execution": {
+    "code": "if (res.status === 500) {\n  tp.execution.setNextRequest(null);\n}",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "bruno/env name and request name": {
+    "code": "console.log(tp.environment.name, tp.info.requestName);",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "bruno/interpolate": {
+    "code": "const url = tp.variables.replaceIn('{{host}}/users');\nconsole.log(url);",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "bruno/process env and secret": {
+    "code": "const key = tp.variables.get('API_KEY');\nconst secret = tp.variables.get('s');",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "bruno/collection and folder variables": {
+    "code": "const a = tp.collectionVariables.get('a');\nconst b = tp.variables.get('b');\nconst c = tp.variables.get('c');",
+    "status": "converted",
+    "changes": 3,
+    "apis": []
+  },
+  "bruno/global env var": {
+    "code": "tp.globals.set('g', 1);\ntp.globals.get('g');",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "bruno/sleep stays": {
+    "code": "await bru.sleep(10);",
+    "status": "unchanged",
+    "changes": 0,
+    "apis": []
+  },
+  "bruno/sendRequest has no equivalent": {
+    "code": "// TODO(import): bru.sendRequest has no TestPion equivalent yet: rewrite this line with TestPion's script API (sendRequest, cookies …)\nconst r = await bru.sendRequest({ url: 'https://example.test' });",
+    "status": "unchanged",
+    "changes": 0,
+    "apis": [
+      "bru.sendRequest"
+    ]
+  },
+  "bruno/cookies have no equivalent": {
+    "code": "// TODO(import): bru.cookies has no TestPion equivalent yet: rewrite this line with TestPion's script API (sendRequest, cookies …)\nconst jar = bru.cookies.jar();\njar.clear();",
+    "status": "unchanged",
+    "changes": 0,
+    "apis": [
+      "bru.cookies"
+    ]
+  },
+  "bruno/res and test stay on the shim": {
+    "code": "test('ok', function () {\n  expect(res.status).to.equal(200);\n  expect(res.getBody().id).to.equal(1);\n});",
+    "status": "unchanged",
+    "changes": 0,
+    "apis": []
+  },
+  "bruno/bru in strings and comments": {
+    "code": "// bru.getVar in a comment stays\nconsole.log('bru.setEnvVar in a string stays');\ntp.collectionVariables.set('x', 1);",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "bruno/local bru object": {
+    "code": "const bru = { getVar: () => 1 };\nbru.getVar('x');",
+    "status": "kept",
+    "changes": 0,
+    "apis": [
+      "bru"
+    ]
+  }
+}

@@ -8,7 +8,7 @@ import { normalizeTemplate } from './templates.js';
  * `none`, a disabled placeholder header that names the lost scheme, and a note the import shows.
  */
 
-export type ForeignTool = 'postman' | 'insomnia' | 'bruno' | 'hoppscotch';
+export type ForeignTool = 'postman' | 'insomnia' | 'bruno' | 'hoppscotch' | 'opencollection';
 
 export interface ForeignAuth {
   /** undefined: the source says nothing, so the item inherits (the caller decides: `inherit` for a request). */
@@ -21,7 +21,7 @@ export interface ForeignAuth {
 
 type Any = Record<string, any>;
 
-const TOOL: Record<ForeignTool, string> = { postman: 'Postman', insomnia: 'Insomnia', bruno: 'Bruno', hoppscotch: 'Hoppscotch' };
+const TOOL: Record<ForeignTool, string> = { postman: 'Postman', insomnia: 'Insomnia', bruno: 'Bruno', hoppscotch: 'Hoppscotch', opencollection: 'OpenCollection' };
 const LABEL: Record<string, string> = {
   hawk: 'Hawk',
   ntlm: 'NTLM',
@@ -313,6 +313,47 @@ function bruno(a: Any, where: string): ForeignAuth {
   }
 }
 
+/** OpenCollection (Bruno's YAML format): `auth: inherit` or an object with a `type`. */
+function opencollection(a: Any, where: string): ForeignAuth {
+  switch (a.type) {
+    case 'basic':
+      return ok({ type: 'basic', username: t(a.username), password: t(a.password) });
+    case 'bearer':
+      return ok({ type: 'bearer', token: t(a.token) });
+    case 'digest':
+      return ok({ type: 'digest', username: t(a.username), password: t(a.password) });
+    case 'ntlm':
+      return ntlm(a);
+    case 'apikey':
+      return ok({ type: 'apiKey', key: t(a.key), value: t(a.value), in: a.placement === 'query' ? 'query' : 'header' });
+    case 'awsv4':
+      return ok({ type: 'awsv4', accessKey: t(a.accessKeyId), secretKey: t(a.secretAccessKey), sessionToken: a.sessionToken ? t(a.sessionToken) : undefined, region: t(a.region), service: t(a.service) });
+    case 'oauth2': {
+      const notes: string[] = [];
+      const c = a.credentials ?? {};
+      return ok(
+        {
+          type: 'oauth2',
+          grantType: grant('opencollection', where, String(a.flow ?? ''), { client_credentials: 'client_credentials', resource_owner_password_credentials: 'password', authorization_code: 'authorization_code', '': 'client_credentials' }, notes),
+          tokenUrl: t(a.accessTokenUrl),
+          authUrl: a.authorizationUrl ? t(a.authorizationUrl) : undefined,
+          clientId: t(c.clientId),
+          clientSecret: c.clientSecret ? t(c.clientSecret) : undefined,
+          scope: a.scope ? t(a.scope) : undefined,
+          username: a.resourceOwner?.username ? t(a.resourceOwner.username) : undefined,
+          password: a.resourceOwner?.password ? t(a.resourceOwner.password) : undefined,
+          usePkce: a.flow === 'authorization_code' ? a.pkce?.disabled !== true : undefined,
+          redirectUri: a.callbackUrl ? t(a.callbackUrl) : undefined,
+          clientAuth: c.placement === 'basic_auth_header' ? 'header' : undefined,
+        },
+        notes,
+      );
+    }
+    default:
+      return unsupported('opencollection', String(a.type), where);
+  }
+}
+
 function hoppscotch(a: Any, where: string): ForeignAuth {
   if (a.authActive === false || a.authType === 'none') return ok({ type: 'none' });
   switch (a.authType) {
@@ -353,6 +394,7 @@ function hoppscotch(a: Any, where: string): ForeignAuth {
  * source has none (the item inherits); an unsupported scheme gives `none` + a disabled placeholder header + a note.
  */
 export function mapForeignAuth(tool: ForeignTool, raw: unknown, where: string): ForeignAuth {
+  if (tool === 'opencollection' && (raw === 'inherit' || raw === 'none')) return ok({ type: raw });
   const a = raw && typeof raw === 'object' ? (raw as Any) : undefined;
   if (!a) return { notes: [], headers: [] };
   switch (tool) {
@@ -366,5 +408,7 @@ export function mapForeignAuth(tool: ForeignTool, raw: unknown, where: string): 
       return a.mode ? bruno(a, where) : { notes: [], headers: [] };
     case 'hoppscotch':
       return a.authType ? hoppscotch(a, where) : { notes: [], headers: [] };
+    case 'opencollection':
+      return a.type ? opencollection(a, where) : { notes: [], headers: [] };
   }
 }
