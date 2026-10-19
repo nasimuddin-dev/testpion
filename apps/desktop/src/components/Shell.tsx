@@ -34,6 +34,7 @@ import { Fragment, lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, 
 import { call, on } from '../api';
 import { useGit } from '../lib/git';
 import wordmarkUrl from '../../build/wordmark-nav.png';
+import wordmarkLightUrl from '../../build/wordmark-nav-light.png';
 import markUrl from '../../build/icons/64x64.png';
 import { ConsolePanel } from './ConsolePanel';
 import { refIcon } from './RefLink';
@@ -124,10 +125,11 @@ export function TopBar() {
         </IconButton>
       )}
       <div className="flex items-center gap-2 pr-1" style={noDrag}>
-        {/* the TestPion wordmark; on the light theme it sits on a navy badge so the white "Pion" stays visible */}
-        <span className="inline-flex items-center gap-1.5 rounded-lg bg-[#0c1440] px-2 py-1 dark:bg-transparent dark:px-0 dark:py-0">
+        {/* the TestPion wordmark: a dark "Pion" on the light theme's white bar, the white one on the dark theme */}
+        <span className="inline-flex items-center gap-1.5">
           <img src={markUrl} alt="" aria-hidden className="h-7 w-7 select-none" draggable={false} />
-          <img src={wordmarkUrl} alt="TestPion" className="h-6 w-auto select-none" draggable={false} />
+          <img src={wordmarkLightUrl} alt="TestPion" className="h-6 w-auto select-none dark:hidden" draggable={false} />
+          <img src={wordmarkUrl} alt="" aria-hidden className="h-6 w-auto select-none hidden dark:block" draggable={false} />
         </span>
       </div>
       <span className="h-5 w-px bg-line hidden md:block" />

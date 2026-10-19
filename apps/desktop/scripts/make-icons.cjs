@@ -188,6 +188,9 @@ app.whenReady().then(async () => {
   const navPng = await render('data:image/svg+xml;base64,' + Buffer.from(nav).toString('base64'), 600, 150);
   write(join(site, 'wordmark-nav.png'), navPng);
   write(join(build, 'wordmark-nav.png'), navPng);
+  // the app's top bar on the light theme: the same wordmark with a dark "Pion", on the bar's own white
+  const navLight = readFileSync(join(build, 'wordmark-nav.svg'), 'utf8').replaceAll('PION_COLOR', '#0c1440');
+  write(join(build, 'wordmark-nav-light.png'), await render('data:image/svg+xml;base64,' + Buffer.from(navLight).toString('base64'), 600, 150));
 
   // Windows installer (NSIS): the wordmark in the header (150×57) and on the welcome/finish pages (164×314)
   const navData = 'data:image/png;base64,' + navPng.toString('base64');

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- The logo in the top bar sits on the bar's own background: white on the light theme (the wordmark has a dark "Pion" there), unchanged on the dark theme. It no longer sits on a navy badge.
 - Expand all and Collapse all are one toggle button, the same in the JSON tree and the explorer: it offers one, then the other after each press (the right-click menus keep both as items).
 - **The same row in every list**: collections, environments, AI providers, History entries and the Tests view's runs are now the one row the other trees use. <kbd>Shift</kbd>+<kbd>F10</kbd> and the menu key open the menu, <kbd>F2</kbd> renames, <kbd>Delete</kbd> deletes (with Undo), <kbd>*</kbd> expands, <kbd>Enter</kbd> opens, arrows, <kbd>Home</kbd>/<kbd>End</kbd> and typing a name move between rows. The runs list had no keyboard at all before.
 - **The keyboard stays where you were**: after deleting a row (key or menu) the focus moves to the next row, and Undo puts it on the restored row.
