@@ -1,0 +1,153 @@
+/**
+ * MCP tools for AI-4 and AI-10 with TestPion's configured model: `spec_gaps` (what the tests never prove about an API
+ * definition; deterministic, no model), `spec_tests_generate` (tests that close the gaps: positive, negative, boundary,
+ * security; TestPion's own cases plus the model's, verified against the document) and `import_tidy` (the clean-up of a
+ * fresh import: names, folders, hosts and tokens as variables, chained ids, tracking requests dropped). They only
+ * propose: `ai_apply_proposal` applies, after the user agrees. Without a model the deterministic proposal is returned.
+ */
+import { aiRunDeps, runAiTask } from '../ai/tasks/run.js';
+import { isAiSetupError, flowSourceRef } from '../ai/flow-from-collection.js';
+import { analyseSpec, draftSpecTestsProposal } from '../ai/spec-tests.js';
+import { draftTidyProposal } from '../ai/tidy-import.js';
+import type { Proposal } from '../ai/proposal.js';
+import { createEngineContext } from '../engine.js';
+import { ApsError, normalizeError } from '../errors.js';
+import type { AppSettings } from '../model/types.js';
+import { SPEC_CATEGORIES, specGapMarkdown, workspaceSpecGaps } from '../openapi/spec-gaps.js';
+import type { SecretStore } from '../storage/secrets.js';
+import type { WorkspaceStore } from '../storage/workspace.js';
+import { str, type Tool } from './tool.js';
+
+const forAgent = (p: Proposal) => ({ ...p, items: p.items.map((i) => ({ ...i, before: i.before && i.before.length > 4000 ? `${i.before.slice(0, 4000)} …` : i.before })) });
+const strings = (v: unknown): string[] | undefined => (Array.isArray(v) ? v.map(String).filter(Boolean) : typeof v === 'string' && v ? v.split(',').map((s) => s.trim()).filter(Boolean) : undefined);
+const PRIVACY = { type: 'string', enum: ['full', 'metadata', 'names'], description: 'full (redacted, default), metadata (shapes and names; no body values), names' };
+
+export function aiSpecTools({ store, secrets, settings }: { store: WorkspaceStore; secrets: SecretStore; settings: AppSettings }): Tool[] {
+  const specArg = (a: Record<string, unknown>) => {
+    const spec = String(a.spec ?? '').replace(/\\/g, '/');
+    if (!spec) throw new ApsError('ValidationError', 'spec is required: an API definition of the workspace (specs/clinic.yaml; openapi_outline lists them)');
+    return spec;
+  };
+  /** Run a task with the configured model; without one, TestPion's own proposal (with the reason). */
+  async function propose(o: {
+    task: string;
+    item: Parameters<typeof runAiTask>[1]['item'];
+    context?: Record<string, unknown>;
+    a: Record<string, unknown>;
+    draft(reason: string): Promise<Proposal>;
+    next(p: Proposal): string;
+  }) {
+    const ctx = createEngineContext({ store, secrets, settings, environment: o.a.environment ? String(o.a.environment) : undefined });
+    try {
+      if (o.a.noAi === true) {
+        const p = await o.draft('Made without AI (noAi): the deterministic proposal.');
+        return { proposal: forAgent(p), next: o.next(p) };
+      }
+      try {
+        const r = await runAiTask(aiRunDeps({ ctx, settings, store, surface: 'mcp' }), {
+          task: o.task,
+          item: o.item,
+          context: o.context,
+          hint: o.a.hint ? String(o.a.hint) : undefined,
+          privacy: o.a.privacy ? String(o.a.privacy) : undefined,
+          path: o.a.path ? String(o.a.path) : undefined,
+          dryRun: o.a.dryRun === true,
+        });
+        if (r.dryRun) return { dryRun: true, preview: r.preview };
+        const { preview, proposal, ...rest } = r;
+        return {
+          ...rest,
+          sent: { privacy: preview.privacy, contextTokens: preview.context.tokens, masked: preview.redactionCount, local: preview.local },
+          ...(proposal ? { proposal: forAgent(proposal), next: o.next(proposal) } : {}),
+        };
+      } catch (e) {
+        if (!isAiSetupError(e) || o.a.dryRun === true) throw e;
+        const why = normalizeError(e).message;
+        const p = await o.draft(`No AI model is set up (${why}): this is the deterministic proposal.`);
+        return { fallback: why, proposal: forAgent(p), next: o.next(p) };
+      }
+    } finally {
+      await ctx.dispose();
+    }
+  }
+  return [
+    {
+      name: 'spec_gaps',
+      description:
+        "What the tests and collections of the workspace never prove about an API definition (deterministic: no model, no key): per operation — is it called, which documented statuses are asserted, is there a negative, a boundary and a security test, is the response checked against the document, which parameters are never sent — and the open gaps, with the coverage in percent. Also how many tests TestPion could build for the gaps without a model.",
+      inputSchema: { type: 'object', properties: { spec: str('The API definition in the workspace, e.g. specs/clinic.yaml'), format: { type: 'string', enum: ['json', 'markdown'], description: 'json (default) or a Markdown report' } }, required: ['spec'] },
+      run: (a) => {
+        const spec = specArg(a);
+        const report = workspaceSpecGaps(store, spec);
+        const { local } = analyseSpec(store, spec);
+        const draft = { tests: local.draft.length, operations: new Set(local.draft.map((c) => c.operation)).size };
+        return a.format === 'markdown' ? { markdown: specGapMarkdown(report), draft } : { report, draft, next: 'spec_tests_generate { spec } proposes tests for these gaps (noAi: true for TestPion’s own cases only).' };
+      },
+    },
+    {
+      name: 'spec_tests_generate',
+      description:
+        "Tests that close the gaps in the tests of an API definition, as a proposal: positive (the documented example, its status, the OpenAPI contract, a shallow JSON Schema), negative (invalid input → 4xx, an unknown id → 404), boundary (a value at and beyond a documented limit) and security (no credentials → 401/403). TestPion builds those from the document itself; with TestPion's configured model (the user's key or a local model) it adds more ideas, built from the document's valid example too — an operation the document does not have is dropped and reported, an undocumented status becomes its class. Every test is validated against the document (operation, status, request against its schema) and the proposal says the coverage before → after, computed. Nothing is written: apply with ai_apply_proposal after the user agrees. Without a model the deterministic cases are the proposal (with a note). `dryRun` returns what would be sent (operations, limits, gaps — no secrets) with the token and cost estimate.",
+      inputSchema: {
+        type: 'object',
+        properties: {
+          spec: str('The API definition in the workspace, e.g. specs/clinic.yaml'),
+          categories: { type: 'array', items: { type: 'string', enum: [...SPEC_CATEGORIES] }, description: 'Default: all four' },
+          operations: { type: 'array', items: { type: 'string' }, description: 'Only these: "POST /patients" or an operationId (default: every operation with a gap)' },
+          gapsOnly: { type: 'boolean', description: 'Only what the gaps need (default true); false: every category for every operation' },
+          includeDelete: { type: 'boolean', description: 'Also DELETE operations (they destroy data; default false)' },
+          hint: str('An extra instruction for the model, e.g. "an order holds at most 10 items"'),
+          privacy: PRIVACY,
+          path: str('Put all the tests in this file under tests/ (default tests/<api>/<tag>-gaps.yaml)'),
+          environment: str('Environment whose variable names (never values) the model may know'),
+          noAi: { type: 'boolean', description: 'Only the deterministic cases (no model is called)' },
+          dryRun: { type: 'boolean', description: 'Send nothing: return what would be sent and the estimate' },
+        },
+        required: ['spec'],
+      },
+      run: (a) => {
+        const spec = specArg(a);
+        const options = { categories: strings(a.categories) as never, operations: strings(a.operations), gapsOnly: a.gapsOnly !== false, includeDelete: a.includeDelete === true };
+        return propose({
+          task: 'tests-from-spec',
+          item: { kind: 'spec', path: spec },
+          context: { options },
+          a,
+          draft: (reason) => draftSpecTestsProposal(store, spec, { ...options, path: a.path ? String(a.path) : undefined, surface: 'mcp', reason }),
+          next: (p) => `Show the user the files (proposal.items[].after), the tests per category, the coverage before → after (proposal.summary), the notes and the verification; apply with ai_apply_proposal { id: "${p.id}" } after they agree, then run them (run_tests).`,
+        });
+      },
+    },
+    {
+      name: 'import_tidy',
+      description:
+        "Tidy a freshly imported collection (Postman, curl, HAR, Insomnia, Bruno), as a proposal of separate reviewable changes: names and folders, a host typed into many URLs and a repeated token as collection variables, a hard-coded id that an earlier response returns chained (a tp.* script sets the variable; confirmed against the saved example when there is one), tracking, static and duplicate requests dropped, optionally a flow wiring the requests. TestPion finds the hosts, tokens, noise, duplicates and confirmed chains itself; TestPion's configured model names and groups (the model's drops and unconfirmed chains are unticked: opt in). Every change is verified: the result is a valid collection and every remaining request sends exactly what it sent before, variables resolved. Nothing is written: apply with ai_apply_proposal (ai_undo_proposal puts the collection back). Without a model the findings are the proposal.",
+      inputSchema: {
+        type: 'object',
+        properties: {
+          collection: str('The collection: its name or id (list_collections)'),
+          flow: { type: 'boolean', description: 'Also propose a flow that wires the requests' },
+          source: str('Where it came from: har, postman, curl, insomnia, bruno (context for the model)'),
+          hint: str('An extra instruction, e.g. "group by resource"'),
+          privacy: PRIVACY,
+          environment: str('Environment whose variable names (never values) the model may know'),
+          noAi: { type: 'boolean', description: 'Only what TestPion finds itself (no model is called)' },
+          dryRun: { type: 'boolean', description: 'Send nothing: return what would be sent and the estimate' },
+        },
+        required: ['collection'],
+      },
+      run: (a) => {
+        const item = flowSourceRef(store, { collection: String(a.collection) });
+        const source = a.source ? String(a.source) : undefined;
+        return propose({
+          task: 'tidy-import',
+          item,
+          context: { options: { flow: a.flow === true, ...(source ? { source } : {}) } },
+          a,
+          draft: (reason) => draftTidyProposal(store, item, { surface: 'mcp', reason, source }),
+          next: (p) => `Show the user each change (proposal.items[].title, before/after, verification); apply the ticked ones with ai_apply_proposal { id: "${p.id}", items: [...] } after they agree; ai_undo_proposal puts the collection back.`,
+        });
+      },
+    },
+  ];
+}

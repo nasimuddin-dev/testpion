@@ -236,6 +236,21 @@ export const TOOL_DOCS: Record<string, ToolDoc> = {
     whenNot: 'To write CRUD flows without a model, use `generate_flows`; to design one yourself, read the requests (`list_requests`, `get_request`) and use `write_test_file`. Apply the proposal with `ai_apply_proposal`.',
     example: { collection: 'Veterinary API', folder: 'Patients', hint: 'also test pagination' },
   },
+  spec_gaps: {
+    when: 'Use it when the user wants to know what the workspace never tests about an API definition: operations never called, documented statuses never asserted, no negative, boundary or security test, no contract check; deterministic, no model needed.',
+    whenNot: 'For which operations the last run exercised, use `api_coverage`; to write the tests, use `spec_tests_generate` (or `generate_tests` for one happy path and one invalid request per operation).',
+    example: { spec: 'specs/veterinary-api.yaml' },
+  },
+  spec_tests_generate: {
+    when: "Use it when the user wants tests for the gaps in what is tested of an API definition — negative, boundary and security cases, not just one example per operation: TestPion builds them from the document, and its own model (their key or a local model) adds ideas; it proposes, validated against the document, with the coverage before and after.",
+    whenNot: 'For one happy path and one invalid request per operation, use `generate_tests`; to write a test yourself, use `write_test_file`. Apply the proposal with `ai_apply_proposal` after the user agrees. Use `noAi: true` for TestPion’s own cases only.',
+    example: { spec: 'specs/veterinary-api.yaml', categories: ['negative', 'security'] },
+  },
+  import_tidy: {
+    when: "Use it when the user wants a fresh import (Postman, curl, HAR, Insomnia, Bruno) tidied: names and folders, the host and the token as variables, ids chained from earlier responses, tracking requests dropped; it proposes, and checks that every request still sends what it sent.",
+    whenNot: 'For duplicates, empty folders and unused variables only, use `collection_tidy`; to change one request, use `update_request`. Apply the proposal with `ai_apply_proposal` after the user agrees; `ai_undo_proposal` puts the collection back.',
+    example: { collection: 'HAR import 2026-10-19', source: 'har', flow: true },
+  },
   ai_triage_run: {
     when: "Use it when the user wants TestPion's own model to explain a failed run and propose fixes (their key or a local model): causes with evidence and verified fixes, as a proposal.",
     whenNot: 'To read failures yourself, use `recent_failures`, `run_breakdown` and `test_history`; to apply the fixes, use `ai_apply_proposal` after the user agrees.',

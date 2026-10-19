@@ -30,6 +30,7 @@ import { registerGenerateCommands } from './commands/generate.js';
 import { registerReplaceCommands } from './commands/replace.js';
 import { registerVarsMoveCommand } from './commands/vars-move.js';
 import { registerTidyCommand } from './commands/tidy.js';
+import { registerAiSpecCommands } from './commands/ai-spec.js';
 import { registerFlowsCommand } from './commands/flows.js';
 import { registerFlowCommand } from './commands/flow.js';
 import { registerFlowExportCommand } from './commands/flow-export.js';
@@ -69,6 +70,7 @@ export function buildProgram(): Command {
   registerReplaceCommands(program);
   registerVarsMoveCommand(program);
   registerTidyCommand(program);
+  registerAiSpecCommands(program);
   registerFlowsCommand(program);
   registerFlowCommand(program);
   registerFlowExportCommand(program);

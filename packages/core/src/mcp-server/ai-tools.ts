@@ -8,6 +8,7 @@ import type { WorkspaceStore } from '../storage/workspace.js';
 import { parseItemRef, toItemRef } from '@testpion/shared';
 import { str, type Tool } from './tool.js';
 import { aiTriageTools } from './ai-triage-tools.js';
+import { aiSpecTools } from './ai-spec-tools.js';
 
 /** An item as an agent passes it: a ref object, a testpion:// link or `kind:id…`. */
 const itemArg = (v: unknown) => {
@@ -206,5 +207,7 @@ export function aiTools({
     },
     // AI-2 / AI-5: triage a failed run, analyse a flaky test, attempt the fix
     ...aiTriageTools({ store, secrets, settings, checkEnvironment }),
+    // AI-4 / AI-10: tests from a spec (gap-driven), tidy an import
+    ...aiSpecTools({ store, secrets, settings }),
   ];
 }
