@@ -100,6 +100,17 @@ export interface AssistantRequest {
  * "Generate integration flow with AI" (AI-1): from a collection or folder (right-click it), or from the flow canvas
  * (where describing it in words is the other source). The dialog runs the task and opens the proposal's review.
  */
+/**
+ * "Ask…" (AI-12): the natural-language search over History, runs, test results and traces. One dialog, opened from the
+ * search box, the palette and the History / Runs / Traces filter bars (`scope` keeps the search inside the view); with a
+ * `question` it asks at once.
+ */
+export interface AskSearchRequest {
+  question?: string;
+  /** Sources to stay in (history, runs, results, traces); none: all four. */
+  scope?: string[];
+}
+
 export interface FlowGenerateRequest {
   /** The collection or folder preselected. */
   source?: { collectionId: string; folderId?: string };
@@ -184,6 +195,8 @@ interface AppState {
   assistant?: AssistantRequest;
   /** The "Generate integration flow with AI" dialog (AI-1). */
   flowGenerate?: FlowGenerateRequest;
+  /** The "Ask…" search dialog (AI-12). */
+  askSearch?: AskSearchRequest;
   /** Explain and fix failures (AI-2) / Why is this flaky? (AI-5). */
   aiAnalysis?: AiAnalysisRequest;
   shortcutsOpen?: boolean;

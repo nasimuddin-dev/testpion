@@ -236,6 +236,12 @@ export const TOOL_DOCS: Record<string, ToolDoc> = {
     whenNot: 'To write CRUD flows without a model, use `generate_flows`; to design one yourself, read the requests (`list_requests`, `get_request`) and use `write_test_file`. Apply the proposal with `ai_apply_proposal`.',
     example: { collection: 'Veterinary API', folder: 'Patients', hint: 'also test pagination' },
   },
+  search_ask: {
+    when: "Use it to find requests sent, runs, test results or traces from a question in plain words (\"failed payment calls last week over 2 s\", \"flaky tests\", \"traces where a tool timed out\"), or with a query of your own: TestPion's model only translates the question, TestPion runs the query, and the answer says how it was understood.",
+    whenNot: 'To find a request, test, environment or variable by name, use `search_workspace`; to list one kind of history or runs with simple filters, use `history_list` or `list_runs`; to read failures of a run, use `recent_failures`.',
+    example: { question: 'failed payment calls last week over 2 s', sources: ['history'] },
+    narrow: 'Name the `sources` and lower `limit` in a `query`.',
+  },
   ai_triage_run: {
     when: "Use it when the user wants TestPion's own model to explain a failed run and propose fixes (their key or a local model): causes with evidence and verified fixes, as a proposal.",
     whenNot: 'To read failures yourself, use `recent_failures`, `run_breakdown` and `test_history`; to apply the fixes, use `ai_apply_proposal` after the user agrees.',

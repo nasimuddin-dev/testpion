@@ -1,3 +1,5 @@
+import { AskSearchButton } from '../components/ai/AskSearchButton';
+import { ASK_SCOPE } from '../components/ai/ask-search';
 import { useState } from 'react';
 import { BarChart3, History } from 'lucide-react';
 import { Empty, Input } from '../components/ui';
@@ -30,14 +32,17 @@ export function RunList({ runs, active, onSelect, onOverview, onRerunFailed }: {
           <BarChart3 size={12} /> Overview of all runs
         </button>
       )}
-      {runs.length > 3 && (
-        <div className="flex items-center gap-2 px-2 py-1.5 border-b border-line">
-          <Input className="h-7 min-h-7 text-sm flex-1 min-w-0" placeholder="Filter runs" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Filter runs" />
-          <label className="flex items-center gap-1 text-xs text-muted whitespace-nowrap">
-            <input type="checkbox" checked={failedOnly} onChange={(e) => setFailedOnly(e.target.checked)} /> Failed
-          </label>
-        </div>
-      )}
+      <div className="flex items-center gap-2 px-2 py-1.5 border-b border-line">
+        {runs.length > 3 && (
+          <>
+            <Input className="h-7 min-h-7 text-sm flex-1 min-w-0" placeholder="Filter runs" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Filter runs" />
+            <label className="flex items-center gap-1 text-xs text-muted whitespace-nowrap">
+              <input type="checkbox" checked={failedOnly} onChange={(e) => setFailedOnly(e.target.checked)} /> Failed
+            </label>
+          </>
+        )}
+        <AskSearchButton scope={ASK_SCOPE.runs} className={runs.length > 3 ? undefined : 'ml-auto'} />
+      </div>
       {/* the keyboard moves between the runs like in every list (↑ ↓, Home / End, Shift+F10 for the menu) */}
       <div className="flex-1 min-h-0 overflow-auto py-1" role="tree" aria-label="Runs" onKeyDown={treeKeys}>
         {shown.map((r) => (

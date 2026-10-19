@@ -9,6 +9,8 @@ import type { Trace } from '../types';
 import { formatMs, plural, timeAgo } from '../lib/format';
 import { TraceView } from '../components/TraceView';
 import { DurationBar } from '../components/charts';
+import { AskSearchButton } from '../components/ai/AskSearchButton';
+import { ASK_SCOPE } from '../components/ai/ask-search';
 import { Badge, Button, cx, Empty, IconButton, Input, Modal, Select, Split, VirtualList } from '../components/ui';
 import { NodeMenu } from '../components/TreeParts';
 import type { NodeMenuCtx } from '../lib/node-menu';
@@ -127,6 +129,7 @@ export function TracesView() {
           <label className="flex items-center gap-1 text-xs text-muted whitespace-nowrap" title="Only traces that ended in an error">
             <input type="checkbox" checked={errorsOnly} onChange={(e) => setErrorsOnly(e.target.checked)} /> Errors
           </label>
+          <AskSearchButton scope={ASK_SCOPE.traces} />
           <IconButton label="Refresh" onClick={() => load(true)}>
             <RefreshCw size={14} />
           </IconButton>

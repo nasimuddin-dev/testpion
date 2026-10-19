@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- **Ask: search in your own words** (AI-12). Type a question — *failed payment calls last week over 2 s*, *flaky tests in staging*, *traces where a tool timed out* — in Quick Open (`~`, or the last **Ask: “…”** row), in the top bar's search, or with the sparkle button beside the filters of History, Runs and Traces, and TestPion searches History, runs, test results and traces. The model only **translates** the question into a validated search query (new AI task `nl-search`, small tier); it sees the question, the time and the field names, never your data. TestPion checks the query against a fixed schema (known fields and operators, bounded values and limits, no code) and runs it itself, read-only; the dialog says how the question was understood (the query in words, what the model guessed) and shows it as editable filters you change and run again with no model. Without a model, or when it fails, a cap refuses it or its query is invalid, the same box searches the words as typed and says why.
+- `testpion search --ask "<question>" [--in …] [--no-ai] [--dry-run] [--json]` and `testpion search --query-json <spec>` (a query run directly, no model); MCP tool `search_ask` (a `question` or a `query`; read-only). One query engine behind the dialog, the CLI and MCP.
+
 ## 0.53.1 — 2026-10-18
 
 Checks only, nothing changes in the app: the registry's "planned" capabilities that were due in 0.53 are re-planned for 0.54 (they are not built yet), and a test that compared a file name in another letter case now agrees with how macOS treats it.

@@ -51,6 +51,7 @@ import { CookiesModal } from './components/CookiesModal';
 const DIALOG_FALLBACK = 'fixed bottom-9 left-1/2 -translate-x-1/2 z-[60] w-[min(720px,92vw)] rounded-lg border shadow-lg';
 const ShortcutsDialog = lazy(async () => ({ default: (await import('./components/ShortcutsDialog')).ShortcutsDialog }));
 const CiDialog = lazy(async () => ({ default: (await import('./components/CiDialog')).CiDialog }));
+const AskSearchDialog = lazy(async () => ({ default: (await import('./components/ai/AskSearchDialog')).AskSearchDialog }));
 const FlowGenerateDialog = lazy(async () => ({ default: (await import('./components/ai/FlowGenerateDialog')).FlowGenerateDialog }));
 const AiAnalysisDialog = lazy(async () => ({ default: (await import('./components/ai/AiAnalysisDialog')).AiAnalysisDialog }));
 const RecordDialog = lazy(async () => ({ default: (await import('./components/RecordDialog')).RecordDialog }));
@@ -194,6 +195,7 @@ export default function App() {
   const searchOpen = useApp((s) => s.searchOpen);
   const ci = useApp((s) => s.ci);
   const flowGenerate = useApp((s) => s.flowGenerate);
+  const askSearch = useApp((s) => s.askSearch);
   const aiAnalysis = useApp((s) => s.aiAnalysis);
   const openapiDiff = useApp((s) => s.openapiDiff);
   const apiCoverage = useApp((s) => s.apiCoverage);
@@ -537,6 +539,14 @@ export default function App() {
             <FlowGenerateDialog request={flowGenerate} onClose={() => useApp.getState().set({ flowGenerate: undefined })} />
           </Suspense>,
           close({ flowGenerate: undefined }),
+        )}
+      {askSearch &&
+        guard(
+          'ask search',
+          <Suspense fallback={null}>
+            <AskSearchDialog request={askSearch} onClose={() => useApp.getState().set({ askSearch: undefined })} />
+          </Suspense>,
+          close({ askSearch: undefined }),
         )}
       {aiAnalysis &&
         guard(
