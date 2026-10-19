@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+### Export and import of everything (backlog B-22)
+
+- **A bundle for every kind**: Export… and Import… are on every list header and every item's menu. A bundle (`.testpion.zip`, or `.testpion.json` when small and all text) holds collections, environments, API definitions, datasets, MCP servers and mocks, protos, script packages, test and flow files, saved gRPC calls and connections, prompts, load tests, evaluations, monitors and (only when asked for) AI providers. It is a selection, not a nesting: nothing moves on disk. [Export and import](/getting-started/export-import)
+- **Export with everything it uses…** (Export ▸ on a collection): adds the environments that define its variables, the API definitions, datasets, protos and mocks its text names, its MCP servers, script packages, saved calls, monitors, load tests and the test and flow files that refer to it; what is named but not in the workspace is listed as missing.
+- **Preview before import**: every item is New, Already here (importing a bundle twice changes nothing), Conflict or Refused, with **Keep both** (the default; the new one is renamed and references to it follow), **Replace** or **Skip** per item and for all. Scripts and programs an MCP server starts are listed under *Review before you run*; nothing runs on import and an imported stdio server stays untrusted.
+- **Undo import**: one step takes back everything an import made and restores what it replaced, byte for byte; a file edited since is left alone and named. Datasets over 10 MB go by reference (or all of them with *Always include the data*).
+- **No secret value in a bundle**: the existing detector replaces every typed-in secret (headers, auth, MCP `headers` and `env`, scripts, dataset columns, connection strings) with a `{{variable}}` and lists each one to fill in.
+- **A bundle is untrusted input**: the reader refuses paths that leave their folder, links, names that differ only in case, encrypted and zip64 archives, too many or too large entries, zip bombs and a wrong checksum; `__proto__`, `constructor` and `prototype` keys are dropped; a higher format version asks you to update.
+- **Command line**: `testpion export <kind:id…> | --section <kind> | --all [--uses] --out <file>`, `testpion import <bundle> [--preview] [--on-conflict keep-both|replace|skip] [--only] [--decisions] --json`, `testpion import --undo <id>` / `--list`, `testpion bundle inspect <file>`.
+- **MCP**: `export_bundle`, `describe_bundle`, `import_bundle_preview` (read-only, returns a `plan_id`), `import_bundle_apply` (the only write, needs the plan and consent) and `undo_import`.
+- **App**: File ▸ Export ▸ Bundle…, File ▸ Import Bundle…, the command palette, and a `.testpion.zip` or `.testpion.json` dropped on the window. Workspace exports of earlier versions are read as bundles too (merge into the open workspace). Export Workspace stays for two more releases.
+
 ## 0.53.1 — 2026-10-18
 
 Checks only, nothing changes in the app: the registry's "planned" capabilities that were due in 0.53 are re-planned for 0.54 (they are not built yet), and a test that compared a file name in another letter case now agrees with how macOS treats it.

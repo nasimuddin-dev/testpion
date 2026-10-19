@@ -64,6 +64,7 @@ const docsSidebar = [
       { text: 'Save and export results', link: '/getting-started/save-and-export-results' },
       { text: 'Examples workspace', link: '/getting-started/examples' },
       { text: 'Workspaces', link: '/getting-started/workspaces' },
+      { text: 'Export and import', link: '/getting-started/export-import' },
       { text: 'Import fidelity', link: '/getting-started/import-fidelity' },
       { text: 'Terminal', link: '/getting-started/terminal' },
       { text: 'Keep your workspace in git', link: '/getting-started/git' },

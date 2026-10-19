@@ -50,9 +50,12 @@ testpion agents init [--targets agents,claude,cursor]   Write or refresh AGENTS.
 testpion coverage <spec> -w   API coverage: which OpenAPI operations and responses the runs exercised (--min for CI)
 testpion docs <collection>    Write Markdown (or --html) documentation for a collection
 testpion export <collection>  Export a collection as Postman v2.1 (or TestPion JSON)
+testpion export <kind:id…> --out <file>   A TestPion bundle of any items (--section <kind>, --all, --uses for everything they use)
+testpion bundle inspect <file>   Read a bundle without a workspace: what it holds, what it needs, what to review
 testpion export-environment <name>   Export an environment in Postman's format
 testpion mcp-server           Serve a workspace to AI agents over MCP (stdio)
 testpion load <url>           Safeguarded load test (--threshold "p95<500" "errors<1%" to pass/fail; --grpc <method> for a gRPC server; --collection, or --test-file <flow> for a whole flow per virtual user)
+testpion import <bundle> -w [--preview] [--on-conflict keep-both|replace|skip]   Preview or import a TestPion bundle; --undo <importId> takes an import back
 testpion import <file|-> -w   Import OpenAPI/Swagger, Postman, Insomnia, Bruno (a collection folder too), Hoppscotch, WSDL (SOAP), a GraphQL schema, HAR, collections, Arazzo workflows (as flow files), or a copied cURL / fetch / PowerShell request
 testpion env list|order|diff -w  List environments; set their order; compare two
 testpion monitor list|add|remove|run|results|uptime|start -w  Collections or test files (flows) on a schedule (monitors; add --test-file <path>)
@@ -551,9 +554,42 @@ testpion export-environment Staging -o staging.postman_environment.json
 
 Parts that Postman can't represent are listed on standard error as `not exported: …`. Secret environment values are never written.
 
+## `export` as a TestPion bundle
+
+`testpion export` also writes a [bundle](/getting-started/export-import): any items of the workspace in one `.testpion.zip` (or `.testpion.json`) that `testpion import` and the app's Import… read back. It is a bundle when you give `kind:id` items, `--section`, `--all`, `--uses` or `--format bundle`; a collection name or id alone exports in the formats above, as before.
+
+```bash
+testpion export collection:clinic --uses --out clinic.testpion.zip -w my-workspace
+testpion export spec:specs/pets.yaml dataset:users.csv mcp-server:petstore --out pets.testpion.zip
+testpion export --section mcp-server --out servers.testpion.json
+testpion export --all --out everything.testpion.zip --json
+```
+
+The items are `kind:id` (the registry's kinds and aliases: `collection:<id>`, `environment:<id>`, `spec:specs/<path>`, `dataset:<name>`, `test:<path>`, `mcp-server:<id>`, `mcp-mock:mocks/<file>`, `proto:protos/<file>`, `script-package:<name>`, `prompt:<id>`, `load-test:<id>`, `evaluation:<id>`, `monitor:<id>`, `grpc-call:<id>`, `ws-connection:<id>`, `provider:<id>`), an ItemRef from `--json` output, or a collection's name.
+
+| Option | Description |
+|---|---|
+| `--section <kind>` | Every item of one kind. |
+| `--all` | The whole workspace (AI providers only with `--providers`). |
+| `--uses` | Add everything the items use: for a collection its environments, API definitions, datasets, protos, mocks, MCP servers, script packages, saved calls, monitors, load tests and the test and flow files that refer to it. What is named but not in the workspace is listed as `missing`. |
+| `--datasets embed\|reference\|auto` | `auto` (default) includes a dataset up to 10 MB and sends a bigger one by reference. |
+| `--title <text>` | The bundle's title (and its default file name). |
+| `-o, --out <file>` | The file to write; `.zip` or `.json` picks the form (default `<title>.testpion.zip` or `.json` in the current folder). |
+| `--json` | `{ path, format, size, title, counts, items: [{ kind, id, name }], replaced: [{ kind, item, field, variable }], requires, missing, notes }`. |
+
+Secret values are never written: each is replaced by a `{{variable}}` (listed in `replaced` and `requires.secrets`).
+
+## `bundle`
+
+```bash
+testpion bundle inspect clinic.testpion.zip --json
+```
+
+`bundle inspect <file>` reads a bundle without a workspace: its title and maker, the items by kind, the secrets to fill in, what to review before running (scripts, programs an MCP server starts, production environments) and what was left out. `--max-size <mb>` refuses a larger file.
+
 ## `workspace export`
 
-One file with everything a workspace defines, which `testpion import` (or **Import** in the app) opens as a new workspace. See [Export the whole workspace](/api-testing/collections#export-the-whole-workspace) for what it holds.
+The earlier whole-workspace file (it stays for two more releases; `testpion export --all` writes a bundle instead). One file with everything a workspace defines, which `testpion import` (or **Import** in the app) opens as a new workspace. See [Export the whole workspace](/api-testing/collections#export-the-whole-workspace) for what it holds.
 
 ```bash
 testpion workspace export "Veterinary API (example)"     # writes "Veterinary API (example).testpion.json"
@@ -575,7 +611,13 @@ Replaced 1 secret with variables: environment Development variables.clientSecret
 
 ## `import`
 
+A TestPion bundle (`.testpion.zip`, `.testpion.json`, or a workspace export of earlier versions) is detected by its content and merged into the workspace with a preview and conflict choices; any other file or link is imported as below.
+
 ```bash
+testpion import clinic.testpion.zip -w my-workspace --preview --json        # what would happen; nothing is written
+testpion import clinic.testpion.zip -w my-workspace --on-conflict keep-both  # the default; replace and skip are the others
+testpion import --undo imp-1a2b3c4d5e6f -w my-workspace                      # take the import back
+testpion import --list -w my-workspace                                       # imports that can be undone
 testpion import openapi.yaml -w my-workspace
 testpion import openapi-v2.yaml -w my-workspace --replace-spec   # replace the document of the same name (default: keep both)
 testpion import ./bruno/clinic-api -w my-workspace      # a Bruno collection folder (bruno.json + .bru files)
@@ -595,6 +637,13 @@ testpion import adopt-pet.arazzo.yaml -w my-workspace --json   # Arazzo: one flo
 | `--name <name>` | For a copied request: its name (default: the method and path, e.g. `POST /v1/owners`). |
 | `--no-contract-checks` | For an OpenAPI / Swagger document: don't add `openapi` contract checks to the imported requests (the document is still kept in `specs/`). |
 | `--replace-spec` | For an OpenAPI, AsyncAPI or GraphQL schema document whose path in `specs/` holds a different document: replace it (the old one goes to the trash, `testpion trash list`). By default both are kept and the new one is saved as `name-2` (`specs/petstore-2.openapi.yaml`), with a note. |
+| `--preview` | A bundle: print what importing would do (per item: `create`, `identical`, `conflict` with the name Keep both would give it, `invalid` with why), what to review and what to fill in. Nothing is written. |
+| `--on-conflict keep-both\|replace\|skip` | A bundle: what happens to an item that is already here (default `keep-both`: the incoming one is renamed). `replace` can be undone with `--undo`. |
+| `--only <kinds>` | A bundle: import only these kinds or `kind:id` items (comma separated). |
+| `--decisions <file>` | A bundle: a JSON file of `"kind:id": "keep-both" \| "replace" \| "skip"` for single items. |
+| `--undo <importId>` | Take back a bundle import: what it made is removed, what it replaced is restored; a file edited since is kept and named. |
+| `--list` | The bundle imports that can be undone. |
+| `--max-size <mb>` | A bundle: refuse a larger file. |
 | `--keep-pm` | For a Postman or Insomnia file: keep `pm.*` in scripts. By default they are converted to TestPion's `tp.*` and the output says `Converted N scripts to tp.* (--keep-pm keeps pm.*)`; for other tools (Bruno's `bru.*` …) it says only `Converted N scripts to tp.*`, since `--keep-pm` changes nothing there (`pm.*` runs either way; `testpion export -f postman` turns `tp.*` back into `pm.*`). |
 | `--fetch-sources` | For an Arazzo document: download the OpenAPI source descriptions given as http(s) links. By default they are looked up next to the Arazzo file and in the workspace (`specs/`); an `operationId` whose document is not found becomes a skipped step to fill in. |
 | `--json` | Print the result as JSON, for scripts and AI agents (includes `specPath` and `contractChecks` for OpenAPI imports, `flows` — `[{ path, workflowId, steps }]` — for Arazzo imports, `notes` (what did not map one to one, for every import: unsupported auth, template tags, values needed, a spec saved as `name-2` …), and `scripts` — `{ converted, unchanged: [{ where, reason }] }` — for Postman, Insomnia and Bruno imports). Without `--json`, the output lists the first 20 notes under *Check after import (N notes)*. |

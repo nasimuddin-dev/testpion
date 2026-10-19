@@ -72,7 +72,24 @@ describe('round trip: every kind goes out and comes back the same', () => {
 
   it('holds all the kinds of the fixture workspace', () => {
     const kinds = Object.keys(bundle.counts).sort();
-    expect(kinds).toEqual(['collection', 'dataset', 'environment', 'evaluation', 'grpc-call', 'load-test', 'mcp-mock', 'mcp-server', 'monitor', 'prompt', 'proto', 'provider', 'script-package', 'spec', 'test', 'ws-connection']);
+    expect(kinds).toEqual([
+      'collection',
+      'dataset',
+      'environment',
+      'evaluation',
+      'grpc-call',
+      'load-test',
+      'mcp-mock',
+      'mcp-server',
+      'monitor',
+      'prompt',
+      'proto',
+      'provider',
+      'script-package',
+      'spec',
+      'test',
+      'ws-connection',
+    ]);
     expect(bundle.format).toBe('zip'); // a binary dataset forces the zip form
   });
 
@@ -87,10 +104,19 @@ describe('round trip: every kind goes out and comes back the same', () => {
       // the new workspace's own default environment is the one the export holds too: identical, so not written again
       expect(out.created.length + out.skipped.filter((x) => x.why?.includes('identical')).length).toBe(b.manifest.items.length);
       for (const k of BUNDLE_KIND_IDS) {
-        const mine = bundleAdapter(k).list(src).map((i) => i.id).sort();
-        const theirs = bundleAdapter(k).list(dest).map((i) => i.id).sort();
+        const mine = bundleAdapter(k)
+          .list(src)
+          .map((i) => i.id)
+          .sort();
+        const theirs = bundleAdapter(k)
+          .list(dest)
+          .map((i) => i.id)
+          .sort();
         // the new workspace starts with its own default environment
-        expect(theirs.filter((id) => k !== 'environment' || id !== 'development'), k).toEqual(mine.filter((id) => k !== 'environment' || id !== 'development'));
+        expect(
+          theirs.filter((id) => k !== 'environment' || id !== 'development'),
+          k,
+        ).toEqual(mine.filter((id) => k !== 'environment' || id !== 'development'));
       }
       // the same bytes again: exporting the destination gives the same item checksums
       const again = buildBundle(dest, 'all', { providers: true, format: form });
@@ -126,7 +152,15 @@ describe('round trip: every kind goes out and comes back the same', () => {
 describe('conflicts: Keep both, Replace, Skip, and Undo', () => {
   function setup() {
     const src = source();
-    const parsed = readBundle(buildBundle(src, [{ kind: 'collection', id: 'api' }, { kind: 'monitor', id: 'mon-pets' }, { kind: 'spec', id: 'specs/petstore.yaml' }, { kind: 'mcp-server', id: 'weather' }, { kind: 'mcp-mock', id: 'mocks/weather.mcp-mock.yaml' }]).bytes);
+    const parsed = readBundle(
+      buildBundle(src, [
+        { kind: 'collection', id: 'api' },
+        { kind: 'monitor', id: 'mon-pets' },
+        { kind: 'spec', id: 'specs/petstore.yaml' },
+        { kind: 'mcp-server', id: 'weather' },
+        { kind: 'mcp-mock', id: 'mocks/weather.mcp-mock.yaml' },
+      ]).bytes,
+    );
     const dest = fresh();
     applyImport(dest, parsed);
     return { src, parsed, dest };
@@ -254,7 +288,15 @@ describe('secrets are never in a bundle', () => {
       updatedAt: '',
       variables: [],
       auth: { type: 'bearer', token: FIXTURE_SECRETS.collectionBearer },
-      items: [{ kind: 'http', id: 'r', name: 'R', request: { method: 'GET', url: 'https://x/y', headers: [{ key: 'X-Api-Key', value: FIXTURE_SECRETS.requestApiKeyHeader, enabled: true }] }, assertions: [] } as never],
+      items: [
+        {
+          kind: 'http',
+          id: 'r',
+          name: 'R',
+          request: { method: 'GET', url: 'https://x/y', headers: [{ key: 'X-Api-Key', value: FIXTURE_SECRETS.requestApiKeyHeader, enabled: true }] },
+          assertions: [],
+        } as never,
+      ],
     } as Collection);
     s.saveEnvironment({ id: 'prod', name: 'Prod', isProduction: true, variables: [{ key: 'password', value: FIXTURE_SECRETS.envPassword, enabled: true }] } as never);
     s.writeTestFile('db.yaml', `name: db\ndataset:\n  connection: postgres://app:${FIXTURE_SECRETS.dbPassword}@db.example.com:5432/clinic\n`);
@@ -306,12 +348,29 @@ describe('Export with everything it uses', () => {
       updatedAt: '',
       variables: [],
       testScript: "const u = tp.require('utils');",
-      items: [{ kind: 'http', id: 'r', name: 'List', request: { method: 'GET', url: '{{baseUrl}}/owners' }, assertions: [{ type: 'openapi', spec: 'specs/clinic.yaml' }, { type: 'openapi', spec: 'specs/gone.yaml' }] } as never],
+      items: [
+        {
+          kind: 'http',
+          id: 'r',
+          name: 'List',
+          request: { method: 'GET', url: '{{baseUrl}}/owners' },
+          assertions: [
+            { type: 'openapi', spec: 'specs/clinic.yaml' },
+            { type: 'openapi', spec: 'specs/gone.yaml' },
+          ],
+        } as never,
+      ],
     } as Collection);
     s.writeTestFile('flows/visit.yaml', 'name: Visit\ncollection: clinic\ndataset: datasets/owners.csv\nsteps:\n  - id: a\n    server: { name: Pets MCP }\n');
     s.writeTestFile('flows/other.yaml', 'name: Other\ncollection: somebody-else\nsteps: []\n');
     s.saveLibrary('grpc', { folders: [], items: [{ id: 'g1', name: 'Hello', collectionId: 'clinic', data: { protoFiles: ['protos/pets.proto'] } }] });
-    s.saveLibrary('monitors', { folders: [], items: [{ id: 'm1', name: 'Clinic monitor', data: { collectionId: 'clinic', environment: 'Staging' } }, { id: 'm2', name: 'Other monitor', data: { collectionId: 'else' } }] });
+    s.saveLibrary('monitors', {
+      folders: [],
+      items: [
+        { id: 'm1', name: 'Clinic monitor', data: { collectionId: 'clinic', environment: 'Staging' } },
+        { id: 'm2', name: 'Other monitor', data: { collectionId: 'else' } },
+      ],
+    });
     return s;
   }
 
@@ -356,7 +415,12 @@ describe('Export with everything it uses', () => {
     const dest = fresh();
     dest.saveMcpServers([{ id: 'pets', name: 'Pets MCP', transport: 'streamable-http', url: 'https://mine.example.com' }]);
     applyImport(dest, readBundle(bytes));
-    expect(dest.getMcpServers().map((x) => x.name).sort()).toEqual(['Pets MCP', 'Pets MCP (imported)']);
+    expect(
+      dest
+        .getMcpServers()
+        .map((x) => x.name)
+        .sort(),
+    ).toEqual(['Pets MCP', 'Pets MCP (imported)']);
     expect(dest.readTestFile('flows/visit.yaml')).toContain('server: { name: Pets MCP (imported) }');
   });
 
@@ -401,7 +465,19 @@ describe('big datasets', () => {
 });
 
 describe('a bundle is untrusted input', () => {
-  const MANIFEST_BASE = { format: BUNDLE_FORMAT, formatVersion: 1, createdBy: { app: 'x', version: '1' }, createdAt: 'now', title: 'Evil', root: [], edges: [], missing: [], requires: { secrets: [], osEnv: [] }, flags: {}, notes: [] };
+  const MANIFEST_BASE = {
+    format: BUNDLE_FORMAT,
+    formatVersion: 1,
+    createdBy: { app: 'x', version: '1' },
+    createdAt: 'now',
+    title: 'Evil',
+    root: [],
+    edges: [],
+    missing: [],
+    requires: { secrets: [], osEnv: [] },
+    flags: {},
+    notes: [],
+  };
   const sha = (b: Buffer) => require('node:crypto').createHash('sha256').update(b).digest('hex') as string;
   /** A bundle made by hand: the manifest with each item pointing at its entry (a zip with raw names, as an attacker writes it). */
   function evil(items: Array<{ kind: string; id: string; entry: string; data: string }>, extra: Record<string, unknown> = {}, names: Array<{ name: string; data: Buffer }> = []) {
@@ -440,35 +516,85 @@ describe('a bundle is untrusted input', () => {
   it('zip-slip entry names, links, case clashes and bombs are refused by the reader', () => {
     const m = Buffer.from(JSON.stringify({ ...MANIFEST_BASE, items: [] }));
     for (const name of ['../evil.txt', '/abs.txt', 'C:/x.txt', 'a/../../b.txt', 'a\\b.txt', 'a/./b.txt'])
-      expect(() => readBundle(writeZip([{ name: 'manifest.json', data: m }, { name, data: Buffer.from('x') }])), name).toThrow(/Not a valid TestPion bundle/);
-    expect(() => readBundle(writeZip([{ name: 'manifest.json', data: m }, { name: 'files/A.txt', data: Buffer.from('x') }, { name: 'files/a.txt', data: Buffer.from('y') }]))).toThrow(/twice/);
+      expect(
+        () =>
+          readBundle(
+            writeZip([
+              { name: 'manifest.json', data: m },
+              { name, data: Buffer.from('x') },
+            ]),
+          ),
+        name,
+      ).toThrow(/Not a valid TestPion bundle/);
+    expect(() =>
+      readBundle(
+        writeZip([
+          { name: 'manifest.json', data: m },
+          { name: 'files/A.txt', data: Buffer.from('x') },
+          { name: 'files/a.txt', data: Buffer.from('y') },
+        ]),
+      ),
+    ).toThrow(/twice/);
     // a symbolic link entry: unix mode 120000 in the central directory
-    const zip = writeZip([{ name: 'manifest.json', data: m }, { name: 'link', data: Buffer.from('target') }]);
+    const zip = writeZip([
+      { name: 'manifest.json', data: m },
+      { name: 'link', data: Buffer.from('target') },
+    ]);
     const firstCd = zip.lastIndexOf(Buffer.from([0x50, 0x4b, 0x01, 0x02]));
-    zip.writeUInt16LE(3 << 8 | 20, firstCd + 4);
+    zip.writeUInt16LE((3 << 8) | 20, firstCd + 4);
     zip.writeUInt32LE((0o120777 << 16) >>> 0, firstCd + 38);
     expect(() => readBundle(zip)).toThrow(/link or a special file/);
     // 4 MB of zeros deflate to a few KB: over 100:1 above 1 MB
-    expect(() => readBundle(writeZip([{ name: 'manifest.json', data: m }, { name: 'files/zeros.bin', data: Buffer.alloc(4 * 1024 * 1024) }]))).toThrow(/zip bomb/);
-    expect(() => readBundle(writeZip([{ name: 'manifest.json', data: m }, { name: 'files/small.txt', data: Buffer.alloc(200 * 1024) }]))).not.toThrow();
-    expect(() => readBundle(writeZip([{ name: 'manifest.json', data: m }, { name: 'files/zeros.txt', data: Buffer.alloc(4 * 1024 * 1024) }]))).toThrow(/zip bomb/);
+    expect(() =>
+      readBundle(
+        writeZip([
+          { name: 'manifest.json', data: m },
+          { name: 'files/zeros.bin', data: Buffer.alloc(4 * 1024 * 1024) },
+        ]),
+      ),
+    ).toThrow(/zip bomb/);
+    expect(() =>
+      readBundle(
+        writeZip([
+          { name: 'manifest.json', data: m },
+          { name: 'files/small.txt', data: Buffer.alloc(200 * 1024) },
+        ]),
+      ),
+    ).not.toThrow();
+    expect(() =>
+      readBundle(
+        writeZip([
+          { name: 'manifest.json', data: m },
+          { name: 'files/zeros.txt', data: Buffer.alloc(4 * 1024 * 1024) },
+        ]),
+      ),
+    ).toThrow(/zip bomb/);
   });
 
   it('limits: too many entries, an entry or total over the limit, a declared size that lies', () => {
     const m = Buffer.from(JSON.stringify({ ...MANIFEST_BASE, items: [] }));
     const many = writeZip([{ name: 'manifest.json', data: m }, ...Array.from({ length: 12 }, (_, i) => ({ name: `files/${i}.txt`, data: Buffer.from('x') }))]);
     expect(() => readBundle(many, { zip: { entries: 5, entryBytes: 1e9, totalBytes: 1e9, ratio: 100, ratioFrom: 1e6 } })).toThrow(/at most 5/);
-    const big = writeZip([{ name: 'manifest.json', data: m }, { name: 'files/a.txt', data: Buffer.alloc(5000, 'a') }]);
+    const big = writeZip([
+      { name: 'manifest.json', data: m },
+      { name: 'files/a.txt', data: Buffer.alloc(5000, 'a') },
+    ]);
     expect(() => readBundle(big, { zip: { entries: 100, entryBytes: 1000, totalBytes: 1e9, ratio: 1e9, ratioFrom: 1e9 } })).toThrow(/at most 1000/);
     expect(() => readBundle(big, { zip: { entries: 100, entryBytes: 1e9, totalBytes: 3000, ratio: 1e9, ratioFrom: 1e9 } })).toThrow(/more than 3000/);
     expect(() => readBundle(big, { limits: { fileBytes: 100, manifestBytes: 1e6, items: 10 } })).toThrow(/at most 100/);
     // the declared size is cut down: the inflater must not trust it
-    const lie = writeZip([{ name: 'manifest.json', data: m }, { name: 'files/a.txt', data: Buffer.alloc(5000, 'a') }]);
+    const lie = writeZip([
+      { name: 'manifest.json', data: m },
+      { name: 'files/a.txt', data: Buffer.alloc(5000, 'a') },
+    ]);
     const cd = lie.lastIndexOf(Buffer.from([0x50, 0x4b, 0x01, 0x02]));
     lie.writeUInt32LE(10, cd + 24);
     expect(() => readBundle(lie)).toThrow(/declared size|too large|Not a valid/);
     // a damaged byte: the CRC catches it
-    const dmg = writeZip([{ name: 'manifest.json', data: m }, { name: 'files/a.bin', data: Buffer.from('hello') }]);
+    const dmg = writeZip([
+      { name: 'manifest.json', data: m },
+      { name: 'files/a.bin', data: Buffer.from('hello') },
+    ]);
     dmg[dmg.indexOf(Buffer.from('hello'))] ^= 1;
     expect(() => readBundle(dmg)).toThrow(/checksum/);
     expect(crc32(Buffer.from('a'))).toBeTypeOf('number');
@@ -487,7 +613,9 @@ describe('a bundle is untrusted input', () => {
     expect(() => readBundle(Buffer.from(JSON.stringify({ ...MANIFEST_BASE, format: 'something-else', items: [] })))).toThrow(/not "testpion-bundle"/);
     expect(() => readBundle(Buffer.from(JSON.stringify({ ...MANIFEST_BASE, formatVersion: 2, items: [] })))).toThrow(/up to 1/);
     expect(() => readBundle(Buffer.from('not a bundle at all'))).toThrow(/neither a zip/);
-    expect(() => readBundle(Buffer.from(JSON.stringify({ ...MANIFEST_BASE, items: [{ kind: 'spec', id: 'a', entry: '../x', sha256: 'a'.repeat(64) }], entries: { '../x': { encoding: 'utf8', content: 'x' } } })))).toThrow(/leaves the archive/);
+    expect(() =>
+      readBundle(Buffer.from(JSON.stringify({ ...MANIFEST_BASE, items: [{ kind: 'spec', id: 'a', entry: '../x', sha256: 'a'.repeat(64) }], entries: { '../x': { encoding: 'utf8', content: 'x' } } }))),
+    ).toThrow(/leaves the archive/);
   });
 
   it('an unknown kind is skipped with a warning; the rest imports', () => {
@@ -540,11 +668,23 @@ describe('a bundle is untrusted input', () => {
   });
 
   it('assemble gives every entry a unique name even when ids differ only in case or characters', () => {
-    const b = assemble({ title: 't', createdBy: { app: 'x', version: '1' }, root: [], edges: [], missing: [], requires: { secrets: [], osEnv: [] }, flags: { scripts: 0, production: [], strippedSecrets: 0, stdioServers: [] }, notes: [] }, [
-      { item: { kind: 'prompt', id: 'A b', name: 'one' }, data: Buffer.from('{}') },
-      { item: { kind: 'prompt', id: 'a_b', name: 'two' }, data: Buffer.from('{}') },
-      { item: { kind: 'prompt', id: 'A_B', name: 'three' }, data: Buffer.from('{}') },
-    ]);
+    const b = assemble(
+      {
+        title: 't',
+        createdBy: { app: 'x', version: '1' },
+        root: [],
+        edges: [],
+        missing: [],
+        requires: { secrets: [], osEnv: [] },
+        flags: { scripts: 0, production: [], strippedSecrets: 0, stdioServers: [] },
+        notes: [],
+      },
+      [
+        { item: { kind: 'prompt', id: 'A b', name: 'one' }, data: Buffer.from('{}') },
+        { item: { kind: 'prompt', id: 'a_b', name: 'two' }, data: Buffer.from('{}') },
+        { item: { kind: 'prompt', id: 'A_B', name: 'three' }, data: Buffer.from('{}') },
+      ],
+    );
     expect(new Set([...b.entries.keys()].map((k) => k.toLowerCase())).size).toBe(3);
     expect(() => readBundle(serializeBundle(b, 'zip'))).not.toThrow();
   });
