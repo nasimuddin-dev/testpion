@@ -1,3 +1,5 @@
+import { convertScript } from './convert/index.js';
+
 /**
  * TestPion scripts can use `tp.*` or Postman's `pm.*`: in the sandbox both names are the same
  * object. Postman only knows `pm`, so scripts are converted to `pm.*` when they are exported to
@@ -173,6 +175,11 @@ export interface ScriptConversion<C> {
 
 type ScriptHolder = { name?: string; preRequestScript?: string; testScript?: string; items?: ScriptHolder[]; kind?: string };
 
+function treeRename(code: string): { code: string; changed: number; skipped?: string } {
+  const r = convertScript(code, 'postman');
+  return { code: r.code, changed: r.changes, ...(r.status === 'kept' ? { skipped: r.reason } : {}) };
+}
+
 /**
  * Rewrite every script in a collection (collection, folders and requests) from `from` to `to`,
  * e.g. Postman's `pm.*` to TestPion's `tp.*`. Returns a new collection; the input is not changed.
@@ -183,7 +190,8 @@ export function convertCollectionScripts<C extends ScriptHolder>(collection: C, 
   const skipped: Array<{ where: string; reason: string }> = [];
   const fix = (code: string | undefined, where: string): string | undefined => {
     if (!code) return code;
-    const r = renameScriptGlobal(code, from, to);
+    // Postman's pm.* to TestPion's tp.*: by syntax tree (scope-aware, legacy postman.* too); the other way by tokens
+    const r = from === 'pm' && to === 'tp' ? treeRename(code) : renameScriptGlobal(code, from, to);
     if (r.skipped) skipped.push({ where, reason: r.skipped });
     if (r.changed) {
       changed++;

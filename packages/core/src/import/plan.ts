@@ -155,14 +155,14 @@ export interface ImportedInput {
 export function importInputs(
   store: WorkspaceStore,
   inputs: ImportInput[],
-  opts: { contractChecks?: boolean; secrets?: SecretStore; scripts?: ImportScriptsMode; specs?: SpecConflict; envName?: (input: ImportInput) => string | undefined } = {},
+  opts: { contractChecks?: boolean; secrets?: SecretStore; scripts?: ImportScriptsMode; specs?: SpecConflict; envName?: (input: ImportInput) => string | undefined; arazzo?: (input: ImportInput) => { baseDir?: string; sources?: Record<string, string> } | undefined } = {},
 ): { imported: ImportedInput[]; receipts: string[] } {
   const imported: ImportedInput[] = [];
   const receipts: string[] = [];
   for (const input of inputs) {
     const id = { name: input.name, source: input.source, fileCount: input.fileCount };
     try {
-      const result = importIntoWorkspace(store, input.text, { contractChecks: opts.contractChecks, secrets: opts.secrets, scripts: opts.scripts, specs: opts.specs, name: opts.envName?.(input) ?? input.name });
+      const result = importIntoWorkspace(store, input.text, { contractChecks: opts.contractChecks, secrets: opts.secrets, scripts: opts.scripts, specs: opts.specs, arazzo: opts.arazzo?.(input), name: opts.envName?.(input) ?? input.name });
       if (result.receipt) receipts.push(result.receipt.id);
       imported.push({ input: id, result });
     } catch (e) {

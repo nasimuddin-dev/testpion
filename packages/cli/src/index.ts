@@ -17,6 +17,7 @@ import { registerRunCommands } from './commands/run.js';
 import { registerEvaluationCommands } from './commands/evaluations.js';
 import { registerServeCommands } from './commands/serve.js';
 import { registerDataCommands } from './commands/data.js';
+import { registerImportCommands } from './commands/import.js';
 import { registerWorkspaceCommands } from './commands/workspace.js';
 import { registerMonitorCommands } from './commands/monitor.js';
 import { registerDoctorCommand } from './commands/doctor.js';
@@ -56,6 +57,7 @@ export function buildProgram(): Command {
   registerEvaluationCommands(program);
   registerServeCommands(program);
   registerDataCommands(program);
+  registerImportCommands(program);
   registerWorkspaceCommands(program);
   registerDoctorCommand(program);
   registerAgentInfoCommand(program);

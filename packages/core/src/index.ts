@@ -211,6 +211,8 @@ export * from './import/report.js';
 export { finishDocument, legacyResult } from './import/pipeline.js';
 export * from './import/plan.js';
 export * from './import/inputs.js';
+export * from './import/read-path.js';
+export * from './import/postman-api.js';
 export { readZip, isZip } from './import/zip.js';
 export { readImportReport, listImports, undoImport, type ImportReceipt, type UndoResult } from './import/import-receipt.js';
 export { convertScript, type ScriptTool, type ScriptResult, type ScriptFinding } from './scripts/convert/index.js';

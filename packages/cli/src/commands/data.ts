@@ -614,67 +614,6 @@ export function registerDataCommands(program: Command): void {
       } else process.stdout.write(md);
     });
   program
-    .command('import')
-    .description('import OpenAPI/Swagger, Postman, Insomnia, Bruno, Hoppscotch, HAR, .env or collection files, Arazzo workflows (as flow files under tests/arazzo/), or a copied cURL / fetch / PowerShell request, into a workspace')
-    .argument('<file>', 'file to import, a Bruno collection folder, an http(s) link to download (OpenAPI URL, GitHub file, Postman API link), or - to read stdin (e.g. a cURL command from the clipboard)')
-    .requiredOption('-w, --workspace <nameOrPath>')
-    .option('--collection <name>', 'for a cURL / fetch / PowerShell request: the collection to add it to (created if needed)', 'Imported')
-    .option('--folder <path>', 'for a request: folder path inside the collection, e.g. "Auth / Tokens"')
-    .option('--name <name>', 'for a request: its name (default: method and path)')
-    .option('--no-contract-checks', 'for an OpenAPI document: do not add openapi contract checks to the requests')
-    .option('--replace-spec', 'for an OpenAPI / AsyncAPI document: replace a different document of the same name in specs/ (it goes to the trash; default: keep both, the new one as name-2)')
-    .option('--keep-pm', "for Postman / Insomnia: keep pm.* in scripts (default: they are converted to TestPion's tp.*; pm.* runs either way)")
-    .option('--fetch-sources', 'for Arazzo: download OpenAPI source descriptions given as http(s) URLs (default: only files next to the Arazzo file or in the workspace, e.g. specs/)')
-    .option('--json', 'print the result as JSON (for scripts and AI agents)')
-    .action((file: string, o) =>
-      withWorkspace(o.workspace, async (store) => {
-        const link = /^https?:\/\//i.test(file) ? await fetchImportText(file) : undefined;
-        // a folder is a Bruno collection (bruno.json and .bru files)
-        const folder = !link && file !== '-' && existsSync(file) && statSync(file).isDirectory();
-        let text = link ? link.text : file === '-' ? readFileSync(0, 'utf8') : folder ? readBrunoFolder(file) : readFileSync(file, 'utf8');
-        // a local WSDL's schemas and WSDLs next to it (schemaLocation="types.xsd")
-        if (!link && !folder && file !== '-' && isWsdl(text)) text = await bundleWsdl(text, resolve(file), async (loc) => (existsSync(loc) ? readFileSync(loc, 'utf8') : undefined));
-        const source = link?.fileName ?? file;
-        if (isRequestSnippet(text)) {
-          // secrets in the command (tokens, keys, cookies) become {{variables}}; they are never written to disk
-          const r = importRequestSnippet(store.listCollections().filter((c) => !c.problem), text, new Redactor(new WorkspaceManager().loadSettings().redactFields), { collection: o.collection, folder: o.folder, name: o.name });
-          const saved = store.saveCollection(r.collection);
-          const out = { format: r.format, collection: saved.name, collectionId: saved.id, createdCollection: r.created, request: r.node.name, requestId: r.node.id, method: r.node.request.method, url: r.node.request.url, placeholders: r.placeholders };
-          if (o.json) printJson(out);
-          else {
-            console.log(green(`Imported ${r.format} request "${r.node.name}" into collection "${saved.name}"`));
-            if (r.placeholders.length) console.log(yellow(`Secrets were replaced by variables; set them as secret environment variables: ${r.placeholders.map((p) => `${p.variable} (${p.where})`).join(', ')}`));
-          }
-          return;
-        }
-        // Arazzo: OpenAPI sources next to the file or in the workspace; URLs only with --fetch-sources
-        let arazzo: { baseDir?: string; sources?: Record<string, string> } | undefined;
-        if (detectFormat(text) === 'arazzo') {
-          const baseDir = !link && file !== '-' && !folder ? dirname(resolve(file)) : undefined;
-          arazzo = { baseDir, sources: (await resolveArazzoSources(text, { workspace: store.root, baseDir, fetch: o.fetchSources ? async (u) => (await fetchImportText(u)).text : undefined })).sources };
-        }
-        const r = importIntoWorkspace(store, text, { contractChecks: o.contractChecks !== false, name: dotenvName(source) ?? httpFileName(source), scripts: o.keepPm ? 'keep' : 'tp', arazzo, specs: o.replaceSpec ? 'replace' : 'keep-both' });
-        if (o.json) printJson({ format: r.format, collection: r.collection?.name, collectionId: r.collection?.id, environment: r.environment?.name, environments: r.environments?.map((e) => e.name), flows: r.flows, secretsToSet: r.secretsToSet, specPath: r.specPath, specKeptBoth: r.specKeptBoth, specReplaced: r.specReplaced, contractChecks: r.contractChecks, scriptWarnings: r.scriptWarnings, notes: r.notes, scripts: r.scripts });
-        else {
-          console.log(green(`Imported ${r.format}: ${r.collection ? `collection "${r.collection.name}"` : ''}${r.environments?.length ? ` ${r.environments.length > 1 ? 'environments' : 'environment'} ${r.environments.map((e) => `"${e.name}"`).join(', ')}` : ''}${r.flows?.length ? `${r.flows.length} flow${r.flows.length > 1 ? 's' : ''}` : ''}`));
-          for (const f of r.flows ?? []) console.log(dim(`  ${f.path}  (workflow ${f.workflowId}, ${f.steps} steps; testpion flow ${f.path.replace(/^tests\//, '')} shows it)`));
-          if (r.specPath) console.log(dim(`Kept the document as ${r.specPath}${r.contractChecks ? `; ${r.contractChecks} requests check the OpenAPI contract` : ''}`));
-          if (r.scripts?.converted) console.log(dim(`Converted ${r.scripts.converted} script${r.scripts.converted === 1 ? '' : 's'} to tp.*${keepPmApplies(r.format) ? ' (--keep-pm keeps pm.*)' : ''}`));
-          for (const u of r.scripts?.unchanged ?? []) console.log(yellow(`  Kept pm.* in ${u.where}: ${u.reason}`));
-          if (r.scriptWarnings?.length) {
-            console.log(yellow(`${r.scriptWarnings.length} script${r.scriptWarnings.length > 1 ? 's use' : ' uses'} something TestPion's sandbox doesn't have:`));
-            for (const w of r.scriptWarnings) console.log(yellow(`  ${w.where} (${w.script} script): ${w.api}; ${w.hint}`));
-          }
-          // what did not map one to one (unsupported auth, template tags, values needed …); --json lists every note
-          const notes = r.notes ?? [];
-          if (notes.length) console.log(yellow(`Check after import (${notes.length} note${notes.length === 1 ? '' : 's'}):`));
-          for (const n of notes.slice(0, 20)) console.log(yellow(`  ${n}`));
-          if (notes.length > 20) console.log(yellow(`  … and ${notes.length - 20} more (--json lists them all)`));
-          if (r.secretsToSet?.length) console.log(yellow(`Secret values were not saved (set them in the app, or as TESTPION_SECRET_* variables): ${r.secretsToSet.join(', ')}`));
-        }
-      }),
-    );
-  program
     .command('scripts')
     .description('script tools')
     .command('convert')
@@ -946,19 +885,4 @@ export function registerDataCommands(program: Command): void {
         process.exitCode = d.summary.different + d.summary.onlyLeft + d.summary.onlyRight ? EXIT.TEST_FAILURE : EXIT.SUCCESS;
       });
     });
-}
-
-
-/** The environment name for an imported .env file: ".env.staging" / "staging.env" → "staging" (else the default). */
-/** clinic.http / api.rest → the collection's name. */
-function httpFileName(file: string): string | undefined {
-  const base = file.split(/[\\/]/).pop() ?? '';
-  // also a GraphQL schema file's name (the imported collection is named after it)
-  return /\.(http|rest|graphqls?|gql)$/i.test(base) ? base.replace(/\.(http|rest|graphqls?|gql)$/i, '') : undefined;
-}
-
-function dotenvName(file: string): string | undefined {
-  const base = file.split(/[\\/]/).pop() ?? '';
-  if (!/(^\.env|\.env$)/.test(base)) return undefined;
-  return base.replace(/^\.env\.?/, '').replace(/\.env$/, '') || undefined;
 }

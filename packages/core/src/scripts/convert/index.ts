@@ -63,6 +63,13 @@ export function convertScript(code: string, tool: ScriptTool, opts: ConvertOptio
   const handled = new Set<N>();
   const replace = (n: { start: number; end: number }, text: string) => edits.push({ start: n.start, end: n.end, text });
   const free = (name: string, isFree: (n: string) => boolean) => isFree(name) && !parsed.topLevel.has(name);
+  /** The name the converted code would use is declared in the script (a `const tp = …`): converting would point at that variable. */
+  let clash: string | undefined;
+  const target = (isFree: (n: string) => boolean): boolean => {
+    if (free(alias, isFree)) return true;
+    clash = alias;
+    return false;
+  };
 
   const missing = (pos: number, api: string, message: string) => {
     const lineStart = code.lastIndexOf('\n', pos - 1) + 1;
@@ -104,21 +111,25 @@ export function convertScript(code: string, tool: ScriptTool, opts: ConvertOptio
         const call = parent?.type === 'CallExpression' && key === 'callee' ? parent : undefined;
         if (tool === 'postman') {
           if (root.name === 'postman' && call && POSTMAN_LEGACY_CALLS[dotted]) {
+            if (!target(isFree)) return false;
             replace(node, POSTMAN_LEGACY_CALLS[dotted]!);
             return false;
           }
           if (root.name === 'responseCode' && (ch.path[0] === 'code' || ch.path[0] === 'name')) {
+            if (!target(isFree)) return false;
             replace(linkNode(node, ch.path.length, 1), ch.path[0] === 'code' ? 'tp.response.code' : 'tp.response.status');
             // (a longer chain keeps its tail: responseCode.code.toString())
             return false;
           }
           if (root.name === 'pm' || root.name === 'aps') {
+            if (!target(isFree)) return false;
             replace(root, 'tp');
             handled.add(root);
             const m = POSTMAN_MISSING.find((x) => x === ch.path[0]);
             if (m) missing(root.start, `pm.${m}`, `pm.${m} has no TestPion equivalent yet (marked TODO(import) in the script)`);
           }
         } else if (tool === 'insomnia' && root.name === 'insomnia') {
+          if (!target(isFree)) return false;
           handled.add(root);
           // the base environment is merged into every imported environment: insomnia.baseEnvironment / collectionVariables read it
           if (ch.path[0] === 'baseEnvironment' || ch.path[0] === 'collectionVariables') {
@@ -128,6 +139,7 @@ export function convertScript(code: string, tool: ScriptTool, opts: ConvertOptio
           const gone = INSOMNIA_MISSING.find((m) => dotted === m || dotted.startsWith(`${m}.`));
           if (gone) missing(root.start, `insomnia.${gone}`, `insomnia.${gone} has no TestPion equivalent (marked TODO(import) in the script)`);
         } else if (tool === 'bruno' && root.name === 'bru') {
+          if (!target(isFree)) return false;
           handled.add(root);
           const depth = ch.path[0] === 'runner' ? 2 : 1;
           const name = ch.path.slice(0, depth).join('.');
@@ -147,12 +159,18 @@ export function convertScript(code: string, tool: ScriptTool, opts: ConvertOptio
     if (!ref || node.type !== 'Identifier' || handled.has(node)) return;
     const name = node.name;
     if (!free(name, isFree)) return;
+    if ((tool === 'postman' && ['pm', 'aps', 'responseBody', 'responseTime'].includes(name)) || (tool === 'insomnia' && name === 'insomnia')) if (!target(isFree)) return;
     const to = tool === 'postman' ? (name === 'pm' || name === 'aps' ? 'tp' : name === 'responseBody' ? 'tp.response.text()' : name === 'responseTime' ? 'tp.response.responseTime' : undefined) : tool === 'insomnia' && name === 'insomnia' ? alias : undefined;
     if (!to) return;
     // { pm } as a value: keep the property name
     replace(node, parent?.type === 'Property' && parent.shorthand && key === 'value' ? `${name}: ${to}` : to);
   });
 
+  // nothing is converted in a script whose own variable has the name the conversion would use
+  if (clash) {
+    const reason = `the script declares its own "${clash}"`;
+    return { code, status: 'kept', changes: 0, findings: [{ code: 'SCRIPT_OWN_GLOBAL', api: clash, line: 1, message: reason }], reason };
+  }
   const changes = edits.length;
   // a TODO line above each line that uses an API TestPion doesn't have
   for (const [lineStart, apis] of todos) {
