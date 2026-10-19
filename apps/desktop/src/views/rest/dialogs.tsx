@@ -4,6 +4,8 @@ import { FolderOpen, Link2, Upload } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { call } from '../../api';
 import { toastError, useApp } from '../../store';
+import { LABEL } from '../../lib/vocabulary';
+import { startTidyImport } from '../../components/ai/flow-generate';
 import type { Collection, CollectionNode } from '../../types';
 import { uid } from '../../lib/format';
 import { IMPORT_FILE_ACCEPT } from '@testpion/shared';
@@ -163,6 +165,9 @@ export function ImportModal({ onClose, onDone }: { onClose(): void; onDone(): vo
             'success',
           );
         toastUnchangedScripts(r.scripts);
+        // a collection from another tool: offer the clean-up (names, folders, variables, chains)
+        if (r.collectionId && !r.request && /^(postman|har|insomnia|bruno|hoppscotch)/i.test(r.format))
+          useApp.getState().toast(`${r.collection ?? 'The collection'} can be tidied: names, folders, the host and token as variables, ids chained.`, 'info', { label: LABEL.tidyImport, onClick: () => startTidyImport({ collectionId: r.collectionId!, source: r.format }) });
         toastImportNotes({ ...r, notes: toastSpecKeptBoth(r) });
         onDone();
         await useApp.getState().refreshWorkspace();

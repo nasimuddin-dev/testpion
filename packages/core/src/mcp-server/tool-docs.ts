@@ -246,7 +246,7 @@ export const TOOL_DOCS: Record<string, ToolDoc> = {
     whenNot: 'For one happy path and one invalid request per operation, use `generate_tests`; to write a test yourself, use `write_test_file`. Apply the proposal with `ai_apply_proposal` after the user agrees. Use `noAi: true` for TestPion’s own cases only.',
     example: { spec: 'specs/veterinary-api.yaml', categories: ['negative', 'security'] },
   },
-  import_tidy: {
+  tidy_import: {
     when: "Use it when the user wants a fresh import (Postman, curl, HAR, Insomnia, Bruno) tidied: names and folders, the host and the token as variables, ids chained from earlier responses, tracking requests dropped; it proposes, and checks that every request still sends what it sent.",
     whenNot: 'For duplicates, empty folders and unused variables only, use `collection_tidy`; to change one request, use `update_request`. Apply the proposal with `ai_apply_proposal` after the user agrees; `ai_undo_proposal` puts the collection back.',
     example: { collection: 'HAR import 2026-10-19', source: 'har', flow: true },

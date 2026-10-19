@@ -52,6 +52,7 @@ const DIALOG_FALLBACK = 'fixed bottom-9 left-1/2 -translate-x-1/2 z-[60] w-[min(
 const ShortcutsDialog = lazy(async () => ({ default: (await import('./components/ShortcutsDialog')).ShortcutsDialog }));
 const CiDialog = lazy(async () => ({ default: (await import('./components/CiDialog')).CiDialog }));
 const FlowGenerateDialog = lazy(async () => ({ default: (await import('./components/ai/FlowGenerateDialog')).FlowGenerateDialog }));
+const TidyImportDialog = lazy(async () => ({ default: (await import('./components/ai/TidyImportDialog')).TidyImportDialog }));
 const AiAnalysisDialog = lazy(async () => ({ default: (await import('./components/ai/AiAnalysisDialog')).AiAnalysisDialog }));
 const RecordDialog = lazy(async () => ({ default: (await import('./components/RecordDialog')).RecordDialog }));
 const FeedbackDialog = lazy(async () => ({ default: (await import('./components/FeedbackDialog')).FeedbackDialog }));
@@ -195,6 +196,7 @@ export default function App() {
   const ci = useApp((s) => s.ci);
   const flowGenerate = useApp((s) => s.flowGenerate);
   const aiAnalysis = useApp((s) => s.aiAnalysis);
+  const tidyImport = useApp((s) => s.tidyImport);
   const openapiDiff = useApp((s) => s.openapiDiff);
   const apiCoverage = useApp((s) => s.apiCoverage);
   const explorerOpen = useApp((s) => s.explorerOpen);
@@ -537,6 +539,14 @@ export default function App() {
             <FlowGenerateDialog request={flowGenerate} onClose={() => useApp.getState().set({ flowGenerate: undefined })} />
           </Suspense>,
           close({ flowGenerate: undefined }),
+        )}
+      {tidyImport &&
+        guard(
+          'tidy import',
+          <Suspense fallback={null}>
+            <TidyImportDialog key={tidyImport.collectionId} request={tidyImport} onClose={() => useApp.getState().set({ tidyImport: undefined })} />
+          </Suspense>,
+          close({ tidyImport: undefined }),
         )}
       {aiAnalysis &&
         guard(

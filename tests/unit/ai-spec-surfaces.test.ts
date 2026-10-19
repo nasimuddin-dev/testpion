@@ -1,5 +1,5 @@
 /**
- * AI-4 / AI-10 for agents and scripts: MCP `spec_gaps`, `spec_tests_generate`, `import_tidy` (they propose; apply with
+ * AI-4 / AI-10 for agents and scripts: MCP `spec_gaps`, `spec_tests_generate`, `tidy_import` (they propose; apply with
  * ai_apply_proposal) and CLI `testpion generate gaps|tests` and `testpion tidy --ai` — with the mock provider and the
  * --json envelope. The owner's key is never used: only the mock.
  */
@@ -41,12 +41,12 @@ const tools = (store: WorkspaceStore, settings = { ...defaultSettings(), assista
   return { list, call: async (name: string, args: Record<string, unknown>) => (await raw.find((x) => x.name === name)!.run(args)) as Record<string, any> };
 };
 
-describe('MCP: spec_gaps, spec_tests_generate, import_tidy', () => {
+describe('MCP: spec_gaps, spec_tests_generate, tidy_import', () => {
   it('the tools say when to use them, and spec_gaps needs no model', async () => {
     const store = workspace('mcp-gaps');
     try {
       const { list, call } = tools(store, { ...defaultSettings(), assistantProvider: undefined });
-      for (const n of ['spec_gaps', 'spec_tests_generate', 'import_tidy']) expect(list.find((x) => x.name === n)!.description).toMatch(/Use it when/);
+      for (const n of ['spec_gaps', 'spec_tests_generate', 'tidy_import']) expect(list.find((x) => x.name === n)!.description).toMatch(/Use it when/);
       const r = await call('spec_gaps', { spec: 'specs/shop.yaml' });
       expect(r.report.summary).toMatchObject({ operations: 5, covered: 4 });
       expect(r.draft.tests).toBeGreaterThan(5);
@@ -86,14 +86,14 @@ describe('MCP: spec_gaps, spec_tests_generate, import_tidy', () => {
     }
   });
 
-  it('import_tidy proposes verified changes; applied by ai_apply_proposal, undone by ai_undo_proposal', async () => {
+  it('tidy_import proposes verified changes; applied by ai_apply_proposal, undone by ai_undo_proposal', async () => {
     const store = workspace('mcp-tidy');
     try {
       const { call } = tools(store);
-      const dry = JSON.stringify(await call('import_tidy', { collection: 'HAR import 2026-10-19', dryRun: true, privacy: 'metadata' }));
+      const dry = JSON.stringify(await call('tidy_import', { collection: 'HAR import 2026-10-19', dryRun: true, privacy: 'metadata' }));
       expect(dry).toContain('"dryRun":true');
       expect(dry).not.toContain(TOKEN);
-      const ran = await call('import_tidy', { collection: 'imp', source: 'har' });
+      const ran = await call('tidy_import', { collection: 'imp', source: 'har' });
       const p = ran.proposal;
       expect(p.items.every((i: { kind: string }) => i.kind === 'collection')).toBe(true);
       expect(p.items.some((i: { verification: Array<{ status: string }> }) => i.verification.some((b) => b.status === 'fail'))).toBe(false);
@@ -103,10 +103,10 @@ describe('MCP: spec_gaps, spec_tests_generate, import_tidy', () => {
       await call('ai_undo_proposal', { id: p.id });
       expect(store.getCollection('imp').variables).toEqual([]);
       const off = tools(store, { ...defaultSettings(), assistantProvider: undefined });
-      const draft = await off.call('import_tidy', { collection: 'imp' });
+      const draft = await off.call('tidy_import', { collection: 'imp' });
       expect(draft.fallback).toBeTruthy();
       expect(draft.proposal.items.length).toBe(6);
-      await expect(call('import_tidy', { collection: 'nope' })).rejects.toThrow(/No collection "nope"/);
+      await expect(call('tidy_import', { collection: 'nope' })).rejects.toThrow(/No collection "nope"/);
     } finally {
       store.close();
     }

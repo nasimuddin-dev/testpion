@@ -728,7 +728,7 @@ export const coverageLine = (c: Coverage): string =>
 /** The spec a proposal is made for: its path under specs/ (an ItemRef `spec:`), read once. */
 export function loadSpec(store: WorkspaceStore, spec: string): { text: string; doc: OpenApiDoc } {
   const rel = spec.replace(/\\/g, '/');
-  if (!/\.(json|ya?ml)$/i.test(rel)) throw new ApsError('ValidationError', `"${spec}" is not an API definition file`, { suggestions: ['Pass a file of specs/ (specs/clinic.yaml); testpion openapi-specs lists them.'] });
+  if (!/\.(json|ya?ml)$/i.test(rel)) throw new ApsError('ValidationError', `"${spec}" is not an API definition file`, { suggestions: ['Pass a file of specs/ (specs/clinic.yaml) (the API definitions of the workspace).'] });
   let text: string;
   try {
     const file = store.safePath(rel);

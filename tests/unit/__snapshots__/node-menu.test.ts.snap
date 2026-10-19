@@ -57,6 +57,7 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
       "Generate integration flow with AI…",
       "Settings, runner & docs",
       "Convert scripts to tp.*",
+      "Tidy with AI…",
     ],
     [
       "History in git…",
@@ -711,6 +712,7 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
     [
       "Generate tests…",
       "Generate integration flows…",
+      "Generate tests from this spec…",
     ],
     [
       "Rename",

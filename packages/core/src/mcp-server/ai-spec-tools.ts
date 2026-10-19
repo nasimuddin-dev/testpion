@@ -1,7 +1,7 @@
 /**
  * MCP tools for AI-4 and AI-10 with TestPion's configured model: `spec_gaps` (what the tests never prove about an API
  * definition; deterministic, no model), `spec_tests_generate` (tests that close the gaps: positive, negative, boundary,
- * security; TestPion's own cases plus the model's, verified against the document) and `import_tidy` (the clean-up of a
+ * security; TestPion's own cases plus the model's, verified against the document) and `tidy_import` (the clean-up of a
  * fresh import: names, folders, hosts and tokens as variables, chained ids, tracking requests dropped). They only
  * propose: `ai_apply_proposal` applies, after the user agrees. Without a model the deterministic proposal is returned.
  */
@@ -119,7 +119,7 @@ export function aiSpecTools({ store, secrets, settings }: { store: WorkspaceStor
       },
     },
     {
-      name: 'import_tidy',
+      name: 'tidy_import',
       description:
         "Tidy a freshly imported collection (Postman, curl, HAR, Insomnia, Bruno), as a proposal of separate reviewable changes: names and folders, a host typed into many URLs and a repeated token as collection variables, a hard-coded id that an earlier response returns chained (a tp.* script sets the variable; confirmed against the saved example when there is one), tracking, static and duplicate requests dropped, optionally a flow wiring the requests. TestPion finds the hosts, tokens, noise, duplicates and confirmed chains itself; TestPion's configured model names and groups (the model's drops and unconfirmed chains are unticked: opt in). Every change is verified: the result is a valid collection and every remaining request sends exactly what it sent before, variables resolved. Nothing is written: apply with ai_apply_proposal (ai_undo_proposal puts the collection back). Without a model the findings are the proposal.",
       inputSchema: {

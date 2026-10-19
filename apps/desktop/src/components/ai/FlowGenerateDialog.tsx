@@ -1,17 +1,21 @@
-import { Eye, FileText, FolderTree, Sparkles, Square, Workflow } from 'lucide-react';
+import { Eye, FileCode2, FileText, FolderTree, Sparkles, Square, Workflow } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { AiTaskResult, Proposal } from '@testpion/core';
+import type { AiTaskResult, Proposal, ProposalItem, SpecGapReport } from '@testpion/core';
 import { asError, call } from '../../api';
 import { useCollectionTree } from '../../lib/collections-store';
 import { aiSetupAction } from '../../lib/ai-errors';
 import { formatCost } from '../../lib/format';
-import { useApp, type AssistantRequest, type FlowGenerateRequest } from '../../store';
+import { toastError, useApp, type AssistantRequest, type FlowGenerateRequest } from '../../store';
 import type { CollectionNode } from '../../types';
-import { Badge, Button, Field, Input, Modal, Segmented, Select, Spinner, Textarea, useDebounced } from '../ui';
+import { Badge, Button, Field, Input, Modal, Segmented, Select, Spinner, Textarea, Toggle, useDebounced } from '../ui';
 import { AiPreviewDialog, PRIVACY_OPTIONS, type AiPrivacy } from './AiPreviewDialog';
 import { FlowProposalReview } from './FlowProposalReview';
+import { ProposalReview } from './ProposalReview';
 
-type Mode = 'collection' | 'describe';
+type Mode = 'collection' | 'describe' | 'spec';
+
+const SPEC_CATEGORIES = ['positive', 'negative', 'boundary', 'security'] as const;
+type SpecCategory = (typeof SPEC_CATEGORIES)[number];
 
 /** How many requests a list of nodes holds, at every level. */
 const countOf = (nodes: CollectionNode[]): number => nodes.reduce((k, x) => k + (x.kind === 'folder' ? countOf(x.items) : 1), 0);
@@ -37,6 +41,12 @@ export function FlowGenerateDialog({ request, onClose }: { request: FlowGenerate
   const cols = useCollectionTree().filter((c) => !c.problem);
   const env = useApp((s) => request.environment ?? s.environment);
   const [mode, setMode] = useState<Mode>(request.mode ?? (request.source || !request.path ? 'collection' : 'describe'));
+  // From a spec (AI-4): the API definition, the categories of tests, and what the gaps in the tests are
+  const [specs, setSpecs] = useState<string[]>([]);
+  const [spec, setSpec] = useState(request.spec ?? '');
+  const [categories, setCategories] = useState<SpecCategory[]>([...SPEC_CATEGORIES]);
+  const [gapsOnly, setGapsOnly] = useState(true);
+  const [gaps, setGaps] = useState<{ report: SpecGapReport; draft: { tests: number; operations: number } } | { error: string }>();
   const [collectionId, setCollectionId] = useState(request.source?.collectionId);
   const [folderId, setFolderId] = useState(request.source?.folderId ?? '');
   const [description, setDescription] = useState('');
@@ -53,9 +63,40 @@ export function FlowGenerateDialog({ request, onClose }: { request: FlowGenerate
   const total = useMemo(() => (col ? countOf(col.items) : 0), [col]);
   const requests = folder ? folder.count : total;
 
+  useEffect(() => {
+    if (mode !== 'spec') return;
+    void call<string[]>('openapi.specs', {}).then((l) => {
+      setSpecs(l);
+      setSpec((s) => s || l[0] || '');
+    }, () => undefined);
+  }, [mode]);
+  const specOptions = { categories, gapsOnly };
+  useEffect(() => {
+    if (mode !== 'spec' || !spec) return setGaps(undefined);
+    let live = true;
+    setGaps(undefined);
+    call<{ report: SpecGapReport; draft: { tests: number; operations: number } }>('ai.specGaps', { spec, ...specOptions }).then(
+      (g) => live && setGaps(g),
+      (e) => live && setGaps({ error: asError(e).message }),
+    );
+    return () => {
+      live = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, spec, categories.join(','), gapsOnly]);
+
   /** The task call for the current choices (the generic runner: the CLI and MCP make the same one). */
   const params = (extra: { hint?: string; privacy?: AiPrivacy } = {}) =>
-    mode === 'collection'
+    mode === 'spec'
+      ? {
+          task: 'tests-from-spec',
+          item: { kind: 'spec', path: spec },
+          context: { options: specOptions },
+          hint: extra.hint ?? (hint.trim() || undefined),
+          privacy: extra.privacy ?? privacy,
+          environment: env,
+        }
+      : mode === 'collection'
       ? {
           task: 'flow-from-collection',
           item: folder ? { kind: 'folder', collectionId: col!.id, folderId: folder.id } : { kind: 'collection', collectionId: col!.id },
@@ -73,10 +114,10 @@ export function FlowGenerateDialog({ request, onClose }: { request: FlowGenerate
           privacy: extra.privacy ?? privacy,
           environment: env,
         };
-  const ready = mode === 'collection' ? !!col && requests > 0 : description.trim().length > 3;
+  const ready = mode === 'spec' ? !!spec && categories.length > 0 && !!gaps && !('error' in gaps) : mode === 'collection' ? !!col && requests > 0 : description.trim().length > 3;
   const asRequest = (): AssistantRequest => {
     const p = params() as { task: string; item?: AssistantRequest['item']; question?: string; context?: unknown; path?: string };
-    return { task: p.task, title: 'Generate an integration flow', context: p.context ?? {}, question: p.question, item: p.item, path: p.path, privacy };
+    return { task: p.task, title: mode === 'spec' ? 'Generate tests from a spec' : 'Generate an integration flow', context: p.context ?? {}, question: p.question, item: p.item, path: p.path, privacy };
   };
 
   // the estimate before anything is sent (a dry run: nothing leaves the computer)
@@ -108,10 +149,12 @@ export function FlowGenerateDialog({ request, onClose }: { request: FlowGenerate
     setError(undefined);
     try {
       const r = extra.noAi
-        ? await call<{ proposal: Proposal }>('ai.generateFlow', { collectionId: col!.id, folderId: folder?.id, path: request.path, environment: env, noAi: true })
+        ? mode === 'spec'
+          ? await call<{ proposal: Proposal }>('ai.specTests', { spec, ...specOptions, environment: env, noAi: true })
+          : await call<{ proposal: Proposal }>('ai.generateFlow', { collectionId: col!.id, folderId: folder?.id, path: request.path, environment: env, noAi: true })
         : await call<AiTaskResult>('ai.runTask', { ...params(extra), requestId: id });
       if (runId.current !== id) return;
-      if (!r.proposal) throw new Error(`The model proposed no flow${'problems' in r && r.problems.length ? `: ${r.problems.join('; ')}` : ''}. Try again with a hint, or a smaller folder.`);
+      if (!r.proposal) throw new Error(`The model proposed no ${mode === 'spec' ? 'tests' : 'flow'}${'problems' in r && r.problems.length ? `: ${r.problems.join('; ')}` : ''}. Try again with a hint, or a smaller folder.`);
       setProposal(r.proposal);
     } catch (e) {
       if (runId.current !== id) return;
@@ -127,6 +170,36 @@ export function FlowGenerateDialog({ request, onClose }: { request: FlowGenerate
     setBusy(undefined);
   };
 
+  /** Accept: the ticked test files through the workspace's writers (one Undo), then they can be opened. */
+  const acceptTests = async (items: ProposalItem[]) => {
+    if (!proposal) return;
+    try {
+      const r = await call<{ applied: Array<{ path?: string }>; skipped: Array<{ reason: string }> }>('ai.applyProposal', { id: proposal.id, items: items.map((i) => i.id) });
+      await useApp.getState().refreshWorkspace();
+      useApp.getState().toast(`Wrote ${r.applied.length} test file${r.applied.length === 1 ? '' : 's'}${r.applied[0]?.path ? ` (tests/${r.applied[0].path})` : ''}${r.skipped.length ? `; ${r.skipped.length} skipped: ${r.skipped[0]!.reason}` : ''}`, r.skipped.length ? 'info' : 'success', undefined, {
+        undo: () => call('ai.undoProposal', { id: proposal.id }).then(() => useApp.getState().refreshWorkspace()),
+      });
+      onClose();
+    } catch (e) {
+      toastError(e);
+    }
+  };
+  if (proposal && mode === 'spec')
+    return (
+      <ProposalReview
+        proposal={proposal}
+        acceptLabel="Write the tests"
+        onAccept={acceptTests}
+        onRegenerate={(h) => {
+          void call('ai.discardProposal', { id: proposal.id }).catch(() => undefined);
+          setProposal(undefined);
+          setHint(h);
+          void generate({ hint: h });
+        }}
+        onDiscard={() => void call('ai.discardProposal', { id: proposal.id }).then(() => (useApp.getState().toast('Proposal discarded', 'info'), onClose()), toastError)}
+        onClose={onClose}
+      />
+    );
   if (proposal)
     return (
       <FlowProposalReview
@@ -149,7 +222,7 @@ export function FlowGenerateDialog({ request, onClose }: { request: FlowGenerate
     <Modal
       title={
         <span className="flex items-center gap-2">
-          <Sparkles size={16} /> Generate integration flow with AI
+          <Sparkles size={16} /> {mode === 'spec' ? 'Generate tests from a spec with AI' : 'Generate integration flow with AI'}
         </span>
       }
       onClose={() => (stop(), onClose())}
@@ -180,9 +253,60 @@ export function FlowGenerateDialog({ request, onClose }: { request: FlowGenerate
           options={[
             { value: 'collection', label: 'From a collection or folder', title: 'Its saved requests become the steps (by id); TestPion’s draft is improved' },
             { value: 'describe', label: 'Describe in words', title: 'One or two sentences; the assistant writes the steps' },
+            { value: 'spec', label: 'From a spec', title: 'Tests for the gaps in what is tested of an API definition: positive, negative, boundary and security cases' },
           ]}
         />
-        {mode === 'collection' ? (
+        {mode === 'spec' ? (
+          !specs.length ? (
+            <p className="text-muted">No API definitions in this workspace yet: import an OpenAPI document first.</p>
+          ) : (
+            <div className="grid gap-3" data-spec-tests>
+              <Field label="API definition">
+                <Select aria-label="API definition" value={spec} onChange={(e) => setSpec(e.target.value)}>
+                  {specs.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <div className="flex items-center gap-3 flex-wrap" role="group" aria-label="Kinds of tests">
+                {SPEC_CATEGORIES.map((c) => (
+                  <label key={c} className="inline-flex items-center gap-1.5">
+                    <input type="checkbox" checked={categories.includes(c)} onChange={(e) => setCategories(e.target.checked ? [...categories, c] : categories.filter((x) => x !== c))} data-spec-category={c} /> {c}
+                  </label>
+                ))}
+                <Toggle checked={gapsOnly} onChange={setGapsOnly} label="Only what the gaps need" />
+              </div>
+              <div className="rounded-lg border border-line p-2 text-xs grid gap-1" data-spec-gaps>
+                {!gaps ? (
+                  <Spinner size={11} />
+                ) : 'error' in gaps ? (
+                  <span className="text-warn">{gaps.error}</span>
+                ) : (
+                  <>
+                    <span>
+                      <b>{gaps.report.summary.covered}</b> of {gaps.report.summary.operations} operations called by a test or saved request · <b>{gaps.report.summary.statusPct}%</b> of documented statuses asserted ·{' '}
+                      <b>{gaps.report.summary.gaps}</b> open gaps
+                    </span>
+                    {gaps.report.operations
+                      .filter((o) => o.gaps.length)
+                      .slice(0, 5)
+                      .map((o) => (
+                        <span key={o.operation} className="text-muted truncate" title={o.gaps.map((g) => g.message).join('\n')}>
+                          <span className="mono">{o.operation}</span>: {o.gaps[0]!.message}
+                          {o.gaps.length > 1 ? ` (+${o.gaps.length - 1})` : ''}
+                        </span>
+                      ))}
+                    <span className="text-muted">
+                      TestPion can build <b>{gaps.draft.tests}</b> tests for {gaps.draft.operations} operations from the document without a model; a configured model adds more ideas.
+                    </span>
+                  </>
+                )}
+              </div>
+            </div>
+          )
+        ) : mode === 'collection' ? (
           !cols.length ? (
             <p className="text-muted">No collections in this workspace yet: import or create one, or describe the flow in words.</p>
           ) : (
@@ -240,6 +364,11 @@ export function FlowGenerateDialog({ request, onClose }: { request: FlowGenerate
               {folder ? <FolderTree size={10} /> : <Workflow size={10} />} {requests} request{requests === 1 ? '' : 's'}
             </Badge>
           )}
+          {mode === 'spec' && spec && (
+            <Badge>
+              <FileCode2 size={10} /> {spec}
+            </Badge>
+          )}
           {mode === 'describe' && (
             <Badge>
               <FileText size={10} /> {request.path ? `tests/${request.path}` : 'a new flow file'}
@@ -265,9 +394,9 @@ export function FlowGenerateDialog({ request, onClose }: { request: FlowGenerate
                   {setup.label}
                 </Button>
               )}
-              {mode === 'collection' && col && (
+              {(mode === 'spec' ? !!spec : mode === 'collection' && col) && (
                 <Button size="sm" onClick={() => void generate({ noAi: true })} data-flow-draft>
-                  Use the draft without AI
+                  {mode === 'spec' ? 'Use the tests TestPion builds without AI' : 'Use the draft without AI'}
                 </Button>
               )}
             </div>

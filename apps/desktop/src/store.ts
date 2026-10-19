@@ -104,7 +104,9 @@ export interface FlowGenerateRequest {
   /** The collection or folder preselected. */
   source?: { collectionId: string; folderId?: string };
   /** Start on "Describe in words" (the canvas of an open flow). */
-  mode?: 'collection' | 'describe';
+  mode?: 'collection' | 'describe' | 'spec';
+  /** mode spec: the API definition preselected (specs/…). */
+  spec?: string;
   /** The flow file the result goes to (the open flow: its review shows the diff); default a new file under tests/flows/. */
   path?: string;
   /** describe: the open flow's steps, as context. */
@@ -118,6 +120,12 @@ export interface FlowGenerateRequest {
  * An AI analysis (AI-2 / AI-5): "Explain and fix failures with AI" on a failed run, or "Why is this flaky?" on a flaky
  * test. The dialog shows what is analysed and the estimate, runs it, and opens the findings with their fixes in the review.
  */
+/** "Tidy this import with AI" (AI-10) for a collection; `source` is the import's format. */
+export interface TidyImportRequest {
+  collectionId: string;
+  source?: string;
+}
+
 export type AiAnalysisRequest = { kind: 'triage'; runId: string; title?: string } | { kind: 'flaky'; testId: string; title?: string };
 
 export interface DialogButton {
@@ -186,6 +194,8 @@ interface AppState {
   flowGenerate?: FlowGenerateRequest;
   /** Explain and fix failures (AI-2) / Why is this flaky? (AI-5). */
   aiAnalysis?: AiAnalysisRequest;
+  /** Tidy this import with AI (AI-10). */
+  tidyImport?: TidyImportRequest;
   shortcutsOpen?: boolean;
   /** The "Run in CI" dialog, with what to run preselected. */
   ci?: CiRequest;

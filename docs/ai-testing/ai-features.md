@@ -7,7 +7,7 @@ description: "How TestPion's own AI features work: your key or a local model, Lo
 
 # AI features: privacy, cost and review
 
-TestPion's AI features — explain an error or a response, suggest checks, write tp tests, write an integration flow from a collection, explain and fix a failed run, find out why a test is flaky, fix lint problems, write a commit message and more — all run through **one task runner** in the engine. The app, the CLI (`testpion ai …`, `testpion flow generate`), the MCP server (`ai_*` tools, `flow_generate`) and CI use the same 29 tasks, the same privacy rules, the same caps and the same usage log.
+TestPion's AI features — explain an error or a response, suggest checks, write tp tests, write an integration flow from a collection, explain and fix a failed run, find out why a test is flaky, fix lint problems, write a commit message and more — all run through **one task runner** in the engine. The app, the CLI (`testpion ai …`, `testpion flow generate`), the MCP server (`ai_*` tools, `flow_generate`) and CI use the same 31 tasks, the same privacy rules, the same caps and the same usage log.
 
 Three rules hold everywhere:
 
@@ -23,6 +23,8 @@ Three rules hold everywhere:
 | Next to **Send** | **Describe a request** | A request from words, reviewed, then opened as a new unsaved tab. |
 | Explorer: right-click a collection or folder | **Generate integration flow with AI…** | A flow file from its saved requests, tried on a mock and reviewed on a canvas ([Let AI write the flow](/test-runner/integration-testing#let-ai-write-the-flow)). |
 | A flow's canvas | **Generate with AI** | The same, *from a collection or folder* or *described in words*. |
+| An API definition: its header, right-click it in the explorer | **Generate tests from this spec…** (also **From a spec** in *Generate with AI*) | Tests for the gaps in what is tested ([below](#tests-from-a-spec)): the gap report, positive / negative / boundary / security tests built from the document, coverage before → after. |
+| Explorer: right-click a collection; the notice after an import | **Tidy with AI…** | The clean-up of an import as separate changes, each verified ([below](#tidy-an-import)). |
 | A failed run: its ⋯ menu, right-click it in **Runs**, the Problems panel, Home's *Needs attention* | **Explain and fix failures with AI…** | The failures grouped by cause, each with evidence and a verified fix you apply, then **Rerun the affected tests** ([below](#explain-and-fix-failures-triage)). |
 | A flaky test: the Problems panel, a result's **History** tab | **Why is this flaky?** | The pattern with evidence and a fix; **Attempt to fix** runs the test 5 times ([below](#why-is-this-flaky)). |
 | Errors, failed tests, timelines, monitors, fuzz and security findings, API diffs, load tests | **Explain with AI**, **How to fix (AI)**, **Analyze with AI** | An answer in the assistant panel. |
@@ -329,6 +331,57 @@ The step now waits for the job:
 
 **Privacy and no model.** The flaky analysis sends the test's history (statuses, times, environments, the failed checks), a failing and a passing response, masked like every context; at *Metadata only* the signature (it quotes body values) and the failure messages are left out. Without a model, the dialog and `ai_analyze_flaky` (`noAi: true`) show the signals, the signature and the likely pattern; so does `testpion ai run analyze-flaky` (with `--no-ai`, or when no model is set up: *note: no model configured*, exit code 0).
 
+## Tests from a spec
+
+*Generate tests from this spec…* answers one question first: **what do the tests never prove about this API definition?** The gap report needs no model and no key. Every HTTP test step under `tests/` and every saved request of a collection is matched to the operation it calls, and each operation is judged:
+
+- is it called at all, and which of its documented statuses does a `status` check assert
+- is there a **negative** test (invalid input → 4xx), a **boundary** test (a value at or beyond a documented limit), a **security** test (no credentials → 401/403)
+- is a response ever checked against the document (an `openapi` or `json-schema` check)
+- which documented parameters no request ever sends
+
+Then the tests. TestPion builds the deterministic ones from the document itself: the documented example with its status, the OpenAPI contract and a shallow JSON Schema (positive); a required field left out, a wrong type, a body that is not JSON, an unknown id → 404 (negative); a value exactly at and just beyond `maxLength`, `minimum` … (boundary); no credentials on a secured operation (security). Only what the gaps need is built (untick **Only what the gaps need** for everything). A configured model adds more ideas — "quantity 0 is refused", "an empty name" — as *what to change in the valid example and the status to expect*; it never writes a request or a check:
+
+- an operation the document does not have is dropped and listed in the review's notes
+- an undocumented status becomes its class (`4xx`); a refused case cannot expect a 2xx
+- a request that should be accepted must satisfy the schema and the required parameters; one that should be refused must break something (else it is flagged: it needs a rule the document does not state)
+- DELETE operations are left out unless you ask
+
+Every test is validated against the document before the review (the *spec-tests* badge), and the proposal says the coverage before → after (operations called, documented statuses asserted, open gaps), computed from the same gap report with the new tests added. Files go to `tests/<api>/<tag>-gaps.yaml` (a free name, never over a file), each test tagged `spec-gap` and its category.
+
+```bash
+testpion generate gaps --spec specs/veterinary-api.yaml                    # the gap report, no AI
+testpion generate tests --spec specs/veterinary-api.yaml --no-ai          # TestPion's own cases as a proposal
+testpion generate tests --spec specs/veterinary-api.yaml --category negative,security --apply
+testpion generate tests --spec specs/veterinary-api.yaml --dry-run        # what would be sent
+```
+
+MCP: `spec_gaps`, `spec_tests_generate` (proposes; apply with `ai_apply_proposal`).
+
+## Tidy an import
+
+A collection from Postman, curl, a HAR, Insomnia or Bruno arrives with generic names, no folders, the host and token typed into every request, ids typed into paths and, from a HAR, the analytics and image requests of a whole page load. *Tidy with AI…* (a collection's right-click menu; the notice after an import offers it) proposes the clean-up as **separate changes** you accept one by one:
+
+| Change | Who finds it | How it is checked |
+|---|---|---|
+| Names and folders ("List orders" in *Orders*) | the model (TestPion renames requests named by their URL) | the request is untouched |
+| A host typed into many URLs → `{{baseUrl}}` | TestPion (the model may name the variable) | the variable keeps the host as its value |
+| A repeated bearer token or API key → `{{token}}` | TestPion | the variable keeps the value; move it to an environment secret afterwards (*Move variables to environments*) |
+| A hard-coded id an earlier response returns → `{{orderId}}`, set by a `tp.*` script on that response | TestPion when a saved example confirms it; the model otherwise (unticked) | the script is run on the saved example: it must set the variable to the id that was typed in |
+| Tracking, static and preflight requests, duplicates → dropped | TestPion; the model's further drops are unticked | listed in the change |
+| A flow wiring the requests (optional) | the model | linted, variables checked |
+
+The verifier proves the safety claim for every change: the result is a valid collection, and **every request that remains sends exactly what it sent before** once the collection's variables are resolved — the only differences allowed are the substitutions themselves. Apply is one step per accepted change set and **Undo** puts the collection back. Scripts the tidy writes are `tp.*`, never `pm.*`. A HAR import keeps each recorded small JSON or text response as a saved example, which is what lets a chain be confirmed.
+
+```bash
+testpion tidy "HAR import" --ai --source har --dry-run     # what would be sent
+testpion tidy "HAR import" --ai --flow                      # a proposal (names, folders, variables, chains, drops, a flow)
+testpion tidy "HAR import" --ai --no-model                  # only what TestPion finds itself
+testpion tidy "HAR import" --ai --apply                     # apply the ticked changes; testpion ai undo <id> reverts
+```
+
+MCP: `tidy_import`. Without a model set up both features return TestPion's own proposal with a note.
+
 ## Cost: estimates, caps and usage
 
 - **Before sending**: the estimate in **What will be sent…**, in the flow dialog and on hover over an AI button (≈ tokens in, the most the answer may cost).
@@ -346,7 +399,7 @@ Terminal: `testpion ai usage [--days 7] [--json]`; agents: `ai_usage`.
 The examples below are run in the [examples workspace](/getting-started/examples) (collection *Veterinary API*). Every command takes `--json` (the [JSON envelope](/cli/reference#json-output-dry-runs-and-scripts)) and `-w <workspace>`.
 
 ```bash
-testpion ai tasks                                            # the 29 tasks: id, title, tier, whether it proposes
+testpion ai tasks                                            # the 31 tasks: id, title, tier, whether it proposes
 TESTPION_AI_PROVIDER=ollama testpion ai run explain-error --context @error.json --dry-run   # what would be sent
 testpion ai run explain-test-failure --item run:<runId>:<resultId>   # an answer, streamed
 testpion ai run explain-test-failure --item run:last                 # the newest finished run (as ci --run last)

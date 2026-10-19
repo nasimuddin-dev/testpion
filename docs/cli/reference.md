@@ -105,7 +105,7 @@ Every command that takes `--json` prints **one envelope** on stdout, whatever ha
 
 **`--jsonl`** on the commands that stream (`test`, `run`, `run-collection`, `eval run`, `load`, `serve flows`, `debug`, `monitor start`, `record`): a line per event as it happens (`{ schema_version, command, type: "result" | "row" | "call" | "exchange" | "listening", data }`), then the envelope as the last line with `type: "result"`. `serve flows --json` and `debug --json` printed lines before and now mean `--jsonl`. `test <file> --data <rows> --json` streams its rows inside the envelope's `data` (`{ rows, summary }`), so a run of 100,000 rows needs no memory.
 
-**`--dry-run`** on the commands that write files or change state (`import`, `export`, `export-environment`, `docs`, `ci`, `report`, `workspace-report`, `env set / unset / order`, `vars rename`, `replace`, `tidy`, `workspace create / rename / delete / export`, `trash restore / empty`, `monitor add / remove`, `datasets`, `generate-data`, `tests-from-spec`, `integration-suite`, `test from-request`, `flow export`, `history export-har`, `git setup`): the command runs against a copy of the workspace and of the app folder, every write outside them is diverted and every delete skipped, and the result lists each file it would add, change or delete (`dry_run: { applied: false, changes: [{ path, change, bytes }] }` in the envelope). Commands with a dry run of their own (`agents init`, `vars move`, `flow edit`, `flow from-har`, `scripts convert`) keep it.
+**`--dry-run`** on the commands that write files or change state (`import`, `export`, `export-environment`, `docs`, `ci`, `report`, `workspace-report`, `env set / unset / order`, `vars rename`, `replace`, `workspace create / rename / delete / export`, `trash restore / empty`, `monitor add / remove`, `datasets`, `generate-data`, `tests-from-spec`, `integration-suite`, `test from-request`, `flow export`, `history export-har`, `git setup`): the command runs against a copy of the workspace and of the app folder, every write outside them is diverted and every delete skipped, and the result lists each file it would add, change or delete (`dry_run: { applied: false, changes: [{ path, change, bytes }] }` in the envelope). Commands with a dry run of their own (`tidy`, `agents init`, `vars move`, `flow edit`, `flow from-har`, `scripts convert`) keep it.
 
 **`--non-interactive`** (the default with `CI` or `TESTPION_NON_INTERACTIVE=1`): a command never waits for input; where it would (a token read from the terminal by `jwt -`) it fails at once with a hint. When a command fails and stdout is not a terminal, stderr suggests the `--json` form.
 
@@ -637,6 +637,37 @@ Your model writes an integration flow from the saved requests of a collection or
 | `--json` | `{ proposal, model, usage, costUsd?, repairs, problems, applied? }`; without a model `{ proposal, model: "none (deterministic draft)", fallback }`; with `--apply` on a flow whose verification failed, `applied: null` and `why`. `--dry-run`: the task result with its `preview`. |
 
 A file that already exists is not replaced: the default name gets a number (`veterinary-api-patients-2.yaml`). Exit code `2` for an unknown collection or folder, a path outside `tests/`, Local only refusing the provider or a cap refusing the call.
+
+## `generate gaps` and `generate tests`
+
+```bash
+testpion generate gaps --spec specs/veterinary-api.yaml
+testpion generate tests --spec specs/veterinary-api.yaml --category negative,boundary --dry-run
+testpion generate tests --spec specs/veterinary-api.yaml --no-ai --apply
+```
+
+`generate gaps` says what the workspace's tests and collections never prove about an API definition (operations never called, documented statuses never asserted, no negative / boundary / security test, no contract check, parameters never sent). It needs no model: `--json` gives `{ report, draft }`. `generate tests` proposes tests for those gaps — TestPion's own cases built from the document plus, with a model, its ideas, all validated against the document — and the coverage before → after. Nothing is written without `--apply` (or `testpion ai apply <id>`). See [Tests from a spec](/ai-testing/ai-features#tests-from-a-spec).
+
+| Option | Description |
+|---|---|
+| `--spec <file>` | The API definition in the workspace (required). |
+| `--category <list>` | `positive`, `negative`, `boundary`, `security`, comma separated (default all). |
+| `--operation <list>` | Only these: `"POST /patients"` or an operationId. |
+| `--no-gaps-only` | Every category for every operation, not only what the gaps need. |
+| `--include-delete` | Also DELETE operations. |
+| `--hint`, `--privacy`, `--path`, `--provider`, `--model`, `-e` | As for [`flow generate`](#flow-generate). `--path` puts all tests in one file under `tests/`. |
+| `--no-ai` | Only the deterministic cases. Without a model set up this is what you get, with a note. |
+| `--dry-run`, `--apply` | Send nothing and print what would be sent; write the files whose verification did not fail. |
+| `--json` | `{ proposal, model, usage, costUsd?, repairs, problems, applied? }`. |
+
+## `tidy --ai`
+
+```bash
+testpion tidy "HAR import" --ai --source har
+testpion tidy "HAR import" --ai --flow --apply
+```
+
+`testpion tidy <collection> --ai` proposes the clean-up of an import as separate, verified changes: names and folders, a host and a repeated token as variables, ids chained from the response that returns them (`tp.*` scripts), tracking, static and duplicate requests dropped, optionally a flow (`--flow`). Every remaining request sends exactly what it sent before. Options: `--source <format>`, `--hint`, `--privacy`, `--provider`, `--model`, `--no-model` (only what TestPion finds itself), `--dry-run` (send nothing), `--apply` (the ticked changes; `testpion ai undo <id>` reverts), `-e`. `--dry-run` without `--ai` reports what `--remove-*` would remove. See [Tidy an import](/ai-testing/ai-features#tidy-an-import).
 
 ## `flow from-har`
 

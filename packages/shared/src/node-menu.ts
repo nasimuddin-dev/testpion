@@ -66,6 +66,8 @@ export type MenuLabelKey =
   | 'compareVersions'
   | 'generateTests'
   | 'generateFlows'
+  | 'generateSpecTests'
+  | 'tidyImport'
   | 'openApiDefinitions'
   | 'preview'
   | 'runWithDataset'
@@ -299,6 +301,8 @@ export const STANDARD_ACTIONS = [
 const COLLECTION_ACTIONS = [
   { id: 'collectionSettings', group: 'tools', label: 'collectionSettings', icon: 'settings-2', kinds: ['collection'] },
   { id: 'convertScripts', group: 'tools', label: 'convertScriptsTp', icon: 'wand-2', kinds: ['collection'] },
+  // AI-10: the clean-up of an import as reviewable changes
+  { id: 'tidyImport', group: 'tools', label: 'tidyImport', icon: 'sparkles', kinds: ['collection'] },
   { id: 'copyGrpcurl', group: 'share', label: 'copyGrpcurl', icon: 'terminal', kinds: ['grpc-call'] },
   { id: 'copyUrl', group: 'share', label: 'copyUrl', icon: 'link-2', kinds: ['ws-connection'] },
   { id: 'editFolder', group: 'tools', label: 'editFolder', icon: 'folder-cog', kinds: ['folder'] },
@@ -317,6 +321,8 @@ const EXPLORER_ACTIONS = [
   { id: 'compareVersions', group: 'run', label: 'compareVersions', icon: 'git-compare', kinds: ['spec'] },
   { id: 'generateTests', group: 'tools', label: 'generateTests', icon: 'file-check-2', kinds: ['spec'] },
   { id: 'generateFlows', group: 'tools', label: 'generateFlows', icon: 'workflow', kinds: ['spec'] },
+  // AI-4: tests for the gaps in what is tested (TestPion's own cases; a configured model adds ideas)
+  { id: 'generateSpecTests', group: 'tools', label: 'generateSpecTests', icon: 'sparkles', kinds: ['spec'] },
   { id: 'openApiDefinitions', group: 'open', label: 'openApiDefinitions', icon: 'square-arrow-out-up-right', kinds: ['section:spec'] },
   // datasets
   { id: 'preview', group: 'open', label: 'preview', icon: 'eye', kinds: ['dataset'] },

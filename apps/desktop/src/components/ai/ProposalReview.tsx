@@ -9,7 +9,7 @@ import { DiffText } from '../GitCommitPanel';
 import { Badge, Button, cx, Input, Modal } from '../ui';
 import { Findings } from './Findings';
 
-const KIND_LABEL: Record<ProposalItem['kind'], string> = { file: 'test file', flow: 'flow', assertion: 'check', script: 'script', request: 'request', patch: 'request change', variable: 'variable', text: 'text' };
+const KIND_LABEL: Record<ProposalItem['kind'], string> = { file: 'test file', flow: 'flow', assertion: 'check', script: 'script', request: 'request', patch: 'request change', variable: 'variable', collection: 'collection change', text: 'text' };
 
 /** One verification badge: the verifier's verdict in words, its detail on hover. */
 export function VerificationBadgeView({ b }: { b: VerificationBadge }) {

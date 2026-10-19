@@ -72,6 +72,8 @@ export const LABEL = {
   compareVersions: 'Compare versions',
   generateTests: 'Generate tests…',
   generateFlows: 'Generate integration flows…',
+  generateSpecTests: 'Generate tests from this spec…',
+  tidyImport: 'Tidy with AI…',
   preview: 'Preview',
   runWithDataset: 'Run a collection with it',
   useInTest: 'Use in a test',

@@ -122,7 +122,7 @@ The menus of every kind, as the app builds them ("New …" stands for the kind's
 
 | Node | create | open | tree | run | share | tools | git | edit | danger |
 |---|---|---|---|---|---|---|---|---|---|
-| Collection | New …, New folder… |  | Expand all <kbd>*</kbd>, Collapse all | Run collection | Copy link, Export ▸ | Monitor on a schedule…, Run in CI…, Create test file from collection…, Generate integration flow with AI…, Settings, runner & docs, Convert scripts to tp.* | History in git… | Rename <kbd>F2</kbd>, Duplicate | Delete… <kbd>Del</kbd> |
+| Collection | New …, New folder… |  | Expand all <kbd>*</kbd>, Collapse all | Run collection | Copy link, Export ▸ | Monitor on a schedule…, Run in CI…, Create test file from collection…, Generate integration flow with AI…, Settings, runner & docs, Convert scripts to tp.*, Tidy with AI… | History in git… | Rename <kbd>F2</kbd>, Duplicate | Delete… <kbd>Del</kbd> |
 | Protocol group (REST, SOAP …) of a collection | New … |  | Expand all <kbd>*</kbd>, Collapse all | Run collection |  |  |  |  |  |
 | Folder of a collection | New …, New folder… |  | Expand all <kbd>*</kbd>, Collapse all | Run folder | Copy link | Monitor on a schedule…, Run in CI…, Create test file from folder…, Generate integration flow with AI…, Edit folder (scripts, variables, auth) |  | Rename <kbd>F2</kbd>, Duplicate, Move to… | Delete… <kbd>Del</kbd> |
 | Request (HTTP, SOAP, GraphQL) |  | Open <kbd>Enter</kbd>, Open in new tab |  |  | Copy link, Copy as ▸ | Monitor on a schedule…, Save as test… | History in git… | Rename <kbd>F2</kbd>, Duplicate, Move to…, Add to favorites | Delete… <kbd>Del</kbd> |
@@ -135,7 +135,7 @@ The menus of every kind, as the app builds them ("New …" stands for the kind's
 | MCP server |  | Open <kbd>Enter</kbd>, Open in new tab |  | Connect, Disconnect | Copy link, Copy MCP config | Settings… |  | Rename <kbd>F2</kbd>, Duplicate, Move to folder ▸ | Delete… <kbd>Del</kbd> |
 | API definitions section | New …, New folder… | Open API definitions | Expand all <kbd>*</kbd>, Collapse all |  |  |  |  |  |  |
 | Folder of API definitions | New … |  | Expand all <kbd>*</kbd>, Collapse all |  |  |  |  | Rename folder <kbd>F2</kbd> | Delete folder… <kbd>Del</kbd> |
-| API definition |  | Open <kbd>Enter</kbd>, Reveal file |  | Lint, API coverage, Compare versions | Copy link, Copy path | Generate tests…, Generate integration flows… |  | Rename <kbd>F2</kbd>, Move to folder ▸ | Delete… <kbd>Del</kbd> |
+| API definition |  | Open <kbd>Enter</kbd>, Reveal file |  | Lint, API coverage, Compare versions | Copy link, Copy path | Generate tests…, Generate integration flows…, Generate tests from this spec… |  | Rename <kbd>F2</kbd>, Move to folder ▸ | Delete… <kbd>Del</kbd> |
 | Datasets section | New …, New folder…, Generate test data… |  | Expand all <kbd>*</kbd>, Collapse all |  |  |  |  |  |  |
 | Folder of datasets | New … |  | Expand all <kbd>*</kbd>, Collapse all |  |  |  |  | Rename folder <kbd>F2</kbd> | Delete folder… <kbd>Del</kbd> |
 | Dataset |  | Open <kbd>Enter</kbd>, Reveal file, Preview |  | Run a collection with it | Copy link, Copy path | Use in a test |  | Rename <kbd>F2</kbd>, Duplicate, Move to folder ▸ | Delete… <kbd>Del</kbd> |

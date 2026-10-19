@@ -1,4 +1,4 @@
-import { startFlowGenerate } from './ai/flow-generate';
+import { startFlowGenerate, startTidyImport } from './ai/flow-generate';
 import { Download, FilePlus2, Undo2 } from 'lucide-react';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import type { Collection, CollectionFolder, CollectionNode } from '../types';
@@ -417,6 +417,7 @@ export const CollectionTree = memo(function CollectionTree({
         flow: () => startFlowGenerate({ source: { collectionId: c.id }, mode: 'collection' }),
         ...(onSettings ? { collectionSettings: () => onSettings(c) } : {}),
         convertScripts: () => void convertScripts(c, 'tp'),
+        tidyImport: () => startTidyImport({ collectionId: c.id }),
         historyInGit: () => setHistoryFor({ c }),
         rename: () => setRenaming(c.id),
         duplicate: () => void duplicateCollection(c),
