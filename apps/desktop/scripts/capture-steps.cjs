@@ -258,6 +258,13 @@ module.exports = async function run(win) {
   /** A tab of the response (right of, or below, the request's own tabs: the last one of that name). */
   const responseTab = async (text) => {
     const find = `__cap.all('main [role=tab]').filter((t) => __cap.text(t).startsWith(${J(text)})).pop()`;
+    // a tab the narrow strip does not draw (it never draws a cut one) is chosen from its overflow list, as a person does
+    if (!(await js(`!!(${find})`))) {
+      await clickOn(`(() => { const m = __cap.all('main [data-tab-overflow]').pop(); m?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, pointerType: 'mouse' })); return m; })()`, 'the response tabs overflow');
+      await until(`__cap.one('[role=menu]')`, 'the response tabs list');
+      await click(text, '[role=menuitem]');
+      return;
+    }
     await clickOn(find, `the response tab ${text}`);
   };
   const invoke = (method, params) => js(`window.aps.invoke(${J(method)}, ${J(params ?? {})})`);

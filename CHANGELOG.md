@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.53.0 — 2026-10-18
+
+A review release: safer saves and downloads, one row and one badge in every list, tabs that always close and never show a cut-off name, one generic delete with Undo that the command line and MCP can use too, and faster trees. Every item below is something you can see or use.
 
 - The logo in the top bar sits on the bar's own background: white on the light theme (the wordmark has a dark "Pion" there), unchanged on the dark theme. It no longer sits on a navy badge.
 - Expand all and Collapse all are one toggle button, the same in the JSON tree and the explorer: it offers one, then the other after each press (the right-click menus keep both as items).
