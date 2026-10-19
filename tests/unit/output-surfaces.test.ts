@@ -46,6 +46,7 @@ const ALLOWED: Record<string, string> = {
   'components/FeedbackDialog.tsx': 'definition: a feedback report',
   'components/DebuggerTools.tsx': "definition: the Debugger's CA certificate",
   'views/TestsView.tsx': 'definition: an Arazzo workflow export',
+  'views/EvaluationsView.tsx': 'definition: a RAG dataset exported as Ragas or DeepEval records',
 };
 const PRIVATE_SAVE = /\bsaveText\b|URL\.createObjectURL\(|\.download\s*=|\bdownload=|\bdownloadContent\(|\bfinishSave\(/;
 
@@ -100,6 +101,7 @@ describe('output surfaces', () => {
       'views/TestsView.tsx': 'renders RunPanel / RunTimeline (marked)',
       'components/FlowRunDock.tsx': 'renders RunPanel / RunTimeline (marked)',
       'views/DatasetView.tsx': 'a dataset (a definition you edit), not an output',
+      'components/rag/RagConnectDialog.tsx': 'the sample response a RAG target’s mapping is made from (part of a definition you edit), not an output',
     };
     const unmarked = sources.filter((s) => RESULT_VIEWS.test(s.text) && !/data-output="/.test(s.text) && !(s.file in REVIEWED)).map((s) => s.file);
     expect(unmarked, 'a new result panel: give it an OUTPUT_SURFACES id, data-output and OutputActions / OutputHeader').toEqual([]);

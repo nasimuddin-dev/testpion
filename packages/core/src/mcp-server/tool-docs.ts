@@ -801,6 +801,28 @@ export const TOOL_DOCS: Record<string, ToolDoc> = {
     example: { run: 'run-def456', baseline: 'run-abc123', threshold: 0.05 },
     narrow: 'Lower `limit` or `maxRegressions`.',
   },
+  rag_list_targets: {
+    when: 'Use it to see which RAG systems the workspace can test (HTTP, SSE, WebSocket, gRPC or MCP endpoints with their mapping) and whether any is broken.',
+    whenNot: 'To run a dataset through one, use `run_evaluation` on a saved evaluation of type rag.',
+    example: {},
+  },
+  rag_probe: {
+    when: 'Use it to ask a RAG target one question and see the answer and the retrieved contexts its mapping reads, before running an evaluation.',
+    whenNot: 'For a whole dataset, use `run_evaluation`; to see the saved targets, use `rag_list_targets`.',
+    example: { target: 'Clinic bot', question: 'What time does the clinic open?' },
+  },
+  rag_import_dataset: {
+    when: 'Use it to read a Ragas or DeepEval dataset file as TestPion RAG records (question, reference, reference_contexts, reference_ids), or to save it under datasets/.',
+    whenNot: 'To add one record to a dataset, use `add_dataset_row`; to convert the other way, use `rag_export_dataset`.',
+    example: { path: 'datasets/ragas-export.jsonl', save_as: 'clinic-rag' },
+    narrow: 'Lower `limit`.',
+  },
+  rag_export_dataset: {
+    when: 'Use it to write a TestPion RAG dataset as Ragas or DeepEval records, to score the same questions with those tools.',
+    whenNot: 'To read their files into TestPion, use `rag_import_dataset`.',
+    example: { path: 'datasets/clinic-rag.jsonl', to: 'ragas' },
+    narrow: 'Lower `limit`.',
+  },
   agents_init: {
     when: 'Use it to write or refresh AGENTS.md (and optionally CLAUDE.md or Cursor rules) describing this workspace.',
     whenNot: 'To read how to use TestPion, use `testpion_guide`.',

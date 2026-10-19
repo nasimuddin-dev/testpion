@@ -17,6 +17,7 @@ export * from './flow-timeline.js';
 export * from './item-ref.js';
 export * from './item-kinds.js';
 export * from './git-marks.js';
+export * from './rag.js';
 export * from './node-menu.js';
 export * from './production.js';
 export * from './run-status.js';

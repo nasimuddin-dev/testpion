@@ -19,6 +19,7 @@ import { describeTriage, prepareTriage, proposeTriage, TRIAGE_SCHEMA } from '../
 import { describeFlaky, FLAKY_SCHEMA, prepareFlaky, proposeFlaky } from '../flaky.js';
 import { describeTidy, prepareTidyContext, proposeTidy, TIDY_PLAN_SCHEMA, TIDY_VERIFIERS } from '../tidy-import.js';
 import { describeSpecTests, prepareSpecContext, proposeSpecTests, SPEC_PLAN_SCHEMA, SPEC_TEST_VERIFIERS } from '../spec-tests.js';
+import { VERDICT_SCHEMA } from '../../eval/rag/judge-prompts.js';
 import { describeFlow, FLOW_PLAN_SCHEMA, FLOW_VERIFIERS, prepareFlowContext, proposeFlow } from '../flow-from-collection.js';
 
 export type AiTaskOutput = { kind: 'markdown' } | { kind: 'code'; language: 'yaml' | 'json' | 'javascript' | 'graphql' | 'text' } | { kind: 'json'; schema: Record<string, unknown> };
@@ -87,6 +88,8 @@ export interface AiTaskDef {
   normalize?(code: string): { code: string; notes: string[] };
   /** The test-file format reference added to its instruction (flow-format.ts, made from the schema and the check registry): the whole format, or the checks alone. */
   format?: FormatKind | FormatKind[];
+  /** The sampling temperature (default 0.2; a judge uses 0 so the same input gives the same verdict as often as the model allows). */
+  temperature?: number;
   /** Other ids it answers to (`suggest-assertions` for generate-assertions). */
   aliases?: string[];
   /** Reads its own context for a workspace item (else the generic item context, item-context.ts). */
@@ -532,6 +535,18 @@ export const AI_TASKS: readonly AiTaskDef[] = [
     maxTokens: 6000,
     verifiers: ['yaml'],
     propose: textItem('yaml', 'MCP toolset'),
+  }),
+  T('rag-judge', {
+    title: 'Judge a RAG answer',
+    description:
+      'One evaluation task of a RAG metric (the question holds the metric’s instruction): the answer is split into claims or statements and each gets a verdict with its evidence, as JSON. Used by the judged RAG metrics (rag-faithfulness, rag-answer-relevance); the verdicts are cached by content, counted in the usage ledger and limited by the AI caps.',
+    tier: 'large',
+    output: { kind: 'json', schema: VERDICT_SCHEMA },
+    context: 'question (the user’s question), answer, contexts [{id, text}], reference (only what the metric needs)',
+    temperature: 0,
+    contextTokens: 24_000,
+    maxTokens: 3000,
+    maxRepairs: 2,
   }),
   T('free', {
     title: 'Ask the assistant',

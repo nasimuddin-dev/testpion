@@ -152,6 +152,10 @@ const BY_TYPE: Record<string, TestKeyDoc[]> = {
     { key: 'model', description: 'The model that answers from the documents (when answer is not given).', shape: 'text' },
     { key: 'prompt', description: 'The prompt template for the model.', shape: 'text' },
     { key: 'system', description: 'The system prompt.', shape: 'text' },
+    { key: 'target', description: 'A RAG system to ask the question: { protocol, step, mapping } (AI Lab ▸ RAG makes one by clicking).', shape: 'map' },
+    { key: 'judge', description: 'The judge of the judged metrics: { provider, model, maxCostUsd, maxCalls }.', shape: 'map' },
+    { key: 'reference_contexts', description: 'The gold documents (texts) of the question.', shape: 'list' },
+    { key: 'reference_ids', description: 'The gold documents (ids) the retriever should return.', shape: 'list' },
   ],
   agent: [
     { key: 'model', description: 'The model that drives the agent.', shape: 'text' },

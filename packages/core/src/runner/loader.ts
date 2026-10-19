@@ -1,7 +1,9 @@
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { parseYaml } from '../util/lazy-yaml.js';
-import type { AuthConfig, BodyConfig, ForEachSpec, HttpRequestSpec, KeyValue, McpTest, ModelRef, SuiteConfig, TestCase, UntilSpec } from '../model/types.js';
+import type { AuthConfig, BodyConfig, ForEachSpec, HttpRequestSpec, KeyValue, McpTest, ModelRef, RagTest, SuiteConfig, TestCase, UntilSpec } from '../model/types.js';
+import type { RagTarget } from '@testpion/shared';
+import { listOf } from '../eval/rag/lists.js';
 import { ApsError } from '../errors.js';
 import { slugify } from '../util/ids.js';
 import { globToRegex } from '../util/glob.js';
@@ -288,6 +290,10 @@ export function normalizeTest(raw: Record<string, unknown>, file?: string, index
         answer: raw.answer as string | undefined,
         model: raw.model ? modelOf(raw.model) : undefined,
         prompt: raw.prompt as string | undefined,
+        ...(raw.target ? { target: raw.target as RagTarget } : {}),
+        ...(raw.judge && typeof raw.judge === 'object' ? { judge: raw.judge as RagTest['judge'] } : {}),
+        ...(listOf(raw.referenceContexts ?? raw.reference_contexts) ? { referenceContexts: listOf(raw.referenceContexts ?? raw.reference_contexts) } : {}),
+        ...(listOf(raw.referenceIds ?? raw.reference_ids) ? { referenceIds: listOf(raw.referenceIds ?? raw.reference_ids) } : {}),
         variables: vars,
       };
     case 'agent':
@@ -458,10 +464,14 @@ export async function* expandDataset(template: Record<string, unknown>, file: st
       t.input = { ...((tpl.input as object) ?? {}), ...vars };
       if (rec[expectedField] !== undefined) t.expected = rec[expectedField];
     } else if (t.type === 'rag') {
-      t.question = rec.question ?? rec.query ?? rec.input ?? tpl.question;
+      t.question = rec.question ?? rec.query ?? rec.input ?? rec.user_input ?? tpl.question;
       if (rec.contexts) t.contexts = rec.contexts;
       if (rec.answer) t.answer = rec.answer;
-      if (rec[expectedField] !== undefined) t.expected = rec[expectedField];
+      // the reference answer: the evaluation's expected field, else the names RAG datasets use (Ragas `reference`, DeepEval `expected_output`)
+      const reference = rec[expectedField] ?? rec.reference ?? rec.ground_truth ?? rec.expected_output;
+      if (reference !== undefined) t.expected = reference;
+      if (rec.reference_contexts !== undefined) t.reference_contexts = rec.reference_contexts;
+      if (rec.reference_ids !== undefined) t.reference_ids = rec.reference_ids;
       t.vars = vars;
     } else if (t.type === 'agent') {
       t.input = rec[ds.inputField ?? 'input'] ?? tpl.input;

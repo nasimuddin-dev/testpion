@@ -60,6 +60,7 @@ import { fetchImportText } from '../import/fetch-url.js';
 import { diffOpenApi } from '../openapi/diff.js';
 import { workspaceApiCoverage } from '../openapi/coverage.js';
 import { evaluationTests, findSavedEvaluation, listSavedEvaluations } from '../runner/saved-evaluations.js';
+import { assertEvaluationRunnable } from '../eval/rag/preflight.js';
 import { collectionSecurityFindings } from '../runner/collection-findings.js';
 import { compareRuns, recordRun } from '../runner/run-records.js';
 import { readSpecRef } from '../openapi/spec-files.js';
@@ -127,7 +128,7 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
    * engine, their results written as they finish; the first 200 come back summarized. run_tests and run_evaluation.
    */
   const recordedRun = async (environment: string | undefined, o: { name: string; tests: Parameters<typeof runTests>[0]['tests']; concurrency: number; retries?: number; plan?: Pick<Parameters<typeof runTests>[0], 'onlyIds' | 'seed'> }) => {
-    const ctx = createEngineContext({ store, secrets, settings, environment });
+    const ctx = createEngineContext({ store, secrets, settings, environment, aiSurface: 'mcp' });
     const runId = shortId('run-');
     const outDir = store.runDir(runId);
     const results: TestResult[] = [];
@@ -1082,9 +1083,18 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
         const environment = checkEnvironment(a.environment);
         const saved = findSavedEvaluation(store, String(a.name ?? ''));
         const limit = Math.min(500, typeof a.limit === 'number' && a.limit > 0 ? a.limit : (saved.limit ?? 500));
+        // a RAG evaluation: its target and judge are checked before any question is sent (the error says what to configure)
+        if (saved.type === 'rag') {
+          const pre = createEngineContext({ store, secrets, settings, environment, aiSurface: 'mcp' });
+          try {
+            assertEvaluationRunnable(store, pre.services.ragJudge!, saved);
+          } finally {
+            await pre.dispose();
+          }
+        }
         const { summary, ...run } = await recordedRun(environment, {
           name: saved.name,
-          tests: evaluationTests({ ...saved, limit }),
+          tests: evaluationTests({ ...saved, limit }, { store }),
           concurrency: Math.min(8, saved.concurrency || 4),
           retries: saved.retries ?? 0,
         });

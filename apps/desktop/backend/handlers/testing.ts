@@ -9,6 +9,7 @@ import {
   reviewCounts,
   runReviews,
   testEditorGuide,
+  assertEvaluationRunnable,
   evaluationTests,
   workspaceReportHtml,
   loadHistory,
@@ -152,8 +153,18 @@ export function testingHandlers(be: Backend): Handlers {
     },
     'eval.run': (p: EvalRunParams) => be.startEvalRun(p),
     /** Run an evaluation as edited in the app (saved or not): the same conversion as `testpion eval run`. */
-    'eval.runDraft': ({ draft, environment }: { draft: SavedEvaluation; environment?: string }) =>
-      be.startRun(draft.name || 'Evaluation', evaluationTests(draft), { environment, concurrency: draft.concurrency, retries: draft.retries, traceMode: 'all' }),
+    'eval.runDraft': async ({ draft, environment }: { draft: SavedEvaluation; environment?: string }) => {
+      // a RAG evaluation: its target and judge are checked before any question is sent (the error says what to configure)
+      if (draft.type === 'rag') {
+        const ctx = be.context({ environment });
+        try {
+          assertEvaluationRunnable(be.ws, ctx.services.ragJudge!, draft);
+        } finally {
+          await ctx.dispose();
+        }
+      }
+      return be.startRun(draft.name || 'Evaluation', evaluationTests(draft, { store: be.ws }), { environment, concurrency: draft.concurrency, retries: draft.retries, traceMode: 'all' });
+    },
     'runs.cancel': ({ runId }: { runId: string }) => be.runs.get(runId)?.ctrl.abort(),
     'runs.list': (q: { query?: string; limit?: number; offset?: number }) => be.ws.meta.listRuns(q),
     'runs.breakdown': ({ runId }: { runId: string }) => be.runBreakdown(runId),
