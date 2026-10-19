@@ -309,6 +309,8 @@ export interface TestBase {
   finally?: boolean;
   /** A parallel group: the steps of the file with the same group may run at the same time (dependsOn still applies). */
   parallel?: string;
+  /** A rate limit: the least time (ms) between the starts of two paced steps of a run (`pace: 250ms`), whatever the concurrency. */
+  paceMs?: number;
 }
 
 export interface HttpTest extends TestBase {

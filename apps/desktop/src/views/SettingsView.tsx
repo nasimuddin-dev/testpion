@@ -482,6 +482,12 @@ function AssistantSettings({ s, set, providers }: { s: AppSettings; set(p: Parti
   );
   return (
     <>
+      <div data-ai-hide>
+        <Toggle checked={s.ai?.hidden === true} onChange={(v) => set({ ai: { ...(s.ai ?? {}), hidden: v } })} label="Hide all AI actions" />
+      </div>
+      <p className="text-sm text-muted -mt-1">
+        Removes every AI button, menu item, command and the assistant from the window, whether or not a model is set up. AI Lab (testing models), the CLI and the MCP tools are not affected; nothing is deleted. Turn it off to have them back.
+      </p>
       <Toggle
         checked={on}
         onChange={(v) => set(v ? { assistantProvider: CLAUDE_ID, assistantModel: s.assistantModel ?? status?.models[0]?.id } : { assistantProvider: undefined, assistantModel: undefined })}

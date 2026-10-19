@@ -1,12 +1,14 @@
 import { lazy, Suspense, useEffect, useId, useRef, useState } from 'react';
 import type { OnMount } from '@monaco-editor/react';
-import { Package, Code2, Info } from 'lucide-react';
+import { Package, Code2, Info, Sparkles } from 'lucide-react';
 import { SNIPPETS } from '../lib/snippets';
 import { setActiveScriptEditor } from '../lib/script-editor';
 import { CodeEditor } from './CodeEditor';
+import { scriptAiItems, type ScriptAiContext } from './ai/script-ai';
+import { useAiEnabled } from '../lib/use-ai-enabled';
 import { useWidth } from './charts';
 import { CommandPalette } from './Shell';
-import { LinkButton, PinnablePanel, Tabs, Tooltip, cx } from './ui';
+import { LinkButton, Menu, PinnablePanel, Tabs, Tooltip, cx } from './ui';
 
 const ScriptPackagesDialog = lazy(() => import('./ScriptPackagesDialog').then((m) => ({ default: m.ScriptPackagesDialog })));
 
@@ -20,7 +22,7 @@ const NARROW = 700;
  * `tp` script API (Postman-compatible) and run in a WebAssembly sandbox. The snippets are a pinnable panel
  * (unpinned, the editor takes the room); Ctrl+Shift+I in the editor picks a snippet by name and inserts it at the cursor.
  */
-export function ScriptsPanel({ pre, post, onPre, onPost }: { pre: string; post: string; onPre(v: string): void; onPost(v: string): void }) {
+export function ScriptsPanel({ pre, post, onPre, onPost, ai }: { pre: string; post: string; onPre(v: string): void; onPost(v: string): void; /** What the AI menu knows about the request (a folder or collection script has none). */ ai?: ScriptAiContext }) {
   const [which, setWhich] = useState<'pre' | 'post'>(() => (pre && !post ? 'pre' : 'post'));
   const [packagesOpen, setPackagesOpen] = useState(false);
   const [picking, setPicking] = useState(false);
@@ -34,6 +36,33 @@ export function ScriptsPanel({ pre, post, onPre, onPost }: { pre: string; post: 
   const set = which === 'pre' ? onPre : onPost;
   const snippets = SNIPPETS.filter((s) => s.kind === 'both' || s.kind === (which === 'pre' ? 'pre' : 'test'));
   const append = (code: string) => set((value.trim() ? value.replace(/\s*$/, '\n\n') : '') + code + '\n');
+  // AI-6: write / fix / explain this script; the items come from the one AI table and are not there while AI is hidden
+  const aiOn = useAiEnabled();
+  const aiItems = aiOn
+    ? scriptAiItems({
+        phase: which,
+        script: value,
+        ctx: ai,
+        use: (code, mode) => {
+          if (mode === 'append') append(code.trim());
+          else set(`${code.trim()}\n`);
+          return { done: 'The script is in the editor: save the request to keep it' };
+        },
+      })
+    : [];
+  const aiButton = (className: string) =>
+    aiItems.length ? (
+      <Menu
+        width={260}
+        align="start"
+        items={aiItems}
+        trigger={
+          <button className={cx('flex items-center gap-2 text-muted hover:text-fg hover:bg-hover', className)} title="Write, fix or explain this script with the AI assistant; it is tried in the sandbox before you see it" data-script-ai>
+            <Sparkles size={13} /> Script with AI
+          </button>
+        }
+      />
+    ) : null;
   /** The quick pick inserts where the cursor is (the panel's list appends, as it always has). */
   const insertAtCursor = (code: string) => {
     const ed = editorRef.current;
@@ -82,6 +111,7 @@ export function ScriptsPanel({ pre, post, onPre, onPost }: { pre: string; post: 
             </button>
           ))}
           {packagesButton('w-full text-left px-3 py-1.5 mt-2 border-t border-line')}
+          {aiButton('w-full text-left px-3 py-1.5')}
           <div className="mt-auto px-2 pt-1">{info}</div>
         </div>
       )}
@@ -99,6 +129,7 @@ export function ScriptsPanel({ pre, post, onPre, onPost }: { pre: string; post: 
             right={
               <>
                 {info}
+                {aiButton('h-7 px-2 rounded-md text-xs')}
                 {packagesButton('h-7 px-2 rounded-md text-xs')}
               </>
             }

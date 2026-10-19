@@ -63,6 +63,18 @@ export function parallelOf(raw: Record<string, unknown>): string | undefined | {
   return { problem: `parallel: names the group of steps that may run at the same time (e.g. parallel: lookups), not ${JSON.stringify(p)}` };
 }
 
+/** The longest `pace:` waits between two paced steps: one minute. */
+export const MAX_PACE_MS = 60_000;
+
+/** `pace: 250ms`: the least time between the starts of two paced steps of a run (a rate limit: 250ms is four requests a second), in ms; undefined, or a text when it is not a duration. */
+export function paceOf(raw: Record<string, unknown>): number | string | undefined {
+  const p = raw.pace ?? raw.paceMs;
+  if (p === undefined || p === null || p === false) return undefined;
+  const ms = durationMs(p, 'pace');
+  if (typeof ms === 'string') return ms;
+  return ms < 1 || ms > MAX_PACE_MS ? `pace: is 1 ms to one minute between two requests (pace: 250ms), not ${JSON.stringify(p)}` : ms;
+}
+
 /** A Set variable block's scope (default run), or a text when it is not one. */
 export function setScopeOf(raw: Record<string, unknown>): SetScope | { problem: string } {
   const s = raw.scope ?? 'run';
@@ -80,6 +92,8 @@ export function controlProblems(raw: Record<string, unknown>, type: string): Arr
   else if (until && (raw.repeat !== undefined || raw.forEach !== undefined || raw.for_each !== undefined))
     out.push({ key: 'until', message: 'A step has until: or a loop (repeat: / forEach:), not both: poll in one step, loop in another' });
   else if (until && ['condition', 'set', 'assert', 'log', 'delay', 'script'].includes(type)) out.push({ key: 'until', message: `until: polls a request; a ${type} step has none to run again` });
+  const pace = paceOf(raw);
+  if (typeof pace === 'string') out.push({ key: 'pace', message: pace });
   const fin = finallyOf(raw);
   if (typeof fin === 'string') out.push({ key: 'finally', message: fin });
   const par = parallelOf(raw);

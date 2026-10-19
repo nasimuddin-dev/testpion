@@ -46,6 +46,12 @@ export function AiSettingsPanel({ s, set, providers }: { s: AppSettings; set(p: 
   };
   return (
     <div className="flex flex-col gap-3 border-t border-line pt-4 mt-1" data-ai-settings>
+      <div data-ai-prefer-stable>
+        <Toggle checked={!!ai.preferStable} onChange={(v) => put({ preferStable: v })} label="Prefer stable checks" />
+      </div>
+      <p className="text-xs text-muted -mt-2 pl-1">
+        Suggested checks assert types, formats and presence instead of literal ids, times and tokens, and a check that pins a value the server makes up is offered in its stable form. CLI and MCP: preferStable.
+      </p>
       <div className="font-medium">Models per task</div>
       <div className="grid grid-cols-2 gap-3">
         {tier('small', 'Small tasks', 'Explanations, triage, commit messages: a cheaper or local model is enough.')}

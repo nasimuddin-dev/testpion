@@ -7,7 +7,8 @@
  * Applying writes files only: nothing is sent and nothing runs, so the production guard is not involved; running what
  * was applied stays a separate step under the guard.
  */
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { atomicWrite } from '../storage/fsutil.js';
 import type { CheckConfig, Collection, CollectionNode, SavedHttpRequest } from '../model/types.js';
 import { ApsError } from '../errors.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
@@ -17,6 +18,9 @@ import { checkedTestFilePath } from '../storage/test-path.js';
 import { getProposal, saveProposal, type Proposal, type ProposalItem, type ProposalUndo } from './proposal.js';
 import { findEnvironment, setEnvironmentVariables, unsetEnvironmentVariables } from '../storage/env-edit.js';
 import { applyTidyOps, type TidyOp } from './tidy-import.js';
+import { applyFlowEdit } from '../runner/flow-edit.js';
+import { applyPatchOps, isJsonSpec, type PatchOp } from '../openapi/spec-patch.js';
+import { stepOfResult } from './run-evidence.js';
 
 /** The text a fix was made from (`data.fix.base`): a file or script that changed since is not overwritten. */
 function assertUnchanged(item: ProposalItem, current: string | null | undefined): void {
@@ -58,8 +62,29 @@ function requestTarget(store: WorkspaceStore, item: ProposalItem): { c: Collecti
   return { c, at };
 }
 
+/** Checks added to one step of a test file (a result's "Generate checks from this response"): the file is rewritten through the flow editor, comments kept. */
+function applyStepChecks(store: WorkspaceStore, item: ProposalItem): ProposalUndo {
+  const { rel: path } = checkedTestFilePath(store.path('tests'), item.path ?? '');
+  let before: string;
+  try {
+    before = store.readTestFile(path);
+  } catch {
+    throw new ApsError('ConfigurationError', `tests/${path} is no longer in the workspace`);
+  }
+  const found = stepOfResult(before, path, { id: item.step!, name: item.step! });
+  if (!found) throw new ApsError('ConfigurationError', `"${item.title}": the step "${item.step}" is no longer in tests/${path}`, { suggestions: ['Generate the checks again from a fresh result.'] });
+  const checks = (Array.isArray(item.data) ? item.data : [item.data]) as CheckConfig[];
+  if (!checks.every((x) => x && typeof x === 'object' && typeof x.type === 'string')) throw new ApsError('ValidationError', `"${item.title}" holds no check`);
+  const key = !Array.isArray(found.step.assertions) && Array.isArray(found.step.checks) ? 'checks' : 'assertions';
+  const existing = (Array.isArray(found.step[key]) ? found.step[key] : []) as CheckConfig[];
+  const text = applyFlowEdit(before, { op: 'updateStep', id: found.ref, set: { [key]: [...existing, ...checks] } }).text;
+  store.writeTestFile(path, text);
+  return { item: item.id, file: { path, before } };
+}
+
 /** Apply one item; returns what to put back. */
 function applyItem(store: WorkspaceStore, item: ProposalItem): ProposalUndo {
+  if (item.kind === 'assertion' && item.step) return applyStepChecks(store, item);
   switch (item.kind) {
     case 'file':
     case 'flow': {
@@ -140,6 +165,26 @@ function applyItem(store: WorkspaceStore, item: ProposalItem): ProposalUndo {
       setEnvironmentVariables(store, d.environment, { [d.key]: d.value });
       return { item: item.id, variable: { environment: d.environment, key: d.key, before: was ? String(was.value ?? '') : null } };
     }
+    case 'spec': {
+      // an API definition under specs/ (a contract-drift patch): the file as it is now must be the one the patch was made from
+      const rel = String(item.path ?? '').replace(/\\/g, '/');
+      if (!/^specs\/[^/].*\.(json|ya?ml)$/i.test(rel) || rel.split('/').includes('..')) throw new ApsError('ValidationError', `"${item.title}" names no API definition under specs/ (${rel || 'no path'})`);
+      const file = store.safePath(rel);
+      let before: string;
+      try {
+        before = readFileSync(file, 'utf8');
+      } catch {
+        throw new ApsError('ConfigurationError', `${rel} is no longer in the workspace`);
+      }
+      // a patch is applied to the document as it is NOW (its operations are independent and idempotent), so several items of one
+      // proposal compose, and a document that changed elsewhere keeps its changes; an item without operations writes its text
+      const ops = (item.data as { spec?: { ops?: PatchOp[] } } | undefined)?.spec?.ops;
+      let text = item.after;
+      if (Array.isArray(ops)) text = applyPatchOps(before, isJsonSpec(rel), ops);
+      else assertUnchanged(item, before);
+      atomicWrite(file, text.endsWith('\n') ? text : `${text}\n`);
+      return { item: item.id, spec: { path: rel, before } };
+    }
     case 'collection': {
       // a tidy: its operations on the collection as it is now (renames, moves, variables, chains, drops)
       const d = item.data as { collectionId?: string; ops?: TidyOp[] } | undefined;
@@ -202,6 +247,10 @@ export function undoProposal(store: WorkspaceStore, id: string): { id: string; r
     } else if (u.variable) {
       if (u.variable.before === null) unsetEnvironmentVariables(store, u.variable.environment, [u.variable.key]);
       else setEnvironmentVariables(store, u.variable.environment, { [u.variable.key]: u.variable.before });
+      restored++;
+    } else if (u.spec) {
+      if (!/^specs\/[^/].*\.(json|ya?ml)$/i.test(u.spec.path) || u.spec.path.split('/').includes('..')) continue;
+      atomicWrite(store.safePath(u.spec.path), u.spec.before);
       restored++;
     } else if (u.file) {
       const { rel, abs } = checkedTestFilePath(store.path('tests'), u.file.path);

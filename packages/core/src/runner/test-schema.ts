@@ -67,6 +67,11 @@ const COMMON: TestKeyDoc[] = [
     description: 'A parallel group: steps of the file with the same group may run at the same time, even with --concurrency 1 (dependsOn still applies). Steps that wait for nothing already run side by side.',
     shape: 'text',
   },
+  {
+    key: 'pace',
+    description: 'A rate limit: steps with pace start at least this far apart across the whole run, even in parallel (pace: 250ms is four requests a second; 1ms to 1m). Put it in defaults: to pace every step of the file.',
+    shape: 'text',
+  },
 ];
 
 const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];

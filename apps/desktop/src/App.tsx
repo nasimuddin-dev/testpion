@@ -1,5 +1,6 @@
 import { AlarmClock, BarChart3, Bot, Code2, Keyboard, Columns2, CopyX, Disc, GitCompare, ScanSearch, TerminalSquare, Variable, Download, FileDown, FlaskConical, FolderOpen, FolderPlus, FolderTree, Gauge, GitBranch, History, KeyRound, Layers, ListChecks, ListX, Network, Play, Plug, Radio, RefreshCw, RotateCcw, Rows3, ScrollText, Search, Settings, Sparkles, SquareTerminal, Upload, Waypoints, Workflow, X, type LucideIcon } from 'lucide-react';
 import { askAssistant } from './components/ai/AiAction';
+import { useAiEnabled } from './lib/use-ai-enabled';
 import { RightPanel } from './components/RightPanel';
 import { openReverseProxyCapture } from './lib/capture';
 import { createElement, lazy, Suspense, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from 'react';
@@ -54,6 +55,7 @@ const CiDialog = lazy(async () => ({ default: (await import('./components/CiDial
 const FlowGenerateDialog = lazy(async () => ({ default: (await import('./components/ai/FlowGenerateDialog')).FlowGenerateDialog }));
 const TidyImportDialog = lazy(async () => ({ default: (await import('./components/ai/TidyImportDialog')).TidyImportDialog }));
 const AiAnalysisDialog = lazy(async () => ({ default: (await import('./components/ai/AiAnalysisDialog')).AiAnalysisDialog }));
+const DriftDialog = lazy(async () => ({ default: (await import('./components/ai/DriftDialog')).DriftDialog }));
 const RecordDialog = lazy(async () => ({ default: (await import('./components/RecordDialog')).RecordDialog }));
 const FeedbackDialog = lazy(async () => ({ default: (await import('./components/FeedbackDialog')).FeedbackDialog }));
 const VariableUsagesDialog = lazy(async () => ({ default: (await import('./components/VariableUsagesDialog')).VariableUsagesDialog }));
@@ -197,6 +199,8 @@ export default function App() {
   const flowGenerate = useApp((s) => s.flowGenerate);
   const aiAnalysis = useApp((s) => s.aiAnalysis);
   const tidyImport = useApp((s) => s.tidyImport);
+  // Settings ▸ AI assistant ▸ Hide all AI actions: no AI command, panel or dialog
+  const aiOn = useAiEnabled();
   const openapiDiff = useApp((s) => s.openapiDiff);
   const apiCoverage = useApp((s) => s.apiCoverage);
   const explorerOpen = useApp((s) => s.explorerOpen);
@@ -379,7 +383,7 @@ export default function App() {
             { id: 'terminal-focus', label: 'Terminal: Focus', hint: keyLabel('terminal', bindings), run: focusTerminal },
           ]
         : []),
-      { id: 'assistant', label: 'Ask AI Assistant', hint: keyLabel('assistant', bindings), run: () => askAssistant() },
+      ...(aiOn ? [{ id: 'assistant', label: 'Ask AI Assistant', hint: keyLabel('assistant', bindings), run: () => askAssistant() }] : []),
       { id: 'feedback', label: 'Send Feedback or Report a Problem…', hint: 'Help', run: () => s.set({ feedback: {} }) },
       { id: 'agents', label: 'Connect an AI Agent (Claude, Cursor, VS Code, Codex) over MCP…', hint: 'Settings', run: () => s.openIntent('settings', { tab: 'agents' }) },
       { id: 'load', label: 'New Load Test', run: () => s.setView('load') },
@@ -426,7 +430,7 @@ export default function App() {
     for (const e of (workspace?.environments ?? []).filter((x) => !x.problem))
       cmds.push({ id: `env-${e.id}`, label: `Switch Environment: ${e.name}`, icon: <span className="block w-2.5 h-2.5 rounded-full" style={{ background: e.color ?? 'var(--ok)' }} />, run: () => s.setEnvironment(e.name) });
     return cmds;
-  }, [workspace, shellCapable, rail, bindings]);
+  }, [workspace, shellCapable, rail, bindings, aiOn]);
   // what is on screen offers its own commands (Quick Open's @, and first among the > commands): a request's script
   // editor (Insert Snippet…, Ctrl+Shift+I there), the flow designer's canvas …
   const hereCommands = useMemo<PaletteCommand[]>(() => {
@@ -532,7 +536,7 @@ export default function App() {
           </Suspense>,
           close({ shortcutsOpen: false }),
         )}
-      {flowGenerate &&
+      {aiOn && flowGenerate &&
         guard(
           'flow generation',
           <Suspense fallback={null}>
@@ -540,7 +544,7 @@ export default function App() {
           </Suspense>,
           close({ flowGenerate: undefined }),
         )}
-      {tidyImport &&
+      {aiOn && tidyImport &&
         guard(
           'tidy import',
           <Suspense fallback={null}>
@@ -548,11 +552,15 @@ export default function App() {
           </Suspense>,
           close({ tidyImport: undefined }),
         )}
-      {aiAnalysis &&
+      {aiOn && aiAnalysis &&
         guard(
           'AI analysis',
           <Suspense fallback={null}>
-            <AiAnalysisDialog key={aiAnalysis.kind === 'triage' ? aiAnalysis.runId : aiAnalysis.testId} request={aiAnalysis} onClose={() => useApp.getState().set({ aiAnalysis: undefined })} />
+            {aiAnalysis.kind === 'drift' ? (
+              <DriftDialog key={`drift:${aiAnalysis.spec}`} request={aiAnalysis} onClose={() => useApp.getState().set({ aiAnalysis: undefined })} />
+            ) : (
+              <AiAnalysisDialog key={`${aiAnalysis.kind}:${aiAnalysis.kind === 'triage' ? aiAnalysis.runId : aiAnalysis.testId}`} request={aiAnalysis} onClose={() => useApp.getState().set({ aiAnalysis: undefined })} />
+            )}
           </Suspense>,
           close({ aiAnalysis: undefined }),
         )}

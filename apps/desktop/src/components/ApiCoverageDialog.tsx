@@ -1,5 +1,5 @@
-import { Download, ScanSearch, Sparkles } from 'lucide-react';
-import { startAi } from './ai/AiAction';
+import { Download, ScanSearch } from 'lucide-react';
+import { AiAction } from './ai/AiAction';
 import { useEffect, useMemo, useState } from 'react';
 import { call } from '../api';
 import { type AssistantApplied, toastError } from '../store';
@@ -111,15 +111,15 @@ export function ApiCoverageDialog({ runId, spec: initialSpec, onClose, inline }:
     return ops;
   }, [result, filter]);
 
+  /** The assistant request for the gaps (AiAction builds it when used; the dialog closes to show the assistant). */
   const suggest = () => {
-    if (!result) return;
+    if (!result) return undefined;
     const gaps = result.report.operations
       .filter((o) => !o.covered || o.untestedStatuses.length)
       .slice(0, 40)
       .map((o) => ({ method: o.method, path: o.path, operationId: o.operationId, summary: o.summary, called: o.covered, untestedStatuses: o.untestedStatuses }));
     const api = result.report.title;
-    startAi({ task: 'suggest-coverage-tests', title: 'Tests for the coverage gaps', context: { api, gaps }, apply: { label: 'Save as a test file', run: (code) => saveGapTests(api ?? 'api', code) } });
-    onClose();
+    return { task: 'suggest-coverage-tests', title: 'Tests for the coverage gaps', context: { api, gaps }, apply: { label: 'Save as a test file', run: (code: string) => saveGapTests(api ?? 'api', code) } };
   };
 
   const s = result?.report.summary;
@@ -137,9 +137,7 @@ export function ApiCoverageDialog({ runId, spec: initialSpec, onClose, inline }:
               <Button icon={<Download size={13} />} onClick={() => downloadContent(`api-coverage${result.report.title ? `-${result.report.title.replace(/[^\w-]+/g, '-')}` : ''}.md`, result.markdown, { type: 'text/markdown' })}>
                 Markdown
               </Button>
-              <Button icon={<Sparkles size={13} />} disabled={!result.report.operations.some((o) => !o.covered || o.untestedStatuses.length)} onClick={suggest}>
-                Suggest tests with AI
-              </Button>
+              {result.report.operations.some((o) => !o.covered || o.untestedStatuses.length) && <AiAction label="Suggest tests with AI" request={suggest} onStart={onClose} preview={false} />}
             </>
           )}
           <Button variant="primary" icon={<ScanSearch size={13} />} loading={busy} disabled={!ready} onClick={() => void analyse()}>

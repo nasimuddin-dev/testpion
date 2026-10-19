@@ -156,7 +156,7 @@ export function responseOfResult(store: WorkspaceStore, r: TestResult): { respon
 }
 
 /** `POST https://…` from a result's input. */
-function requestOfResult(r: TestResult): FailureEvidence['request'] {
+export function requestOfResult(r: TestResult): FailureEvidence['request'] {
   const meta = (r.metadata ?? {}) as { method?: unknown; url?: unknown };
   if (typeof meta.url === 'string') return { method: typeof meta.method === 'string' ? meta.method : undefined, url: meta.url };
   const m = /^([A-Z]+)\s+(\S+)/.exec(r.input ?? '');

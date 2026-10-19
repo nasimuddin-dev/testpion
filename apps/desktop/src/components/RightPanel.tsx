@@ -1,5 +1,6 @@
 import { Bot, Copy, FileText, History, Info, KeyRound } from 'lucide-react';
 import { askAssistant } from './ai/AiAction';
+import { useAiEnabled } from '../lib/use-ai-enabled';
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import type { ItemRef } from '@testpion/shared';
 import { call } from '../api';
@@ -200,12 +201,13 @@ export function ContextInfo() {
  * waits as a tab on the edge and slides over the content; pinned it docks. Asking the assistant anything shows it.
  */
 export function RightPanel() {
-  const assistant = useApp((s) => s.assistant);
+  const aiOn = useAiEnabled();
+  const assistant = useApp((s) => (aiOn ? s.assistant : undefined));
   const [tab, setTab] = useSticky<'info' | 'assistant'>('right:tab', 'info', { persist: true });
   useEffect(() => {
     if (assistant) setTab('assistant');
   }, [assistant, setTab]);
-  const shown = tab === 'assistant' ? 'assistant' : 'info';
+  const shown = aiOn && tab === 'assistant' ? 'assistant' : 'info';
   return (
     <PinnablePanel
       id="right"
@@ -222,7 +224,7 @@ export function RightPanel() {
           onChange={setTab}
           options={[
             { value: 'info', label: 'Info' },
-            { value: 'assistant', label: 'Assistant' },
+            ...(aiOn ? [{ value: 'assistant' as const, label: 'Assistant' }] : []),
           ]}
         />
       </div>

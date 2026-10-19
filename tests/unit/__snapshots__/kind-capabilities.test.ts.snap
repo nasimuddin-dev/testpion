@@ -453,7 +453,6 @@ exports[`the item-kind registry is complete > every capability is declared; a na
     "test-file": "it is a test file already",
   },
   "test-case": {
-    "ai": "addressable only: it has no storage of its own",
     "ci": "addressable only: it has no storage of its own",
     "container": "a record holds nothing to expand",
     "delete": "addressable only: it has no storage of its own",

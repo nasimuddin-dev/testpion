@@ -1,4 +1,5 @@
 import { askAssistant } from './ai/AiAction';
+import { useAiEnabled } from '../lib/use-ai-enabled';
 import {
   Activity,
   AlertOctagon,
@@ -99,6 +100,7 @@ function useTitleBarColors(ref: React.RefObject<HTMLElement | null>) {
 
 export function TopBar() {
   const bindings = useBindings();
+  const aiOn = useAiEnabled();
   const set = useApp((s) => s.set);
   const noDrag = { WebkitAppRegion: 'no-drag' } as React.CSSProperties;
   const header = useRef<HTMLElement>(null);
@@ -157,9 +159,11 @@ export function TopBar() {
         <Button size="md" variant="ghost" onClick={() => set({ paletteOpen: true })} icon={<TerminalSquare size={15} />}>
           <span className="hidden lg:inline">Commands</span> <Kbd>{keyLabel('palette', bindings)}</Kbd>
         </Button>
-        <IconButton label="AI assistant" onClick={() => askAssistant()}>
-          <Bot size={17} />
-        </IconButton>
+        {aiOn && (
+          <IconButton label="AI assistant" onClick={() => askAssistant()}>
+            <Bot size={17} />
+          </IconButton>
+        )}
         <IconButton label="Settings" onClick={() => useApp.getState().setView('settings')}>
           <Settings size={17} />
         </IconButton>

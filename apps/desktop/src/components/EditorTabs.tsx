@@ -13,6 +13,7 @@ import { saveAsTestMenuItem } from '../lib/save-test';
 import { noteClosedTabs } from '../lib/closed-tabs';
 import { refOfEditorItem, revealInSidebar } from '../lib/open-ref';
 import { LABEL } from '../lib/vocabulary';
+import { useAiEnabled } from '../lib/use-ai-enabled';
 
 /**
  * One tab strip for every request editor (Postman-style): REST's tabs and a tab for each other editor that
@@ -235,13 +236,14 @@ export function closeTabsFor(itemIds: string[]) {
  */
 export function NoOpenTabs({ onDescribe }: { onDescribe?(): void }) {
   const describe = onDescribe ?? (() => useApp.getState().openIntent('rest', { describe: true }));
+  const aiOn = useAiEnabled();
   return (
     <Empty
       icon={<Send size={28} />}
       title="No open requests"
       actions={[
         { label: 'New request', icon: <Plus size={13} />, items: newRequestItems() },
-        { label: 'Describe with AI', icon: <Sparkles size={13} />, onClick: describe, title: 'Describe a request in plain words; the AI assistant drafts it and you review it before sending' },
+        ...(aiOn ? [{ label: 'Describe with AI', icon: <Sparkles size={13} />, onClick: describe, title: 'Describe a request in plain words; the AI assistant drafts it and you review it before sending' }] : []),
       ]}
     >
       Open a request from the sidebar, or start a new one.

@@ -13,7 +13,7 @@ import { ProposalReview } from './ProposalReview';
 
 type Report = (TriageResult | FlakyReport) & { preview?: { providerName: string; model: string; local: boolean; estimate: { inputTokens: number; priceKnown: boolean; maxCostUsd?: number } } };
 
-const isTriage = (r: AiAnalysisRequest): r is Extract<AiAnalysisRequest, { kind: 'triage' }> => r.kind === 'triage';
+const isTriage = (r: Exclude<AiAnalysisRequest, { kind: 'drift' }>): r is Extract<AiAnalysisRequest, { kind: 'triage' }> => r.kind === 'triage';
 const findingsOf = (r: Report): ProposalFinding[] => ('findings' in r ? r.findings : [r.finding]);
 
 /** "passed 5/5": an attempt's verdict in words. */
@@ -38,7 +38,7 @@ function Verdict({ a }: { a: ProposalAttempt }) {
  * **Attempt to fix** applies the fix and runs the test 5 times for a verdict. Without a model: TestPion's own findings
  * and the setup action.
  */
-export function AiAnalysisDialog({ request, onClose }: { request: AiAnalysisRequest; onClose(): void }) {
+export function AiAnalysisDialog({ request, onClose }: { request: Exclude<AiAnalysisRequest, { kind: 'drift' }>; onClose(): void }) {
   const triage = isTriage(request);
   const [privacy, setPrivacy] = useState<AiPrivacy>(useApp.getState().settings?.ai?.privacy ?? 'full');
   const [hint, setHint] = useState('');

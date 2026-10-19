@@ -29,6 +29,7 @@ import type { NodeMenuCtx } from '../lib/node-menu';
 import { LABEL } from '../lib/vocabulary';
 import { requestCopyItems } from '../lib/request-copy';
 import { generateFlows } from '../lib/files';
+import { startAiAnalysis } from './ai/ai-analysis';
 import { startFlowGenerate } from './ai/flow-generate';
 import { generateSpecTests } from './ApiPreviewPanel';
 import { useAreaMenu } from './AreaMenu';
@@ -526,6 +527,7 @@ export function Explorer() {
         generateTests: () => void generateSpecTests(path),
         generateFlows: () => void generateFlows({ path }, confirmAction),
         generateSpecTests: () => startFlowGenerate({ mode: 'spec', spec: path }),
+        driftReport: () => startAiAnalysis({ kind: 'drift', spec: path }),
         rename: () => setRenaming(path),
         move: moveToFolderSubmenu(specOps, specFolders.items, path, folder),
         delete: () => {
@@ -547,7 +549,7 @@ export function Explorer() {
           });
         },
       },
-      disabled: isAsync ? { generateSpecTests: 'Tests from a spec read OpenAPI documents', lint: 'Lint reads OpenAPI documents', apiCoverage: 'API coverage reads OpenAPI documents', compareVersions: 'Compare versions reads OpenAPI documents' } : {},
+      disabled: isAsync ? { generateSpecTests: 'Tests from a spec read OpenAPI documents', driftReport: 'Contract drift reads OpenAPI documents', lint: 'Lint reads OpenAPI documents', apiCoverage: 'API coverage reads OpenAPI documents', compareVersions: 'Compare versions reads OpenAPI documents' } : {},
     };
   };
   /** The menu of a dataset: open, preview, run a collection with it, copy, use in a test, rename, duplicate, move, delete (Undo). */

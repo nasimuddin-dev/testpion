@@ -11,11 +11,21 @@ import { Badge, Button, Field, Input, Modal, Segmented, Select, Spinner, Textare
 import { AiPreviewDialog, PRIVACY_OPTIONS, type AiPrivacy } from './AiPreviewDialog';
 import { FlowProposalReview } from './FlowProposalReview';
 import { ProposalReview } from './ProposalReview';
+import { SecurityRunDialog } from './SecurityRunDialog';
 
-type Mode = 'collection' | 'describe' | 'spec';
+type Mode = 'collection' | 'describe' | 'spec' | 'security';
 
 const SPEC_CATEGORIES = ['positive', 'negative', 'boundary', 'security'] as const;
 type SpecCategory = (typeof SPEC_CATEGORIES)[number];
+
+/** The probes of a security test file (AI-8): what each tests, in OWASP's words. */
+const PROBES = [
+  { id: 'bola', label: 'BOLA', title: "API1 · a second user repeats the owner's request and must be refused and must not see their data" },
+  { id: 'auth', label: 'Authentication', title: 'API2 · no credentials, and an invalid token, must be refused' },
+  { id: 'mass-assignment', label: 'Mass assignment', title: 'API3 · privileged fields (role, isAdmin, balance …) added to a body must not come back (needs write requests)' },
+  { id: 'bfla', label: 'Admin functions', title: 'API5 · a lower-privilege user calls an admin function and must be refused' },
+] as const;
+type Probe = (typeof PROBES)[number]['id'];
 
 /** How many requests a list of nodes holds, at every level. */
 const countOf = (nodes: CollectionNode[]): number => nodes.reduce((k, x) => k + (x.kind === 'folder' ? countOf(x.items) : 1), 0);
@@ -47,6 +57,14 @@ export function FlowGenerateDialog({ request, onClose }: { request: FlowGenerate
   const [categories, setCategories] = useState<SpecCategory[]>([...SPEC_CATEGORIES]);
   const [gapsOnly, setGapsOnly] = useState(true);
   const [gaps, setGaps] = useState<{ report: SpecGapReport; draft: { tests: number; operations: number } } | { error: string }>();
+  // Security tests (AI-8): the probes, the two principals' variables (names only), write / delete probes
+  const [probes, setProbes] = useState<Probe[]>(PROBES.map((p) => p.id));
+  const [owner, setOwner] = useState('');
+  const [other, setOther] = useState('');
+  const [includeWrite, setIncludeWrite] = useState(false);
+  const [includeDelete, setIncludeDelete] = useState(false);
+  const [written, setWritten] = useState<{ path: string }>();
+  const prod = useApp((s) => !!s.workspace?.environments.find((e) => e.name === env)?.isProduction);
   const [collectionId, setCollectionId] = useState(request.source?.collectionId);
   const [folderId, setFolderId] = useState(request.source?.folderId ?? '');
   const [description, setDescription] = useState('');
@@ -86,8 +104,24 @@ export function FlowGenerateDialog({ request, onClose }: { request: FlowGenerate
   }, [mode, spec, categories.join(','), gapsOnly]);
 
   /** The task call for the current choices (the generic runner: the CLI and MCP make the same one). */
+  const secOptions = {
+    probes,
+    identities: owner.trim() || other.trim() ? { ...(owner.trim() ? { owner: owner.trim() } : {}), ...(other.trim() ? { other: other.trim() } : {}) } : undefined,
+    includeWrite,
+    includeDelete,
+    environment: env,
+  };
   const params = (extra: { hint?: string; privacy?: AiPrivacy } = {}) =>
-    mode === 'spec'
+    mode === 'security'
+      ? {
+          task: 'security-tests',
+          item: folder ? { kind: 'folder', collectionId: col!.id, folderId: folder.id } : { kind: 'collection', collectionId: col!.id },
+          context: { options: secOptions },
+          hint: extra.hint ?? (hint.trim() || undefined),
+          privacy: extra.privacy ?? privacy,
+          environment: env,
+        }
+      : mode === 'spec'
       ? {
           task: 'tests-from-spec',
           item: { kind: 'spec', path: spec },
@@ -114,10 +148,17 @@ export function FlowGenerateDialog({ request, onClose }: { request: FlowGenerate
           privacy: extra.privacy ?? privacy,
           environment: env,
         };
-  const ready = mode === 'spec' ? !!spec && categories.length > 0 && !!gaps && !('error' in gaps) : mode === 'collection' ? !!col && requests > 0 : description.trim().length > 3;
+  const ready =
+    mode === 'spec'
+      ? !!spec && categories.length > 0 && !!gaps && !('error' in gaps)
+      : mode === 'security'
+        ? !!col && requests > 0 && probes.length > 0 && !prod
+        : mode === 'collection'
+          ? !!col && requests > 0
+          : description.trim().length > 3;
   const asRequest = (): AssistantRequest => {
     const p = params() as { task: string; item?: AssistantRequest['item']; question?: string; context?: unknown; path?: string };
-    return { task: p.task, title: mode === 'spec' ? 'Generate tests from a spec' : 'Generate an integration flow', context: p.context ?? {}, question: p.question, item: p.item, path: p.path, privacy };
+    return { task: p.task, title: mode === 'spec' ? 'Generate tests from a spec' : mode === 'security' ? 'Generate security tests' : 'Generate an integration flow', context: p.context ?? {}, question: p.question, item: p.item, path: p.path, privacy };
   };
 
   // the estimate before anything is sent (a dry run: nothing leaves the computer)
@@ -151,10 +192,12 @@ export function FlowGenerateDialog({ request, onClose }: { request: FlowGenerate
       const r = extra.noAi
         ? mode === 'spec'
           ? await call<{ proposal: Proposal }>('ai.specTests', { spec, ...specOptions, environment: env, noAi: true })
-          : await call<{ proposal: Proposal }>('ai.generateFlow', { collectionId: col!.id, folderId: folder?.id, path: request.path, environment: env, noAi: true })
+          : mode === 'security'
+            ? await call<{ proposal: Proposal }>('ai.securityTests', { collectionId: col!.id, folderId: folder?.id, ...secOptions, noAi: true })
+            : await call<{ proposal: Proposal }>('ai.generateFlow', { collectionId: col!.id, folderId: folder?.id, path: request.path, environment: env, noAi: true })
         : await call<AiTaskResult>('ai.runTask', { ...params(extra), requestId: id });
       if (runId.current !== id) return;
-      if (!r.proposal) throw new Error(`The model proposed no ${mode === 'spec' ? 'tests' : 'flow'}${'problems' in r && r.problems.length ? `: ${r.problems.join('; ')}` : ''}. Try again with a hint, or a smaller folder.`);
+      if (!r.proposal) throw new Error(`The model proposed no ${mode === 'spec' ? 'tests' : mode === 'security' ? 'probes' : 'flow'}${'problems' in r && r.problems.length ? `: ${r.problems.join('; ')}` : ''}. Try again with a hint, or a smaller folder.`);
       setProposal(r.proposal);
     } catch (e) {
       if (runId.current !== id) return;
@@ -179,16 +222,20 @@ export function FlowGenerateDialog({ request, onClose }: { request: FlowGenerate
       useApp.getState().toast(`Wrote ${r.applied.length} test file${r.applied.length === 1 ? '' : 's'}${r.applied[0]?.path ? ` (tests/${r.applied[0].path})` : ''}${r.skipped.length ? `; ${r.skipped.length} skipped: ${r.skipped[0]!.reason}` : ''}`, r.skipped.length ? 'info' : 'success', undefined, {
         undo: () => call('ai.undoProposal', { id: proposal.id }).then(() => useApp.getState().refreshWorkspace()),
       });
+      // security tests are run next, in a test environment, one step at a time (the verdicts are the runner's)
+      const file = r.applied.find((a) => a.path)?.path;
+      if (mode === 'security' && file) return setWritten({ path: file });
       onClose();
     } catch (e) {
       toastError(e);
     }
   };
-  if (proposal && mode === 'spec')
+  if (written) return <SecurityRunDialog path={written.path} environment={env} onClose={onClose} />;
+  if (proposal && (mode === 'spec' || mode === 'security'))
     return (
       <ProposalReview
         proposal={proposal}
-        acceptLabel="Write the tests"
+        acceptLabel={mode === 'security' ? 'Write the security tests' : 'Write the tests'}
         onAccept={acceptTests}
         onRegenerate={(h) => {
           void call('ai.discardProposal', { id: proposal.id }).catch(() => undefined);
@@ -222,7 +269,7 @@ export function FlowGenerateDialog({ request, onClose }: { request: FlowGenerate
     <Modal
       title={
         <span className="flex items-center gap-2">
-          <Sparkles size={16} /> {mode === 'spec' ? 'Generate tests from a spec with AI' : 'Generate integration flow with AI'}
+          <Sparkles size={16} /> {mode === 'spec' ? 'Generate tests from a spec with AI' : mode === 'security' ? 'Generate security tests with AI' : 'Generate integration flow with AI'}
         </span>
       }
       onClose={() => (stop(), onClose())}
@@ -254,6 +301,7 @@ export function FlowGenerateDialog({ request, onClose }: { request: FlowGenerate
             { value: 'collection', label: 'From a collection or folder', title: 'Its saved requests become the steps (by id); TestPion’s draft is improved' },
             { value: 'describe', label: 'Describe in words', title: 'One or two sentences; the assistant writes the steps' },
             { value: 'spec', label: 'From a spec', title: 'Tests for the gaps in what is tested of an API definition: positive, negative, boundary and security cases' },
+            { value: 'security', label: 'Security tests', title: 'OWASP API probes (BOLA, authentication, mass assignment, admin functions) with verdicts computed from the responses' },
           ]}
         />
         {mode === 'spec' ? (
@@ -306,10 +354,11 @@ export function FlowGenerateDialog({ request, onClose }: { request: FlowGenerate
               </div>
             </div>
           )
-        ) : mode === 'collection' ? (
+        ) : mode === 'collection' || mode === 'security' ? (
           !cols.length ? (
             <p className="text-muted">No collections in this workspace yet: import or create one, or describe the flow in words.</p>
           ) : (
+            <div className="grid gap-3">
             <div className="grid grid-cols-2 gap-3">
               <Field label="Collection">
                 <Select
@@ -338,6 +387,35 @@ export function FlowGenerateDialog({ request, onClose }: { request: FlowGenerate
                 </Select>
               </Field>
             </div>
+            {mode === 'security' && (
+              <div className="grid gap-3" data-security-tests>
+                <div className="flex items-center gap-3 flex-wrap" role="group" aria-label="Probes">
+                  {PROBES.map((p) => (
+                    <label key={p.id} className="inline-flex items-center gap-1.5" title={p.title}>
+                      <input type="checkbox" checked={probes.includes(p.id)} onChange={(e) => setProbes(e.target.checked ? [...probes, p.id] : probes.filter((x) => x !== p.id))} data-security-probe={p.id} /> {p.label}
+                    </label>
+                  ))}
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="Owner's credentials (variable)" hint="The variable that holds the token the saved requests were written for. Names only.">
+                    <Input className="mono" value={owner} onChange={(e) => setOwner(e.target.value)} placeholder="tokenA" aria-label="Owner variable" data-security-owner />
+                  </Field>
+                  <Field label="Another user's credentials (variable)" hint="BOLA and admin-function probes need a second user.">
+                    <Input className="mono" value={other} onChange={(e) => setOther(e.target.value)} placeholder="tokenB" aria-label="Other user variable" data-security-other />
+                  </Field>
+                </div>
+                <div className="flex items-center gap-4 flex-wrap">
+                  <Toggle checked={includeWrite} onChange={setIncludeWrite} label="Include POST / PUT / PATCH" title="Mass assignment needs them; they change data" />
+                  <Toggle checked={includeDelete} onChange={setIncludeDelete} label="Include DELETE" title="They destroy data" />
+                </div>
+                <p className={`text-xs ${prod ? 'text-bad' : 'text-muted'}`} data-security-notice>
+                  {prod
+                    ? `"${env}" is a production environment: security tests are refused there. Pick a test environment first.`
+                    : 'Authorised testing only: GET requests by default, paced, capped; the verdicts are checks computed from the responses, never the model’s opinion. Run them against a test environment you own.'}
+                </p>
+              </div>
+            )}
+            </div>
           )
         ) : (
           <Field label="What should the flow do?">
@@ -359,7 +437,7 @@ export function FlowGenerateDialog({ request, onClose }: { request: FlowGenerate
           <Segmented label="Privacy level" value={privacy} onChange={(v) => setPrivacy(v as AiPrivacy)} options={PRIVACY_OPTIONS.map((o) => ({ value: o.value, label: o.label, title: o.title }))} />
         </div>
         <div className="flex items-center gap-2 text-xs text-muted min-h-5" data-flow-estimate>
-          {mode === 'collection' && col && (
+          {(mode === 'collection' || mode === 'security') && col && (
             <Badge>
               {folder ? <FolderTree size={10} /> : <Workflow size={10} />} {requests} request{requests === 1 ? '' : 's'}
             </Badge>
@@ -382,7 +460,7 @@ export function FlowGenerateDialog({ request, onClose }: { request: FlowGenerate
         </p>
         {busy && (
           <div className="flex items-center gap-2 text-muted" role="status">
-            <Spinner /> Writing and checking the flow…
+            <Spinner /> Writing and checking the {mode === 'security' ? 'probes' : 'flow'}…
           </div>
         )}
         {error && (
@@ -394,9 +472,9 @@ export function FlowGenerateDialog({ request, onClose }: { request: FlowGenerate
                   {setup.label}
                 </Button>
               )}
-              {(mode === 'spec' ? !!spec : mode === 'collection' && col) && (
+              {(mode === 'spec' ? !!spec : (mode === 'collection' || mode === 'security') && col) && (
                 <Button size="sm" onClick={() => void generate({ noAi: true })} data-flow-draft>
-                  {mode === 'spec' ? 'Use the tests TestPion builds without AI' : 'Use the draft without AI'}
+                  {mode === 'spec' ? 'Use the tests TestPion builds without AI' : mode === 'security' ? 'Use the probes TestPion makes without AI' : 'Use the draft without AI'}
                 </Button>
               )}
             </div>

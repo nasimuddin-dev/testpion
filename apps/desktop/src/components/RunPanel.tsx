@@ -9,7 +9,7 @@ import { toastError, useApp } from '../store';
 import type { RunSummary, TestResult, Trace } from '../types';
 import { EnvBadge } from './EnvSelect';
 import { runCiMenuItems } from '../lib/run-ci';
-import { triageRunItem } from './ai/ai-analysis';
+import { triageRunItems } from './ai/ai-analysis';
 import { formatCost, formatMs, plural, timeAgo } from '../lib/format';
 import { CheckList, ErrorPanel, StatusIcon } from './Results';
 import { TraceView } from './TraceView';
@@ -210,7 +210,7 @@ export function RunPanel({ runId, expectedTotal, onRerunFailed, focusName }: { r
             }>
               HTML report
             </Button>
-            <MoreMenu label="Run actions" items={[...runCiMenuItems(runId), ...(s && s.failed + s.errors > 0 ? [triageRunItem(runId, { title: s.name, separator: true })] : [])]} />
+            <MoreMenu label="Run actions" items={[...runCiMenuItems(runId), ...(s && s.failed + s.errors > 0 ? triageRunItems(runId, { title: s.name, separator: true }) : [])]} />
             <Button size="sm" icon={<ScanSearch size={12} />} title="Which OpenAPI operations and responses this run exercised" onClick={() => useApp.getState().set({ apiCoverage: { runId } })}>
               API coverage
             </Button>
@@ -441,6 +441,16 @@ export function ResultDetail({ r, runId, onReviewed, initialTab = 'checks' }: { 
           <>
             {r.error && <ErrorPanel error={r.error} raw={false} context={{ test: r.name, input: r.input }} />}
             {r.status === 'skipped' && <div className="p-3 text-sm text-warn">Skipped: {String(r.metadata?.reason ?? '')}</div>}
+            {runId && (r.type === 'http' || r.type === 'graphql') && r.status !== 'skipped' && !r.error && (
+              <div className="px-3 pt-3" data-result-checks>
+                {/* B-12: checks for THIS step from the response the run stored — each run against it, added to the step of its test file or to its saved request */}
+                <AiAction
+                  hint="Checks for this step, written from the response the run stored and run against it before they are offered; accepted ones join the step's checks"
+                  label="Generate checks from this response"
+                  request={() => ({ task: 'generate-assertions', title: `Checks for "${r.name}"`, context: {}, item: { kind: 'run', runId, resultId: r.id }, autoReview: true })}
+                />
+              </div>
+            )}
             {r.status === 'failed' && (
               <div className="px-3 pt-3">
                 <AiAction hint="Ask the AI assistant why the checks failed and what to change (the test or the API)" label="Explain with AI" request={() => ({

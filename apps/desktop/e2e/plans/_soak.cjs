@@ -516,6 +516,8 @@ const cycle = (c) => {
        let flow = 'no row';
        if (col) {
          await __t.real.rightClick(col);
+         const aiMenu = await __t.waitFor(() => [...document.querySelectorAll('[role=menuitem]')].find((m) => m.textContent.trim() === 'AI'), 3000);
+         if (aiMenu) await __t.real.click(aiMenu);
          const item = await __t.waitFor(() => [...document.querySelectorAll('[role=menuitem]')].find((m) => m.textContent.trim() === 'Generate integration flow with AI…'), 3000);
          if (item) {
            await __t.real.click(item);

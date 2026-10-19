@@ -9,6 +9,9 @@ import { parseItemRef, toItemRef } from '@testpion/shared';
 import { str, type Tool } from './tool.js';
 import { aiTriageTools } from './ai-triage-tools.js';
 import { aiSpecTools } from './ai-spec-tools.js';
+import { aiSecurityTools } from './ai-security-tools.js';
+import { aiDriftTools } from './ai-drift-tools.js';
+import { aiScriptTools } from './ai-script-tools.js';
 
 /** An item as an agent passes it: a ref object, a testpion:// link or `kind:id…`. */
 const itemArg = (v: unknown) => {
@@ -70,6 +73,7 @@ export function aiTools({
           path: str('Where a generated test file goes, under tests/'),
           target: { description: 'Where a generated request goes: collection:<id> or folder:<c>:<f>' },
           environment: str('Environment whose variable names (never values) the task may use'),
+          preferStable: { type: 'boolean', description: 'Checks tasks: prefer types, formats and presence over literal ids, times and tokens (default: the AI setting)' },
           dryRun: { type: 'boolean', description: 'Send nothing: return what would be sent (messages, sections, token and cost estimate, what was masked)' },
         },
         required: ['task'],
@@ -87,6 +91,7 @@ export function aiTools({
             path: a.path ? String(a.path) : undefined,
             target: itemArg(a.target),
             dryRun: a.dryRun === true,
+            ...(typeof a.preferStable === 'boolean' ? { preferStable: a.preferStable } : {}),
           });
           const { preview, proposal, ...rest } = r;
           return {
@@ -209,5 +214,9 @@ export function aiTools({
     ...aiTriageTools({ store, secrets, settings, checkEnvironment }),
     // AI-4 / AI-10: tests from a spec (gap-driven), tidy an import
     ...aiSpecTools({ store, secrets, settings }),
+    // AI-8 / AI-9 / AI-6: security tests, contract drift, the script helper
+    ...aiSecurityTools({ store, secrets, settings, checkEnvironment }),
+    ...aiDriftTools({ store, secrets, settings }),
+    ...aiScriptTools({ store, secrets, settings }),
   ];
 }

@@ -1,4 +1,5 @@
 import { startAi } from '../components/ai/AiAction';
+import { useAiEnabled } from '../lib/use-ai-enabled';
 import {
   Bug,
   ChevronDown,
@@ -79,6 +80,7 @@ const debuggerTabDrafts = persisted<null>('debugger-tab', null);
 /** An exchange as a REST request, for Open in a tab and Resend. */
 export function DebuggerView() {
   const { status, setStatus, rules, setRules, held, openBreakpoint, setOpenBreakpoint, loadStatus } = useDebuggerSession();
+  const aiOn = useAiEnabled();
   const [selected, setSelected] = useState<string>();
   const [detail, setDetail] = useState<Exchange>();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -788,7 +790,7 @@ export function DebuggerView() {
                           const r = incoming.list.find((x) => x.id === incomingSel);
                           if (!r) return <Empty title="Select a request">What your program sent to the mock server and what it answered, side by side.</Empty>;
                           const e = incomingAsExchange(r);
-                          return <ExchangePanes e={e} onOpen={() => openInTab(e)} onAsk={() => ask(e)} />;
+                          return <ExchangePanes e={e} onOpen={() => openInTab(e)} onAsk={aiOn ? () => ask(e) : undefined} />;
                         })()
                       ) : !sel ? (
                         <Empty title="Select an exchange">Its request and response show side by side: headers, content, raw text and JSON.</Empty>
@@ -797,7 +799,7 @@ export function DebuggerView() {
                           e={sel}
                           onOpen={() => openInTab(sel)}
                           onResend={() => void resend(sel)}
-                          onAsk={() => ask(sel)}
+                          onAsk={aiOn ? () => ask(sel) : undefined}
                           onBookmark={async () => (await call('debug.bookmark', { id: sel.id, on: !sel.bookmarked }), void load(), setDetail({ ...sel, bookmarked: !sel.bookmarked }))}
                           onDelete={() => void remove([sel.id])}
                           onCompare={() => setCompareA(sel)}

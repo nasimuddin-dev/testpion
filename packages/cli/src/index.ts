@@ -31,6 +31,8 @@ import { registerReplaceCommands } from './commands/replace.js';
 import { registerVarsMoveCommand } from './commands/vars-move.js';
 import { registerTidyCommand } from './commands/tidy.js';
 import { registerAiSpecCommands } from './commands/ai-spec.js';
+import { registerAiSecurityCommands } from './commands/ai-security.js';
+import { registerAiDriftCommand } from './commands/ai-drift.js';
 import { registerFlowsCommand } from './commands/flows.js';
 import { registerFlowCommand } from './commands/flow.js';
 import { registerFlowExportCommand } from './commands/flow-export.js';
@@ -43,7 +45,7 @@ import { registerKindsCommand } from './commands/kinds.js';
 import { registerItemCommand } from './commands/item.js';
 
 /** The commands that send to APIs with an environment (by their path): they take --allow-production. */
-export const SENDING_COMMANDS = new Set(['test', 'run', 'run-collection', 'load', 'send', 'monitor add', 'monitor run', 'monitor start', 'eval run', 'serve flows', 'ai attempt-fix']);
+export const SENDING_COMMANDS = new Set(['test', 'run', 'run-collection', 'load', 'send', 'monitor add', 'monitor run', 'monitor start', 'eval run', 'serve flows', 'ai attempt-fix', 'security generate', 'security run']);
 
 /** The testpion command line: one module per area of commands (commands/*.ts). */
 export function buildProgram(): Command {
@@ -71,6 +73,8 @@ export function buildProgram(): Command {
   registerVarsMoveCommand(program);
   registerTidyCommand(program);
   registerAiSpecCommands(program);
+  registerAiSecurityCommands(program);
+  registerAiDriftCommand(program);
   registerFlowsCommand(program);
   registerFlowCommand(program);
   registerFlowExportCommand(program);

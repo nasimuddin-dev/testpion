@@ -14,6 +14,7 @@ import { ErrorPanel } from '../Results';
 import { ResponseSplit } from '../ResponseSplit';
 import { Badge, Button, Callout, cx, Empty, Field, IconButton, Input, Menu, Segmented, Select, Split, Toggle, Textarea } from '../ui';
 import { ToolResult, type ToolRun } from './ToolsPanel';
+import { useAiEnabled } from '../../lib/use-ai-enabled';
 import { LABEL } from '../../lib/vocabulary';
 
 /**
@@ -35,6 +36,7 @@ const EMPTY_SCHEMA = { type: 'object', properties: {} };
 const NEW_TOOL = (): MockTool => ({ name: 'new_tool', description: '', inputSchema: { type: 'object', properties: {}, required: [] }, responses: [{ json: { ok: true } }] });
 
 export const ToolsetEditor = forwardRef<ToolsetEditorHandle, { file: string; serverName: string; connected?: boolean }>(function ToolsetEditor({ file, serverName, connected }, ref) {
+  const aiOn = useAiEnabled();
   const [loaded, setLoaded] = useState<Loaded>();
   const [loadError, setLoadError] = useState<ReturnType<typeof asError>>();
   const [def, setDef] = useState<McpMockDefinition>({ name: '', tools: [] });
@@ -175,15 +177,17 @@ export const ToolsetEditor = forwardRef<ToolsetEditorHandle, { file: string; ser
             { value: 'yaml', label: 'YAML', icon: <FileCode size={12} /> },
           ]}
         />
-        <Button
-          size="sm"
-          icon={<Sparkles size={12} />}
-          onClick={() => void generate()}
-          data-toolset-generate
-          title="Describe the agent's job; the assistant proposes the tools, which you review before saving"
-        >
-          Generate with AI
-        </Button>
+        {aiOn && (
+          <Button
+            size="sm"
+            icon={<Sparkles size={12} />}
+            onClick={() => void generate()}
+            data-toolset-generate
+            title="Describe the agent's job; the assistant proposes the tools, which you review before saving"
+          >
+            Generate with AI
+          </Button>
+        )}
         <Button size="sm" icon={<Server size={12} />} onClick={() => setServe((s) => !s)} data-toolset-serve aria-pressed={serve} title="The command lines that serve this toolset to an agent">
           Serve
         </Button>
@@ -258,7 +262,7 @@ export const ToolsetEditor = forwardRef<ToolsetEditorHandle, { file: string; ser
               title="No tools yet"
               actions={[
                 { label: 'Add tool', icon: <Plus size={12} />, onClick: addTool },
-                { label: 'Generate with AI', icon: <Sparkles size={12} />, onClick: () => void generate() },
+                ...(aiOn ? [{ label: 'Generate with AI', icon: <Sparkles size={12} />, onClick: () => void generate() }] : []),
               ]}
             >
               A toolset is what an agent sees: each tool has a name, a description that says when to call it, an input schema, and the answers the mock gives. Design it here, then serve it with the

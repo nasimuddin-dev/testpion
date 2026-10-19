@@ -6,6 +6,7 @@ import type { BodyConfig, HttpRequestSpec, KeyValue, SavedExample } from '../../
 import { ExamplesPanel } from '../../components/ExamplesPanel';
 import { Markdown } from '../../components/Markdown';
 import { ScriptsPanel } from '../../components/ScriptsPanel';
+import type { ScriptAiContext } from '../../components/ai/script-ai';
 
 import { AssertionEditor } from '../../components/AssertionEditor';
 import { AuthEditor } from '../../components/AuthEditor';
@@ -22,12 +23,15 @@ export function RequestEditor({
   setReq,
   setParams,
   setExamples,
+  scriptAi,
 }: {
   tab: RestTab;
   update(p: Partial<RestTab>): void;
   setReq(p: Partial<HttpRequestSpec>): void;
   setParams(p: KeyValue[]): void;
   setExamples(e: SavedExample[]): void;
+  /** What the script editor's AI menu knows about this request (RestView builds it). */
+  scriptAi?: ScriptAiContext;
 }) {
   const [sub, setSub] = useState<'params' | 'auth' | 'headers' | 'body' | 'cookies' | 'scripts' | 'tests' | 'examples' | 'docs' | 'settings'>('params');
   const r = tab.request;
@@ -81,7 +85,7 @@ export function RequestEditor({
             </p>
           </div>
         )}
-        {sub === 'scripts' && <ScriptsPanel pre={tab.preRequestScript ?? ''} post={tab.testScript ?? ''} onPre={(v) => update({ preRequestScript: v })} onPost={(v) => update({ testScript: v })} />}
+        {sub === 'scripts' && <ScriptsPanel pre={tab.preRequestScript ?? ''} post={tab.testScript ?? ''} onPre={(v) => update({ preRequestScript: v })} onPost={(v) => update({ testScript: v })} ai={scriptAi} />}
         {sub === 'docs' && <DocsEditor value={tab.description ?? ''} onChange={(description) => update({ description })} />}
         {sub === 'examples' && <ExamplesPanel key={tab.id} collectionId={tab.collectionId} requestId={tab.requestId} examples={tab.examples ?? []} onChange={setExamples} />}
         {sub === 'tests' && <AssertionEditor checks={tab.assertions} onChange={(assertions) => update({ assertions })} groups={['Response', 'Body']} />}

@@ -54,10 +54,9 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
       "Monitor on a schedule…",
       "Run in CI…",
       "Create test file from collection…",
-      "Generate integration flow with AI…",
+      "AI ▸",
       "Settings, runner & docs",
       "Convert scripts to tp.*",
-      "Tidy with AI…",
     ],
     [
       "History in git…",
@@ -202,7 +201,7 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
       "Monitor on a schedule…",
       "Run in CI…",
       "Create test file from folder…",
-      "Generate integration flow with AI…",
+      "AI ▸",
       "Edit folder (scripts, variables, auth)",
     ],
     [
@@ -534,6 +533,7 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
     [
       "Monitor on a schedule…",
       "Save as test…",
+      "Suggest checks with AI…",
     ],
     [
       "History in git…",
@@ -712,7 +712,7 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
     [
       "Generate tests…",
       "Generate integration flows…",
-      "Generate tests from this spec…",
+      "AI ▸",
     ],
     [
       "Rename",
@@ -757,6 +757,9 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
     ],
     [
       "Copy link",
+    ],
+    [
+      "Why is this flaky?",
     ],
   ],
   "trace": [
