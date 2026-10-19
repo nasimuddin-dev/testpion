@@ -390,8 +390,12 @@ async function* discoverFiles(pattern: string, cwd = process.cwd()): AsyncGenera
 }
 
 /** Load all tests defined in one file (single test, `tests:` list, or dataset-expanded template). */
-/** The tests of a file; `text` reads that text instead of the file's (an editor's unsaved version of it). */
-export async function* loadTestsFromFile(path: string, text?: string): AsyncGenerator<TestCase> {
+/**
+ * The tests of a file; `text` reads that text instead of the file's (an editor's unsaved version of it). With
+ * `templates` a test with a `dataset:` stays one test (the template, one per entry of the file) instead of one per
+ * record: the flow designer edits the file's own steps, a run needs the expanded ones.
+ */
+export async function* loadTestsFromFile(path: string, text?: string, opts: { templates?: boolean } = {}): AsyncGenerator<TestCase> {
   const data = (await parseFile(path, text)) as Record<string, unknown> | unknown[];
   if (!data) return;
   const rel = path;
@@ -405,15 +409,29 @@ export async function* loadTestsFromFile(path: string, text?: string): AsyncGene
     if (data.webhook !== undefined) parseWebhook(data.webhook, path);
     const defaults = (data.defaults ?? {}) as Record<string, unknown>;
     let i = 0;
-    for (const t of data.tests as Array<Record<string, unknown>>) yield normalizeTest({ ...defaults, ...t }, rel, i++);
+    for (const t of data.tests as Array<Record<string, unknown>>) {
+      const merged = { ...defaults, ...t };
+      // a test of the list may carry a dataset: too (what the designer writes when it edits a dataset-driven file)
+      if (hasDataset(merged) && !opts.templates) yield* expandDataset(merged, path);
+      else yield normalizeTest(stripDataset(merged), rel, i);
+      i++;
+    }
     return;
   }
-  if (data.dataset) {
-    yield* expandDataset(data, path);
+  if (hasDataset(data)) {
+    if (opts.templates) yield normalizeTest(stripDataset(data), rel, 0);
+    else yield* expandDataset(data, path);
     return;
   }
   if (data.type || data.request || data.url || data.query || data.prompt) yield normalizeTest(data, rel, 0);
 }
+
+/** A test written with a `dataset:` block (one test per record when it runs). */
+export const hasDataset = (t: Record<string, unknown>): boolean => !!t.dataset && typeof t.dataset === 'object' && !Array.isArray(t.dataset);
+const stripDataset = (t: Record<string, unknown>): Record<string, unknown> => {
+  const { dataset: _d, ...rest } = t;
+  return rest;
+};
 
 /**
  * A test with a `dataset` becomes one test per record. Records are streamed, so datasets

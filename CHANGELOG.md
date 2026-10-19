@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- **A dataset-driven test file can be edited in the Flow view.** A test file with a `dataset:` (one test per record when it runs) is one step on the canvas, labelled "× each row of …", instead of one step per record; moving, editing, connecting, adding or removing steps now writes to the right step instead of failing with "No step … in the flow". A test in a `tests:` list may carry a `dataset:` too, and runs once per record. The step's latest result is the worst of its rows'.
+- **The GitHub Action's job summary** shows the run's Markdown report and, with the new `triage: true` input (adds `--triage`), the failure triage from triage.md.
+
 ## 0.53.1 — 2026-10-18
 
 Checks only, nothing changes in the app: the registry's "planned" capabilities that were due in 0.53 are re-planned for 0.54 (they are not built yet), and a test that compared a file name in another letter case now agrees with how macOS treats it.
