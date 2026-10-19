@@ -1,6 +1,7 @@
 import { existsSync, openSync, readSync, closeSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { Command } from 'commander';
+import { kindByName } from '@testpion/shared';
 import {
   ApsError,
   TRANSFER_LIMITS,
@@ -44,7 +45,7 @@ export interface BundleExportOptions {
 
 /** Whether an `export` call asks for a bundle: a section, everything, "uses", or a ref in the kind:id form. */
 export function wantsBundleExport(refs: string[], o: { format?: string } & Pick<BundleExportOptions, 'section' | 'all' | 'uses'>): boolean {
-  return o.format === 'bundle' || !!o.section || !!o.all || !!o.uses || refs.some((r) => /^[a-z][a-z-]*:[^/\\]/.test(r) && !/^[a-z]+:\/\//i.test(r));
+  return o.format === 'bundle' || !!o.section || !!o.all || !!o.uses || refs.some((r) => !!kindByName(r.slice(0, Math.max(0, r.indexOf(':')))) && !/^[a-z]+:\/\//i.test(r));
 }
 
 export async function runBundleExport(refs: string[], o: BundleExportOptions): Promise<void> {

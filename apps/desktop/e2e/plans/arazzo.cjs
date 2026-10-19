@@ -72,7 +72,7 @@ module.exports = withExpect(
   {
     import:
       /Imported arazzo: flow tests\/arazzo\/petcheck\.yaml.*\|\| method: GET ; url: "\{\{baseUrl\}\}\/pet\/\{\{petId\}\}" ; # Arazzo, not imported: on success goto getPet .* method: GET ; url: "\{\{baseUrl\}\}\/pet\/\{\{petId\}\}"/,
-    'tree-menu': /Open \| Reveal file \| Run \| Run with data… \| Run in several environments… \| Copy link \| Copy path \| Copy CLI command \| Export as Arazzo… \| Monitor on a schedule… \| Run in CI… \| Expose as MCP tool… \| Rename \| Duplicate \| Delete…/,
+    'tree-menu': /Open \| Reveal file \| Run \| Run with data… \| Run in several environments… \| Copy link \| Copy path \| Copy CLI command \| Export as Arazzo… \| Export… \| Monitor on a schedule… \| Run in CI… \| Expose as MCP tool… \| Rename \| Duplicate \| Delete…/,
     export: /Arazzo workflow saved to .*petcheck\.arazzo\.yaml/,
     'export-maps-operations': /^petCheck \| getPet:getPetById:path petId=\$inputs\.petId:\$statusCode == 200 \| again:getPetById:path petId=\$inputs\.petId:\$response\.body#\/name == 'doggie'$/,
   },

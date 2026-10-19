@@ -100,7 +100,12 @@ describe('testpion export / import with bundles', () => {
     expect(b.listCollections()).toHaveLength(1);
     const both = cli(['import', zip(), '--json', '-w', b.root]);
     expect(both.env!.data.created.map((c: { target: { id: string } }) => c.target.id)).toEqual(['api-2']);
-    expect(b.listCollections().map((c) => c.id).sort()).toEqual(['api', 'api-2']);
+    expect(
+      b
+        .listCollections()
+        .map((c) => c.id)
+        .sort(),
+    ).toEqual(['api', 'api-2']);
     const undo = cli(['import', '--undo', both.env!.data.importId, '--json', '-w', b.root]);
     expect(undo.status).toBe(0);
     expect(b.listCollections().map((c) => c.id)).toEqual(['api']);

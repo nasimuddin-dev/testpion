@@ -182,6 +182,10 @@ testpion export "Veterinary API" -f testpion -o vet.collection.json
 testpion export-environment Staging -o staging.postman_environment.json
 ```
 
+### Export with everything it uses
+
+The collection's **Export ▸ Export with everything it uses…** writes a TestPion **bundle**: the collection plus the environments, API definitions, datasets, MCP servers and mocks, protos, script packages, saved calls, monitors and test and flow files it needs, with a preview before the file is saved and a preview, conflict choices and Undo when it is imported. See [Export and import](/getting-started/export-import).
+
 ### Export the whole workspace
 
 **Export** ▸ *The whole workspace* (also in the workspace switcher and the app menu) writes one file, `<workspace name>.testpion.json`, that **Import** opens as a new workspace on another computer:

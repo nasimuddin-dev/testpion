@@ -107,22 +107,23 @@ export default function ImportBundleDialog({ request, onClose }: { request: Impo
     try {
       const r = await call<Outcome>('bundle.apply', { planId: loaded.planId, onConflict, decisions, ...(only ? { only } : {}) });
       const n = r.created.length + r.replaced.length;
-      const toast = useApp.getState().toast;
-      toast(`Imported ${n} item${n === 1 ? '' : 's'} from “${r.title}”${r.replaced.length ? ` (${r.replaced.length} replaced)` : ''}`, 'success', r.open ? { ref: r.open } : undefined, {
-        undo: () => call('bundle.undo', { importId: r.importId, planId: loaded.planId }),
-        restored: `Undid the import of “${r.title}”`,
-      });
       const need = r.requires.secrets.filter((s) => !s.defined);
-      if (need.length)
-        toast(
-          `Values to fill in (secrets are never in a bundle; set them as secret variables of an environment): ${need
-            .slice(0, 8)
+      // one message, so its Undo is never under another: what was imported, and the values to fill in (secrets are never in a bundle)
+      const fill = need.length
+        ? `. To fill in as secret variables of an environment: ${need
+            .slice(0, 6)
             .map((s) => `{{${s.name}}}`)
-            .join(', ')}${need.length > 8 ? ' …' : ''}`,
-          'warning',
+            .join(', ')}${need.length > 6 ? ' …' : ''}`
+        : '';
+      useApp
+        .getState()
+        .toast(
+          `Imported ${n} item${n === 1 ? '' : 's'} from “${r.title}”${r.replaced.length ? ` (${r.replaced.length} replaced)` : ''}${fill}`,
+          need.length ? 'warning' : 'success',
+          r.open ? { ref: r.open } : undefined,
           {
-            label: 'Open Environments',
-            onClick: () => useApp.getState().openIntent('environments', {}),
+            undo: () => call('bundle.undo', { importId: r.importId, planId: loaded.planId }),
+            restored: `Undid the import of “${r.title}”`,
           },
         );
       onClose();

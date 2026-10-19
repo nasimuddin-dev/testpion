@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { cpSync, existsSync, mkdirSync, readFileSync, statSync, utimesSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { crc32 } from 'node:zlib';
+import Ajv2020 from 'ajv/dist/2020.js';
 import { KIND_INFO, can, type KindId } from '@testpion/shared';
 import {
   BUNDLE_FORMAT,
@@ -705,5 +706,20 @@ describe('workspace exports of earlier versions are read as bundles', () => {
     expect(existsSync(dest.path('specs', 'petstore.yaml'))).toBe(true);
     const second = previewImport(dest, parsed);
     expect(second.totals.create).toBe(0);
+  });
+});
+
+describe('the published manifest schema', () => {
+  it('describes the manifests this version writes (and refuses a broken one)', () => {
+    const schema = JSON.parse(readFileSync(join(__dirname, '..', '..', 'docs', 'public', 'schemas', 'testpion-bundle-v1.schema.json'), 'utf8'));
+    const validate = new (Ajv2020 as unknown as new (o: object) => { compile(s: object): ((v: unknown) => boolean) & { errors?: unknown } })({ strict: false }).compile(schema);
+    const src = source();
+    write(src, 'datasets/big.csv', 'a,b\n' + '1,2\n'.repeat(3000));
+    for (const b of [buildBundle(src, 'all', { providers: true, embedBytes: 1000 }), buildBundle(src, [{ kind: 'collection', id: 'api' }], { uses: true })]) {
+      expect(validate(b.manifest), JSON.stringify(validate.errors)).toBe(true);
+      expect(validate(readBundle(b.bytes).manifest)).toBe(true);
+    }
+    expect(validate({ format: 'testpion-bundle', formatVersion: 1, items: [{ kind: 'spec', id: 'x', name: 'x' }] })).toBe(false); // an embedded item needs its entry and checksum
+    expect(validate({ format: 'something', formatVersion: 1, items: [] })).toBe(false);
   });
 });
