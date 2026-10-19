@@ -194,10 +194,13 @@ export function createRestServer() {
       const n = Math.floor((mb * 1024 * 1024) / row.length);
       let i = 0;
       const pump = () => {
+        // rows are written in ~64 KB batches: a write per 230-byte row makes Node's fetch (undici) stall now and then
+        // with the socket paused for good (reproduced with a bare `fetch` loop; an upstream bug), which showed up as
+        // an intermittent 30 s timeout in the soak plan's 20 MB send
         while (i < n) {
-          const ok = res.write((i ? ',' : '') + row.replace('"id":0', `"id":${i}`));
-          i++;
-          if (!ok) return res.once('drain', pump);
+          let batch = '';
+          for (let k = 0; k < 280 && i < n; k++, i++) batch += (i ? ',' : '') + row.replace('"id":0', `"id":${i}`);
+          if (!res.write(batch)) return res.once('drain', pump);
         }
         res.end(']}');
       };
