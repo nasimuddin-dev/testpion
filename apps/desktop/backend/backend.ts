@@ -123,6 +123,7 @@ import {
   assertProductionStep,
   isDataChangingMethod,
   samePath,
+  type OutputDeps,
 } from '@testpion/core';
 import { appHandlers } from './handlers/app.js';
 import { workspaceHandlers } from './handlers/workspace.js';
@@ -215,6 +216,8 @@ export class Backend {
   logBuffer: LogRecord[] = [];
   /** Postman-style console: recent requests with their details and script output. */
   consoleBuffer: ConsoleEntry[] = [];
+  /** What the output builders (output.save) read from the handlers that hold it: the Debugger session on screen, as HAR. */
+  outputProviders: { har?: NonNullable<OutputDeps['har']>; scaleRows?: OutputDeps['scaleRows'] } = {};
   /** Redactors of connected MCP servers and WebSocket sessions, for their console entries. */
   mcpRedactors = new Map<string, Redactor>();
   wsConsole = new Map<string, { url: string; redactor: Redactor; counts: { sent: number; received: number; opened: number } }>();

@@ -471,5 +471,13 @@ export function bytesToBase64(bytes: Uint8Array): string {
   return btoa(bin);
 }
 
+/** Bytes from base64 (a binary content an MCP server sent), whitespace ignored. */
+export function base64ToBytes(b64: string): Uint8Array {
+  const bin = atob(b64.replace(/\s+/g, ''));
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
 /** How many bytes a text takes in UTF-8. */
 export const utf8Bytes = (s: string): number => new TextEncoder().encode(s).length;

@@ -24,6 +24,8 @@ import { Button, cx, Empty, Field, IconButton, Input, Menu, SectionTitle, Select
 import { PromptsPanel, ResourcesPanel, type Discovery } from '../components/mcp/McpPanels';
 import { splitCommandLine, joinCommandLine } from '../lib/command-line';
 import { ToolsPanel } from '../components/mcp/ToolsPanel';
+import { OutputActions } from '../components/output/OutputFrame';
+import { traceOutputSpec } from '../components/output/mcp-specs';
 import { ToolsetEditor, type ToolsetEditorHandle } from '../components/mcp/ToolsetEditor';
 import { VarInput } from '../components/VarInput';
 import { useExternalChange } from '../lib/external-change';
@@ -380,7 +382,7 @@ It runs with your permissions. Allow it only if you know where this workspace co
             ) : tab === 'usage' ? (
               <McpUsage serverId={current.id} />
             ) : tab === 'trace' ? (
-              <McpTrace events={draft ? [] : events[current.id] ?? []} error={connError} />
+              <McpTrace events={draft ? [] : events[current.id] ?? []} error={connError} server={current.name} />
             ) : tab === 'tools' && form.transport === 'mock' ? (
               <ToolsetEditor ref={toolset} key={form.mockFile} file={form.mockFile} serverName={form.name} connected={!!server?.connected && !draft} />
             ) : !disc ? (
@@ -578,20 +580,22 @@ function ServerSettings({ s, onChange, folders = [] }: { s: McpServerConfig; onC
 }
 
 /** Timeline of every JSON-RPC message with direction, method, latency and payloads (spec §12.4). */
-function McpTrace({ events, error }: { events: McpEvent[]; error?: NormalizedError }) {
+function McpTrace({ events, error, server }: { events: McpEvent[]; error?: NormalizedError; server: string }) {
   const [sel, setSel] = useState<McpEvent>();
   const [filter, setFilter] = useState('');
   const endRef = useRef(0);
   const shown = useMemo(() => (filter ? events.filter((e) => e.method.includes(filter) || e.kind.includes(filter)) : events), [events, filter]);
   const t0 = events[0]?.timestamp ?? 0;
   endRef.current = shown.length - 1;
+  const spec = useMemo(() => traceOutputSpec(server, shown), [server, shown]);
   return (
     <Split id="mcp-trace" initial={55}>
-      <div className="h-full flex flex-col">
+      <div className="h-full flex flex-col" data-output="mcp.trace">
         {error && <ErrorPanel error={error} />}
         <div className="flex items-center gap-2 px-2 h-9 border-b border-line text-xs">
           <Input className="h-6 min-h-6 w-48 text-xs" placeholder="Filter method (e.g. tools/call)" value={filter} onChange={(e) => setFilter(e.target.value)} />
           <span className="text-muted">{plural(shown.length, 'event')}</span>
+          <OutputActions spec={spec} />
         </div>
         <div className="grid grid-cols-[70px_22px_1fr_80px_70px] text-[0.72rem] text-muted px-2 py-1 border-b border-line">
           <span>+time</span>

@@ -238,7 +238,7 @@ describe('output.save', () => {
     await expect(save({ surface: 'response.headers', format: 'json', suggestedName: 'x.json', source: { kind: 'response', payloadPath: 'x' } })).rejects.toThrow(/unknown source response for Response headers/);
     await expect(save({ surface: 'eval.matrix', format: 'csv', suggestedName: 'x.csv', source: { kind: 'logs' } })).rejects.toThrow(/unknown source logs/);
     await expect(be.invoke('output.copy', { surface: 'load.results', format: 'json', source: { kind: 'run', runId: 'run-zip' } })).rejects.toThrow(/unknown source run/);
-    for (const s of OUTPUT_SURFACES) for (const k of s.sources ?? []) expect(['response', 'run', 'flow-timeline', 'console', 'logs', 'debugger', 'grid'], `${s.id} ${k}`).toContain(k);
+    for (const s of OUTPUT_SURFACES) for (const k of s.sources ?? []) expect(['response', 'run', 'flow-timeline', 'console', 'logs', 'debugger', 'grid', 'history', 'traces', 'monitor-runs', 'runs-overview', 'git-diff', 'workspace-report'], `${s.id} ${k}`).toContain(k);
   });
 
   it('Show in folder and Open take the job, never a path', async () => {
@@ -287,10 +287,10 @@ describe('output.save', () => {
   });
 
   it('a grid saves as JSON, HTML and Markdown page by page, the same bytes as one document', async () => {
-    const real = be.handlers['tests.scaleRows'];
+    const real = be.outputProviders.scaleRows;
     const rows = (p: { offset: number; limit: number }) =>
       Array.from({ length: Math.max(0, Math.min(p.limit, 1_234 - p.offset)) }, (_, i) => ({ index: p.offset + i, status: 'passed', durationMs: 1, startedAt: 't', values: { name: `row ${p.offset + i}`, note: '<b>&</b>|x' } }));
-    be.handlers['tests.scaleRows'] = async (p: { offset: number; limit: number }) => ({ rows: rows(p), matched: 1_234, total: 1_234 });
+    be.outputProviders.scaleRows = async (p: { offset: number; limit: number }) => ({ rows: rows(p), matched: 1_234, total: 1_234 });
     try {
       const all = rows({ offset: 0, limit: 1_234 });
       const cols = ['row', 'status', 'durationMs', 'startedAt', 'failedStep', 'error', 'name', 'note'];
@@ -316,7 +316,7 @@ describe('output.save', () => {
       expect(md.split('\n').length).toBe(1_234 + 3);
       expect(md).toContain('<b>&</b>\\|x');
     } finally {
-      be.handlers['tests.scaleRows'] = real!;
+      be.outputProviders.scaleRows = real;
     }
   });
 
@@ -384,7 +384,28 @@ describe('output.save: the secrets policy of every surface', () => {
 
   it('the surfaces masked before they are built say so (run reports, traces, cURL, the timeline, data-run rows, the Debugger HAR)', () => {
     const captured = OUTPUT_SURFACES.filter((s) => s.capturedRedacted).map((s) => s.id);
-    expect(captured.sort()).toEqual(['console', 'debugger.session', 'flow.grid', 'flow.timeline', 'logs', 'response.curl', 'response.trace', 'run.results']);
+    expect(captured.sort()).toEqual([
+      'ai.analysis',
+      'ai.answers',
+      'ai.compare',
+      'ai.proposals',
+      'api.reports',
+      'collection.docs',
+      'console',
+      'debugger.exchange',
+      'debugger.session',
+      'env.matrix',
+      'flow.grid',
+      'flow.timeline',
+      'history',
+      'logs',
+      'mcp.trace',
+      'response.curl',
+      'response.trace',
+      'run.results',
+      'settings.diagnostics',
+      'traces',
+    ]);
     for (const id of captured) expect(OUTPUT_SURFACES.find((s) => s.id === id)!.redaction).toBe('redacted-default');
   });
 });
@@ -432,9 +453,9 @@ describe('output.save: files and folders', () => {
   }, 60_000);
 
   it('a 10,000-row data run saves as CSV page by page: one header, every row, CRLF, bounded time and memory', async () => {
-    const real = be.handlers['tests.scaleRows'];
+    const real = be.outputProviders.scaleRows;
     const pages: number[] = [];
-    be.handlers['tests.scaleRows'] = async (p: { offset: number; limit: number }) => {
+    be.outputProviders.scaleRows = async (p: { offset: number; limit: number }) => {
       pages.push(p.offset);
       const rows = Array.from({ length: Math.max(0, Math.min(p.limit, 10_000 - p.offset)) }, (_, i) => {
         const index = p.offset + i;
@@ -459,7 +480,7 @@ describe('output.save: files and folders', () => {
       console.log(`10k-row grid CSV: ${Math.round(ms)} ms, ${(r.bytes / 1024 / 1024).toFixed(1)} MB, heap +${((process.memoryUsage().heapUsed - heap0) / 1024 / 1024).toFixed(1)} MB`);
       expect(ms).toBeLessThan(10_000);
     } finally {
-      be.handlers['tests.scaleRows'] = real!;
+      be.outputProviders.scaleRows = real;
     }
   }, 60_000);
 

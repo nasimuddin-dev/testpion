@@ -1,5 +1,5 @@
 import { Play, Plus, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useSticky } from '../../lib/sticky';
 import { call, type NormalizedError } from '../../api';
 import { useApp } from '../../store';
@@ -7,6 +7,8 @@ import type { ProviderConfig } from '../../types';
 import { formatCost, formatMs, uid } from '../../lib/format';
 import { CheckList } from '../../components/Results';
 import { Button, Empty, IconButton, Split } from '../../components/ui';
+import { OutputHeader } from '../../components/output/OutputFrame';
+import { compareOutputSpec } from '../../components/output/ai-specs';
 import { ChatResult, useCompareDraft, ModelPicker, Params, responseFormat, parseExpected, PromptEditor, ModelError, AddKeyHint, NoProviders } from './common';
 
 export function Compare({ providers, onSetUp }: { providers: ProviderConfig[]; onSetUp(): void }) {
@@ -16,6 +18,8 @@ export function Compare({ providers, onSetUp }: { providers: ProviderConfig[]; o
   const env = useApp((s) => s.environment);
   const rows = d.compare.length ? d.compare : providers.slice(0, 2).map((p) => ({ provider: p.id, name: p.defaultModel ?? '' }));
   const providerName = (id: string) => providers.find((p) => p.id === id || p.name === id)?.name ?? id;
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- providerName only reads the providers
+  const spec = useMemo(() => compareOutputSpec(results, providerName), [results, providers]);
   const run = async () => {
     setRunning(true);
     const expected = parseExpected(d.expected);
@@ -75,7 +79,9 @@ export function Compare({ providers, onSetUp }: { providers: ProviderConfig[]; o
           <PromptEditor d={d} set={set} />
         </div>
       </div>
-      <div className="h-full overflow-auto">
+      <div className="h-full flex flex-col min-h-0" data-output="ai.compare">
+        <OutputHeader spec={spec} title="Comparison" />
+        <div className="flex-1 min-h-0 overflow-auto">
         {results.length ? (
           <>
             <p className="px-3 py-2 text-xs text-muted border-b border-line">
@@ -164,6 +170,7 @@ export function Compare({ providers, onSetUp }: { providers: ProviderConfig[]; o
             Add the models on the left, then run: the same prompt goes to each, and the table compares latency, tokens, cost, structured-output validity and your evaluators; the fastest and the cheapest are marked.
           </Empty>
         )}
+        </div>
       </div>
     </Split>
   );

@@ -16,6 +16,8 @@ import { Button, Empty, LinkButton, Metric, Split, Tabs } from '../../components
 import { ChatResult, SavedPrompt, drafts, type Draft, ModelPicker, Params, responseFormat, parseExpected, PromptEditor, NoProviders } from './common';
 import { useLibraryTabs } from '../../lib/library-tabs';
 import { LibraryTabStrip, NoOpenItems } from '../../components/LibraryTabStrip';
+import { OutputActions } from '../../components/output/OutputFrame';
+import { answerOutputSpec } from '../../components/output/ai-specs';
 
 import { refOfWorkspacePath } from '@testpion/shared';
 import { saveAsTest as saveAsTestShared, saveAsTestLabel } from '../../lib/save-test';
@@ -151,8 +153,9 @@ export function Playground({ providers, onSetUp }: { providers: ProviderConfig[]
       toastError(e);
     }
   };
-  if (!providers.length) return <NoProviders onSetUp={onSetUp} />;
   const r = result && !('error' in result) ? result : undefined;
+  const spec = useMemo(() => answerOutputSpec(r), [r]);
+  if (!providers.length) return <NoProviders onSetUp={onSetUp} />;
   // a run in another tab streams there, not here
   const runningHere = running?.tab === tabs.active.id ? running : undefined;
   return (
@@ -243,7 +246,7 @@ export function Playground({ providers, onSetUp }: { providers: ProviderConfig[]
               <PromptEditor d={d} set={set} />
             </div>
           </div>
-          <div className="h-full flex flex-col min-h-0">
+          <div className="h-full flex flex-col min-h-0" data-output="ai.answers">
             {result && 'error' in result ? (
               <ErrorPanel error={result.error!} context={{ provider: d.provider, model: d.model }} />
             ) : runningHere || r ? (
@@ -282,7 +285,8 @@ export function Playground({ providers, onSetUp }: { providers: ProviderConfig[]
                     { id: 'prompt', label: 'Rendered prompt' },
                   ]}
                   right={
-                    r && (
+                    <OutputActions spec={spec}>
+                    {r && (
                       <span className="flex items-center gap-3 text-xs text-muted pr-2">
                         <LinkButton icon={<CopyPlus size={12} />} title="Keep this answer as an evaluation case: the inputs and the answer as expected" onClick={() => void addToDataset(r)}>
                           Add to dataset
@@ -291,7 +295,8 @@ export function Playground({ providers, onSetUp }: { providers: ProviderConfig[]
                           {providers.find((p) => p.id === r.provider)?.name ?? r.provider} · {r.model} · {r.finishReason}
                         </span>
                       </span>
-                    )
+                    )}
+                    </OutputActions>
                   }
                 />
                 <div className="flex-1 min-h-0 overflow-auto">

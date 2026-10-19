@@ -49,6 +49,12 @@ interface Job {
 /** The jobs of each backend (a workspace switch or quit cancels them). */
 const jobsOf = new WeakMap<Backend, Map<string, Job>>();
 
+/** A page of a data run's rows: from the run's writer while it goes, from disk after (the grid and the output builders read it here). */
+export function scaleRowsPage(be: Backend, { id, offset, limit, status }: { id: string; offset?: number; limit?: number; status?: RowFilter }) {
+  const j = jobsOf.get(be)?.get(id);
+  return j?.writer ? j.writer.page({ offset, limit, status }) : readScaleRows(be.ws, id, { offset, limit, status });
+}
+
 /** Cancel every running data run and matrix of a backend. */
 export function cancelScaleRuns(be: Backend): void {
   for (const j of jobsOf.get(be)?.values() ?? []) j.ctrl.abort();
@@ -212,10 +218,7 @@ export function flowScaleHandlers(be: Backend): Handlers {
       return r.kind === 'matrix' ? { ...r, status, columns: r.columns.map((c) => ({ ...c, results: c.results.map((x) => ({ ...x, output: x.output?.slice(0, 2000) })) })) } : { ...r, status };
     },
     /** A page of a data run's rows, in row order (status all / failed / passed / cancelled / skipped). */
-    'tests.scaleRows': ({ id, offset, limit, status }: { id: string; offset?: number; limit?: number; status?: RowFilter }) => {
-      const j = jobs.get(id);
-      return j?.writer ? j.writer.page({ offset, limit, status }) : readScaleRows(be.ws, id, { offset, limit, status });
-    },
+    'tests.scaleRows': (p: { id: string; offset?: number; limit?: number; status?: RowFilter }) => scaleRowsPage(be, p),
     /** One row's step results (null when they were not kept: they are for failing rows and the first passing ones). */
     'tests.scaleRow': ({ id, index }: { id: string; index: number }) => {
       const j = jobs.get(id);

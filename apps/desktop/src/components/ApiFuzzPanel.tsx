@@ -1,7 +1,9 @@
 import { CodeBlock } from './CodeBlock';
 import { AiAction } from './ai/AiAction';
 import { Bug, ChevronDown, ChevronRight, ExternalLink, FlaskConical, Play, Square, TriangleAlert } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { ApiReportBar } from './ApiReportBar';
+import { fuzzReport } from './output/api-report-specs';
 import { call, on } from '../api';
 import { toastError, useApp } from '../store';
 import { TreeBadge } from './CollectionTree';
@@ -104,6 +106,7 @@ export function ApiFuzzPanel({ spec }: { spec: string }) {
       setRunning(false);
     }
   };
+  const doc = useMemo(() => (report ? fuzzReport(spec, report) : undefined), [spec, report]);
   const findings = report ? report.results.filter((r) => r.verdict !== 'ok' && r.verdict !== 'not-judged') : [];
 
   return (
@@ -155,11 +158,11 @@ export function ApiFuzzPanel({ spec }: { spec: string }) {
               <Badge tone={report.counts['server-error'] ? 'bad' : 'ok'}>{report.counts['server-error']} server errors</Badge>
               <Badge tone={report.counts['accepted-invalid'] ? 'warn' : 'ok'}>{report.counts['accepted-invalid']} accepted</Badge>
               <Badge>{report.counts['undocumented-status']} undocumented</Badge>
+              <ApiReportBar kind="fuzz" report={doc}>
               {report.counts['server-error'] + report.counts['accepted-invalid'] > 0 && (
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="ml-auto"
                   icon={<FlaskConical size={12} />}
                   title="Each server error and accepted invalid input as a test that expects a 4xx: it passes once the API is fixed"
                   onClick={() =>
@@ -173,7 +176,7 @@ export function ApiFuzzPanel({ spec }: { spec: string }) {
                 </Button>
               )}
               {findings.length > 0 && (
-                <AiAction variant="ghost" className={report.counts['server-error'] + report.counts['accepted-invalid'] > 0 ? undefined : 'ml-auto'} label="Explain and fix (AI)" request={() => ({
+                <AiAction variant="ghost" label="Explain and fix (AI)" request={() => ({
                   task: 'explain-fuzz',
                   title: `Fuzzing · ${spec.replace(/^specs\//, '')}`,
                   context: {
@@ -190,6 +193,7 @@ export function ApiFuzzPanel({ spec }: { spec: string }) {
                   },
                 })} />
               )}
+              </ApiReportBar>
             </div>
             {!findings.length ? (
               <Empty title="Nothing found">Every invalid request was rejected with a documented 4xx, and the valid examples were accepted.</Empty>

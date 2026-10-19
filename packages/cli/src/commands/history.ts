@@ -24,6 +24,7 @@ import {
   runReviewReport,
 } from '@testpion/core';
 import { EXIT, green, red, yellow, dim, bold, CliError, printJson, withWorkspace, requireCollection } from '../shared.js';
+import { addOutputOptions, saveSurface, savedLine } from '../output-save.js';
 
 /** `testpion history …`: the response history of requests sent in the app, test and score history, comparing two responses. */
 export function registerHistoryCommands(program: Command): void {
@@ -46,18 +47,27 @@ export function registerHistoryCommands(program: Command): void {
         } else process.stdout.write(text);
       }),
     );
-  histCmd
-    .command('list')
-    .description('recent responses, newest first (optionally of one saved request)')
-    .requiredOption('-w, --workspace <nameOrPath>')
-    .option('--collection <nameOrId>', 'collection of --request')
-    .option('--request <nameOrId>', 'only responses of this saved request')
-    .option('--failed', 'only responses that failed (4xx/5xx, transport errors, non-OK gRPC codes)')
-    .option('--kind <kind>', `only this kind: ${HISTORY_KINDS.join(', ')} (capture: Debugger capture sessions and what they became)`)
-    .option('-q, --query <text>', 'only entries matching this text (name, URL, method, status)')
-    .option('-n, --limit <n>', 'how many', '20')
-    .option('--json', 'print as JSON')
-    .action((o) => {
+  addOutputOptions(
+    histCmd
+      .command('list')
+      .description('recent responses, newest first (optionally of one saved request); with --out, saved as HAR, CSV or JSON like the app’s History download')
+      .requiredOption('-w, --workspace <nameOrPath>')
+      .option('--collection <nameOrId>', 'collection of --request')
+      .option('--request <nameOrId>', 'only responses of this saved request')
+      .option('--failed', 'only responses that failed (4xx/5xx, transport errors, non-OK gRPC codes)')
+      .option('--kind <kind>', `only this kind: ${HISTORY_KINDS.join(', ')} (capture: Debugger capture sessions and what they became)`)
+      .option('-q, --query <text>', 'only entries matching this text (name, URL, method, status)')
+      .option('-n, --limit <n>', 'how many', '20')
+      .option('--json', 'print as JSON'),
+    'history',
+  ).action((o) => {
+      if (o.out) {
+        return withWorkspace(o.workspace, async (store) => {
+          const saved = await saveSurface({ store, surface: 'history', format: o.format, out: o.out, params: { query: o.query, kind: o.kind, failed: o.failed || undefined, limit: Number(o.limit) || 20 } });
+          if (o.json) printJson(saved);
+          else console.log(savedLine(saved));
+        });
+      }
       return withWorkspace(o.workspace, (store) => {
         const requestId = o.request ? savedRequestId(store, o.request, o.collection) : undefined;
         const kind = requestId ? 'http' : historyKindOf(o.kind);

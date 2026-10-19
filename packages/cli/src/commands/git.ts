@@ -19,6 +19,7 @@ import {
   runMergeDriver,
   gitConflictDetail, gitDeleteBranch, gitRenameBranch } from '@testpion/core';
 import { EXIT, green, red, yellow, dim, bold, CliError, printJson, withWorkspace } from '../shared.js';
+import { addOutputOptions, saveSurface, savedLine } from '../output-save.js';
 
 const MARK: Record<string, string> = { added: 'A', untracked: 'A', removed: 'D', deleted: 'D', changed: 'M', modified: 'M', renamed: 'R', conflicted: '!' };
 
@@ -50,17 +51,23 @@ export function registerGitCommands(git: Command, program: Command): void {
     }),
   );
 
-  git
-    .command('diff')
-    .description('the line diff of one file of the workspace (against the last commit)')
-    .argument('<file>', 'path inside the workspace, e.g. collections/payments.json')
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest)')
-    .option('--staged', 'the staged change')
-    .action((file: string, o) =>
-      withWorkspace(o.workspace, async (s) => {
-        process.stdout.write(await gitDiff(s.root, file, !!o.staged));
-      }),
-    );
+  addOutputOptions(
+    git
+      .command('diff')
+      .description('the line diff of one file of the workspace (against the last commit); --out saves it as a patch or Markdown, like the app’s Git download')
+      .argument('<file>', 'path inside the workspace, e.g. collections/payments.json')
+      .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest)')
+      .option('--staged', 'the staged change'),
+    'git.diff',
+  ).action((file: string, o) =>
+    withWorkspace(o.workspace, async (s) => {
+      if (o.out) {
+        const saved = await saveSurface({ store: s, surface: 'git.diff', format: o.format, out: o.out, params: { path: file, staged: !!o.staged } });
+        return console.log(savedLine(saved));
+      }
+      process.stdout.write(await gitDiff(s.root, file, !!o.staged));
+    }),
+  );
 
   wsOpt(
     git

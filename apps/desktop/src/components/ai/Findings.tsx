@@ -1,7 +1,10 @@
 import { Lightbulb } from 'lucide-react';
+import { useMemo } from 'react';
 import type { ProposalFinding } from '@testpion/core';
 import { RefLink } from '../RefLink';
 import { Badge } from '../ui';
+import { OutputActions } from '../output/OutputFrame';
+import { findingsOutputSpec } from '../output/ai-specs';
 
 /** What a finding's kind is called (a triage cause, a flaky pattern). */
 const KIND: Record<string, string> = {
@@ -27,9 +30,10 @@ const TONE: Record<string, 'bad' | 'warn' | 'accent' | 'default'> = { 'api-regre
  * many results it explains, the model's confidence, the explanation and the evidence, each fact linking what it is
  * about (a result of the run, the last passing run). The proposal review shows it above the items that fix it.
  */
-export function Findings({ findings, fixes }: { findings: ProposalFinding[]; fixes?: Record<string, number> }) {
+export function Findings({ findings, fixes, title }: { findings: ProposalFinding[]; fixes?: Record<string, number>; /** Given: the findings can be downloaded (an analysis on its own; the proposal review has its own download). */ title?: string }) {
+  const spec = useMemo(() => findingsOutputSpec(findings, title ?? 'Findings'), [findings, title]);
   if (!findings.length) return null;
-  return (
+  const list = (
     <ul className="grid grid-cols-[minmax(0,1fr)] gap-2" aria-label="Findings" data-findings>
       {findings.map((f) => (
         <li key={f.id} className="rounded-lg border border-line bg-panel/60 px-3 py-2 grid grid-cols-[minmax(0,1fr)] gap-1 min-w-0" data-finding={f.id} data-finding-kind={f.kind}>
@@ -64,5 +68,14 @@ export function Findings({ findings, fixes }: { findings: ProposalFinding[]; fix
         </li>
       ))}
     </ul>
+  );
+  if (!title) return list;
+  return (
+    <div className="grid gap-2" data-output="ai.analysis">
+      <div className="flex items-center">
+        <OutputActions spec={spec} />
+      </div>
+      {list}
+    </div>
   );
 }

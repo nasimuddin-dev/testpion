@@ -1,8 +1,10 @@
 import { Lock } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { asError, call } from '../api';
 import { plural } from '../lib/format';
 import { Empty, Modal, Spinner, Toggle, cx } from './ui';
+import { EnvOutputBar } from './EnvOutputBar';
+import { tableOutputSpec } from './output/table-specs';
 
 /** From `env.matrix` (environmentMatrix in core): statuses only, never values. */
 interface Matrix {
@@ -33,6 +35,20 @@ export function EnvMatrix({ onClose }: { onClose(): void }) {
     );
   }, []);
   const rows = m ? (onlyIncomplete ? m.rows.filter((r) => r.incompleteIn.length) : m.rows) : [];
+  // the rows as shown (statuses, never values)
+  const spec = useMemo(
+    () =>
+      tableOutputSpec({
+        id: 'env.matrix',
+        what: 'environment matrix',
+        name: 'environment-matrix',
+        title: 'Variables across environments',
+        columns: ['variable', ...(m?.environments ?? []), 'differs'],
+        rows: rows.map((r) => [r.key, ...r.cells.map((c) => `${c.state}${c.secret ? ' (secret)' : ''}`), r.differs ? 'yes' : '']),
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- rows follow m and the filter
+    [m, onlyIncomplete],
+  );
   return (
     <Modal title="Variables across environments" onClose={onClose} width={Math.min(1100, 360 + (m?.environments.length ?? 2) * 120)}>
       {error ? (
@@ -48,6 +64,7 @@ export function EnvMatrix({ onClose }: { onClose(): void }) {
               {m.incomplete ? `${plural(m.incomplete, 'variable')} missing, empty or off somewhere` : 'Every variable is set in every environment'} · {plural(m.rows.length, 'variable')}
             </span>
             {m.incomplete > 0 && <Toggle checked={onlyIncomplete} onChange={setOnlyIncomplete} label="Only incomplete" />}
+            <EnvOutputBar spec={spec} />
           </div>
           <div className="overflow-auto max-h-[60vh] rounded-lg border border-line">
             <table className="w-full text-xs">

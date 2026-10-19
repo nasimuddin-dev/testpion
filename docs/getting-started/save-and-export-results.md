@@ -65,6 +65,17 @@ File names are made from what the output is and when, for example `GET-patients-
 | Terminal | Text |
 | Problems | Markdown, JSON, CSV |
 | HTTP Debugger session | HAR (sanitized), JSON, CSV |
+| One Debugger exchange | Request and response as raw text, a one-entry HAR, the request or response body as the file it is |
+| History | HAR (HTTP and GraphQL), CSV, JSON, as filtered, up to the newest 1,000 |
+| Traces | OTLP JSON: the traces shown, or the selected one |
+| MCP resource, prompt, protocol trace | A resource's content as its file (a blob as bytes); a prompt's messages as JSON or Markdown; the trace as a JSON-RPC log (JSON Lines) |
+| AI: Playground answer, model comparison, analysis findings, a proposal | Markdown, JSON; the comparison also as CSV, a proposal also as one patch |
+| Git changes | One patch of every change (or of the file whose diff is open), or what changed by meaning as Markdown |
+| API reports: lint, fuzzing, coverage, security review, comparison of two versions | Markdown, JSON |
+| Charts (every chart card) | PNG of the card; SVG of the plot when the plot is a drawing |
+| Environment matrix, comparing two environments | CSV, Markdown, JSON (statuses and masked values only) |
+| Monitor runs, runs list | CSV, JSON |
+| Workspace report (Home), collection documentation, diagnostics (Settings ▸ About) | HTML to share; Markdown or HTML; text or JSON |
 
 Message logs, server-sent events and subscription events hold every message kept, not only the filtered ones.
 
@@ -112,6 +123,14 @@ These outputs show a **Redacted** mark next to the arrow. On the ones that still
 **A response body is your own data, so it is saved as it is.** When the body looks like it holds a credential (an `access_token` field, a bearer token), the message after saving says so. When the active environment is marked as production, the menu and the message say that too.
 
 What a saved file can contain, and what never leaves your computer: [Privacy](/security/privacy#saved-files).
+
+## From the command line and for AI agents {#command-line}
+
+The outputs that are built from the workspace are saved by the same code in the command line and for AI agents, so the file is byte for byte the one the down arrow saves:
+
+- `testpion output <output> --format <format> --out <file>` ([the CLI reference](/cli/reference#output)); `testpion output --list --json` lists them.
+- `--out` and `--format` on `send`, `history list`, `monitor results`, `git diff` and `eval matrix`.
+- The MCP tool `save_output` ([MCP server](/ai-testing/mcp-server)) returns the content, or writes a new file inside the workspace. Secrets stay masked: an agent cannot include them.
 
 ## Big outputs {#big-outputs}
 

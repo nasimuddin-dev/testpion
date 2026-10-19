@@ -371,6 +371,8 @@ export function debuggerHandlers(be: Backend): Handlers {
     }
   };
   state.view = () => shown().exchanges;
+  // the output builders (output.save) read the session on screen as HAR through this, not through the RPC by name
+  be.outputProviders.har = () => exchangesToHar(shown().exchanges, be.logger.redactor, ENGINE_VERSION);
   const sessionsDir = () => be.ws.path(SESSIONS_DIR);
   const sessionFile = (name: string) => {
     const file = captureSessionFileName(name); // the same name a capture ref (History) finds it by

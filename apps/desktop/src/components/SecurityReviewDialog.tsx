@@ -1,6 +1,8 @@
 import { ShieldAlert, ShieldCheck } from 'lucide-react';
 import { AiAction } from './ai/AiAction';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { ApiReportBar } from './ApiReportBar';
+import { securityReport } from './output/api-report-specs';
 import { call } from '../api';
 import { useApp } from '../store';
 import { openRef } from '../lib/open-ref';
@@ -20,6 +22,7 @@ export function SecurityReviewDialog({ collectionId, name, onClose }: { collecti
   const [findings, setFindings] = useState<SecurityFinding[]>();
   const env = useApp((s) => s.environment);
   useEffect(() => void call<SecurityFinding[]>('col.securityLint', { id: collectionId, environment: env }).then(setFindings), [collectionId, env]);
+  const report = useMemo(() => (findings ? securityReport(name, findings) : undefined), [name, findings]);
   const open = (f: SecurityFinding) => {
     if (!f.requestId) return;
     void openRef({ kind: 'request', collectionId, requestId: f.requestId });
@@ -35,7 +38,7 @@ export function SecurityReviewDialog({ collectionId, name, onClose }: { collecti
           <>
             <div className="text-sm flex items-center gap-2">
               <ShieldAlert size={15} className="text-bad" /> {plural(findings.length, 'finding')}
-              <AiAction variant="ghost" className="ml-auto" onStart={onClose} label="How to fix (AI)" request={() => ({ task: 'fix-security', title: `Fixes · ${name}`, context: { collection: name, findings: findings.slice(0, 60).map(({ severity, where, message, category }) => ({ severity, category, where, message })) } })} />
+              <ApiReportBar kind="security" report={report}><AiAction variant="ghost" onStart={onClose} label="How to fix (AI)" request={() => ({ task: 'fix-security', title: `Fixes · ${name}`, context: { collection: name, findings: findings.slice(0, 60).map(({ severity, where, message, category }) => ({ severity, category, where, message })) } })} /></ApiReportBar>
             </div>
             <ul className="flex flex-col max-h-[50vh] overflow-auto">
               {findings.map((f, i) => (

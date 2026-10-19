@@ -326,7 +326,7 @@ export function AiAnalysisDialog({ request, onClose }: { request: AiAnalysisRequ
         {shown && (result || !estimate?.ok) && (
           <div className="grid gap-2" data-ai-analysis-findings>
             {shown.fallback && <p className="text-xs text-warn">{shown.fallback}</p>}
-            <Findings findings={findingsOf(shown)} />
+            <Findings findings={findingsOf(shown)} title={title} />
           </div>
         )}
       </div>

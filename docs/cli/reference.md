@@ -28,6 +28,7 @@ testpion replace <c> <find> <with> Find and replace across a collection's reques
 testpion agent-info               What an AI agent needs to use TestPion here, as JSON (workspace, commands, exit codes, MCP setup)
 testpion kinds [kind]            The kinds of item a workspace holds and what each offers (open, rename, delete with undo, run, CI …), with why an action never applies, and the menus of its rows (--json)
 testpion item delete|restore <ref|id> -w   Delete any item to Recently deleted by its ref (collection:<id>, environment:<id>, dataset:<name>, spec:specs/<path>, mcp-server:<id>), or put one back (--json)
+testpion output <output>        Save an output of the app (run results, History, traces, a timeline, a matrix, the changes …) to a file, byte for byte as the app's down arrow does (--format, --out, --list)
 testpion open <ref>              Open an item in the TestPion app by its ref (a testpion://open link, the JSON "ref" of --json output, or kind:id); checked first (--json, --print)
 testpion tests-from-spec <spec> Write a first test suite from an API definition (examples and invalid requests)
 testpion integration-suite <spec|collection> Write an integration suite: a flow per resource (create, read, update, list, delete), the login first
@@ -113,9 +114,9 @@ Every command that takes `--json` prints **one envelope** on stdout, whatever ha
 
 ## Results as files {#results-as-files}
 
-The commands that already write files: `test`, `run-collection` and `eval run` (`-o, --out <dir>` and `-r` for the JUnit, JSON, HTML and Markdown reports), `report` (reports from a `results.jsonl`), `load --json <file>`, `history export-har -o <file>`, `debug -o <file.har>`, `flow report <file> --html <out>`, `export` / `workspace export` and `docs -o`. Anything else prints to stdout, so `testpion send … > body.json` keeps a body.
+The commands that already write files: `test`, `run-collection` and `eval run` (`-o, --out <dir>` and `-r` for the JUnit, JSON, HTML and Markdown reports), `report` (reports from a `results.jsonl`), `load --json <file>`, `history export-har -o <file>`, `debug -o <file.har>`, `flow report <file> --html <out>`, `export` / `workspace export` and `docs -o`. Most commands that print a result now also take `--out <file>` and `--format`, and `testpion output` saves any output of the app: see [`output`](#output) below. Anything else prints to stdout, so `testpion send … > body.json` keeps a body.
 
-**Coming in release B (not in 0.51):** `--out <file> --format …` on every command that prints a result, with the formats and redaction of the app's down arrow ([Save and export results](/getting-started/save-and-export-results)), and MCP tools that save a big result into the workspace's `exports/` folder.
+`--out <file>` and `--format` on `send` (the body), `history list` (History as HAR, CSV or JSON), `monitor results` (CSV, JSON), `git diff` (patch, Markdown), `eval matrix` (CSV, JSON, Markdown, HTML) and `testpion output` use the same builders, formats and redaction as the app's down arrow ([Save and export results](/getting-started/save-and-export-results)), so a file written here is byte for byte the file the app saves. The MCP server has the same in its `save_output` tool ([MCP server](/ai-testing/mcp-server)).
 
 ## `test` / `run` options
 
@@ -193,8 +194,46 @@ testpion send https://api.example.com/items -X POST -H "Content-Type: applicatio
 | `-i, --include` | Also print the status line and response headers. |
 | `--fail` | Exit `1` on an HTTP error status (400+) or a failed check. |
 | `--json` | The envelope, with `{ status, statusText, url, durationMs, headers, body, checks }` in `data`. |
+| `--out <file>` | Write the body to a file instead of printing it: as received by default (like `curl -o`), or laid out with `--format json`, minified with `--format json-min`, or `text`, `html`, `xml`. With `--json`, `data.saved` says where and how big. |
 
 Check results go to stderr, so `testpion send … | jq` gets only the body.
+
+## `output` {#output}
+
+```bash
+testpion output --list                         # what can be saved, with formats and parameters (--json for a script)
+testpion output history -w clinic --out history.har            # History as HAR (the format from the file name)
+testpion output history -w clinic --failed --format csv --out failed.csv
+testpion output run.results -w clinic --run run-2026-10-18-0932 --format junit --out junit.xml
+testpion output git.diff -w clinic --format md --out changes.md
+testpion output response.body -w clinic --history-id h-7f3 --format json --out body.json
+```
+
+Saves an output of the app to a file, as the **down arrow** in the window does: the same builders, the same formats and the same secrets policy ([Save and export results](/getting-started/save-and-export-results)). `testpion output --list` shows what it can save from a workspace:
+
+| Output | Formats | Parameters |
+|---|---|---|
+| `run.results` | html, json, junit, md, csv, zip | `--run` (the run id) |
+| `flow.timeline` | html, json | `--run`, or `--file` (a flow file: its latest run) |
+| `flow.grid` | csv, json, html | `--data-run`, `--status` |
+| `eval.matrix` | csv, json, md, html | `--runs <ids…>`, `--baseline` |
+| `history` | har, csv, json | `-q`, `--kind`, `--failed`, `-n` |
+| `traces` | json (OTLP) | `--traces <ids…>`, or `-q`, `--kind`, `--failed`, `-n` |
+| `monitor.runs` | csv, json | `--monitor`, `-n` |
+| `runs.overview` | csv, json | `-q`, `-n` |
+| `git.diff` | diff, md | `--path`, `--staged` |
+| `workspace.report` | html | `--days` |
+| `response.body`, `graphql.response` | raw, json, csv … | `--history-id` (a saved response body) |
+
+The console of a running app, the Debugger session and what only the window holds (a selected exchange, a chart, an AI answer) are saved from the app.
+
+| Option | Description |
+|---|---|
+| `--out <file>` | The file to write (without it the text is printed; `--json` needs it). It is written through a `.part` file and renamed when complete, so a failure leaves no half file. |
+| `--format <format>` | One of the output's formats; by default the one the `--out` extension names (`.csv`, `.har`, `.md` …), else the output's default. |
+| `--include-secrets` | Keep the secrets that are masked by default (not for outputs that are masked when they are recorded). A script has no dialog to confirm in: the flag is the confirmation. |
+| `-e, --environment` | Mask this environment's secret values as well. |
+| `--json` | `{ surface, format, path, bytes, redacted, notice }` in the envelope. |
 
 ## `collections` and `requests`
 

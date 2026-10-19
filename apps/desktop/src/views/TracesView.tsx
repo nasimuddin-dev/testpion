@@ -1,5 +1,5 @@
 import { Activity, RefreshCw, Send } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { call, on } from '../api';
 import { persisted, toastError, useApp } from '../store';
 import { KeyValueEditor } from '../components/KeyValueEditor';
@@ -13,6 +13,9 @@ import { Badge, Button, cx, Empty, IconButton, Input, Modal, Select, Split, Virt
 import { NodeMenu } from '../components/TreeParts';
 import type { NodeMenuCtx } from '../lib/node-menu';
 import { openRef, copyRefLink } from '../lib/open-ref';
+import { outputFileName } from '@testpion/shared';
+import { OutputActions } from '../components/output/OutputFrame';
+import type { OutputSpec } from '../components/output/output-core';
 
 interface TraceMeta {
   id: string;
@@ -113,9 +116,23 @@ export function TracesView() {
     void call<Trace | null>('traces.get', { id: sel }).then(setTrace);
   }, [sel]);
   useIntent('traces', (p) => p?.traceId && setSel(p.traceId));
+  // OTLP JSON of the traces as filtered here (the newest 1,000), or of the selected one; the backend reads them from disk
+  const spec = useMemo<OutputSpec>(() => {
+    const shown = { kind: 'traces' as const, query: query || undefined, traceKind: kind || undefined, failed: errorsOnly || undefined, limit: 1000 };
+    return {
+      id: 'traces',
+      what: 'traces',
+      name: outputFileName({ name: 'testpion-traces', ext: '' }),
+      formats: [
+        { key: 'shown', format: 'json', label: 'Traces shown (OTLP JSON)', source: shown, default: true },
+        ...(sel ? [{ key: 'selected', format: 'json' as const, label: 'Selected trace (OTLP JSON)', source: { kind: 'traces' as const, ids: [sel] }, fileName: `trace-${sel.slice(0, 8)}.json` }] : []),
+      ],
+      empty: total ? undefined : 'No traces yet',
+    };
+  }, [query, kind, errorsOnly, sel, total]);
   return (
     <Split id="traces" initial={32}>
-      <div className="h-full flex flex-col">
+      <div className="h-full flex flex-col" data-output="traces">
         <div className="flex gap-2 p-2 border-b border-line">
           <Input className="flex-1" placeholder="Filter traces" value={query} onChange={(e) => setQuery(e.target.value)} />
           <Select value={kind} onChange={(e) => setKind(e.target.value)} aria-label="Kind">
@@ -130,12 +147,16 @@ export function TracesView() {
           <IconButton label="Refresh" onClick={() => load(true)}>
             <RefreshCw size={14} />
           </IconButton>
-          <IconButton label="Send to OpenTelemetry (OTLP)" onClick={() => setOtlpOpen(true)}>
-            <Send size={14} />
-          </IconButton>
         </div>
         {otlpOpen && <OtlpDialog ids={items.map((t) => t.id)} selected={sel} onClose={() => setOtlpOpen(false)} />}
-        <div className="text-xs text-muted px-3 py-1">{plural(total, 'trace')}</div>
+        <div className="flex items-center gap-2 px-3 min-h-8 min-w-0">
+          <span className="text-xs text-muted truncate min-w-0">{plural(total, 'trace')}</span>
+          <OutputActions spec={spec}>
+            <IconButton label="Send to OpenTelemetry (OTLP)" onClick={() => setOtlpOpen(true)}>
+              <Send size={14} />
+            </IconButton>
+          </OutputActions>
+        </div>
         {items.length ? (
           <VirtualList
             className="flex-1"
