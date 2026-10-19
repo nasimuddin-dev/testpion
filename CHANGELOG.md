@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.53.1 — 2026-10-18
+
+Checks only, nothing changes in the app: the registry's "planned" capabilities that were due in 0.53 are re-planned for 0.54 (they are not built yet), and a test that compared a file name in another letter case now agrees with how macOS treats it.
+
 ## 0.53.0 — 2026-10-18
 
 A review release: safer saves and downloads, one row and one badge in every list, tabs that always close and never show a cut-off name, one generic delete with Undo that the command line and MCP can use too, and faster trees. Every item below is something you can see or use.

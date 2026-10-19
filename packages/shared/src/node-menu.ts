@@ -219,12 +219,12 @@ function computeCapabilities(kind: NodeKind): Capabilities {
       container: true,
       rename: true,
       delete: true,
-      duplicate: { planned: '0.53' },
-      move: { planned: '0.53' },
+      duplicate: { planned: '0.54' },
+      move: { planned: '0.54' },
       // a folder of test files runs (and runs in CI) as one; a library's folder is a way to sort its items
       run: base.run === true && info.folders === 'dirs' ? true : NA('its items run one by one'),
       ci: base.ci === true && info.folders === 'dirs' ? true : NA('its items run in CI one by one'),
-      export: { planned: '0.53' },
+      export: { planned: '0.54' },
     };
   if (kind === 'category') return { ...all(NA('a group of one protocol’s requests in a collection')), container: true, run: true };
   return { ...all(NA('favorites gather requests from every collection')), container: true };
@@ -256,7 +256,7 @@ const testFileLabel = (_c: NodeMenuContext, k: NodeKind): MenuLabelKey => (k ===
 /** The shared actions, in their order inside each group (kind actions follow the shared ones of their group). */
 export const STANDARD_ACTIONS = [
   { id: 'newFolder', group: 'create', label: 'newFolder', icon: 'folder-plus', cap: 'container' },
-  // Import… on a section's create group (per container in 0.53, EX-A2)
+  // Import… on a section's create group (per container in 0.54, EX-A2)
   { id: 'import', group: 'create', label: 'import', icon: 'upload', cap: 'import', appliesTo: isSectionNode },
   { id: 'open', group: 'open', label: 'open', icon: 'external-link', cap: 'open', shortcut: 'Enter' },
   { id: 'openNewTab', group: 'open', label: 'openNewTab', icon: 'square-arrow-out-up-right', cap: 'open-new-tab' },
