@@ -79,7 +79,7 @@ const steps = [
     'a-preset-chooses-the-triad',
     `await __t.real.click('[data-rag-preset="rag-triad"]'); await __t.sleep(800);
      const chosen = vis('[data-rag-metric]').filter((r) => r.querySelector('[data-rag-metric-check]')?.checked).map((r) => r.getAttribute('data-rag-metric'));
-     const modes = [...document.querySelectorAll('[data-rag-instance] select')].map((s) => s.selectedOptions[0].textContent).join(',');
+     const modes = [...${row('context-relevance')}.querySelectorAll('[data-rag-instance] select')].map((s) => s.selectedOptions[0].textContent).join(',');
      return 'chosen: ' + chosen.sort().join(',') + ' | context-relevance mode: ' + modes;`,
   ),
   step(
@@ -98,7 +98,8 @@ const steps = [
   ),
   step(
     'try-faithfulness-on-a-sample-from-the-target',
-    `await __t.real.click(${row('faithfulness')}.querySelector('[data-rag-try]'));
+    `const tryButton = ${row('faithfulness')}.querySelector('[data-rag-try]'); tryButton.scrollIntoView({ block: 'center' }); await __t.sleep(400);
+     await __t.real.click(tryButton);
      const d = await __t.waitFor(() => document.querySelector('[data-rag-try-dialog]'), 5000); if (!d) return 'NO DIALOG';
      const q = document.querySelector('[data-rag-try-question]'); if (!q) return 'NO QUESTION';
      await __t.real.click('[data-rag-try-probe]');
@@ -168,6 +169,7 @@ const steps = [
   step(
     'a-cell-opens-the-sample',
     `const cell = document.querySelector('[data-rag-cell$="|faithfulness"]'); if (!cell) return 'NO CELL';
+     cell.scrollIntoView({ block: 'center' }); await __t.sleep(300);
      await __t.real.click(cell);
      const d = await __t.waitFor(() => document.querySelector('[data-rag-detail]'), 8000); if (!d) return 'NO DETAIL';
      await __t.sleep(500);
@@ -230,8 +232,8 @@ const steps = [
      for (const s of ['answer', 'contexts', 'context.text', 'context.id', 'context.score']) { const i = document.querySelector('[data-rag-slot="' + s + '"]'); await __t.real.click(i); await __t.real.key('a', { ctrl: true }); await __t.real.key('Backspace'); }
      await __t.real.click('[data-rag-probe]');
      const tree = await __t.waitFor(() => document.querySelector('[data-rag-response] .syn-key'), 15000); if (!tree) return 'NO RESPONSE';
-     const button = vis('[data-rag-connect] [data-ai-action]').find((b) => /Suggest mapping/.test(b.textContent)); if (!button) return 'NO BUTTON';
-     await __t.real.click(button);
+     const suggest = vis('[data-rag-connect] [data-ai-action]').find((b) => /Suggest mapping/.test(b.textContent)); if (!suggest) return 'NO BUTTON';
+     await __t.real.click(suggest);
      const filled = await __t.waitFor(() => document.querySelector('[data-rag-slot="answer"]').value === '$.answer' && document.querySelector('[data-rag-slot="contexts"]').value, 15000);
      const sample = await __t.waitFor(() => /8am/.test(document.querySelector('[data-rag-answer]')?.textContent ?? '') && document.querySelector('[data-rag-sample]'), 8000);
      return 'answer: ' + document.querySelector('[data-rag-slot="answer"]').value + ' | contexts: ' + document.querySelector('[data-rag-slot="contexts"]').value + ' | text: ' + document.querySelector('[data-rag-slot="context.text"]').value + ' | sample reads the answer: ' + !!sample + ' | note: ' + short(document.querySelector('[data-rag-suggest-note]')?.textContent, 40);`,
@@ -259,5 +261,5 @@ module.exports = withExpect(
     'connect-from-a-preset-with-limits': /^limits: 2\/120 \| request has \/invoke: true \| answer: \$\.output\.answer \| contexts: \$\.output\.context\[\*\] \| named: LangServe.*$/,
     'ai-suggest-mapping-reads-the-sample': /^answer: \$\.answer \| contexts: \$\.sources\[\*\] \| text: \$\.text \| sample reads the answer: true \| note: check the score scale$/,
   },
-  { prepare, settings: { assistantProvider: 'rag-mock-judge', assistantModel: 'mock-model' } },
+  { prepare, settings: { assistantProvider: 'rag-mock-judge', assistantModel: 'mock-model', pricing: [{ provider: '*', model: 'mock-model', inputPerMillion: 1, outputPerMillion: 2, version: 'e2e' }] } },
 );

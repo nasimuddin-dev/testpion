@@ -157,7 +157,7 @@ export function MetricPicker({
                             {kind.label}
                           </Badge>
                           {r.direction === 'lower' && <Badge title="A lower score is better">lower is better</Badge>}
-                          <span className="text-xs text-muted">{r.calls === '0' ? '' : `${r.calls} call(s)`}</span>
+                          <span className="text-xs text-muted">{r.calls === '0' ? '' : `judge calls: ${r.calls}`}</span>
                         </div>
                         {missing.length > 0 && (
                           <div className="text-xs text-warn" data-rag-missing>
