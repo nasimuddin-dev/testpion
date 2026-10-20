@@ -346,7 +346,7 @@ export function CollectionsView() {
                   { id: 'headers', label: 'Headers', badge: draft.headers?.filter((h) => h.key).length || undefined },
                   { id: 'auth', label: 'Authorization' },
                   { id: 'scripts', label: 'Scripts' },
-                  { id: 'settings', label: 'Settings', badge: Object.keys(draft.settings ?? {}).length || undefined },
+                  { id: 'settings', label: 'Settings', badge: Object.values(draft.settings ?? {}).filter((v) => v !== undefined).length || undefined },
                   { id: 'docs', label: 'Docs' },
                   { id: 'run', label: 'Run' },
                   { id: 'mock', label: 'Mock' },

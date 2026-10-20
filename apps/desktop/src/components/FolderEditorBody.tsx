@@ -33,7 +33,7 @@ export function FolderEditorBody({ folder, onSave, onClose }: { folder: Collecti
                 testScript: draft.testScript?.trim() ? draft.testScript : undefined,
                 variables: draft.variables?.some((v) => v.key) ? draft.variables.filter((v) => v.key) : undefined,
                 headers: draft.headers?.some((h) => h.key) ? draft.headers.filter((h) => h.key) : undefined,
-                settings: draft.settings && Object.keys(draft.settings).length ? draft.settings : undefined,
+                settings: draft.settings && Object.values(draft.settings).some((v) => v !== undefined) ? draft.settings : undefined,
                 description: draft.description?.trim() ? draft.description : undefined,
               });
               onClose();
@@ -52,7 +52,7 @@ export function FolderEditorBody({ folder, onSave, onClose }: { folder: Collecti
           { id: 'variables', label: 'Variables', badge: draft.variables?.filter((v) => v.key).length || undefined },
           { id: 'headers', label: 'Headers', badge: draft.headers?.filter((h) => h.key).length || undefined },
           { id: 'auth', label: 'Authorization' },
-          { id: 'settings', label: 'Settings', badge: Object.keys(draft.settings ?? {}).length || undefined },
+          { id: 'settings', label: 'Settings', badge: Object.values(draft.settings ?? {}).filter((v) => v !== undefined).length || undefined },
           { id: 'docs', label: 'Docs', badge: draft.description?.trim() ? 1 : undefined },
         ]}
       />

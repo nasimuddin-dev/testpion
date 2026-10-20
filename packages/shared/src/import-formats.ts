@@ -14,7 +14,7 @@ export const IMPORT_FORMATS = {
   har: ['har', 'json'],
   'aps-collection': ['json'],
   'aps-workspace': ['json'],
-  'graphql-sdl': ['graphql', 'gql', 'graphqls', 'sdl'],
+  'graphql-sdl': ['graphql', 'gql', 'graphqls', 'sdl', 'json'],
   insomnia: ['json', 'yaml', 'yml'],
   bruno: ['bru', 'json'],
   opencollection: ['yml', 'yaml', 'json'],

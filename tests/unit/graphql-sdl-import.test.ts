@@ -18,8 +18,13 @@ describe('GraphQL SDL import', () => {
     const c = r.collection!;
     expect(c.name).toBe('clinic');
     expect(c.variables).toEqual([{ key: 'graphqlUrl', value: '', enabled: true }]);
-    const req = c.items[0] as SavedGraphQLRequest;
-    expect(req).toMatchObject({ kind: 'graphql', name: 'clinic: patient', request: { endpoint: '{{graphqlUrl}}' } });
+    // a folder per operation type, a request per root field
+    expect(c.items.map((n) => n.name)).toEqual(['Queries', 'Mutations']);
+    const queries = c.items[0] as { items: SavedGraphQLRequest[] };
+    expect(queries.items.map((n) => n.name)).toEqual(['patient', 'patients']);
+    expect((c.items[1] as { items: SavedGraphQLRequest[] }).items.map((n) => n.name)).toEqual(['addPatient']);
+    const req = queries.items[0]!;
+    expect(req).toMatchObject({ kind: 'graphql', name: 'patient', request: { endpoint: '{{graphqlUrl}}', operationName: 'Patient' } });
     // the operation for the first Query field, with its required argument as a variable, and valid against the schema
     expect(req.request.query).toMatch(/query \w+\(\$id: ID!\) \{\s+patient\(id: \$id\) \{/);
     expect(req.request.variables).toEqual({ id: expect.anything() });

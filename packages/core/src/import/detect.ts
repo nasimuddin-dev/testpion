@@ -10,6 +10,7 @@ import { isHttpFile } from './http-file.js';
 import { isArazzo } from './arazzo.js';
 import { isOpenCollection } from './opencollection-import.js';
 import { isThunder } from './thunder-import.js';
+import { isGraphqlIntrospection } from './graphql-sdl.js';
 import { isYaak } from './yaak-import.js';
 import { isHttpie } from './httpie-import.js';
 import { isApidog } from './apidog-import.js';
@@ -32,6 +33,8 @@ export function detectFormat(text: string): ImportFormat | 'unknown' {
     return 'unknown';
   }
   if (!d || typeof d !== 'object') return 'unknown';
+  // a GraphQL introspection result ({ data: { __schema } }): the schema, as a collection of its root fields
+  if (isGraphqlIntrospection(d)) return 'graphql-sdl';
   // an Arazzo workflow description (arazzo: 1.0.x): its workflows become flow files under tests/
   if (isArazzo(d)) return 'arazzo';
   // Bruno's OpenCollection (opencollection: 1.0.0), the YAML format
