@@ -4,6 +4,7 @@ import {
   changesMarkdown,
   describeGitChanges,
   describeRevChanges,
+  gitChangesByItem,
   findCommittableSecrets,
   gitBranches,
   gitCommit,
@@ -19,6 +20,7 @@ import {
   runMergeDriver,
   gitConflictDetail, gitDeleteBranch, gitRenameBranch } from '@testpion/core';
 import { EXIT, green, red, yellow, dim, bold, CliError, printJson, withWorkspace } from '../shared.js';
+import { addOutputOptions, saveSurface, savedLine } from '../output-save.js';
 
 const MARK: Record<string, string> = { added: 'A', untracked: 'A', removed: 'D', deleted: 'D', changed: 'M', modified: 'M', renamed: 'R', conflicted: '!' };
 
@@ -27,8 +29,23 @@ const out = (json: boolean, value: unknown, text: () => void) => (json ? printJs
 export function registerGitCommands(git: Command, program: Command): void {
   const wsOpt = (c: Command) => c.option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest)').option('--json', 'print as JSON');
 
-  wsOpt(git.command('status').description('branch, ahead / behind the remote, and the changed files of the workspace')).action((o) =>
+  wsOpt(
+    git
+      .command('status')
+      .description('branch, ahead / behind the remote, and the changed files of the workspace (--by-item: the changed items, named like the app does)')
+      .option('--by-item', 'list the changes item by item ("MCP server Weather: URL") instead of file by file')
+      .option('--kind <kind...>', 'with --by-item, only these kinds (mcp-server, provider, prompt, dataset, spec, request, environment …)'),
+  ).action((o) =>
     withWorkspace(o.workspace, async (s) => {
+      if (o.byItem || o.kind) {
+        const r = await gitChangesByItem(s.root, { kinds: o.kind });
+        if (!r.repository) throw new CliError(`${s.root} is not in a git repository: run  git init  there (then  testpion git setup)`, EXIT.CONFIG_ERROR);
+        return out(o.json, r, () => {
+          console.log(`${bold(r.branch ?? '(detached)')}${r.ahead ? ` ↑${r.ahead}` : ''}${r.behind ? ` ↓${r.behind}` : ''}`);
+          if (!r.items.length) console.log(dim(o.kind ? 'No changed items of these kinds.' : 'Nothing changed since the last commit.'));
+          for (const i of r.items) console.log(`  ${MARK[i.change] ?? '?'} ${i.title}${i.details.length ? dim(`  ${i.details.join(', ')}`) : ''}${dim(`  ${i.file}${i.staged ? ' (staged)' : ''}`)}`);
+        });
+      }
       const st = await gitStatus(s.root);
       if (!st.repository) throw new CliError(`${s.root} is not in a git repository: run  git init  there (then  testpion git setup)`, EXIT.CONFIG_ERROR);
       out(o.json, st, () => {
@@ -50,17 +67,23 @@ export function registerGitCommands(git: Command, program: Command): void {
     }),
   );
 
-  git
-    .command('diff')
-    .description('the line diff of one file of the workspace (against the last commit)')
-    .argument('<file>', 'path inside the workspace, e.g. collections/payments.json')
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest)')
-    .option('--staged', 'the staged change')
-    .action((file: string, o) =>
-      withWorkspace(o.workspace, async (s) => {
-        process.stdout.write(await gitDiff(s.root, file, !!o.staged));
-      }),
-    );
+  addOutputOptions(
+    git
+      .command('diff')
+      .description('the line diff of one file of the workspace (against the last commit); --out saves it as a patch or Markdown, like the app’s Git download')
+      .argument('<file>', 'path inside the workspace, e.g. collections/payments.json')
+      .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest)')
+      .option('--staged', 'the staged change'),
+    'git.diff',
+  ).action((file: string, o) =>
+    withWorkspace(o.workspace, async (s) => {
+      if (o.out) {
+        const saved = await saveSurface({ store: s, surface: 'git.diff', format: o.format, out: o.out, params: { path: file, staged: !!o.staged } });
+        return console.log(savedLine(saved));
+      }
+      process.stdout.write(await gitDiff(s.root, file, !!o.staged));
+    }),
+  );
 
   wsOpt(
     git

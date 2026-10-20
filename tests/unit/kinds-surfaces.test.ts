@@ -25,7 +25,7 @@ describe('kinds for agents', () => {
     expect(mcp.can).toEqual(expect.arrayContaining(['open', 'rename', 'delete', 'trash']));
     expect(mcp.facets).toEqual(['resolve', 'ops']);
     expect(describeKinds({ kind: 'library:grpc' }).kinds.map((k) => k.id)).toEqual(['grpc-call']);
-    expect(describeKinds({ all: true }).kinds.some((k) => k.id === 'rag-target' && k.since === '0.60')).toBe(true);
+    expect(describeKinds({ all: true }).kinds.some((k) => k.id === 'metric' && k.since === '0.61')).toBe(true);
     expect(() => describeKinds({ kind: 'nope' })).toThrow(/Unknown kind "nope"/);
   });
 

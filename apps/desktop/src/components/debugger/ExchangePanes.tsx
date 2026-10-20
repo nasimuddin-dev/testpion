@@ -9,6 +9,8 @@ import { JwtView } from '../JwtView';
 import { EventsView, FramesView, GrpcView } from '../DebuggerTools';
 import { bodyNote, curlOf, hexDump, rawOf, versionOf, type Exchange } from './model';
 import { copyText } from '../../lib/clipboard';
+import { OutputActions } from '../output/OutputFrame';
+import { exchangeOutputSpec } from '../output/debugger-specs';
 
 const parseJson = (text?: string) => {
   if (!text) return undefined;
@@ -48,14 +50,15 @@ export function ExchangePanes({ e, ...a }: { e: Exchange } & ExchangeActions) {
   })();
   const version = versionOf(e);
   const tunnel = e.kind === 'tunnel';
+  const spec = useMemo(() => exchangeOutputSpec(e), [e]);
   return (
-    <div className="h-full flex flex-col min-h-0">
+    <div className="h-full flex flex-col min-h-0" data-output="debugger.exchange">
       <div className="flex items-center gap-2 px-3 h-9 border-b border-line text-sm shrink-0 whitespace-nowrap overflow-hidden">
         <Badge tone={e.error ? 'bad' : statusTone(e.status)}>{e.error ? 'error' : `${e.status ?? '…'} ${e.statusText ?? ''}`}</Badge>
         <span className="mono text-xs truncate" title={e.url}>
           {e.method} {e.url}
         </span>
-        <span className="ml-auto flex items-center gap-1 shrink-0">
+        <OutputActions spec={spec}>
           <Button size="sm" variant="ghost" icon={<ExternalLink size={12} />} onClick={a.onOpen} title="Open as request: in a tab, to change and send">
             Open
           </Button>
@@ -113,7 +116,7 @@ export function ExchangePanes({ e, ...a }: { e: Exchange } & ExchangeActions) {
               Delete
             </Button>
           )}
-        </span>
+        </OutputActions>
       </div>
       {e.error && <div className="px-3 py-2 text-sm text-bad border-b border-line">{e.error}</div>}
       {(e.rules?.length || e.redirectedTo || e.repliedByRule || e.edited) && (

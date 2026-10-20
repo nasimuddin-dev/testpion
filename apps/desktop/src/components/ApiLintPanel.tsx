@@ -1,5 +1,8 @@
 import { CircleAlert, CircleCheck, Info, TriangleAlert } from 'lucide-react';
+import { useMemo } from 'react';
 import { AiAction } from './ai/AiAction';
+import { ApiReportBar } from './ApiReportBar';
+import { lintReport } from './output/api-report-specs';
 import { Badge, Empty } from './ui';
 import { plural } from '../lib/format';
 
@@ -29,6 +32,7 @@ const TONE = { error: 'bad', warning: 'warn', info: 'default' } as const;
 
 /** The lint problems of an API definition: one row per problem (opens its place in the document), and AI advice on fixing them. */
 export function ApiLintPanel({ spec, text, result, onOpen }: { spec: string; text: string; result?: ApiLintResult; onOpen(p: ApiLintProblem): void }) {
+  const report = useMemo(() => (result ? lintReport(spec, result) : undefined), [spec, result]);
   if (!result) return <Empty title="Checking the document…" />;
   const { counts, problems } = result;
   if (!problems.length)
@@ -50,11 +54,13 @@ export function ApiLintPanel({ spec, text, result, onOpen }: { spec: string; tex
           {ICON.info} {plural(counts.info, 'note')}
         </span>
         <span className="text-muted">· {plural(result.operations, 'operation')}</span>
-        <AiAction variant="ghost" className="ml-auto" label="How to fix (AI)" request={() => ({
+        <ApiReportBar kind="lint" report={report}>
+        <AiAction variant="ghost" label="How to fix (AI)" request={() => ({
           task: 'fix-openapi-lint',
           title: `Fixes · ${spec.replace(/^specs\//, '')}`,
           context: { document: spec, problems: problems.slice(0, 80).map(({ rule, severity, line, where, message }) => ({ rule, severity, line, where, message })), text: text.slice(0, 40_000) },
         })} />
+        </ApiReportBar>
       </div>
       <ul className="flex-1 overflow-auto p-1">
         {problems.map((p, i) => (

@@ -1,6 +1,8 @@
 import { spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { collectionFileContent } from '../storage/workspace.js';
+import { environmentFileValue, libraryFileValue, mcpServersFileValue, providersFileValue, sameValue, stableText } from '../storage/stable-files.js';
+import { mcpServerParts, providerParts } from './item-parts.js';
 import type { Collection } from '../model/types.js';
 import { mergeModeOfPath } from '@testpion/shared';
 
@@ -49,7 +51,8 @@ interface Ctx {
   resolutions: MergeResolutions;
 }
 
-const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+/** The same content, whatever the order of the keys (a file in an older key order is not a conflict with its stable form). */
+const same = sameValue;
 
 /** The three-way choice for one value: whoever changed it wins; both changed it differently → a conflict, settled by its resolution (ours by default). */
 function pick<T>(base: T | undefined, ours: T | undefined, theirs: T | undefined, ctx: Ctx, conflict: Omit<MergeConflict, 'base' | 'ours' | 'theirs'>, words: string): T | undefined {
@@ -153,7 +156,7 @@ function mergeEnvironmentTexts(baseText: string, oursText: string, theirsText: s
   });
   for (const c of ctx.items) c.key = c.key.replace(/^item:/, '');
   const fields = mergeFields(without(base, 'variables'), without(ours, 'variables'), without(theirs, 'variables'), `environment ${name}`, 'environment', ctx);
-  return { text: JSON.stringify({ ...fields, variables }, null, 2) + '\n', conflicts: ctx.conflicts, items: ctx.items };
+  return { text: stableText(environmentFileValue({ ...fields, variables })), conflicts: ctx.conflicts, items: ctx.items };
 }
 
 /** An object without some keys (merged separately). */
@@ -174,7 +177,23 @@ function mergeLibraryTexts(baseText: string, oursText: string, theirsText: strin
   const folders = new Set([...of, ...tf].filter((f) => !(bf.has(f) && (!of.has(f) || !tf.has(f)))));
   for (const i of items) if (typeof (i as Obj).folder === 'string' && (i as Obj).folder) folders.add((i as Obj).folder as string);
   const fields = mergeFields(without(base, 'folders'), without(ours, 'folders'), without(theirs, 'folders'), 'library', 'library', ctx);
-  return { text: JSON.stringify({ ...fields, folders: [...folders].sort((a, b) => a.localeCompare(b)), items }, null, 2) + '\n', conflicts: ctx.conflicts, items: ctx.items };
+  return { text: stableText(libraryFileValue({ ...fields, folders: [...folders], items })), conflicts: ctx.conflicts, items: ctx.items };
+}
+
+/**
+ * The list of MCP servers or of AI providers merged by item id, like a library: whoever changes, adds or removes a server
+ * is taken; the same server changed differently on both sides is a conflict. The order is ours, with what only theirs
+ * added placed after its predecessor (the order is what people see).
+ */
+function mergeListFileTexts(baseText: string, oursText: string, theirsText: string, key: 'servers' | 'providers', resolutions: MergeResolutions = {}): MergeResult | undefined {
+  const [base, ours, theirs] = [parseObj(baseText), parseObj(oursText), parseObj(theirsText)];
+  if (!base || !ours || !theirs || !Array.isArray(ours[key]) || !Array.isArray(theirs[key])) return undefined;
+  const ctx: Ctx = { conflicts: [], items: [], resolutions };
+  const where = key === 'servers' ? 'MCP servers' : 'AI providers';
+  const items = mergeItems((base[key] as Node[] | undefined) ?? [], ours[key] as Node[], theirs[key] as Node[], where, ctx);
+  const fields = mergeFields(without(base, key), without(ours, key), without(theirs, key), where, key, ctx);
+  const file = { ...fields, [key]: items };
+  return { text: stableText(key === 'servers' ? mcpServersFileValue(file) : providersFileValue(file)), conflicts: ctx.conflicts, items: ctx.items };
 }
 
 /**
@@ -187,6 +206,7 @@ export function mergeWorkspaceTexts(baseText: string, oursText: string, theirsTe
   const mode = path === undefined ? undefined : mergeModeOfPath(path);
   if (mode === 'environment' && Array.isArray(ours.variables)) return mergeEnvironmentTexts(baseText, oursText, theirsText, resolutions);
   if (mode === 'library' && Array.isArray(ours.folders)) return mergeLibraryTexts(baseText, oursText, theirsText, resolutions);
+  if (mode === 'servers' || mode === 'providers') return mergeListFileTexts(baseText, oursText, theirsText, mode, resolutions);
   if (mode === 'collection') return mergeCollectionTexts(baseText, oursText, theirsText, resolutions);
   if (Array.isArray(ours.variables) && !Array.isArray(ours.items)) return mergeEnvironmentTexts(baseText, oursText, theirsText, resolutions);
   // a library file has a folders list (a collection's folders are items)
@@ -215,7 +235,7 @@ export function mergeCollectionTexts(baseText: string, oursText: string, theirsT
   const ctx: Ctx = { conflicts: [], items: [], resolutions };
   const name = String(ours.name ?? theirs.name ?? 'collection');
   const merged = { ...mergeFields(base, ours, theirs, `collection ${name}`, 'collection', ctx), items: mergeItems(base.items as Node[], ours.items as Node[], theirs.items as Node[], name, ctx) };
-  return { text: JSON.stringify(collectionFileContent(merged as unknown as Collection), null, 2) + '\n', conflicts: ctx.conflicts, items: ctx.items };
+  return { text: stableText(collectionFileContent(merged as unknown as Collection)), conflicts: ctx.conflicts, items: ctx.items };
 }
 
 /**
@@ -262,6 +282,9 @@ export function requestParts(node: unknown): Record<string, string> {
     Checks: json(n.assertions),
     Description: String(n.description ?? ''),
   };
+  // an MCP server or an AI provider: its settings (secret values hidden)
+  if (typeof n.transport === 'string' && !('request' in n)) return mcpServerParts(n);
+  if (typeof n.baseUrl === 'string' && typeof n.kind === 'string' && !('request' in n)) return providerParts(n);
   // a library item (a saved gRPC call, a connection, a prompt …): its data as JSON
   if ('data' in n) return Object.fromEntries(Object.entries({ Name: String(n.name ?? ''), Folder: String(n.folder ?? ''), Data: json(n.data) }).filter(([, v]) => v !== ''));
   // an environment variable (merged as an item keyed by its name)

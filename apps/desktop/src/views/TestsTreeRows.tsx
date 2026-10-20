@@ -117,6 +117,7 @@ export const TestTreeRow = memo(function TestTreeRow({ n, depth, expanded, activ
       ctx={() => (dir ? h().folderMenu(n) : h().fileMenu(n))}
       rename={renaming ? { value: n.name, label: 'File name', done: (name) => h().finishRename(n, name) } : undefined}
       drag={!dir && h().isTestFile(n.name) && !/\.suite\./.test(n.name) ? [{ kind: 'test', path: n.path }] : undefined}
+      git={dir ? { folder: 'test', name: n.path } : { kind: 'test', path: n.path }}
       style={{ paddingLeft: (dir ? 6 : 22) + depth * 12 }}
       actions={
         runnable && (

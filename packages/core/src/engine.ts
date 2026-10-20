@@ -13,6 +13,8 @@ import { recordCertificate } from './storage/certificates.js';
 import { secretKeys, type SecretStore } from './storage/secrets.js';
 import { CookieJar } from './cookies/cookie-jar.js';
 import { productionAllowed } from './net/production-guard.js';
+import { createRagJudgeHost } from './eval/rag/judge.js';
+import type { AiSurface } from './storage/ai-usage.js';
 import { APP_CLAUDE_ID, APP_CLAUDE_SECRET, appClaudeProvider } from './ai/app-provider.js';
 
 export interface ContextOptions {
@@ -46,6 +48,10 @@ export interface ContextOptions {
    * call this context is created in (`allowProductionFor`, the CLI's --allow-production), else none.
    */
   allowProduction?: boolean;
+  /** Who is calling, for the AI usage ledger of the judged RAG metrics (default `cli`). */
+  aiSurface?: AiSurface;
+  /** TESTPION_AI_* variables the judge may read (the CLI and CI pass process.env; the app and the MCP server pass none). */
+  aiEnv?: Record<string, string | undefined>;
 }
 
 export interface EngineContext {
@@ -134,6 +140,7 @@ export function createEngineContext(opts: ContextOptions): EngineContext {
     readFile: (path: string) => readFileSync(store.safePath(path, opts.fileRoot ?? store.root), 'utf8'),
     scriptPackage: (name: string) => store.readScriptPackage(name),
     onCertificate: (url, c) => recordCertificate(store, url, c),
+    ragJudge: createRagJudgeHost({ store, providers, redactor, settings, surface: opts.aiSurface ?? 'cli', env: opts.aiEnv }),
   };
   return { services, vars, redactor, environment, collection, dispose: () => mcp.close() };
 }

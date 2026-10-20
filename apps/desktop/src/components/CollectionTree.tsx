@@ -26,6 +26,7 @@ import { setSubtree as setTreeSubtree, useTreeOpen } from '../lib/tree-state';
 import { requestCopyItems } from '../lib/request-copy';
 import { saveAsTest } from '../lib/save-test';
 import { openRef } from '../lib/open-ref';
+import { openExportBundle } from '../lib/transfer';
 import { deferDrop, useDragSession } from '../lib/drag-ref';
 import { buildTreeRows, categoryOpenKey, examplesOpenKey, findTreeRow, folderOpenKey, isOpenKey, scopedNodeId, treeRowKey, type ExtraGroup, type TreeRow } from '../lib/tree-rows';
 import { CATEGORY_META, CategoryRow, CollectionRow, EmptyRow, ExampleRow, ExtraFolderRow, ExtraItemRow, FolderRow, RequestRow, SAVED_ITEM_MIME, type DropMode, type RowContext } from './CollectionTreeRows';
@@ -410,6 +411,7 @@ export const CollectionTree = memo(function CollectionTree({
         // Export ▸ the export dialog, or the scripts as Postman's pm.* (TestPion itself writes tp.*)
         export: [
           ...(onExport ? [{ label: LABEL.export, icon: <Download size={14} />, onSelect: () => onExport(c) }] : []),
+          { label: LABEL.exportWithUses, icon: <Download size={14} />, onSelect: () => openExportBundle({ selection: [ref], uses: true, title: c.name }) },
           { label: LABEL.forPostman, icon: <Undo2 size={14} />, onSelect: () => void convertScripts(c, 'pm') },
         ],
         monitor: () => useApp.getState().openIntent('monitors', { create: { collectionId: c.id } }),
@@ -587,7 +589,6 @@ export const CollectionTree = memo(function CollectionTree({
             renaming={renaming === r.key}
             examplesOpen={!!isOpenKey(open, examplesOpenKey(r.c.id, r.n.id), `${r.n.id}:examples`)}
             dropMode={dropModeOf(r.key)}
-            gitMark={git.items.get(r.n.id)}
             ctx={ctx}
           />
         );

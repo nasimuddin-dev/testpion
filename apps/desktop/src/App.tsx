@@ -9,6 +9,7 @@ import { touchesFiles, type DataChangedEvent } from './lib/data-changed';
 import { useApp, type ViewId } from './store';
 import { watchSecretRefs } from './lib/secret-refs';
 import { watchOpenLinks } from './lib/open-ref';
+import { useBundleDrop } from './lib/transfer';
 import { focusedScriptEditor } from './lib/script-editor';
 import { focusedPaletteCommands } from './lib/palette-context';
 import { VarPopoverHost } from './components/VarPopoverHost';
@@ -51,7 +52,10 @@ import { CookiesModal } from './components/CookiesModal';
 /** Where a dialog (or another floating part) that failed says so: a line over the status bar, with Close. */
 const DIALOG_FALLBACK = 'fixed bottom-9 left-1/2 -translate-x-1/2 z-[60] w-[min(720px,92vw)] rounded-lg border shadow-lg';
 const ShortcutsDialog = lazy(async () => ({ default: (await import('./components/ShortcutsDialog')).ShortcutsDialog }));
+const ExportBundleDialog = lazy(() => import('./components/ExportBundleDialog'));
+const ImportBundleDialog = lazy(() => import('./components/ImportBundleDialog'));
 const CiDialog = lazy(async () => ({ default: (await import('./components/CiDialog')).CiDialog }));
+const AskSearchDialog = lazy(async () => ({ default: (await import('./components/ai/AskSearchDialog')).AskSearchDialog }));
 const FlowGenerateDialog = lazy(async () => ({ default: (await import('./components/ai/FlowGenerateDialog')).FlowGenerateDialog }));
 const TidyImportDialog = lazy(async () => ({ default: (await import('./components/ai/TidyImportDialog')).TidyImportDialog }));
 const AiAnalysisDialog = lazy(async () => ({ default: (await import('./components/ai/AiAnalysisDialog')).AiAnalysisDialog }));
@@ -178,6 +182,8 @@ const PALETTE_ICONS: Record<string, LucideIcon> = {
   'm-exp-col': FolderTree,
   'm-exp-env': KeyRound,
   'm-exp-ws': Download,
+  'm-exp-bundle': Download,
+  'm-import-bundle': Upload,
 };
 
 /** The examples workspace gained requests, collections or servers in this version: tell the user once, with Open. */
@@ -197,11 +203,15 @@ export default function App() {
   const searchOpen = useApp((s) => s.searchOpen);
   const ci = useApp((s) => s.ci);
   const flowGenerate = useApp((s) => s.flowGenerate);
+  const askSearch = useApp((s) => s.askSearch);
   const aiAnalysis = useApp((s) => s.aiAnalysis);
   const tidyImport = useApp((s) => s.tidyImport);
   // Settings ▸ AI assistant ▸ Hide all AI actions: no AI command, panel or dialog
   const aiOn = useAiEnabled();
   const openapiDiff = useApp((s) => s.openapiDiff);
+  useBundleDrop();
+  const exportBundle = useApp((s) => s.exportBundle);
+  const importBundle = useApp((s) => s.importBundle);
   const apiCoverage = useApp((s) => s.apiCoverage);
   const explorerOpen = useApp((s) => s.explorerOpen);
   const explorerInTests = useApp((s) => !!s.explorerInTests);
@@ -419,6 +429,8 @@ export default function App() {
       { id: 'm-exp-col', label: 'Export Collection (Postman)', hint: 'File', run: () => void runMenuCommand('export-collection') },
       { id: 'm-exp-env', label: 'Export Current Environment', hint: 'File', run: () => void runMenuCommand('export-environment') },
       { id: 'm-exp-ws', label: 'Export Workspace', hint: 'File', run: () => void runMenuCommand('export-workspace') },
+      { id: 'm-exp-bundle', label: 'Export a TestPion Bundle…', hint: 'File', run: () => void runMenuCommand('export-bundle') },
+      { id: 'm-import-bundle', label: 'Import a TestPion Bundle…', hint: 'File', run: () => void runMenuCommand('import-bundle') },
     ];
     // every command has an icon: its own, or a generic one for a command added without
     for (const c of cmds) c.icon = createElement(PALETTE_ICONS[c.id] ?? TerminalSquare, { size: 16 });
@@ -552,7 +564,15 @@ export default function App() {
           </Suspense>,
           close({ tidyImport: undefined }),
         )}
-      {aiOn && aiAnalysis &&
+      {askSearch &&
+        guard(
+          'ask search',
+          <Suspense fallback={null}>
+            <AskSearchDialog request={askSearch} onClose={() => useApp.getState().set({ askSearch: undefined })} />
+          </Suspense>,
+          close({ askSearch: undefined }),
+        )}
+      {aiAnalysis &&
         guard(
           'AI analysis',
           <Suspense fallback={null}>
@@ -571,6 +591,22 @@ export default function App() {
             <CiDialog />
           </Suspense>,
           close({ ci: undefined }),
+        )}
+      {exportBundle &&
+        guard(
+          'export dialog',
+          <Suspense fallback={null}>
+            <ExportBundleDialog request={exportBundle} onClose={() => useApp.getState().set({ exportBundle: undefined })} />
+          </Suspense>,
+          close({ exportBundle: undefined }),
+        )}
+      {importBundle &&
+        guard(
+          'import dialog',
+          <Suspense fallback={null}>
+            <ImportBundleDialog request={importBundle} onClose={() => useApp.getState().set({ importBundle: undefined })} />
+          </Suspense>,
+          close({ importBundle: undefined }),
         )}
       {guard('MCP requests', <McpClientRequests />)}
       {feedback &&

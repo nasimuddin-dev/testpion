@@ -305,7 +305,8 @@ export async function runAiTask(deps: AiRunDeps, req: AiTaskRequest): Promise<Ai
   /** The answer as proposal items, verified; cached per answer so the repair check and the result share the work. */
   let proposeNotes: string[] = [];
   const itemsOf = async (answer: { text: string; code: string; value?: unknown }): Promise<{ items: ProposalItem[]; problems: string[] }> => {
-    if (!def.propose) return { items: [], problems: [] };
+    // a task that only answers (a search query) may still have its answer checked: the problems are repaired like a verifier's
+    if (!def.propose) return { items: [], problems: def.validate && answer.value !== undefined ? def.validate(answer.value) : [] };
     let drafts;
     // what the task could not make of the answer and the model can correct (a fix naming text that is not in the file):
     // repair turns send it back like a failing verifier's problem
@@ -345,7 +346,7 @@ export async function runAiTask(deps: AiRunDeps, req: AiTaskRequest): Promise<Ai
       provider,
       model,
       maxTokens: maxOutputTokens,
-      temperature: 0.2,
+      temperature: def.temperature ?? 0.2,
       signal: deps.signal,
       onCall: (r: { usage: TokenUsage; model: string }) => (
         (usage = { inputTokens: usage.inputTokens + r.usage.inputTokens, outputTokens: usage.outputTokens + r.usage.outputTokens, totalTokens: usage.totalTokens + r.usage.totalTokens }),

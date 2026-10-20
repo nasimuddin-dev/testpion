@@ -286,13 +286,15 @@ export function kindOfPath(path: string, opts: { raw?: boolean } = {}): { kind: 
 
 /**
  * How a workspace file merges by meaning (git merge driver, conflict screen): a collection, an environment, or a library
- * file (library/<name>.json); undefined for a file git merges line by line. MCP servers, providers, rules and the
- * workspace file join in 0.57 (planning/master-roadmap.md §1.7 row 10).
+ * file (library/<name>.json), the list of MCP servers or of AI providers (by id); undefined for a file git merges line by
+ * line. The Debugger rules and the workspace file join later (planning/master-roadmap.md §1.7 row 10).
  */
-export function mergeModeOfPath(path: string): 'collection' | 'environment' | 'library' | undefined {
+export function mergeModeOfPath(path: string): 'collection' | 'environment' | 'library' | 'servers' | 'providers' | undefined {
   const k = kindOfPath(path, { raw: true });
   if (k?.id && k.kind === 'collection') return 'collection';
   if (k?.id && k.kind === 'environment') return 'environment';
+  if (k?.kind === 'mcp-server') return 'servers';
+  if (k?.kind === 'provider') return 'providers';
   if (libraryOfPath(path, { raw: true })) return 'library';
   return undefined;
 }

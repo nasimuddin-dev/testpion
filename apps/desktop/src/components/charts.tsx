@@ -1,4 +1,8 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { outputFileName } from '@testpion/shared';
+import { OutputActions } from './output/OutputFrame';
+import type { OutputSpec } from './output/output-core';
+import { chartPng, chartSvg } from './output/chart-image';
 
 /** Width of an element, kept current (charts draw at their real size: round markers, crisp text). */
 export function useWidth<T extends HTMLElement>(): [React.RefObject<T | null>, number] {
@@ -17,11 +21,30 @@ export function useWidth<T extends HTMLElement>(): [React.RefObject<T | null>, n
 
 /** A chart's frame: small caps title, an aside (headline number) and a legend row under the plot. */
 export function ChartCard({ title, aside, legend, children, className }: { title: string; aside?: ReactNode; legend?: ReactNode; children: ReactNode; className?: string }) {
+  const card = useRef<HTMLElement>(null);
+  // a plot that is an SVG can be saved as one (the other charts are drawn in HTML: they save as the picture only)
+  const [hasPlot, setHasPlot] = useState(false);
+  useEffect(() => setHasPlot(!!card.current?.querySelector('svg')));
+  const spec = useMemo<OutputSpec>(
+    () => ({
+      id: 'chart',
+      what: `${title} chart`,
+      name: outputFileName({ name: `chart-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`, ext: '' }),
+      formats: [
+        { key: 'png', format: 'png', label: 'Picture (PNG)', default: true, build: () => chartPng(card.current!) },
+        ...(hasPlot ? [{ key: 'svg', format: 'svg' as const, label: 'Plot (SVG)', build: () => chartSvg(card.current!, title) ?? '' }] : []),
+      ],
+    }),
+    [title, hasPlot],
+  );
   return (
-    <section className={'rounded-xl border border-line bg-panel/40 p-3 min-w-0 ' + (className ?? '')}>
-      <div className="flex items-baseline gap-2 mb-2">
+    <section ref={card} className={'rounded-xl border border-line bg-panel/40 p-3 min-w-0 ' + (className ?? '')} data-output="chart">
+      <div className="flex items-center gap-2 mb-2">
         <h3 className="text-xs font-semibold text-muted uppercase tracking-wide">{title}</h3>
-        {aside && <div className="ml-auto text-xs text-muted">{aside}</div>}
+        <div className="ml-auto flex items-center gap-2 min-w-0">
+          {aside && <div className="text-xs text-muted truncate">{aside}</div>}
+          <OutputActions spec={spec} />
+        </div>
       </div>
       {children}
       {legend && <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 text-xs text-muted">{legend}</div>}

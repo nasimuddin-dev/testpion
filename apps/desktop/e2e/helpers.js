@@ -1,9 +1,10 @@
 window.__t = (() => {
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-  /** Wait until `fn()` is truthy (checked every 50 ms), at most `ms`; returns its value or undefined. */
+  /** Wait until `fn()` (sync or async) is truthy (checked every 50 ms), at most `ms`; returns its value or undefined. */
   const waitFor = async (fn, ms = 2000) => {
     for (const end = Date.now() + ms; Date.now() < end; await sleep(50)) {
-      const v = fn();
+      // awaited: an async check (an RPC) is polled, not taken as truthy because it is a promise
+      const v = await fn();
       if (v) return v;
     }
     return undefined;
@@ -92,6 +93,13 @@ window.__t = (() => {
         if (!b) return false;
       }
       b.click(); await sleep(1200); return true;
+    },
+    // click Send and wait until the request is over (the Cancel button is Send again, "Sending request…" is gone): a public
+    // server may take seconds under load, so no fixed sleep decides whether the response is in
+    sendAndWait: async (ms = 60000) => {
+      const sent = await window.__t.button('Send');
+      if (!sent) return false;
+      return !!(await waitFor(() => !/Sending request…/.test(document.querySelector('main')?.innerText ?? ''), ms));
     },
     button: async (label) => { const b = [...document.querySelectorAll('main button')].find((x) => x.offsetParent && (x.textContent.trim() === label || x.getAttribute('aria-label') === label)); b?.click(); await sleep(1200); return !!b; },
     key: async (k, mods = {}) => { window.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, ...mods })); await sleep(900); return (document.querySelector('[role=dialog]')?.innerText ?? 'NONE').slice(0, 60); },

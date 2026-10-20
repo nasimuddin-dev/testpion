@@ -81,6 +81,7 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
     [
       "Copy link",
       "Copy path",
+      "Export…",
     ],
     [
       "Use in a test",
@@ -112,6 +113,7 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
     ],
     [
       "Copy link",
+      "Export…",
     ],
     [
       "History in git…",
@@ -134,6 +136,7 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
     ],
     [
       "Copy link",
+      "Export…",
     ],
     [
       "Rename",
@@ -169,6 +172,7 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
     [
       "Copy link",
       "Copy path",
+      "Export…",
     ],
     [
       "Monitor on a schedule…",
@@ -379,6 +383,7 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
     [
       "Copy link",
       "Copy as grpcurl",
+      "Export…",
     ],
     [
       "Save as test…",
@@ -418,6 +423,7 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
     ],
     [
       "Copy link",
+      "Export…",
     ],
     [
       "Rename",
@@ -428,7 +434,11 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
       "Delete…",
     ],
   ],
-  "mcp-mock": [],
+  "mcp-mock": [
+    [
+      "Export…",
+    ],
+  ],
   "mcp-server": [
     [
       "Open",
@@ -441,6 +451,7 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
     [
       "Copy link",
       "Copy MCP config",
+      "Export…",
     ],
     [
       "Settings…",
@@ -475,6 +486,7 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
     ],
     [
       "Copy link",
+      "Export…",
     ],
     [
       "Rename",
@@ -492,6 +504,7 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
     ],
     [
       "Copy link",
+      "Export…",
     ],
     [
       "Rename",
@@ -503,13 +516,18 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
     ],
   ],
   "proposal": [],
-  "proto": [],
+  "proto": [
+    [
+      "Export…",
+    ],
+  ],
   "provider": [
     [
       "Open",
     ],
     [
       "Copy link",
+      "Export…",
     ],
     [
       "Settings…",
@@ -571,6 +589,9 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
   ],
   "script-package": [
     [
+      "Export…",
+    ],
+    [
       "Rename",
     ],
     [
@@ -590,6 +611,9 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
       "Collapse all",
     ],
     [
+      "Export…",
+    ],
+    [
       "Run in CI…",
     ],
   ],
@@ -597,45 +621,62 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
     [
       "New …",
       "New folder…",
+      "Import…",
       "Generate test data…",
     ],
     [
       "Expand all",
       "Collapse all",
     ],
+    [
+      "Export…",
+    ],
   ],
   "section:environment": [
     [
       "New …",
+      "Import…",
     ],
     [
       "Recently deleted…",
+    ],
+    [
+      "Export…",
     ],
   ],
   "section:evaluation": [
     [
       "New …",
       "New folder…",
+      "Import…",
     ],
     [
       "Expand all",
       "Collapse all",
+    ],
+    [
+      "Export…",
     ],
   ],
   "section:load-test": [
     [
       "New …",
       "New folder…",
+      "Import…",
     ],
     [
       "Expand all",
       "Collapse all",
+    ],
+    [
+      "Export…",
     ],
   ],
   "section:mcp-server": [
     [
       "New …",
       "New folder…",
+      "Import…",
     ],
     [
       "Open MCP inspector",
@@ -644,36 +685,52 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
       "Expand all",
       "Collapse all",
     ],
+    [
+      "Export…",
+    ],
   ],
   "section:monitor": [
     [
       "New …",
       "New folder…",
+      "Import…",
     ],
     [
       "Expand all",
       "Collapse all",
+    ],
+    [
+      "Export…",
     ],
   ],
   "section:prompt": [
     [
       "New …",
       "New folder…",
+      "Import…",
     ],
     [
       "Expand all",
       "Collapse all",
     ],
+    [
+      "Export…",
+    ],
   ],
   "section:provider": [
     [
       "New …",
+      "Import…",
+    ],
+    [
+      "Export…",
     ],
   ],
   "section:spec": [
     [
       "New …",
       "New folder…",
+      "Import…",
     ],
     [
       "Open API definitions",
@@ -682,14 +739,21 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
       "Expand all",
       "Collapse all",
     ],
+    [
+      "Export…",
+    ],
   ],
   "section:test": [
     [
       "New …",
+      "Import…",
     ],
     [
       "Expand all",
       "Collapse all",
+    ],
+    [
+      "Export…",
     ],
     [
       "Run in CI…",
@@ -708,6 +772,7 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
     [
       "Copy link",
       "Copy path",
+      "Export…",
     ],
     [
       "Generate tests…",
@@ -737,6 +802,7 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
       "Copy path",
       "Copy CLI command",
       "Export as Arazzo…",
+      "Export…",
     ],
     [
       "Monitor on a schedule…",
@@ -795,6 +861,7 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
     [
       "Copy link",
       "Copy URL",
+      "Export…",
     ],
     [
       "Save as test…",

@@ -22,7 +22,8 @@ import { harness, LIVE, printScorecard, score } from './harness.js';
 afterAll(printScorecard);
 
 /** The token budgets of the references (they go into every call of those tasks). */
-const FLOW_BUDGET = 900;
+// (+50: the seven RAG metrics are named in the list of other check types; their fields are not in the reference)
+const FLOW_BUDGET = 950;
 const CHECKS_BUDGET = 600;
 
 describe('the format reference', () => {

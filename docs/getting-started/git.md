@@ -19,7 +19,25 @@ TestPion uses the **git installed on your computer**. It brings your SSH keys, y
 | Variable names and non-secret values | **Secret values** (in the OS secret store, never in a file) |
 | `.gitignore` and `.gitattributes` written by TestPion | The local database (`database.sqlite`), `.local/` (save counters, per-computer state), `trash/` |
 
-Collection files are written in a **git-friendly form**: keys in a fixed order and no save counter or timestamp, so saving a collection without changing it changes nothing in git.
+Every file TestPion writes is in a **stable form**, so saving an item without changing it changes nothing in git, and two people editing different items merge cleanly:
+
+- keys in a fixed order (an item's id and name first, the rest sorted), the same on every computer;
+- no volatile field: a collection keeps its save counter and time in `.local/`, a library item has no `updatedAt`;
+- LF line endings and exactly one final newline, on Windows too (a test file you edit keeps your text and only gets LF and the final newline);
+- lists keep the order you see (MCP servers, environment variables, requests).
+
+| What | File | Stable form |
+|---|---|---|
+| Collections, folders, requests (HTTP, GraphQL, SOAP) | `collections/<id>.json` | yes |
+| Environments | `environments/<id>.json` | yes |
+| Workspace settings and variables | `workspace.json` | yes |
+| Saved gRPC calls, connections, prompts, load tests, evaluations, monitors | `library/<kind>.json` | yes |
+| MCP servers, AI providers | `mcp-servers.json`, `providers.json` | yes |
+| HTTP Debugger rules | `debugger/rules.json` | yes |
+| Test files and flows | `tests/**/*.yaml` | your text; LF and a final newline |
+| API definitions, datasets, script packages, MCP mocks, .proto files | `specs/`, `datasets/`, `packages/`, `mocks/`, `protos/` | your file, never rewritten by the app |
+
+An older file is read as it is and written in the stable form the next time its item is saved; nothing is rewritten when you open the workspace.
 
 ## Step 1: Put the workspace in git
 
@@ -46,14 +64,14 @@ When git can't sign in, TestPion says so in plain words ("Git could not sign in 
 
 The **Git** view shows the branch and remote at the top, then:
 
-- **Changes, by meaning.** Each changed file, and under it what changed in words: *HTTP basics ▸ Requests & responses ▸ GET with query parameters: URL, headers (0 → 1)*, *environment Staging: added baseUrl*, *Checkout ▸ pay: body, if, checks (1 → 2)*, *Connection Echo socket: renamed from …* (saved gRPC calls, connections, prompts and monitors one by one). Click a change to open it where it is edited: a request in its own editor (REST, SOAP, GraphQL), a folder or collection's settings, an environment, a gRPC call or a connection, a test file or the flow step; right-click for **Open in new tab** and **Copy link** ([Finding your way around](/getting-started/finding-your-way)); **Compare** shows a changed request, a flow step, the collection's settings or an environment side by side, part by part: the last commit and now. Click a file name for its line diff. **Stage** / **Unstage** per file, **Discard** (back to the last commit; new files are deleted, after a confirmation) per file or all.
+- **Changes, by item.** Each row names what changed, not the file it is in: an icon for its kind, a change mark, the item's name and what changed in words (the file's path is the muted text beside it, and Stage / Discard act on the file). *MCP server Weather: URL, environment (added TOKEN)*, *AI provider OpenAI: model, headers (added X-Team)*, *Prompt Greeting: moved, settings*, *API definition petstore.json: 2 operations added, 1 breaking change*, *Dataset users.csv: 12 rows added, column dob removed*, *Workspace settings: variables (added region)*. A file that holds several items (a collection, the MCP servers) is a header with its items under it. The down arrow of the Changes list saves them as Markdown by item, or as a patch. What changed, file by file in words, for requests, environments and flows: *HTTP basics ▸ Requests & responses ▸ GET with query parameters: URL, headers (0 → 1)*, *environment Staging: added baseUrl*, *Checkout ▸ pay: body, if, checks (1 → 2)*, *Connection Echo socket: renamed from …* (saved gRPC calls, connections, prompts and monitors one by one). Click a change to open it where it is edited: a request in its own editor (REST, SOAP, GraphQL), a folder or collection's settings, an environment, a gRPC call or a connection, a test file or the flow step; right-click for **Open in new tab** and **Copy link** ([Finding your way around](/getting-started/finding-your-way)); **Compare** shows a changed request, a flow step, the collection's settings or an environment side by side, part by part: the last commit and now. Click a file name for its line diff. **Stage** / **Unstage** per file, **Discard** (back to the last commit; new files are deleted, after a confirmation) per file or all.
 - **Commit.** Write a message, or click **Write message** and the AI assistant writes one from the changes (it sees the changes' meaning, never secret values). With nothing staged, **Commit** commits every change of the workspace.
 - **History.** The latest commits of the workspace.
 
 The rest of the app shows git too:
 
 - **Status bar:** the branch, `↑2` commits to push, `↓1` to pull, `• 3` changed files. Click it to open the Git view.
-- **Explorer:** changed requests carry a mark: **M** changed, **A** added, **D** deleted, **R** renamed, **!** conflict.
+- **Explorer:** every changed row carries a mark: **M** changed, **A** added, **D** deleted, **R** renamed, **!** conflict. It is on requests, folders and collections, gRPC calls and connections, environments, test files and flows, MCP servers, AI providers, prompts, load tests, evaluations, monitors, API definitions and datasets. A folder and a section header (*MCP servers*, *Datasets* …) show how many changes are inside, as a number.
 
 ### Flows, step by step
 
@@ -92,9 +110,9 @@ TestPion knows its own saves by the file and what it wrote into it, not by the t
 
 ## Merging collections request by request
 
-Two people who change **different requests** of the same collection never get a conflict: TestPion merges collection files by the id of each request and folder, not by lines of JSON. Environments merge the same way, variable by variable, and library files (saved gRPC calls, connections, prompts) item by item. A request added on one side and another added on the other side both end up in the file; a request moved, renamed or edited on one side keeps that change.
+Two people who change **different requests** of the same collection never get a conflict: TestPion merges collection files by the id of each request and folder, not by lines of JSON. Environments merge the same way, variable by variable, library files (saved gRPC calls, connections, prompts) item by item, and the lists of MCP servers and AI providers server by server (the order is yours, with what the other side added after its neighbour). A request added on one side and another added on the other side both end up in the file; a request moved, renamed or edited on one side keeps that change.
 
-This is a git **merge driver**. `.gitattributes` has `collections/*.json merge=testpion`, and **Initialize repository**, opening a workspace that is in git, or `testpion git setup` registers it in the repository's git config (`git config merge.testpion.driver`). It works for `git merge` and `git pull` in a terminal too.
+This is a git **merge driver**. `.gitattributes` has `collections/*.json merge=testpion` (and the same for `environments/`, `library/`, `mcp-servers.json` and `providers.json`; `workspace.json.bak-*` and `*.tmp-*` are ignored), and **Initialize repository**, opening a workspace that is in git, or `testpion git setup` registers it in the repository's git config (`git config merge.testpion.driver`). It works for `git merge` and `git pull` in a terminal too.
 
 A **real conflict** is the same request (or the same collection setting) changed differently on both sides, or a request changed on one side and deleted on the other. The file then keeps your version with every other change merged in, and the Git view lists the file under **Conflicts**:
 
@@ -117,6 +135,8 @@ Every git feature has a CLI command with `--json` for scripts. `-w` picks the wo
 testpion git setup              # .gitignore, .gitattributes, tidy collection files, merge driver
 testpion git status             # branch, ahead / behind, changed files
 testpion git changes            # what changed, by meaning
+testpion git status --by-item   # the same rows as the Git view: "MCP server Weather", "Dataset users.csv" …
+testpion git status --by-item --kind mcp-server dataset --json   # only some kinds, for scripts
 testpion git diff collections/payments.json
 testpion git check              # secrets typed in? exit 1 if any
 testpion git commit -m "Add payment tests"      # refuses when a secret is typed in
@@ -139,6 +159,7 @@ The workspace's MCP server (see [Use from AI agents](/ai-testing/mcp-server)) ha
 | Tool | What it does |
 |---|---|
 | `git_status` | Branch, ahead / behind, changed files. |
+| `git_changes` | What changed, item by item, named like the app (`MCP server Weather`, `Dataset users.csv: 12 rows added`), with the registry `kind`, `details`, the item's `ref` and `link`, and the file; filter with `kind` or `file`. The same rows as the Git view and `testpion git status --by-item --json`. |
 | `git_diff` | The changes by meaning (requests, environments, flow steps and connections); with `from` / `to`, between two commits (`markdown: true` for a pull-request comment). |
 | `git_log` | Commits of the workspace, a file or a collection. |
 | `git_sync` | Pull & push in one step; returns `pushed`, `up-to-date`, `pulled-nothing-to-push`, or `conflicts` with the files (nothing is pushed then). Not available on a read-only server. |

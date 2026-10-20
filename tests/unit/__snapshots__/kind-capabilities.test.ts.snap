@@ -390,6 +390,7 @@ exports[`the item-kind registry is complete > every capability is declared; a na
     "favorite": "favorites are saved requests (one click away in the sidebar)",
     "flow": "integration flows are generated from collections and folders",
     "monitor": "monitors run collections and test files on a schedule",
+    "open-new-tab": "it opens in AI Lab ▸ RAG, in a dialog, not in an editor tab",
     "test-file": "test files are created from requests, collections and calls",
   },
   "request": {

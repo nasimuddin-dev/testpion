@@ -12,13 +12,22 @@ export const CHANGE_MARK: Record<string, { letter: string; tone: 'ok' | 'bad' | 
   conflicted: { letter: '!', tone: 'bad', label: 'Conflict' },
 };
 
-/** A git change mark (A / M / D / R / !), the same in the Git view, the explorer and anywhere else. */
-export function ChangeMark({ change, className }: { change: string; className?: string }) {
+/**
+ * A git change mark (A / M / D / R / !), the same in the Git view, the explorer and anywhere else. A folder or a section
+ * header that holds changes shows how many (`count`) in place of the letter.
+ */
+export function ChangeMark({ change, count, className }: { change: string; count?: number; className?: string }) {
   const m = CHANGE_MARK[change] ?? CHANGE_MARK.changed!;
+  const counted = count !== undefined && m.letter === 'M';
   return (
-    <span title={m.label} className={cx('inline-grid place-items-center w-4 h-4 rounded text-[0.65rem] font-bold shrink-0', className)} style={{ color: `var(--${m.tone})` }}>
-      {m.letter}
+    <span
+      title={counted ? `${count} changed inside` : m.label}
+      data-change-mark={m.letter}
+      data-change-count={counted ? count : undefined}
+      className={cx('inline-grid place-items-center h-4 rounded text-[0.65rem] font-bold shrink-0', counted ? 'min-w-4 px-1 bg-warn/15' : 'w-4', className)}
+      style={{ color: `var(--${m.tone})` }}
+    >
+      {counted ? count : m.letter}
     </span>
   );
 }
-

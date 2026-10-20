@@ -8,10 +8,11 @@ import { extname } from 'node:path';
 import { parseYaml } from '../util/lazy-yaml.js';
 import { flowChecks, flowGraph, layoutExtras, namesSetByScripts, stepLine, templatedText, templateVariables, toDot, type FlowCheck, type FlowFrameDef, type FlowGraph, type FlowNote, type FlowStep } from '@testpion/shared';
 import { ApsError } from '../errors.js';
+import { slugify } from '../util/ids.js';
 import type { TestCase } from '../model/types.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { pathMatcher, relativeInside } from '../storage/fsutil.js';
-import { isSuiteFile, loadTestsFromFile } from './loader.js';
+import { hasDataset, isSuiteFile, loadTestsFromFile } from './loader.js';
 import { readResultsFile } from './runner.js';
 import { loopLabel } from './flow-blocks.js';
 
@@ -144,6 +145,25 @@ export function flowStepOf(t: TestCase): FlowStep {
   return s;
 }
 
+/** The steps written in a parsed test file, as the loader reads them: the `tests:` list, the top-level list, or the one test at the top. */
+function writtenSteps(data: unknown): unknown[] {
+  const root = data && typeof data === 'object' && !Array.isArray(data) ? (data as Record<string, unknown>) : undefined;
+  return Array.isArray(data) ? data : Array.isArray(root?.tests) ? (root!.tests as unknown[]) : root ? [root] : [];
+}
+
+const STATUS_RANK = ['skipped', 'passed', 'failed', 'error'];
+
+/** A step written with a `dataset:` runs once per record: it stays one step on the canvas, labelled like a `forEach:` loop. */
+export function markDatasetLoops(steps: FlowStep[], data: unknown): void {
+  const items = writtenSteps(data);
+  if (items.length !== steps.length) return;
+  items.forEach((raw, i) => {
+    if (!raw || typeof raw !== 'object' || !hasDataset(raw as Record<string, unknown>) || steps[i]!.loop) return;
+    const d = (raw as { dataset: { path?: string; url?: string; query?: string; connection?: string } }).dataset;
+    steps[i]!.loop = `× each row of ${d.path ?? d.url ?? (d.query ? 'a query' : 'the dataset')}`;
+  });
+}
+
 /** `file` as given to `testpion flow` (from the current folder, e.g. tests/rest/auth.yaml, or inside tests/): the path inside tests/. */
 export function testFileRef(store: WorkspaceStore, file: string): string {
   const fromCwd = resolve(file);
@@ -163,7 +183,8 @@ export async function flowOfFile(store: WorkspaceStore, file: string, opts: { ru
   const text = opts.text ?? readFileSync(abs, 'utf8');
   const steps: FlowStep[] = [];
   const tests: TestCase[] = [];
-  for await (const t of loadTestsFromFile(abs, opts.text)) {
+  // the file's own steps (a dataset: test stays one step, not one per row): the designer edits what is written
+  for await (const t of loadTestsFromFile(abs, opts.text, { templates: true })) {
     const s = flowStepOf(t);
     s.line = stepLine(text, t.name);
     steps.push(s);
@@ -179,6 +200,7 @@ export async function flowOfFile(store: WorkspaceStore, file: string, opts: { ru
     data = undefined;
   }
   const root = data && typeof data === 'object' && !Array.isArray(data) ? (data as Record<string, unknown>) : undefined;
+  markDatasetLoops(steps, data);
   const layout = root?.layout && typeof root.layout === 'object' ? (root.layout as Record<string, unknown>) : {};
   for (const s of steps) {
     const p = layout[s.id];
@@ -215,6 +237,9 @@ export async function flowOfFile(store: WorkspaceStore, file: string, opts: { ru
   if (!steps.length) return out;
   // the latest run that included the file (by the results' file, else by the steps' ids), newest first
   const ids = new Set(steps.map((s) => s.id));
+  // the rows a dataset step ran as have ids of their own (<name>:<row>): they report to the step
+  const rowOwners = new Map(steps.filter((s) => s.loop?.startsWith('× each row')).map((s) => [`${slugify(s.name)}:`, s.id]));
+  const worse = (a: string, b: string): string => (STATUS_RANK.indexOf(b) > STATUS_RANK.indexOf(a) ? b : a);
   // the file as the workspace names it, or as a run did (its real path, resolved from the current folder)
   const isFile = pathMatcher(abs);
   for (const run of store.meta.listRuns({ limit: Math.min(Math.max(opts.runs ?? 30, 1), 300) }).items) {
@@ -222,9 +247,15 @@ export async function flowOfFile(store: WorkspaceStore, file: string, opts: { ru
     if (!existsSync(results)) continue;
     const found = new Map<string, { status: string; durationMs: number; tries?: number }>();
     for await (const r of await readResultsFile(results)) {
+      const own = ids.has(r.id) ? r.id : rowOwners.get(r.id.slice(0, r.id.lastIndexOf(':') + 1));
+      if (!own) continue;
       const sameFile = r.file ? isFile(r.file) : ids.has(r.id);
       const tries = typeof r.metadata?.tries === 'number' ? r.metadata.tries : undefined;
-      if (sameFile && ids.has(r.id) && !found.has(r.id)) found.set(r.id, { status: r.status, durationMs: r.durationMs, ...(tries !== undefined ? { tries } : {}) });
+      if (!sameFile) continue;
+      const prev = found.get(own);
+      if (!prev) found.set(own, { status: r.status, durationMs: r.durationMs, ...(tries !== undefined ? { tries } : {}) });
+      // a dataset step ran once per row: its result is the worst row's, the time the rows' together
+      else if (own !== r.id) found.set(own, { status: worse(prev.status, r.status), durationMs: prev.durationMs + r.durationMs });
     }
     if (!found.size) continue;
     for (const s of steps) {

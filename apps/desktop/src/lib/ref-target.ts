@@ -36,7 +36,7 @@ const PAYLOAD: { [K in ItemRef['kind']]?: (ref: RefOf<K>, opts: TargetOptions, i
   // a folder's settings live in its collection's page; Run there runs the folder
   folder: (r) => ({ collectionId: r.collectionId, folderId: r.folderId }),
   mock: (r) => ({ collectionId: r.collectionId, mock: true }),
-  saved: (r, _o, info) => (info.id === 'monitor' ? { monitorId: r.itemId } : { savedId: r.itemId }),
+  saved: (r, _o, info) => (info.id === 'monitor' ? { monitorId: r.itemId } : info.id === 'rag-target' ? { tab: 'rag', ragTargetId: r.itemId } : { savedId: r.itemId }),
   monitor: (r) => ({ monitorId: r.monitorId }),
   environment: (r) => (r.environmentId ? { environmentId: r.environmentId } : r.scope === 'collection' ? { tab: 'collection', collectionId: r.collectionId } : r.scope ? { tab: r.scope } : {}),
   variable: (r) => (r.environmentId ? { environmentId: r.environmentId, variable: r.key } : { dialog: 'variableUsages', key: r.key }),

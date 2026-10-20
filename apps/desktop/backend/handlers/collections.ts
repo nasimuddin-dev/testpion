@@ -85,14 +85,12 @@ export function collectionsHandlers(be: Backend): Handlers {
         void ctx.dispose();
       }
     },
-    /** The documentation as a self-contained HTML page, saved through the host (or downloaded in a browser). */
-    'col.exportDocsHtml': async ({ id, collection, environment }: { id?: string; collection?: Collection; environment?: string }) => {
+    /** The documentation as a self-contained HTML page (masked like the Markdown); the window saves it through the shared output control. */
+    'col.docsHtml': async ({ id, collection, environment }: { id?: string; collection?: Collection; environment?: string }) => {
       const c = collection ?? be.ws.getCollection(id!);
       const ctx = be.context({ environment, collectionId: collection ? undefined : c.id });
       try {
-        const html = collectionHtml(c, { redactor: ctx.redactor });
-        const name = `${c.name.replace(/[\\/:*?"<>|]+/g, '-')}.html`;
-        return await be.saveOrDownload(name, [{ name: 'HTML', extensions: ['html'] }], (dest) => writeFileSync(dest, html), () => Buffer.from(html));
+        return collectionHtml(c, { redactor: ctx.redactor });
       } finally {
         await ctx.dispose();
       }

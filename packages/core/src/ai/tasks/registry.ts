@@ -23,6 +23,8 @@ import { prepareChecksItem, proposeChecksItems } from '../result-checks.js';
 import { describeScript, prepareScriptContext, proposeScript, SCRIPT_PLAN_SCHEMA, SCRIPT_VERIFIERS } from '../write-script.js';
 import { describeDrift, DRIFT_PLAN_SCHEMA, DRIFT_VERIFIERS, prepareDriftContext, proposeDrift } from '../contract-drift.js';
 import { describeSecurity, prepareSecurityContext, proposeSecurity, SECURITY_PLAN_SCHEMA, SECURITY_VERIFIERS } from '../security-tests.js';
+import { VERDICT_SCHEMA } from '../../eval/rag/judge-prompts.js';
+import { NL_SEARCH_SCHEMA, validateNlSearch } from '../nl-search.js';
 import { describeFlow, FLOW_PLAN_SCHEMA, FLOW_VERIFIERS, prepareFlowContext, proposeFlow } from '../flow-from-collection.js';
 
 export type AiTaskOutput = { kind: 'markdown' } | { kind: 'code'; language: 'yaml' | 'json' | 'javascript' | 'graphql' | 'text' } | { kind: 'json'; schema: Record<string, unknown> };
@@ -89,12 +91,16 @@ export interface AiTaskDef {
   propose?(answer: { text: string; code: string; value?: unknown }, input: AiTaskInput): DraftItem[] | { items: DraftItem[]; notes?: string[]; problems?: string[] };
   /** The verifiers (verify.ts) its items go through. */
   verifiers?: string[];
+  /** Checks a JSON answer that proposes nothing (a search query): its problems go back to the model like a verifier's. */
+  validate?(value: unknown): string[];
   /** Repair turns when verification fails (default 2; 0 for prose). */
   maxRepairs?: number;
   /** Makes a code answer safe before it is verified (an unquoted {{ in YAML quoted); what it fixed goes into the proposal's notes. */
   normalize?(code: string): { code: string; notes: string[] };
   /** The test-file format reference added to its instruction (flow-format.ts, made from the schema and the check registry): the whole format, or the checks alone. */
   format?: FormatKind | FormatKind[];
+  /** The sampling temperature (default 0.2; a judge uses 0 so the same input gives the same verdict as often as the model allows). */
+  temperature?: number;
   /** Other ids it answers to (`suggest-assertions` for generate-assertions). */
   aliases?: string[];
   /** `prepare` reads an item when one is given; the task also runs without one (the caller passes the context). */
@@ -610,6 +616,30 @@ export const AI_TASKS: readonly AiTaskDef[] = [
     maxTokens: 6000,
     verifiers: ['yaml'],
     propose: textItem('yaml', 'MCP toolset'),
+  }),
+  T('rag-judge', {
+    title: 'Judge a RAG answer',
+    description:
+      'One evaluation task of a RAG metric (the question holds the metric’s instruction): the answer is split into claims or statements and each gets a verdict with its evidence, as JSON. Used by the judged RAG metrics (rag-faithfulness, rag-answer-relevance); the verdicts are cached by content, counted in the usage ledger and limited by the AI caps.',
+    tier: 'large',
+    output: { kind: 'json', schema: VERDICT_SCHEMA },
+    context: 'question (the user’s question), answer, contexts [{id, text}], reference (only what the metric needs)',
+    temperature: 0,
+    contextTokens: 24_000,
+    maxTokens: 3000,
+    maxRepairs: 2,
+  }),
+  T('nl-search', {
+    title: 'Ask about history, runs and traces',
+    description:
+      'Translates a question ("failed payment calls last week over 2 s") into a validated search query over History, runs, test results and traces; TestPion runs the query itself. The model sees the question and the field names, never the data; the query is shown in plain words and as editable chips.',
+    tier: 'small',
+    output: { kind: 'json', schema: NL_SEARCH_SCHEMA },
+    context: 'now (ISO time), scope (the sources asked in, optional); the question is the question',
+    contextTokens: 1500,
+    maxTokens: 800,
+    maxRepairs: 2,
+    validate: validateNlSearch,
   }),
   T('free', {
     title: 'Ask the assistant',

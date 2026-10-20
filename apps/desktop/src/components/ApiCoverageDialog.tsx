@@ -1,4 +1,4 @@
-import { Download, ScanSearch } from 'lucide-react';
+import { ScanSearch } from 'lucide-react';
 import { AiAction } from './ai/AiAction';
 import { useEffect, useMemo, useState } from 'react';
 import { call } from '../api';
@@ -8,7 +8,8 @@ import { parseYaml } from '../lib/yaml';
 import { SidePicker, type Side } from './OpenApiDiffDialog';
 import { Badge, Button, cx, Field, Input, Metric, MetricGrid, ModalOrPanel, Select, Toggle } from './ui';
 import { BarRow, ChartCard, Swatch } from './charts';
-import { downloadContent } from '../lib/files';
+import { ApiReportBar } from './ApiReportBar';
+import type { ApiReport } from './output/api-report-specs';
 
 interface OperationCoverage {
   method: string;
@@ -122,6 +123,7 @@ export function ApiCoverageDialog({ runId, spec: initialSpec, onClose, inline }:
     return { task: 'suggest-coverage-tests', title: 'Tests for the coverage gaps', context: { api, gaps }, apply: { label: 'Save as a test file', run: (code: string) => saveGapTests(api ?? 'api', code) } };
   };
 
+  const coverageDoc = useMemo<ApiReport | undefined>(() => (result ? { kind: 'coverage', title: `API coverage${result.report.title ? ` · ${result.report.title}` : ''}`, markdown: result.markdown, data: result.report } : undefined), [result]);
   const s = result?.report.summary;
   const tone = (p: number) => (p >= 80 ? 'ok' : p >= 50 ? 'warn' : 'bad');
   return (
@@ -134,9 +136,7 @@ export function ApiCoverageDialog({ runId, spec: initialSpec, onClose, inline }:
         <>
           {result && (
             <>
-              <Button icon={<Download size={13} />} onClick={() => downloadContent(`api-coverage${result.report.title ? `-${result.report.title.replace(/[^\w-]+/g, '-')}` : ''}.md`, result.markdown, { type: 'text/markdown' })}>
-                Markdown
-              </Button>
+              <ApiReportBar kind="coverage" report={coverageDoc} />
               {result.report.operations.some((o) => !o.covered || o.untestedStatuses.length) && <AiAction label="Suggest tests with AI" request={suggest} onStart={onClose} preview={false} />}
             </>
           )}

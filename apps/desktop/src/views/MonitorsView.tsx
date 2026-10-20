@@ -26,6 +26,9 @@ import { useCollectionTree } from '../lib/collections-store';
 import { VarInput } from '../components/VarInput';
 import { useExternalChange } from '../lib/external-change';
 import { EnvBadge, EnvSelect } from '../components/EnvSelect';
+import { OutputActions } from '../components/output/OutputFrame';
+import type { OutputSpec } from '../components/output/output-core';
+import { outputFileName } from '@testpion/shared';
 
 /** The tab of a monitor being created (not saved yet, so no id). */
 const NEW_TAB = 'new';
@@ -404,6 +407,20 @@ function MonitorDetail(p: {
   onDelete(): void;
 }) {
   const { m, results } = p;
+  // the monitor's runs as the backend keeps them (the newest 100), not only the page on screen
+  const runsSpec = useMemo<OutputSpec>(() => {
+    const source = { kind: 'monitor-runs' as const, monitor: m.id, limit: 100 };
+    return {
+      id: 'monitor.runs',
+      what: 'monitor runs',
+      name: outputFileName({ name: `monitor-${m.name}`, ext: '' }),
+      formats: [
+        { format: 'csv', label: 'Runs (CSV)', source, default: true },
+        { format: 'json', label: 'Runs (JSON)', source },
+      ],
+      empty: results.length ? undefined : 'No runs yet',
+    };
+  }, [m.id, m.name, results.length]);
   const last = results[0];
   const stats = useMemo(() => {
     const done = results.filter((r) => r.status !== 'error' || r.total === 0);
@@ -472,8 +489,11 @@ function MonitorDetail(p: {
       <MonitorCharts runs={results} p95Limit={m.maxP95Ms} monitorId={m.id} />
       <MonitorRequests monitorId={m.id} refresh={results[0]?.runId} />
 
-      <div>
-        <div className="text-xs font-medium text-muted uppercase tracking-wide mb-1">Runs</div>
+      <div data-output="monitor.runs">
+        <div className="flex items-center gap-2 mb-1">
+          <span className="text-xs font-medium text-muted uppercase tracking-wide">Runs</span>
+          <OutputActions spec={runsSpec} />
+        </div>
         {results.length ? (
           <table className="w-full text-sm">
             <thead>

@@ -13,6 +13,7 @@ testpion test <flow> --data [file] | --env-matrix <envs>   One flow file once pe
 testpion test from-request <item>   Save a saved request (a folder, a collection, any item ref) as a test file, like Save as test… in the app
 testpion run --suite <name>   Run tests/<name>.suite.yaml from a workspace (or testpion run <file> for one test file)
 testpion search <words>       Find items by name or content, like Quick Open (Ctrl+P); each hit has a ref for testpion open
+testpion search --ask "…"    Ask in your own words about History, runs, test results and traces; the model only translates, TestPion searches
 testpion problems             What is failing in the workspace, as the app's Problems list (alias: attention; exit 1 on a high-severity item)
 testpion send <request|url>   Send one saved request (scripts, auth, checks) or a URL and print the response, like curl
 testpion run-collection <collection>   Run a collection like Postman's Collection Runner / Newman
@@ -28,6 +29,7 @@ testpion replace <c> <find> <with> Find and replace across a collection's reques
 testpion agent-info               What an AI agent needs to use TestPion here, as JSON (workspace, commands, exit codes, MCP setup)
 testpion kinds [kind]            The kinds of item a workspace holds and what each offers (open, rename, delete with undo, run, CI …), with why an action never applies, and the menus of its rows (--json)
 testpion item delete|restore <ref|id> -w   Delete any item to Recently deleted by its ref (collection:<id>, environment:<id>, dataset:<name>, spec:specs/<path>, mcp-server:<id>), or put one back (--json)
+testpion output <output>        Save an output of the app (run results, History, traces, a timeline, a matrix, the changes …) to a file, byte for byte as the app's down arrow does (--format, --out, --list)
 testpion open <ref>              Open an item in the TestPion app by its ref (a testpion://open link, the JSON "ref" of --json output, or kind:id); checked first (--json, --print)
 testpion tests-from-spec <spec> Write a first test suite from an API definition (examples and invalid requests)
 testpion integration-suite <spec|collection> Write an integration suite: a flow per resource (create, read, update, list, delete), the login first
@@ -46,13 +48,17 @@ testpion openapi-lint [specs...]     Lint OpenAPI documents: broken $refs, undec
 testpion eval list|run <name>   Evaluations saved in the app: list them, or run one by name (exit 1 on failures)
 testpion eval compare <run> --baseline <run>   Compare an evaluation run with a baseline case by case; exit 1 on regressions (for CI)
 testpion eval matrix <runs...>   Evaluation runs side by side: cases × variants, against a baseline (a page at a time)
+testpion rag targets|probe|import|export   RAG systems under test: list the targets, ask one a question, convert Ragas / DeepEval datasets
 testpion agents init [--targets agents,claude,cursor]   Write or refresh AGENTS.md (and a CLAUDE.md pointer, a Cursor rule) for coding agents
 testpion coverage <spec> -w   API coverage: which OpenAPI operations and responses the runs exercised (--min for CI)
 testpion docs <collection>    Write Markdown (or --html) documentation for a collection
 testpion export <collection>  Export a collection as Postman v2.1 (or TestPion JSON)
+testpion export <kind:id…> --out <file>   A TestPion bundle of any items (--section <kind>, --all, --uses for everything they use)
+testpion bundle inspect <file>   Read a bundle without a workspace: what it holds, what it needs, what to review
 testpion export-environment <name>   Export an environment in Postman's format
 testpion mcp-server           Serve a workspace to AI agents over MCP (stdio)
 testpion load <url>           Safeguarded load test (--threshold "p95<500" "errors<1%" to pass/fail; --grpc <method> for a gRPC server; --collection, or --test-file <flow> for a whole flow per virtual user)
+testpion import <bundle> -w [--preview] [--on-conflict keep-both|replace|skip]   Preview or import a TestPion bundle; --undo <importId> takes an import back
 testpion import <file|-> -w   Import OpenAPI/Swagger, Postman, Insomnia, Bruno (a collection folder too), Hoppscotch, WSDL (SOAP), a GraphQL schema, HAR, collections, Arazzo workflows (as flow files), or a copied cURL / fetch / PowerShell request
 testpion env list|order|diff -w  List environments; set their order; compare two
 testpion monitor list|add|remove|run|results|uptime|start -w  Collections or test files (flows) on a schedule (monitors; add --test-file <path>)
@@ -72,7 +78,7 @@ testpion trash list|restore|empty -w  Recently deleted collections, environments
 testpion history list|stats|diff|test|export-har -w  Response history of saved requests; response times; compare two responses; a test across runs; HAR export
 testpion workspace list|create|rename|delete|export   Manage workspaces (see Workspaces); export writes <name>.testpion.json, secrets replaced by {{variables}}
 testpion git setup|check|hook install -w   Make a workspace git-ready; find secrets before a commit; a pre-commit hook
-testpion git status|changes|diff|commit|log|branch|switch|pull|push|sync|resolve -w   Git for the workspace (sync: pull & push in one step) (see Keep your workspace in git)
+testpion git status|changes|diff|commit|log|branch|switch|pull|push|sync|resolve -w   Git for the workspace (sync: pull & push in one step; status --by-item [--kind <kind…>] lists the changed items by name) (see Keep your workspace in git)
 testpion diff <from> [to] -w  What changed between two commits, by meaning (--markdown for a pull-request comment)
 testpion mcp [--url|--sse|--server <name> -w] [--call <tool> --args <json>] [--json]   Inspect an MCP server (a saved one with --server), or call one of its tools
 testpion ws <url> [-m msg] [-e event=json]    Talk to a WebSocket or Socket.IO server and print the replies
@@ -113,9 +119,9 @@ Every command that takes `--json` prints **one envelope** on stdout, whatever ha
 
 ## Results as files {#results-as-files}
 
-The commands that already write files: `test`, `run-collection` and `eval run` (`-o, --out <dir>` and `-r` for the JUnit, JSON, HTML and Markdown reports), `report` (reports from a `results.jsonl`), `load --json <file>`, `history export-har -o <file>`, `debug -o <file.har>`, `flow report <file> --html <out>`, `export` / `workspace export` and `docs -o`. Anything else prints to stdout, so `testpion send … > body.json` keeps a body.
+The commands that already write files: `test`, `run-collection` and `eval run` (`-o, --out <dir>` and `-r` for the JUnit, JSON, HTML and Markdown reports), `report` (reports from a `results.jsonl`), `load --json <file>`, `history export-har -o <file>`, `debug -o <file.har>`, `flow report <file> --html <out>`, `export` / `workspace export` and `docs -o`. Most commands that print a result now also take `--out <file>` and `--format`, and `testpion output` saves any output of the app: see [`output`](#output) below. Anything else prints to stdout, so `testpion send … > body.json` keeps a body.
 
-**Coming in release B (not in 0.51):** `--out <file> --format …` on every command that prints a result, with the formats and redaction of the app's down arrow ([Save and export results](/getting-started/save-and-export-results)), and MCP tools that save a big result into the workspace's `exports/` folder.
+`--out <file>` and `--format` on `send` (the body), `history list` (History as HAR, CSV or JSON), `monitor results` (CSV, JSON), `git diff` (patch, Markdown), `eval matrix` (CSV, JSON, Markdown, HTML) and `testpion output` use the same builders, formats and redaction as the app's down arrow ([Save and export results](/getting-started/save-and-export-results)), so a file written here is byte for byte the file the app saves. The MCP server has the same in its `save_output` tool ([MCP server](/ai-testing/mcp-server)).
 
 ## `test` / `run` options
 
@@ -174,6 +180,27 @@ testpion search patients -w my-workspace
 testpion search "create order" --json -n 5
 ```
 
+**`--ask "<question>"`** searches **History, runs, test results and traces** from a question in your own words (the app's *Ask…*). The configured model only translates the question into a validated search query (it sees the question, the time and the field names, never your data); TestPion runs the query itself, read-only, and says how the question was understood — the query in plain words, the model's assumptions, then the hits, each with a `ref` for `testpion open`:
+
+```bash
+testpion search --ask "failed payment calls last week over 2 s"
+testpion search --ask "flaky tests in staging" --in results --json
+testpion search --ask "payments" --no-ai          # the words as typed, no model
+testpion search --ask "…" --dry-run               # send nothing: print what would be sent
+testpion search --query-json '{"where":[{"field":"status","op":"gte","value":500}],"limit":10}'
+testpion search --query-json @query.json --in history     # a query from a file ("-": stdin)
+```
+
+| Option | |
+|---|---|
+| `--ask <question>` | The question. Without a model, or when the model fails or its query is not valid, the words are searched as typed (`mode: "text"`, the reason in `fallback`; exit `0`). |
+| `--query-json <spec>` | Run a query directly, with no model: JSON, `@file` or `-`. `{"sources": ["history"], "where": [{"field", "op", "value"}], "sort": {"by": "time", "dir": "desc"}, "limit": 25}`. The fields and operators are in [Ask: search in your own words](/getting-started/finding-your-way#ask); an invalid query exits `2` and lists what is allowed. |
+| `--in <sources>` | Stay inside some sources: `history`, `runs`, `results`, `traces` (comma-separated). |
+| `--no-ai`, `--dry-run`, `--privacy`, `--provider`, `--model` | As for [`ai run`](#ai). |
+| `--json` | `{ question, mode: "ai" \| "text" \| "query", query, explain, chips, assumptions, fallback?, outcome: { rows, matched, perSource, capped, notes, ms }, model?, usage?, costUsd? }`. |
+
+The call is counted in `testpion ai usage` as the task `nl-search`.
+
 ## `send`
 
 Sends one request and prints the response body (pretty-printed JSON), like `curl`. The request is a saved one, by name, with its scripts, auth (inherited too), variables and checks, or a URL:
@@ -193,8 +220,46 @@ testpion send https://api.example.com/items -X POST -H "Content-Type: applicatio
 | `-i, --include` | Also print the status line and response headers. |
 | `--fail` | Exit `1` on an HTTP error status (400+) or a failed check. |
 | `--json` | The envelope, with `{ status, statusText, url, durationMs, headers, body, checks }` in `data`. |
+| `--out <file>` | Write the body to a file instead of printing it: as received by default (like `curl -o`), or laid out with `--format json`, minified with `--format json-min`, or `text`, `html`, `xml`. With `--json`, `data.saved` says where and how big. |
 
 Check results go to stderr, so `testpion send … | jq` gets only the body.
+
+## `output` {#output}
+
+```bash
+testpion output --list                         # what can be saved, with formats and parameters (--json for a script)
+testpion output history -w clinic --out history.har            # History as HAR (the format from the file name)
+testpion output history -w clinic --failed --format csv --out failed.csv
+testpion output run.results -w clinic --run run-2026-10-18-0932 --format junit --out junit.xml
+testpion output git.diff -w clinic --format md --out changes.md
+testpion output response.body -w clinic --history-id h-7f3 --format json --out body.json
+```
+
+Saves an output of the app to a file, as the **down arrow** in the window does: the same builders, the same formats and the same secrets policy ([Save and export results](/getting-started/save-and-export-results)). `testpion output --list` shows what it can save from a workspace:
+
+| Output | Formats | Parameters |
+|---|---|---|
+| `run.results` | html, json, junit, md, csv, zip | `--run` (the run id) |
+| `flow.timeline` | html, json | `--run`, or `--file` (a flow file: its latest run) |
+| `flow.grid` | csv, json, html | `--data-run`, `--status` |
+| `eval.matrix` | csv, json, md, html | `--runs <ids…>`, `--baseline` |
+| `history` | har, csv, json | `-q`, `--kind`, `--failed`, `-n` |
+| `traces` | json (OTLP) | `--traces <ids…>`, or `-q`, `--kind`, `--failed`, `-n` |
+| `monitor.runs` | csv, json | `--monitor`, `-n` |
+| `runs.overview` | csv, json | `-q`, `-n` |
+| `git.diff` | diff, md | `--path`, `--staged` |
+| `workspace.report` | html | `--days` |
+| `response.body`, `graphql.response` | raw, json, csv … | `--history-id` (a saved response body) |
+
+The console of a running app, the Debugger session and what only the window holds (a selected exchange, a chart, an AI answer) are saved from the app.
+
+| Option | Description |
+|---|---|
+| `--out <file>` | The file to write (without it the text is printed; `--json` needs it). It is written through a `.part` file and renamed when complete, so a failure leaves no half file. |
+| `--format <format>` | One of the output's formats; by default the one the `--out` extension names (`.csv`, `.har`, `.md` …), else the output's default. |
+| `--include-secrets` | Keep the secrets that are masked by default (not for outputs that are masked when they are recorded). A script has no dialog to confirm in: the flag is the confirmation. |
+| `-e, --environment` | Mask this environment's secret values as well. |
+| `--json` | `{ surface, format, path, bytes, redacted, notice }` in the envelope. |
 
 ## `collections` and `requests`
 
@@ -513,6 +578,20 @@ testpion ai attempt-fix ai-mvckdy5ve28aa50ec9 --times 5   # apply it, run the te
 
 `suggest-assertions` is an alias of `generate-assertions`, `generate-tests` of `generate-pm-tests`. A task that answers in JSON (`triage-run`, `analyze-flaky` …) is printed as its proposal — the findings with their evidence, then the items — not as the raw JSON. With `--item request:<c>:<r>`, suggested checks and tests are verified against the request's latest response in History (sent from the app); without one each item says *no response to check against*. `ai run --json` returns `{ task, taskVersion, provider, model, text, truncated, finishReason, problems, repairs, calls, usage, ms, preview, proposal?, applied? }`; `preview` is what was (or, with `--dry-run`, would be) sent: the model, privacy level, sections, masks and estimate (and the messages on a dry run). Exit code `2` when no model is set up (`ConfigurationError`, *The AI assistant is off*) — except `analyze-flaky`, which then prints TestPion's own finding (the signature, the likely pattern, *note: no model configured*) and exits `0`, as with `--no-ai` (`--json`: `{ task, testId, name, signals, runs, finding, ai: false, fallback }`) — Local only refuses the provider, or a cap refuses the call — nothing was sent. Exit code `1` (envelope `status: "failed"`) when the answer is still invalid after the repairs: `problems` lists why (without `--json` they are printed under the answer). With the global `--dry-run`, `ai apply` prints *would apply …* and the files it would change, nothing else. See [AI features](/ai-testing/ai-features#from-the-terminal-agents-and-ci).
 
+## `rag` {#rag}
+
+RAG systems under test (AI Lab ▸ RAG; the guide is [RAG testing](/ai-testing/rag)). All four take `--json`.
+
+| Command | What it does |
+|---|---|
+| `rag targets` | The RAG targets of the workspace (protocol, the mapping in a line, what stops one from being called). |
+| `rag probe [target] [question]` | One real question to a target (a saved one, or `--file target.yaml`): the answer, the retrieved contexts with id, score and source, usage and latency, the warnings of the mapping, and with `--raw` the response the mapping reads. `-e` picks the environment; `--allow-production` as for any request that is not a read. |
+| `rag import <file>` | A Ragas or DeepEval dataset (JSON, JSONL or CSV; only data is read) as TestPion records (`question`, `reference`, `reference_contexts`, `reference_ids`, `tags`). `--from ragas\|deepeval\|testpion` (default: found by the columns), `-o` writes JSON Lines, `--format json` an array. Notes on what was left out go to stderr. |
+| `rag export <dataset> --to ragas\|deepeval` | A dataset file, or a saved evaluation by name, as Ragas or DeepEval records. `--run <runId>` adds the answer and retrieved contexts each record got in that run. |
+
+`eval run` of a RAG evaluation checks the target and the judge before it sends the first question, and takes `--judge <provider/model>` and
+`--max-judge-cost <usd>`. Without a usable judge it exits `2` and lists what to configure; the verdicts are cached, so a second run costs nothing.
+
 ## `eval compare` and `eval matrix`
 
 `eval compare <run> --baseline <run>` compares an evaluation run with a baseline run case by case and exits `1` when more cases regressed than `--max-regressions` (default `0`): for CI after `eval run`. A case regressed when it stopped passing or its mean score dropped by more than `--threshold` (default `0.05`, strictly more); improvements, missing and new cases are listed apart, and `--fail-on-missing` fails on a missing case too. Runs are ids, `last` or names (the newest finished run of that name). `--json` prints the report (counts, per-variant pass rate and mean score change, the lists, `passed`).
@@ -551,9 +630,42 @@ testpion export-environment Staging -o staging.postman_environment.json
 
 Parts that Postman can't represent are listed on standard error as `not exported: …`. Secret environment values are never written.
 
+## `export` as a TestPion bundle
+
+`testpion export` also writes a [bundle](/getting-started/export-import): any items of the workspace in one `.testpion.zip` (or `.testpion.json`) that `testpion import` and the app's Import… read back. It is a bundle when you give `kind:id` items, `--section`, `--all`, `--uses` or `--format bundle`; a collection name or id alone exports in the formats above, as before.
+
+```bash
+testpion export collection:clinic --uses --out clinic.testpion.zip -w my-workspace
+testpion export spec:specs/pets.yaml dataset:users.csv mcp-server:petstore --out pets.testpion.zip
+testpion export --section mcp-server --out servers.testpion.json
+testpion export --all --out everything.testpion.zip --json
+```
+
+The items are `kind:id` (the registry's kinds and aliases: `collection:<id>`, `environment:<id>`, `spec:specs/<path>`, `dataset:<name>`, `test:<path>`, `mcp-server:<id>`, `mcp-mock:mocks/<file>`, `proto:protos/<file>`, `script-package:<name>`, `prompt:<id>`, `load-test:<id>`, `evaluation:<id>`, `monitor:<id>`, `grpc-call:<id>`, `ws-connection:<id>`, `provider:<id>`), an ItemRef from `--json` output, or a collection's name.
+
+| Option | Description |
+|---|---|
+| `--section <kind>` | Every item of one kind. |
+| `--all` | The whole workspace (AI providers only with `--providers`). |
+| `--uses` | Add everything the items use: for a collection its environments, API definitions, datasets, protos, mocks, MCP servers, script packages, saved calls, monitors, load tests and the test and flow files that refer to it. What is named but not in the workspace is listed as `missing`. |
+| `--datasets embed\|reference\|auto` | `auto` (default) includes a dataset up to 10 MB and sends a bigger one by reference. |
+| `--title <text>` | The bundle's title (and its default file name). |
+| `-o, --out <file>` | The file to write; `.zip` or `.json` picks the form (default `<title>.testpion.zip` or `.json` in the current folder). |
+| `--json` | `{ path, format, size, title, counts, items: [{ kind, id, name }], replaced: [{ kind, item, field, variable }], requires, missing, notes }`. |
+
+Secret values are never written: each is replaced by a `{{variable}}` (listed in `replaced` and `requires.secrets`).
+
+## `bundle`
+
+```bash
+testpion bundle inspect clinic.testpion.zip --json
+```
+
+`bundle inspect <file>` reads a bundle without a workspace: its title and maker, the items by kind, the secrets to fill in, what to review before running (scripts, programs an MCP server starts, production environments) and what was left out. `--max-size <mb>` refuses a larger file.
+
 ## `workspace export`
 
-One file with everything a workspace defines, which `testpion import` (or **Import** in the app) opens as a new workspace. See [Export the whole workspace](/api-testing/collections#export-the-whole-workspace) for what it holds.
+The earlier whole-workspace file (it stays for two more releases; `testpion export --all` writes a bundle instead). One file with everything a workspace defines, which `testpion import` (or **Import** in the app) opens as a new workspace. See [Export the whole workspace](/api-testing/collections#export-the-whole-workspace) for what it holds.
 
 ```bash
 testpion workspace export "Veterinary API (example)"     # writes "Veterinary API (example).testpion.json"
@@ -575,7 +687,13 @@ Replaced 1 secret with variables: environment Development variables.clientSecret
 
 ## `import`
 
+A TestPion bundle (`.testpion.zip`, `.testpion.json`, or a workspace export of earlier versions) is detected by its content and merged into the workspace with a preview and conflict choices; any other file or link is imported as below.
+
 ```bash
+testpion import clinic.testpion.zip -w my-workspace --preview --json        # what would happen; nothing is written
+testpion import clinic.testpion.zip -w my-workspace --on-conflict keep-both  # the default; replace and skip are the others
+testpion import --undo imp-1a2b3c4d5e6f -w my-workspace                      # take the import back
+testpion import --list -w my-workspace                                       # imports that can be undone
 testpion import openapi.yaml -w my-workspace
 testpion import openapi-v2.yaml -w my-workspace --replace-spec   # replace the document of the same name (default: keep both)
 testpion import ./bruno/clinic-api -w my-workspace      # a Bruno collection folder (bruno.json + .bru files)
@@ -595,6 +713,13 @@ testpion import adopt-pet.arazzo.yaml -w my-workspace --json   # Arazzo: one flo
 | `--name <name>` | For a copied request: its name (default: the method and path, e.g. `POST /v1/owners`). |
 | `--no-contract-checks` | For an OpenAPI / Swagger document: don't add `openapi` contract checks to the imported requests (the document is still kept in `specs/`). |
 | `--replace-spec` | For an OpenAPI, AsyncAPI or GraphQL schema document whose path in `specs/` holds a different document: replace it (the old one goes to the trash, `testpion trash list`). By default both are kept and the new one is saved as `name-2` (`specs/petstore-2.openapi.yaml`), with a note. |
+| `--preview` | A bundle: print what importing would do (per item: `create`, `identical`, `conflict` with the name Keep both would give it, `invalid` with why), what to review and what to fill in. Nothing is written. |
+| `--on-conflict keep-both\|replace\|skip` | A bundle: what happens to an item that is already here (default `keep-both`: the incoming one is renamed). `replace` can be undone with `--undo`. |
+| `--only <kinds>` | A bundle: import only these kinds or `kind:id` items (comma separated). |
+| `--decisions <file>` | A bundle: a JSON file of `"kind:id": "keep-both" \| "replace" \| "skip"` for single items. |
+| `--undo <importId>` | Take back a bundle import: what it made is removed, what it replaced is restored; a file edited since is kept and named. |
+| `--list` | The bundle imports that can be undone. |
+| `--max-size <mb>` | A bundle: refuse a larger file. |
 | `--keep-pm` | For a Postman or Insomnia file: keep `pm.*` in scripts. By default they are converted to TestPion's `tp.*` and the output says `Converted N scripts to tp.* (--keep-pm keeps pm.*)`; for other tools (Bruno's `bru.*` …) it says only `Converted N scripts to tp.*`, since `--keep-pm` changes nothing there (`pm.*` runs either way; `testpion export -f postman` turns `tp.*` back into `pm.*`). |
 | `--fetch-sources` | For an Arazzo document: download the OpenAPI source descriptions given as http(s) links. By default they are looked up next to the Arazzo file and in the workspace (`specs/`); an `operationId` whose document is not found becomes a skipped step to fill in. |
 | `--json` | Print the result as JSON, for scripts and AI agents (includes `specPath` and `contractChecks` for OpenAPI imports, `flows` — `[{ path, workflowId, steps }]` — for Arazzo imports, `notes` (what did not map one to one, for every import: unsupported auth, template tags, values needed, a spec saved as `name-2` …), and `scripts` — `{ converted, unchanged: [{ where, reason }] }` — for Postman, Insomnia and Bruno imports). Without `--json`, the output lists the first 20 notes under *Check after import (N notes)*. |

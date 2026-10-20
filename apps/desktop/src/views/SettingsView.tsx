@@ -3,7 +3,7 @@ import { AgentsPanel } from '../components/AgentsPanel';
 import { KeyboardSettings } from '../components/KeyboardSettings';
 import { AiSettingsPanel } from '../components/ai/AiSettingsPanel';
 import { Plus, Save, Trash2 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { asError, call } from '../api';
 import { pickTextFile } from '../lib/files';
 import { toastError, useApp } from '../store';
@@ -11,6 +11,8 @@ import { useIntent } from '../hooks';
 import type { AppSettings, PriceEntry, ProviderConfig } from '../types';
 import { checkForUpdates } from '../updates';
 import { Badge, Button, Field, IconButton, Input, Segmented, Select, Tabs, Toggle, Textarea } from '../components/ui';
+import { OutputActions } from '../components/output/OutputFrame';
+import { diagnosticsOutputSpec } from '../components/output/diagnostics-specs';
 
 type Tab = 'appearance' | 'keyboard' | 'requests' | 'git' | 'proxy' | 'certificates' | 'privacy' | 'pricing' | 'load' | 'storage' | 'assistant' | 'about' | 'agents';
 
@@ -20,6 +22,11 @@ export function SettingsView() {
   const ws = useApp((s) => s.workspace);
   const [s, setS] = useState<AppSettings | undefined>(settings);
   const [tab, setTab] = useState<Tab>('appearance');
+  const diagnosticsSpec = useMemo(
+    () => diagnosticsOutputSpec({ appVersion: info?.appVersion, version: info?.version, electron: info?.electron, node: info?.node, platform: navigator.platform, metaBackend: info?.metaBackend, secretBackend: info?.secretBackend, workspacePath: ws?.path, theme: s?.theme ?? 'system', proxy: s?.proxy?.mode ?? 'env' }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the settings draft only changes the theme and proxy lines
+    [info, ws?.path, s?.theme, s?.proxy?.mode],
+  );
   // other views open a tab directly, e.g. the assistant's "Set up" button; AI Lab's "Set a price…" adds a row for its model
   useIntent(
     'settings',
@@ -271,26 +278,9 @@ export function SettingsView() {
               {!!ws?.migrations.length && <div>Migrations applied on open: {ws.migrations.join(', ')}</div>}
               <div className="text-muted">Available check types: {info?.checkTypes.join(', ')}</div>
               <div>
-                <Button
-                  size="sm"
-                  title="Versions, platform and storage backends, for a bug report (your home folder is replaced with ~)"
-                  onClick={() => {
-                    const home = (ws?.path ?? '').match(/^([A-Za-z]:\\Users\\[^\\]+|\/(?:home|Users)\/[^/]+)/)?.[1];
-                    const text = [
-                      `TestPion ${info?.appVersion ?? '?'} (engine ${info?.version ?? '?'})`,
-                      `Electron ${info?.electron ?? '-'} · Node ${info?.node ?? '-'} · ${navigator.platform}`,
-                      `Metadata store: ${info?.metaBackend ?? '?'} · Secret storage: ${info?.secretBackend ?? '?'}`,
-                      `Workspace: ${home ? (ws?.path ?? '').replace(home, '~') : (ws?.path ?? '-')}`,
-                      `Theme: ${s.theme} · Proxy: ${s.proxy?.mode ?? 'env'}`,
-                    ].join('\n');
-                    void navigator.clipboard.writeText(text).then(
-                      () => useApp.getState().toast('Diagnostics copied', 'success'),
-                      () => useApp.getState().toast('Could not copy to the clipboard', 'error'),
-                    );
-                  }}
-                >
-                  Copy diagnostics
-                </Button>
+                <span className="inline-flex align-middle" data-output="settings.diagnostics" title="Versions, platform and storage backends, for a bug report (your home folder is replaced with ~)">
+                  <OutputActions spec={diagnosticsSpec} />
+                </span>
                 <Button size="sm" className="ml-2" onClick={() => useApp.getState().set({ feedback: {} })}>
                   Send feedback or report a problem
                 </Button>

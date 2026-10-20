@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { closeTabs, openTab, type TabsState } from '../../apps/desktop/src/lib/library-tabs';
 
 // WF-19: views whose items are saved in a library (Load tests, Evaluations) open them as tabs, with preview tabs.
@@ -45,5 +47,18 @@ describe('library tabs', () => {
     expect(closeTabs(s, ['b', 'c']).active).toBe('a');
     expect(closeTabs(s, ['a']).active).toBe('b');
     expect(closeTabs(s, ['a', 'b', 'c'])).toEqual({ tabs: [{ id: 'main' }], active: 'main' });
+  });
+
+  // B-08b: the AI prompts tab never closed its last tab (the view had no empty state); every view whose tabs can all be
+  // closed shows the shared NoOpenItems, and the UI plan tab-close-button closes the last tab of each
+  it('a view that can close every tab draws the shared empty state', () => {
+    const views = ['views/ai/Playground.tsx', 'views/EvaluationsView.tsx', 'views/LoadView.tsx'];
+    const withEmpty = views.filter((v) => /canBeEmpty: true/.test(readFileSync(join(__dirname, '../../apps/desktop/src', v), 'utf8')));
+    expect(withEmpty).toEqual(views);
+    for (const v of withEmpty) {
+      const src = readFileSync(join(__dirname, '../../apps/desktop/src', v), 'utf8');
+      expect(src, v).toMatch(/tabs\.empty/);
+      expect(src, v).toContain('<NoOpenItems');
+    }
   });
 });

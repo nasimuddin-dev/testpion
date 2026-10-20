@@ -1,22 +1,20 @@
 import { useAiEnabled } from '../lib/use-ai-enabled';
-import { ArrowDown, ArrowDownUp, ArrowUp, Check, Columns2, ExternalLink, FolderGit2, GitBranch, GitCommitHorizontal, GitPullRequest, KeyRound, Pencil, Minus, Plus, RefreshCw, RotateCcw, ShieldAlert, Sparkles, Trash2, Undo2, X } from 'lucide-react';
+import { ArrowDown, ArrowDownUp, ArrowUp, Check, ExternalLink, FolderGit2, GitBranch, GitCommitHorizontal, GitPullRequest, KeyRound, Pencil, Plus, RefreshCw, ShieldAlert, Sparkles, Trash2, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { asError, call, on } from '../api';
 import { confirmAction, isPushRejected, promptText, toastError, useApp } from '../store';
 import { useIntent } from '../hooks';
 import { openRef } from '../lib/open-ref';
-import { RefLink } from '../components/RefLink';
-import type { ItemRef } from '@testpion/shared';
+import type { ItemRef, KindId } from '@testpion/shared';
 import { useEditorTabsStore } from '../components/EditorTabs';
-import { Badge, Button, Callout, cx, Empty, LinkButton, Menu, MoreMenu, PageHeader, SectionTitle, Spinner, Split, Textarea } from '../components/ui';
-import { DiffText, GitCommitPanel } from '../components/GitCommitPanel';
+import { Button, Callout, cx, Empty, Menu, MoreMenu, PageHeader, SectionTitle, Spinner, Split, Textarea } from '../components/ui';
+import { GitCommitPanel } from '../components/GitCommitPanel';
 import { plural } from '../lib/format';
 import { GitItemDiffDialog } from '../components/GitItemDiffDialog';
 import { GitConflictDialog } from '../components/GitConflictDialog';
 import { ChangeMark } from '../components/ChangeMark';
-import { RowMenu } from '../components/TreeParts';
-import { LABEL } from '../lib/vocabulary';
-import { mergeModeOfPath, refOfWorkspacePath } from '@testpion/shared';
+import { GitChanges } from '../components/GitChanges';
+import { mergeModeOfPath } from '@testpion/shared';
 
 export interface GitFile {
   path: string;
@@ -52,6 +50,10 @@ export interface SemanticChange {
   itemKind?: string;
   /** What to open for it (core's refOfChange): the request, folder, environment, saved item, test or flow file … */
   ref?: ItemRef;
+  /** The registry kind of the item (an MCP server, a prompt, a dataset …). */
+  kindId?: KindId;
+  /** The keys of the marks the change makes on the lists it is inside. */
+  containers?: string[];
 }
 
 interface SecretFinding {
@@ -115,8 +117,6 @@ export function GitView() {
   // the commit picked in the history: what it changed shows on the right
   const [selectedCommit, setSelectedCommit] = useState<string>();
   const [diff, setDiff] = useState<{ path: string; text: string; line?: number }>();
-  // a changed file's menu (right-click or ⋯): open · show the diff · stage · discard
-  const [fileMenu, setFileMenu] = useState<string>();
   const [prUrl, setPrUrl] = useState<string>();
 
   const load = useCallback(async () => {
@@ -211,11 +211,6 @@ export function GitView() {
   });
 
   const files = status?.files ?? [];
-  const byFile = useMemo(() => {
-    const m = new Map<string, SemanticChange[]>();
-    for (const c of changes) m.set(c.file, [...(m.get(c.file) ?? []), c]);
-    return m;
-  }, [changes]);
 
   const commit = async (force = false) => {
     if (!message.trim()) return useApp.getState().toast('Write a commit message first (or let the assistant write one).', 'warning');
@@ -398,123 +393,7 @@ export function GitView() {
       <div className="h-full min-h-0 overflow-auto p-4 grid gap-5 content-start max-w-5xl w-full">
         {status.conflicted && <ConflictPanel files={files.filter((f) => f.state === 'conflicted')} note={syncNote} onDone={() => void load()} />}
 
-        <section>
-          <SectionTitle
-            right={
-              files.length > 0 && (
-                <div className="flex gap-1">
-                  <Button size="sm" variant="ghost" icon={<Plus size={12} />} onClick={() => void run('stage', () => call('git.stage', { paths: files.map((f) => f.path) }))}>
-                    Stage all
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    icon={<Undo2 size={12} />}
-                    onClick={async () => {
-                      if (await confirmAction({ title: 'Discard all changes', message: `Throw away ${plural(files.length, 'changed file')}?`, detail: 'Files go back to the last commit; new files are deleted.', confirmLabel: 'Discard', danger: true }))
-                        await run('discard', () => call('git.discard', { files }), 'Changes discarded');
-                    }}
-                  >
-                    Discard all
-                  </Button>
-                </div>
-              )
-            }
-          >
-            Changes {files.length ? <Badge>{files.length}</Badge> : null}
-          </SectionTitle>
-          {!files.length ? (
-            <div className="text-sm text-muted py-3">Nothing changed since the last commit.</div>
-          ) : (
-            <ul className="grid gap-1" aria-label="Changes">
-              {files.map((f) => (
-                <li key={f.path} className={cx('rounded-md border border-line bg-panel', fileMenu === f.path && 'bg-hover')}>
-                  <div
-                    className="flex items-center gap-2 px-2 py-1.5 text-sm"
-                    onContextMenu={(e) => {
-                      e.preventDefault();
-                      setFileMenu(f.path);
-                    }}
-                  >
-                    <ChangeMark change={f.state} />
-                    <button className="font-mono text-xs truncate text-left hover:underline" title="Show the line diff" onClick={() => void call<string>('git.diff', { path: f.path, staged: f.staged }).then((text) => setDiff(diff?.path === f.path ? undefined : { path: f.path, text }), toastError)}>
-                      {f.path}
-                    </button>
-                    {f.staged && <Badge tone="accent">staged</Badge>}
-                    <span className="ml-auto flex gap-1">
-                      <Button size="sm" variant="ghost" icon={f.staged ? <Minus size={12} /> : <Plus size={12} />} onClick={() => void run('stage', () => call(f.staged ? 'git.unstage' : 'git.stage', { paths: [f.path] }))}>
-                        {f.staged ? 'Unstage' : 'Stage'}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        icon={<RotateCcw size={12} />}
-                        onClick={async () => {
-                          if (await confirmAction({ title: 'Discard changes', message: `Throw away the changes to ${f.path}?`, confirmLabel: 'Discard', danger: true })) await run('discard', () => call('git.discard', { files: [f] }));
-                        }}
-                      >
-                        Discard
-                      </Button>
-                      <RowMenu
-                        label={f.path}
-                        open={fileMenu === f.path}
-                        onOpenChange={(o) => setFileMenu(o ? f.path : undefined)}
-                        items={
-                          fileMenu === f.path
-                            ? [
-                                ...(() => {
-                                  const ref = (byFile.get(f.path) ?? []).find((c) => c.ref && c.change !== 'removed' && c.change !== 'conflicted')?.ref ?? refOfWorkspacePath(f.path);
-                                  return ref && f.state !== 'deleted' ? [{ label: LABEL.open, icon: <ExternalLink size={14} />, onSelect: () => void openRef(ref) }] : [];
-                                })(),
-                                { label: 'Show the line diff', icon: <Columns2 size={14} />, onSelect: () => void call<string>('git.diff', { path: f.path, staged: f.staged }).then((text) => setDiff({ path: f.path, text }), toastError) },
-                                { label: f.staged ? 'Unstage' : 'Stage', icon: f.staged ? <Minus size={14} /> : <Plus size={14} />, separator: true, onSelect: () => void run('stage', () => call(f.staged ? 'git.unstage' : 'git.stage', { paths: [f.path] })) },
-                                {
-                                  label: 'Discard…',
-                                  icon: <RotateCcw size={14} />,
-                                  danger: true,
-                                  separator: true,
-                                  onSelect: async () => {
-                                    if (await confirmAction({ title: 'Discard changes', message: `Throw away the changes to ${f.path}?`, confirmLabel: 'Discard', danger: true })) await run('discard', () => call('git.discard', { files: [f] }));
-                                  },
-                                },
-                              ]
-                            : []
-                        }
-                      />
-                    </span>
-                  </div>
-                  {(byFile.get(f.path) ?? []).filter((c) => c.title !== f.path).length > 0 && (
-                    <ul className="border-t border-line px-3 py-1.5 grid gap-0.5">
-                      {(byFile.get(f.path) ?? []).map((c, i) => (
-                        <li key={i} className="flex items-center gap-2 text-xs">
-                          <ChangeMark change={c.change} />
-                          {c.ref && c.change !== 'removed' && c.change !== 'conflicted' ? (
-                            <RefLink to={c.ref} icon={false} className="text-fg">
-                              {c.title}
-                            </RefLink>
-                          ) : (
-                            <span className="truncate">{c.title}</span>
-                          )}
-                          {c.details.length > 0 && <span className="text-muted truncate">{c.details.join(', ')}</span>}
-                          {(c.kind === 'collection' || c.kind === 'environment' || c.kind === 'test') && c.change !== 'conflicted' && (
-                            <LinkButton className="ml-auto shrink-0" icon={<Columns2 size={12} />} title="Side by side: the last commit and now, part by part" onClick={() => setItemDiff({ file: c.file, itemId: c.itemId })}>
-                              Compare
-                            </LinkButton>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  {diff?.path === f.path && (
-                    <div className="border-t border-line max-h-80 overflow-auto text-[0.9em]">
-                      <DiffText text={diff.text} line={diff.line} />
-                    </div>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
+        <GitChanges files={files} changes={changes} run={run} onCompare={(file, itemId) => setItemDiff({ file, itemId })} diff={diff} setDiff={setDiff} />
 
         <section className="grid gap-2">
           <SectionTitle>Commit {staged.length ? <span className="text-muted font-normal">· {staged.length} staged</span> : files.length ? <span className="text-muted font-normal">· all changes</span> : null}</SectionTitle>
