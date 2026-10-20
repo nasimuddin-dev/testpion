@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync, statSync, existsSync } from 'node:fs';
 import { basename, join, relative } from 'node:path';
 import { ApsError } from '../errors.js';
+import { bruExample, bruRealtimeItem } from './bru-extra.js';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Any = any;
@@ -22,7 +23,7 @@ export interface BruBlock {
   list?: string[];
 }
 
-const TEXT_BLOCK = /^(body(:(json|text|xml|sparql|graphql|graphql:vars))?|script:.*|tests|docs)$/;
+const TEXT_BLOCK = /^(body(:(json|text|xml|sparql|graphql|graphql:vars|grpc|ws))?|script:.*|tests|docs|example)$/;
 
 /** Parse a .bru file into its blocks. */
 export function parseBru(text: string): BruBlock[] {
@@ -108,7 +109,8 @@ function bruRequest(text: string, fallbackName: string): Any | undefined {
   const find = (n: string) => blocks.find((b) => b.name === n);
   const meta = dict(find('meta'));
   const methodBlock = blocks.find((b) => METHODS.includes(b.name));
-  if (!methodBlock) return undefined;
+  // gRPC and WebSocket requests (Bruno 2.x)
+  if (!methodBlock) return bruRealtimeItem(blocks, meta, fallbackName);
   const m = dict(methodBlock);
   const graphql = meta.type === 'graphql';
   const bodyMode = String(m.body ?? 'none');
@@ -138,7 +140,7 @@ function bruRequest(text: string, fallbackName: string): Any | undefined {
       url: m.url ?? '',
       method: (methodBlock.name === 'http' ? String(m.method || 'GET') : methodBlock.name).toUpperCase(),
       ...(find('settings') ? { settings: dict(find('settings')) } : {}),
-      ...(blocks.some((b) => b.name === 'example') ? { examples: blocks.filter((b) => b.name === 'example').map((b) => dict(b)) } : {}),
+      ...(blocks.some((b) => b.name === 'example') ? { examples: blocks.filter((b) => b.name === 'example').map(bruExample).filter(Boolean) } : {}),
       headers: nv(find('headers')),
       params,
       body,

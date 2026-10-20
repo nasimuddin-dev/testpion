@@ -1,5 +1,5 @@
 import { parseYaml } from '../util/lazy-yaml.js';
-import type { AuthConfig, BodyConfig, CheckConfig, Collection, CollectionFolder, CollectionNode, Environment, HttpSettings, KeyValue, SavedExample } from '../model/types.js';
+import type { AuthConfig, BodyConfig, CheckConfig, Collection, CollectionFolder, CollectionNode, Environment, HttpSettings, KeyValue, LibraryItem, SavedExample } from '../model/types.js';
 import { shortId, slugify } from '../util/ids.js';
 import { brunoAssertionScript } from '../scripts/bruno.js';
 import { mapForeignAuth } from './foreign-auth.js';
@@ -189,6 +189,7 @@ export function parseOpenCollection(textIn: string): ImportDocument {
   const d: Any = t.startsWith('{') ? JSON.parse(t) : parseYaml(t);
   const findings = new Findings();
   const doc = newDocument('opencollection', textIn, { tool: 'Bruno (OpenCollection)', version: String(d.opencollection ?? ''), scriptTool: 'bruno' });
+  const savedItems: { grpc?: LibraryItem[]; websocket?: LibraryItem[] } = {};
   const convert = (items: Any[]): CollectionNode[] =>
     [...(items ?? [])].flatMap((it: Any): CollectionNode[] => {
       if (Array.isArray(it.items) || it.info?.type === 'folder') {
@@ -198,10 +199,20 @@ export function parseOpenCollection(textIn: string): ImportDocument {
       }
       const kind = it.graphql ? 'graphql' : it.http ? 'http' : it.grpc ? 'grpc' : it.websocket ? 'websocket' : undefined;
       const name = it.info?.name ?? it.http?.url ?? 'Request';
-      if (kind !== 'http' && kind !== 'graphql') {
-        if (kind) findings.add({ code: 'NOT_IMPORTED', severity: 'not-imported', where: [name], message: `"${name}": a ${kind === 'grpc' ? 'gRPC' : 'WebSocket'} request is not imported yet` });
+      if (kind === 'grpc' || kind === 'websocket') {
+        // a gRPC call / connection of the imported collection (a library item)
+        const g = (it[kind] ?? {}) as Any;
+        const meta = rows(g.metadata ?? g.headers);
+        const msg = g.message ?? g.messages?.[0];
+        const content = typeof msg === 'string' ? msg : typeof msg?.data === 'string' ? msg.data : typeof msg?.content === 'string' ? msg.content : '';
+        const url = normalizeTemplate(String(g.url ?? ''));
+        if (kind === 'grpc') {
+          (savedItems.grpc ??= []).push({ id: shortId('lib-'), name, data: { target: url.replace(/^grpcs?:\/\//, ''), method: String(g.method ?? '').replace(/^\//, ''), message: normalizeTemplate(content || '{}'), metadata: meta, tls: /^grpcs:/i.test(url), protoFiles: [] } });
+          findings.add({ code: 'NOT_IMPORTED', severity: 'changed', where: [name], message: `"${name}": the gRPC request came over as a gRPC call without its .proto file: choose the proto file again` });
+        } else (savedItems.websocket ??= []).push({ id: shortId('lib-'), name, data: { url, mode: 'websocket', message: normalizeTemplate(content), headers: meta, protocols: '' } });
         return [];
       }
+      if (kind !== 'http' && kind !== 'graphql') return [];
       const h = it[kind] as Any;
       const url = normalizeTemplate(h.url ?? '');
       const headers = rows(h.headers);
@@ -280,6 +291,7 @@ export function parseOpenCollection(textIn: string): ImportDocument {
   if (d.config?.proxy || d.config?.clientCertificates?.length) findings.add({ code: 'NOT_IMPORTED', severity: 'not-imported', where: [], message: 'The collection\'s proxy and client certificate settings were not imported (set them in Settings)' });
   const secretValues = dotenvEnvironments(typeof d.extensions?.dotenv === 'string' ? d.extensions.dotenv : undefined, processEnvNames(textIn), environments, findings);
   doc.collections.push(collection);
+  if (savedItems.grpc?.length || savedItems.websocket?.length) doc.savedItems = savedItems;
   doc.environments = environments;
   if (secretValues) doc.secretValues = secretValues;
   doc.findings.push(...findings.list);
