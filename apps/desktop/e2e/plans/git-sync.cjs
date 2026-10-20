@@ -31,11 +31,24 @@ const steps = [
       await __t.view('Git');
       const ws = await window.aps.invoke('ws.current');
       await window.aps.invoke('git.init', { remote: ws.path.replace(/[\\\\/]ws$/, '') + '/remote.git' });
-      // the examples hold demo passwords: committed on purpose here
-      const r = await window.aps.invoke('git.commit', { message: 'Start the API tests', paths: ['.'], force: true });
+      return 'connected';
+    })()`,
+  ],
+  // the examples hold demo passwords, which the commit's secret scan refuses for good (no "commit anyway"): the base commit is made with git itself
+  [
+    'first-commit',
+    `main:
+      const { execFileSync } = require('node:child_process'); const cwd = require('node:path').join(home, 'ws');
+      execFileSync('git', ['add', '-A'], { cwd }); execFileSync('git', ['commit', '-m', 'Start the API tests'], { cwd });
+      return 'committed';`,
+    false,
+  ],
+  [
+    'first-push',
+    `(async () => {
       await window.aps.invoke('git.push');
       const st = await window.aps.invoke('git.status');
-      return 'committed: ' + r.committed + ' | upstream: ' + st.upstream;
+      return 'committed: true | upstream: ' + st.upstream;
     })()`,
   ],
   // the teammate renames one request and pushes; meanwhile the app commits a change to another request
@@ -100,7 +113,9 @@ module.exports = withExpect(
   steps,
   {
     'bare-remote': /^remote ready$/,
-    shared: /^committed: true \| upstream: origin\/main$/,
+    shared: /^connected$/,
+    'first-commit': /^committed$/,
+    'first-push': /^committed: true \| upstream: origin\/main$/,
     'both-change': /^ready$/,
     'behind-shown': /^pull: Pull 1 \| strip: Your team pushed 1 commit\. Pull before pushing\..* \| pull & push: true \| push: false \| rail: 1$/,
     'pull-and-push': /^Pulled 1 commit, merged, and pushed [2-9] commits\. \| theirs: true \| mine: true \| ahead\/behind: 0\/0 \| strip: false \| rail: false$/,

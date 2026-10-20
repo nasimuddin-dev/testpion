@@ -159,7 +159,7 @@ const steps = [
     `(async () => {
       await __t.requests(); await __t.expand('HTTP basics (httpbin)'); await __t.expand('Requests & responses');
       const items = await __t.menu('GET with query parameters');
-      const item = [...document.querySelectorAll('[role=menuitem]')].find((m) => m.textContent.trim() === 'History in git…');
+      const item = (await (async () => { const g = [...document.querySelectorAll('[role=menuitem]')].find((m) => m.textContent.trim().startsWith('Git')); if (!g) return undefined; g.click(); await __t.sleep(250); return [...document.querySelectorAll('[role=menuitem]')].find((m) => m.textContent.trim() === 'History in git…'); })());
       if (!item) return 'NO MENU ' + items;
       item.click();
       const list = await __t.waitFor(() => document.querySelector('[aria-label="Versions"]'), 6000);
@@ -191,8 +191,8 @@ const steps = [
     `(async () => {
       await __t.requests(); await __t.sleep(500);
       await __t.menu('HTTP basics (httpbin)');
-      const item = [...document.querySelectorAll('[role=menuitem]')].find((m) => m.textContent.trim() === 'History in git…');
-      if (!item) return 'NO MENU';
+      const item = (await (async () => { const g = [...document.querySelectorAll('[role=menuitem]')].find((m) => m.textContent.trim().startsWith('Git')); if (!g) return undefined; g.click(); await __t.sleep(250); return [...document.querySelectorAll('[role=menuitem]')].find((m) => m.textContent.trim() === 'History in git…'); })());
+      if (!item) return 'NO MENU: ' + [...document.querySelectorAll('[role=menuitem]')].map((m) => m.textContent.trim()).join(' | ');
       item.click();
       const list = await __t.waitFor(() => document.querySelector('[aria-label="Versions"]'), 6000);
       const n = list ? list.querySelectorAll('li').length : 0;
@@ -229,13 +229,13 @@ const steps = [
     `(async () => {
       await __t.view('Git'); await __t.sleep(1000);
       ${button('Pull')}?.click();
-      const compare = await __t.waitFor(() => [...document.querySelectorAll('main section[role=alert] button')].find((b) => b.textContent.trim() === 'Compare…'), 10000);
+      const compare = await __t.waitFor(() => [...document.querySelectorAll('main section[role=alert] button')].find((b) => b.textContent.trim() === 'Resolve…'), 10000);
       if (!compare) return 'NO CONFLICT';
       compare.click();
       const item = await __t.waitFor(() => document.querySelector('[role=dialog] [data-conflict="item:hb-get"]'), 8000);
       if (!item) return 'NO CONFLICT ITEM';
       const parts = [...item.querySelectorAll('[data-part]')].map((r) => r.getAttribute('data-part'));
-      [...item.querySelectorAll('[role=radio]')].find((r) => r.textContent.trim() === 'Theirs')?.click(); await __t.sleep(200);
+      [...item.querySelectorAll('[role=radio]')].find((r) => r.textContent.trim() === 'Keep theirs')?.click(); await __t.sleep(200);
       [...document.querySelectorAll('[role=dialog] button')].find((b) => b.textContent.trim() === 'Resolve with these choices')?.click();
       await __t.waitFor(() => !document.querySelector('main section[role=alert]'), 8000);
       const c = (await window.aps.invoke('col.list')).find((x) => x.id === 'httpbin');
@@ -277,7 +277,7 @@ module.exports = withExpect(
     'compare-a-change': /^request part: true$/,
     'collection-history': /^versions: true \| compared with now: true$/,
     'conflicting-changes': /^ready$/,
-    'conflict-compared-and-resolved': /^differing parts: Request \| url: get\?side=theirs$/,
+    'conflict-compared-and-resolved': /^differing parts: request.url \| url: get\?side=theirs$/,
     'branch-renamed': /^current: trunk$/,
   },
   { env: { GIT_AUTHOR_NAME: 'E2E', GIT_AUTHOR_EMAIL: 'e2e@example.com', GIT_COMMITTER_NAME: 'E2E', GIT_COMMITTER_EMAIL: 'e2e@example.com' } },

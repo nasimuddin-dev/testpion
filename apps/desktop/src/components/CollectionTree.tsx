@@ -14,7 +14,6 @@ import { MoveDialog, subtreeIds } from './MoveDialog';
 import { closeTabsFor } from './EditorTabs';
 import { plural, uid } from '../lib/format';
 import { FolderEditor } from './FolderEditor';
-import { GitItemHistory } from './GitItemHistory';
 import { useGit } from '../lib/git';
 import { fullCollection } from '../lib/collections-store';
 import { matchIndex, requestCategory, type RequestCategory } from '../lib/collection-filter';
@@ -160,7 +159,6 @@ export const CollectionTree = memo(function CollectionTree({
   };
   const health = useCollectionsHealth();
   const [moving, setMoving] = useState<{ c: Collection; n: CollectionNode }>();
-  const [historyFor, setHistoryFor] = useState<{ c: Collection; n?: CollectionNode }>();
   const git = useGit();
   /** A copy of the collection with everything it holds (its gRPC calls and connections too). */
   const duplicateCollection = async (c: Collection) => {
@@ -422,7 +420,6 @@ export const CollectionTree = memo(function CollectionTree({
         ...(onSettings ? { collectionSettings: () => onSettings(c) } : {}),
         convertScripts: () => void convertScripts(c, 'tp'),
         tidyImport: () => startTidyImport({ collectionId: c.id }),
-        historyInGit: () => setHistoryFor({ c }),
         rename: () => setRenaming(c.id),
         duplicate: () => void duplicateCollection(c),
         delete: () => void deleteCollection(c),
@@ -471,7 +468,6 @@ export const CollectionTree = memo(function CollectionTree({
         monitor: () => useApp.getState().openIntent('monitors', { create: { collectionId: c.id, selection: [n.id] } }),
         testFile: () => void saveAsTest({ ref, name: n.name }),
         suggestChecks: () => startAi({ task: 'generate-assertions', title: `Suggested checks for ${n.name}`, context: {}, item: ref, autoReview: true }),
-        historyInGit: () => setHistoryFor({ c, n }),
         rename: () => void renameNode(c, n),
         duplicate: () => change(c, (c) => ({ ...c, items: duplicateNode(c.items, n.id, (y) => ({ ...y, id: uid('req-'), name: `${y.name} copy` })) })),
         move: () => setMoving({ c, n }),
@@ -608,7 +604,6 @@ export const CollectionTree = memo(function CollectionTree({
           onSave={(folder) => onChange({ ...editing.c, items: mapNodes(editing.c.items, (x) => (x.id === folder.id && x.kind === 'folder' ? { ...folder, items: x.items } : x)) })}
         />
       )}
-      {historyFor && <GitItemHistory target={{ collectionId: historyFor.c.id, itemId: historyFor.n?.id }} name={historyFor.n?.name ?? historyFor.c.name} onClose={() => setHistoryFor(undefined)} />}
       {moving && <MoveDialog node={moving.n} from={moving.c} collections={collections} onClose={() => setMoving(undefined)} onMove={(to, folderId) => move(moving.c, moving.n, to, folderId)} />}
       <VirtualList
         items={rows}

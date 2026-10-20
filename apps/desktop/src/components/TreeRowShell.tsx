@@ -76,7 +76,10 @@ export function TreeRowShell({ kind, ctx, nodeId, label, children, onClick, onOp
   const button = useRef<HTMLButtonElement>(null);
   /** The row's menu context, with Delete… putting the keyboard on the next row once this one is gone. */
   const menuCtx = (): NodeMenuCtx => {
-    const c = ctx();
+    // a row that says what it is (its change mark's ref) gets that ref for the menu: git actions (History, Discard, Stage) need it
+    const raw = ctx();
+    const own = git && 'kind' in git && !('folder' in git) ? (git as ItemRef) : undefined;
+    const c = own && !raw.ref ? { ...raw, ref: own, name: raw.name ?? label } : raw;
     const del = c.on.delete;
     const row = button.current;
     if (typeof del !== 'function' || !row) return c;

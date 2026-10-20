@@ -7,7 +7,6 @@ import {
   describeGitChanges,
   describeRevChanges,
   runGit,
-  findCollectionItem,
   findCommittableSecrets,
   fixCommittableSecrets,
   type SecretFinding,
@@ -26,7 +25,6 @@ import {
   gitDiscard,
   gitFetch,
   gitInit,
-  gitItemHistory,
   gitLog,
   gitPull,
   gitPush,
@@ -37,15 +35,15 @@ import {
   gitSwitch,
   gitSync,
   gitUnstage,
+  scanStagedSecrets,
+  commitVerdict,
+  type StagedSecret,
   gitVersion,
   makeGitReady,
   pullRequestUrl,
-  replaceCollectionItem,
-  type Collection,
   type GitFile,
   gitCommitDetail,
   gitCommitDiff,
-  atomicWrite,
   isWorkspaceDir,
 } from '@testpion/core';
 import type { Backend, Handlers } from '../backend.js';
@@ -133,15 +131,41 @@ export function gitHandlers(be: Backend): Handlers {
       return changed(r);
     },
     /**
-     * Commit (GIT-206). The secret guard runs first: with findings nothing is committed and they are returned, unless
-     * `force` (the user read them and chose to go on).
+     * Commit (GIT-206). What is staged (the paths are staged first) is scanned for secrets, blob by blob, with the
+     * detector the exports use: a high-confidence secret refuses the commit for good (fix it or unstage it); a probable one
+     * needs `force` (the user read the list and confirmed). A refused commit leaves the index as it was.
      */
     'git.commit': async ({ message, paths, amend, force }: { message: string; paths?: string[]; amend?: boolean; force?: boolean }) => {
-      const secrets = findCommittableSecrets(be.ws);
-      if (secrets.length && !force) return { committed: false, secrets };
-      const commit = await gitCommit(ws(), message, { paths, amend });
+      const before = new Set((await gitStatus(ws())).files.filter((f) => f.staged).map((f) => f.path));
+      if (paths?.length) await gitStage(ws(), paths);
+      const scan = await scanStagedSecrets(ws());
+      const verdict = commitVerdict(scan, !!force);
+      if (!verdict.allowed) {
+        // staged only for the scan: put the index back
+        if (paths?.length) {
+          const now = (await gitStatus(ws())).files.filter((f) => f.staged && !before.has(f.path)).map((f) => f.path);
+          await gitUnstage(ws(), now);
+        }
+        return { committed: false, reason: verdict.reason, secrets: [...scan.blocking, ...scan.confirm] };
+      }
+      const commit = await gitCommit(ws(), message, { amend });
       rmSync(proposalFile(), { force: true });
       return changed({ committed: true, commit, secrets: [] });
+    },
+    /** What a commit of the staged files would publish: the secret scan of the index. */
+    'git.stagedScan': () => scanStagedSecrets(ws()),
+    /**
+     * Fix what the staged scan found, in one click, where the app can (collections, environments, workspace variables:
+     * the value becomes a secret variable of the environment); the files that were staged are staged again with the fix.
+     */
+    'git.fixStaged': async ({ findings, environmentId }: { findings: StagedSecret[]; environmentId: string }) => {
+      const files = new Set(findings.map((f) => f.file));
+      const staged = new Set((await gitStatus(ws())).files.filter((f) => f.staged).map((f) => f.path));
+      const todo = findCommittableSecrets(be.ws).filter((f) => files.has(f.file));
+      const r = await fixCommittableSecrets(be.ws, be.secrets, todo, { environmentId });
+      await gitStage(ws(), [...files].filter((f) => staged.has(f)));
+      be.host.emit('data.changed', { method: 'col.save' });
+      return changed({ ...r, scan: await scanStagedSecrets(ws()) });
     },
     /** A commit an AI agent proposed (MCP git_propose_commit): its message fills the commit box for a person to review. */
     'git.proposal': () => {
@@ -160,48 +184,12 @@ export function gitHandlers(be: Backend): Handlers {
       const r = await be.assistant({ task: 'write-commit-message', context: { workspace: be.ws.workspace.name, changes: changes.slice(0, 200) } });
       return { message: r.text.trim().replace(/^```\w*\n?|```$/g, '').trim(), model: `${r.provider}/${r.model}` };
     },
-    /** Commits, newest first: of the workspace, of a file, or of one request (its collection's file). */
     /** A picked commit: its message and the files it changed in the workspace; and one file's diff in it. */
     'git.commitDetail': ({ hash }: { hash: string }) => gitCommitDetail(ws(), hash),
     'git.commitDiff': ({ hash, path }: { hash: string; path: string }) => gitCommitDiff(ws(), hash, path),
+    /** Commits, newest first: of the workspace or of one file. */
     'git.log': ({ path, collectionId, limit }: { path?: string; collectionId?: string; limit?: number }) =>
       gitLog(ws(), { path: path ?? (collectionId ? be.ws.collectionFileOf(collectionId) : undefined), limit }),
-    /**
-     * History of one request (GIT-209): the commits that changed it, each with the request as it was then. Commits
-     * that touched the collection but not this request are left out.
-     */
-    'git.itemHistory': ({ collectionId, itemId, limit }: { collectionId: string; itemId: string; limit?: number }) => gitItemHistory(ws(), be.ws.collectionFileOf(collectionId), itemId, limit),
-    /**
-     * The versions of a request, a whole collection or an environment in git (GIT-209): the commits that changed it,
-     * newest first, and the file they are in (git.itemDiff compares a version with now).
-     */
-    'git.history': async ({ collectionId, environmentId, itemId, limit = 30 }: { collectionId?: string; environmentId?: string; itemId?: string; limit?: number }) => {
-      const file = collectionId ? be.ws.collectionFileOf(collectionId) : environmentId ? be.ws.environmentFileOf(environmentId) : undefined;
-      if (!file) throw new ApsError('ValidationError', 'A collection or an environment');
-      const commits = itemId && collectionId ? (await gitItemHistory(ws(), file, itemId, limit)).map((v) => v.commit) : await gitLog(ws(), { path: file, limit });
-      return { file, itemId, versions: commits };
-    },
-    /** Put a whole collection or environment back as it was in a commit (a change to commit; history keeps the current one). */
-    'git.restoreFile': async ({ collectionId, environmentId, rev }: { collectionId?: string; environmentId?: string; rev: string }) => {
-      const file = collectionId ? be.ws.collectionFileOf(collectionId) : environmentId ? be.ws.environmentFileOf(environmentId) : undefined;
-      if (!file) throw new ApsError('ValidationError', 'A collection or an environment');
-      const text = await gitShow(ws(), file, rev);
-      if (text === undefined) throw new ApsError('ValidationError', `${file} is not in commit ${rev.slice(0, 7)}`);
-      atomicWrite(be.ws.safePath(file), text);
-      be.host.emit('data.changed', { method: collectionId ? 'col.save' : 'env.save' });
-      return { file, rev };
-    },
-    /** Put one request back as it was in a commit (the rest of the collection is unchanged). */
-    'git.restoreItem': async ({ collectionId, itemId, rev }: { collectionId: string; itemId: string; rev: string }) => {
-      const text = await gitShow(ws(), be.ws.collectionFileOf(collectionId), rev);
-      const old = text ? findCollectionItem(JSON.parse(text) as Collection, itemId) : undefined;
-      if (!old) throw new ApsError('ValidationError', `The request is not in commit ${rev.slice(0, 7)}`);
-      const current = be.ws.getCollection(collectionId);
-      const next = replaceCollectionItem(current, itemId, old) ?? { ...current, items: [...current.items, old] };
-      const saved = be.ws.saveCollection(next as Collection);
-      be.host.emit('data.changed', { method: 'col.save' });
-      return changed({ collection: saved.id, item: old });
-    },
     'git.branches': () => gitBranches(ws()),
     'git.switch': ({ branch, create, from }: { branch: string; create?: boolean; from?: string }) => rewritten(() => gitSwitch(ws(), branch, { create, from })),
     'git.deleteBranch': async ({ branch, force }: { branch: string; force?: boolean }) => changed(await gitDeleteBranch(ws(), branch, force)),

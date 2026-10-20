@@ -59,7 +59,7 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
       "Convert scripts to tp.*",
     ],
     [
-      "History in git…",
+      "Git",
     ],
     [
       "Rename",
@@ -85,6 +85,9 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
     ],
     [
       "Use in a test",
+    ],
+    [
+      "Git",
     ],
     [
       "Rename",
@@ -116,7 +119,7 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
       "Export…",
     ],
     [
-      "History in git…",
+      "Git",
     ],
     [
       "Rename",
@@ -137,6 +140,9 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
     [
       "Copy link",
       "Export…",
+    ],
+    [
+      "Git",
     ],
     [
       "Rename",
@@ -179,6 +185,9 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
       "Run in CI…",
     ],
     [
+      "Git",
+    ],
+    [
       "Rename",
       "Duplicate",
     ],
@@ -207,6 +216,9 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
       "Create test file from folder…",
       "AI ▸",
       "Edit folder (scripts, variables, auth)",
+    ],
+    [
+      "Git",
     ],
     [
       "Rename",
@@ -404,6 +416,9 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
       "Save as test…",
     ],
     [
+      "Git",
+    ],
+    [
       "Rename",
       "Duplicate",
       "Move to collection ▸",
@@ -441,6 +456,9 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
       "Export…",
     ],
     [
+      "Git",
+    ],
+    [
       "Rename",
       "Duplicate",
       "Move to folder ▸",
@@ -470,6 +488,9 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
     ],
     [
       "Settings…",
+    ],
+    [
+      "Git",
     ],
     [
       "Rename",
@@ -504,6 +525,9 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
       "Export…",
     ],
     [
+      "Git",
+    ],
+    [
       "Rename",
       "Duplicate",
       "Move to folder ▸",
@@ -520,6 +544,9 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
     [
       "Copy link",
       "Export…",
+    ],
+    [
+      "Git",
     ],
     [
       "Rename",
@@ -548,6 +575,9 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
       "Settings…",
     ],
     [
+      "Git",
+    ],
+    [
       "Duplicate",
     ],
     [
@@ -560,6 +590,9 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
     ],
     [
       "Copy link",
+    ],
+    [
+      "Git",
     ],
     [
       "Rename",
@@ -585,7 +618,7 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
       "Suggest checks with AI…",
     ],
     [
-      "History in git…",
+      "Git",
     ],
     [
       "Rename",
@@ -821,6 +854,9 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
       "AI ▸",
     ],
     [
+      "Git",
+    ],
+    [
       "Rename",
       "Move to folder ▸",
     ],
@@ -849,6 +885,9 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
       "Monitor on a schedule…",
       "Run in CI…",
       "Expose as MCP tool…",
+    ],
+    [
+      "Git",
     ],
     [
       "Rename",
@@ -906,6 +945,9 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
     ],
     [
       "Save as test…",
+    ],
+    [
+      "Git",
     ],
     [
       "Rename",

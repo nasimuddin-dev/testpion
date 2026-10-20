@@ -123,7 +123,50 @@ A **real conflict** is the same request (or the same collection setting) changed
 
 **Items open while files change.** When a pull, a branch switch or another editor changes something you have open (a REST, SOAP or GraphQL request, a saved gRPC call or connection, an MCP server's settings, a monitor being edited), the editor shows the new version by itself. If you have unsaved edits there, TestPion asks first, the same question everywhere: **Keep mine** (saving then replaces the new version with yours) or **Take the new version**. Several changes at once ask one question at a time.
 
-## History of a request, a collection or an environment
+## History, restore, discard, stage and who changed what, for every item
+
+Every item of a versioned kind has a **Git** group in its menu (right-click, or the **⋯** button), and the same buttons sit on its row in the **Git view**:
+
+| In the menu | What it does |
+|---|---|
+| **History in git…** | The commits that changed *this item*, newest first, each with what it changed. Click one to see it side by side with now. **Restore this version** shows what would change, writes just that item, and offers **Undo**. The other tab, **Who changed what**, names for each field the author, commit and date of its last change ("not committed yet" for a change you have not committed). |
+| **Discard changes…** | Throws away the uncommitted change of *this item only*. A second MCP server, another request or a different prompt changed in the same file stays as it is. A new item is removed; a new file is deleted. Undo puts it back. |
+| **Stage changes** | Stages the file the item is in. A file that holds several items stages as one file: the message says which other changed items come along. |
+
+This works for requests and folders, collections, environments, test files and flows, API definitions, datasets (a database is restored whole), MCP servers, AI providers, saved gRPC calls and connections, prompts, load tests, evaluations and monitors. The menu items are greyed out ("No uncommitted changes") for an item git does not see a change in.
+
+Things worth knowing:
+
+- Restore and Discard write the item in the same stable form the app always writes, so they never make a file change more than the item. Line endings follow the file: a `core.autocrlf` repository keeps its CRLF working copies.
+- Every restore and discard is kept for undo in `.local/git-undo/` (git ignores it; the newest 30 are kept). Undo is the toast, `Ctrl+Z`, `testpion git undo`, or the MCP tool `git_undo`.
+- Nothing outside the workspace is ever written, and a workspace that is a folder of a bigger repository works the same.
+- Without git installed, the Git view and every command say so plainly ("Git is not installed") and change nothing.
+
+### Set changes aside
+
+**Set changes aside…** (Git view) takes every uncommitted change of the workspace away under a name ("Before the pagination rewrite"); the workspace goes back to the last commit. The list shows each stash by name, branch and date, and by item when opened. **Put back** brings the changes in again (and removes the entry; if they clash with what is there now they appear in the conflict list and the entry is kept), **Drop** deletes it for good. Command line: `testpion git stash push -m "name"`, `list`, `show`, `apply`, `pop`, `drop`.
+
+## When a merge conflicts: every kind of file
+
+After a pull that stops on conflicts, the Git view lists the conflicted files with **Resolve…**. What the screen shows depends on the file:
+
+- **Collections, environments, library files, MCP servers, AI providers, the workspace settings and the Debugger rules** are merged by meaning: item by item, and inside an item changed on both sides, field by field. Fields only one side changed are merged for you; the screen lists only the fields that clash (`request.url`, `data.prompt` …).
+- **Test and flow files, API definitions, mocks, datasets** are text: the lines both sides changed differently are *hunks*, each named by the step or item it is in ("near step create-order"); everything else merged.
+- **A database or an image** cannot be merged: you take one side whole, with both sizes shown.
+
+For each conflict choose **Keep mine**, **Keep theirs** or **Edit** (for an item or a field the value as JSON, for a hunk the lines to keep). The file is written in the stable form and marked resolved; commit to finish the pull. On the command line: `testpion git conflicts [file] [--json]` lists the keys, `testpion git resolve <file> --pick key=theirs --edit key=<value>` settles them, `testpion git conflicts --resolve ours|theirs` settles every file the same way.
+
+## The commit scans what is staged
+
+When you press **Commit**, the files that will be committed (the staged ones, or all changes when nothing is staged) are scanned for secrets *as they are staged*, not as they are in the working folder, with the detector the exports use: collections (headers, auth, variables), environments and workspace variables, MCP servers (every header and environment value), providers, saved items, test files, API definitions, datasets and the shape of keys, private keys and passwords in any other text file.
+
+- A **certain** secret (a secret name with a typed value, or a value shaped like a provider key) refuses the commit. The message names the item and the variable to use ("MCP server Weather: headers.Authorization, use `{{WEATHER_AUTHORIZATION}}`"). There is no "commit anyway" for these: put the value in a secret variable, or unstage the file. **Fix** does it for collections, environments and workspace variables and stages the fix.
+- A **probable** secret is listed and can be committed after a confirmation (`--allow-secrets` on the command line).
+- Fixing the working file is not enough until the fix is staged: the scan reads the index.
+
+`testpion git check --staged` runs the same scan; the pre-commit hook still checks the working folder.
+
+## History of a request, a collection or an environment (the original page)
 
 Right-click a request in the explorer (or **⋯**) ▸ **History in git…**: the commits that changed this request (commits that changed only other requests are left out), each compared with the request as it is now, part by part. Select one and **Restore this version**: only this request changes, as a new change for you to commit; nothing in git history is rewritten. A collection's menu and an environment's menu have **History in git…** too: there the whole collection or environment goes back.
 

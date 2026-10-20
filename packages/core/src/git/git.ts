@@ -1,10 +1,5 @@
 import { execFile } from 'node:child_process';
-import { existsSync, realpathSync, writeFileSync } from 'node:fs';
-import { mergeModeOfPath } from '@testpion/shared';
-import { mergeWorkspaceTexts, requestParts, type MergeConflict, type MergeResolutions } from './merge.js';
-
-/** The files TestPion merges by meaning (collections, environments, library files), not by lines: the registry says. */
-const mergedByMeaning = (path: string) => mergeModeOfPath(path) !== undefined;
+import { existsSync, realpathSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { ApsError } from '../errors.js';
 
@@ -177,7 +172,7 @@ export function realFolder(dir: string): string {
 /** Paths in git output are relative to the repository root: make them relative to the workspace. */
 const toWorkspacePath = (repo: string, ws: string, p: string) => relative(realFolder(ws), resolve(repo, p)).split(sep).join('/');
 /** A workspace path as a path in the repository. */
-const toRepoPath = (repo: string, ws: string, p: string) => relative(repo, resolve(realFolder(ws), p)).split(sep).join('/');
+export const toRepoPath = (repo: string, ws: string, p: string) => relative(repo, resolve(realFolder(ws), p)).split(sep).join('/');
 
 /** `git status` of the workspace folder: branch, ahead / behind, and each changed file. */
 export async function gitStatus(ws: string): Promise<GitStatus> {
@@ -607,70 +602,6 @@ export async function gitDefaultBranch(ws: string): Promise<string> {
   } catch {
     return 'main';
   }
-}
-
-/**
- * Settle one conflicted file (GIT-302), and mark it resolved. A collection file is merged again request by request,
- * taking `side` only for the requests changed on both sides (every other change of both sides stays); any other file
- * is taken whole from that side.
- */
-export async function gitResolve(ws: string, path: string, side: 'ours' | 'theirs', resolutions?: MergeResolutions): Promise<void> {
-  const [base, ours, theirs] = await conflictStages(ws, path);
-  const merged = mergedByMeaning(path)
-    ? resolutions
-      ? mergeWorkspaceTexts(base, ours, theirs, resolutions, path)
-      : // the side kept on a conflict is the merge's "ours": swap the sides to prefer theirs
-        side === 'ours'
-        ? mergeWorkspaceTexts(base, ours, theirs, {}, path)
-        : mergeWorkspaceTexts(base, theirs, ours, {}, path)
-    : undefined;
-  if (merged) writeFileSync(resolve(ws, path), merged.text);
-  else await runGit(ws, ['checkout', `--${side}`, '--', path]);
-  await runGit(ws, ['add', '--', path]);
-}
-
-/** The three versions of a conflicted file: the common ancestor, ours, theirs (empty when a side has none). */
-async function conflictStages(ws: string, path: string): Promise<[string, string, string]> {
-  const repo = await repoRoot(ws);
-  const inRepo = repo ? toRepoPath(repo, ws, path) : path;
-  const stage = (n: 1 | 2 | 3) => runGit(ws, ['show', `:${n}:${inRepo}`]).catch(() => '');
-  return Promise.all([stage(1), stage(2), stage(3)]);
-}
-
-export interface ConflictDetail {
-  path: string;
-  /** A collection file: its conflicts one by one; any other file is resolved whole (mine or theirs). */
-  collection: boolean;
-  items: Array<Omit<MergeConflict, 'base' | 'ours' | 'theirs'> & { parts: Array<{ part: string; base?: string; ours?: string; theirs?: string; differs: boolean }> }>;
-}
-
-/** What conflicts in one file (GIT-302), part by part, for the side-by-side view. */
-export async function gitConflictDetail(ws: string, path: string): Promise<ConflictDetail> {
-  const [base, ours, theirs] = await conflictStages(ws, path);
-  const merged = mergedByMeaning(path) ? mergeWorkspaceTexts(base, ours, theirs, {}, path) : undefined;
-  if (!merged) return { path, collection: false, items: [] };
-  return {
-    path,
-    collection: true,
-    items: merged.items.map(({ base: b, ours: o, theirs: th, ...rest }) => {
-      const text = (v: unknown) => (v === undefined ? undefined : typeof v === 'string' ? v : JSON.stringify(v, null, 2));
-      const isItem = rest.kind !== 'setting';
-      const pb = isItem ? requestParts(b) : { Value: text(b) ?? '' };
-      const po = isItem ? requestParts(o) : { Value: text(o) ?? '' };
-      const pt = isItem ? requestParts(th) : { Value: text(th) ?? '' };
-      const names = [...new Set([...Object.keys(pb), ...Object.keys(po), ...Object.keys(pt)])];
-      return {
-        ...rest,
-        parts: names.map((part) => ({
-          part,
-          base: b === undefined ? undefined : (pb[part] ?? ''),
-          ours: o === undefined ? undefined : (po[part] ?? ''),
-          theirs: th === undefined ? undefined : (pt[part] ?? ''),
-          differs: (o === undefined ? undefined : (po[part] ?? '')) !== (th === undefined ? undefined : (pt[part] ?? '')),
-        })),
-      };
-    }),
-  };
 }
 
 /** Stop a merge (or rebase) that ended in conflicts: everything goes back to before the pull. */

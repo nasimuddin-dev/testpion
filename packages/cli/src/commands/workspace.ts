@@ -19,6 +19,7 @@ import {
 } from '@testpion/core';
 import { EXIT, green, dim, bold, yellow, CliError, printJson, withWorkspace } from '../shared.js';
 import { registerGitCommands } from './git.js';
+import { checkStaged } from './git-items.js';
 
 /** This very CLI as a command line (forward slashes: git runs it with sh), for git hooks and the merge driver. */
 const cliSelf = () => `"${process.execPath.split('\\').join('/')}" "${process.argv[1]!.split('\\').join('/')}"`;
@@ -110,8 +111,10 @@ export function registerWorkspaceCommands(program: Command): void {
     .command('check')
     .description('before a commit: list secrets typed into the workspace (headers, auth, body fields, plain-text variables, MCP servers, providers) that a commit would publish; exit 1 if any')
     .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest)')
+    .option('--staged', 'scan what is staged (the blobs a commit would take) instead of the working folder: certain secrets and probable ones; exit 1 on any')
     .option('--json', 'print the findings as JSON')
     .action((o) => {
+      if (o.staged) return withWorkspace(o.workspace, (store) => checkStaged(store, !!o.json));
       return withWorkspace(o.workspace, (store) => {
         const found = findCommittableSecrets(store);
         if (o.json) printJson(found);

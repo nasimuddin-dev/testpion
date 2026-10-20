@@ -1,3 +1,4 @@
+import { GitItemHistory } from './components/GitItemHistory';
 import { AlarmClock, BarChart3, Bot, Code2, Keyboard, Columns2, CopyX, Disc, GitCompare, ScanSearch, TerminalSquare, Variable, Download, FileDown, FlaskConical, FolderOpen, FolderPlus, FolderTree, Gauge, GitBranch, History, KeyRound, Layers, ListChecks, ListX, Network, Play, Plug, Radio, RefreshCw, RotateCcw, Rows3, ScrollText, Search, Settings, Sparkles, SquareTerminal, Upload, Waypoints, Workflow, X, type LucideIcon } from 'lucide-react';
 import { ImportHost } from './components/ImportHost';
 import { askAssistant } from './components/ai/AiAction';
@@ -212,6 +213,7 @@ export default function App() {
   const openapiDiff = useApp((s) => s.openapiDiff);
   useBundleDrop();
   const exportBundle = useApp((s) => s.exportBundle);
+  const gitItem = useApp((s) => s.gitItem);
   const importBundle = useApp((s) => s.importBundle);
   const apiCoverage = useApp((s) => s.apiCoverage);
   const explorerOpen = useApp((s) => s.explorerOpen);
@@ -594,6 +596,8 @@ export default function App() {
           </Suspense>,
           close({ ci: undefined }),
         )}
+      {gitItem &&
+        guard('item history', <GitItemHistory itemRef={gitItem.ref} name={gitItem.name} tab={gitItem.tab} onClose={() => useApp.getState().set({ gitItem: undefined })} />, close({ gitItem: undefined }))}
       {exportBundle &&
         guard(
           'export dialog',

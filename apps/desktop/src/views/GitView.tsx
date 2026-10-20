@@ -1,20 +1,20 @@
 import { useAiEnabled } from '../lib/use-ai-enabled';
-import { ArrowDown, ArrowDownUp, ArrowUp, Check, ExternalLink, FolderGit2, GitBranch, GitCommitHorizontal, GitPullRequest, KeyRound, Pencil, Plus, RefreshCw, ShieldAlert, Sparkles, Trash2, X } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ArrowDown, ArrowDownUp, ArrowUp, Check, ExternalLink, FolderGit2, GitBranch, GitCommitHorizontal, GitPullRequest, Pencil, Plus, RefreshCw, Sparkles, Trash2 } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
 import { asError, call, on } from '../api';
 import { confirmAction, isPushRejected, promptText, toastError, useApp } from '../store';
 import { useIntent } from '../hooks';
-import { openRef } from '../lib/open-ref';
 import type { ItemRef, KindId } from '@testpion/shared';
 import { useEditorTabsStore } from '../components/EditorTabs';
-import { Button, Callout, cx, Empty, Menu, MoreMenu, PageHeader, SectionTitle, Spinner, Split, Textarea } from '../components/ui';
+import { Button, Callout, cx, Empty, Menu, PageHeader, SectionTitle, Spinner, Split, Textarea } from '../components/ui';
 import { GitCommitPanel } from '../components/GitCommitPanel';
 import { plural } from '../lib/format';
 import { GitItemDiffDialog } from '../components/GitItemDiffDialog';
 import { GitConflictDialog } from '../components/GitConflictDialog';
 import { ChangeMark } from '../components/ChangeMark';
 import { GitChanges } from '../components/GitChanges';
-import { mergeModeOfPath } from '@testpion/shared';
+import { GitSecretsPanel, type StagedSecret } from '../components/GitSecretsPanel';
+import { GitStash } from '../components/GitStash';
 
 export interface GitFile {
   path: string;
@@ -56,22 +56,6 @@ export interface SemanticChange {
   containers?: string[];
 }
 
-interface SecretFinding {
-  file: string;
-  where: string;
-  message: string;
-  kind: 'request' | 'collection-auth' | 'collection-variable' | 'environment-variable' | 'workspace-variable' | 'mcp-server' | 'provider';
-  collectionId?: string;
-  itemId?: string;
-  part?: 'auth' | 'headers' | 'params' | 'body';
-  field?: string;
-  environmentId?: string;
-  serverId?: string;
-  providerId?: string;
-  variable?: string;
-}
-
-
 /** What Pull & push did (git.sync). */
 interface GitSyncResult {
   state: 'pushed' | 'up-to-date' | 'pulled-nothing-to-push' | 'conflicts';
@@ -111,7 +95,7 @@ export function GitView() {
   const [message, setMessage] = useState('');
   const aiOn = useAiEnabled();
   const [busy, setBusy] = useState<string>();
-  const [secrets, setSecrets] = useState<SecretFinding[]>();
+  const [secrets, setSecrets] = useState<StagedSecret[]>();
   const [branches, setBranches] = useState<{ current?: string; local: string[]; remote: string[] }>();
   const [log, setLog] = useState<Array<{ hash: string; short: string; author: string; date: string; subject: string }>>([]);
   // the commit picked in the history: what it changed shows on the right
@@ -145,8 +129,10 @@ export function GitView() {
     void load();
     // a quiet fetch as the view opens: the team's new commits show at once (git.remoteChanged reloads)
     void call('git.autoFetch').catch(() => undefined);
-    const offs = [on('git.changed', () => void load()), on('git.remoteChanged', () => void load()), on('data.changed', () => void load())];
-    return () => offs.forEach((o) => o());
+    // an edit outside the app: read again once the files settled (a merge writes several)
+    let settle: ReturnType<typeof setTimeout> | undefined;
+    const offs = [on('git.changed', () => void load()), on('git.remoteChanged', () => void load()), on('data.changed', () => { void load(); clearTimeout(settle); settle = setTimeout(() => void load(), 2200); }), on('workspace.changedOnDisk', () => { clearTimeout(settle); settle = setTimeout(() => void load(), 2200); })];
+    return () => (clearTimeout(settle), offs.forEach((o) => o()));
   }, [load]);
   // what a sync that stopped on conflicts said, shown with the Conflicts list
   const [syncNote, setSyncNote] = useState<string>();
@@ -218,7 +204,7 @@ export function GitView() {
     try {
       // with nothing staged, commit every change of the workspace
       const paths = files.some((f) => f.staged) ? undefined : ['.'];
-      const r = await call<{ committed: boolean; secrets: SecretFinding[]; commit?: { short: string } }>('git.commit', { message, paths, force });
+      const r = await call<{ committed: boolean; secrets: StagedSecret[]; commit?: { short: string } }>('git.commit', { message, paths, force });
       if (!r.committed) return setSecrets(r.secrets);
       setSecrets(undefined);
       setMessage('');
@@ -395,6 +381,8 @@ export function GitView() {
 
         <GitChanges files={files} changes={changes} run={run} onCompare={(file, itemId) => setItemDiff({ file, itemId })} diff={diff} setDiff={setDiff} />
 
+        <GitStash changed={files.length > 0} afterChange={() => void load()} />
+
         <section className="grid gap-2">
           <SectionTitle>Commit {staged.length ? <span className="text-muted font-normal">· {staged.length} staged</span> : files.length ? <span className="text-muted font-normal">· all changes</span> : null}</SectionTitle>
           <Textarea className="field min-h-20 font-mono text-xs" aria-label="Commit message" placeholder="What changed and why (e.g. Add payment tests)" value={message} onChange={(e) => setMessage(e.target.value)} />
@@ -414,7 +402,7 @@ export function GitView() {
               </Button>
             )}
           </div>
-          {secrets && secrets.length > 0 && <SecretsPanel findings={secrets} onChange={setSecrets} onCommitAnyway={() => void commit(true)} />}
+          {secrets && secrets.length > 0 && <GitSecretsPanel findings={secrets} onChange={setSecrets} onCommitAnyway={() => void commit(true)} />}
         </section>
 
         {status.remote && status.behind > 0 && (status.ahead > 0 || files.length > 0) ? (
@@ -491,159 +479,6 @@ export function GitView() {
   );
 }
 
-/** Where a finding lives, as the explorer shows it: "Admin ▸ Printers ▸ Print jobs" → the folders and the request. */
-function splitWhere(where: string): { path: string; name: string } {
-  const parts = where.split(/\s[›▸]\s/);
-  return parts.length > 1 ? { path: parts.slice(0, -1).join(' › '), name: parts[parts.length - 1]! } : { path: '', name: where };
-}
-
-/** What a finding holds, in a few words: "header Authorization", "body field continuationToken", "bearer token". */
-function whatOf(f: SecretFinding): string {
-  if (f.kind === 'request' || f.kind === 'collection-auth') return f.part === 'headers' ? `header ${f.field}` : f.part === 'body' ? `body field "${f.field}"` : f.part === 'auth' ? `auth ${f.field}` : (f.field ?? 'a value');
-  if (f.kind === 'mcp-server') return `${f.field} of the server`;
-  if (f.kind === 'provider') return 'the API key';
-  return `variable ${f.field}`;
-}
-
-/** What a finding points at, as an ItemRef: the request, the collection's auth or variables, the environment … */
-function refOfFinding(f: SecretFinding): ItemRef | undefined {
-  if (f.kind === 'request' && f.collectionId && f.itemId) return { kind: 'request', collectionId: f.collectionId, requestId: f.itemId };
-  if (f.kind === 'collection-auth' && f.collectionId) return { kind: 'collection', collectionId: f.collectionId, tab: 'auth' };
-  if (f.kind === 'collection-variable' && f.collectionId) return { kind: 'collection', collectionId: f.collectionId, tab: 'variables' };
-  if (f.kind === 'environment-variable' && f.environmentId) return { kind: 'environment', environmentId: f.environmentId };
-  if (f.kind === 'workspace-variable') return { kind: 'environment', scope: 'workspace' };
-  if (f.kind === 'mcp-server' && f.serverId) return { kind: 'mcp-server', serverId: f.serverId };
-  if (f.kind === 'provider' && f.providerId) return { kind: 'provider', providerId: f.providerId };
-  return undefined;
-}
-
-/** Open what a finding points at (in its own editor: a GraphQL request in GraphQL). */
-function openFinding(f: SecretFinding) {
-  const ref = refOfFinding(f);
-  if (ref) void openRef(ref);
-}
-
-/**
- * The secrets a commit would publish, as a list a person can act on: each one opens where it is, is fixed in one
- * click (the value becomes a secret variable of the active environment, the request a {{reference}}), or the request
- * is removed. Grouped by where they are, with the long tail folded.
- */
-function SecretsPanel({ findings, onChange, onCommitAnyway }: { findings: SecretFinding[]; onChange(next: SecretFinding[] | undefined): void; onCommitAnyway(): void }) {
-  const ws = useApp((s) => s.workspace);
-  const envName = useApp((s) => s.environment);
-  const env = ws?.environments.find((e) => e.name === envName);
-  const [showAll, setShowAll] = useState(false);
-  const [busy, setBusy] = useState<string>();
-  const fixable = findings.filter((f) => f.kind !== 'mcp-server' && f.kind !== 'provider');
-  const groups = useMemo(() => {
-    const m = new Map<string, SecretFinding[]>();
-    for (const f of findings) {
-      const key = f.kind === 'request' || f.kind === 'collection-auth' ? splitWhere(f.where).path || f.where : f.kind === 'environment-variable' ? f.where.replace(/, variable .*$/, '') : f.kind === 'mcp-server' ? 'MCP servers' : f.kind === 'provider' ? 'AI providers' : f.kind === 'workspace-variable' ? 'Workspace variables' : f.where.replace(/, variable .*$/, '');
-      m.set(key, [...(m.get(key) ?? []), f]);
-    }
-    return [...m.entries()];
-  }, [findings]);
-  const shownGroups = showAll ? groups : groups.slice(0, 4);
-  const hidden = findings.length - shownGroups.reduce((n, [, g]) => n + g.length, 0);
-
-  const fix = async (list: SecretFinding[]) => {
-    if (!env) return useApp.getState().toast('Choose the environment that should keep the secret values (top bar), then fix.', 'warning');
-    setBusy(list.length === 1 ? list[0]!.where + list[0]!.field : 'all');
-    try {
-      const r = await call<{ fixed: SecretFinding[]; skipped: Array<{ finding: SecretFinding; reason: string }>; variables: string[] }>('git.fixSecrets', { findings: list, environmentId: env.id });
-      const left = await call<SecretFinding[]>('git.check');
-      onChange(left.length ? left : undefined);
-      useApp.getState().toast(
-        r.fixed.length ? `${plural(r.fixed.length, 'secret')} moved to ${r.variables.length ? `secret variable${r.variables.length === 1 ? '' : 's'} ${r.variables.join(', ')} of ${env.name}` : 'the secret store'}${r.skipped.length ? `; ${r.skipped.length} left to do by hand` : ''}` : 'Nothing could be fixed by itself; open each one.',
-        r.fixed.length ? 'success' : 'warning',
-      );
-    } catch (e) {
-      toastError(e);
-    } finally {
-      setBusy(undefined);
-    }
-  };
-  const remove = async (f: SecretFinding) => {
-    if (!f.collectionId || !f.itemId) return;
-    const { name } = splitWhere(f.where);
-    if (!(await confirmAction({ title: 'Remove request', message: `Remove "${name}" from the collection?`, detail: 'The request is deleted; its collection keeps everything else. Undo with git until you commit.', confirmLabel: 'Remove', danger: true }))) return;
-    try {
-      const c = await call<{ id: string; items: unknown[] }>('col.get', { id: f.collectionId }).catch(() => undefined);
-      if (!c) return;
-      const prune = (nodes: Array<{ id: string; kind: string; items?: unknown[] }>): unknown[] => nodes.filter((n) => n.id !== f.itemId).map((n) => (n.kind === 'folder' ? { ...n, items: prune(n.items as typeof nodes) } : n));
-      await call('col.save', { ...c, items: prune(c.items as Array<{ id: string; kind: string; items?: unknown[] }>) });
-      const left = await call<SecretFinding[]>('git.check');
-      onChange(left.length ? left : undefined);
-      useApp.getState().toast(`Removed "${name}"`, 'success');
-    } catch (e) {
-      toastError(e);
-    }
-  };
-
-  return (
-    <Callout tone="bad" block role="alert">
-      <div className="flex items-center gap-2 font-medium">
-        <ShieldAlert size={15} className="text-bad" /> Not committed: {findings.length} secret{findings.length === 1 ? ' is' : 's are'} typed into the workspace
-      </div>
-      <div className="text-xs text-muted">
-        A value typed into a request would go to everyone who pulls. <b>Fix</b> turns it into a {'{{variable}}'} whose value stays on this computer as a secret variable of {env ? <b>{env.name}</b> : 'the active environment (choose one in the top bar)'}; plain variables become secret the same way.
-      </div>
-      <div className="grid gap-2">
-        {shownGroups.map(([group, list]) => (
-          <div key={group} className="rounded-md border border-line bg-panel">
-            <div className="px-2 py-1 text-xs text-muted border-b border-line truncate" title={group}>
-              {group} · {list.length}
-            </div>
-            <ul>
-              {list.map((f, i) => {
-                const { name } = splitWhere(f.where);
-                const key = f.where + f.field + i;
-                return (
-                  <li key={key} className="flex items-center gap-2 px-2 py-1 text-xs border-b border-line last:border-b-0">
-                    <button className="font-medium truncate hover:underline text-left" title={`${f.message} (${f.file})`} onClick={() => openFinding(f)}>
-                      {f.kind === 'request' || f.kind === 'collection-auth' ? name : f.kind === 'environment-variable' || f.kind === 'collection-variable' || f.kind === 'workspace-variable' ? f.field : name}
-                    </button>
-                    <span className="text-muted truncate">{whatOf(f)}</span>
-                    <span className="ml-auto flex items-center gap-1 shrink-0">
-                      <Button size="sm" variant="ghost" icon={<ExternalLink size={12} />} onClick={() => openFinding(f)} title="Open it to change by hand">
-                        Open
-                      </Button>
-                      {f.kind !== 'mcp-server' && f.kind !== 'provider' && (
-                        <Button size="sm" variant="ghost" icon={<KeyRound size={12} />} loading={busy === f.where + f.field} onClick={() => void fix([f])} title={`Replace the value with {{${f.variable ?? 'variable'}}} and keep it as a secret variable`}>
-                          Fix
-                        </Button>
-                      )}
-                      {f.kind === 'request' && <MoreMenu label={`More for ${name}`} items={[{ label: 'Remove request…', icon: <Trash2 size={14} />, danger: true, onSelect: () => void remove(f) }]} />}
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        ))}
-        {hidden > 0 && (
-          <button className="text-xs text-accent text-left hover:underline" onClick={() => setShowAll(true)}>
-            Show all ({hidden} more)
-          </button>
-        )}
-      </div>
-      <div className="flex flex-wrap gap-2">
-        {fixable.length > 0 && (
-          <Button size="sm" variant="primary" icon={<KeyRound size={13} />} loading={busy === 'all'} onClick={() => void fix(fixable)} title="Every one of them, in one go">
-            Fix all {fixable.length === findings.length ? '' : `(${fixable.length})`}
-          </Button>
-        )}
-        <Button size="sm" icon={<X size={13} />} onClick={() => onChange(undefined)}>
-          Later
-        </Button>
-        <Button size="sm" variant="danger" icon={<ShieldAlert size={13} />} onClick={onCommitAnyway} title="Commit with the secrets in the files (for demo values you mean to share)">
-          Commit anyway
-        </Button>
-      </div>
-    </Callout>
-  );
-}
-
 /** Files changed on both sides after a pull (GIT-302): keep yours, take theirs, or open the file to merge by hand. */
 function ConflictPanel({ files, note, onDone }: { files: GitFile[]; /** What a Pull & push that stopped here said. */ note?: string; onDone(): void }) {
   const [busy, setBusy] = useState<string>();
@@ -673,11 +508,9 @@ function ConflictPanel({ files, note, onDone }: { files: GitFile[]; /** What a P
             <ChangeMark change="conflicted" />
             <span className="font-mono text-xs truncate">{f.path}</span>
             <span className="ml-auto flex gap-1">
-              {mergeModeOfPath(f.path) && (
-                <Button size="sm" variant="primary" onClick={() => setComparing(f.path)} title="See each conflicting request side by side and choose per request">
-                  Compare…
-                </Button>
-              )}
+              <Button size="sm" variant="primary" onClick={() => setComparing(f.path)} title="See what clashes (items, fields or lines) and choose: keep mine, keep theirs or edit">
+                Resolve…
+              </Button>
               <Button size="sm" loading={busy === f.path} onClick={() => void pick(f.path, 'ours')}>
                 Keep mine
               </Button>
@@ -692,7 +525,7 @@ function ConflictPanel({ files, note, onDone }: { files: GitFile[]; /** What a P
         <Button size="sm" variant="ghost" onClick={() => void call('git.abortMerge').then(onDone, toastError)}>
           Cancel the pull
         </Button>
-        <span className="text-xs text-muted">In a collection, only the requests changed on both sides take the side you choose; every other change of both sides stays. When every file is resolved, commit to finish the pull.</span>
+        <span className="text-xs text-muted">In a file merged by meaning, only what both sides changed differently takes the side you choose; every other change of both sides stays. When every file is resolved, commit to finish the pull.</span>
       </div>
       {comparing && <GitConflictDialog path={comparing} onClose={() => setComparing(undefined)} onResolved={() => (setComparing(undefined), onDone())} />}
     </Callout>

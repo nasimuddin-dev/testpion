@@ -7,6 +7,7 @@ import { buildNodeMenu, type NodeKind, type NodeMenuCtx } from '../lib/node-menu
 import { transferActions } from '../lib/transfer';
 import { copyText } from '../lib/clipboard';
 import { itemRefUrl } from '@testpion/shared';
+import { gitActions } from '../lib/git-items';
 
 /*
  * The parts every sidebar tree is made of (the explorer, monitors, load tests, saved prompts …), so they all look
@@ -391,5 +392,6 @@ export function withRefDefaults(c: NodeMenuCtx, kind: NodeKind): NodeMenuCtx {
   const transfer = transferActions(kind, c);
   const ref = c.ref;
   const link = ref && !c.on.copyLink ? { copyLink: () => copyText(itemRefUrl(ref), 'the link') } : {};
-  return { ...c, on: { ...transfer, ...link, ...c.on } };
+  const git = ref ? gitActions(kind, c) : undefined;
+  return { ...c, ...(git ? { repo: c.repo ?? git.repo, disabled: { ...git.disabled, ...c.disabled } } : {}), on: { ...transfer, ...link, ...git?.on, ...c.on } };
 }

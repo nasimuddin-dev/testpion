@@ -1,7 +1,6 @@
 import { Plus, ArrowLeftRight, Grid3x3, Download, FileJson, FileText, KeyRound, Save, ScanSearch, TriangleAlert } from 'lucide-react';
 import { SecretRefsLine } from '../components/SecretRefsLine';
 import { useGit } from '../lib/git';
-import { GitItemHistory } from '../components/GitItemHistory';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useCollectionTree } from '../lib/collections-store';
 import { call } from '../api';
@@ -35,7 +34,6 @@ const envDrafts = persisted<Environment | null>('env-edit', null);
 
 export function EnvironmentsView() {
   const git = useGit();
-  const [historyOf, setHistoryOf] = useState<{ id: string; name: string }>();
   const ws = useApp((s) => s.workspace);
   const settings = useApp((s) => s.settings);
   const activeEnv = useApp((s) => s.environment);
@@ -210,7 +208,6 @@ export function EnvironmentsView() {
       makeActive: () => void useApp.getState().setEnvironment(e.name),
       rename: () => setRenamingEnv(e.id),
       duplicate: () => void duplicateEnv(e),
-      historyInGit: () => setHistoryOf({ id: e.id, name: e.name }),
       delete: () => void deleteEnv(e),
     },
     disabled: activeEnv === e.name ? { makeActive: 'It is the active environment' } : e.problem ? { makeActive: 'Its file cannot be read' } : {},
@@ -406,7 +403,7 @@ export function EnvironmentsView() {
                         withRefDefaults({
                           ref: { kind: 'environment', environmentId: draft.id },
                           repo: !!git.status?.repository,
-                          on: { duplicate: () => void duplicateEnv(draft), historyInGit: () => setHistoryOf({ id: draft.id, name: draft.name }), delete: () => void deleteEnv(draft) },
+                          on: { duplicate: () => void duplicateEnv(draft), delete: () => void deleteEnv(draft) },
                         }, 'environment'),
                       )}
                     />
@@ -501,7 +498,6 @@ export function EnvironmentsView() {
       {trashOpen && <TrashDialog kinds={['environment']} onClose={() => setTrashOpen(false)} onRestored={(r) => void load().then(() => setSel(r.id))} />}
       {comparing && sel && <EnvCompare environments={envs} initialLeft={sel} onClose={() => setComparing(false)} />}
       {matrix && <EnvMatrix onClose={() => setMatrix(false)} />}
-      {historyOf && <GitItemHistory target={{ environmentId: historyOf.id }} name={historyOf.name} onClose={() => (setHistoryOf(undefined), void load())} />}
     </div>
   );
 }

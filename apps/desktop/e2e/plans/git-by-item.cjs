@@ -15,13 +15,17 @@ const H = `
 const s = (name, body) => step(name, body, true, { extra: H, short: 400 });
 
 const steps = [
-  s(
-    'repo-ready',
-    `await window.aps.invoke('git.init', {});
-     const r = await window.aps.invoke('git.commit', { message: 'Base', paths: ['.'], force: true });
-     const st = await window.aps.invoke('git.status');
-     return (r.committed ? 'committed' : 'NO COMMIT') + ' | changes: ' + st.files.length;`,
-  ),
+  s('repo-init', `await window.aps.invoke('git.init', {}); await window.aps.invoke('git.check'); return 'initialized';`),
+  // the examples hold demo passwords, which the commit's secret scan refuses for good (no "commit anyway"): the base commit is made with git itself
+  [
+    'base-commit',
+    `main:
+      const { execFileSync } = require('node:child_process'); const cwd = require('node:path').join(home, 'ws');
+      execFileSync('git', ['add', '-A'], { cwd }); execFileSync('git', ['commit', '-m', 'Base'], { cwd });
+      return 'committed';`,
+    false,
+  ],
+  s('repo-ready', `await window.aps.invoke('git.stage', { paths: [] }); await __t.sleep(800); const st = await window.aps.invoke('git.status'); return 'committed | changes: ' + st.files.length;`),
   // real input: right-click the MCP server's row, Rename, type, Enter
   s(
     'rename-an-mcp-server',
@@ -102,6 +106,8 @@ const steps = [
 module.exports = withExpect(
   steps,
   {
+    'repo-init': /^initialized$/,
+    'base-commit': /^committed$/,
     'repo-ready': /^committed \| changes: 0$/,
     'rename-an-mcp-server': /^row mark: R \| section header: M:1$/,
     'git-view-names-the-item': /^title: MCP server DeepWiki docs \| details: true \| icon: true \| mark: R \| file \(muted\): mcp-servers\.json \| starts with the name, not the path: true$/,

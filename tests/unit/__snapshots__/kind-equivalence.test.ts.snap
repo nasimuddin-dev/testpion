@@ -878,7 +878,7 @@ exports[`kind equivalence (REG-1 snapshots; unchanged by the registry adapters) 
     "collection, same part",
     {
       "conflicts": [
-        "API ▸ R: changed on both sides",
+        "API ▸ R: request.url changed on both sides",
       ],
       "items": [
         {
@@ -891,6 +891,14 @@ exports[`kind equivalence (REG-1 snapshots; unchanged by the registry adapters) 
               "url": "x",
             },
           },
+          "fields": [
+            {
+              "base": "x",
+              "ours": "y",
+              "path": "request.url",
+              "theirs": "z",
+            },
+          ],
           "key": "item:r1",
           "kind": "changed-both",
           "ours": {
@@ -957,7 +965,7 @@ exports[`kind equivalence (REG-1 snapshots; unchanged by the registry adapters) 
     "environment conflict",
     {
       "conflicts": [
-        "environment E ▸ {{a}}: changed on both sides",
+        "environment E ▸ {{a}}: value changed on both sides",
       ],
       "items": [
         {
@@ -968,6 +976,14 @@ exports[`kind equivalence (REG-1 snapshots; unchanged by the registry adapters) 
             "name": "{{a}}",
             "value": "1",
           },
+          "fields": [
+            {
+              "base": "1",
+              "ours": "2",
+              "path": "value",
+              "theirs": "3",
+            },
+          ],
           "key": "var:a",
           "kind": "changed-both",
           "ours": {
@@ -1026,7 +1042,7 @@ exports[`kind equivalence (REG-1 snapshots; unchanged by the registry adapters) 
     "library conflict",
     {
       "conflicts": [
-        "library ▸ b: changed on both sides",
+        "library ▸ b: name changed on both sides",
       ],
       "items": [
         {
@@ -1035,6 +1051,14 @@ exports[`kind equivalence (REG-1 snapshots; unchanged by the registry adapters) 
             "id": "i",
             "name": "a",
           },
+          "fields": [
+            {
+              "base": "a",
+              "ours": "b",
+              "path": "name",
+              "theirs": "c",
+            },
+          ],
           "key": "item:i",
           "kind": "changed-both",
           "ours": {
@@ -1076,11 +1100,19 @@ exports[`kind equivalence (REG-1 snapshots; unchanged by the registry adapters) 
     "empty base",
     {
       "conflicts": [
-        "API ▸ R: changed on both sides",
+        "API ▸ R: request.url changed on both sides",
       ],
       "items": [
         {
           "base": undefined,
+          "fields": [
+            {
+              "base": undefined,
+              "ours": "y",
+              "path": "request.url",
+              "theirs": "z",
+            },
+          ],
           "key": "item:r1",
           "kind": "changed-both",
           "ours": {
