@@ -11,10 +11,14 @@
  */
 import { datasetFormatOf, previewDatasetRecords, type DatasetTextFormat } from '@testpion/shared';
 import { ApsError } from '../../errors.js';
+import { importNvidia, importPromptfoo } from './dataset-imports.js';
 import { listOf } from './lists.js';
 
-export type RagDatasetFormat = 'testpion' | 'ragas' | 'deepeval';
-export const RAG_DATASET_FORMATS: readonly RagDatasetFormat[] = ['testpion', 'ragas', 'deepeval'];
+export type RagDatasetFormat = 'testpion' | 'ragas' | 'deepeval' | 'nvidia' | 'promptfoo' | 'beir';
+/** The formats a dataset can be imported from (BEIR needs its queries, qrels and corpus files: see importBeir). */
+export const RAG_DATASET_FORMATS: readonly RagDatasetFormat[] = ['testpion', 'ragas', 'deepeval', 'nvidia', 'promptfoo', 'beir'];
+/** The formats a dataset can be exported to. */
+export const RAG_EXPORT_FORMATS: readonly RagDatasetFormat[] = ['ragas', 'deepeval'];
 
 type Rec = Record<string, unknown>;
 
@@ -50,6 +54,8 @@ const str = (v: unknown) => (typeof v === 'string' ? v : v === undefined || v ==
 /** Which format a dataset's records are in, by the column names each tool uses. */
 export function detectRagFormat(records: Rec[]): RagDatasetFormat {
   const r = records[0] ?? {};
+  if (has(r, 'vars') || has(r, 'assert')) return 'promptfoo';
+  if (has(r, 'pos_doc', 'positive_passages', 'positive_ctxs', 'pos_docs')) return 'nvidia';
   if (has(r, 'question') || has(r, 'reference_ids')) return 'testpion';
   if (has(r, 'user_input', 'retrieved_contexts', 'reference_contexts', 'ground_truth', 'ground_truths', 'response', 'retrieved_context_ids', 'reference_context_ids')) return 'ragas';
   if (has(r, 'input', 'expected_output', 'expectedOutput', 'actual_output', 'actualOutput', 'retrieval_context', 'retrievalContext')) return 'deepeval';
@@ -68,6 +74,9 @@ export interface ImportResult {
 /** Records of a Ragas or DeepEval dataset as TestPion's. A record that is TestPion's own is kept as it is. */
 export function importRagRecords(records: Rec[], from?: RagDatasetFormat): ImportResult {
   const fmt = from ?? detectRagFormat(records);
+  if (fmt === 'nvidia') return { ...importNvidia(records), from: fmt };
+  if (fmt === 'promptfoo') return { ...importPromptfoo(records), from: fmt };
+  if (fmt === 'beir') throw new ApsError('ValidationError', 'A BEIR dataset is three files (queries, qrels and optionally the corpus): use importBeir, or `testpion rag import queries.jsonl --from beir --qrels qrels/test.tsv --corpus corpus.jsonl`');
   const notes: string[] = [];
   const out: Rec[] = [];
   records.forEach((r, i) => {
@@ -122,6 +131,7 @@ export function importRagRecords(records: Rec[], from?: RagDatasetFormat): Impor
 /** TestPion records in a Ragas or DeepEval shape (only the columns that tool documents). */
 export function exportRagRecords(records: Rec[], to: RagDatasetFormat): Rec[] {
   if (to === 'testpion') return records;
+  if (to !== 'ragas' && to !== 'deepeval') throw new ApsError('ValidationError', `Datasets are exported to ${RAG_EXPORT_FORMATS.join(' or ')}, not ${to}`);
   return records.map((r) => {
     const q = str(pick(r, 'question', 'query', 'input', 'user_input')) ?? '';
     const ref = str(pick(r, 'reference', 'expected', 'ground_truth', 'expected_output'));

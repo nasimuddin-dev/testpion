@@ -21,6 +21,7 @@ import { describeTidy, prepareTidyContext, proposeTidy, TIDY_PLAN_SCHEMA, TIDY_V
 import { describeSpecTests, prepareSpecContext, proposeSpecTests, SPEC_PLAN_SCHEMA, SPEC_TEST_VERIFIERS } from '../spec-tests.js';
 import { VERDICT_SCHEMA } from '../../eval/rag/judge-prompts.js';
 import { NL_SEARCH_SCHEMA, validateNlSearch } from '../nl-search.js';
+import { responseOfContext, SUGGEST_MAPPING_SCHEMA, suggestedMappingProblems } from '../../eval/rag/suggest-mapping.js';
 import { describeFlow, FLOW_PLAN_SCHEMA, FLOW_VERIFIERS, prepareFlowContext, proposeFlow } from '../flow-from-collection.js';
 
 export type AiTaskOutput = { kind: 'markdown' } | { kind: 'code'; language: 'yaml' | 'json' | 'javascript' | 'graphql' | 'text' } | { kind: 'json'; schema: Record<string, unknown> };
@@ -550,6 +551,19 @@ export const AI_TASKS: readonly AiTaskDef[] = [
     contextTokens: 24_000,
     maxTokens: 3000,
     maxRepairs: 2,
+  }),
+  T('rag-suggest-mapping', {
+    title: 'Suggest the mapping of a RAG response',
+    description: 'From a sample response of a RAG endpoint, the JSONPath mapping of its answer, retrieved contexts and usage. TestPion applies the mapping to that response and sends a mapping that reads nothing back to the model, so what is offered has already read the sample.',
+    tier: 'small',
+    output: { kind: 'json', schema: SUGGEST_MAPPING_SCHEMA },
+    context: 'response (the sample response as a JSON document), question (the question that was asked), protocol',
+    sectionBudgets: { response: 6000 },
+    contextTokens: 8000,
+    maxTokens: 800,
+    maxRepairs: 2,
+    // the verifier: the mapping must extract an answer (and, when it maps contexts, documents with text) from the sample
+    propose: (answer, input) => ({ items: [], problems: suggestedMappingProblems(answer.value, responseOfContext(input.context)) }),
   }),
   T('nl-search', {
     title: 'Ask about history, runs and traces',
