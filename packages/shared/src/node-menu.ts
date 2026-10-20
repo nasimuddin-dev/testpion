@@ -6,6 +6,7 @@
  * `testpion kinds --json`, MCP `list_kinds` and RPC `kinds.list` print the shape of every menu. Nothing here branches
  * on a kind's name where the registry can say it.
  */
+import { AI_ACTIONS, type AiActionId } from './ai-actions.js';
 import { CAPABILITIES, kindInfoOf, KIND_INFO, liveKinds, type Capabilities, type Capability, type CapabilityState, type ItemKindInfo, type KindId } from './item-kinds.js';
 
 /** The groups of every node menu, in this order everywhere: create · open · tree · run · share · tools · git · edit · danger. */
@@ -40,6 +41,15 @@ export type MenuLabelKey =
   | 'createTestFileFromCollection'
   | 'createTestFileFromFolder'
   | 'generateFlow'
+  | 'generateSecurityTests'
+  | 'checkTraffic'
+  | 'suggestChecks'
+  | 'whyFlaky'
+  | 'askAi'
+  | 'aiActions'
+  | 'writeScriptAi'
+  | 'fixScriptAi'
+  | 'explainScriptAi'
   | 'settings'
   | 'historyInGit'
   | 'rename'
@@ -104,6 +114,8 @@ export interface NodeMenuContext {
   favorite?: boolean;
   /** The workspace is a git repository (the git group shows). */
   repo?: boolean;
+  /** Settings hides every AI action: the AI items (ai-actions.ts) are left out of the menu. */
+  aiHidden?: boolean;
 }
 
 export interface ActionDef {
@@ -120,6 +132,8 @@ export interface ActionDef {
   kinds?: readonly NodeKind[];
   /** Only when the context says so (the git group needs a repository). */
   when?: (c: NodeMenuContext) => boolean;
+  /** An AI action (from ai-actions.ts, the one table): Settings ▸ "Hide all AI actions" removes it. */
+  ai?: true;
   /** Only for the node kinds this says (an action without a capability of its own: Copy as, Reveal file …). */
   appliesTo?: (kind: NodeKind) => boolean;
   /** Offered only by some views (Reveal in sidebar: outside the sidebar), so a kind's shape leaves it out. */
@@ -282,7 +296,6 @@ export const STANDARD_ACTIONS = [
   { id: 'monitor', group: 'tools', label: 'monitor', icon: 'alarm-clock', cap: 'monitor' },
   { id: 'ci', group: 'tools', label: 'runInCi', icon: 'workflow', cap: 'ci' },
   { id: 'testFile', group: 'tools', label: testFileLabel, icon: 'file-check-2', cap: 'test-file' },
-  { id: 'flow', group: 'tools', label: 'generateFlow', icon: 'sparkles', cap: 'flow' },
   { id: 'settings', group: 'tools', label: 'settings', icon: 'settings-2', appliesTo: isListItem, last: true },
   { id: 'historyInGit', group: 'git', label: 'historyInGit', icon: 'history', cap: 'git-history', when: (c) => !!c.repo },
   { id: 'rename', group: 'edit', label: (_c, k) => (isFolderNode(k) ? 'renameFolder' : 'rename'), icon: 'pencil', cap: 'rename', shortcut: 'F2' },
@@ -303,8 +316,6 @@ export const STANDARD_ACTIONS = [
 const COLLECTION_ACTIONS = [
   { id: 'collectionSettings', group: 'tools', label: 'collectionSettings', icon: 'settings-2', kinds: ['collection'] },
   { id: 'convertScripts', group: 'tools', label: 'convertScriptsTp', icon: 'wand-2', kinds: ['collection'] },
-  // AI-10: the clean-up of an import as reviewable changes
-  { id: 'tidyImport', group: 'tools', label: 'tidyImport', icon: 'sparkles', kinds: ['collection'] },
   { id: 'copyGrpcurl', group: 'share', label: 'copyGrpcurl', icon: 'terminal', kinds: ['grpc-call'] },
   { id: 'copyUrl', group: 'share', label: 'copyUrl', icon: 'link-2', kinds: ['ws-connection'] },
   { id: 'editFolder', group: 'tools', label: 'editFolder', icon: 'folder-cog', kinds: ['folder'] },
@@ -323,8 +334,6 @@ const EXPLORER_ACTIONS = [
   { id: 'compareVersions', group: 'run', label: 'compareVersions', icon: 'git-compare', kinds: ['spec'] },
   { id: 'generateTests', group: 'tools', label: 'generateTests', icon: 'file-check-2', kinds: ['spec'] },
   { id: 'generateFlows', group: 'tools', label: 'generateFlows', icon: 'workflow', kinds: ['spec'] },
-  // AI-4: tests for the gaps in what is tested (TestPion's own cases; a configured model adds ideas)
-  { id: 'generateSpecTests', group: 'tools', label: 'generateSpecTests', icon: 'sparkles', kinds: ['spec'] },
   { id: 'openApiDefinitions', group: 'open', label: 'openApiDefinitions', icon: 'square-arrow-out-up-right', kinds: ['section:spec'] },
   // datasets
   { id: 'preview', group: 'open', label: 'preview', icon: 'eye', kinds: ['dataset'] },
@@ -347,7 +356,6 @@ const LIST_ACTIONS = [
   { id: 'copyRunId', group: 'share', label: 'copyRunId', icon: 'copy', kinds: ['run'] },
   { id: 'exposeMcp', group: 'tools', label: 'exposeMcp', icon: 'bot', kinds: ['test'] },
   { id: 'exportArazzo', group: 'share', label: 'exportArazzo', icon: 'workflow', kinds: ['test'] },
-  { id: 'triage', group: 'tools', label: 'triageWithAi', icon: 'sparkles', kinds: ['run'] },
   { id: 'exportReport', group: 'share', label: 'exportReport', icon: 'download', kinds: ['run'] },
   // history, traces, environments
   { id: 'openRequest', group: 'open', label: 'openRequest', icon: 'external-link', kinds: ['history'] },
@@ -360,17 +368,28 @@ const LIST_ACTIONS = [
 /** Every kind's own actions; the shared groups come from the capabilities. */
 export const KIND_ACTIONS = [...COLLECTION_ACTIONS, ...EXPLORER_ACTIONS, ...LIST_ACTIONS] as const satisfies readonly ActionDef[];
 
+/**
+ * Every AI item of every menu, made from the one table (ai-actions.ts): the label, icon, group and the kinds are its. A
+ * kind's `ai` capability and the unit test that lists the window's views keep the table and the menus honest.
+ */
+export const AI_MENU_ACTIONS: readonly ActionDef[] = AI_ACTIONS.map(
+  (a): ActionDef => ({ id: a.id, group: a.group, label: a.label, icon: a.icon, ai: true, ...('cap' in a ? { cap: a.cap } : {}), ...('kinds' in a ? { kinds: a.kinds } : {}) }),
+);
+
 /** The id of an action a view can handle (`on`): a typo is a compile error, not an item silently left out. */
-export type ActionId = (typeof STANDARD_ACTIONS)[number]['id'] | (typeof KIND_ACTIONS)[number]['id'];
+export type ActionId = (typeof STANDARD_ACTIONS)[number]['id'] | (typeof KIND_ACTIONS)[number]['id'] | AiActionId;
 
 const ACTIONS = new Map<NodeKind, readonly ActionDef[]>();
 
-/** The actions of a node kind: the shared ones, then the kind's own ones, each group in this order. */
+/** The actions of a node kind: the shared ones, then the kind's own ones (the AI ones among them), each group in this order. */
 export function actionsOf(kind: NodeKind): readonly ActionDef[] {
   const hit = ACTIONS.get(kind);
   if (hit) return hit;
   const own = KIND_ACTIONS.filter((a) => (a.kinds as readonly NodeKind[]).includes(kind));
-  const defs: readonly ActionDef[] = [...STANDARD_ACTIONS.filter((a) => !('last' in a)), ...own, ...STANDARD_ACTIONS.filter((a) => 'last' in a)];
+  // an AI action of a capability (Generate integration flow: every container that can) sits among the shared ones; the others after the kind's own
+  const aiShared = AI_MENU_ACTIONS.filter((a) => a.cap);
+  const aiOwn = AI_MENU_ACTIONS.filter((a) => a.kinds?.includes(kind));
+  const defs: readonly ActionDef[] = [...STANDARD_ACTIONS.filter((a) => !('last' in a)), ...aiShared, ...own, ...aiOwn, ...STANDARD_ACTIONS.filter((a) => 'last' in a)];
   ACTIONS.set(kind, defs);
   return defs;
 }
@@ -399,6 +418,7 @@ export function nodeMenuEntries(kind: NodeKind, ctx: NodeMenuContext): Array<{ g
     for (const def of defs) {
       if (def.group !== group) continue;
       if (def.cap && caps[def.cap] !== true) continue;
+      if (def.ai && ctx.aiHidden) continue;
       if (def.id === 'newFolder' && !hasFolders(kind)) continue;
       if (def.when && !def.when(ctx)) continue;
       if (def.appliesTo && !def.appliesTo(kind)) continue;
@@ -429,19 +449,44 @@ export function fullMenuContext(kind: NodeKind): NodeMenuContext & { creates: bo
   return { on, repo: true, creates: createsHere(kind) };
 }
 
+/** One action of a menu shape: its id, label key and key; an AI one is marked, and a node's AI actions are the `items` of one `ai` submenu. */
+export interface NodeMenuShapeAction {
+  id: string;
+  label: MenuLabelKey;
+  shortcut?: string;
+  submenu?: true;
+  ai?: true;
+  items?: NodeMenuShapeAction[];
+}
+
 /** The shape of one node's menu as agents and scripts read it: its groups (empty ones left out), each action with its label key and key. */
 export interface NodeMenuShape {
   node: NodeKind;
   /** The node offers New … items of its kind first (the view names them). */
   creates: boolean;
-  groups: Array<{ group: MenuGroup; actions: Array<{ id: string; label: MenuLabelKey; shortcut?: string; submenu?: true }> }>;
+  groups: Array<{ group: MenuGroup; actions: NodeMenuShapeAction[] }>;
 }
+
+/** A node with several AI items keeps them in one "AI ▸" submenu (a single AI item stays where it is): the window and the shape follow this one rule. */
+export const foldsAiItems = (entries: ReadonlyArray<{ def: ActionDef }>): boolean => entries.filter((e) => e.def.ai).length > 1;
 
 export function nodeMenuShapeOf(kind: NodeKind): NodeMenuShape {
   const ctx = fullMenuContext(kind);
+  const action = (e: NodeMenuEntry): NodeMenuShapeAction => ({ id: e.def.id, label: e.label, ...(e.shortcut ? { shortcut: e.shortcut } : {}), ...(e.submenu ? { submenu: true as const } : {}), ...(e.def.ai ? { ai: true as const } : {}) });
   const groups = nodeMenuEntries(kind, ctx)
     .filter((g) => g.entries.length)
-    .map((g) => ({ group: g.group, actions: g.entries.map((e) => ({ id: e.def.id, label: e.label, ...(e.shortcut ? { shortcut: e.shortcut } : {}), ...(e.submenu ? { submenu: true as const } : {}) })) }));
+    .map((g) => {
+      const fold = foldsAiItems(g.entries);
+      const actions: NodeMenuShapeAction[] = [];
+      for (const e of g.entries) {
+        if (fold && e.def.ai) {
+          if (e === g.entries.find((x) => x.def.ai)) actions.push({ id: 'ai', label: 'aiActions', submenu: true, ai: true, items: g.entries.filter((x) => x.def.ai).map(action) });
+          continue;
+        }
+        actions.push(action(e));
+      }
+      return { group: g.group, actions };
+    });
   return { node: kind, creates: ctx.creates, groups };
 }
 

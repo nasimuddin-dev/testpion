@@ -12,6 +12,8 @@ import { LABEL } from '../../apps/desktop/src/lib/vocabulary';
 
 const labels = new Set<string>(Object.values(LABEL));
 const flat = (kind: NodeKind) => buildNodeMenu(kind, fullCtx(kind));
+/** Every label of a menu, the ones inside submenus too (the AI items of a node are in its AI ▸ submenu). */
+const deep = (items: Array<{ label: string; items?: unknown[] }>): string[] => items.flatMap((i) => [i.label, ...deep((i.items ?? []) as Array<{ label: string; items?: unknown[] }>)]);
 
 /** The item each menu capability implies (master-roadmap §1.9). */
 const IMPLIES: Partial<Record<Capability, RegExp>> = {
@@ -53,7 +55,7 @@ describe('node menus', () => {
 
   it('every capability a kind has shows its item (no gap can come back)', () => {
     for (const k of liveKinds()) {
-      const shown = flat(k.id).map((i) => i.label);
+      const shown = deep(flat(k.id));
       for (const [cap, re] of Object.entries(IMPLIES) as Array<[Capability, RegExp]>) {
         if (k.capabilities[cap] !== true) continue;
         expect(
@@ -168,8 +170,8 @@ describe('node menus', () => {
 
   it('section and folder nodes come from the registry: every live kind with folders has a folder node, every listed kind a section node', () => {
     // today's ten folder kinds and eleven section kinds, derived, not listed
-    expect(folderNodeKinds().map((k) => k.id)).toEqual(['grpc-call', 'ws-connection', 'test', 'dataset', 'spec', 'mcp-server', 'prompt', 'load-test', 'evaluation', 'monitor']);
-    expect(sectionNodeKinds().map((k) => k.id)).toEqual(['collection', 'environment', 'test', 'dataset', 'spec', 'mcp-server', 'provider', 'prompt', 'load-test', 'evaluation', 'monitor']);
+    expect(folderNodeKinds().map((k) => k.id)).toEqual(['grpc-call', 'ws-connection', 'test', 'dataset', 'spec', 'mcp-server', 'prompt', 'load-test', 'evaluation', 'monitor', 'rag-target']);
+    expect(sectionNodeKinds().map((k) => k.id)).toEqual(['collection', 'environment', 'test', 'dataset', 'spec', 'mcp-server', 'provider', 'prompt', 'load-test', 'evaluation', 'monitor', 'rag-target']);
     for (const k of liveKinds()) {
       const folders = typeof k.folders === 'object' || (k.folders === 'dirs' && !k.variantOf && k.opens !== 'none');
       expect(NODE_KINDS.includes(`folder:${k.id}`), `folder:${k.id}`).toBe(folders);

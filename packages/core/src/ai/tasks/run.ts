@@ -15,7 +15,7 @@ import { checkAiCaps, type AiSurface } from '../../storage/ai-usage.js';
 import type { WorkspaceStore } from '../../storage/workspace.js';
 import { shortId } from '../../util/ids.js';
 import { maskSensitiveText, type Redaction, type Redactor } from '../../util/redact.js';
-import { aiLocalOnly, aiPrivacyOf, assertLocalAllowed, resolveAiRoute, type AiPrivacy, type AiRoute, type AiSettingsSource } from '../ai-settings.js';
+import { aiHidden, aiLocalOnly, aiPrefersStable, aiPrivacyOf, assertLocalAllowed, resolveAiRoute, type AiPrivacy, type AiRoute, type AiSettingsSource } from '../ai-settings.js';
 import { buildAiContext, type AiContextSection } from '../context.js';
 import { estimateCost, type ProviderRegistry } from '../index.js';
 import { newProposalId, proposedTestFilePath, PROPOSAL_TTL_MS, saveProposal, type Proposal, type ProposalItem } from '../proposal.js';
@@ -99,6 +99,8 @@ export interface AiTaskRequest {
   dryRun?: boolean;
   /** Override the task's output limit. */
   maxTokens?: number;
+  /** Prefer stable checks (types, formats, presence over literal ids, times, tokens); unset: the AI setting. */
+  preferStable?: boolean;
 }
 
 /** "What will be sent": the exact messages, the context's sections, the estimate and the redactions. */
@@ -150,6 +152,9 @@ export interface AiTaskResult {
 
 const SYSTEM = 'You are the AI assistant inside TestPion, a developer tool for testing REST, GraphQL, MCP and LLM systems.';
 const FORMAT = 'Format answers in Markdown (short headings, lists, fenced code blocks with a language). Values shown as *** or [REDACTED…] were hidden by TestPion; never ask for them.';
+/** Added to a checks task's instruction while "Prefer stable checks" is on. */
+const PREFER_STABLE =
+  'Prefer stable checks: assert the status, which fields exist, their types and formats (a regex for an id, a time or a token) and ranges; use equals only for a value the request itself sent or a fixed status, never for an id, a time, a token or any value the server makes up.';
 const FOLLOW_UP =
   'This is a follow-up in the conversation: answer the question itself, in prose with code blocks where useful (the output-only rule above applied to the first answer); when you change code you gave before, give the whole new version in one code block.';
 
@@ -168,7 +173,7 @@ function unknownTask(id: string): ApsError {
 }
 
 /** The messages of a call: the system prompt (task instruction), the conversation, and this turn with the context. */
-function composeMessages(def: AiTaskDef, contextText: string, req: AiTaskRequest, safe: (s: string) => string): ChatMessage[] {
+function composeMessages(def: AiTaskDef, contextText: string, req: AiTaskRequest, safe: (s: string) => string, preferStable = false): ChatMessage[] {
   const history = (req.history ?? []).slice(-12).map((m) => ({ role: m.role, content: safe(m.content).slice(0, 8000) }));
   const first = history.length === 0;
   const question = req.question ? safe(req.question) : undefined;
@@ -180,7 +185,8 @@ function composeMessages(def: AiTaskDef, contextText: string, req: AiTaskRequest
   if (!first && hasContext) history[0] = { role: history[0]!.role, content: `${history[0]!.content}\n\nContext:\n${contextText}` };
   // the format reference is made when it is used, from the schema and the check registry (never stale)
   const reference = def.format ? `\n\n${formatReference(def.format)}\n\n` : ' ';
-  return [{ role: 'system', content: `${SYSTEM} ${def.instruction}${reference}${FORMAT}${first ? '' : ` ${FOLLOW_UP}`}` }, ...history, { role: 'user', content: turn }];
+  const stable = preferStable ? ` ${PREFER_STABLE}` : '';
+  return [{ role: 'system', content: `${SYSTEM} ${def.instruction}${stable}${reference}${FORMAT}${first ? '' : ` ${FOLLOW_UP}`}` }, ...history, { role: 'user', content: turn }];
 }
 
 /** Build the call without sending it: route, context, messages and the estimate. */
@@ -211,7 +217,8 @@ export function prepareAiTask(deps: AiRunDeps, req: AiTaskRequest, extraContext:
     { privacy, redactor: deps.redactor, budgetTokens: def.contextTokens, sectionBudgets: def.sectionBudgets, maskPersonalData: pii },
   );
   const safe = (s: string) => maskSensitiveText(deps.redactor.redactString(s), { pii });
-  const messages = composeMessages(def, ctx.text, req, safe);
+  const preferStable = !!def.stable && aiPrefersStable(deps.settings, req.preferStable);
+  const messages = composeMessages(def, ctx.text, req, safe, preferStable);
   const maxOutputTokens = Math.max(64, Math.min(req.maxTokens ?? def.maxTokens ?? (def.tier === 'large' ? 4000 : 2000), 32_000));
   const inputTokens = estimateTokens(messages.map((m) => m.content).join('\n'));
   const pricing = deps.settings.pricing ?? [];
@@ -240,19 +247,22 @@ export function prepareAiTask(deps: AiRunDeps, req: AiTaskRequest, extraContext:
     redactionCount: ctx.redactionCount,
     estimate: { inputTokens, maxOutputTokens, costUsd: inCost.cost, maxCostUsd: maxCost.cost, priceKnown: maxCost.cost !== undefined },
   };
-  return { def, provider, model, preview, maxOutputTokens };
+  return { def, provider, model, preview, maxOutputTokens, preferStable };
 }
 
 let counter = 0;
 
 /** Run an AI task (see the module comment). */
 export async function runAiTask(deps: AiRunDeps, req: AiTaskRequest): Promise<AiTaskResult> {
+  // Settings ▸ AI assistant ▸ "Hide AI actions": the window offers none, and a stale one is refused here (the CLI and MCP are explicit calls)
+  if (deps.surface === 'app' && aiHidden(deps.settings))
+    throw new ApsError('ConfigurationError', 'AI actions are hidden', { why: 'Settings ▸ AI assistant has "Hide all AI actions" on, so the window runs no AI task. Nothing was sent.', suggestions: ['Turn it off in Settings ▸ AI assistant to use the AI actions again.'] });
   // a workspace item: its context (a request and its latest response, a run result, a flow …), under what the caller passed
   let itemContext: Record<string, unknown> | undefined;
   let local: unknown;
   let label: string | undefined;
   const own = aiTask(req.task, { lenient: deps.surface === 'app' });
-  if (own?.prepare && !req.item) throw new ApsError('ValidationError', `The AI task "${own.id}" works on a workspace item`, { suggestions: [`Pass one: ${own.context}`] });
+  if (own?.prepare && !own.itemOptional && !req.item) throw new ApsError('ValidationError', `The AI task "${own.id}" works on a workspace item`, { suggestions: [`Pass one: ${own.context}`] });
   // the file to propose: inside tests/, refused before anything is built or sent
   if (req.path?.trim() && deps.store) req = { ...req, path: proposedTestFilePath(deps.store, req.path) };
   if (req.item && deps.store) {
@@ -267,7 +277,7 @@ export async function runAiTask(deps: AiRunDeps, req: AiTaskRequest): Promise<Ai
   }
   // the tp.* reference is read from the sandbox once per process (before the messages are composed)
   if (own && [own.format].flat().includes('script')) await loadScriptApi();
-  const { def, provider, model, preview, maxOutputTokens } = prepareAiTask(deps, req, itemContext);
+  const { def, provider, model, preview, maxOutputTokens, preferStable } = prepareAiTask(deps, req, itemContext);
   const { messages, ...summary } = preview;
   const base = { task: def.id, taskVersion: def.version, title: def.title, provider: provider.config.name, model, aiGenerated: true as const };
   if (req.dryRun) return { ...base, text: '', truncated: false, problems: [], repairs: 0, calls: 0, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 }, ms: 0, preview, dryRun: true };
@@ -281,7 +291,7 @@ export async function runAiTask(deps: AiRunDeps, req: AiTaskRequest): Promise<Ai
   let error: string | undefined;
   let proposal: Proposal | undefined;
   let modelUsed = model;
-  const input: AiTaskInput = { question: req.question, context: req.context, item: req.item, path: req.path, target: req.target, model: `${provider.config.name}/${model}`, local, label };
+  const input: AiTaskInput = { question: req.question, context: req.context, item: req.item, path: req.path, target: req.target, model: `${provider.config.name}/${model}`, local, label, preferStable };
   const verifyCtx = {
     response: req.response,
     previous: req.previous,
@@ -310,7 +320,7 @@ export async function runAiTask(deps: AiRunDeps, req: AiTaskRequest): Promise<Ai
     } catch (e) {
       return { items: [], problems: [normalizeError(e).message] };
     }
-    const items: ProposalItem[] = drafts.map((d, i) => ({ ...d, id: `i${i + 1}`, verification: [], selected: true }));
+    const items: ProposalItem[] = drafts.map((d, i) => ({ ...d, id: `i${i + 1}`, verification: [], selected: d.selected ?? true }));
     // a file that exists: its current text, so the review shows a diff (and apply keeps it for undo)
     for (const it of items)
       if ((it.kind === 'file' || it.kind === 'flow') && it.path && it.before === undefined && deps.store)

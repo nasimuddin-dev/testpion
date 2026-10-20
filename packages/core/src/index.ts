@@ -33,6 +33,8 @@ export * from './openapi/tests-from-spec.js';
 export * from './openapi/flows-from-spec.js';
 export * from './openapi/coverage.js';
 export * from './openapi/spec-gaps.js';
+export * from './openapi/drift.js';
+export * from './openapi/spec-patch.js';
 export * from './openapi/from-collection.js';
 export * from './import/workspace-import.js';
 export * from './protocols/graphql/graphql.js';

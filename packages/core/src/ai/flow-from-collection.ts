@@ -32,8 +32,9 @@ import type { AiSurface } from '../storage/ai-usage.js';
 import { newProposalId, proposedTestFilePath, PROPOSAL_TTL_MS, saveProposal, type Proposal, type ProposalItem } from './proposal.js';
 import type { AiTaskInput, DraftItem, PreparedItem } from './tasks/registry.js';
 import { flowVariableProblems, registerVerifier, verifyItems, type VerifyContext } from './verify.js';
+import { diffFlowSteps, flowDiffSummary } from './flow-diff.js';
 
-type Saved = Exclude<CollectionNode, { kind: 'folder' }>;
+export type Saved = Exclude<CollectionNode, { kind: 'folder' }>;
 
 /** At most this many requests are sent; a bigger folder is sampled (the draft's requests first, then one per endpoint). */
 export const FLOW_MAX_REQUESTS = 60;
@@ -168,7 +169,7 @@ export function flowSourceRef(store: WorkspaceStore, o: { collection: string; fo
 }
 
 /** The requests of the source with the auth each inherits (its own, the nearest folder's, the collection's). */
-function sourceRequests(c: Collection, folderId?: string): { label: string; folder?: CollectionFolder; list: Array<{ node: Saved; folder: string[]; auth?: AuthConfig }> } {
+export function sourceRequests(c: Collection, folderId?: string): { label: string; folder?: CollectionFolder; list: Array<{ node: Saved; folder: string[]; auth?: AuthConfig }> } {
   const list: Array<{ node: Saved; folder: string[]; auth?: AuthConfig }> = [];
   const own = (a: AuthConfig | undefined) => (a && a.type !== 'inherit' ? a : undefined);
   let label = c.name;
@@ -190,8 +191,8 @@ function sourceRequests(c: Collection, folderId?: string): { label: string; fold
   return { label, folder: found, list };
 }
 
-const bodyContent = (b: unknown): string | undefined => (b && typeof b === 'object' && typeof (b as { content?: unknown }).content === 'string' ? (b as { content: string }).content : undefined);
-const jsonOrText = (s: string | undefined): unknown => {
+export const bodyContent = (b: unknown): string | undefined => (b && typeof b === 'object' && typeof (b as { content?: unknown }).content === 'string' ? (b as { content: string }).content : undefined);
+export const jsonOrText = (s: string | undefined): unknown => {
   if (s === undefined) return undefined;
   try {
     return JSON.parse(s);
@@ -199,10 +200,10 @@ const jsonOrText = (s: string | undefined): unknown => {
     return s;
   }
 };
-const enabled = (kv: KeyValue[] | undefined) => (kv ?? []).filter((h) => h.enabled !== false && h.key);
+export const enabled = (kv: KeyValue[] | undefined) => (kv ?? []).filter((h) => h.enabled !== false && h.key);
 
 /** A path's segments without the origin: `{{baseUrl}}/orders/{{id}}?x=1` → ['orders', '{{id}}']. */
-const segmentsOf = (url: string) =>
+export const segmentsOf = (url: string) =>
   url
     .trim()
     .replace(/^[a-z][a-z0-9+.-]*:\/\/[^/?#]*/i, '')
@@ -211,7 +212,7 @@ const segmentsOf = (url: string) =>
     .split('/')
     .filter(Boolean);
 /** A segment that stands for a value: a variable, a path parameter, or an id that was typed in (42, 7f3a-…, job-1). */
-const isValueSegment = (s: string) => /^\{\{.*\}\}$|^:|^\{.*\}$/.test(s) || /^\d+$/.test(s) || /^[0-9a-f-]{16,}$/i.test(s) || (/\d/.test(s) && /^[\w-]{1,64}$/.test(s));
+export const isValueSegment = (s: string) => /^\{\{.*\}\}$|^:|^\{.*\}$/.test(s) || /^\d+$/.test(s) || /^[0-9a-f-]{16,}$/i.test(s) || (/\d/.test(s) && /^[\w-]{1,64}$/.test(s));
 
 /** Two URLs name the same endpoint: the same number of segments, the literal ones equal (values may differ). */
 export function sameEndpoint(a: string, b: string): boolean {
@@ -321,7 +322,7 @@ function specOperations(store: WorkspaceStore, requests: Saved[]): { spec: strin
 }
 
 /** A free file name under tests/ (an existing file is never the default target). */
-function freePath(store: WorkspaceStore, base: string): string {
+export function freePath(store: WorkspaceStore, base: string): string {
   const tests = store.path('tests');
   for (let i = 1; i < 200; i++) {
     const p = `${base}${i === 1 ? '' : `-${i}`}.yaml`;
@@ -350,7 +351,7 @@ function sampleRequests(list: Saved[], draft: FlowPlan): Saved[] {
 }
 
 /** A request as the model sees it: names and shapes it needs, never header values or secrets. */
-function requestContext(r: { node: Saved; folder: string[]; auth?: AuthConfig }): Record<string, unknown> {
+export function requestContext(r: { node: Saved; folder: string[]; auth?: AuthConfig }): Record<string, unknown> {
   const n = r.node;
   const where = r.folder.length ? { folder: r.folder.join(' / ') } : {};
   const auth = r.auth && r.auth.type !== 'none' ? { auth: r.auth.type } : {};
@@ -526,10 +527,12 @@ export function proposeFlow(a: { value?: unknown }, input: AiTaskInput): DraftIt
   if (!local) throw new ApsError('ValidationError', 'An integration flow needs the collection or folder it is made from');
   const plan = (a.value ?? {}) as FlowPlan;
   const built = buildFlowFile(plan, local, { by: input.model, ai: true });
-  return [flowItem(local, built)];
+  // what the model changed, step by step, against the flow TestPion builds without it (the review's "vs draft")
+  const draft = buildFlowFile(local.draft, local, { by: 'TestPion', ai: false });
+  return [flowItem(local, built, { draft: draft.yaml, vsDraft: diffFlowSteps(draft.yaml, built.yaml) })];
 }
 
-function flowItem(local: FlowLocal, built: ReturnType<typeof buildFlowFile>): DraftItem {
+function flowItem(local: FlowLocal, built: ReturnType<typeof buildFlowFile>, extra: Record<string, unknown> = {}): DraftItem {
   return {
     kind: 'flow',
     title: `tests/${local.path}`,
@@ -537,7 +540,7 @@ function flowItem(local: FlowLocal, built: ReturnType<typeof buildFlowFile>): Dr
     after: built.yaml,
     language: 'yaml',
     target: { kind: 'flow', path: local.path },
-    data: { source: local.ref, known: local.known, steps: built.steps, notes: built.notes },
+    data: { source: local.ref, known: local.known, steps: built.steps, notes: built.notes, ...extra },
   };
 }
 
@@ -545,8 +548,9 @@ function flowItem(local: FlowLocal, built: ReturnType<typeof buildFlowFile>): Dr
 export function describeFlow(value: unknown, items: ProposalItem[]): { summary?: string; assumptions?: string[]; notes?: string[] } {
   const v = (value ?? {}) as FlowPlan;
   const notes = items.flatMap((i) => ((i.data as { notes?: string[] } | undefined)?.notes ?? []).filter((n) => typeof n === 'string'));
+  const vs = (items[0]?.data as { vsDraft?: Parameters<typeof flowDiffSummary>[0] } | undefined)?.vsDraft;
   return {
-    summary: typeof v.summary === 'string' ? v.summary : undefined,
+    summary: [typeof v.summary === 'string' ? v.summary : '', vs ? `Against TestPion's own draft: ${flowDiffSummary(vs)}.` : ''].filter(Boolean).join(' ') || undefined,
     assumptions: Array.isArray(v.assumptions) ? v.assumptions.map(String) : [],
     notes,
   };

@@ -11,7 +11,7 @@ import { readDataset, type DatasetSource } from './datasets.js';
 import { dbKindOf } from './db-datasets.js';
 import { parseExpose } from './exposed-flows.js';
 import { parseWebhook } from './flow-webhook-config.js';
-import { controlProblems, finallyOf, parallelOf, setScopeOf, untilOf } from './control-keys.js';
+import { controlProblems, finallyOf, paceOf, parallelOf, setScopeOf, untilOf } from './control-keys.js';
 
 const TEST_EXT = new Set(['.yaml', '.yml', '.json']);
 
@@ -142,6 +142,7 @@ export function normalizeTest(raw: Record<string, unknown>, file?: string, index
   const until = untilOf(raw) as UntilSpec | undefined;
   const fin = finallyOf(raw) === true;
   const parallel = parallelOf(raw) as string | undefined;
+  const pace = paceOf(raw);
   const loop = loopOf(raw);
   if (typeof loop === 'string') throw new ApsError('ConfigurationError', `${loop} ${where}`);
   const when = whenOf(raw);
@@ -169,6 +170,7 @@ export function normalizeTest(raw: Record<string, unknown>, file?: string, index
     ...(until ? { until } : {}),
     ...(fin ? { finally: true } : {}),
     ...(parallel ? { parallel } : {}),
+    ...(typeof pace === 'number' ? { paceMs: pace } : {}),
   };
   const vars = (raw.vars ?? (type === 'graphql' ? undefined : type === 'llm' ? undefined : raw.variables)) as Record<string, unknown> | undefined;
 

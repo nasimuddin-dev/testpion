@@ -1,3 +1,4 @@
+import { aiHidden } from './ai-visible';
 import type { ItemRef } from '@testpion/shared';
 
 /**
@@ -87,6 +88,7 @@ export function quickOpenRows(q: string, s: QuickSources, base: QuickMode = 'ite
       return { rows, text, placeholder: 'Environment or variable…', empty: 'No matching environment or variable' };
     }
     case 'ask':
+      if (aiHidden()) return { rows: [], text: '', placeholder: 'AI actions are hidden (Settings ▸ AI assistant)', empty: 'AI actions are hidden' };
       return {
         rows: text ? [askRow(text, s)] : [],
         text: '',
@@ -111,7 +113,7 @@ export function quickOpenRows(q: string, s: QuickSources, base: QuickMode = 'ite
       // the search answered for this text: its hits, already ranked (the palette's own filter keeps them)
       const rows: QuickRow[] = (s.hits ?? []).flatMap((h) => (h.ref ? [{ id: `hit:${h.kind}:${h.id}`, label: h.title, detail: h.subtitle, hint: s.noun(h.ref), ref: h.ref, run: () => s.open(h.ref!) }] : []));
       // the last row, always: put the words to the AI as a question (the dialog shows how it was understood)
-      if (s.hits) rows.push(askRow(text, s));
+      if (s.hits && !aiHidden()) rows.push(askRow(text, s));
       return { rows, text: '', placeholder: 'Go to an item (> commands, # environments, ? help)', empty: s.hits ? 'No matching items (> for commands)' : 'Searching…' };
     }
   }

@@ -3,6 +3,7 @@ import { FolderOpen, Link2, Upload, Undo2 } from 'lucide-react';
 import { call } from '../api';
 import { toastError, useApp } from '../store';
 import { LABEL } from '../lib/vocabulary';
+import { aiHidden } from '../lib/ai-visible';
 import { startTidyImport } from './ai/flow-generate';
 import { toastSpecKeptBoth } from '../lib/spec-import';
 import { toastImportNotes, toastUnchangedScripts } from '../lib/import-scripts';
@@ -109,7 +110,7 @@ export function ImportDialog({ onClose, onDone, initial, tool: toolIn, migrate }
         const x = i.result;
         if (!x) continue;
         toastUnchangedScripts(x.scripts);
-        if (x.collection && /^(postman|har|insomnia|bruno|hoppscotch|opencollection)/i.test(x.format))
+        if (x.collection && !aiHidden() && /^(postman|har|insomnia|bruno|hoppscotch|opencollection)/i.test(x.format))
           useApp.getState().toast(`${x.collection.name} can be tidied: names, folders, the host and token as variables, ids chained.`, 'info', { label: LABEL.tidyImport, onClick: () => startTidyImport({ collectionId: x.collection!.id, source: x.format }) });
         toastImportNotes({ notes: toastSpecKeptBoth({ ...x, notes: x.notes }), scriptWarnings: x.scriptWarnings });
       }

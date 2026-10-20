@@ -11,6 +11,7 @@ import { setDraftScope } from './lib/ws-scope';
 import { offerUndo, UNDO_MS } from './lib/undo';
 import { normalizeEnvironment } from './lib/environments-store';
 import { refOpenLabel, type ItemRef } from '@testpion/shared';
+import { aiHidden, setAiHiddenSource, withoutAiLaunch } from './lib/ai-visible';
 
 export type ViewId =
   | 'home'
@@ -115,7 +116,7 @@ export interface FlowGenerateRequest {
   /** The collection or folder preselected. */
   source?: { collectionId: string; folderId?: string };
   /** Start on "Describe in words" (the canvas of an open flow). */
-  mode?: 'collection' | 'describe' | 'spec';
+  mode?: 'collection' | 'describe' | 'spec' | 'security';
   /** mode spec: the API definition preselected (specs/…). */
   spec?: string;
   /** The flow file the result goes to (the open flow: its review shows the diff); default a new file under tests/flows/. */
@@ -137,7 +138,7 @@ export interface TidyImportRequest {
   source?: string;
 }
 
-export type AiAnalysisRequest = { kind: 'triage'; runId: string; title?: string } | { kind: 'flaky'; testId: string; title?: string };
+export type AiAnalysisRequest = { kind: 'triage'; runId: string; title?: string } | { kind: 'flaky'; testId: string; title?: string } | { kind: 'drift'; spec?: string; title?: string };
 
 export interface DialogButton {
   id: string;
@@ -392,7 +393,7 @@ export const useApp = create<AppState>((set, get) => ({
   toasts: [],
   activity: {},
   mcpConnected: 0,
-  set: (p) => set(p),
+  set: (p) => set(aiHidden() ? withoutAiLaunch(p) : p),
   toast: (text, kind = 'info', actions, opts) => {
     const id = ++toastId;
     const sonnerId = `t${id}`;
@@ -463,6 +464,9 @@ export const useApp = create<AppState>((set, get) => ({
     set({ environment: name });
   },
 }));
+
+// Settings ▸ AI assistant ▸ Hide all AI actions: the menus and the controls read it here (lib/ai-visible.ts)
+setAiHiddenSource(() => useApp.getState().settings?.ai?.hidden === true);
 
 /**
  * A system notification (the window is in the background) about an item: clicking it brings the window up with the

@@ -775,6 +775,7 @@ exports[`kind equivalence (REG-1 snapshots; unchanged by the registry adapters) 
     "grpc": "gRPC call",
     "load-tests": "Load test",
     "monitors": "Monitor",
+    "rag-targets": "RAG target",
     "websocket": "Connection",
   },
   "LIBRARY_VIEW": {
@@ -783,6 +784,7 @@ exports[`kind equivalence (REG-1 snapshots; unchanged by the registry adapters) 
     "grpc": "grpc",
     "load-tests": "load",
     "monitors": "monitors",
+    "rag-targets": "ai",
     "websocket": "websocket",
   },
   "PROTOCOL_VIEW": {
@@ -812,7 +814,7 @@ exports[`kind equivalence (REG-1 snapshots; unchanged by the registry adapters) 
   "load test",
   "evaluation",
   "monitor",
-  "saved item",
+  "RAG target",
   "saved item",
   "monitor",
   "environment",
@@ -1697,11 +1699,43 @@ exports[`kind equivalence (REG-1 snapshots; unchanged by the registry adapters) 
     },
   ],
   [
-    null,
-    null,
-    null,
-    null,
-    null,
+    {
+      "payload": {
+        "ragTargetId": "rt-1",
+        "tab": "rag",
+      },
+      "view": "ai",
+    },
+    {
+      "payload": {
+        "newDoc": true,
+        "ragTargetId": "rt-1",
+        "tab": "rag",
+      },
+      "view": "ai",
+    },
+    {
+      "payload": {
+        "ragTargetId": "rt-1",
+        "tab": "rag",
+      },
+      "view": "ai",
+    },
+    {
+      "payload": {
+        "ragTargetId": "rt-1",
+        "tab": "rag",
+      },
+      "view": "ai",
+    },
+    {
+      "payload": {
+        "newDoc": true,
+        "ragTargetId": "rt-1",
+        "tab": "rag",
+      },
+      "view": "ai",
+    },
   ],
   [
     null,
@@ -2823,7 +2857,7 @@ exports[`kind equivalence (REG-1 snapshots; unchanged by the registry adapters) 
     },
   },
   {
-    "message": "That saved item is no longer saved in this workspace (deleted, or in another workspace).",
+    "message": "That rag target is no longer saved in this workspace (deleted, or in another workspace).",
     "next": {
       "label": "Search the workspace",
       "view": "search",

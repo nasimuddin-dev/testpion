@@ -1,5 +1,6 @@
 import { AlertTriangle, Copy, Sparkles } from 'lucide-react';
 import { startAi } from './ai/AiAction';
+import { useAiEnabled } from '../lib/use-ai-enabled';
 import { useState } from 'react';
 import { LinkButton } from './ui';
 import { copyText } from '../lib/clipboard';
@@ -12,6 +13,7 @@ export function AttentionCard() {
   // the Problems list (WF-03): the same rows as the bottom panel's tab, the first five here
   const items = useProblems();
   const [all, setAll] = useState(false);
+  const aiOn = useAiEnabled();
   if (!items.length) return null;
   return (
     <section aria-label="Needs attention" className="rounded-2xl border border-line bg-bg shadow-sm">
@@ -20,17 +22,19 @@ export function AttentionCard() {
           <AlertTriangle size={15} />
         </span>
         Needs attention
+        {aiOn && (
+          <button
+            className="ml-auto inline-flex items-center gap-1 text-xs font-normal text-accent hover:underline"
+            title="Ask the AI assistant what to fix first (the items' messages and severities are sent)"
+            onClick={() =>
+              startAi({ task: 'triage-attention', title: 'What to fix first', context: { items: items.map((i) => ({ severity: i.severity, kind: i.kind, message: i.message })) } })
+            }
+          >
+            <Sparkles size={12} /> What first?
+          </button>
+        )}
         <button
-          className="ml-auto inline-flex items-center gap-1 text-xs font-normal text-accent hover:underline"
-          title="Ask the AI assistant what to fix first (the items' messages and severities are sent)"
-          onClick={() =>
-            startAi({ task: 'triage-attention', title: 'What to fix first', context: { items: items.map((i) => ({ severity: i.severity, kind: i.kind, message: i.message })) } })
-          }
-        >
-          <Sparkles size={12} /> What first?
-        </button>
-        <button
-          className="inline-flex items-center gap-1 text-xs font-normal text-accent hover:underline"
+          className={`${aiOn ? '' : 'ml-auto '}inline-flex items-center gap-1 text-xs font-normal text-accent hover:underline`}
           title="Copy the list as Markdown (to paste into a chat or an issue)"
           onClick={() =>
             void copyText(['**Needs attention**', ...items.map((i) => `- ${i.severity === 'high' ? '🔴' : i.severity === 'medium' ? '🟠' : '⚪'} ${i.message}`)].join('\n'))

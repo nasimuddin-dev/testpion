@@ -1,3 +1,4 @@
+import { useAiEnabled } from '../lib/use-ai-enabled';
 import { ArrowDown, ArrowDownUp, ArrowUp, Check, ExternalLink, FolderGit2, GitBranch, GitCommitHorizontal, GitPullRequest, KeyRound, Pencil, Plus, RefreshCw, ShieldAlert, Sparkles, Trash2, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { asError, call, on } from '../api';
@@ -108,6 +109,7 @@ export function GitView() {
   const [changes, setChanges] = useState<SemanticChange[]>([]);
   const [itemDiff, setItemDiff] = useState<{ file: string; itemId?: string }>();
   const [message, setMessage] = useState('');
+  const aiOn = useAiEnabled();
   const [busy, setBusy] = useState<string>();
   const [secrets, setSecrets] = useState<SecretFinding[]>();
   const [branches, setBranches] = useState<{ current?: string; local: string[]; remote: string[] }>();
@@ -400,15 +402,17 @@ export function GitView() {
             <Button variant="primary" icon={<GitCommitHorizontal size={13} />} loading={busy === 'commit'} disabled={!files.length} onClick={() => void commit()}>
               Commit
             </Button>
-            <Button
-              icon={<Sparkles size={13} />}
-              loading={busy === 'suggest'}
-              disabled={!files.length}
-              title="The AI assistant writes a message from what changed (no secret values are sent)"
-              onClick={() => void run('suggest', async () => setMessage((await call<{ message: string }>('git.suggestMessage')).message))}
-            >
-              Write message
-            </Button>
+            {aiOn && (
+              <Button
+                icon={<Sparkles size={13} />}
+                loading={busy === 'suggest'}
+                disabled={!files.length}
+                title="The AI assistant writes a message from what changed (no secret values are sent)"
+                onClick={() => void run('suggest', async () => setMessage((await call<{ message: string }>('git.suggestMessage')).message))}
+              >
+                Write message
+              </Button>
+            )}
           </div>
           {secrets && secrets.length > 0 && <SecretsPanel findings={secrets} onChange={setSecrets} onCommitAnyway={() => void commit(true)} />}
         </section>

@@ -1,4 +1,6 @@
 import { askAssistant } from './ai/AiAction';
+import { useAiEnabled } from '../lib/use-ai-enabled';
+import { aiHidden } from '../lib/ai-visible';
 import {
   Activity,
   AlertOctagon,
@@ -99,6 +101,7 @@ function useTitleBarColors(ref: React.RefObject<HTMLElement | null>) {
 
 export function TopBar() {
   const bindings = useBindings();
+  const aiOn = useAiEnabled();
   const set = useApp((s) => s.set);
   const noDrag = { WebkitAppRegion: 'no-drag' } as React.CSSProperties;
   const header = useRef<HTMLElement>(null);
@@ -157,9 +160,11 @@ export function TopBar() {
         <Button size="md" variant="ghost" onClick={() => set({ paletteOpen: true })} icon={<TerminalSquare size={15} />}>
           <span className="hidden lg:inline">Commands</span> <Kbd>{keyLabel('palette', bindings)}</Kbd>
         </Button>
-        <IconButton label="AI assistant" onClick={() => askAssistant()}>
-          <Bot size={17} />
-        </IconButton>
+        {aiOn && (
+          <IconButton label="AI assistant" onClick={() => askAssistant()}>
+            <Bot size={17} />
+          </IconButton>
+        )}
         <IconButton label="Settings" onClick={() => useApp.getState().setView('settings')}>
           <Settings size={17} />
         </IconButton>
@@ -510,7 +515,7 @@ export function SearchDialog() {
   }, [q]);
   const close = () => set({ searchOpen: false });
   // the last row, always: put the words to the AI as a question (Ask…, AI-12), the same row as in Quick Open
-  const shown: SearchHit[] = q.trim() ? [...hits, { kind: 'ask', id: 'ask', title: `Ask: “${q.trim()}”`, subtitle: 'History, runs, test results and traces, in your own words (AI)', ref: {} }] : [];
+  const shown: SearchHit[] = q.trim() ? [...hits, ...(aiHidden() ? [] : [{ kind: 'ask' as const, id: 'ask', title: `Ask: “${q.trim()}”`, subtitle: 'History, runs, test results and traces, in your own words (AI)', ref: {} }])] : [];
   // every hit names its item with an ItemRef: it opens the one way everything opens (a hit of something deleted since says so)
   const open = (h?: SearchHit) => {
     if (!h) return;

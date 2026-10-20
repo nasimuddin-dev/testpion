@@ -2,6 +2,8 @@ import { ItemBreadcrumb } from '../components/ItemBreadcrumb';
 import { refMenu } from '../components/RefLink';
 import { FileCode2, Save, Sparkles, Upload } from 'lucide-react';
 import { startFlowGenerate } from '../components/ai/flow-generate';
+import { startAiAnalysis } from '../components/ai/ai-analysis';
+import { useAiEnabled } from '../lib/use-ai-enabled';
 import { LABEL } from '../lib/vocabulary';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { OnMount } from '@monaco-editor/react';
@@ -46,6 +48,7 @@ function infoOf(text: string): { title?: string; version?: string; openapi?: str
  */
 export function ApiDefinitionView() {
   const { docId } = useDoc();
+  const aiOn = useAiEnabled();
   const docState = useMemo(() => tabSpec.forDoc(docId), [docId]);
   const [spec, setSpec] = useState<string | undefined>(() => docState.load().spec);
   useEffect(() => docState.save({ spec }), [spec, docState]);
@@ -177,12 +180,17 @@ export function ApiDefinitionView() {
           </Badge>
         )}
         <span className="mono text-xs text-muted truncate">{spec}</span>
-        {!isAsync && (
-          <Button className="ml-auto" icon={<Sparkles size={14} />} onClick={() => startFlowGenerate({ mode: 'spec', spec })} title="Tests for the gaps in what is tested of this API definition: positive, negative, boundary and security" data-generate-spec-tests>
-            {LABEL.generateSpecTests}
-          </Button>
+        {!isAsync && aiOn && (
+          <>
+            <Button className="ml-auto" icon={<Sparkles size={14} />} onClick={() => startFlowGenerate({ mode: 'spec', spec })} title="Tests for the gaps in what is tested of this API definition: positive, negative, boundary and security" data-generate-spec-tests>
+              {LABEL.generateSpecTests}
+            </Button>
+            <Button icon={<Sparkles size={14} />} onClick={() => startAiAnalysis({ kind: 'drift', spec })} title="Real traffic compared with this definition: what differs, who is right, and the fix verified against the same traffic" data-check-traffic>
+              {LABEL.checkTraffic}
+            </Button>
+          </>
         )}
-        <Button className={isAsync ? 'ml-auto' : undefined} icon={<Save size={14} />} disabled={!dirty} onClick={() => void save()} title="Save (Ctrl+S)">
+        <Button className={isAsync || !aiOn ? 'ml-auto' : undefined} icon={<Save size={14} />} disabled={!dirty} onClick={() => void save()} title="Save (Ctrl+S)">
           Save
         </Button>
       </div>

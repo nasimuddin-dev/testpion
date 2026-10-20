@@ -4,6 +4,7 @@ import type { AiTaskResult } from '@testpion/core';
 import { call } from '../../api';
 import { useApp, type AssistantRequest } from '../../store';
 import { formatCost } from '../../lib/format';
+import { useAiEnabled } from '../../lib/use-ai-enabled';
 import { Button, cx, IconButton, LinkButton } from '../ui';
 import { AiPreviewDialog, taskParams } from './AiPreviewDialog';
 
@@ -52,6 +53,7 @@ export function AiAction({
   /** An analysis with a dialog of its own (triage, flaky analysis): opened instead of the assistant panel; `request` still gives the estimate and What will be sent. */
   open?(): void;
 }) {
+  const enabled = useAiEnabled();
   const configured = useApp((s) => aiConfigured(s.settings));
   const [previewing, setPreviewing] = useState<AssistantRequest>();
   const [estimate, setEstimate] = useState<string>();
@@ -82,6 +84,8 @@ export function AiAction({
   };
   const title = [hint, configured ? (estimate ?? 'AI: the answer is a suggestion you review') : 'Set up the AI assistant first (Settings ▸ AI assistant)'].filter(Boolean).join('\n');
   const icon = <Sparkles size={12} />;
+  // Settings ▸ AI assistant ▸ Hide all AI actions: the button is not there at all
+  if (!enabled) return null;
   const main =
     variant === 'link' ? (
       <LinkButton icon={icon} onClick={go} onPointerEnter={onHover} title={title} data-ai-action>

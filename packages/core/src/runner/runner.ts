@@ -398,6 +398,8 @@ export async function runTests(opts: RunOptions): Promise<RunSummary> {
    * --concurrency 1); a debugged run goes one step at a time.
    */
   const groups = new Map<string, { n: number; ready: Promise<() => void> }>();
+  /** When the next paced step may start (`pace:`). */
+  let nextPaced = 0;
   const acquire = async (t: TestCase): Promise<() => void> => {
     if (!t.parallel || opts.pauseBefore) return sem.acquire(signal);
     const key = `${t.file ?? ''}|${t.parallel}`;
@@ -521,6 +523,13 @@ export async function runTests(opts: RunOptions): Promise<RunSummary> {
     const release = await acquire(t);
     running++;
     try {
+      // a rate limit (`pace:`): paced steps start at least `paceMs` apart across the run, whatever the concurrency
+      if (t.paceMs) {
+        const now = Date.now();
+        const at = Math.max(now, nextPaced);
+        nextPaced = at + t.paceMs;
+        if (at > now) await sleep(at - now, signal);
+      }
       if (opts.pauseBefore) {
         // the step waits here (nothing of it has started: no timeout runs while the run is paused)
         const answer = await opts.pauseBefore(id, opts.services.vars.toObject());

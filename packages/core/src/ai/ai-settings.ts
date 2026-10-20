@@ -41,6 +41,10 @@ export interface AiSettings {
   dailyTokens?: number;
   /** Most estimated cost per day in this workspace (USD, from the price table); 0 or unset: no cap. */
   dailyBudgetUsd?: number;
+  /** Hide every AI action of the window (menus, buttons, the assistant, shortcuts); the CLI and MCP tools stay explicit calls. */
+  hidden?: boolean;
+  /** Prefer stable checks: suggested checks assert types, formats and presence instead of literal ids, times and tokens. */
+  preferStable?: boolean;
 }
 
 /** The parts of the app settings the AI features read. */
@@ -131,6 +135,8 @@ export function normalizeAiSettings(v: unknown): AiSettings | undefined {
   if (typeof a.localOnly === 'boolean') out.localOnly = a.localOnly;
   if (isPrivacy(a.privacy)) out.privacy = a.privacy;
   if (typeof a.maskPersonalData === 'boolean') out.maskPersonalData = a.maskPersonalData;
+  if (typeof a.hidden === 'boolean') out.hidden = a.hidden;
+  if (typeof a.preferStable === 'boolean') out.preferStable = a.preferStable;
   for (const cap of ['maxTokensPerCall', 'dailyTokens', 'dailyBudgetUsd'] as const) {
     const n = a[cap];
     if (typeof n === 'number' && Number.isFinite(n) && n > 0) out[cap] = n;
@@ -140,3 +146,9 @@ export function normalizeAiSettings(v: unknown): AiSettings | undefined {
 
 /** The privacy level of a call: the call's own, else the settings' default, else full (redacted). */
 export const aiPrivacyOf = (settings: AiSettingsSource, asked?: string): AiPrivacy => (isPrivacy(asked) ? asked : isPrivacy(settings.ai?.privacy) ? settings.ai.privacy : 'full');
+
+/** Whether Settings hides every AI action of the window (the app refuses to run a task then; the CLI and MCP are explicit calls). */
+export const aiHidden = (settings: AiSettingsSource): boolean => settings.ai?.hidden === true;
+
+/** Whether suggested checks prefer stable forms: the call's own choice, else the setting (off by default). */
+export const aiPrefersStable = (settings: AiSettingsSource, asked?: boolean): boolean => (typeof asked === 'boolean' ? asked : settings.ai?.preferStable === true);

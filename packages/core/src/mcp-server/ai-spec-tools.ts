@@ -5,22 +5,16 @@
  * fresh import: names, folders, hosts and tokens as variables, chained ids, tracking requests dropped). They only
  * propose: `ai_apply_proposal` applies, after the user agrees. Without a model the deterministic proposal is returned.
  */
-import { aiRunDeps, runAiTask } from '../ai/tasks/run.js';
-import { isAiSetupError, flowSourceRef } from '../ai/flow-from-collection.js';
+import { flowSourceRef } from '../ai/flow-from-collection.js';
 import { analyseSpec, draftSpecTestsProposal } from '../ai/spec-tests.js';
 import { draftTidyProposal } from '../ai/tidy-import.js';
-import type { Proposal } from '../ai/proposal.js';
-import { createEngineContext } from '../engine.js';
-import { ApsError, normalizeError } from '../errors.js';
+import { ApsError } from '../errors.js';
 import type { AppSettings } from '../model/types.js';
 import { SPEC_CATEGORIES, specGapMarkdown, workspaceSpecGaps } from '../openapi/spec-gaps.js';
 import type { SecretStore } from '../storage/secrets.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
+import { createProposer, PRIVACY, strings } from './ai-propose.js';
 import { str, type Tool } from './tool.js';
-
-const forAgent = (p: Proposal) => ({ ...p, items: p.items.map((i) => ({ ...i, before: i.before && i.before.length > 4000 ? `${i.before.slice(0, 4000)} …` : i.before })) });
-const strings = (v: unknown): string[] | undefined => (Array.isArray(v) ? v.map(String).filter(Boolean) : typeof v === 'string' && v ? v.split(',').map((s) => s.trim()).filter(Boolean) : undefined);
-const PRIVACY = { type: 'string', enum: ['full', 'metadata', 'names'], description: 'full (redacted, default), metadata (shapes and names; no body values), names' };
 
 export function aiSpecTools({ store, secrets, settings }: { store: WorkspaceStore; secrets: SecretStore; settings: AppSettings }): Tool[] {
   const specArg = (a: Record<string, unknown>) => {
@@ -29,47 +23,7 @@ export function aiSpecTools({ store, secrets, settings }: { store: WorkspaceStor
     return spec;
   };
   /** Run a task with the configured model; without one, TestPion's own proposal (with the reason). */
-  async function propose(o: {
-    task: string;
-    item: Parameters<typeof runAiTask>[1]['item'];
-    context?: Record<string, unknown>;
-    a: Record<string, unknown>;
-    draft(reason: string): Promise<Proposal>;
-    next(p: Proposal): string;
-  }) {
-    const ctx = createEngineContext({ store, secrets, settings, environment: o.a.environment ? String(o.a.environment) : undefined });
-    try {
-      if (o.a.noAi === true) {
-        const p = await o.draft('Made without AI (noAi): the deterministic proposal.');
-        return { proposal: forAgent(p), next: o.next(p) };
-      }
-      try {
-        const r = await runAiTask(aiRunDeps({ ctx, settings, store, surface: 'mcp' }), {
-          task: o.task,
-          item: o.item,
-          context: o.context,
-          hint: o.a.hint ? String(o.a.hint) : undefined,
-          privacy: o.a.privacy ? String(o.a.privacy) : undefined,
-          path: o.a.path ? String(o.a.path) : undefined,
-          dryRun: o.a.dryRun === true,
-        });
-        if (r.dryRun) return { dryRun: true, preview: r.preview };
-        const { preview, proposal, ...rest } = r;
-        return {
-          ...rest,
-          sent: { privacy: preview.privacy, contextTokens: preview.context.tokens, masked: preview.redactionCount, local: preview.local },
-          ...(proposal ? { proposal: forAgent(proposal), next: o.next(proposal) } : {}),
-        };
-      } catch (e) {
-        if (!isAiSetupError(e) || o.a.dryRun === true) throw e;
-        const why = normalizeError(e).message;
-        const p = await o.draft(`No AI model is set up (${why}): this is the deterministic proposal.`);
-        return { fallback: why, proposal: forAgent(p), next: o.next(p) };
-      }
-    } finally {
-      await ctx.dispose();
-    }
-  }
+  const propose = createProposer({ store, secrets, settings });
   return [
     {
       name: 'spec_gaps',

@@ -24,7 +24,7 @@ const parseJson = (text?: string) => {
 /** What can be done with the exchange shown: a captured one has every action; a request a mock server received only the first three. */
 export interface ExchangeActions {
   onOpen(): void;
-  onAsk(): void;
+  onAsk?(): void;
   onResend?(): void;
   onBookmark?(): void;
   onDelete?(): void;
@@ -70,9 +70,11 @@ export function ExchangePanes({ e, ...a }: { e: Exchange } & ExchangeActions) {
           <Button size="sm" variant="ghost" icon={<Copy size={12} />} onClick={() => void copyText(curlOf(e), 'as cURL')}>
             cURL
           </Button>
-          <Button size="sm" variant="ghost" icon={<Bot size={12} />} onClick={a.onAsk} title="Ask the AI assistant what this exchange does, why it failed, what to check (sent redacted)">
-            Ask AI
-          </Button>
+          {a.onAsk && (
+            <Button size="sm" variant="ghost" icon={<Bot size={12} />} onClick={a.onAsk} title="Ask the AI assistant what this exchange does, why it failed, what to check (sent redacted)">
+              Ask AI
+            </Button>
+          )}
           {a.onCompare && (
             <Button size="sm" variant="ghost" icon={<Scale size={12} />} onClick={a.onCompare} title="Compare with another exchange: click it next">
               Compare

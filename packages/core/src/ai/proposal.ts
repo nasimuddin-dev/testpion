@@ -15,7 +15,7 @@ import { noteProposalOutcome, type AiSurface } from '../storage/ai-usage.js';
 import { shortId } from '../util/ids.js';
 import { checkedTestFilePath } from '../storage/test-path.js';
 
-export type ProposalItemKind = 'file' | 'flow' | 'assertion' | 'script' | 'request' | 'patch' | 'variable' | 'collection' | 'text';
+export type ProposalItemKind = 'file' | 'flow' | 'assertion' | 'script' | 'request' | 'patch' | 'variable' | 'collection' | 'spec' | 'text';
 
 /** What a verifier said about an item: `pass` (checked and fine), `fail`, `warn`, `skip` (could not check). */
 export interface VerificationBadge {
@@ -34,6 +34,8 @@ export interface ProposalItem {
   target?: ItemRef;
   /** file / flow: the path under tests/ (`smoke/orders.yaml`). */
   path?: string;
+  /** assertion: the step (its id or name) of the test file `path` the check is added to (a check for a request is added to the saved request instead). */
+  step?: string;
   /** The current text (absent for something new). */
   before?: string;
   /** The proposed text (YAML, JSON, JavaScript, Markdown). */
@@ -82,6 +84,8 @@ export interface ProposalUndo {
   collection?: { collectionId: string; before: unknown };
   /** variable: its value in the environment before (null: it was not there). */
   variable?: { environment: string; key: string; before: string | null };
+  /** spec: an API definition of the workspace (specs/…) before the change. */
+  spec?: { path: string; before: string };
 }
 
 export interface Proposal {

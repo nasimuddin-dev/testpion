@@ -588,7 +588,7 @@ export function blockPickerCommands(o: {
   addParallel(): void;
   output(): void;
   fromCollection(): void;
-  generate(): void;
+  generate?(): void;
 }): PaletteCommand[] {
   const saved: PaletteCommand[] = [];
   for (const c of o.collections.filter((x) => !x.problem)) {
@@ -616,7 +616,7 @@ export function blockPickerCommands(o: {
     ...saved,
     ...o.subflows.map((f) => ({ id: `subflow:${f}`, label: f, group: 'Sub-flows', detail: 'Run this flow file as one step', icon: <Workflow size={16} />, run: () => o.add({ name: f.split('/').pop()!.replace(/\.[^.]+$/, ''), type: 'flow', file: f }) })),
     { id: 'more:collection', label: 'From a collection…', group: 'More', detail: 'A folder of saved requests, chained', icon: <FolderInput size={16} />, run: o.fromCollection },
-    { id: 'more:ai', label: 'Generate the flow with AI…', group: 'More', detail: 'Describe the flow; review the YAML', icon: <Sparkles size={16} />, run: o.generate },
+    ...(o.generate ? [{ id: 'more:ai', label: 'Generate the flow with AI…', group: 'More', detail: 'Describe the flow; review the YAML', icon: <Sparkles size={16} />, run: o.generate }] : []),
   ];
   // the blocks' groups in their order (a command of a group may be written apart from the others)
   const rank = ['Requests', 'Logic', 'Data', 'Flow', 'Saved requests', 'Sub-flows', 'More'];

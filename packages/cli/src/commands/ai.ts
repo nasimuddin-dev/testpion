@@ -24,6 +24,7 @@ import { bold, cliContext, CliError, cyan, dim, EXIT, green, printJson, red, wit
 import { machine } from '../output.js';
 import { dryRunActive } from '../dry-run.js';
 import { registerAiTriageCommands } from './ai-triage.js';
+import { registerAiScriptCommand } from './ai-script.js';
 
 /** The surface a CLI call is recorded under in the usage ledger: CI when the pipeline says so. */
 const surface = () => (process.env.CI ? 'ci' : 'cli') as 'ci' | 'cli';
@@ -67,7 +68,7 @@ export function printProposal(p: Proposal, o: { applied?: boolean; findings?: bo
   for (const n of p.notes ?? []) console.log(yellow(`  note: ${n}`));
   for (const i of p.items) {
     // the path once: an item titled by its file (a flow, a test file) does not repeat it
-    const where = i.path && !i.title.includes(i.path) ? dim(`  tests/${i.path}`) : '';
+    const where = i.path && !i.title.includes(i.path) ? dim(`  ${i.kind === 'spec' ? i.path : `tests/${i.path}`}`) : '';
     console.log(`  ${i.selected ? '[x]' : '[ ]'} ${i.id}  ${i.title}${where}`);
     for (const b of i.verification) console.log(`        ${badge(b.status)} ${b.label}${b.detail ? dim(` — ${b.detail.split('\n')[0]}`) : ''}`);
   }
@@ -109,6 +110,7 @@ function printFlakyFinding(r: FlakyReport): void {
 export function registerAiCommands(program: Command): void {
   const ai = program.command('ai').description('AI tasks with your own model (or a local one): explain, generate tests and flows as proposals you apply; triage failed runs, analyse flaky tests; usage and caps');
   registerAiTriageCommands(ai);
+  registerAiScriptCommand(ai);
 
   ai.command('tasks')
     .description('list the AI tasks: what each does, its tier (small/large model), its output and whether it proposes changes')
@@ -132,6 +134,8 @@ export function registerAiCommands(program: Command): void {
     .option('--path <file>', 'where a generated test file goes, under tests/ (default tests/ai/<name>.yaml)')
     .option('--target <ref>', 'where a generated request goes: collection:<id> or folder:<c>:<f>')
     .option('--max-tokens <n>', 'most output tokens', (v) => Number(v))
+    .option('--prefer-stable', 'checks tasks: prefer types, formats and presence over literal ids, times and tokens (default: the AI setting preferStable)')
+    .option('--no-prefer-stable', 'checks tasks: do not (overrides the AI setting)')
     .option('--dry-run', 'send nothing: print what would be sent (messages, sections, tokens, cost, what was masked)')
     .option('--apply', 'apply the proposal right away (the ticked items; --items to choose)')
     .option('--items <ids>', 'with --apply: the items to apply, comma-separated (i1,i3)')
@@ -153,6 +157,7 @@ export function registerAiCommands(program: Command): void {
           path?: string;
           target?: string;
           maxTokens?: number;
+          preferStable?: boolean;
           dryRun?: boolean;
           apply?: boolean;
           items?: string;
@@ -203,6 +208,7 @@ export function registerAiCommands(program: Command): void {
                   path: o.path,
                   target: ref(o.target, '--target'),
                   maxTokens: o.maxTokens,
+                  ...(typeof o.preferStable === 'boolean' ? { preferStable: o.preferStable } : {}),
                   dryRun: o.dryRun,
                 },
               );

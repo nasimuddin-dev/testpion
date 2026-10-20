@@ -1,4 +1,5 @@
 import { startFlowGenerate } from './ai/flow-generate';
+import { useAiEnabled } from '../lib/use-ai-enabled';
 import {
   FileSpreadsheet,
   GanttChart,
@@ -427,6 +428,7 @@ export function FlowDesigner({
     setPicking(false);
     await apply({ op: 'addFromCollection', collection, items: [item], chain: true, ...placeNew() }, { select: true });
   };
+  const aiOn = useAiEnabled();
   /** Generate with AI (AI-1): from a collection or folder, or described in words; the review's Accept replaces this file in one undo step. */
   const generate = () =>
     startFlowGenerate({
@@ -704,7 +706,7 @@ export function FlowDesigner({
         setTimeout(() => document.querySelector<HTMLInputElement>('[data-flow-output] input[aria-label="New name"]')?.focus(), 50);
       },
       fromCollection: () => setPicking(true),
-      generate,
+      generate: aiOn ? generate : undefined,
     });
 
   /* ---------------------------------------------------------------- the Start node and Deploy */
@@ -753,7 +755,7 @@ export function FlowDesigner({
           { id: 'example', label: 'API example', icon: <Globe size={14} />, tone: 'var(--ok)', title: 'A ready request to a public API with an extract and a check: Run flow works at once', onClick: () => addStep(API_EXAMPLE) },
           { id: 'collection', label: 'Create from collection', icon: <FolderInput size={14} />, tone: 'var(--warn)', title: 'Saved requests (or a folder, chained)', onClick: () => setPicking(true) },
           { id: 'record', label: 'Record from the Debugger', icon: <Bug size={14} />, tone: 'var(--bad)', title: 'Use your app; the exchanges become steps', onClick: () => useApp.getState().openIntent('debugger', { record: true }) },
-          { id: 'ai', label: 'Generate with AI', icon: <Sparkles size={14} />, tone: 'oklch(0.62 0.18 300)', title: 'From a collection or folder, or described in words: the AI writes it, you review it', onClick: generate },
+          ...(aiOn ? [{ id: 'ai', label: 'Generate with AI', icon: <Sparkles size={14} />, tone: 'oklch(0.62 0.18 300)', title: 'From a collection or folder, or described in words: the AI writes it, you review it', onClick: generate }] : []),
         ],
   };
   // the toolbar's less used actions: buttons on a wide canvas, the ⋯ menu on a narrow one

@@ -19,6 +19,10 @@ import { describeTriage, prepareTriage, proposeTriage, TRIAGE_SCHEMA } from '../
 import { describeFlaky, FLAKY_SCHEMA, prepareFlaky, proposeFlaky } from '../flaky.js';
 import { describeTidy, prepareTidyContext, proposeTidy, TIDY_PLAN_SCHEMA, TIDY_VERIFIERS } from '../tidy-import.js';
 import { describeSpecTests, prepareSpecContext, proposeSpecTests, SPEC_PLAN_SCHEMA, SPEC_TEST_VERIFIERS } from '../spec-tests.js';
+import { prepareChecksItem, proposeChecksItems } from '../result-checks.js';
+import { describeScript, prepareScriptContext, proposeScript, SCRIPT_PLAN_SCHEMA, SCRIPT_VERIFIERS } from '../write-script.js';
+import { describeDrift, DRIFT_PLAN_SCHEMA, DRIFT_VERIFIERS, prepareDriftContext, proposeDrift } from '../contract-drift.js';
+import { describeSecurity, prepareSecurityContext, proposeSecurity, SECURITY_PLAN_SCHEMA, SECURITY_VERIFIERS } from '../security-tests.js';
 import { VERDICT_SCHEMA } from '../../eval/rag/judge-prompts.js';
 import { NL_SEARCH_SCHEMA, validateNlSearch } from '../nl-search.js';
 import { describeFlow, FLOW_PLAN_SCHEMA, FLOW_VERIFIERS, prepareFlowContext, proposeFlow } from '../flow-from-collection.js';
@@ -40,6 +44,8 @@ export interface AiTaskInput {
   local?: unknown;
   /** A short name of what it is about ("Orders / Refunds"). */
   label?: string;
+  /** "Prefer stable checks" is on for this call (the setting, or the caller's choice). */
+  preferStable?: boolean;
 }
 
 /** What a task's own `prepare` reads from the workspace for an item (instead of the generic item context). */
@@ -54,10 +60,12 @@ export interface PreparedItem {
   /** Where a generated file goes when the caller names none. */
   path?: string;
   response?: StoredResponse;
+  /** The response before it (a check that passes on `response` but not on it pins a value that changes). */
+  previous?: StoredResponse;
 }
 
 /** A proposal item before ids, verification and selection are added. */
-export type DraftItem = Omit<ProposalItem, 'id' | 'verification' | 'selected'>;
+export type DraftItem = Omit<ProposalItem, 'id' | 'verification' | 'selected'> & { selected?: boolean };
 
 export interface AiTaskDef {
   id: string;
@@ -95,6 +103,10 @@ export interface AiTaskDef {
   temperature?: number;
   /** Other ids it answers to (`suggest-assertions` for generate-assertions). */
   aliases?: string[];
+  /** `prepare` reads an item when one is given; the task also runs without one (the caller passes the context). */
+  itemOptional?: boolean;
+  /** It writes checks: "Prefer stable checks" (Settings, or the call's own choice) adds its sentence to the instruction. */
+  stable?: boolean;
   /** Reads its own context for a workspace item (else the generic item context, item-context.ts). */
   prepare?(store: WorkspaceStore, item: ItemRef, o: { path?: string; privacy: AiPrivacy; context?: Record<string, unknown> }): Promise<PreparedItem> | PreparedItem;
   /** The summary, assumptions, notes and findings of a JSON task's proposal (what the review shows above the items). */
@@ -326,19 +338,21 @@ export const AI_TASKS: readonly AiTaskDef[] = [
     propose: textItem('text', 'Commit message'),
   }),
   T('generate-assertions', {
-    version: 4,
+    version: 5,
     format: 'checks',
     aliases: ['suggest-assertions'],
+    stable: true,
+    itemOptional: true,
     title: 'Suggest assertions',
     description:
-      'Checks for a response (status, fields, types) as JSON, each verified against the response it was written for (and the one before it): unstable values are flagged with a safer form.',
+      'Checks for a response (status, fields, types) as JSON, each verified against the response it was written for (and the one before it): unstable values are flagged with a safer form; "Prefer stable checks" (a setting, or preferStable) asks for types and formats over literal ids and times. From a run result (run:<runId>:<resultId>) they are made for the response the run stored and join the request or the step of the test file that produced it.',
     tier: 'large',
     output: { kind: 'json', schema: CHECKS_SCHEMA },
-    context: 'request (method, url), status, headers, body (the response the checks are for); item: request:<c>:<r> uses its latest response',
+    context: 'request (method, url), status, headers, body (the response the checks are for); item: request:<c>:<r> uses its latest response, run:<runId>:<resultId> the response a run stored for that result, history:<id> that exchange',
     sectionBudgets: { body: 3000 },
     verifiers: ['checks'],
-    propose: (a, input) =>
-      checksOfValue(a.value).map((c) => ({ kind: 'assertion', title: checkLabel(c), after: toYaml([c]).trim(), language: 'yaml', data: c, ...(requestOf(input) ? { target: requestOf(input) } : {}) })),
+    prepare: (store, item) => prepareChecksItem(store, item),
+    propose: (a, input) => proposeChecksItems(checksOfValue(a.value), input, requestOf(input)),
   }),
   T('generate-pm-tests', {
     version: 4,
@@ -422,6 +436,70 @@ export const AI_TASKS: readonly AiTaskDef[] = [
     prepare: (store, item, o) => prepareSpecContext(store, item, o),
     propose: proposeSpecTests,
     describe: describeSpecTests,
+  }),
+  T('security-tests', {
+    version: 1,
+    title: 'Security tests',
+    description:
+      "OWASP API security tests for a collection or folder as one test file with deterministic verdicts: BOLA (a second user repeats the owner's request), broken authentication (no credentials, an invalid token), mass assignment (privileged fields added to a body) and function-level authorization (a lower-privilege user calls an owner's function). The model only proposes which saved requests to probe and which variables hold the principals' credentials; TestPion writes the steps from the saved requests and the verdicts are checks computed from the responses (a status that must be 401/403/404, a value that must not appear, a field that must not be echoed). Safe by design: read-only unless write or delete probes are asked for, paced, capped, refuses a production environment, nothing runs until the person runs the file.",
+    tier: 'large',
+    output: { kind: 'json', schema: SECURITY_PLAN_SCHEMA },
+    context:
+      'item: collection:<id> or folder:<collectionId>:<folderId> (its HTTP requests with auth type, header and query names, body shape and saved examples; the deterministic draft); context.options {probes, identities {owner, other}: variable names, includeWrite, includeDelete, rate, max, environment}',
+    contextTokens: 12_000,
+    sectionBudgets: { requests: 8000, draft: 1500 },
+    maxTokens: 6000,
+    variableNames: false,
+    verifiers: SECURITY_VERIFIERS,
+    prepare: (store, item, o) => prepareSecurityContext(store, item, o),
+    propose: proposeSecurity,
+    describe: describeSecurity,
+  }),
+  T('contract-drift', {
+    version: 1,
+    title: 'Contract drift explained',
+    description:
+      "An OpenAPI document compared with real traffic (History, a HAR file or a run's stored responses): TestPion finds the drift itself (an endpoint, status or content type the document lacks; a field it does not have; a type that differs; a required field that is missing; a null it forbids; an enum value outside it), the model explains the impact and says who is right and what to do per finding, and the fix is a reviewed proposal — a spec patch TestPion makes from what was observed (never written by the model), or a contract check pinned to the saved request. Every patch is verified against the same traffic: the drift must be gone, no other drift may appear, and the document must lint no worse.",
+    tier: 'large',
+    output: { kind: 'json', schema: DRIFT_PLAN_SCHEMA },
+    context:
+      'item: spec:<path> (an API definition under specs/); context.options.source {kind: history {limit, host, requestId} | har {path, text} | run {runId}} (default: History, newest 300). The context holds the findings, never the traffic',
+    contextTokens: 12_000,
+    sectionBudgets: { findings: 7000, schemas: 3000 },
+    maxTokens: 6000,
+    verifiers: DRIFT_VERIFIERS,
+    prepare: (store, item, o) => prepareDriftContext(store, item, o),
+    propose: proposeDrift,
+    describe: describeDrift,
+  }),
+  T('write-script', {
+    version: 1,
+    format: 'script',
+    itemOptional: true,
+    title: 'Write a script',
+    description:
+      "A pre-request or post-response script from a description (or a script that threw, fixed with its error and logs), written for the tp.* script API as the sandbox has it (never pm.*) and run once in the sandbox before it is offered: the static check names every member that does not exist, the dry run says what it did (variables set, headers or URL changed, tests run) and a script that throws is repaired, not offered as ready.",
+    tier: 'large',
+    output: { kind: 'json', schema: SCRIPT_PLAN_SCHEMA },
+    context:
+      'question: what the script should do; context {phase: pre | test, script: the one on screen, error, logs, request {method, url, headers, body}, status, headers, body}; item: request:<c>:<r> reads its request and latest response; variable names are added',
+    variableNames: true,
+    sectionBudgets: { body: 3000, script: 3000 },
+    maxTokens: 3000,
+    verifiers: SCRIPT_VERIFIERS,
+    prepare: (store, item, o) => prepareScriptContext(store, item, o),
+    propose: proposeScript,
+    describe: describeScript,
+  }),
+  T('explain-script', {
+    version: 1,
+    format: 'script',
+    title: 'Explain a script',
+    description: 'What a tp.* script does, which variables it reads and sets, and what would go wrong (members that do not exist, pm.* names, async code), with the fix for an error.',
+    tier: 'small',
+    output: md,
+    context: 'script (the code), phase, error and logs (when it failed), the request and response it runs on',
+    sectionBudgets: { script: 4000 },
   }),
   T('tidy-import', {
     version: 1,

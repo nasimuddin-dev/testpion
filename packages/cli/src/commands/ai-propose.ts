@@ -16,6 +16,8 @@ export interface ProposeOptions {
   item: Parameters<typeof runAiTask>[1]['item'];
   context?: Record<string, unknown>;
   hint?: string;
+  /** What to generate (a description). */
+  question?: string;
   privacy?: string;
   path?: string;
   provider?: string;
@@ -24,7 +26,7 @@ export interface ProposeOptions {
   dryRun?: boolean;
   apply?: boolean;
   /** TestPion's own proposal (no model set up, `--no-ai`). */
-  draft(reason: string): Promise<Proposal>;
+  draft?(reason: string): Promise<Proposal>;
   /** What to print after the proposal when it was applied. */
   appliedHint(p: Proposal): string;
   /** The text shown above the proposal (the file or the outline it proposes). */
@@ -37,14 +39,17 @@ export async function proposeCommand(o: ProposeOptions): Promise<void> {
   let proposal: Proposal | undefined;
   let result: AiTaskResult | undefined;
   let fallback: string | undefined;
-  if (o.ai === false) proposal = await o.draft('Made without AI (--no-ai): the deterministic proposal.');
-  else
+  if (o.ai === false) {
+    if (!o.draft) throw normalizeError(new Error('--no-ai: TestPion makes nothing of this without a model'));
+    proposal = await o.draft('Made without AI (--no-ai): the deterministic proposal.');
+  } else
     try {
       result = await runAiTask(aiRunDeps({ ctx: o.ctx, settings, store: o.store, surface, env: process.env }), {
         task: o.task,
         item: o.item,
         context: o.context,
         hint: o.hint,
+        question: o.question,
         privacy: o.privacy,
         path: o.path,
         provider: o.provider,
@@ -54,7 +59,7 @@ export async function proposeCommand(o: ProposeOptions): Promise<void> {
       proposal = result.proposal;
     } catch (e) {
       // no model set up: what TestPion builds itself (AI is an upgrade, not a dependency)
-      if (!isAiSetupError(e) || o.dryRun) throw e;
+      if (!isAiSetupError(e) || o.dryRun || !o.draft) throw e;
       fallback = normalizeError(e).message;
       proposal = await o.draft(`No AI model is set up (${fallback}): this is the deterministic proposal.`);
     }

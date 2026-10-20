@@ -114,6 +114,20 @@ export function findingsOutputSpec(findings: ProposalFinding[], title: string): 
   };
 }
 
+/** A security test run (AI-8): the report as Markdown, or the verdicts as JSON. Part of the API reports surface. */
+export function securityOutputSpec(report: { markdown: string; verdicts: unknown[] } | undefined): OutputSpec {
+  if (!report) return { id: 'api.reports', what: 'report', name: 'security-tests', formats: [], empty: 'Run the tests first' };
+  return {
+    id: 'api.reports',
+    what: 'report',
+    name: 'security-tests',
+    formats: [
+      { key: 'md', format: 'md', label: 'Report (Markdown)', default: true, build: () => report.markdown },
+      { key: 'json', format: 'json', label: 'Verdicts (JSON)', build: () => jsonPretty(report) },
+    ],
+  };
+}
+
 /** A proposal under review: the document of what the model proposes, the same as JSON, or the changes as one patch. */
 export function proposalOutputSpec(p: Proposal): OutputSpec {
   const patch = () =>

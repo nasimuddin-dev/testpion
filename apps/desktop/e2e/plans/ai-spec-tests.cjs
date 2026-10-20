@@ -110,6 +110,7 @@ const steps = [
     `await __t.requests();
      const row = await __t.waitFor(() => [...document.querySelectorAll('aside [data-tree-row]')].find((r) => r.offsetParent && r.textContent.includes('e2e-shop.yaml')), 5000); if (!row) return 'NO ROW e2e-shop.yaml';
      await __t.real.rightClick(row);
+     const aiMenu = await __t.waitFor(() => [...document.querySelectorAll('[role=menuitem]')].find((m) => m.textContent.trim() === 'AI'), 3000); if (!aiMenu) return 'NO AI submenu'; await __t.real.click(aiMenu);
      const item = await __t.waitFor(() => [...document.querySelectorAll('[role=menuitem]')].find((m) => m.textContent.trim() === 'Generate tests from this spec…'), 3000); if (!item) return 'NO MENU item';
      await __t.real.click(item);
      const d = await __t.waitFor(() => dlg(), 4000); if (!d) return 'NO DIALOG';

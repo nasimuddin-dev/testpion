@@ -59,7 +59,7 @@ const tokensOf = (v: unknown) => estimateTokens(JSON.stringify(v, null, 2) ?? ''
 const BODY_KEY = /^(body|bodyPreview|bodyText|rawBody|requestBody|responseBody|content|json|payload|data|output|input|example|examples|text|result|value|values|message_?body|lastSeconds|series)$/i;
 /** Keys whose (short) string values are names, kinds or statuses: kept at every level. */
 const NAME_KEY =
-  /^(name|title|label|method|kind|type|status|statusText|severity|category|rule|check|operationId|tool|task|protocol|environment|tag|tags|code|codeName|contentType|id|ref|folder|collection|step|file|path)$/i;
+  /^(name|title|label|method|kind|type|status|statusText|severity|category|rule|check|operationId|operation|pointer|tool|task|protocol|environment|tag|tags|code|codeName|contentType|id|ref|folder|collection|step|file|path)$/i;
 /** Numbers that say what happened (status, counts, times): kept at `names` too. */
 const NUMBER_KEY = /(status|code|count|total|passed|failed|errors|skipped|ms|duration|latency|p\d\d|tokens|size|iterations|attempts|line|users|rps|rate)/i;
 
@@ -132,7 +132,7 @@ export function applyPrivacy(v: unknown, level: AiPrivacy, key = '', depth = 0):
   if (typeof v !== 'string') return typeof v;
   if (looksUrl(v)) return level === 'metadata' ? stripQueryValues(v) : pathOnly(v);
   if (NAME_KEY.test(key) && v.length <= 200) return /^(url|path)$/i.test(key) && level === 'names' ? pathOnly(v) : v;
-  if (level === 'metadata' && v.length <= 160 && /^(message|error|why|what|reason|description|summary|hint|expected|actual|where)$/i.test(key)) return v;
+  if (level === 'metadata' && v.length <= 160 && /^(message|error|why|what|reason|description|summary|hint|expected|actual|where|observed)$/i.test(key)) return v;
   return v.length ? `string (${v.length} chars)` : '';
 }
 

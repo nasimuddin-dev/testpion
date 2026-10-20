@@ -809,6 +809,36 @@ testpion tidy "HAR import" --ai --flow --apply
 
 `testpion tidy <collection> --ai` proposes the clean-up of an import as separate, verified changes: names and folders, a host and a repeated token as variables, ids chained from the response that returns them (`tp.*` scripts), tracking, static and duplicate requests dropped, optionally a flow (`--flow`). Every remaining request sends exactly what it sent before. Options: `--source <format>`, `--hint`, `--privacy`, `--provider`, `--model`, `--no-model` (only what TestPion finds itself), `--dry-run` (send nothing), `--apply` (the ticked changes; `testpion ai undo <id>` reverts), `-e`. `--dry-run` without `--ai` reports what `--remove-*` would remove. See [Tidy an import](/ai-testing/ai-features#tidy-an-import).
 
+## `security generate` and `security run`
+
+```bash
+testpion security generate --collection "Veterinary API" --identities owner=tokenA,other=tokenB -e staging
+testpion security generate --collection "Veterinary API" --folder Patients --include-write --apply
+testpion security run security/veterinary-api.yaml -e staging
+```
+
+`generate` proposes OWASP API probes (BOLA, broken authentication, mass assignment, admin functions) as one test file; the model chooses what to probe, TestPion writes the steps and every verdict is a check computed from the responses. `--identities` names the variables that hold the two users' credentials (names only); GET requests only unless `--include-write` / `--include-delete`; `--probes`, `--rate` (requests a second, default 4), `--max` (default 40); `--no-ai`, `--dry-run`, `--apply`, `--json` as `generate tests`. `run` runs a generated file one step at a time and prints a verdict per step (finding, pass, inconclusive), exit code 1 on a finding. Both refuse an environment marked as production unless `--allow-production`.
+
+## `openapi-drift`
+
+```bash
+testpion openapi-drift --spec specs/veterinary-api.yaml --limit 200
+testpion openapi-drift --spec specs/veterinary-api.yaml --har captures/day.har --ai
+testpion openapi-drift --spec specs/veterinary-api.yaml --run last --propose --apply
+```
+
+Compares an OpenAPI document with real traffic (`--har <file>`, `--run <id>`, else History with `--limit`, `--host`, `--request`) and reports the drift without a model. `--ai` has the configured model explain each finding and propose the fix (a spec patch made from what was observed, a contract check), verified against the same traffic; `--propose` offers TestPion's own patches; `--apply` writes the ticked ones (`testpion ai undo <id>` restores the file); `--dry-run`, `--privacy`, `--hint`, `--json`.
+
+## `ai script`
+
+```bash
+testpion ai script --describe "send a fresh nonce in an X-Nonce header" --phase pre
+testpion ai script --request request:veterinary-api:req-list --describe "save the first order id" --apply
+testpion ai script --script login.js --error "TypeError: …" --describe "fix it"
+```
+
+Writes a `tp.*` script (never `pm.*`) and runs it once in the sandbox before offering it; the proposal says what it did. `--request` makes the saved request the context (and the target of `--apply`), `--phase pre|post`, `--mode append`. Checks tasks also take `--prefer-stable` on `testpion ai run`.
+
 ## `flow from-har`
 
 ```bash

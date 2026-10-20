@@ -1,7 +1,8 @@
-import { fullMenuContext, nodeMenuEntries, type ActionId, type MenuLabelKey, type NodeKind } from '@testpion/shared';
+import { foldsAiItems, fullMenuContext, nodeMenuEntries, type ActionId, type MenuLabelKey, type NodeKind } from '@testpion/shared';
 import type { MenuItem } from '../components/ui';
 import { icon, type Act, type NodeMenuCtx } from './node-menu-actions';
 import { LABEL } from './vocabulary';
+import { aiHidden } from './ai-visible';
 
 export { MENU_GROUPS, NODE_KINDS, baseKind, nodeCapabilities } from '@testpion/shared';
 export type { Act, ActionDef, ActionId, NodeKind, NodeMenuCtx } from './node-menu-actions';
@@ -22,11 +23,12 @@ const text = (key: MenuLabelKey): string => LABEL[key];
 
 /** A node's menu group by group (empty groups included), in MENU_GROUPS order. */
 export function nodeMenuGroups(kind: NodeKind, ctx: NodeMenuCtx): Array<{ group: MenuGroup; items: MenuItem[] }> {
-  return nodeMenuEntries(kind, ctx).map(({ group, entries }) => {
+  // Settings ▸ Hide all AI actions: the items from the one AI table are left out (lib/ai-visible.ts)
+  return nodeMenuEntries(kind, { ...ctx, aiHidden: ctx.aiHidden ?? aiHidden() }).map(({ group, entries }) => {
     const items: MenuItem[] = group === 'create' ? [...(ctx.create ?? [])] : [];
-    for (const e of entries) {
+    const asItem = (e: (typeof entries)[number]): MenuItem => {
       const act = ctx.on[e.def.id as ActionId] as Act;
-      items.push({
+      return {
         label: text(e.label),
         icon: icon(e.def.icon),
         ...(e.def.danger ? { danger: true } : {}),
@@ -34,7 +36,18 @@ export function nodeMenuGroups(kind: NodeKind, ctx: NodeMenuCtx): Array<{ group:
         onSelect: typeof act === 'function' ? () => void act() : () => undefined,
         ...(Array.isArray(act) ? { items: act } : {}),
         ...(e.disabled ? { disabled: true, title: e.disabled } : {}),
-      });
+      };
+    };
+    // A node with several AI items (a collection: flow, security tests, tidy; an API definition: tests, traffic) keeps them in
+    // one "AI ▸" submenu, so the menu stays short and the AI actions are together; a single AI item stays where it is.
+    const ai = entries.filter((e) => e.def.ai);
+    const fold = foldsAiItems(entries);
+    for (const e of entries) {
+      if (fold && e.def.ai) {
+        if (e === ai[0]) items.push({ label: LABEL.aiActions, icon: icon('sparkles'), onSelect: () => undefined, items: ai.map(asItem) });
+        continue;
+      }
+      items.push(asItem(e));
     }
     return { group, items };
   });

@@ -19,6 +19,7 @@ export * from './item-kinds.js';
 export * from './git-marks.js';
 export * from './rag.js';
 export * from './node-menu.js';
+export * from './ai-actions.js';
 export * from './production.js';
 export * from './run-status.js';
 export * from './response-diff.js';

@@ -47,10 +47,10 @@ environment variable only).
 |---|---|---|---|
 | B-10 | AI-4 tests from an OpenAPI spec, gap-driven (positive/negative/boundary/security) + "From a spec" in the flow generate dialog | ai-features.md | todo |
 | B-11 | AI-10 import cleanup (Postman/curl/HAR → tidy collection + flows, variables, chaining) | ai-features.md | todo |
-| B-12 | Flow leftovers: per-step diff vs the deterministic draft in the flow review; Tests-view generators from a run's stored response; "Prefer stable checks" setting | ai-features.md | todo |
-| B-13 | AI-8 security tests (BOLA/auth/mass-assignment, deterministic verdicts) | ai-features.md | todo |
-| B-14 | AI-9 contract drift explained (spec vs traffic) | ai-features.md | todo |
-| B-15 | AI-6 tp.* script helper + one registry for right-click "… with AI" items + setting to hide all AI actions | ai-features.md | todo |
+| B-12 | Flow leftovers: per-step diff vs the deterministic draft in the flow review; Tests-view generators from a run's stored response; "Prefer stable checks" setting | ai-features.md | done (0.55) |
+| B-13 | AI-8 security tests (BOLA/auth/mass-assignment, deterministic verdicts) | ai-features.md | done (0.55) |
+| B-14 | AI-9 contract drift explained (spec vs traffic) | ai-features.md | done (0.55) |
+| B-15 | AI-6 tp.* script helper + one registry for right-click "… with AI" items + setting to hide all AI actions | ai-features.md | done (0.55) |
 
 ### P1 · consistency foundation (one registry for menus, export/import, git, import)
 

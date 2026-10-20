@@ -1,3 +1,4 @@
+import { startAi } from './ai/AiAction';
 import { startFlowGenerate, startTidyImport } from './ai/flow-generate';
 import { Download, FilePlus2, Undo2 } from 'lucide-react';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
@@ -417,6 +418,7 @@ export const CollectionTree = memo(function CollectionTree({
         ci: () => useApp.getState().set({ ci: { collection: c.id } }),
         testFile: () => void saveAsTest({ ref, name: c.name }),
         flow: () => startFlowGenerate({ source: { collectionId: c.id }, mode: 'collection' }),
+        securityTests: () => startFlowGenerate({ source: { collectionId: c.id }, mode: 'security' }),
         ...(onSettings ? { collectionSettings: () => onSettings(c) } : {}),
         convertScripts: () => void convertScripts(c, 'tp'),
         tidyImport: () => startTidyImport({ collectionId: c.id }),
@@ -444,6 +446,7 @@ export const CollectionTree = memo(function CollectionTree({
         ci: () => useApp.getState().set({ ci: { collection: c.id, folders: [n.id] } }),
         testFile: () => void saveAsTest({ ref, name: n.name }),
         flow: () => startFlowGenerate({ source: { collectionId: c.id, folderId: n.id }, mode: 'collection' }),
+        securityTests: () => startFlowGenerate({ source: { collectionId: c.id, folderId: n.id }, mode: 'security' }),
         editFolder: () => void fullCollection(c).then((whole) => setEditing({ c: whole, folder: wholeNode(whole, n) }), toastError),
         rename: () => void renameNode(c, n),
         duplicate: () => change(c, (c) => ({ ...c, items: duplicateNode(c.items, n.id, (x) => ({ ...withNewIds(x), name: `${x.name} copy` })) })),
@@ -467,6 +470,7 @@ export const CollectionTree = memo(function CollectionTree({
         ...(n.kind === 'http' ? { copyAs: requestCopyItems(c, n) } : {}),
         monitor: () => useApp.getState().openIntent('monitors', { create: { collectionId: c.id, selection: [n.id] } }),
         testFile: () => void saveAsTest({ ref, name: n.name }),
+        suggestChecks: () => startAi({ task: 'generate-assertions', title: `Suggested checks for ${n.name}`, context: {}, item: ref, autoReview: true }),
         historyInGit: () => setHistoryFor({ c, n }),
         rename: () => void renameNode(c, n),
         duplicate: () => change(c, (c) => ({ ...c, items: duplicateNode(c.items, n.id, (y) => ({ ...y, id: uid('req-'), name: `${y.name} copy` })) })),

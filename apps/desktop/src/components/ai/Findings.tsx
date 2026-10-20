@@ -3,6 +3,10 @@ import { useMemo } from 'react';
 import type { ProposalFinding } from '@testpion/core';
 import { RefLink } from '../RefLink';
 import { Badge } from '../ui';
+import { plural } from '../../lib/format';
+
+/** The kinds of contract-drift findings: they count responses, not failures. */
+const DRIFT = new Set(['drift', 'spec-outdated', 'api-bug', 'test-stale', 'intended']);
 import { OutputActions } from '../output/OutputFrame';
 import { findingsOutputSpec } from '../output/ai-specs';
 
@@ -22,8 +26,12 @@ const KIND: Record<string, string> = {
   'rate-limit': 'Rate limit',
   'data-collision': 'Data collision',
   unknown: 'Unclear',
+  'spec-outdated': 'Document outdated',
+  'api-bug': 'API bug',
+  intended: 'Intended',
+  drift: 'Drift',
 };
-const TONE: Record<string, 'bad' | 'warn' | 'accent' | 'default'> = { 'api-regression': 'bad', auth: 'warn', environment: 'warn', 'stale-test': 'accent', flaky: 'warn', timing: 'warn' };
+const TONE: Record<string, 'bad' | 'warn' | 'accent' | 'default'> = { 'api-bug': 'bad', 'spec-outdated': 'accent', drift: 'warn', 'api-regression': 'bad', auth: 'warn', environment: 'warn', 'stale-test': 'accent', flaky: 'warn', timing: 'warn' };
 
 /**
  * What an AI analysis found (AI-2 causes of failures, AI-5 why a test is flaky): one block per finding — its kind, how
@@ -41,7 +49,7 @@ export function Findings({ findings, fixes, title }: { findings: ProposalFinding
             <Lightbulb size={13} className="text-accent shrink-0" />
             <span className="font-medium min-w-0 break-words">{f.title}</span>
             <Badge tone={TONE[f.kind] ?? 'default'}>{KIND[f.kind] ?? f.kind}</Badge>
-            {f.count !== undefined && <span className="text-xs text-muted">{f.count === 1 ? '1 failure' : `${f.count.toLocaleString()} failures`}</span>}
+            {f.count !== undefined && <span className="text-xs text-muted">{plural(f.count, DRIFT.has(f.kind) ? 'response' : 'failure')}</span>}
             {typeof f.confidence === 'number' && (
               <span className="text-xs text-muted" title="The model's own confidence">
                 {Math.round(f.confidence * 100)}% sure

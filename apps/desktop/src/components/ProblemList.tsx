@@ -1,5 +1,5 @@
 import { Fragment, useState } from 'react';
-import { AlertCircle, AlertTriangle, ChevronRight, Info, Play, Sparkles } from 'lucide-react';
+import { AlertCircle, AlertTriangle, ChevronRight, Info, Play } from 'lucide-react';
 import { call } from '../api';
 import { toastError, useApp } from '../store';
 import { openRef } from '../lib/open-ref';
@@ -7,7 +7,8 @@ import { runAgain } from '../lib/run-again';
 import { askAboutProblem, type Problem } from '../lib/problems';
 import { timeAgo } from '../lib/format';
 import { RowMenu } from './TreeParts';
-import { flakyTestItem, triageRunItem } from './ai/ai-analysis';
+import { flakyTestItems, triageRunItems } from './ai/ai-analysis';
+import { aiMenuItems } from '../lib/ai-menu';
 import { LABEL } from '../lib/vocabulary';
 import { cx, type MenuItem } from './ui';
 
@@ -33,9 +34,9 @@ export function problemActions(p: Problem): MenuItem[] {
     ...(p.kind === 'run' && p.ref.kind === 'run' ? [{ label: LABEL.runAgain, icon: <Play size={14} />, onSelect: () => void runAgain(p.ref.runId!) }] : []),
     ...(p.kind === 'monitor' && p.ref.monitorId ? [{ label: 'Run now', icon: <Play size={14} />, onSelect: () => runMonitor(p.ref.monitorId!) }] : []),
     // a failed run (the latest, or a failing monitor's): explain and fix its failures; a flaky test: why
-    ...((p.kind === 'run' || p.kind === 'monitor') && p.ref.runId ? [triageRunItem(p.ref.runId, { separator: true })] : []),
-    ...(p.kind === 'flaky' && (p.ref as { testId?: string }).testId ? [flakyTestItem((p.ref as { testId: string }).testId, { separator: true })] : []),
-    { label: 'Ask AI', icon: <Sparkles size={14} />, separator: !((p.kind === 'run' || p.kind === 'monitor') && p.ref.runId) && p.kind !== 'flaky', onSelect: () => askAboutProblem(p) },
+    ...((p.kind === 'run' || p.kind === 'monitor') && p.ref.runId ? triageRunItems(p.ref.runId, { separator: true }) : []),
+    ...(p.kind === 'flaky' && (p.ref as { testId?: string }).testId ? flakyTestItems((p.ref as { testId: string }).testId, { separator: true }) : []),
+    ...aiMenuItems('askProblem', () => askAboutProblem(p), { separator: !((p.kind === 'run' || p.kind === 'monitor') && p.ref.runId) && p.kind !== 'flaky' }),
   ];
 }
 

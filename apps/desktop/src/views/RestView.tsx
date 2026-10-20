@@ -14,6 +14,7 @@ import { fromEngineRequest, paramsFromUrl, syncPathVariables, toEngineRequest, u
 import { CodeModal } from '../components/CodeModal';
 import { CookiesModal, hostOf } from '../components/CookiesModal';
 import { NEW_TAB_TITLE, NoOpenTabs, tabTitle, useEditorTabs } from '../components/EditorTabs';
+import { useAiEnabled } from '../lib/use-ai-enabled';
 import { uid } from '../lib/format';
 
 /** Browser devtools "Copy as cURL (bash/cmd) / fetch / fetch (Node.js) / PowerShell" output. */
@@ -38,7 +39,8 @@ const isEditable = (el: EventTarget | null) =>
 import { addToFolder, findNode, mapNodes } from '../components/CollectionTree';
 import { ResponseViewer } from '../components/ResponseViewer';
 import { EnvCompareDialog } from './rest/EnvCompareDialog';
-import { generateRequestAi, generateTestsAi, suggestChecksAi } from '../lib/ai-request-actions';
+import { aiResponseOf, generateRequestAi, generateTestsAi, suggestChecksAi } from '../lib/ai-request-actions';
+import type { ScriptAiContext } from '../components/ai/script-ai';
 import type { TreeAssertion, TreeVariable } from '../components/JsonView';
 import { saveResponseVariable } from '../lib/save-variable';
 import { SseEvents } from '../components/SseEvents';
@@ -92,6 +94,7 @@ export function RestView() {
   const [comparingEnvs, setComparingEnvs] = useState(false);
   const [showCookies, setShowCookies] = useState(false);
   const env = useApp((s) => s.environment);
+  const aiOn = useAiEnabled();
   // with every tab closed, a stable placeholder keeps the hooks below simple; the editor shows an empty state
   const placeholder = useMemo(() => blankRequest(), []);
   const noTabs = tabs.length === 0;
@@ -212,7 +215,7 @@ export function RestView() {
   useIntent('rest', async (p) => {
     if (p?.tabCommand) return runTabCommand(p.tabCommand);
     // "Describe with AI" from an empty GraphQL, gRPC, WebSocket or MCP view
-    if (p?.describe) return void describeRequest();
+    if (p?.describe) return aiOn ? void describeRequest() : undefined;
     if (p?.newTab) {
       const t = blankRequest();
       setTabs((ts) => [...ts, t]);
@@ -459,7 +462,7 @@ export function RestView() {
     ...(tab.collectionId && tab.requestId ? { item: { kind: 'request' as const, collectionId: tab.collectionId, requestId: tab.requestId } } : {}),
     rerun: () => send().then((r) => r?.response),
   });
-  const generateTests = result?.response
+  const generateTests = aiOn && result?.response
     ? () => {
         const tabId = tab.id;
         startAi(
@@ -471,7 +474,7 @@ export function RestView() {
         );
       }
     : undefined;
-  const explain = result?.response
+  const explain = aiOn && result?.response
     ? () =>
         startAi({ task: 'explain-response', title: 'Explain this response', context: { request: { method: tab.request.method, url: tab.request.url }, status: result.response!.status, headers: result.response!.headers.slice(0, 20), body: result.response!.bodyPreview } })
     : undefined;
@@ -512,7 +515,13 @@ export function RestView() {
     if (!tabs.some((t) => t.id === tabId)) return 'the request was closed';
     setTabs((ts) => ts.map((t) => (t.id === tabId ? { ...t, assertions: [...t.assertions, ...checks], dirty: true } : t)));
   };
-  const suggest = result?.response ? () => startAi(suggestChecksAi(aboutResponse(), (code) => addSuggestedChecks(tab.id, code))) : undefined;
+  const suggest = aiOn && result?.response ? () => startAi(suggestChecksAi(aboutResponse(), (code) => addSuggestedChecks(tab.id, code))) : undefined;
+  /** What the script editor's AI menu knows: the saved request, the request as edited, the response on screen (a post-response script is tried on it). */
+  const scriptAi: ScriptAiContext = {
+    ...(tab.collectionId && tab.requestId ? { item: { kind: 'request' as const, collectionId: tab.collectionId, requestId: tab.requestId } } : {}),
+    request: { method: tab.request.method, url: tab.request.url, headers: tab.request.headers, body: (tab.request.body as { content?: string } | undefined)?.content },
+    ...(result?.response ? { response: aiResponseOf(result.response) } : {}),
+  };
 
   // REST's tabs are shown in the shared tab strip above every request editor (with the other editors' tabs)
   useEditorTabs(
@@ -604,9 +613,11 @@ export function RestView() {
         <IconButton label="Code snippet" onClick={() => setShowCode(true)}>
           <Code2 size={16} />
         </IconButton>
-        <IconButton label="Describe a request with AI" onClick={() => void describeRequest()}>
-          <Sparkles size={16} />
-        </IconButton>
+        {aiOn && (
+          <IconButton label="Describe a request with AI" onClick={() => void describeRequest()}>
+            <Sparkles size={16} />
+          </IconButton>
+        )}
         <IconButton label="Cookies" onClick={() => setShowCookies(true)}>
           <Cookie size={16} />
         </IconButton>
@@ -615,7 +626,7 @@ export function RestView() {
         </Button>
       </div>
       <ResponseSplit id="rest-req-res" initialBelow={45}>
-        <RequestEditor tab={tab} update={update} setReq={setReq} setParams={setParams} setExamples={setExamples} />
+        <RequestEditor tab={tab} update={update} setReq={setReq} setParams={setParams} setExamples={setExamples} scriptAi={scriptAi} />
         <div className="h-full min-h-0 flex flex-col">
           {sending[tab.id] && liveEvents[sending[tab.id]!] ? (
             <SseEvents events={liveEvents[sending[tab.id]!]!} live onStop={cancel} stateKey={tab.id} />

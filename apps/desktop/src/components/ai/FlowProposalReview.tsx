@@ -1,6 +1,6 @@
 import { Check, Code2, FlaskConical, GitCompare, RefreshCw, Trash2, Workflow } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import type { Proposal } from '@testpion/core';
+import type { Proposal, StepDiff } from '@testpion/core';
 import { unifiedDiff, type FlowStep } from '@testpion/shared';
 import { asError, call } from '../../api';
 import { runTestFileNow } from '../../lib/save-test';
@@ -11,7 +11,53 @@ import { DiffText } from '../GitCommitPanel';
 import { Badge, Button, Input, Modal, Segmented, Spinner } from '../ui';
 import { VerificationBadgeView } from './ProposalReview';
 
-type Tab = 'canvas' | 'yaml' | 'changes';
+type Tab = 'canvas' | 'yaml' | 'changes' | 'draft';
+
+const STATUS_WORD = { same: 'same', changed: 'changed', added: 'added by the model', removed: 'only in the draft' } as const;
+const STATUS_TONE = { same: 'default', changed: 'warn', added: 'accent', removed: 'bad' } as const;
+
+/**
+ * What the model changed against TestPion's own deterministic draft, step by step (B-12): a step it added (an error case),
+ * one it dropped, and for each step in both the fields that differ — its place, what it waits for, the request, the body,
+ * what it extracts and its checks. The engine makes the diff (`data.vsDraft`); this only shows it.
+ */
+function VersusDraft({ steps }: { steps: StepDiff[] }) {
+  return (
+    <ul className="p-2 grid gap-1.5 text-xs" aria-label="Against the draft" data-flow-vs-draft>
+      {steps.map((s) => (
+        <li key={s.id} className="rounded-lg border border-line px-2.5 py-1.5 grid gap-1 min-w-0" data-vs-step={s.status}>
+          <div className="flex items-center gap-2 min-w-0">
+            <Badge tone={STATUS_TONE[s.status]}>{STATUS_WORD[s.status]}</Badge>
+            <span className="font-medium truncate" title={s.id}>
+              {s.name}
+            </span>
+          </div>
+          {s.changes.map((c, i) => (
+            <div key={i} className="pl-1 text-muted break-words" data-vs-field={c.field}>
+              <span className="text-fg">{c.field}</span>
+              {c.before !== undefined || c.after !== undefined ? (
+                <>
+                  {' '}
+                  <span className="line-through">{c.before || '(none)'}</span> → <span>{c.after || '(none)'}</span>
+                </>
+              ) : null}
+              {c.added?.map((a) => (
+                <div key={`+${a}`} className="mono text-ok pl-3">
+                  + {a}
+                </div>
+              ))}
+              {c.removed?.map((a) => (
+                <div key={`-${a}`} className="mono text-bad pl-3">
+                  − {a}
+                </div>
+              ))}
+            </div>
+          ))}
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 /**
  * The review of a proposed flow (AI-1, the one ProposalReview pattern for a flow file): the flow on a canvas preview
@@ -47,6 +93,9 @@ export function FlowProposalReview({
   const ai = proposal.taskVersion > 0;
   const failing = item.verification.some((b) => b.status === 'fail');
   const path = item.path ?? 'flows/generated.yaml';
+  // what the model changed against TestPion's own draft (AI flows only)
+  const vsDraft = (item.data as { vsDraft?: StepDiff[] } | undefined)?.vsDraft;
+  const draftChanges = vsDraft?.filter((s) => s.status !== 'same').length ?? 0;
 
   // the canvas: the proposed text read as a flow, without writing it
   useEffect(() => {
@@ -169,6 +218,7 @@ export function FlowProposalReview({
               options={[
                 { value: 'canvas', label: 'Canvas', title: 'The steps and how values flow between them' },
                 { value: 'yaml', label: 'YAML', title: 'The file as it will be written: edit it here' },
+                ...(vsDraft?.length ? [{ value: 'draft' as const, label: draftChanges ? `Vs draft (${draftChanges})` : 'Vs draft', title: 'What the model changed, step by step, against the flow TestPion builds without it' }] : []),
                 ...(item.before !== undefined ? [{ value: 'changes' as const, label: 'Changes', title: 'Against the file it replaces' }] : []),
               ]}
             />
@@ -185,6 +235,10 @@ export function FlowProposalReview({
                 )
               ) : tab === 'yaml' ? (
                 <CodeEditor value={text} onChange={(v) => setText(v ?? '')} language="yaml" path={`proposal://${proposal.id}/${path}`} />
+              ) : tab === 'draft' && vsDraft ? (
+                <div className="h-full overflow-auto">
+                  <VersusDraft steps={vsDraft} />
+                </div>
               ) : (
                 <div className="h-full overflow-auto">
                   <DiffText text={diff} />

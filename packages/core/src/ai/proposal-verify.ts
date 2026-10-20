@@ -10,6 +10,7 @@ import type { Collection } from '../model/types.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { getProposal, saveProposal, type Proposal } from './proposal.js';
 import { aiTask } from './tasks/registry.js';
+import { diffFlowSteps } from './flow-diff.js';
 import { verifyItems, type StoredResponse, type VerifyContext } from './verify.js';
 
 export interface ReverifyOptions {
@@ -50,6 +51,9 @@ export async function reverifyProposal(store: WorkspaceStore, id: string, o: Rev
       if (typeof o.after !== 'string' || !o.after.trim()) throw new ApsError('ValidationError', 'The new text is empty');
       it.after = o.after;
     }
+    // an edited AI flow: what it changes against TestPion's own draft is read again
+    const draft = (it.data as { draft?: unknown } | undefined)?.draft;
+    if (o.after !== undefined && typeof draft === 'string') it.data = { ...(it.data as object), vsDraft: diffFlowSteps(draft, o.after) };
     if (o.data !== undefined) {
       it.data = o.data;
       // a check switched to its safer form: its title says the new check
