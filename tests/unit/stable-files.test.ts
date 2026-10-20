@@ -217,8 +217,8 @@ describe('the store writes the stable form, and writes it once', () => {
   it('the generated .gitignore keeps the migration copy of workspace.json out, and .gitattributes merges the lists by item', () => {
     const store = WorkspaceStore.create(join(t.dir, 'ws-ignore'), 'Ignore');
     expect(read(store.root, '.gitignore')).toMatch(/^workspace\.json\.bak-\*$/m);
-    expect(read(store.root, '.gitattributes')).toMatch(/^mcp-servers\.json merge=testpion$/m);
-    expect(read(store.root, '.gitattributes')).toMatch(/^providers\.json merge=testpion$/m);
+    expect(read(store.root, '.gitattributes')).toMatch(/^mcp-servers\.json merge=testpion diff=testpion$/m);
+    expect(read(store.root, '.gitattributes')).toMatch(/^providers\.json merge=testpion diff=testpion$/m);
     expect(existsSync(join(store.root, '.gitattributes'))).toBe(true);
     store.close();
   });

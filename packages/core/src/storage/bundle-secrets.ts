@@ -45,10 +45,20 @@ const SHAPE_NAME: Record<string, string> = { 'connection-string': 'dbPassword', 
 /** One pass over one bundle: the replacements so far, and one variable name per distinct value. */
 export class SecretStripper {
   readonly replaced: ReplacedSecret[] = [];
+  /**
+   * The value each replacement stood for, in the same order as `replaced`. An export never reads it; the commit guard needs
+   * it to fingerprint a finding for the allowlist and to move the value to the secret store when it fixes one.
+   */
+  readonly values: string[] = [];
   private byValue = new Map<string, string>();
   private taken = new Set<string>();
 
   /** The variable for a value: the same value always gets the same name; a different value under a taken name gets name2 … */
+  /** Names an environment already uses: a replacement never takes one of them, so a fix cannot overwrite another variable. */
+  reserve(names: Iterable<string>): void {
+    for (const n of names) this.taken.add(n);
+  }
+
   private nameFor(base: string, value: string): string {
     const known = this.byValue.get(value);
     if (known) return known;
@@ -65,6 +75,7 @@ export class SecretStripper {
     const scheme = SCHEME.exec(value)?.[0] ?? '';
     const name = this.nameFor(base, value.slice(scheme.length));
     this.replaced.push({ kind, item, field, variable: name });
+    this.values.push(value.slice(scheme.length));
     return `${scheme}{{${name}}}`;
   }
 
@@ -76,6 +87,7 @@ export class SecretStripper {
       (p, secret) => {
         const name = this.nameFor(SHAPE_NAME[p.id] ?? 'apiKey', secret);
         this.replaced.push({ kind, item, field: `${field} (${p.id})`, variable: name });
+        this.values.push(secret);
         return `{{${name}}}`;
       },
       'high',
@@ -188,6 +200,7 @@ export class SecretStripper {
       const c = classifySecret(v.key, v.value);
       if (!c || !confidenceAtLeast(c.confidence, 'medium')) return v;
       this.replaced.push({ kind, item, field: `variables.${v.key}`, variable: v.key });
+      this.values.push(v.value);
       changed = true;
       return { ...v, value: '', secret: true };
     });
@@ -301,6 +314,7 @@ export class SecretStripper {
     if (apiKey && !isSecretReference(apiKey)) {
       apiKey = `{{$secret.provider.${p.id}.apiKey}}`;
       this.replaced.push({ kind: 'provider', item, field: 'apiKey', variable: apiKey });
+      this.values.push(p.apiKey ?? '');
     }
     return { ...p, ...(p.apiKey !== undefined ? { apiKey } : {}), ...(p.headers !== undefined && p.headers !== null ? { headers: this.rows('provider', item, 'headers', p.headers) } : {}) };
   }

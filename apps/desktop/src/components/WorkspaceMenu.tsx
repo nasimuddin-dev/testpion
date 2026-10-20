@@ -102,7 +102,12 @@ export function WorkspaceMenu() {
     { label: 'Rename', icon: <Pencil size={14} />, onSelect: () => setNameDialog({ mode: 'rename', target: w, value: w.name }) },
     { label: 'Duplicate…', icon: <Copy size={14} />, onSelect: () => setNameDialog({ mode: 'duplicate', target: w, value: `${w.name} copy` }) },
     { label: 'Show in folder', icon: <FolderOpen size={14} />, onSelect: () => void call('app.openPath', { path: w.path }).catch(toastError) },
-    ...(isCurrent(w) ? [{ label: 'Make ready for git', icon: <GitBranch size={14} />, onSelect: () => (setOpen(false), void runMenuCommand('git-ready')) }] : []),
+    ...(isCurrent(w)
+      ? [
+          { label: 'Make ready for git', icon: <GitBranch size={14} />, onSelect: () => (setOpen(false), void runMenuCommand('git-ready')) },
+          { label: 'Fix git setup…', icon: <GitBranch size={14} />, onSelect: () => (setOpen(false), void runMenuCommand('git-fix')) },
+        ]
+      : []),
     {
       label: 'Export…',
       icon: <Download size={14} />,

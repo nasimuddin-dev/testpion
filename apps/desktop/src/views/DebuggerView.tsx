@@ -23,6 +23,7 @@ import {
   Upload,
   Workflow,
   Circle,
+  Users,
 } from 'lucide-react';
 import { openReverseProxyCapture } from '../lib/capture';
 import { Disc, FolderPlus, Plus, Settings2 } from 'lucide-react';
@@ -46,6 +47,7 @@ import { BreakpointDialog, CompareExchangesDialog, RuleDialog, RulesPanel, type 
 import { DebuggerGrid, GridTotals, IncomingList, TrafficSide, useIncoming, type GridActions } from '../components/debugger/DebuggerGrid';
 import { useIntent, useStableCallbacks } from '../hooks';
 import { reportUnopenable } from '../lib/open-ref';
+import { shareDebuggerSession } from '../lib/git-share';
 import { CreateFlowDialog } from '../components/debugger/CreateFlowDialog';
 import { SaveToCollectionDialog } from '../components/debugger/SaveToCollectionDialog';
 import { Dock } from '../components/debugger/Dock';
@@ -252,7 +254,7 @@ export function DebuggerView() {
   };
   const saveSession = async () => {
     const name = await promptText('Save the session', {
-      message: 'A name for this capture; it is saved as a HAR file in the workspace (debugger/, never committed).',
+      message: 'A name for this capture; it is saved as a HAR file in the workspace (debugger/, kept out of git: Share session puts a masked copy in git).',
       value: `session-${new Date().toISOString().slice(0, 16).replace('T', ' ').replace(':', '')}`,
       okLabel: 'Save',
     });
@@ -432,6 +434,10 @@ export function DebuggerView() {
       icon: <FolderOpen size={14} />,
       onSelect: () => void openSession(s),
     })),
+    // a saved session is git-ignored; sharing it puts a masked copy in debugger/shared/, which git tracks (release C of Everything under Git)
+    ...sessions
+      .filter((x) => !x.autosave)
+      .map<MenuItem>((s) => ({ label: `Share ${s.name} with the team…`, icon: <Users size={14} />, title: 'Put a masked copy of this session in debugger/shared/, which git tracks', onSelect: () => void shareDebuggerSession(s.name) })),
     { label: 'Import a HAR file…', icon: <Upload size={14} />, onSelect: () => void importHar() },
     { label: 'Import a Fiddler session (.saz)…', icon: <Upload size={14} />, onSelect: () => void importSaz() },
     { label: 'Export as HAR…', icon: <Download size={14} />, disabled: !rows.length, onSelect: () => void saveOutput(outputSpec, defaultFormat(outputSpec)) },

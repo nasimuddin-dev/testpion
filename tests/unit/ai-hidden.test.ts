@@ -167,6 +167,7 @@ const ENTRY_POINTS: Record<string, Gate> = {
   'components/CollectionTree.tsx': 'menu',
   'components/Explorer.tsx': 'menu',
   'components/FlowDesigner.tsx': 'hook',
+  'components/rag/RagConnectDialog.tsx': 'component',
   'components/ImportDialog.tsx': 'snapshot',
   'components/OpenApiDiffDialog.tsx': 'component',
   'components/ProblemList.tsx': 'items',

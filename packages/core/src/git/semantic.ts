@@ -1,13 +1,14 @@
 import { readFileSync, statSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
 import type { Collection, CollectionNode, Environment } from '../model/types.js';
-import { assertGitRev, gitBlobSize, gitShow, realFolder, runGit, type GitFile } from './git.js';
+import { assertGitRev, gitBlobSize, gitIndexText, gitShow, realFolder, runGit, type GitFile } from './git.js';
 import { requestParts } from './merge.js';
 import { flowChanges, flowItemParts, isFlowFile } from './flow-diff.js';
 import { KIND_INFO, LIBRARY_LABEL, gitFolderKey, gitKindOfRef, gitRefKey, gitSectionKey, kindOfPath, kindOfRef, libraryOfPath, savedItemRef, watchKindOfPath, type ItemRef, type KindId } from '@testpion/shared';
 import { sameValue } from '../storage/stable-files.js';
 import { describeOtherFile, isBinaryPath } from './item-changes.js';
 import { mcpServerParts, providerParts, workspaceParts } from './item-parts.js';
+import { FOLDER_LIBRARY_KIND, folderLibraryChanges } from './folder-library.js';
 
 /** The registry kind of a workspace path (lexical; git's paths are relative with `/`). */
 const kindAt = (path: string) => kindOfPath(path, { raw: true });
@@ -29,6 +30,8 @@ export interface SemanticChange {
   kindId?: KindId;
   /** The keys of the marks the change makes on the lists it is inside (its folders, its collection, its section): see gitMarksOf. */
   containers?: string[];
+  /** The change is in the index (a commit takes it): the file is staged, or just this item was (see stageItem). */
+  staged?: boolean;
   change: 'added' | 'removed' | 'changed' | 'renamed' | 'conflicted';
   /** What changed, in words: "Payments ▸ Create invoice", "environment Staging". */
   title: string;
@@ -88,6 +91,8 @@ interface LibraryFile {
 function libraryChanges(file: string, beforeText: string | undefined, afterText: string | undefined): SemanticChange[] | undefined {
   const kind = libraryOfPath(file, { raw: true });
   if (!kind) return undefined;
+  // the folder-only libraries (MCP, API definition and dataset folders) mark the folders of those lists
+  if (FOLDER_LIBRARY_KIND[kind]) return folderLibraryChanges(file, kind, beforeText, afterText);
   const before = beforeText === undefined ? { items: [] } : parse<LibraryFile>(beforeText);
   const after = afterText === undefined ? { items: [] } : parse<LibraryFile>(afterText);
   if (!before || !after || !Array.isArray(before.items ?? []) || !Array.isArray(after.items ?? [])) return undefined;
@@ -265,7 +270,17 @@ export async function describeGitChanges(ws: string, files: GitFile[]): Promise<
         const now = f.state === 'deleted' ? {} : readWorking(ws, f.path);
     const was = f.state === 'untracked' || f.state === 'added' ? {} : await readRev(ws, f.from ?? f.path);
     const state: FileState = f.state === 'untracked' || f.state === 'added' ? 'added' : f.state === 'deleted' ? 'removed' : f.state === 'renamed' ? 'renamed' : 'changed';
-    out.push(...describeFile(f.path, was.text, now.text, state, f.from, { before: was.size, after: now.size }));
+    const rows = describeFile(f.path, was.text, now.text, state, f.from, { before: was.size, after: now.size });
+    if (f.staged && f.alsoUnstaged && was.text !== undefined && now.text !== undefined) {
+      // staged and changed again: the changes the index already has are the staged ones (an item staged alone)
+      const idx = await gitIndexText(ws, f.path);
+      const ids = (cs: SemanticChange[]) => new Set(cs.map((c) => c.itemId ?? ''));
+      const inIndex = idx === undefined ? new Set<string>() : ids(describeFile(f.path, was.text, idx, state, f.from));
+      // an item is staged when the index has its change and the working folder has not moved on from it
+      const movedOn = idx === undefined ? new Set<string>() : ids(describeFile(f.path, idx, now.text, state, f.from));
+      for (const c of rows) c.staged = inIndex.has(c.itemId ?? '') && !movedOn.has(c.itemId ?? '');
+    } else if (f.staged) for (const c of rows) c.staged = true;
+    out.push(...rows);
   }
   return withRefs(out);
 }

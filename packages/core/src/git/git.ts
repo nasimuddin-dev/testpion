@@ -17,6 +17,8 @@ export interface GitFile {
   state: GitFileState;
   /** Staged (in the index) rather than only in the working folder. */
   staged: boolean;
+  /** Staged, and changed again in the working folder since (an item staged alone, or an edit after staging). */
+  alsoUnstaged?: boolean;
   /** For a rename, where it came from. */
   from?: string;
 }
@@ -199,7 +201,7 @@ export async function gitStatus(ws: string): Promise<GitStatus> {
       const code = xy[0] !== '.' ? xy[0]! : xy[1]!;
       const state: GitFileState = line.startsWith('2 ') ? 'renamed' : code === 'A' ? 'added' : code === 'D' ? 'deleted' : 'modified';
       // staged when the index column has a change; a file changed in both shows once, as staged
-      st.files.push({ path: toWorkspacePath(repo, ws, path), state, staged: xy[0] !== '.', ...(from ? { from: toWorkspacePath(repo, ws, from) } : {}) });
+      st.files.push({ path: toWorkspacePath(repo, ws, path), state, staged: xy[0] !== '.', ...(xy[0] !== '.' && xy[1] !== '.' ? { alsoUnstaged: true } : {}), ...(from ? { from: toWorkspacePath(repo, ws, from) } : {}) });
     } else if (line.startsWith('u ')) {
       const f = line.split(' ');
       st.files.push({ path: toWorkspacePath(repo, ws, f.slice(10).join(' ')), state: 'conflicted', staged: false });
@@ -222,6 +224,17 @@ export async function gitShow(ws: string, path: string, rev = 'HEAD'): Promise<s
   }
 }
 
+/** A file as it is in the index (what a commit would take); undefined when it is not staged / tracked. */
+export async function gitIndexText(ws: string, path: string): Promise<string | undefined> {
+  const repo = await repoRoot(ws);
+  if (!repo) return undefined;
+  try {
+    return await runGit(ws, ['show', `:${toRepoPath(repo, ws, path)}`]);
+  } catch {
+    return undefined;
+  }
+}
+
 /** The size in bytes of a file as it is in a commit (default HEAD); undefined when it does not exist there. */
 export async function gitBlobSize(ws: string, path: string, rev = 'HEAD'): Promise<number | undefined> {
   const repo = await repoRoot(ws);
@@ -236,7 +249,7 @@ export async function gitBlobSize(ws: string, path: string, rev = 'HEAD'): Promi
 
 /** The unified diff of one file (working folder against HEAD, or the staged change). */
 export async function gitDiff(ws: string, path: string, staged = false): Promise<string> {
-  return runGit(ws, ['diff', '--no-color', ...(staged ? ['--cached'] : []), '--', path]);
+  return runGit(ws, ['diff', '--no-color', '--no-textconv', ...(staged ? ['--cached'] : []), '--', path]);
 }
 
 export async function gitStage(ws: string, paths: string[]): Promise<void> {
@@ -316,7 +329,7 @@ export async function gitCommitDiff(ws: string, hash: string, path: string): Pro
   const repo = await repoRoot(ws);
   if (!repo || !/^[0-9a-f]{4,40}$/i.test(hash)) return '';
   try {
-    return await runGit(ws, ['show', '--format=', hash, '--', toRepoPath(repo, ws, path)]);
+    return await runGit(ws, ['show', '--format=', '--no-textconv', hash, '--', toRepoPath(repo, ws, path)]);
   } catch {
     return '';
   }

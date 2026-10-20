@@ -99,7 +99,7 @@ export type KindStorage =
   | { layout: 'ref-only' };
 
 /** The `data.changed` / folder-watcher kinds of today (`kinds` of the event); 0.57 adds the canonical kind beside them. */
-export type WatchKind = 'collections' | 'environments' | 'tests' | 'library' | 'mcp' | 'providers' | 'workspace' | 'specs' | 'other';
+export type WatchKind = 'collections' | 'environments' | 'tests' | 'datasets' | 'library' | 'mcp' | 'providers' | 'workspace' | 'specs' | 'other';
 
 export interface ItemKindInfo {
   id: KindId;

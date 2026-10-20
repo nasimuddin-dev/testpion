@@ -124,9 +124,10 @@ describe('restore, discard, stage and undo', () => {
     expect(r.read('mcp-servers.json')).toBe(before);
   });
 
-  it('git_stage_item names the items that come along; git_discard_item keeps the others\' changes', async () => {
-    const stage = await call<{ applied: boolean; alsoStages: string[]; message: string }>('git_stage_item', { ref: 'mcp-server:weather', dryRun: true });
-    expect(stage.data.alsoStages.join(' ')).toMatch(/Search/);
+  it('git_stage_item stages just the item and names the ones left out; git_discard_item keeps the others\' changes', async () => {
+    const stage = await call<{ applied: boolean; partial?: boolean; leftUnstaged: string[]; message: string }>('git_stage_item', { ref: 'mcp-server:weather', dryRun: true });
+    expect(stage.data.partial).toBe(true);
+    expect(stage.data.leftUnstaged.join(' ')).toMatch(/Search/);
     expect(stage.data.applied).toBe(false);
     const real = await call<{ applied: boolean }>('git_stage_item', { ref: 'mcp-server:weather' });
     expect(real.data.applied).toBe(true);

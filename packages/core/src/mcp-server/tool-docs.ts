@@ -697,7 +697,7 @@ export const TOOL_DOCS: Record<string, ToolDoc> = {
     example: { ref: 'mcp-server:weather', dryRun: true },
   },
   git_stage_item: {
-    when: 'Use it to stage the file of one item before a commit, or unstage it; it names the other changed items that come along.',
+    when: 'Use it to stage just one item before a commit (a request, an MCP server, a provider, a prompt …), or unstage it; the other items in the file stay as they are. A file that is one item stages whole.',
     whenNot: 'To stage everything and propose a commit message, use `git_propose_commit`.',
     example: { ref: 'mcp-server:weather', dryRun: true },
   },
@@ -710,6 +710,41 @@ export const TOOL_DOCS: Record<string, ToolDoc> = {
     when: 'Use it to set the uncommitted changes aside under a name ("push") before pulling or switching, and to put them back ("pop").',
     whenNot: 'To throw changes away, use `git_discard_item`; to commit them, use `git_propose_commit`.',
     example: { action: 'list' },
+  },
+  git_fix_setup: {
+    when: 'Use it to make a workspace ready for git: complete .gitignore and .gitattributes, write existing files in the stable format once, and see what else needs doing (big files, tracked files that should be ignored). Try `dryRun` first.',
+    whenNot: 'To put an older version of an item back, use `git_restore_item`; to check a commit for secrets, use `git_propose_commit`.',
+    example: { dryRun: true },
+  },
+  git_large_files: {
+    when: 'Use it to find files that are too big for plain git (5 MB warn, 50 MB offer LFS or a reference, 100 MB refused) and to check `.ref` files against the data.',
+    whenNot: 'To take a file out of plain git, use `git_track_large`; for the usual commit checks, use `git_propose_commit`.',
+    example: { check: true },
+  },
+  git_track_large: {
+    when: 'Use it to move a big dataset out of plain git: Git LFS (a rule in .gitattributes) or by reference (a .ref file with the checksum, the data git-ignored). Try `dryRun` first.',
+    whenNot: 'For a file under 50 MB plain git is fine; to list big files, use `git_large_files`.',
+    example: { file: 'datasets/patients.csv', mode: 'reference', source: 's3://team-data/patients.csv', dryRun: true },
+  },
+  git_share_session: {
+    when: 'Use it to put a saved Debugger session into the repository on purpose: a masked copy goes to debugger/shared/. Without `name` it lists the shared sessions.',
+    whenNot: 'Sessions are git-ignored by default; to see what a session captured, use `debugger_session`.',
+    example: { name: 'checkout bug', dryRun: true },
+  },
+  git_codeowners: {
+    when: 'Use it to draft a CODEOWNERS with a line per kind folder (environments, MCP servers, providers …) for the team to complete.',
+    whenNot: 'It never overwrites a CODEOWNERS that exists; to check who changed what, use `git_blame`.',
+    example: { owner: '@your-org/platform' },
+  },
+  git_allowed_secrets: {
+    when: 'Use it to see which values the staged secret scan lets through, and why (`.testpion/secrets-allow.json`).',
+    whenNot: 'Adding an entry is for a person to decide (the app, or `testpion git allow-secret`); to see what a commit would publish, use `git_propose_commit`.',
+    example: {},
+  },
+  git_secrets_fix_plan: {
+    when: 'Use it after `git_propose_commit` refused: for each secret typed into a staged MCP server, provider, library item or test file, it names the `{{variable}}` the value would become, so the fix can be described to the person.',
+    whenNot: 'It writes nothing; the person applies the fix in the TestPion Git view (Fix all). For collections and environments the app fixes the same way.',
+    example: { environment: 'Staging' },
   },
   git_propose_commit: {
     when: 'Use it to stage the changes, check them for secrets and propose a commit message for a person to commit.',
