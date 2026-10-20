@@ -233,16 +233,16 @@ const contextRelevance = (cfg: CheckConfig, ctx: CheckContext): Promise<CheckRes
 const strictOver = (strict: (cfg: CheckConfig, ctx: CheckContext) => Promise<CheckResult>, legacy: ReturnType<typeof checkFn>) => (cfg: CheckConfig, ctx: CheckContext) => (ctx.ragRun?.strict || !legacy ? strict(cfg, ctx) : legacy(cfg, ctx));
 
 const faithfulnessFn = strictOver(faithfulness, checkFn('groundedness'));
-registerCheck('faithfulness', faithfulnessFn, { fields: 'threshold (default 0.8), judge: { provider, model } (default: the evaluation’s judge)', example: { type: 'faithfulness', threshold: 0.8 } });
+registerCheck('faithfulness', faithfulnessFn);
 registerCheck('groundedness', faithfulnessFn);
 // the R1a names always mean the strict metric, anywhere
 registerCheck('rag-faithfulness', faithfulness);
 
 const relevanceFn = strictOver(answerRelevance, checkFn('answer-relevance'));
-registerCheck('answer-relevance', relevanceFn, { fields: 'threshold (default 0.7), mode (statements | reverse-questions), judge: { provider, model }', example: { type: 'answer-relevance', threshold: 0.7 } });
+registerCheck('answer-relevance', relevanceFn);
 registerCheck('rag-answer-relevance', answerRelevance);
 
-registerCheck('context-relevance', contextRelevance, { fields: 'threshold (default 0.5), mode (nvidia | statements | chunks | sentences), judge: { provider, model }', example: { type: 'context-relevance', mode: 'nvidia' } });
+registerCheck('context-relevance', contextRelevance);
 
 /** Names of the check types that ask a judge through the judge service (a run with one needs a judge before it starts). */
 export function needsJudgeService(type: string, strictRun: boolean): boolean {

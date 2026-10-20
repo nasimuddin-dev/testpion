@@ -26,6 +26,7 @@ import {
 import { EXIT, green, red, yellow, dim, bold, CliError, printJson, withWorkspace, cliContext, requireCollection } from '../shared.js';
 import { addOutputOptions, saveSurface, savedLine } from '../output-save.js';
 import { resolveSelection } from '../run.js';
+import { parseGates } from '@testpion/core';
 
 const collect = (v: string, prev: string[] = []) => [...prev, v];
 
@@ -38,6 +39,7 @@ function runner(store: WorkspaceStore) {
 
 /** What a monitor runs, for lists: the collection's name or tests/<file>. */
 function target(store: WorkspaceStore, m: Monitor): string {
+  if (m.evaluation) return `RAG evaluation ${m.evaluation}`;
   if (m.testFile) return `tests/${m.testFile}`;
   try {
     return store.getCollection(m.collectionId ?? '').name;
@@ -80,6 +82,11 @@ export function registerMonitorCommands(program: Command): void {
     .requiredOption('-w, --workspace <nameOrPath>')
     .option('--collection <nameOrId>', 'collection to run')
     .option('--test-file <path>', 'or a test file / flow under tests/ to run (e.g. orders/new-order.yaml), with the test runner')
+    .option('--rag-evaluation <name>', 'or a saved RAG evaluation: its questions go to the RAG system and are scored (see --gate, --judge-sample, --judge-budget)')
+    .option('--limit <n>', 'with --rag-evaluation: only the first n dataset records')
+    .option('--gate <metric=value>', 'with --rag-evaluation: the lowest mean a metric may have (repeatable; the same names as `rag run --min`)', collect)
+    .option('--judge-sample <share>', 'with --rag-evaluation: the share of samples (0 to 1) that get the judged metrics; the free metrics always run')
+    .option('--judge-budget <usd>', 'with --rag-evaluation: stop judging for the day at this much (from the AI usage ledger); the rest is n/a')
     .requiredOption('--every <interval>', 'how often: minutes, or e.g. 15m, 1h, 1d (1 minute to 7 days)')
     .option('--folder <nameOrId>', 'run only this folder or request (repeatable)', collect)
     .option('-e, --environment <name>', 'environment to run with')
@@ -92,14 +99,14 @@ export function registerMonitorCommands(program: Command): void {
     .option('--json', 'print the monitor as JSON')
     .action((name: string, o) =>
       withWorkspace(o.workspace, (store) => {
-        if (!o.collection === !o.testFile) throw new CliError('Give --collection <name> or --test-file <path> (one of them)', EXIT.CONFIG_ERROR);
+        if ([o.collection, o.testFile, o.ragEvaluation].filter(Boolean).length !== 1) throw new CliError('Give --collection <name>, --test-file <path> or --rag-evaluation <name> (one of them)', EXIT.CONFIG_ERROR);
         if (o.testFile && o.folder?.length) throw new CliError('--folder picks folders of a collection; a --test-file runs as a whole', EXIT.CONFIG_ERROR);
         const collection = o.collection ? requireCollection(store, String(o.collection), { loadable: true }) : undefined;
         const existing = listMonitors(store).find((m) => m.name.toLowerCase() === name.toLowerCase());
         const m = saveMonitor(store, {
           id: existing?.id ?? shortId('mon-'),
           name,
-          ...(collection ? { collectionId: collection.id, selection: resolveSelection(collection, o.folder) } : { testFile: String(o.testFile) }),
+          ...(collection ? { collectionId: collection.id, selection: resolveSelection(collection, o.folder) } : o.ragEvaluation ? { evaluation: String(o.ragEvaluation), ...(o.limit ? { limit: Number(o.limit) } : {}), ...(o.gate?.length ? { gates: parseGates(o.gate) } : {}), ...(o.judgeSample ? { judgeSample: Number(o.judgeSample) } : {}), ...(o.judgeBudget ? { judgeBudgetUsdPerDay: Number(o.judgeBudget) } : {}) } : { testFile: String(o.testFile) }),
           environment: o.environment,
           everyMinutes: parseEvery(o.every),
           enabled: !o.paused,

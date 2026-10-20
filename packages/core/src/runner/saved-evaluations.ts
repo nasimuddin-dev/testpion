@@ -33,7 +33,7 @@ export interface SavedEvaluation {
   /** type `rag`: the RAG target (id or name) the questions are sent to; without one the contexts written in the dataset are scored. */
   target?: string;
   /** type `rag` with a target: the judge of the judged metrics (unset: the AI settings' large model; never a silent mock) and the run's limits. */
-  judge?: Pick<RagJudgeSetup, 'provider' | 'model' | 'judges' | 'aggregate' | 'swap' | 'repeat' | 'shortCircuit'>;
+  judge?: Pick<RagJudgeSetup, 'provider' | 'model' | 'judges' | 'aggregate' | 'swap' | 'repeat' | 'shortCircuit' | 'shareClaims' | 'sampleShare'>;
   maxJudgeCostUsd?: number;
   maxJudgeCalls?: number;
 }
@@ -42,7 +42,7 @@ export const EVALUATIONS_LIBRARY = 'evaluations';
 
 /** The judge of a RAG evaluation as the metrics read it: the evaluation's own choices and the run's limits. */
 export function judgeSetupOf(d: Pick<SavedEvaluation, 'judge' | 'maxJudgeCostUsd' | 'maxJudgeCalls'>): RagJudgeSetup {
-  return { ...(d.judge ?? {}), ...(d.maxJudgeCostUsd ? { maxCostUsd: d.maxJudgeCostUsd } : {}), ...(d.maxJudgeCalls ? { maxCalls: d.maxJudgeCalls } : {}) };
+  return { ...(d.judge ?? {}), ...(d.maxJudgeCostUsd !== undefined ? { maxCostUsd: d.maxJudgeCostUsd } : {}), ...(d.maxJudgeCalls !== undefined ? { maxCalls: d.maxJudgeCalls } : {}) };
 }
 
 /** The test template each dataset record is expanded into. */

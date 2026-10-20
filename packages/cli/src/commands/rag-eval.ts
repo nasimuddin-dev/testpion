@@ -299,8 +299,7 @@ export function registerRagEvalCommands(rag: Command): void {
           const r = await config(() => rescoreRun(store, { runId, evaluators, judge, providers: ctx.services.providers, ragJudge: ctx.services.ragJudge!, reports }));
           const matrix = await buildMetricMatrix(runResults(store, r.runId), { runId: r.runId, limit: 1 });
           const gates = checkGates(matrix, parseGates(o.min));
-          if (o.junit && r.reports.junit) copyFileSync(r.reports.junit, resolve(o.junit));
-          if (o.html && r.reports.html) copyFileSync(r.reports.html, resolve(o.html));
+          for (const [file, report] of [[o.junit, r.reports.junit], [o.html, r.reports.html]] as const) if (file && report && resolve(file) !== resolve(report)) copyFileSync(report, resolve(file));
           if (o.json) printJson({ runId: r.runId, rescoredFrom: runId, rescored: r.rescored, skipped: r.skipped, summary: r.summary, metrics: matrix.aggregates, failures: matrix.failures, gates });
           else {
             console.log(`${green('Re-scored')} ${r.rescored} samples of ${runId} → run ${bold(r.runId)}${r.skipped ? dim(` (${r.skipped} had no stored answer)`) : ''}${r.summary.judgeCostUsd ? dim(` · judge cost ${money(r.summary.judgeCostUsd)}`) : ''}`);
@@ -487,7 +486,7 @@ async function runCommand(ref: string, o: RunFlags): Promise<number> {
         await ctx.dispose();
       }
     }
-    const reports: ReportFormat[] = [...new Set<ReportFormat>(['json', ...(o.junit ? (['junit'] as const) : []), ...(o.html ? (['html'] as const) : [])])];
+    const reports: ReportFormat[] = [...new Set<ReportFormat>(['json', 'markdown', ...(o.junit ? (['junit'] as const) : []), ...(o.html ? (['html'] as const) : [])])];
     const out = await config(() =>
       runRagEvaluation({
         store,
@@ -508,9 +507,7 @@ async function runCommand(ref: string, o: RunFlags): Promise<number> {
         },
       }),
     );
-    if (o.junit && out.reports.junit) copyFileSync(out.reports.junit, resolve(o.junit));
-    if (o.html && out.reports.html) copyFileSync(out.reports.html, resolve(o.html));
-    if (o.reportJson && out.reports.json) copyFileSync(out.reports.json, resolve(o.reportJson));
+    for (const [file, report] of [[o.junit, out.reports.junit], [o.html, out.reports.html], [o.reportJson, out.reports.json]] as const) if (file && report && resolve(file) !== resolve(report)) copyFileSync(report, resolve(file));
     const matrix = await buildMetricMatrix(runResults(store, out.runId), { runId: out.runId, limit: 1 });
     const gateResults = checkGates(matrix, gates);
     const comparison = o.baseline ? await compareMetricRuns(runResults(store, out.runId), runResults(store, o.baseline), { minDelta: Number(o.maxRegression) }) : undefined;

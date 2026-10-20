@@ -64,6 +64,8 @@ export interface RagJudgeSetup {
    * Default: only when three or more metrics read the claims, because with two the extra call costs more than it saves.
    */
   shareClaims?: boolean;
+  /** A monitor judges only this share (0 to 1) of its samples, chosen by the sample itself; the free metrics always run. */
+  sampleShare?: number;
 }
 
 export type RagProtocol = 'http' | 'sse' | 'websocket' | 'grpc' | 'mcp';

@@ -111,7 +111,7 @@ export async function estimateRescore(store: WorkspaceStore, ctx: EngineContext,
 export interface RagRunOptions {
   store: WorkspaceStore;
   /** A fresh engine context (the host's secrets, environment and surface); disposed here. */
-  makeContext(): EngineContext;
+  makeContext(): Pick<EngineContext, 'services' | 'dispose'>;
   evaluation: SavedEvaluation;
   concurrency?: number;
   retries?: number;

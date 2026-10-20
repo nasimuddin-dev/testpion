@@ -133,7 +133,7 @@ export function RagTryDialog({
           </>
         }
       >
-        <div className="grid gap-3 text-sm" data-rag-try>
+        <div className="grid gap-3 text-sm" data-rag-try-dialog>
           <div className="flex items-center gap-2 flex-wrap">
             <Segmented
               label="Sample"

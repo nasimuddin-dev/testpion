@@ -4,6 +4,7 @@ import { ENGINE_VERSION } from '../version.js';
 import { envNameForSecret, secretKeys } from '../storage/secrets.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { findCollection } from '../storage/env-edit.js';
+import { findSavedEvaluation } from './saved-evaluations.js';
 
 /**
  * CI configuration for running a workspace's tests in a pipeline (Postman's "Run in CI"): GitHub Actions,
@@ -32,6 +33,14 @@ export interface CiTarget {
   envMatrix?: string[];
   /** Data-changing requests may go to an environment marked as production. */
   allowProduction?: boolean;
+  /** Run a saved RAG evaluation (`testpion rag run`): its metrics, gates and a JUnit / HTML report; the judge key is a CI secret. */
+  ragEvaluation?: string;
+  /** With a RAG evaluation: a metric preset replacing its metrics, the judge (provider/model), gates ("faithfulness=0.8"), a baseline run, the most the judge may cost. */
+  ragPreset?: string;
+  ragJudge?: string;
+  ragMin?: string[];
+  ragBaseline?: string;
+  ragMaxCost?: number;
   /** One flow file: keep its run as an HTML timeline (test-results/timeline.html), also when the run fails. */
   timelineHtml?: boolean;
 }
@@ -91,7 +100,9 @@ export function ciCommand(o: CiConfigOptions, cli = 'testpion'): string {
   const ws = o.workspaceDir?.trim() || '.';
   const env = o.environment ? ` -e ${q(o.environment)}` : '';
   const out = ' -r console junit html -o test-results';
-  if ([o.suite, o.collection, o.tests?.length].filter(Boolean).length > 1) throw new ApsError('ValidationError', 'Choose one of a suite, a collection or test paths', { suggestions: [] });
+  if ([o.suite, o.collection, o.tests?.length, o.ragEvaluation].filter(Boolean).length > 1) throw new ApsError('ValidationError', 'Choose one of a suite, a collection, test paths or a RAG evaluation', { suggestions: [] });
+  if (o.ragEvaluation)
+    return `${cli} rag run ${q(o.ragEvaluation)} -w ${q(ws)}${env}${o.ragPreset ? ` --preset ${q(o.ragPreset)}` : ''}${o.ragJudge ? ` --judge ${q(o.ragJudge)}` : ''}${(o.ragMin ?? []).map((m) => ` --min ${q(m)}`).join('')}${o.ragBaseline ? ` --baseline ${q(o.ragBaseline)}` : ''}${o.ragMaxCost !== undefined ? ` --max-cost ${o.ragMaxCost}` : ''} -o test-results --junit test-results/junit.xml --html test-results/report.html`;
   const prod = o.allowProduction ? ' --allow-production' : '';
   const flowOptions = o.data !== undefined || !!o.envMatrix?.length || !!o.timelineHtml;
   if (flowOptions && (o.suite || o.collection || o.tests?.length !== 1)) throw new ApsError('ValidationError', 'Data, an environment matrix and a timeline run one flow file: give exactly one test file', { suggestions: [] });
@@ -125,6 +136,13 @@ export function ciConfig(store: WorkspaceStore, o: CiConfigOptions): CiConfig {
     if (/^\/|^[A-Za-z]:|(^|\/)\.\.(\/|$)/.test(rel)) throw new ApsError('ValidationError', `"${t}" is not a path inside tests/`, { suggestions: [] });
     if (!existsSync(store.path('tests', rel))) throw new ApsError('ValidationError', `No test file or folder "tests/${rel}"`, { suggestions: [] });
   }
+  if (o.ragEvaluation) {
+    try {
+      findSavedEvaluation(store, o.ragEvaluation);
+    } catch {
+      throw new ApsError('ValidationError', `No saved evaluation "${o.ragEvaluation}"`, { suggestions: [] });
+    }
+  }
   const version = o.version ?? ENGINE_VERSION;
   const tag = version.startsWith('v') ? version : `v${version}`;
   const secrets = ciSecrets(store, o.environment, { providers: !o.collection });
@@ -133,7 +151,7 @@ export function ciConfig(store: WorkspaceStore, o: CiConfigOptions): CiConfig {
   const localCommand = ciCommand({ ...o, workspaceDir: store.root.replace(/\\/g, '/') }, 'testpion');
   const install = `git clone --depth 1 --branch ${tag} ${REPO} "$TESTPION_HOME_DIR" && cd "$TESTPION_HOME_DIR" && npm ci --no-audit --no-fund && npm run build -w @testpion/shared -w @testpion/core -w @testpion/cli`;
   const files = (o.tests ?? []).map((t) => t.replace(/\\/g, '/').replace(/^tests\//, '')).filter((t) => t && t !== '.');
-  const name = o.suite ? `suite ${o.suite}` : o.collection ? `collection ${o.collection}` : files.length ? `tests ${files.slice(0, 3).join(', ')}${files.length > 3 ? ` and ${files.length - 3} more` : ''}` : 'tests';
+  const name = o.ragEvaluation ? `RAG evaluation ${o.ragEvaluation}` : o.suite ? `suite ${o.suite}` : o.collection ? `collection ${o.collection}` : files.length ? `tests ${files.slice(0, 3).join(', ')}${files.length > 3 ? ` and ${files.length - 3} more` : ''}` : 'tests';
   // integration tests: start the system under test, wait until it answers, then run; it is stopped when the job ends
   const start = o.start?.trim() ? `(${o.start.trim()}) &` : undefined;
   const wait = o.waitFor?.trim() ? `node "$TESTPION_CLI" wait-for ${q(o.waitFor.trim())} --timeout ${Math.max(5, Math.round(o.waitSeconds ?? 90))}` : undefined;

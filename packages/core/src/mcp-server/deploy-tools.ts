@@ -60,6 +60,11 @@ export function deployTools({ store }: { store: WorkspaceStore }): Tool[] {
           collection: str('A collection name or id to run'),
           selection: { type: 'array', items: { type: 'string' }, description: 'With collection: folder or request ids to run (default all)' },
           testFile: str('Or a test file / flow under tests/, e.g. orders/new-order.yaml'),
+          evaluation: str('Or a saved RAG evaluation (list_evaluations): its questions are asked of the RAG system and scored on the schedule'),
+          limit: { type: 'number', description: 'With evaluation: only the first n dataset records' },
+          gates: { type: 'object', description: 'With evaluation: metric name → the lowest mean it may have, e.g. { "faithfulness": 0.8, "recall@5": 0.9 }; the run fails below it', additionalProperties: { type: 'number' } },
+          judgeSample: { type: 'number', description: 'With evaluation: the share (0 to 1) of samples that get the judged metrics; the free ones always run' },
+          judgeBudgetUsdPerDay: { type: 'number', description: 'With evaluation: stop judging for the day at this much (USD); the rest is n/a' },
           every: { type: ['string', 'number'], description: 'How often: minutes, or 15m, 1h, 1d' },
           environment: str('The environment it runs with'),
           webhook: str('Alert URL (Slack / Teams / Discord webhook or any URL; {{variables}} work)'),
@@ -71,7 +76,8 @@ export function deployTools({ store }: { store: WorkspaceStore }): Tool[] {
         const name = String(a.name ?? '').trim();
         const hasCollection = typeof a.collection === 'string' && !!a.collection.trim();
         const hasFile = typeof a.testFile === 'string' && !!a.testFile.trim();
-        if (hasCollection === hasFile) throw new ApsError('ValidationError', 'Give collection or testFile (one of them)', { suggestions: [] });
+        const hasEvaluation = typeof a.evaluation === 'string' && !!a.evaluation.trim();
+        if ([hasCollection, hasFile, hasEvaluation].filter(Boolean).length !== 1) throw new ApsError('ValidationError', 'Give collection, testFile or evaluation (one of them)', { suggestions: [] });
         const collection = hasCollection ? findCollection(store, String(a.collection), { loadable: true }) : undefined;
         if (hasCollection && !collection) throw new ApsError('ValidationError', `No collection "${String(a.collection)}"`, { suggestions: [] });
         if (a.environment && !store.getEnvironment(String(a.environment))) throw new ApsError('ValidationError', `No environment "${String(a.environment)}"`, { suggestions: [] });
@@ -83,7 +89,7 @@ export function deployTools({ store }: { store: WorkspaceStore }): Tool[] {
         const m = saveMonitor(store, {
           id: existing?.id ?? shortId('mon-'),
           name,
-          ...(collection ? { collectionId: collection.id, ...(Array.isArray(a.selection) && a.selection.length ? { selection: a.selection.map(String) } : {}) } : { testFile: String(a.testFile) }),
+          ...(collection ? { collectionId: collection.id, ...(Array.isArray(a.selection) && a.selection.length ? { selection: a.selection.map(String) } : {}) } : hasEvaluation ? { evaluation: String(a.evaluation), ...(typeof a.limit === 'number' ? { limit: a.limit } : {}), ...(a.gates && typeof a.gates === 'object' ? { gates: Object.fromEntries(Object.entries(a.gates as Record<string, unknown>).map(([k, v]) => [k, Number(v)])) } : {}), ...(typeof a.judgeSample === 'number' ? { judgeSample: a.judgeSample } : {}), ...(typeof a.judgeBudgetUsdPerDay === 'number' ? { judgeBudgetUsdPerDay: a.judgeBudgetUsdPerDay } : {}) } : { testFile: String(a.testFile) }),
           everyMinutes: parseEvery(a.every as string | number),
           enabled: a.enabled !== false,
           ...(a.environment ? { environment: String(a.environment) } : {}),
