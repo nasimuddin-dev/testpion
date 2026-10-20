@@ -1,0 +1,408 @@
+{
+  "apidogProject": "1.0.0",
+  "info": {
+    "name": "Chat API"
+  },
+  "apiCollection": [
+    {
+      "name": "Root",
+      "id": 1,
+      "items": [
+        {
+          "name": "conversations",
+          "id": 10,
+          "items": [
+            {
+              "name": "conversations.list",
+              "api": {
+                "id": "101",
+                "method": "get",
+                "path": "/conversations.list",
+                "parameters": {
+                  "query": [
+                    {
+                      "name": "limit",
+                      "required": true,
+                      "type": "string",
+                      "example": "100"
+                    },
+                    {
+                      "name": "types",
+                      "required": true,
+                      "type": "string",
+                      "example": "public_channel"
+                    }
+                  ],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "responses": [
+                  {
+                    "id": "1010",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "conversations.history",
+              "api": {
+                "id": "102",
+                "method": "get",
+                "path": "/conversations.history",
+                "parameters": {
+                  "query": [
+                    {
+                      "name": "channel",
+                      "required": true,
+                      "type": "string",
+                      "example": "{{channel}}"
+                    },
+                    {
+                      "name": "limit",
+                      "required": true,
+                      "type": "string",
+                      "example": "20"
+                    }
+                  ],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "responses": [
+                  {
+                    "id": "1020",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "conversations.join",
+              "api": {
+                "id": "103",
+                "method": "post",
+                "path": "/conversations.join",
+                "parameters": {
+                  "query": [],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "requestBody": {
+                  "type": "application/json",
+                  "example": "{\n  \"channel\": \"{{channel}}\"\n}"
+                },
+                "responses": [
+                  {
+                    "id": "1030",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "conversations.create",
+              "api": {
+                "id": "104",
+                "method": "post",
+                "path": "/conversations.create",
+                "parameters": {
+                  "query": [],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "requestBody": {
+                  "type": "application/json",
+                  "example": "{\n  \"name\": \"new-channel\",\n  \"is_private\": false\n}"
+                },
+                "responses": [
+                  {
+                    "id": "1040",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "chat",
+          "id": 11,
+          "items": [
+            {
+              "name": "chat.postMessage",
+              "api": {
+                "id": "105",
+                "method": "post",
+                "path": "/chat.postMessage",
+                "parameters": {
+                  "query": [],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "requestBody": {
+                  "type": "application/json",
+                  "example": "{\n  \"channel\": \"{{channel}}\",\n  \"text\": \"Hello, world\",\n  \"unfurl_links\": false\n}"
+                },
+                "responses": [
+                  {
+                    "id": "1050",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "chat.update",
+              "api": {
+                "id": "106",
+                "method": "post",
+                "path": "/chat.update",
+                "parameters": {
+                  "query": [],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "requestBody": {
+                  "type": "application/json",
+                  "example": "{\n  \"channel\": \"{{channel}}\",\n  \"ts\": \"1405894322.002768\",\n  \"text\": \"edited\"\n}"
+                },
+                "responses": [
+                  {
+                    "id": "1060",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "chat.delete",
+              "api": {
+                "id": "107",
+                "method": "post",
+                "path": "/chat.delete",
+                "parameters": {
+                  "query": [],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "requestBody": {
+                  "type": "application/json",
+                  "example": "{\n  \"channel\": \"{{channel}}\",\n  \"ts\": \"1405894322.002768\"\n}"
+                },
+                "responses": [
+                  {
+                    "id": "1070",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "users",
+          "id": 12,
+          "items": [
+            {
+              "name": "users.list",
+              "api": {
+                "id": "108",
+                "method": "get",
+                "path": "/users.list",
+                "parameters": {
+                  "query": [
+                    {
+                      "name": "limit",
+                      "required": true,
+                      "type": "string",
+                      "example": "200"
+                    }
+                  ],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "responses": [
+                  {
+                    "id": "1080",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "users.info",
+              "api": {
+                "id": "109",
+                "method": "get",
+                "path": "/users.info",
+                "parameters": {
+                  "query": [
+                    {
+                      "name": "user",
+                      "required": true,
+                      "type": "string",
+                      "example": "U0123"
+                    }
+                  ],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "responses": [
+                  {
+                    "id": "1090",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "auth.test",
+              "api": {
+                "id": "110",
+                "method": "post",
+                "path": "/auth.test",
+                "parameters": {
+                  "query": [],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "responses": [
+                  {
+                    "id": "1100",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "environments": [
+    {
+      "name": "workspace",
+      "baseUrl": "https://chat.example.test/api",
+      "variables": [
+        {
+          "name": "botToken",
+          "value": "xoxb-test"
+        },
+        {
+          "name": "channel",
+          "value": "C0123"
+        }
+      ]
+    }
+  ]
+}

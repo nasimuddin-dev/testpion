@@ -1,0 +1,443 @@
+{
+  "clientName": "Thunder Client",
+  "collectionName": "Pet Store",
+  "collectionId": "c-petstore",
+  "dateExported": "2026-03-01T00:00:00.000Z",
+  "version": "1.2",
+  "folders": [
+    {
+      "_id": "f0",
+      "name": "pet",
+      "containerId": "",
+      "created": "2026-01-01",
+      "sortNum": 10000
+    },
+    {
+      "_id": "f1",
+      "name": "store",
+      "containerId": "",
+      "created": "2026-01-01",
+      "sortNum": 20000
+    },
+    {
+      "_id": "f2",
+      "name": "user",
+      "containerId": "",
+      "created": "2026-01-01",
+      "sortNum": 30000
+    }
+  ],
+  "requests": [
+    {
+      "_id": "r1",
+      "colId": "c-petstore",
+      "containerId": "f0",
+      "name": "Add a new pet",
+      "url": "{{baseUrl}}/pet",
+      "method": "POST",
+      "sortNum": 10000,
+      "headers": [],
+      "params": [],
+      "body": {
+        "type": "json",
+        "raw": "{\n  \"id\": 0,\n  \"name\": \"doggie\",\n  \"status\": \"available\",\n  \"tags\": [\n    {\n      \"name\": \"good\"\n    }\n  ]\n}",
+        "form": []
+      },
+      "auth": {
+        "type": "apikey",
+        "apikey": {
+          "key": "api_key",
+          "value": "{{apiKey}}",
+          "addTo": "header"
+        }
+      },
+      "tests": []
+    },
+    {
+      "_id": "r2",
+      "colId": "c-petstore",
+      "containerId": "f0",
+      "name": "Update an existing pet",
+      "url": "{{baseUrl}}/pet",
+      "method": "PUT",
+      "sortNum": 20000,
+      "headers": [],
+      "params": [],
+      "body": {
+        "type": "json",
+        "raw": "{\n  \"id\": 1,\n  \"name\": \"doggie\",\n  \"status\": \"sold\"\n}",
+        "form": []
+      },
+      "auth": {
+        "type": "apikey",
+        "apikey": {
+          "key": "api_key",
+          "value": "{{apiKey}}",
+          "addTo": "header"
+        }
+      },
+      "tests": []
+    },
+    {
+      "_id": "r3",
+      "colId": "c-petstore",
+      "containerId": "f0",
+      "name": "Find pets by status",
+      "url": "{{baseUrl}}/pet/findByStatus",
+      "method": "GET",
+      "sortNum": 30000,
+      "headers": [],
+      "params": [
+        {
+          "name": "status",
+          "value": "available",
+          "isPath": false
+        }
+      ],
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
+      "auth": {
+        "type": "apikey",
+        "apikey": {
+          "key": "api_key",
+          "value": "{{apiKey}}",
+          "addTo": "header"
+        }
+      },
+      "tests": [
+        {
+          "type": "res-code",
+          "custom": "",
+          "action": "equal",
+          "value": "200"
+        }
+      ]
+    },
+    {
+      "_id": "r4",
+      "colId": "c-petstore",
+      "containerId": "f0",
+      "name": "Find pet by ID",
+      "url": "{{baseUrl}}/pet/1",
+      "method": "GET",
+      "sortNum": 40000,
+      "headers": [],
+      "params": [],
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
+      "auth": {
+        "type": "apikey",
+        "apikey": {
+          "key": "api_key",
+          "value": "{{apiKey}}",
+          "addTo": "header"
+        }
+      },
+      "tests": [
+        {
+          "type": "res-code",
+          "custom": "",
+          "action": "equal",
+          "value": "200"
+        }
+      ]
+    },
+    {
+      "_id": "r5",
+      "colId": "c-petstore",
+      "containerId": "f0",
+      "name": "Delete a pet",
+      "url": "{{baseUrl}}/pet/1",
+      "method": "DELETE",
+      "sortNum": 50000,
+      "headers": [
+        {
+          "name": "api_key",
+          "value": "{{apiKey}}"
+        }
+      ],
+      "params": [],
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
+      "auth": {
+        "type": "apikey",
+        "apikey": {
+          "key": "api_key",
+          "value": "{{apiKey}}",
+          "addTo": "header"
+        }
+      },
+      "tests": []
+    },
+    {
+      "_id": "r6",
+      "colId": "c-petstore",
+      "containerId": "f0",
+      "name": "Upload an image",
+      "url": "{{baseUrl}}/pet/1/uploadImage",
+      "method": "POST",
+      "sortNum": 60000,
+      "headers": [],
+      "params": [],
+      "body": {
+        "type": "formdata",
+        "raw": "",
+        "form": [
+          {
+            "name": "additionalMetadata",
+            "value": "cute"
+          }
+        ],
+        "files": [
+          {
+            "name": "file",
+            "value": "dog.png"
+          }
+        ]
+      },
+      "auth": {
+        "type": "apikey",
+        "apikey": {
+          "key": "api_key",
+          "value": "{{apiKey}}",
+          "addTo": "header"
+        }
+      },
+      "tests": []
+    },
+    {
+      "_id": "r7",
+      "colId": "c-petstore",
+      "containerId": "f1",
+      "name": "Returns pet inventories by status",
+      "url": "{{baseUrl}}/store/inventory",
+      "method": "GET",
+      "sortNum": 70000,
+      "headers": [],
+      "params": [],
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
+      "auth": {
+        "type": "apikey",
+        "apikey": {
+          "key": "api_key",
+          "value": "{{apiKey}}",
+          "addTo": "header"
+        }
+      },
+      "tests": [
+        {
+          "type": "res-code",
+          "custom": "",
+          "action": "equal",
+          "value": "200"
+        }
+      ]
+    },
+    {
+      "_id": "r8",
+      "colId": "c-petstore",
+      "containerId": "f1",
+      "name": "Place an order for a pet",
+      "url": "{{baseUrl}}/store/order",
+      "method": "POST",
+      "sortNum": 80000,
+      "headers": [],
+      "params": [],
+      "body": {
+        "type": "json",
+        "raw": "{\n  \"petId\": 1,\n  \"quantity\": 1,\n  \"status\": \"placed\"\n}",
+        "form": []
+      },
+      "auth": {
+        "type": "apikey",
+        "apikey": {
+          "key": "api_key",
+          "value": "{{apiKey}}",
+          "addTo": "header"
+        }
+      },
+      "tests": []
+    },
+    {
+      "_id": "r9",
+      "colId": "c-petstore",
+      "containerId": "f1",
+      "name": "Find purchase order by ID",
+      "url": "{{baseUrl}}/store/order/1",
+      "method": "GET",
+      "sortNum": 90000,
+      "headers": [],
+      "params": [],
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
+      "auth": {
+        "type": "apikey",
+        "apikey": {
+          "key": "api_key",
+          "value": "{{apiKey}}",
+          "addTo": "header"
+        }
+      },
+      "tests": []
+    },
+    {
+      "_id": "r10",
+      "colId": "c-petstore",
+      "containerId": "f1",
+      "name": "Delete purchase order by ID",
+      "url": "{{baseUrl}}/store/order/1",
+      "method": "DELETE",
+      "sortNum": 100000,
+      "headers": [],
+      "params": [],
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
+      "auth": {
+        "type": "apikey",
+        "apikey": {
+          "key": "api_key",
+          "value": "{{apiKey}}",
+          "addTo": "header"
+        }
+      },
+      "tests": []
+    },
+    {
+      "_id": "r11",
+      "colId": "c-petstore",
+      "containerId": "f2",
+      "name": "Create user",
+      "url": "{{baseUrl}}/user",
+      "method": "POST",
+      "sortNum": 110000,
+      "headers": [],
+      "params": [],
+      "body": {
+        "type": "json",
+        "raw": "{\n  \"username\": \"theUser\",\n  \"email\": \"john@example.test\"\n}",
+        "form": []
+      },
+      "auth": {
+        "type": "apikey",
+        "apikey": {
+          "key": "api_key",
+          "value": "{{apiKey}}",
+          "addTo": "header"
+        }
+      },
+      "tests": []
+    },
+    {
+      "_id": "r12",
+      "colId": "c-petstore",
+      "containerId": "f2",
+      "name": "Logs user into the system",
+      "url": "{{baseUrl}}/user/login",
+      "method": "GET",
+      "sortNum": 120000,
+      "headers": [],
+      "params": [
+        {
+          "name": "username",
+          "value": "theUser",
+          "isPath": false
+        },
+        {
+          "name": "password",
+          "value": "{{password}}",
+          "isPath": false
+        }
+      ],
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
+      "auth": {
+        "type": "apikey",
+        "apikey": {
+          "key": "api_key",
+          "value": "{{apiKey}}",
+          "addTo": "header"
+        }
+      },
+      "tests": [
+        {
+          "type": "res-code",
+          "custom": "",
+          "action": "equal",
+          "value": "200"
+        }
+      ]
+    },
+    {
+      "_id": "r13",
+      "colId": "c-petstore",
+      "containerId": "f2",
+      "name": "Get user by user name",
+      "url": "{{baseUrl}}/user/theUser",
+      "method": "GET",
+      "sortNum": 130000,
+      "headers": [],
+      "params": [],
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
+      "auth": {
+        "type": "apikey",
+        "apikey": {
+          "key": "api_key",
+          "value": "{{apiKey}}",
+          "addTo": "header"
+        }
+      },
+      "tests": []
+    },
+    {
+      "_id": "r14",
+      "colId": "c-petstore",
+      "containerId": "f2",
+      "name": "Logs out current logged in user session",
+      "url": "{{baseUrl}}/user/logout",
+      "method": "GET",
+      "sortNum": 140000,
+      "headers": [],
+      "params": [],
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
+      "auth": {
+        "type": "apikey",
+        "apikey": {
+          "key": "api_key",
+          "value": "{{apiKey}}",
+          "addTo": "header"
+        }
+      },
+      "tests": []
+    }
+  ]
+}

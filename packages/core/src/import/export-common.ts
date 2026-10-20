@@ -7,6 +7,19 @@ import type { CheckConfig, Collection, CollectionFolder, CollectionNode, KeyValu
  * collection carries that the target format only has on folders and requests.
  */
 
+/**
+ * A name as a file name on every system: no characters Windows refuses, no trailing dot or space, no leading dot, no
+ * device name (CON, NUL, AUX, PRN, COM1-9, LPT1-9, with or without an extension: opening one on Windows talks to a device,
+ * not a file), at most 120 characters. An empty name is `fallback`.
+ */
+export function safeFileName(name: string, fallback = 'request'): string {
+  // eslint-disable-next-line no-control-regex
+  let s = name.replace(/[<>:"/\\|?*\u0000-\u001f]/g, '-').replace(/[. ]+$/g, '').replace(/^\.+/, '').replace(/^\s+/, '').slice(0, 120).replace(/[. ]+$/g, '');
+  if (!s) s = fallback;
+  s = s.replace(/^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?=\.|$)/i, '$1_');
+  return s;
+}
+
 /** A deterministic id with a prefix (`req_3f9c…`), so exporting the same collection twice gives the same ids. */
 export const stableId = (prefix: string, seed: string): string => `${prefix}_${createHash('sha1').update(seed).digest('hex').slice(0, 24)}`;
 

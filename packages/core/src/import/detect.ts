@@ -1,4 +1,4 @@
-import { parseYaml } from '../util/lazy-yaml.js';
+import { parseYamlShared } from '../util/lazy-yaml.js';
 import { WORKSPACE_FORMATS } from '../storage/workspace.js';
 import type { ImportFormat } from '@testpion/shared';
 import { looksLikeBru } from './bru.js';
@@ -28,7 +28,7 @@ export function detectFormat(text: string): ImportFormat | 'unknown' {
   if (!t.startsWith('{') && !t.startsWith('[') && isDotenv(t)) return 'dotenv';
   let d: Record<string, any>;
   try {
-    d = t.startsWith('{') || t.startsWith('[') ? JSON.parse(t) : parseYaml(t);
+    d = t.startsWith('{') || t.startsWith('[') ? JSON.parse(t) : (parseYamlShared(t) as Record<string, any>);
   } catch {
     return 'unknown';
   }

@@ -1,4 +1,4 @@
-import { parseYaml } from '../util/lazy-yaml.js';
+import { parseYamlShared } from '../util/lazy-yaml.js';
 import type { Collection, CollectionFolder, CollectionNode, Environment, HttpSettings, KeyValue, LibraryItem, SavedGraphQLRequest, SavedHttpRequest } from '../model/types.js';
 import { shortId, slugify } from '../util/ids.js';
 import { mapForeignAuth } from './foreign-auth.js';
@@ -227,7 +227,7 @@ function unitTests(tests: Array<{ suite: string; name: string; code: string; req
 /** Insomnia v4 / v5 → document. */
 export function parseInsomnia(text: string): ImportDocument {
   const t = text.trim();
-  const d: Any = t.startsWith('{') ? JSON.parse(t) : parseYaml(t);
+  const d: Any = t.startsWith('{') ? JSON.parse(t) : (parseYamlShared(t) as Any);
   const findings = new Findings();
   const v5 = String(d.type ?? '').startsWith('collection.insomnia.rest/5');
   const ctx: Ctx = { findings, requests: [], folders: [], saved: { grpc: [], websocket: [] }, specs: [], sourceIds: {} };

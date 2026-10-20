@@ -1,4 +1,4 @@
-import { parseYaml } from '../util/lazy-yaml.js';
+import { parseYaml, parseYamlShared } from '../util/lazy-yaml.js';
 import type { AuthConfig, BodyConfig, CheckConfig, Collection, CollectionFolder, CollectionNode, Environment, HttpSettings, KeyValue, LibraryItem, SavedExample } from '../model/types.js';
 import { shortId, slugify } from '../util/ids.js';
 import { brunoAssertionScript } from '../scripts/bruno.js';
@@ -186,7 +186,7 @@ function examplesOf(list: Any[] | undefined): SavedExample[] | undefined {
 /** An OpenCollection document (bundled) → import document. */
 export function parseOpenCollection(textIn: string): ImportDocument {
   const t = textIn.trim();
-  const d: Any = t.startsWith('{') ? JSON.parse(t) : parseYaml(t);
+  const d: Any = t.startsWith('{') ? JSON.parse(t) : (parseYamlShared(t) as Any);
   const findings = new Findings();
   const doc = newDocument('opencollection', textIn, { tool: 'Bruno (OpenCollection)', version: String(d.opencollection ?? ''), scriptTool: 'bruno' });
   const savedItems: { grpc?: LibraryItem[]; websocket?: LibraryItem[] } = {};

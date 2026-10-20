@@ -2,7 +2,7 @@ import type { AuthConfig, BodyConfig, Collection, CollectionFolder, CollectionNo
 import { tpToBruno } from '../scripts/bruno.js';
 import { stringifyYaml } from '../util/lazy-yaml.js';
 import { slugify } from '../util/ids.js';
-import { assertionsToTests, joinScripts } from './export-common.js';
+import { assertionsToTests, joinScripts, safeFileName } from './export-common.js';
 
 /**
  * Export a collection as OpenCollection, the YAML format Bruno uses by default since 3.1 (opencollection.com): a folder with
@@ -174,8 +174,9 @@ export function collectionToOpenCollection(c: Collection, envs: Environment[] = 
   const names = (dir: string, list: CollectionNode[]) => {
     const used = new Set<string>();
     return list.map((n) => {
-      let stem = slugify(n.name) || 'item';
-      for (let i = 2; used.has(`${dir}${stem}`); i++) stem = `${slugify(n.name) || 'item'}-${i}`;
+      const base = safeFileName(slugify(n.name), 'item');
+      let stem = base;
+      for (let i = 2; used.has(`${dir}${stem}`); i++) stem = `${base}-${i}`;
       used.add(`${dir}${stem}`);
       return stem;
     });
@@ -193,7 +194,7 @@ export function collectionToOpenCollection(c: Collection, envs: Environment[] = 
     });
   };
   walk(c.items, '');
-  for (const e of envs) files.push({ path: `environments/${slugify(e.name) || 'env'}.yml`, text: y(envFile(e)) });
+  for (const e of envs) files.push({ path: `environments/${safeFileName(slugify(e.name), 'env')}.yml`, text: y(envFile(e)) });
   if (envs.some((e) => e.variables.some((v) => v.secret))) notes.add('Secret variable values are never exported: enter them in Bruno');
   return { files, notes: [...notes] };
 }

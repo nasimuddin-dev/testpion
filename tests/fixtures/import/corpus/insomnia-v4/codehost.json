@@ -1,0 +1,229 @@
+{
+  "_type": "export",
+  "__export_format": 4,
+  "__export_source": "insomnia.desktop.app:v10",
+  "resources": [
+    {
+      "_id": "wrk_codehost",
+      "_type": "workspace",
+      "name": "Code Host API",
+      "parentId": null
+    },
+    {
+      "_id": "fld_codehost_0",
+      "_type": "request_group",
+      "parentId": "wrk_codehost",
+      "name": "Repos",
+      "metaSortKey": 0,
+      "authentication": {
+        "type": "bearer",
+        "token": "{{token}}"
+      }
+    },
+    {
+      "_id": "req_codehost_0_0",
+      "_type": "request",
+      "parentId": "fld_codehost_0",
+      "metaSortKey": 0,
+      "name": "Get a repository",
+      "url": "{{ _.baseUrl }}/repos/{{ _.owner }}/{{ _.repo }}",
+      "method": "GET",
+      "headers": [
+        {
+          "name": "Accept",
+          "value": "application/vnd.codehost+json"
+        }
+      ],
+      "afterResponseScript": "insomnia.test(\"Status code is 200\", () => {\n  insomnia.expect(insomnia.response.code).to.eql(200);\n});"
+    },
+    {
+      "_id": "req_codehost_0_1",
+      "_type": "request",
+      "parentId": "fld_codehost_0",
+      "metaSortKey": 1,
+      "name": "List repository contributors",
+      "url": "{{ _.baseUrl }}/repos/{{ _.owner }}/{{ _.repo }}/contributors",
+      "method": "GET",
+      "parameters": [
+        {
+          "name": "per_page",
+          "value": "30"
+        },
+        {
+          "name": "page",
+          "value": "1"
+        }
+      ],
+      "headers": []
+    },
+    {
+      "_id": "req_codehost_0_2",
+      "_type": "request",
+      "parentId": "fld_codehost_0",
+      "metaSortKey": 2,
+      "name": "List branches",
+      "url": "{{ _.baseUrl }}/repos/{{ _.owner }}/{{ _.repo }}/branches",
+      "method": "GET",
+      "headers": []
+    },
+    {
+      "_id": "req_codehost_0_3",
+      "_type": "request",
+      "parentId": "fld_codehost_0",
+      "metaSortKey": 3,
+      "name": "Create a fork",
+      "url": "{{ _.baseUrl }}/repos/{{ _.owner }}/{{ _.repo }}/forks",
+      "method": "POST",
+      "headers": []
+    },
+    {
+      "_id": "req_codehost_0_4",
+      "_type": "request",
+      "parentId": "fld_codehost_0",
+      "metaSortKey": 4,
+      "name": "Delete a repository",
+      "url": "{{ _.baseUrl }}/repos/{{ _.owner }}/{{ _.repo }}",
+      "method": "DELETE",
+      "headers": []
+    },
+    {
+      "_id": "fld_codehost_1",
+      "_type": "request_group",
+      "parentId": "wrk_codehost",
+      "name": "Issues",
+      "metaSortKey": 1
+    },
+    {
+      "_id": "req_codehost_1_0",
+      "_type": "request",
+      "parentId": "fld_codehost_1",
+      "metaSortKey": 0,
+      "name": "List issues",
+      "url": "{{ _.baseUrl }}/repos/{{ _.owner }}/{{ _.repo }}/issues",
+      "method": "GET",
+      "parameters": [
+        {
+          "name": "state",
+          "value": "open"
+        },
+        {
+          "name": "labels",
+          "value": "bug"
+        }
+      ],
+      "headers": []
+    },
+    {
+      "_id": "req_codehost_1_1",
+      "_type": "request",
+      "parentId": "fld_codehost_1",
+      "metaSortKey": 1,
+      "name": "Create an issue",
+      "url": "{{ _.baseUrl }}/repos/{{ _.owner }}/{{ _.repo }}/issues",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"title\": \"Found a bug\",\n  \"body\": \"I'm having a problem with this.\",\n  \"labels\": [\n    \"bug\"\n  ]\n}"
+      },
+      "headers": [],
+      "afterResponseScript": "insomnia.test(\"Status code is 201\", () => {\n  insomnia.expect(insomnia.response.code).to.eql(201);\n});"
+    },
+    {
+      "_id": "req_codehost_1_2",
+      "_type": "request",
+      "parentId": "fld_codehost_1",
+      "metaSortKey": 2,
+      "name": "Get an issue",
+      "url": "{{ _.baseUrl }}/repos/{{ _.owner }}/{{ _.repo }}/issues/1347",
+      "method": "GET",
+      "headers": []
+    },
+    {
+      "_id": "req_codehost_1_3",
+      "_type": "request",
+      "parentId": "fld_codehost_1",
+      "metaSortKey": 3,
+      "name": "Update an issue",
+      "url": "{{ _.baseUrl }}/repos/{{ _.owner }}/{{ _.repo }}/issues/1347",
+      "method": "PATCH",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"state\": \"closed\"\n}"
+      },
+      "headers": []
+    },
+    {
+      "_id": "req_codehost_1_4",
+      "_type": "request",
+      "parentId": "fld_codehost_1",
+      "metaSortKey": 4,
+      "name": "Lock an issue",
+      "url": "{{ _.baseUrl }}/repos/{{ _.owner }}/{{ _.repo }}/issues/1347/lock",
+      "method": "PUT",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"lock_reason\": \"resolved\"\n}"
+      },
+      "headers": []
+    },
+    {
+      "_id": "fld_codehost_2",
+      "_type": "request_group",
+      "parentId": "wrk_codehost",
+      "name": "Users",
+      "metaSortKey": 2
+    },
+    {
+      "_id": "req_codehost_2_0",
+      "_type": "request",
+      "parentId": "fld_codehost_2",
+      "metaSortKey": 0,
+      "name": "Get the authenticated user",
+      "url": "{{ _.baseUrl }}/user",
+      "method": "GET",
+      "headers": [],
+      "afterResponseScript": "insomnia.test(\"Status code is 200\", () => {\n  insomnia.expect(insomnia.response.code).to.eql(200);\n});"
+    },
+    {
+      "_id": "req_codehost_2_1",
+      "_type": "request",
+      "parentId": "fld_codehost_2",
+      "metaSortKey": 1,
+      "name": "Get a user",
+      "url": "{{ _.baseUrl }}/users/{{ _.owner }}",
+      "method": "GET",
+      "headers": []
+    },
+    {
+      "_id": "req_codehost_2_2",
+      "_type": "request",
+      "parentId": "fld_codehost_2",
+      "metaSortKey": 2,
+      "name": "List followers of a user",
+      "url": "{{ _.baseUrl }}/users/{{ _.owner }}/followers",
+      "method": "GET",
+      "headers": []
+    },
+    {
+      "_id": "env_codehost",
+      "_type": "environment",
+      "parentId": "wrk_codehost",
+      "name": "Base Environment",
+      "data": {
+        "baseUrl": "https://api.codehost.example.test"
+      }
+    },
+    {
+      "_id": "env_codehost_default",
+      "_type": "environment",
+      "parentId": "env_codehost",
+      "name": "default",
+      "data": {
+        "baseUrl": "https://api.codehost.example.test",
+        "token": "",
+        "owner": "octocat",
+        "repo": "hello-world"
+      }
+    }
+  ]
+}

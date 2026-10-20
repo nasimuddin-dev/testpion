@@ -1,0 +1,156 @@
+opencollection: 1.0.0
+bundled: true
+info:
+  name: Maps API
+request:
+  auth:
+    type: apikey
+    key: key
+    value: "{{mapsKey}}"
+    placement: query
+  variables:
+    - name: baseUrl
+      value: https://maps.example.test/maps/api
+items:
+  - info:
+      name: Geocoding
+      type: folder
+      seq: 1
+    items:
+      - info:
+          name: Geocode an address
+          type: http
+          seq: 1
+        http:
+          method: GET
+          url: "{{baseUrl}}/geocode/json"
+          params:
+            - name: address
+              value: 1600 Amphitheatre Parkway, Mountain View, CA
+              type: query
+        runtime:
+          assertions:
+            - expression: res.status
+              operator: eq
+              value: "200"
+      - info:
+          name: Reverse geocode
+          type: http
+          seq: 2
+        http:
+          method: GET
+          url: "{{baseUrl}}/geocode/json"
+          params:
+            - name: latlng
+              value: 40.714224,-73.961452
+              type: query
+      - info:
+          name: Geocode by place id
+          type: http
+          seq: 3
+        http:
+          method: GET
+          url: "{{baseUrl}}/geocode/json"
+          params:
+            - name: place_id
+              value: ChIJd8BlQ2BZwokRAFUEcm_qrcA
+              type: query
+  - info:
+      name: Directions
+      type: folder
+      seq: 2
+    items:
+      - info:
+          name: Driving directions
+          type: http
+          seq: 1
+        http:
+          method: GET
+          url: "{{baseUrl}}/directions/json"
+          params:
+            - name: origin
+              value: Toronto
+              type: query
+            - name: destination
+              value: Montreal
+              type: query
+            - name: mode
+              value: driving
+              type: query
+        runtime:
+          assertions:
+            - expression: res.status
+              operator: eq
+              value: "200"
+      - info:
+          name: Transit directions
+          type: http
+          seq: 2
+        http:
+          method: GET
+          url: "{{baseUrl}}/directions/json"
+          params:
+            - name: origin
+              value: Boston
+              type: query
+            - name: destination
+              value: Concord
+              type: query
+            - name: mode
+              value: transit
+              type: query
+  - info:
+      name: Places
+      type: folder
+      seq: 3
+    items:
+      - info:
+          name: Find place
+          type: http
+          seq: 1
+        http:
+          method: GET
+          url: "{{baseUrl}}/place/findplacefromtext/json"
+          params:
+            - name: input
+              value: Museum of Contemporary Art Australia
+              type: query
+            - name: inputtype
+              value: textquery
+              type: query
+      - info:
+          name: Place details
+          type: http
+          seq: 2
+        http:
+          method: GET
+          url: "{{baseUrl}}/place/details/json"
+          params:
+            - name: place_id
+              value: ChIJN1t_tDeuEmsRUsoyG83frY4
+              type: query
+      - info:
+          name: Nearby search
+          type: http
+          seq: 3
+        http:
+          method: GET
+          url: "{{baseUrl}}/place/nearbysearch/json"
+          params:
+            - name: location
+              value: -33.8670522,151.1957362
+              type: query
+            - name: radius
+              value: "1500"
+              type: query
+            - name: type
+              value: restaurant
+              type: query
+config:
+  environments:
+    - name: default
+      variables:
+        - name: baseUrl
+          value: https://maps.example.test/maps/api
+        - name: mapsKey
+          value: AIza-test

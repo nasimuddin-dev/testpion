@@ -179,6 +179,11 @@ export function parseBruno(text: string): ImportDocument {
         headers.push(...a.headers);
         const auth = a.auth ?? { type: 'inherit' as const };
         const examples = it.type === 'http-request' ? brunoExamples(r.examples ?? it.examples) : undefined;
+        const exampleCount = (r.examples ?? it.examples ?? []).length;
+        if (it.type === 'http-request' && exampleCount > (examples?.length ?? 0)) {
+          const n = exampleCount - (examples?.length ?? 0);
+          findings.add({ code: 'NOT_IMPORTED', severity: 'not-imported', where: [name], field: 'examples', message: `"${name}": ${n} Bruno response example${n > 1 ? 's' : ''} had no response and ${n > 1 ? 'were' : 'was'} not imported` });
+        }
         if (it.type === 'graphql-request' && (r.examples?.length || it.examples?.length)) findings.add({ code: 'NOT_IMPORTED', severity: 'not-imported', where: [name], field: 'examples', message: `"${name}": the response examples of a GraphQL request were not imported` });
         const settings = brunoSettings(r.settings ?? it.settings);
         if (it.type === 'graphql-request') {

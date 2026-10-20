@@ -1,0 +1,296 @@
+{
+  "apidogProject": "1.0.0",
+  "info": {
+    "name": "Weather API"
+  },
+  "apiCollection": [
+    {
+      "name": "Root",
+      "id": 1,
+      "items": [
+        {
+          "name": "Current",
+          "id": 10,
+          "items": [
+            {
+              "name": "Current weather by city",
+              "api": {
+                "id": "101",
+                "method": "get",
+                "path": "/weather",
+                "parameters": {
+                  "query": [
+                    {
+                      "name": "q",
+                      "required": true,
+                      "type": "string",
+                      "example": "London,uk"
+                    },
+                    {
+                      "name": "units",
+                      "required": true,
+                      "type": "string",
+                      "example": "metric"
+                    }
+                  ],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "responses": [
+                  {
+                    "id": "1010",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "Current weather by coordinates",
+              "api": {
+                "id": "102",
+                "method": "get",
+                "path": "/weather",
+                "parameters": {
+                  "query": [
+                    {
+                      "name": "lat",
+                      "required": true,
+                      "type": "string",
+                      "example": "51.5"
+                    },
+                    {
+                      "name": "lon",
+                      "required": true,
+                      "type": "string",
+                      "example": "-0.12"
+                    }
+                  ],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "responses": [
+                  {
+                    "id": "1020",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "Current weather by zip",
+              "api": {
+                "id": "103",
+                "method": "get",
+                "path": "/weather",
+                "parameters": {
+                  "query": [
+                    {
+                      "name": "zip",
+                      "required": true,
+                      "type": "string",
+                      "example": "94040,us"
+                    }
+                  ],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "responses": [
+                  {
+                    "id": "1030",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Forecast",
+          "id": 11,
+          "items": [
+            {
+              "name": "5 day forecast",
+              "api": {
+                "id": "104",
+                "method": "get",
+                "path": "/forecast",
+                "parameters": {
+                  "query": [
+                    {
+                      "name": "q",
+                      "required": true,
+                      "type": "string",
+                      "example": "Paris"
+                    },
+                    {
+                      "name": "cnt",
+                      "required": true,
+                      "type": "string",
+                      "example": "40"
+                    }
+                  ],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "responses": [
+                  {
+                    "id": "1040",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "Air pollution",
+              "api": {
+                "id": "105",
+                "method": "get",
+                "path": "/air_pollution",
+                "parameters": {
+                  "query": [
+                    {
+                      "name": "lat",
+                      "required": true,
+                      "type": "string",
+                      "example": "50"
+                    },
+                    {
+                      "name": "lon",
+                      "required": true,
+                      "type": "string",
+                      "example": "50"
+                    }
+                  ],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "responses": [
+                  {
+                    "id": "1050",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "Weather alerts",
+              "api": {
+                "id": "106",
+                "method": "get",
+                "path": "/onecall",
+                "parameters": {
+                  "query": [
+                    {
+                      "name": "lat",
+                      "required": true,
+                      "type": "string",
+                      "example": "33.44"
+                    },
+                    {
+                      "name": "lon",
+                      "required": true,
+                      "type": "string",
+                      "example": "-94.04"
+                    },
+                    {
+                      "name": "exclude",
+                      "required": true,
+                      "type": "string",
+                      "example": "minutely,hourly"
+                    }
+                  ],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "responses": [
+                  {
+                    "id": "1060",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "environments": [
+    {
+      "name": "default",
+      "baseUrl": "https://api.weather.example.test/data/2.5",
+      "variables": [
+        {
+          "name": "appid",
+          "value": "demo"
+        }
+      ]
+    }
+  ]
+}

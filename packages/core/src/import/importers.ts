@@ -38,7 +38,9 @@ export type { ImportAnyResult } from './pipeline.js';
 const withFormat = (doc: ImportDocument, format: string): ImportDocument => ({ ...doc, format });
 
 /** Read any supported text into an import document (scripts not yet converted, ids not yet made unique). */
-export function parseImport(text: string, opts: { name?: string } = {}): ImportDocument {
+export function parseImport(textIn: string, opts: { name?: string } = {}): ImportDocument {
+  // (a file saved with a byte order mark)
+  const text = textIn.charCodeAt(0) === 0xfeff ? textIn.slice(1) : textIn;
   const format = detectFormat(text);
   switch (format) {
     case 'openapi':
@@ -129,8 +131,18 @@ export function parseImport(text: string, opts: { name?: string } = {}): ImportD
 
 /** A text read, converted and checked: the document with its report (nothing is written anywhere). */
 export function importDocument(text: string, opts: { name?: string; scripts?: ImportScriptsMode; takenIds?: Iterable<string>; liftTests?: boolean } = {}): { document: ImportDocument; report: ImportReport } {
-  const document = finishDocument(parseImport(text, opts), opts);
+  const document = nested(() => finishDocument(parseImport(text, opts), opts));
   return { document, report: buildReport(document) };
+}
+
+/** A file nested thousands of levels deep overflows the stack of any recursive reader: that is a message, not a crash. */
+function nested<T>(f: () => T): T {
+  try {
+    return f();
+  } catch (e) {
+    if (e instanceof RangeError && /call stack/i.test(e.message)) throw new ApsError('ValidationError', 'The file is nested too deeply to import (folders or objects thousands of levels deep)', { suggestions: ['Check the file: a real collection is a few levels deep. Export it again, or split it.'] });
+    throw e;
+  }
 }
 
 /**
@@ -139,5 +151,5 @@ export function importDocument(text: string, opts: { name?: string; scripts?: Im
  * imported collection never shares ids with another one (a TestPion file imported twice, say); a note says how many changed.
  */
 export function importAny(text: string, opts: { name?: string; scripts?: ImportScriptsMode; takenIds?: Iterable<string>; liftTests?: boolean } = {}): ImportAnyResult {
-  return legacyResult(finishDocument(parseImport(text, opts), opts));
+  return legacyResult(nested(() => finishDocument(parseImport(text, opts), opts)));
 }

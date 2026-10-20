@@ -1,0 +1,213 @@
+{
+  "_type": "export",
+  "__export_format": 4,
+  "__export_source": "insomnia.desktop.app:v10",
+  "resources": [
+    {
+      "_id": "wrk_chat",
+      "_type": "workspace",
+      "name": "Chat API",
+      "parentId": null
+    },
+    {
+      "_id": "fld_chat_0",
+      "_type": "request_group",
+      "parentId": "wrk_chat",
+      "name": "conversations",
+      "metaSortKey": 0,
+      "authentication": {
+        "type": "bearer",
+        "token": "{{botToken}}"
+      }
+    },
+    {
+      "_id": "req_chat_0_0",
+      "_type": "request",
+      "parentId": "fld_chat_0",
+      "metaSortKey": 0,
+      "name": "conversations.list",
+      "url": "{{ _.baseUrl }}/conversations.list",
+      "method": "GET",
+      "parameters": [
+        {
+          "name": "limit",
+          "value": "100"
+        },
+        {
+          "name": "types",
+          "value": "public_channel"
+        }
+      ],
+      "headers": [],
+      "afterResponseScript": "insomnia.test(\"Status code is 200\", () => {\n  insomnia.expect(insomnia.response.code).to.eql(200);\n});"
+    },
+    {
+      "_id": "req_chat_0_1",
+      "_type": "request",
+      "parentId": "fld_chat_0",
+      "metaSortKey": 1,
+      "name": "conversations.history",
+      "url": "{{ _.baseUrl }}/conversations.history",
+      "method": "GET",
+      "parameters": [
+        {
+          "name": "channel",
+          "value": "{{ _.channel }}"
+        },
+        {
+          "name": "limit",
+          "value": "20"
+        }
+      ],
+      "headers": []
+    },
+    {
+      "_id": "req_chat_0_2",
+      "_type": "request",
+      "parentId": "fld_chat_0",
+      "metaSortKey": 2,
+      "name": "conversations.join",
+      "url": "{{ _.baseUrl }}/conversations.join",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"channel\": \"{{ _.channel }}\"\n}"
+      },
+      "headers": []
+    },
+    {
+      "_id": "req_chat_0_3",
+      "_type": "request",
+      "parentId": "fld_chat_0",
+      "metaSortKey": 3,
+      "name": "conversations.create",
+      "url": "{{ _.baseUrl }}/conversations.create",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"name\": \"new-channel\",\n  \"is_private\": false\n}"
+      },
+      "headers": []
+    },
+    {
+      "_id": "fld_chat_1",
+      "_type": "request_group",
+      "parentId": "wrk_chat",
+      "name": "chat",
+      "metaSortKey": 1
+    },
+    {
+      "_id": "req_chat_1_0",
+      "_type": "request",
+      "parentId": "fld_chat_1",
+      "metaSortKey": 0,
+      "name": "chat.postMessage",
+      "url": "{{ _.baseUrl }}/chat.postMessage",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"channel\": \"{{ _.channel }}\",\n  \"text\": \"Hello, world\",\n  \"unfurl_links\": false\n}"
+      },
+      "headers": [],
+      "afterResponseScript": "insomnia.test(\"Status code is 200\", () => {\n  insomnia.expect(insomnia.response.code).to.eql(200);\n});"
+    },
+    {
+      "_id": "req_chat_1_1",
+      "_type": "request",
+      "parentId": "fld_chat_1",
+      "metaSortKey": 1,
+      "name": "chat.update",
+      "url": "{{ _.baseUrl }}/chat.update",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"channel\": \"{{ _.channel }}\",\n  \"ts\": \"1405894322.002768\",\n  \"text\": \"edited\"\n}"
+      },
+      "headers": []
+    },
+    {
+      "_id": "req_chat_1_2",
+      "_type": "request",
+      "parentId": "fld_chat_1",
+      "metaSortKey": 2,
+      "name": "chat.delete",
+      "url": "{{ _.baseUrl }}/chat.delete",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"channel\": \"{{ _.channel }}\",\n  \"ts\": \"1405894322.002768\"\n}"
+      },
+      "headers": []
+    },
+    {
+      "_id": "fld_chat_2",
+      "_type": "request_group",
+      "parentId": "wrk_chat",
+      "name": "users",
+      "metaSortKey": 2
+    },
+    {
+      "_id": "req_chat_2_0",
+      "_type": "request",
+      "parentId": "fld_chat_2",
+      "metaSortKey": 0,
+      "name": "users.list",
+      "url": "{{ _.baseUrl }}/users.list",
+      "method": "GET",
+      "parameters": [
+        {
+          "name": "limit",
+          "value": "200"
+        }
+      ],
+      "headers": []
+    },
+    {
+      "_id": "req_chat_2_1",
+      "_type": "request",
+      "parentId": "fld_chat_2",
+      "metaSortKey": 1,
+      "name": "users.info",
+      "url": "{{ _.baseUrl }}/users.info",
+      "method": "GET",
+      "parameters": [
+        {
+          "name": "user",
+          "value": "U0123"
+        }
+      ],
+      "headers": []
+    },
+    {
+      "_id": "req_chat_2_2",
+      "_type": "request",
+      "parentId": "fld_chat_2",
+      "metaSortKey": 2,
+      "name": "auth.test",
+      "url": "{{ _.baseUrl }}/auth.test",
+      "method": "POST",
+      "headers": [],
+      "afterResponseScript": "insomnia.test(\"Status code is 200\", () => {\n  insomnia.expect(insomnia.response.code).to.eql(200);\n});"
+    },
+    {
+      "_id": "env_chat",
+      "_type": "environment",
+      "parentId": "wrk_chat",
+      "name": "Base Environment",
+      "data": {
+        "baseUrl": "https://chat.example.test/api"
+      }
+    },
+    {
+      "_id": "env_chat_workspace",
+      "_type": "environment",
+      "parentId": "env_chat",
+      "name": "workspace",
+      "data": {
+        "baseUrl": "https://chat.example.test/api",
+        "botToken": "xoxb-test",
+        "channel": "C0123"
+      }
+    }
+  ]
+}

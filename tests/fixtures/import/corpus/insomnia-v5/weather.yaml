@@ -1,0 +1,118 @@
+type: collection.insomnia.rest/5.0
+schema_version: "5.1"
+name: Weather API
+meta:
+  id: wrk_weather
+  created: 1
+  modified: 1
+collection:
+  - name: Current
+    meta:
+      id: fld_weather_0
+      sortKey: 0
+    authentication:
+      type: apikey
+      key: appid
+      value: "{{appid}}"
+      addTo: queryParams
+    children:
+      - name: Current weather by city
+        url: "{{ _.baseUrl }}/weather"
+        method: GET
+        parameters:
+          - name: q
+            value: London,uk
+          - name: units
+            value: metric
+        headers: []
+        scripts:
+          afterResponse: |-
+            insomnia.test("Status code is 200", () => {
+              insomnia.expect(insomnia.response.code).to.eql(200);
+            });
+        meta:
+          id: req_weather_0_0
+          sortKey: 0
+      - name: Current weather by coordinates
+        url: "{{ _.baseUrl }}/weather"
+        method: GET
+        parameters:
+          - name: lat
+            value: "51.5"
+          - name: lon
+            value: "-0.12"
+        headers: []
+        meta:
+          id: req_weather_0_1
+          sortKey: 1
+      - name: Current weather by zip
+        url: "{{ _.baseUrl }}/weather"
+        method: GET
+        parameters:
+          - name: zip
+            value: 94040,us
+        headers: []
+        meta:
+          id: req_weather_0_2
+          sortKey: 2
+  - name: Forecast
+    meta:
+      id: fld_weather_1
+      sortKey: 1
+    children:
+      - name: 5 day forecast
+        url: "{{ _.baseUrl }}/forecast"
+        method: GET
+        parameters:
+          - name: q
+            value: Paris
+          - name: cnt
+            value: "40"
+        headers: []
+        scripts:
+          afterResponse: |-
+            insomnia.test("Status code is 200", () => {
+              insomnia.expect(insomnia.response.code).to.eql(200);
+            });
+        meta:
+          id: req_weather_1_0
+          sortKey: 0
+      - name: Air pollution
+        url: "{{ _.baseUrl }}/air_pollution"
+        method: GET
+        parameters:
+          - name: lat
+            value: "50"
+          - name: lon
+            value: "50"
+        headers: []
+        meta:
+          id: req_weather_1_1
+          sortKey: 1
+      - name: Weather alerts
+        url: "{{ _.baseUrl }}/onecall"
+        method: GET
+        parameters:
+          - name: lat
+            value: "33.44"
+          - name: lon
+            value: "-94.04"
+          - name: exclude
+            value: minutely,hourly
+        headers: []
+        meta:
+          id: req_weather_1_2
+          sortKey: 2
+environments:
+  name: Base Environment
+  meta:
+    id: env_weather
+  data:
+    baseUrl: https://api.weather.example.test/data/2.5
+  subEnvironments:
+    - name: default
+      meta:
+        id: env_weather_default
+      data:
+        baseUrl: https://api.weather.example.test/data/2.5
+        appid: demo

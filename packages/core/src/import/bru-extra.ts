@@ -55,7 +55,8 @@ export function bruExample(block: BruBlock): Any | undefined {
     name: d.name ?? 'Example',
     description: d.description,
     request: { url: req.url, method: req.method, headers: headersOf(req.headers), body: req.body && typeof req.body === 'object' ? { type: req.body.type ?? req.mode, content: req.body.content } : undefined },
-    response: { status: Number(status.code) || undefined, statusText: status.text, headers: headersOf(res.headers), body: res.body && typeof res.body === 'object' ? { type: res.body.type, content: res.body.content } : res.body ? { type: 'text', content: String(res.body) } : undefined },
+    // (an example with no response is read and reported by the importer, not dropped here)
+    response: !d.response ? undefined : { status: Number(status.code) || undefined, statusText: status.text, headers: headersOf(res.headers), body: res.body && typeof res.body === 'object' ? { type: res.body.type, content: res.body.content } : res.body ? { type: 'text', content: String(res.body) } : undefined },
   };
 }
 

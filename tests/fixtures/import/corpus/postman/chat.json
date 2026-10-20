@@ -1,0 +1,316 @@
+{
+  "info": {
+    "_postman_id": "pm-chat",
+    "name": "Chat API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{botToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "conversations",
+      "item": [
+        {
+          "name": "conversations.list",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/conversations.list?limit=100&types=public_channel",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "conversations.list"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "100"
+                },
+                {
+                  "key": "types",
+                  "value": "public_channel"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "conversations.history",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/conversations.history?channel={{channel}}&limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "conversations.history"
+              ],
+              "query": [
+                {
+                  "key": "channel",
+                  "value": "{{channel}}"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "conversations.join",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"channel\": \"{{channel}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/conversations.join",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "conversations.join"
+              ]
+            }
+          }
+        },
+        {
+          "name": "conversations.create",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"new-channel\",\n  \"is_private\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/conversations.create",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "conversations.create"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "chat",
+      "item": [
+        {
+          "name": "chat.postMessage",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"channel\": \"{{channel}}\",\n  \"text\": \"Hello, world\",\n  \"unfurl_links\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/chat.postMessage",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "chat.postMessage"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "chat.update",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"channel\": \"{{channel}}\",\n  \"ts\": \"1405894322.002768\",\n  \"text\": \"edited\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/chat.update",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "chat.update"
+              ]
+            }
+          }
+        },
+        {
+          "name": "chat.delete",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"channel\": \"{{channel}}\",\n  \"ts\": \"1405894322.002768\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/chat.delete",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "chat.delete"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "users",
+      "item": [
+        {
+          "name": "users.list",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/users.list?limit=200",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users.list"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "200"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "users.info",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/users.info?user=U0123",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users.info"
+              ],
+              "query": [
+                {
+                  "key": "user",
+                  "value": "U0123"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "auth.test",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth.test",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth.test"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://chat.example.test/api"
+    }
+  ]
+}

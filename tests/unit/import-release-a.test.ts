@@ -191,7 +191,7 @@ describe('Bruno gaps', () => {
     const req = r.collection!.items[0] as SavedHttpRequest;
     expect(req.request).toMatchObject({ method: 'PURGE', body: { type: 'text', content: 'SELECT * WHERE { ?s ?p ?o }' }, settings: { encodeUrl: false, timeoutMs: 2500 } });
     expect(r.notes?.some((n) => /SPARQL body was imported as a text body/.test(n))).toBe(true);
-    expect(r.notes?.some((n) => /1 Bruno response example was not imported/.test(n))).toBe(true);
+    expect(r.notes?.some((n) => /1 Bruno response example had no response and was not imported/.test(n))).toBe(true);
   });
 });
 

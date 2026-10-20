@@ -1,0 +1,350 @@
+{
+  "name": "Maps API",
+  "version": "1",
+  "items": [
+    {
+      "type": "folder",
+      "name": "Geocoding",
+      "seq": 1,
+      "items": [
+        {
+          "type": "http-request",
+          "name": "Geocode an address",
+          "seq": 1,
+          "request": {
+            "url": "{{baseUrl}}/geocode/json?address=1600 Amphitheatre Parkway, Mountain View, CA",
+            "method": "GET",
+            "headers": [],
+            "params": [
+              {
+                "name": "address",
+                "value": "1600 Amphitheatre Parkway, Mountain View, CA",
+                "type": "query",
+                "enabled": true
+              }
+            ],
+            "body": {
+              "mode": "none"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [
+              {
+                "name": "res.status",
+                "value": "eq 200",
+                "enabled": true
+              }
+            ],
+            "tests": "test(\"Status code is 200\", function () {\n  expect(res.status).to.equal(200);\n});"
+          }
+        },
+        {
+          "type": "http-request",
+          "name": "Reverse geocode",
+          "seq": 2,
+          "request": {
+            "url": "{{baseUrl}}/geocode/json?latlng=40.714224,-73.961452",
+            "method": "GET",
+            "headers": [],
+            "params": [
+              {
+                "name": "latlng",
+                "value": "40.714224,-73.961452",
+                "type": "query",
+                "enabled": true
+              }
+            ],
+            "body": {
+              "mode": "none"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [],
+            "tests": ""
+          }
+        },
+        {
+          "type": "http-request",
+          "name": "Geocode by place id",
+          "seq": 3,
+          "request": {
+            "url": "{{baseUrl}}/geocode/json?place_id=ChIJd8BlQ2BZwokRAFUEcm_qrcA",
+            "method": "GET",
+            "headers": [],
+            "params": [
+              {
+                "name": "place_id",
+                "value": "ChIJd8BlQ2BZwokRAFUEcm_qrcA",
+                "type": "query",
+                "enabled": true
+              }
+            ],
+            "body": {
+              "mode": "none"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [],
+            "tests": ""
+          }
+        }
+      ]
+    },
+    {
+      "type": "folder",
+      "name": "Directions",
+      "seq": 2,
+      "items": [
+        {
+          "type": "http-request",
+          "name": "Driving directions",
+          "seq": 1,
+          "request": {
+            "url": "{{baseUrl}}/directions/json?origin=Toronto&destination=Montreal&mode=driving",
+            "method": "GET",
+            "headers": [],
+            "params": [
+              {
+                "name": "origin",
+                "value": "Toronto",
+                "type": "query",
+                "enabled": true
+              },
+              {
+                "name": "destination",
+                "value": "Montreal",
+                "type": "query",
+                "enabled": true
+              },
+              {
+                "name": "mode",
+                "value": "driving",
+                "type": "query",
+                "enabled": true
+              }
+            ],
+            "body": {
+              "mode": "none"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [
+              {
+                "name": "res.status",
+                "value": "eq 200",
+                "enabled": true
+              }
+            ],
+            "tests": "test(\"Status code is 200\", function () {\n  expect(res.status).to.equal(200);\n});"
+          }
+        },
+        {
+          "type": "http-request",
+          "name": "Transit directions",
+          "seq": 2,
+          "request": {
+            "url": "{{baseUrl}}/directions/json?origin=Boston&destination=Concord&mode=transit",
+            "method": "GET",
+            "headers": [],
+            "params": [
+              {
+                "name": "origin",
+                "value": "Boston",
+                "type": "query",
+                "enabled": true
+              },
+              {
+                "name": "destination",
+                "value": "Concord",
+                "type": "query",
+                "enabled": true
+              },
+              {
+                "name": "mode",
+                "value": "transit",
+                "type": "query",
+                "enabled": true
+              }
+            ],
+            "body": {
+              "mode": "none"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [],
+            "tests": ""
+          }
+        }
+      ]
+    },
+    {
+      "type": "folder",
+      "name": "Places",
+      "seq": 3,
+      "items": [
+        {
+          "type": "http-request",
+          "name": "Find place",
+          "seq": 1,
+          "request": {
+            "url": "{{baseUrl}}/place/findplacefromtext/json?input=Museum of Contemporary Art Australia&inputtype=textquery",
+            "method": "GET",
+            "headers": [],
+            "params": [
+              {
+                "name": "input",
+                "value": "Museum of Contemporary Art Australia",
+                "type": "query",
+                "enabled": true
+              },
+              {
+                "name": "inputtype",
+                "value": "textquery",
+                "type": "query",
+                "enabled": true
+              }
+            ],
+            "body": {
+              "mode": "none"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [],
+            "tests": ""
+          }
+        },
+        {
+          "type": "http-request",
+          "name": "Place details",
+          "seq": 2,
+          "request": {
+            "url": "{{baseUrl}}/place/details/json?place_id=ChIJN1t_tDeuEmsRUsoyG83frY4",
+            "method": "GET",
+            "headers": [],
+            "params": [
+              {
+                "name": "place_id",
+                "value": "ChIJN1t_tDeuEmsRUsoyG83frY4",
+                "type": "query",
+                "enabled": true
+              }
+            ],
+            "body": {
+              "mode": "none"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [],
+            "tests": ""
+          }
+        },
+        {
+          "type": "http-request",
+          "name": "Nearby search",
+          "seq": 3,
+          "request": {
+            "url": "{{baseUrl}}/place/nearbysearch/json?location=-33.8670522,151.1957362&radius=1500&type=restaurant",
+            "method": "GET",
+            "headers": [],
+            "params": [
+              {
+                "name": "location",
+                "value": "-33.8670522,151.1957362",
+                "type": "query",
+                "enabled": true
+              },
+              {
+                "name": "radius",
+                "value": "1500",
+                "type": "query",
+                "enabled": true
+              },
+              {
+                "name": "type",
+                "value": "restaurant",
+                "type": "query",
+                "enabled": true
+              }
+            ],
+            "body": {
+              "mode": "none"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [],
+            "tests": ""
+          }
+        }
+      ]
+    }
+  ],
+  "environments": [
+    {
+      "name": "default",
+      "variables": [
+        {
+          "name": "baseUrl",
+          "value": "https://maps.example.test/maps/api",
+          "enabled": true,
+          "secret": false
+        },
+        {
+          "name": "mapsKey",
+          "value": "AIza-test",
+          "enabled": true,
+          "secret": false
+        }
+      ]
+    }
+  ],
+  "root": {
+    "request": {
+      "auth": {
+        "mode": "apikey",
+        "apikey": {
+          "key": "key",
+          "value": "{{mapsKey}}",
+          "placement": "queryparams"
+        }
+      },
+      "vars": {
+        "req": [
+          {
+            "name": "baseUrl",
+            "value": "https://maps.example.test/maps/api",
+            "enabled": true
+          }
+        ]
+      }
+    }
+  },
+  "brunoConfig": {
+    "version": "1",
+    "name": "Maps API",
+    "type": "collection"
+  }
+}

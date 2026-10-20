@@ -1,0 +1,174 @@
+{
+  "_type": "export",
+  "__export_format": 4,
+  "__export_source": "insomnia.desktop.app:v10",
+  "resources": [
+    {
+      "_id": "wrk_weather",
+      "_type": "workspace",
+      "name": "Weather API",
+      "parentId": null
+    },
+    {
+      "_id": "fld_weather_0",
+      "_type": "request_group",
+      "parentId": "wrk_weather",
+      "name": "Current",
+      "metaSortKey": 0,
+      "authentication": {
+        "type": "apikey",
+        "key": "appid",
+        "value": "{{appid}}",
+        "addTo": "queryParams"
+      }
+    },
+    {
+      "_id": "req_weather_0_0",
+      "_type": "request",
+      "parentId": "fld_weather_0",
+      "metaSortKey": 0,
+      "name": "Current weather by city",
+      "url": "{{ _.baseUrl }}/weather",
+      "method": "GET",
+      "parameters": [
+        {
+          "name": "q",
+          "value": "London,uk"
+        },
+        {
+          "name": "units",
+          "value": "metric"
+        }
+      ],
+      "headers": [],
+      "afterResponseScript": "insomnia.test(\"Status code is 200\", () => {\n  insomnia.expect(insomnia.response.code).to.eql(200);\n});"
+    },
+    {
+      "_id": "req_weather_0_1",
+      "_type": "request",
+      "parentId": "fld_weather_0",
+      "metaSortKey": 1,
+      "name": "Current weather by coordinates",
+      "url": "{{ _.baseUrl }}/weather",
+      "method": "GET",
+      "parameters": [
+        {
+          "name": "lat",
+          "value": "51.5"
+        },
+        {
+          "name": "lon",
+          "value": "-0.12"
+        }
+      ],
+      "headers": []
+    },
+    {
+      "_id": "req_weather_0_2",
+      "_type": "request",
+      "parentId": "fld_weather_0",
+      "metaSortKey": 2,
+      "name": "Current weather by zip",
+      "url": "{{ _.baseUrl }}/weather",
+      "method": "GET",
+      "parameters": [
+        {
+          "name": "zip",
+          "value": "94040,us"
+        }
+      ],
+      "headers": []
+    },
+    {
+      "_id": "fld_weather_1",
+      "_type": "request_group",
+      "parentId": "wrk_weather",
+      "name": "Forecast",
+      "metaSortKey": 1
+    },
+    {
+      "_id": "req_weather_1_0",
+      "_type": "request",
+      "parentId": "fld_weather_1",
+      "metaSortKey": 0,
+      "name": "5 day forecast",
+      "url": "{{ _.baseUrl }}/forecast",
+      "method": "GET",
+      "parameters": [
+        {
+          "name": "q",
+          "value": "Paris"
+        },
+        {
+          "name": "cnt",
+          "value": "40"
+        }
+      ],
+      "headers": [],
+      "afterResponseScript": "insomnia.test(\"Status code is 200\", () => {\n  insomnia.expect(insomnia.response.code).to.eql(200);\n});"
+    },
+    {
+      "_id": "req_weather_1_1",
+      "_type": "request",
+      "parentId": "fld_weather_1",
+      "metaSortKey": 1,
+      "name": "Air pollution",
+      "url": "{{ _.baseUrl }}/air_pollution",
+      "method": "GET",
+      "parameters": [
+        {
+          "name": "lat",
+          "value": "50"
+        },
+        {
+          "name": "lon",
+          "value": "50"
+        }
+      ],
+      "headers": []
+    },
+    {
+      "_id": "req_weather_1_2",
+      "_type": "request",
+      "parentId": "fld_weather_1",
+      "metaSortKey": 2,
+      "name": "Weather alerts",
+      "url": "{{ _.baseUrl }}/onecall",
+      "method": "GET",
+      "parameters": [
+        {
+          "name": "lat",
+          "value": "33.44"
+        },
+        {
+          "name": "lon",
+          "value": "-94.04"
+        },
+        {
+          "name": "exclude",
+          "value": "minutely,hourly"
+        }
+      ],
+      "headers": []
+    },
+    {
+      "_id": "env_weather",
+      "_type": "environment",
+      "parentId": "wrk_weather",
+      "name": "Base Environment",
+      "data": {
+        "baseUrl": "https://api.weather.example.test/data/2.5"
+      }
+    },
+    {
+      "_id": "env_weather_default",
+      "_type": "environment",
+      "parentId": "env_weather",
+      "name": "default",
+      "data": {
+        "baseUrl": "https://api.weather.example.test/data/2.5",
+        "appid": "demo"
+      }
+    }
+  ]
+}

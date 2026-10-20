@@ -120,7 +120,7 @@
     "apis": []
   },
   "postman/legacy tests object": {
-    "code": "tp.test(\"Status code is 200\", function () { tp.expect(tp.response.code === 200).to.be.ok; });\ntp.test(\"Body has id\", function () { tp.expect(tp.response.json().id === 7).to.be.ok; });",
+    "code": "tp.test(\"Status is 201\", function () { tp.expect(tp.response.code === 201).to.be.ok; });\ntp.test(\"Has name\", function () { tp.expect(tp.response.json().name === \"n\").to.be.ok; });",
     "status": "converted",
     "changes": 6,
     "apis": []
@@ -269,9 +269,9 @@
     "apis": []
   },
   "bruno/next request": {
-    "code": "tp.execution.setNextRequest('Get user');\ntp.execution.skipRequest();",
+    "code": "tp.execution.setNextRequest(\"Fetch details\");",
     "status": "converted",
-    "changes": 2,
+    "changes": 1,
     "apis": []
   },
   "bruno/stop execution": {
@@ -287,7 +287,7 @@
     "apis": []
   },
   "bruno/interpolate": {
-    "code": "const url = tp.variables.replaceIn('{{host}}/users');\nconsole.log(url);",
+    "code": "const url = tp.variables.replaceIn(\"{{host}}/items\");\nconsole.log(url);",
     "status": "converted",
     "changes": 1,
     "apis": []
@@ -305,7 +305,7 @@
     "apis": []
   },
   "bruno/global env var": {
-    "code": "tp.globals.set('g', 1);\ntp.globals.get('g');",
+    "code": "tp.globals.set(\"g\", \"1\");\nconsole.log(tp.globals.get(\"g\"));",
     "status": "converted",
     "changes": 2,
     "apis": []

@@ -1,0 +1,385 @@
+{
+  "yaakVersion": "2025.2.0",
+  "yaakSchema": 3,
+  "resources": {
+    "workspaces": [
+      {
+        "model": "workspace",
+        "id": "wk_petstore",
+        "name": "Pet Store"
+      }
+    ],
+    "environments": [
+      {
+        "model": "environment",
+        "id": "ev_petstore_base",
+        "workspaceId": "wk_petstore",
+        "name": "Global",
+        "base": true,
+        "variables": [
+          {
+            "enabled": true,
+            "name": "baseUrl",
+            "value": "https://petstore.example.test/v2"
+          }
+        ]
+      },
+      {
+        "model": "environment",
+        "id": "ev_petstore_dev",
+        "workspaceId": "wk_petstore",
+        "name": "dev",
+        "variables": [
+          {
+            "enabled": true,
+            "name": "baseUrl",
+            "value": "http://localhost:8080/v2"
+          },
+          {
+            "enabled": true,
+            "name": "apiKey",
+            "value": "dev-key"
+          }
+        ]
+      },
+      {
+        "model": "environment",
+        "id": "ev_petstore_staging",
+        "workspaceId": "wk_petstore",
+        "name": "staging",
+        "variables": [
+          {
+            "enabled": true,
+            "name": "baseUrl",
+            "value": "https://staging.petstore.example.test/v2"
+          },
+          {
+            "enabled": true,
+            "name": "apiKey",
+            "value": "stg-key"
+          }
+        ]
+      },
+      {
+        "model": "environment",
+        "id": "ev_petstore_prod",
+        "workspaceId": "wk_petstore",
+        "name": "prod",
+        "variables": [
+          {
+            "enabled": true,
+            "name": "baseUrl",
+            "value": "https://petstore.example.test/v2"
+          },
+          {
+            "enabled": true,
+            "name": "apiKey",
+            "value": ""
+          }
+        ]
+      }
+    ],
+    "folders": [
+      {
+        "model": "folder",
+        "id": "fl_petstore_0",
+        "workspaceId": "wk_petstore",
+        "folderId": null,
+        "name": "pet",
+        "sortPriority": 1,
+        "authenticationType": "apikey",
+        "authentication": {
+          "key": "api_key",
+          "value": "{{apiKey}}",
+          "location": "header"
+        }
+      },
+      {
+        "model": "folder",
+        "id": "fl_petstore_1",
+        "workspaceId": "wk_petstore",
+        "folderId": null,
+        "name": "store",
+        "sortPriority": 2
+      },
+      {
+        "model": "folder",
+        "id": "fl_petstore_2",
+        "workspaceId": "wk_petstore",
+        "folderId": null,
+        "name": "user",
+        "sortPriority": 3
+      }
+    ],
+    "httpRequests": [
+      {
+        "model": "http_request",
+        "id": "rq_petstore_1",
+        "workspaceId": "wk_petstore",
+        "folderId": "fl_petstore_0",
+        "name": "Add a new pet",
+        "method": "POST",
+        "url": "${[ baseUrl ]}/pet",
+        "urlParameters": [],
+        "headers": [],
+        "bodyType": "application/json",
+        "body": {
+          "text": "{\n  \"id\": 0,\n  \"name\": \"doggie\",\n  \"status\": \"available\",\n  \"tags\": [\n    {\n      \"name\": \"good\"\n    }\n  ]\n}"
+        },
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 1
+      },
+      {
+        "model": "http_request",
+        "id": "rq_petstore_2",
+        "workspaceId": "wk_petstore",
+        "folderId": "fl_petstore_0",
+        "name": "Update an existing pet",
+        "method": "PUT",
+        "url": "${[ baseUrl ]}/pet",
+        "urlParameters": [],
+        "headers": [],
+        "bodyType": "application/json",
+        "body": {
+          "text": "{\n  \"id\": 1,\n  \"name\": \"doggie\",\n  \"status\": \"sold\"\n}"
+        },
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 2
+      },
+      {
+        "model": "http_request",
+        "id": "rq_petstore_3",
+        "workspaceId": "wk_petstore",
+        "folderId": "fl_petstore_0",
+        "name": "Find pets by status",
+        "method": "GET",
+        "url": "${[ baseUrl ]}/pet/findByStatus",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": "status",
+            "value": "available"
+          }
+        ],
+        "headers": [],
+        "bodyType": null,
+        "body": {},
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 3
+      },
+      {
+        "model": "http_request",
+        "id": "rq_petstore_4",
+        "workspaceId": "wk_petstore",
+        "folderId": "fl_petstore_0",
+        "name": "Find pet by ID",
+        "method": "GET",
+        "url": "${[ baseUrl ]}/pet/1",
+        "urlParameters": [],
+        "headers": [],
+        "bodyType": null,
+        "body": {},
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 4
+      },
+      {
+        "model": "http_request",
+        "id": "rq_petstore_5",
+        "workspaceId": "wk_petstore",
+        "folderId": "fl_petstore_0",
+        "name": "Delete a pet",
+        "method": "DELETE",
+        "url": "${[ baseUrl ]}/pet/1",
+        "urlParameters": [],
+        "headers": [
+          {
+            "enabled": true,
+            "name": "api_key",
+            "value": "${[ apiKey ]}"
+          }
+        ],
+        "bodyType": null,
+        "body": {},
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 5
+      },
+      {
+        "model": "http_request",
+        "id": "rq_petstore_6",
+        "workspaceId": "wk_petstore",
+        "folderId": "fl_petstore_0",
+        "name": "Upload an image",
+        "method": "POST",
+        "url": "${[ baseUrl ]}/pet/1/uploadImage",
+        "urlParameters": [],
+        "headers": [],
+        "bodyType": "multipart/form-data",
+        "body": {
+          "form": [
+            {
+              "enabled": true,
+              "name": "additionalMetadata",
+              "value": "cute"
+            },
+            {
+              "enabled": true,
+              "name": "file",
+              "file": "dog.png"
+            }
+          ]
+        },
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 6
+      },
+      {
+        "model": "http_request",
+        "id": "rq_petstore_7",
+        "workspaceId": "wk_petstore",
+        "folderId": "fl_petstore_1",
+        "name": "Returns pet inventories by status",
+        "method": "GET",
+        "url": "${[ baseUrl ]}/store/inventory",
+        "urlParameters": [],
+        "headers": [],
+        "bodyType": null,
+        "body": {},
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 7
+      },
+      {
+        "model": "http_request",
+        "id": "rq_petstore_8",
+        "workspaceId": "wk_petstore",
+        "folderId": "fl_petstore_1",
+        "name": "Place an order for a pet",
+        "method": "POST",
+        "url": "${[ baseUrl ]}/store/order",
+        "urlParameters": [],
+        "headers": [],
+        "bodyType": "application/json",
+        "body": {
+          "text": "{\n  \"petId\": 1,\n  \"quantity\": 1,\n  \"status\": \"placed\"\n}"
+        },
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 8
+      },
+      {
+        "model": "http_request",
+        "id": "rq_petstore_9",
+        "workspaceId": "wk_petstore",
+        "folderId": "fl_petstore_1",
+        "name": "Find purchase order by ID",
+        "method": "GET",
+        "url": "${[ baseUrl ]}/store/order/1",
+        "urlParameters": [],
+        "headers": [],
+        "bodyType": null,
+        "body": {},
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 9
+      },
+      {
+        "model": "http_request",
+        "id": "rq_petstore_10",
+        "workspaceId": "wk_petstore",
+        "folderId": "fl_petstore_1",
+        "name": "Delete purchase order by ID",
+        "method": "DELETE",
+        "url": "${[ baseUrl ]}/store/order/1",
+        "urlParameters": [],
+        "headers": [],
+        "bodyType": null,
+        "body": {},
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 10
+      },
+      {
+        "model": "http_request",
+        "id": "rq_petstore_11",
+        "workspaceId": "wk_petstore",
+        "folderId": "fl_petstore_2",
+        "name": "Create user",
+        "method": "POST",
+        "url": "${[ baseUrl ]}/user",
+        "urlParameters": [],
+        "headers": [],
+        "bodyType": "application/json",
+        "body": {
+          "text": "{\n  \"username\": \"theUser\",\n  \"email\": \"john@example.test\"\n}"
+        },
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 11
+      },
+      {
+        "model": "http_request",
+        "id": "rq_petstore_12",
+        "workspaceId": "wk_petstore",
+        "folderId": "fl_petstore_2",
+        "name": "Logs user into the system",
+        "method": "GET",
+        "url": "${[ baseUrl ]}/user/login",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": "username",
+            "value": "theUser"
+          },
+          {
+            "enabled": true,
+            "name": "password",
+            "value": "${[ password ]}"
+          }
+        ],
+        "headers": [],
+        "bodyType": null,
+        "body": {},
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 12
+      },
+      {
+        "model": "http_request",
+        "id": "rq_petstore_13",
+        "workspaceId": "wk_petstore",
+        "folderId": "fl_petstore_2",
+        "name": "Get user by user name",
+        "method": "GET",
+        "url": "${[ baseUrl ]}/user/theUser",
+        "urlParameters": [],
+        "headers": [],
+        "bodyType": null,
+        "body": {},
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 13
+      },
+      {
+        "model": "http_request",
+        "id": "rq_petstore_14",
+        "workspaceId": "wk_petstore",
+        "folderId": "fl_petstore_2",
+        "name": "Logs out current logged in user session",
+        "method": "GET",
+        "url": "${[ baseUrl ]}/user/logout",
+        "urlParameters": [],
+        "headers": [],
+        "bodyType": null,
+        "body": {},
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 14
+      }
+    ]
+  }
+}

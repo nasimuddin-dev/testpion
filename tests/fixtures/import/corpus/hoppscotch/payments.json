@@ -1,0 +1,310 @@
+{
+  "v": 2,
+  "name": "Payments API",
+  "folders": [
+    {
+      "v": 2,
+      "name": "Customers",
+      "folders": [],
+      "auth": {
+        "authType": "inherit",
+        "authActive": true
+      },
+      "headers": [],
+      "variables": [],
+      "requests": [
+        {
+          "v": "11",
+          "name": "Create a customer",
+          "method": "POST",
+          "endpoint": "<<baseUrl>>/customers",
+          "params": [],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "pw.test(\"Status code is 200\", () => {\n  pw.expect(pw.response.status).toBe(200);\n});",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": "application/x-www-form-urlencoded",
+            "body": "email: jenny@example.test\nname: Jenny Rosen"
+          },
+          "requestVariables": []
+        },
+        {
+          "v": "11",
+          "name": "Retrieve a customer",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/customers/cus_123",
+          "params": [],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "pw.test(\"Status code is 200\", () => {\n  pw.expect(pw.response.status).toBe(200);\n});",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": null,
+            "body": null
+          },
+          "requestVariables": []
+        },
+        {
+          "v": "11",
+          "name": "Update a customer",
+          "method": "POST",
+          "endpoint": "<<baseUrl>>/customers/cus_123",
+          "params": [],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": "application/x-www-form-urlencoded",
+            "body": "description: VIP"
+          },
+          "requestVariables": []
+        },
+        {
+          "v": "11",
+          "name": "Delete a customer",
+          "method": "DELETE",
+          "endpoint": "<<baseUrl>>/customers/cus_123",
+          "params": [],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": null,
+            "body": null
+          },
+          "requestVariables": []
+        },
+        {
+          "v": "11",
+          "name": "List all customers",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/customers",
+          "params": [
+            {
+              "key": "limit",
+              "value": "10",
+              "active": true
+            },
+            {
+              "key": "starting_after",
+              "value": "cus_100",
+              "active": true
+            }
+          ],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "pw.test(\"Status code is 200\", () => {\n  pw.expect(pw.response.status).toBe(200);\n});",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": null,
+            "body": null
+          },
+          "requestVariables": []
+        }
+      ]
+    },
+    {
+      "v": 2,
+      "name": "Charges",
+      "folders": [],
+      "auth": {
+        "authType": "inherit",
+        "authActive": true
+      },
+      "headers": [],
+      "variables": [],
+      "requests": [
+        {
+          "v": "11",
+          "name": "Create a charge",
+          "method": "POST",
+          "endpoint": "<<baseUrl>>/charges",
+          "params": [],
+          "headers": [
+            {
+              "key": "Idempotency-Key",
+              "value": "<<$guid>>",
+              "active": true
+            }
+          ],
+          "preRequestScript": "",
+          "testScript": "pw.test(\"Status code is 200\", () => {\n  pw.expect(pw.response.status).toBe(200);\n});",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": "application/x-www-form-urlencoded",
+            "body": "amount: 2000\ncurrency: usd\nsource: tok_visa"
+          },
+          "requestVariables": []
+        },
+        {
+          "v": "11",
+          "name": "Retrieve a charge",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/charges/ch_123",
+          "params": [],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": null,
+            "body": null
+          },
+          "requestVariables": []
+        },
+        {
+          "v": "11",
+          "name": "Capture a charge",
+          "method": "POST",
+          "endpoint": "<<baseUrl>>/charges/ch_123/capture",
+          "params": [],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": null,
+            "body": null
+          },
+          "requestVariables": []
+        },
+        {
+          "v": "11",
+          "name": "List all charges",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/charges",
+          "params": [
+            {
+              "key": "customer",
+              "value": "cus_123",
+              "active": true
+            }
+          ],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": null,
+            "body": null
+          },
+          "requestVariables": []
+        }
+      ]
+    },
+    {
+      "v": 2,
+      "name": "Refunds",
+      "folders": [],
+      "auth": {
+        "authType": "inherit",
+        "authActive": true
+      },
+      "headers": [],
+      "variables": [],
+      "requests": [
+        {
+          "v": "11",
+          "name": "Create a refund",
+          "method": "POST",
+          "endpoint": "<<baseUrl>>/refunds",
+          "params": [],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": "application/x-www-form-urlencoded",
+            "body": "charge: ch_123\namount: 500"
+          },
+          "requestVariables": []
+        },
+        {
+          "v": "11",
+          "name": "Retrieve a refund",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/refunds/re_123",
+          "params": [],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": null,
+            "body": null
+          },
+          "requestVariables": []
+        },
+        {
+          "v": "11",
+          "name": "List all refunds",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/refunds",
+          "params": [
+            {
+              "key": "charge",
+              "value": "ch_123",
+              "active": true
+            }
+          ],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": null,
+            "body": null
+          },
+          "requestVariables": []
+        }
+      ]
+    }
+  ],
+  "requests": [],
+  "auth": {
+    "authType": "bearer",
+    "authActive": true,
+    "token": "{{secretKey}}"
+  },
+  "headers": [],
+  "variables": []
+}

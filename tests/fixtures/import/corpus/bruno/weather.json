@@ -1,0 +1,281 @@
+{
+  "name": "Weather API",
+  "version": "1",
+  "items": [
+    {
+      "type": "folder",
+      "name": "Current",
+      "seq": 1,
+      "items": [
+        {
+          "type": "http-request",
+          "name": "Current weather by city",
+          "seq": 1,
+          "request": {
+            "url": "{{baseUrl}}/weather?q=London,uk&units=metric",
+            "method": "GET",
+            "headers": [],
+            "params": [
+              {
+                "name": "q",
+                "value": "London,uk",
+                "type": "query",
+                "enabled": true
+              },
+              {
+                "name": "units",
+                "value": "metric",
+                "type": "query",
+                "enabled": true
+              }
+            ],
+            "body": {
+              "mode": "none"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [
+              {
+                "name": "res.status",
+                "value": "eq 200",
+                "enabled": true
+              }
+            ],
+            "tests": "test(\"Status code is 200\", function () {\n  expect(res.status).to.equal(200);\n});"
+          }
+        },
+        {
+          "type": "http-request",
+          "name": "Current weather by coordinates",
+          "seq": 2,
+          "request": {
+            "url": "{{baseUrl}}/weather?lat=51.5&lon=-0.12",
+            "method": "GET",
+            "headers": [],
+            "params": [
+              {
+                "name": "lat",
+                "value": "51.5",
+                "type": "query",
+                "enabled": true
+              },
+              {
+                "name": "lon",
+                "value": "-0.12",
+                "type": "query",
+                "enabled": true
+              }
+            ],
+            "body": {
+              "mode": "none"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [],
+            "tests": ""
+          }
+        },
+        {
+          "type": "http-request",
+          "name": "Current weather by zip",
+          "seq": 3,
+          "request": {
+            "url": "{{baseUrl}}/weather?zip=94040,us",
+            "method": "GET",
+            "headers": [],
+            "params": [
+              {
+                "name": "zip",
+                "value": "94040,us",
+                "type": "query",
+                "enabled": true
+              }
+            ],
+            "body": {
+              "mode": "none"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [],
+            "tests": ""
+          }
+        }
+      ]
+    },
+    {
+      "type": "folder",
+      "name": "Forecast",
+      "seq": 2,
+      "items": [
+        {
+          "type": "http-request",
+          "name": "5 day forecast",
+          "seq": 1,
+          "request": {
+            "url": "{{baseUrl}}/forecast?q=Paris&cnt=40",
+            "method": "GET",
+            "headers": [],
+            "params": [
+              {
+                "name": "q",
+                "value": "Paris",
+                "type": "query",
+                "enabled": true
+              },
+              {
+                "name": "cnt",
+                "value": "40",
+                "type": "query",
+                "enabled": true
+              }
+            ],
+            "body": {
+              "mode": "none"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [
+              {
+                "name": "res.status",
+                "value": "eq 200",
+                "enabled": true
+              }
+            ],
+            "tests": "test(\"Status code is 200\", function () {\n  expect(res.status).to.equal(200);\n});"
+          }
+        },
+        {
+          "type": "http-request",
+          "name": "Air pollution",
+          "seq": 2,
+          "request": {
+            "url": "{{baseUrl}}/air_pollution?lat=50&lon=50",
+            "method": "GET",
+            "headers": [],
+            "params": [
+              {
+                "name": "lat",
+                "value": "50",
+                "type": "query",
+                "enabled": true
+              },
+              {
+                "name": "lon",
+                "value": "50",
+                "type": "query",
+                "enabled": true
+              }
+            ],
+            "body": {
+              "mode": "none"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [],
+            "tests": ""
+          }
+        },
+        {
+          "type": "http-request",
+          "name": "Weather alerts",
+          "seq": 3,
+          "request": {
+            "url": "{{baseUrl}}/onecall?lat=33.44&lon=-94.04&exclude=minutely,hourly",
+            "method": "GET",
+            "headers": [],
+            "params": [
+              {
+                "name": "lat",
+                "value": "33.44",
+                "type": "query",
+                "enabled": true
+              },
+              {
+                "name": "lon",
+                "value": "-94.04",
+                "type": "query",
+                "enabled": true
+              },
+              {
+                "name": "exclude",
+                "value": "minutely,hourly",
+                "type": "query",
+                "enabled": true
+              }
+            ],
+            "body": {
+              "mode": "none"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [],
+            "tests": ""
+          }
+        }
+      ]
+    }
+  ],
+  "environments": [
+    {
+      "name": "default",
+      "variables": [
+        {
+          "name": "baseUrl",
+          "value": "https://api.weather.example.test/data/2.5",
+          "enabled": true,
+          "secret": false
+        },
+        {
+          "name": "appid",
+          "value": "demo",
+          "enabled": true,
+          "secret": false
+        }
+      ]
+    }
+  ],
+  "root": {
+    "request": {
+      "auth": {
+        "mode": "apikey",
+        "apikey": {
+          "key": "appid",
+          "value": "{{appid}}",
+          "placement": "queryparams"
+        }
+      },
+      "vars": {
+        "req": [
+          {
+            "name": "baseUrl",
+            "value": "https://api.weather.example.test/data/2.5",
+            "enabled": true
+          }
+        ]
+      }
+    }
+  },
+  "brunoConfig": {
+    "version": "1",
+    "name": "Weather API",
+    "type": "collection"
+  }
+}

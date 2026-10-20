@@ -1,0 +1,189 @@
+type: collection.insomnia.rest/5.0
+schema_version: "5.1"
+name: Bank API
+meta:
+  id: wrk_bank
+  created: 1
+  modified: 1
+collection:
+  - name: Accounts
+    meta:
+      id: fld_bank_0
+      sortKey: 0
+    authentication:
+      type: oauth2
+      grantType: client_credentials
+      accessTokenUrl: https://auth.bank.example.test/oauth/token
+      clientId: "{{clientId}}"
+      clientSecret: "{{clientSecret}}"
+      scope: accounts payments
+    children:
+      - name: List accounts
+        url: "{{ _.baseUrl }}/accounts"
+        method: GET
+        headers: []
+        scripts:
+          afterResponse: |-
+            insomnia.test("Status code is 200", () => {
+              insomnia.expect(insomnia.response.code).to.eql(200);
+            });
+        meta:
+          id: req_bank_0_0
+          sortKey: 0
+      - name: Get account
+        url: "{{ _.baseUrl }}/accounts/{{ _.accountId }}"
+        method: GET
+        headers: []
+        meta:
+          id: req_bank_0_1
+          sortKey: 1
+      - name: Get balances
+        url: "{{ _.baseUrl }}/accounts/{{ _.accountId }}/balances"
+        method: GET
+        headers: []
+        scripts:
+          afterResponse: |-
+            insomnia.test("Status code is 200", () => {
+              insomnia.expect(insomnia.response.code).to.eql(200);
+            });
+        meta:
+          id: req_bank_0_2
+          sortKey: 2
+      - name: Get transactions
+        url: "{{ _.baseUrl }}/accounts/{{ _.accountId }}/transactions"
+        method: GET
+        parameters:
+          - name: fromBookingDateTime
+            value: 2026-01-01T00:00:00Z
+          - name: limit
+            value: "50"
+        headers: []
+        meta:
+          id: req_bank_0_3
+          sortKey: 3
+      - name: List standing orders
+        url: "{{ _.baseUrl }}/accounts/{{ _.accountId }}/standing-orders"
+        method: GET
+        headers: []
+        meta:
+          id: req_bank_0_4
+          sortKey: 4
+  - name: Payments
+    meta:
+      id: fld_bank_1
+      sortKey: 1
+    children:
+      - name: Create a payment consent
+        url: "{{ _.baseUrl }}/domestic-payment-consents"
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "Data": {
+                "Initiation": {
+                  "InstructionIdentification": "ACME412",
+                  "InstructedAmount": {
+                    "Amount": "165.88",
+                    "Currency": "GBP"
+                  }
+                }
+              },
+              "Risk": {}
+            }
+        headers:
+          - name: x-idempotency-key
+            value: "{{$guid}}"
+          - name: x-fapi-financial-id
+            value: "{{ _.orgId }}"
+        scripts:
+          afterResponse: |-
+            insomnia.test("Status code is 201", () => {
+              insomnia.expect(insomnia.response.code).to.eql(201);
+            });
+        meta:
+          id: req_bank_1_0
+          sortKey: 0
+      - name: Get a payment consent
+        url: "{{ _.baseUrl }}/domestic-payment-consents/{{ _.consentId }}"
+        method: GET
+        headers: []
+        meta:
+          id: req_bank_1_1
+          sortKey: 1
+      - name: Submit a payment
+        url: "{{ _.baseUrl }}/domestic-payments"
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "Data": {
+                "ConsentId": "{{ _.consentId }}"
+              },
+              "Risk": {}
+            }
+        headers: []
+        meta:
+          id: req_bank_1_2
+          sortKey: 2
+      - name: Get a payment
+        url: "{{ _.baseUrl }}/domestic-payments/{{ _.paymentId }}"
+        method: GET
+        headers: []
+        meta:
+          id: req_bank_1_3
+          sortKey: 3
+  - name: Funds
+    meta:
+      id: fld_bank_2
+      sortKey: 2
+    children:
+      - name: Confirm funds
+        url: "{{ _.baseUrl }}/funds-confirmations"
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "Data": {
+                "ConsentId": "{{ _.consentId }}",
+                "Reference": "Purchase01",
+                "InstructedAmount": {
+                  "Amount": "20.00",
+                  "Currency": "GBP"
+                }
+              }
+            }
+        headers: []
+        meta:
+          id: req_bank_2_0
+          sortKey: 0
+      - name: Get funds consent
+        url: "{{ _.baseUrl }}/funds-confirmation-consents/{{ _.consentId }}"
+        method: GET
+        headers: []
+        meta:
+          id: req_bank_2_1
+          sortKey: 1
+environments:
+  name: Base Environment
+  meta:
+    id: env_bank
+  data:
+    baseUrl: https://api.bank.example.test/open-banking/v3
+  subEnvironments:
+    - name: sandbox
+      meta:
+        id: env_bank_sandbox
+      data:
+        baseUrl: https://sandbox.bank.example.test/open-banking/v3
+        clientId: sandbox-client
+        clientSecret: ""
+    - name: production
+      meta:
+        id: env_bank_production
+      data:
+        baseUrl: https://api.bank.example.test/open-banking/v3
+        clientId: ""
+        clientSecret: ""

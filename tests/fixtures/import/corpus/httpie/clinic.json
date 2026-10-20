@@ -1,0 +1,234 @@
+{
+  "meta": {
+    "format": "httpie",
+    "version": "1.0.0",
+    "contentType": "collection",
+    "docs": "https://httpie.io/r/export-docs",
+    "source": "HTTPie for Desktop 2025.2.0"
+  },
+  "entry": {
+    "name": "Vet Clinic",
+    "auth": {
+      "type": "basic",
+      "credentials": {
+        "username": "{{user}}",
+        "password": "{{password}}"
+      }
+    },
+    "requests": [],
+    "collections": [
+      {
+        "name": "Patients",
+        "requests": [
+          {
+            "name": "List patients",
+            "method": "GET",
+            "url": "{{baseUrl}}/patients",
+            "queryParams": [
+              {
+                "name": "species",
+                "value": "dog",
+                "enabled": true
+              },
+              {
+                "name": "limit",
+                "value": "25",
+                "enabled": true
+              }
+            ],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {}
+          },
+          {
+            "name": "Create a patient",
+            "method": "POST",
+            "url": "{{baseUrl}}/patients",
+            "queryParams": [],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {
+              "text": {
+                "format": "json",
+                "value": "{\n  \"name\": \"Rex\",\n  \"species\": \"dog\",\n  \"born\": \"2021-03-04\",\n  \"owner\": \"o-7\"\n}"
+              }
+            }
+          },
+          {
+            "name": "Get a patient",
+            "method": "GET",
+            "url": "{{baseUrl}}/patients/:id",
+            "queryParams": [],
+            "pathParams": [
+              {
+                "name": "id",
+                "value": "p-1",
+                "enabled": true
+              }
+            ],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {}
+          },
+          {
+            "name": "Update a patient",
+            "method": "PATCH",
+            "url": "{{baseUrl}}/patients/:id",
+            "queryParams": [],
+            "pathParams": [
+              {
+                "name": "id",
+                "value": "p-1",
+                "enabled": true
+              }
+            ],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {
+              "text": {
+                "format": "json",
+                "value": "{\n  \"weightKg\": 31.5\n}"
+              }
+            }
+          },
+          {
+            "name": "Upload a photo",
+            "method": "PUT",
+            "url": "{{baseUrl}}/patients/:id/photo",
+            "queryParams": [],
+            "pathParams": [
+              {
+                "name": "id",
+                "value": "p-1",
+                "enabled": true
+              }
+            ],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {
+              "form": {
+                "isMultipart": true,
+                "fields": [
+                  {
+                    "name": "caption",
+                    "value": "At the beach",
+                    "enabled": true
+                  },
+                  {
+                    "name": "photo",
+                    "type": "file",
+                    "values": [
+                      {
+                        "name": "rex.png",
+                        "path": "rex.png"
+                      }
+                    ],
+                    "enabled": true
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "Visits",
+        "requests": [
+          {
+            "name": "List visits",
+            "method": "GET",
+            "url": "{{baseUrl}}/visits",
+            "queryParams": [
+              {
+                "name": "patient",
+                "value": "p-1",
+                "enabled": true
+              }
+            ],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {}
+          },
+          {
+            "name": "Book a visit",
+            "method": "POST",
+            "url": "{{baseUrl}}/visits",
+            "queryParams": [],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {
+              "text": {
+                "format": "json",
+                "value": "{\n  \"patient\": \"p-1\",\n  \"at\": \"2026-05-04T09:30:00Z\",\n  \"reason\": \"vaccination\"\n}"
+              }
+            }
+          },
+          {
+            "name": "Cancel a visit",
+            "method": "DELETE",
+            "url": "{{baseUrl}}/visits/v-3",
+            "queryParams": [],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {}
+          }
+        ]
+      },
+      {
+        "name": "Owners",
+        "requests": [
+          {
+            "name": "List owners",
+            "method": "GET",
+            "url": "{{baseUrl}}/owners",
+            "queryParams": [],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {}
+          },
+          {
+            "name": "Create an owner",
+            "method": "POST",
+            "url": "{{baseUrl}}/owners",
+            "queryParams": [],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {
+              "text": {
+                "format": "json",
+                "value": "{\n  \"name\": \"Ada\",\n  \"email\": \"ada@example.test\"\n}"
+              }
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

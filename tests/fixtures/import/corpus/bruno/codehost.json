@@ -1,0 +1,408 @@
+{
+  "name": "Code Host API",
+  "version": "1",
+  "items": [
+    {
+      "type": "folder",
+      "name": "Repos",
+      "seq": 1,
+      "items": [
+        {
+          "type": "http-request",
+          "name": "Get a repository",
+          "seq": 1,
+          "request": {
+            "url": "{{baseUrl}}/repos/{{owner}}/{{repo}}",
+            "method": "GET",
+            "headers": [
+              {
+                "name": "Accept",
+                "value": "application/vnd.codehost+json",
+                "enabled": true
+              }
+            ],
+            "params": [],
+            "body": {
+              "mode": "none"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [
+              {
+                "name": "res.status",
+                "value": "eq 200",
+                "enabled": true
+              }
+            ],
+            "tests": "test(\"Status code is 200\", function () {\n  expect(res.status).to.equal(200);\n});"
+          }
+        },
+        {
+          "type": "http-request",
+          "name": "List repository contributors",
+          "seq": 2,
+          "request": {
+            "url": "{{baseUrl}}/repos/{{owner}}/{{repo}}/contributors?per_page=30&page=1",
+            "method": "GET",
+            "headers": [],
+            "params": [
+              {
+                "name": "per_page",
+                "value": "30",
+                "type": "query",
+                "enabled": true
+              },
+              {
+                "name": "page",
+                "value": "1",
+                "type": "query",
+                "enabled": true
+              }
+            ],
+            "body": {
+              "mode": "none"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [],
+            "tests": ""
+          }
+        },
+        {
+          "type": "http-request",
+          "name": "List branches",
+          "seq": 3,
+          "request": {
+            "url": "{{baseUrl}}/repos/{{owner}}/{{repo}}/branches",
+            "method": "GET",
+            "headers": [],
+            "params": [],
+            "body": {
+              "mode": "none"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [],
+            "tests": ""
+          }
+        },
+        {
+          "type": "http-request",
+          "name": "Create a fork",
+          "seq": 4,
+          "request": {
+            "url": "{{baseUrl}}/repos/{{owner}}/{{repo}}/forks",
+            "method": "POST",
+            "headers": [],
+            "params": [],
+            "body": {
+              "mode": "none"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [],
+            "tests": ""
+          }
+        },
+        {
+          "type": "http-request",
+          "name": "Delete a repository",
+          "seq": 5,
+          "request": {
+            "url": "{{baseUrl}}/repos/{{owner}}/{{repo}}",
+            "method": "DELETE",
+            "headers": [],
+            "params": [],
+            "body": {
+              "mode": "none"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [],
+            "tests": ""
+          }
+        }
+      ]
+    },
+    {
+      "type": "folder",
+      "name": "Issues",
+      "seq": 2,
+      "items": [
+        {
+          "type": "http-request",
+          "name": "List issues",
+          "seq": 1,
+          "request": {
+            "url": "{{baseUrl}}/repos/{{owner}}/{{repo}}/issues?state=open&labels=bug",
+            "method": "GET",
+            "headers": [],
+            "params": [
+              {
+                "name": "state",
+                "value": "open",
+                "type": "query",
+                "enabled": true
+              },
+              {
+                "name": "labels",
+                "value": "bug",
+                "type": "query",
+                "enabled": true
+              }
+            ],
+            "body": {
+              "mode": "none"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [],
+            "tests": ""
+          }
+        },
+        {
+          "type": "http-request",
+          "name": "Create an issue",
+          "seq": 2,
+          "request": {
+            "url": "{{baseUrl}}/repos/{{owner}}/{{repo}}/issues",
+            "method": "POST",
+            "headers": [],
+            "params": [],
+            "body": {
+              "mode": "json",
+              "json": "{\n  \"title\": \"Found a bug\",\n  \"body\": \"I'm having a problem with this.\",\n  \"labels\": [\n    \"bug\"\n  ]\n}"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [
+              {
+                "name": "res.status",
+                "value": "eq 201",
+                "enabled": true
+              }
+            ],
+            "tests": "test(\"Status code is 201\", function () {\n  expect(res.status).to.equal(201);\n});"
+          }
+        },
+        {
+          "type": "http-request",
+          "name": "Get an issue",
+          "seq": 3,
+          "request": {
+            "url": "{{baseUrl}}/repos/{{owner}}/{{repo}}/issues/1347",
+            "method": "GET",
+            "headers": [],
+            "params": [],
+            "body": {
+              "mode": "none"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [],
+            "tests": ""
+          }
+        },
+        {
+          "type": "http-request",
+          "name": "Update an issue",
+          "seq": 4,
+          "request": {
+            "url": "{{baseUrl}}/repos/{{owner}}/{{repo}}/issues/1347",
+            "method": "PATCH",
+            "headers": [],
+            "params": [],
+            "body": {
+              "mode": "json",
+              "json": "{\n  \"state\": \"closed\"\n}"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [],
+            "tests": ""
+          }
+        },
+        {
+          "type": "http-request",
+          "name": "Lock an issue",
+          "seq": 5,
+          "request": {
+            "url": "{{baseUrl}}/repos/{{owner}}/{{repo}}/issues/1347/lock",
+            "method": "PUT",
+            "headers": [],
+            "params": [],
+            "body": {
+              "mode": "json",
+              "json": "{\n  \"lock_reason\": \"resolved\"\n}"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [],
+            "tests": ""
+          }
+        }
+      ]
+    },
+    {
+      "type": "folder",
+      "name": "Users",
+      "seq": 3,
+      "items": [
+        {
+          "type": "http-request",
+          "name": "Get the authenticated user",
+          "seq": 1,
+          "request": {
+            "url": "{{baseUrl}}/user",
+            "method": "GET",
+            "headers": [],
+            "params": [],
+            "body": {
+              "mode": "none"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [
+              {
+                "name": "res.status",
+                "value": "eq 200",
+                "enabled": true
+              }
+            ],
+            "tests": "test(\"Status code is 200\", function () {\n  expect(res.status).to.equal(200);\n});"
+          }
+        },
+        {
+          "type": "http-request",
+          "name": "Get a user",
+          "seq": 2,
+          "request": {
+            "url": "{{baseUrl}}/users/{{owner}}",
+            "method": "GET",
+            "headers": [],
+            "params": [],
+            "body": {
+              "mode": "none"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [],
+            "tests": ""
+          }
+        },
+        {
+          "type": "http-request",
+          "name": "List followers of a user",
+          "seq": 3,
+          "request": {
+            "url": "{{baseUrl}}/users/{{owner}}/followers",
+            "method": "GET",
+            "headers": [],
+            "params": [],
+            "body": {
+              "mode": "none"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [],
+            "tests": ""
+          }
+        }
+      ]
+    }
+  ],
+  "environments": [
+    {
+      "name": "default",
+      "variables": [
+        {
+          "name": "baseUrl",
+          "value": "https://api.codehost.example.test",
+          "enabled": true,
+          "secret": false
+        },
+        {
+          "name": "token",
+          "value": "",
+          "enabled": true,
+          "secret": false
+        },
+        {
+          "name": "owner",
+          "value": "octocat",
+          "enabled": true,
+          "secret": false
+        },
+        {
+          "name": "repo",
+          "value": "hello-world",
+          "enabled": true,
+          "secret": false
+        }
+      ]
+    }
+  ],
+  "root": {
+    "request": {
+      "auth": {
+        "mode": "bearer",
+        "bearer": {
+          "token": "{{token}}"
+        }
+      },
+      "vars": {
+        "req": [
+          {
+            "name": "baseUrl",
+            "value": "https://api.codehost.example.test",
+            "enabled": true
+          }
+        ]
+      }
+    }
+  },
+  "brunoConfig": {
+    "version": "1",
+    "name": "Code Host API",
+    "type": "collection"
+  }
+}

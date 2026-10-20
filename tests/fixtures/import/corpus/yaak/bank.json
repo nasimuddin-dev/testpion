@@ -1,0 +1,315 @@
+{
+  "yaakVersion": "2025.2.0",
+  "yaakSchema": 3,
+  "resources": {
+    "workspaces": [
+      {
+        "model": "workspace",
+        "id": "wk_bank",
+        "name": "Bank API"
+      }
+    ],
+    "environments": [
+      {
+        "model": "environment",
+        "id": "ev_bank_base",
+        "workspaceId": "wk_bank",
+        "name": "Global",
+        "base": true,
+        "variables": [
+          {
+            "enabled": true,
+            "name": "baseUrl",
+            "value": "https://api.bank.example.test/open-banking/v3"
+          }
+        ]
+      },
+      {
+        "model": "environment",
+        "id": "ev_bank_sandbox",
+        "workspaceId": "wk_bank",
+        "name": "sandbox",
+        "variables": [
+          {
+            "enabled": true,
+            "name": "baseUrl",
+            "value": "https://sandbox.bank.example.test/open-banking/v3"
+          },
+          {
+            "enabled": true,
+            "name": "clientId",
+            "value": "sandbox-client"
+          },
+          {
+            "enabled": true,
+            "name": "clientSecret",
+            "value": ""
+          }
+        ]
+      },
+      {
+        "model": "environment",
+        "id": "ev_bank_production",
+        "workspaceId": "wk_bank",
+        "name": "production",
+        "variables": [
+          {
+            "enabled": true,
+            "name": "baseUrl",
+            "value": "https://api.bank.example.test/open-banking/v3"
+          },
+          {
+            "enabled": true,
+            "name": "clientId",
+            "value": ""
+          },
+          {
+            "enabled": true,
+            "name": "clientSecret",
+            "value": ""
+          }
+        ]
+      }
+    ],
+    "folders": [
+      {
+        "model": "folder",
+        "id": "fl_bank_0",
+        "workspaceId": "wk_bank",
+        "folderId": null,
+        "name": "Accounts",
+        "sortPriority": 1,
+        "authenticationType": "oauth2",
+        "authentication": {
+          "grantType": "client_credentials",
+          "accessTokenUrl": "https://auth.bank.example.test/oauth/token",
+          "clientId": "{{clientId}}",
+          "clientSecret": "{{clientSecret}}",
+          "scope": "accounts payments"
+        }
+      },
+      {
+        "model": "folder",
+        "id": "fl_bank_1",
+        "workspaceId": "wk_bank",
+        "folderId": null,
+        "name": "Payments",
+        "sortPriority": 2
+      },
+      {
+        "model": "folder",
+        "id": "fl_bank_2",
+        "workspaceId": "wk_bank",
+        "folderId": null,
+        "name": "Funds",
+        "sortPriority": 3
+      }
+    ],
+    "httpRequests": [
+      {
+        "model": "http_request",
+        "id": "rq_bank_1",
+        "workspaceId": "wk_bank",
+        "folderId": "fl_bank_0",
+        "name": "List accounts",
+        "method": "GET",
+        "url": "${[ baseUrl ]}/accounts",
+        "urlParameters": [],
+        "headers": [],
+        "bodyType": null,
+        "body": {},
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 1
+      },
+      {
+        "model": "http_request",
+        "id": "rq_bank_2",
+        "workspaceId": "wk_bank",
+        "folderId": "fl_bank_0",
+        "name": "Get account",
+        "method": "GET",
+        "url": "${[ baseUrl ]}/accounts/${[ accountId ]}",
+        "urlParameters": [],
+        "headers": [],
+        "bodyType": null,
+        "body": {},
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 2
+      },
+      {
+        "model": "http_request",
+        "id": "rq_bank_3",
+        "workspaceId": "wk_bank",
+        "folderId": "fl_bank_0",
+        "name": "Get balances",
+        "method": "GET",
+        "url": "${[ baseUrl ]}/accounts/${[ accountId ]}/balances",
+        "urlParameters": [],
+        "headers": [],
+        "bodyType": null,
+        "body": {},
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 3
+      },
+      {
+        "model": "http_request",
+        "id": "rq_bank_4",
+        "workspaceId": "wk_bank",
+        "folderId": "fl_bank_0",
+        "name": "Get transactions",
+        "method": "GET",
+        "url": "${[ baseUrl ]}/accounts/${[ accountId ]}/transactions",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": "fromBookingDateTime",
+            "value": "2026-01-01T00:00:00Z"
+          },
+          {
+            "enabled": true,
+            "name": "limit",
+            "value": "50"
+          }
+        ],
+        "headers": [],
+        "bodyType": null,
+        "body": {},
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 4
+      },
+      {
+        "model": "http_request",
+        "id": "rq_bank_5",
+        "workspaceId": "wk_bank",
+        "folderId": "fl_bank_0",
+        "name": "List standing orders",
+        "method": "GET",
+        "url": "${[ baseUrl ]}/accounts/${[ accountId ]}/standing-orders",
+        "urlParameters": [],
+        "headers": [],
+        "bodyType": null,
+        "body": {},
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 5
+      },
+      {
+        "model": "http_request",
+        "id": "rq_bank_6",
+        "workspaceId": "wk_bank",
+        "folderId": "fl_bank_1",
+        "name": "Create a payment consent",
+        "method": "POST",
+        "url": "${[ baseUrl ]}/domestic-payment-consents",
+        "urlParameters": [],
+        "headers": [
+          {
+            "enabled": true,
+            "name": "x-idempotency-key",
+            "value": "{{$guid}}"
+          },
+          {
+            "enabled": true,
+            "name": "x-fapi-financial-id",
+            "value": "${[ orgId ]}"
+          }
+        ],
+        "bodyType": "application/json",
+        "body": {
+          "text": "{\n  \"Data\": {\n    \"Initiation\": {\n      \"InstructionIdentification\": \"ACME412\",\n      \"InstructedAmount\": {\n        \"Amount\": \"165.88\",\n        \"Currency\": \"GBP\"\n      }\n    }\n  },\n  \"Risk\": {}\n}"
+        },
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 6
+      },
+      {
+        "model": "http_request",
+        "id": "rq_bank_7",
+        "workspaceId": "wk_bank",
+        "folderId": "fl_bank_1",
+        "name": "Get a payment consent",
+        "method": "GET",
+        "url": "${[ baseUrl ]}/domestic-payment-consents/${[ consentId ]}",
+        "urlParameters": [],
+        "headers": [],
+        "bodyType": null,
+        "body": {},
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 7
+      },
+      {
+        "model": "http_request",
+        "id": "rq_bank_8",
+        "workspaceId": "wk_bank",
+        "folderId": "fl_bank_1",
+        "name": "Submit a payment",
+        "method": "POST",
+        "url": "${[ baseUrl ]}/domestic-payments",
+        "urlParameters": [],
+        "headers": [],
+        "bodyType": "application/json",
+        "body": {
+          "text": "{\n  \"Data\": {\n    \"ConsentId\": \"${[ consentId ]}\"\n  },\n  \"Risk\": {}\n}"
+        },
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 8
+      },
+      {
+        "model": "http_request",
+        "id": "rq_bank_9",
+        "workspaceId": "wk_bank",
+        "folderId": "fl_bank_1",
+        "name": "Get a payment",
+        "method": "GET",
+        "url": "${[ baseUrl ]}/domestic-payments/${[ paymentId ]}",
+        "urlParameters": [],
+        "headers": [],
+        "bodyType": null,
+        "body": {},
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 9
+      },
+      {
+        "model": "http_request",
+        "id": "rq_bank_10",
+        "workspaceId": "wk_bank",
+        "folderId": "fl_bank_2",
+        "name": "Confirm funds",
+        "method": "POST",
+        "url": "${[ baseUrl ]}/funds-confirmations",
+        "urlParameters": [],
+        "headers": [],
+        "bodyType": "application/json",
+        "body": {
+          "text": "{\n  \"Data\": {\n    \"ConsentId\": \"${[ consentId ]}\",\n    \"Reference\": \"Purchase01\",\n    \"InstructedAmount\": {\n      \"Amount\": \"20.00\",\n      \"Currency\": \"GBP\"\n    }\n  }\n}"
+        },
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 10
+      },
+      {
+        "model": "http_request",
+        "id": "rq_bank_11",
+        "workspaceId": "wk_bank",
+        "folderId": "fl_bank_2",
+        "name": "Get funds consent",
+        "method": "GET",
+        "url": "${[ baseUrl ]}/funds-confirmation-consents/${[ consentId ]}",
+        "urlParameters": [],
+        "headers": [],
+        "bodyType": null,
+        "body": {},
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 11
+      }
+    ]
+  }
+}
