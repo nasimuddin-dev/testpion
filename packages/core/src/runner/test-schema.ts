@@ -508,6 +508,9 @@ export function lintTestFile(text: string, opts: { file?: string; suite?: boolea
           const tp = (a as unknown as { items: Pair[] }).items.find((p) => keyOf(p) === 'type');
           if (!tp) add('error', 'A check needs a type', a);
           else if (isScalar(tp.value) && !checks.has(String(tp.value.value))) add('error', `Unknown check type "${String(tp.value.value)}": ${[...checks].join(', ')}`, tp);
+          // before RAG R2 `hallucination` was an alias of faithfulness (higher is better); it is now DeepEval's lower-is-better metric
+          else if (isScalar(tp.value) && String(tp.value.value) === 'hallucination')
+            add('info', 'hallucination now scores the share of unsupported claims: lower is better, so the pass mark is a maximum. For "higher is better" grounding use faithfulness', tp);
         }
     }
     // the flow blocks' keys: what is wrong is said at the key (and not again for the whole step)

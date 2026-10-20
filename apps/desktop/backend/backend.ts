@@ -158,6 +158,7 @@ import { flowDeployHandlers, stopFlowWebhooks } from './handlers/flow-deploy.js'
 import { flowScaleHandlers, cancelScaleRuns } from './handlers/flow-scale.js';
 import { evalMatrixHandlers } from './handlers/eval-matrix.js';
 import { ragHandlers } from './handlers/rag.js';
+import { ragMetricHandlers } from './handlers/rag-metrics.js';
 import { outputHandlers } from './handlers/output.js';
 import { kindHandlers } from './handlers/kinds.js';
 import { importHandlers } from './handlers/import.js';
@@ -666,7 +667,7 @@ export class Backend {
    */
   private buildHandlers(): Handlers {
     const all: Handlers = {};
-    for (const group of [appHandlers, workspaceHandlers, collectionsHandlers, requestsHandlers, grpcHandlers, mcpHandlers, aiHandlers, aiTaskHandlers, aiTriageHandlers, aiSpecHandlers, aiSecurityHandlers, testingHandlers, monitorHandlers, agentHandlers, feedbackHandlers, gitHandlers, debuggerHandlers, debuggerRulesHandlers, externalSecretsHandlers, fuzzHandlers, flowDebugHandlers, debuggerFlowHandlers, debuggerReverseHandlers, flowDeployHandlers, terminalHandlers, flowScaleHandlers, evalMatrixHandlers, outputHandlers, kindHandlers, importHandlers, bundleHandlers, ragHandlers, gitItemHandlers]) {
+    for (const group of [appHandlers, workspaceHandlers, collectionsHandlers, requestsHandlers, grpcHandlers, mcpHandlers, aiHandlers, aiTaskHandlers, aiTriageHandlers, aiSpecHandlers, aiSecurityHandlers, testingHandlers, monitorHandlers, agentHandlers, feedbackHandlers, gitHandlers, debuggerHandlers, debuggerRulesHandlers, externalSecretsHandlers, fuzzHandlers, flowDebugHandlers, debuggerFlowHandlers, debuggerReverseHandlers, flowDeployHandlers, terminalHandlers, flowScaleHandlers, evalMatrixHandlers, outputHandlers, kindHandlers, importHandlers, bundleHandlers, ragHandlers, ragMetricHandlers, gitItemHandlers]) {
       for (const [name, fn] of Object.entries(group(this))) {
         if (name in all) throw new Error(`RPC method ${name} is defined twice`);
         // the parameters are checked first; a TypeError from inside becomes an InternalError naming the method

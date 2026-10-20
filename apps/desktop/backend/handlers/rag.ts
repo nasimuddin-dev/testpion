@@ -23,6 +23,7 @@ import {
   metricToCheck,
   parseRagImportText,
   presetChecks,
+  readRunSummary,
   rescoreRun,
   runResults,
   storedSample,
@@ -71,7 +72,7 @@ export function ragHandlers(be: Backend): Handlers {
       const ctx = be.context({ environment });
       try {
         const input: Record<string, unknown> = {};
-        for (const f of m.inputs) input[f] = f === 'contexts' ? (sample.contexts ?? []).map((d) => ({ id: d.id, text: d.text })) : f === 'claims' ? [] : sample[f];
+        for (const f of m.inputs) input[f] = f === 'contexts' ? (sample.contexts ?? []).map((d) => ({ id: d.id, text: d.text })) : f === 'claims' ? [] : (sample as Record<string, unknown>)[f];
         return { metric: m.id, version: m.version, what: m.what, preview: previewJudge(ctx.services.ragJudge!, m, input, judge) };
       } finally {
         void ctx.dispose();
@@ -150,7 +151,8 @@ export function ragHandlers(be: Backend): Handlers {
     'rag.rescore': async ({ runId, evaluators, judge, environment }: { runId: string; evaluators?: Array<{ type: string }>; judge?: SavedEvaluation['judge']; environment?: string }) => {
       const ctx = be.context({ environment });
       try {
-        const r = await rescoreRun(be.ws, { runId, evaluators, judge, providers: ctx.services.providers, ragJudge: ctx.services.ragJudge! });
+        // the new run keeps the evaluation's name, so it sits with the evaluation's other runs
+        const r = await rescoreRun(be.ws, { runId, evaluators, judge, providers: ctx.services.providers, ragJudge: ctx.services.ragJudge!, name: readRunSummary(be.ws, runId)?.name });
         return { runId: r.runId, rescored: r.rescored, skipped: r.skipped };
       } finally {
         await ctx.dispose();

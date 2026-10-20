@@ -1,4 +1,4 @@
-import { Database, FlaskConical, Plus } from 'lucide-react';
+import { Database, FlaskConical, Plus, Ruler } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { call } from '../../api';
 import { useApp } from '../../store';
@@ -7,7 +7,8 @@ import type { RagTarget } from '@testpion/shared';
 import type { RagTargetInfo } from '@testpion/core';
 import { FolderList } from '../../components/FolderList';
 import { RagConnectDialog } from '../../components/rag/RagConnectDialog';
-import { Badge, Button, Empty } from '../../components/ui';
+import { CustomMetricsList, MetricEditor } from '../../components/rag/CustomMetrics';
+import { Badge, Button, Empty, Segmented } from '../../components/ui';
 
 /**
  * AI Lab ▸ RAG: the RAG systems under test (a request of any protocol and the mapping of its response). Connect one,
@@ -17,6 +18,8 @@ export function Rag({ openTarget }: { openTarget?: { id: string; at: number } })
   const targets = useLibrary<RagTarget>('rag-targets');
   const [dialog, setDialog] = useState<{ id?: string }>();
   const [selected, setSelected] = useState<string>();
+  const [side, setSide] = useState<'targets' | 'metrics'>('targets');
+  const [metric, setMetric] = useState<{ id?: string }>();
   const [info, setInfo] = useState<RagTargetInfo[]>([]);
   useEffect(() => {
     void call<RagTargetInfo[]>('rag.targets').then(setInfo, () => setInfo([]));
@@ -43,6 +46,21 @@ export function Rag({ openTarget }: { openTarget?: { id: string; at: number } })
   return (
     <div className="h-full flex min-h-0" data-rag-tab>
       <div className="w-80 border-r border-line flex flex-col min-h-0">
+        <div className="px-2 py-1.5 border-b border-line">
+          <Segmented
+            label="Show"
+            size="xs"
+            value={side}
+            onChange={setSide}
+            options={[
+              { value: 'targets', label: 'RAG targets', icon: <Database size={11} /> },
+              { value: 'metrics', label: 'Metrics', icon: <Ruler size={11} />, title: 'Your own metrics: files in the workspace (metrics/*.yaml) that score an answer by your rule' },
+            ]}
+          />
+        </div>
+        {side === 'metrics' ? (
+          <CustomMetricsList selected={metric?.id} onSelect={(id) => setMetric({ id })} onNew={() => setMetric({})} />
+        ) : (
         <FolderList
           id="rag-targets"
           kind="rag-target"
@@ -62,6 +80,7 @@ export function Rag({ openTarget }: { openTarget?: { id: string; at: number } })
             </Empty>
           }
         />
+        )}
       </div>
       <div className="flex-1 min-w-0 overflow-auto p-6 text-sm">
         <h2 className="text-lg font-semibold mb-1">Test a RAG system</h2>
@@ -81,8 +100,10 @@ export function Rag({ openTarget }: { openTarget?: { id: string; at: number } })
           <li>Connect: request, probe, click-to-map, save.</li>
           <li>Evaluations ▸ type RAG: choose the target, the dataset (question, reference answer, gold documents; Ragas and DeepEval files convert) and the metrics.</li>
           <li>A judged metric needs a judge model: choose one for the evaluation, or set Settings ▸ AI assistant. It never falls back on a mock silently.</li>
+          <li>Metrics tab: write your own metric (a criterion a judge decides, a checklist, rules, a formula, a script), check it against examples, and use it in the picker like any other.</li>
         </ol>
       </div>
+      {metric && <MetricEditor id={metric.id} onClose={() => setMetric(undefined)} onSaved={(id) => setMetric((m) => (m && !m.id ? { id } : m))} />}
       {dialog && <RagConnectDialog id={dialog.id} onClose={() => setDialog(undefined)} onSaved={(id) => (void targets.reload(), setSelected(id))} />}
     </div>
   );

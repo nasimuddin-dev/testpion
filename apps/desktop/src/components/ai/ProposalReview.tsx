@@ -11,7 +11,7 @@ import { Findings } from './Findings';
 import { OutputActions } from '../output/OutputFrame';
 import { proposalOutputSpec } from '../output/ai-specs';
 
-const KIND_LABEL: Record<ProposalItem['kind'], string> = { file: 'test file', flow: 'flow', assertion: 'check', script: 'script', request: 'request', patch: 'request change', variable: 'variable', collection: 'collection change', spec: 'API definition change', text: 'text' };
+const KIND_LABEL: Record<ProposalItem['kind'], string> = { file: 'test file', flow: 'flow', assertion: 'check', script: 'script', request: 'request', patch: 'request change', variable: 'variable', collection: 'collection change', spec: 'API definition change', metric: 'custom metric', text: 'text' };
 
 /** One verification badge: the verifier's verdict in words, its detail on hover. */
 export function VerificationBadgeView({ b }: { b: VerificationBadge }) {

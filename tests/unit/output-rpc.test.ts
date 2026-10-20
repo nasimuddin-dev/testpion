@@ -238,7 +238,7 @@ describe('output.save', () => {
     await expect(save({ surface: 'response.headers', format: 'json', suggestedName: 'x.json', source: { kind: 'response', payloadPath: 'x' } })).rejects.toThrow(/unknown source response for Response headers/);
     await expect(save({ surface: 'eval.matrix', format: 'csv', suggestedName: 'x.csv', source: { kind: 'logs' } })).rejects.toThrow(/unknown source logs/);
     await expect(be.invoke('output.copy', { surface: 'load.results', format: 'json', source: { kind: 'run', runId: 'run-zip' } })).rejects.toThrow(/unknown source run/);
-    for (const s of OUTPUT_SURFACES) for (const k of s.sources ?? []) expect(['response', 'run', 'flow-timeline', 'console', 'logs', 'debugger', 'grid', 'history', 'traces', 'monitor-runs', 'runs-overview', 'git-diff', 'workspace-report'], `${s.id} ${k}`).toContain(k);
+    for (const s of OUTPUT_SURFACES) for (const k of s.sources ?? []) expect(['response', 'run', 'flow-timeline', 'console', 'logs', 'debugger', 'grid', 'history', 'traces', 'monitor-runs', 'runs-overview', 'git-diff', 'workspace-report', 'rag-matrix'], `${s.id} ${k}`).toContain(k);
   });
 
   it('Show in folder and Open take the job, never a path', async () => {
@@ -400,6 +400,7 @@ describe('output.save: the secrets policy of every surface', () => {
       'history',
       'logs',
       'mcp.trace',
+      'rag.matrix',
       'response.curl',
       'response.trace',
       'run.results',

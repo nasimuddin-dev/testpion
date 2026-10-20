@@ -644,6 +644,15 @@ export const AI_TASKS: readonly AiTaskDef[] = [
     // the verifier: the mapping must extract an answer (and, when it maps contexts, documents with text) from the sample
     propose: (answer, input) => ({ items: [], problems: suggestedMappingProblems(answer.value, responseOfContext(input.context)) }),
   }),
+  T('rag-explain-sample', {
+    title: 'Explain a RAG sample',
+    description: 'Why one sample of a RAG evaluation scored low: which part failed (retriever, generator or the metric itself), the evidence, and the first thing to change. Reads the stored sample and the metric results; proposes nothing.',
+    tier: 'small',
+    output: md,
+    context: 'question, answer, reference, contexts [{rank, id, score, text}], referenceIds, failure, metrics [{name, score, passed, message, items}]',
+    contextTokens: 8000,
+    maxTokens: 900,
+  }),
   T('rag-draft-metric', {
     title: 'Draft a custom RAG metric',
     description: 'From a description of what good looks like, a custom RAG metric file (metrics/<id>.yaml) of the kind that fits (judge, checklist, rule, formula, embedding set or script) with 4 to 8 examples that must pass or fail. Offered as a proposal; the verifier runs the examples of a rule or script metric and checks the prompts of a judged one.',

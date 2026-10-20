@@ -5,6 +5,7 @@ import { useRpc } from '../../lib/use-rpc';
 import type { CheckConfig } from '../../types';
 import { AssertionEditor } from '../AssertionEditor';
 import { Badge, Button, Callout, Input, IconButton, Segmented, Select, Spinner, cx } from '../ui';
+import { MetricEditor } from './CustomMetrics';
 import { metricResolver, type MetricCatalogue, type MetricRow } from './metric-resolver';
 
 type Row = MetricRow;
@@ -17,7 +18,24 @@ const KIND_BADGE: Record<string, { label: string; tone: 'ok' | 'judge' | 'accent
   sql: { label: 'SQL', tone: 'default', title: 'Runs SQL' },
 };
 
-const INPUT_NAME: Record<string, string> = { question: 'a question', answer: 'the answer', contexts: 'retrieved contexts', reference: 'a "reference" column', referenceIds: 'a "reference_ids" column', referenceContexts: 'a "reference_contexts" column' };
+const INPUT_NAME: Record<string, string> = {
+  question: 'a question',
+  answer: 'the answer',
+  contexts: 'retrieved contexts',
+  reference: 'a "reference" column',
+  referenceIds: 'a "reference_ids" column',
+  referenceContexts: 'a "reference_contexts" column',
+  canaries: 'a "canaries" column',
+  toolCalls: 'the tool calls',
+  referenceToolCalls: 'a "reference_tool_calls" column',
+  answerable: 'an "answerable" column',
+  source: 'a "source" column',
+  rubric: 'a "rubric" column',
+  goodAnswers: 'a "good_answers" column',
+  latency: 'the latency',
+  scores: 'retrieval scores',
+  relevance: 'a "relevance" column',
+};
 
 /** A second instance of a metric with options: the next k (5 more), or the next mode not used yet, named so its column is its own. */
 function variantOf(r: Row, used: CheckConfig[]): Record<string, unknown> {
@@ -59,10 +77,11 @@ export function MetricPicker({
   onTry?(check: CheckConfig): void;
   footer?: ReactNode;
 }) {
-  const cat = useRpc<Catalogue>('rag.metrics', { columns, hasTarget }, { keep: true });
+  const cat = useRpc<Catalogue>('rag.metrics', { columns, hasTarget }, { keep: true, reloadOn: ['data.changed'] });
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<'all' | 'free' | 'judged' | 'selected'>('all');
   const [open, setOpen] = useState<string>();
+  const [editing, setEditing] = useState<{ id?: string }>();
   const resolve = useMemo(() => metricResolver(cat?.metrics ?? []), [cat]);
   const byRow = useMemo(() => {
     const m = new Map<string, number[]>();
@@ -107,6 +126,9 @@ export function MetricPicker({
             Clear
           </Button>
         )}
+        <Button size="sm" className="ml-auto" icon={<Plus size={12} />} onClick={() => setEditing({})} title="Write your own metric: a criterion, a checklist, rules, a formula, a script" data-rag-new-metric>
+          New custom metric
+        </Button>
       </div>
       <div className="flex items-center gap-2">
         <div className="relative flex-1">
@@ -158,6 +180,11 @@ export function MetricPicker({
                           </Badge>
                           {r.direction === 'lower' && <Badge title="A lower score is better">lower is better</Badge>}
                           <span className="text-xs text-muted">{r.calls === '0' ? '' : `judge calls: ${r.calls}`}</span>
+                          {r.custom && (
+                            <button className="text-xs text-accent hover:underline" onClick={() => setEditing({ id: r.id.replace(/^custom\//, '') })} data-rag-edit-metric={r.id}>
+                              Edit
+                            </button>
+                          )}
                         </div>
                         {missing.length > 0 && (
                           <div className="text-xs text-warn" data-rag-missing>
@@ -254,6 +281,7 @@ export function MetricPicker({
           />
         </details>
       )}
+      {editing && <MetricEditor id={editing.id} onClose={() => setEditing(undefined)} />}
       {footer && (
         <div className="sticky bottom-0 -mx-3 px-3 py-2 border-t border-line bg-bg text-xs" data-rag-picker-footer>
           {footer}

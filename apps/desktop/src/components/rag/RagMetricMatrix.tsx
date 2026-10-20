@@ -1,9 +1,14 @@
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronRight, RefreshCw } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import type { MatrixCell, MetricMatrix } from '@testpion/core';
+import { outputFileName, type RagJudgeSetup } from '@testpion/shared';
 import { call } from '../../api';
+import type { CheckConfig, ProviderConfig } from '../../types';
 import { useDebounced } from '../ui';
-import { Badge, Input, Select, Spinner, cx } from '../ui';
+import { Badge, Button, Input, Segmented, Select, Spinner, cx } from '../ui';
+import { OutputActions } from '../output/OutputFrame';
+import type { OutputSpec } from '../output/output-core';
+import { RagByTag, RagCharts, RagCompare, RagPivot, RagRescoreDialog, type RunChoice } from './RagResultViews';
 import { RagSampleDetail } from './RagSampleDetail';
 
 const PAGE = 100;
@@ -29,7 +34,27 @@ const cellClass = (c: MatrixCell | null) => (!c ? '' : c.failed ? 'bg-bad/10 tex
  * pass rate, n/a count, a 95% interval and the distribution. Rows can be searched, sorted by a metric and filtered by why they
  * failed; a click on a cell opens the sample through that metric.
  */
-export function RagMetricMatrix({ runId, target, judge }: { runId: string; target?: string; judge?: { provider?: string; model?: string } }) {
+export function RagMetricMatrix({
+  runId,
+  target,
+  judge,
+  runs = [],
+  evaluators = [],
+  providers = [],
+  onRescored,
+}: {
+  runId: string;
+  target?: string;
+  judge?: RagJudgeSetup;
+  /** The evaluation's runs (compare, the variant pivot). */
+  runs?: RunChoice[];
+  /** The evaluation's metrics now (score the run again with them). */
+  evaluators?: CheckConfig[];
+  providers?: ProviderConfig[];
+  onRescored?(runId: string): void;
+}) {
+  const [view, setView] = useState<'samples' | 'tags' | 'charts' | 'compare' | 'pivot'>('samples');
+  const [rescoring, setRescoring] = useState(false);
   const [query, setQuery] = useState('');
   const [failure, setFailure] = useState('');
   const [sort, setSort] = useState('');
@@ -59,6 +84,19 @@ export function RagMetricMatrix({ runId, target, judge }: { runId: string; targe
       </div>
     );
   if (!m.columns.length) return <div className="p-4 text-sm text-muted">This run holds no scored RAG samples.</div>;
+  // the down arrow: every sample and every metric of the run (the backend builds the file; the pass marks edited here go with it)
+  const source = { kind: 'rag-matrix' as const, runId, ...(Object.keys(t).length ? { thresholds: t } : {}) };
+  const spec: OutputSpec = {
+    id: 'rag.matrix',
+    what: 'RAG metrics matrix',
+    name: outputFileName({ name: `rag-metrics-${runId}`, ext: '' }),
+    formats: [
+      { format: 'csv', label: 'Samples × metrics (CSV)', source, default: true },
+      { format: 'json', label: 'Matrix with aggregates (JSON)', source },
+      { format: 'html', label: 'Report (HTML)', source },
+    ],
+    empty: m.total ? undefined : 'No scored samples',
+  };
   const shownCols = m.columns.map((c, i) => ({ c, i })).filter(({ c }) => !collapsed.has(c.group));
   const toggle = (g: string) => setCollapsed((s) => (s.has(g) ? new Set([...s].filter((x) => x !== g)) : new Set([...s, g])));
   const groupMean = (cells: Array<MatrixCell | null>, group: string) => {
@@ -66,8 +104,36 @@ export function RagMetricMatrix({ runId, target, judge }: { runId: string; targe
     return xs.length ? Math.round((xs.reduce((a, b) => a + b, 0) / xs.length) * 1000) / 1000 : undefined;
   };
   return (
-    <div className="h-full flex flex-col min-h-0" data-rag-matrix>
-      <div className="flex items-center gap-2 p-2 border-b border-line flex-wrap">
+    <div className="h-full flex flex-col min-h-0" data-rag-matrix data-output="rag.matrix">
+      <div className="flex items-center gap-2 px-2 pt-2 flex-wrap">
+        <Segmented
+          label="View"
+          size="xs"
+          value={view}
+          onChange={setView}
+          options={[
+            { value: 'samples', label: 'Samples' },
+            { value: 'tags', label: 'By tag', title: 'The mean of each metric for each tag of the dataset records' },
+            { value: 'charts', label: 'Charts', title: 'The distribution of every metric' },
+            { value: 'compare', label: 'Compare', title: 'This run against another, metric by metric, with a paired bootstrap' },
+            { value: 'pivot', label: 'Runs × metrics', title: 'Several runs side by side: the mean of every metric' },
+          ]}
+        />
+        <Button size="sm" icon={<RefreshCw size={12} />} onClick={() => setRescoring(true)} title="Score the stored answers again with other metrics or another judge: the RAG system is not called" data-rag-rescore-open>
+          Score again…
+        </Button>
+        <OutputActions spec={spec} />
+      </div>
+      {view === 'tags' && (
+        <div className="flex-1 min-h-0 overflow-auto p-3">
+          <RagByTag m={m} />
+        </div>
+      )}
+      {view === 'charts' && <RagCharts m={m} />}
+      {view === 'compare' && <RagCompare runId={runId} runs={runs} />}
+      {view === 'pivot' && <RagPivot runs={runs} />}
+      {rescoring && <RagRescoreDialog runId={runId} evaluators={evaluators} judge={judge} providers={providers} onDone={(id) => onRescored?.(id)} onClose={() => setRescoring(false)} />}
+      <div className={cx('flex items-center gap-2 p-2 border-b border-line flex-wrap', view !== 'samples' && 'hidden')}>
         <Input className="w-56" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search samples, questions, tags" aria-label="Search samples" />
         <Select className="h-7 min-h-7 py-0 text-xs" value={failure} onChange={(e) => setFailure(e.target.value)} aria-label="Why a sample failed" data-rag-failure-filter>
           <option value="">All samples</option>
@@ -92,7 +158,7 @@ export function RagMetricMatrix({ runId, target, judge }: { runId: string; targe
           {m.failures.length > 0 && <> · {m.failures.map((f) => `${f.label} ${f.count}`).join(', ')}</>}
         </span>
       </div>
-      <div className="flex-1 min-h-0 overflow-auto">
+      <div className={cx('flex-1 min-h-0 overflow-auto', view !== 'samples' && 'hidden')}>
         <table className="text-xs border-separate border-spacing-0 min-w-full" data-rag-matrix-table>
           <thead className="sticky top-0 z-10 bg-bg">
             <tr>
@@ -219,7 +285,7 @@ export function RagMetricMatrix({ runId, target, judge }: { runId: string; targe
           </tbody>
         </table>
       </div>
-      {m.total > PAGE && (
+      {m.total > PAGE && view === 'samples' && (
         <div className="flex items-center gap-2 px-2 py-1 border-t border-line text-xs">
           <button className="px-2 py-0.5 rounded hover:bg-hover disabled:opacity-40" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE))}>
             Previous

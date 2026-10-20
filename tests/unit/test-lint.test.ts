@@ -88,4 +88,11 @@ describe('test files: lint and keys', () => {
     const both = ['name: x', 'type: http', 'url: http://a', 'assertions: []', 'checks: []'].join('\n');
     expect(lintTestFile(both).map((p) => p.message).join(' | ')).toMatch(/only assertions: is read/);
   });
+  it('says hallucination changed meaning (lower is better now) and points at faithfulness', () => {
+    const t = ['name: x', 'type: http', 'url: http://a', 'assertions:', '  - { type: hallucination, min: 0.8 }'].join('\n');
+    const p = lintTestFile(t).find((q) => /hallucination/.test(q.message));
+    expect(p?.severity).toBe('info');
+    expect(p?.message).toMatch(/lower is better/);
+    expect(p?.message).toMatch(/faithfulness/);
+  });
 });

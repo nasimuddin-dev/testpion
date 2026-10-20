@@ -23,6 +23,7 @@ import type { Collection, CollectionNode, Library } from '../types';
 import { formatMs, timeAgo } from '../lib/format';
 import { Badge, Button, cx, Empty, Field, Input, Metric, MetricGrid, ModalOrPanel, PageHeader, Select, Split, Toggle, Tooltip } from '../components/ui';
 import { useCollectionTree } from '../lib/collections-store';
+import { useLibrary } from '../lib/library';
 import { VarInput } from '../components/VarInput';
 import { useExternalChange } from '../lib/external-change';
 import { EnvBadge, EnvSelect } from '../components/EnvSelect';
@@ -41,6 +42,12 @@ interface MonitorDraft {
   selection?: string[];
   /** Or a test file / flow under tests/ (the collection is then ''). */
   testFile?: string;
+  /** Or a saved RAG evaluation (its id or name): scored, and failed by its gates. */
+  evaluation?: string;
+  limit?: number;
+  gates?: Record<string, number>;
+  judgeSample?: number;
+  judgeBudgetUsdPerDay?: number;
   environment?: string;
   everyMinutes: number;
   enabled: boolean;
@@ -563,7 +570,7 @@ function useTestFiles(): string[] {
 /** What a monitor's definition is, to tell unsaved edits from a change on disk (its results and status left out). */
 function monitorSnapshot(m: Partial<MonitorDraft>): string {
   const x = m as Record<string, unknown>;
-  return JSON.stringify(['name', 'folder', 'collectionId', 'selection', 'testFile', 'environment', 'everyMinutes', 'enabled', 'iterations', 'bail', 'webhook', 'maxP95Ms', 'minCertDays'].map((k) => x[k] ?? null));
+  return JSON.stringify(['name', 'folder', 'collectionId', 'selection', 'testFile', 'evaluation', 'limit', 'gates', 'judgeSample', 'judgeBudgetUsdPerDay', 'environment', 'everyMinutes', 'enabled', 'iterations', 'bail', 'webhook', 'maxP95Ms', 'minCertDays'].map((k) => x[k] ?? null));
 }
 
 function MonitorEditor({ draft, collections, onCancel, onSave }: { draft: MonitorDraft; collections: Collection[]; onCancel(): void; onSave(d: MonitorDraft): Promise<void> }) {
@@ -574,8 +581,12 @@ function MonitorEditor({ draft, collections, onCancel, onSave }: { draft: Monito
   const [error, setError] = useState<string>();
   const [saving, setSaving] = useState(false);
   // what it runs: a collection (and some of its folders) or a test file / flow under tests/
-  const [target, setTarget] = useState<'collection' | 'file'>(draft.testFile ? 'file' : 'collection');
+  const [target, setTarget] = useState<'collection' | 'file' | 'evaluation'>(draft.evaluation ? 'evaluation' : draft.testFile ? 'file' : 'collection');
   const testFiles = useTestFiles();
+  const evaluations = useLibrary<{ type?: string }>('evaluations');
+  const ragEvaluations = evaluations.lib.items.filter((i) => i.data.type === 'rag');
+  // the gates as the person writes them: metric=minimum, comma separated (the same names as `testpion rag run --min`)
+  const [gatesText, setGatesText] = useState(Object.entries(draft.gates ?? {}).map(([k, v]) => `${k}=${v}`).join(', '));
   // the monitor changed on disk (a pull, the CLI, an agent): follow it, or ask when the form has edits (WF-15)
   const unitF = (UNITS.find((u) => u.id === unit) ?? UNITS[0]).f;
   const base = useRef(monitorSnapshot(draft));
@@ -592,7 +603,8 @@ function MonitorEditor({ draft, collections, onCancel, onSave }: { draft: Monito
       setD(m);
       setUnit(u.id);
       setEvery(String(m.everyMinutes / u.f));
-      setTarget(m.testFile ? 'file' : 'collection');
+      setTarget(m.evaluation ? 'evaluation' : m.testFile ? 'file' : 'collection');
+      setGatesText(Object.entries(m.gates ?? {}).map(([k, v]) => `${k}=${v}`).join(', '));
     },
     keep: (_id, snapshot) => void (base.current = snapshot),
   });
@@ -645,8 +657,21 @@ function MonitorEditor({ draft, collections, onCancel, onSave }: { draft: Monito
     if (!(minutes >= 1 && minutes <= 10080)) return setError('A monitor runs every 1 minute to 7 days.');
     if (target === 'file' && !d.testFile) return setError('Pick the test file to run.');
     if (target === 'collection' && !d.collectionId) return setError('Pick the collection to run.');
-    // one target: the other one is cleared
-    const what = target === 'file' ? { collectionId: '', selection: undefined, testFile: d.testFile } : { testFile: undefined, selection: d.selection?.length ? d.selection : undefined };
+    if (target === 'evaluation' && !d.evaluation) return setError('Pick the RAG evaluation to run.');
+    const gates: Record<string, number> = {};
+    for (const part of gatesText.split(/[,\n]/).map((x) => x.trim()).filter(Boolean)) {
+      const m = /^([\w.@:-]+)\s*[=:]\s*(\d*\.?\d+)$/.exec(part);
+      if (!m) return setError(`A gate reads metric=minimum, e.g. faithfulness=0.8 (got "${part}")`);
+      gates[m[1]!] = Number(m[2]);
+    }
+    // one target: the others are cleared
+    const none = { evaluation: undefined, limit: undefined, gates: undefined, judgeSample: undefined, judgeBudgetUsdPerDay: undefined };
+    const what =
+      target === 'evaluation'
+        ? { collectionId: '', selection: undefined, testFile: undefined, ...(Object.keys(gates).length ? { gates } : { gates: undefined }) }
+        : target === 'file'
+          ? { ...none, collectionId: '', selection: undefined, testFile: d.testFile }
+          : { ...none, testFile: undefined, selection: d.selection?.length ? d.selection : undefined };
     setSaving(true);
     try {
       await onSave({ ...d, ...what, name: d.name.trim(), everyMinutes: minutes, environment: d.environment || undefined });
@@ -681,6 +706,7 @@ function MonitorEditor({ draft, collections, onCancel, onSave }: { draft: Monito
           <Select value={target} onChange={(e) => setTarget(e.target.value as 'collection' | 'file')} aria-label="What the monitor runs">
             <option value="collection">A collection</option>
             <option value="file">A test file or flow</option>
+            <option value="evaluation">A RAG evaluation</option>
           </Select>
         </Field>
         <div className="grid grid-cols-2 gap-3">
@@ -690,6 +716,17 @@ function MonitorEditor({ draft, collections, onCancel, onSave }: { draft: Monito
                 {collections.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          ) : target === 'evaluation' ? (
+            <Field label="RAG evaluation">
+              <Select value={d.evaluation ?? ''} onChange={(e) => setD({ ...d, evaluation: e.target.value || undefined })} aria-label="RAG evaluation">
+                <option value="">Pick a saved RAG evaluation…</option>
+                {ragEvaluations.map((i) => (
+                  <option key={i.id} value={i.id}>
+                    {i.name}
                   </option>
                 ))}
               </Select>
@@ -722,6 +759,24 @@ function MonitorEditor({ draft, collections, onCancel, onSave }: { draft: Monito
             </Select>
           </div>
         </Field>
+        {target === 'evaluation' && (
+          <>
+            <Field label="Gates (optional)" hint="The run fails when the mean of a metric is under its minimum: faithfulness=0.8, context-recall=0.7. Without gates a run fails when a sample fails. The reason names the metric.">
+              <Input value={gatesText} placeholder="faithfulness=0.8, context-recall=0.7" onChange={(e) => setGatesText(e.target.value)} aria-label="Gates" />
+            </Field>
+            <div className="grid grid-cols-3 gap-3">
+              <Field label="Questions" hint="Only the first n records.">
+                <Input type="number" min={1} placeholder="all" value={d.limit ?? ''} onChange={(e) => setD({ ...d, limit: e.target.value ? Math.max(1, Math.round(Number(e.target.value))) : undefined })} aria-label="Number of questions" />
+              </Field>
+              <Field label="Judged share" hint="0 to 1: the share of samples that get the judged metrics. The free ones always run.">
+                <Input type="number" min={0.01} max={1} step={0.05} placeholder="1" value={d.judgeSample ?? ''} onChange={(e) => setD({ ...d, judgeSample: e.target.value ? Math.min(1, Math.max(0.01, Number(e.target.value))) : undefined })} aria-label="Share of samples judged" />
+              </Field>
+              <Field label="Judge budget / day" hint="USD: judging stops for the day at this much; the rest is n/a.">
+                <Input type="number" min={0} step={0.5} placeholder="no cap" value={d.judgeBudgetUsdPerDay ?? ''} onChange={(e) => setD({ ...d, judgeBudgetUsdPerDay: e.target.value ? Math.max(0, Number(e.target.value)) : undefined })} aria-label="Daily judge budget in USD" />
+              </Field>
+            </div>
+          </>
+        )}
         {target === 'collection' && (
           <Field label="What to run" hint={sel.size ? `${sel.size} selected` : 'Nothing selected runs the whole collection.'}>
             <div className="max-h-44 overflow-auto rounded-md border border-line p-1">

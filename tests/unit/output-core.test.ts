@@ -104,6 +104,7 @@ describe('the policy is the registry’s', () => {
       'history',
       'logs',
       'monitor-runs',
+      'rag-matrix',
       'response',
       'run',
       'runs-overview',

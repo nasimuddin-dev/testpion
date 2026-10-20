@@ -14,12 +14,13 @@ import { EstimateLoading, RagEstimateView, useRagEstimate } from './RagEstimate'
  * engine, the same as `testpion rag run --estimate` and the MCP tool rag_estimate. A run with only free metrics does not
  * ask: there is nothing to estimate. Sizing the answers with one real call to the target is the person's choice.
  */
-export function RagEstimateDialog({ draft, firstQuestion, hasTarget, onRun, onClose }: { draft: { evaluators: CheckConfig[]; target?: string; judge?: unknown } & Record<string, unknown>; firstQuestion?: string; hasTarget: boolean; onRun(): void; onClose(): void }) {
+export function RagEstimateDialog({ draft, firstQuestion, hasTarget, onRun, onClose }: { draft: { evaluators: CheckConfig[]; target?: string; judge?: unknown } & Record<string, unknown>; firstQuestion?: string; hasTarget: boolean; onRun(freeFirst: boolean): void; onClose(): void }) {
   const env = useApp((s) => s.environment);
   const [probe, setProbe] = useState(false);
   const { estimate, error, loading } = useRagEstimate(draft, { probe, environment: env, delay: 0 });
   const [prompt, setPrompt] = useState<TryResult['willSend']>();
   const [busy, setBusy] = useState(false);
+  const [freeFirst, setFreeFirst] = useState(false);
   const firstJudgedLine = estimate?.metrics.find((m) => m.llmCalls > 0);
   const firstJudged = firstJudgedLine ? draft.evaluators[firstJudgedLine.evaluator] : undefined;
   const show = async () => {
@@ -56,7 +57,7 @@ export function RagEstimateDialog({ draft, firstQuestion, hasTarget, onRun, onCl
                 Set up AI
               </Button>
             ) : (
-              <Button variant="primary" icon={<Play size={13} />} disabled={!estimate} onClick={onRun} data-rag-estimate-run>
+              <Button variant="primary" icon={<Play size={13} />} disabled={!estimate} onClick={() => onRun(freeFirst)} data-rag-estimate-run>
                 {over ? 'Run anyway (the rest becomes n/a)' : 'Run'}
               </Button>
             )}
@@ -67,6 +68,9 @@ export function RagEstimateDialog({ draft, firstQuestion, hasTarget, onRun, onCl
           {error && <Callout tone="bad">{error}</Callout>}
           {!estimate && !error && <EstimateLoading />}
           {estimate && <RagEstimateView estimate={estimate} />}
+          <label className="flex items-center gap-1.5 text-xs" title="Calls your RAG system and scores only with the metrics that need no model. Look at the results, then press Score again… in the results to add the judged metrics on the stored answers: the RAG system is not called twice.">
+            <input type="checkbox" checked={freeFirst} onChange={(e) => setFreeFirst(e.target.checked)} data-rag-estimate-two-phase /> Free metrics first: run the metrics that need no model now, add the judged ones after looking
+          </label>
           {hasTarget && (
             <label className="flex items-center gap-1.5 text-xs">
               <input type="checkbox" checked={probe} onChange={(e) => setProbe(e.target.checked)} data-rag-estimate-probe /> Size a typical answer with one real call to your RAG system{loading && probe ? ' …' : ''}

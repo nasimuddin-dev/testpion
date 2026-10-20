@@ -1,11 +1,13 @@
 import { ThumbsDown, ThumbsUp } from 'lucide-react';
-import { useState } from 'react';
-import type { TrySample } from '@testpion/core';
+import { useEffect, useState } from 'react';
+import type { TrySample, Trace } from '@testpion/core';
 import { call } from '../../api';
 import { toastError } from '../../store';
 import { useRpc } from '../../lib/use-rpc';
 import type { CheckResult, TestResult } from '../../types';
 import { CheckList } from '../Results';
+import { AiAction } from '../ai/AiAction';
+import { TraceView } from '../TraceView';
 import { Badge, Button, cx, Modal, Spinner } from '../ui';
 import { RagTryDialog } from './RagTryDialog';
 
@@ -28,6 +30,13 @@ export function RagSampleDetail({ runId, resultId, focus, target, judge, onClose
   const [mark, setMark] = useState<string>();
   const [tryCheck, setTryCheck] = useState<CheckResult>();
   const [doc, setDoc] = useState<string>();
+  const [showTrace, setShowTrace] = useState(false);
+  const [trace, setTrace] = useState<Trace | null>();
+  const traceId = data?.result.traceId;
+  // the raw exchange with the RAG system: the trace of the call (the request, the response, the streamed events), fetched when asked for
+  useEffect(() => {
+    if (showTrace && traceId && trace === undefined) void call<Trace | null>('traces.get', { id: traceId }).then((t) => setTrace(t ?? null), () => setTrace(null));
+  }, [showTrace, traceId, trace]);
   if (!data)
     return (
       <Modal title="Sample" onClose={onClose}>
@@ -70,7 +79,25 @@ export function RagSampleDetail({ runId, resultId, focus, target, judge, onClose
         width={980}
         footer={
           <>
-            <span className="mr-auto text-xs text-muted">Review this result</span>
+            <AiAction
+              className="mr-auto"
+              label="Explain this sample"
+              hint="The AI reads the question, the answer, the retrieved documents and what each metric said, and tells you which part failed (the retriever, the generator or a metric) and what to change first. It proposes nothing."
+              request={() => ({
+                task: 'rag-explain-sample',
+                title: 'Explain this sample',
+                context: {
+                  question: sample?.question,
+                  answer: sample?.answer,
+                  reference: sample?.reference,
+                  referenceIds: sample?.referenceIds,
+                  contexts: (sample?.contexts ?? []).map((c, i) => ({ rank: i + 1, id: c.id, score: c.score, text: c.text.slice(0, 1200) })),
+                  failure,
+                  metrics: result.checks.map((c) => ({ name: c.name || c.type, score: c.score, passed: c.passed, message: c.message.slice(0, 300), items: itemsOf(c).slice(0, 12) })),
+                },
+              })}
+            />
+            <span className="text-xs text-muted">Review this result</span>
             <Button size="sm" icon={<ThumbsUp size={12} />} variant={mark === 'good' ? 'primary' : undefined} onClick={() => void review('good')} data-rag-review="good">
               Good
             </Button>
@@ -169,6 +196,12 @@ export function RagSampleDetail({ runId, resultId, focus, target, judge, onClose
               }
             />
           </div>
+          {traceId && (
+            <details className="text-xs" onToggle={(e) => e.currentTarget.open && setShowTrace(true)} data-rag-trace>
+              <summary className="cursor-pointer text-muted">The call to your RAG system: request, response, events and timing</summary>
+              <div className="h-80 mt-1 border border-line rounded-lg overflow-hidden">{trace ? <TraceView trace={trace} /> : trace === null ? <div className="p-3 text-muted">No trace was stored for this call.</div> : <Spinner />}</div>
+            </details>
+          )}
           {sample && (
             <details className="text-xs">
               <summary className="cursor-pointer text-muted">The sample as stored</summary>
