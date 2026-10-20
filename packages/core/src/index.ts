@@ -247,6 +247,7 @@ export { collectionToOpenCollection, collectionToOpenCollectionBundle, type OcFi
 export { retargetScript } from './scripts/convert/retarget.js';
 export { assertionsToTests } from './import/export-common.js';
 export { parseRepoLink, fetchRepoFiles, REPO_LIMITS, type RepoRef, type RepoFetch } from './import/repo-import.js';
+export { findLeftovers, LEFTOVER_MARK } from './ai/import-leftovers.js';
 export { SCRIPT_TOOLS, requireScriptTool, convertScriptText, convertCollectionScriptsFrom, type CollectionScriptsResult } from './import/convert-api.js';
 export { IMPORTER_SUPPORT, TOOL_FORMATS, MATRIX_FEATURES, type ImporterSupport, type MatrixFeature } from './import/support.js';
 export { migrationPages, scriptTable, type MigratePage } from './import/migrate-docs.js';
