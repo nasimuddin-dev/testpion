@@ -4,15 +4,16 @@ import { AuthEditor } from './AuthEditor';
 import { KeyValueEditor } from './KeyValueEditor';
 import { InheritedHeaders } from './InheritedHeaders';
 import { ScriptsPanel } from './ScriptsPanel';
-import { Button, Modal, Tabs } from './ui';
+import { RequestSettings } from './RequestSettings';
+import { Button, Field, Modal, Tabs, Textarea } from './ui';
 
 /**
- * Folder settings: scripts that run around every request inside, folder variables and the auth the
- * folder's requests inherit. Order of scripts: collection → outer folders → this folder → request.
+ * Folder settings: scripts that run around every request inside, folder variables, headers, the auth the
+ * folder's requests inherit, request settings (timeout, redirects, TLS, cookies … the defaults of its requests) and a description. Order of scripts: collection → outer folders → this folder → request.
  */
 export function FolderEditorBody({ folder, onSave, onClose }: { folder: CollectionFolder; onSave(f: CollectionFolder): void; onClose(): void }) {
   const [draft, setDraft] = useState<CollectionFolder>(folder);
-  const [tab, setTab] = useState<'scripts' | 'variables' | 'headers' | 'auth'>('scripts');
+  const [tab, setTab] = useState<'scripts' | 'variables' | 'headers' | 'auth' | 'settings' | 'docs'>('scripts');
   return (
     <Modal
       title={`Folder: ${folder.name}`}
@@ -32,6 +33,8 @@ export function FolderEditorBody({ folder, onSave, onClose }: { folder: Collecti
                 testScript: draft.testScript?.trim() ? draft.testScript : undefined,
                 variables: draft.variables?.some((v) => v.key) ? draft.variables.filter((v) => v.key) : undefined,
                 headers: draft.headers?.some((h) => h.key) ? draft.headers.filter((h) => h.key) : undefined,
+                settings: draft.settings && Object.keys(draft.settings).length ? draft.settings : undefined,
+                description: draft.description?.trim() ? draft.description : undefined,
               });
               onClose();
             }}
@@ -49,6 +52,8 @@ export function FolderEditorBody({ folder, onSave, onClose }: { folder: Collecti
           { id: 'variables', label: 'Variables', badge: draft.variables?.filter((v) => v.key).length || undefined },
           { id: 'headers', label: 'Headers', badge: draft.headers?.filter((h) => h.key).length || undefined },
           { id: 'auth', label: 'Authorization' },
+          { id: 'settings', label: 'Settings', badge: Object.keys(draft.settings ?? {}).length || undefined },
+          { id: 'docs', label: 'Docs', badge: draft.description?.trim() ? 1 : undefined },
         ]}
       />
       <div className="h-[48vh] mt-2">
@@ -76,6 +81,21 @@ export function FolderEditorBody({ folder, onSave, onClose }: { folder: Collecti
         {tab === 'headers' && (
           <div className="overflow-auto h-full">
             <InheritedHeaders where="folder" rows={draft.headers} onChange={(headers) => setDraft({ ...draft, headers })} />
+          </div>
+        )}
+        {tab === 'settings' && (
+          <div className="h-full flex flex-col" data-folder-settings>
+            <p className="text-xs text-muted pb-2">Settings the requests in this folder start from: their own settings win, an inner folder's win over an outer one's, and the collection's are the base.</p>
+            <div className="flex-1 min-h-0">
+              <RequestSettings settings={draft.settings ?? {}} onChange={(settings) => setDraft({ ...draft, settings })} />
+            </div>
+          </div>
+        )}
+        {tab === 'docs' && (
+          <div className="overflow-auto h-full">
+            <Field label="Description" hint="What the folder is for (Markdown). Shown in the generated docs.">
+              <Textarea autoGrow={false} className="field w-full h-56 text-sm" aria-label="Folder description" value={draft.description ?? ''} onChange={(e) => setDraft({ ...draft, description: e.target.value })} />
+            </Field>
           </div>
         )}
         {tab === 'auth' && (

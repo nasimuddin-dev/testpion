@@ -38,6 +38,7 @@ import type { Collection, CollectionNode } from '../types';
 import { timeAgo, uid, plural } from '../lib/format';
 import { AuthEditor } from '../components/AuthEditor';
 import { InheritedHeaders } from '../components/InheritedHeaders';
+import { RequestSettings } from '../components/RequestSettings';
 import { ScriptsPanel } from '../components/ScriptsPanel';
 import { CollectionRunner } from '../components/CollectionRunner';
 import { MockPanel } from '../components/MockPanel';
@@ -76,7 +77,7 @@ export function CollectionsView() {
     return () => void (live = false);
   }, [selOutline]);
   const [draft, setDraft] = useState<Collection>();
-  const [tab, setTab] = useState<'overview' | 'requests' | 'variables' | 'headers' | 'auth' | 'scripts' | 'docs' | 'run' | 'mock'>('requests');
+  const [tab, setTab] = useState<'overview' | 'requests' | 'variables' | 'headers' | 'auth' | 'scripts' | 'settings' | 'docs' | 'run' | 'mock'>('requests');
   const [runFolder, setRunFolder] = useState<string>();
   // a dataset chosen before the collection (the sidebar's "Run a collection with it"): the runner starts with it
   const [runData, setRunData] = useState<string>();
@@ -345,6 +346,7 @@ export function CollectionsView() {
                   { id: 'headers', label: 'Headers', badge: draft.headers?.filter((h) => h.key).length || undefined },
                   { id: 'auth', label: 'Authorization' },
                   { id: 'scripts', label: 'Scripts' },
+                  { id: 'settings', label: 'Settings', badge: Object.keys(draft.settings ?? {}).length || undefined },
                   { id: 'docs', label: 'Docs' },
                   { id: 'run', label: 'Run' },
                   { id: 'mock', label: 'Mock' },
@@ -411,6 +413,14 @@ export function CollectionsView() {
                       onPre={(preRequestScript) => setDraft({ ...draft, preRequestScript })}
                       onPost={(testScript) => setDraft({ ...draft, testScript })}
                     />
+                  </div>
+                )}
+                {tab === 'settings' && (
+                  <div className="h-full flex flex-col" data-collection-settings>
+                    <p className="text-xs text-muted px-3 pt-3">Settings every request of the collection starts from: a folder's and a request's own settings win.</p>
+                    <div className="flex-1 min-h-0">
+                      <RequestSettings settings={draft.settings ?? {}} onChange={(settings) => setDraft({ ...draft, settings })} />
+                    </div>
                   </div>
                 )}
                 {tab === 'docs' && <CollectionDocs collection={draft} onDescription={(description) => setDraft({ ...draft, description })} />}

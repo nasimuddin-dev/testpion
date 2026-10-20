@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, Download } from 'lucide-react';
+import { ChevronDown, ChevronRight, Download, Sparkles } from 'lucide-react';
 import type { ImportFinding, ImportReport as Report, PlanNode } from '../types';
 import { downloadContent } from '../lib/files';
+import { LABEL } from '../lib/vocabulary';
 import { Badge, Button, cx } from './ui';
 
 /** The message of a finding without the `"Item": ` prefix the notes carry (the report shows the item beside it). */
@@ -18,7 +19,7 @@ const SEVERITY: Record<ImportFinding['severity'], { label: string; tone: 'bad' |
  * grouped by what it is, each naming the item. The one component for the preview step and the result of the Import
  * dialog (and a stored report); Download writes it as JSON or Markdown.
  */
-export function ImportReportView({ report, markdown }: { report: Report; markdown?: () => Promise<string> }) {
+export function ImportReportView({ report, markdown, onFixWithAi }: { report: Report; markdown?: () => Promise<string>; onFixWithAi?: () => void }) {
   const s = report.summary;
   const c = report.counts;
   const [open, setOpen] = useState<string | undefined>(report.groups.find((g) => g.severity !== 'info')?.code);
@@ -55,6 +56,11 @@ export function ImportReportView({ report, markdown }: { report: Report; markdow
           </span>
         )}
         <span className="ml-auto flex gap-1">
+          {onFixWithAi && report.findings.some((f) => f.code === 'SCRIPT_API') && (
+            <Button size="sm" icon={<Sparkles size={12} />} title="Rewrite the scripts marked TODO(import) with TestPion's script API: a reviewed proposal, each script checked in the sandbox" onClick={onFixWithAi} data-import-fix-ai>
+              {LABEL.fixImportLeftovers}
+            </Button>
+          )}
           <Button size="sm" variant="ghost" icon={<Download size={12} />} title="Download the report as JSON" onClick={() => downloadContent('import-report.json', JSON.stringify(report, null, 2), { type: 'application/json' })}>
             JSON
           </Button>
