@@ -24,6 +24,7 @@ import { openApiTools } from '../openapi-tools.js';
 import { ragTools } from '../rag-tools.js';
 import { ragEvalTools } from '../rag-eval-tools.js';
 import { ragMetricTools } from '../rag-metric-tools.js';
+import { ragR4Tools } from '../rag-r4-tools.js';
 import { recordingTools } from '../recording-tools.js';
 import { refTools } from '../ref-tools.js';
 import { scaleTools } from '../scale-tools.js';
@@ -88,6 +89,7 @@ export function moduleTools(d: ModuleToolDeps): Tool[] {
     ...ragTools({ store, secrets, settings, checkEnvironment }),
     ...ragEvalTools({ store, secrets, settings, checkEnvironment }),
     ...ragMetricTools({ store, secrets, settings, checkEnvironment }),
+    ...ragR4Tools({ store, secrets, settings, checkEnvironment }),
     ...aiTools({ store, secrets, settings, checkEnvironment }),
     ...workspaceEditTools({
       store,

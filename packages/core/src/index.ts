@@ -98,6 +98,7 @@ export * from './eval/rag/judge-panel.js';
 export * from './eval/rag/judge-prompts-more.js';
 export * from './eval/rag/failure.js';
 export * from './eval/rag/score.js';
+export * from './eval/rag/r4.js';
 export { needsJudgeService } from './eval/rag/metrics-judged.js';
 export { limiterOf, limitsProblems } from './eval/rag/limiter.js';
 export * from './eval/rag/estimate.js';
