@@ -168,7 +168,7 @@ export function importIntoWorkspace(
   if (detectFormat(text) === 'arazzo') return withReceipt(store, importArazzoIntoWorkspace(store, text, opts.arazzo), text);
   // node ids never repeat across the workspace's collections: colliding ones are renamed (with a note)
   const { document, report } = importDocument(text, { name: opts.name, scripts: opts.scripts, takenIds: workspaceNodeIds(store.listCollections()), liftTests: opts.liftTests });
-  const r = legacyResult(document);
+  const r = legacyResult(document, { globalsAsEnvironment: false });
   const out: WorkspaceImportResult = { format: r.format, ...(r.scripts ? { scripts: r.scripts } : {}), report };
   const made: Created = { collections: [], environments: [], specs: [], flows: [], library: [], secrets: [], updated: [], envUpdated: [], globals: [], cookies: [] };
   const taken = new Set(store.listCollections().map((c) => c.id));

@@ -244,5 +244,8 @@ export function parsePostmanEnvironment(text: string): ImportDocument {
 }
 
 export function importPostmanEnvironment(text: string): Environment {
-  return parsePostmanEnvironment(text).environments[0]!;
+  const doc = parsePostmanEnvironment(text);
+  if (doc.environments[0]) return doc.environments[0];
+  // a globals file read as an environment (`run-collection --globals` takes its variables)
+  return { id: 'globals', name: 'Globals', variables: (doc.globals ?? []).map((g) => ({ key: g.key, value: g.value, ...(g.secret ? { secret: true } : {}), enabled: true })) };
 }

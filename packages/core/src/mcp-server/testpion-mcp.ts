@@ -80,6 +80,7 @@ import { compareEnvironments, environmentMatrix } from '../storage/env-compare.j
 import { compareRequestAcrossEnvironments } from '../runner/env-request-compare.js';
 import { executeMonitor, findMonitor, listMonitors, monitorDaily, monitorResults, monitorStatus } from '../runner/monitors.js';
 import { toItemRef } from '@testpion/shared';
+import { importsMany, runImportMany } from './import-tools.js';
 
 /**
  * `testpion mcp-server`: the TestPion engine as MCP tools, so AI agents (Claude, IDE assistants …)
@@ -750,13 +751,18 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
           name: str('Name for an imported .env environment'),
           contractChecks: { type: 'boolean', description: 'For OpenAPI: add a contract check to each request (default true)' },
           keep_pm: { type: 'boolean', description: 'For Postman / Insomnia: keep pm.* in scripts instead of converting them to tp.* (default false)' },
+          lift_tests: { type: 'boolean', description: 'Turn simple tests (status, response time, headers, JSON fields) into assertions' },
+          update: { type: 'boolean', description: 'A source imported before updates the collection it made, item by item (default true); false adds a copy' },
+          decisions: { type: 'object', additionalProperties: { type: 'string', enum: ['replace', 'new', 'skip'] }, description: 'For an update: the item keys import_preview prints → replace | new | skip' },
+          files: { type: 'array', items: { type: 'object', properties: { path: str('Path inside the folder'), text: str('The file text') } }, description: 'Several files or a collection folder\'s files (like import_preview)' },
         },
       },
       run: async (a) => {
+        if (importsMany(a)) return runImportMany(store, a);
         const f = typeof a.url === 'string' && a.url ? await fetchImportText(a.url) : undefined;
         const text = f?.text ?? (typeof a.text === 'string' ? a.text : '');
         if (!text.trim()) throw new ApsError('ValidationError', 'Give a url or text to import');
-        const r = importIntoWorkspace(store, text, { contractChecks: a.contractChecks !== false, name: typeof a.name === 'string' ? a.name : undefined, scripts: a.keep_pm === true ? 'keep' : 'tp' });
+        const r = importIntoWorkspace(store, text, { contractChecks: a.contractChecks !== false, name: typeof a.name === 'string' ? a.name : undefined, scripts: a.keep_pm === true ? 'keep' : 'tp', liftTests: a.lift_tests === true, update: a.update === false ? false : a.decisions && typeof a.decisions === 'object' ? { decisions: a.decisions as Record<string, 'replace' | 'new' | 'skip'> } : true });
         return {
           format: r.format,
           source: f?.url,
@@ -772,6 +778,7 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
           // the compatibility report (per item: fully / with changes / not imported, and why) and the id to read or undo it
           report: r.report,
           importId: r.receipt?.id,
+          updated: r.updated,
         };
       },
     },

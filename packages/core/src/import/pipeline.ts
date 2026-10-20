@@ -58,8 +58,13 @@ export interface ImportAnyResult {
   collections?: Collection[];
 }
 
-/** The document as the result `importAny` has always returned. */
-export function legacyResult(doc: ImportDocument): ImportAnyResult {
+/**
+ * The document as the result `importAny` has always returned. Postman's globals file has no environment of its own in the
+ * document (they are workspace globals); the old result, which the runner's `--globals` reads, shows them as one.
+ */
+export function legacyResult(doc: ImportDocument, opts: { globalsAsEnvironment?: boolean } = {}): ImportAnyResult {
+  if (opts.globalsAsEnvironment !== false && doc.globals?.length && !doc.environments.length)
+    doc = { ...doc, environments: [{ id: 'globals', name: 'Globals', variables: doc.globals.map((g) => ({ key: g.key, value: g.value, ...(g.secret ? { secret: true } : {}), enabled: true })) }] };
   const notes = doc.findings.filter((f) => !f.reportOnly).map((f) => f.message);
   return {
     format: doc.format,

@@ -78,7 +78,7 @@ export function planImport(store: WorkspaceStore, text: string, opts: { name?: s
   const changed = new Set(document.findings.filter((f) => f.severity !== 'info').map((f) => f.where.join(' / ')));
   const names = new Set(store.listCollections().map((c) => c.name.toLowerCase()));
   const envNames = new Set(store.listEnvironments().map((e) => e.name.toLowerCase()));
-  const r = legacyResult(document);
+  const r = legacyResult(document, { globalsAsEnvironment: false });
   const specs = plannedSpecs(r, text).map((s) => {
     const rel = `${s.stem}${s.suffix}`;
     let existing: 'same' | 'different' | undefined;
