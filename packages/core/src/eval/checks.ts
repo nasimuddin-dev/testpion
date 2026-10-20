@@ -10,6 +10,7 @@ import type { SpanHandle } from '../trace/tracer.js';
 import { normalizeError } from '../errors.js';
 import { compileSchema } from '../util/json-schema.js';
 import type { RagJudgeHost } from './rag/judge.js';
+import type { RagJudgeSetup } from '@testpion/shared';
 
 /** Everything a check may inspect about an execution. */
 export interface CheckContext {
@@ -49,7 +50,9 @@ export interface CheckContext {
   referenceContexts?: string[];
   referenceIds?: string[];
   /** RAG: the judge the evaluation names (else the AI settings'), and its limits for the run. */
-  judge?: { provider?: string; model?: string; maxCostUsd?: number; maxCalls?: number };
+  judge?: RagJudgeSetup;
+  /** RAG: set when the answer and contexts come from a RAG target (or a stored sample): the judged metrics then use the judge service strictly, and know which metrics run beside them (the shared claim pass). */
+  ragRun?: { strict: boolean; metrics: string[] };
   services?: { providers?: ProviderRegistry; signal?: AbortSignal; span?: SpanHandle; ragJudge?: RagJudgeHost };
 }
 
@@ -68,6 +71,19 @@ const docs = new Map<string, CheckDoc>();
 export function registerCheck(type: string, fn: CheckFn, doc?: CheckDoc): void {
   registry.set(type, fn);
   if (doc) docs.set(type, doc);
+}
+
+/** A registered check type's function (a metric that wraps a check of this file reads the original here). */
+export const checkFn = (type: string): CheckFn | undefined => registry.get(type);
+
+/**
+ * Other spellings of a check type (the metric registry's: Ragas and DeepEval names, `recall@5`): called when a type is not
+ * registered; gives the registered type that computes it and the options the spelling implies.
+ */
+export type CheckResolver = (cfg: CheckConfig) => { check: string; options?: Record<string, unknown> } | undefined;
+let resolver: CheckResolver | undefined;
+export function setCheckResolver(fn: CheckResolver): void {
+  resolver = fn;
 }
 
 /** Describe a registered check type (its fields and an example). */
@@ -988,8 +1004,16 @@ registerCheck('citation', (cfg, ctx) => {
 /** Run all checks for an execution. Checks never throw; failures become failed results. */
 export async function runChecks(checks: CheckConfig[] | undefined, ctx: CheckContext): Promise<CheckResult[]> {
   const out: CheckResult[] = [];
-  for (const cfg of checks ?? []) {
-    const fn = registry.get(cfg.type);
+  for (const cfg0 of checks ?? []) {
+    let cfg = cfg0;
+    let fn = registry.get(cfg.type);
+    if (!fn && resolver) {
+      const r = resolver(cfg);
+      if (r && registry.has(r.check)) {
+        fn = registry.get(r.check);
+        cfg = { ...r.options, ...cfg, type: r.check, name: cfg.name ?? cfg.type };
+      }
+    }
     if (!fn) {
       out.push({ type: cfg.type, name: cfg.name ?? cfg.type, passed: false, source: 'deterministic', message: `unknown check type "${cfg.type}". Known: ${checkTypes().join(', ')}` });
       continue;

@@ -40,9 +40,20 @@ export interface JudgeBudget {
   costUsd: number;
 }
 
+/** One judge call a dry run would make (nothing is sent): the prompt, its size and whether the cache already holds the verdict. */
+export interface DryJudgeCall {
+  metric: string;
+  version: string;
+  input: Record<string, unknown>;
+  preview: AiPreview;
+  cached: boolean;
+}
+
 export interface RagJudgeHost {
   deps: AiRunDeps;
   budget: JudgeBudget;
+  /** Set on a dry host (see `dryHost`): judge calls are listed here and answered with an empty verdict, never sent. */
+  dry?: DryJudgeCall[];
   /** Verdicts being asked right now, by key: the same question asked twice at once is asked once. */
   inflight: Map<string, Promise<JudgeAnswer>>;
 }
@@ -62,6 +73,11 @@ export function createRagJudgeHost(o: { store?: WorkspaceStore; providers: Provi
     budget: { calls: 0, cached: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 },
     inflight: new Map(),
   };
+}
+
+/** A host that sends nothing: the metrics run against it and every judge call they would make is recorded in `dry`. */
+export function dryHost(host: RagJudgeHost): RagJudgeHost & { dry: DryJudgeCall[] } {
+  return { deps: host.deps, budget: { calls: 0, cached: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 }, inflight: new Map(), dry: [] };
 }
 
 /** What to configure for a judge: the one error a missing or refused judge gives, in every host. */
@@ -120,13 +136,19 @@ export function previewJudge(host: RagJudgeHost, metric: JudgedMetric, input: Re
   return prepareAiTask(host.deps, judgeRequest(metric, input, judge)).preview;
 }
 
-const verdictProblems = (v: unknown): string[] => {
+const verdictProblems = (v: unknown, metric?: JudgedMetric): string[] => {
   const s = validateSchema(VERDICT_SCHEMA, v);
-  return s.valid ? [] : s.errors;
+  if (!s.valid) return s.errors;
+  // a rating metric needs a rating in range on every item, not only a verdict
+  if (metric?.rating !== undefined) {
+    const bad = (v as Verdict).items.findIndex((i) => !Number.isInteger(i.rating) || i.rating! < 0 || i.rating! > metric.rating!);
+    if (bad >= 0) return [`items[${bad}].rating must be an integer from 0 to ${metric.rating}`];
+  }
+  return [];
 };
 
 /** Asks the judge one metric of one sample (cache, budget, ledger and caps as the module comment says). */
-export async function judgeCall(host: RagJudgeHost, metric: JudgedMetric, input: Record<string, unknown>, o: { judge?: JudgeRef; signal?: AbortSignal } = {}): Promise<JudgeAnswer> {
+export async function judgeCall(host: RagJudgeHost, metric: JudgedMetric, input: Record<string, unknown>, o: { judge?: JudgeRef; signal?: AbortSignal; fresh?: boolean } = {}): Promise<JudgeAnswer> {
   assertJudgeUsable(host, o.judge);
   const deps: AiRunDeps = { ...host.deps, signal: o.signal ?? host.deps.signal };
   const req = judgeRequest(metric, input, o.judge);
@@ -140,11 +162,16 @@ export async function judgeCall(host: RagJudgeHost, metric: JudgedMetric, input:
   // the key is the exact prompt (after redaction) with the model that answers: any change to the sample, the wording, the model or the task misses
   const key = hash({ task: 'rag-judge', provider: preview.provider, providerName: preview.providerName, model: preview.model, metric: metric.id, version: metric.version, messages: preview.messages });
   const cache = host.deps.store?.meta;
-  const hit = cache?.getJudgeCache(key);
+  if (host.dry) {
+    host.dry.push({ metric: metric.id, version: metric.version, input, preview, cached: !o.fresh && !!cache?.getJudgeCache(key) });
+    return { verdict: { reasoning: '', items: [] }, cached: true, judge, usage: { calls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 }, redactionCount: preview.redactionCount };
+  }
+  // `fresh` asks again whatever the cache holds (a repeat measures the judge's own noise); the answer is still stored
+  const hit = o.fresh ? undefined : cache?.getJudgeCache(key);
   if (hit) {
     try {
       const verdict = JSON.parse(hit) as Verdict;
-      if (!verdictProblems(verdict).length) {
+      if (!verdictProblems(verdict, metric).length) {
         host.budget.cached++;
         return { verdict, cached: true, judge, usage: { calls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 }, redactionCount: preview.redactionCount };
       }
@@ -152,14 +179,14 @@ export async function judgeCall(host: RagJudgeHost, metric: JudgedMetric, input:
       /* a broken row is asked again */
     }
   }
-  const running = host.inflight.get(key);
+  const running = o.fresh ? undefined : host.inflight.get(key);
   if (running) return running.then((a) => ({ ...a, cached: true, usage: { calls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 } }));
   const { maxCalls, maxCostUsd } = o.judge ?? {};
   if (maxCalls !== undefined && host.budget.calls >= maxCalls) throw new ApsError('ValidationError', `The judge budget is used up (${host.budget.calls} of ${maxCalls} model calls); this score is not computed`, { details: { budget: true } });
   if (maxCostUsd !== undefined && host.budget.costUsd >= maxCostUsd) throw new ApsError('ValidationError', `The judge budget is used up ($${host.budget.costUsd.toFixed(4)} of $${maxCostUsd}); this score is not computed`, { details: { budget: true } });
   const ask = (async (): Promise<JudgeAnswer> => {
     const r = await runAiTask(deps, req);
-    const problems = r.problems.length ? r.problems : verdictProblems(r.value);
+    const problems = r.problems.length ? r.problems : verdictProblems(r.value, metric);
     if (r.value === undefined || problems.length)
       throw new ApsError('ValidationError', `The judge (${preview.providerName}/${preview.model}) did not answer in the verdict format: ${problems.slice(0, 3).join('; ') || 'no JSON'}`, {
         suggestions: ['Use a stronger judge model (this format needs one that follows a JSON schema).', 'The usage ledger counted the attempt.'],
@@ -176,10 +203,10 @@ export async function judgeCall(host: RagJudgeHost, metric: JudgedMetric, input:
     }
     return { verdict, cached: false, judge: { ...judge, provider: r.provider, model: r.model }, usage: { calls: r.calls, inputTokens: r.usage.inputTokens, outputTokens: r.usage.outputTokens, costUsd: r.costUsd }, redactionCount: preview.redactionCount };
   })();
-  host.inflight.set(key, ask);
+  if (!o.fresh) host.inflight.set(key, ask);
   try {
     return await ask;
   } finally {
-    host.inflight.delete(key);
+    if (!o.fresh) host.inflight.delete(key);
   }
 }

@@ -12,6 +12,12 @@ import { collectionRequests, runCollection } from './collection-run.js';
 import { collectionRealtimeTests } from './collection-realtime.js';
 import { readResultsFile, runTests, type RunEvent } from './runner.js';
 import { isSuiteFile, loadSuite, loadTestsFromFile, streamTests } from './loader.js';
+import { findSavedEvaluation } from './saved-evaluations.js';
+import { chooseRagRun, runRagEvaluation } from './rag-evaluation.js';
+import { runResults } from './run-results.js';
+import { buildMetricMatrix, checkGates } from '../eval/rag/metric-matrix.js';
+import { resolveMetric } from '../eval/rag/metric-registry.js';
+import { aiUsageSummary } from '../storage/ai-usage.js';
 
 /**
  * Monitors: a collection (or some of its folders / requests) run on a schedule, like Postman monitors.
@@ -27,6 +33,20 @@ export interface MonitorData {
   selection?: string[];
   /** A test file or flow (or a suite) under tests/, e.g. orders/new-order.yaml, run with the test runner instead of a collection. */
   testFile?: string;
+  /**
+   * Or a saved RAG evaluation: its questions go to the RAG system and are scored. The run fails when a gate fails (the
+   * mean of a metric below its minimum), or, without gates, when a sample fails; the reason names the metric
+   * ("faithfulness mean 0.78 < 0.8").
+   */
+  evaluation?: string;
+  /** With an evaluation: only the first n dataset records. */
+  limit?: number;
+  /** With an evaluation: metric name → the lowest mean it may have (the same names as `testpion rag run --min`). */
+  gates?: Record<string, number>;
+  /** With an evaluation: the share (0 to 1) of samples that get the judged metrics; the free metrics always run. */
+  judgeSample?: number;
+  /** With an evaluation: stop judging for the day at this much (USD, from the AI usage ledger); the rest is n/a. */
+  judgeBudgetUsdPerDay?: number;
   environment?: string;
   /** Minutes between runs (1 minute to 1 week). */
   everyMinutes: number;
@@ -154,9 +174,18 @@ export function validateMonitor(store: WorkspaceStore, m: Pick<Monitor, 'name'> 
   if (!m.name?.trim()) throw invalid('A monitor needs a name');
   if (!(m.everyMinutes >= MIN_EVERY_MINUTES && m.everyMinutes <= MAX_EVERY_MINUTES)) throw invalid('A monitor runs every 1 minute to 7 days');
   const file = m.testFile?.trim();
-  if (file && m.collectionId) throw invalid('A monitor runs a collection or a test file, not both: clear one of them');
-  if (!file && !m.collectionId) throw invalid('A monitor needs what to run: a collection, or a test file under tests/');
-  if (file) {
+  const targets = [file, m.collectionId, m.evaluation?.trim()].filter(Boolean).length;
+  if (targets > 1) throw invalid('A monitor runs one of a collection, a test file or a RAG evaluation, not both: clear the others');
+  if (!targets) throw invalid('A monitor needs what to run: a collection, a test file under tests/, or a saved RAG evaluation');
+  if (m.evaluation?.trim()) {
+    const ev = findSavedEvaluation(store, m.evaluation.trim());
+    if (ev.type !== 'rag') throw invalid(`"${ev.name}" is not a RAG evaluation`);
+    if (m.selection?.length) throw invalid('Folders and requests are picked in a collection; an evaluation runs as a whole');
+    if (m.judgeSample !== undefined && !(m.judgeSample > 0 && m.judgeSample <= 1)) throw invalid('The judged share is more than 0 and at most 1 (0.2 judges one sample in five)');
+    if (m.judgeBudgetUsdPerDay !== undefined && !(m.judgeBudgetUsdPerDay >= 0)) throw invalid('The daily judge budget is an amount in USD (0 or more)');
+    if (m.limit !== undefined && !(Number.isInteger(m.limit) && m.limit >= 1)) throw invalid('The limit is a number of records (1 or more)');
+    for (const k of Object.keys(m.gates ?? {})) if (!resolveMetric(k)) throw invalid(`"${k}" is not a metric name (testpion rag metrics lists them)`);
+  } else if (file) {
     if (m.selection?.length) throw invalid('Folders and requests are picked in a collection; a test file runs as a whole');
     monitorTestPath(store, file);
   } else {
@@ -193,6 +222,7 @@ export function saveMonitor(store: WorkspaceStore, m: Monitor): Monitor {
   // one target: an empty collection or file is no target
   if (m.testFile !== undefined) m = { ...m, testFile: m.testFile.trim() ? monitorTestFile(m.testFile) : undefined };
   if (!m.collectionId) m = { ...m, collectionId: undefined };
+  if (m.evaluation !== undefined) m = { ...m, evaluation: m.evaluation.trim() || undefined };
   validateMonitor(store, m);
   const lib = store.getLibrary<MonitorData>(MONITORS_LIBRARY);
   const { id, name, folder, ...data } = m;
@@ -323,12 +353,20 @@ export function executeMonitor(o: ExecuteMonitorOptions): Promise<MonitorResult>
 
 async function runMonitorOnce(o: ExecuteMonitorOptions): Promise<MonitorResult> {
   const { store, monitor } = o;
-  const runId = shortId('run-');
+  const firstRunId = shortId('run-');
   const startedAt = new Date().toISOString();
-  const base = { monitorId: monitor.id, runId, startedAt, trigger: o.trigger ?? 'manual' } as const;
+  const base = { monitorId: monitor.id, runId: firstRunId, startedAt, trigger: o.trigger ?? 'manual' } as const;
   let summary: RunSummary;
+  let runId = firstRunId;
+  /** The evaluation monitors record their own run (and say which gates failed). */
+  let gateReasons: string[] = [];
   try {
-    if (monitor.testFile) summary = await runMonitorTestFile(o, runId);
+    if (monitor.evaluation) {
+      const r = await runMonitorEvaluation(o);
+      summary = r.summary;
+      runId = r.runId;
+      gateReasons = r.gateReasons;
+    } else if (monitor.testFile) summary = await runMonitorTestFile(o, runId);
     else {
       const collection = store.getCollection(monitor.collectionId ?? '');
       const dir = store.runDir(runId);
@@ -356,7 +394,7 @@ async function runMonitorOnce(o: ExecuteMonitorOptions): Promise<MonitorResult> 
         await ctx.dispose();
       }
     }
-    await recordRun(store, summary, store.runDir(runId), { reports: ['json', 'html'] });
+    if (!monitor.evaluation) await recordRun(store, summary, store.runDir(runId), { reports: ['json', 'html'] });
   } catch (e) {
     const r: MonitorResult = { ...base, durationMs: Date.now() - Date.parse(startedAt), status: 'error', total: 0, passed: 0, failed: 0, errors: 0, error: e instanceof Error ? e.message : String(e) };
     recordResult(store, r);
@@ -369,13 +407,16 @@ async function runMonitorOnce(o: ExecuteMonitorOptions): Promise<MonitorResult> 
   const cert = monitor.minCertDays !== undefined ? await soonestCertificate(join(store.runDir(runId), 'results.jsonl')) : undefined;
   const certSoon = !!cert && cert.daysLeft < monitor.minCertDays!;
   const reasons = [
+    ...gateReasons,
     slow ? `p95 ${Math.round(p95!)} ms is over the ${monitor.maxP95Ms} ms limit` : '',
     certSoon ? (cert!.daysLeft < 0 ? `the certificate of ${cert!.host} has expired` : `the certificate of ${cert!.host} expires in ${cert!.daysLeft} day${cert!.daysLeft === 1 ? '' : 's'} (warning at ${monitor.minCertDays})`) : '',
   ].filter(Boolean);
   const r: MonitorResult = {
     ...base,
     durationMs: summary.durationMs,
-    status: summary.failed || summary.errors || summary.cancelled || slow || certSoon ? 'failed' : 'passed',
+    runId,
+    // an evaluation with gates is judged by its gates (a sample that scores low is what a metric is for); the system not answering always fails
+    status: (monitor.evaluation && Object.keys(monitor.gates ?? {}).length ? summary.errors || gateReasons.length || summary.cancelled : summary.failed || summary.errors || summary.cancelled) || slow || certSoon ? 'failed' : 'passed',
     total: summary.total,
     passed: summary.passed,
     failed: summary.failed,
@@ -387,6 +428,35 @@ async function runMonitorOnce(o: ExecuteMonitorOptions): Promise<MonitorResult> 
   };
   recordResult(store, r);
   return r;
+}
+
+/**
+ * A RAG evaluation as a monitor: the saved evaluation (the first `limit` records), judged on a share of its samples and
+ * within the day's judge budget, then its gates. The run is recorded as any monitor run; `gateReasons` say which metric
+ * fell below its minimum ("faithfulness mean 0.78 < 0.8").
+ */
+async function runMonitorEvaluation(o: ExecuteMonitorOptions): Promise<{ summary: RunSummary; runId: string; gateReasons: string[] }> {
+  const { store, monitor } = o;
+  const saved = findSavedEvaluation(store, monitor.evaluation!);
+  // what the judge may still spend today: the budget less what the ledger holds for the judge in the last day
+  const spent = monitor.judgeBudgetUsdPerDay !== undefined ? (aiUsageSummary(store, { days: 1 }).byTask.find((t) => t.task === 'rag-judge')?.costUsd ?? 0) : 0;
+  const left = monitor.judgeBudgetUsdPerDay !== undefined ? Math.max(0, monitor.judgeBudgetUsdPerDay - spent) : undefined;
+  const d = chooseRagRun({ ...saved, name: `${MONITOR_RUN_PREFIX}${monitor.name}` }, { limit: monitor.limit, ...(left !== undefined ? (left > 0 ? { maxJudgeCostUsd: left } : { maxJudgeCalls: 0 }) : {}) });
+  if (monitor.judgeSample !== undefined) d.judge = { ...(d.judge ?? {}), sampleShare: monitor.judgeSample };
+  const out = await runRagEvaluation({
+    store,
+    makeContext: () => o.context({ environment: monitor.environment }),
+    evaluation: d,
+    environment: monitor.environment,
+    signal: o.signal,
+    reports: ['json', 'html'],
+    onResult: (r) => o.onEvent?.({ type: 'test-end', result: r } as RunEvent),
+  });
+  const matrix = await buildMetricMatrix(runResults(store, out.runId), { runId: out.runId, limit: 1 });
+  const gateReasons = checkGates(matrix, monitor.gates ?? {})
+    .filter((g) => !g.passed)
+    .map((g) => g.why);
+  return { summary: out.summary, runId: out.runId, gateReasons };
 }
 
 /** A monitor's test file (or suite) run with the test runner, like `testpion test`: steps in order, traces of failures. */

@@ -623,11 +623,11 @@ const KINDS: readonly ItemKindInfo[] = [
     capabilities: {
       ...LIBRARY_ITEM,
       'open-new-tab': { na: 'it opens in AI Lab ▸ RAG, in a dialog, not in an editor tab' },
-      trash: { planned: '0.57' },
-      run: { planned: '0.57' },
-      export: { planned: '0.57' },
-      import: { planned: '0.57' },
-      uses: { planned: '0.57' },
+      trash: { planned: '0.58' },
+      run: { planned: '0.58' },
+      export: { planned: '0.58' },
+      import: { planned: '0.58' },
+      uses: { planned: '0.58' },
     },
   },
   {

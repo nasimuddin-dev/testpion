@@ -242,6 +242,8 @@ describe('the backend boundary: every send and run method', () => {
       'runs.resume',
       // reads two finished runs' results
       'eval.compare',
+      // the same for two RAG runs, metric by metric
+      'rag.compare',
     ]);
     const sending = Object.keys(be.handlers).filter(
       (m) => /(\.send|\.run|Run$|\.publish|\.emit|\.produce|\.call|\.start|rerun|compare)/i.test(m) && !/^(runs|baselines|debug|git|ai|history)\./.test(m),

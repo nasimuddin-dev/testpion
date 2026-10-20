@@ -7,10 +7,8 @@ export const RAG_STARTER_DATASET =
 export const RAG_STARTER_EVALUATORS: CheckConfig[] = [
   { type: 'token-f1', threshold: 0.5 },
   { type: 'context-recall-ids', threshold: 0.8 },
-  { type: 'rag-faithfulness', threshold: 0.8 },
-  { type: 'rag-answer-relevance', threshold: 0.7 },
+  { type: 'faithfulness', threshold: 0.8 },
+  { type: 'answer-relevance', threshold: 0.7 },
   { type: 'latency', max: 5000 },
 ];
 
-/** The metrics that ask a judge model (the evaluation then shows its judge). */
-export const RAG_JUDGED = new Set(['rag-faithfulness', 'rag-answer-relevance']);

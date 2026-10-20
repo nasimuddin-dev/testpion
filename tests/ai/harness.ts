@@ -44,6 +44,7 @@ export function recordingRegistry(configs: ProviderConfig[], vars: VariableScope
     const p = get(ref);
     return {
       config: p.config,
+      ...(p.embed ? { embed: p.embed.bind(p) } : {}),
       chat: (req: ChatRequest): Promise<ChatResponse> => {
         rec.requests.push(req);
         return p.chat(req);

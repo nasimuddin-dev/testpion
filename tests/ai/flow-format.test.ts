@@ -23,7 +23,8 @@ afterAll(printScorecard);
 
 /** The token budgets of the references (they go into every call of those tasks). */
 // (+50: the seven RAG metrics are named in the list of other check types; their fields are not in the reference)
-const FLOW_BUDGET = 950;
+// (+60: the retrieval metrics of R1b (recall@k … r-precision, the lexical context metrics, string-similarity, context-relevance) are named too)
+const FLOW_BUDGET = 1010;
 const CHECKS_BUDGET = 600;
 
 describe('the format reference', () => {

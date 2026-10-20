@@ -48,7 +48,7 @@ testpion openapi-lint [specs...]     Lint OpenAPI documents: broken $refs, undec
 testpion eval list|run <name>   Evaluations saved in the app: list them, or run one by name (exit 1 on failures)
 testpion eval compare <run> --baseline <run>   Compare an evaluation run with a baseline case by case; exit 1 on regressions (for CI)
 testpion eval matrix <runs...>   Evaluation runs side by side: cases × variants, against a baseline (a page at a time)
-testpion rag targets|probe|import|export   RAG systems under test: list the targets, ask one a question, convert Ragas / DeepEval datasets
+testpion rag targets|probe|connect|metrics|metric|presets|run|rescore|compare|cache|import|export   RAG systems under test: connect, probe, the 30 metrics, run with gates, re-score, compare, convert datasets
 testpion agents init [--targets agents,claude,cursor]   Write or refresh AGENTS.md (and a CLAUDE.md pointer, a Cursor rule) for coding agents
 testpion coverage <spec> -w   API coverage: which OpenAPI operations and responses the runs exercised (--min for CI)
 testpion docs <collection>    Write Markdown (or --html) documentation for a collection
@@ -587,13 +587,22 @@ testpion ai attempt-fix ai-mvckdy5ve28aa50ec9 --times 5   # apply it, run the te
 
 ## `rag` {#rag}
 
-RAG systems under test (AI Lab ▸ RAG; the guide is [RAG testing](/ai-testing/rag)). All four take `--json`.
+RAG systems under test (AI Lab ▸ RAG; the guide is [RAG testing](/ai-testing/rag), the metrics are [RAG metrics](/ai-testing/rag-metrics)). All take `--json`.
 
 | Command | What it does |
 |---|---|
 | `rag targets` | The RAG targets of the workspace (protocol, the mapping in a line, what stops one from being called). |
 | `rag probe [target] [question]` | One real question to a target (a saved one, or `--file target.yaml`): the answer, the retrieved contexts with id, score and source, usage and latency, the warnings of the mapping, and with `--raw` the response the mapping reads. `-e` picks the environment; `--allow-production` as for any request that is not a read. |
-| `rag import <file>` | A Ragas or DeepEval dataset (JSON, JSONL or CSV; only data is read) as TestPion records (`question`, `reference`, `reference_contexts`, `reference_ids`, `tags`). `--from ragas\|deepeval\|testpion` (default: found by the columns), `-o` writes JSON Lines, `--format json` an array. Notes on what was left out go to stderr. |
+| `rag connect <preset\|file> --name <name>` | Save a target without the app, from a preset (`openai-compatible`, `openai-compatible-stream`, `langserve`, `llamaindex`, `haystack`, `dify`, `flowise`, `generic-json`) or from a request file. `--var key=value` puts a value into the request (`{{ragUrl}}`), `--answer`, `--contexts`, `--text`, `--id`, `--score` set the mapping, `--concurrency`, `--rpm`, `--retries` the limits, `--read-only`. |
+| `rag metrics` | The catalogue: id, kind (no model / judge / embeddings), direction, what it reads, judge calls per sample, other names. `--group`, `--kind`, `--search` (an id, an older name or a Ragas name). |
+| `rag metric show <name>` | One metric: what, how, a worked example, inputs, calls, the names it answers to and the options a Ragas name implies. |
+| `rag metric test <name>` | Try a metric on one sample (`--sample file.json`, `--run <id> --record <id>`, `--probe "q" --target <name>`, or `--question --answer --context --reference --reference-id`). `--dry-run` prints the exact judge prompts and sends nothing; `--judge provider/model`, `--option mode=chunks`. Exit 1 when it does not pass. |
+| `rag presets` | The metric presets (`rag-triad`, `ragas-core`, `deepeval-rag`, `nvidia-rag`, `retrieval-only`, `free`, `answer-vs-reference`, `ragas-nl-comparison`, `ops`) and the target presets. |
+| `rag run <evaluation>` | Run a saved RAG evaluation with chosen metrics: `--metrics a,b` (ids, aliases, Ragas names, `recall@5`) or `--preset`, `--judge`, `--judges a,b --aggregate majority\|mean\|min`, `--swap`, `--repeat n`, `--short-circuit`, `--share-claims`, `--two-phase`, `--max-cost usd`, `--max-calls n`, `--limit n`, `--target`. `--estimate` (with `--probe`) prints the judge calls, tokens and cost range and exits without a call. Gates: `--min faithfulness=0.8` (repeat; the mean must reach it). `--baseline <run>` compares metric by metric (`--max-regression`). Reports: `--junit f`, `--html f`, `--report-json f`. Exit 1 on a failed gate or a regression, 2 on a configuration error. |
+| `rag rescore <run>` | Score a finished run again with `--metrics`/`--preset`/`--judge`/`--judges`/`--swap`/`--repeat`: its stored answers and contexts are used and the RAG system is not called; a new run is recorded. `--estimate` is exact (the cache hits are counted). `--min`, `--junit`, `--html`. |
+| `rag compare <run> -b <baseline>` | The two runs metric by metric: means, the difference over the samples both scored, a 95% interval (seeded paired bootstrap) and whether it is real. Exit 1 on a regression. `--min-delta`. |
+| `rag cache clear` | Empty the judge cache (verdicts stored by the content hash of the prompt). |
+| `rag import <file>` | A dataset of another tool (Ragas, DeepEval, NVIDIA retriever data, promptfoo tests, or BEIR queries with `--qrels` and `--corpus`; JSON, JSONL, CSV, YAML; only data is read) as TestPion records (`question`, `reference`, `reference_contexts`, `reference_ids`, `tags`). `--from ragas\|deepeval\|nvidia\|promptfoo\|beir\|testpion` (default: found by the columns), `-o` writes JSON Lines, `--format json` an array. Notes on what was left out go to stderr. |
 | `rag export <dataset> --to ragas\|deepeval` | A dataset file, or a saved evaluation by name, as Ragas or DeepEval records. `--run <runId>` adds the answer and retrieved contexts each record got in that run. |
 
 `eval run` of a RAG evaluation checks the target and the judge before it sends the first question, and takes `--judge <provider/model>` and

@@ -1,9 +1,11 @@
 import { Eye, Play, Save } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { RAG_MAP_SLOTS, RAG_PROTOCOLS, assignSlot, emptyMapping, ragStepTemplate, type RagMapSlot, type RagMapping, type RagProtocol, type RagTarget } from '@testpion/shared';
+import { RAG_MAP_SLOTS, RAG_PROTOCOLS, RAG_TARGET_PRESETS, assignSlot, emptyMapping, findRagTargetPreset, ragStepTemplate, type RagLimits, type RagMapSlot, type RagMapping, type RagProtocol, type RagTarget } from '@testpion/shared';
 import type { AiTaskResult, RagProbe, RagSample } from '@testpion/core';
 import { asError, call } from '../../api';
 import { toastError, useApp } from '../../store';
+import { toastAiError } from '../../lib/ai-errors';
+import { AiAction } from '../ai/AiAction';
 import { useLibrary } from '../../lib/library';
 import { parseYaml, stringifyYaml } from '../../lib/yaml';
 import { Badge, Button, Callout, Field, Input, Modal, Select, Spinner, type MenuItem } from '../ui';
@@ -55,6 +57,10 @@ export function RagConnectDialog({ id, onClose, onSaved }: { id?: string; onClos
   const [stepText, setStepText] = useState(() => ragStepTemplate('http'));
   const [mapping, setMapping] = useState<RagMapping>(emptyMapping());
   const [readOnly, setReadOnly] = useState(false);
+  const [limits, setLimits] = useState<RagLimits>({});
+  const [presetId, setPresetId] = useState('');
+  const [suggesting, setSuggesting] = useState(false);
+  const [suggestNotes, setSuggestNotes] = useState<string[]>([]);
   const [question, setQuestion] = useState('What time does the clinic open?');
   const [probe, setProbe] = useState<RagProbe>();
   const [sample, setSample] = useState<RagSample>();
@@ -72,6 +78,7 @@ export function RagConnectDialog({ id, onClose, onSaved }: { id?: string; onClos
     setStepText(stringifyYaml(existing.data.step));
     setMapping(existing.data.mapping ?? emptyMapping());
     setReadOnly(existing.data.readOnly === true);
+    setLimits(existing.data.limits ?? {});
   }, [existing, loaded]);
 
   const parsed = useMemo((): { step?: Record<string, unknown>; problem?: string } => {
@@ -82,7 +89,40 @@ export function RagConnectDialog({ id, onClose, onSaved }: { id?: string; onClos
       return { problem: (e as Error).message.split('\n')[0] };
     }
   }, [stepText]);
-  const target: RagTarget | undefined = parsed.step ? { protocol, step: parsed.step, mapping, ...(readOnly ? { readOnly: true } : {}) } : undefined;
+  const cleanLimits = Object.fromEntries(Object.entries(limits).filter(([, v]) => typeof v === 'number' && v >= 0)) as RagLimits;
+  const target: RagTarget | undefined = parsed.step ? { protocol, step: parsed.step, mapping, ...(readOnly ? { readOnly: true } : {}), ...(Object.keys(cleanLimits).length ? { limits: cleanLimits } : {}) } : undefined;
+
+  /** One-click start from a framework's request and mapping (OpenAI-compatible, LangServe, LlamaIndex, Haystack, Dify, Flowise …). */
+  const applyPreset = (id: string) => {
+    setPresetId(id);
+    const preset = findRagTargetPreset(id);
+    if (!preset) return;
+    setProtocol(preset.protocol);
+    setStepText(stringifyYaml(preset.step));
+    setMapping(JSON.parse(JSON.stringify(preset.mapping)) as RagMapping);
+    setProbe(undefined);
+    setSample(undefined);
+    setSuggestNotes(preset.note ? [preset.note] : []);
+    if (!name.trim()) setName(preset.name.replace(/ \(.*$/, ''));
+  };
+
+  /** AI "Suggest mapping": the model reads the sample response; TestPion has already applied what it suggested (the engine's verifier). */
+  const suggest = async () => {
+    if (!probe) return;
+    setSuggesting(true);
+    setSuggestNotes([]);
+    try {
+      const r = await call<AiTaskResult>('ai.runTask', { task: 'rag-suggest-mapping', context: { response: probe.response.doc, question, protocol }, environment: env });
+      const v = r.value as { mapping?: RagMapping; notes?: string[] } | undefined;
+      if (v?.mapping) setMapping(v.mapping);
+      setSuggestNotes([...(v?.notes ?? []), ...r.problems.map((p) => `The suggestion still has a problem: ${p}`)]);
+      if (v?.mapping && !r.problems.length) useApp.getState().toast('The suggested mapping reads an answer from the sample. Check it, then save.', 'success');
+    } catch (e) {
+      toastAiError(e);
+    } finally {
+      setSuggesting(false);
+    }
+  };
 
   const doProbe = async () => {
     if (!target) return;
@@ -155,7 +195,7 @@ export function RagConnectDialog({ id, onClose, onSaved }: { id?: string; onClos
 
   const judgeLoad = () =>
     call<{ preview: AiTaskResult['preview'] }>('rag.judgePreview', {
-      metric: 'rag-faithfulness',
+      metric: 'faithfulness',
       sample: { question, answer: sample?.answer ?? '', contexts: sample?.contexts ?? [] },
       environment: env,
     }).then((r) => r.preview);
@@ -179,9 +219,19 @@ export function RagConnectDialog({ id, onClose, onSaved }: { id?: string; onClos
         }
       >
         <div className="grid gap-3 text-sm" data-rag-connect>
-          <div className="grid grid-cols-[1fr_16rem] gap-2">
+          <div className="grid grid-cols-[1fr_14rem_14rem] gap-2">
             <Field label="Name">
               <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Clinic support bot" aria-label="Target name" data-rag-name />
+            </Field>
+            <Field label="Start from">
+              <Select value={presetId} onChange={(e) => applyPreset(e.target.value)} aria-label="Start from a preset" data-rag-preset-select>
+                <option value="">A blank request</option>
+                {RAG_TARGET_PRESETS.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </Select>
             </Field>
             <Field label="Protocol">
               <Select
@@ -212,6 +262,23 @@ export function RagConnectDialog({ id, onClose, onSaved }: { id?: string; onClos
               <label className="flex items-center gap-1.5 text-xs">
                 <input type="checkbox" checked={readOnly} onChange={(e) => setReadOnly(e.target.checked)} /> This endpoint only answers questions: a production environment may call it
               </label>
+              <details className="text-xs rounded-lg border border-line px-2 py-1" data-rag-limits>
+                <summary className="cursor-pointer text-muted select-none">Limits on the calls an evaluation makes{Object.keys(cleanLimits).length ? ' · set' : ''}</summary>
+                <div className="grid grid-cols-4 gap-2 mt-2 pb-1">
+                  {(
+                    [
+                      ['concurrency', 'At once', 'The most calls in flight, however many workers the evaluation has'],
+                      ['requestsPerMinute', 'Per minute', 'The most requests started in a minute'],
+                      ['timeoutMs', 'Timeout (ms)', 'How long one call may take'],
+                      ['retries', 'Retries', 'How often a call that failed on the server’s side is tried again'],
+                    ] as const
+                  ).map(([k, label, hint]) => (
+                    <Field key={k} label={label} hint={undefined}>
+                      <Input type="number" min={k === 'retries' ? 0 : 1} className="h-7 min-h-7 text-xs" title={hint} value={limits[k] ?? ''} placeholder="no limit" onChange={(e) => setLimits({ ...limits, [k]: e.target.value === '' ? undefined : Number(e.target.value) })} aria-label={label} data-rag-limit={k} />
+                    </Field>
+                  ))}
+                </div>
+              </details>
               <div className="flex items-center gap-2">
                 <Input className="flex-1" value={question} onChange={(e) => setQuestion(e.target.value)} aria-label="Probe question" data-rag-question onKeyDown={(e) => e.key === 'Enter' && void doProbe()} />
                 <Button variant="primary" icon={busy ? <Spinner /> : <Play size={13} />} disabled={!target || busy || !question.trim()} onClick={() => void doProbe()} data-rag-probe>
@@ -219,7 +286,23 @@ export function RagConnectDialog({ id, onClose, onSaved }: { id?: string; onClos
                 </Button>
               </div>
               {error && <Callout tone="bad">{error}</Callout>}
-              <div className="text-xs text-muted">Mapping</div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted">Mapping</span>
+                {probe && (
+                  <AiAction
+                    className="ml-auto"
+                    label={suggesting ? 'Reading the response …' : 'Suggest mapping'}
+                    hint="The AI reads the sample response and proposes where the answer and the retrieved documents are. TestPion applies the proposal to the sample first and sends a mapping that reads nothing back to the model."
+                    request={{ task: 'rag-suggest-mapping', title: 'Suggest the mapping', context: { response: probe.response.doc, question, protocol } }}
+                    open={() => void suggest()}
+                  />
+                )}
+              </div>
+              {suggestNotes.map((n) => (
+                <div key={n} className="text-xs text-warn" data-rag-suggest-note>
+                  {n}
+                </div>
+              ))}
               <div className="grid grid-cols-[9rem_1fr] gap-x-2 gap-y-1 items-center" data-rag-mapping>
                 {FIELD_SLOTS.map((s) => (
                   <label key={s.slot} className="contents">

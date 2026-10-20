@@ -9,6 +9,7 @@ import { ApsError } from '../../errors.js';
 import type { TestCase } from '../../model/types.js';
 import type { VariableScope } from '../../vars/variables.js';
 import type { CheckContext } from '../checks.js';
+import { limiterOf, limitsProblems } from './limiter.js';
 import { applyMapping, mappingProblems, responseOf, type RagResponse } from './mapping.js';
 
 /** What the runner lends: turn a step written as in a test file into a test, run it, and say what it would change. */
@@ -33,7 +34,7 @@ export function targetProblems(t: RagTarget | undefined): string[] {
     if (!allowed) out.push(`Unknown protocol "${String(t.protocol)}". Use http, sse, websocket, grpc or mcp.`);
     else if (!allowed.includes(type)) out.push(`A ${t.protocol} target's request is of type ${allowed.join(' or ')}, not "${type || 'unset'}".`);
   }
-  out.push(...mappingProblems(t.mapping));
+  out.push(...mappingProblems(t.mapping), ...limitsProblems(t.limits));
   return out;
 }
 
@@ -62,9 +63,18 @@ export async function callTarget(target: RagTarget, question: string, scope: Var
   const raw = s.resolveDeep(target.step);
   const step = run.normalize({ name: 'RAG target', ...raw });
   if (!target.readOnly) run.guard?.(step, s);
-  const t0 = performance.now();
-  const ctx = await run.run(step, s);
-  const latencyMs = Math.round(performance.now() - t0);
+  if (step.timeoutMs === undefined && (target.limits?.timeoutMs ?? target.timeoutMs)) step.timeoutMs = target.limits?.timeoutMs ?? target.timeoutMs;
+  let latencyMs = 0;
+  const limiter = o.probe ? undefined : limiterOf(target);
+  // a limiter retries a call that failed on the server's side (5xx, 429); the checks below report whatever is left
+  const attempt = async () => {
+    const t0 = performance.now();
+    const c = await run.run(step, s);
+    latencyMs = Math.round(performance.now() - t0);
+    if (limiter && step.type === 'http' && c.status !== undefined && (c.status >= 500 || c.status === 429)) throw new ApsError(c.status === 429 ? 'RateLimitError' : 'ServerError', `The RAG endpoint answered HTTP ${c.status}: ${c.text.slice(0, 300) || '(no body)'}`);
+    return c;
+  };
+  const ctx = await (limiter ? limiter.run(attempt) : attempt());
   if (ctx.isError && !o.probe) throw new ApsError('ProtocolError', `The RAG tool reported an error: ${ctx.text.slice(0, 300)}`);
   if (!o.probe && step.type === 'http' && ctx.status !== undefined && ctx.status >= 400) throw new ApsError('ProtocolError', `The RAG endpoint answered HTTP ${ctx.status}: ${ctx.text.slice(0, 300) || '(no body)'}`, { suggestions: ['Probe the target in AI Lab ▸ RAG to see the request and the response.', 'Check the URL, the authentication and the request body.'] });
   if (!o.probe && ctx.grpc && ctx.grpc.code !== 0) throw new ApsError('ProtocolError', `The RAG gRPC call ended with ${ctx.grpc.codeName}: ${ctx.grpc.details}`);

@@ -13,8 +13,10 @@ export interface JudgedMetric {
   /** What this metric judges, one line (docs and the picker). */
   what: string;
   instruction: string;
-  /** The sample fields the judge needs: only these are sent. */
-  inputs: ReadonlyArray<'question' | 'answer' | 'contexts' | 'reference'>;
+  /** The sample fields the judge needs: only these are sent (`claims`: the answer's claims from the shared `claims-v1` pass). */
+  inputs: ReadonlyArray<'question' | 'answer' | 'contexts' | 'reference' | 'claims'>;
+  /** A metric whose items are rated 0..max instead of true/false (the score is the mean rating / max). */
+  rating?: number;
   /** What an item is called in the result, and its two verdicts. */
   noun: string;
   labels: readonly [string, string];
@@ -23,7 +25,7 @@ export interface JudgedMetric {
 }
 
 export const FAITHFULNESS: JudgedMetric = {
-  id: 'rag-faithfulness',
+  id: 'faithfulness',
   version: 'faithfulness-v1',
   what: 'The share of the answer’s claims that the retrieved documents support (a high score means the answer stays inside what was retrieved).',
   instruction: [
@@ -40,7 +42,7 @@ export const FAITHFULNESS: JudgedMetric = {
 };
 
 export const ANSWER_RELEVANCE: JudgedMetric = {
-  id: 'rag-answer-relevance',
+  id: 'answer-relevance',
   version: 'answer-relevance-v1',
   what: 'The share of the answer’s statements that are relevant to the question (a low score means the answer wanders off or pads).',
   instruction: [
@@ -81,6 +83,7 @@ export const VERDICT_SCHEMA = {
         properties: {
           text: { type: 'string', description: 'The claim or statement judged' },
           verdict: { type: 'boolean' },
+          rating: { type: 'integer', description: 'Only for the metrics that rate: the rating asked for' },
           reason: { type: 'string', description: 'The evidence (a short quote with the document id) or why there is none' },
         },
       },
@@ -90,5 +93,5 @@ export const VERDICT_SCHEMA = {
 
 export interface Verdict {
   reasoning: string;
-  items: Array<{ text: string; verdict: boolean; reason: string }>;
+  items: Array<{ text: string; verdict: boolean; reason: string; rating?: number }>;
 }

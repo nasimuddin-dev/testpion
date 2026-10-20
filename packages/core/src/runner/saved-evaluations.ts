@@ -5,7 +5,7 @@ import type { CheckConfig, TestCase } from '../model/types.js';
 import { ApsError } from '../errors.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { expandDataset } from './loader.js';
-import type { RagTarget } from '@testpion/shared';
+import type { RagJudgeSetup, RagTarget } from '@testpion/shared';
 import { findRagTarget } from '../eval/rag/targets.js';
 import { datasetFormatOf, countDatasetRecords } from '@testpion/shared';
 export { datasetFormatOf, countDatasetRecords };
@@ -33,18 +33,23 @@ export interface SavedEvaluation {
   /** type `rag`: the RAG target (id or name) the questions are sent to; without one the contexts written in the dataset are scored. */
   target?: string;
   /** type `rag` with a target: the judge of the judged metrics (unset: the AI settings' large model; never a silent mock) and the run's limits. */
-  judge?: { provider?: string; model?: string };
+  judge?: Pick<RagJudgeSetup, 'provider' | 'model' | 'judges' | 'aggregate' | 'swap' | 'repeat' | 'shortCircuit' | 'shareClaims' | 'sampleShare'>;
   maxJudgeCostUsd?: number;
   maxJudgeCalls?: number;
 }
 
 export const EVALUATIONS_LIBRARY = 'evaluations';
 
+/** The judge of a RAG evaluation as the metrics read it: the evaluation's own choices and the run's limits. */
+export function judgeSetupOf(d: Pick<SavedEvaluation, 'judge' | 'maxJudgeCostUsd' | 'maxJudgeCalls'>): RagJudgeSetup {
+  return { ...(d.judge ?? {}), ...(d.maxJudgeCostUsd !== undefined ? { maxCostUsd: d.maxJudgeCostUsd } : {}), ...(d.maxJudgeCalls !== undefined ? { maxCalls: d.maxJudgeCalls } : {}) };
+}
+
 /** The test template each dataset record is expanded into. */
 export function evaluationTemplate(d: SavedEvaluation, target?: RagTarget): Record<string, unknown> {
   const model = { provider: d.provider, name: d.model || undefined, temperature: d.temperature };
   if (d.type === 'rag' && target) {
-    const judge = { ...(d.judge?.provider ? { provider: d.judge.provider } : {}), ...(d.judge?.model ? { model: d.judge.model } : {}), ...(d.maxJudgeCostUsd ? { maxCostUsd: d.maxJudgeCostUsd } : {}), ...(d.maxJudgeCalls ? { maxCalls: d.maxJudgeCalls } : {}) };
+    const judge = judgeSetupOf(d);
     return { name: d.name, type: 'rag', target, ...(Object.keys(judge).length ? { judge } : {}), evaluators: d.evaluators };
   }
   if (d.type === 'rag') return { name: d.name, type: 'rag', model, ...(d.prompt.includes('{{context}}') ? { prompt: d.prompt } : {}), evaluators: d.evaluators };

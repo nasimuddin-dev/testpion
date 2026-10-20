@@ -137,13 +137,18 @@ const steps = [
   ),
   step(
     'metrics-of-the-evaluation',
-    `await __t.real.click(tab('Evaluators')); await __t.sleep(500);
+    `await __t.real.click(tab('Metrics')); await __t.sleep(800);
      const t = document.querySelector('main')?.innerText ?? '';
-     return 'metrics: ' + ['Token F1', 'Context recall by id', 'Faithfulness (judge)', 'Answer relevance (judge)'].filter((m) => t.includes(m)).join(', ') + ' | judge note: ' + !!document.querySelector('[data-rag-judge-note]');`,
+     const chosen = vis('[data-rag-metric]').filter((r) => r.querySelector('[data-rag-metric-check]')?.checked).map((r) => r.getAttribute('data-rag-metric'));
+     return 'metrics: ' + ['Token F1', 'Context recall (ids)', 'Faithfulness', 'Answer relevance'].filter((m) => t.includes(m)).join(', ') + ' | chosen: ' + chosen.join(',') + ' | judge note: ' + !!document.querySelector('[data-rag-judge-note]');`,
   ),
   step(
     'run-it',
     `await __t.real.click(vis('main button').find((b) => /^Run \\d+ cases/.test(b.textContent.trim())));
+     const dlg = await __t.waitFor(() => document.querySelector('[data-rag-estimate-dialog]'), 10000); if (!dlg) return 'NO DIALOG';
+     const est = await __t.waitFor(() => document.querySelector('[data-rag-estimate-total]'), 10000); if (!est) return 'NO ESTIMATE';
+     const calls = est.textContent.slice(0, 40);
+     await __t.real.click('[data-rag-estimate-run]'); await __t.sleep(300);
      let runs = [];
      for (let i = 0; i < 120 && !(runs.length === 1 && runs[0].total > 0); i++) {
        await __t.sleep(500);
@@ -151,12 +156,16 @@ const steps = [
      }
      const res = runs[0] ? await window.aps.invoke('runs.results', { runId: runs[0].id, limit: 10 }) : { items: [] };
      const checks = res.items.flatMap((r) => r.checks.map((c) => c.type + ':' + (c.score ?? 'n/a') + (c.passed ? '' : '(failed)')));
-     return 'runs: ' + runs.length + ' | passed: ' + runs[0]?.passed + '/' + runs[0]?.total + ' | judged: ' + res.items.flatMap((r) => r.checks).filter((c) => c.source === 'ai-judge').length + ' | ' + checks.slice(0, 5).join(' ');`,
+     return 'estimate: ' + /Judge calls\\s*4/.test(calls) + ' | runs: ' + runs.length + ' | passed: ' + runs[0]?.passed + '/' + runs[0]?.total + ' | judged: ' + res.items.flatMap((r) => r.checks).filter((c) => c.source === 'ai-judge').length + ' | ' + checks.slice(0, 5).join(' ');`,
   ),
   step(
     'again-costs-nothing',
     `const before = (await window.aps.invoke('ai.taskUsage', { days: 1 })).byTask.find((t) => t.task === 'rag-judge')?.calls ?? 0;
      await __t.real.click(vis('main button').find((b) => /^Run \\d+ cases/.test(b.textContent.trim())));
+     const go = await __t.waitFor(() => document.querySelector('[data-rag-estimate-run]'), 10000); if (!go) return 'NO DIALOG';
+     await __t.sleep(400);
+     const cached = /already cached/.test(document.querySelector('[data-rag-estimate-total]')?.textContent ?? '') ? 'cached-known' : 'cache-unknown';
+     await __t.real.click(go); await __t.sleep(300);
      let runs = [];
      for (let i = 0; i < 120 && !(runs.length === 2 && runs[0].total > 0); i++) {
        await __t.sleep(500);
@@ -200,11 +209,11 @@ module.exports = withExpect(
     'click-inside-a-document': /^text: \$\.text \| id: \$\.id \| score: \$\.score$/,
     'the-sample-the-mapping-reads': /^answer: The clinic opens at 8am .* \| documents: [1-3] \| first id: doc-1 \| warnings: 0$/,
     'what-the-judge-receives': /^model: RAG mock judge.* \| metric in prompt: true \| answer in prompt: true \| privacy switch: false$/,
-    'save-the-target': /^dialog closed: true \| saved: 1 Clinic bot http \| mapping: \{"answer":"\$\.answer","contexts":"\$\.sources\[\*\]","context":\{"text":"\$\.text","id":"\$\.id","score":"\$\.score"\}\} \| listed: true$/,
+    'save-the-target': /^dialog closed: true \| saved: 1 Clinic bot http \| mapping: \{"answer":"\$\.answer","context":\{"id":"\$\.id","score":"\$\.score","text":"\$\.text"\},"contexts":"\$\.sources\[\*\]"\} \| listed: true$/,
     'the-target-opens-again-with-its-mapping': /^name: Clinic bot \| answer: \$\.answer \| contexts: \$\.sources\[\*\] \| request: true$/,
     'a-rag-evaluation': /^target: Clinic bot \| judge fields: true \| prompt tab: false \| import button: true \| run: Run 2 cases$/,
-    'metrics-of-the-evaluation': /^metrics: Token F1, Context recall by id, Faithfulness \(judge\), Answer relevance \(judge\) \| judge note: true$/,
-    'run-it': /^runs: 1 \| passed: 2\/2 \| judged: 4 \| token-f1:0\.778 context-recall-ids:1 rag-faithfulness:1 rag-answer-relevance:1 latency:n\/a$/,
+    'metrics-of-the-evaluation': /^metrics: Token F1, Context recall \(ids\), Faithfulness, Answer relevance \| chosen: [a-z0-9,-]+ \| judge note: true$/,
+    'run-it': /^estimate: true \| runs: 1 \| passed: 2\/2 \| judged: 4 \| token-f1:0\.778 context-recall-ids:1 faithfulness:1 answer-relevance:1 latency:n\/a$/,
     'again-costs-nothing': /^runs: 2 \| judge calls before: 4 after: 4 \| cached: 4\/4$/,
     'the-matrix-shows-the-runs': /^cases: 2 \| matrix: true$/,
     'no-judge-no-run': /^refused: true \| set up button: true \| runs started: 0$/,

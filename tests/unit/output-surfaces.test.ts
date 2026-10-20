@@ -102,6 +102,7 @@ describe('output surfaces', () => {
       'views/TestsView.tsx': 'renders RunPanel / RunTimeline (marked)',
       'components/FlowRunDock.tsx': 'renders RunPanel / RunTimeline (marked)',
       'views/DatasetView.tsx': 'a dataset (a definition you edit), not an output',
+      'components/rag/RagSampleDetail.tsx': 'one sample of a run, opened from a cell of the metrics matrix (a view of a result the run panel already offers to download)',
       'components/rag/RagConnectDialog.tsx': 'the sample response a RAG target’s mapping is made from (part of a definition you edit), not an output',
     };
     const unmarked = sources.filter((s) => RESULT_VIEWS.test(s.text) && !/data-output="/.test(s.text) && !(s.file in REVIEWED)).map((s) => s.file);

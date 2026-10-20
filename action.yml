@@ -8,6 +8,13 @@
 #       start: npm start              # integration tests: start the system under test first (optional)
 #       wait-for: http://127.0.0.1:3000/health
 #       triage: true                  # on failures: group them by cause (and explain them with an AI model, if set up) in the job summary
+#
+# A RAG evaluation instead (its metrics and gates, a JUnit and HTML report; the judge model's key is a secret):
+#       rag-evaluation: Clinic RAG
+#       preset: rag-triad
+#       min: faithfulness=0.8 recall@5=0.9
+#       baseline: run-abc123
+#       max-cost: '2'
 #     env:
 #       TESTPION_SECRET_ENV_STAGING_APIKEY: ${{ secrets.STAGING_API_KEY }}   # secret variables, named by `testpion ci`
 #
@@ -56,6 +63,24 @@ inputs:
   triage:
     description: 'After a failed run, group the failures by likely cause (and, with an AI model set up, explain them) in triage.md and the job summary (true/false; adds --triage).'
     default: 'false'
+  rag-evaluation:
+    description: 'A saved RAG evaluation to run instead of tests (`testpion rag run`): the questions go to the RAG system and are scored by the metrics; a failed gate fails the job.'
+    default: ''
+  preset:
+    description: 'With rag-evaluation: a metric preset (rag-triad, ragas-core, deepeval-rag, nvidia-rag, retrieval-only, free …) replacing the evaluation''s metrics.'
+    default: ''
+  judge:
+    description: 'With rag-evaluation: the judge as provider/model (default: the evaluation''s, else TESTPION_AI_PROVIDER / TESTPION_AI_MODEL).'
+    default: ''
+  min:
+    description: 'With rag-evaluation: gates, space separated metric=value (the mean must reach it), e.g. "faithfulness=0.8 recall@5=0.9".'
+    default: ''
+  baseline:
+    description: 'With rag-evaluation: a run id to compare with, metric by metric; a real regression fails the job.'
+    default: ''
+  max-cost:
+    description: 'With rag-evaluation: stop judging once this much (USD) is spent; the rest is n/a.'
+    default: ''
   upload:
     description: Upload the reports as an artifact (true/false).
     default: 'true'
@@ -91,7 +116,15 @@ runs:
         ENV=""; [ -n "${{ inputs.environment }}" ] && ENV="-e ${{ inputs.environment }}"
         PROD=""; [ "${{ inputs.allow-production }}" = "true" ] && PROD="--allow-production"
         TRIAGE=""; [ "${{ inputs.triage }}" = "true" ] && TRIAGE="--triage"
-        if [ -n "${{ inputs.collection }}" ]; then
+        if [ -n "${{ inputs.rag-evaluation }}" ]; then
+          RAG=""
+          [ -n "${{ inputs.preset }}" ] && RAG="$RAG --preset ${{ inputs.preset }}"
+          [ -n "${{ inputs.judge }}" ] && RAG="$RAG --judge ${{ inputs.judge }}"
+          [ -n "${{ inputs.baseline }}" ] && RAG="$RAG --baseline ${{ inputs.baseline }}"
+          [ -n "${{ inputs.max-cost }}" ] && RAG="$RAG --max-cost ${{ inputs.max-cost }}"
+          for g in ${{ inputs.min }}; do RAG="$RAG --min $g"; done
+          node "$CLI" rag run "${{ inputs.rag-evaluation }}" -w "${{ inputs.workspace }}" $ENV $RAG -o "${{ inputs.out }}" --junit "${{ inputs.out }}/junit.xml" --html "${{ inputs.out }}/report.html"
+        elif [ -n "${{ inputs.collection }}" ]; then
           FOLDER=""; [ -n "${{ inputs.folder }}" ] && FOLDER="--folder ${{ inputs.folder }}"
           node "$CLI" run-collection "${{ inputs.collection }}" -w "${{ inputs.workspace }}" $ENV $FOLDER -r console junit html markdown -o "${{ inputs.out }}" $PROD $TRIAGE
         elif [ -n "${{ inputs.suite }}" ]; then

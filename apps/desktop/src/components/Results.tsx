@@ -197,7 +197,7 @@ export function CheckList({ checks, compact, actions }: { checks: CheckResult[];
  * The items a claim-by-claim check judged (claims, documents, statements, entities): what is still to verify first,
  * then what was demonstrated, each with its evidence. A person decides; the list is what they look at.
  */
-function EvidenceList({ check }: { check: CheckResult }) {
+export function EvidenceList({ check }: { check: CheckResult }) {
   const items = (check.metadata?.items as Array<{ text: string; ok: boolean; evidence?: string }> | undefined) ?? [];
   if (!items.length) return null;
   // what the check calls its verdicts (supported / not supported, useful / not useful …)

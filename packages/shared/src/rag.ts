@@ -29,6 +29,45 @@ export interface RagMapping {
   latencyMs?: string;
 }
 
+/**
+ * How a target is limited, so an evaluation cannot overload the system under test: the most calls in flight, the most
+ * requests per minute, the time one call may take, and how often a failed call is tried again.
+ */
+export interface RagLimits {
+  concurrency?: number;
+  requestsPerMinute?: number;
+  timeoutMs?: number;
+  retries?: number;
+}
+
+/**
+ * The judge of an evaluation's judged metrics. `provider` / `model` is the single judge (unset: the AI settings' large
+ * model; never a silent mock); the other fields are the options of the judge panel (planning/rag-testing.md §4c).
+ */
+export interface RagJudgeSetup {
+  provider?: string;
+  model?: string;
+  /** Stop judging once the run has spent this much (USD, from the price table) or made this many model calls. */
+  maxCostUsd?: number;
+  maxCalls?: number;
+  /** A jury: each of these judges the sample, and `aggregate` combines their scores (default majority). */
+  judges?: Array<{ provider?: string; model?: string }>;
+  aggregate?: 'majority' | 'mean' | 'min';
+  /** Judge twice with the documents in the opposite order; when the two disagree on pass or fail the sample is a tie (not passed). */
+  swap?: boolean;
+  /** Judge n times with the cache bypassed: the score is the mean and the result reports the flip rate. */
+  repeat?: number;
+  /** Skip the judged answer metrics of a sample whose free retrieval metrics already failed. */
+  shortCircuit?: boolean;
+  /**
+   * Split the answer into claims once (the shared `claims-v1` pass) and let faithfulness and answer-relevance judge those.
+   * Default: only when three or more metrics read the claims, because with two the extra call costs more than it saves.
+   */
+  shareClaims?: boolean;
+  /** A monitor judges only this share (0 to 1) of its samples, chosen by the sample itself; the free metrics always run. */
+  sampleShare?: number;
+}
+
 export type RagProtocol = 'http' | 'sse' | 'websocket' | 'grpc' | 'mcp';
 
 export const RAG_PROTOCOLS: ReadonlyArray<{ id: RagProtocol; label: string }> = [
@@ -53,6 +92,8 @@ export interface RagTarget {
   /** The endpoint only answers questions and changes nothing: a production environment may call it without asking. */
   readOnly?: boolean;
   timeoutMs?: number;
+  /** Concurrency, rate and retries of the calls an evaluation makes to it. */
+  limits?: RagLimits;
 }
 
 /** One retrieved context as the metrics read it. */
@@ -172,4 +213,18 @@ tool: search
 arguments: { query: "{{question}}" }
 `;
   }
+}
+
+/**
+ * A metric name in the one form names are compared in: `LLMContextRecall` and `context_recall` and "Context Recall" are
+ * `llm-context-recall` / `context-recall` (case ignored, CamelCase split, `_` and spaces become `-`). The engine's
+ * registry and the window's picker both use it, so a name found in one is found in the other.
+ */
+export function normalizeMetricName(raw: string): string {
+  return raw
+    .trim()
+    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1_$2')
+    .toLowerCase()
+    .replace(/[\s_]+/g, '-');
 }

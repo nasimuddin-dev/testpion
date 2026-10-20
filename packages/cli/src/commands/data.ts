@@ -657,6 +657,12 @@ export function registerDataCommands(program: Command): void {
     .option('--collection <nameOrId>', 'run a collection')
     .option('--folder <nameOrId>', 'with --collection: only this folder or request (repeatable)', (v: string, prev: string[] = []) => [...prev, v])
     .option('--tests <paths...>', 'test files or folders under tests/ (default: all)')
+    .option('--rag-evaluation <name>', 'run a saved RAG evaluation (`testpion rag run`) with its metrics and gates; the judge model\'s key is a CI secret')
+    .option('--rag-preset <id>', 'with --rag-evaluation: a metric preset replacing its metrics')
+    .option('--rag-judge <provider/model>', 'with --rag-evaluation: the judge')
+    .option('--rag-min <metric=value...>', 'with --rag-evaluation: gates, e.g. faithfulness=0.8 (the mean must reach it)')
+    .option('--rag-baseline <run>', 'with --rag-evaluation: compare with this run, metric by metric')
+    .option('--rag-max-cost <usd>', 'with --rag-evaluation: stop judging once this much is spent')
     .option('--run <runId>', 'instead of --suite / --collection / --tests: what this finished run ran, in its environment ("last": the newest finished run of test files or a collection)')
     .option('--data [file]', 'one flow file (--tests file): run it once per row of this data (a dataset; without a value, the file\'s own data:)')
     .option('--env-matrix <names...>', 'one flow file: run it in each of these environments and compare step by step')
@@ -681,6 +687,7 @@ export function registerDataCommands(program: Command): void {
           collection: o.collection,
           folders: o.folder,
           tests: o.tests,
+          ...(o.ragEvaluation ? { ragEvaluation: o.ragEvaluation, ragPreset: o.ragPreset, ragJudge: o.ragJudge, ragMin: o.ragMin, ragBaseline: o.ragBaseline, ragMaxCost: o.ragMaxCost !== undefined ? Number(o.ragMaxCost) : undefined } : {}),
           ...fromRun?.target,
           data: o.data === true ? '' : o.data,
           envMatrix: o.envMatrix,
