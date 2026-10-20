@@ -18,6 +18,7 @@ const sources = (over: Partial<QuickSources> = {}): QuickSources => ({
   open: (ref) => opened.push(JSON.stringify(ref)),
   switchEnvironment: (n) => opened.push(`env:${n}`),
   setQuery: (q) => opened.push(`q:${q}`),
+  ask: (q) => opened.push(`ask:${q}`),
   noun: (ref) => (ref.kind === 'request' ? 'Request' : ref.kind),
   ...over,
 });
@@ -28,6 +29,7 @@ describe('Quick Open', () => {
     expect(parseQuickQuery('#prod')).toEqual({ mode: 'environments', text: 'prod' });
     expect(parseQuickQuery('@x')).toEqual({ mode: 'here', text: 'x' });
     expect(parseQuickQuery('?')).toEqual({ mode: 'help', text: '' });
+    expect(parseQuickQuery('~failed calls')).toEqual({ mode: 'ask', text: 'failed calls' });
     expect(parseQuickQuery('patients')).toEqual({ mode: 'items', text: 'patients' });
     expect(parseQuickQuery('patients', 'commands')).toEqual({ mode: 'commands', text: 'patients' });
   });
@@ -39,7 +41,24 @@ describe('Quick Open', () => {
     expect(opened.pop()).toContain('"requestId":"r"');
     expect(quickOpenRows('pat', sources()).empty).toBe('Searching…');
     const found = quickOpenRows('pat', sources({ hits: [{ id: 'h', kind: 'request', title: 'Create patient', ref: { kind: 'request', collectionId: 'c', requestId: 'p' } }] }));
-    expect(found.rows.map((r) => r.label)).toEqual(['Create patient']);
+    // the hits, then the last row that asks the words as a question (Ask…, AI-12)
+    expect(found.rows.map((r) => r.label)).toEqual(['Create patient', 'Ask: “pat”']);
+    found.rows.at(-1)!.run();
+    expect(opened.pop()).toBe('ask:pat');
+  });
+
+  it('~ is the Ask mode: one row that asks the typed question, nothing until something is typed', () => {
+    const none = quickOpenRows('~', sources());
+    expect(none.rows).toEqual([]);
+    expect(none.empty).toMatch(/Type a question/);
+    const r = quickOpenRows('~failed payment calls last week', sources());
+    expect(r.rows.map((x) => [x.id, x.label, x.hint])).toEqual([['ask', 'Ask: “failed payment calls last week”', 'Ask']]);
+    r.rows[0]!.run();
+    expect(opened.pop()).toBe('ask:failed payment calls last week');
+    // the help lists it and opens the palette in that mode
+    const help = quickOpenRows('?', sources());
+    help.rows.find((x) => x.hint === '~')!.run();
+    expect(opened.pop()).toBe('q:~');
   });
 
   it('# lists environments to switch to and their variables', () => {

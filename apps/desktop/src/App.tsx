@@ -54,6 +54,7 @@ const ShortcutsDialog = lazy(async () => ({ default: (await import('./components
 const ExportBundleDialog = lazy(() => import('./components/ExportBundleDialog'));
 const ImportBundleDialog = lazy(() => import('./components/ImportBundleDialog'));
 const CiDialog = lazy(async () => ({ default: (await import('./components/CiDialog')).CiDialog }));
+const AskSearchDialog = lazy(async () => ({ default: (await import('./components/ai/AskSearchDialog')).AskSearchDialog }));
 const FlowGenerateDialog = lazy(async () => ({ default: (await import('./components/ai/FlowGenerateDialog')).FlowGenerateDialog }));
 const TidyImportDialog = lazy(async () => ({ default: (await import('./components/ai/TidyImportDialog')).TidyImportDialog }));
 const AiAnalysisDialog = lazy(async () => ({ default: (await import('./components/ai/AiAnalysisDialog')).AiAnalysisDialog }));
@@ -200,6 +201,7 @@ export default function App() {
   const searchOpen = useApp((s) => s.searchOpen);
   const ci = useApp((s) => s.ci);
   const flowGenerate = useApp((s) => s.flowGenerate);
+  const askSearch = useApp((s) => s.askSearch);
   const aiAnalysis = useApp((s) => s.aiAnalysis);
   const tidyImport = useApp((s) => s.tidyImport);
   const openapiDiff = useApp((s) => s.openapiDiff);
@@ -557,6 +559,14 @@ export default function App() {
             <TidyImportDialog key={tidyImport.collectionId} request={tidyImport} onClose={() => useApp.getState().set({ tidyImport: undefined })} />
           </Suspense>,
           close({ tidyImport: undefined }),
+        )}
+      {askSearch &&
+        guard(
+          'ask search',
+          <Suspense fallback={null}>
+            <AskSearchDialog request={askSearch} onClose={() => useApp.getState().set({ askSearch: undefined })} />
+          </Suspense>,
+          close({ askSearch: undefined }),
         )}
       {aiAnalysis &&
         guard(

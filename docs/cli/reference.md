@@ -13,6 +13,7 @@ testpion test <flow> --data [file] | --env-matrix <envs>   One flow file once pe
 testpion test from-request <item>   Save a saved request (a folder, a collection, any item ref) as a test file, like Save as test… in the app
 testpion run --suite <name>   Run tests/<name>.suite.yaml from a workspace (or testpion run <file> for one test file)
 testpion search <words>       Find items by name or content, like Quick Open (Ctrl+P); each hit has a ref for testpion open
+testpion search --ask "…"    Ask in your own words about History, runs, test results and traces; the model only translates, TestPion searches
 testpion problems             What is failing in the workspace, as the app's Problems list (alias: attention; exit 1 on a high-severity item)
 testpion send <request|url>   Send one saved request (scripts, auth, checks) or a URL and print the response, like curl
 testpion run-collection <collection>   Run a collection like Postman's Collection Runner / Newman
@@ -178,6 +179,27 @@ Finds items in a workspace by name or content, like Quick Open in the app; each 
 testpion search patients -w my-workspace
 testpion search "create order" --json -n 5
 ```
+
+**`--ask "<question>"`** searches **History, runs, test results and traces** from a question in your own words (the app's *Ask…*). The configured model only translates the question into a validated search query (it sees the question, the time and the field names, never your data); TestPion runs the query itself, read-only, and says how the question was understood — the query in plain words, the model's assumptions, then the hits, each with a `ref` for `testpion open`:
+
+```bash
+testpion search --ask "failed payment calls last week over 2 s"
+testpion search --ask "flaky tests in staging" --in results --json
+testpion search --ask "payments" --no-ai          # the words as typed, no model
+testpion search --ask "…" --dry-run               # send nothing: print what would be sent
+testpion search --query-json '{"where":[{"field":"status","op":"gte","value":500}],"limit":10}'
+testpion search --query-json @query.json --in history     # a query from a file ("-": stdin)
+```
+
+| Option | |
+|---|---|
+| `--ask <question>` | The question. Without a model, or when the model fails or its query is not valid, the words are searched as typed (`mode: "text"`, the reason in `fallback`; exit `0`). |
+| `--query-json <spec>` | Run a query directly, with no model: JSON, `@file` or `-`. `{"sources": ["history"], "where": [{"field", "op", "value"}], "sort": {"by": "time", "dir": "desc"}, "limit": 25}`. The fields and operators are in [Ask: search in your own words](/getting-started/finding-your-way#ask); an invalid query exits `2` and lists what is allowed. |
+| `--in <sources>` | Stay inside some sources: `history`, `runs`, `results`, `traces` (comma-separated). |
+| `--no-ai`, `--dry-run`, `--privacy`, `--provider`, `--model` | As for [`ai run`](#ai). |
+| `--json` | `{ question, mode: "ai" \| "text" \| "query", query, explain, chips, assumptions, fallback?, outcome: { rows, matched, perSource, capped, notes, ms }, model?, usage?, costUsd? }`. |
+
+The call is counted in `testpion ai usage` as the task `nl-search`.
 
 ## `send`
 

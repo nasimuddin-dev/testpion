@@ -74,7 +74,7 @@ environment variable only).
 | B-31 | RAG R2: all remaining LLM-judged retrieval/generation/claim-level metrics; custom checklist/embedding/script metrics; SQL metrics with the read-only executor | rag-testing.md | todo |
 | B-32 | RAG R3: conversational, agent/tool, judged safety, multimodal, decision trees; every catalogue row runnable | rag-testing.md | todo |
 | B-33 | RAG R4: test-set generation from documents, capture from traffic, judge calibration (kappa) + AI-11 evaluation authoring, monitor and CI polish | rag-testing.md, ai-features.md | todo |
-| B-34 | AI-12 natural-language search over history/runs/traces | ai-features.md | todo |
+| B-34 | AI-12 natural-language search over history/runs/traces: `nl-search` task, one query spec + engine (search/query-spec.ts, query-engine.ts), Ask dialog (Quick Open `~`, top-bar search, History/Runs/Traces filters), `testpion search --ask/--query-json`, MCP `search_ask` | ai-features.md | done (0.55, unreleased) |
 
 ### P3 · always on
 

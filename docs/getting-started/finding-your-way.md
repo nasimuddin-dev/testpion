@@ -33,6 +33,36 @@ A new workspace's Home starts with **Get started**: the first loop, from a reque
   <img src="/images/quick-open.jpg" alt="Quick Open (Ctrl+P) over a request: patient typed, the matching requests, test files and the collection, each with its kind" width="1440" height="900" loading="lazy">
 </figure>
 
+## Ask: search in your own words {#ask}
+
+Type a question instead of a name and TestPion searches **History, runs, test results and traces** for it: *failed payment calls last week over 2 s*, *flaky tests in staging*, *traces where a tool timed out*, *the slowest call yesterday*. It opens from the same dialog in every place:
+
+- **Quick Open** (<kbd>Ctrl</kbd>+<kbd>P</kbd>): start with `~` (*~failed payment calls last week*), or type anything and take the last row, **Ask: “…”**.
+- **Search** (the box in the top bar): the same **Ask: “…”** row after the hits.
+- The sparkle button beside the filters of **History**, **Runs** (the Tests view's Runs tab) and **Traces**: the question stays inside that view's data.
+
+The model only **translates** the question into a search query; it sees your words, the current time and the field names, never your requests, runs or traces. TestPion checks the query (known fields and operators, bounded values) and runs it itself, so the same query always gives the same answer. The dialog shows how it was understood before you trust it: the query in plain words (*Looking in History where failed is yes and url contains "payment" and time within the last 7 days and duration over 2 s; newest first, at most 25.*), what the model had to guess (*"last week" taken as the last 7 days*), and the query as **editable filters**: change a field, an operator or a value, remove a filter, add one, pick the sources, the order and the limit, and **Search** runs the edited query again with no model. A hit opens like any other item.
+
+Without a model (or when it fails, a cap refuses the call, or its query is not valid) the box still answers: it searches the words as typed, says why (*No AI model is set up … Searched for the words as typed instead*) and offers **Set up AI**. **Search the words only** skips the model on purpose. Every call is counted in the [AI usage](/ai-testing/ai-features#cost-estimates-caps-and-usage).
+
+| Field | Means | Operators |
+|---|---|---|
+| `text` | free text anywhere in the entry | contains, does not contain |
+| `time` | when it happened | since / until (an ISO date; a date alone covers the day), within the last `90m`, `24h`, `7d`, `2w` |
+| `name` | the request, run, test or trace name | contains, does not contain, is |
+| `kind`, `method` | protocol or trace kind; HTTP method (History) | is, is not, is one of |
+| `url`, `status`, `size` | URL text; HTTP status; response bytes (History) | contains, does not contain; =, ≠, <, ≤, >, ≥, one of; <, ≤, >, ≥ |
+| `failed` | it failed (4xx/5xx or an error; a run or test with failures; a trace with an error) | is yes / no |
+| `duration` | milliseconds | over, at least, under, at most |
+| `environment`, `file` | the run's environment; the test file (test results) | is, is not, contains |
+| `collection` | the collection a request was sent from (History) | is, contains |
+| `error`, `assertion` | error text (test results, trace spans); a failed check's name or message (test results) | contains |
+| `span`, `spans` | a span's name; the span count (traces) | contains; =, <, ≤, >, ≥ |
+| `flaky`, `attempts` | a flaky test; the attempts a result took (test results) | is yes / no; =, <, ≤, >, ≥ |
+| `failures` | how many tests of a run failed (runs) | =, <, ≤, >, ≥ |
+
+All conditions must hold. A field that only some sources have limits the search to them. The newest 5,000 History entries, 1,000 runs, the results of the newest 100 runs and 2,000 traces are searched (the files of 300 traces for *error* and *span*); a search that stopped at one of these says so. It only reads: nothing is written. From a terminal and from agents: [`testpion search --ask`](/cli/reference#search) and the MCP tool `search_ask`.
+
 ## The Info panel
 
 The right edge of the window holds **Info** and the **Assistant** in one panel: a tab on the edge that slides over the content on hover or click, or, pinned, docked beside it (the pin and its width are kept). **Info** is about the item on screen — a request, a test file, a monitor — and is the same for each: the variables it uses with their values and where each comes from in the active environment (a variable that is set nowhere is marked), the file that holds it and its git state (a click shows the change), the latest runs that included it, and for a request **Copy as cURL**. Asking the assistant (<kbd>Ctrl</kbd>+<kbd>J</kbd>, or an AI button such as **Ask AI** or **Explain with AI**) shows it in the same panel; the eye beside every AI button, **What will be sent…**, shows what would be sent first, and generated checks, tests and flows open in a review before anything is added ([AI features](/ai-testing/ai-features)). Agents get the same with `item_info`.

@@ -29,6 +29,7 @@ import { bundleTools } from './bundle-tools.js';
 import { itemTools } from './item-tools.js';
 import { outputTools } from './output-tools.js';
 import { gitItemTools } from './git-item-tools.js';
+import { searchAskTools } from './search-ask-tools.js';
 
 /** What the tool modules need from the server: the workspace, its secrets and settings, and the lookups the server shares. */
 export interface ModuleToolDeps {
@@ -61,6 +62,7 @@ export function moduleTools(d: ModuleToolDeps): Tool[] {
     ...itemTools({ store }),
     ...outputTools({ store, redactor }),
     ...bundleTools({ store }),
+    ...searchAskTools({ store, secrets, settings }),
     ...mockTools({ store }),
     ...datasetTools({ store }),
     ...arazzoTools({ store }),

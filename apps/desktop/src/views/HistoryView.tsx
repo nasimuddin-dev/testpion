@@ -16,6 +16,8 @@ import { TreeRowShell } from '../components/TreeRowShell';
 import type { NodeMenuCtx } from '../lib/node-menu';
 import { saveAsTest } from '../lib/save-test';
 import { outputFileName, type ItemRef } from '@testpion/shared';
+import { AskSearchButton } from '../components/ai/AskSearchButton';
+import { ASK_SCOPE } from '../components/ai/ask-search';
 
 interface Entry {
   id: string;
@@ -229,6 +231,7 @@ export function HistoryView() {
           <label className="flex items-center gap-1 text-xs text-muted whitespace-nowrap" title="Only responses that failed: 4xx/5xx, transport errors, non-OK gRPC codes, MCP tool errors">
             <input type="checkbox" checked={failedOnly} onChange={(e) => setFailedOnly(e.target.checked)} /> Failed
           </label>
+          <AskSearchButton scope={ASK_SCOPE.history} />
           <Button
             variant="ghost"
             icon={<Trash2 size={13} />}

@@ -27,6 +27,7 @@ Three rules hold everywhere:
 | Explorer: right-click a collection; the notice after an import | **Tidy with AI…** | The clean-up of an import as separate changes, each verified ([below](#tidy-an-import)). |
 | A failed run: its ⋯ menu, right-click it in **Runs**, the Problems panel, Home's *Needs attention* | **Explain and fix failures with AI…** | The failures grouped by cause, each with evidence and a verified fix you apply, then **Rerun the affected tests** ([below](#explain-and-fix-failures-triage)). |
 | A flaky test: the Problems panel, a result's **History** tab | **Why is this flaky?** | The pattern with evidence and a fix; **Attempt to fix** runs the test 5 times ([below](#why-is-this-flaky)). |
+| Quick Open (<kbd>Ctrl</kbd>+<kbd>P</kbd>, `~` or its last row), the top bar's search, the filters of History, Runs and Traces | **Ask…** | A question in your own words (*failed payment calls last week over 2 s*) turned into a search you can see and edit ([below](#ask-search-in-your-own-words)). |
 | Errors, failed tests, timelines, monitors, fuzz and security findings, API diffs, load tests | **Explain with AI**, **How to fix (AI)**, **Analyze with AI** | An answer in the assistant panel. |
 | Anywhere | <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>J</kbd>, **Ask AI Assistant** (<kbd>Ctrl</kbd>+<kbd>K</kbd>) | A free question about what is on screen ([the assistant](/ai-testing/overview#talking-to-the-assistant)). |
 | Git, Home | **Write message**, **What to fix first** | A commit message from the changes; the items of *Needs attention* in order. |
@@ -382,6 +383,27 @@ testpion tidy "HAR import" --ai --apply                     # apply the ticked c
 
 MCP: `tidy_import`. Without a model set up both features return TestPion's own proposal with a note.
 
+## Ask: search in your own words
+
+**Ask…** finds things in **History, runs, test results and traces** from a question: *failed payment calls last week over 2 s*, *which tests failed in production*, *flaky tests*, *traces where a tool timed out*. The task is `nl-search` (small model, JSON out, nothing to apply), and the design is the opposite of "let the model look at your data":
+
+1. The model **translates** the question into a *search query*: sources, conditions (`field`, `op`, `value`), an order and a limit. It is sent the question (masked like every context), the current time, where the question was asked (History, Runs, Traces) and the list of fields — **never** a request, a response, a run or a trace.
+2. TestPion **validates** the query against a fixed schema: only the known fields, only the operators each takes, values of the right type and size, at most 12 conditions and 200 results, no regular expressions, no free-form code. An invalid query goes back to the model with what is allowed (up to two repairs); one that stays invalid is never run.
+3. TestPion **runs** it itself, read-only, over the stores it already keeps (the same query engine as the filter chips, `testpion search --query-json` and the MCP tools).
+4. The answer shows **how the question was understood**: the query in plain words, the model's assumptions (*"slow" taken as 1 s or more*) and the query as editable filters. Edit them and **Search** again — no model is called.
+
+No model set up, a cap that refused the call, a network error or a query that stays invalid: the same box searches the words as typed and says why, so it never dead-ends. **What will be sent…** (`--dry-run`) shows the exact messages; the call is counted in the usage ledger like every AI task. See [Ask: search in your own words](/getting-started/finding-your-way#ask) for the fields.
+
+```bash
+testpion search --ask "failed payment calls last week over 2 s"          # how it was understood, then the hits
+testpion search --ask "flaky tests in staging" --in results --json       # { query, explain, chips, assumptions, outcome: { rows, matched } }
+testpion search --ask "payments" --no-ai                                 # the words as typed, no model
+testpion search --ask "…" --dry-run                                      # what would be sent
+testpion search --query-json '{"where":[{"field":"status","op":"gte","value":500}],"limit":10}'   # a query of your own, no model
+```
+
+Agents: `search_ask` (`question`, or a `query` object; `sources`, `noAi`, `dryRun`) — read-only, the result carries `explain`, `chips`, `assumptions` and `outcome.rows` with a `ref` each.
+
 ## Cost: estimates, caps and usage
 
 - **Before sending**: the estimate in **What will be sent…**, in the flow dialog and on hover over an AI button (≈ tokens in, the most the answer may cost).
@@ -400,6 +422,8 @@ The examples below are run in the [examples workspace](/getting-started/examples
 
 ```bash
 testpion ai tasks                                            # the 31 tasks: id, title, tier, whether it proposes
+
+testpion ai tasks                                            # the 30 tasks: id, title, tier, whether it proposes
 TESTPION_AI_PROVIDER=ollama testpion ai run explain-error --context @error.json --dry-run   # what would be sent
 testpion ai run explain-test-failure --item run:<runId>:<resultId>   # an answer, streamed
 testpion ai run explain-test-failure --item run:last                 # the newest finished run (as ci --run last)
