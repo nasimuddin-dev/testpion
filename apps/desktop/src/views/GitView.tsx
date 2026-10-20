@@ -1,5 +1,5 @@
 import { useAiEnabled } from '../lib/use-ai-enabled';
-import { ArrowDown, ArrowDownUp, ArrowUp, Check, ExternalLink, FolderGit2, GitBranch, GitCommitHorizontal, GitPullRequest, Pencil, Plus, RefreshCw, Sparkles, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowDownUp, ArrowUp, ExternalLink, FolderGit2, GitBranch, GitCommitHorizontal, GitPullRequest, Pencil, Plus, RefreshCw, Sparkles, Trash2, Users, Wrench } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { asError, call, on } from '../api';
 import { confirmAction, isPushRejected, promptText, toastError, useApp } from '../store';
@@ -15,11 +15,16 @@ import { ChangeMark } from '../components/ChangeMark';
 import { GitChanges } from '../components/GitChanges';
 import { GitSecretsPanel, type StagedSecret } from '../components/GitSecretsPanel';
 import { GitStash } from '../components/GitStash';
+import { GitFixDialog } from '../components/GitFixDialog';
+import { GitLargeFiles } from '../components/GitLargeFiles';
+import { GitCodeownersDialog } from '../components/GitCodeownersDialog';
 
 export interface GitFile {
   path: string;
   state: 'modified' | 'added' | 'deleted' | 'renamed' | 'untracked' | 'conflicted';
   staged: boolean;
+  /** Staged, and changed again since (an item staged alone leaves the file's other changes unstaged). */
+  alsoUnstaged?: boolean;
   from?: string;
 }
 
@@ -54,6 +59,8 @@ export interface SemanticChange {
   kindId?: KindId;
   /** The keys of the marks the change makes on the lists it is inside. */
   containers?: string[];
+  /** The change is in the index: its file is staged, or just this item was staged alone. */
+  staged?: boolean;
 }
 
 /** What Pull & push did (git.sync). */
@@ -102,6 +109,11 @@ export function GitView() {
   const [selectedCommit, setSelectedCommit] = useState<string>();
   const [diff, setDiff] = useState<{ path: string; text: string; line?: number }>();
   const [prUrl, setPrUrl] = useState<string>();
+  // Fix git setup (release C): the dialog, what is still to fix (read when the view opens and after a fix), and CODEOWNERS
+  const [fixOpen, setFixOpen] = useState(false);
+  const [codeowners, setCodeowners] = useState(false);
+  const [toFix, setToFix] = useState(0);
+  const refreshToFix = useCallback(() => void call<{ steps: Array<{ state: string }> }>('git.fixPlan', {}).then((p) => setToFix(p.steps.filter((x) => x.state === 'todo').length), () => setToFix(0)), []);
 
   const load = useCallback(async () => {
     try {
@@ -127,13 +139,14 @@ export function GitView() {
 
   useEffect(() => {
     void load();
+    refreshToFix();
     // a quiet fetch as the view opens: the team's new commits show at once (git.remoteChanged reloads)
     void call('git.autoFetch').catch(() => undefined);
     // an edit outside the app: read again once the files settled (a merge writes several)
     let settle: ReturnType<typeof setTimeout> | undefined;
     const offs = [on('git.changed', () => void load()), on('git.remoteChanged', () => void load()), on('data.changed', () => { void load(); clearTimeout(settle); settle = setTimeout(() => void load(), 2200); }), on('workspace.changedOnDisk', () => { clearTimeout(settle); settle = setTimeout(() => void load(), 2200); })];
     return () => (clearTimeout(settle), offs.forEach((o) => o()));
-  }, [load]);
+  }, [load, refreshToFix]);
   // what a sync that stopped on conflicts said, shown with the Conflicts list
   const [syncNote, setSyncNote] = useState<string>();
   useEffect(() => {
@@ -182,8 +195,9 @@ export function GitView() {
       }
     });
   // "Pull & push" from a rejected push's toast (anywhere in the app)
-  useIntent('git', (p?: { sync?: boolean; file?: string; line?: number }) => {
+  useIntent('git', (p?: { sync?: boolean; fix?: boolean; file?: string; line?: number }) => {
     if (p?.sync) void sync();
+    if (p?.fix) setFixOpen(true);
     // a changed file named elsewhere (an agent's git_status ref, a link): its line diff, open (at `line` when given)
     if (p?.file) {
       const path = p.file;
@@ -204,8 +218,11 @@ export function GitView() {
     try {
       // with nothing staged, commit every change of the workspace
       const paths = files.some((f) => f.staged) ? undefined : ['.'];
-      const r = await call<{ committed: boolean; secrets: StagedSecret[]; commit?: { short: string } }>('git.commit', { message, paths, force });
-      if (!r.committed) return setSecrets(r.secrets);
+      const r = await call<{ committed: boolean; reason?: string; secrets: StagedSecret[]; commit?: { short: string } }>('git.commit', { message, paths, force });
+      if (!r.committed) {
+        if (r.reason === 'too-big') useApp.getState().toast('Not committed: a staged file is over 100 MB, which GitHub rejects. Track it with Git LFS or by reference (Big files, above).', 'error');
+        return setSecrets(r.secrets);
+      }
       setSecrets(undefined);
       setMessage('');
       useApp.getState().toast(`Committed ${r.commit?.short ?? ''}`, 'success');
@@ -372,14 +389,30 @@ export function GitView() {
             icon: <ExternalLink size={14} />,
             onSelect: () => void connectRemote(),
           },
-          { label: 'Make ready for git', icon: <Check size={14} />, onSelect: () => void run('ready', () => call('ws.gitReady'), 'Git files are in place') },
+          { label: 'Fix git setup…', icon: <Wrench size={14} />, onSelect: () => setFixOpen(true) },
+          { label: 'Create CODEOWNERS…', icon: <Users size={14} />, onSelect: () => setCodeowners(true) },
         ]}
       />
       <Split id="git-main" initial={58} min={30} collapsedSecond={!selectedCommit}>
       <div className="h-full min-h-0 overflow-auto p-4 grid gap-5 content-start max-w-5xl w-full">
         {status.conflicted && <ConflictPanel files={files.filter((f) => f.state === 'conflicted')} note={syncNote} onDone={() => void load()} />}
 
+        {toFix > 0 && (
+          <Callout
+            data-fix-banner=""
+            action={
+              <Button size="sm" variant="primary" icon={<Wrench size={12} />} onClick={() => setFixOpen(true)}>
+                Fix git setup…
+              </Button>
+            }
+          >
+            Git setup is not complete: {plural(toFix, 'thing')} to fix (ignore and attribute files, merge and diff drivers, files not yet in the stable format). Nothing changes until you confirm.
+          </Callout>
+        )}
+
         <GitChanges files={files} changes={changes} run={run} onCompare={(file, itemId) => setItemDiff({ file, itemId })} diff={diff} setDiff={setDiff} />
+
+        <GitLargeFiles afterChange={() => void load()} />
 
         <GitStash changed={files.length > 0} afterChange={() => void load()} />
 
@@ -474,6 +507,19 @@ export function GitView() {
       </div>
       <div className="h-full min-h-0">{selectedCommit && <GitCommitPanel hash={selectedCommit} onClose={() => setSelectedCommit(undefined)} />}</div>
       </Split>
+      {fixOpen && (
+        <GitFixDialog
+          onClose={() => {
+            setFixOpen(false);
+            refreshToFix();
+          }}
+          onDone={() => {
+            void load();
+            refreshToFix();
+          }}
+        />
+      )}
+      {codeowners && <GitCodeownersDialog onClose={() => setCodeowners(false)} onDone={() => void load()} />}
       {itemDiff && <GitItemDiffDialog file={itemDiff.file} itemId={itemDiff.itemId} onClose={() => setItemDiff(undefined)} />}
     </div>
   );

@@ -70,7 +70,13 @@ export function registerGitSetupCommands(git: Command): void {
   ).action((o) =>
     withWorkspace(o.workspace, async (s) => {
       const self = cliSelf();
-      const r = await fixGitSetup(s, { dryRun: !!o.dryRun, mergeDriverCommand: `${self} merge-driver`, textconvCommand: `${self} git textconv`, hook: o.hook ? { cli: self } : false, untrack: !!o.untrack });
+      const r = await fixGitSetup(s, {
+        dryRun: !!o.dryRun,
+        mergeDriverCommand: `${self} merge-driver`,
+        textconvCommand: `${self} git textconv`,
+        hook: o.hook ? { cli: self } : false,
+        untrack: !!o.untrack,
+      });
       out(o.json, r, () => printFix(r));
     }),
   );
@@ -121,12 +127,19 @@ export function registerGitSetupCommands(git: Command): void {
   );
 
   dry(
-    wsOpt(git.command('share-session').description('share a saved Debugger session: a masked copy goes to debugger/shared/ (tracked); the session itself stays git-ignored').argument('<name>', 'the saved session\'s name')),
+    wsOpt(
+      git
+        .command('share-session')
+        .description('share a saved Debugger session: a masked copy goes to debugger/shared/ (tracked); the session itself stays git-ignored')
+        .argument('<name>', "the saved session's name"),
+    ),
   ).action((name: string, o) =>
     withWorkspace(o.workspace, async (s) => {
       const r = shareSession(s, name, { redactor: new Redactor(new WorkspaceManager().loadSettings().redactFields), dryRun: !!o.dryRun });
       out(o.json, r, () => {
-        console.log(`${r.applied ? green('Shared') : yellow('Would share')} ${bold(r.name)} ${dim(`${r.entries} exchanges → ${r.to}${r.masked ? ' (masked more than the capture had)' : ''}${r.replaced ? ', replacing the shared copy' : ''}`)}`);
+        console.log(
+          `${r.applied ? green('Shared') : yellow('Would share')} ${bold(r.name)} ${dim(`${r.entries} exchanges → ${r.to}${r.masked ? ' (masked more than the capture had)' : ''}${r.replaced ? ', replacing the shared copy' : ''}`)}`,
+        );
         if (r.undoId) console.log(dim(`Undo with:  testpion git undo ${r.undoId}`));
       });
     }),
@@ -169,14 +182,20 @@ export function registerGitSetupCommands(git: Command): void {
   wsOpt(
     git
       .command('allow-secret')
-      .description('let one reviewed value through the staged secret scan (.testpion/secrets-allow.json, committed): by the fingerprint `git check --staged --json` prints as `hash`; never a pattern, never the value')
-      .argument('<hash>', 'the finding\'s hash (a start of it is enough)')
+      .description(
+        'let one reviewed value through the staged secret scan (.testpion/secrets-allow.json, committed): by the fingerprint `git check --staged --json` prints as `hash`; never a pattern, never the value',
+      )
+      .argument('<hash>', "the finding's hash (a start of it is enough)")
       .requiredOption('--reason <text>', 'why it is not a secret: read in review'),
   ).action((hash: string, o) =>
     withWorkspace(o.workspace, async (s) => {
       const scan = await scanStagedSecrets(s.root);
       const hits = [...scan.blocking, ...scan.confirm].filter((f) => f.hash.startsWith(hash));
-      if (hits.length !== 1) throw new CliError(hits.length ? `${hash} matches ${hits.length} findings: use more of the hash` : `No staged finding has the hash ${hash}: run  testpion git check --staged --json`, EXIT.CONFIG_ERROR);
+      if (hits.length !== 1)
+        throw new CliError(
+          hits.length ? `${hash} matches ${hits.length} findings: use more of the hash` : `No staged finding has the hash ${hash}: run  testpion git check --staged --json`,
+          EXIT.CONFIG_ERROR,
+        );
       const r = allowSecret(s.root, hits[0]!, o.reason);
       out(o.json, r, () => console.log(r.applied ? `${green('Allowed')} ${hits[0]!.item}: ${hits[0]!.field} ${dim('(commit .testpion/secrets-allow.json with it)')}` : dim('It was allowed already.')));
     }),

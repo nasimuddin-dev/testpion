@@ -15,6 +15,7 @@ import { plural, uid } from './lib/format';
  */
 export type MenuCommand =
   | 'git-ready'
+  | 'git-fix'
   | 'git-clone'
   | 'new-http'
   | 'new-graphql'
@@ -107,6 +108,9 @@ export async function runMenuCommand(cmd: MenuCommand): Promise<void> {
         const repo = r.inRepository ? '' : ' It is not a git repository yet: run git init in its folder (Show in folder).';
         return s.toast(did.length ? `Ready for git: ${did.join(', ')}.${repo}` : `This workspace is already ready for git.${repo}`, 'success');
       }
+      case 'git-fix':
+        // Fix git setup: previewed and undoable, in the Git view (release C of Everything under Git)
+        return s.openIntent('git', { fix: true });
       case 'git-clone': {
         // GIT-202: clone a repository that holds a TestPion workspace, and open it
         const url = await promptText('Clone from Git', { message: 'The repository URL (HTTPS or SSH). Sign-in uses your git setup: SSH keys or the credential manager.', placeholder: 'https://github.com/team/api-tests.git', okLabel: 'Next' });

@@ -18,6 +18,7 @@ import {
   findLargeFiles,
   fixGitSetup,
   fixStagedFiles,
+  gitChangesByItem,
   gitSetupTextconv,
   gitStatus,
   ignoreText,
@@ -92,7 +93,10 @@ describe('Fix git setup', () => {
   });
   afterAll(() => r.cleanup());
 
-  const state = () => ['collections/api.json', 'environments/staging.json', 'library/ai-prompts.json', 'tests/rest/a.yaml', '.gitignore', '.gitattributes'].map((f) => (existsSync(join(r.ws, f)) ? readFileSync(join(r.ws, f), 'utf8') : null));
+  const state = () =>
+    ['collections/api.json', 'environments/staging.json', 'library/ai-prompts.json', 'tests/rest/a.yaml', '.gitignore', '.gitattributes'].map((f) =>
+      existsSync(join(r.ws, f)) ? readFileSync(join(r.ws, f), 'utf8') : null,
+    );
 
   it('a dry run lists every step and changes nothing', async () => {
     const before = state();
@@ -111,9 +115,7 @@ describe('Fix git setup', () => {
     const res = await fixGitSetup(r.store, { mergeDriverCommand: 'testpion merge-driver', textconvCommand: 'testpion git textconv' });
     expect(res).toMatchObject({ applied: true, changed: true });
     expect(res.undoId).toBeTruthy();
-    expect(readFileSync(join(r.ws, 'collections/api.json'), 'utf8')).toBe(
-      JSON.stringify({ schemaVersion: '1.0', id: 'api', name: 'Kinds API', variables: [], items: [] }, null, 2) + '\n',
-    );
+    expect(readFileSync(join(r.ws, 'collections/api.json'), 'utf8')).toBe(JSON.stringify({ schemaVersion: '1.0', id: 'api', name: 'Kinds API', variables: [], items: [] }, null, 2) + '\n');
     expect(readFileSync(join(r.ws, 'environments/staging.json'), 'utf8')).toBe('{\n  "id": "staging",\n  "name": "Staging",\n  "variables": []\n}\n');
     expect(readFileSync(join(r.ws, 'library/ai-prompts.json'), 'utf8')).not.toContain('updatedAt');
     expect(readFileSync(join(r.ws, 'tests/rest/a.yaml'), 'utf8')).toBe('name: a\ntests: []\n');
@@ -185,7 +187,11 @@ describe('Fix git setup', () => {
 
 describe('the readable-diff driver', () => {
   it('prints a collection, an environment, MCP servers and a library item by item', () => {
-    const col = JSON.stringify({ id: 'api', name: 'API', items: [{ kind: 'folder', id: 'f', name: 'Pets', items: [{ kind: 'http', id: 'r1', name: 'List', request: { method: 'GET', url: '/pets' } }] }] });
+    const col = JSON.stringify({
+      id: 'api',
+      name: 'API',
+      items: [{ kind: 'folder', id: 'f', name: 'Pets', items: [{ kind: 'http', id: 'r1', name: 'List', request: { method: 'GET', url: '/pets' } }] }],
+    });
     const t = textconvText(col)!;
     expect(t).toContain('== API [collection api] ==');
     expect(t).toContain('== API ▸ Pets [folder f] ==');
@@ -199,7 +205,7 @@ describe('the readable-diff driver', () => {
     expect(textconvText('{"foo": 1}')).toBeUndefined();
   });
 
-  it('git diff shows the item that changed under its own heading; the app\'s own diff stays plain', async () => {
+  it("git diff shows the item that changed under its own heading; the app's own diff stays plain", async () => {
     const r = await makeRepo();
     try {
       r.write('mcp-servers.json', servers([weather, search('https://s.example.com/v1'), files('https://f.example.com/v1')]));
@@ -283,7 +289,10 @@ describe('big files', () => {
     try {
       mkdirSync(join(r.ws, 'datasets'), { recursive: true });
       writeFileSync(join(r.ws, 'datasets', 'huge.csv'), 'a,b\n1,2\n');
-      const lfs = await runGit(r.ws, ['lfs', 'version']).then(() => true, () => false);
+      const lfs = await runGit(r.ws, ['lfs', 'version']).then(
+        () => true,
+        () => false,
+      );
       if (!lfs) {
         await expect(trackWithLfs(r.ws, 'datasets/huge.csv')).rejects.toThrow(/Git LFS is not installed/);
         return;
@@ -317,7 +326,25 @@ describe('Share session', () => {
     const r = await makeRepo();
     try {
       r.write('.gitignore', 'debugger/*.har\n');
-      const har = { log: { version: '1.2', creator: { name: 'TestPion', version: '0' }, entries: [{ request: { method: 'GET', url: 'https://api.example.com/x', headers: [{ name: 'Authorization', value: 'Bearer abcdef0123456789abcdef0123456789' }, { name: 'Accept', value: 'application/json' }] }, response: { status: 200 } }] } };
+      const har = {
+        log: {
+          version: '1.2',
+          creator: { name: 'TestPion', version: '0' },
+          entries: [
+            {
+              request: {
+                method: 'GET',
+                url: 'https://api.example.com/x',
+                headers: [
+                  { name: 'Authorization', value: 'Bearer abcdef0123456789abcdef0123456789' },
+                  { name: 'Accept', value: 'application/json' },
+                ],
+              },
+              response: { status: 200 },
+            },
+          ],
+        },
+      };
       r.write('debugger/checkout bug.har', JSON.stringify(har, null, 2));
       const redactor = new Redactor();
       const dry = shareSession(r.store, 'checkout bug', { redactor, dryRun: true });
@@ -443,7 +470,10 @@ describe('the allowlist and the one-click fix of the staged secret scan', () => 
 
   it('the fix moves MCP header values, a provider key and a test file token to secret variables, stages nothing by itself, and Undo restores the files', async () => {
     r.write('mcp-servers.json', servers([weather, search('https://s.example.com/v1', { headers: [{ key: 'Authorization', value: KEY, enabled: true }] })]));
-    r.write('providers.json', JSON.stringify({ schemaVersion: '1.0', providers: [{ id: 'demo', name: 'Demo', kind: 'openai', apiKey: 'sk-proj-abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGH' }] }, null, 2) + '\n');
+    r.write(
+      'providers.json',
+      JSON.stringify({ schemaVersion: '1.0', providers: [{ id: 'demo', name: 'Demo', kind: 'openai', apiKey: 'sk-proj-abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGH' }] }, null, 2) + '\n',
+    );
     r.write('tests/rest/pay.yaml', 'name: pay\ntests:\n  - name: p\n    request:\n      url: https://x/y\n      headers:\n        X-Token: ghp_abcdefghijklmnopqrstuvwxyz0123456789\n');
     await gitStage(r.ws, ['mcp-servers.json', 'providers.json', 'tests/rest/pay.yaml']);
     const scan = await scanStagedSecrets(r.ws);
@@ -496,7 +526,7 @@ describe('staging one item by its index blob', () => {
 
   const indexServers = async () => (JSON.parse(await r.git('show', ':mcp-servers.json')) as { servers: Array<{ id: string; url?: string }> }).servers;
 
-  it('stages only that item\'s change: the index holds it, the working file keeps the other change unstaged', async () => {
+  it("stages only that item's change: the index holds it, the working file keeps the other change unstaged", async () => {
     r.write('mcp-servers.json', servers([weather, search('https://s.example.com/v2'), files('https://f.example.com/v2')]));
     const dry = await stageItem(r.ws, addressOf('mcp-servers.json', 'search'), { dryRun: true });
     expect(dry).toMatchObject({ applied: false, partial: true });
@@ -507,6 +537,9 @@ describe('staging one item by its index blob', () => {
     const idx = await indexServers();
     expect(idx.find((s) => s.id === 'search')!.url).toBe('https://s.example.com/v2');
     expect(idx.find((s) => s.id === 'files')!.url).toBe('https://f.example.com/v1');
+    // the Git view's rows say which item is staged and which is not
+    const rows = (await gitChangesByItem(r.ws)).items.filter((i) => i.file === 'mcp-servers.json');
+    expect(rows.map((i) => `${i.title} ${i.staged}`).sort()).toEqual(['MCP server Files false', 'MCP server Search true']);
     // a commit takes just that
     await r.git('commit', '-m', 'search v2');
     expect((await r.git('show', 'HEAD:mcp-servers.json')).includes('f.example.com/v2')).toBe(false);
@@ -578,7 +611,7 @@ describe('git history of a plain word', () => {
 });
 
 describe('the folder libraries mark their folders', () => {
-  it('a folder made or removed, and a definition moved into one, are changes of that kind\'s list', () => {
+  it("a folder made or removed, and a definition moved into one, are changes of that kind's list", () => {
     const before = JSON.stringify({ schemaVersion: '1.0', folders: ['Public'], items: [{ id: 'specs/a.yaml', name: 'a', folder: 'Public' }] });
     const after = JSON.stringify({ schemaVersion: '1.0', folders: ['Private'], items: [{ id: 'specs/a.yaml', name: 'a', folder: 'Private' }] });
     const c = describeFile('library/spec-folders.json', before, after, 'changed');

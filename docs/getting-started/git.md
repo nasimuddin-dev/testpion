@@ -18,6 +18,7 @@ TestPion uses the **git installed on your computer**. It brings your SSH keys, y
 | `workspace.json`, `collections/`, `environments/`, `tests/`, `library/`, `specs/`, datasets | Run results (`runs/`, `reports/`, `baselines/`), traces and payloads |
 | Variable names and non-secret values | **Secret values** (in the OS secret store, never in a file) |
 | `.gitignore` and `.gitattributes` written by TestPion | The local database (`database.sqlite`), `.local/` (save counters, per-computer state), `trash/` |
+| A Debugger session you **share** (`debugger/shared/`), the secret scan's allowlist (`.testpion/secrets-allow.json`), a dataset's `.ref` file | Debugger sessions (`debugger/*.har`: large, personal traffic; [share one](#share-a-debugger-session) on purpose), datasets you keep [by reference](#big-files-git-lfs-or-by-reference) |
 
 Every file TestPion writes is in a **stable form**, so saving an item without changing it changes nothing in git, and two people editing different items merge cleanly:
 
@@ -49,7 +50,37 @@ Pick one:
 - **A workspace in your code repository.** Create the workspace in a folder of the checkout (**New**, then *in a folder*), or **Open folder** for one that is there already. TestPion only looks at the workspace folder: the rest of the repository is never listed or committed by it.
 - **From a terminal:** `git init` in the workspace folder, then `testpion git setup` (writes the git files and registers the merge driver; safe to run again).
 
-An existing workspace you started before this version: workspace switcher ▸ **⋯ ▸ Make ready for git** (or `testpion git setup`) adds the git files and tidies the collection files once.
+An existing workspace you started before this version: workspace switcher ▸ **⋯ ▸ Fix git setup…** (or `testpion git fix`). It does everything **Make ready for git** (`testpion git setup`) did and more; see [Fix git setup](#fix-git-setup).
+
+## Fix git setup
+
+The Git view shows a strip when the workspace's git setup is not complete: *Git setup is not complete: 3 things to fix*. **Fix git setup…** (the strip, the Git view's **⋯** menu, the workspace switcher's **⋯** menu, or <kbd>Ctrl</kbd>+<kbd>K</kbd> ▸ *Fix Git Setup*) opens one dialog that **previews every step before anything is written**, applies them together, says what it changed, and offers **Undo**:
+
+| Step | What it does |
+|---|---|
+| `.gitignore` | Keeps results, traces, baselines, capture sessions and this computer's state out of git. Lines you wrote stay. |
+| `.gitattributes` | One line-ending policy (`* text=auto eol=lf`), binary files, and on every JSON kind the **merge driver** (`merge=testpion`) and the **readable-diff driver** (`diff=testpion`). A pattern you already have gets the missing attributes on its own line; an attribute you set to another value stays yours. |
+| Drivers in the repository's config | `merge.testpion` and `diff.testpion` point at this app (or at the command line when you run `testpion git fix`). |
+| Stable format, once | Existing files are rewritten into the [stable form](#what-is-committed-and-what-isnt): fixed key order, no save counter or time, LF, one final newline. This is one tidy commit (the dialog lists the files and says whether a file only changes line endings); from then on a file changes only when what people wrote changes. It never happens silently when you open a workspace. |
+| Pre-commit hook (a checkbox) | Installs the secret check as a git hook. A hook of yours is never overwritten. |
+| Tracked files that should be ignored (a checkbox) | `git rm --cached` for files git tracks that the ignore rules say to leave out (results someone committed by mistake). The files stay on disk. |
+
+It also **notes** (and does not do for you) big files over the size policy and documents with CRLF line endings. Running it again on a workspace that is in order says *Git setup is complete: nothing to fix*. It works when the workspace is a folder of a bigger repository (everything it writes is inside the workspace folder), and says plainly when Git is not installed or the folder is not a repository (the file steps are still done). Every file it writes is copied aside first; **Undo** (the toast, the dialog, or `testpion git undo`) puts them back exactly (the git config entries stay: they only register TestPion's drivers).
+
+On the command line: `testpion git fix --dry-run --json` is the preview, `testpion git fix` applies it (`--hook`, `--untrack`). The MCP tool `git_fix_setup` does the same for an agent (`dryRun` first).
+
+## A readable `git diff`
+
+With the diff driver registered, plain `git diff`, `git log -p` and `git show` print a collection, an environment, a library file, the MCP servers or the AI providers **item by item**: the hunk header names the item (`@@ … @@ MCP servers ▸ Weather [MCP server weather]`), and the lines are that item's fields in a fixed order, not braces that moved. It is a view for people: git still stores and merges the JSON itself, and the TestPion app's own line diff stays plain.
+
+Fix git setup registers it. For people who work in the repository without TestPion installed on a computer, two lines by hand do it, with the `testpion` command on the PATH:
+
+```bash
+git config diff.testpion.textconv "testpion git textconv"
+git config diff.testpion.xfuncname "^== (.*) ==$"
+```
+
+(`.gitattributes` already has `diff=testpion`. Without the config, git ignores that attribute and prints the plain diff.)
 
 ## Step 2: Sign in to the remote
 
@@ -64,7 +95,8 @@ When git can't sign in, TestPion says so in plain words ("Git could not sign in 
 
 The **Git** view shows the branch and remote at the top, then:
 
-- **Changes, by item.** Each row names what changed, not the file it is in: an icon for its kind, a change mark, the item's name and what changed in words (the file's path is the muted text beside it, and Stage / Discard act on the file). *MCP server Weather: URL, environment (added TOKEN)*, *AI provider OpenAI: model, headers (added X-Team)*, *Prompt Greeting: moved, settings*, *API definition petstore.json: 2 operations added, 1 breaking change*, *Dataset users.csv: 12 rows added, column dob removed*, *Workspace settings: variables (added region)*. A file that holds several items (a collection, the MCP servers) is a header with its items under it. The down arrow of the Changes list saves them as Markdown by item, or as a patch. What changed, file by file in words, for requests, environments and flows: *HTTP basics ▸ Requests & responses ▸ GET with query parameters: URL, headers (0 → 1)*, *environment Staging: added baseUrl*, *Checkout ▸ pay: body, if, checks (1 → 2)*, *Connection Echo socket: renamed from …* (saved gRPC calls, connections, prompts and monitors one by one). Click a change to open it where it is edited: a request in its own editor (REST, SOAP, GraphQL), a folder or collection's settings, an environment, a gRPC call or a connection, a test file or the flow step; right-click for **Open in new tab** and **Copy link** ([Finding your way around](/getting-started/finding-your-way)); **Compare** shows a changed request, a flow step, the collection's settings or an environment side by side, part by part: the last commit and now. Click a file name for its line diff. **Stage** / **Unstage** per file, **Discard** (back to the last commit; new files are deleted, after a confirmation) per file or all.
+- **Changes, by item**, with **kind chips** above the list (*MCP server 3*, *Dataset 1* …) to show only some kinds. Each row names what changed, not the file it is in: an icon for its kind, a change mark, the item's name and what changed in words (the file's path is the muted text beside it, and Stage / Discard act on the file). *MCP server Weather: URL, environment (added TOKEN)*, *AI provider OpenAI: model, headers (added X-Team)*, *Prompt Greeting: moved, settings*, *API definition petstore.json: 2 operations added, 1 breaking change*, *Dataset users.csv: 12 rows added, column dob removed*, *Workspace settings: variables (added region)*. A file that holds several items (a collection, the MCP servers) is a header with its items under it. The down arrow of the Changes list saves them as Markdown by item, or as a patch. What changed, file by file in words, for requests, environments and flows: *HTTP basics ▸ Requests & responses ▸ GET with query parameters: URL, headers (0 → 1)*, *environment Staging: added baseUrl*, *Checkout ▸ pay: body, if, checks (1 → 2)*, *Connection Echo socket: renamed from …* (saved gRPC calls, connections, prompts and monitors one by one). Click a change to open it where it is edited: a request in its own editor (REST, SOAP, GraphQL), a folder or collection's settings, an environment, a gRPC call or a connection, a test file or the flow step; right-click for **Open in new tab** and **Copy link** ([Finding your way around](/getting-started/finding-your-way)); **Compare** shows a changed request, a flow step, the collection's settings or an environment side by side, part by part: the last commit and now. Click a file name for its line diff. **Stage** / **Unstage** per file, **Discard** (back to the last commit; new files are deleted, after a confirmation) per file or all.
+- **Big files.** When a file is over the size policy a strip offers [Git LFS or a reference](#big-files-git-lfs-or-by-reference).
 - **Commit.** Write a message, or click **Write message** and the AI assistant writes one from the changes (it sees the changes' meaning, never secret values). With nothing staged, **Commit** commits every change of the workspace.
 - **History.** The latest commits of the workspace.
 
@@ -92,6 +124,10 @@ Before every commit TestPion checks for secrets **typed into** the workspace: a 
 > environment Staging, variable apiKey (environments/staging.json) …
 
 Fix them by making them **secret variables** (the lock icon: their values move to the OS secret store) or by using `{{variables}}`, then commit again. **Commit anyway** is there for demo values you mean to share.
+
+**Fix all** does it in one click for every kind: a typed value in an MCP server's headers or environment, a provider's key or header, a saved item (gRPC metadata, WebSocket headers, a prompt, a monitor), a test or flow file, an API definition or any other text file becomes a `{{variable}}` in the file (written in the stable form) and the value a secret variable of the active environment, in the OS secret store, never in a file. **Undo** puts the files back. A dataset is data: change the data, or generate synthetic data. From the command line, `testpion git fix-secrets --environment <name>` and the MCP tool `git_secrets_fix_plan` show which variable each value would become (applying it needs the app's secret store).
+
+If a value is **not** a secret (a public test key in an API definition's example), **Allow…** lets that one value through, with a reason you write. The reason goes into `.testpion/secrets-allow.json`, which you commit: reviewers see in the pull request what was allowed and why. An entry names the file, the item, the field and a fingerprint of the value (never the value), so the same text somewhere else is still found and a changed value is found again. `testpion git allow-secret <hash> --reason "…"` does the same from a terminal (the hash is in `testpion git check --staged --json`); `git allowed-secrets` lists them. There is deliberately no MCP tool that adds an entry: an agent must not be able to switch the guard off.
 
 The same check runs in the terminal: `testpion git check` (exit code 1 when something is found), and `testpion git hook install` adds a git **pre-commit hook** so a plain `git commit` is checked too (an existing hook of yours is never overwritten).
 
@@ -131,7 +167,7 @@ Every item of a versioned kind has a **Git** group in its menu (right-click, or 
 |---|---|
 | **History in git…** | The commits that changed *this item*, newest first, each with what it changed. Click one to see it side by side with now. **Restore this version** shows what would change, writes just that item, and offers **Undo**. The other tab, **Who changed what**, names for each field the author, commit and date of its last change ("not committed yet" for a change you have not committed). |
 | **Discard changes…** | Throws away the uncommitted change of *this item only*. A second MCP server, another request or a different prompt changed in the same file stays as it is. A new item is removed; a new file is deleted. Undo puts it back. |
-| **Stage changes** | Stages the file the item is in. A file that holds several items stages as one file: the message says which other changed items come along. |
+| **Stage changes** | Stages **just this item**. In a file that holds several items (a collection, the MCP servers, the providers, a library) the staged copy of the file gets this item's change and no other: the file's other changed items stay out of the commit and keep showing as changes (*partly staged*). Each item row in the Git view has its own **Stage** / **Unstage**. A file that is one item (an environment, a test file) stages as one file, and so does a file whose staged copy is not in the stable form yet ([Fix git setup](#fix-git-setup) first); the message says so. |
 
 This works for requests and folders, collections, environments, test files and flows, API definitions, datasets (a database is restored whole), MCP servers, AI providers, saved gRPC calls and connections, prompts, load tests, evaluations and monitors. The menu items are greyed out ("No uncommitted changes") for an item git does not see a change in.
 
@@ -145,6 +181,23 @@ Things worth knowing:
 ### Set changes aside
 
 **Set changes aside…** (Git view) takes every uncommitted change of the workspace away under a name ("Before the pagination rewrite"); the workspace goes back to the last commit. The list shows each stash by name, branch and date, and by item when opened. **Put back** brings the changes in again (and removes the entry; if they clash with what is there now they appear in the conflict list and the entry is kept), **Drop** deletes it for good. Command line: `testpion git stash push -m "name"`, `list`, `show`, `apply`, `pop`, `drop`.
+
+## Big files: Git LFS or by reference
+
+A dataset of tens of megabytes makes every clone slower, and GitHub rejects a file over 100 MB. The size policy is: a note at **5 MB**, an offer at **50 MB**, and a commit that would take a file of **100 MB** is refused (until it is one of the two below). The Git view's *Big files* strip lists the files over 50 MB, each with:
+
+- **Git LFS…** adds `<file> filter=lfs diff=lfs merge=lfs -text` to `.gitattributes`; the repository keeps a small pointer and the data goes to the LFS server on push. It needs `git-lfs` installed (TestPion says so when it is not, and everyone who clones needs it). The file stays in history if it was committed before; `git lfs migrate import` rewrites history, TestPion does not.
+- **By reference…** commits `datasets/x.csv.ref`, a small file with the size, the sha256 checksum and (if you say) where the team keeps the data, and adds the data file to `.gitignore` (it leaves git if it was tracked; it stays on disk). `testpion git large --check` says for every reference whether this computer has the right data (*ok*, *missing: get it from …*, *different*).
+
+Both show what they will write first and have **Undo**. `testpion git large` lists the big files, `--track <file> --lfs|--reference [--source <where>]` does it (with `--dry-run`), and the MCP tools are `git_large_files` and `git_track_large`.
+
+## Share a Debugger session
+
+A saved Debugger session (`debugger/*.har`) is git-ignored: it is large, personal traffic. To put one in the repository on purpose (a bug report, a reference recording), use the Debugger's **Session** menu ▸ **Share "session name" with the team…** (or `testpion git share-session <name>`, MCP `git_share_session`). The preview names the destination; the copy goes to `debugger/shared/<name>.har` after a **second masking pass** with the redaction every export uses (secret values the workspace knows, sensitive header and field names, credentials by their shape), and git tracks it. The saved session itself is untouched. `unshare-session` deletes the shared copy.
+
+## CODEOWNERS
+
+**⋯ ▸ Create CODEOWNERS…** (or `testpion git codeowners`) drafts a `CODEOWNERS` with one line per kind folder the workspace has (environments, MCP servers, AI providers, tests, specs, datasets, `.gitattributes` and the allowlist) so a change to the parts others run against can need a reviewer you name. The owners are left as comments to fill in (a line naming a team that does not exist protects nothing), or give one owner for every line. It takes effect when the repository requires review from code owners. It is written to `.github/CODEOWNERS` only when the workspace is the repository itself, **never over a CODEOWNERS that exists**, and never outside the workspace (for a workspace in a folder of a bigger repository you copy the lines).
 
 ## When a merge conflicts: every kind of file
 
@@ -176,6 +229,12 @@ Every git feature has a CLI command with `--json` for scripts. `-w` picks the wo
 
 ```bash
 testpion git setup              # .gitignore, .gitattributes, tidy collection files, merge driver
+testpion git fix --dry-run      # Fix git setup: the preview (add --json); without --dry-run it applies; --hook, --untrack
+testpion git large              # files over the size policy; --check the .ref files; --track f --lfs | --reference
+testpion git share-session "checkout bug"   # a masked copy in debugger/shared/ (unshare-session, shared-sessions)
+testpion git codeowners --owner @acme/platform --write   # a starter CODEOWNERS (never overwrites)
+testpion git allow-secret <hash> --reason "public test key"   # allowlist one reviewed value (disallow-secret, allowed-secrets)
+testpion git history mcp-server:weather     # an unknown name is an error, not an empty list
 testpion git status             # branch, ahead / behind, changed files
 testpion git changes            # what changed, by meaning
 testpion git status --by-item   # the same rows as the Git view: "MCP server Weather", "Dataset users.csv" …
@@ -206,6 +265,11 @@ The workspace's MCP server (see [Use from AI agents](/ai-testing/mcp-server)) ha
 | `git_diff` | The changes by meaning (requests, environments, flow steps and connections); with `from` / `to`, between two commits (`markdown: true` for a pull-request comment). |
 | `git_log` | Commits of the workspace, a file or a collection. |
 | `git_sync` | Pull & push in one step; returns `pushed`, `up-to-date`, `pulled-nothing-to-push`, or `conflicts` with the files (nothing is pushed then). Not available on a read-only server. |
+| `git_fix_setup` | Fix git setup: the ignore and attribute files, existing files into the stable format once; `dryRun` first. Returns an `undoId` for `git_undo`. Needs `confirm: true` unless `dryRun`. |
+| `git_large_files` · `git_track_large` | Files over the size policy (and the `.ref` files against the data); take one out of plain git with Git LFS or by reference. |
+| `git_share_session` | Share a saved Debugger session (a masked copy in `debugger/shared/`), unshare it, or list the shared ones. |
+| `git_codeowners` | A starter CODEOWNERS (the text, or written when the workspace is the repository). |
+| `git_allowed_secrets` · `git_secrets_fix_plan` | What the allowlist lets through; which `{{variable}}` each typed secret of the staged files would become. Adding an allowlist entry is for a person (the app or `testpion git allow-secret`). |
 | `git_propose_commit` | Stages the changes and saves the agent's commit message as a proposal (after the secret check). It does **not** commit: the message appears in the Git view's commit box for you to review and commit. Not available on a read-only server. |
 
 ## In CI: test every pull request

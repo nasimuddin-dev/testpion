@@ -37,8 +37,7 @@ interface AllowFile {
 }
 
 /** A fingerprint of a value in its place: 32 hex digits of sha256 over file, item, field and value. The value is not recoverable from it. */
-export const secretFingerprint = (file: string, item: string, field: string, value: string): string =>
-  createHash('sha256').update([file, item, field, value].join('\0')).digest('hex').slice(0, 32);
+export const secretFingerprint = (file: string, item: string, field: string, value: string): string => createHash('sha256').update([file, item, field, value].join('\0')).digest('hex').slice(0, 32);
 
 const byKey = (a: SecretAllowEntry, b: SecretAllowEntry) => (a.file + a.item + a.field + a.hash < b.file + b.item + b.field + b.hash ? -1 : 1);
 

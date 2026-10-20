@@ -103,7 +103,10 @@ function candidates(root: string): string[] {
 }
 
 async function configured(ws: string, key: string): Promise<string | undefined> {
-  return runGit(ws, ['config', '--local', '--get', key]).then((v) => v.trim() || undefined, () => undefined);
+  return runGit(ws, ['config', '--local', '--get', key]).then(
+    (v) => v.trim() || undefined,
+    () => undefined,
+  );
 }
 
 /** Documents with CRLF line endings (a count: they are user text, never rewritten): specs, protos, packages, mocks, datasets under 2 MB. */
@@ -119,7 +122,8 @@ function crlfDocuments(root: string): string[] {
     for (const e of entries) {
       const rel = `${dir}/${e.name}`;
       if (e.isDirectory() && !e.name.startsWith('.')) walk(rel);
-      else if (e.isFile() && /\.(ya?ml|json|proto|js|csv|tsv|md|jsonl)$/i.test(e.name) && statSync(join(root, rel)).size < 2 * 1024 * 1024 && readFileSync(join(root, rel), 'utf8').includes('\r\n')) out.push(rel);
+      else if (e.isFile() && /\.(ya?ml|json|proto|js|csv|tsv|md|jsonl)$/i.test(e.name) && statSync(join(root, rel)).size < 2 * 1024 * 1024 && readFileSync(join(root, rel), 'utf8').includes('\r\n'))
+        out.push(rel);
     }
   };
   for (const d of ['specs', 'protos', 'packages', 'mocks', 'datasets']) walk(d);
@@ -141,14 +145,38 @@ export async function fixGitSetup(store: WorkspaceStore, o: GitFixOptions = {}):
   const gi = ignoreText(read('.gitignore'));
   if (gi !== undefined) {
     writes.set('.gitignore', gi);
-    const had = new Set(read('.gitignore').split(/\r?\n/).map((l) => l.trim()));
-    steps.push({ id: 'gitignore', title: 'Keep results and this computer\'s state out of git', detail: gi.split('\n').filter((l) => l && !l.startsWith('#') && !had.has(l.trim())).map((l) => `ignore ${l}`), files: ['.gitignore'], state: 'todo' });
+    const had = new Set(
+      read('.gitignore')
+        .split(/\r?\n/)
+        .map((l) => l.trim()),
+    );
+    steps.push({
+      id: 'gitignore',
+      title: "Keep results and this computer's state out of git",
+      detail: gi
+        .split('\n')
+        .filter((l) => l && !l.startsWith('#') && !had.has(l.trim()))
+        .map((l) => `ignore ${l}`),
+      files: ['.gitignore'],
+      state: 'todo',
+    });
   }
   const ga = attributesText(read('.gitattributes'));
   if (ga !== undefined) {
     writes.set('.gitattributes', ga);
-    const had = read('.gitattributes').split(/\r?\n/).map((l) => l.trim());
-    steps.push({ id: 'gitattributes', title: 'Line endings, merge and diff drivers for every JSON kind', detail: ga.split('\n').filter((l) => l && !l.startsWith('#') && !had.includes(l.trim())).map((l) => l.trim()), files: ['.gitattributes'], state: 'todo' });
+    const had = read('.gitattributes')
+      .split(/\r?\n/)
+      .map((l) => l.trim());
+    steps.push({
+      id: 'gitattributes',
+      title: 'Line endings, merge and diff drivers for every JSON kind',
+      detail: ga
+        .split('\n')
+        .filter((l) => l && !l.startsWith('#') && !had.includes(l.trim()))
+        .map((l) => l.trim()),
+      files: ['.gitattributes'],
+      state: 'todo',
+    });
   }
 
   // 4: the stable form, once
@@ -197,9 +225,21 @@ export async function fixGitSetup(store: WorkspaceStore, o: GitFixOptions = {}):
   // 3: the drivers in the repository's config
   const drivers: Array<{ id: GitFixStepId; key: string; want: string; title: string; set(): Promise<void> }> = [];
   if (inRepository && o.mergeDriverCommand)
-    drivers.push({ id: 'merge-driver', key: 'merge.testpion.driver', want: `${o.mergeDriverCommand} %O %A %B %P`, title: 'Merge collections, environments and lists item by item', set: () => gitSetupMergeDriver(root, o.mergeDriverCommand!) });
+    drivers.push({
+      id: 'merge-driver',
+      key: 'merge.testpion.driver',
+      want: `${o.mergeDriverCommand} %O %A %B %P`,
+      title: 'Merge collections, environments and lists item by item',
+      set: () => gitSetupMergeDriver(root, o.mergeDriverCommand!),
+    });
   if (inRepository && o.textconvCommand)
-    drivers.push({ id: 'diff-driver', key: 'diff.testpion.textconv', want: o.textconvCommand, title: 'Show git diff item by item (readable-diff driver)', set: () => gitSetupTextconv(root, o.textconvCommand!) });
+    drivers.push({
+      id: 'diff-driver',
+      key: 'diff.testpion.textconv',
+      want: o.textconvCommand,
+      title: 'Show git diff item by item (readable-diff driver)',
+      set: () => gitSetupTextconv(root, o.textconvCommand!),
+    });
   const pending: typeof drivers = [];
   for (const d of drivers) if ((await configured(root, d.key)) !== d.want) pending.push(d);
   for (const d of pending) steps.push({ id: d.id, title: d.title, detail: [`git config ${d.key}`], files: [], state: 'todo' });
@@ -213,7 +253,8 @@ export async function fixGitSetup(store: WorkspaceStore, o: GitFixOptions = {}):
     const ours = existsSync(hook) && readFileSync(hook, 'utf8').includes('# testpion-secret-guard');
     const foreign = existsSync(hook) && !ours;
     installHook = !ours && !foreign;
-    if (foreign) steps.push({ id: 'hook', title: 'Pre-commit secret check', detail: [`a pre-commit hook of yours exists: add  testpion git check  to it (it is never overwritten)`], files: [], state: 'advice' });
+    if (foreign)
+      steps.push({ id: 'hook', title: 'Pre-commit secret check', detail: [`a pre-commit hook of yours exists: add  testpion git check  to it (it is never overwritten)`], files: [], state: 'advice' });
     else if (!ours) steps.push({ id: 'hook', title: 'Refuse a commit that would publish a secret (pre-commit hook)', detail: ['a hook of yours is never overwritten'], files: [], state: 'todo' });
   }
   let tracked: string[] = [];
@@ -223,25 +264,52 @@ export async function fixGitSetup(store: WorkspaceStore, o: GitFixOptions = {}):
       steps.push({
         id: 'untrack',
         title: 'Files git tracks that should stay out of git',
-        detail: [...tracked.slice(0, 8), ...(tracked.length > 8 ? [`… ${tracked.length - 8} more`] : []), o.untrack ? 'removed from git (the files stay on disk)' : 'testpion git fix --untrack removes them from git (the files stay on disk)'],
+        detail: [
+          ...tracked.slice(0, 8),
+          ...(tracked.length > 8 ? [`… ${tracked.length - 8} more`] : []),
+          o.untrack ? 'removed from git (the files stay on disk)' : 'testpion git fix --untrack removes them from git (the files stay on disk)',
+        ],
         files: [],
         state: o.untrack ? 'todo' : 'advice',
       });
   } else if (gitAvailable) steps.push({ id: 'repository', title: 'Put the workspace under git', detail: [`run  git init  in ${root}`], files: [], state: 'advice' });
-  else steps.push({ id: 'repository', title: 'Git is not installed', detail: ['Install Git from https://git-scm.com and restart TestPion; the files above are written either way'], files: [], state: 'skipped' });
+  else
+    steps.push({
+      id: 'repository',
+      title: 'Git is not installed',
+      detail: ['Install Git from https://git-scm.com and restart TestPion; the files above are written either way'],
+      files: [],
+      state: 'skipped',
+    });
 
   // advice: big files, CRLF documents
   const largeFiles = await findLargeFiles(root).catch(() => []);
   const big = largeFiles.filter((l) => l.level !== 'warn');
-  if (big.length) steps.push({ id: 'large-files', title: 'Big files: Git LFS or track by reference', detail: big.map((l) => `${l.file} (${(l.bytes / 1048576).toFixed(0)} MB)`), files: [], state: 'advice' });
+  if (big.length)
+    steps.push({ id: 'large-files', title: 'Big files: Git LFS or track by reference', detail: big.map((l) => `${l.file} (${(l.bytes / 1048576).toFixed(0)} MB)`), files: [], state: 'advice' });
   const crlf = crlfDocuments(root);
-  if (crlf.length) steps.push({ id: 'crlf-documents', title: 'Documents with CRLF line endings', detail: [`${crlf.length} file${crlf.length === 1 ? '' : 's'} (specs, datasets, scripts …): git now stores LF; run  git add --renormalize .  once to normalise them`], files: [], state: 'advice' });
+  if (crlf.length)
+    steps.push({
+      id: 'crlf-documents',
+      title: 'Documents with CRLF line endings',
+      detail: [`${crlf.length} file${crlf.length === 1 ? '' : 's'} (specs, datasets, scripts …): git now stores LF; run  git add --renormalize .  once to normalise them`],
+      files: [],
+      state: 'advice',
+    });
 
   const files = [...new Set([...writes.keys(), ...tidyCollections])];
   const todo = steps.some((s) => s.state === 'todo');
   const base: Omit<GitFixResult, 'applied' | 'message' | 'undoId'> = { dryRun, changed: todo, gitAvailable, inRepository, steps, files, rewritten, largeFiles, problems };
   if (dryRun || !todo) {
-    return { ...base, applied: false, message: todo ? `Would fix ${steps.filter((s) => s.state === 'todo').length} thing(s) (nothing was changed)` : steps.some((s) => s.state === 'advice') ? 'Nothing to fix by itself; see the advice' : 'Git setup is complete: nothing to fix' };
+    return {
+      ...base,
+      applied: false,
+      message: todo
+        ? `Would fix ${steps.filter((s) => s.state === 'todo').length} thing(s) (nothing was changed)`
+        : steps.some((s) => s.state === 'advice')
+          ? 'Nothing to fix by itself; see the advice'
+          : 'Git setup is complete: nothing to fix',
+    };
   }
 
   // apply: copy the files aside, then write
@@ -255,7 +323,8 @@ export async function fixGitSetup(store: WorkspaceStore, o: GitFixOptions = {}):
   if (writes.has('workspace.json')) store.reloadWorkspaceFile();
   for (const d of pending) await d.set();
   if (installHook) installPreCommitHook(root, typeof o.hook === 'object' ? o.hook.cli : undefined);
-  if (o.untrack && tracked.length) for (let i = 0; i < tracked.length; i += MAX_UNTRACK_LIST) await runGit(root, ['rm', '--cached', '-r', '--quiet', '--ignore-unmatch', '--', ...tracked.slice(i, i + MAX_UNTRACK_LIST)]);
+  if (o.untrack && tracked.length)
+    for (let i = 0; i < tracked.length; i += MAX_UNTRACK_LIST) await runGit(root, ['rm', '--cached', '-r', '--quiet', '--ignore-unmatch', '--', ...tracked.slice(i, i + MAX_UNTRACK_LIST)]);
   const did = steps.filter((s) => s.state === 'todo').map((s) => s.title);
   return {
     ...base,

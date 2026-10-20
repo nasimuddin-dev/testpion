@@ -38,7 +38,10 @@ const STORE_KINDS = new Set(['collection', 'environment', 'workspace']);
 
 export async function fixStagedFiles(store: WorkspaceStore, secrets: SecretStore | undefined, o: { files: string[]; environmentId: string; dryRun?: boolean }): Promise<StagedFixResult> {
   const env = store.listEnvironments().find((e) => e.id === o.environmentId);
-  if (!env) throw new ApsError('ValidationError', `No environment ${o.environmentId} to keep the secret variables in`, { suggestions: ['Pass an existing environment: its secret variables keep the values.'] });
+  if (!env)
+    throw new ApsError('ValidationError', `No environment ${o.environmentId} to keep the secret variables in`, {
+      suggestions: ['Pass an existing environment: its secret variables keep the values.'],
+    });
   const result: StagedFixResult = { fixed: [], variables: [], files: [], skipped: [], applied: false };
   const allow = readSecretsAllow(store.root).entries;
   // names the environment uses are never taken by a replacement, and neither are the ones an earlier file just took
@@ -78,7 +81,10 @@ export async function fixStagedFiles(store: WorkspaceStore, secrets: SecretStore
   }
   result.variables = [...values.keys()];
   if (o.dryRun || !texts.size) return result;
-  if (!secrets) throw new ApsError('ConfigurationError', 'There is no secret store here to keep the values in', { suggestions: ['Fix it in the TestPion app (Git view), whose secret store keeps them; `dryRun` shows what would change.'] });
+  if (!secrets)
+    throw new ApsError('ConfigurationError', 'There is no secret store here to keep the values in', {
+      suggestions: ['Fix it in the TestPion app (Git view), whose secret store keeps them; `dryRun` shows what would change.'],
+    });
 
   const undo = beginJournal(store.root, 'fix-secrets', 'Move typed secrets to secret variables', result.files);
   for (const [id, value] of providerKeys) await secrets.set(secretKeys.provider(id), value);

@@ -45,7 +45,16 @@ export function folderLibraryChanges(file: string, library: string, before: stri
     const was = ma.get(id) ?? '';
     if (was === folder) continue;
     const ref = kind === 'spec' ? ({ kind: 'spec', path: id } as const) : kind === 'dataset' ? ({ kind: 'dataset', name: id } as const) : undefined;
-    out.push(row({ change: 'changed', title: `${info.label} ${id}`, details: [folder ? `moved to folder ${folder}` : `moved out of folder ${was}`], itemId: id, ...(ref ? { ref } : {}), containers: [...own(was), ...own(folder)] }));
+    out.push(
+      row({
+        change: 'changed',
+        title: `${info.label} ${id}`,
+        details: [folder ? `moved to folder ${folder}` : `moved out of folder ${was}`],
+        itemId: id,
+        ...(ref ? { ref } : {}),
+        containers: [...own(was), ...own(folder)],
+      }),
+    );
   }
   for (const [id, was] of ma) if (!mb.has(id) && was) out.push(row({ change: 'changed', title: `${info.label} ${id}`, details: [`left folder ${was}`], itemId: id, containers: own(was) }));
   if (out.length) return out;

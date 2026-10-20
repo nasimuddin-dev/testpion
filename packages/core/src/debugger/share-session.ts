@@ -60,7 +60,8 @@ export function listSharedSessions(store: WorkspaceStore): SharedSession[] {
 export function shareSession(store: WorkspaceStore, name: string, o: { redactor: Redactor; dryRun?: boolean }): ShareResult {
   const file = sessionName(name);
   const source = store.safePath(file, store.path(CAPTURE_SESSIONS_DIR));
-  if (!existsSync(source)) throw new ApsError('ValidationError', `There is no saved session "${basename(file, '.har')}"`, { suggestions: ['Save the session in the Debugger first (Save session), then share it.'] });
+  if (!existsSync(source))
+    throw new ApsError('ValidationError', `There is no saved session "${basename(file, '.har')}"`, { suggestions: ['Save the session in the Debugger first (Save session), then share it.'] });
   const text = readFileSync(source, 'utf8');
   let entries = 0;
   try {

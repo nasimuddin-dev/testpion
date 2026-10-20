@@ -58,7 +58,7 @@ export async function gitChangesByItem(ws: string, opts: { kinds?: readonly stri
     .filter((c) => !filter || (c.kindId && filter.has(c.kindId)))
     .map((c) => {
       const ref = c.ref ?? { kind: 'git-file' as const, path: c.file };
-      return { kind: c.kindId, change: c.change, title: c.title, details: c.details, ref, link: itemRefUrl(ref), file: c.file, staged: !!files.get(c.file)?.staged };
+      return { kind: c.kindId, change: c.change, title: c.title, details: c.details, ref, link: itemRefUrl(ref), file: c.file, staged: c.staged ?? !!files.get(c.file)?.staged };
     });
   return { repository: true, branch: st.branch, ahead: st.ahead, behind: st.behind, conflicted: st.conflicted, items };
 }

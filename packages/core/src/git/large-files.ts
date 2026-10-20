@@ -71,11 +71,12 @@ export async function findLargeFiles(ws: string, o: { minBytes?: number } = {}):
   let keep = found;
   try {
     await requireRepo(ws);
-    const ignored = new Set(
-      (await runGit(ws, ['check-ignore', '-z', '--stdin'], { input: found.map((f) => f.file).join('\0') }).catch(() => '')).split('\0').filter(Boolean),
-    );
+    const ignored = new Set((await runGit(ws, ['check-ignore', '-z', '--stdin'], { input: found.map((f) => f.file).join('\0') }).catch(() => '')).split('\0').filter(Boolean));
     keep = found.filter((f) => !ignored.has(f.file));
-    const lfs = await lfsCovered(ws, keep.map((f) => f.file));
+    const lfs = await lfsCovered(
+      ws,
+      keep.map((f) => f.file),
+    );
     keep = keep.filter((f) => !lfs.has(f.file));
   } catch {
     /* not in a repository (or no git): every big file is listed; there is nothing to be ignored or tracked yet */
@@ -134,7 +135,10 @@ const ignorePattern = (p: string) => escapePattern(p).replace(/ $/, '\\ ');
 
 /** What is in the repository about a path: tracked (in the index) or not. */
 async function isTracked(ws: string, file: string): Promise<boolean> {
-  return (await runGit(ws, ['ls-files', '--error-unmatch', '--', file]).then(() => true, () => false)) as boolean;
+  return (await runGit(ws, ['ls-files', '--error-unmatch', '--', file]).then(
+    () => true,
+    () => false,
+  )) as boolean;
 }
 
 function checkFile(ws: string, file: string): { rel: string; bytes: number } {
@@ -219,7 +223,14 @@ export async function trackByReference(ws: string, file: string, o: { source?: s
   const plan: LargePlan = { file: rel, mode: 'reference', bytes, writes, untrack, notes };
   const sum = await sha256File(workspaceFile(ws, rel));
   const name = rel.split('/').pop()!;
-  const ref: DatasetReference = { schemaVersion: '1.0', name, bytes: sum.bytes, sha256: sum.sha256, ...(sum.lines && /\.(csv|tsv|jsonl|ndjson|md|txt)$/i.test(rel) ? { rows: sum.lines } : {}), ...(o.source ? { source: o.source } : {}) };
+  const ref: DatasetReference = {
+    schemaVersion: '1.0',
+    name,
+    bytes: sum.bytes,
+    sha256: sum.sha256,
+    ...(sum.lines && /\.(csv|tsv|jsonl|ndjson|md|txt)$/i.test(rel) ? { rows: sum.lines } : {}),
+    ...(o.source ? { source: o.source } : {}),
+  };
   if (o.dryRun) return { ...plan, applied: false, reference: ref };
   const undo = beginJournal(ws, 'reference', `Track ${rel} by reference`, writes);
   atomicWrite(workspaceFile(ws, refFile), stableText(ref));
@@ -276,4 +287,3 @@ export async function checkReferences(ws: string): Promise<ReferenceCheck[]> {
   }
   return out;
 }
-

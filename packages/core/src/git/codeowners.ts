@@ -90,7 +90,12 @@ export async function writeCodeowners(ws: string, o: { owner?: string; dryRun?: 
   const repo = await repoRoot(ws);
   if (!repo) return { ...plan, written: false, reason: 'The workspace is not in a git repository yet' };
   if (plan.existing) return { ...plan, written: false, reason: `${plan.existing} exists: it is never overwritten (add the lines you want to it)` };
-  if (plan.insideRepository) return { ...plan, written: false, reason: `The workspace is the folder ${toRepoPath(repo, ws, '.')} of the repository: CODEOWNERS belongs to the repository root, outside the workspace. Copy the lines into it.` };
+  if (plan.insideRepository)
+    return {
+      ...plan,
+      written: false,
+      reason: `The workspace is the folder ${toRepoPath(repo, ws, '.')} of the repository: CODEOWNERS belongs to the repository root, outside the workspace. Copy the lines into it.`,
+    };
   if (!plan.lines.length) return { ...plan, written: false, reason: 'The workspace has nothing to own yet' };
   if (o.dryRun) return { ...plan, written: false };
   const file = join(realPathOf(ws), plan.path);

@@ -1,8 +1,8 @@
-import { ExternalLink, KeyRound, ShieldAlert, X } from 'lucide-react';
+import { ExternalLink, KeyRound, ShieldAlert, ShieldCheck, X } from 'lucide-react';
 import { useState } from 'react';
 import type { ItemRef } from '@testpion/shared';
 import { call } from '../api';
-import { confirmAction, toastError, useApp } from '../store';
+import { confirmAction, promptText, toastError, useApp } from '../store';
 import { openRef } from '../lib/open-ref';
 import { plural } from '../lib/format';
 import { Button, Callout } from './ui';
@@ -14,13 +14,15 @@ export interface StagedSecret {
   item: string;
   field: string;
   variable: string;
+  /** Fingerprint of the value in its place (never the value): what the allowlist names. */
+  hash: string;
   confidence: 'high' | 'medium';
   message: string;
   ref?: ItemRef;
 }
 
-/** Kinds the app can move to a secret variable by itself (collections, environments, workspace variables). */
-const FIXABLE = new Set(['collection', 'environment', 'workspace']);
+/** What the fix cannot move to a variable: a dataset holds data (the scan reads it as a file). */
+const fixable = (f: StagedSecret) => !f.file.startsWith('datasets/');
 
 /**
  * What the commit would publish, found in the STAGED files (release B of planning/git-everything.md §4e): the item, the
@@ -33,12 +35,12 @@ export function GitSecretsPanel({ findings, onChange, onCommitAnyway }: { findin
   const env = ws?.environments.find((e) => e.name === envName);
   const [busy, setBusy] = useState(false);
   const certain = findings.filter((f) => f.confidence === 'high');
-  const fixable = findings.filter((f) => FIXABLE.has(f.kind));
+  const canFix = findings.filter(fixable);
   const fix = async () => {
     if (!env) return useApp.getState().toast('Choose the environment that should keep the secret values (top bar), then fix.', 'warning');
     setBusy(true);
     try {
-      const r = await call<{ fixed: unknown[]; variables: string[]; scan: { blocking: StagedSecret[]; confirm: StagedSecret[] } }>('git.fixStaged', { findings: fixable, environmentId: env.id });
+      const r = await call<{ fixed: unknown[]; variables: string[]; scan: { blocking: StagedSecret[]; confirm: StagedSecret[] } }>('git.fixStaged', { findings: canFix, environmentId: env.id });
       const left = [...r.scan.blocking, ...r.scan.confirm];
       onChange(left.length ? left : undefined);
       useApp.getState().toast(r.fixed.length ? `${plural(r.fixed.length, 'secret')} moved to secret variables of ${env.name}: ${r.variables.join(', ')}` : 'Nothing could be fixed by itself; open each one.', r.fixed.length ? 'success' : 'warning');
@@ -46,6 +48,24 @@ export function GitSecretsPanel({ findings, onChange, onCommitAnyway }: { findin
       toastError(e);
     } finally {
       setBusy(false);
+    }
+  };
+  /** Let one reviewed value through (.testpion/secrets-allow.json, committed and read in review); the reason is what the reviewer sees. */
+  const allow = async (f: StagedSecret) => {
+    const reason = await promptText('Allow this value', {
+      message: `${f.item}: ${f.field}. The scan lets exactly this value through, in this place, and nothing else. Write why it is not a secret; it is committed in .testpion/secrets-allow.json and read in review.`,
+      placeholder: 'public test key from the provider docs',
+      okLabel: 'Allow',
+    });
+    if (!reason?.trim()) return;
+    try {
+      await call('git.allowSecret', { finding: { file: f.file, item: f.item, field: f.field, hash: f.hash }, reason: reason.trim() });
+      const scan = await call<{ blocking: StagedSecret[]; confirm: StagedSecret[] }>('git.stagedScan');
+      const left = [...scan.blocking, ...scan.confirm];
+      onChange(left.length ? left : undefined);
+      useApp.getState().toast('Allowed: commit .testpion/secrets-allow.json with your changes so the team sees why', 'success');
+    } catch (e) {
+      toastError(e);
     }
   };
   const anyway = async () => {
@@ -76,14 +96,17 @@ export function GitSecretsPanel({ findings, onChange, onCommitAnyway }: { findin
                   Open
                 </Button>
               )}
+              <Button size="sm" variant="ghost" icon={<ShieldCheck size={12} />} onClick={() => void allow(f)} title="This is not a secret: let this value through, with a reason that is committed for review" data-secret-allow="">
+                Allow…
+              </Button>
             </span>
           </li>
         ))}
       </ul>
       <div className="flex flex-wrap gap-2">
-        {fixable.length > 0 && (
-          <Button size="sm" variant="primary" icon={<KeyRound size={13} />} loading={busy} onClick={() => void fix()} title="Move the values to secret variables of the active environment and stage the fixed files">
-            Fix all {fixable.length === findings.length ? '' : `(${fixable.length})`}
+        {canFix.length > 0 && (
+          <Button size="sm" variant="primary" icon={<KeyRound size={13} />} loading={busy} onClick={() => void fix()} title="Move the values to secret variables of the active environment and stage the fixed files" data-secrets-fix="">
+            Fix all {canFix.length === findings.length ? '' : `(${canFix.length})`}
           </Button>
         )}
         <Button size="sm" icon={<X size={13} />} onClick={() => onChange(undefined)}>

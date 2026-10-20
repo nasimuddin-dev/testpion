@@ -37,6 +37,7 @@ import {
   gitUnstage,
   scanStagedSecrets,
   commitVerdict,
+  fixStagedFiles,
   type StagedSecret,
   gitVersion,
   makeGitReady,
@@ -146,7 +147,7 @@ export function gitHandlers(be: Backend): Handlers {
           const now = (await gitStatus(ws())).files.filter((f) => f.staged && !before.has(f.path)).map((f) => f.path);
           await gitUnstage(ws(), now);
         }
-        return { committed: false, reason: verdict.reason, secrets: [...scan.blocking, ...scan.confirm] };
+        return { committed: false, reason: verdict.reason, secrets: [...scan.blocking, ...scan.confirm], large: scan.large };
       }
       const commit = await gitCommit(ws(), message, { amend });
       rmSync(proposalFile(), { force: true });
@@ -161,11 +162,15 @@ export function gitHandlers(be: Backend): Handlers {
     'git.fixStaged': async ({ findings, environmentId }: { findings: StagedSecret[]; environmentId: string }) => {
       const files = new Set(findings.map((f) => f.file));
       const staged = new Set((await gitStatus(ws())).files.filter((f) => f.staged).map((f) => f.path));
+      // collections, environments and workspace variables are saved through the store; every other kind (MCP servers, providers,
+      // library items, tests, API definitions …) is rewritten by the same reading as the scan (fixStagedFiles)
       const todo = findCommittableSecrets(be.ws).filter((f) => files.has(f.file));
       const r = await fixCommittableSecrets(be.ws, be.secrets, todo, { environmentId });
+      const more = await fixStagedFiles(be.ws, be.secrets, { files: [...files], environmentId });
       await gitStage(ws(), [...files].filter((f) => staged.has(f)));
-      be.host.emit('data.changed', { method: 'col.save' });
-      return changed({ ...r, scan: await scanStagedSecrets(ws()) });
+      be.adoptDiskState();
+      be.host.emit('data.changed', { method: 'git' });
+      return changed({ ...r, fixed: [...r.fixed, ...more.fixed], variables: [...new Set([...r.variables, ...more.variables])], skipped: [...r.skipped, ...more.skipped.map((k) => ({ finding: { file: k.file }, reason: k.reason }))], undoId: more.undoId, scan: await scanStagedSecrets(ws()) });
     },
     /** A commit an AI agent proposed (MCP git_propose_commit): its message fills the commit box for a person to review. */
     'git.proposal': () => {
