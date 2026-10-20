@@ -26,6 +26,10 @@ const OPEN_WORLD = new Set([
   'openapi_outline',
   'api_fuzz',
   'api_coverage',
+  'rag_probe',
+  'rag_run',
+  'rag_try_metric',
+  'rag_rescore',
 ]);
 
 /** Tools that change or remove what is already there (variable values everywhere, files), or send requests that may change the API's data. */
@@ -243,6 +247,26 @@ Finish with what you added per request and anything that looked like a bug.`,
 Use workspace_activity, list_monitors with monitor_uptime and monitor_results, response_time_stats or collection_health for the main collections, recent_failures, list_certificates and flaky_tests.
 
 Report in Markdown: a one-line summary, then availability per monitor, the slowest requests (p95) and whether they got slower, the failures that repeat, certificates that expire soon, and the three things to fix first.`,
+  },
+  {
+    name: 'evaluate_rag_system',
+    title: 'Evaluate a RAG system',
+    description: 'Probe a RAG target, choose metrics, estimate the cost, run a saved evaluation with gates and compare with a baseline.',
+    arguments: [
+      { name: 'evaluation', description: 'The saved RAG evaluation (list_evaluations)', required: true },
+      { name: 'baseline', description: 'A run id to compare with' },
+    ],
+    text: (a) =>
+      `Evaluate the RAG system of the saved evaluation "${a.evaluation}".
+
+1. rag_list_targets, then rag_probe the evaluation's target with one real question: check that the answer and the retrieved contexts are read (a mapping that finds no contexts makes every context metric fail).
+2. rag_metrics to see what can be measured. Free metrics (kind deterministic) need no model; judged ones need a judge, which is the evaluation's or the AI settings' large model, never a guess. Pick the metrics for the question being asked (the preset rag-triad is a good start).
+3. rag_try_metric with dry_run on one sample for each judged metric you chose, to see exactly what the judge would receive.
+4. rag_estimate: judge calls, tokens, cost range, caps. Tell the user the cost before running anything that spends money, and pass max_cost_usd to rag_run.
+5. rag_run with the metrics and gates (min: ["faithfulness=0.8"]${a.baseline ? `, baseline: "${a.baseline}"` : ''}). Read failures: it says why samples failed (retrieval miss, unfaithful, false refusal …), so fix the retriever or the generator accordingly, not both at once.
+6. To try another judge or a metric on the same answers use rag_rescore (no new calls to the RAG system); to see what a change did use rag_compare.
+
+Report: the mean of each metric with its interval, the gates, the biggest failure class with two example samples, and what to change first.`,
   },
   {
     name: 'import_and_test',

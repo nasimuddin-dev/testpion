@@ -20,6 +20,7 @@ import { kindTools } from '../kind-tools.js';
 import { mockTools } from '../mock-tools.js';
 import { openApiTools } from '../openapi-tools.js';
 import { ragTools } from '../rag-tools.js';
+import { ragEvalTools } from '../rag-eval-tools.js';
 import { recordingTools } from '../recording-tools.js';
 import { refTools } from '../ref-tools.js';
 import { scaleTools } from '../scale-tools.js';
@@ -76,6 +77,7 @@ export function moduleTools(d: ModuleToolDeps): Tool[] {
     ...deployTools({ store }),
     ...evalAgentTools({ store }),
     ...ragTools({ store, secrets, settings, checkEnvironment }),
+    ...ragEvalTools({ store, secrets, settings, checkEnvironment }),
     ...aiTools({ store, secrets, settings, checkEnvironment }),
     ...workspaceEditTools({
       store,
