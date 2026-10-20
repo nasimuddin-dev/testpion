@@ -25,6 +25,8 @@ interface Ctx {
   saved: Required<SavedItems>;
   /** Names of items by Insomnia id → for the folder path of library items (v5). */
   specs: Array<{ name: string; text: string }>;
+  /** Insomnia ids by node id (re-import matches on them). */
+  sourceIds: Record<string, string>;
 }
 
 /** v4 `preRequestScript` / `afterResponseScript`; v5 `scripts.preRequest` / `scripts.afterResponse`. */
@@ -55,6 +57,8 @@ function insomniaFolder(f: Any, items: CollectionNode[], ctx: Ctx): CollectionFo
     ...(s.post ? { testScript: s.post } : {}),
   };
   ctx.folders.push(folder);
+  const sid = f._id ?? f.meta?.id;
+  if (sid) (ctx.sourceIds[folder.id] = String(sid));
   return folder;
 }
 
@@ -114,6 +118,7 @@ function insomniaRequest(r: Any, ctx: Ctx): SavedHttpRequest | SavedGraphQLReque
   if (s.pre) node.preRequestScript = s.pre;
   if (s.post) node.testScript = s.post;
   ctx.requests.push({ id, node });
+  if (id) ctx.sourceIds[node.id] = String(id);
   return node;
 }
 
@@ -172,7 +177,7 @@ export function parseInsomnia(text: string): ImportDocument {
   const d: Any = t.startsWith('{') ? JSON.parse(t) : parseYaml(t);
   const findings = new Findings();
   const v5 = String(d.type ?? '').startsWith('collection.insomnia.rest/5');
-  const ctx: Ctx = { findings, requests: [], folders: [], saved: { grpc: [], websocket: [] }, specs: [] };
+  const ctx: Ctx = { findings, requests: [], folders: [], saved: { grpc: [], websocket: [] }, specs: [], sourceIds: {} };
   const doc = newDocument('insomnia', text, { tool: 'Insomnia', version: v5 ? String(d.type).split('/')[1] : String(d.__export_format ?? 4), scriptTool: 'insomnia' });
   let collection: Collection;
   let environments: Environment[];
@@ -246,6 +251,7 @@ export function parseInsomnia(text: string): ImportDocument {
   // template tags first (they add pre-request and post-response lines in tp.*), then the pipeline converts the scripts
   findings.notes(mapInsomniaTemplateTags(ctx.requests, ctx.folders, environments));
   doc.collections.push(collection);
+  if (Object.keys(ctx.sourceIds).length) doc.sourceIds = ctx.sourceIds;
   doc.environments = environments;
   if (ctx.saved.grpc.length || ctx.saved.websocket.length) doc.savedItems = { ...(ctx.saved.grpc.length ? { grpc: ctx.saved.grpc } : {}), ...(ctx.saved.websocket.length ? { websocket: ctx.saved.websocket } : {}) };
   if (ctx.specs.length) {

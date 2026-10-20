@@ -1,0 +1,1 @@
+{ "meta": { "format": "httpie", "version": "1.0.0", "contentType": "environment", "docs": "https://httpie.io/r/export-docs" }, "entry": { "name": "Staging", "variables": { "host": "https://staging.example.test", "token": { "value": "t0k" } } } }

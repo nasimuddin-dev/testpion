@@ -16,6 +16,9 @@ import type { ImportScriptsMode, ImportScriptsSummary } from './import-scripts.j
 import { atomicWrite, renameOwned } from '../storage/fsutil.js';
 import { trashSpec } from '../storage/trash.js';
 import { workspaceNodeIds } from '../storage/node-ids.js';
+import { applyReimport, recordProvenance, type ReimportAction, type ReimportPlan } from './reimport.js';
+import { importGlobalsAndCookies } from './globals-cookies.js';
+import type { StoredCookie } from '../cookies/cookie-jar.js';
 
 export interface WorkspaceImportResult {
   format: string;
@@ -49,6 +52,22 @@ export interface WorkspaceImportResult {
   receipt?: ImportReceipt;
   /** A file with several collections (an export of a Postman account): each one that was saved. */
   collections?: Array<{ id: string; name: string }>;
+  /** `update`: the collections that were updated in place instead of added (replace / new / skip per item). */
+  updated?: Array<{ collectionId: string; name: string; applied: { replaced: number; added: number; skipped: number }; plan: ReimportPlan['counts'] }>;
+  /** Workspace globals that were set (a Postman globals file). */
+  globals?: number;
+  /** Cookies added to the cookie jar. */
+  cookies?: number;
+}
+
+/**
+ * Where an import puts what is not a workspace file: the workspace's globals and cookie jar live on this computer (the
+ * app's current values and cookie store), so the host that has them lends a way in. Without one, globals become an
+ * environment and cookies are reported.
+ */
+export interface ImportSinks {
+  globals?: { set(vars: Array<{ key: string; value: string; secret?: boolean }>): void | Promise<void>; remove?(keys: string[]): void };
+  cookies?: { add(cookies: StoredCookie[]): void; remove?(cookies: Array<{ name: string; domain: string; path: string }>): void };
 }
 
 /**
@@ -132,21 +151,43 @@ export function importIntoWorkspace(
   text: string,
   /** `scripts: 'keep'` leaves Postman's `pm.*` in imported scripts; the default rewrites them to `tp.*`. */
   /** `specs`: an API definition whose path holds a different document is kept beside it (`keep-both`, the default: x-2.yaml) or replaces it (the old one goes to the trash). */
-  opts: { contractChecks?: boolean; name?: string; secrets?: SecretStore; scripts?: ImportScriptsMode; arazzo?: { baseDir?: string; sources?: Record<string, string> }; specs?: SpecConflict } = {},
+  opts: {
+    contractChecks?: boolean;
+    name?: string;
+    secrets?: SecretStore;
+    scripts?: ImportScriptsMode;
+    arazzo?: { baseDir?: string; sources?: Record<string, string> };
+    specs?: SpecConflict;
+    /** Simple tests (`pm.test` of a status, a header, a JSON field …) become assertions. */
+    liftTests?: boolean;
+    /** Re-import: update the collection that came from the same source (item by item: replace / new / skip) instead of adding another. */
+    update?: boolean | { decisions?: Record<string, ReimportAction> };
+    sinks?: ImportSinks;
+  } = {},
 ): WorkspaceImportResult {
   if (detectFormat(text) === 'arazzo') return withReceipt(store, importArazzoIntoWorkspace(store, text, opts.arazzo), text);
   // node ids never repeat across the workspace's collections: colliding ones are renamed (with a note)
-  const { document, report } = importDocument(text, { name: opts.name, scripts: opts.scripts, takenIds: workspaceNodeIds(store.listCollections()) });
+  const { document, report } = importDocument(text, { name: opts.name, scripts: opts.scripts, takenIds: workspaceNodeIds(store.listCollections()), liftTests: opts.liftTests });
   const r = legacyResult(document);
   const out: WorkspaceImportResult = { format: r.format, ...(r.scripts ? { scripts: r.scripts } : {}), report };
-  const made: Created = { collections: [], environments: [], specs: [], flows: [], library: [], secrets: [] };
+  const made: Created = { collections: [], environments: [], specs: [], flows: [], library: [], secrets: [], updated: [], envUpdated: [], globals: [], cookies: [] };
   const taken = new Set(store.listCollections().map((c) => c.id));
   const saveOne = (c: Collection): Collection => {
+    // a re-import of the same source updates the collection that came from it, item by item
+    if (opts.update) {
+      const u = applyReimport(store, document, c, typeof opts.update === 'object' ? opts.update.decisions : {});
+      if (u) {
+        made.updated!.push({ id: u.collection.id, name: u.collection.name, version: u.collection.version, before: u.before });
+        (out.updated ??= []).push({ collectionId: u.collection.id, name: u.collection.name, applied: u.applied, plan: u.plan.counts });
+        return u.collection;
+      }
+    }
     // an import never replaces a collection the workspace already has (a file exported from it, imported again)
     const clash = taken.has(c.id) || taken.has(slugify(c.id));
     const saved = store.saveCollection(clash ? { ...c, id: `${slugify(c.name) || 'collection'}-${shortId().slice(-4)}` } : c);
     taken.add(saved.id);
     made.collections.push({ id: saved.id, name: saved.name, version: saved.version });
+    recordProvenance(store, document, c, saved);
     return saved;
   };
   let collection = r.collection;
@@ -185,7 +226,23 @@ export function importIntoWorkspace(
     out.collections = [out.collection!, ...r.collections.slice(1).map(saveOne)].map((c) => ({ id: c.id, name: c.name }));
   } else if (!collection && r.notes?.length) out.notes = [...r.notes, ...(out.notes ?? [])];
   // an import never replaces an environment the workspace already has: a clash gets a new id and name
-  const envs = (r.environments ?? (r.environment ? [r.environment] : [])).map((e) => {
+  // (an update adds the variables an existing environment of the same name lacks, and keeps its values)
+  const existingEnvs = store.listEnvironments();
+  const updatedEnvs = new Set<string>();
+  if (opts.update) {
+    for (const e of r.environments ?? (r.environment ? [r.environment] : [])) {
+      const ex = existingEnvs.find((x) => !x.problem && x.name.toLowerCase() === e.name.toLowerCase());
+      if (!ex) continue;
+      const have = new Set(ex.variables.map((v) => v.key));
+      const add = e.variables.filter((v) => !have.has(v.key));
+      updatedEnvs.add(e.id);
+      if (!add.length) continue;
+      made.envUpdated!.push({ id: ex.id, name: ex.name, before: JSON.parse(JSON.stringify(ex)) as Environment });
+      store.saveEnvironment({ ...ex, variables: [...ex.variables, ...add] });
+      (out.notes ??= []).push(`Environment "${ex.name}": ${add.length} variable${add.length === 1 ? '' : 's'} added (${add.map((v) => v.key).slice(0, 5).join(', ')}${add.length > 5 ? ' …' : ''}); its values are kept`);
+    }
+  }
+  const envs = (r.environments ?? (r.environment ? [r.environment] : [])).filter((e) => !updatedEnvs.has(e.id)).map((e) => {
     const taken = store.listEnvironments();
     const clash = taken.some((x) => x.id === e.id || x.name.toLowerCase() === e.name.toLowerCase());
     if (!clash) return e;
@@ -210,6 +267,7 @@ export function importIntoWorkspace(
     out.environment = envs[0];
     out.environments = envs;
   }
+  importGlobalsAndCookies(store, document, opts.sinks, out, made);
   return withReceipt(store, out, text, made);
 }
 

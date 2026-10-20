@@ -115,11 +115,11 @@ describe('importing other API clients', () => {
     expect(JSON.stringify(r)).not.toContain('super-secret');
   });
 
-  it('Hoppscotch: folders, <<variables>>, api-key auth, scripts as comments', () => {
+  it('Hoppscotch: folders, <<variables>>, api-key auth, pw.* scripts as tp.*', () => {
     const r = importAny(hoppscotch);
     const post = req(r.collection!.items, 'New post');
     expect(post.request).toMatchObject({ method: 'POST', url: '{{base}}/posts', body: { type: 'json', content: '{"t":1}' }, auth: { type: 'apiKey', key: 'k', value: '{{key}}', in: 'header' } });
-    expect(post.testScript).toContain('// Hoppscotch script');
+    expect(post.testScript).toBe('tp.test("ok", () => {});');
     expect(req(r.collection!.items, 'Health').request).toMatchObject({ url: '{{base}}/health', params: [{ key: 'v', value: '1', enabled: true }], auth: { type: 'none' } });
   });
 });

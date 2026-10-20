@@ -1,6 +1,9 @@
 import { bruFilesToBrunoExport } from './bru.js';
 import { detectFormat } from './detect.js';
 import { ocFilesToBundle } from './opencollection-import.js';
+import { looksLikePostmanV3 } from './postman-versions.js';
+import { yaakFilesToExport } from './yaak-import.js';
+import { parseYaml } from '../util/lazy-yaml.js';
 import { isZip, readZip } from './zip.js';
 import { ApsError } from '../errors.js';
 import { IMPORT_FILE_EXTENSIONS } from '@testpion/shared';
@@ -65,12 +68,51 @@ export function expandImportFiles(files: RawImportFile[], opts: { folderName?: s
   }
 
   // collection folders: where a bruno.json or opencollection.yml is, everything below it belongs to that collection
-  const roots = new Map<string, 'bruno' | 'opencollection'>();
+  const roots = new Map<string, 'bruno' | 'opencollection' | 'postman-v3' | 'yaak'>();
   for (const f of flat) {
     const dir = f.path.includes('/') ? f.path.slice(0, f.path.lastIndexOf('/')) : '';
     if (base(f.path) === 'bruno.json') roots.set(dir, 'bruno');
     else if (/^opencollection\.ya?ml$/.test(base(f.path))) roots.set(dir, 'opencollection');
+    else if (/^yaak\..+\.ya?ml$/.test(base(f.path)) && !roots.has(dir)) roots.set(dir, 'yaak');
   }
+  // Postman v3 (Git integration): a folder whose definition.yaml says $kind: collection, or that holds *.request.yaml files
+  const v3 = new Map<string, string>();
+  for (const f of flat) {
+    if (!/(^|\/)(\.resources\/)?definition\.ya?ml$/i.test(f.path) || typeof f.data !== 'string' && f.data.length > 1_000_000) continue;
+    try {
+      const y = parseYaml(toText(f.data)) as Record<string, unknown> | undefined;
+      if (/^collection$/i.test(String(y?.$kind ?? y?.type ?? ''))) v3.set(f.path.replace(/\/?(\.resources\/)?definition\.ya?ml$/i, ''), String(y?.id ?? ''));
+    } catch {
+      /* not YAML */
+    }
+  }
+  for (const dir of v3.keys()) if (!roots.has(dir)) roots.set(dir, 'postman-v3');
+  if (!v3.size) {
+    const requestDirs = flat.filter((f) => /\.request\.ya?ml$/i.test(f.path)).map((f) => (f.path.includes('/') ? f.path.slice(0, f.path.lastIndexOf('/')) : ''));
+    if (requestDirs.length) {
+      // the folder all the requests share is the collection
+      let common = requestDirs[0]!.split('/');
+      for (const d of requestDirs) {
+        const parts = d.split('/');
+        let i = 0;
+        while (i < common.length && i < parts.length && common[i] === parts[i]) i++;
+        common = common.slice(0, i);
+      }
+      const dir = common.join('/');
+      if (!roots.has(dir)) roots.set(dir, 'postman-v3');
+    }
+  }
+  // Native Git: .postman/resources.yaml maps local collections to their ids in the cloud (what re-import matches on)
+  const cloudIds = new Map<string, string>();
+  for (const f of flat)
+    if (/(^|\/)\.postman\/resources\.ya?ml$/i.test(f.path)) {
+      try {
+        const y = parseYaml(toText(f.data)) as { cloudResources?: { collections?: Record<string, string> } } | undefined;
+        for (const [local, id] of Object.entries(y?.cloudResources?.collections ?? {})) cloudIds.set(String(local).replace(/^(\.\.\/|\.\/)+/, '').replace(/\/$/, ''), String(id));
+      } catch {
+        /* not YAML */
+      }
+    }
   // a picked folder of .bru files without bruno.json is a Bruno collection too
   if (!roots.size && flat.some((f) => ext(f.path) === 'bru') && flat.filter((f) => ext(f.path) === 'bru').length > 1) roots.set('', 'bruno');
   const rootOf = (path: string): string | undefined => {
@@ -84,7 +126,8 @@ export function expandImportFiles(files: RawImportFile[], opts: { folderName?: s
     const root = rootOf(f.path);
     if (root === undefined) continue;
     const rel = root ? f.path.slice(root.length + 1) : f.path;
-    const wanted = roots.get(root) === 'bruno' ? ext(rel) === 'bru' || rel === 'bruno.json' || rel === '.env' : /\.ya?ml$/.test(rel) || rel === '.env';
+    const kind0 = roots.get(root);
+    const wanted = kind0 === 'bruno' ? ext(rel) === 'bru' || rel === 'bruno.json' || rel === '.env' : kind0 === 'yaak' ? /^yaak\..+\.ya?ml$/.test(base(rel)) : /\.ya?ml$/.test(rel) || rel === '.env';
     if (!wanted) {
       skipped.push({ path: f.path, why: 'not part of the collection' });
       continue;
@@ -98,7 +141,17 @@ export function expandImportFiles(files: RawImportFile[], opts: { folderName?: s
   for (const [root, list] of grouped) {
     const name = (root ? base(root) : opts.folderName) ?? (inputs.length ? `Collection ${inputs.length + 1}` : 'Collection');
     const kind = roots.get(root)!;
-    const text = kind === 'bruno' ? JSON.stringify(bruFilesToBrunoExport(list, list.some((x) => x.path === 'bruno.json') ? undefined : name)) : JSON.stringify(ocFilesToBundle(list, name));
+    let text: string;
+    if (kind === 'bruno') text = JSON.stringify(bruFilesToBrunoExport(list, list.some((x) => x.path === 'bruno.json') ? undefined : name));
+    else if (kind === 'yaak') text = JSON.stringify(yaakFilesToExport(list));
+    else if (kind === 'postman-v3') {
+      if (!looksLikePostmanV3(list)) {
+        skipped.push({ path: root || name, why: 'not a Postman collection folder' });
+        continue;
+      }
+      const key = v3.get(root) || cloudIds.get(root) || undefined;
+      text = JSON.stringify({ postmanV3: 1, name, ...(key ? { key } : {}), files: list });
+    } else text = JSON.stringify(ocFilesToBundle(list, name));
     inputs.push({ name, text, source: root || opts.folderName || name, fileCount: list.length });
   }
 
@@ -123,10 +176,19 @@ export function expandImportFiles(files: RawImportFile[], opts: { folderName?: s
       skipped.push({ path: f.path, why: 'a binary file' });
       continue;
     }
-    const text = toText(f.data);
+    let text = toText(f.data);
     if (!text.trim()) {
       skipped.push({ path: f.path, why: 'empty' });
       continue;
+    }
+    // Postman's globals file (workspace.globals.yaml): its values are globals, not an environment
+    if (/\.globals\.ya?ml$/i.test(f.path)) {
+      try {
+        const y = parseYaml(text) as Record<string, unknown>;
+        if (y && Array.isArray(y.values)) text = JSON.stringify({ ...y, name: y.name ?? 'Globals', _postman_variable_scope: 'globals' });
+      } catch {
+        /* the importer reports it */
+      }
     }
     // (a copied cURL command saved to a file is handled by the caller, which knows the snippet formats)
     const format = detectFormat(text);

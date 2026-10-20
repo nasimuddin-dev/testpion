@@ -168,21 +168,22 @@ describe('Bruno scripts as tp.*', () => {
     expect(req.preRequestScript).toContain("const secret = tp.variables.get('API_SECRET');");
     expect(req.preRequestScript).toContain('// bru.getVar in a comment stays');
     expect(req.preRequestScript).toContain('"bru.setEnvVar in a string stays"');
-    expect(req.testScript).toContain('tp.collectionVariables.set("token", res.body.token);');
-    expect(req.testScript).toContain('tp.environment.set("token", res.body.token);');
+    expect(req.testScript).toContain('tp.collectionVariables.set("token", tp.response.json().token);');
+    expect(req.testScript).toContain('tp.environment.set("token", tp.response.json().token);');
     expect(req.testScript).toContain('if (tp.environment.get("token")) tp.execution.setNextRequest("Get patient");');
     expect(req.testScript).toContain('expect(tp.variables.get("clinic")).to.equal("north");');
-    expect(req.testScript).toMatch(/\/\/ TODO\(import\): bru\.sendRequest has no TestPion equivalent yet.*\n\s*bru\.sendRequest\(/);
+    // bru.sendRequest has an equivalent now: an adapter over tp.sendRequest
+    expect(req.testScript).toContain('tp.sendRequest({ url: cfg.url');
+    expect(req.testScript).not.toContain('bru.sendRequest');
     expect(r.collection!.preRequestScript).toContain('tp.collectionVariables.set("startedAt", Date.now());');
     expect(r.scripts!.converted).toBe(3);
-    expect(r.scripts!.warnings).toEqual([{ where: 'Env clinic / Log in (post-response)', api: 'bru.sendRequest' }]);
-    expect(r.notes).toContain('Env clinic / Log in (post-response): bru.sendRequest has no TestPion equivalent yet (marked TODO(import) in the script)');
+    expect(r.scripts!.warnings).toBeUndefined();
   });
 
   it('the converted script still runs (req / res / test through the shim)', async () => {
     const r = importAny(readBrunoFolder(dir));
     const req = login(r.collection!.items);
-    const out = await runScript(req.testScript!.replace(/^\s*bru\.sendRequest.*$/m, ''), {
+    const out = await runScript(req.testScript!.replace(/^.*tp\.sendRequest.*$/m, ''), {
       variables: { clinic: 'north' },
       request: { method: 'POST', url: 'http://localhost:3000/login', headers: [] },
       response: { status: 200, headers: [['content-type', 'application/json']], body: '{"token":"t-1"}', time: 3 },
@@ -199,9 +200,11 @@ describe('Bruno scripts as tp.*', () => {
     const text = files.find((f) => f.path === 'Log in.bru')!.text;
     expect(text).toContain('bru.setVar("clinic", "north");');
     expect(text).toContain('bru.setEnvVar("token", res.body.token);');
+    expect(text).toContain('expect(bru.getVar("clinic")).to.equal("north");');
     expect(text).toContain('if (bru.getEnvVar("token")) bru.runner.setNextRequest("Get patient");');
     expect(text).toContain('"bru.setEnvVar in a string stays"');
-    expect(text).not.toMatch(/\btp\./);
+    // (an adapter such as tp.sendRequest has no Bruno form back, and a call whose arguments hold strings is not rewritten)
+    expect(text.replace(/tp\.sendRequest|tp\.request\.headers\.upsert/g, '')).not.toMatch(/\btp\./);
     expect(tpToBruno('tp.execution.setNextRequest(null); tp.environment.name; x = "tp.environment.get(1)"')).toBe('bru.runner.stopExecution(); bru.getEnvName(); x = "tp.environment.get(1)"');
   });
 
@@ -210,9 +213,9 @@ describe('Bruno scripts as tp.*', () => {
       'bru.getEnvName(); bru.hasVar("a"); bru.deleteVar("a"); bru.getCollectionVar("c"); bru.interpolate("{{x}}"); bru.getRequestName(); bru.runner.skipRequest(); bru.runner.stopExecution(); bru.sleep(5); bru.cookies.jar();';
     const once = brunoToTp(src);
     expect(once.code.split('\n').at(-1)).toBe(
-      'tp.environment.name; tp.variables.has("a"); tp.collectionVariables.unset("a"); tp.collectionVariables.get("c"); tp.variables.replaceIn("{{x}}"); tp.info.requestName; tp.execution.skipRequest(); tp.execution.setNextRequest(null); bru.sleep(5); bru.cookies.jar();',
+      'tp.environment.name; tp.variables.has("a"); tp.collectionVariables.unset("a"); tp.collectionVariables.get("c"); tp.variables.replaceIn("{{x}}"); tp.info.requestName; tp.execution.skipRequest(); tp.execution.setNextRequest(null); bru.sleep(5); tp.cookies.jar();',
     );
-    expect(once.warnings).toEqual(['bru.cookies']);
+    expect(once.warnings).toEqual([]);
     expect(brunoToTp(once.code).code).toBe(once.code);
   });
 });

@@ -5,6 +5,7 @@ import { mapForeignAuth } from './foreign-auth.js';
 import { finishDocument } from './pipeline.js';
 import { Findings, newDocument, type ImportDocument } from './model.js';
 import type { ImportScriptsMode, ImportScriptsSummary } from './import-scripts.js';
+import { parseYaml } from '../util/lazy-yaml.js';
 
 /** A Postman v2.0 / v2.1 collection, and its environment and globals files, as import documents. */
 
@@ -92,9 +93,11 @@ export function parsePostman(text: string): ImportDocument {
         const variables: KeyValue[] = (it.variable ?? []).filter((v: any) => v.key).map((v: any) => ({ key: v.key, value: String(v.value ?? ''), enabled: !v.disabled }));
         const settings = pmSettings(it.protocolProfileBehavior, it.name ?? 'Folder', findings);
         const description = pmDescription(it.description);
+        const fid = shortId('fld-');
+        if (it.id) (doc.sourceIds ??= {})[fid] = String(it.id);
         return {
           kind: 'folder',
-          id: shortId('fld-'),
+          id: fid,
           name: it.name,
           items: convert(it.item),
           auth: authOf(it.auth, it.name ?? 'Folder'),
@@ -116,9 +119,11 @@ export function parsePostman(text: string): ImportDocument {
       const auth = authOf(r.auth, it.name ?? url, headers) ?? { type: 'inherit' as const };
       if (r.body?.mode === 'graphql') {
         const g = r.body.graphql ?? {};
+        const gid = shortId('gql-');
+        if (it.id) (doc.sourceIds ??= {})[gid] = String(it.id);
         return {
           kind: 'graphql',
-          id: shortId('gql-'),
+          id: gid,
           name: it.name ?? url,
           request: { endpoint: url, query: g.query ?? '', variables: typeof g.variables === 'string' && g.variables.trim() ? g.variables : undefined, headers, auth },
           ...(pmScript(it.event, 'prerequest') ? { preRequestScript: pmScript(it.event, 'prerequest') } : {}),
@@ -143,9 +148,11 @@ export function parsePostman(text: string): ImportDocument {
         };
       else if (r.body?.mode === 'file' && r.body.file?.src) body = { type: 'binary', filePath: r.body.file.src };
       const settings = pmSettings(it.protocolProfileBehavior, it.name ?? url, findings);
+      const rid = shortId('req-');
+      if (it.id) (doc.sourceIds ??= {})[rid] = String(it.id);
       return {
         kind: 'http',
-        id: shortId('req-'),
+        id: rid,
         name: it.name ?? url,
         request: {
           method: r.method ?? 'GET',
@@ -180,6 +187,7 @@ export function parsePostman(text: string): ImportDocument {
     testScript: pmScript(d.event, 'test'),
   };
   doc.collections.push(collection);
+  if (d.info?._postman_id) doc.sourceKey = String(d.info._postman_id);
   // Postman Vault: the export carries the reference, never the secret
   const vault = [...new Set([...text.matchAll(/\{\{vault:([^}]+)\}\}/g)].map((m) => m[1]!.trim()))];
   for (const name of vault) findings.add({ code: 'VALUE_NEEDED', severity: 'changed', where: [], message: `Values needed: Postman Vault secret "${name}" (the export holds only the reference {{vault:${name}}}): create a secret variable ${name} and use {{${name}}}` });
@@ -200,9 +208,25 @@ export function importPostman(text: string, opts: { scripts?: ImportScriptsMode 
 
 /** A Postman environment (or globals) file: secret values go to the secret store, the ones the file does not hold are listed as values needed. */
 export function parsePostmanEnvironment(text: string): ImportDocument {
-  const d = JSON.parse(text);
+  // (a JSON file of the app, or the YAML environment / globals file of Postman's Git integration)
+  const t = text.trim();
+  const d = t.startsWith('{') ? JSON.parse(t) : parseYaml(t);
   const id = slugify(d.name ?? 'imported');
   const doc = newDocument('postman-env', text, { tool: 'Postman' });
+  // the globals file: values for the workspace's globals (on this computer), not an environment
+  if (d._postman_variable_scope === 'globals') {
+    const globals: NonNullable<ImportDocument['globals']> = [];
+    const needed: string[] = [];
+    for (const v of d.values ?? []) {
+      if (!v?.key || v.enabled === false) continue;
+      const secret = v.type === 'secret';
+      if (secret && !v.value) needed.push(String(v.key));
+      else globals.push({ key: String(v.key), value: String(v.value ?? ''), ...(secret ? { secret: true } : {}) });
+    }
+    doc.globals = globals;
+    if (needed.length) doc.findings.push({ code: 'VALUE_NEEDED', severity: 'changed', where: [], message: `Values needed: ${needed.join(', ')} (secret globals: Postman keeps their values in the app, not in the export)` });
+    return doc;
+  }
   const secrets: Record<string, string> = {};
   const needed: string[] = [];
   const variables = (d.values ?? []).map((v: any) => {

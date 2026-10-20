@@ -7,7 +7,8 @@ import { importDocument } from './importers.js';
 import { legacyResult } from './pipeline.js';
 import type { ImportReport } from './report.js';
 import type { ImportScriptsMode } from './import-scripts.js';
-import { plannedSpecs, importIntoWorkspace, type SpecConflict, type WorkspaceImportResult } from './workspace-import.js';
+import { plannedSpecs, importIntoWorkspace, type ImportSinks, type SpecConflict, type WorkspaceImportResult } from './workspace-import.js';
+import { planReimport, type ReimportAction, type ReimportPlan } from './reimport.js';
 import { existsSync, readFileSync } from 'node:fs';
 import { undoImportReceipt, type UndoResult } from './import-receipt.js';
 import type { ImportInput, SkippedFile } from './inputs.js';
@@ -43,6 +44,12 @@ export interface ImportPlan {
   library: Record<string, number>;
   /** Secret values the import would write to the secret store (a .env file): the count only. */
   secretValues: number;
+  /** Workspace globals the import would set (Postman's globals file). */
+  globals: number;
+  /** Cookies the import would add to the cookie jar. */
+  cookies: number;
+  /** Collections of the workspace that came from this same source: an update would change them item by item (replace / new / skip). */
+  reimport?: ReimportPlan[];
   report: ImportReport;
 }
 
@@ -65,8 +72,9 @@ function treeOf(nodes: CollectionNode[], path: string[], changed: Set<string>, b
 }
 
 /** What importing this text into the workspace would do. Nothing is written. */
-export function planImport(store: WorkspaceStore, text: string, opts: { name?: string; scripts?: ImportScriptsMode } = {}): ImportPlan {
-  const { document, report } = importDocument(text, { name: opts.name, scripts: opts.scripts, takenIds: workspaceNodeIds(store.listCollections()) });
+export function planImport(store: WorkspaceStore, text: string, opts: { name?: string; scripts?: ImportScriptsMode; liftTests?: boolean } = {}): ImportPlan {
+  const { document, report } = importDocument(text, { name: opts.name, scripts: opts.scripts, takenIds: workspaceNodeIds(store.listCollections()), liftTests: opts.liftTests });
+  const reimport = document.collections.flatMap((c) => planReimport(store, document, c) ?? []);
   const changed = new Set(document.findings.filter((f) => f.severity !== 'info').map((f) => f.where.join(' / ')));
   const names = new Set(store.listCollections().map((c) => c.name.toLowerCase()));
   const envNames = new Set(store.listEnvironments().map((e) => e.name.toLowerCase()));
@@ -106,6 +114,9 @@ export function planImport(store: WorkspaceStore, text: string, opts: { name?: s
     flows: (document.flows ?? []).map((f) => ({ path: f.path, steps: f.steps })),
     library: Object.fromEntries(saved.filter(([, n]) => n > 0)),
     secretValues: Object.values(document.secretValues ?? {}).reduce((n, v) => n + Object.keys(v).length, 0),
+    globals: document.globals?.length ?? 0,
+    cookies: document.cookies?.length ?? 0,
+    ...(reimport.length ? { reimport } : {}),
     report,
   };
 }
@@ -120,11 +131,11 @@ export interface ImportManyPlan {
 }
 
 /** The plans of several inputs (a failing one is reported, the others still plan). */
-export function planInputs(store: WorkspaceStore, inputs: ImportInput[], skipped: SkippedFile[] = [], opts: { scripts?: ImportScriptsMode } = {}): ImportManyPlan {
+export function planInputs(store: WorkspaceStore, inputs: ImportInput[], skipped: SkippedFile[] = [], opts: { scripts?: ImportScriptsMode; liftTests?: boolean } = {}): ImportManyPlan {
   const planned: PlannedInput[] = inputs.map((input) => {
     const id = { name: input.name, source: input.source, fileCount: input.fileCount };
     try {
-      return { input: id, plan: planImport(store, input.text, { name: input.name, scripts: opts.scripts }) };
+      return { input: id, plan: planImport(store, input.text, { name: input.name, scripts: opts.scripts, liftTests: opts.liftTests }) };
     } catch (e) {
       return { input: id, error: normalizeError(e) };
     }
@@ -155,14 +166,14 @@ export interface ImportedInput {
 export function importInputs(
   store: WorkspaceStore,
   inputs: ImportInput[],
-  opts: { contractChecks?: boolean; secrets?: SecretStore; scripts?: ImportScriptsMode; specs?: SpecConflict; envName?: (input: ImportInput) => string | undefined; arazzo?: (input: ImportInput) => { baseDir?: string; sources?: Record<string, string> } | undefined } = {},
+  opts: { contractChecks?: boolean; secrets?: SecretStore; scripts?: ImportScriptsMode; liftTests?: boolean; update?: boolean | { decisions?: Record<string, ReimportAction> }; sinks?: ImportSinks; specs?: SpecConflict; envName?: (input: ImportInput) => string | undefined; arazzo?: (input: ImportInput) => { baseDir?: string; sources?: Record<string, string> } | undefined } = {},
 ): { imported: ImportedInput[]; receipts: string[] } {
   const imported: ImportedInput[] = [];
   const receipts: string[] = [];
   for (const input of inputs) {
     const id = { name: input.name, source: input.source, fileCount: input.fileCount };
     try {
-      const result = importIntoWorkspace(store, input.text, { contractChecks: opts.contractChecks, secrets: opts.secrets, scripts: opts.scripts, specs: opts.specs, arazzo: opts.arazzo?.(input), name: opts.envName?.(input) ?? input.name });
+      const result = importIntoWorkspace(store, input.text, { contractChecks: opts.contractChecks, secrets: opts.secrets, scripts: opts.scripts, liftTests: opts.liftTests, update: opts.update, sinks: opts.sinks, specs: opts.specs, arazzo: opts.arazzo?.(input), name: opts.envName?.(input) ?? input.name });
       if (result.receipt) receipts.push(result.receipt.id);
       imported.push({ input: id, result });
     } catch (e) {
@@ -173,7 +184,7 @@ export function importInputs(
 }
 
 /** Take back several imports (the ids `importInputs` returned). */
-export function undoMany(store: WorkspaceStore, receipts: string[], opts: { force?: boolean } = {}): UndoResult[] {
+export function undoMany(store: WorkspaceStore, receipts: string[], opts: { force?: boolean; sinks?: ImportSinks } = {}): UndoResult[] {
   if (!receipts.length) throw new ApsError('ValidationError', 'No import to undo', { suggestions: [] });
   return receipts.map((id) => undoImportReceipt(store, id, opts));
 }

@@ -28,9 +28,9 @@ export function brunoAssertions(list: Any[] | undefined): CheckConfig[] | undefi
 }
 
 /** The first line of every imported Bruno script: it also loads the shim that runs Bruno's req / res / test (scripts/bruno.ts). */
-export const BRUNO_HEADER = "// Bruno script: bru.* became tp.*; req, res and test run as in Bruno";
+export const BRUNO_HEADER = "// Bruno script: converted to tp.* (bru, req, res, test and expect; TODO(import) marks what has no equivalent)";
 
-/** A Bruno script, kept runnable: its `bru.*` calls are rewritten to `tp.*` afterwards (scripts/convert), req / res run through the shim. */
+/** A Bruno script: its `bru.*`, `req.*` and `res.*` are rewritten to `tp.*` afterwards (scripts/convert); the shim (scripts/bruno.ts) still runs what is left. */
 export function brunoScript(...parts: Array<string | undefined>): string | undefined {
   const s = parts.map((p) => String(p ?? '').trim()).filter(Boolean).join('\n\n');
   return s ? `${BRUNO_HEADER}\n${s}` : undefined;

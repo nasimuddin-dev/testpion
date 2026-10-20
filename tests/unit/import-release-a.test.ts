@@ -171,8 +171,8 @@ describe('OpenCollection YAML', () => {
 
   it('scripts speak tp.*; assertions and actions become checks and lines; an unknown script type is reported', () => {
     expect(req.preRequestScript).toContain('tp.variables.set("pre", "one");');
-    expect(req.testScript).toContain('tp.environment.set("id", res.body.id);');
-    expect(req.testScript).toContain('tp.collectionVariables.set("tok", res.body.token);');
+    expect(req.testScript).toContain('tp.environment.set("id", tp.response.json().id);');
+    expect(req.testScript).toContain('tp.collectionVariables.set("tok", tp.response.json().token);');
     expect(req.testScript).toContain('to.be.a(\'number\')');
     expect(req.assertions).toEqual([{ type: 'status', expected: 201 }]);
     expect(r.notes?.some((n) => /type hooks/.test(n))).toBe(true);

@@ -1,0 +1,16 @@
+$kind: collection
+name: Clinic (v3)
+description: The clinic API as Postman's Git integration writes it
+auth:
+  type: bearer
+  credentials:
+    - key: token
+      value: "{{token}}"
+variables:
+  - key: host
+    value: https://api.example.test
+scripts:
+  - type: beforeRequest
+    language: text/javascript
+    code: |
+      pm.variables.set('startedAt', Date.now());

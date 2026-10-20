@@ -3,14 +3,17 @@ import { collectNodeIds, ensureUniqueIds } from '../storage/node-ids.js';
 import type { ArazzoFlowFile } from './arazzo.js';
 import type { ImportScriptsMode, ImportScriptsSummary } from './import-scripts.js';
 import { convertDocumentScripts } from './script-pass.js';
+import { liftDocumentTests } from './lift-pass.js';
 import type { ImportDocument } from './model.js';
 
 /**
  * The part of an import every format shares, after its parser: scripts in `tp.*`, node ids unique (against the
  * workspace's other collections and within the file), findings on their items. Pure: nothing is written.
  */
-export function finishDocument(doc: ImportDocument, opts: { scripts?: ImportScriptsMode; takenIds?: Iterable<string> } = {}): ImportDocument {
+export function finishDocument(doc: ImportDocument, opts: { scripts?: ImportScriptsMode; takenIds?: Iterable<string>; liftTests?: boolean } = {}): ImportDocument {
   convertDocumentScripts(doc, opts.scripts);
+  // simple tests as assertions (counted for the report unless asked for)
+  liftDocumentTests(doc, !!opts.liftTests);
   // a finding that names an item by its name alone gets the item's path when exactly one item has that name
   const paths = new Map<string, string[] | null>();
   const index = (nodes: CollectionNode[], path: string[]) => {

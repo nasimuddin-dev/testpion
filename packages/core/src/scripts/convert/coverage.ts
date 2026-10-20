@@ -19,8 +19,15 @@ export const POSTMAN_LEGACY_CALLS: Record<string, string> = {
   // (postman.getResponseCookie returns { name, value }; tp.cookies.get returns the value: left as it is, it still runs)
 };
 
-/** Postman sandbox members TestPion does not have (yet): Datasets (SQL over a dataset), Mock (match saved examples), State. */
-export const POSTMAN_MISSING = ['datasets', 'mock', 'state'];
+/**
+ * Postman sandbox members TestPion has no equivalent for: Datasets (SQL over a dataset) and Mock (match a saved example).
+ * `pm.state` is `tp.state` (kept as globals named `state.<key>`). The hint says what to use instead.
+ */
+export const POSTMAN_MISSING = ['datasets', 'mock'];
+export const POSTMAN_MISSING_HINT: Record<string, string> = {
+  datasets: 'TestPion datasets feed the runner (data file, tp.iterationData); there is no SQL over them in a script',
+  mock: "TestPion's mock server serves the saved examples (Collection > Mock): point the request at it instead of matching in a script",
+};
 
 /** `insomnia.*` members TestPion has nothing for. A path prefix. */
 export const INSOMNIA_MISSING = ['parentFolders', 'request.auth.update', 'request.proxy', 'request.certificate'];

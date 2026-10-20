@@ -1,0 +1,10 @@
+workspace:
+  id: 11111111-2222-4333-8444-555555555555
+localResources:
+  collections:
+    - ../postman/collections/Clinic
+  environments:
+    - ../postman/environments/Staging.environment.yaml
+cloudResources:
+  collections:
+    ../postman/collections/Clinic: 12345678-aaaa-4bbb-8ccc-1234567890ab

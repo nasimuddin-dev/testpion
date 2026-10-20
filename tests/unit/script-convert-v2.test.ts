@@ -76,10 +76,10 @@ describe('the coverage tables', () => {
     for (const to of [...Object.values(BRU_TO_TP), ...Object.values(POSTMAN_LEGACY_CALLS)]) expect(to).toMatch(/^tp\./);
   });
   it('brunoToTp (the old entry) is the converter: its table, warnings and idempotence', () => {
-    const src = 'bru.getEnvName(); bru.hasVar("a"); bru.deleteVar("a"); bru.cookies.jar();';
+    const src = 'bru.getEnvName(); bru.hasVar("a"); bru.deleteVar("a"); bru.cookies.jar(); res.setBody(1);';
     const once = brunoToTp(src);
-    expect(once.code.split('\n').at(-1)).toBe('tp.environment.name; tp.variables.has("a"); tp.collectionVariables.unset("a"); bru.cookies.jar();');
-    expect(once.warnings).toEqual(['bru.cookies']);
+    expect(once.code.split('\n').at(-1)).toBe('tp.environment.name; tp.variables.has("a"); tp.collectionVariables.unset("a"); tp.cookies.jar(); res.setBody(1);');
+    expect(once.warnings).toEqual(['res.setBody']);
     expect(brunoToTp(once.code).code).toBe(once.code);
   });
   it('an Insomnia script can be converted to pm.* (kept for Postman) or tp.*', () => {
@@ -114,10 +114,12 @@ describe('scope and syntax edge cases', () => {
     expect(r.reason).toMatch(/does not parse \(line 1, column/);
   });
   it('leaves TODO markers once, above the line, with its indentation', () => {
-    const src = 'if (x) {\n  bru.cookies.jar(); bru.sendRequest({});\n}';
+    const src = 'if (x) {\n  res.setBody({}); req.getTimeout();\n}';
     const r = convertScript(src, 'bruno');
-    expect(r.code).toBe("if (x) {\n  // TODO(import): bru.cookies, bru.sendRequest has no TestPion equivalent yet: rewrite this line with TestPion's script API (sendRequest, cookies …)\n  bru.cookies.jar(); bru.sendRequest({});\n}");
-    expect(r.findings.map((f) => f.api)).toEqual(['bru.cookies', 'bru.sendRequest']);
+    expect(r.code).toBe("if (x) {\n  // TODO(import): res.setBody, req.getTimeout has no TestPion equivalent yet: rewrite this line with TestPion's script API (sendRequest, cookies …)\n  res.setBody({}); req.getTimeout();\n}");
+    expect(r.findings.map((f) => f.api)).toEqual(['res.setBody', 'req.getTimeout']);
+    // and a second conversion leaves the marker alone
+    expect(convertScript(r.code, 'bruno').code).toBe(r.code);
   });
   it('a long script converts quickly', () => {
     const big = Array.from({ length: 3000 }, (_, i) => `pm.test("t${i}", function () { pm.expect(pm.response.code).to.equal(200); });`).join('\n');

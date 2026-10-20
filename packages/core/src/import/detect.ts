@@ -9,6 +9,11 @@ import { isAsyncApi } from './asyncapi.js';
 import { isHttpFile } from './http-file.js';
 import { isArazzo } from './arazzo.js';
 import { isOpenCollection } from './opencollection-import.js';
+import { isThunder } from './thunder-import.js';
+import { isYaak } from './yaak-import.js';
+import { isHttpie } from './httpie-import.js';
+import { isApidog } from './apidog-import.js';
+import { isPostmanV1, isPostmanV3Bundle } from './postman-versions.js';
 
 /** Which format a text is in; every format it returns has its file extensions in IMPORT_FORMATS (the pickers' filter). */
 export function detectFormat(text: string): ImportFormat | 'unknown' {
@@ -31,6 +36,13 @@ export function detectFormat(text: string): ImportFormat | 'unknown' {
   if (isArazzo(d)) return 'arazzo';
   // Bruno's OpenCollection (opencollection: 1.0.0), the YAML format
   if (isOpenCollection(d)) return 'opencollection';
+  // the tools with their own file shape (Thunder Client, Yaak, HTTPie, Apidog) and Postman's older and newer formats
+  if (isPostmanV3Bundle(d)) return 'postman-v3';
+  if (isYaak(d)) return 'yaak';
+  if (isHttpie(d)) return 'httpie';
+  if (isApidog(d)) return 'apidog';
+  if (isThunder(d)) return 'thunder';
+  if (isPostmanV1(d)) return 'postman-v1';
   const other = detectOtherTool(d);
   if (other) return other;
   if (isAsyncApi(d)) return 'asyncapi';

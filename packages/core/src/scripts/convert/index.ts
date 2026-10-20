@@ -1,5 +1,6 @@
 import { applyEdits, chainOf, parseScript, ScriptParseError, walk, type Edit, type N } from './ast.js';
-import { BRU_SHIM, BRU_TO_TP, INSOMNIA_MISSING, POSTMAN_LEGACY_CALLS, POSTMAN_MISSING } from './coverage.js';
+import { BRU_SHIM, BRU_TO_TP, INSOMNIA_MISSING, POSTMAN_LEGACY_CALLS, POSTMAN_MISSING, POSTMAN_MISSING_HINT } from './coverage.js';
+import { ruleFor, type RuleTool } from './rules.js';
 
 /**
  * Script converter v2 (import-compat plan 4b): another tool's script API → TestPion's `tp.*`, by the syntax tree.
@@ -9,10 +10,11 @@ import { BRU_SHIM, BRU_TO_TP, INSOMNIA_MISSING, POSTMAN_LEGACY_CALLS, POSTMAN_MI
  * A script that does not parse is returned as it is (it still runs through the alias) with a parse finding.
  */
 
-export type ScriptTool = 'postman' | 'insomnia' | 'bruno';
+export type ScriptTool = 'postman' | 'insomnia' | 'bruno' | 'thunder' | 'hoppscotch';
+const RULE_TOOLS: ReadonlySet<ScriptTool> = new Set(['bruno', 'thunder', 'hoppscotch']);
 
 export interface ScriptFinding {
-  code: 'SCRIPT_API' | 'SCRIPT_BASE_ENVIRONMENT' | 'SCRIPT_PARSE_ERROR' | 'SCRIPT_OWN_GLOBAL';
+  code: 'SCRIPT_API' | 'SCRIPT_BASE_ENVIRONMENT' | 'SCRIPT_PARSE_ERROR' | 'SCRIPT_OWN_GLOBAL' | 'SCRIPT_LIFT';
   /** The API concerned (`bru.sendRequest`, `insomnia.parentFolders`, `pm.datasets`). */
   api: string;
   line: number;
@@ -27,6 +29,10 @@ export interface ScriptResult {
   changes: number;
   findings: ScriptFinding[];
   reason?: string;
+  /** Constants the script set on the request that belong in its settings (`req.setTimeout(5000)`): the import puts them there. */
+  lifts?: { timeoutMs?: number; maxRedirects?: number };
+  /** Names the script reads from the process environment (`bru.getProcessEnv('X')`): the import checks they exist as variables. */
+  processEnv?: string[];
 }
 
 export interface ConvertOptions {
@@ -34,7 +40,7 @@ export interface ConvertOptions {
   alias?: 'tp' | 'pm';
 }
 
-const OWN: Record<ScriptTool, string> = { postman: 'pm', insomnia: 'insomnia', bruno: 'bru' };
+const OWN: Record<ScriptTool, string> = { postman: 'pm', insomnia: 'insomnia', bruno: 'bru', thunder: 'tc', hoppscotch: 'pw' };
 const lineOf = (code: string, pos: number) => code.slice(0, pos).split('\n').length;
 
 /** The node of a chain that covers the root and its first `depth` links (`a.b` of `a.b.c.d` for depth 1). */
@@ -44,8 +50,31 @@ function linkNode(outer: N, pathLength: number, depth: number): N {
   return n;
 }
 
-/** Convert one script. */
+/**
+ * Convert one script. Bruno's, Thunder Client's and Hoppscotch's rules replace whole calls, whose arguments are copied as
+ * written: the arguments are converted by a further pass (at most four, until nothing changes).
+ */
 export function convertScript(code: string, tool: ScriptTool, opts: ConvertOptions = {}): ScriptResult {
+  let r = convertOnce(code, tool, opts);
+  if (!RULE_TOOLS.has(tool)) return r;
+  for (let pass = 1; pass < 4 && r.status === 'converted'; pass++) {
+    const next = convertOnce(r.code, tool, opts);
+    if (next.status !== 'converted') break;
+    const seen = new Set(r.findings.map((f) => `${f.code}:${f.api}`));
+    r = {
+      ...next,
+      changes: r.changes + next.changes,
+      findings: [...r.findings, ...next.findings.filter((f) => !seen.has(`${f.code}:${f.api}`))],
+      lifts: { ...r.lifts, ...next.lifts },
+      processEnv: [...new Set([...(r.processEnv ?? []), ...(next.processEnv ?? [])])],
+    };
+  }
+  if (!Object.keys(r.lifts ?? {}).length) delete r.lifts;
+  if (!r.processEnv?.length) delete r.processEnv;
+  return r;
+}
+
+function convertOnce(code: string, tool: ScriptTool, opts: ConvertOptions = {}): ScriptResult {
   const alias = opts.alias ?? 'tp';
   if (!code?.trim()) return { code, status: 'unchanged', changes: 0, findings: [] };
   let parsed;
@@ -61,6 +90,8 @@ export function convertScript(code: string, tool: ScriptTool, opts: ConvertOptio
   /** APIs without an equivalent, by the start of the line they are on (one TODO line per line of code). */
   const todos = new Map<number, string[]>();
   const handled = new Set<N>();
+  let lifts: ScriptResult['lifts'];
+  const processEnv = new Set<string>();
   const replace = (n: { start: number; end: number }, text: string) => edits.push({ start: n.start, end: n.end, text });
   const free = (name: string, isFree: (n: string) => boolean) => isFree(name) && !parsed.topLevel.has(name);
   /** The name the converted code would use is declared in the script (a `const tp = …`): converting would point at that variable. */
@@ -82,6 +113,24 @@ export function convertScript(code: string, tool: ScriptTool, opts: ConvertOptio
   };
 
   walk(parsed.ast, ({ node, parent, key, isFree, ref }) => {
+    // ---- the call-shaped rules of Bruno's req / res, Thunder Client's tc and Hoppscotch's pw / hopp
+    if (RULE_TOOLS.has(tool)) {
+      const r = ruleFor(tool as RuleTool, node, parent, key, (n) => code.slice(n.start, n.end), (name) => free(name, isFree));
+      if (r) {
+        if (r.edit) {
+          if (!target(isFree)) return false;
+          edits.push(r.edit);
+        }
+        if (r.missing) missing(r.missing.at, r.missing.api, `${r.missing.api} has no TestPion equivalent yet (marked TODO(import) in the script)`);
+        if (r.lift) {
+          lifts = { ...lifts, ...r.lift };
+          findings.push({ code: 'SCRIPT_LIFT', api: Object.keys(r.lift)[0]!, line: lineOf(code, node.start), message: `${code.slice(node.start, node.end)} was moved to the request's settings` });
+        }
+        if (r.processEnv) processEnv.add(r.processEnv);
+        if (r.skipChildren) return false;
+        if (r.edit || r.missing) return;
+      }
+    }
     // ---- tests["name"] = expr;   (Postman's pre-pm assertions)
     if (tool === 'postman' && node.type === 'ExpressionStatement' && node.expression.type === 'AssignmentExpression' && node.expression.operator === '=') {
       const l = node.expression.left;
@@ -109,24 +158,24 @@ export function convertScript(code: string, tool: ScriptTool, opts: ConvertOptio
         const root = ch.root;
         const dotted = ch.path.join('.');
         const call = parent?.type === 'CallExpression' && key === 'callee' ? parent : undefined;
-        if (tool === 'postman') {
-          if (root.name === 'postman' && call && POSTMAN_LEGACY_CALLS[dotted]) {
+        if (tool === 'postman' || tool === 'hoppscotch') {
+          if (tool === 'postman' && root.name === 'postman' && call && POSTMAN_LEGACY_CALLS[dotted]) {
             if (!target(isFree)) return false;
             replace(node, POSTMAN_LEGACY_CALLS[dotted]!);
             return false;
           }
-          if (root.name === 'responseCode' && (ch.path[0] === 'code' || ch.path[0] === 'name')) {
+          if (tool === 'postman' && root.name === 'responseCode' && (ch.path[0] === 'code' || ch.path[0] === 'name')) {
             if (!target(isFree)) return false;
             replace(linkNode(node, ch.path.length, 1), ch.path[0] === 'code' ? 'tp.response.code' : 'tp.response.status');
             // (a longer chain keeps its tail: responseCode.code.toString())
             return false;
           }
-          if (root.name === 'pm' || root.name === 'aps') {
+          if (root.name === 'pm' || (tool === 'postman' && root.name === 'aps')) {
             if (!target(isFree)) return false;
             replace(root, 'tp');
             handled.add(root);
             const m = POSTMAN_MISSING.find((x) => x === ch.path[0]);
-            if (m) missing(root.start, `pm.${m}`, `pm.${m} has no TestPion equivalent yet (marked TODO(import) in the script)`);
+            if (m) missing(root.start, `pm.${m}`, `pm.${m} has no TestPion equivalent (marked TODO(import) in the script): ${POSTMAN_MISSING_HINT[m]}`);
           }
         } else if (tool === 'insomnia' && root.name === 'insomnia') {
           if (!target(isFree)) return false;
@@ -159,8 +208,9 @@ export function convertScript(code: string, tool: ScriptTool, opts: ConvertOptio
     if (!ref || node.type !== 'Identifier' || handled.has(node)) return;
     const name = node.name;
     if (!free(name, isFree)) return;
-    if ((tool === 'postman' && ['pm', 'aps', 'responseBody', 'responseTime'].includes(name)) || (tool === 'insomnia' && name === 'insomnia')) if (!target(isFree)) return;
-    const to = tool === 'postman' ? (name === 'pm' || name === 'aps' ? 'tp' : name === 'responseBody' ? 'tp.response.text()' : name === 'responseTime' ? 'tp.response.responseTime' : undefined) : tool === 'insomnia' && name === 'insomnia' ? alias : undefined;
+    if (tool === 'hoppscotch' && name !== 'pm') return;
+    if (((tool === 'postman' || tool === 'hoppscotch') && ['pm', 'aps', 'responseBody', 'responseTime'].includes(name)) || (tool === 'insomnia' && name === 'insomnia')) if (!target(isFree)) return;
+    const to = tool === 'postman' || tool === 'hoppscotch' ? (name === 'pm' || name === 'aps' ? 'tp' : name === 'responseBody' ? 'tp.response.text()' : name === 'responseTime' ? 'tp.response.responseTime' : undefined) : tool === 'insomnia' && name === 'insomnia' ? alias : undefined;
     if (!to) return;
     // { pm } as a value: keep the property name
     replace(node, parent?.type === 'Property' && parent.shorthand && key === 'value' ? `${name}: ${to}` : to);
@@ -193,7 +243,7 @@ export function convertScript(code: string, tool: ScriptTool, opts: ConvertOptio
     const reason = `the script declares its own "${own}"`;
     return { code, status: 'kept', changes: 0, findings: [{ code: 'SCRIPT_OWN_GLOBAL', api: own, line: 1, message: reason }], reason };
   }
-  return { code: out, status: changes ? 'converted' : 'unchanged', changes, findings };
+  return { code: out, status: changes ? 'converted' : 'unchanged', changes, findings, ...(lifts ? { lifts } : {}), ...(processEnv.size ? { processEnv: [...processEnv] } : {}) };
 }
 
 export { BRU_TO_TP, POSTMAN_LEGACY_CALLS, POSTMAN_MISSING, INSOMNIA_MISSING } from './coverage.js';

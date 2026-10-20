@@ -102,6 +102,19 @@ export function brunoToTp(code: string): { code: string; changed: number; warnin
 
 /** The way back, for a Bruno export of a script that came from Bruno: each `tp.*` of the table as Bruno's `bru.*`. */
 const TP_TO_BRU: Array<[RegExp, string]> = [
+  // the response and request, back to Bruno's res / req (the converter's rules in convert/rules.ts, reversed)
+  [/(?<![\w$.])tp\.response\.json\(\)/g, 'res.body'],
+  [/(?<![\w$.])tp\.response\.code\b/g, 'res.status'],
+  [/(?<![\w$.])tp\.response\.status\b/g, 'res.statusText'],
+  [/(?<![\w$.])tp\.response\.responseTime\b/g, 'res.responseTime'],
+  [/(?<![\w$.])tp\.response\.headers\.get(?=\s*\()/g, 'res.getHeader'],
+  [/(?<![\w$.])tp\.response\.headers\.toObject\(\)/g, 'res.headers'],
+  [/(?<![\w$.])tp\.request\.url\.toString\(\)/g, 'req.getUrl()'],
+  [/(?<![\w$.])tp\.request\.headers\.get(?=\s*\()/g, 'req.getHeader'],
+  [/(?<![\w$.])tp\.request\.headers\.remove(?=\s*\()/g, 'req.deleteHeader'],
+  [/(?<![\w$.])tp\.cookies\.jar(?=\s*\()/g, 'bru.cookies.jar'],
+  [/(?<![\w$.])tp\.test(?=\s*\()/g, 'test'],
+  [/(?<![\w$.])tp\.expect(?=\s*\()/g, 'expect'],
   [/(?<![\w$.])tp\.execution\.setNextRequest\(null\)/g, 'bru.runner.stopExecution()'],
   [/(?<![\w$.])tp\.environment\.name\b/g, 'bru.getEnvName()'],
   [/(?<![\w$.])tp\.info\.requestName\b/g, 'bru.getRequestName()'],

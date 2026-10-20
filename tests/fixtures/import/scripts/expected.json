@@ -275,9 +275,9 @@
     "apis": []
   },
   "bruno/stop execution": {
-    "code": "if (res.status === 500) {\n  tp.execution.setNextRequest(null);\n}",
+    "code": "if (tp.response.code === 500) {\n  tp.execution.setNextRequest(null);\n}",
     "status": "converted",
-    "changes": 1,
+    "changes": 2,
     "apis": []
   },
   "bruno/env name and request name": {
@@ -317,25 +317,21 @@
     "apis": []
   },
   "bruno/sendRequest has no equivalent": {
-    "code": "// TODO(import): bru.sendRequest has no TestPion equivalent yet: rewrite this line with TestPion's script API (sendRequest, cookies …)\nconst r = await bru.sendRequest({ url: 'https://example.test' });",
-    "status": "unchanged",
-    "changes": 0,
-    "apis": [
-      "bru.sendRequest"
-    ]
+    "code": "const r = await ((cfg, cb) => { const p = new Promise((resolve) => tp.sendRequest({ url: cfg.url, method: cfg.method || 'GET', header: Object.entries(cfg.headers || {}).map(([key, value]) => ({ key, value })), body: cfg.data === undefined ? undefined : { mode: 'raw', raw: typeof cfg.data === 'string' ? cfg.data : JSON.stringify(cfg.data) } }, (err, res) => resolve([err, res && { status: res.code, statusText: res.status, headers: res.headers.toObject(), data: (() => { try { return res.json(); } catch (e) { return res.text(); } })() }]))); return cb ? p.then(([err, res]) => cb(err, res)) : p.then(([err, res]) => { if (err) throw err; return res; }); })({ url: 'https://example.test' }, undefined);",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
   },
   "bruno/cookies have no equivalent": {
-    "code": "// TODO(import): bru.cookies has no TestPion equivalent yet: rewrite this line with TestPion's script API (sendRequest, cookies …)\nconst jar = bru.cookies.jar();\njar.clear();",
-    "status": "unchanged",
-    "changes": 0,
-    "apis": [
-      "bru.cookies"
-    ]
+    "code": "const jar = tp.cookies.jar();\njar.clear();",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
   },
   "bruno/res and test stay on the shim": {
-    "code": "test('ok', function () {\n  expect(res.status).to.equal(200);\n  expect(res.getBody().id).to.equal(1);\n});",
-    "status": "unchanged",
-    "changes": 0,
+    "code": "tp.test('ok', function () {\n  tp.expect(tp.response.code).to.equal(200);\n  tp.expect(tp.response.json().id).to.equal(1);\n});",
+    "status": "converted",
+    "changes": 5,
     "apis": []
   },
   "bruno/bru in strings and comments": {

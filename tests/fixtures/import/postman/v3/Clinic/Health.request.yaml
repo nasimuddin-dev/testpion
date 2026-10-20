@@ -1,0 +1,14 @@
+$kind: http-request
+name: Health
+method: GET
+url: "{{host}}/health"
+order: 1000
+auth:
+  type: noauth
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |
+      pm.test('up', function () {
+        pm.response.to.have.status(200);
+      });

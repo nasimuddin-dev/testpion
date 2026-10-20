@@ -1,4 +1,5 @@
 import type { Any } from './import-helpers.js';
+import { isHoppscotchEnvironments } from './hoppscotch-import.js';
 
 /**
  * Importers for other API clients' exports live in one module each: insomnia-import.ts (v4 JSON, v5 YAML),
@@ -9,7 +10,7 @@ import type { Any } from './import-helpers.js';
 export { normalizeTemplate } from './templates.js';
 export { importInsomnia, parseInsomnia } from './insomnia-import.js';
 export { importBruno, parseBruno } from './bruno-import.js';
-export { importHoppscotch, parseHoppscotch } from './hoppscotch-import.js';
+export { importHoppscotch, parseHoppscotch, isHoppscotchEnvironments } from './hoppscotch-import.js';
 
 export function detectOtherTool(d: unknown): 'insomnia' | 'bruno' | 'hoppscotch' | undefined {
   if (!d || typeof d !== 'object') return undefined;
@@ -19,5 +20,6 @@ export function detectOtherTool(d: unknown): 'insomnia' | 'bruno' | 'hoppscotch'
   if (Array.isArray(o.items) && (o.brunoConfig || o.items.some((i: Any) => /^(http|graphql)-request$|^folder$/.test(i?.type ?? '')))) return 'bruno';
   const hopp = (c: Any) => c && typeof c === 'object' && Array.isArray(c.folders) && Array.isArray(c.requests);
   if (hopp(o) || (Array.isArray(o) && o.length > 0 && o.every(hopp))) return 'hoppscotch';
+  if (isHoppscotchEnvironments(d)) return 'hoppscotch';
   return undefined;
 }

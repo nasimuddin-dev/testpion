@@ -1,0 +1,50 @@
+{
+  "clientName": "Thunder Client",
+  "collectionName": "Vet Clinic",
+  "collectionId": "c1d2e3f4-0000-4000-8000-000000000001",
+  "dateExported": "2026-03-01T10:00:00.000Z",
+  "version": "1.2",
+  "folders": [
+    { "_id": "f-patients", "name": "Patients", "containerId": "", "created": "2026-01-01T00:00:00.000Z", "sortNum": 10000, "settings": { "headers": [{ "name": "X-Clinic", "value": "{{clinic}}" }], "auth": { "type": "bearer", "bearer": "{{token}}" } } },
+    { "_id": "f-admin", "name": "Admin", "containerId": "f-patients", "created": "2026-01-01T00:00:00.000Z", "sortNum": 30000 }
+  ],
+  "requests": [
+    {
+      "_id": "r-login", "colId": "c1", "containerId": "", "name": "Login", "url": "{{host}}/login", "method": "POST", "sortNum": 5000,
+      "headers": [{ "name": "Content-Type", "value": "application/json" }],
+      "params": [],
+      "body": { "type": "json", "raw": "{\n  \"user\": \"{{user}}\",\n  \"nonce\": \"{{#guid}}\"\n}", "form": [] },
+      "auth": { "type": "basic", "basic": { "username": "{{user}}", "password": "{{pass}}" } },
+      "tests": [
+        { "type": "res-code", "custom": "", "action": "equal", "value": "200" },
+        { "type": "res-time", "custom": "", "action": "<", "value": "800" },
+        { "type": "json-query", "custom": "json.token", "action": "istype", "value": "string" },
+        { "type": "res-header", "custom": "content-type", "action": "contains", "value": "json" }
+      ],
+      "postReq": { "setEnvVar": [{ "key": "token", "value": "json.token" }] }
+    },
+    {
+      "_id": "r-list", "colId": "c1", "containerId": "f-patients", "name": "List patients", "url": "{{host}}/patients?limit=10", "method": "GET", "sortNum": 10000,
+      "headers": [{ "name": "Accept", "value": "application/json" }, { "name": "X-Debug", "value": "1", "isDisabled": true }],
+      "params": [{ "name": "limit", "value": "10", "isPath": false }, { "name": "page", "value": "{{#number, 1, 5}}", "isPath": false, "isDisabled": true }],
+      "tests": [{ "type": "res-body", "custom": "", "action": "contains", "value": "Rex" }],
+      "postReq": { "inlineScripts": [{ "script": ["tc.setVar('firstId', tc.response.json[0].id);", "tc.test('has patients', function () { expect(tc.response.status).to.equal(200); });"] }] }
+    },
+    {
+      "_id": "r-get", "colId": "c1", "containerId": "f-patients", "name": "Get patient", "url": "{{host}}/patients/:id", "method": "GET", "sortNum": 20000,
+      "headers": [], "params": [{ "name": "id", "value": "{{firstId}}", "isPath": true }], "auth": { "type": "none" }
+    },
+    {
+      "_id": "r-upload", "colId": "c1", "containerId": "f-admin", "name": "Upload photo", "url": "{{host}}/patients/1/photo", "method": "PUT", "sortNum": 10000,
+      "headers": [], "params": [],
+      "body": { "type": "formdata", "raw": "", "form": [{ "name": "caption", "value": "Rex at the beach" }], "files": [{ "name": "photo", "value": "rex.png" }] },
+      "auth": { "type": "oauth2", "oauth2": { "grantType": "client_credentials", "accessTokenUrl": "{{host}}/oauth/token", "clientId": "clinic", "clientSecret": "{{secret}}", "scope": "photos" } }
+    },
+    {
+      "_id": "r-gql", "colId": "c1", "containerId": "", "name": "Patient query", "url": "{{host}}/graphql", "method": "POST", "sortNum": 30000,
+      "headers": [], "params": [],
+      "body": { "type": "graphql", "raw": "", "form": [], "graphql": { "query": "query { patients { id name } }", "variables": "{}" } },
+      "auth": { "type": "kerberos", "kerberos": { "service": "HTTP" } }
+    }
+  ]
+}

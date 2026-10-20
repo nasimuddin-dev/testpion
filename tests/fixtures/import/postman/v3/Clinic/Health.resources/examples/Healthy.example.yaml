@@ -1,0 +1,8 @@
+name: Healthy
+response:
+  code: 200
+  status: OK
+  headers:
+    - key: Content-Type
+      value: application/json
+  body: '{"status":"up"}'
