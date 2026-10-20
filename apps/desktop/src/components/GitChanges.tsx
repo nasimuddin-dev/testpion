@@ -1,9 +1,10 @@
-import { Columns2, ExternalLink, Minus, Plus, RotateCcw, Undo2 } from 'lucide-react';
+import { Columns2, ExternalLink, History, Minus, Plus, RotateCcw, Undo2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { outputFileName, refOfWorkspacePath } from '@testpion/shared';
 import { call } from '../api';
 import { confirmAction, toastError } from '../store';
 import { openRef } from '../lib/open-ref';
+import { discardGitItem, openGitItem } from '../lib/git-items';
 import { changesByItemMarkdown, groupChanges, type ChangeGroup } from '../lib/git-rows';
 import { plural } from '../lib/format';
 import { LABEL } from '../lib/vocabulary';
@@ -142,9 +143,21 @@ function ItemName({ c, onCompare }: { c: SemanticChange; onCompare(file: string,
       )}
       {c.details.length > 0 && <span className="text-muted truncate">{c.details.join(', ')}</span>}
       {c.change !== 'conflicted' && (
-        <LinkButton className="ml-auto shrink-0" icon={<Columns2 size={12} />} title="Side by side: the last commit and now, part by part" onClick={() => onCompare(c.file, c.itemId)}>
-          Compare
-        </LinkButton>
+        <span className="ml-auto shrink-0 flex items-center gap-2">
+          <LinkButton icon={<Columns2 size={12} />} title="Side by side: the last commit and now, part by part" onClick={() => onCompare(c.file, c.itemId)}>
+            Compare
+          </LinkButton>
+          {c.ref && (
+            <>
+              <LinkButton icon={<History size={12} />} title="Its versions in git, who changed what, and Restore this version" onClick={() => openGitItem(c.ref!, c.title)} data-item-history="">
+                History
+              </LinkButton>
+              <LinkButton icon={<RotateCcw size={12} />} title="Throw away the change to this item only; the rest of its file stays" onClick={() => void discardGitItem(c.ref!, c.title)} data-item-discard="">
+                Discard
+              </LinkButton>
+            </>
+          )}
+        </span>
       )}
     </>
   );
@@ -194,7 +207,13 @@ function FileRow({
       </button>
       {f.staged && <Badge tone="accent">staged</Badge>}
       <span className="ml-auto flex gap-1 shrink-0">
-        <Button size="sm" variant="ghost" icon={f.staged ? <Minus size={12} /> : <Plus size={12} />} onClick={toggle}>
+        <Button
+          size="sm"
+          variant="ghost"
+          icon={f.staged ? <Minus size={12} /> : <Plus size={12} />}
+          onClick={toggle}
+          title={g.items.length > 1 ? `${f.staged ? 'Unstages' : 'Stages'} the whole file with all ${g.items.length} changed items in it` : undefined}
+        >
           {f.staged ? 'Unstage' : 'Stage'}
         </Button>
         <Button size="sm" variant="ghost" icon={<RotateCcw size={12} />} onClick={() => void discard(f)}>

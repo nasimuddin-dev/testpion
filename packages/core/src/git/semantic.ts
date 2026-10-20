@@ -1,7 +1,7 @@
 import { readFileSync, statSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
 import type { Collection, CollectionNode, Environment } from '../model/types.js';
-import { assertGitRev, gitBlobSize, gitLog, gitShow, realFolder, runGit, type GitCommit, type GitFile } from './git.js';
+import { assertGitRev, gitBlobSize, gitShow, realFolder, runGit, type GitFile } from './git.js';
 import { requestParts } from './merge.js';
 import { flowChanges, flowItemParts, isFlowFile } from './flow-diff.js';
 import { KIND_INFO, LIBRARY_LABEL, gitFolderKey, gitKindOfRef, gitRefKey, gitSectionKey, kindOfPath, kindOfRef, libraryOfPath, savedItemRef, watchKindOfPath, type ItemRef, type KindId } from '@testpion/shared';
@@ -224,7 +224,7 @@ type FileState = SemanticChange['change'];
 const READ_LIMIT = 8 * 1024 * 1024;
 
 /** The meaning of one changed file: the text on each side (undefined: not there, or too big / binary to read). */
-function describeFile(file: string, before: string | undefined, after: string | undefined, state: FileState, from?: string, sizes?: { before?: number; after?: number }): SemanticChange[] {
+export function describeFile(file: string, before: string | undefined, after: string | undefined, state: FileState, from?: string, sizes?: { before?: number; after?: number }): SemanticChange[] {
   if (isItemFile(file, 'collection')) return collectionChanges(file, parse<Collection>(before), parse<Collection>(after));
   if (isItemFile(file, 'environment')) return environmentChanges(file, parse<Environment>(before), parse<Environment>(after));
   if (state !== 'renamed') {
@@ -380,36 +380,6 @@ export function changesMarkdown(changes: SemanticChange[]): string {
   return changes.map((c) => `- ${mark[c.change] ?? ''} **${c.title}**${c.details.length ? `: ${c.details.join(', ')}` : ''}`).join('\n');
 }
 
-/**
- * One request's versions in git (GIT-209), newest first: each commit that changed it, with the request as that
- * commit left it. Commits that changed only other parts of the collection are left out.
- */
-export async function gitItemHistory(ws: string, file: string, itemId: string, limit = 30): Promise<Array<{ commit: GitCommit; item: CollectionNode }>> {
-  const commits = await gitLog(ws, { path: file, limit: limit * 4 });
-  const cache = new Map<string, string>();
-  /** The item in a commit, as JSON ("null" when not there). */
-  const at = async (rev: string) => {
-    let json = cache.get(rev);
-    if (json === undefined) {
-      json = JSON.stringify(findCollectionItem(parse<Collection>(await gitShow(ws, file, rev)) ?? { items: [] }, itemId) ?? null);
-      cache.set(rev, json);
-    }
-    return json;
-  };
-  const versions: Array<{ commit: GitCommit; item: CollectionNode }> = [];
-  for (const commit of commits) {
-    const json = await at(commit.hash);
-    if (json === 'null') continue;
-    // it made a version when the request differs from every parent (a merge that took one side made none)
-    const parents = (await runGit(ws, ['rev-parse', `${commit.hash}^@`]).catch(() => '')).split('\n').filter(Boolean);
-    let changed = true;
-    for (const p of parents) if ((await at(p)) === json) changed = false;
-    if (changed) versions.push({ commit, item: JSON.parse(json) as CollectionNode });
-    if (versions.length >= limit) break;
-  }
-  return versions;
-}
-
 /** One part of an item in two versions (GIT-205's side-by-side view). */
 export interface PartChange {
   part: string;
@@ -425,7 +395,6 @@ export interface PartChange {
  * `rev` is the version to compare with (the last commit by default); the other side is the file in the working folder.
  */
 export async function describeItemDiff(ws: string, file: string, itemId?: string, rev = 'HEAD'): Promise<{ title: string; parts: PartChange[] }> {
-  const at = kindAt(file);
   const big = isBinaryPath(file) || (await tooBig(ws, file, rev));
   const before = big ? undefined : await gitShow(ws, file, rev);
   let after: string | undefined;
@@ -434,12 +403,35 @@ export async function describeItemDiff(ws: string, file: string, itemId?: string
   } catch {
     after = undefined;
   }
-  const rows = (b: Record<string, string> | undefined, a: Record<string, string> | undefined): PartChange[] =>
-    [...new Set([...Object.keys(b ?? {}), ...Object.keys(a ?? {})])].map((part) => {
-      const x = b ? (b[part] ?? '') : undefined;
-      const y = a ? (a[part] ?? '') : undefined;
-      return { part, before: x, after: y, differs: x !== y };
-    });
+  if (!big) return diffTexts(file, itemId, before, after);
+  // a database, an image or a very big file: its size
+  const size = async (r: string) => (await gitBlobSize(ws, file, r)) ?? 0;
+  const now = (() => {
+    try {
+      return statSync(join(ws, file)).size;
+    } catch {
+      return 0;
+    }
+  })();
+  return { title: file, parts: partRows(before === undefined ? undefined : { Size: `${await size(rev)} bytes` }, after === undefined ? undefined : { Size: `${now} bytes` }) };
+}
+
+/** Before / after of two parts lists as rows. */
+export function partRows(b: Record<string, string> | undefined, a: Record<string, string> | undefined): PartChange[] {
+  return [...new Set([...Object.keys(b ?? {}), ...Object.keys(a ?? {})])].map((part) => {
+    const x = b ? (b[part] ?? '') : undefined;
+    const y = a ? (a[part] ?? '') : undefined;
+    return { part, before: x, after: y, differs: x !== y };
+  });
+}
+
+/**
+ * Two versions of a file's text compared part by part (what describeItemDiff does with the file read from git and from
+ * the working folder; the item history and the restore previews compare any two versions the same way).
+ */
+export function diffTexts(file: string, itemId: string | undefined, before: string | undefined, after: string | undefined): { title: string; parts: PartChange[] } {
+  const at = kindAt(file);
+  const rows = partRows;
   if (isItemFile(file, 'collection')) {
     const bc = parse<Collection>(before);
     const ac = parse<Collection>(after);
@@ -478,18 +470,6 @@ export async function describeItemDiff(ws: string, file: string, itemId?: string
   if (at?.kind === 'workspace') {
     const [bw, aw] = [parse<Record<string, unknown>>(before), parse<Record<string, unknown>>(after)];
     return { title: 'Workspace settings', parts: rows(bw && workspaceParts(bw), aw && workspaceParts(aw)) };
-  }
-  // a database, an image or a very big file: its size
-  if (isBinaryPath(file) || (await tooBig(ws, file, rev))) {
-    const size = async (r: string) => (await gitBlobSize(ws, file, r)) ?? 0;
-    const now = (() => {
-      try {
-        return statSync(join(ws, file)).size;
-      } catch {
-        return 0;
-      }
-    })();
-    return { title: file, parts: rows(before === undefined ? undefined : { Size: `${await size(rev)} bytes` }, after === undefined ? undefined : { Size: `${now} bytes` }) };
   }
   // a test or flow file: one step part by part (itemId is its id), or the file's own settings and steps
   if (isFlowFile(file)) {

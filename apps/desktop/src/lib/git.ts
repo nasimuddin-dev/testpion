@@ -61,6 +61,9 @@ export function useGitMarkInfo(key: string): GitMarkInfo | undefined {
   return useSyncExternalStore(subscribe, () => state.marks.get(key));
 }
 
+/** The current state without subscribing (menus are built while open, outside React's render). */
+export const gitSnapshot = (): GitState => state;
+
 export function useGit(): GitState {
   useEffect(() => {
     if (users++ === 0) {

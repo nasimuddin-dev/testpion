@@ -112,7 +112,7 @@ const LIBRARY_ITEM: Capabilities = {
 /* ------------------------------------------------------------------ the kinds */
 
 /** Every kind, in the registry's order (the order of `testpion kinds`, of Recently deleted, of the docs table). */
-export const KIND_LIST: readonly ItemKindInfo[] = [
+const KINDS: readonly ItemKindInfo[] = [
   {
     id: 'collection',
     ref: 'collection',
@@ -886,3 +886,19 @@ export const KIND_LIST: readonly ItemKindInfo[] = [
     capabilities: REF_ONLY,
   },
 ];
+
+/**
+ * Release B of "Everything under Git" (planning/git-everything.md): every kind that is versioned (and a request or a folder,
+ * which are versioned with their collection file) has per-item History / Restore / Blame, Discard, Stage and the
+ * staged-file secret scan, in the app, the CLI and the MCP server. A kind not yet versioned keeps its own `planned`.
+ */
+const GIT_OPS = ['git-history', 'git-discard', 'git-stage', 'secret-scan'] as const;
+const withGitOps = (k: ItemKindInfo): ItemKindInfo => {
+  const versioned = k.capabilities.versioned === true || k.id === 'request' || k.id === 'folder';
+  if (!versioned) return k;
+  const capabilities = { ...k.capabilities } as Record<string, unknown>;
+  for (const c of GIT_OPS) capabilities[c] = true;
+  return { ...k, capabilities: capabilities as unknown as ItemKindInfo['capabilities'] };
+};
+
+export const KIND_LIST: readonly ItemKindInfo[] = KINDS.map(withGitOps);

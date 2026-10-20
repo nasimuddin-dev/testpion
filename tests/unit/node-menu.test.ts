@@ -28,7 +28,7 @@ const IMPLIES: Partial<Record<Capability, RegExp>> = {
   favorite: /^(Add to|Remove from) favorites$/,
   link: /^Copy link$/,
   export: /^Export/,
-  'git-history': /^History in git…$/,
+  'git-history': /^Git$/,
 };
 
 describe('node menus', () => {
@@ -107,8 +107,8 @@ describe('node menus', () => {
   });
 
   it('the git group needs a repository; Copy as and Move to folder are submenus', () => {
-    expect(buildNodeMenu('collection', { on: { historyInGit: () => undefined } })).toEqual([]);
-    expect(buildNodeMenu('collection', { on: { historyInGit: () => undefined }, repo: true }).map((i) => i.label)).toEqual([LABEL.historyInGit]);
+    expect(buildNodeMenu('collection', { on: { gitMenu: [] } })).toEqual([]);
+    expect(buildNodeMenu('collection', { on: { gitMenu: [] }, repo: true }).map((i) => i.label)).toEqual([LABEL.gitMenu]);
     const sub = [{ label: 'cURL (bash)', onSelect: () => undefined }];
     expect(buildNodeMenu('request', { on: { copyAs: sub } })[0]).toMatchObject({ label: LABEL.copyAs, items: sub });
     expect(buildNodeMenu('prompt', { on: { move: [] } })[0]!.label).toBe(LABEL.moveToFolder);
@@ -124,7 +124,7 @@ describe('node menus', () => {
         { label: LABEL.newRequest, onSelect: () => undefined, items: [] },
       ],
       on: Object.fromEntries(
-        ['newFolder', 'expandAll', 'collapseAll', 'run', 'copyLink', 'monitor', 'ci', 'testFile', 'flow', 'collectionSettings', 'convertScripts', 'historyInGit', 'rename', 'duplicate', 'delete'].map(
+        ['newFolder', 'expandAll', 'collapseAll', 'run', 'copyLink', 'monitor', 'ci', 'testFile', 'flow', 'collectionSettings', 'convertScripts', 'gitMenu', 'rename', 'duplicate', 'delete'].map(
           (id) => [id, () => undefined],
         ),
       ),
@@ -143,7 +143,7 @@ describe('node menus', () => {
       LABEL.generateFlow,
       LABEL.collectionSettings,
       LABEL.convertScriptsTp,
-      `| ${LABEL.historyInGit}`,
+      `| ${LABEL.gitMenu}`,
       `| ${LABEL.rename}`,
       LABEL.duplicate,
       `| ${LABEL.delete}`,

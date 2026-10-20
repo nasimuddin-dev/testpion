@@ -1,8 +1,10 @@
 import { RotateCcw } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import type { ItemRef } from '@testpion/shared';
 import { call } from '../api';
-import { confirmAction, toastError, useApp } from '../store';
-import { Button, cx, Empty, Modal, Spinner } from './ui';
+import { confirmAction, toastError } from '../store';
+import { partsLines, toastWithUndo, type ItemWritePlan } from '../lib/git-items';
+import { Button, cx, Empty, Modal, Segmented, Spinner } from './ui';
 import { PartsTable } from './PartsTable';
 
 interface Commit {
@@ -12,54 +14,70 @@ interface Commit {
   date: string;
   subject: string;
 }
+interface Version {
+  commit: Commit;
+  /** What this version changed. */
+  changed: string[];
+}
 interface ItemDiff {
   title: string;
   parts: Array<{ part: string; before?: string; after?: string; differs: boolean }>;
 }
-
-/** What the history is of: a request of a collection, a whole collection, or an environment. */
-export type HistoryTarget = { collectionId: string; itemId?: string } | { environmentId: string };
+interface Blame {
+  title: string;
+  fields: Array<{ field: string; value: string; commit?: Commit; uncommitted?: boolean }>;
+}
+interface Target {
+  file: string;
+  itemId?: string;
+}
 
 /**
- * The versions of a request, a collection or an environment in git (GIT-209): the commits that changed it, each
- * compared with now part by part, and Restore this version (a change to commit; the current one stays in history).
+ * One item in git, for any versioned kind (release B of planning/git-everything.md): its versions, each with what it
+ * changed and compared with now part by part, Restore this version (a reviewed change to commit, with Undo), and who last
+ * changed each of its fields.
  */
-export function GitItemHistoryBody({ target, name, onClose }: { target: HistoryTarget; name: string; onClose(): void }) {
-  const [history, setHistory] = useState<{ file: string; itemId?: string; versions: Commit[] }>();
+export function GitItemHistoryBody({ itemRef, name, tab: first = 'versions', onClose }: { itemRef: ItemRef; name: string; tab?: 'versions' | 'blame'; onClose(): void }) {
+  const [tab, setTab] = useState(first);
+  const [target, setTarget] = useState<Target>();
+  const [history, setHistory] = useState<{ title: string; versions: Version[] }>();
+  const [blame, setBlame] = useState<Blame>();
   const [sel, setSel] = useState(0);
   const [diff, setDiff] = useState<ItemDiff>();
   const [onlyDiffs, setOnlyDiffs] = useState(true);
-  const what = 'environmentId' in target ? 'environment' : target.itemId ? 'request' : 'collection';
+  const key = JSON.stringify(itemRef);
   useEffect(() => {
-    void call<{ file: string; itemId?: string; versions: Commit[] }>('git.history', target).then(setHistory, (e) => {
+    void call<Target>('git.target', { ref: itemRef }).then(setTarget, toastError);
+    void call<{ title: string; versions: Version[] }>('git.itemVersions', { ref: itemRef }).then(setHistory, (e) => {
       toastError(e);
-      setHistory({ file: '', versions: [] });
+      setHistory({ title: name, versions: [] });
     });
-  }, [JSON.stringify(target)]);
+  }, [key]);
+  useEffect(() => {
+    if (tab === 'blame' && !blame) void call<Blame>('git.itemBlame', { ref: itemRef }).then(setBlame, toastError);
+  }, [tab, key]);
   const v = history?.versions[sel];
   useEffect(() => {
-    if (!history?.file || !v) return setDiff(undefined);
+    if (!target || !v) return setDiff(undefined);
     setDiff(undefined);
-    void call<ItemDiff>('git.itemDiff', { file: history.file, itemId: history.itemId, rev: v.hash }).then(setDiff, () => setDiff({ title: '', parts: [] }));
-  }, [history, v?.hash]);
+    void call<ItemDiff>('git.itemDiff', { file: target.file, itemId: target.itemId, rev: v.commit.hash }).then(setDiff, () => setDiff({ title: '', parts: [] }));
+  }, [target?.file, target?.itemId, v?.commit.hash]);
+  const title = history?.title || name;
   const restore = async () => {
     if (!v) return;
-    if (
-      !(await confirmAction({
-        title: 'Restore this version',
-        message: `Put ${what === 'request' ? `"${name}"` : `the ${what} ${name}`} back as it was in ${v.short} (${v.subject})?`,
-        detail:
-          what === 'request'
-            ? 'Only this request changes; commit to keep it. Your current version stays in git history.'
-            : `The whole ${what} goes back; commit to keep it. Your current version stays in git history.`,
-        confirmLabel: 'Restore',
-      }))
-    )
-      return;
     try {
-      if ('collectionId' in target && target.itemId) await call('git.restoreItem', { collectionId: target.collectionId, itemId: target.itemId, rev: v.hash });
-      else await call('git.restoreFile', { ...target, rev: v.hash });
-      useApp.getState().toast(`Restored ${name} from ${v.short}`, 'success');
+      // the preview first: what would change in the item
+      const plan = await call<ItemWritePlan>('git.itemRestore', { ref: itemRef, rev: v.commit.hash, dryRun: true });
+      if (!plan.changed) return toastWithUndo(`${title} is already the same as in ${v.commit.short}`, undefined);
+      const ok = await confirmAction({
+        title: 'Restore this version',
+        message: `Put ${title} back as it was in ${v.commit.short} (${v.commit.subject})?`,
+        detail: `Only this ${plan.itemId ? 'item' : 'file'} changes; the rest of ${plan.file} stays. Commit to keep it; Undo puts it back as it is now.\n\n${partsLines(plan.parts)}`,
+        confirmLabel: 'Restore',
+      });
+      if (!ok) return;
+      const done = await call<ItemWritePlan>('git.itemRestore', { ref: itemRef, rev: v.commit.hash });
+      toastWithUndo(`Restored ${title} from ${v.commit.short}`, done.undoId);
       onClose();
     } catch (e) {
       toastError(e);
@@ -68,59 +86,102 @@ export function GitItemHistoryBody({ target, name, onClose }: { target: HistoryT
   const rows = (diff?.parts ?? []).filter((p) => !onlyDiffs || p.differs).map((p) => ({ part: p.part, differs: p.differs, values: { then: p.before, now: p.after } }));
   return (
     <Modal
-      title={`History of ${name}`}
+      title={`History of ${title}`}
       onClose={onClose}
       width={1000}
       footer={
         <>
-          <label className="mr-auto flex items-center gap-1 text-xs text-muted">
-            <input type="checkbox" checked={onlyDiffs} onChange={(e) => setOnlyDiffs(e.target.checked)} /> Only the parts that differ from now
-          </label>
+          {tab === 'versions' && (
+            <label className="mr-auto flex items-center gap-1 text-xs text-muted">
+              <input type="checkbox" checked={onlyDiffs} onChange={(e) => setOnlyDiffs(e.target.checked)} /> Only the parts that differ from now
+            </label>
+          )}
           <Button onClick={onClose}>Close</Button>
-          <Button variant="primary" icon={<RotateCcw size={13} />} disabled={!v} onClick={() => void restore()}>
-            Restore this version
-          </Button>
+          {tab === 'versions' && (
+            <Button variant="primary" icon={<RotateCcw size={13} />} disabled={!v} onClick={() => void restore()}>
+              Restore this version
+            </Button>
+          )}
         </>
       }
     >
-      {!history ? (
-        <div className="h-40 grid place-items-center">
-          <Spinner />
-        </div>
-      ) : !history.versions.length ? (
-        <Empty title={`No commits changed this ${what} yet`}>Commit the workspace (Git view) to start its history.</Empty>
-      ) : (
-        <div className="grid grid-cols-[260px_1fr] gap-3 h-[55vh]">
-          <ul className="overflow-auto border border-line rounded-md" aria-label="Versions">
-            {history.versions.map((x, i) => (
-              <li key={x.hash}>
-                <button className={cx('w-full text-left px-2 py-1.5 text-sm border-b border-line', i === sel ? 'bg-accent-soft' : 'hover:bg-hover')} onClick={() => setSel(i)}>
-                  <div className="truncate">{x.subject}</div>
-                  <div className="text-xs text-muted">
-                    <span className="font-mono">{x.short}</span> · {x.author} · {new Date(x.date).toLocaleDateString()}
-                  </div>
-                </button>
-              </li>
-            ))}
-          </ul>
-          <div className="overflow-auto border border-line rounded-md" data-history-diff>
-            {!diff ? (
-              <div className="h-24 grid place-items-center">
-                <Spinner />
-              </div>
-            ) : (
-              <PartsTable
-                rows={rows}
-                emptyText="This version is the same as now."
-                columns={[
-                  { key: 'then', label: `In ${v?.short ?? ''}`, missing: 'not there' },
-                  { key: 'now', label: 'Now', missing: 'deleted since', highlight: true },
-                ]}
-              />
-            )}
+      <div className="grid gap-3">
+        <Segmented
+          label="What to show"
+          value={tab}
+          onChange={setTab}
+          options={[
+            { value: 'versions', label: 'Versions' },
+            { value: 'blame', label: 'Who changed what' },
+          ]}
+        />
+        {!history ? (
+          <div className="h-40 grid place-items-center">
+            <Spinner />
           </div>
-        </div>
-      )}
+        ) : tab === 'blame' ? (
+          !blame ? (
+            <div className="h-24 grid place-items-center">
+              <Spinner />
+            </div>
+          ) : (
+            <table className="w-full text-sm" data-git-blame>
+              <thead>
+                <tr className="text-left text-xs text-muted">
+                  <th className="py-1 pr-3">Field</th>
+                  <th className="pr-3">Value</th>
+                  <th className="pr-3">Last changed by</th>
+                  <th>When</th>
+                </tr>
+              </thead>
+              <tbody>
+                {blame.fields.map((f) => (
+                  <tr key={f.field} className="border-t border-line align-top" data-blame-field={f.field}>
+                    <td className="py-1 pr-3 font-medium">{f.field}</td>
+                    <td className="pr-3 font-mono text-xs whitespace-pre-wrap break-all max-w-[360px]">{f.value || '—'}</td>
+                    <td className="pr-3">{f.uncommitted ? <span className="text-warn">not committed yet</span> : `${f.commit?.author} · ${f.commit?.short} ${f.commit?.subject}`}</td>
+                    <td className="text-muted whitespace-nowrap">{f.commit ? new Date(f.commit.date).toLocaleDateString() : 'now'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )
+        ) : !history.versions.length ? (
+          <Empty title="No commits changed this yet">Commit the workspace (Git view) to start its history.</Empty>
+        ) : (
+          <div className="grid grid-cols-[280px_1fr] gap-3 h-[55vh]">
+            <ul className="overflow-auto border border-line rounded-md" aria-label="Versions">
+              {history.versions.map((x, i) => (
+                <li key={x.commit.hash}>
+                  <button className={cx('w-full text-left px-2 py-1.5 text-sm border-b border-line', i === sel ? 'bg-accent-soft' : 'hover:bg-hover')} onClick={() => setSel(i)} data-version={x.commit.short}>
+                    <div className="truncate">{x.commit.subject}</div>
+                    <div className="text-xs text-muted truncate">{x.changed.join(', ')}</div>
+                    <div className="text-xs text-muted">
+                      <span className="font-mono">{x.commit.short}</span> · {x.commit.author} · {new Date(x.commit.date).toLocaleDateString()}
+                    </div>
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <div className="overflow-auto border border-line rounded-md" data-history-diff>
+              {!diff ? (
+                <div className="h-24 grid place-items-center">
+                  <Spinner />
+                </div>
+              ) : (
+                <PartsTable
+                  rows={rows}
+                  emptyText="This version is the same as now."
+                  columns={[
+                    { key: 'then', label: `In ${v?.commit.short ?? ''}`, missing: 'not there' },
+                    { key: 'now', label: 'Now', missing: 'deleted since', highlight: true },
+                  ]}
+                />
+              )}
+            </div>
+          </div>
+        )}
+      </div>
     </Modal>
   );
 }

@@ -40,7 +40,7 @@ Right-click a request in the tree, or click its **⋯** button:
 | **Copy as ▸** | **Copy URL** (with `{{variables}}` resolved from the active environment), **cURL (bash)**, **cURL (cmd)**, **PowerShell**, **fetch**: a runnable command or code, like the browser's *Copy as …*, with variables resolved and inherited auth applied (`fetch` code also runs in Node.js 18+); **More code snippets…** opens the code generator (Python requests and httpx, Go, Java, Kotlin, C#, Dart, HTTPie and more). |
 | **Monitor on a schedule…** | A monitor that runs this request on a schedule. |
 | **Save as test…** | The request as a test file in **Tests**, to run with the test runner and in CI (also `testpion test from-request "Collection/Folder/Request"`). |
-| **History in git…** | The request's versions in git (when the workspace is in git). |
+| **Git ▸ History in git…** | The request's versions in git, who changed what, and Restore this version (when the workspace is in git); **Stage changes** and **Discard changes…** act on this request only. |
 | **Rename**, **Duplicate**, **Add to favorites** | Manage the request. |
 | **Move to…** | Move it to another folder, or to a folder of another collection. Open tabs follow it. You can also drag it: onto a request to place it before that one, onto a folder to put it inside, or onto a collection's name for its top level. |
 | **Delete…** | Delete the request at once (also <kbd>Delete</kbd> on a focused row). The message that follows has **Undo** for 8 seconds, and <kbd>Ctrl</kbd>+<kbd>Z</kbd> outside a text field does the same: the request comes back with its id, in its place ([Deleting and Undo](/getting-started/finding-your-way#deleting-and-undo)). |

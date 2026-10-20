@@ -607,7 +607,7 @@ export const TOOL_DOCS: Record<string, ToolDoc> = {
     narrow: 'Give `path` for one file.',
   },
   git_resolve: {
-    when: 'Use it to settle a conflicted file by taking ours or theirs, for all its conflicts or per conflict.',
+    when: 'Use it to settle a conflicted file by taking ours or theirs, or your own value, for all its conflicts or per conflict (items, fields, text hunks).',
     whenNot: 'To see the conflicts first, use `git_conflicts`.',
     example: { path: 'collections/veterinary-api.json', side: 'theirs', confirm: true },
   },
@@ -638,6 +638,42 @@ export const TOOL_DOCS: Record<string, ToolDoc> = {
     whenNot: 'For what changed in them, use `git_diff` with `from` and `to`.',
     example: { collection: 'Veterinary API', limit: 20 },
     narrow: 'Give `file` or `collection`, lower `limit`, or page with `cursor`.',
+  },
+  git_history: {
+    when: 'Use it to see the versions of one item in git and what each one changed, before restoring an older one.',
+    whenNot: 'For the commits of a whole file or collection, use `git_log`; for what changed since the last commit, use `git_changes`.',
+    example: { ref: 'mcp-server:weather', limit: 10 },
+    narrow: 'Lower `limit`, or page with `cursor`.',
+  },
+  git_blame: {
+    when: 'Use it to find out who last changed each field of one item (its URL, headers, name …) and when.',
+    whenNot: 'For all the versions of the item, use `git_history`.',
+    example: { ref: 'provider:openai' },
+  },
+  git_restore_item: {
+    when: 'Use it to put an older version of one item back (take the commit from `git_history`); try `dryRun` first to see what changes.',
+    whenNot: 'To throw away uncommitted changes, use `git_discard_item`; to undo a restore, use `git_undo`.',
+    example: { ref: 'mcp-server:weather', rev: 'a1b2c3d', dryRun: true },
+  },
+  git_discard_item: {
+    when: 'Use it to throw away the uncommitted change of one item while the other changes in its file stay.',
+    whenNot: 'To go back to an older commit, use `git_restore_item`; to undo a discard, use `git_undo`.',
+    example: { ref: 'mcp-server:weather', dryRun: true },
+  },
+  git_stage_item: {
+    when: 'Use it to stage the file of one item before a commit, or unstage it; it names the other changed items that come along.',
+    whenNot: 'To stage everything and propose a commit message, use `git_propose_commit`.',
+    example: { ref: 'mcp-server:weather', dryRun: true },
+  },
+  git_undo: {
+    when: 'Use it to undo the last `git_restore_item` or `git_discard_item`, or list what can be undone with `list`.',
+    whenNot: 'It cannot undo a commit or a stash; use `git_stash` with "pop" for a stash.',
+    example: { list: true },
+  },
+  git_stash: {
+    when: 'Use it to set the uncommitted changes aside under a name ("push") before pulling or switching, and to put them back ("pop").',
+    whenNot: 'To throw changes away, use `git_discard_item`; to commit them, use `git_propose_commit`.',
+    example: { action: 'list' },
   },
   git_propose_commit: {
     when: 'Use it to stage the changes, check them for secrets and propose a commit message for a person to commit.',

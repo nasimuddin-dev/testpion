@@ -1,5 +1,4 @@
 import { lazy, Suspense, type ComponentProps } from 'react';
-export type { HistoryTarget } from './GitItemHistoryBody';
 
 // An item's git history: loads when first opened, not at startup
 const GitItemHistoryBody = lazy(async () => ({ default: (await import('./GitItemHistoryBody')).GitItemHistoryBody }));

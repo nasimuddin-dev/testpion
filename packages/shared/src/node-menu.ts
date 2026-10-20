@@ -41,7 +41,7 @@ export type MenuLabelKey =
   | 'createTestFileFromFolder'
   | 'generateFlow'
   | 'settings'
-  | 'historyInGit'
+  | 'gitMenu'
   | 'rename'
   | 'renameFolder'
   | 'duplicate'
@@ -284,7 +284,8 @@ export const STANDARD_ACTIONS = [
   { id: 'testFile', group: 'tools', label: testFileLabel, icon: 'file-check-2', cap: 'test-file' },
   { id: 'flow', group: 'tools', label: 'generateFlow', icon: 'sparkles', cap: 'flow' },
   { id: 'settings', group: 'tools', label: 'settings', icon: 'settings-2', appliesTo: isListItem, last: true },
-  { id: 'historyInGit', group: 'git', label: 'historyInGit', icon: 'history', cap: 'git-history', when: (c) => !!c.repo },
+  // one submenu (History in git…, Stage changes, Discard changes…): the menus stay within 18 items
+  { id: 'gitMenu', group: 'git', label: 'gitMenu', icon: 'git-compare', cap: 'git-history', when: (c) => !!c.repo },
   { id: 'rename', group: 'edit', label: (_c, k) => (isFolderNode(k) ? 'renameFolder' : 'rename'), icon: 'pencil', cap: 'rename', shortcut: 'F2' },
   { id: 'duplicate', group: 'edit', label: 'duplicate', icon: 'copy-plus', cap: 'duplicate' },
   // a dialog (Move to…), or a submenu of the list's folders, or of the collections a gRPC call or connection can be in

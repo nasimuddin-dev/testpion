@@ -140,6 +140,7 @@ import { grpcHandlers } from './handlers/grpc.js';
 import { agentHandlers } from './handlers/agents.js';
 import { feedbackHandlers } from './handlers/feedback.js';
 import { gitHandlers } from './handlers/git.js';
+import { gitItemHandlers } from './handlers/git-items.js';
 import { GitAutoFetch } from './git-autofetch.js';
 import { debuggerHandlers, type DebuggerState } from './handlers/debugger.js';
 import { debuggerRulesHandlers } from './handlers/debugger-rules.js';
@@ -660,7 +661,7 @@ export class Backend {
    */
   private buildHandlers(): Handlers {
     const all: Handlers = {};
-    for (const group of [appHandlers, workspaceHandlers, collectionsHandlers, requestsHandlers, grpcHandlers, mcpHandlers, aiHandlers, aiTaskHandlers, aiTriageHandlers, aiSpecHandlers, testingHandlers, monitorHandlers, agentHandlers, feedbackHandlers, gitHandlers, debuggerHandlers, debuggerRulesHandlers, externalSecretsHandlers, fuzzHandlers, flowDebugHandlers, debuggerFlowHandlers, debuggerReverseHandlers, flowDeployHandlers, terminalHandlers, flowScaleHandlers, evalMatrixHandlers, outputHandlers, kindHandlers, bundleHandlers, ragHandlers]) {
+    for (const group of [appHandlers, workspaceHandlers, collectionsHandlers, requestsHandlers, grpcHandlers, mcpHandlers, aiHandlers, aiTaskHandlers, aiTriageHandlers, aiSpecHandlers, testingHandlers, monitorHandlers, agentHandlers, feedbackHandlers, gitHandlers, gitItemHandlers, debuggerHandlers, debuggerRulesHandlers, externalSecretsHandlers, fuzzHandlers, flowDebugHandlers, debuggerFlowHandlers, debuggerReverseHandlers, flowDeployHandlers, terminalHandlers, flowScaleHandlers, evalMatrixHandlers, outputHandlers, kindHandlers, bundleHandlers, ragHandlers]) {
       for (const [name, fn] of Object.entries(group(this))) {
         if (name in all) throw new Error(`RPC method ${name} is defined twice`);
         // the parameters are checked first; a TypeError from inside becomes an InternalError naming the method

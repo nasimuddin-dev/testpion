@@ -5,7 +5,6 @@ import {
   describeGitChanges,
   describeRevChanges,
   gitChangesByItem,
-  findCommittableSecrets,
   gitBranches,
   gitCommit,
   gitDiff,
@@ -18,15 +17,21 @@ import {
   gitSync,
   type GitSyncResult,
   runMergeDriver,
-  gitConflictDetail, gitDeleteBranch, gitRenameBranch } from '@testpion/core';
+  gitConflictDetail,
+  gitDeleteBranch,
+  gitRenameBranch,
+  type MergeResolutions,
+} from '@testpion/core';
 import { EXIT, green, red, yellow, dim, bold, CliError, printJson, withWorkspace } from '../shared.js';
 import { addOutputOptions, saveSurface, savedLine } from '../output-save.js';
+import { commitScanned, registerGitItemCommands, splitKeyValue } from './git-items.js';
 
 const MARK: Record<string, string> = { added: 'A', untracked: 'A', removed: 'D', deleted: 'D', changed: 'M', modified: 'M', renamed: 'R', conflicted: '!' };
 
 const out = (json: boolean, value: unknown, text: () => void) => (json ? printJson(value) : text());
 
 export function registerGitCommands(git: Command, program: Command): void {
+  registerGitItemCommands(git);
   const wsOpt = (c: Command) => c.option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest)').option('--json', 'print as JSON');
 
   wsOpt(
@@ -88,26 +93,12 @@ export function registerGitCommands(git: Command, program: Command): void {
   wsOpt(
     git
       .command('commit')
-      .description('commit the workspace changes (or the staged ones); refuses when a secret is typed in (see git check) unless --allow-secrets')
+      .description('commit the workspace changes (or the staged ones) after a scan of what is staged: a secret typed in refuses the commit (see git check --staged); --allow-secrets only confirms probable ones')
       .requiredOption('-m, --message <text>', 'the commit message')
       .option('--staged', 'commit only what is staged')
-      .option('--allow-secrets', 'commit even with secrets typed in')
+      .option('--allow-secrets', 'commit although probable secrets were found (a certain one always refuses: use a {{variable}} instead)')
       .option('--amend', 'replace the last commit (its message too)'),
-  ).action((o) =>
-    withWorkspace(o.workspace, async (s) => {
-      const secrets = findCommittableSecrets(s);
-      if (secrets.length && !o.allowSecrets) {
-        out(o.json, { committed: false, secrets }, () => {
-          console.log(red(`Not committed: ${secrets.length} secret${secrets.length === 1 ? '' : 's'} typed in:`));
-          for (const f of secrets) console.log(`  ${f.where} ${dim(`(${f.file})`)}`);
-        });
-        process.exitCode = EXIT.TEST_FAILURE;
-        return;
-      }
-      const commit = await gitCommit(s.root, o.message, { paths: o.staged ? undefined : ['.'], amend: !!o.amend });
-      out(o.json, { committed: true, commit }, () => console.log(green(`Committed ${commit.short} ${commit.subject}`)));
-    }),
-  );
+  ).action((o) => withWorkspace(o.workspace, (s) => commitScanned(s, o)));
 
   wsOpt(git.command('log').description('commits that changed the workspace (or one file), newest first').option('--file <path>', 'only commits that changed this file').option('-n, --limit <n>', 'how many', '20')).action((o) =>
     withWorkspace(o.workspace, async (s) => {
@@ -193,61 +184,91 @@ export function registerGitCommands(git: Command, program: Command): void {
     }),
   );
 
-  git
-    .command('resolve')
-    .description('settle a conflicted file: a collection keeps both sides\' changes and takes yours (--ours) or theirs (--theirs) only for requests changed on both; then commit')
-    .argument('<file>', 'path inside the workspace, e.g. collections/payments.json')
-    .option('--ours', 'keep your version of what conflicts')
-    .option('--theirs', 'take their version of what conflicts')
-    .option('--pick <key=side...>', 'a choice per conflict (keys from `testpion git conflicts`), e.g. item:r1=theirs item:r2=ours; the rest keep --ours/--theirs (default ours)')
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest)')
-    .action((file: string, o) =>
-      withWorkspace(o.workspace, async (s) => {
-        const picks = ((o.pick as string[] | undefined) ?? []).map((kv) => {
-          const i = kv.lastIndexOf('=');
-          const side = kv.slice(i + 1);
-          if (i <= 0 || (side !== 'ours' && side !== 'theirs')) throw new CliError(`--pick expects key=ours or key=theirs, got "${kv}"`, EXIT.CONFIG_ERROR);
-          return [kv.slice(0, i), side] as const;
-        });
-        if (!picks.length && !!o.ours === !!o.theirs) throw new CliError('Choose --ours or --theirs (or --pick per conflict)', EXIT.CONFIG_ERROR);
-        const side: 'ours' | 'theirs' = o.theirs ? 'theirs' : 'ours';
-        if (picks.length) {
-          // every conflict gets the default side unless picked
-          const detail = await gitConflictDetail(s.root, file);
-          const resolutions: Record<string, 'ours' | 'theirs'> = Object.fromEntries(detail.items.map((i) => [i.key, side]));
-          for (const [k, v] of picks) {
-            if (!(k in resolutions)) throw new CliError(`No conflict "${k}" in ${file}. Keys: ${Object.keys(resolutions).join(', ') || '(none)'}`, EXIT.CONFIG_ERROR);
-            resolutions[k] = v;
+  wsOpt(
+    git
+      .command('resolve')
+      .description('settle a conflicted file: a file merged by meaning (collections, environments, MCP servers, providers, library, settings) keeps both sides\' changes and takes yours (--ours) or theirs (--theirs) only where they conflict; a text file (tests, flows, specs) is settled hunk by hunk; a binary file whole; then commit')
+      .argument('<file>', 'path inside the workspace, e.g. collections/payments.json')
+      .option('--ours', 'keep your version of what conflicts')
+      .option('--theirs', 'take their version of what conflicts')
+      .option('--pick <key=side...>', 'a choice per conflict (keys from `testpion git conflicts`), e.g. item:r1=theirs item:r1#request.url=ours hunk:0=ours; the rest keep --ours/--theirs (default ours)')
+      .option('--edit <key=value...>', 'your own value for a conflict: JSON for an item or field key (item:r1#request.url="https://…"), plain text for a hunk key (hunk:0=the lines to keep)'),
+  ).action((file: string, o) =>
+    withWorkspace(o.workspace, async (s) => {
+      const picks = ((o.pick as string[] | undefined) ?? []).map((kv) => {
+        const i = kv.lastIndexOf('=');
+        const side = kv.slice(i + 1);
+        if (i <= 0 || (side !== 'ours' && side !== 'theirs')) throw new CliError(`--pick expects key=ours or key=theirs, got "${kv}"`, EXIT.CONFIG_ERROR);
+        return [kv.slice(0, i), side] as const;
+      });
+      const edits = ((o.edit as string[] | undefined) ?? []).map((kv) => {
+        const [key, value] = splitKeyValue(kv, '--edit');
+        if (!key.startsWith('hunk:')) {
+          try {
+            JSON.parse(value);
+          } catch {
+            throw new CliError(`--edit ${key} expects JSON (a string needs its quotes: ${key}='"text"'), got ${value.slice(0, 40)}`, EXIT.CONFIG_ERROR);
           }
-          await gitResolve(s.root, file, side, resolutions);
-        } else await gitResolve(s.root, file, side);
-        console.log(green(`Resolved ${file}`));
-      }),
-    );
+        }
+        return [key, value] as const;
+      });
+      if (!picks.length && !edits.length && !!o.ours === !!o.theirs) throw new CliError('Choose --ours or --theirs (or --pick / --edit per conflict)', EXIT.CONFIG_ERROR);
+      const side: 'ours' | 'theirs' = o.theirs ? 'theirs' : 'ours';
+      const resolutions: MergeResolutions = {};
+      if (picks.length || edits.length) {
+        // only the conflicts named get their own answer: the rest keep `side` (the core fills them in)
+        const detail = await gitConflictDetail(s.root, file);
+        const keys = new Set([...detail.items.flatMap((i) => [i.key, ...(i.fields ?? []).map((f) => f.key)]), ...detail.hunks.map((h) => h.key)]);
+        for (const k of [...picks.map(([k]) => k), ...edits.map(([k]) => k)])
+          if (!keys.has(k)) throw new CliError(`No conflict "${k}" in ${file}. Keys: ${[...keys].join(', ') || '(none)'}`, EXIT.CONFIG_ERROR);
+        for (const [k, v] of picks) resolutions[k] = v;
+        for (const [k, v] of edits) resolutions[k] = { edit: v };
+      }
+      await gitResolve(s.root, file, side, Object.keys(resolutions).length ? resolutions : undefined);
+      out(o.json, { resolved: file, side, picks: picks.length, edits: edits.length }, () => console.log(green(`Resolved ${file}`)));
+    }),
+  );
 
-  git
-    .command('conflicts')
-    .description('after a pull that stopped on conflicts: each conflict of a collection file, part by part (base, ours, theirs), with the key to --pick')
-    .argument('[file]', 'one conflicted file (default: all)')
-    .option('--json', 'machine-readable output (for scripts and AI agents)')
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest)')
-    .action((file: string | undefined, o) =>
-      withWorkspace(o.workspace, async (s) => {
-        const st = await gitStatus(s.root);
-        const files = st.files.filter((f) => f.state === 'conflicted' && (!file || f.path === file));
-        const details = await Promise.all(files.map((f) => gitConflictDetail(s.root, f.path)));
-        out(o.json, details, () => {
-          if (!details.length) return console.log(green('No conflicts.'));
-          for (const d of details) {
-            console.log(bold(d.path) + (d.collection ? '' : dim('  (not a collection: --ours or --theirs takes the whole file)')));
-            for (const i of d.items) {
-              console.log(`  ${yellow(i.key)}  ${i.where} ${dim(`(${i.kind})`)}`);
-              for (const p of i.parts.filter((x) => x.differs)) console.log(dim(`    ${p.part}: mine ${JSON.stringify(p.ours ?? '(deleted)')} · theirs ${JSON.stringify(p.theirs ?? '(deleted)')}`));
-            }
-          }
+  wsOpt(
+    git
+      .command('conflicts')
+      .description('after a pull that stopped on conflicts: each conflicted file by what it holds (items with their fields, text hunks, or a binary file with sizes) and the key to --pick / --edit; --resolve ours|theirs settles them all')
+      .argument('[file]', 'one conflicted file (default: all)')
+      .option('--resolve <side>', 'settle every conflicted file (or the one given) with this side: ours or theirs'),
+  ).action((file: string | undefined, o) =>
+    withWorkspace(o.workspace, async (s) => {
+      const st = await gitStatus(s.root);
+      if (!st.repository) throw new CliError(`${s.root} is not in a git repository: run  git init  there (then  testpion git setup)`, EXIT.CONFIG_ERROR);
+      const files = st.files.filter((f) => f.state === 'conflicted' && (!file || f.path === file));
+      if (o.resolve !== undefined) {
+        if (o.resolve !== 'ours' && o.resolve !== 'theirs') throw new CliError('--resolve takes ours or theirs', EXIT.CONFIG_ERROR);
+        const side: 'ours' | 'theirs' = o.resolve;
+        for (const f of files) await gitResolve(s.root, f.path, side);
+        return out(o.json, { side, resolved: files.map((f) => f.path) }, () => {
+          if (!files.length) return console.log(green('No conflicts.'));
+          for (const f of files) console.log(green(`Resolved ${f.path} (${side})`));
+          console.log(dim('Commit to finish.'));
         });
-      }),
-    );
+      }
+      const details = await Promise.all(files.map((f) => gitConflictDetail(s.root, f.path)));
+      out(o.json, details, () => {
+        if (!details.length) return console.log(green('No conflicts.'));
+        for (const d of details) {
+          console.log(bold(d.path) + dim(d.mode === 'items' ? '  (merged by meaning: item by item)' : d.mode === 'text' ? '  (text: hunk by hunk)' : '  (binary: --ours or --theirs takes the whole file)'));
+          for (const i of d.items) {
+            console.log(`  ${yellow(i.key)}  ${i.where} ${dim(`(${i.kind})`)}`);
+            if (i.fields?.length) for (const f of i.fields) console.log(`    ${yellow(f.key)}  ${dim(`mine ${JSON.stringify(f.ours ?? '(deleted)')} · theirs ${JSON.stringify(f.theirs ?? '(deleted)')}`)}`);
+            else for (const p of i.parts.filter((x) => x.differs)) console.log(dim(`    ${p.part}: mine ${JSON.stringify(p.ours ?? '(deleted)')} · theirs ${JSON.stringify(p.theirs ?? '(deleted)')}`));
+          }
+          for (const h of d.hunks) {
+            console.log(`  ${yellow(h.key)}  ${h.where}`);
+            console.log(dim(`    mine:\n${h.ours.replace(/\n$/, '').replace(/^/gm, '      ')}\n    theirs:\n${h.theirs.replace(/\n$/, '').replace(/^/gm, '      ')}`));
+          }
+          if (d.sizes) console.log(dim(`  mine ${d.sizes.ours ?? 0} bytes · theirs ${d.sizes.theirs ?? 0} bytes`));
+        }
+      });
+    }),
+  );
 
   wsOpt(git.command('push').description('send your commits to the remote (the first push of a branch sets its upstream)')).action((o) =>
     withWorkspace(o.workspace, async (s) => {

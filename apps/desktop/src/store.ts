@@ -216,6 +216,8 @@ interface AppState {
   openapiDiff?: boolean;
   /** The Export bundle dialog (lib/transfer.ts): what to export. */
   exportBundle?: import('./lib/transfer').ExportRequest;
+  /** The History / Who changed what dialog of one item in git (lib/git-items.ts). */
+  gitItem?: { ref: import('@testpion/shared').ItemRef; name: string; tab?: 'versions' | 'blame' };
   /** The Import bundle dialog (lib/transfer.ts): a section limits it to that kind. */
   importBundle?: import('./lib/transfer').ImportRequest;
   /** The API coverage dialog; `runId` preselects a run. */

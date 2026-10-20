@@ -49,6 +49,7 @@ export const LIST_TOOLS: Record<string, { field?: string }> = {
   git_log: {},
   git_diff: {},
   git_changes: { field: 'items' },
+  git_history: { field: 'versions' },
   flow_runs: {},
   test_history: { field: 'runs' },
   debugger_exchanges: { field: 'exchanges' },
@@ -108,6 +109,27 @@ export const CONFIRM_TOOLS: Record<string, { when?(a: Args): boolean; describe(a
   flow_remove_step: { describe: (a) => `remove the step ${q(a.id)} from tests/${String(a.file ?? '')} (steps that wait for it lose that dependency)` },
   git_resolve: { describe: (a) => `overwrite the conflicted file ${q(a.path)} with ${a.side ? `"${String(a.side)}"` : 'the chosen sides'} (the other side's changes in it are dropped)` },
   git_sync: { describe: () => 'pull (merging the remote changes into the workspace files) and push the local commits' },
+  git_restore_item: {
+    when: (a) => a.dryRun !== true,
+    describe: (a) => `write the version of ${typeof a.ref === 'string' ? q(a.ref) : a.file ? q(a.file) : 'the item'} from commit ${q(a.rev)} over its current content (the change stays uncommitted; git_undo takes it back)`,
+    preview: (a) => ({ ...a, dryRun: true }),
+  },
+  git_discard_item: {
+    when: (a) => a.dryRun !== true,
+    describe: (a) => `throw away the uncommitted change of ${typeof a.ref === 'string' ? q(a.ref) : a.file ? q(a.file) : 'the item'} (git_undo takes it back)`,
+    preview: (a) => ({ ...a, dryRun: true }),
+  },
+  git_undo: { when: (a) => a.list !== true, describe: (a) => `undo ${a.id ? `the operation ${q(a.id)}` : 'the last restore or discard'}: its files go back as they were before it` },
+  git_stash: {
+    when: (a) => ['push', 'apply', 'pop', 'drop'].includes(String(a.action)) && !(a.action === 'push' && a.dryRun === true),
+    describe: (a) =>
+      a.action === 'push'
+        ? `set every uncommitted change of the workspace aside as ${q(a.name)} (the workspace goes back to the last commit)`
+        : a.action === 'drop'
+          ? 'remove the stash for good'
+          : `put the stash back into the workspace files${a.action === 'pop' ? ' and remove it from the list' : ''}`,
+    preview: (a) => (a.action === 'push' ? { ...a, dryRun: true } : { action: 'show', ...(a.index !== undefined ? { index: a.index } : {}), ...(a.hash ? { hash: a.hash } : {}) }),
+  },
   collection_tidy: { describe: (a) => `tidy the collection ${q(a.collection)}: remove duplicate requests, empty folders and unused variables as asked (requests and variables are deleted)` },
   rename_variable: { describe: (a) => `rename the variable ${q(a.from)} to ${q(a.to)} everywhere it is defined or used (environments, collections, test files)` },
   replace_in_collection: {

@@ -60,7 +60,7 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
       "Tidy with AI…",
     ],
     [
-      "History in git…",
+      "Git",
     ],
     [
       "Rename",
@@ -86,6 +86,9 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
     ],
     [
       "Use in a test",
+    ],
+    [
+      "Git",
     ],
     [
       "Rename",
@@ -117,7 +120,7 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
       "Export…",
     ],
     [
-      "History in git…",
+      "Git",
     ],
     [
       "Rename",
@@ -138,6 +141,9 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
     [
       "Copy link",
       "Export…",
+    ],
+    [
+      "Git",
     ],
     [
       "Rename",
@@ -180,6 +186,9 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
       "Run in CI…",
     ],
     [
+      "Git",
+    ],
+    [
       "Rename",
       "Duplicate",
     ],
@@ -208,6 +217,9 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
       "Create test file from folder…",
       "Generate integration flow with AI…",
       "Edit folder (scripts, variables, auth)",
+    ],
+    [
+      "Git",
     ],
     [
       "Rename",
@@ -320,6 +332,21 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
       "Delete folder…",
     ],
   ],
+  "folder:rag-target": [
+    [
+      "New …",
+    ],
+    [
+      "Expand all",
+      "Collapse all",
+    ],
+    [
+      "Rename folder",
+    ],
+    [
+      "Delete folder…",
+    ],
+  ],
   "folder:spec": [
     [
       "New …",
@@ -390,6 +417,9 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
       "Save as test…",
     ],
     [
+      "Git",
+    ],
+    [
       "Rename",
       "Duplicate",
       "Move to collection ▸",
@@ -427,6 +457,9 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
       "Export…",
     ],
     [
+      "Git",
+    ],
+    [
       "Rename",
       "Duplicate",
       "Move to folder ▸",
@@ -456,6 +489,9 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
     ],
     [
       "Settings…",
+    ],
+    [
+      "Git",
     ],
     [
       "Rename",
@@ -490,6 +526,9 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
       "Export…",
     ],
     [
+      "Git",
+    ],
+    [
       "Rename",
       "Duplicate",
       "Move to folder ▸",
@@ -506,6 +545,9 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
     [
       "Copy link",
       "Export…",
+    ],
+    [
+      "Git",
     ],
     [
       "Rename",
@@ -534,7 +576,29 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
       "Settings…",
     ],
     [
+      "Git",
+    ],
+    [
       "Duplicate",
+    ],
+    [
+      "Delete…",
+    ],
+  ],
+  "rag-target": [
+    [
+      "Open",
+    ],
+    [
+      "Copy link",
+    ],
+    [
+      "Git",
+    ],
+    [
+      "Rename",
+      "Duplicate",
+      "Move to folder ▸",
     ],
     [
       "Delete…",
@@ -554,7 +618,7 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
       "Save as test…",
     ],
     [
-      "History in git…",
+      "Git",
     ],
     [
       "Rename",
@@ -726,6 +790,16 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
       "Export…",
     ],
   ],
+  "section:rag-target": [
+    [
+      "New …",
+      "New folder…",
+    ],
+    [
+      "Expand all",
+      "Collapse all",
+    ],
+  ],
   "section:spec": [
     [
       "New …",
@@ -780,6 +854,9 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
       "Generate tests from this spec…",
     ],
     [
+      "Git",
+    ],
+    [
       "Rename",
       "Move to folder ▸",
     ],
@@ -808,6 +885,9 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
       "Monitor on a schedule…",
       "Run in CI…",
       "Expose as MCP tool…",
+    ],
+    [
+      "Git",
     ],
     [
       "Rename",
@@ -862,6 +942,9 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
     ],
     [
       "Save as test…",
+    ],
+    [
+      "Git",
     ],
     [
       "Rename",

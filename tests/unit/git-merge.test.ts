@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { WorkspaceStore, assertGitRef, assertGitRev, assertRemoteUrl, describeRevChanges, changesMarkdown, gitCommit, gitConflictDetail, gitItemHistory, gitInit, gitResolve, gitSetupMergeDriver, gitStatus, gitVersion, mergeCollectionTexts, mergeWorkspaceTexts, pullRequestUrl, runGit, type Collection } from '@testpion/core';
+import { WorkspaceStore, assertGitRef, assertGitRev, assertRemoteUrl, describeRevChanges, changesMarkdown, gitCommit, gitConflictDetail, itemHistory, addressOf, gitInit, gitResolve, gitSetupMergeDriver, gitStatus, gitVersion, mergeCollectionTexts, mergeWorkspaceTexts, pullRequestUrl, runGit, type Collection } from '@testpion/core';
 
 // GIT-301 (merge by id), GIT-304 (pull request links), GIT-401 (semantic diff between commits).
 const root = mkdtempSync(join(tmpdir(), 'tp-merge-'));
@@ -38,7 +38,7 @@ describe('merging collections by id', () => {
     const ours = col([folder([req('a', 'A', 'https://x/mine')], 'Folder')]);
     const theirs = col([folder([req('a', 'A', 'https://x/theirs'), req('n', 'N', 'https://x/n')])]);
     const r = mergeCollectionTexts(base, ours, theirs)!;
-    expect(r.conflicts).toEqual(['API ▸ Folder ▸ A: changed on both sides']);
+    expect(r.conflicts).toEqual(['API ▸ Folder ▸ A: request.url changed on both sides']);
     const f = (JSON.parse(r.text) as { items: Array<{ name: string; items: Array<{ id: string; request: { url: string } }> }> }).items[0]!;
     expect(f.name).toBe('Folder');
     expect(f.items.map((i) => i.id)).toEqual(['a', 'n']);
@@ -167,10 +167,10 @@ describe('git with the merge driver', () => {
     // a request's history: only the commits that changed it (the merge and "ours" left B as theirs made it)
     save([req('a', 'A', 'https://x/a-ours'), req('b', 'B', 'https://x/b-theirs'), req('c', 'C', 'https://x/c')]);
     await gitCommit(ws, 'add C', { paths: ['collections'] });
-    const hist = await gitItemHistory(ws, 'collections/api.json', 'b');
+    const hist = (await itemHistory(ws, addressOf('collections/api.json', 'b'))).versions;
     expect(hist.map((h) => h.commit.subject)).toEqual(['theirs', 'base']);
-    expect((hist[0]!.item as { request: { url: string } }).request.url).toBe('https://x/b-theirs');
-    expect((await gitItemHistory(ws, 'collections/api.json', 'c')).map((h) => h.commit.subject)).toEqual(['add C']);
+    expect(hist[0]!.parts.find((p) => p.part === 'Request')!.after).toContain('https://x/b-theirs');
+    expect((await itemHistory(ws, addressOf('collections/api.json', 'c'))).versions.map((h) => h.commit.subject)).toEqual(['add C']);
 
     // a real conflict: A changed on both sides; "theirs" wins only A, our change to C stays
     await runGit(ws, ['switch', '-c', 'other2']);
