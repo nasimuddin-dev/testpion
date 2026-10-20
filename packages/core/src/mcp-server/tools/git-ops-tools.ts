@@ -71,7 +71,7 @@ export function gitOpsTools({ store, redactor }: { store: WorkspaceStore; redact
       name: 'git_stage_item',
       write: true,
       description:
-        'Stage (or with `unstage: true`, unstage) the file an item is in, so a commit takes it. A file that holds several items stages as one file: `alsoStages` names the other changed items that come along, so check it before committing. With `dryRun: true` it only reports.',
+        'Stage (or with `unstage: true`, unstage) one item, so a commit takes it. In a file that holds several items (a collection, MCP servers, providers, a library) only the change of this item goes into the index (`partial: true`; `leftUnstaged` names the other changed items of the file, which stay out of the commit); a file that is one item, or whose staged copy is not in the stable form, stages whole and `alsoStages` names the other changed items that come along, so check it before committing. With `dryRun: true` it only reports.',
       inputSchema: { type: 'object', properties: { ...target, unstage: { type: 'boolean', description: 'true: take it out of the staged files' }, dryRun } },
       run: (a) => stageItem(store.root, to(a), { unstage: a.unstage === true, dryRun: a.dryRun === true }),
     },

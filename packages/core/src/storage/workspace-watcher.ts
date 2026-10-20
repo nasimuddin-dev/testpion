@@ -20,7 +20,8 @@ export interface WorkspaceChange {
 }
 
 const IGNORED_TOP = new Set(['runs', 'traces', 'payloads', 'reports', 'baselines', 'trash', '.local', '.git', 'node_modules']);
-const IGNORED_FILE = /(^|\/)(database\.sqlite.*|metadata\.jsonl|\.template-offered\.json)$|\.tmp-\d+-[0-9a-f]+$|~$|\.swp$/;
+// debugger/*.har: capture sessions are git-ignored and written constantly while a capture runs (debugger/shared/ is tracked and still reported)
+const IGNORED_FILE = /(^|\/)(database\.sqlite.*|metadata\.jsonl|\.template-offered\.json)$|^debugger\/[^/]+\.har$|\.tmp-\d+-[0-9a-f]+$|~$|\.swp$/;
 
 /** What a changed file is (results, local state and temp files: nothing); the registry says which kind it belongs to. */
 export function changeKind(path: string): WorkspaceChangeKind | undefined {

@@ -68,6 +68,9 @@ export function printStagedScan(scan: StagedScan) {
     console.log(yellow(`${scan.confirm.length} probable secret${scan.confirm.length === 1 ? '' : 's'} (a commit needs --allow-secrets):`));
     for (const f of scan.confirm) console.log(line(f));
   }
+  if (scan.allowed.length) console.log(dim(`${scan.allowed.length} value${scan.allowed.length === 1 ? ' is' : 's are'} allowed by .testpion/secrets-allow.json: ${scan.allowed.map((f) => `${f.item} ${f.field}`).join(', ')}`));
+  if (scan.allowProblem) console.log(red(scan.allowProblem));
+  for (const l of scan.large) console.log(l.level === 'refuse' ? red(`${l.file} is ${(l.bytes / 1048576).toFixed(0)} MB: a commit is refused (GitHub rejects 100 MB). Track it:  testpion git large --track ${l.file} --lfs   or   --reference`) : l.level === 'lfs' ? yellow(`${l.file} is ${(l.bytes / 1048576).toFixed(0)} MB: track it with Git LFS or by reference:  testpion git large --track ${l.file} --lfs   or   --reference`) : dim(`${l.file} is ${(l.bytes / 1048576).toFixed(1)} MB`));
   if (!scan.blocking.length && !scan.confirm.length) console.log(green(scan.staged.length ? 'No secrets in the staged files: safe to commit.' : 'Nothing is staged.'));
   if (scan.skipped.length) console.log(dim(`Not read (binary or very big): ${scan.skipped.join(', ')}`));
 }
@@ -76,7 +79,7 @@ export function printStagedScan(scan: StagedScan) {
 export async function checkStaged(store: WorkspaceStore, json: boolean): Promise<void> {
   const scan = await scanStagedSecrets(store.root);
   out(json, scan, () => printStagedScan(scan));
-  if (scan.blocking.length || scan.confirm.length) process.exitCode = EXIT.TEST_FAILURE;
+  if (scan.blocking.length || scan.confirm.length || scan.large.some((l) => l.level === 'refuse')) process.exitCode = EXIT.TEST_FAILURE;
 }
 
 /**
@@ -97,7 +100,7 @@ export async function commitScanned(store: WorkspaceStore, o: { message: string;
       if (now.length) await gitUnstage(ws, now);
     }
     out(!!o.json, { committed: false, reason: verdict.reason, secrets: [...scan.blocking, ...scan.confirm] }, () => {
-      console.log(red(verdict.reason === 'blocked' ? 'Not committed: a secret is typed in.' : 'Not committed: probable secrets need a yes.'));
+      console.log(red(verdict.reason === 'blocked' ? 'Not committed: a secret is typed in.' : verdict.reason === 'too-big' ? 'Not committed: a staged file is over 100 MB (the host would reject the push).' : 'Not committed: probable secrets need a yes.'));
       printStagedScan(scan);
     });
     process.exitCode = EXIT.TEST_FAILURE;

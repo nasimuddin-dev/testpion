@@ -96,7 +96,7 @@ exports[`kind equivalence (REG-1 snapshots; unchanged by the registry adapters) 
   ],
   [
     "datasets/users.csv",
-    "tests",
+    "datasets",
     {
       "kind": "dataset",
       "name": "users.csv",
@@ -104,7 +104,7 @@ exports[`kind equivalence (REG-1 snapshots; unchanged by the registry adapters) 
   ],
   [
     "datasets/nested/cases.jsonl",
-    "tests",
+    "datasets",
     {
       "kind": "dataset",
       "name": "nested/cases.jsonl",
@@ -112,7 +112,7 @@ exports[`kind equivalence (REG-1 snapshots; unchanged by the registry adapters) 
   ],
   [
     "datasets/db.sqlite",
-    "tests",
+    "datasets",
     {
       "kind": "dataset",
       "name": "db.sqlite",
@@ -120,7 +120,7 @@ exports[`kind equivalence (REG-1 snapshots; unchanged by the registry adapters) 
   ],
   [
     "datasets/inline-x.csv",
-    "tests",
+    "datasets",
     {
       "kind": "dataset",
       "name": "inline-x.csv",
@@ -128,7 +128,7 @@ exports[`kind equivalence (REG-1 snapshots; unchanged by the registry adapters) 
   ],
   [
     "datasets/sub/",
-    "tests",
+    "datasets",
     {
       "kind": "dataset",
       "name": "sub/",
@@ -240,7 +240,7 @@ exports[`kind equivalence (REG-1 snapshots; unchanged by the registry adapters) 
   ],
   [
     "debugger/morning capture.har",
-    "other",
+    null,
     null,
   ],
   [

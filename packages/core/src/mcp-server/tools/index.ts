@@ -32,6 +32,7 @@ import { itemTools } from './item-tools.js';
 import { outputTools } from './output-tools.js';
 import { gitItemTools } from './git-item-tools.js';
 import { gitOpsTools } from './git-ops-tools.js';
+import { gitSetupTools } from './git-setup-tools.js';
 import { searchAskTools } from './search-ask-tools.js';
 
 /** What the tool modules need from the server: the workspace, its secrets and settings, and the lookups the server shares. */
@@ -73,6 +74,7 @@ export function moduleTools(d: ModuleToolDeps): Tool[] {
     ...gitTools({ store, findCollection, redactor }),
     ...gitItemTools({ store }),
     ...gitOpsTools({ store, redactor }),
+    ...gitSetupTools({ store, redactor }),
     ...openApiTools({ store, readSpecRef: d.readSpec, context: (environment) => createEngineContext({ store, secrets, settings, environment }) }),
     ...debuggerTools({ redactor, store, session: d.captured }),
     ...recordingTools({ store, redactor, secrets, session: d.captured }),

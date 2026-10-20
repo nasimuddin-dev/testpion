@@ -29,12 +29,13 @@ export const GITATTRIBUTES_LINES = [
   '*.png binary',
   '*.jpg binary',
   '*.sqlite binary',
-  // merged request by request when the TestPion merge driver is set up (testpion git setup); else git's line merge
-  'collections/*.json merge=testpion',
-  'environments/*.json merge=testpion',
-  'library/*.json merge=testpion',
-  'mcp-servers.json merge=testpion',
-  'providers.json merge=testpion',
+  // merged item by item when the TestPion merge driver is set up, and read item by item in `git diff` when the diff driver is
+  // (both: testpion git fix); without them git uses its line merge and its plain diff
+  'collections/*.json merge=testpion diff=testpion',
+  'environments/*.json merge=testpion diff=testpion',
+  'library/*.json merge=testpion diff=testpion',
+  'mcp-servers.json merge=testpion diff=testpion',
+  'providers.json merge=testpion diff=testpion',
 ];
 
 export interface GitReadyResult {
@@ -46,21 +47,67 @@ export interface GitReadyResult {
   inRepository: boolean;
 }
 
-/** Append the lines a file is missing (keeping what the user wrote); returns whether it changed. */
-function ensureLines(file: string, lines: string[]): boolean {
-  const had = existsSync(file) ? readFileSync(file, 'utf8') : '';
+/** The text of an ignore file with the lines it is missing added (what the user wrote stays); undefined: nothing to add. */
+export function ignoreText(had: string, lines: readonly string[] = GITIGNORE_LINES): string | undefined {
   const present = new Set(had.split(/\r?\n/).map((l) => l.trim()));
   const missing = lines.filter((l) => !present.has(l.trim()));
-  if (!missing.some((l) => !l.startsWith('#'))) return false;
-  atomicWrite(file, `${had}${had && !had.endsWith('\n') ? '\n' : ''}${had ? '\n' : ''}${missing.join('\n')}\n`);
+  if (!missing.some((l) => !l.startsWith('#'))) return undefined;
+  return `${had}${had && !had.endsWith('\n') ? '\n' : ''}${had ? '\n' : ''}${missing.join('\n')}\n`;
+}
+
+/** The name of an attribute: `merge=testpion` is merge, `-text` is text, `binary` is binary. */
+const attrName = (a: string) => a.replace(/^[-!]/, '').split('=')[0]!;
+
+/**
+ * The text of an attributes file with what it is missing added. A pattern the file has already gets the attributes it lacks on
+ * its own line (`collections/*.json merge=testpion` becomes `… merge=testpion diff=testpion`), never a second line for the
+ * same pattern; an attribute the user set to another value stays theirs. Undefined: nothing to add.
+ */
+export function attributesText(had: string, wanted: readonly string[] = GITATTRIBUTES_LINES): string | undefined {
+  const lines = had.split(/\r?\n/);
+  if (lines[lines.length - 1] === '') lines.pop();
+  const appended: string[] = [];
+  // a comment is added with the first line it describes, and only if the file does not have it yet
+  let pending: string[] = [];
+  let changed = false;
+  for (const w of wanted) {
+    if (w.startsWith('#')) {
+      if (!lines.some((l) => l.trim() === w.trim())) pending.push(w);
+      continue;
+    }
+    const [pattern, ...attrs] = w.trim().split(/\s+/);
+    const at = lines.findIndex((l) => !l.trim().startsWith('#') && l.trim().split(/\s+/)[0] === pattern);
+    if (at < 0) {
+      appended.push(...pending, w);
+      pending = [];
+      changed = true;
+      continue;
+    }
+    pending = [];
+    const have = lines[at]!.trim().split(/\s+/).slice(1);
+    const add = attrs.filter((a) => !have.some((h) => attrName(h) === attrName(a)));
+    if (add.length) {
+      lines[at] = `${lines[at]!.replace(/\s+$/, '')} ${add.join(' ')}`;
+      changed = true;
+    }
+  }
+  if (!changed) return undefined;
+  return [...lines, ...(lines.length && appended.length ? [''] : []), ...appended].join('\n') + '\n';
+}
+
+function ensureFile(file: string, next: (had: string) => string | undefined): boolean {
+  const had = existsSync(file) ? readFileSync(file, 'utf8') : '';
+  const text = next(had);
+  if (text === undefined) return false;
+  atomicWrite(file, text);
   return true;
 }
 
 /** The ignore and attribute files only (new workspaces get them when created). */
 export function writeGitFiles(root: string): string[] {
   const out: string[] = [];
-  if (ensureLines(join(root, '.gitignore'), GITIGNORE_LINES)) out.push('.gitignore');
-  if (ensureLines(join(root, '.gitattributes'), GITATTRIBUTES_LINES)) out.push('.gitattributes');
+  if (ensureFile(join(root, '.gitignore'), (had) => ignoreText(had))) out.push('.gitignore');
+  if (ensureFile(join(root, '.gitattributes'), (had) => attributesText(had))) out.push('.gitattributes');
   return out;
 }
 

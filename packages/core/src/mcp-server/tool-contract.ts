@@ -119,6 +119,22 @@ export const CONFIRM_TOOLS: Record<string, { when?(a: Args): boolean; describe(a
     describe: (a) => `throw away the uncommitted change of ${typeof a.ref === 'string' ? q(a.ref) : a.file ? q(a.file) : 'the item'} (git_undo takes it back)`,
     preview: (a) => ({ ...a, dryRun: true }),
   },
+  git_fix_setup: {
+    when: (a) => a.dryRun !== true,
+    describe: (a) => `fix the git setup of the workspace: write .gitignore and .gitattributes, rewrite existing files into the stable format${a.hook === true ? ', install the pre-commit secret check' : ''}${a.untrack === true ? ', remove ignored files from git' : ''} (git_undo takes the files back)`,
+    preview: (a) => ({ ...a, dryRun: true }),
+  },
+  git_track_large: {
+    when: (a) => a.dryRun !== true,
+    describe: (a) => `take ${q(a.file)} out of plain git by ${a.mode === 'lfs' ? 'Git LFS (a rule in .gitattributes)' : 'reference (a .ref file is committed, the data file is git-ignored)'} (git_undo takes the files back)`,
+    preview: (a) => ({ ...a, dryRun: true }),
+  },
+  git_share_session: {
+    when: (a) => !!a.name && a.dryRun !== true,
+    describe: (a) => (a.unshare === true ? `delete the shared copy of the session ${q(a.name)} from debugger/shared/` : `copy the session ${q(a.name)}, masked, to debugger/shared/ where git tracks it`),
+    preview: (a) => (a.unshare === true ? { ...a, unshare: false, name: undefined } : { ...a, dryRun: true }),
+  },
+  git_codeowners: { when: (a) => a.write === true, describe: () => 'write .github/CODEOWNERS (never over an existing one)', preview: (a) => ({ ...a, write: false }) },
   git_undo: { when: (a) => a.list !== true, describe: (a) => `undo ${a.id ? `the operation ${q(a.id)}` : 'the last restore or discard'}: its files go back as they were before it` },
   git_stash: {
     when: (a) => ['push', 'apply', 'pop', 'drop'].includes(String(a.action)) && !(a.action === 'push' && a.dryRun === true),

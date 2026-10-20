@@ -97,8 +97,8 @@ export function DatasetView() {
   // the file changed elsewhere (a run appended rows, an agent, the Collection Runner's Generate…): shown fresh unless edited here
   useEffect(() => {
     if (!name) return;
-    return on<{ kind?: string }>('data.changed', (p) => {
-      if (p?.kind === 'datasets' && !dirty) void load(name);
+    return on<{ kind?: string; kinds?: string[] }>('data.changed', (p) => {
+      if ((p?.kind === 'datasets' || p?.kinds?.includes('datasets')) && !dirty) void load(name);
     });
   }, [name, dirty, load]);
 

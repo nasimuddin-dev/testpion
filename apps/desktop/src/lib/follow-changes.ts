@@ -4,7 +4,7 @@
  */
 
 /** The kinds of workspace files the watcher reports (core WorkspaceChangeKind). */
-export type ChangeKind = 'collections' | 'environments' | 'tests' | 'library' | 'mcp' | 'providers' | 'workspace' | 'specs' | 'other';
+export type ChangeKind = 'collections' | 'environments' | 'tests' | 'datasets' | 'library' | 'mcp' | 'providers' | 'workspace' | 'specs' | 'other';
 
 /** One item an editor has open: what it loaded (`base`, a snapshot) and whether it was edited since. */
 export interface FollowedItem {

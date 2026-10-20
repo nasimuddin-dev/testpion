@@ -17,12 +17,9 @@ import {
   exportSummary,
   workspaceExportFileName,
 } from '@testpion/core';
-import { EXIT, green, dim, bold, yellow, CliError, printJson, withWorkspace } from '../shared.js';
+import { EXIT, green, dim, bold, yellow, CliError, cliSelf, printJson, withWorkspace } from '../shared.js';
 import { registerGitCommands } from './git.js';
 import { checkStaged } from './git-items.js';
-
-/** This very CLI as a command line (forward slashes: git runs it with sh), for git hooks and the merge driver. */
-const cliSelf = () => `"${process.execPath.split('\\').join('/')}" "${process.argv[1]!.split('\\').join('/')}"`;
 
 export function registerWorkspaceCommands(program: Command): void {
   const ws = program.command('workspace').description('manage workspaces');

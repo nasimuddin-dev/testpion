@@ -236,7 +236,7 @@ export async function gitBlobSize(ws: string, path: string, rev = 'HEAD'): Promi
 
 /** The unified diff of one file (working folder against HEAD, or the staged change). */
 export async function gitDiff(ws: string, path: string, staged = false): Promise<string> {
-  return runGit(ws, ['diff', '--no-color', ...(staged ? ['--cached'] : []), '--', path]);
+  return runGit(ws, ['diff', '--no-color', '--no-textconv', ...(staged ? ['--cached'] : []), '--', path]);
 }
 
 export async function gitStage(ws: string, paths: string[]): Promise<void> {
@@ -316,7 +316,7 @@ export async function gitCommitDiff(ws: string, hash: string, path: string): Pro
   const repo = await repoRoot(ws);
   if (!repo || !/^[0-9a-f]{4,40}$/i.test(hash)) return '';
   try {
-    return await runGit(ws, ['show', '--format=', hash, '--', toRepoPath(repo, ws, path)]);
+    return await runGit(ws, ['show', '--format=', '--no-textconv', hash, '--', toRepoPath(repo, ws, path)]);
   } catch {
     return '';
   }

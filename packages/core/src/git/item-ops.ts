@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { ApsError } from '../errors.js';
 import { atomicWrite } from '../storage/fsutil.js';
-import { stableValue } from '../storage/stable-files.js';
+import { canonicalText, stableValue } from '../storage/stable-files.js';
 import { assertGitRev, gitLog, gitShow, gitStage, gitStatus, gitUnstage, gitVersion, repoRoot, runGit, toRepoPath, type GitCommit } from './git.js';
 import { addressOf, matchEol, readItem, sameText, workspaceFile, writeItem, type ItemAddress } from './item-address.js';
 import { isBinaryPath } from './item-changes.js';
@@ -115,6 +115,15 @@ async function walkVersions(ws: string, a: ItemAddress, limit: number): Promise<
 /** The item's versions in git with what each one changed (newest first). */
 export async function itemHistory(ws: string, a: ItemAddress, limit = 30): Promise<ItemHistory> {
   const { versions } = await walkVersions(ws, a, limit);
+  // a name that is no item and no file (a plain word typed for an item) is an error, not an empty history
+  if (!versions.length) {
+    const now = workingText(ws, a.file);
+    const there = a.mode === 'whole' ? existsSync(workspaceFile(ws, a.file)) : readItem(a, now) !== undefined;
+    if (!there)
+      throw new ApsError('ValidationError', a.mode === 'whole' ? `"${a.file}" is not an item or a file of the workspace` : `There is no item ${a.itemId} in ${a.file}`, {
+        suggestions: ['Name an item with a testpion:// link, a short ref such as mcp-server:weather, or a file path (path#itemId for an item inside a file).'],
+      });
+  }
   const out: ItemVersion[] = versions.map((v, i) => {
     const older = versions[i + 1]?.text;
     if (v.text === undefined) return { commit: v.commit, changed: ['binary file'], parts: [] };
@@ -306,15 +315,23 @@ export interface ItemStageResult {
   title: string;
   /** The file was staged (false: a dry run or nothing changed). */
   applied: boolean;
-  /** Staging takes the file: the other changed items in it come along (their titles). */
+  /** Staging takes the file: the other changed items in it come along (their titles). Empty when only this item was staged. */
   alsoStages: string[];
+  /** Only this item's change went into the index (its file keeps its other changes unstaged). */
+  partial?: boolean;
+  /** For a partial stage: the other changed items of the file, which stay unstaged. */
+  leftUnstaged?: string[];
   /** In words, for the toast and the CLI: "Staged mcp-servers.json (it also holds 2 other changed items)". */
   message: string;
 }
 
 /**
- * Stage (or unstage) the file an item is in. A file with several items stages as one file: the result names the other
- * changed items that come along, so nobody commits more than they meant.
+ * Stage (or unstage) one item. In a file that holds several items (a collection, an MCP servers or providers list, a library)
+ * only that item's change goes into the index: the staged version of the file is the last staged (or committed) one with this
+ * item replaced, written by the same serializer the app saves with, and checked by putting the old item back (the other items
+ * must come out byte for byte as they were, else the whole file is staged instead and the result says so). A file that is
+ * one item, a new file, or one whose staged version is not in the stable form stages as one file, naming the other changed
+ * items that come along, so nobody commits more than they meant.
  */
 export async function stageItem(ws: string, a: ItemAddress, o: { unstage?: boolean; dryRun?: boolean } = {}): Promise<ItemStageResult> {
   await requireRepo(ws);
@@ -324,10 +341,46 @@ export async function stageItem(ws: string, a: ItemAddress, o: { unstage?: boole
   const mine = changes.find((c) => (a.itemId ? c.itemId === a.itemId : true));
   const title = mine?.title ?? nameOf(a, workingText(ws, a.file));
   if (!f) return { file: a.file, itemId: a.itemId, title, applied: false, alsoStages: [], message: `${title} has no uncommitted changes` };
+  if (a.mode !== 'whole' && f.state !== 'conflicted') {
+    const partial = await stageItemBlob(ws, a, title, changes.filter((c) => c.itemId !== a.itemId).map((c) => c.title), o);
+    if (partial) return partial;
+  }
   const alsoStages = a.itemId ? changes.filter((c) => c.itemId !== a.itemId).map((c) => c.title) : [];
   if (!o.dryRun) await (o.unstage ? gitUnstage(ws, [a.file]) : gitStage(ws, [a.file]));
   const other = alsoStages.length ? ` (it also holds ${alsoStages.length} other changed item${alsoStages.length === 1 ? '' : 's'}: ${alsoStages.slice(0, 3).join(', ')}${alsoStages.length > 3 ? ' …' : ''})` : '';
   return { file: a.file, itemId: a.itemId, title, applied: !o.dryRun, alsoStages, message: `${o.dryRun ? 'Would ' + (o.unstage ? 'unstage' : 'stage') : o.unstage ? 'Unstaged' : 'Staged'} ${a.file}${other}` };
+}
+
+/** The item staged alone, or undefined when the file has to be staged whole (see {@link stageItem}). */
+async function stageItemBlob(ws: string, a: ItemAddress, title: string, others: string[], o: { unstage?: boolean; dryRun?: boolean }): Promise<ItemStageResult | undefined> {
+  const [head, idx, work] = [await textAt(ws, a.file, 'HEAD'), await indexText(ws, a.file), workingText(ws, a.file)];
+  const base = idx ?? head;
+  // a new or deleted file is one change; a staged version that is not stable would stage the formatting of every other item too
+  if (base === undefined || work === undefined || head === undefined) return undefined;
+  if (canonicalText(a.file, base) !== base.replace(/\r\n?/g, '\n')) return undefined;
+  const value = o.unstage ? readItem(a, head) : readItem(a, work);
+  const before = readItem(a, base);
+  // a nested item that is new has no place in the index copy yet (its folder may be new too): the file goes whole
+  if (a.mode === 'nested' && before === undefined && value !== undefined) return undefined;
+  const next = writeItem(a, base, value);
+  if (next === undefined) return undefined;
+  // exact or not at all: putting the item back must give the index copy as it was
+  const back = writeItem(a, next, before);
+  if (back === undefined || !sameText(back, writeItem(a, base, before))) return undefined;
+  const verb = o.unstage ? 'unstage' : 'stage';
+  if (sameText(next, base)) return { file: a.file, itemId: a.itemId, title, applied: false, alsoStages: [], partial: true, leftUnstaged: others, message: `${title} is already ${o.unstage ? 'unstaged' : 'staged'}` };
+  if (!o.dryRun) await setIndexText(ws, a.file, next);
+  const left = others.length ? `; the file's ${others.length} other changed item${others.length === 1 ? '' : 's'} stay${others.length === 1 ? 's' : ''} ${o.unstage ? 'as they are' : 'unstaged'}` : '';
+  return {
+    file: a.file,
+    itemId: a.itemId,
+    title,
+    applied: !o.dryRun,
+    alsoStages: [],
+    partial: true,
+    leftUnstaged: others,
+    message: `${o.dryRun ? `Would ${verb}` : o.unstage ? 'Unstaged' : 'Staged'} ${title} only${left}`,
+  };
 }
 
 /** The size of a text file in the working folder (the Git UI hides previews of very big ones). */

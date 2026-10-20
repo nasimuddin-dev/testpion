@@ -25,6 +25,7 @@ import {
 import { EXIT, green, red, yellow, dim, bold, CliError, printJson, withWorkspace } from '../shared.js';
 import { addOutputOptions, saveSurface, savedLine } from '../output-save.js';
 import { commitScanned, registerGitItemCommands, splitKeyValue } from './git-items.js';
+import { registerGitSetupCommands } from './git-setup.js';
 
 const MARK: Record<string, string> = { added: 'A', untracked: 'A', removed: 'D', deleted: 'D', changed: 'M', modified: 'M', renamed: 'R', conflicted: '!' };
 
@@ -32,6 +33,7 @@ const out = (json: boolean, value: unknown, text: () => void) => (json ? printJs
 
 export function registerGitCommands(git: Command, program: Command): void {
   registerGitItemCommands(git);
+  registerGitSetupCommands(git);
   const wsOpt = (c: Command) => c.option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest)').option('--json', 'print as JSON');
 
   wsOpt(

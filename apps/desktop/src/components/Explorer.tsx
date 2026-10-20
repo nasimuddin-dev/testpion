@@ -54,8 +54,7 @@ const PART_KINDS: Array<[ListPart, FileKind[]]> = [
   ['library', ['library']],
   ['mcp', ['mcp']],
   ['specs', ['specs']],
-  // the datasets/ folder is watched with the tests
-  ['datasets', ['tests']],
+  ['datasets', ['datasets']],
 ];
 const ALL_PARTS: ReadonlySet<ListPart> = new Set(PART_KINDS.map(([p]) => p));
 const LIBRARY: ReadonlySet<ListPart> = new Set(['library']);

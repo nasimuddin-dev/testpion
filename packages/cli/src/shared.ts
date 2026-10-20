@@ -114,6 +114,9 @@ export async function withWorkspace<T>(ref: string | undefined, fn: (store: Work
   }
 }
 
+/** This very CLI as a command line (forward slashes: git runs it with sh), for git hooks and the merge and diff drivers. */
+export const cliSelf = () => `"${process.execPath.split('\\').join('/')}" "${process.argv[1]!.split('\\').join('/')}"`;
+
 /** The CLI has no OS keychain: secret variables come from TESTPION_SECRET_* environment variables. */
 export const cliSecrets = () => new ChainSecretStore([new EnvSecretStore()]);
 

@@ -8,6 +8,7 @@ import { KIND_INFO, LIBRARY_LABEL, gitFolderKey, gitKindOfRef, gitRefKey, gitSec
 import { sameValue } from '../storage/stable-files.js';
 import { describeOtherFile, isBinaryPath } from './item-changes.js';
 import { mcpServerParts, providerParts, workspaceParts } from './item-parts.js';
+import { FOLDER_LIBRARY_KIND, folderLibraryChanges } from './folder-library.js';
 
 /** The registry kind of a workspace path (lexical; git's paths are relative with `/`). */
 const kindAt = (path: string) => kindOfPath(path, { raw: true });
@@ -88,6 +89,8 @@ interface LibraryFile {
 function libraryChanges(file: string, beforeText: string | undefined, afterText: string | undefined): SemanticChange[] | undefined {
   const kind = libraryOfPath(file, { raw: true });
   if (!kind) return undefined;
+  // the folder-only libraries (MCP, API definition and dataset folders) mark the folders of those lists
+  if (FOLDER_LIBRARY_KIND[kind]) return folderLibraryChanges(file, kind, beforeText, afterText);
   const before = beforeText === undefined ? { items: [] } : parse<LibraryFile>(beforeText);
   const after = afterText === undefined ? { items: [] } : parse<LibraryFile>(afterText);
   if (!before || !after || !Array.isArray(before.items ?? []) || !Array.isArray(after.items ?? [])) return undefined;

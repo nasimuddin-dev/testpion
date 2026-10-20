@@ -43,6 +43,7 @@ exports[`the item-kind registry is complete > every capability is declared; a na
     "search": "listed in the Debugger session menu",
     "test-file": "test files are created from requests, collections and calls",
     "trash": "sessions are local to this computer",
+    "versioned": "sessions stay on this computer (git-ignored); Share session copies a masked one to debugger/shared/",
   },
   "certificate": {
     "ai": "addressable only: it has no storage of its own",
