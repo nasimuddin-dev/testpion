@@ -4,7 +4,6 @@
  * examples), the variant × metric pivot of several runs, and a result's trace. The window never reads or writes a metric
  * file itself and never checks one: the engine does, the same as `testpion rag metric` and the MCP tools.
  */
-import { stringify as stringifyYaml } from 'yaml';
 import {
   ApsError,
   buildMetricMatrix,
@@ -16,6 +15,7 @@ import {
   removeMetricFile,
   runMetricExamples,
   runResults,
+  stringifyYaml,
   syncCustomMetrics,
   writeMetricFile,
   type SavedEvaluation,

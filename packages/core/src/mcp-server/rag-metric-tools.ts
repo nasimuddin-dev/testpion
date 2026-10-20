@@ -5,7 +5,7 @@
  * (task `rag-draft-metric`), saves it here, and tries it on a sample with `rag_try_metric` (`custom/<id>`).
  * A judge or checklist metric's examples ask the judge, so running them is a deliberate step.
  */
-import { stringify as stringifyYaml } from 'yaml';
+import { stringifyYaml } from '../util/lazy-yaml.js';
 import { CUSTOM_METRIC_KINDS, customMetricTemplate, type CustomMetricKind } from '@testpion/shared';
 import { ApsError } from '../errors.js';
 import { createEngineContext } from '../engine.js';

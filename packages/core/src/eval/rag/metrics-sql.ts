@@ -9,7 +9,8 @@ import type { CheckConfig, CheckResult } from '../../model/types.js';
 import { registerCheck, type CheckContext } from '../checks.js';
 import { isInside } from '../../storage/fsutil.js';
 import { ApsError } from '../../errors.js';
-import { checkReadOnlySql, resolveSqlSource, runReadOnlySql, type SqlSource } from '../../runner/sql-exec.js';
+import type { SqlSource } from '../../runner/sql-exec.js';
+import { sqlHost } from './sql-host.js';
 import { judgedCheck, referenceText, round3 } from './judged-kit.js';
 import { SQL_EQUIVALENCE } from './prompts-r2.js';
 import { num, result } from './metric-util.js';
@@ -18,7 +19,7 @@ import { compareResults, parseResultText, sqlOf, type ResultSet } from './sql.js
 function sourceOf(cfg: CheckConfig, ctx: CheckContext) {
   const db = (cfg.database ?? {}) as SqlSource;
   const base = ctx.workspaceRoot ?? process.cwd();
-  const src = resolveSqlSource(db, { base });
+  const src = sqlHost().resolveSqlSource(db, { base });
   // a SQLite file named in a pull request's evaluation must not be one elsewhere on the machine
   if (src.dialect === 'sqlite' && ctx.workspaceRoot && !isInside(ctx.workspaceRoot, src.path!, { orSame: false })) {
     const abs = isAbsolute(db.path ?? '') ? db.path! : resolve(base, db.path ?? '');
@@ -54,13 +55,13 @@ const datacompy = async (cfg: CheckConfig, ctx: CheckContext): Promise<CheckResu
     const query = sqlOf(ctx.text);
     // the reference query is the author's: a failure there is a configuration problem, not a bad answer
     try {
-      ref = await runReadOnlySql(src, sqlOf(reference), limits, ctx.services?.signal);
+      ref = await sqlHost().runReadOnlySql(src, sqlOf(reference), limits, ctx.services?.signal);
     } catch (e) {
       return result(cfg, false, `the reference query could not be run: ${(e as Error).message}`, { source: 'deterministic', explanation: 'The reference query failed.', metadata: { ...meta, executed: null } });
     }
     try {
-      checkReadOnlySql(query, src.dialect);
-      resp = await runReadOnlySql(src, query, limits, ctx.services?.signal);
+      sqlHost().checkReadOnlySql(query, src.dialect);
+      resp = await sqlHost().runReadOnlySql(src, query, limits, ctx.services?.signal);
     } catch (e) {
       // the generated query did not run: that is the answer being wrong, and it scores 0 with the reason
       return result(cfg, false, `datacompy 0: the generated query did not run: ${(e as Error).message.split('\n')[0]}`, { source: 'deterministic', score: 0, explanation: (e as ApsError).why ?? (e as Error).message, metadata: { ...meta, executed: false, error: (e as Error).message.slice(0, 500), subScores: { executed: 0, precision: 0, recall: 0, f1: 0 } } });
@@ -85,7 +86,7 @@ async function schemaOf(cfg: CheckConfig, ctx: CheckContext): Promise<string | u
   if (!cfg.database) return undefined;
   const src = sourceOf(cfg, ctx);
   if (src.dialect !== 'sqlite') return undefined;
-  const r = await runReadOnlySql(src, "SELECT name, sql FROM sqlite_master WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%' ORDER BY name LIMIT 200", { maxRows: 200, timeoutMs: 3000 }, ctx.services?.signal);
+  const r = await sqlHost().runReadOnlySql(src, "SELECT name, sql FROM sqlite_master WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%' ORDER BY name LIMIT 200", { maxRows: 200, timeoutMs: 3000 }, ctx.services?.signal);
   return r.rows.map((row) => String(row[1] ?? '')).join(';\n').slice(0, 20_000);
 }
 

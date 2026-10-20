@@ -15,6 +15,7 @@
  *
  * The connection must be declared `readOnly: true` for PostgreSQL and MySQL (the docs ask for a read-only database user too).
  */
+import { provideSqlHost } from '../eval/rag/sql-host.js';
 import { Worker } from 'node:worker_threads';
 import { isAbsolute, resolve } from 'node:path';
 import { ApsError } from '../errors.js';
@@ -281,3 +282,6 @@ export async function runReadOnlySql(src: ResolvedSource, sql: string, limits: S
     release();
   }
 }
+
+// the SQL metrics of eval/rag use the executor through this hand-over (the metric engine imports nothing from the runner)
+provideSqlHost({ checkReadOnlySql, resolveSqlSource, runReadOnlySql });

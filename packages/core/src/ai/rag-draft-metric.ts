@@ -5,7 +5,7 @@
  * script metric must agree with every example it was drafted with (they run for real: they cost nothing), and a judged
  * metric must build its prompt for each example (the real judge call is a deliberate step, "Run examples").
  */
-import { stringify as stringifyYaml } from 'yaml';
+import { stringifyYaml } from '../util/lazy-yaml.js';
 import { CUSTOM_METRIC_KINDS, customMetricTemplate } from '@testpion/shared';
 import { compileCustomMetric, runMetricExamples } from '../eval/rag/custom/compile.js';
 import { parseCustomMetric } from '../eval/rag/custom/file.js';

@@ -655,8 +655,8 @@ const KINDS: readonly ItemKindInfo[] = [
     // MCP tools write; what is not built says when it will be
     capabilities: {
       ...FILE_ITEM,
-      export: true,
-      import: true,
+      export: { na: 'copied with `testpion rag metric export` and `import` (the workspace bundle does not carry metrics yet)' },
+      import: { na: 'copied with `testpion rag metric export` and `import` (the workspace bundle does not carry metrics yet)' },
       open: { na: 'edited in AI Lab ▸ RAG ▸ Metrics, where the metrics are listed' },
       link: { na: 'used by name (custom/<id>) in evaluations, presets and formulas' },
       rename: { na: 'the file name is the metric id that evaluations name: Save as in the metric editor makes it under another id' },

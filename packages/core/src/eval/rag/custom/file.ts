@@ -5,7 +5,7 @@
  * not the name, the description, the examples or the calibration, so a result can say "scored by v3 · changed since".
  */
 import { createHash } from 'node:crypto';
-import { parse as parseYaml } from 'yaml';
+import { parseYaml } from '../../../util/lazy-yaml.js';
 import { CUSTOM_METRIC_ID, CUSTOM_METRIC_KINDS, type CustomMetricFile, type CustomMetricKind } from '@testpion/shared';
 import { checkTypes } from '../../checks.js';
 import { getMetric, resolveMetric } from '../metric-registry.js';
