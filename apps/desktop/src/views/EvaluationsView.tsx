@@ -13,9 +13,19 @@ import type { CheckConfig, ProviderConfig } from '../types';
 import { templateVars, timeAgo } from '../lib/format';
 import { countDatasetRecords, datasetFormatOf, datasetFormatOfName, previewDatasetRecords } from '@testpion/shared';
 import { downloadContent, pickTextFile } from '../lib/files';
-import type { RagTarget } from '@testpion/shared';
+import type { RagJudgeSetup, RagTarget } from '@testpion/shared';
 import { RagConnectDialog } from '../components/rag/RagConnectDialog';
-import { RAG_JUDGED, RAG_STARTER_DATASET, RAG_STARTER_EVALUATORS } from '../components/rag/starter';
+import { RAG_STARTER_DATASET, RAG_STARTER_EVALUATORS } from '../components/rag/starter';
+import { MetricPicker } from '../components/rag/MetricPicker';
+import { metricResolver, spendsOnJudge, type MetricCatalogue } from '../components/rag/metric-resolver';
+import { RagEstimateDialog } from '../components/rag/RagEstimateDialog';
+import { RagEstimateView, useRagEstimate } from '../components/rag/RagEstimate';
+import { RagTryDialog } from '../components/rag/RagTryDialog';
+import { RagMetricMatrix } from '../components/rag/RagMetricMatrix';
+import { RagColumnMapper } from '../components/rag/RagColumnMapper';
+import { RagImportDialog } from '../components/rag/RagImportDialog';
+import { RagJudgeOptions } from '../components/rag/RagJudgeOptions';
+import { useRpc } from '../lib/use-rpc';
 import { AssertionEditor } from '../components/AssertionEditor';
 import { CodeEditor } from '../components/CodeEditor';
 import { RunPanel } from '../components/RunPanel';
@@ -46,8 +56,9 @@ interface Draft {
   /** type rag: the RAG target (a library item id) the questions are sent to; without one the contexts written in the dataset are scored. */
   target?: string;
   /** type rag with a target: the judge of the judged metrics (unset: the AI settings' large model). */
-  judge?: { provider?: string; model?: string };
+  judge?: RagJudgeSetup;
   maxJudgeCostUsd?: number;
+  maxJudgeCalls?: number;
 }
 
 const drafts = persisted<Draft>('eval', {
@@ -70,6 +81,18 @@ const drafts = persisted<Draft>('eval', {
   retries: 1,
 });
 
+/** The estimate of the draft as one line under the metric picker: it follows the choices (asked again after a pause). */
+function MetricEstimateLine({ draft, env }: { draft: Draft; env?: string }) {
+  const { estimate, error, loading } = useRagEstimate(draft, { environment: env });
+  if (error) return <span className="text-bad">{error}</span>;
+  if (!estimate) return <span className="text-muted">Estimating …</span>;
+  return (
+    <span className={loading ? 'opacity-60' : undefined}>
+      <RagEstimateView estimate={estimate} compact />
+    </span>
+  );
+}
+
 /** Evaluation Lab: dataset × prompt × model × evaluators, streamed through the test runner. */
 /** The editor's language for each dataset format: colours, and each format's own checks (JSONL line by line). */
 const EDITOR_LANGUAGE = { json: 'json', jsonl: 'jsonl', csv: 'csv', md: 'markdown' } as const;
@@ -84,7 +107,7 @@ export function EvaluationsView() {
   const [runs, setRuns] = useState<RunRow[]>([]);
   const [sub, setSub] = useSticky<'prompt' | 'dataset' | 'evaluators'>('eval:sub', 'dataset');
   // the right pane: a run (or the overview of runs), or the matrix of runs side by side, case by case
-  const [pane, setPane] = useSticky<'runs' | 'matrix'>('eval:pane', 'runs', { persist: true });
+  const [pane, setPane] = useSticky<'runs' | 'matrix' | 'metrics'>('eval:pane', 'runs', { persist: true });
   // dataset files of the workspace (datasets/), offered next to Load file
   const [datasets, setDatasets] = useState<Array<{ path: string; name: string }>>([]);
   useEffect(() => {
@@ -107,23 +130,19 @@ export function EvaluationsView() {
   const saved = useLibrary<Draft>('evaluations');
   const ragTargets = useLibrary<RagTarget>('rag-targets');
   const [connect, setConnect] = useState(false);
+  // RAG evaluations: the metric catalogue (what each evaluator is), the dialogs, and the estimate before a run
+  const [estimating, setEstimating] = useState(false);
+  const [tryCheck, setTryCheck] = useState<CheckConfig>();
+  const [mapper, setMapper] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const catalogue = useRpc<MetricCatalogue>('rag.metrics', undefined, { keep: true });
+  const resolveMetric = useMemo(() => metricResolver(catalogue?.metrics ?? []), [catalogue]);
   /** The target the evaluation calls (type rag): its questions go to that system, and the model fields become the judge. */
   const ragTarget = d.type === 'rag' ? ragTargets.lib.items.find((i) => i.id === d.target) : undefined;
   const setType = (type: Draft['type']) => {
     // a new RAG evaluation starts with RAG records and metrics instead of the intent-classification example
     const untouched = JSON.stringify(d.evaluators) === JSON.stringify(drafts.defaults.evaluators);
     set({ type, ...(type === 'rag' && untouched ? { evaluators: RAG_STARTER_EVALUATORS, ...(d.dataset === drafts.defaults.dataset ? { dataset: RAG_STARTER_DATASET } : {}) } : {}) });
-  };
-  const importRag = async () => {
-    const f = await pickTextFile('.jsonl,.json,.csv,.tsv,.ndjson');
-    if (!f) return;
-    try {
-      const r = await call<{ from: string; count: number; notes: string[]; text: string }>('rag.convert', { text: f.text, name: f.name });
-      set({ dataset: r.text, datasetFormat: 'jsonl' });
-      useApp.getState().toast(`Imported ${r.count} records (${r.from} format)${r.notes.length ? `. ${r.notes[0]}` : ''}`, r.notes.length ? 'info' : 'success');
-    } catch (e) {
-      toastError(e);
-    }
   };
   const exportRag = async (to: 'ragas' | 'deepeval') => {
     try {
@@ -178,7 +197,9 @@ export function EvaluationsView() {
     [saved.lib.items],
   );
 
-  const run = () => runDraft(d);
+  /** A run that asks a judge or an embedding model is estimated first (calls, tokens, cost, caps); a run of free metrics starts at once. */
+  const spends = d.type === 'rag' && !!ragTarget && d.evaluators.some((e) => spendsOnJudge(resolveMetric(e.type), e));
+  const run = () => (spends ? setEstimating(true) : void runDraft(d));
   const runDraft = async (d: Draft) => {
     try {
       // the engine builds the test template, exactly as `testpion eval run` and the run_evaluation MCP tool do
@@ -265,6 +286,18 @@ export function EvaluationsView() {
       />
     <div className="h-full flex flex-col min-w-0">
     {connect && <RagConnectDialog onClose={() => setConnect(false)} onSaved={(id) => void ragTargets.reload().then(() => set({ target: id }))} />}
+    {estimating && (
+      <RagEstimateDialog
+        draft={d as never}
+        hasTarget={!!ragTarget}
+        firstQuestion={String(preview[0]?.question ?? preview[0]?.query ?? preview[0]?.input ?? preview[0]?.user_input ?? '') || undefined}
+        onClose={() => setEstimating(false)}
+        onRun={() => (setEstimating(false), void runDraft(d))}
+      />
+    )}
+    {tryCheck && <RagTryDialog check={tryCheck} target={d.target} question={String(preview[0]?.question ?? preview[0]?.query ?? preview[0]?.input ?? preview[0]?.user_input ?? '') || undefined} judge={d.judge} onClose={() => setTryCheck(undefined)} />}
+    {mapper && <RagColumnMapper dataset={d.dataset} format={readAs} onApply={(dataset) => set({ dataset, datasetFormat: 'jsonl' })} onClose={() => setMapper(false)} />}
+    {importing && <RagImportDialog onImport={(dataset) => set({ dataset, datasetFormat: 'jsonl' })} onClose={() => setImporting(false)} />}
     <LibraryTabStrip
       label="Open evaluations"
       library="evaluations"
@@ -304,7 +337,7 @@ export function EvaluationsView() {
             <Button className="shrink-0" icon={<Save size={13} />} title={current ? `Save changes to "${current.name}"` : 'Save this evaluation to run it again later'} onClick={() => void saveEval()}>
               {current && dirty ? 'Save*' : 'Save'}
             </Button>
-            <Button variant="primary" className="shrink-0" icon={<Play size={13} />} onClick={run} disabled={!count || (!ragTarget && !d.provider)}>
+            <Button variant="primary" className="shrink-0" icon={<Play size={13} />} onClick={run} disabled={!count || (!ragTarget && !d.provider)} data-eval-run>
               Run {count ? `${d.limit ? Math.min(d.limit, count) : count} cases` : ''}
             </Button>
           </div>
@@ -329,7 +362,7 @@ export function EvaluationsView() {
           {ragTarget ? (
             <div className="grid grid-cols-2 gap-2 [&>*]:min-w-0" data-rag-judge>
               <Field label="Judge provider" hint="Judged metrics only">
-                <Select value={d.judge?.provider ?? ''} onChange={(e) => set({ judge: { provider: e.target.value || undefined, model: providers.find((p) => p.id === e.target.value)?.defaultModel || undefined } })} aria-label="Judge provider">
+                <Select value={d.judge?.provider ?? ''} onChange={(e) => set({ judge: { ...d.judge, provider: e.target.value || undefined, model: providers.find((p) => p.id === e.target.value)?.defaultModel || undefined } })} aria-label="Judge provider">
                   <option value="">The AI settings’ large model</option>
                   {providers.map((p) => (
                     <option key={p.id} value={p.id}>
@@ -358,6 +391,7 @@ export function EvaluationsView() {
             </Field>
           </div>
           )}
+          {ragTarget && <RagJudgeOptions judge={d.judge ?? {}} maxCostUsd={d.maxJudgeCostUsd} maxCalls={d.maxJudgeCalls} providers={providers} onChange={set} />}
           <div className="grid grid-cols-4 gap-2 [&>*]:min-w-0">
             <Field label="Temp.">
               <Input type="number" step="0.1" value={d.temperature ?? ''} onChange={(e) => set({ temperature: e.target.value === '' ? undefined : Number(e.target.value) })} />
@@ -379,7 +413,7 @@ export function EvaluationsView() {
           tabs={[
             { id: 'dataset', label: 'Dataset', badge: count },
             ...(ragTarget ? [] : [{ id: 'prompt' as const, label: d.type === 'rag' ? 'Prompt (optional)' : 'Prompt' }]),
-            { id: 'evaluators', label: 'Evaluators', badge: d.evaluators.length },
+            { id: 'evaluators', label: d.type === 'rag' ? 'Metrics' : 'Evaluators', badge: d.evaluators.length },
           ]}
         />
         <div className="flex-1 min-h-0">
@@ -397,8 +431,11 @@ export function EvaluationsView() {
                 </label>
                 {d.type === 'rag' && (
                   <>
-                    <Button size="sm" onClick={() => void importRag()} title="Read a Ragas or DeepEval dataset file (JSON, JSONL or CSV; only data is read) as TestPion records" data-rag-import>
-                      Import Ragas / DeepEval…
+                    <Button size="sm" onClick={() => setImporting(true)} title="Read a dataset of another tool (Ragas, DeepEval, BEIR, NVIDIA, promptfoo; only data is read) as RAG records" data-rag-import>
+                      Import…
+                    </Button>
+                    <Button size="sm" onClick={() => setMapper(true)} title="Choose which column is the question, the reference answer, the gold chunk ids …" data-rag-map-columns>
+                      Map columns…
                     </Button>
                     <Select className="h-7 min-h-7 py-0 text-xs max-w-32" aria-label="Export the dataset" value="" onChange={(e) => e.target.value && void exportRag(e.target.value as 'ragas' | 'deepeval')}>
                       <option value="">Export as…</option>
@@ -514,12 +551,23 @@ export function EvaluationsView() {
               <p className="px-3 pt-3 text-xs text-muted">
                 Deterministic checks are the source of truth for deterministic requirements. Similarity/RAG heuristics are approximate; LLM-judge scores are model-generated and labelled as such.
               </p>
-              {ragTarget && d.evaluators.some((e) => RAG_JUDGED.has(e.type)) && (
+              {ragTarget && d.evaluators.some((e) => spendsOnJudge(resolveMetric(e.type), e)) && (
                 <Callout tone="accent" className="mx-3 mt-2" data-rag-judge-note>
                   {d.judge?.provider ? `Judged metrics ask ${providers.find((p) => p.id === d.judge?.provider)?.name ?? d.judge.provider}${d.judge.model ? ` / ${d.judge.model}` : ''}.` : 'Judged metrics ask the AI settings’ large model.'} The run stops before the first question, and says what to configure, when no judge is set. Verdicts are kept: running again costs nothing.
                 </Callout>
               )}
-              <AssertionEditor checks={d.evaluators} onChange={(evaluators) => set({ evaluators })} groups={['Body', 'AI', 'RAG', 'Safety', 'Response']} />
+              {d.type === 'rag' ? (
+                <MetricPicker
+                  evaluators={d.evaluators}
+                  onChange={(evaluators) => set({ evaluators })}
+                  columns={previewKeys}
+                  hasTarget={!!ragTarget}
+                  onTry={setTryCheck}
+                  footer={ragTarget ? <MetricEstimateLine draft={d} env={env} /> : <span className="text-muted">Choose a RAG target to see what a run costs.</span>}
+                />
+              ) : (
+                <AssertionEditor checks={d.evaluators} onChange={(evaluators) => set({ evaluators })} groups={['Body', 'AI', 'RAG', 'Safety', 'Response']} />
+              )}
             </div>
           )}
         </div>
@@ -535,11 +583,22 @@ export function EvaluationsView() {
               options={[
                 { value: 'runs', label: runId ? 'Run' : 'Runs', icon: <History size={12} /> },
                 { value: 'matrix', label: 'Matrix', icon: <Grid3x3 size={12} />, title: 'Runs side by side, case by case, against a baseline' },
+                ...(d.type === 'rag' ? [{ value: 'metrics' as const, label: 'Metrics', icon: <BarChart3 size={12} />, title: 'The samples of a run against every metric, with each metric’s mean, interval and distribution' }] : []),
               ]}
             />
           </div>
         )}
-        {pane === 'matrix' && evalRuns.length > 0 ? (
+        {pane === 'metrics' && d.type === 'rag' && evalRuns.length > 0 ? (
+          <div className="flex-1 min-h-0">
+            {runId ? (
+              <RagMetricMatrix runId={runId} target={d.target} judge={d.judge} />
+            ) : (
+              <Empty icon={<BarChart3 size={26} />} title="Choose a run">
+                Pick a run in the Runs list to see its samples against every metric.
+              </Empty>
+            )}
+          </div>
+        ) : pane === 'matrix' && evalRuns.length > 0 ? (
           <div className="flex-1 min-h-0">
             <EvalMatrix runs={evalRuns} />
           </div>

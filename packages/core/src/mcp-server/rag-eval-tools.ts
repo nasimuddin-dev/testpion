@@ -140,7 +140,7 @@ export function ragEvalTools({ store, secrets, settings, checkEnvironment }: { s
             sample = { ...sample, answer: p.sample.answer, contexts: p.sample.contexts, latencyMs: p.latencyMs };
           }
           const j = a.judge ? { provider: String(a.judge).split('/')[0], ...(String(a.judge).includes('/') ? { model: String(a.judge).split('/').slice(1).join('/') } : {}) } : undefined;
-          const r = await tryMetric({ providers: ctx.services.providers, ragJudge: ctx.services.ragJudge! }, { metric: { type: String(a.metric), ...((a.options as Record<string, unknown>) ?? {}) }, sample, judge: j, dryRun: a.dry_run === true });
+          const r = await tryMetric({ providers: ctx.services.providers, ragJudge: ctx.services.ragJudge! }, { metric: { ...((a.options as Record<string, unknown>) ?? {}), type: String(a.metric) }, sample, judge: j, dryRun: a.dry_run === true });
           return { ...r, sample: { question: sample.question, answer: sample.answer?.slice(0, 1000), contexts: sample.contexts?.length } };
         } finally {
           await ctx.dispose();

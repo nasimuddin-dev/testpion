@@ -270,3 +270,4 @@ export * from './eval/rag/suggest-mapping.js';
 export { docsOf, listOf } from './eval/rag/lists.js';
 export * from './eval/rag/metric-compare.js';
 export * from './eval/rag/metric-docs.js';
+export * from './eval/rag/dataset-columns.js';

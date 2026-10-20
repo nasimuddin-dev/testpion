@@ -212,3 +212,17 @@ arguments: { query: "{{question}}" }
 `;
   }
 }
+
+/**
+ * A metric name in the one form names are compared in: `LLMContextRecall` and `context_recall` and "Context Recall" are
+ * `llm-context-recall` / `context-recall` (case ignored, CamelCase split, `_` and spaces become `-`). The engine's
+ * registry and the window's picker both use it, so a name found in one is found in the other.
+ */
+export function normalizeMetricName(raw: string): string {
+  return raw
+    .trim()
+    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1_$2')
+    .toLowerCase()
+    .replace(/[\s_]+/g, '-');
+}

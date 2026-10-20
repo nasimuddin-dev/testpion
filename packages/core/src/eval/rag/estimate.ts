@@ -18,6 +18,8 @@ import { scoreRagSample } from './score.js';
 export const DEFAULT_SHAPE: SampleShape = { questionTokens: 20, answerTokens: 120, contextTokens: 900, contexts: 5, referenceTokens: 60 };
 
 export interface MetricLine {
+  /** The position of the evaluator in the evaluation's list (the window opens its prompt). */
+  evaluator: number;
   id: string;
   name: string;
   kind: string;
@@ -81,7 +83,7 @@ export function estimateRagRun(
   const basis: RunEstimate['basis'] = stored ? 'stored' : i.shape ? (i.shapeFrom ?? 'dataset') : 'default';
   const lines: MetricLine[] = [];
   let needsJudge = false;
-  for (const e of i.evaluators) {
+  for (const [at, e] of i.evaluators.entries()) {
     const r = resolveMetric(e.type);
     if (!r) {
       unknown.push(e.type);
@@ -94,6 +96,7 @@ export function estimateRagRun(
     const f = judged ? panelFactor(r.def.requires.includes('contexts'), i.judge) : 1;
     if (judged) needsJudge = true;
     lines.push({
+      evaluator: at,
       id: r.def.id,
       name: r.def.name,
       kind: r.def.kind,

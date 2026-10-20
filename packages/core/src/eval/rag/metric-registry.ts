@@ -5,6 +5,7 @@
  * `assertions` / `evaluators` of a test, a saved evaluation, `run_tests` over MCP. Its other names (the old check names,
  * Ragas, DeepEval, NVIDIA) are aliases that resolve to the same metric; `resolveMetric` is the only resolver.
  */
+import { normalizeMetricName } from '@testpion/shared';
 import type { CheckConfig } from '../../model/types.js';
 import { setCheckResolver } from '../checks.js';
 
@@ -99,15 +100,7 @@ export interface MetricDef {
 const registry = new Map<string, MetricDef>();
 const names = new Map<string, { def: MetricDef; options?: Record<string, unknown>; ragas?: boolean }>();
 
-/** `LLMContextRecall` / `context_recall` / "Context Recall" → `llm-context-recall` / `context-recall`. */
-export function normalizeMetricName(raw: string): string {
-  return raw
-    .trim()
-    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
-    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1_$2')
-    .toLowerCase()
-    .replace(/[\s_]+/g, '-');
-}
+export { normalizeMetricName };
 
 export function registerMetric(def: MetricDef): void {
   registry.set(def.id, def);
