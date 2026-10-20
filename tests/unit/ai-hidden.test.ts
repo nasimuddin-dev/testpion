@@ -167,6 +167,7 @@ const ENTRY_POINTS: Record<string, Gate> = {
   'components/CollectionTree.tsx': 'menu',
   'components/Explorer.tsx': 'menu',
   'components/FlowDesigner.tsx': 'hook',
+  'components/ImportDialog.tsx': 'snapshot',
   'components/OpenApiDiffDialog.tsx': 'component',
   'components/ProblemList.tsx': 'items',
   'components/ResponseViewer.tsx': 'component',
@@ -197,7 +198,6 @@ const ENTRY_POINTS: Record<string, Gate> = {
   'views/RestView.tsx': 'hook',
   'views/TestsRunsList.tsx': 'menu',
   'views/TracesView.tsx': 'component',
-  'views/rest/dialogs.tsx': 'snapshot',
 };
 
 /** Entry points that are not a call of a launcher: a control that calls an AI RPC itself, or a surface of its own. */
