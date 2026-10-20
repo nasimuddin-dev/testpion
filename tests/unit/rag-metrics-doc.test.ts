@@ -18,7 +18,7 @@ describe('rag-metrics.md', () => {
       expect(doc, m.id).toContain(`\`${m.id}\``);
       expect(doc, m.id).toContain(m.example);
     }
-    expect(doc).toMatch(/TestPion has 30 RAG metrics/);
+    expect(doc).toContain(`TestPion has ${metricCatalogue().length} RAG metrics`);
   });
 
   it('is in the docs sidebar', () => {

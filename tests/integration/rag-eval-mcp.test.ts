@@ -64,10 +64,10 @@ afterAll(async () => {
 describe('RAG metric tools over MCP', () => {
   it('rag_metrics lists the catalogue and the presets; a Ragas name finds its metric', async () => {
     const all = (await call<{ count: number; metrics: Array<{ id: string; kind: string }>; presets: Array<{ id: string }> }>('rag_metrics', {})).data;
-    expect(all.count).toBe(30);
+    expect(all.count).toBe(84);
     expect(all.presets.map((p) => p.id)).toContain('ragas-core');
     expect((await call<{ metrics: Array<{ id: string }> }>('rag_metrics', { search: 'response_relevancy' })).data.metrics.map((m) => m.id)).toContain('answer-relevance');
-    expect((await call<{ count: number }>('rag_metrics', { kind: 'deterministic' })).data.count).toBe(23);
+    expect((await call<{ count: number }>('rag_metrics', { kind: 'deterministic' })).data.count).toBe(39);
   });
 
   it('rag_try_metric: a dry run shows the prompt and sends nothing; a real run scores; a free metric answers at once', async () => {
@@ -113,6 +113,38 @@ describe('RAG metric tools over MCP', () => {
     const cmp = (await call<{ metrics: Array<{ key: string; change: string }>; regressions: unknown[] }>('rag_compare', { run_id: r.runId, baseline_run_id: runId })).data;
     expect(cmp.regressions).toEqual([]);
     expect(cmp.metrics.map((m) => m.key)).toContain('faithfulness');
+  });
+
+  it('custom metrics: list, save (checked, confirmed), validate with examples, then usable as custom/<id> in rag_try_metric', async () => {
+    const empty = (await call<{ count: number; kinds: unknown[] }>('rag_list_custom_metrics', {})).data;
+    expect(empty.count).toBe(0);
+    expect(empty.kinds).toHaveLength(6);
+    const file = ['id: no-promises', 'kind: rule', 'rules:', '  - { type: not-regex, pattern: "guarantee|promise", flags: i }', 'threshold: 1', 'examples:', '  - { name: fine, sample: { answer: "We will do our best." }, expect: pass }', '  - { name: promise, sample: { answer: "We guarantee a cure." }, expect: fail }'].join('\n');
+    // an invalid file is refused with the reason, and nothing is written
+    const bad = await call('rag_save_custom_metric', { id: 'broken', content: 'id: broken\nkind: judge\n' });
+    expect(bad.isError).toBe(true);
+    expect(bad.text).toMatch(/needs criteria/);
+    expect((await call<{ count: number }>('rag_list_custom_metrics', {})).data.count).toBe(0);
+    const ok = (await call<{ written: boolean; metric: string; registered: boolean }>('rag_save_custom_metric', { id: 'no-promises', content: file })).data;
+    expect(ok).toMatchObject({ written: true, metric: 'custom/no-promises', registered: true });
+    // a file that exists is replaced only on purpose, and then only with the user's yes
+    expect((await call('rag_save_custom_metric', { id: 'no-promises', content: file })).isError).toBe(true);
+    const asked = await call<{ confirmationRequired?: boolean }>('rag_save_custom_metric', { id: 'no-promises', content: file, overwrite: true });
+    expect(asked.data.confirmationRequired).toBe(true);
+    expect((await call<{ written: boolean }>('rag_save_custom_metric', { id: 'no-promises', content: file, overwrite: true, confirm: true })).data.written).toBe(true);
+    const v = (await call<{ ok: boolean; examples: Array<{ ok: boolean }> }>('rag_validate_metric', { id: 'no-promises', run_examples: true })).data;
+    expect(v.ok).toBe(true);
+    expect(v.examples.map((e) => e.ok)).toEqual([true, true]);
+    const listed = (await call<{ count: number; metrics: Array<{ id: string; kind: string; registered: boolean; examples: number }> }>('rag_list_custom_metrics', {})).data;
+    expect(listed.metrics[0]).toMatchObject({ id: 'no-promises', kind: 'rule', registered: true, examples: 2 });
+    // the catalogue lists it in its own group, and it is scored like any metric
+    expect((await call<{ metrics: Array<{ id: string; group: string }> }>('rag_metrics', { search: 'no-promises' })).data.metrics[0]).toMatchObject({ id: 'custom/no-promises', group: 'custom' });
+    const t = (await call<{ result: { score: number; passed: boolean } }>('rag_try_metric', { metric: 'custom/no-promises', answer: 'We guarantee a full recovery.' })).data;
+    expect(t.result).toMatchObject({ score: 0, passed: false });
+    // a draft that disagrees with its own example is reported, not written
+    const draft = await call<{ ok: boolean; examples: Array<{ ok: boolean; message: string }> }>('rag_validate_metric', { content: file.replace('expect: fail', 'expect: pass'), run_examples: true });
+    expect(draft.data.ok).toBe(false);
+    expect(draft.data.examples[1]).toMatchObject({ ok: false });
   });
 
   it('the evaluate_rag_system prompt walks an agent through the tools', async () => {

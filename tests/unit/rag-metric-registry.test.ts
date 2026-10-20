@@ -15,7 +15,7 @@ describe('the catalogue', () => {
   it('has the counts the docs state (changing them is a docs change: docs/ai-testing/rag-metrics.md is generated from this)', () => {
     const rows = metricCatalogue();
     const by = (k: string) => rows.filter((m) => m.kind === k).length;
-    expect({ total: rows.length, deterministic: by('deterministic'), judged: by('judged'), embedding: by('embedding'), sql: by('sql') }).toEqual({ total: 30, deterministic: 23, judged: 6, embedding: 1, sql: 0 });
+    expect({ total: rows.length, deterministic: by('deterministic'), judged: by('judged'), embedding: by('embedding'), sql: by('sql') }).toEqual({ total: 84, deterministic: 39, judged: 41, embedding: 3, sql: 1 });
     expect(new Set(rows.map((m) => m.id)).size).toBe(rows.length);
   });
 
@@ -40,9 +40,12 @@ describe('names', () => {
   it('the canonical ids, the aliases and the older check names all resolve to one metric', () => {
     expect(resolveMetric('faithfulness')!.def.id).toBe('faithfulness');
     for (const n of ['rag-faithfulness', 'groundedness', 'Faithfulness', 'faithful']) expect(resolveMetric(n)!.def.id, n).toBe('faithfulness');
-    expect(resolveMetric('answer-correctness')!.def.id).toBe('factual-correctness');
+    // answer-correctness is Ragas' weighted metric now; the claim F1 it used to alias is factual-correctness
+    expect(resolveMetric('answer-correctness')!.def.id).toBe('answer-correctness');
+    expect(resolveMetric('factual_correctness')!.def.id).toBe('factual-correctness');
     expect(resolveMetric('rag-answer-relevance')!.def.id).toBe('answer-relevance');
-    expect(resolveMetric('hallucination')).toBeUndefined();
+    // hallucination is DeepEval's metric (lower is better), no longer an alias of faithfulness
+    expect(resolveMetric('hallucination')!.def).toMatchObject({ id: 'hallucination', direction: 'lower' });
     expect(canonicalMetricId('LLMContextRecall')).toBe('context-recall');
     expect(canonicalMetricId('not a metric')).toBe('not a metric');
   });
@@ -50,10 +53,28 @@ describe('names', () => {
   it('Ragas names (snake_case, class, legacy class) resolve; the ones that mean something else carry their parity options', () => {
     const cases: Array<[string, string, Record<string, unknown>]> = [
       ['context_precision', 'context-precision', {}],
-      ['LLMContextPrecisionWithReference', 'context-precision', {}],
+      ['LLMContextPrecisionWithReference', 'context-precision', { perChunk: true }],
       ['llm_context_recall', 'context-recall', {}],
       ['ContextEntityRecall', 'context-entity-recall', {}],
-      ['context_entities_recall', 'context-entity-recall', {}],
+      ['context_entities_recall', 'context-entity-recall', { mode: 'llm', caseSensitive: true }],
+      ['nv_accuracy', 'answer-accuracy', {}],
+      ['ResponseGroundedness', 'response-groundedness', {}],
+      ['noise_sensitivity', 'noise-sensitivity-relevant', {}],
+      ['NoiseSensitivity', 'noise-sensitivity-relevant', {}],
+      ['noise_sensitivity_irrelevant', 'noise-sensitivity-irrelevant', {}],
+      ['AspectCritic', 'pass-fail', {}],
+      ['SimpleCriteriaScore', 'simple-criteria', {}],
+      ['RubricsScore', 'rubric-score', {}],
+      ['InstanceRubrics', 'instance-rubric', {}],
+      ['bleu_score', 'bleu', { segmentation: 'ragas' }],
+      ['CHRFScore', 'chrf', {}],
+      ['QuotedSpansAlignment', 'quoted-spans', {}],
+      ['ToolCallF1', 'tool-call-f1', {}],
+      ['ToolCallAccuracy', 'tool-call-accuracy', {}],
+      ['DataCompyScore', 'datacompy-score', { inputs: 'results' }],
+      ['sql_query_equivalence', 'sql-equivalence', {}],
+      ['AnswerCorrectness', 'answer-correctness', {}],
+      ['LLMContextPrecisionWithoutReference', 'context-utilization', {}],
       ['id_based_context_precision', 'context-precision-ids', {}],
       ['NonLLMContextRecall', 'context-recall-lexical', {}],
       ['response_relevancy', 'answer-relevance', { mode: 'reverse-questions' }],

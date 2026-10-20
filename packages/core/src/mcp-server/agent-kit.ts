@@ -30,6 +30,7 @@ const OPEN_WORLD = new Set([
   'rag_run',
   'rag_try_metric',
   'rag_rescore',
+  'rag_validate_metric',
 ]);
 
 /** Tools that change or remove what is already there (variable values everywhere, files), or send requests that may change the API's data. */

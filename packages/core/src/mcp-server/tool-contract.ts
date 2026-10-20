@@ -102,6 +102,7 @@ const q = (v: unknown) => JSON.stringify(String(v ?? ''));
  * do; `preview` is the same call in the tool's own dry-run mode, run to show the details without changing anything.
  */
 export const CONFIRM_TOOLS: Record<string, { when?(a: Args): boolean; describe(a: Args): string; preview?(a: Args): Args }> = {
+  rag_save_custom_metric: { when: (a) => a.overwrite === true, describe: (a) => `replace the custom metric file metrics/${String(a.id ?? '')}.yaml with the new text (git brings the old one back)` },
   delete_request: { describe: (a) => `delete the request ${q(a.request)} of the collection ${q(a.collection)} (it goes to no trash: git or a backup brings it back)` },
   import_bundle_apply: { describe: (a) => `import the previewed bundle ${q(a.plan_id)} into the workspace (${a.on_conflict === 'replace' ? 'items that are already here are replaced' : a.on_conflict === 'skip' ? 'items that are already here are kept' : 'items that are already here are kept and the incoming ones renamed'}; undo_import takes it back)` },
   undo_import: { when: (a) => typeof a.import_id === 'string' && !!a.import_id, describe: (a) => `undo the import ${q(a.import_id)}: items it made are removed, items it replaced come back` },
