@@ -175,7 +175,7 @@ export function validateMonitor(store: WorkspaceStore, m: Pick<Monitor, 'name'> 
   if (!(m.everyMinutes >= MIN_EVERY_MINUTES && m.everyMinutes <= MAX_EVERY_MINUTES)) throw invalid('A monitor runs every 1 minute to 7 days');
   const file = m.testFile?.trim();
   const targets = [file, m.collectionId, m.evaluation?.trim()].filter(Boolean).length;
-  if (targets > 1) throw invalid('A monitor runs a collection, a test file or a RAG evaluation, not several: clear the others');
+  if (targets > 1) throw invalid('A monitor runs one of a collection, a test file or a RAG evaluation, not both: clear the others');
   if (!targets) throw invalid('A monitor needs what to run: a collection, a test file under tests/, or a saved RAG evaluation');
   if (m.evaluation?.trim()) {
     const ev = findSavedEvaluation(store, m.evaluation.trim());
