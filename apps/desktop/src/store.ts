@@ -100,11 +100,24 @@ export interface AssistantRequest {
  * "Generate integration flow with AI" (AI-1): from a collection or folder (right-click it), or from the flow canvas
  * (where describing it in words is the other source). The dialog runs the task and opens the proposal's review.
  */
+/**
+ * "Ask…" (AI-12): the natural-language search over History, runs, test results and traces. One dialog, opened from the
+ * search box, the palette and the History / Runs / Traces filter bars (`scope` keeps the search inside the view); with a
+ * `question` it asks at once.
+ */
+export interface AskSearchRequest {
+  question?: string;
+  /** Sources to stay in (history, runs, results, traces); none: all four. */
+  scope?: string[];
+}
+
 export interface FlowGenerateRequest {
   /** The collection or folder preselected. */
   source?: { collectionId: string; folderId?: string };
   /** Start on "Describe in words" (the canvas of an open flow). */
-  mode?: 'collection' | 'describe';
+  mode?: 'collection' | 'describe' | 'spec';
+  /** mode spec: the API definition preselected (specs/…). */
+  spec?: string;
   /** The flow file the result goes to (the open flow: its review shows the diff); default a new file under tests/flows/. */
   path?: string;
   /** describe: the open flow's steps, as context. */
@@ -118,6 +131,12 @@ export interface FlowGenerateRequest {
  * An AI analysis (AI-2 / AI-5): "Explain and fix failures with AI" on a failed run, or "Why is this flaky?" on a flaky
  * test. The dialog shows what is analysed and the estimate, runs it, and opens the findings with their fixes in the review.
  */
+/** "Tidy this import with AI" (AI-10) for a collection; `source` is the import's format. */
+export interface TidyImportRequest {
+  collectionId: string;
+  source?: string;
+}
+
 export type AiAnalysisRequest = { kind: 'triage'; runId: string; title?: string } | { kind: 'flaky'; testId: string; title?: string };
 
 export interface DialogButton {
@@ -184,13 +203,21 @@ interface AppState {
   assistant?: AssistantRequest;
   /** The "Generate integration flow with AI" dialog (AI-1). */
   flowGenerate?: FlowGenerateRequest;
+  /** The "Ask…" search dialog (AI-12). */
+  askSearch?: AskSearchRequest;
   /** Explain and fix failures (AI-2) / Why is this flaky? (AI-5). */
   aiAnalysis?: AiAnalysisRequest;
+  /** Tidy this import with AI (AI-10). */
+  tidyImport?: TidyImportRequest;
   shortcutsOpen?: boolean;
   /** The "Run in CI" dialog, with what to run preselected. */
   ci?: CiRequest;
   /** The "Compare OpenAPI versions" dialog. */
   openapiDiff?: boolean;
+  /** The Export bundle dialog (lib/transfer.ts): what to export. */
+  exportBundle?: import('./lib/transfer').ExportRequest;
+  /** The Import bundle dialog (lib/transfer.ts): a section limits it to that kind. */
+  importBundle?: import('./lib/transfer').ImportRequest;
   /** The API coverage dialog; `runId` preselects a run. */
   apiCoverage?: { runId?: string; spec?: string };
   /** The "Variable usages" dialog, with the variable to show (true: none chosen yet). */

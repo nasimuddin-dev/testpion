@@ -3,6 +3,7 @@ import { Command } from 'commander';
 import { ITEM_KINDS, itemRefUrl, parseItemRef, resolveItemRef, WorkspaceSearch, type RefResolution } from '@testpion/core';
 import { CliError, EXIT, dim, printJson, withWorkspace, yellow } from '../shared.js';
 import { noteError } from '../output.js';
+import { runSearchAsk, type SearchAskOptions } from './search-ask.js';
 
 /** Hand a testpion:// link to the OS, which starts the app (or brings the running one forward) on that item. */
 function launch(url: string): void {
@@ -20,19 +21,31 @@ function launch(url: string): void {
 export function registerOpenCommand(program: Command): void {
   // `testpion search`: the app's Quick Open from a shell (each hit's ref goes to `testpion open`)
   program
-    .command('search <query...>')
-    .description('find items in a workspace by name or content, like Quick Open in the app: requests, collections, test files and flows, environments and variables, monitors, history, traces, runs …; each hit has a ref for `testpion open`')
+    .command('search [query...]')
+    .description(
+      'find items in a workspace by name or content, like Quick Open in the app: requests, collections, test files and flows, environments and variables, monitors, history, traces, runs …; each hit has a ref for `testpion open`. With --ask, a question in your own words ("failed payment calls last week over 2 s") is translated by the configured model into a validated query over History, runs, test results and traces and run by TestPion (the model never sees the data); --query-json runs such a query directly',
+    )
     .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: the nearest workspace.json)')
     .option('-n, --limit <n>', 'at most this many hits', '20')
-    .option('--json', 'print the hits as JSON ({ kind, id, title, subtitle, ref })')
-    .action((words: string[], o: { workspace?: string; limit: string; json?: boolean }) =>
-      withWorkspace(o.workspace, (store) => {
+    .option('--ask <question>', 'ask in natural language: History, runs, test results and traces. The model only translates the question into a query (see how it was understood in the output); without a model the words are searched as typed')
+    .option('--query-json <spec>', 'run a search query directly: JSON, @file or - for stdin ({"sources": [...], "where": [{"field", "op", "value"}], "sort", "limit"}); no model is called')
+    .option('--in <sources>', 'with --ask / --query-json: search only these sources (comma-separated: history, runs, results, traces)')
+    .option('--no-ai', 'with --ask: do not call a model; search the words as typed')
+    .option('--dry-run', 'with --ask: send nothing, print what would be sent')
+    .option('--privacy <level>', 'with --ask: full (redacted, default) | metadata | names')
+    .option('--provider <id>', 'with --ask: provider id or name (default: TESTPION_AI_PROVIDER, then the app settings)')
+    .option('--model <name>', 'with --ask: model name (default: TESTPION_AI_MODEL, then the app settings)')
+    .option('--json', 'print the hits as JSON ({ kind, id, title, subtitle, ref }); with --ask / --query-json the answer: { question, mode, query, explain, chips, assumptions, fallback?, outcome: { rows, matched, notes }, usage? }')
+    .action((words: string[], o: { workspace?: string; limit: string; json?: boolean } & SearchAskOptions) => {
+      if (o.ask !== undefined || o.queryJson !== undefined) return runSearchAsk(words, o);
+      if (!words.length) throw new CliError('Give words to search for, or --ask "<question>" / --query-json <spec>', EXIT.CONFIG_ERROR);
+      return withWorkspace(o.workspace, (store) => {
         const hits = new WorkspaceSearch(store).search(words.join(' '), Math.min(Math.max(Number(o.limit) || 20, 1), 100));
         if (o.json) return printJson(hits);
         if (!hits.length) return console.log(dim('Nothing found.'));
         for (const h of hits) console.log(`${h.title}${h.subtitle ? dim(`  ${h.subtitle}`) : ''}  ${dim(`[${h.kind}]`)}  ${dim(itemRefUrl(h.ref as never))}`);
-      }),
-    );
+      });
+    });
   program
     .command('open <ref>')
     .description(

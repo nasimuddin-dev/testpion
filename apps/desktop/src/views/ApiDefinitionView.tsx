@@ -1,6 +1,8 @@
 import { ItemBreadcrumb } from '../components/ItemBreadcrumb';
 import { refMenu } from '../components/RefLink';
-import { FileCode2, Save, Upload } from 'lucide-react';
+import { FileCode2, Save, Sparkles, Upload } from 'lucide-react';
+import { startFlowGenerate } from '../components/ai/flow-generate';
+import { LABEL } from '../lib/vocabulary';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { OnMount } from '@monaco-editor/react';
 import { asError, call } from '../api';
@@ -175,7 +177,12 @@ export function ApiDefinitionView() {
           </Badge>
         )}
         <span className="mono text-xs text-muted truncate">{spec}</span>
-        <Button className="ml-auto" icon={<Save size={14} />} disabled={!dirty} onClick={() => void save()} title="Save (Ctrl+S)">
+        {!isAsync && (
+          <Button className="ml-auto" icon={<Sparkles size={14} />} onClick={() => startFlowGenerate({ mode: 'spec', spec })} title="Tests for the gaps in what is tested of this API definition: positive, negative, boundary and security" data-generate-spec-tests>
+            {LABEL.generateSpecTests}
+          </Button>
+        )}
+        <Button className={isAsync ? 'ml-auto' : undefined} icon={<Save size={14} />} disabled={!dirty} onClick={() => void save()} title="Save (Ctrl+S)">
           Save
         </Button>
       </div>

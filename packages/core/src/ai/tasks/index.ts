@@ -9,6 +9,8 @@ export * from '../proposal-apply.js';
 export * from '../verify.js';
 export * from '../item-context.js';
 export * from '../flow-from-collection.js';
+export * from '../spec-tests.js';
+export * from '../tidy-import.js';
 export * from '../proposal-verify.js';
 export * from '../yaml-repair.js';
 export * from '../flow-format.js';

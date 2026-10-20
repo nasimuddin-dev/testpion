@@ -5,6 +5,8 @@ import type { CheckConfig, TestCase } from '../model/types.js';
 import { ApsError } from '../errors.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { expandDataset } from './loader.js';
+import type { RagTarget } from '@testpion/shared';
+import { findRagTarget } from '../eval/rag/targets.js';
 import { datasetFormatOf, countDatasetRecords } from '@testpion/shared';
 export { datasetFormatOf, countDatasetRecords };
 
@@ -28,13 +30,23 @@ export interface SavedEvaluation {
   concurrency: number;
   limit?: number;
   retries: number;
+  /** type `rag`: the RAG target (id or name) the questions are sent to; without one the contexts written in the dataset are scored. */
+  target?: string;
+  /** type `rag` with a target: the judge of the judged metrics (unset: the AI settings' large model; never a silent mock) and the run's limits. */
+  judge?: { provider?: string; model?: string };
+  maxJudgeCostUsd?: number;
+  maxJudgeCalls?: number;
 }
 
 export const EVALUATIONS_LIBRARY = 'evaluations';
 
 /** The test template each dataset record is expanded into. */
-export function evaluationTemplate(d: SavedEvaluation): Record<string, unknown> {
+export function evaluationTemplate(d: SavedEvaluation, target?: RagTarget): Record<string, unknown> {
   const model = { provider: d.provider, name: d.model || undefined, temperature: d.temperature };
+  if (d.type === 'rag' && target) {
+    const judge = { ...(d.judge?.provider ? { provider: d.judge.provider } : {}), ...(d.judge?.model ? { model: d.judge.model } : {}), ...(d.maxJudgeCostUsd ? { maxCostUsd: d.maxJudgeCostUsd } : {}), ...(d.maxJudgeCalls ? { maxCalls: d.maxJudgeCalls } : {}) };
+    return { name: d.name, type: 'rag', target, ...(Object.keys(judge).length ? { judge } : {}), evaluators: d.evaluators };
+  }
   if (d.type === 'rag') return { name: d.name, type: 'rag', model, ...(d.prompt.includes('{{context}}') ? { prompt: d.prompt } : {}), evaluators: d.evaluators };
   return {
     name: d.name,
@@ -56,6 +68,8 @@ export interface SavedEvaluationInfo {
   model: string;
   cases: number;
   evaluators: string[];
+  /** type `rag`: the RAG target it calls. */
+  target?: string;
 }
 
 export function listSavedEvaluations(store: WorkspaceStore): SavedEvaluationInfo[] {
@@ -68,6 +82,7 @@ export function listSavedEvaluations(store: WorkspaceStore): SavedEvaluationInfo
     model: i.data.model,
     cases: countDatasetRecords(i.data.dataset ?? '', i.data.datasetFormat ?? 'jsonl'),
     evaluators: (i.data.evaluators ?? []).map((e) => e.type),
+    ...(i.data.target ? { target: i.data.target } : {}),
   }));
 }
 
@@ -84,14 +99,21 @@ export function findSavedEvaluation(store: WorkspaceStore, ref: string): SavedEv
  * The test cases of an evaluation (one per dataset record). The dataset text goes to a temporary file
  * that is removed when the generator finishes, so nothing is written to the workspace.
  */
-export async function* evaluationTests(d: SavedEvaluation): AsyncGenerator<TestCase> {
+export async function* evaluationTests(d: SavedEvaluation, o: { store?: WorkspaceStore } = {}): AsyncGenerator<TestCase> {
+  // the RAG target is read when the run starts (a later edit of it never changes a run in progress)
+  let target: RagTarget | undefined;
+  if (d.type === 'rag' && d.target) {
+    if (!o.store) throw new ApsError('ConfigurationError', `The evaluation "${d.name}" calls the RAG target "${d.target}": open it from a workspace`);
+    const { id: _id, name: _name, ...t } = findRagTarget(o.store, d.target);
+    target = t;
+  }
   const dir = mkdtempSync(join(tmpdir(), 'testpion-eval-'));
   try {
     const format = datasetFormatOf(d.dataset ?? '', d.datasetFormat);
     const file = join(dir, `dataset.${format}`);
     writeFileSync(file, d.dataset ?? '');
     const template = {
-      ...evaluationTemplate(d),
+      ...evaluationTemplate(d, target),
       dataset: { path: file, format: format === 'md' ? 'markdown' : format, limit: d.limit, expectedField: d.expectedField || 'expected' },
     };
     yield* expandDataset(template, join(dir, 'evaluation'));

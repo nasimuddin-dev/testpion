@@ -102,7 +102,7 @@ function assertionItems(r: { path: string; value: unknown; expandable: boolean }
 /** The tree's own path of a child: `[i]` in an array, `.key` in an object (what expanding and walking both use). */
 const childPath = (parent: string, value: unknown, key: string) => (Array.isArray(value) ? `${parent}[${key}]` : `${parent}.${key}`);
 
-export function JsonTree({ data: full, query, onAssert: assertOnFull, onSaveVariable }: { data: unknown; query?: string; onAssert?(a: TreeAssertion): void; onSaveVariable?(v: TreeVariable): void }) {
+export function JsonTree({ data: full, query, onAssert: assertOnFull, onSaveVariable, pickItems: pickOnFull, hint }: { data: unknown; query?: string; onAssert?(a: TreeAssertion): void; onSaveVariable?(v: TreeVariable): void; /** More items for a key's menu (Connect a RAG system: "This is the answer" …); like checks, only offered unfiltered. */ pickItems?(row: { path: string; key: string; value: unknown }): MenuItem[]; /** The toolbar's hint when a menu is offered. */ hint?: string }) {
   // "Filter with JSONPath": show only what the expression selects (evaluated a moment after typing stops: a big body
   // is not searched on every keystroke); the field suggests the body's own paths (lib/json-paths.ts)
   const [filter, setFilter] = useState('');
@@ -124,6 +124,7 @@ export function JsonTree({ data: full, query, onAssert: assertOnFull, onSaveVari
   const data = useMemo(() => filtered?.data ?? (filtered ? [] : full), [filtered, full]);
   // paths inside a filtered result aren't the response's paths, so checks are only offered unfiltered
   const onAssert = filtered ? undefined : assertOnFull;
+  const pickItems = filtered ? undefined : pickOnFull;
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set(['$']));
   useEffect(() => {
     // new data opens its first level; a filter's matches open one level more, so a matched object shows its fields
@@ -216,7 +217,9 @@ export function JsonTree({ data: full, query, onAssert: assertOnFull, onSaveVari
         hint={
           filtered
             ? 'Showing the matches as a list'
-            : onAssert
+            : pickItems && hint
+              ? hint
+              : onAssert
               ? onSaveVariable
                 ? 'Click a key to copy its JSONPath, save it to a variable or check it'
                 : 'Click a key to copy its JSONPath or turn it into an assertion'
@@ -245,12 +248,12 @@ export function JsonTree({ data: full, query, onAssert: assertOnFull, onSaveVari
                 )}
               </span>
               {r.key !== undefined &&
-                (onAssert && !r.embedded ? (
+                ((onAssert || pickItems) && !r.embedded ? (
                   <Menu
                     align="start"
                     width={230}
                     trigger={
-                      <button title={`${r.path}: copy the path or add an assertion`} className="syn-key hover:underline">
+                      <button title={`${r.path}: ${onAssert ? 'copy the path or add an assertion' : 'copy the path or map it'}`} className="syn-key hover:underline">
                         {/^\d+$/.test(r.key) ? r.key : `"${r.key}"`}
                       </button>
                     }
@@ -259,7 +262,8 @@ export function JsonTree({ data: full, query, onAssert: assertOnFull, onSaveVari
                       ...(onSaveVariable
                         ? [{ label: 'Save to variable…', icon: <Variable size={14} />, onSelect: () => onSaveVariable({ name: variableName(r.key!), access: r.access ?? '', value: r.value }) }]
                         : []),
-                      ...assertionItems(r, onAssert).map((it, i) => (i === 0 ? { ...it, separator: true } : it)),
+                      ...(onAssert ? assertionItems(r, onAssert).map((it, i) => (i === 0 ? { ...it, separator: true } : it)) : []),
+                      ...(pickItems ? pickItems({ path: r.path, key: r.key, value: r.value }).map((it, i) => (i === 0 ? { ...it, separator: true } : it)) : []),
                     ]}
                   />
                 ) : r.embedded ? (

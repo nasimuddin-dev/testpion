@@ -31,6 +31,7 @@ import { registerGenerateCommands } from './commands/generate.js';
 import { registerReplaceCommands } from './commands/replace.js';
 import { registerVarsMoveCommand } from './commands/vars-move.js';
 import { registerTidyCommand } from './commands/tidy.js';
+import { registerAiSpecCommands } from './commands/ai-spec.js';
 import { registerFlowsCommand } from './commands/flows.js';
 import { registerFlowCommand } from './commands/flow.js';
 import { registerFlowExportCommand } from './commands/flow-export.js';
@@ -40,10 +41,13 @@ import { registerFlowReportCommand } from './commands/flow-scale.js';
 import { registerTestFromCommand } from './commands/test-from.js';
 import { registerAiCommands } from './commands/ai.js';
 import { registerKindsCommand } from './commands/kinds.js';
+import { registerRagCommands } from './commands/rag.js';
 import { registerItemCommand } from './commands/item.js';
+import { registerOutputCommand } from './commands/output.js';
+import { registerBundleCommands } from './commands/bundle.js';
 
 /** The commands that send to APIs with an environment (by their path): they take --allow-production. */
-export const SENDING_COMMANDS = new Set(['test', 'run', 'run-collection', 'load', 'send', 'monitor add', 'monitor run', 'monitor start', 'eval run', 'serve flows', 'ai attempt-fix']);
+export const SENDING_COMMANDS = new Set(['test', 'run', 'run-collection', 'load', 'send', 'monitor add', 'monitor run', 'monitor start', 'eval run', 'serve flows', 'ai attempt-fix', 'rag probe']);
 
 /** The testpion command line: one module per area of commands (commands/*.ts). */
 export function buildProgram(): Command {
@@ -71,6 +75,7 @@ export function buildProgram(): Command {
   registerReplaceCommands(program);
   registerVarsMoveCommand(program);
   registerTidyCommand(program);
+  registerAiSpecCommands(program);
   registerFlowsCommand(program);
   registerFlowCommand(program);
   registerFlowExportCommand(program);
@@ -80,7 +85,10 @@ export function buildProgram(): Command {
   registerTestFromCommand(program);
   registerAiCommands(program);
   registerKindsCommand(program);
+  registerBundleCommands(program);
+  registerRagCommands(program);
   registerItemCommand(program);
+  registerOutputCommand(program);
 
   // WF-06: the commands that send take --allow-production; without it the engine refuses data-changing requests to an
   // environment marked as production (GETs still run, so a smoke run against production works as before)

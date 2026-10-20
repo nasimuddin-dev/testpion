@@ -509,9 +509,12 @@ export function SearchDialog() {
     return () => clearTimeout(t);
   }, [q]);
   const close = () => set({ searchOpen: false });
+  // the last row, always: put the words to the AI as a question (Ask…, AI-12), the same row as in Quick Open
+  const shown: SearchHit[] = q.trim() ? [...hits, { kind: 'ask', id: 'ask', title: `Ask: “${q.trim()}”`, subtitle: 'History, runs, test results and traces, in your own words (AI)', ref: {} }] : [];
   // every hit names its item with an ItemRef: it opens the one way everything opens (a hit of something deleted since says so)
   const open = (h?: SearchHit) => {
     if (!h) return;
+    if (h.kind === 'ask') return startAskSearch({ question: q.trim() });
     close();
     void openRef(h.ref);
   };
@@ -527,6 +530,7 @@ export function SearchDialog() {
     history: <History size={14} />,
     trace: <Activity size={14} />,
     run: <Boxes size={14} />,
+    ask: <Sparkles size={14} />,
   };
   // kinds without an icon of their own here (environments, API definitions, datasets …) take their kind's (RefLink)
   const iconOf = (h: SearchHit) => icons[h.kind] ?? ((r) => (r ? refIcon(r, 14) : null))(toItemRef(h.ref));
@@ -548,14 +552,15 @@ export function SearchDialog() {
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Escape') close();
-              if (e.key === 'ArrowDown') (e.preventDefault(), setIdx((i) => Math.min(hits.length - 1, i + 1)));
+              if (e.key === 'ArrowDown') (e.preventDefault(), setIdx((i) => Math.min(shown.length - 1, i + 1)));
               if (e.key === 'ArrowUp') (e.preventDefault(), setIdx((i) => Math.max(0, i - 1)));
-              if (e.key === 'Enter') open(hits[idx]);
+              if (e.key === 'Enter') open(shown[idx]);
             }}
           />
         </div>
         <div className="max-h-[55vh] overflow-auto py-1" role="listbox">
-          {hits.map((h, i) => (
+          {q && !hits.length && <div className="px-4 py-3 text-sm text-muted">No matching items</div>}
+          {shown.map((h, i) => (
             <button key={`${h.kind}:${h.id}`} role="option" aria-selected={i === idx} {...hoverSelect(() => setIdx(i))} onClick={() => open(h)} className={cx('w-full text-left px-4 py-2 flex items-center gap-3', i === idx && 'bg-accent/10')}>
               <span className="text-muted">{iconOf(h)}</span>
               <span className="min-w-0">
@@ -565,7 +570,6 @@ export function SearchDialog() {
               <span className="ml-auto text-[0.7rem] text-muted">{h.kind}</span>
             </button>
           ))}
-          {q && !hits.length && <div className="px-4 py-6 text-sm text-muted">No results</div>}
           {!q && <div className="px-4 py-6 text-sm text-muted">Searches requests, collections, tests, GraphQL operations, MCP servers, providers, environments and their variables, API definitions, datasets, history, traces and runs.</div>}
         </div>
       </div>
@@ -611,6 +615,7 @@ import { StatusBarTools } from './StatusBarTools';
 import { EnvSelect } from './EnvSelect';
 import { keyLabel, useBindings } from '../lib/keybindings';
 import { hoverSelect } from '../lib/hover-select';
+import { startAskSearch } from './ai/ask-search';
 export { iconForLabel };
 
 function DialogView({ d }: { d: DialogRequest }) {

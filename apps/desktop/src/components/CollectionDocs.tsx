@@ -1,11 +1,13 @@
-import { Download, Eye, Globe, Pencil } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { Eye, Pencil } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { outputFileName } from '@testpion/shared';
 import { asError, call } from '../api';
-import { toastError, useApp } from '../store';
+import { useApp } from '../store';
 import type { Collection } from '../types';
-import { downloadContent, finishSave, type SaveResult } from '../lib/files';
+import { OutputActions } from './output/OutputFrame';
+import type { OutputSpec } from './output/output-core';
 import { Markdown } from './Markdown';
-import { Button, Segmented, useDebounced, Textarea } from './ui';
+import { Segmented, useDebounced, Textarea } from './ui';
 
 /**
  * Postman-style collection documentation: the collection description plus every folder and request
@@ -21,16 +23,23 @@ export function CollectionDocs({ collection, onDescription }: { collection: Coll
     call<string>('col.docs', { collection: debounced, environment: env }).then(setMarkdown, (e) => setMarkdown(`> ${asError(e).message}`));
   }, [debounced, env]);
 
-  const exportHtml = async () => {
-    try {
-      finishSave(await call<SaveResult>('col.exportDocsHtml', { collection, environment: env }), 'Documentation');
-    } catch (e) {
-      toastError(e);
-    }
-  };
+  // the documentation as shown (Markdown), or as one self-contained HTML page the backend lays out; sensitive values are masked in both
+  const spec = useMemo<OutputSpec>(
+    () => ({
+      id: 'collection.docs',
+      what: 'documentation',
+      name: outputFileName({ name: collection.name, ext: '' }),
+      formats: [
+        { key: 'md', format: 'md', label: 'Markdown', default: true, build: () => markdown },
+        { key: 'html', format: 'html', label: 'HTML page', build: () => call<string>('col.docsHtml', { collection, environment: env }) },
+      ],
+      empty: markdown ? undefined : 'No documentation yet',
+    }),
+    [collection, markdown, env],
+  );
 
   return (
-    <div className="h-full flex flex-col min-h-0">
+    <div className="h-full flex flex-col min-h-0" data-output="collection.docs">
       <div className="flex items-center gap-2 px-3 h-10 border-b border-line shrink-0">
         <Segmented
           label="Documentation mode"
@@ -42,12 +51,7 @@ export function CollectionDocs({ collection, onDescription }: { collection: Coll
           ]}
         />
         <span className="text-xs text-muted ml-2">Sensitive values are masked. Request docs are written in each request’s Docs tab.</span>
-        <Button size="sm" variant="ghost" className="ml-auto" icon={<Download size={12} />} disabled={!markdown} onClick={() => downloadContent(`${collection.name}.md`, markdown, { type: 'text/markdown' })}>
-          Export Markdown
-        </Button>
-        <Button size="sm" variant="ghost" icon={<Globe size={12} />} disabled={!markdown} onClick={() => void exportHtml()}>
-          Export HTML
-        </Button>
+        <OutputActions spec={spec} />
       </div>
       {mode === 'edit' ? (
         <div className="flex-1 min-h-0 grid grid-cols-2 gap-3 p-3">

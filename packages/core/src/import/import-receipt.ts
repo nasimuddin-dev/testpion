@@ -77,7 +77,7 @@ export function readImportReport(store: WorkspaceStore, id: string): { receipt: 
 }
 
 /** The imports of the workspace, newest first. */
-export function listImports(store: WorkspaceStore): Array<{ id: string; at: string; format: string; collections: string[]; environments: string[]; summary: ImportReport['summary'] }> {
+export function listImportReceipts(store: WorkspaceStore): Array<{ id: string; at: string; format: string; collections: string[]; environments: string[]; summary: ImportReport['summary'] }> {
   if (!existsSync(dir(store))) return [];
   return readdirSync(dir(store))
     .filter((f) => f.endsWith('.json'))
@@ -104,7 +104,7 @@ export interface UndoResult {
 }
 
 /** Take an import back. Nothing is changed when something was edited since, unless `force`. */
-export function undoImport(store: WorkspaceStore, id: string, opts: { force?: boolean } = {}): UndoResult {
+export function undoImportReceipt(store: WorkspaceStore, id: string, opts: { force?: boolean } = {}): UndoResult {
   const { receipt } = readImportReport(store, id);
   const refused: string[] = [];
   if (!opts.force) {

@@ -12,7 +12,7 @@ Owner clarifications (same day):
 2. *"The user can also define custom metrics, which also evaluate."* Custom metrics are a first-class part of the metric
    engine: kept as files, reviewable, runnable, and usable anywhere a built-in metric is.
 
-Status: plan only, nothing built. Written against the tree after v0.48.1 (with the uncommitted triage work). Sizes and
+Status: **R1a is built** (backlog B-30; what is left of R1 is B-30b): targets over HTTP, SSE, WebSocket, gRPC and MCP with click-to-map, the `rag-target` item kind, datasets with Ragas / DeepEval import and export, the `rag-judge` judge service (content-hash cache, ledger, caps, no silent judge), `normalized-match`, `token-f1`, `rouge`, `context-recall-ids`, `context-precision-ids`, `rag-faithfulness` and `rag-answer-relevance`, `testpion rag targets|probe|import|export`, four MCP tools. Everything else below is still a plan. Written against the tree after v0.48.1 (with the uncommitted triage work). Sizes and
 item ids follow `planning/README.md` (S ≤ 1 day, M 2–4 days, L 1–2 weeks). The ground rules apply: AI-first (CLI
 `--json`, an MCP tool, `llms.txt`, docs), cloud-ready (UI only via RPC, host-agnostic engine), uniform UI, and the local
 app stays free.

@@ -1,10 +1,11 @@
 import { openDocs } from '../lib/docs-link';
 import { askAssistant } from '../components/ai/AiAction';
-import { Activity as ActivityIcon, AlarmClock, BookOpen, Bug, Gauge, FileDown, Bot, LockKeyhole, ShieldCheck, FolderPlus, FolderTree, GitBranch, History, KeyRound, Network, Play, Plug, Plus, Sparkles, Upload, ArrowRight } from 'lucide-react';
+import { Activity as ActivityIcon, AlarmClock, BookOpen, Bug, Gauge, Bot, LockKeyhole, ShieldCheck, FolderPlus, FolderTree, GitBranch, History, KeyRound, Network, Play, Plug, Plus, Sparkles, Upload, ArrowRight } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { asError, call, modKey, on } from '../api';
-import { finishSave, type SaveResult } from '../lib/files';
-import { promptText, toastError, useApp } from '../store';
+import { OutputActions } from '../components/output/OutputFrame';
+import type { OutputSpec } from '../components/output/output-core';
+import { promptText, useApp } from '../store';
 import { runMenuCommand } from '../menu-commands';
 import type { CollectionNode, HttpRequestSpec } from '../types';
 import { timeAgo, uid, plural } from '../lib/format';
@@ -21,7 +22,7 @@ import { GuidedTour } from '../components/GuidedTour';
 import { openRef } from '../lib/open-ref';
 import { refIcon } from '../components/RefLink';
 import { TreeBadge } from '../components/TreeParts';
-import { ITEM_KIND_LABEL, itemRefKey } from '@testpion/shared';
+import { ITEM_KIND_LABEL, itemRefKey, outputFileName } from '@testpion/shared';
 
 /** The newest history entry and the count: whether requests were sent since Home last loaded. */
 const historyMark = (r: { items: Array<{ id: string }>; total: number }) => `${r.total}|${r.items[0]?.id ?? ''}`;
@@ -185,6 +186,17 @@ export function HomeView() {
   // the reload on returning to Home runs from a subscription made once: read the period from a ref
   const daysRef = useRef(days);
   daysRef.current = days;
+  // the dashboard, the collections' health, monitors and latest runs as one HTML page to share (names, counts and timings only)
+  const workspaceName = useApp((s) => s.workspace?.name);
+  const reportSpec = useMemo<OutputSpec>(
+    () => ({
+      id: 'workspace.report',
+      what: 'workspace report',
+      name: outputFileName({ name: `${(workspaceName || 'workspace').replace(/[^\w.-]+/g, '-').slice(0, 60)}-report`, ext: '' }),
+      formats: [{ format: 'html', label: 'HTML page (to share)', source: { kind: 'workspace-report', days, tzOffsetMin: new Date().getTimezoneOffset() }, default: true }],
+    }),
+    [days, workspaceName],
+  );
   const loadActivity = (n = daysRef.current) => void call<Activity>('stats.activity', { days: n, tzOffsetMin: new Date().getTimezoneOffset() }).then(setActivity, () => setActivity(undefined));
   const pickDays = (n: number) => {
     setDays(n);
@@ -320,25 +332,13 @@ export function HomeView() {
         <AttentionCard />
 
         {activity && (
-          <section aria-label="Activity" className="rounded-2xl border border-line bg-bg shadow-sm p-4 flex flex-col gap-3">
+          <section aria-label="Activity" className="rounded-2xl border border-line bg-bg shadow-sm p-4 flex flex-col gap-3" data-output="workspace.report">
             <header className="flex items-center gap-2 text-sm font-semibold">
               <span className="grid place-items-center h-7 w-7 rounded-lg bg-panel2 text-muted">
                 <ActivityIcon size={15} />
               </span>
               Activity
-              <button
-                className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1 text-xs font-normal text-muted hover:text-fg hover:bg-hover"
-                title="Save this dashboard, the collections' health, monitors and latest runs as one HTML file to share"
-                onClick={() =>
-                  void call<SaveResult>('report.workspace', { days, tzOffsetMin: new Date().getTimezoneOffset() }).then(
-                    (r) => finishSave(r, 'Workspace report'),
-                    (e) => toastError(e),
-                  )
-                }
-              >
-                <FileDown size={13} />
-                Share report
-              </button>
+              <OutputActions spec={reportSpec} />
               <Segmented label="Period" value={days} onChange={pickDays} options={[7, 14, 30].map((n) => ({ value: n, label: `${n} days` }))} />
             </header>
             <ActivityCharts activity={activity} />

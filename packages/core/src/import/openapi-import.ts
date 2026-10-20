@@ -35,12 +35,26 @@ export function sampleFromSchema(schema: any, spec: any, depth = 0): unknown {
     case 'array':
       return [sampleFromSchema(schema.items, spec, depth + 1)];
     case 'integer':
-    case 'number':
+    case 'number': {
+      // an example inside the documented range (the document's own limits make the sample valid)
+      const lo = typeof schema.minimum === 'number' ? schema.minimum + (schema.exclusiveMinimum === true ? 1 : 0) : typeof schema.exclusiveMinimum === 'number' ? schema.exclusiveMinimum + 1 : undefined;
+      const hi = typeof schema.maximum === 'number' ? schema.maximum - (schema.exclusiveMaximum === true ? 1 : 0) : typeof schema.exclusiveMaximum === 'number' ? schema.exclusiveMaximum - 1 : undefined;
+      if (lo !== undefined && lo > 0) return lo;
+      if (hi !== undefined && hi < 0) return hi;
       return 0;
+    }
     case 'boolean':
       return false;
-    case 'string':
-      return schema.format === 'date-time' ? new Date(0).toISOString() : schema.format === 'uuid' ? '00000000-0000-0000-0000-000000000000' : schema.format === 'email' ? 'user@example.com' : 'string';
+    case 'string': {
+      if (schema.format === 'date-time') return new Date(0).toISOString();
+      if (schema.format === 'uuid') return '00000000-0000-0000-0000-000000000000';
+      if (schema.format === 'email') return 'user@example.com';
+      // within the documented length
+      let v = 'string';
+      if (typeof schema.minLength === 'number' && v.length < schema.minLength) v = v.padEnd(Math.min(schema.minLength, 10_000), 'x');
+      if (typeof schema.maxLength === 'number' && v.length > schema.maxLength) v = v.slice(0, Math.max(0, schema.maxLength));
+      return v;
+    }
     default:
       return null;
   }

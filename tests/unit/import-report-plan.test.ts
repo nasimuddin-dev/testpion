@@ -11,9 +11,9 @@ import {
   planInputs,
   importInputs,
   undoMany,
-  undoImport,
+  undoImportReceipt,
   readImportReport,
-  listImports,
+  listImportReceipts,
   restoreItem,
   reportMarkdown,
   expandImportFiles,
@@ -200,12 +200,12 @@ describe('undo', () => {
     expect(r.report!.counts.requests).toBe(3);
     expect(store.listCollections().map((c) => c.name)).toContain('Vet clinic');
     // the report and receipt are kept per computer
-    expect(listImports(store)[0]).toMatchObject({ id: r.receipt!.id, collections: ['Vet clinic'] });
+    expect(listImportReceipts(store)[0]).toMatchObject({ id: r.receipt!.id, collections: ['Vet clinic'] });
     expect(readImportReport(store, r.receipt!.id).report.summary.items).toBe(5);
-    const u = undoImport(store, r.receipt!.id);
+    const u = undoImportReceipt(store, r.receipt!.id);
     expect(u.trashed).toHaveLength(1);
     expect(store.listCollections().map((c) => c.name)).not.toContain('Vet clinic');
-    expect(listImports(store)).toEqual([]);
+    expect(listImportReceipts(store)).toEqual([]);
     const back = restoreItem(store, u.trashed[0]!.trashId);
     expect(back.name).toBe('Vet clinic');
     expect(store.listCollections().map((c) => c.name)).toContain('Vet clinic');
@@ -216,10 +216,10 @@ describe('undo', () => {
     const r = importIntoWorkspace(store, postman);
     const c = store.listCollections().find((x) => x.id === r.collection!.id)!;
     store.saveCollection({ ...c, description: 'edited' });
-    const refused = undoImport(store, r.receipt!.id);
+    const refused = undoImportReceipt(store, r.receipt!.id);
     expect(refused.refused![0]).toMatch(/was edited after the import/);
     expect(store.listCollections().map((x) => x.name)).toContain('Vet clinic');
-    expect(undoImport(store, r.receipt!.id, { force: true }).trashed).toHaveLength(1);
+    expect(undoImportReceipt(store, r.receipt!.id, { force: true }).trashed).toHaveLength(1);
   });
 
   it('removes an environment, an API definition and flow files an import made', () => {
@@ -227,11 +227,11 @@ describe('undo', () => {
     const spec = JSON.stringify({ openapi: '3.0.0', info: { title: 'Pets', version: '1' }, paths: { '/pets': { get: { responses: { 200: { description: 'ok' } } } } } });
     const r = importIntoWorkspace(store, spec);
     expect(existsSync(join(store.root, r.specPath!))).toBe(true);
-    undoImport(store, r.receipt!.id);
+    undoImportReceipt(store, r.receipt!.id);
     expect(existsSync(join(store.root, r.specPath!))).toBe(false);
     const e = importIntoWorkspace(store, 'A=1\nB=2\n', { name: 'tmp' });
     expect(store.listEnvironments().map((x) => x.name)).toContain('tmp');
-    undoImport(store, e.receipt!.id);
+    undoImportReceipt(store, e.receipt!.id);
     expect(store.listEnvironments().map((x) => x.name)).not.toContain('tmp');
   });
 

@@ -66,6 +66,8 @@ export type MenuLabelKey =
   | 'compareVersions'
   | 'generateTests'
   | 'generateFlows'
+  | 'generateSpecTests'
+  | 'tidyImport'
   | 'openApiDefinitions'
   | 'preview'
   | 'runWithDataset'
@@ -210,6 +212,8 @@ function computeCapabilities(kind: NodeKind): Capabilities {
       ...all(NA('a section header holds a list, it is not an item')),
       // a list of folders, or a tree, expands; a flat list (environments, providers) has nothing to expand
       container: info.folders !== 'none' ? true : NA('a flat list: nothing to expand or collapse'),
+      // Export… and Import… on a section header act on the whole list (the kinds a bundle holds)
+      export: base.export,
       import: base.import,
       ci: base.ci === true ? true : NA('its items do not run in CI'),
     };
@@ -224,7 +228,7 @@ function computeCapabilities(kind: NodeKind): Capabilities {
       // a folder of test files runs (and runs in CI) as one; a library's folder is a way to sort its items
       run: base.run === true && info.folders === 'dirs' ? true : NA('its items run one by one'),
       ci: base.ci === true && info.folders === 'dirs' ? true : NA('its items run in CI one by one'),
-      export: { planned: '0.54' },
+      export: { planned: '0.55' },
     };
   if (kind === 'category') return { ...all(NA('a group of one protocol’s requests in a collection')), container: true, run: true };
   return { ...all(NA('favorites gather requests from every collection')), container: true };
@@ -299,6 +303,8 @@ export const STANDARD_ACTIONS = [
 const COLLECTION_ACTIONS = [
   { id: 'collectionSettings', group: 'tools', label: 'collectionSettings', icon: 'settings-2', kinds: ['collection'] },
   { id: 'convertScripts', group: 'tools', label: 'convertScriptsTp', icon: 'wand-2', kinds: ['collection'] },
+  // AI-10: the clean-up of an import as reviewable changes
+  { id: 'tidyImport', group: 'tools', label: 'tidyImport', icon: 'sparkles', kinds: ['collection'] },
   { id: 'copyGrpcurl', group: 'share', label: 'copyGrpcurl', icon: 'terminal', kinds: ['grpc-call'] },
   { id: 'copyUrl', group: 'share', label: 'copyUrl', icon: 'link-2', kinds: ['ws-connection'] },
   { id: 'editFolder', group: 'tools', label: 'editFolder', icon: 'folder-cog', kinds: ['folder'] },
@@ -317,6 +323,8 @@ const EXPLORER_ACTIONS = [
   { id: 'compareVersions', group: 'run', label: 'compareVersions', icon: 'git-compare', kinds: ['spec'] },
   { id: 'generateTests', group: 'tools', label: 'generateTests', icon: 'file-check-2', kinds: ['spec'] },
   { id: 'generateFlows', group: 'tools', label: 'generateFlows', icon: 'workflow', kinds: ['spec'] },
+  // AI-4: tests for the gaps in what is tested (TestPion's own cases; a configured model adds ideas)
+  { id: 'generateSpecTests', group: 'tools', label: 'generateSpecTests', icon: 'sparkles', kinds: ['spec'] },
   { id: 'openApiDefinitions', group: 'open', label: 'openApiDefinitions', icon: 'square-arrow-out-up-right', kinds: ['section:spec'] },
   // datasets
   { id: 'preview', group: 'open', label: 'preview', icon: 'eye', kinds: ['dataset'] },

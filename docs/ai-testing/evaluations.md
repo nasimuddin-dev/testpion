@@ -9,6 +9,8 @@ description: "Evaluate LLM output with deterministic, semantic and LLM-as-judge 
 
 ## Saved evaluations
 
+An evaluation of type **RAG** sends the questions of its dataset to a RAG system you connect (HTTP, SSE, WebSocket, gRPC or an MCP tool) and scores the answers and the documents it retrieved; its Provider and Model become the *judge* of the judged metrics. See [RAG testing](/ai-testing/rag).
+
 Save an evaluation (its dataset, prompt, model, parameters and evaluators) with **Save** next to **Run**, and it appears under **Saved** in the sidebar. Group evaluations in folders (**New folder**, drag and drop, or **Move to folder**), and right-click one to **Run** it again, rename, duplicate or delete it (a delete happens at once, with **Undo** in the message). **Save** updates the evaluation you opened (it shows `Save*` when there are changes). **Save current evaluation** in a folder's menu saves a copy there. The **Runs** pane lists the runs of your evaluations, each with the environment it ran against (**PRODUCTION** in red); pick one to see its results.
 
 Evaluations open in tabs, like requests: each tab keeps its own unsaved changes, a single click in the **Saved** list opens a preview tab (its name in italics) that the next click replaces, and a double-click keeps it. The first line of the view says where the evaluation is (*Evaluations › folder › name*), and its ⋯ has **Copy link**. See [Finding your way around](/getting-started/finding-your-way#open-an-item).

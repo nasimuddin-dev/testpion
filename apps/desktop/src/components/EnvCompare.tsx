@@ -1,8 +1,10 @@
 import { ArrowLeftRight } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { asError, call } from '../api';
 import type { Environment } from '../types';
 import { Badge, cx, IconButton, Modal, Select, Toggle } from './ui';
+import { EnvOutputBar } from './EnvOutputBar';
+import { tableOutputSpec } from './output/table-specs';
 
 interface EnvDiffRow {
   key: string;
@@ -58,6 +60,28 @@ export function EnvCompare({ environments, initialLeft, onClose }: { environment
       </span>
     );
   };
+  // the values as shown: secrets only as set / not set
+  const text = (r: EnvDiffRow, side: 'left' | 'right') => {
+    if (side === 'left' ? r.status === 'only-right' : r.status === 'only-left') return 'not defined';
+    const secret = side === 'left' ? r.secretLeft : r.secretRight;
+    const set = side === 'left' ? r.secretSetLeft : r.secretSetRight;
+    const value = side === 'left' ? r.left : r.right;
+    return `${secret ? (set === false ? 'secret · not set' : 'secret · set') : value || 'empty'}${(side === 'left' ? r.disabledLeft : r.disabledRight) ? ' (disabled)' : ''}`;
+  };
+  const spec = useMemo(
+    () =>
+      tableOutputSpec({
+        id: 'env.matrix',
+        what: 'environment comparison',
+        name: `compare-${diff?.left ?? 'left'}-${diff?.right ?? 'right'}`,
+        title: `${diff?.left ?? ''} compared with ${diff?.right ?? ''}`,
+        columns: ['variable', diff?.left ?? 'left', diff?.right ?? 'right', 'status'],
+        rows: rows.map((r) => [r.key, text(r, 'left'), text(r, 'right'), LABEL[r.status].text]),
+        empty: diff ? undefined : 'Reading the environments…',
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- rows follow diff and the filter
+    [diff, showSame],
+  );
   const picker = (value: string, set: (v: string) => void, label: string) => (
     <Select aria-label={label} value={value} onChange={(e) => set(e.target.value)} className="flex-1">
       {environments.map((e) => (
@@ -85,9 +109,9 @@ export function EnvCompare({ environments, initialLeft, onClose }: { environment
             <Badge tone={diff.summary.onlyLeft ? 'bad' : 'default'}>{diff.summary.onlyLeft} only in {diff.left}</Badge>
             <Badge tone={diff.summary.onlyRight ? 'bad' : 'default'}>{diff.summary.onlyRight} only in {diff.right}</Badge>
             <Badge>{diff.summary.same} same</Badge>
-            <span className="ml-auto">
+            <EnvOutputBar spec={spec}>
               <Toggle checked={showSame} onChange={setShowSame} label="Show variables that are the same" />
-            </span>
+            </EnvOutputBar>
           </div>
         )}
         <div className="max-h-[55vh] overflow-auto rounded-lg border border-line">

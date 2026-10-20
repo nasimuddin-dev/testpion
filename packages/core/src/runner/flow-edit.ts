@@ -15,7 +15,7 @@ import { slugify } from '../util/ids.js';
 import { spliceYaml } from '../util/yaml-splice.js';
 import { isSuiteFile, normalizeTest } from './loader.js';
 import { collectionSteps, TAIL_KEYS } from './flow-steps-from-requests.js';
-import { flowStepOf } from './flow-steps.js';
+import { flowStepOf, markDatasetLoops } from './flow-steps.js';
 import { parseWebhook } from './flow-webhook-config.js';
 import { FLOW_COLORS, flowGraph, freeSpot, STEP_SIZE, type FlowNote, type FlowStep } from '@testpion/shared';
 
@@ -116,7 +116,7 @@ function open(text: string, file?: string): Ctx {
     else if (tests) {
       seq = doc.createNode([]) as YAMLSeq;
       tests.value = seq;
-    } else if (['type', 'url', 'request', 'query', 'prompt', 'tool', 'method'].some((k) => pairOf(root as YAMLMap, k))) {
+    } else if (['type', 'url', 'request', 'query', 'prompt', 'tool', 'method', 'dataset'].some((k) => pairOf(root as YAMLMap, k))) {
       // one test at the top: it becomes the first step of a tests: list
       seq = doc.createNode([]) as YAMLSeq;
       seq.items.push(root);
@@ -1061,7 +1061,7 @@ export function flowStepsOfText(text: string, file?: string): FlowStep[] {
     return [];
   }
   const root = data && typeof data === 'object' ? (data as Record<string, unknown>) : undefined;
-  const list = Array.isArray(data) ? data : Array.isArray(root?.tests) ? (root!.tests as unknown[]) : root && (root.type || root.url || root.request) ? [root] : [];
+  const list = Array.isArray(data) ? data : Array.isArray(root?.tests) ? (root!.tests as unknown[]) : root && (root.type || root.url || root.request || root.prompt || root.dataset) ? [root] : [];
   const defaults = (!Array.isArray(data) && root?.defaults && typeof root.defaults === 'object' ? root.defaults : {}) as Record<string, unknown>;
   const out: FlowStep[] = [];
   list.forEach((t, i) => {
@@ -1072,6 +1072,7 @@ export function flowStepsOfText(text: string, file?: string): FlowStep[] {
       out.push({ id: String(raw.id ?? raw.name ?? `#${i + 1}`), name: String(raw.name ?? `#${i + 1}`), type: String(raw.type ?? '?') });
     }
   });
+  markDatasetLoops(out, data);
   return out;
 }
 

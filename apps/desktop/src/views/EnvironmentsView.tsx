@@ -277,6 +277,7 @@ export function EnvironmentsView() {
                   <TreeRowShell
                     key={e.id}
                     kind="environment"
+                    git={{ kind: 'environment', environmentId: e.id }}
                     nodeId={`env:${e.id}`}
                     label={e.name}
                     active={sel === e.id}
@@ -406,7 +407,7 @@ export function EnvironmentsView() {
                           ref: { kind: 'environment', environmentId: draft.id },
                           repo: !!git.status?.repository,
                           on: { duplicate: () => void duplicateEnv(draft), historyInGit: () => setHistoryOf({ id: draft.id, name: draft.name }), delete: () => void deleteEnv(draft) },
-                        }),
+                        }, 'environment'),
                       )}
                     />
                   </div>

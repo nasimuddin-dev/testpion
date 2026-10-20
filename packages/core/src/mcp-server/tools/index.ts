@@ -19,12 +19,17 @@ import { historyTools, type HistoryToolsDeps } from '../history-tools.js';
 import { kindTools } from '../kind-tools.js';
 import { mockTools } from '../mock-tools.js';
 import { openApiTools } from '../openapi-tools.js';
+import { ragTools } from '../rag-tools.js';
 import { recordingTools } from '../recording-tools.js';
 import { refTools } from '../ref-tools.js';
 import { scaleTools } from '../scale-tools.js';
 import type { Tool } from '../tool.js';
 import { workspaceEditTools, type EditToolsDeps } from '../workspace-edit-tools.js';
+import { bundleTools } from './bundle-tools.js';
 import { itemTools } from './item-tools.js';
+import { outputTools } from './output-tools.js';
+import { gitItemTools } from './git-item-tools.js';
+import { searchAskTools } from './search-ask-tools.js';
 
 /** What the tool modules need from the server: the workspace, its secrets and settings, and the lookups the server shares. */
 export interface ModuleToolDeps {
@@ -55,10 +60,14 @@ export function moduleTools(d: ModuleToolDeps): Tool[] {
     ...refTools({ store }),
     ...kindTools({ store }),
     ...itemTools({ store }),
+    ...outputTools({ store, redactor }),
+    ...bundleTools({ store }),
+    ...searchAskTools({ store, secrets, settings }),
     ...mockTools({ store }),
     ...datasetTools({ store }),
     ...arazzoTools({ store }),
     ...gitTools({ store, findCollection, redactor }),
+    ...gitItemTools({ store }),
     ...openApiTools({ store, readSpecRef: d.readSpec, context: (environment) => createEngineContext({ store, secrets, settings, environment }) }),
     ...debuggerTools({ redactor, store, session: d.captured }),
     ...recordingTools({ store, redactor, secrets, session: d.captured }),
@@ -66,6 +75,7 @@ export function moduleTools(d: ModuleToolDeps): Tool[] {
     ...scaleTools({ store, secrets, settings, redactor, checkEnvironment }),
     ...deployTools({ store }),
     ...evalAgentTools({ store }),
+    ...ragTools({ store, secrets, settings, checkEnvironment }),
     ...aiTools({ store, secrets, settings, checkEnvironment }),
     ...workspaceEditTools({
       store,

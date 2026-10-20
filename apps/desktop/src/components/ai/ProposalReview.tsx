@@ -8,8 +8,10 @@ import { unifiedDiff } from '@testpion/shared';
 import { DiffText } from '../GitCommitPanel';
 import { Badge, Button, cx, Input, Modal } from '../ui';
 import { Findings } from './Findings';
+import { OutputActions } from '../output/OutputFrame';
+import { proposalOutputSpec } from '../output/ai-specs';
 
-const KIND_LABEL: Record<ProposalItem['kind'], string> = { file: 'test file', flow: 'flow', assertion: 'check', script: 'script', request: 'request', patch: 'request change', variable: 'variable', text: 'text' };
+const KIND_LABEL: Record<ProposalItem['kind'], string> = { file: 'test file', flow: 'flow', assertion: 'check', script: 'script', request: 'request', patch: 'request change', variable: 'variable', collection: 'collection change', text: 'text' };
 
 /** One verification badge: the verifier's verdict in words, its detail on hover. */
 export function VerificationBadgeView({ b }: { b: VerificationBadge }) {
@@ -105,6 +107,7 @@ export function ProposalReview({
   const [hint, setHint] = useState('');
   const [busy, setBusy] = useState(false);
   const chosen = applicable.filter((i) => picked.has(i.id));
+  const spec = useMemo(() => proposalOutputSpec(proposal), [proposal]);
   const failing = proposal.items.filter((i) => i.verification.some((b) => b.status === 'fail')).length;
   const toggle = (set: Set<string>, id: string) => {
     const n = new Set(set);
@@ -157,6 +160,7 @@ export function ProposalReview({
         className="grid grid-cols-[minmax(0,1fr)] gap-3 text-sm min-w-0"
         data-proposal={proposal.id}
         data-proposal-body
+        data-output="ai.proposals"
         onKeyDown={(e) => {
           if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
             e.preventDefault();
@@ -173,16 +177,18 @@ export function ProposalReview({
             · {proposal.items.length} item{proposal.items.length === 1 ? '' : 's'}
             {failing ? ` · ${failing} failed verification (unticked)` : ' · all verified'}
           </span>
-          {applicable.length > 1 && (
-            <span className="ml-auto flex gap-2">
-              <button className="hover:text-fg underline-offset-2 hover:underline" onClick={() => setPicked(new Set(applicable.map((i) => i.id)))}>
-                Select all
-              </button>
-              <button className="hover:text-fg underline-offset-2 hover:underline" onClick={() => setPicked(new Set())}>
-                None
-              </button>
-            </span>
-          )}
+          <OutputActions spec={spec}>
+            {applicable.length > 1 && (
+              <span className="flex gap-2">
+                <button className="hover:text-fg underline-offset-2 hover:underline" onClick={() => setPicked(new Set(applicable.map((i) => i.id)))}>
+                  Select all
+                </button>
+                <button className="hover:text-fg underline-offset-2 hover:underline" onClick={() => setPicked(new Set())}>
+                  None
+                </button>
+              </span>
+            )}
+          </OutputActions>
         </div>
         {banner}
         {proposal.summary && <p className="text-muted whitespace-pre-wrap break-words">{proposal.summary}</p>}

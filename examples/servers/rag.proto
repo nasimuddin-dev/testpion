@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package rag.v1;
+
+// A tiny RAG endpoint for TestPion examples and tests (examples/servers/rag-server.mjs).
+service Rag {
+  rpc Ask (AskRequest) returns (AskReply);
+}
+
+message AskRequest {
+  string question = 1;
+}
+
+message Source {
+  string id = 1;
+  string text = 2;
+  double score = 3;
+  string source = 4;
+}
+
+message AskReply {
+  string answer = 1;
+  repeated Source sources = 2;
+}

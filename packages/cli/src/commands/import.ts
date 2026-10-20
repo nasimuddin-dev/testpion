@@ -12,7 +12,7 @@ import {
   parsePostmanRef,
   readImportPath,
   readImportReport,
-  listImports,
+  listImportReceipts,
   undoMany,
   planInputs,
   importInputs,
@@ -31,6 +31,7 @@ import {
   type SkippedFile,
   type WorkspaceImportResult,
 } from '@testpion/core';
+import { isBundleFile, runBundleImport } from './bundle.js';
 import { EXIT, green, yellow, dim, bold, CliError, printJson, withWorkspace } from '../shared.js';
 
 /** clinic.http / api.rest → the collection's name; a GraphQL schema file's name too. */
@@ -95,9 +96,15 @@ export function registerImportCommands(program: Command): void {
     .description(
       'import OpenAPI/Swagger, Postman, Insomnia, Bruno (folders and OpenCollection YAML too), Hoppscotch, HAR, .env or collection files, Arazzo workflows (as flow files under tests/arazzo/), or a copied cURL / fetch / PowerShell request, into a workspace. Several files, a folder or a ZIP (a Postman data export) are previewed first: --apply imports them',
     )
-    .argument('<input...>', 'file(s) to import, a collection folder, a .zip, an http(s) link (OpenAPI URL, GitHub file, Postman API link), postman:collection/<id> (needs a Postman API key), or - to read stdin (e.g. a cURL command from the clipboard)')
+    .argument('[input...]', 'file(s) to import, a collection folder, a .zip, an http(s) link (OpenAPI URL, GitHub file, Postman API link), postman:collection/<id> (needs a Postman API key), or - to read stdin (e.g. a cURL command from the clipboard)')
     .requiredOption('-w, --workspace <nameOrPath>')
-    .option('--preview', 'show what would be created and what would not come over, and write nothing')
+    .option('--preview', 'show what would be created and what would not come over, and write nothing (a bundle: say what importing would do per item)')
+    .option('--on-conflict <choice>', 'a TestPion bundle: when an item is already here: keep-both (default; the new one is renamed), replace (yours is replaced; --undo restores it) or skip')
+    .option('--only <kinds>', 'a bundle: import only these kinds or kind:id items (comma separated)')
+    .option('--decisions <file>', 'a bundle: a JSON file of "kind:id": "keep-both" | "replace" | "skip" for single items')
+    .option('--max-size <mb>', 'a bundle: refuse a file larger than this many megabytes')
+    .option('--undo <importId>', 'take back a bundle import (what it made is removed, what it replaced is restored)')
+    .option('--list', 'list the bundle imports that can be undone')
     .option('--apply', 'import several files, a folder or a ZIP (they are previewed by default); a single file is imported without it')
     .option('--report <file>', 'write the compatibility report (.json, or .md for Markdown)')
     .option('--collection <name>', 'for a cURL / fetch / PowerShell request: the collection to add it to (created if needed)', 'Imported')
@@ -109,8 +116,11 @@ export function registerImportCommands(program: Command): void {
     .option('--fetch-sources', 'for Arazzo: download OpenAPI source descriptions given as http(s) URLs (default: only files next to the Arazzo file or in the workspace, e.g. specs/)')
     .option('--postman-api-key <key>', 'a Postman API key for postman:… ids and links (or the POSTMAN_API_KEY variable); sent only to api.getpostman.com')
     .option('--json', 'print the result as JSON (for scripts and AI agents)')
-    .action((inputsArg: string[], o) =>
-      withWorkspace(o.workspace, async (store) => {
+    .action(async (inputsArg: string[], o) => {
+      // a TestPion bundle (.testpion.zip / .testpion.json, a workspace export) merges with the user's choices (commands/bundle.ts)
+      if (o.undo || o.list || (inputsArg.length === 1 && inputsArg[0] !== '-' && isBundleFile(inputsArg[0]!))) return runBundleImport(inputsArg[0], o);
+      if (!inputsArg.length) throw new CliError('Give a file to import (or --undo <importId> / --list for a bundle import)', EXIT.CONFIG_ERROR);
+      return withWorkspace(o.workspace, async (store) => {
         // ---- gather the inputs
         const inputs: ImportInput[] = [];
         const skipped: SkippedFile[] = [];
@@ -243,8 +253,8 @@ export function registerImportCommands(program: Command): void {
           if (receipts.length) console.log(dim(`To take it back: testpion import-undo ${receipts.join(' ')} -w <workspace>`));
         }
         if (imported.some((x) => x.error) && !imported.some((x) => x.result)) process.exitCode = EXIT.CONFIG_ERROR;
-      }),
-    );
+      });
+    });
 
   program
     .command('import-report')
@@ -256,7 +266,7 @@ export function registerImportCommands(program: Command): void {
     .action((id: string | undefined, o) =>
       withWorkspace(o.workspace, (store) => {
         if (!id) {
-          const list = listImports(store);
+          const list = listImportReceipts(store);
           if (o.json) printJson(list);
           else if (!list.length) console.log(dim('No imports kept in this workspace.'));
           else for (const i of list) console.log(`${i.id}  ${dim(i.at)}  ${i.format}  ${[...i.collections, ...i.environments].join(', ')}  ${dim(`${i.summary.changed} with changes, ${i.summary.notImported} not imported`)}`);

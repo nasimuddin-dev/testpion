@@ -258,7 +258,7 @@ export async function runAiTask(deps: AiRunDeps, req: AiTaskRequest): Promise<Ai
   if (req.item && deps.store) {
     // a task with its own reading of an item (a flow from a folder) builds its context itself; the rest share item-context.ts
     // the privacy level is the task's to know: an analysis leaves out what metadata may not hold (failure messages with values)
-    const ic = own?.prepare ? await own.prepare(deps.store, req.item, { path: req.path, privacy: aiPrivacyOf(deps.settings, req.privacy) }) : await contextOfItem(deps.store, req.item);
+    const ic = own?.prepare ? await own.prepare(deps.store, req.item, { path: req.path, privacy: aiPrivacyOf(deps.settings, req.privacy), context: req.context }) : await contextOfItem(deps.store, req.item);
     itemContext = ic.context;
     label = ic.label;
     local = 'local' in ic ? ic.local : undefined;
@@ -290,11 +290,13 @@ export async function runAiTask(deps: AiRunDeps, req: AiTaskRequest): Promise<Ai
     services: deps.services,
     schema: req.schema ?? (req.context?.schema as Record<string, unknown> | undefined),
     signal: deps.signal,
+    store: deps.store,
   };
   /** The answer as proposal items, verified; cached per answer so the repair check and the result share the work. */
   let proposeNotes: string[] = [];
   const itemsOf = async (answer: { text: string; code: string; value?: unknown }): Promise<{ items: ProposalItem[]; problems: string[] }> => {
-    if (!def.propose) return { items: [], problems: [] };
+    // a task that only answers (a search query) may still have its answer checked: the problems are repaired like a verifier's
+    if (!def.propose) return { items: [], problems: def.validate && answer.value !== undefined ? def.validate(answer.value) : [] };
     let drafts;
     // what the task could not make of the answer and the model can correct (a fix naming text that is not in the file):
     // repair turns send it back like a failing verifier's problem
@@ -334,7 +336,7 @@ export async function runAiTask(deps: AiRunDeps, req: AiTaskRequest): Promise<Ai
       provider,
       model,
       maxTokens: maxOutputTokens,
-      temperature: 0.2,
+      temperature: def.temperature ?? 0.2,
       signal: deps.signal,
       onCall: (r: { usage: TokenUsage; model: string }) => (
         (usage = { inputTokens: usage.inputTokens + r.usage.inputTokens, outputTokens: usage.outputTokens + r.usage.outputTokens, totalTokens: usage.totalTokens + r.usage.totalTokens }),

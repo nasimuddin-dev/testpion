@@ -29,11 +29,13 @@ const shared = (f: string) => f.startsWith('components/output/') || f === 'lib/f
 /**
  * Saves that are not the shared control, each with why. `definition`: exports of what you edit (a collection, an
  * environment, the workspace, your key bindings, a CI file, a feedback report, a certificate) through their own export
- * dialogs, not outputs. `release B`: outputs that move onto the control in release B of planning/output-export.md
- * (owner-visible TODO: each still saves, but with its own button).
+ * dialogs, not outputs. (Every output of planning/output-export.md is on the control now; a new
+ * private save of an output is not allowed here.)
  */
 const ALLOWED: Record<string, string> = {
   'components/ExportDialogBody.tsx': 'definition: collection / environment / workspace export dialog',
+  // B-22: Export… of any item or section as a TestPion bundle (the backend's saveOrDownload, then finishSave)
+  'components/ExportBundleDialog.tsx': 'definition: export of items as a bundle',
   // 0.50: every Export workspace entry (workspace menu, app menu, Collections, Export dialog) goes through this helper
   'lib/workspace-export.ts': 'definition: the shared workspace export (.testpion.json bundle)',
   'menu-commands.ts': 'definition: File ▸ Export (environment, workspace)',
@@ -44,11 +46,7 @@ const ALLOWED: Record<string, string> = {
   'components/FeedbackDialog.tsx': 'definition: a feedback report',
   'components/DebuggerTools.tsx': "definition: the Debugger's CA certificate",
   'views/TestsView.tsx': 'definition: an Arazzo workflow export',
-  'components/ApiCoverageDialog.tsx': 'release B: API coverage report (Download .md)',
-  'components/CollectionDocs.tsx': 'release B: collection docs (Markdown / HTML)',
-  'components/debugger/DebuggerGrid.tsx': "release B: a debugger exchange's bodies",
-  'views/HistoryView.tsx': 'release B: History as HAR',
-  'views/HomeView.tsx': 'release B: the workspace report (HTML)',
+  'views/EvaluationsView.tsx': 'definition: a RAG dataset exported as Ragas or DeepEval records',
 };
 const PRIVATE_SAVE = /\bsaveText\b|URL\.createObjectURL\(|\.download\s*=|\bdownload=|\bdownloadContent\(|\bfinishSave\(/;
 
@@ -82,12 +80,12 @@ describe('output surfaces', () => {
     expect(sources.filter((s) => /<OutputDownload\b/.test(s.text)).map((s) => s.file)).toEqual(['components/output/OutputFrame.tsx']);
   });
 
-  it('no private way of saving a file outside the shared module (allow-list: definitions and release B)', () => {
+  it('no private way of saving a file outside the shared module (allow-list: definitions)', () => {
     const offenders = sources.filter((s) => !shared(s.file) && PRIVATE_SAVE.test(s.text)).map((s) => s.file);
     expect(offenders.filter((f) => !(f in ALLOWED))).toEqual([]);
     // an allowed file that no longer saves privately leaves the list
     expect(Object.keys(ALLOWED).filter((f) => !offenders.includes(f))).toEqual([]);
-    for (const why of Object.values(ALLOWED)) expect(why).toMatch(/^(definition|release B): .{8,}/);
+    for (const why of Object.values(ALLOWED)) expect(why).toMatch(/^definition: .{8,}/);
   });
 
   it('a component that renders a response or a result view is a marked surface or a reviewed exception', () => {
@@ -102,14 +100,8 @@ describe('output surfaces', () => {
       'views/EvaluationsView.tsx': 'renders RunPanel / EvalMatrix (marked)',
       'views/TestsView.tsx': 'renders RunPanel / RunTimeline (marked)',
       'components/FlowRunDock.tsx': 'renders RunPanel / RunTimeline (marked)',
-      'components/debugger/ExchangePanes.tsx': 'release B: debugger exchange panes (debugger.exchange)',
-      'components/mcp/McpPanels.tsx': 'release B: MCP resource / prompt output',
-      'views/McpView.tsx': 'release B: MCP protocol trace and server info',
-      'views/HistoryView.tsx': 'release B: History',
-      'views/TracesView.tsx': 'release B: Traces',
-      'views/ai/Compare.tsx': 'release B: AI Lab Compare',
-      'views/ai/Playground.tsx': 'release B: AI Lab Playground',
       'views/DatasetView.tsx': 'a dataset (a definition you edit), not an output',
+      'components/rag/RagConnectDialog.tsx': 'the sample response a RAG target’s mapping is made from (part of a definition you edit), not an output',
     };
     const unmarked = sources.filter((s) => RESULT_VIEWS.test(s.text) && !/data-output="/.test(s.text) && !(s.file in REVIEWED)).map((s) => s.file);
     expect(unmarked, 'a new result panel: give it an OUTPUT_SURFACES id, data-output and OutputActions / OutputHeader').toEqual([]);

@@ -33,6 +33,36 @@ A new workspace's Home starts with **Get started**: the first loop, from a reque
   <img src="/images/quick-open.jpg" alt="Quick Open (Ctrl+P) over a request: patient typed, the matching requests, test files and the collection, each with its kind" width="1440" height="900" loading="lazy">
 </figure>
 
+## Ask: search in your own words {#ask}
+
+Type a question instead of a name and TestPion searches **History, runs, test results and traces** for it: *failed payment calls last week over 2 s*, *flaky tests in staging*, *traces where a tool timed out*, *the slowest call yesterday*. It opens from the same dialog in every place:
+
+- **Quick Open** (<kbd>Ctrl</kbd>+<kbd>P</kbd>): start with `~` (*~failed payment calls last week*), or type anything and take the last row, **Ask: “…”**.
+- **Search** (the box in the top bar): the same **Ask: “…”** row after the hits.
+- The sparkle button beside the filters of **History**, **Runs** (the Tests view's Runs tab) and **Traces**: the question stays inside that view's data.
+
+The model only **translates** the question into a search query; it sees your words, the current time and the field names, never your requests, runs or traces. TestPion checks the query (known fields and operators, bounded values) and runs it itself, so the same query always gives the same answer. The dialog shows how it was understood before you trust it: the query in plain words (*Looking in History where failed is yes and url contains "payment" and time within the last 7 days and duration over 2 s; newest first, at most 25.*), what the model had to guess (*"last week" taken as the last 7 days*), and the query as **editable filters**: change a field, an operator or a value, remove a filter, add one, pick the sources, the order and the limit, and **Search** runs the edited query again with no model. A hit opens like any other item.
+
+Without a model (or when it fails, a cap refuses the call, or its query is not valid) the box still answers: it searches the words as typed, says why (*No AI model is set up … Searched for the words as typed instead*) and offers **Set up AI**. **Search the words only** skips the model on purpose. Every call is counted in the [AI usage](/ai-testing/ai-features#cost-estimates-caps-and-usage).
+
+| Field | Means | Operators |
+|---|---|---|
+| `text` | free text anywhere in the entry | contains, does not contain |
+| `time` | when it happened | since / until (an ISO date; a date alone covers the day), within the last `90m`, `24h`, `7d`, `2w` |
+| `name` | the request, run, test or trace name | contains, does not contain, is |
+| `kind`, `method` | protocol or trace kind; HTTP method (History) | is, is not, is one of |
+| `url`, `status`, `size` | URL text; HTTP status; response bytes (History) | contains, does not contain; =, ≠, <, ≤, >, ≥, one of; <, ≤, >, ≥ |
+| `failed` | it failed (4xx/5xx or an error; a run or test with failures; a trace with an error) | is yes / no |
+| `duration` | milliseconds | over, at least, under, at most |
+| `environment`, `file` | the run's environment; the test file (test results) | is, is not, contains |
+| `collection` | the collection a request was sent from (History) | is, contains |
+| `error`, `assertion` | error text (test results, trace spans); a failed check's name or message (test results) | contains |
+| `span`, `spans` | a span's name; the span count (traces) | contains; =, <, ≤, >, ≥ |
+| `flaky`, `attempts` | a flaky test; the attempts a result took (test results) | is yes / no; =, <, ≤, >, ≥ |
+| `failures` | how many tests of a run failed (runs) | =, <, ≤, >, ≥ |
+
+All conditions must hold. A field that only some sources have limits the search to them. The newest 5,000 History entries, 1,000 runs, the results of the newest 100 runs and 2,000 traces are searched (the files of 300 traces for *error* and *span*); a search that stopped at one of these says so. It only reads: nothing is written. From a terminal and from agents: [`testpion search --ask`](/cli/reference#search) and the MCP tool `search_ask`.
+
 ## The Info panel
 
 The right edge of the window holds **Info** and the **Assistant** in one panel: a tab on the edge that slides over the content on hover or click, or, pinned, docked beside it (the pin and its width are kept). **Info** is about the item on screen — a request, a test file, a monitor — and is the same for each: the variables it uses with their values and where each comes from in the active environment (a variable that is set nowhere is marked), the file that holds it and its git state (a click shows the change), the latest runs that included it, and for a request **Copy as cURL**. Asking the assistant (<kbd>Ctrl</kbd>+<kbd>J</kbd>, or an AI button such as **Ask AI** or **Explain with AI**) shows it in the same panel; the eye beside every AI button, **What will be sent…**, shows what would be sent first, and generated checks, tests and flows open in a review before anything is added ([AI features](/ai-testing/ai-features)). Agents get the same with `item_info`.
@@ -122,37 +152,37 @@ The menus of every kind, as the app builds them ("New …" stands for the kind's
 
 | Node | create | open | tree | run | share | tools | git | edit | danger |
 |---|---|---|---|---|---|---|---|---|---|
-| Collection | New …, New folder… |  | Expand all <kbd>*</kbd>, Collapse all | Run collection | Copy link, Export ▸ | Monitor on a schedule…, Run in CI…, Create test file from collection…, Generate integration flow with AI…, Settings, runner & docs, Convert scripts to tp.* | History in git… | Rename <kbd>F2</kbd>, Duplicate | Delete… <kbd>Del</kbd> |
+| Collection | New …, New folder… |  | Expand all <kbd>*</kbd>, Collapse all | Run collection | Copy link, Export ▸ | Monitor on a schedule…, Run in CI…, Create test file from collection…, Generate integration flow with AI…, Settings, runner & docs, Convert scripts to tp.*, Tidy with AI… | History in git… | Rename <kbd>F2</kbd>, Duplicate | Delete… <kbd>Del</kbd> |
 | Protocol group (REST, SOAP …) of a collection | New … |  | Expand all <kbd>*</kbd>, Collapse all | Run collection |  |  |  |  |  |
 | Folder of a collection | New …, New folder… |  | Expand all <kbd>*</kbd>, Collapse all | Run folder | Copy link | Monitor on a schedule…, Run in CI…, Create test file from folder…, Generate integration flow with AI…, Edit folder (scripts, variables, auth) |  | Rename <kbd>F2</kbd>, Duplicate, Move to… | Delete… <kbd>Del</kbd> |
 | Request (HTTP, SOAP, GraphQL) |  | Open <kbd>Enter</kbd>, Open in new tab |  |  | Copy link, Copy as ▸ | Monitor on a schedule…, Save as test… | History in git… | Rename <kbd>F2</kbd>, Duplicate, Move to…, Add to favorites | Delete… <kbd>Del</kbd> |
 | Folder of gRPC calls or connections |  |  | Expand all <kbd>*</kbd>, Collapse all |  |  |  |  | Rename folder <kbd>F2</kbd> | Delete folder… <kbd>Del</kbd> |
-| Saved gRPC call |  | Open <kbd>Enter</kbd>, Open in new tab |  |  | Copy link, Copy as grpcurl | Save as test… |  | Rename <kbd>F2</kbd>, Duplicate, Move to collection ▸ | Delete… <kbd>Del</kbd> |
-| Saved WebSocket / MQTT / Kafka connection |  | Open <kbd>Enter</kbd>, Open in new tab |  |  | Copy link, Copy URL | Save as test… |  | Rename <kbd>F2</kbd>, Duplicate, Move to collection ▸ | Delete… <kbd>Del</kbd> |
+| Saved gRPC call |  | Open <kbd>Enter</kbd>, Open in new tab |  |  | Copy link, Copy as grpcurl, Export… | Save as test… |  | Rename <kbd>F2</kbd>, Duplicate, Move to collection ▸ | Delete… <kbd>Del</kbd> |
+| Saved WebSocket / MQTT / Kafka connection |  | Open <kbd>Enter</kbd>, Open in new tab |  |  | Copy link, Copy URL, Export… | Save as test… |  | Rename <kbd>F2</kbd>, Duplicate, Move to collection ▸ | Delete… <kbd>Del</kbd> |
 | Favorites section |  |  | Expand all <kbd>*</kbd>, Collapse all |  |  |  |  |  |  |
-| MCP servers section | New …, New folder… | Open MCP inspector | Expand all <kbd>*</kbd>, Collapse all |  |  |  |  |  |  |
+| MCP servers section | New …, New folder…, Import… | Open MCP inspector | Expand all <kbd>*</kbd>, Collapse all |  | Export… |  |  |  |  |
 | Folder of MCP servers | New … |  | Expand all <kbd>*</kbd>, Collapse all |  |  |  |  | Rename folder <kbd>F2</kbd> | Delete folder… <kbd>Del</kbd> |
-| MCP server |  | Open <kbd>Enter</kbd>, Open in new tab |  | Connect, Disconnect | Copy link, Copy MCP config | Settings… |  | Rename <kbd>F2</kbd>, Duplicate, Move to folder ▸ | Delete… <kbd>Del</kbd> |
-| API definitions section | New …, New folder… | Open API definitions | Expand all <kbd>*</kbd>, Collapse all |  |  |  |  |  |  |
+| MCP server |  | Open <kbd>Enter</kbd>, Open in new tab |  | Connect, Disconnect | Copy link, Copy MCP config, Export… | Settings… |  | Rename <kbd>F2</kbd>, Duplicate, Move to folder ▸ | Delete… <kbd>Del</kbd> |
+| API definitions section | New …, New folder…, Import… | Open API definitions | Expand all <kbd>*</kbd>, Collapse all |  | Export… |  |  |  |  |
 | Folder of API definitions | New … |  | Expand all <kbd>*</kbd>, Collapse all |  |  |  |  | Rename folder <kbd>F2</kbd> | Delete folder… <kbd>Del</kbd> |
-| API definition |  | Open <kbd>Enter</kbd>, Reveal file |  | Lint, API coverage, Compare versions | Copy link, Copy path | Generate tests…, Generate integration flows… |  | Rename <kbd>F2</kbd>, Move to folder ▸ | Delete… <kbd>Del</kbd> |
-| Datasets section | New …, New folder…, Generate test data… |  | Expand all <kbd>*</kbd>, Collapse all |  |  |  |  |  |  |
+| API definition |  | Open <kbd>Enter</kbd>, Reveal file |  | Lint, API coverage, Compare versions | Copy link, Copy path, Export… | Generate tests…, Generate integration flows…, Generate tests from this spec… |  | Rename <kbd>F2</kbd>, Move to folder ▸ | Delete… <kbd>Del</kbd> |
+| Datasets section | New …, New folder…, Import…, Generate test data… |  | Expand all <kbd>*</kbd>, Collapse all |  | Export… |  |  |  |  |
 | Folder of datasets | New … |  | Expand all <kbd>*</kbd>, Collapse all |  |  |  |  | Rename folder <kbd>F2</kbd> | Delete folder… <kbd>Del</kbd> |
-| Dataset |  | Open <kbd>Enter</kbd>, Reveal file, Preview |  | Run a collection with it | Copy link, Copy path | Use in a test |  | Rename <kbd>F2</kbd>, Duplicate, Move to folder ▸ | Delete… <kbd>Del</kbd> |
-| The sidebar’s blank area | New …, Import… | Recently deleted… | Expand all <kbd>*</kbd>, Collapse all |  |  | Run in CI… |  |  |  |
-| Saved prompt (AI Lab) |  | Open <kbd>Enter</kbd>, Open in new tab |  |  | Copy link |  |  | Rename <kbd>F2</kbd>, Duplicate, Move to folder ▸ | Delete… <kbd>Del</kbd> |
-| Saved load test |  | Open <kbd>Enter</kbd>, Open in new tab |  | Run | Copy link |  |  | Rename <kbd>F2</kbd>, Duplicate, Move to folder ▸ | Delete… <kbd>Del</kbd> |
-| Saved evaluation |  | Open <kbd>Enter</kbd>, Open in new tab |  | Run | Copy link |  |  | Rename <kbd>F2</kbd>, Duplicate, Move to folder ▸ | Delete… <kbd>Del</kbd> |
-| Monitor |  | Open <kbd>Enter</kbd>, Open in new tab, Edit |  | Run now, Pause, Resume | Copy link |  |  | Rename <kbd>F2</kbd>, Duplicate, Move to folder ▸ | Delete… <kbd>Del</kbd> |
+| Dataset |  | Open <kbd>Enter</kbd>, Reveal file, Preview |  | Run a collection with it | Copy link, Copy path, Export… | Use in a test |  | Rename <kbd>F2</kbd>, Duplicate, Move to folder ▸ | Delete… <kbd>Del</kbd> |
+| The sidebar’s blank area | New …, Import… | Recently deleted… | Expand all <kbd>*</kbd>, Collapse all |  | Export… | Run in CI… |  |  |  |
+| Saved prompt (AI Lab) |  | Open <kbd>Enter</kbd>, Open in new tab |  |  | Copy link, Export… |  |  | Rename <kbd>F2</kbd>, Duplicate, Move to folder ▸ | Delete… <kbd>Del</kbd> |
+| Saved load test |  | Open <kbd>Enter</kbd>, Open in new tab |  | Run | Copy link, Export… |  |  | Rename <kbd>F2</kbd>, Duplicate, Move to folder ▸ | Delete… <kbd>Del</kbd> |
+| Saved evaluation |  | Open <kbd>Enter</kbd>, Open in new tab |  | Run | Copy link, Export… |  |  | Rename <kbd>F2</kbd>, Duplicate, Move to folder ▸ | Delete… <kbd>Del</kbd> |
+| Monitor |  | Open <kbd>Enter</kbd>, Open in new tab, Edit |  | Run now, Pause, Resume | Copy link, Export… |  |  | Rename <kbd>F2</kbd>, Duplicate, Move to folder ▸ | Delete… <kbd>Del</kbd> |
 | Folder of a list (monitors, prompts, load tests, evaluations) | New … |  | Expand all <kbd>*</kbd>, Collapse all |  |  |  |  | Rename folder <kbd>F2</kbd> | Delete folder… <kbd>Del</kbd> |
-| Tests section (and its blank area) | New … |  | Expand all <kbd>*</kbd>, Collapse all |  |  | Run in CI… |  |  |  |
+| Tests section (and its blank area) | New …, Import… |  | Expand all <kbd>*</kbd>, Collapse all |  | Export… | Run in CI… |  |  |  |
 | Folder of test files | New … |  | Expand all <kbd>*</kbd>, Collapse all | Run folder |  | Run in CI… |  | Rename folder <kbd>F2</kbd> | Delete folder… <kbd>Del</kbd> |
-| Test file |  | Open <kbd>Enter</kbd>, Reveal file |  | Run, Run with data…, Run in several environments… | Copy link, Copy path, Copy CLI command, Export as Arazzo… | Monitor on a schedule…, Run in CI…, Expose as MCP tool… |  | Rename <kbd>F2</kbd>, Duplicate | Delete… <kbd>Del</kbd> |
+| Test file |  | Open <kbd>Enter</kbd>, Reveal file |  | Run, Run with data…, Run in several environments… | Copy link, Copy path, Copy CLI command, Export as Arazzo…, Export… | Monitor on a schedule…, Run in CI…, Expose as MCP tool… |  | Rename <kbd>F2</kbd>, Duplicate | Delete… <kbd>Del</kbd> |
 | Run |  | Open <kbd>Enter</kbd> |  | Rerun failed | Copy link, Copy CLI command, Copy run id, Export report… | Run in CI…, Explain and fix failures with AI… |  |  | Delete… <kbd>Del</kbd> |
 | History entry |  | Open <kbd>Enter</kbd>, Open request, Open trace |  |  | Copy link | Save as test… |  |  | Delete… <kbd>Del</kbd> |
 | Trace |  | Open <kbd>Enter</kbd>, Open run |  |  | Copy link |  |  |  |  |
-| Environment |  | Open <kbd>Enter</kbd> |  | Make active | Copy link |  | History in git… | Rename <kbd>F2</kbd>, Duplicate | Delete… <kbd>Del</kbd> |
-| AI provider |  | Open <kbd>Enter</kbd> |  |  | Copy link | Settings… |  | Duplicate | Delete… <kbd>Del</kbd> |
+| Environment |  | Open <kbd>Enter</kbd> |  | Make active | Copy link, Export… |  | History in git… | Rename <kbd>F2</kbd>, Duplicate | Delete… <kbd>Del</kbd> |
+| AI provider |  | Open <kbd>Enter</kbd> |  |  | Copy link, Export… | Settings… |  | Duplicate | Delete… <kbd>Del</kbd> |
 
 <!-- node-menus:end -->
 

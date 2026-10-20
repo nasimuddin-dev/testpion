@@ -9,6 +9,7 @@ import { parseYaml, stringifyYaml } from '../util/lazy-yaml.js';
 import { checkLabel, namesSetByScripts, templatedText, templateVariables } from '@testpion/shared';
 import type { CheckConfig, Collection } from '../model/types.js';
 import type { ExecServices } from '../runner/execute.js';
+import type { WorkspaceStore } from '../storage/workspace.js';
 import { runChecks, validateSchema, checkTypes } from '../eval/checks.js';
 import { runScript } from '../scripts/sandbox.js';
 import { lintTestFile } from '../runner/test-schema.js';
@@ -41,6 +42,8 @@ export interface VerifyContext {
   /** A JSON Schema generated JSON must satisfy (`json`): e.g. an MCP tool's input schema. */
   schema?: Record<string, unknown>;
   signal?: AbortSignal;
+  /** The open workspace: verifiers that read it (a spec the tests are checked against). */
+  store?: WorkspaceStore;
 }
 
 export type Verifier = (item: ProposalItem, ctx: VerifyContext) => Promise<VerificationBadge | undefined> | VerificationBadge | undefined;

@@ -1,5 +1,5 @@
 import { toast as sonner } from 'sonner';
-import { OUTPUT_FORMATS, CLIENT_OUTPUT_LIMIT, COPY_LIMIT, PROGRESS_THRESHOLD, bytesToBase64, formatBytes, outputSurface, type OutputFormatId, type OutputSource } from '@testpion/shared';
+import { OUTPUT_FORMATS, CLIENT_OUTPUT_LIMIT, COPY_LIMIT, PROGRESS_THRESHOLD, bytesToBase64, formatBytes, outputSurface, type OutputFormatId, type OutputSource, type OutputSurfaceId } from '@testpion/shared';
 import { call, on } from '../../api';
 import { confirmAction, toastError, useApp } from '../../store';
 import { downloadContent } from '../../lib/files';
@@ -30,7 +30,7 @@ export interface OutputFormatSpec {
 
 export interface OutputSpec {
   /** The OUTPUT_SURFACES id (also the panel's data-output marker). */
-  id: string;
+  id: OutputSurfaceId;
   /** What it is, in a sentence: "response body" → "Download response body", "Response body saved to …". */
   what: string;
   /** The file name without extension (see outputFileName). */

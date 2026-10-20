@@ -126,6 +126,7 @@ import {
   assertProductionStep,
   isDataChangingMethod,
   samePath,
+  type OutputDeps,
 } from '@testpion/core';
 import { appHandlers } from './handlers/app.js';
 import { workspaceHandlers } from './handlers/workspace.js';
@@ -135,6 +136,7 @@ import { mcpHandlers } from './handlers/mcp.js';
 import { aiHandlers } from './handlers/ai.js';
 import { aiTaskHandlers } from './handlers/ai-tasks.js';
 import { aiTriageHandlers } from './handlers/ai-triage.js';
+import { aiSpecHandlers } from './handlers/ai-spec.js';
 import { testingHandlers } from './handlers/testing.js';
 import { monitorHandlers, runMonitorNow } from './handlers/monitors.js';
 import { grpcHandlers } from './handlers/grpc.js';
@@ -153,8 +155,10 @@ import { terminalHandlers, createTerminals, type TerminalHost, type TerminalMana
 import { flowDeployHandlers, stopFlowWebhooks } from './handlers/flow-deploy.js';
 import { flowScaleHandlers, cancelScaleRuns } from './handlers/flow-scale.js';
 import { evalMatrixHandlers } from './handlers/eval-matrix.js';
+import { ragHandlers } from './handlers/rag.js';
 import { outputHandlers } from './handlers/output.js';
 import { kindHandlers } from './handlers/kinds.js';
+import { bundleHandlers } from './handlers/bundle.js';
 import { checkRpcParams, guardHandler } from './rpc-params.js';
 import { forgetProductionSessions, guardProduction } from './production-guard.js';
 import { VizPages } from './viz-pages.js';
@@ -217,6 +221,8 @@ export class Backend {
   logBuffer: LogRecord[] = [];
   /** Postman-style console: recent requests with their details and script output. */
   consoleBuffer: ConsoleEntry[] = [];
+  /** What the output builders (output.save) read from the handlers that hold it: the Debugger session on screen, as HAR. */
+  outputProviders: { har?: NonNullable<OutputDeps['har']>; scaleRows?: OutputDeps['scaleRows'] } = {};
   /** Redactors of connected MCP servers and WebSocket sessions, for their console entries. */
   mcpRedactors = new Map<string, Redactor>();
   wsConsole = new Map<string, { url: string; redactor: Redactor; counts: { sent: number; received: number; opened: number } }>();
@@ -616,6 +622,7 @@ export class Backend {
       openExternal: this.host.openExternal?.bind(this.host),
       cookieJar: this.cookieStore?.jar,
       allowProduction: opts.allowProduction,
+      aiSurface: 'app',
     });
     // Postman-style current values: set by scripts, kept on this machine, override stored values
     const cv = this.currentValues;
@@ -656,7 +663,7 @@ export class Backend {
    */
   private buildHandlers(): Handlers {
     const all: Handlers = {};
-    for (const group of [appHandlers, workspaceHandlers, collectionsHandlers, requestsHandlers, grpcHandlers, mcpHandlers, aiHandlers, aiTaskHandlers, aiTriageHandlers, testingHandlers, monitorHandlers, agentHandlers, feedbackHandlers, gitHandlers, debuggerHandlers, debuggerRulesHandlers, externalSecretsHandlers, fuzzHandlers, flowDebugHandlers, debuggerFlowHandlers, debuggerReverseHandlers, flowDeployHandlers, terminalHandlers, flowScaleHandlers, evalMatrixHandlers, outputHandlers, kindHandlers]) {
+    for (const group of [appHandlers, workspaceHandlers, collectionsHandlers, requestsHandlers, grpcHandlers, mcpHandlers, aiHandlers, aiTaskHandlers, aiTriageHandlers, aiSpecHandlers, testingHandlers, monitorHandlers, agentHandlers, feedbackHandlers, gitHandlers, debuggerHandlers, debuggerRulesHandlers, externalSecretsHandlers, fuzzHandlers, flowDebugHandlers, debuggerFlowHandlers, debuggerReverseHandlers, flowDeployHandlers, terminalHandlers, flowScaleHandlers, evalMatrixHandlers, outputHandlers, kindHandlers, bundleHandlers, ragHandlers]) {
       for (const [name, fn] of Object.entries(group(this))) {
         if (name in all) throw new Error(`RPC method ${name} is defined twice`);
         // the parameters are checked first; a TypeError from inside becomes an InternalError naming the method

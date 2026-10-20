@@ -9,6 +9,7 @@ import type { ProviderRegistry } from '../ai/index.js';
 import type { SpanHandle } from '../trace/tracer.js';
 import { normalizeError } from '../errors.js';
 import { compileSchema } from '../util/json-schema.js';
+import type { RagJudgeHost } from './rag/judge.js';
 
 /** Everything a check may inspect about an execution. */
 export interface CheckContext {
@@ -44,7 +45,12 @@ export interface CheckContext {
   question?: string;
   input?: unknown;
   expected?: unknown;
-  services?: { providers?: ProviderRegistry; signal?: AbortSignal; span?: SpanHandle };
+  /** RAG: the gold chunks (texts) and their ids from the dataset record, for the metrics that compare the retrieval with them. */
+  referenceContexts?: string[];
+  referenceIds?: string[];
+  /** RAG: the judge the evaluation names (else the AI settings'), and its limits for the run. */
+  judge?: { provider?: string; model?: string; maxCostUsd?: number; maxCalls?: number };
+  services?: { providers?: ProviderRegistry; signal?: AbortSignal; span?: SpanHandle; ragJudge?: RagJudgeHost };
 }
 
 type CheckFn = (cfg: CheckConfig, ctx: CheckContext) => Promise<CheckResult> | CheckResult;

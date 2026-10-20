@@ -8,7 +8,7 @@
 export const SCHEMA_VERSION = '1.0';
 
 export type { KeyValue } from '@testpion/shared';
-import type { KeyValue } from '@testpion/shared';
+import type { KeyValue, RagTarget } from '@testpion/shared';
 import type { AssertTest, ConditionTest, DelayTest, FlowTest, ForEachSpec, LogTest, ScriptTest, SetTest, UntilSpec } from './flow-types.js';
 // the flow blocks' types (a flow's own steps: delay, condition, script, sub-flow, log, set, assert) live in flow-types.ts
 export type * from './flow-types.js';
@@ -391,6 +391,13 @@ export interface RagTest extends TestBase {
   answer?: string;
   model?: ModelRef;
   prompt?: string;
+  /** A RAG system to call (eval/rag/run-target.ts): the question goes to it and its answer and contexts are scored. */
+  target?: RagTarget;
+  /** The gold chunks and their ids of the dataset record (the metrics that compare the retrieval with them). */
+  referenceContexts?: string[];
+  referenceIds?: string[];
+  /** The judge of the judged metrics (else the AI settings' large model; never a silent mock) and its limits for the run. */
+  judge?: { provider?: string; model?: string; maxCostUsd?: number; maxCalls?: number };
 }
 
 export interface MockTool {

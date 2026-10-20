@@ -37,6 +37,9 @@ import { estimateCost, renderPrompt, type ProviderRegistry } from '../ai/index.j
 import { runAgent, type AgentTool } from '../ai/agent.js';
 import type { ChatMessage } from '../ai/types.js';
 import { runChecks, type CheckContext } from '../eval/checks.js';
+import '../eval/rag/metrics.js';
+import type { RagJudgeHost } from '../eval/rag/judge.js';
+import { runRagTargetTest } from './rag-run.js';
 import { runScript } from '../scripts/sandbox.js';
 import { renderVisualizer } from '../scripts/visualizer.js';
 import { applyScriptOutput, scriptRequestSender, scriptScopes, type PersistVariable } from '../scripts/bridge.js';
@@ -82,6 +85,8 @@ export interface ExecServices {
   pinned?: (testId: string) => PinnedResponse | undefined;
   /** A production environment's gate: data-changing steps run only with consent (net/production-guard.ts). */
   production?: ProductionGate;
+  /** The judge of the judged RAG metrics (eval/rag/judge.ts): the AI settings, the cache and the budget of this run. */
+  ragJudge?: RagJudgeHost;
 }
 
 export interface ExecutionOutcome {
@@ -190,7 +195,7 @@ export async function executeTest(testIn: TestCase, svc: ExecServices, opts: { t
         case 'llm':
           return runLlm(test, scope, svc, root, signal);
         case 'rag':
-          return runRag(test, scope, svc, root, signal);
+          return test.target ? runRagTargetTest(test, scope, root, (step, sc) => protocolStep(step, sc, svc, root, signal), svc.production ? (step, sc) => assertProductionStep(svc.production!, productionStep(step, sc)) : undefined) : runRag(test, scope, svc, root, signal);
         case 'agent':
           return runAgentTest(test, scope, svc, root, signal);
         case 'delay':
@@ -226,7 +231,7 @@ export async function executeTest(testIn: TestCase, svc: ExecServices, opts: { t
     ctx.error = err;
     root.event('error', { kind: err.kind, message: err.message });
   }
-  ctx.services = { providers: svc.providers, signal: opts.signal, span: root };
+  ctx.services = { providers: svc.providers, signal: opts.signal, span: root, ragJudge: svc.ragJudge };
 
   // test script (sandboxed)
   if (test.testScript) {
@@ -720,6 +725,25 @@ Context:
 {{context}}
 
 Question: {{question}}`;
+
+/** The protocol clients as a RAG target's runner (a probe, a test): see protocolStep. */
+export const ragStepRunner = (svc: ExecServices, span: SpanHandle, signal: AbortSignal) => (step: TestCase, scope: VariableScope): Promise<CheckContext> => protocolStep(step, scope, svc, span, signal);
+
+/** One protocol step of a RAG target: the same clients a test of that type uses; its check context comes back. */
+async function protocolStep(step: TestCase, scope: VariableScope, svc: ExecServices, span: SpanHandle, signal: AbortSignal): Promise<CheckContext> {
+  switch (step.type) {
+    case 'http':
+      return (await runHttp(step, scope, svc, span, signal)).ctx;
+    case 'websocket':
+      return (await runWebSocket(step, scope, svc, span, signal)).ctx;
+    case 'grpc':
+      return (await runGrpc(step, scope, svc, span, signal)).ctx;
+    case 'mcp':
+      return (await runMcp(step, scope, svc, span, signal)).ctx;
+    default:
+      throw new ApsError('ConfigurationError', `A RAG target's request can be http, websocket, grpc or mcp, not "${step.type}"`);
+  }
+}
 
 async function runRag(test: RagTest, scope: VariableScope, svc: ExecServices, span: SpanHandle, signal: AbortSignal): Runner {
   const question = scope.resolve(test.question);

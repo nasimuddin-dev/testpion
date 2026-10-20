@@ -2,7 +2,7 @@
  * RPC handlers of the AI task runner (packages/core/src/ai/tasks): the window's AI actions call these, the same
  * runner the CLI (`testpion ai …`) and the MCP server (`ai_*` tools) use. The window never builds prompts itself.
  */
-import { aiUsageSummary, applyProposal, discardProposal, draftFlowProposal, getProposal, listAiTasks, listProposals, reverifyProposal, undoProposal, AI_PRIVACY_LEVELS, type ItemRef, type Proposal, type ReverifyOptions } from '@testpion/core';
+import { aiUsageSummary, applyProposal, askSearch, OP_LABEL, runQuerySpec, SEARCH_FIELDS, SEARCH_SOURCES, SOURCE_LABEL, discardProposal, draftFlowProposal, getProposal, listAiTasks, listProposals, reverifyProposal, undoProposal, AI_PRIVACY_LEVELS, type ItemRef, type Proposal, type ReverifyOptions } from '@testpion/core';
 import type { Backend, Handlers } from '../backend.js';
 
 export function aiTaskHandlers(be: Backend): Handlers {
@@ -47,6 +47,17 @@ export function aiTaskHandlers(be: Backend): Handlers {
       return { id: p.id, status: p.status };
     },
     'ai.undoProposal': ({ id }: { id: string }) => undoProposal(be.ws, id),
+    /**
+     * The Ask box (AI-12): a question translated by the model into a validated search query and run by TestPion, the
+     * query shown in words and as chips. No model, or a failure: the words are searched as typed (`mode: 'text'`, why in
+     * `fallback`). `scope` keeps the search inside the view it was asked in (History, Runs, Traces).
+     */
+    'search.ask': ({ question, scope, noAi, privacy, dryRun, requestId }: { question: string; scope?: string[]; noAi?: boolean; privacy?: string; dryRun?: boolean; requestId?: string }) =>
+      be.withAiDeps({ requestId, dryRun }, (deps) => askSearch(deps, { question, scope: scope as never, noAi, privacy, dryRun })),
+    /** Run a query the window holds (the chips edited by hand): validated by the same schema, no model. */
+    'search.query': ({ query, scope }: { query: unknown; scope?: string[] }) => runQuerySpec(be.ws, query, { scope: scope as never }),
+    /** The fields, operators and sources a query may use: what the chip editor offers. */
+    'search.fields': () => ({ fields: SEARCH_FIELDS, sources: SEARCH_SOURCES.map((id) => ({ id, label: SOURCE_LABEL[id] })), ops: OP_LABEL }),
     /** The AI features' usage in this workspace (app, CLI, MCP, CI), the caps and what is left today, and AI Lab per model. */
     'ai.taskUsage': ({ days }: { days?: number }) => aiUsageSummary(be.ws, { days, settings: be.settings.ai, recent: 50 }),
   };

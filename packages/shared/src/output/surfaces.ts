@@ -41,7 +41,7 @@ interface SurfaceFields {
    * without any is only ever saved from content the window built.
    */
   sources?: readonly OutputSource['kind'][];
-  /** The CLI command that writes the same output (release B adds --out / --format everywhere). */
+  /** The CLI command that writes the same output: a command path of the program (checked by tests/unit/output-cli.test.ts). */
   cli?: string;
   /** true: shipped (the panel is marked and has the control); planned: comes in that release. */
   state: true | { planned: string };
@@ -57,7 +57,19 @@ export type OutputSource =
   | { kind: 'console' }
   | { kind: 'logs' }
   | { kind: 'debugger' }
-  | { kind: 'grid'; grid: GridSourceId; params: Record<string, unknown> };
+  | { kind: 'grid'; grid: GridSourceId; params: Record<string, unknown> }
+  /** The requests sent from the app (History), newest first: `query` / `historyKind` / `failed` as the list filters them. */
+  | { kind: 'history'; query?: string; historyKind?: string; failed?: boolean; limit?: number }
+  /** Recorded traces (the ones given, else the newest matching), as OTLP JSON. */
+  | { kind: 'traces'; ids?: string[]; query?: string; traceKind?: string; failed?: boolean; limit?: number }
+  /** A monitor's results, newest first. */
+  | { kind: 'monitor-runs'; monitor: string; limit?: number }
+  /** The runs list (test runs, collection runs, evaluations), newest first. */
+  | { kind: 'runs-overview'; query?: string; limit?: number }
+  /** The workspace's uncommitted changes: one file's diff (`path`), or all of them. */
+  | { kind: 'git-diff'; path?: string; staged?: boolean }
+  /** The workspace at a glance (activity, collections' health, monitors, latest runs) as one HTML page. */
+  | { kind: 'workspace-report'; days?: number; tzOffsetMin?: number };
 
 const s =<I extends string>(id: I, label: string, formats: OutputFormatId[], redaction: OutputRedaction, extra: Partial<SurfaceFields> = {}): SurfaceFields & { id: I } => ({
   id,
@@ -68,11 +80,10 @@ const s =<I extends string>(id: I, label: string, formats: OutputFormatId[], red
   state: true,
   ...extra,
 });
-const B = { state: { planned: 'release B' } } as const;
 
 const SURFACES = [
   // the response of a request (REST, SOAP), one per tab of the response pane
-  s('response.body', 'Response body', ['raw', 'json', 'json-min', 'csv', 'tsv', 'html', 'xml', 'text', 'har', 'md'], 'raw-notice', { cli: 'send --json', sources: ['response'] }),
+  s('response.body', 'Response body', ['raw', 'json', 'json-min', 'csv', 'tsv', 'html', 'xml', 'text', 'har', 'md'], 'raw-notice', { cli: 'send', sources: ['response'] }),
   s('response.headers', 'Response headers', ['json', 'csv', 'text'], 'raw-notice'),
   s('response.cookies', 'Response cookies', ['json', 'csv', 'cookies-txt'], 'raw-notice'),
   s('response.jwt', 'Decoded JWTs', ['json'], 'redacted-default'),
@@ -91,32 +102,37 @@ const SURFACES = [
   s('mcp.tool-result', 'MCP tool result', ['json', 'md', 'text'], 'raw-notice'),
   s('code.generated', 'Generated code', ['text'], 'redacted-default'),
   // runs and results
-  s('run.results', 'Run results', ['html', 'json', 'junit', 'md', 'csv', 'zip'], 'redacted-default', { cli: 'run-collection -o / -r', capturedRedacted: true, sources: ['run'] }),
-  s('flow.timeline', 'Flow run timeline', ['html', 'json'], 'redacted-default', { cli: 'flow report --html', capturedRedacted: true, sources: ['flow-timeline'] }),
-  s('flow.grid', 'Flow data / scale / matrix rows', ['csv', 'json', 'html'], 'redacted-default', { capturedRedacted: true, sources: ['grid'] }),
-  s('load.results', 'Load test results', ['json', 'csv', 'html', 'md'], 'none', { cli: 'load --json' }),
-  s('eval.matrix', 'Evaluation matrix', ['csv', 'json', 'md', 'html'], 'none', { sources: ['grid'] }),
+  s('run.results', 'Run results', ['html', 'json', 'junit', 'md', 'csv', 'zip'], 'redacted-default', { cli: 'run-collection', capturedRedacted: true, sources: ['run'] }),
+  s('flow.timeline', 'Flow run timeline', ['html', 'json'], 'redacted-default', { cli: 'flow report', capturedRedacted: true, sources: ['flow-timeline'] }),
+  s('flow.grid', 'Flow data / scale / matrix rows', ['csv', 'json', 'html'], 'redacted-default', { cli: 'output', capturedRedacted: true, sources: ['grid'] }),
+  s('load.results', 'Load test results', ['json', 'csv', 'html', 'md'], 'none', { cli: 'load' }),
+  s('eval.matrix', 'Evaluation matrix', ['csv', 'json', 'md', 'html'], 'none', { cli: 'eval matrix', sources: ['grid'] }),
   // logs
   s('console', 'Console', ['text', 'jsonl'], 'redacted-default', { capturedRedacted: true, sources: ['console'] }),
   s('logs', 'Application log', ['text', 'jsonl'], 'redacted-default', { capturedRedacted: true, sources: ['logs'] }),
   s('terminal', 'Terminal transcript', ['text'], 'redacted-default'),
   s('problems', 'Problems', ['md', 'json', 'csv'], 'none'),
-  s('debugger.session', 'HTTP Debugger session', ['har', 'json', 'csv'], 'redacted-default', { cli: 'debug -o', capturedRedacted: true, sources: ['debugger'] }),
-  // release B
-  s('history', 'History', ['har', 'csv', 'json'], 'redacted-default', B),
-  s('traces', 'Traces', ['json'], 'redacted-default', B),
-  s('debugger.exchange', 'Debugger exchange', ['har', 'text'], 'redacted-default', B),
-  s('mcp.resource', 'MCP resource', ['raw'], 'raw-notice', B),
-  s('mcp.prompt', 'MCP prompt output', ['json', 'md'], 'raw-notice', B),
-  s('mcp.trace', 'MCP protocol trace', ['jsonl'], 'redacted-default', B),
-  s('ai.answers', 'AI answers, proposals and analyses', ['md', 'json'], 'redacted-default', B),
-  s('git.diff', 'Git changes', ['diff', 'md'], 'none', B),
-  s('api.reports', 'API lint, fuzz, coverage, security and OpenAPI diff reports', ['md', 'json'], 'none', B),
-  s('chart', 'Charts', ['png', 'svg', 'csv'], 'none', B),
-  s('env.matrix', 'Environment matrix and compare', ['csv', 'md', 'json'], 'redacted-default', B),
-  s('monitor.runs', 'Monitor runs', ['csv', 'json'], 'none', B),
-  s('runs.overview', 'Runs overview and test history', ['csv', 'json'], 'none', B),
-  s('settings.diagnostics', 'Settings diagnostics', ['text', 'json'], 'redacted-default', B),
+  s('debugger.session', 'HTTP Debugger session', ['har', 'json', 'csv'], 'redacted-default', { cli: 'debug', capturedRedacted: true, sources: ['debugger'] }),
+  // history, traces and the rest (release B)
+  s('history', 'History', ['har', 'csv', 'json'], 'redacted-default', { cli: 'history list', capturedRedacted: true, sources: ['history'] }),
+  s('traces', 'Traces', ['json'], 'redacted-default', { cli: 'output', capturedRedacted: true, sources: ['traces'] }),
+  s('debugger.exchange', 'Debugger exchange', ['text', 'har', 'raw'], 'redacted-default', { capturedRedacted: true }),
+  s('mcp.resource', 'MCP resource', ['raw'], 'raw-notice'),
+  s('mcp.prompt', 'MCP prompt output', ['json', 'md'], 'raw-notice'),
+  s('mcp.trace', 'MCP protocol trace', ['jsonl'], 'redacted-default', { capturedRedacted: true }),
+  s('ai.answers', 'AI answer (Playground)', ['md', 'json'], 'redacted-default', { capturedRedacted: true }),
+  s('ai.compare', 'AI model comparison', ['md', 'csv', 'json'], 'redacted-default', { capturedRedacted: true }),
+  s('ai.analysis', 'AI analysis findings (triage, flaky tests)', ['md', 'json'], 'redacted-default', { capturedRedacted: true }),
+  s('ai.proposals', 'AI proposal under review', ['md', 'json', 'diff'], 'redacted-default', { capturedRedacted: true }),
+  s('git.diff', 'Git changes', ['diff', 'md'], 'raw-notice', { cli: 'git diff', sources: ['git-diff'] }),
+  s('api.reports', 'API lint, fuzz, coverage, security and OpenAPI diff reports', ['md', 'json'], 'redacted-default', { capturedRedacted: true }),
+  s('chart', 'Charts', ['png', 'svg'], 'none'),
+  s('env.matrix', 'Environment matrix and compare', ['csv', 'md', 'json'], 'redacted-default', { capturedRedacted: true }),
+  s('monitor.runs', 'Monitor runs', ['csv', 'json'], 'none', { cli: 'monitor results', sources: ['monitor-runs'] }),
+  s('runs.overview', 'Runs overview and test history', ['csv', 'json'], 'none', { cli: 'output', sources: ['runs-overview'] }),
+  s('workspace.report', 'Workspace report', ['html'], 'none', { cli: 'workspace-report', sources: ['workspace-report'] }),
+  s('collection.docs', 'Collection documentation', ['md', 'html'], 'redacted-default', { cli: 'docs', capturedRedacted: true }),
+  s('settings.diagnostics', 'Settings diagnostics', ['text', 'json'], 'redacted-default', { capturedRedacted: true }),
 ] as const;
 
 export const OUTPUT_SURFACES: readonly OutputSurfaceInfo[] = SURFACES;

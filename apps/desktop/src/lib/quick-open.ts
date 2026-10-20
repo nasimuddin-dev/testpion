@@ -3,14 +3,14 @@ import type { ItemRef } from '@testpion/shared';
 /**
  * WF-01 Quick Open: one palette for items and commands, its mode chosen by the first character typed, as in VS Code
  * and Postman. Nothing typed: the items opened lately; text: items found by the workspace search; `>` commands;
- * `@` what is on screen (the focused editor's commands); `#` environments and their variables; `?` this help.
+ * `@` what is on screen (the focused editor's commands); `#` environments and their variables; `~` Ask (a question in your own words about history, runs and traces, AI); `?` this help.
  * Ctrl+P opens it on items, Ctrl+K (and the top bar's Commands) on commands, Ctrl+Shift+E on environments: the mode it
  * opens in is the one plain text searches; a prefix typed first switches it. Pure: App.tsx gives it the lists.
  */
-export type QuickMode = 'items' | 'commands' | 'here' | 'environments' | 'help';
+export type QuickMode = 'items' | 'commands' | 'here' | 'environments' | 'ask' | 'help';
 
-export const MODE_OF_PREFIX: Readonly<Record<string, QuickMode>> = { '>': 'commands', '@': 'here', '#': 'environments', '?': 'help' };
-export const PREFIX_OF_MODE: Readonly<Record<QuickMode, string>> = { items: '', commands: '>', here: '@', environments: '#', help: '?' };
+export const MODE_OF_PREFIX: Readonly<Record<string, QuickMode>> = { '>': 'commands', '@': 'here', '#': 'environments', '~': 'ask', '?': 'help' };
+export const PREFIX_OF_MODE: Readonly<Record<QuickMode, string>> = { items: '', commands: '>', here: '@', environments: '#', ask: '~', help: '?' };
 
 /** The mode a query is in (a prefix typed first, else the mode it opened in), and the text after the prefix. */
 export function parseQuickQuery(q: string, base: QuickMode = 'items'): { mode: QuickMode; text: string } {
@@ -42,6 +42,8 @@ export interface QuickSources {
   active?: string;
   open(ref: ItemRef): void;
   switchEnvironment(name: string): void;
+  /** Ask… (AI-12): open the natural-language search with this question. */
+  ask(question: string): void;
   /** Reopen the palette in a mode (the help rows). */
   setQuery(prefix: string): void;
   /** What a kind of item is called ("Request", "Test file"). */
@@ -53,7 +55,11 @@ const HELP: Array<[string, string]> = [
   ['>', 'Run a command'],
   ['@', 'What is on screen: the focused editor'],
   ['#', 'Switch environment, or find a variable'],
+  ['~', 'Ask in your own words about history, runs and traces (AI)'],
 ];
+
+/** The row that asks the typed text as a question (Ask…, AI-12). */
+const askRow = (text: string, s: QuickSources): QuickRow => ({ id: 'ask', label: `Ask: “${text}”`, detail: 'History, runs, test results and traces, in your own words (AI)', hint: 'Ask', group: 'Ask', run: () => s.ask(text) });
 
 /** The rows for a query: what the palette lists (it filters them by `text`), its placeholder and its empty line. */
 export function quickOpenRows(q: string, s: QuickSources, base: QuickMode = 'items'): { rows: QuickRow[]; text: string; placeholder: string; empty: string } {
@@ -80,6 +86,13 @@ export function quickOpenRows(q: string, s: QuickSources, base: QuickMode = 'ite
         }
       return { rows, text, placeholder: 'Environment or variable…', empty: 'No matching environment or variable' };
     }
+    case 'ask':
+      return {
+        rows: text ? [askRow(text, s)] : [],
+        text: '',
+        placeholder: 'Ask: failed payment calls last week over 2 s…',
+        empty: 'Type a question and press Enter: history, runs, test results and traces, in your own words',
+      };
     case 'help':
       return {
         rows: HELP.map(([p, label]) => ({ id: `help:${p || 'items'}`, label, hint: p || 'type', run: () => s.setQuery(p) })),
@@ -96,7 +109,9 @@ export function quickOpenRows(q: string, s: QuickSources, base: QuickMode = 'ite
           empty: 'Nothing opened yet: type a name, or > for commands',
         };
       // the search answered for this text: its hits, already ranked (the palette's own filter keeps them)
-      const rows = (s.hits ?? []).flatMap((h) => (h.ref ? [{ id: `hit:${h.kind}:${h.id}`, label: h.title, detail: h.subtitle, hint: s.noun(h.ref), ref: h.ref, run: () => s.open(h.ref!) }] : []));
+      const rows: QuickRow[] = (s.hits ?? []).flatMap((h) => (h.ref ? [{ id: `hit:${h.kind}:${h.id}`, label: h.title, detail: h.subtitle, hint: s.noun(h.ref), ref: h.ref, run: () => s.open(h.ref!) }] : []));
+      // the last row, always: put the words to the AI as a question (the dialog shows how it was understood)
+      if (s.hits) rows.push(askRow(text, s));
       return { rows, text: '', placeholder: 'Go to an item (> commands, # environments, ? help)', empty: s.hits ? 'No matching items (> for commands)' : 'Searching…' };
     }
   }

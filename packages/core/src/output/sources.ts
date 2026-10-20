@@ -1,13 +1,15 @@
 /**
- * The sources of `output.save` (output.ts): what the backend builds and streams into the file because it is big or
- * held only here — a spooled response body, a run's reports, the console and the log, the Debugger's HAR, the rows of
- * a data run or an evaluation matrix. Every builder gives chunks as they come: a 50 MB body is re-indented as it is
- * read, a 100,000-row grid is written page by page, a run's ZIP entry by entry; nothing is one string of the whole.
+ * The sources of an output (a `source` of `output.save`, `testpion output`, MCP `save_output`): what is built from the
+ * workspace and the running app and streamed into the file because it is big or held only there — a spooled response
+ * body, a run's reports, the console and the log, the Debugger's HAR, the rows of a data run or an evaluation matrix, the
+ * history, traces, monitor runs, runs list and the workspace's changes. Every builder gives chunks as they come: a 50 MB
+ * body is re-indented as it is read, a 100,000-row grid is written page by page, a run's ZIP entry by entry; nothing is
+ * one string of the whole. The host gives what only it holds (OutputDeps); the bytes are the same wherever they are saved.
  */
 import { createReadStream, existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { ApsError, plainFileInside } from '@testpion/core';
 import {
+  GRID_SOURCES,
   HTML_DOCUMENT_TAIL,
   HTML_TABLE_TAIL,
   OUTPUT_FORMATS,
@@ -24,11 +26,12 @@ import {
   type OutputFormatId,
   type OutputSource,
 } from '@testpion/shared';
-import type { Backend } from '../backend.js';
-import type { ConsoleEntry } from '../console-log.js';
+import { ApsError } from '../errors.js';
+import { flowRunTimelineHtml } from '../runner/flow-report.js';
+import { plainFileInside } from '../storage/fsutil.js';
+import { dataSource } from './sources-data.js';
+import { SAMPLE_BYTES, one, type Built, type Chunks, type ConsoleLine, type GridPage, type OutputDeps } from './types.js';
 
-/** How much of a raw output is looked at for the "looks like it holds a secret" notice. */
-export const SAMPLE_BYTES = 1024 * 1024;
 const REPORT_FILES: Record<string, string> = { html: 'report.html', md: 'report.md', junit: 'junit.xml', json: 'report.json' };
 /** Entries of the console and the log are written this many at a time (each chunk whole lines, so a mask per chunk is a mask per line). */
 const LOG_PAGE = 500;
@@ -40,34 +43,18 @@ const LOG_PAGE = 500;
 const PRETTY_RATIO = 8;
 const PRETTY_FLOOR = 4 * 1024 * 1024;
 
-/** What is written: chunks, as they come (a source streams; content is one chunk). */
-export type Chunks = AsyncIterable<Buffer | string>;
-
-export interface Built {
-  chunks: Chunks;
-  /** Bytes, when known before writing (progress). */
-  total?: number;
-  /** A sample of the output's text, for the raw-notice check. */
-  sample?: () => string | Promise<string>;
-  redacted: boolean;
-}
-
-export async function* one(x: Buffer | string): Chunks {
-  yield x;
-}
-
-const consoleLine = (e: ConsoleEntry) =>
+const consoleLine = (e: ConsoleLine) =>
   [e.time, e.kind ?? 'http', e.method, e.url, e.status ?? '', e.durationMs !== undefined ? `${e.durationMs} ms` : '', e.error ? `error: ${e.error}` : ''].filter((x) => x !== '').join(' ') +
   e.logs.map((l) => `\n    [${l.phase}] ${l.message}`).join('');
 
-/** Rows of a big grid, page by page through its own RPC (the window shows the same pages). */
-async function* gridRows(be: Backend, src: Extract<OutputSource, { kind: 'grid' }>, signal: AbortSignal): AsyncGenerator<{ columns?: string[]; rows: unknown[][]; total?: number }> {
-  const method = src.grid === 'scale-rows' ? 'tests.scaleRows' : src.grid === 'eval-matrix' ? 'eval.matrix' : undefined;
-  if (!method) throw new ApsError('ValidationError', `output.save: unknown grid ${String(src.grid)}`);
+/** Rows of a big grid, page by page through the host (the window shows the same pages). */
+async function* gridRows(deps: OutputDeps, src: Extract<OutputSource, { kind: 'grid' }>, signal: AbortSignal): AsyncGenerator<{ columns?: string[]; rows: unknown[][]; total?: number }> {
+  if (!(src.grid in GRID_SOURCES)) throw new ApsError('ValidationError', `output.save: unknown grid ${String(src.grid)}`);
   const limit = 500;
   for (let offset = 0; ; offset += limit) {
     if (signal.aborted) return;
-    const page = (await be.handlers[method]!({ ...src.params, offset, limit })) as { rows: Array<Record<string, unknown>>; matched?: number; total?: number; columns?: Array<{ label: string }> };
+    const paged = { ...src.params, offset, limit };
+    const page: GridPage = await (src.grid === 'eval-matrix' ? deps.evalMatrix(paged) : deps.scaleRows(paged));
     if (src.grid === 'eval-matrix') {
       const cols = page.columns ?? [];
       yield {
@@ -99,9 +86,9 @@ async function* gridRows(be: Backend, src: Extract<OutputSource, { kind: 'grid' 
 }
 
 /** A run's results as CSV rows. */
-async function runCsv(be: Backend, runId: string): Promise<string> {
+async function runCsv(deps: OutputDeps, runId: string): Promise<string> {
   const rows: unknown[][] = [['name', 'status', 'type', 'file', 'durationMs', 'attempts', 'checksPassed', 'checks', 'error', 'startedAt']];
-  for await (const r of be.results(runId))
+  for await (const r of deps.results(runId))
     rows.push([r.name, r.status, r.type, r.file ?? '', r.durationMs, r.attempts, r.checks.filter((c) => c.passed).length, r.checks.length, r.error?.message ?? '', r.startedAt]);
   return toCsv(rows);
 }
@@ -114,10 +101,10 @@ function checkRunId(runId: unknown): string {
 const asBuffer = (u8: Uint8Array) => Buffer.from(u8.buffer, u8.byteOffset, u8.byteLength);
 
 /** A spooled response body: raw as it is, or re-indented / minified as it streams (no parse, no copy of the whole). */
-function responseSource(src: Extract<OutputSource, { kind: 'response' }>, be: Backend, format: OutputFormatId, signal: AbortSignal): Built {
+function responseSource(src: Extract<OutputSource, { kind: 'response' }>, deps: OutputDeps, format: OutputFormatId, signal: AbortSignal): Built {
   // really inside payloads/ and a plain file: a prefix test alone would accept payloads/../../anything, and a link put
   // under payloads/ would have the file it points to read out
-  const found = typeof src.payloadPath === 'string' ? plainFileInside(be.ws.path('payloads'), src.payloadPath) : undefined;
+  const found = typeof src.payloadPath === 'string' ? plainFileInside(deps.store.path('payloads'), src.payloadPath) : undefined;
   if (found === undefined) throw new ApsError('ValidationError', 'The response body is no longer on disk', { suggestions: ['Send the request again.'] });
   const size = found;
   const path = src.payloadPath;
@@ -163,9 +150,9 @@ function responseSource(src: Extract<OutputSource, { kind: 'response' }>, be: Ba
 }
 
 /** The rows of a grid as CSV, JSON, HTML or Markdown, written page by page (a 10,000-row data run never is one string). */
-function gridSource(be: Backend, src: Extract<OutputSource, { kind: 'grid' }>, format: OutputFormatId, redact: (t: string) => string, redacted: boolean, signal: AbortSignal): Built {
-  const pages = gridRows(be, src, signal);
-  const title = src.grid === 'eval-matrix' ? 'Evaluation matrix' : 'Data run';
+function gridSource(deps: OutputDeps, src: Extract<OutputSource, { kind: 'grid' }>, format: OutputFormatId, redact: (t: string) => string, redacted: boolean, signal: AbortSignal): Built {
+  const pages = gridRows(deps, src, signal);
+  const title = GRID_SOURCES[src.grid]?.title ?? 'Rows';
   async function* csv(): Chunks {
     let columns: string[] | undefined;
     for await (const p of pages) {
@@ -219,7 +206,7 @@ function gridSource(be: Backend, src: Extract<OutputSource, { kind: 'grid' }>, f
 
 /** A run's reports and results: one report, the results as CSV, or everything as a ZIP written entry by entry. */
 async function runSource(
-  be: Backend,
+  deps: OutputDeps,
   src: Extract<OutputSource, { kind: 'run' }>,
   format: OutputFormatId,
   text: (t: string) => Built,
@@ -227,8 +214,8 @@ async function runSource(
   redacted: boolean,
 ): Promise<Built> {
   const runId = checkRunId(src.runId);
-  const dir = be.ws.runDir(runId);
-  if (format === 'csv') return text(await runCsv(be, runId));
+  const dir = deps.store.runDir(runId);
+  if (format === 'csv') return text(await runCsv(deps, runId));
   if (format === 'zip') {
     // each entry's header and bytes go out as the entry is read; only the central directory waits for the end
     async function* zip(): Chunks {
@@ -237,7 +224,7 @@ async function runSource(
         const p = join(dir, name);
         if (existsSync(p)) for (const part of w.add(name, redact(readFileSync(p, 'utf8')))) yield asBuffer(part);
       }
-      for (const part of w.add('results.csv', redact(await runCsv(be, runId)))) yield asBuffer(part);
+      for (const part of w.add('results.csv', redact(await runCsv(deps, runId)))) yield asBuffer(part);
       yield asBuffer(w.end());
     }
     return { chunks: zip(), redacted };
@@ -266,6 +253,13 @@ function logSource<T>(entries: readonly T[], format: OutputFormatId, line: (e: T
 
 const identity = (t: string) => t;
 
+/** What the app holds and a CLI or an MCP server does not: said when a source needs it. */
+function needs<T>(have: T | undefined, what: string): T {
+  if (have === undefined)
+    throw new ApsError('ConfigurationError', `${what} only exists in the running TestPion app`, { suggestions: ['Save it from the app, or use the command that records it to a file.'] });
+  return have;
+}
+
 /**
  * Build a format of a source: chunks to write (streamed for the big ones). `redact` masks a text when the surface's
  * policy says so; with `capturedRedacted` the stored outputs (a run's reports, a timeline, a grid's rows, the HAR) were
@@ -274,7 +268,7 @@ const identity = (t: string) => t;
  * unmasked still never leaves it.
  */
 export async function buildSource(
-  be: Backend,
+  deps: OutputDeps,
   src: OutputSource,
   format: OutputFormatId,
   redact: (t: string) => string,
@@ -289,26 +283,25 @@ export async function buildSource(
   };
   switch (src.kind) {
     case 'response':
-      return responseSource(src, be, format, signal);
+      return responseSource(src, deps, format, signal);
     case 'run':
-      return runSource(be, src, format, text, stored, redacted);
+      return runSource(deps, src, format, text, stored, redacted);
     case 'flow-timeline': {
-      const { flowRunTimelineHtml } = await import('@testpion/core');
-      if (format === 'html') {
-        const h = await flowRunTimelineHtml(be.ws, src.file, src.runId);
-        return text(h.html);
-      }
-      const t = await be.handlers['tests.flowTimeline']!({ file: src.file, runId: src.runId });
-      return text(JSON.stringify(t, null, 2) + '\n');
+      if (format === 'html') return text((await flowRunTimelineHtml(deps.store, src.file, src.runId)).html);
+      return text(JSON.stringify(await deps.flowTimeline({ file: src.file, runId: src.runId }), null, 2) + '\n');
     }
     case 'console':
-      return logSource(be.consoleBuffer, format, consoleLine, redact, redacted);
+      return logSource(needs(deps.consoleEntries, 'The console')(), format, consoleLine, redact, redacted);
     case 'logs':
-      return logSource(be.logBuffer, format, (r) => `${r.time} ${r.level.toUpperCase()} [${r.scope}] ${r.message}${r.data === undefined ? '' : ` ${JSON.stringify(r.data)}`}`, redact, redacted);
+      return logSource(
+        needs(deps.logEntries, 'The application log')(),
+        format,
+        (r) => `${r.time} ${r.level.toUpperCase()} [${r.scope}] ${r.message}${r.data === undefined ? '' : ` ${JSON.stringify(r.data)}`}`,
+        redact,
+        redacted,
+      );
     case 'debugger': {
-      const har = (await be.handlers['debug.har']!({})) as {
-        log: { entries: Array<{ startedDateTime: string; time: number; request: { method: string; url: string }; response: { status: number; content?: { size?: number; mimeType?: string } } }> };
-      };
+      const har = await needs(deps.har, "The Debugger's session")();
       if (format === 'csv')
         return text(
           toCsv([
@@ -327,7 +320,14 @@ export async function buildSource(
       return text(JSON.stringify(format === 'json' ? har.log.entries : har, null, 2) + '\n');
     }
     case 'grid':
-      return gridSource(be, src, format, stored, redacted, signal);
+      return gridSource(deps, src, format, stored, redacted, signal);
+    case 'history':
+    case 'traces':
+    case 'monitor-runs':
+    case 'runs-overview':
+    case 'git-diff':
+    case 'workspace-report':
+      return text(await dataSource(deps, src, format));
     default:
       throw new ApsError('ValidationError', `output.save: unknown source ${String((src as { kind?: unknown }).kind)}`);
   }

@@ -234,6 +234,11 @@ export interface MetaStore {
   addAiCall(c: AiCallRecord): void;
   /** Ledger rows since `since` (ISO), newest first. */
   listAiCalls(q?: { since?: string; limit?: number }): AiCallRecord[];
+  /** The judge cache (eval/rag/judge.ts): a verdict by the hash of the exact prompt, so an unchanged input is never judged twice. */
+  getJudgeCache(key: string): string | undefined;
+  putJudgeCache(key: string, doc: string): void;
+  /** Empties the cache; returns how many verdicts it held. */
+  clearJudgeCache(): number;
   /** Run `fn` in one transaction (a burst of inserts: a run's traces). Nested calls join the outer one. */
   batch<T>(fn: () => T): T;
   close(): void;
@@ -308,6 +313,8 @@ const MAX_HISTORY = 20_000;
 const MAX_TRACES = 50_000;
 /** Pruning runs once per this many inserts (not on every one: a run can add thousands of traces). */
 const PRUNE_EVERY = 200;
+/** Verdicts kept in the judge cache; the oldest go first. */
+export const MAX_JUDGE_CACHE = 200_000;
 
 /**
  * Delete the files of removed history entries (response bodies in payloads/) and traces (traces/…).
@@ -333,7 +340,7 @@ class SqliteMetaStore implements MetaStore {
   private root: string;
   /** Prepared once: inserts happen for every request sent and every trace of a run. */
   private statements = new Map<string, ReturnType<SqliteDb['prepare']>>();
-  private inserts = { history: 0, traces: 0, ai: 0 };
+  private inserts = { history: 0, traces: 0, ai: 0, judge: 0 };
   private batchDepth = 0;
 
   private stmt(sql: string) {
@@ -357,6 +364,8 @@ class SqliteMetaStore implements MetaStore {
     this.db.exec('CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT)');
     // the AI usage ledger (a table of its own: no schema bump, older databases get it on open)
     this.db.exec('CREATE TABLE IF NOT EXISTS ai_calls (id TEXT PRIMARY KEY, at TEXT, doc TEXT); CREATE INDEX IF NOT EXISTS ai_calls_at ON ai_calls(at DESC);');
+    // the judge cache (a table of its own too): a verdict by the content hash of its prompt
+    this.db.exec('CREATE TABLE IF NOT EXISTS judge_cache (key TEXT PRIMARY KEY, at TEXT, doc TEXT);');
     const row = this.db.prepare("SELECT value FROM meta WHERE key='schema'").get() as { value: string } | undefined;
     const v = row ? Number(row.value) : 0;
     if (v < 1) {
@@ -434,7 +443,22 @@ class SqliteMetaStore implements MetaStore {
     return out;
   }
 
-  private prune(table: 'history' | 'traces' | 'ai_calls', order: string, fileCol: string, max: number): void {
+  getJudgeCache(key: string): string | undefined {
+    return (this.stmt('SELECT doc FROM judge_cache WHERE key = ?').get(key) as { doc: string } | undefined)?.doc;
+  }
+
+  putJudgeCache(key: string, doc: string): void {
+    this.stmt('INSERT OR REPLACE INTO judge_cache (key, at, doc) VALUES (?,?,?)').run(key, new Date().toISOString(), doc);
+    if (this.inserts.judge++ % PRUNE_EVERY === 0) this.prune('judge_cache', 'at', 'NULL', MAX_JUDGE_CACHE);
+  }
+
+  clearJudgeCache(): number {
+    const n = (this.stmt('SELECT COUNT(*) AS n FROM judge_cache').get() as { n: number }).n;
+    this.db.exec('DELETE FROM judge_cache');
+    return n;
+  }
+
+  private prune(table: 'history' | 'traces' | 'ai_calls' | 'judge_cache', order: string, fileCol: string, max: number): void {
     const n = (this.stmt(`SELECT COUNT(*) AS n FROM ${table}`).get() as { n: number }).n;
     if (n <= max) return;
     const old = this.db.prepare(`SELECT rowid AS id, ${fileCol} AS file FROM ${table} ORDER BY ${order} ASC LIMIT ?`).all(n - max) as Array<{ id: number; file: string | null }>;
@@ -679,7 +703,7 @@ function traceRow(r: Record<string, unknown>): TraceMeta {
 /** Fallback when `node:sqlite` is unavailable: append-only JSON-lines files with periodic compaction. */
 class JsonlMetaStore implements MetaStore {
   readonly backend = 'jsonl' as const;
-  private data: { history: HistoryEntry[]; runs: RunMeta[]; traces: TraceMeta[]; ai: AiCallRecord[] } = { history: [], runs: [], traces: [], ai: [] };
+  private data: { history: HistoryEntry[]; runs: RunMeta[]; traces: TraceMeta[]; ai: AiCallRecord[]; judge: Array<{ id: string; doc: string }> } = { history: [], runs: [], traces: [], ai: [], judge: [] };
 
   private root: string;
 
@@ -809,6 +833,23 @@ class JsonlMetaStore implements MetaStore {
     const rows = q.since ? this.data.ai.filter((c) => c.at >= q.since!) : this.data.ai;
     return [...rows].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0)).slice(0, Math.min(Math.max(q.limit ?? 1000, 1), MAX_AI_CALLS));
   }
+  getJudgeCache(key: string) {
+    return this.data.judge.find((x) => x.id === key)?.doc;
+  }
+  putJudgeCache(key: string, doc: string) {
+    const v = { id: key, doc };
+    const i = this.data.judge.findIndex((x) => x.id === key);
+    if (i >= 0) this.data.judge[i] = v;
+    else this.data.judge.push(v);
+    if (this.data.judge.length > 20_000) this.data.judge.splice(0, this.data.judge.length - 20_000);
+    this.log('judge', v);
+  }
+  clearJudgeCache() {
+    const n = this.data.judge.length;
+    this.data.judge.length = 0;
+    this.log('judge', { id: '' }, 'clear');
+    return n;
+  }
   close() {
     // compact
     const lines = [
@@ -816,6 +857,7 @@ class JsonlMetaStore implements MetaStore {
       ...this.data.runs.map((v) => ({ t: 'runs', v })),
       ...this.data.traces.map((v) => ({ t: 'traces', v })),
       ...this.data.ai.map((v) => ({ t: 'ai', v })),
+      ...this.data.judge.map((v) => ({ t: 'judge', v })),
     ];
     atomicWrite(this.path, lines.map((l) => JSON.stringify(l)).join('\n') + '\n');
   }

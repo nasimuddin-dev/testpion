@@ -1,10 +1,13 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
 import type { Collection, CollectionNode, Environment } from '../model/types.js';
-import { assertGitRev, gitLog, gitShow, realFolder, runGit, type GitCommit, type GitFile } from './git.js';
+import { assertGitRev, gitBlobSize, gitLog, gitShow, realFolder, runGit, type GitCommit, type GitFile } from './git.js';
 import { requestParts } from './merge.js';
 import { flowChanges, flowItemParts, isFlowFile } from './flow-diff.js';
-import { LIBRARY_LABEL, kindOfPath, libraryOfPath, savedItemRef, watchKindOfPath, type ItemRef, type KindId } from '@testpion/shared';
+import { KIND_INFO, LIBRARY_LABEL, gitFolderKey, gitKindOfRef, gitRefKey, gitSectionKey, kindOfPath, kindOfRef, libraryOfPath, savedItemRef, watchKindOfPath, type ItemRef, type KindId } from '@testpion/shared';
+import { sameValue } from '../storage/stable-files.js';
+import { describeOtherFile, isBinaryPath } from './item-changes.js';
+import { mcpServerParts, providerParts, workspaceParts } from './item-parts.js';
 
 /** The registry kind of a workspace path (lexical; git's paths are relative with `/`). */
 const kindAt = (path: string) => kindOfPath(path, { raw: true });
@@ -20,7 +23,12 @@ const fileGroup = (path: string): SemanticChange['kind'] => (kindAt(path)?.kind 
  */
 export interface SemanticChange {
   file: string;
-  kind: 'collection' | 'environment' | 'test' | 'library' | 'other';
+  /** The group of the change: the three file kinds read item by item, a library, any other registry kind (`kindId`), else a file. */
+  kind: 'collection' | 'environment' | 'test' | 'library' | 'other' | KindId;
+  /** The registry kind of the item the change is about (an MCP server, a prompt, a request, a dataset …). */
+  kindId?: KindId;
+  /** The keys of the marks the change makes on the lists it is inside (its folders, its collection, its section): see gitMarksOf. */
+  containers?: string[];
   change: 'added' | 'removed' | 'changed' | 'renamed' | 'conflicted';
   /** What changed, in words: "Payments ▸ Create invoice", "environment Staging". */
   title: string;
@@ -51,7 +59,26 @@ export function refOfChange(c: SemanticChange): ItemRef {
   return { kind: 'git-file', path: c.file };
 }
 
-const withRefs = (changes: SemanticChange[]): SemanticChange[] => changes.map((c) => (c.ref ? c : { ...c, ref: refOfChange(c) }));
+/** The kind whose section lists a kind's items: a request, a folder, a gRPC call or a connection is listed in its collection. */
+const sectionKindOf = (kind: KindId): KindId => (kind === 'request' || kind === 'folder' || kind === 'grpc-call' || kind === 'ws-connection' ? 'collection' : kind === 'flow' ? 'test' : kind);
+
+/** Every change with its ref, its registry kind and the keys of the marks it makes on the lists it is inside (gitMarksOf). */
+function withRefs(changes: SemanticChange[]): SemanticChange[] {
+  return changes.map((c) => {
+    const ref = c.ref ?? refOfChange(c);
+    const kindId: KindId | undefined = c.kindId ?? (ref.kind === 'git-file' ? kindAt(c.file)?.kind : gitKindOfRef(ref)) ?? kindAt(c.file)?.kind;
+    if (!kindId) return { ...c, ref };
+    const containers = c.containers ?? [];
+    // a test file is inside the folders of its path
+    if (kindId === 'test' || kindId === 'flow') {
+      const dirs = (kindAt(c.file)?.id ?? '').split('/').slice(0, -1);
+      dirs.forEach((_, i) => containers.push(gitFolderKey('test', dirs.slice(0, i + 1).join('/'))));
+    }
+    const section = gitSectionKey(sectionKindOf(kindId));
+    // a change to a whole file (nothing inside it is named) is the file's own row, not a container's count
+    return { ...c, ref, kindId, containers: [...new Set([...containers, section])] };
+  });
+}
 
 interface LibraryFile {
   items?: Array<{ id: string; name?: string; folder?: string; collectionId?: string; data?: unknown }>;
@@ -65,20 +92,32 @@ function libraryChanges(file: string, beforeText: string | undefined, afterText:
   const after = afterText === undefined ? { items: [] } : parse<LibraryFile>(afterText);
   if (!before || !after || !Array.isArray(before.items ?? []) || !Array.isArray(after.items ?? [])) return undefined;
   const what = LIBRARY_LABEL[kind] ?? 'Saved item';
+  const kindId = kindOfRef({ kind: 'saved', library: kind })?.id;
   const a = new Map((before.items ?? []).map((i) => [i.id, i]));
   const b = new Map((after.items ?? []).map((i) => [i.id, i]));
   const out: SemanticChange[] = [];
   const title = (i: { name?: string; id: string }) => `${what} ${i.name ?? i.id}`;
+  // a folder of the list and, for a call or a connection, the collection it is shown in, show the change too
+  const inside = (i: { folder?: string; collectionId?: string }): Pick<SemanticChange, 'containers'> =>
+    kindId ? { containers: [...(i.folder ? [gitFolderKey(kindId, i.folder)] : []), ...(i.collectionId ? [gitRefKey({ kind: 'collection', collectionId: i.collectionId })] : [])] } : {};
+  const known = kindId ? { kindId } : {};
   for (const [id, i] of b) {
     const was = a.get(id);
-    if (!was) out.push({ file, kind: 'library', change: 'added', title: title(i), details: [], itemId: id, itemKind: kind, ref: savedItemRef(kind, id) });
+    if (!was) out.push({ file, kind: 'library', ...known, change: 'added', title: title(i), details: [], itemId: id, itemKind: kind, ref: savedItemRef(kind, id), ...inside(i) });
     else if (!same(was, i)) {
       const details = [was.name !== i.name ? `renamed from ${was.name}` : '', was.folder !== i.folder ? 'moved' : '', !same(was.data, i.data) ? 'settings' : '', was.collectionId !== i.collectionId ? 'collection' : ''].filter(Boolean);
-      out.push({ file, kind: 'library', change: was.name !== i.name ? 'renamed' : 'changed', title: title(i), details: details.length ? details : ['order'], itemId: id, itemKind: kind, ref: savedItemRef(kind, id) });
+      out.push({ file, kind: 'library', ...known, change: was.name !== i.name ? 'renamed' : 'changed', title: title(i), details: details.length ? details : ['order'], itemId: id, itemKind: kind, ref: savedItemRef(kind, id), ...inside(i) });
     }
   }
-  for (const [id, i] of a) if (!b.has(id)) out.push({ file, kind: 'library', change: 'removed', title: title(i), details: [], itemId: id, itemKind: kind, ref: savedItemRef(kind, id) });
-  return out.length ? out : [{ file, kind: 'library', change: 'changed', title: file, details: ['order or formatting'] }];
+  for (const [id, i] of a) if (!b.has(id)) out.push({ file, kind: 'library', ...known, change: 'removed', title: title(i), details: [], itemId: id, itemKind: kind, ref: savedItemRef(kind, id), ...inside(i) });
+  if (out.length) return out;
+  // a library of folders only (MCP and API folders): the folders added and removed
+  const folders = (f: LibraryFile) => ((f as { folders?: unknown }).folders as string[] | undefined) ?? [];
+  const [fa, fb] = [new Set(folders(before)), new Set(folders(after))];
+  const added = [...fb].filter((x) => !fa.has(x));
+  const removed = [...fa].filter((x) => !fb.has(x));
+  const details = [added.length ? `folder ${added.join(', ')} added` : '', removed.length ? `folder ${removed.join(', ')} removed` : ''].filter(Boolean);
+  return [{ file, kind: 'library', ...known, change: 'changed', title: kindId ? KIND_INFO[kindId].plural : file, details: details.length ? details : ['order or formatting'] }];
 }
 
 type Node = CollectionNode & { name?: string; items?: Node[] };
@@ -93,15 +132,15 @@ const parse = <T>(text: string | undefined): T | undefined => {
 };
 
 /** Every request and folder of a collection by id, with its path of names. */
-function index(nodes: Node[] = [], path: string[] = [], out = new Map<string, { node: Node; path: string[] }>()) {
+function index(nodes: Node[] = [], path: string[] = [], out = new Map<string, { node: Node; path: string[]; ids: string[] }>(), ids: string[] = []) {
   for (const n of nodes) {
-    out.set(n.id, { node: n, path: [...path, n.name ?? n.id] });
-    if (n.kind === 'folder') index(n.items as Node[], [...path, n.name ?? n.id], out);
+    out.set(n.id, { node: n, path: [...path, n.name ?? n.id], ids });
+    if (n.kind === 'folder') index(n.items as Node[], [...path, n.name ?? n.id], out, [...ids, n.id]);
   }
   return out;
 }
 
-const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+const same = sameValue;
 
 /** Which parts of a request changed, in words. */
 function requestDetails(a: Node, b: Node): string[] {
@@ -150,7 +189,14 @@ function collectionChanges(file: string, before: Collection | undefined, after: 
   }
   for (const [id, { node, path }] of a) if (!b.has(id)) out.push({ file, kind: 'collection', change: 'removed', title: [name, ...path].join(' ▸ '), details: [node.kind === 'folder' ? 'folder' : 'request'], collectionId: cid, itemId: id, itemKind: node.kind });
   if (!out.length) out.push({ file, kind: 'collection', change: 'changed', title: `collection ${name}`, details: ['order or formatting'], collectionId: cid });
-  return out;
+  // a request or folder marks the folders it is in and its collection
+  const collectionKey = cid ? gitRefKey({ kind: 'collection', collectionId: cid }) : undefined;
+  return out.map((c) => {
+    if (!c.itemId || !cid) return c;
+    const where = b.get(c.itemId) ?? a.get(c.itemId);
+    const folders = (where?.ids ?? []).map((folderId) => gitRefKey({ kind: 'folder', collectionId: cid, folderId }));
+    return { ...c, containers: [...folders, ...(collectionKey ? [collectionKey] : [])] };
+  });
 }
 
 function environmentChanges(file: string, before: Environment | undefined, after: Environment | undefined): SemanticChange[] {
@@ -171,33 +217,108 @@ function environmentChanges(file: string, before: Environment | undefined, after
   return [{ file, kind: 'environment', change: 'changed', title: `environment ${name}`, details: details.length ? details : ['settings'], ...(ref ? { ref } : {}) }];
 }
 
+/** How a file changed. */
+type FileState = SemanticChange['change'];
+
+/** Files bigger than this are named by size (a changed dataset of 50 MB is not read to say what changed). */
+const READ_LIMIT = 8 * 1024 * 1024;
+
+/** The meaning of one changed file: the text on each side (undefined: not there, or too big / binary to read). */
+function describeFile(file: string, before: string | undefined, after: string | undefined, state: FileState, from?: string, sizes?: { before?: number; after?: number }): SemanticChange[] {
+  if (isItemFile(file, 'collection')) return collectionChanges(file, parse<Collection>(before), parse<Collection>(after));
+  if (isItemFile(file, 'environment')) return environmentChanges(file, parse<Environment>(before), parse<Environment>(after));
+  if (state !== 'renamed') {
+    const meaning = (isFlowFile(file) ? flowChanges(file, before, after) : undefined) ?? libraryChanges(file, before, after) ?? describeOtherFile(file, before, after, state, { sizes });
+    if (meaning) return meaning;
+  }
+  return [{ file, kind: fileGroup(file), change: state, title: file, details: state === 'renamed' && from ? [`was ${from}`] : [] }];
+}
+
+/** The text of a file in the working folder; undefined when it is missing, binary or too big (its size is said instead). */
+function readWorking(ws: string, path: string): { text?: string; size?: number } {
+  try {
+    const size = statSync(join(ws, path)).size;
+    return isBinaryPath(path) || size > READ_LIMIT ? { size } : { text: readFileSync(join(ws, path), 'utf8'), size };
+  } catch {
+    return {};
+  }
+}
+
+/** Whether a file can be big enough to be named by its size (a dataset, an API definition, a database or an image). */
+const mayBeBig = (path: string) => isBinaryPath(path) || kindAt(path)?.kind === 'dataset' || kindAt(path)?.kind === 'spec';
+
+/** The text of a file in a commit; undefined when it is not there, binary or too big (then its size). */
+async function readRev(ws: string, path: string, rev?: string): Promise<{ text?: string; size?: number }> {
+  const size = mayBeBig(path) ? await gitBlobSize(ws, path, rev) : undefined;
+  if (isBinaryPath(path) || (size !== undefined && size > READ_LIMIT)) return { size };
+  return { text: await gitShow(ws, path, rev), size };
+}
+
 /** The meaning of each changed file (working folder against the last commit). */
 export async function describeGitChanges(ws: string, files: GitFile[]): Promise<SemanticChange[]> {
   const out: SemanticChange[] = [];
   for (const f of files) {
-    const read = () => {
-      try {
-        return f.state === 'deleted' ? undefined : readFileSync(join(ws, f.path), 'utf8');
-      } catch {
-        return undefined;
-      }
-    };
     if (f.state === 'conflicted') {
       out.push({ file: f.path, kind: kindAt(f.path)?.kind === 'collection' ? 'collection' : kindAt(f.path)?.kind === 'environment' ? 'environment' : 'other', change: 'conflicted', title: f.path, details: ['changed on both sides'] });
       continue;
     }
-    const head = f.state === 'untracked' || f.state === 'added' ? undefined : await gitShow(ws, f.from ?? f.path);
-    if (isItemFile(f.path, 'collection')) out.push(...collectionChanges(f.path, parse<Collection>(head), parse<Collection>(read())));
-    else if (isItemFile(f.path, 'environment')) out.push(...environmentChanges(f.path, parse<Environment>(head), parse<Environment>(read())));
-    else if (isFlowFile(f.path) && f.state !== 'renamed' && flowChanges(f.path, head, read())) out.push(...flowChanges(f.path, head, read())!);
-    else if (f.state !== 'renamed' && libraryChanges(f.path, head, read())) out.push(...libraryChanges(f.path, head, read())!);
-    else {
-      const kind = fileGroup(f.path);
-      const change = f.state === 'untracked' || f.state === 'added' ? 'added' : f.state === 'deleted' ? 'removed' : f.state === 'renamed' ? 'renamed' : 'changed';
-      out.push({ file: f.path, kind, change, title: f.path, details: f.state === 'renamed' && f.from ? [`was ${f.from}`] : [] });
-    }
+        const now = f.state === 'deleted' ? {} : readWorking(ws, f.path);
+    const was = f.state === 'untracked' || f.state === 'added' ? {} : await readRev(ws, f.from ?? f.path);
+    const state: FileState = f.state === 'untracked' || f.state === 'added' ? 'added' : f.state === 'deleted' ? 'removed' : f.state === 'renamed' ? 'renamed' : 'changed';
+    out.push(...describeFile(f.path, was.text, now.text, state, f.from, { before: was.size, after: now.size }));
   }
   return withRefs(out);
+}
+
+/** Whether a file in a commit or in the working folder is too big to show as text. */
+async function tooBig(ws: string, file: string, rev: string): Promise<boolean> {
+  if (!(kindAt(file)?.kind === 'dataset' || kindAt(file)?.kind === 'spec')) return false;
+  const size = (await gitBlobSize(ws, file, rev)) ?? 0;
+  let now = 0;
+  try {
+    now = statSync(join(ws, file)).size;
+  } catch {
+    /* not in the working folder */
+  }
+  return Math.max(size, now) > READ_LIMIT;
+}
+
+/**
+ * The items of a list file (MCP servers, AI providers, a library) in two versions, by the parts the side-by-side view
+ * shows: the item with this id, or every item that differs (each part named "item ▸ part"). Undefined for any other file.
+ */
+function listedItems(file: string, before: string | undefined, after: string | undefined, itemId?: string): { title: string; before?: Record<string, string>; after?: Record<string, string> } | undefined {
+  const at = kindAt(file);
+  const library = libraryOfPath(file, { raw: true });
+  const key = at?.kind === 'mcp-server' ? 'servers' : at?.kind === 'provider' ? 'providers' : library ? 'items' : undefined;
+  if (!key) return undefined;
+  const partsOf = at?.kind === 'mcp-server' ? mcpServerParts : at?.kind === 'provider' ? providerParts : requestParts;
+  type Rec = Record<string, unknown>;
+  const list = (t: string | undefined): Rec[] | undefined => {
+    const arr = parse<Rec>(t)?.[key];
+    return Array.isArray(arr) ? (arr as Rec[]) : t === undefined ? [] : undefined;
+  };
+  const [x, y] = [list(before), list(after)];
+  if (!x || !y) return undefined;
+  const noun = at ? KIND_INFO[at.kind].label : (LIBRARY_LABEL[library!] ?? 'Saved item');
+  const nameOf = (i: Rec) => String(i.name ?? i.id);
+  const find = (l: Rec[], id: string) => l.find((i) => String(i.id) === id);
+  if (itemId) {
+    const [b, a] = [find(x, itemId), find(y, itemId)];
+    return { title: `${noun} ${nameOf((a ?? b) as Rec)}`, before: b && partsOf(b), after: a && partsOf(a) };
+  }
+  const ids = [...new Set([...x, ...y].map((i) => String(i.id)))];
+  const flat = (l: Rec[]) => {
+    const out: Record<string, string> = {};
+    for (const id of ids) {
+      const [b, a] = [find(x, id), find(y, id)];
+      if (JSON.stringify(b ?? null) === JSON.stringify(a ?? null)) continue;
+      const item = find(l, id);
+      for (const [part, v] of Object.entries(item ? partsOf(item) : {})) out[`${nameOf((a ?? b) as Rec)} ▸ ${part}`] = v;
+    }
+    return out;
+  };
+  return { title: file, before: before === undefined ? undefined : flat(x), after: after === undefined ? undefined : flat(y) };
 }
 
 /** One item (request or folder) of a collection by id, anywhere in its folders. */
@@ -236,16 +357,10 @@ export async function describeRevChanges(ws: string, from: string, to?: string):
   }
   const result: SemanticChange[] = [];
   for (const f of files) {
-    const before = f.status === 'A' ? undefined : await gitShow(ws, f.from ?? f.path, from);
-    const after = f.status === 'D' ? undefined : to ? await gitShow(ws, f.path, to) : readOrUndefined(join(ws, f.path));
-    if (isItemFile(f.path, 'collection')) result.push(...collectionChanges(f.path, parse<Collection>(before), parse<Collection>(after)));
-    else if (isItemFile(f.path, 'environment')) result.push(...environmentChanges(f.path, parse<Environment>(before), parse<Environment>(after)));
-    else if (isFlowFile(f.path) && f.status !== 'R' && flowChanges(f.path, before, after)) result.push(...flowChanges(f.path, before, after)!);
-    else if (f.status !== 'R' && libraryChanges(f.path, before, after)) result.push(...libraryChanges(f.path, before, after)!);
-    else {
-      const kind = fileGroup(f.path);
-      result.push({ file: f.path, kind, change: f.status === 'A' ? 'added' : f.status === 'D' ? 'removed' : f.status === 'R' ? 'renamed' : 'changed', title: f.path, details: f.from ? [`was ${f.from}`] : [] });
-    }
+    const was = f.status === 'A' ? {} : await readRev(ws, f.from ?? f.path, from);
+    const now = f.status === 'D' ? {} : to ? await readRev(ws, f.path, to) : readWorking(ws, f.path);
+    const state: FileState = f.status === 'A' ? 'added' : f.status === 'D' ? 'removed' : f.status === 'R' ? 'renamed' : 'changed';
+    result.push(...describeFile(f.path, was.text, now.text, state, f.from, { before: was.size, after: now.size }));
   }
   return withRefs(result);
 }
@@ -310,10 +425,12 @@ export interface PartChange {
  * `rev` is the version to compare with (the last commit by default); the other side is the file in the working folder.
  */
 export async function describeItemDiff(ws: string, file: string, itemId?: string, rev = 'HEAD'): Promise<{ title: string; parts: PartChange[] }> {
-  const before = await gitShow(ws, file, rev);
+  const at = kindAt(file);
+  const big = isBinaryPath(file) || (await tooBig(ws, file, rev));
+  const before = big ? undefined : await gitShow(ws, file, rev);
   let after: string | undefined;
   try {
-    after = readFileSync(join(ws, file), 'utf8');
+    after = big ? (statSync(join(ws, file)) && '') : readFileSync(join(ws, file), 'utf8');
   } catch {
     after = undefined;
   }
@@ -354,6 +471,25 @@ export async function describeItemDiff(ws: string, file: string, itemId?: string
         ...Object.fromEntries(e.variables.map((v) => [`{{${v.key}}}`, `${v.enabled === false ? '(off) ' : ''}${v.secret ? '•••• (secret, in the OS store)' : v.value}`])),
       };
     return { title: `environment ${ae?.name ?? be?.name ?? file}`, parts: rows(vars(be), vars(ae)) };
+  }
+  // a list kept in one file (MCP servers, AI providers) or a library file: one item (itemId), else every changed item
+  const listed = listedItems(file, before, after, itemId);
+  if (listed) return { title: listed.title, parts: rows(listed.before, listed.after) };
+  if (at?.kind === 'workspace') {
+    const [bw, aw] = [parse<Record<string, unknown>>(before), parse<Record<string, unknown>>(after)];
+    return { title: 'Workspace settings', parts: rows(bw && workspaceParts(bw), aw && workspaceParts(aw)) };
+  }
+  // a database, an image or a very big file: its size
+  if (isBinaryPath(file) || (await tooBig(ws, file, rev))) {
+    const size = async (r: string) => (await gitBlobSize(ws, file, r)) ?? 0;
+    const now = (() => {
+      try {
+        return statSync(join(ws, file)).size;
+      } catch {
+        return 0;
+      }
+    })();
+    return { title: file, parts: rows(before === undefined ? undefined : { Size: `${await size(rev)} bytes` }, after === undefined ? undefined : { Size: `${now} bytes` }) };
   }
   // a test or flow file: one step part by part (itemId is its id), or the file's own settings and steps
   if (isFlowFile(file)) {

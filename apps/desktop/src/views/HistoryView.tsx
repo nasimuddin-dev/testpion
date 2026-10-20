@@ -1,20 +1,23 @@
 import { CompareView, type Compared } from '../components/ResponseHistory';
-import { Download, History, RotateCcw, Trash2 } from 'lucide-react';
+import { History, RotateCcw, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { asError, call } from '../api';
-import { confirmAction, useApp, toastError } from '../store';
+import { confirmAction, useApp } from '../store';
 import { useFilteredLoad, useIntent } from '../hooks';
 import { openRef } from '../lib/open-ref';
 import { formatBytes, formatMs, groupByDay } from '../lib/format';
 import { DurationBar } from '../components/charts';
-import { finishSave, type SaveResult } from '../lib/files';
+import { OutputActions } from '../components/output/OutputFrame';
+import type { OutputSpec } from '../components/output/output-core';
 import { JsonTree } from '../components/JsonView';
 import { Badge, Button, Empty, Input, Select, Split, statusTone, VirtualList } from '../components/ui';
 import { NodeMenu, TreeBadge, treeKeys } from '../components/TreeParts';
 import { TreeRowShell } from '../components/TreeRowShell';
 import type { NodeMenuCtx } from '../lib/node-menu';
 import { saveAsTest } from '../lib/save-test';
-import { type ItemRef } from '@testpion/shared';
+import { outputFileName, type ItemRef } from '@testpion/shared';
+import { AskSearchButton } from '../components/ai/AskSearchButton';
+import { ASK_SCOPE } from '../components/ai/ask-search';
 
 interface Entry {
   id: string;
@@ -132,6 +135,9 @@ function TimingStrip({ timing }: { timing?: Timing }) {
   );
 }
 
+/** How many entries a History download holds (the newest first, as filtered). */
+const DOWNLOAD_LIMIT = 1000;
+
 export function HistoryView() {
   const [items, setItems] = useState<Entry[]>([]);
   const [total, setTotal] = useState(0);
@@ -171,6 +177,21 @@ export function HistoryView() {
     if (p?.historyId) setSel(await call('history.get', { id: p.historyId }));
   });
   const rows = useMemo(() => groupByDay(items, (e) => e.timestamp), [items]);
+  // the entries as filtered here, built by the backend from the whole History (not the page on screen)
+  const spec = useMemo<OutputSpec>(() => {
+    const source = { kind: 'history' as const, query: query || undefined, historyKind: kind || undefined, failed: failedOnly || undefined, limit: DOWNLOAD_LIMIT };
+    return {
+      id: 'history',
+      what: 'history',
+      name: outputFileName({ name: 'testpion-history', ext: '' }),
+      formats: [
+        { format: 'har', label: 'HAR (HTTP and GraphQL, secrets masked)', source, default: true },
+        { format: 'csv', label: 'List (CSV)', source },
+        { format: 'json', label: 'List (JSON)', source },
+      ],
+      empty: total ? undefined : 'No history yet',
+    };
+  }, [query, kind, failedOnly, total]);
   // the slowest loaded entry sets the scale of the duration bars
   const maxMs = useMemo(() => Math.max(1, ...items.map((e) => e.durationMs ?? 0)), [items]);
   // in the editor of its kind, with what was sent (the whole entry is read: the list holds previews)
@@ -196,7 +217,7 @@ export function HistoryView() {
   });
   return (
     <Split id="history" initial={45}>
-      <div className="h-full flex flex-col" onKeyDown={treeKeys}>
+      <div className="h-full flex flex-col" onKeyDown={treeKeys} data-output="history">
         <div className="flex gap-2 p-2 border-b border-line">
           <Input className="flex-1" placeholder="Search history (name, URL, method, status)" value={query} onChange={(e) => setQuery(e.target.value)} />
           <Select value={kind} onChange={(e) => setKind(e.target.value)} aria-label="Kind">
@@ -210,14 +231,7 @@ export function HistoryView() {
           <label className="flex items-center gap-1 text-xs text-muted whitespace-nowrap" title="Only responses that failed: 4xx/5xx, transport errors, non-OK gRPC codes, MCP tool errors">
             <input type="checkbox" checked={failedOnly} onChange={(e) => setFailedOnly(e.target.checked)} /> Failed
           </label>
-          <Button
-            variant="ghost"
-            icon={<Download size={13} />}
-            title="Export the HTTP and GraphQL entries shown here as a HAR file (secrets are masked)"
-            onClick={() => void call<SaveResult>('history.exportHar', { query: query || undefined, kind: kind || undefined }).then((r) => finishSave(r, 'HAR file'), toastError)}
-          >
-            HAR
-          </Button>
+          <AskSearchButton scope={ASK_SCOPE.history} />
           <Button
             variant="ghost"
             icon={<Trash2 size={13} />}
@@ -230,7 +244,11 @@ export function HistoryView() {
             Clear
           </Button>
         </div>
-        <div className="text-xs text-muted px-3 py-1">{total.toLocaleString()} {total === 1 ? 'entry' : 'entries'} · grouped by day · double-click to open · Ctrl+click another to compare</div>
+        {/* the count and the download share a row: the filter bar above has no room for the control in a narrow list */}
+        <div className="flex items-center gap-2 px-3 min-h-8 min-w-0">
+          <span className="text-xs text-muted truncate min-w-0">{total.toLocaleString()} {total === 1 ? 'entry' : 'entries'} · grouped by day · double-click to open · Ctrl+click another to compare</span>
+          <OutputActions spec={spec} />
+        </div>
         <StatusMix items={items} />
         {items.length ? (
           <VirtualList

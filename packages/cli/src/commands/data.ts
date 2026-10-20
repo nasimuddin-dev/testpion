@@ -6,6 +6,7 @@ import { Command, Option } from 'commander';
 import { WorkspaceManager, formatDuration, importRequestSnippet, ciConfig, ciTargetOfRun, finishedRun, compareEnvironments, environmentMatrix, compareRequestAcrossEnvironments, collectionRequests, type CiProvider, convertCollectionScripts, isRequestSnippet, Redactor, collectionMarkdown, collectionHtml, exportPostmanCollection, exportPostmanEnvironment, fetchImportText, readBrunoFolder, collectionToBru, type Environment, bundleWsdl, isWsdl, importIntoWorkspace, diffOpenApi, lintOpenApi, OPENAPI_LINT_RULES, type OpenApiLintSeverity, type OpenApiLintResult, workspaceApiCoverage, apiCoverageMarkdown, securityLint, collectionSecurityFindings, type SecurityFinding, listSpecs, unusedVariables, definedVariableNames, findEnvironment, setEnvironmentVariables, addVariablesToEnvironments, unsetEnvironmentVariables, variableFlow, collectionToOpenApiText, variableUsages, renameVariable, collectionSavedItems, listWorkspaceDatasets, appendDatasetRow, readWorkspaceDataset, workspaceReportHtml, collectionVariableFlow, loadHistory, workspaceStorage, deleteRunsBefore, listCertificates, workspaceAttention, decodeJwt, describeExpiry, recordCertificate, checkCertificate, detectFormat, resolveArazzoSources, keepPmApplies } from '@testpion/core';
 import { EXIT, green, red, yellow, dim, bold, CliError, printJson, findWorkspaceUp, withWorkspace, warnProblems, cliSecrets, cliContext, requireCollection, requireEnvironment, loadCollectionRef, readDefinition } from '../shared.js';
 import { requireInteractive } from '../contract.js';
+import { runBundleExport, wantsBundleExport } from './bundle.js';
 
 export function registerDataCommands(program: Command): void {
   program
@@ -531,13 +532,22 @@ export function registerDataCommands(program: Command): void {
     });
   program
     .command('export')
-    .description('export a collection as a Postman v2.1 collection (default), TestPion JSON, an OpenAPI 3.1 document (--format openapi), a Bruno collection folder (--format bruno --out <folder>) an .http file (--format http) or its connections as AsyncAPI 3.0 (--format asyncapi)\n<collection> is a collection name or id in the workspace, or a collection file to convert')
-    .argument('<collection>', 'collection name or id, a file, or an http(s) link')
+    .description('export a collection as a Postman v2.1 collection (default), TestPion JSON, an OpenAPI 3.1 document (--format openapi), a Bruno collection folder (--format bruno --out <folder>) an .http file (--format http) or its connections as AsyncAPI 3.0 (--format asyncapi)\n<collection> is a collection name or id in the workspace, or a collection file to convert\nA TestPion bundle (.testpion.zip / .testpion.json) holds any items: kind:id items (collection:<id> spec:specs/<path> dataset:<name> mcp-server:<id> ...), --section <kind>, or --all; --uses adds what they use (a collection: its environments, API definitions, datasets, MCP servers, mocks, protos, tests, flows). Secret values are never in it.')
+    .argument('[refs...]', 'collection name or id, a file, or an http(s) link; for a bundle: the items as kind:id')
     .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
-    .addOption(new Option('-f, --format <format>', 'output format').choices(['postman', 'testpion', 'openapi', 'bruno', 'http', 'asyncapi']).default('postman'))
+    .addOption(new Option('-f, --format <format>', 'output format').choices(['postman', 'testpion', 'openapi', 'bruno', 'http', 'asyncapi', 'bundle']).default('postman'))
     .option('--json', 'with --format openapi: JSON instead of YAML')
-    .option('-o, --out <file>', 'write to this file instead of stdout')
-    .action(async (ref: string, o: { workspace?: string; format: 'postman' | 'testpion' | 'openapi' | 'bruno' | 'http' | 'asyncapi'; json?: boolean; out?: string }) => {
+    .option('-o, --out <file>', 'write to this file instead of stdout (a bundle: <title>.testpion.zip in the current folder; .zip or .json picks the form)')
+    .option('--section <kind>', 'a bundle of every item of one kind (collection, environment, spec, dataset, test, mcp-server, mcp-mock, proto, script-package, prompt, load-test, evaluation, monitor, grpc-call, ws-connection, provider)')
+    .option('--all', 'a bundle of the whole workspace (AI providers only with --providers)')
+    .option('--uses', 'a bundle: add everything the items use')
+    .option('--datasets <mode>', 'a bundle: embed, reference or auto (embed up to 10 MB, bigger by reference; default)')
+    .option('--providers', 'a bundle: include AI providers in a whole-workspace or section export')
+    .option('--title <text>', 'a bundle: its title')
+    .action(async (refs: string[], o: { workspace?: string; format: 'postman' | 'testpion' | 'openapi' | 'bruno' | 'http' | 'asyncapi' | 'bundle'; json?: boolean; out?: string; section?: string; all?: boolean; uses?: boolean; datasets?: 'auto' | 'embed' | 'reference'; providers?: boolean; title?: string }) => {
+      if (wantsBundleExport(refs, o)) return runBundleExport(refs, o);
+      if (refs.length !== 1) throw new CliError('Give one collection (name, id, file or link) to export in this format; several items go in a bundle (kind:id items, --format bundle)', EXIT.CONFIG_ERROR);
+      const ref = refs[0]!;
       const c = await loadCollectionRef(ref, o.workspace);
       if (o.format === 'bruno') {
         // a folder like the one Bruno keeps in git; the workspace's environments go to environments/ (secret values never)

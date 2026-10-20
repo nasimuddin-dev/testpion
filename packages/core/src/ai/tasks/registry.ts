@@ -17,6 +17,10 @@ import { quoteTemplateValues } from '../yaml-repair.js';
 import type { FormatKind } from '../flow-format.js';
 import { describeTriage, prepareTriage, proposeTriage, TRIAGE_SCHEMA } from '../triage.js';
 import { describeFlaky, FLAKY_SCHEMA, prepareFlaky, proposeFlaky } from '../flaky.js';
+import { describeTidy, prepareTidyContext, proposeTidy, TIDY_PLAN_SCHEMA, TIDY_VERIFIERS } from '../tidy-import.js';
+import { describeSpecTests, prepareSpecContext, proposeSpecTests, SPEC_PLAN_SCHEMA, SPEC_TEST_VERIFIERS } from '../spec-tests.js';
+import { VERDICT_SCHEMA } from '../../eval/rag/judge-prompts.js';
+import { NL_SEARCH_SCHEMA, validateNlSearch } from '../nl-search.js';
 import { describeFlow, FLOW_PLAN_SCHEMA, FLOW_VERIFIERS, prepareFlowContext, proposeFlow } from '../flow-from-collection.js';
 
 export type AiTaskOutput = { kind: 'markdown' } | { kind: 'code'; language: 'yaml' | 'json' | 'javascript' | 'graphql' | 'text' } | { kind: 'json'; schema: Record<string, unknown> };
@@ -79,16 +83,20 @@ export interface AiTaskDef {
   propose?(answer: { text: string; code: string; value?: unknown }, input: AiTaskInput): DraftItem[] | { items: DraftItem[]; notes?: string[]; problems?: string[] };
   /** The verifiers (verify.ts) its items go through. */
   verifiers?: string[];
+  /** Checks a JSON answer that proposes nothing (a search query): its problems go back to the model like a verifier's. */
+  validate?(value: unknown): string[];
   /** Repair turns when verification fails (default 2; 0 for prose). */
   maxRepairs?: number;
   /** Makes a code answer safe before it is verified (an unquoted {{ in YAML quoted); what it fixed goes into the proposal's notes. */
   normalize?(code: string): { code: string; notes: string[] };
   /** The test-file format reference added to its instruction (flow-format.ts, made from the schema and the check registry): the whole format, or the checks alone. */
   format?: FormatKind | FormatKind[];
+  /** The sampling temperature (default 0.2; a judge uses 0 so the same input gives the same verdict as often as the model allows). */
+  temperature?: number;
   /** Other ids it answers to (`suggest-assertions` for generate-assertions). */
   aliases?: string[];
   /** Reads its own context for a workspace item (else the generic item context, item-context.ts). */
-  prepare?(store: WorkspaceStore, item: ItemRef, o: { path?: string; privacy: AiPrivacy }): Promise<PreparedItem> | PreparedItem;
+  prepare?(store: WorkspaceStore, item: ItemRef, o: { path?: string; privacy: AiPrivacy; context?: Record<string, unknown> }): Promise<PreparedItem> | PreparedItem;
   /** The summary, assumptions, notes and findings of a JSON task's proposal (what the review shows above the items). */
   describe?(value: unknown, items: ProposalItem[], input: AiTaskInput): { summary?: string; assumptions?: string[]; notes?: string[]; findings?: ProposalFinding[] };
 }
@@ -399,6 +407,38 @@ export const AI_TASKS: readonly AiTaskDef[] = [
     propose: proposeFlow,
     describe: describeFlow,
   }),
+  T('tests-from-spec', {
+    version: 1,
+    title: 'Tests from a spec',
+    description:
+      "Tests for an OpenAPI document, driven by the gaps in the tests that exist (the gap report is deterministic): positive, negative, boundary and security cases as test files under tests/<api>/ — TestPion builds the deterministic ones from the document, the model adds ideas (what to change in the valid example and the status to expect); an operation the document does not have is dropped, the checks come from the document (status, openapi contract, a shallow JSON Schema), every test is validated against the document, and the proposal says the coverage before → after.",
+    tier: 'large',
+    output: { kind: 'json', schema: SPEC_PLAN_SCHEMA },
+    context: 'item: spec:<path> (an API definition under specs/; its operations with limits and documented responses, the gaps in the existing tests, the draft); context.options {categories, operations, gapsOnly, includeDelete}',
+    contextTokens: 12_000,
+    sectionBudgets: { operations: 9000 },
+    maxTokens: 8000,
+    verifiers: SPEC_TEST_VERIFIERS,
+    prepare: (store, item, o) => prepareSpecContext(store, item, o),
+    propose: proposeSpecTests,
+    describe: describeSpecTests,
+  }),
+  T('tidy-import', {
+    version: 1,
+    title: 'Tidy this import',
+    description:
+      "A freshly imported collection (Postman, curl, HAR, Insomnia, Bruno) tidied as separate reviewable changes: sensible names and folders, a host or token typed into many requests becomes a variable, a hard-coded id an earlier response returns is chained (a tp.* script sets the variable), tracking, static and duplicate requests are dropped, optionally a flow wiring the requests. TestPion finds the hosts, tokens, noise, duplicates and the chains a saved example confirms itself; the model names and groups. Every change is verified: the result is a valid collection and every remaining request sends exactly what it sent (variables resolved).",
+    tier: 'large',
+    output: { kind: 'json', schema: TIDY_PLAN_SCHEMA },
+    context: 'item: collection:<id> (its requests with a saved example, the hosts, the findings TestPion made); context.options {flow, source}',
+    contextTokens: 12_000,
+    sectionBudgets: { requests: 8000, findings: 2000 },
+    maxTokens: 8000,
+    verifiers: TIDY_VERIFIERS,
+    prepare: (store, item, o) => prepareTidyContext(store, item, o),
+    propose: proposeTidy,
+    describe: describeTidy,
+  }),
   T('triage-run', {
     version: 2,
     format: ['checks', 'script'],
@@ -498,6 +538,30 @@ export const AI_TASKS: readonly AiTaskDef[] = [
     maxTokens: 6000,
     verifiers: ['yaml'],
     propose: textItem('yaml', 'MCP toolset'),
+  }),
+  T('rag-judge', {
+    title: 'Judge a RAG answer',
+    description:
+      'One evaluation task of a RAG metric (the question holds the metric’s instruction): the answer is split into claims or statements and each gets a verdict with its evidence, as JSON. Used by the judged RAG metrics (rag-faithfulness, rag-answer-relevance); the verdicts are cached by content, counted in the usage ledger and limited by the AI caps.',
+    tier: 'large',
+    output: { kind: 'json', schema: VERDICT_SCHEMA },
+    context: 'question (the user’s question), answer, contexts [{id, text}], reference (only what the metric needs)',
+    temperature: 0,
+    contextTokens: 24_000,
+    maxTokens: 3000,
+    maxRepairs: 2,
+  }),
+  T('nl-search', {
+    title: 'Ask about history, runs and traces',
+    description:
+      'Translates a question ("failed payment calls last week over 2 s") into a validated search query over History, runs, test results and traces; TestPion runs the query itself. The model sees the question and the field names, never the data; the query is shown in plain words and as editable chips.',
+    tier: 'small',
+    output: { kind: 'json', schema: NL_SEARCH_SCHEMA },
+    context: 'now (ISO time), scope (the sources asked in, optional); the question is the question',
+    contextTokens: 1500,
+    maxTokens: 800,
+    maxRepairs: 2,
+    validate: validateNlSearch,
   }),
   T('free', {
     title: 'Ask the assistant',

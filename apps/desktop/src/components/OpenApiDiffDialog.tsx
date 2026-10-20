@@ -1,6 +1,8 @@
 import { CircleAlert, CircleCheck, FileUp, GitCompare } from 'lucide-react';
 import { AiAction } from './ai/AiAction';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { ApiReportBar } from './ApiReportBar';
+import { diffReport } from './output/api-report-specs';
 import { call } from '../api';
 import { toastError } from '../store';
 import { pickTextFile } from '../lib/files';
@@ -83,6 +85,7 @@ export function OpenApiDiffDialog({ onClose, inline, before: fixedBefore }: { on
       setAfter(other ? { path: other } : { url: '' });
     });
   }, []);
+  const report = useMemo(() => (result ? diffReport(result) : undefined), [result]);
   const ready = (s: Side) => !!(s.path || s.url?.trim() || s.text);
   const compare = async () => {
     setBusy(true);
@@ -121,9 +124,11 @@ export function OpenApiDiffDialog({ onClose, inline, before: fixedBefore }: { on
           <div className={cx('flex flex-col gap-2 overflow-auto', !inline && 'max-h-[46vh]')}>
             <div className="text-sm text-muted flex items-center gap-2">
               {result.operations.old} → {result.operations.new} operations ({result.operations.added} added, {result.operations.removed} removed)
+              <ApiReportBar kind="diff" report={report}>
               {!!(result.breaking.length + result.nonBreaking.length) && (
-                <AiAction variant="ghost" className="ml-auto" onStart={onClose} label="Explain with AI" request={() => ({ task: 'explain-api-changes', title: 'Impact of the API changes', context: { breaking: result.breaking.slice(0, 80), other: result.nonBreaking.slice(0, 80), operations: result.operations } })} />
+                <AiAction variant="ghost" onStart={onClose} label="Explain with AI" request={() => ({ task: 'explain-api-changes', title: 'Impact of the API changes', context: { breaking: result.breaking.slice(0, 80), other: result.nonBreaking.slice(0, 80), operations: result.operations } })} />
               )}
+              </ApiReportBar>
             </div>
             {result.breaking.length ? (
               <div>

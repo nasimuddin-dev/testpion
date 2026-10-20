@@ -7,6 +7,7 @@
 import type { Command } from 'commander';
 import { compareEvalRuns, evalMatrixPage, type EvalCompareItem, type EvalMatrixQuery } from '@testpion/core';
 import { EXIT, bold, CliError, dim, green, printJson, red, withWorkspace, yellow } from '../shared.js';
+import { addOutputOptions, saveSurface, savedLine } from '../output-save.js';
 
 const number = (v: string | undefined, what: string, o: { int?: boolean; min?: number; max?: number } = {}): number | undefined => {
   if (v === undefined) return undefined;
@@ -87,21 +88,28 @@ export function registerEvalCompareCommands(ev: Command): void {
         if (!r.passed) process.exitCode = EXIT.TEST_FAILURE;
       }),
     );
-  ev.command('matrix')
-    .description('evaluation runs side by side: cases × variants (a column per run, or per model of a run) with status and score, against a baseline run when given; prints a page')
-    .argument('<runs...>', 'runs in column order: ids, "last" or names')
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
-    .option('-b, --baseline <run>', 'compare every column with this run')
-    .option('-t, --threshold <score>', 'a score change counts beyond this, 0 to 1', '0.05')
-    .option('--filter <which>', 'all, failed, regressed, improved, changed, missing', 'all')
-    .option('--tag <tag>', 'only cases with this tag')
-    .option('--sort <by>', 'case, score, delta, failures', 'case')
-    .option('--offset <n>', 'first row', '0')
-    .option('--limit <n>', 'rows (at most 1000)', '50')
-    .option('--json', 'print the page as JSON (columns with stats, rows with cells, counts per filter, tags)')
-    .action((runs: string[], o: { workspace?: string; baseline?: string; threshold?: string; filter: string; tag?: string; sort: string; offset: string; limit: string; json?: boolean }) =>
+  addOutputOptions(
+    ev
+      .command('matrix')
+      .description('evaluation runs side by side: cases × variants (a column per run, or per model of a run) with status and score, against a baseline run when given; prints a page, or --out saves every row as CSV, JSON, Markdown or HTML')
+      .argument('<runs...>', 'runs in column order: ids, "last" or names')
+      .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
+      .option('-b, --baseline <run>', 'compare every column with this run')
+      .option('-t, --threshold <score>', 'a score change counts beyond this, 0 to 1', '0.05')
+      .option('--filter <which>', 'all, failed, regressed, improved, changed, missing', 'all')
+      .option('--tag <tag>', 'only cases with this tag')
+      .option('--sort <by>', 'case, score, delta, failures', 'case')
+      .option('--offset <n>', 'first row', '0')
+      .option('--limit <n>', 'rows (at most 1000)', '50')
+      .option('--json', 'print the page as JSON (columns with stats, rows with cells, counts per filter, tags)'),
+    'eval.matrix',
+  ).action((runs: string[], o: { workspace?: string; baseline?: string; threshold?: string; filter: string; tag?: string; sort: string; offset: string; limit: string; json?: boolean; out?: string; format?: string }) =>
       withWorkspace(o.workspace, async (store, ephemeral) => {
         if (ephemeral) throw new CliError('No workspace found: run inside a workspace or pass -w <nameOrPath>', EXIT.CONFIG_ERROR);
+        if (o.out) {
+          const saved = await saveSurface({ store, surface: 'eval.matrix', format: o.format, out: o.out, params: { runs, baseline: o.baseline } });
+          return o.json ? printJson(saved) : console.log(savedLine(saved));
+        }
         const filters = ['all', 'failed', 'regressed', 'improved', 'changed', 'missing'];
         const sorts = ['case', 'score', 'delta', 'failures'];
         if (!filters.includes(o.filter)) throw new CliError(`--filter is one of ${filters.join(', ')}`, EXIT.CONFIG_ERROR);

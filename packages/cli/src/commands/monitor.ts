@@ -24,6 +24,7 @@ import {
   type WorkspaceStore,
 } from '@testpion/core';
 import { EXIT, green, red, yellow, dim, bold, CliError, printJson, withWorkspace, cliContext, requireCollection } from '../shared.js';
+import { addOutputOptions, saveSurface, savedLine } from '../output-save.js';
 import { resolveSelection } from '../run.js';
 
 const collect = (v: string, prev: string[] = []) => [...prev, v];
@@ -161,16 +162,22 @@ export function registerMonitorCommands(program: Command): void {
       });
     });
 
-  mon
-    .command('results')
-    .description("a monitor's recent results, newest first")
-    .argument('<nameOrId>')
-    .requiredOption('-w, --workspace <nameOrPath>')
-    .option('-n, --limit <n>', 'how many', '20')
-    .option('--json', 'print as JSON')
-    .action((ref: string, o) =>
-      withWorkspace(o.workspace, (store) => {
+  addOutputOptions(
+    mon
+      .command('results')
+      .description("a monitor's recent results, newest first (--out saves them as CSV or JSON)")
+      .argument('<nameOrId>')
+      .requiredOption('-w, --workspace <nameOrPath>')
+      .option('-n, --limit <n>', 'how many', '20')
+      .option('--json', 'print as JSON'),
+    'monitor.runs',
+  ).action((ref: string, o) =>
+      withWorkspace(o.workspace, async (store) => {
         const m = findMonitor(store, ref);
+        if (o.out) {
+          const saved = await saveSurface({ store, surface: 'monitor.runs', format: o.format, out: o.out, params: { monitor: m.id, limit: Number(o.limit) || 20 } });
+          return o.json ? printJson(saved) : console.log(savedLine(saved));
+        }
         const rows = monitorResults(store, m.id, Math.min(Number(o.limit) || 20, 500));
         if (o.json) return printJson(rows);
         if (!rows.length) return console.log(dim('No results yet.'));

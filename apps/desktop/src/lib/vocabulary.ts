@@ -47,6 +47,8 @@ export const LABEL = {
   exportSubmenu: 'Export',
   /** Export ▸ the scripts rewritten to Postman's pm.* (TestPion writes tp.*; pm.* only for Postman). */
   forPostman: 'For Postman (pm.*)…',
+  /** Export ▸ a TestPion bundle of the collection with the environments, API definitions, datasets, MCP servers and tests it uses. */
+  exportWithUses: 'Export with everything it uses…',
   convertScriptsTp: 'Convert scripts to tp.*',
   settings: 'Settings…',
   historyInGit: 'History in git…',
@@ -72,6 +74,8 @@ export const LABEL = {
   compareVersions: 'Compare versions',
   generateTests: 'Generate tests…',
   generateFlows: 'Generate integration flows…',
+  generateSpecTests: 'Generate tests from this spec…',
+  tidyImport: 'Tidy with AI…',
   preview: 'Preview',
   runWithDataset: 'Run a collection with it',
   useInTest: 'Use in a test',

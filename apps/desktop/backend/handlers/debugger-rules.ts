@@ -17,6 +17,8 @@ import {
   type DebuggerRule,
   type DebuggerRulesFile,
   atomicWrite,
+  debuggerRulesFileValue,
+  stableText,
 } from '@testpion/core';
 import type { Backend, Handlers } from '../backend.js';
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
@@ -60,7 +62,7 @@ export const activeRules = (be: Backend, state: DebuggerState): DebuggerRule[] =
 function save(be: Backend, state: DebuggerState) {
   const f = rulesOf(be, state);
   mkdirSync(be.ws.path('debugger'), { recursive: true });
-  atomicWrite(be.ws.path(RULES_FILE), JSON.stringify(f, null, 2) + '\n');
+  atomicWrite(be.ws.path(RULES_FILE), stableText(debuggerRulesFileValue(f)));
   be.host.emit('debug.rules', { active: f.active, count: (f.profiles[f.active] ?? []).filter((r) => r.enabled).length });
 }
 

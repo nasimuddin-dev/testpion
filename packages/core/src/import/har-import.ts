@@ -1,4 +1,4 @@
-import type { BodyConfig, Collection, CollectionNode, SavedHttpRequest } from '../model/types.js';
+import type { BodyConfig, Collection, CollectionNode, SavedExample, SavedHttpRequest } from '../model/types.js';
 import { SCHEMA_VERSION } from '../model/types.js';
 import { shortId, slugify } from '../util/ids.js';
 import { newDocument, type ImportDocument } from './model.js';
@@ -10,6 +10,15 @@ function newCollection(name: string, items: CollectionNode[], extra: Partial<Col
 /** A HAR file (browser developer tools, proxies) as an import document: a request per entry, with its status as a check. */
 export function parseHar(text: string): ImportDocument {
   return newDocument('har', text, { tool: 'HAR', collections: [importHar(text).collection] });
+}
+
+/** The response a HAR entry recorded, kept as a saved example when it is a small JSON or text body (it lets a tidy chain ids and a mock answer). */
+function harExample(res: any): { examples?: SavedExample[] } {
+  const content = res?.content;
+  const status = Number(res?.status);
+  if (!status || typeof content?.text !== 'string' || content.encoding === 'base64' || content.text.length > 32_768) return {};
+  if (!/json|text|xml/i.test(String(content.mimeType ?? ''))) return {};
+  return { examples: [{ id: shortId('ex-'), name: `Captured ${status}`, status, ...(res.statusText ? { statusText: String(res.statusText) } : {}), headers: [], body: content.text }] };
 }
 
 export function importHar(text: string): { collection: Collection } {
@@ -34,6 +43,7 @@ export function importHar(text: string): { collection: Collection } {
         body,
       },
       assertions: e.response?.status ? [{ type: 'status', expected: e.response.status }] : undefined,
+      ...harExample(e.response),
     };
   });
   return { collection: newCollection(`HAR import ${new Date().toISOString().slice(0, 10)}`, items) };

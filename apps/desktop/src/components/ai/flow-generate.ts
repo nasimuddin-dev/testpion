@@ -1,11 +1,16 @@
 import { createElement } from 'react';
 import { Sparkles } from 'lucide-react';
-import { useApp, type FlowGenerateRequest } from '../../store';
+import { useApp, type FlowGenerateRequest, type TidyImportRequest } from '../../store';
 import type { MenuItem } from '../ui';
 
 /** Open "Generate integration flow with AI" (AI-1): the one way, from the explorer's menus and the flow canvas. */
 export function startFlowGenerate(req: FlowGenerateRequest = {}): void {
   useApp.getState().set({ flowGenerate: req });
+}
+
+/** Open "Tidy this import with AI" (AI-10): the explorer's collection menu, and the import's own notice. */
+export function startTidyImport(req: TidyImportRequest): void {
+  useApp.getState().set({ tidyImport: req });
 }
 
 /** The right-click / ⋯ item of a collection or a folder: the same label and icon everywhere. */

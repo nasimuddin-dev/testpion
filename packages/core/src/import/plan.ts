@@ -9,7 +9,7 @@ import type { ImportReport } from './report.js';
 import type { ImportScriptsMode } from './import-scripts.js';
 import { plannedSpecs, importIntoWorkspace, type SpecConflict, type WorkspaceImportResult } from './workspace-import.js';
 import { existsSync, readFileSync } from 'node:fs';
-import { undoImport, type UndoResult } from './import-receipt.js';
+import { undoImportReceipt, type UndoResult } from './import-receipt.js';
 import type { ImportInput, SkippedFile } from './inputs.js';
 import type { SecretStore } from '../storage/secrets.js';
 
@@ -175,6 +175,6 @@ export function importInputs(
 /** Take back several imports (the ids `importInputs` returned). */
 export function undoMany(store: WorkspaceStore, receipts: string[], opts: { force?: boolean } = {}): UndoResult[] {
   if (!receipts.length) throw new ApsError('ValidationError', 'No import to undo', { suggestions: [] });
-  return receipts.map((id) => undoImport(store, id, opts));
+  return receipts.map((id) => undoImportReceipt(store, id, opts));
 }
 

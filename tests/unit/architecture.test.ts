@@ -61,6 +61,10 @@ describe('architecture', () => {
     expect(readFileSync(join(root, 'packages/shared/tsconfig.json'), 'utf8')).not.toMatch(/"DOM"/);
   });
 
+  it('the RAG metric engine (eval/rag) takes nothing from the runner but types: the runner lends it what it needs', () => {
+    expect(offenders('packages/core/src/eval/rag', (i) => /(^|\/)runner\//.test(i.spec) && !i.typeOnly)).toEqual([]);
+  });
+
   it('the CLI is core plus commands', () => {
     expect(offenders('packages/cli/src', (i) => /^(electron|react|react-dom)(\/|$)/.test(i.spec) || i.spec.includes('apps/desktop'))).toEqual([]);
   });

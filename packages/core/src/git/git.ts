@@ -227,6 +227,18 @@ export async function gitShow(ws: string, path: string, rev = 'HEAD'): Promise<s
   }
 }
 
+/** The size in bytes of a file as it is in a commit (default HEAD); undefined when it does not exist there. */
+export async function gitBlobSize(ws: string, path: string, rev = 'HEAD'): Promise<number | undefined> {
+  const repo = await repoRoot(ws);
+  if (!repo) return undefined;
+  try {
+    const n = Number((await runGit(ws, ['cat-file', '-s', `${assertGitRev(rev)}:${toRepoPath(repo, ws, path)}`])).trim());
+    return Number.isFinite(n) ? n : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** The unified diff of one file (working folder against HEAD, or the staged change). */
 export async function gitDiff(ws: string, path: string, staged = false): Promise<string> {
   return runGit(ws, ['diff', '--no-color', ...(staged ? ['--cached'] : []), '--', path]);

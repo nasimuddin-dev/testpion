@@ -236,6 +236,27 @@ export const TOOL_DOCS: Record<string, ToolDoc> = {
     whenNot: 'To write CRUD flows without a model, use `generate_flows`; to design one yourself, read the requests (`list_requests`, `get_request`) and use `write_test_file`. Apply the proposal with `ai_apply_proposal`.',
     example: { collection: 'Veterinary API', folder: 'Patients', hint: 'also test pagination' },
   },
+  spec_gaps: {
+    when: 'Use it when the user wants to know what the workspace never tests about an API definition: operations never called, documented statuses never asserted, no negative, boundary or security test, no contract check; deterministic, no model needed.',
+    whenNot: 'For which operations the last run exercised, use `api_coverage`; to write the tests, use `spec_tests_generate` (or `generate_tests` for one happy path and one invalid request per operation).',
+    example: { spec: 'specs/veterinary-api.yaml' },
+  },
+  spec_tests_generate: {
+    when: "Use it when the user wants tests for the gaps in what is tested of an API definition — negative, boundary and security cases, not just one example per operation: TestPion builds them from the document, and its own model (their key or a local model) adds ideas; it proposes, validated against the document, with the coverage before and after.",
+    whenNot: 'For one happy path and one invalid request per operation, use `generate_tests`; to write a test yourself, use `write_test_file`. Apply the proposal with `ai_apply_proposal` after the user agrees. Use `noAi: true` for TestPion’s own cases only.',
+    example: { spec: 'specs/veterinary-api.yaml', categories: ['negative', 'security'] },
+  },
+  tidy_import: {
+    when: "Use it when the user wants a fresh import (Postman, curl, HAR, Insomnia, Bruno) tidied: names and folders, the host and the token as variables, ids chained from earlier responses, tracking requests dropped; it proposes, and checks that every request still sends what it sent.",
+    whenNot: 'For duplicates, empty folders and unused variables only, use `collection_tidy`; to change one request, use `update_request`. Apply the proposal with `ai_apply_proposal` after the user agrees; `ai_undo_proposal` puts the collection back.',
+    example: { collection: 'HAR import 2026-10-19', source: 'har', flow: true },
+  },
+  search_ask: {
+    when: "Use it to find requests sent, runs, test results or traces from a question in plain words (\"failed payment calls last week over 2 s\", \"flaky tests\", \"traces where a tool timed out\"), or with a query of your own: TestPion's model only translates the question, TestPion runs the query, and the answer says how it was understood.",
+    whenNot: 'To find a request, test, environment or variable by name, use `search_workspace`; to list one kind of history or runs with simple filters, use `history_list` or `list_runs`; to read failures of a run, use `recent_failures`.',
+    example: { question: 'failed payment calls last week over 2 s', sources: ['history'] },
+    narrow: 'Name the `sources` and lower `limit` in a `query`.',
+  },
   ai_triage_run: {
     when: "Use it when the user wants TestPion's own model to explain a failed run and propose fixes (their key or a local model): causes with evidence and verified fixes, as a proposal.",
     whenNot: 'To read failures yourself, use `recent_failures`, `run_breakdown` and `test_history`; to apply the fixes, use `ai_apply_proposal` after the user agrees.',
@@ -481,6 +502,33 @@ export const TOOL_DOCS: Record<string, ToolDoc> = {
     example: { trash_id: 'environment/1760700000000--staging-old.json' },
   },
 
+  // ── Bundles: move work between workspaces ──────────────────────────────
+  export_bundle: {
+    when: 'Use it to hand a collection, a section or the whole workspace to someone else or another workspace in one file: a collection with `uses: true` takes its environments, API definitions, datasets, MCP servers, mocks and tests with it.',
+    whenNot: 'For one collection in Postman, OpenAPI or Bruno form, use `collection_openapi` or the app’s Export; for a response, `export_traces`.',
+    example: { items: ['collection:clinic'], uses: true },
+  },
+  describe_bundle: {
+    when: 'Use it to see what a bundle file holds and what it needs before importing it.',
+    whenNot: 'To see what importing would change here, use `import_bundle_preview`.',
+    example: { file: '.local/exports/clinic.testpion.zip' },
+  },
+  import_bundle_preview: {
+    when: 'Use it before any import of a bundle: it lists what is new, what is already here and what conflicts, and gives the `plan_id` the apply needs.',
+    whenNot: 'To only read the bundle, use `describe_bundle`; foreign formats (Postman, OpenAPI …) go through `import_definition`.',
+    example: { file: '.local/exports/clinic.testpion.zip' },
+  },
+  import_bundle_apply: {
+    when: 'Use it after the user has seen the preview and chose how conflicts go: it writes the items and keeps a journal for `undo_import`.',
+    whenNot: 'Never without a `plan_id` from `import_bundle_preview` and the user’s yes.',
+    example: { plan_id: 'plan-1a2b3c4d5e6f', on_conflict: 'keep-both', confirm: true },
+  },
+  undo_import: {
+    when: 'Use it to take back an import that was not wanted; without `import_id` it lists the imports that can be undone.',
+    whenNot: 'To undo a single delete, use `restore_item`.',
+    example: { import_id: 'imp-1a2b3c4d5e6f', confirm: true },
+  },
+
   // ── MCP servers and mocks ──────────────────────────────────────────────
   mock_tools: {
     when: 'Use it to read the tools an MCP mock file defines and the commands that serve it.',
@@ -572,6 +620,12 @@ export const TOOL_DOCS: Record<string, ToolDoc> = {
     when: 'Use it to pull and push in one step when the user asks to sync the workspace.',
     whenNot: 'To prepare a commit, use `git_propose_commit`; for conflicts, use `git_conflicts`.',
     example: { confirm: true },
+  },
+  git_changes: {
+    when: 'Use it to list what changed since the last commit item by item, named like the app: "MCP server Weather", "Dataset users.csv: 12 rows added", "Prompt Greeting".',
+    whenNot: 'For the branch and ahead / behind counts use `git_status`; for one item side by side or between two commits use `git_diff`.',
+    example: { kind: 'mcp-server' },
+    narrow: 'Give `kind` or `file`, lower `limit`, or page with `cursor`.',
   },
   git_diff: {
     when: 'Use it to see what changed by meaning: requests, variables and flow steps added, changed or removed.',
@@ -752,6 +806,28 @@ export const TOOL_DOCS: Record<string, ToolDoc> = {
     whenNot: 'For a matrix of several runs, use `eval_matrix`; for test runs, use `compare_runs`.',
     example: { run: 'run-def456', baseline: 'run-abc123', threshold: 0.05 },
     narrow: 'Lower `limit` or `maxRegressions`.',
+  },
+  rag_list_targets: {
+    when: 'Use it to see which RAG systems the workspace can test (HTTP, SSE, WebSocket, gRPC or MCP endpoints with their mapping) and whether any is broken.',
+    whenNot: 'To run a dataset through one, use `run_evaluation` on a saved evaluation of type rag.',
+    example: {},
+  },
+  rag_probe: {
+    when: 'Use it to ask a RAG target one question and see the answer and the retrieved contexts its mapping reads, before running an evaluation.',
+    whenNot: 'For a whole dataset, use `run_evaluation`; to see the saved targets, use `rag_list_targets`.',
+    example: { target: 'Clinic bot', question: 'What time does the clinic open?' },
+  },
+  rag_import_dataset: {
+    when: 'Use it to read a Ragas or DeepEval dataset file as TestPion RAG records (question, reference, reference_contexts, reference_ids), or to save it under datasets/.',
+    whenNot: 'To add one record to a dataset, use `add_dataset_row`; to convert the other way, use `rag_export_dataset`.',
+    example: { path: 'datasets/ragas-export.jsonl', save_as: 'clinic-rag' },
+    narrow: 'Lower `limit`.',
+  },
+  rag_export_dataset: {
+    when: 'Use it to write a TestPion RAG dataset as Ragas or DeepEval records, to score the same questions with those tools.',
+    whenNot: 'To read their files into TestPion, use `rag_import_dataset`.',
+    example: { path: 'datasets/clinic-rag.jsonl', to: 'ragas' },
+    narrow: 'Lower `limit`.',
   },
   agents_init: {
     when: 'Use it to write or refresh AGENTS.md (and optionally CLAUDE.md or Cursor rules) describing this workspace.',

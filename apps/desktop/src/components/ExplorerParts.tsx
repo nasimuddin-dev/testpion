@@ -1,6 +1,6 @@
 import { Plus } from 'lucide-react';
 import { memo, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
-import type { ItemRef } from '@testpion/shared';
+import { baseKind, type ItemRef } from '@testpion/shared';
 import { promptText } from '../store';
 import { deleteWithUndo } from '../lib/undo-delete';
 import type { NodeKind, NodeMenuCtx } from '../lib/node-menu';
@@ -8,6 +8,7 @@ import { LABEL } from '../lib/vocabulary';
 import { treeKey, useTreeOpen } from '../lib/tree-state';
 import { restoreFolder } from './FolderList';
 import { TreeRowShell } from './TreeRowShell';
+import type { GitTarget } from './GitMark';
 import { CLOSED_ICON, CountPill, FOLDER_ICON, OPEN_ICON, focusRow, moveToFolderItem } from './TreeParts';
 import { Button } from './ui';
 
@@ -94,6 +95,7 @@ export function ItemRow({
   ctx,
   rename,
   drag,
+  git,
 }: {
   kind: NodeKind;
   nodeId: string;
@@ -106,6 +108,8 @@ export function ItemRow({
   ctx: () => NodeMenuCtx;
   rename?: RowRename;
   drag?: ItemRef[];
+  /** What the row is, for its change mark. */
+  git?: GitTarget;
 }) {
   return (
     <TreeRowShell
@@ -118,6 +122,7 @@ export function ItemRow({
       onOpen={onClick}
       ctx={ctx}
       drag={drag}
+      git={git}
       rename={rename?.editing ? { value: label, done: rename.done } : undefined}
       className={indent ? 'pl-10' : 'pl-6'}
     >
@@ -262,6 +267,7 @@ const SectionFolderRow = memo(function SectionFolderRow({ kind, section, name, c
       label={name}
       depth={1}
       expanded={open}
+      git={{ folder: baseKind(kind), name }}
       onClick={() => h().sections.toggle(key, true)}
       className="pl-5"
       rename={
