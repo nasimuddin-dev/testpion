@@ -1,0 +1,18 @@
+{
+  "meta": { "format": "httpie", "version": "1.0.0", "contentType": "collection", "schema": "https://httpie.io/app/schemas/collection.v1.json", "docs": "https://httpie.io/r/export-docs", "source": "HTTPie for Desktop 2025.2.0" },
+  "entry": {
+    "name": "Vet Clinic",
+    "docs": "The clinic API",
+    "auth": { "type": "bearer", "credentials": { "token": "{{token}}" } },
+    "requests": [
+      { "name": "List patients", "method": "GET", "url": "{{host}}/patients?limit=10", "queryParams": [{ "name": "limit", "value": "10", "enabled": true }, { "name": "page", "value": "2", "enabled": false }], "pathParams": [], "headers": [{ "name": "Accept", "value": "application/json", "enabled": true }], "auth": { "type": "inherit" }, "body": {} },
+      { "name": "Create patient", "method": "POST", "url": "{{host}}/patients", "queryParams": [], "headers": [], "auth": { "type": "basic", "credentials": { "username": "vet", "password": "{{password}}" } }, "body": { "text": { "format": "json", "value": "{\"name\":\"Rex\"}" } }, "docs": "Adds a patient" }
+    ],
+    "collections": [
+      { "name": "Photos", "requests": [
+        { "name": "Upload", "method": "PUT", "url": "{{host}}/photo", "headers": [], "auth": { "type": "none" }, "body": { "form": { "isMultipart": true, "fields": [{ "name": "caption", "value": "Rex", "enabled": true }, { "name": "photo", "type": "file", "values": [{ "name": "rex.png", "path": "/tmp/rex.png" }], "enabled": true }] } } },
+        { "name": "Odd auth", "method": "GET", "url": "{{host}}/x", "headers": [], "auth": { "type": "kerberos", "credentials": { "id": "a" } }, "body": {} }
+      ] }
+    ]
+  }
+}

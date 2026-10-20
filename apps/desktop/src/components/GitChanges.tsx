@@ -1,8 +1,8 @@
 import { Columns2, ExternalLink, History, Minus, Plus, RotateCcw, Undo2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { outputFileName, refOfWorkspacePath } from '@testpion/shared';
+import { KIND_INFO, outputFileName, refOfWorkspacePath, type KindId } from '@testpion/shared';
 import { call } from '../api';
-import { confirmAction, toastError } from '../store';
+import { confirmAction, toastError, useApp } from '../store';
 import { openRef } from '../lib/open-ref';
 import { discardGitItem, openGitItem } from '../lib/git-items';
 import { changesByItemMarkdown, groupChanges, type ChangeGroup } from '../lib/git-rows';
@@ -10,6 +10,7 @@ import { plural } from '../lib/format';
 import { LABEL } from '../lib/vocabulary';
 import type { GitFile, SemanticChange } from '../views/GitView';
 import { ChangeMark } from './ChangeMark';
+import { FilterChips } from './FilterChips';
 import { DiffText } from './GitCommitPanel';
 import { KindIcon } from './KindIcon';
 import { RefLink } from './RefLink';
@@ -40,7 +41,28 @@ export function GitChanges({
   run(label: string, op: () => Promise<unknown>, done?: string): Promise<void>;
   onCompare(file: string, itemId?: string): void;
 }) {
-  const groups = useMemo(() => groupChanges(files, changes), [files, changes]);
+  const allGroups = useMemo(() => groupChanges(files, changes), [files, changes]);
+  // the kinds that changed, as chips (any number on; none means all): "MCP server 3", "Dataset 1" …
+  const [kinds, setKinds] = useState<KindId[]>([]);
+  const counts = useMemo(() => {
+    const m = new Map<KindId, number>();
+    for (const c of changes) if (c.kindId) m.set(c.kindId, (m.get(c.kindId) ?? 0) + 1);
+    return [...m].sort((a, b) => KIND_INFO[a[0]].label.localeCompare(KIND_INFO[b[0]].label));
+  }, [changes]);
+  const active = useMemo(() => kinds.filter((k) => counts.some(([c]) => c === k)), [kinds, counts]);
+  const groups = useMemo(
+    () =>
+      active.length
+        ? allGroups
+            .map((g) => {
+              const items = g.items.filter((c) => c.kindId && active.includes(c.kindId));
+              // a file whose items are all shown keeps its one-row form
+              return { ...g, items, single: g.single && items.includes(g.single) ? g.single : undefined };
+            })
+            .filter((g) => g.items.length)
+        : allGroups,
+    [allGroups, active],
+  );
   // a changed file's menu (right-click or ⋯): open · show the line diff · stage · discard
   const [menu, setMenu] = useState<string>();
   const showDiff = (f: GitFile) => void call<string>('git.diff', { path: f.path, staged: f.staged }).then((text) => setDiff(diff?.path === f.path ? undefined : { path: f.path, text }), toastError);
@@ -99,6 +121,14 @@ export function GitChanges({
       >
         Changes {files.length ? <Badge>{files.length}</Badge> : null}
       </SectionTitle>
+      {counts.length > 1 && (
+        <FilterChips
+          label="Filter the changes by kind"
+          value={active}
+          onChange={setKinds}
+          options={counts.map(([k, n]) => ({ value: k, label: KIND_INFO[k].label, count: n, icon: <KindIcon kind={k} size={12} />, title: `Only ${KIND_INFO[k].plural.toLowerCase()}` }))}
+        />
+      )}
       {!files.length ? (
         <div className="text-sm text-muted py-3">Nothing changed since the last commit.</div>
       ) : (
@@ -109,8 +139,8 @@ export function GitChanges({
               {!g.single && g.items.length > 0 && (
                 <ul className="border-t border-line px-3 py-1.5 grid gap-0.5">
                   {g.items.map((c, i) => (
-                    <li key={i} className="flex items-center gap-2 text-xs" data-change-item={c.title}>
-                      <ItemName c={c} onCompare={onCompare} />
+                    <li key={i} className="flex items-center gap-2 text-xs" data-change-item={c.title} data-item-staged={c.staged ? '' : undefined}>
+                      <ItemName c={c} onCompare={onCompare} run={run} stageable={g.file.state !== 'conflicted'} />
                     </li>
                   ))}
                 </ul>
@@ -129,7 +159,7 @@ export function GitChanges({
 }
 
 /** One item: its change mark, kind icon and name (a link to open it), what changed, and Compare. */
-function ItemName({ c, onCompare }: { c: SemanticChange; onCompare(file: string, itemId?: string): void }) {
+function ItemName({ c, onCompare, run, stageable }: { c: SemanticChange; onCompare(file: string, itemId?: string): void; run?(label: string, op: () => Promise<unknown>, done?: string): Promise<void>; stageable?: boolean }) {
   return (
     <>
       <ChangeMark change={c.change} />
@@ -142,8 +172,25 @@ function ItemName({ c, onCompare }: { c: SemanticChange; onCompare(file: string,
         <span className="truncate">{c.title}</span>
       )}
       {c.details.length > 0 && <span className="text-muted truncate">{c.details.join(', ')}</span>}
+      {stageable && c.staged && <Badge tone="accent">staged</Badge>}
       {c.change !== 'conflicted' && (
         <span className="ml-auto shrink-0 flex items-center gap-2">
+          {stageable && c.ref && run && (
+            // just this item: the staged copy of its file gets this item's change and no other (release C: staging by index blob)
+            <LinkButton
+              icon={c.staged ? <Minus size={12} /> : <Plus size={12} />}
+              title={c.staged ? 'Take just this item out of the staged changes' : 'Stage just this item: the others in the file stay out of the commit'}
+              data-item-stage=""
+              onClick={() =>
+                void run('stage-item', async () => {
+                  const r = await call<{ message: string }>('git.itemStage', { ref: c.ref, unstage: !!c.staged });
+                  useApp.getState().toast(r.message, 'success');
+                })
+              }
+            >
+              {c.staged ? 'Unstage' : 'Stage'}
+            </LinkButton>
+          )}
           <LinkButton icon={<Columns2 size={12} />} title="Side by side: the last commit and now, part by part" onClick={() => onCompare(c.file, c.itemId)}>
             Compare
           </LinkButton>
@@ -205,14 +252,14 @@ function FileRow({
       <button className="font-mono text-[0.7rem] text-muted truncate max-w-[30%] text-left hover:underline" title={`${f.path}: show the line diff`} onClick={() => showDiff(f)}>
         {f.path}
       </button>
-      {f.staged && <Badge tone="accent">staged</Badge>}
+      {f.staged && <Badge tone="accent">{f.alsoUnstaged ? 'partly staged' : 'staged'}</Badge>}
       <span className="ml-auto flex gap-1 shrink-0">
         <Button
           size="sm"
           variant="ghost"
           icon={f.staged ? <Minus size={12} /> : <Plus size={12} />}
           onClick={toggle}
-          title={g.items.length > 1 ? `${f.staged ? 'Unstages' : 'Stages'} the whole file with all ${g.items.length} changed items in it` : undefined}
+          title={g.items.length > 1 ? `${f.staged ? 'Unstages' : 'Stages'} the whole file with all ${g.items.length} changed items in it (or stage one item below)` : undefined}
         >
           {f.staged ? 'Unstage' : 'Stage'}
         </Button>

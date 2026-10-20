@@ -1,0 +1,346 @@
+{
+  "clientName": "Thunder Client",
+  "collectionName": "Vet Clinic",
+  "collectionId": "c-clinic",
+  "dateExported": "2026-03-01T00:00:00.000Z",
+  "version": "1.2",
+  "folders": [
+    {
+      "_id": "f0",
+      "name": "Patients",
+      "containerId": "",
+      "created": "2026-01-01",
+      "sortNum": 10000
+    },
+    {
+      "_id": "f1",
+      "name": "Visits",
+      "containerId": "",
+      "created": "2026-01-01",
+      "sortNum": 20000
+    },
+    {
+      "_id": "f2",
+      "name": "Owners",
+      "containerId": "",
+      "created": "2026-01-01",
+      "sortNum": 30000
+    }
+  ],
+  "requests": [
+    {
+      "_id": "r1",
+      "colId": "c-clinic",
+      "containerId": "f0",
+      "name": "List patients",
+      "url": "{{baseUrl}}/patients",
+      "method": "GET",
+      "sortNum": 10000,
+      "headers": [],
+      "params": [
+        {
+          "name": "species",
+          "value": "dog",
+          "isPath": false
+        },
+        {
+          "name": "limit",
+          "value": "25",
+          "isPath": false
+        }
+      ],
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
+      "auth": {
+        "type": "basic",
+        "basic": {
+          "username": "{{user}}",
+          "password": "{{password}}"
+        }
+      },
+      "tests": [
+        {
+          "type": "res-code",
+          "custom": "",
+          "action": "equal",
+          "value": "200"
+        }
+      ]
+    },
+    {
+      "_id": "r2",
+      "colId": "c-clinic",
+      "containerId": "f0",
+      "name": "Create a patient",
+      "url": "{{baseUrl}}/patients",
+      "method": "POST",
+      "sortNum": 20000,
+      "headers": [],
+      "params": [],
+      "body": {
+        "type": "json",
+        "raw": "{\n  \"name\": \"Rex\",\n  \"species\": \"dog\",\n  \"born\": \"2021-03-04\",\n  \"owner\": \"o-7\"\n}",
+        "form": []
+      },
+      "auth": {
+        "type": "basic",
+        "basic": {
+          "username": "{{user}}",
+          "password": "{{password}}"
+        }
+      },
+      "tests": [
+        {
+          "type": "res-code",
+          "custom": "",
+          "action": "equal",
+          "value": "201"
+        }
+      ]
+    },
+    {
+      "_id": "r3",
+      "colId": "c-clinic",
+      "containerId": "f0",
+      "name": "Get a patient",
+      "url": "{{baseUrl}}/patients/:id",
+      "method": "GET",
+      "sortNum": 30000,
+      "headers": [],
+      "params": [
+        {
+          "name": "id",
+          "value": "p-1",
+          "isPath": true
+        }
+      ],
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
+      "auth": {
+        "type": "basic",
+        "basic": {
+          "username": "{{user}}",
+          "password": "{{password}}"
+        }
+      },
+      "tests": [
+        {
+          "type": "res-code",
+          "custom": "",
+          "action": "equal",
+          "value": "200"
+        }
+      ]
+    },
+    {
+      "_id": "r4",
+      "colId": "c-clinic",
+      "containerId": "f0",
+      "name": "Update a patient",
+      "url": "{{baseUrl}}/patients/:id",
+      "method": "PATCH",
+      "sortNum": 40000,
+      "headers": [],
+      "params": [
+        {
+          "name": "id",
+          "value": "p-1",
+          "isPath": true
+        }
+      ],
+      "body": {
+        "type": "json",
+        "raw": "{\n  \"weightKg\": 31.5\n}",
+        "form": []
+      },
+      "auth": {
+        "type": "basic",
+        "basic": {
+          "username": "{{user}}",
+          "password": "{{password}}"
+        }
+      },
+      "tests": []
+    },
+    {
+      "_id": "r5",
+      "colId": "c-clinic",
+      "containerId": "f0",
+      "name": "Upload a photo",
+      "url": "{{baseUrl}}/patients/:id/photo",
+      "method": "PUT",
+      "sortNum": 50000,
+      "headers": [],
+      "params": [
+        {
+          "name": "id",
+          "value": "p-1",
+          "isPath": true
+        }
+      ],
+      "body": {
+        "type": "formdata",
+        "raw": "",
+        "form": [
+          {
+            "name": "caption",
+            "value": "At the beach"
+          }
+        ],
+        "files": [
+          {
+            "name": "photo",
+            "value": "rex.png"
+          }
+        ]
+      },
+      "auth": {
+        "type": "basic",
+        "basic": {
+          "username": "{{user}}",
+          "password": "{{password}}"
+        }
+      },
+      "tests": []
+    },
+    {
+      "_id": "r6",
+      "colId": "c-clinic",
+      "containerId": "f1",
+      "name": "List visits",
+      "url": "{{baseUrl}}/visits",
+      "method": "GET",
+      "sortNum": 60000,
+      "headers": [],
+      "params": [
+        {
+          "name": "patient",
+          "value": "p-1",
+          "isPath": false
+        }
+      ],
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
+      "auth": {
+        "type": "basic",
+        "basic": {
+          "username": "{{user}}",
+          "password": "{{password}}"
+        }
+      },
+      "tests": []
+    },
+    {
+      "_id": "r7",
+      "colId": "c-clinic",
+      "containerId": "f1",
+      "name": "Book a visit",
+      "url": "{{baseUrl}}/visits",
+      "method": "POST",
+      "sortNum": 70000,
+      "headers": [],
+      "params": [],
+      "body": {
+        "type": "json",
+        "raw": "{\n  \"patient\": \"p-1\",\n  \"at\": \"2026-05-04T09:30:00Z\",\n  \"reason\": \"vaccination\"\n}",
+        "form": []
+      },
+      "auth": {
+        "type": "basic",
+        "basic": {
+          "username": "{{user}}",
+          "password": "{{password}}"
+        }
+      },
+      "tests": [
+        {
+          "type": "res-code",
+          "custom": "",
+          "action": "equal",
+          "value": "201"
+        }
+      ]
+    },
+    {
+      "_id": "r8",
+      "colId": "c-clinic",
+      "containerId": "f1",
+      "name": "Cancel a visit",
+      "url": "{{baseUrl}}/visits/v-3",
+      "method": "DELETE",
+      "sortNum": 80000,
+      "headers": [],
+      "params": [],
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
+      "auth": {
+        "type": "basic",
+        "basic": {
+          "username": "{{user}}",
+          "password": "{{password}}"
+        }
+      },
+      "tests": []
+    },
+    {
+      "_id": "r9",
+      "colId": "c-clinic",
+      "containerId": "f2",
+      "name": "List owners",
+      "url": "{{baseUrl}}/owners",
+      "method": "GET",
+      "sortNum": 90000,
+      "headers": [],
+      "params": [],
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
+      "auth": {
+        "type": "basic",
+        "basic": {
+          "username": "{{user}}",
+          "password": "{{password}}"
+        }
+      },
+      "tests": []
+    },
+    {
+      "_id": "r10",
+      "colId": "c-clinic",
+      "containerId": "f2",
+      "name": "Create an owner",
+      "url": "{{baseUrl}}/owners",
+      "method": "POST",
+      "sortNum": 100000,
+      "headers": [],
+      "params": [],
+      "body": {
+        "type": "json",
+        "raw": "{\n  \"name\": \"Ada\",\n  \"email\": \"ada@example.test\"\n}",
+        "form": []
+      },
+      "auth": {
+        "type": "basic",
+        "basic": {
+          "username": "{{user}}",
+          "password": "{{password}}"
+        }
+      },
+      "tests": []
+    }
+  ]
+}

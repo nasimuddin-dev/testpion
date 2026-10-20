@@ -1,5 +1,6 @@
 import type { AuthConfig, CheckConfig, Collection, CollectionFolder, CollectionNode, Environment, KeyValue, SavedGraphQLRequest, SavedHttpRequest } from '../model/types.js';
 import { tpToBruno } from '../scripts/bruno.js';
+import { safeFileName } from './export-common.js';
 
 /**
  * A collection as a Bruno collection folder (the way Bruno keeps collections in git): bruno.json,
@@ -34,7 +35,7 @@ export function collectionToBru(collection: Collection, environments: Environmen
   return files;
 }
 
-const fileName = (s: string) => s.replace(/[<>:"/\\|?*\x00-\x1f]/g, '-').replace(/\s+$/g, '').replace(/^\.+/, '') || 'request';
+const fileName = (s: string) => safeFileName(s);
 function unique(used: Set<string>, p: string): string {
   let out = p;
   for (let i = 2; used.has(out.toLowerCase()); i++) out = `${p} (${i})`;

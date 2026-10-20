@@ -1,0 +1,17 @@
+$kind: http-request
+name: Create patient
+method: POST
+url: "{{host}}/patients"
+order: 2000
+headers:
+  - key: Content-Type
+    value: application/json
+queryParams:
+  - key: dryRun
+    value: "true"
+    disabled: true
+body:
+  type: json
+  content: |
+    {"name": "Rex"}
+mystery: surprise

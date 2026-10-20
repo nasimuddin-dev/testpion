@@ -1,4 +1,4 @@
-import type { BodyConfig, CheckConfig, Collection, CollectionFolder, CollectionNode, Environment, EnvironmentVariable, HttpSettings, KeyValue } from '../model/types.js';
+import type { BodyConfig, CheckConfig, Collection, CollectionFolder, CollectionNode, Environment, EnvironmentVariable, HttpSettings, KeyValue, LibraryItem, SavedExample } from '../model/types.js';
 import { shortId, slugify } from '../util/ids.js';
 import { bruFilesToBrunoExport, looksLikeBru } from './bru.js';
 import { brunoAssertionScript } from '../scripts/bruno.js';
@@ -27,10 +27,44 @@ export function brunoAssertions(list: Any[] | undefined): CheckConfig[] | undefi
   return out.length ? out : undefined;
 }
 
-/** The first line of every imported Bruno script: it also loads the shim that runs Bruno's req / res / test (scripts/bruno.ts). */
-export const BRUNO_HEADER = "// Bruno script: bru.* became tp.*; req, res and test run as in Bruno";
+/** Bruno response examples (`example` blocks of a .bru file, `examples` of an export) as saved examples. */
+function brunoExamples(list: Any[] | undefined): SavedExample[] | undefined {
+  const out = (list ?? [])
+    .filter((e) => e?.response)
+    .map((e): SavedExample => {
+      const r = e.response;
+      const q = e.request;
+      const content = r.body?.content;
+      return {
+        id: shortId('ex-'),
+        name: String(e.name || `${r.status ?? 200}`),
+        status: Number(r.status) || 200,
+        ...(r.statusText ? { statusText: String(r.statusText) } : {}),
+        headers: (r.headers ?? []).filter((h: Any) => h?.name).map((h: Any) => ({ key: String(h.name), value: String(h.value ?? '') })),
+        body: typeof content === 'string' ? content : content === undefined ? '' : JSON.stringify(content),
+        ...(q?.url ? { request: { method: String(q.method ?? 'GET').toUpperCase(), url: String(q.url), headers: (q.headers ?? []).filter((h: Any) => h?.name).map((h: Any) => ({ key: String(h.name), value: String(h.value ?? '') })), ...(typeof q.body?.content === 'string' ? { body: q.body.content } : {}) } } : {}),
+      };
+    });
+  return out.length ? out : undefined;
+}
 
-/** A Bruno script, kept runnable: its `bru.*` calls are rewritten to `tp.*` afterwards (scripts/convert), req / res run through the shim. */
+/** A Bruno gRPC / WebSocket request as a library item (the imported collection's gRPC call / connection). */
+function realtimeItem(it: Any, folder: string | undefined): { kind: 'grpc' | 'websocket'; item: LibraryItem } {
+  const r = it.request ?? {};
+  const meta = (r.headers ?? []).filter((h: Any) => h?.name).map((h: Any) => ({ key: String(h.name), value: normalizeTemplate(h.value ?? ''), enabled: h.enabled !== false }));
+  if (it.type === 'grpc-request') {
+    const url = normalizeTemplate(String(r.url ?? ''));
+    const first = r.body?.grpc?.[0]?.content;
+    return { kind: 'grpc', item: { id: shortId('lib-'), name: String(it.name || 'gRPC call'), folder, data: { target: url.replace(/^grpcs?:\/\//, ''), method: String(r.method ?? '').replace(/^\//, ''), message: normalizeTemplate(typeof first === 'string' ? first : '{}'), metadata: meta, tls: /^grpcs:/i.test(url), protoFiles: [] } } };
+  }
+  const first = r.body?.ws?.[0]?.content;
+  return { kind: 'websocket', item: { id: shortId('lib-'), name: String(it.name || 'WebSocket'), folder, data: { url: normalizeTemplate(String(r.url ?? '')), mode: 'websocket', message: normalizeTemplate(typeof first === 'string' ? first : ''), headers: meta, protocols: '' } } };
+}
+
+/** The first line of every imported Bruno script: it also loads the shim that runs Bruno's req / res / test (scripts/bruno.ts). */
+export const BRUNO_HEADER = "// Bruno script: converted to tp.* (bru, req, res, test and expect; TODO(import) marks what has no equivalent)";
+
+/** A Bruno script: its `bru.*`, `req.*` and `res.*` are rewritten to `tp.*` afterwards (scripts/convert); the shim (scripts/bruno.ts) still runs what is left. */
 export function brunoScript(...parts: Array<string | undefined>): string | undefined {
   const s = parts.map((p) => String(p ?? '').trim()).filter(Boolean).join('\n\n');
   return s ? `${BRUNO_HEADER}\n${s}` : undefined;
@@ -120,14 +154,21 @@ export function parseBruno(text: string): ImportDocument {
   const d: Any = looksLikeBru(text) ? bruFilesToBrunoExport([{ path: 'request.bru', text }], 'Bruno import') : JSON.parse(text);
   const findings = new Findings();
   const doc = newDocument('bruno', text, { tool: 'Bruno', scriptTool: 'bruno' });
-  const convert = (items: Any[]): CollectionNode[] =>
+  const saved: { grpc: LibraryItem[]; websocket: LibraryItem[] } = { grpc: [], websocket: [] };
+  const convert = (items: Any[], path: string[] = []): CollectionNode[] =>
     [...(items ?? [])]
       .sort((a, b) => (a.seq ?? 0) - (b.seq ?? 0))
       .flatMap((it: Any): CollectionNode[] => {
-        if (it.type === 'folder') return [{ kind: 'folder', id: shortId('fld-'), name: it.name ?? 'Folder', items: convert(it.items), ...brunoRoot(it.root, it.name ?? 'Folder', findings) } as CollectionFolder];
+        if (it.type === 'folder') return [{ kind: 'folder', id: shortId('fld-'), name: it.name ?? 'Folder', items: convert(it.items, [...path, it.name ?? 'Folder']), ...brunoRoot(it.root, it.name ?? 'Folder', findings) } as CollectionFolder];
         const r = it.request ?? {};
         const url = normalizeTemplate(r.url);
         const name = it.name || url;
+        if (it.type === 'grpc-request' || it.type === 'ws-request') {
+          const r2 = realtimeItem(it, path.join(' / ') || undefined);
+          saved[r2.kind].push(r2.item);
+          if (r2.kind === 'grpc') findings.add({ code: 'NOT_IMPORTED', severity: 'changed', where: [name], message: `"${name}": the Bruno gRPC request came over as a gRPC call without its .proto file${r.protoPath ? ` (${r.protoPath})` : ''}: choose the proto file again` });
+          return [];
+        }
         if (it.type !== 'http-request' && it.type !== 'graphql-request') {
           findings.add({ code: 'NOT_IMPORTED', severity: 'not-imported', where: [name], message: `"${name}": a Bruno ${String(it.type ?? 'item').replace(/-request$/, '')} request is not imported yet` });
           return [];
@@ -137,7 +178,13 @@ export function parseBruno(text: string): ImportDocument {
         findings.notes(a.notes);
         headers.push(...a.headers);
         const auth = a.auth ?? { type: 'inherit' as const };
-        if (r.examples?.length || it.examples?.length) findings.add({ code: 'NOT_IMPORTED', severity: 'not-imported', where: [name], field: 'examples', message: `"${name}": ${(r.examples ?? it.examples).length} Bruno response example${(r.examples ?? it.examples).length > 1 ? 's were' : ' was'} not imported` });
+        const examples = it.type === 'http-request' ? brunoExamples(r.examples ?? it.examples) : undefined;
+        const exampleCount = (r.examples ?? it.examples ?? []).length;
+        if (it.type === 'http-request' && exampleCount > (examples?.length ?? 0)) {
+          const n = exampleCount - (examples?.length ?? 0);
+          findings.add({ code: 'NOT_IMPORTED', severity: 'not-imported', where: [name], field: 'examples', message: `"${name}": ${n} Bruno response example${n > 1 ? 's' : ''} had no response and ${n > 1 ? 'were' : 'was'} not imported` });
+        }
+        if (it.type === 'graphql-request' && (r.examples?.length || it.examples?.length)) findings.add({ code: 'NOT_IMPORTED', severity: 'not-imported', where: [name], field: 'examples', message: `"${name}": the response examples of a GraphQL request were not imported` });
         const settings = brunoSettings(r.settings ?? it.settings);
         if (it.type === 'graphql-request') {
           const gPre = brunoScript(brunoVars(r.vars).pre, r.script?.req);
@@ -194,6 +241,7 @@ export function parseBruno(text: string): ImportDocument {
             ...(pre ? { preRequestScript: pre } : {}),
             ...(post ? { testScript: post } : {}),
             ...(brunoAssertions(r.assertions) ? { assertions: brunoAssertions(r.assertions) } : {}),
+            ...(examples ? { examples } : {}),
           },
         ];
       });
@@ -219,6 +267,7 @@ export function parseBruno(text: string): ImportDocument {
     ...(root.description ? { description: root.description } : {}),
   });
   doc.collections.push(collection);
+  if (saved.grpc.length || saved.websocket.length) doc.savedItems = { ...(saved.grpc.length ? { grpc: saved.grpc } : {}), ...(saved.websocket.length ? { websocket: saved.websocket } : {}) };
   const secretValues = dotenvEnvironments(typeof d.dotenv === 'string' ? d.dotenv : undefined, processEnvNames(text), environments, findings);
   doc.environments = environments;
   if (secretValues) doc.secretValues = secretValues;

@@ -98,7 +98,11 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
       "Delete…",
     ],
   ],
-  "debugger-rules": [],
+  "debugger-rules": [
+    [
+      "Git",
+    ],
+  ],
   "doc": [
     [
       "Open",
@@ -471,6 +475,9 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
     [
       "Export…",
     ],
+    [
+      "Git",
+    ],
   ],
   "mcp-server": [
     [
@@ -570,6 +577,9 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
     [
       "Export…",
     ],
+    [
+      "Git",
+    ],
   ],
   "provider": [
     [
@@ -662,6 +672,9 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
   "script-package": [
     [
       "Export…",
+    ],
+    [
+      "Git",
     ],
     [
       "Rename",
@@ -939,6 +952,9 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
     ],
     [
       "Copy link",
+    ],
+    [
+      "Git",
     ],
   ],
   "ws-connection": [

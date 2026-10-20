@@ -1,0 +1,329 @@
+{
+  "clientName": "Thunder Client",
+  "collectionName": "Maps API",
+  "collectionId": "c-geo",
+  "dateExported": "2026-03-01T00:00:00.000Z",
+  "version": "1.2",
+  "folders": [
+    {
+      "_id": "f0",
+      "name": "Geocoding",
+      "containerId": "",
+      "created": "2026-01-01",
+      "sortNum": 10000
+    },
+    {
+      "_id": "f1",
+      "name": "Directions",
+      "containerId": "",
+      "created": "2026-01-01",
+      "sortNum": 20000
+    },
+    {
+      "_id": "f2",
+      "name": "Places",
+      "containerId": "",
+      "created": "2026-01-01",
+      "sortNum": 30000
+    }
+  ],
+  "requests": [
+    {
+      "_id": "r1",
+      "colId": "c-geo",
+      "containerId": "f0",
+      "name": "Geocode an address",
+      "url": "{{baseUrl}}/geocode/json",
+      "method": "GET",
+      "sortNum": 10000,
+      "headers": [],
+      "params": [
+        {
+          "name": "address",
+          "value": "1600 Amphitheatre Parkway, Mountain View, CA",
+          "isPath": false
+        }
+      ],
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
+      "auth": {
+        "type": "apikey",
+        "apikey": {
+          "key": "key",
+          "value": "{{mapsKey}}",
+          "addTo": "query"
+        }
+      },
+      "tests": [
+        {
+          "type": "res-code",
+          "custom": "",
+          "action": "equal",
+          "value": "200"
+        }
+      ]
+    },
+    {
+      "_id": "r2",
+      "colId": "c-geo",
+      "containerId": "f0",
+      "name": "Reverse geocode",
+      "url": "{{baseUrl}}/geocode/json",
+      "method": "GET",
+      "sortNum": 20000,
+      "headers": [],
+      "params": [
+        {
+          "name": "latlng",
+          "value": "40.714224,-73.961452",
+          "isPath": false
+        }
+      ],
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
+      "auth": {
+        "type": "apikey",
+        "apikey": {
+          "key": "key",
+          "value": "{{mapsKey}}",
+          "addTo": "query"
+        }
+      },
+      "tests": []
+    },
+    {
+      "_id": "r3",
+      "colId": "c-geo",
+      "containerId": "f0",
+      "name": "Geocode by place id",
+      "url": "{{baseUrl}}/geocode/json",
+      "method": "GET",
+      "sortNum": 30000,
+      "headers": [],
+      "params": [
+        {
+          "name": "place_id",
+          "value": "ChIJd8BlQ2BZwokRAFUEcm_qrcA",
+          "isPath": false
+        }
+      ],
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
+      "auth": {
+        "type": "apikey",
+        "apikey": {
+          "key": "key",
+          "value": "{{mapsKey}}",
+          "addTo": "query"
+        }
+      },
+      "tests": []
+    },
+    {
+      "_id": "r4",
+      "colId": "c-geo",
+      "containerId": "f1",
+      "name": "Driving directions",
+      "url": "{{baseUrl}}/directions/json",
+      "method": "GET",
+      "sortNum": 40000,
+      "headers": [],
+      "params": [
+        {
+          "name": "origin",
+          "value": "Toronto",
+          "isPath": false
+        },
+        {
+          "name": "destination",
+          "value": "Montreal",
+          "isPath": false
+        },
+        {
+          "name": "mode",
+          "value": "driving",
+          "isPath": false
+        }
+      ],
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
+      "auth": {
+        "type": "apikey",
+        "apikey": {
+          "key": "key",
+          "value": "{{mapsKey}}",
+          "addTo": "query"
+        }
+      },
+      "tests": [
+        {
+          "type": "res-code",
+          "custom": "",
+          "action": "equal",
+          "value": "200"
+        }
+      ]
+    },
+    {
+      "_id": "r5",
+      "colId": "c-geo",
+      "containerId": "f1",
+      "name": "Transit directions",
+      "url": "{{baseUrl}}/directions/json",
+      "method": "GET",
+      "sortNum": 50000,
+      "headers": [],
+      "params": [
+        {
+          "name": "origin",
+          "value": "Boston",
+          "isPath": false
+        },
+        {
+          "name": "destination",
+          "value": "Concord",
+          "isPath": false
+        },
+        {
+          "name": "mode",
+          "value": "transit",
+          "isPath": false
+        }
+      ],
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
+      "auth": {
+        "type": "apikey",
+        "apikey": {
+          "key": "key",
+          "value": "{{mapsKey}}",
+          "addTo": "query"
+        }
+      },
+      "tests": []
+    },
+    {
+      "_id": "r6",
+      "colId": "c-geo",
+      "containerId": "f2",
+      "name": "Find place",
+      "url": "{{baseUrl}}/place/findplacefromtext/json",
+      "method": "GET",
+      "sortNum": 60000,
+      "headers": [],
+      "params": [
+        {
+          "name": "input",
+          "value": "Museum of Contemporary Art Australia",
+          "isPath": false
+        },
+        {
+          "name": "inputtype",
+          "value": "textquery",
+          "isPath": false
+        }
+      ],
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
+      "auth": {
+        "type": "apikey",
+        "apikey": {
+          "key": "key",
+          "value": "{{mapsKey}}",
+          "addTo": "query"
+        }
+      },
+      "tests": []
+    },
+    {
+      "_id": "r7",
+      "colId": "c-geo",
+      "containerId": "f2",
+      "name": "Place details",
+      "url": "{{baseUrl}}/place/details/json",
+      "method": "GET",
+      "sortNum": 70000,
+      "headers": [],
+      "params": [
+        {
+          "name": "place_id",
+          "value": "ChIJN1t_tDeuEmsRUsoyG83frY4",
+          "isPath": false
+        }
+      ],
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
+      "auth": {
+        "type": "apikey",
+        "apikey": {
+          "key": "key",
+          "value": "{{mapsKey}}",
+          "addTo": "query"
+        }
+      },
+      "tests": []
+    },
+    {
+      "_id": "r8",
+      "colId": "c-geo",
+      "containerId": "f2",
+      "name": "Nearby search",
+      "url": "{{baseUrl}}/place/nearbysearch/json",
+      "method": "GET",
+      "sortNum": 80000,
+      "headers": [],
+      "params": [
+        {
+          "name": "location",
+          "value": "-33.8670522,151.1957362",
+          "isPath": false
+        },
+        {
+          "name": "radius",
+          "value": "1500",
+          "isPath": false
+        },
+        {
+          "name": "type",
+          "value": "restaurant",
+          "isPath": false
+        }
+      ],
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
+      "auth": {
+        "type": "apikey",
+        "apikey": {
+          "key": "key",
+          "value": "{{mapsKey}}",
+          "addTo": "query"
+        }
+      },
+      "tests": []
+    }
+  ]
+}

@@ -1,5 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, protocol, safeStorage, screen, shell, nativeTheme } from 'electron';
-import { existsSync } from 'node:fs';
+import { existsSync, writeSync } from 'node:fs';
 import { join } from 'node:path';
 import * as nodeModule from 'node:module';
 import { createRequire } from 'node:module';
@@ -7,7 +7,7 @@ import { Backend } from '../backend/backend.js';
 import { openLinksIn, queueOpenLink } from '../backend/open-links.js';
 import { canInstallInPlace, createUpdater } from './updater.js';
 import { installAppMenu, installTextContextMenu } from './app-menu.js';
-import { defaultAppDir, normalizeError, runMergeDriver } from '@testpion/core';
+import { defaultAppDir, normalizeError, runMergeDriver, textconvFile } from '@testpion/core';
 import { parseMcpMode, runMcpMode } from './mcp-mode.js';
 import { ptyHost } from './pty-host.js';
 
@@ -35,9 +35,32 @@ if (mergeAt >= 0) {
   app.exit(code);
 }
 
+// `TestPion --textconv <file>`: git's readable-diff driver (diff.testpion.textconv, set up by Fix git setup) prints a collection,
+// environment, library, MCP servers or providers file item by item; no window
+const textconvAt = process.argv.indexOf('--textconv');
+if (textconvAt >= 0) {
+  let code = 2;
+  try {
+    // written synchronously: the process ends right below, and git reads until then
+    const bytes = Buffer.from(textconvFile(process.argv[textconvAt + 1]!), 'utf8');
+    for (let at = 0; at < bytes.length; ) {
+      try {
+        at += writeSync(1, bytes, at);
+      } catch (e) {
+        if ((e as NodeJS.ErrnoException).code !== 'EAGAIN') throw e; // a full pipe: git has not read yet
+      }
+    }
+    code = 0;
+  } catch (e) {
+    process.stderr.write(`TestPion diff driver: ${String(e)}
+`);
+  }
+  app.exit(code);
+}
+
 // `TestPion --cli …`: the testpion command line, no window (the Terminal panel's `testpion` command runs this; see
 // backend/terminal.ts). The CLI is a bundle of its own (dist-electron/cli.cjs), loaded only in this mode.
-const cliAt = mergeAt < 0 ? process.argv.indexOf('--cli') : -1;
+const cliAt = mergeAt < 0 && textconvAt < 0 ? process.argv.indexOf('--cli') : -1;
 if (cliAt >= 0) {
   app.dock?.hide();
   // exit once what was written reached the terminal

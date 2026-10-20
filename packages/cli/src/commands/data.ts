@@ -1,9 +1,10 @@
 /** Moving data in and out: import, export, docs, script conversion, response history and environments. */
 import { exportTextFormat } from './export-formats.js';
+import { exportMoreFormat, MORE_EXPORT_FORMATS } from './export-more.js';
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { Command, Option } from 'commander';
-import { WorkspaceManager, formatDuration, importRequestSnippet, ciConfig, ciTargetOfRun, finishedRun, compareEnvironments, environmentMatrix, compareRequestAcrossEnvironments, collectionRequests, type CiProvider, convertCollectionScripts, isRequestSnippet, Redactor, collectionMarkdown, collectionHtml, exportPostmanCollection, exportPostmanEnvironment, fetchImportText, readBrunoFolder, collectionToBru, type Environment, bundleWsdl, isWsdl, importIntoWorkspace, diffOpenApi, lintOpenApi, OPENAPI_LINT_RULES, type OpenApiLintSeverity, type OpenApiLintResult, workspaceApiCoverage, apiCoverageMarkdown, securityLint, collectionSecurityFindings, type SecurityFinding, listSpecs, unusedVariables, definedVariableNames, findEnvironment, setEnvironmentVariables, addVariablesToEnvironments, unsetEnvironmentVariables, variableFlow, collectionToOpenApiText, variableUsages, renameVariable, collectionSavedItems, listWorkspaceDatasets, appendDatasetRow, readWorkspaceDataset, workspaceReportHtml, collectionVariableFlow, loadHistory, workspaceStorage, deleteRunsBefore, listCertificates, workspaceAttention, decodeJwt, describeExpiry, recordCertificate, checkCertificate, detectFormat, resolveArazzoSources, keepPmApplies } from '@testpion/core';
+import { requireScriptTool, convertScriptText, convertCollectionScriptsFrom, WorkspaceManager, formatDuration, importRequestSnippet, ciConfig, ciTargetOfRun, finishedRun, compareEnvironments, environmentMatrix, compareRequestAcrossEnvironments, collectionRequests, type CiProvider, convertCollectionScripts, isRequestSnippet, Redactor, collectionMarkdown, collectionHtml, exportPostmanCollection, exportPostmanEnvironment, fetchImportText, readBrunoFolder, collectionToBru, type Environment, bundleWsdl, isWsdl, importIntoWorkspace, diffOpenApi, lintOpenApi, OPENAPI_LINT_RULES, type OpenApiLintSeverity, type OpenApiLintResult, workspaceApiCoverage, apiCoverageMarkdown, securityLint, collectionSecurityFindings, type SecurityFinding, listSpecs, unusedVariables, definedVariableNames, findEnvironment, setEnvironmentVariables, addVariablesToEnvironments, unsetEnvironmentVariables, variableFlow, collectionToOpenApiText, variableUsages, renameVariable, collectionSavedItems, listWorkspaceDatasets, appendDatasetRow, readWorkspaceDataset, workspaceReportHtml, collectionVariableFlow, loadHistory, workspaceStorage, deleteRunsBefore, listCertificates, workspaceAttention, decodeJwt, describeExpiry, recordCertificate, checkCertificate, detectFormat, resolveArazzoSources, keepPmApplies } from '@testpion/core';
 import { EXIT, green, red, yellow, dim, bold, CliError, printJson, findWorkspaceUp, withWorkspace, warnProblems, cliSecrets, cliContext, requireCollection, requireEnvironment, loadCollectionRef, readDefinition } from '../shared.js';
 import { requireInteractive } from '../contract.js';
 import { runBundleExport, wantsBundleExport } from './bundle.js';
@@ -532,10 +533,10 @@ export function registerDataCommands(program: Command): void {
     });
   program
     .command('export')
-    .description('export a collection as a Postman v2.1 collection (default), TestPion JSON, an OpenAPI 3.1 document (--format openapi), a Bruno collection folder (--format bruno --out <folder>) an .http file (--format http) or its connections as AsyncAPI 3.0 (--format asyncapi)\n<collection> is a collection name or id in the workspace, or a collection file to convert\nA TestPion bundle (.testpion.zip / .testpion.json) holds any items: kind:id items (collection:<id> spec:specs/<path> dataset:<name> mcp-server:<id> ...), --section <kind>, or --all; --uses adds what they use (a collection: its environments, API definitions, datasets, MCP servers, mocks, protos, tests, flows). Secret values are never in it.')
+    .description('export a collection as a Postman v2.1 collection (default), TestPion JSON, an OpenAPI 3.1 document (--format openapi), a Bruno collection folder (--format bruno --out <folder>) or as OpenCollection YAML (--format opencollection --out <folder>, or --format opencollection-file), an Insomnia file (--format insomnia: v5 YAML, insomnia-v4: JSON), an .http file (--format http) or its connections as AsyncAPI 3.0 (--format asyncapi). What the target format cannot hold is listed on stderr (not exported: …)\n<collection> is a collection name or id in the workspace, or a collection file to convert\nA TestPion bundle (.testpion.zip / .testpion.json) holds any items: kind:id items (collection:<id> spec:specs/<path> dataset:<name> mcp-server:<id> ...), --section <kind>, or --all; --uses adds what they use (a collection: its environments, API definitions, datasets, MCP servers, mocks, protos, tests, flows). Secret values are never in it.')
     .argument('[refs...]', 'collection name or id, a file, or an http(s) link; for a bundle: the items as kind:id')
     .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
-    .addOption(new Option('-f, --format <format>', 'output format').choices(['postman', 'testpion', 'openapi', 'bruno', 'http', 'asyncapi', 'bundle']).default('postman'))
+    .addOption(new Option('-f, --format <format>', 'output format').choices(['postman', 'testpion', 'openapi', 'bruno', 'http', 'asyncapi', 'bundle', ...MORE_EXPORT_FORMATS]).default('postman'))
     .option('--json', 'with --format openapi: JSON instead of YAML')
     .option('-o, --out <file>', 'write to this file instead of stdout (a bundle: <title>.testpion.zip in the current folder; .zip or .json picks the form)')
     .option('--section <kind>', 'a bundle of every item of one kind (collection, environment, spec, dataset, test, mcp-server, mcp-mock, proto, script-package, prompt, load-test, evaluation, monitor, grpc-call, ws-connection, provider)')
@@ -544,7 +545,7 @@ export function registerDataCommands(program: Command): void {
     .option('--datasets <mode>', 'a bundle: embed, reference or auto (embed up to 10 MB, bigger by reference; default)')
     .option('--providers', 'a bundle: include AI providers in a whole-workspace or section export')
     .option('--title <text>', 'a bundle: its title')
-    .action(async (refs: string[], o: { workspace?: string; format: 'postman' | 'testpion' | 'openapi' | 'bruno' | 'http' | 'asyncapi' | 'bundle'; json?: boolean; out?: string; section?: string; all?: boolean; uses?: boolean; datasets?: 'auto' | 'embed' | 'reference'; providers?: boolean; title?: string }) => {
+    .action(async (refs: string[], o: { workspace?: string; format: 'postman' | 'testpion' | 'openapi' | 'bruno' | 'http' | 'asyncapi' | 'bundle' | (typeof MORE_EXPORT_FORMATS)[number]; json?: boolean; out?: string; section?: string; all?: boolean; uses?: boolean; datasets?: 'auto' | 'embed' | 'reference'; providers?: boolean; title?: string }) => {
       if (wantsBundleExport(refs, o)) return runBundleExport(refs, o);
       if (refs.length !== 1) throw new CliError('Give one collection (name, id, file or link) to export in this format; several items go in a bundle (kind:id items, --format bundle)', EXIT.CONFIG_ERROR);
       const ref = refs[0]!;
@@ -565,6 +566,7 @@ export function registerDataCommands(program: Command): void {
         return;
       }
       if (await exportTextFormat(o.format, c, o)) return;
+      if (await exportMoreFormat(o.format, c, o)) return;
       if (o.format === 'openapi') {
         const text = collectionToOpenApiText(c, { format: o.json ? 'json' : 'yaml' });
         if (o.out) {
@@ -627,14 +629,51 @@ export function registerDataCommands(program: Command): void {
     .command('scripts')
     .description('script tools')
     .command('convert')
-    .description("rewrite collection scripts between Postman's pm.* and TestPion's tp.* (both always work)")
-    .requiredOption('-w, --workspace <nameOrPath>')
-    .requiredOption('--to <tp|pm>', 'the name to use')
+    .description("rewrite scripts between Postman's pm.* and TestPion's tp.* (both always work), or from another tool's script API (--from bruno | insomnia | thunder | hoppscotch | postman) to tp.*: the scripts of a collection, or a file (--file)")
+    .option('-w, --workspace <nameOrPath>', 'the workspace (not needed with --file)')
+    .option('--to <tp|pm>', 'the name to use', 'tp')
+    .option('--from <api>', 'convert from this tool\'s script API: postman, insomnia, bruno, thunder or hoppscotch')
+    .option('--file <path>', 'convert this script file (- reads stdin) and print the result')
+    .option('--lift-tests', 'with --from and a collection: turn simple tests into assertions')
     .option('--collection <nameOrId>', 'only this collection (default: all)')
     .option('--dry-run', 'only report what would change')
+    .option('--report <file>', 'write the findings (calls with no equivalent, scripts that do not parse) as JSON')
     .option('--json', 'print the result as JSON')
     .action((o) => {
       if (o.to !== 'tp' && o.to !== 'pm') throw new CliError('--to must be tp or pm', EXIT.CONFIG_ERROR);
+      // another tool's script API → tp.*
+      if (o.from || o.file) {
+        const tool = requireScriptTool(o.from ?? 'postman');
+        if (o.to !== 'tp') throw new CliError('--from converts to tp.*: leave --to out', EXIT.CONFIG_ERROR);
+        if (o.file) {
+          const code = o.file === '-' ? readFileSync(0, 'utf8') : readFileSync(resolve(o.file), 'utf8');
+          const r = convertScriptText(code, tool);
+          if (o.report) writeFileSync(resolve(o.report), JSON.stringify({ status: r.status, changes: r.changes, findings: r.findings }, null, 2) + '\n');
+          if (o.json) printJson({ from: tool, status: r.status, changes: r.changes, code: r.code, findings: r.findings, reason: r.reason });
+          else {
+            process.stdout.write(r.code.endsWith('\n') ? r.code : r.code + '\n');
+            for (const f of r.findings) console.error(yellow(`line ${f.line}: ${f.message}`));
+          }
+          return;
+        }
+        if (!o.workspace) throw new CliError('Give the workspace (-w) for a collection, or a script file (--file)', EXIT.CONFIG_ERROR);
+        return withWorkspace(o.workspace, (store) => {
+          const cols = o.collection ? [requireCollection(store, String(o.collection), { loadable: true })] : store.listCollections().filter((c) => !c.problem);
+          const results = cols.map((c) => {
+            const r = convertCollectionScriptsFrom(c, tool, { liftTests: !!o.liftTests });
+            if (!o.dryRun && (r.converted || r.lifted)) store.saveCollection(r.collection);
+            return { collection: c.name, converted: r.converted, lifted: r.lifted, kept: r.kept, findings: r.findings.filter((f) => f.severity !== 'info') };
+          });
+          if (o.report) writeFileSync(resolve(o.report), JSON.stringify(results, null, 2) + '\n');
+          if (o.json) printJson({ from: tool, dryRun: !!o.dryRun, results });
+          else
+            for (const r of results) {
+              console.log(`${r.converted || r.lifted ? green(`${o.dryRun ? 'Would convert' : 'Converted'} ${r.converted} script(s)${r.lifted ? ` and lift ${r.lifted} test(s)` : ''}`) : dim('No change')} in "${r.collection}"${r.kept.length ? yellow(` (${r.kept.length} kept: ${r.kept.map((s) => s.where).join(', ')})`) : ''}`);
+              for (const f of r.findings.slice(0, 10)) console.log(yellow(`  ${f.where.join(' / ')}: ${f.message}`));
+            }
+        });
+      }
+      if (!o.workspace) throw new CliError('Give the workspace with -w', EXIT.CONFIG_ERROR);
       return withWorkspace(o.workspace, (store) => {
         const cols = o.collection ? [requireCollection(store, String(o.collection), { loadable: true })] : store.listCollections().filter((c) => !c.problem);
         const results = cols.map((c) => {

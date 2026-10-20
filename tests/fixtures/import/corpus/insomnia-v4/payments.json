@@ -1,0 +1,270 @@
+{
+  "_type": "export",
+  "__export_format": 4,
+  "__export_source": "insomnia.desktop.app:v10",
+  "resources": [
+    {
+      "_id": "wrk_payments",
+      "_type": "workspace",
+      "name": "Payments API",
+      "parentId": null
+    },
+    {
+      "_id": "fld_payments_0",
+      "_type": "request_group",
+      "parentId": "wrk_payments",
+      "name": "Customers",
+      "metaSortKey": 0,
+      "authentication": {
+        "type": "bearer",
+        "token": "{{secretKey}}"
+      }
+    },
+    {
+      "_id": "req_payments_0_0",
+      "_type": "request",
+      "parentId": "fld_payments_0",
+      "metaSortKey": 0,
+      "name": "Create a customer",
+      "url": "{{ _.baseUrl }}/customers",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/x-www-form-urlencoded",
+        "params": [
+          {
+            "name": "email",
+            "value": "jenny@example.test"
+          },
+          {
+            "name": "name",
+            "value": "Jenny Rosen"
+          }
+        ]
+      },
+      "headers": [],
+      "afterResponseScript": "insomnia.test(\"Status code is 200\", () => {\n  insomnia.expect(insomnia.response.code).to.eql(200);\n});"
+    },
+    {
+      "_id": "req_payments_0_1",
+      "_type": "request",
+      "parentId": "fld_payments_0",
+      "metaSortKey": 1,
+      "name": "Retrieve a customer",
+      "url": "{{ _.baseUrl }}/customers/cus_123",
+      "method": "GET",
+      "headers": [],
+      "afterResponseScript": "insomnia.test(\"Status code is 200\", () => {\n  insomnia.expect(insomnia.response.code).to.eql(200);\n});"
+    },
+    {
+      "_id": "req_payments_0_2",
+      "_type": "request",
+      "parentId": "fld_payments_0",
+      "metaSortKey": 2,
+      "name": "Update a customer",
+      "url": "{{ _.baseUrl }}/customers/cus_123",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/x-www-form-urlencoded",
+        "params": [
+          {
+            "name": "description",
+            "value": "VIP"
+          }
+        ]
+      },
+      "headers": []
+    },
+    {
+      "_id": "req_payments_0_3",
+      "_type": "request",
+      "parentId": "fld_payments_0",
+      "metaSortKey": 3,
+      "name": "Delete a customer",
+      "url": "{{ _.baseUrl }}/customers/cus_123",
+      "method": "DELETE",
+      "headers": []
+    },
+    {
+      "_id": "req_payments_0_4",
+      "_type": "request",
+      "parentId": "fld_payments_0",
+      "metaSortKey": 4,
+      "name": "List all customers",
+      "url": "{{ _.baseUrl }}/customers",
+      "method": "GET",
+      "parameters": [
+        {
+          "name": "limit",
+          "value": "10"
+        },
+        {
+          "name": "starting_after",
+          "value": "cus_100"
+        }
+      ],
+      "headers": [],
+      "afterResponseScript": "insomnia.test(\"Status code is 200\", () => {\n  insomnia.expect(insomnia.response.code).to.eql(200);\n});"
+    },
+    {
+      "_id": "fld_payments_1",
+      "_type": "request_group",
+      "parentId": "wrk_payments",
+      "name": "Charges",
+      "metaSortKey": 1
+    },
+    {
+      "_id": "req_payments_1_0",
+      "_type": "request",
+      "parentId": "fld_payments_1",
+      "metaSortKey": 0,
+      "name": "Create a charge",
+      "url": "{{ _.baseUrl }}/charges",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/x-www-form-urlencoded",
+        "params": [
+          {
+            "name": "amount",
+            "value": "2000"
+          },
+          {
+            "name": "currency",
+            "value": "usd"
+          },
+          {
+            "name": "source",
+            "value": "tok_visa"
+          }
+        ]
+      },
+      "headers": [
+        {
+          "name": "Idempotency-Key",
+          "value": "{{$guid}}"
+        }
+      ],
+      "afterResponseScript": "insomnia.test(\"Status code is 200\", () => {\n  insomnia.expect(insomnia.response.code).to.eql(200);\n});"
+    },
+    {
+      "_id": "req_payments_1_1",
+      "_type": "request",
+      "parentId": "fld_payments_1",
+      "metaSortKey": 1,
+      "name": "Retrieve a charge",
+      "url": "{{ _.baseUrl }}/charges/ch_123",
+      "method": "GET",
+      "headers": []
+    },
+    {
+      "_id": "req_payments_1_2",
+      "_type": "request",
+      "parentId": "fld_payments_1",
+      "metaSortKey": 2,
+      "name": "Capture a charge",
+      "url": "{{ _.baseUrl }}/charges/ch_123/capture",
+      "method": "POST",
+      "headers": []
+    },
+    {
+      "_id": "req_payments_1_3",
+      "_type": "request",
+      "parentId": "fld_payments_1",
+      "metaSortKey": 3,
+      "name": "List all charges",
+      "url": "{{ _.baseUrl }}/charges",
+      "method": "GET",
+      "parameters": [
+        {
+          "name": "customer",
+          "value": "cus_123"
+        }
+      ],
+      "headers": []
+    },
+    {
+      "_id": "fld_payments_2",
+      "_type": "request_group",
+      "parentId": "wrk_payments",
+      "name": "Refunds",
+      "metaSortKey": 2
+    },
+    {
+      "_id": "req_payments_2_0",
+      "_type": "request",
+      "parentId": "fld_payments_2",
+      "metaSortKey": 0,
+      "name": "Create a refund",
+      "url": "{{ _.baseUrl }}/refunds",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/x-www-form-urlencoded",
+        "params": [
+          {
+            "name": "charge",
+            "value": "ch_123"
+          },
+          {
+            "name": "amount",
+            "value": "500"
+          }
+        ]
+      },
+      "headers": []
+    },
+    {
+      "_id": "req_payments_2_1",
+      "_type": "request",
+      "parentId": "fld_payments_2",
+      "metaSortKey": 1,
+      "name": "Retrieve a refund",
+      "url": "{{ _.baseUrl }}/refunds/re_123",
+      "method": "GET",
+      "headers": []
+    },
+    {
+      "_id": "req_payments_2_2",
+      "_type": "request",
+      "parentId": "fld_payments_2",
+      "metaSortKey": 2,
+      "name": "List all refunds",
+      "url": "{{ _.baseUrl }}/refunds",
+      "method": "GET",
+      "parameters": [
+        {
+          "name": "charge",
+          "value": "ch_123"
+        }
+      ],
+      "headers": []
+    },
+    {
+      "_id": "env_payments",
+      "_type": "environment",
+      "parentId": "wrk_payments",
+      "name": "Base Environment",
+      "data": {
+        "baseUrl": "https://api.payments.example.test/v1"
+      }
+    },
+    {
+      "_id": "env_payments_test",
+      "_type": "environment",
+      "parentId": "env_payments",
+      "name": "test",
+      "data": {
+        "baseUrl": "https://api.payments.example.test/v1",
+        "secretKey": "sk_test_0000"
+      }
+    },
+    {
+      "_id": "env_payments_live",
+      "_type": "environment",
+      "parentId": "env_payments",
+      "name": "live",
+      "data": {
+        "baseUrl": "https://api.payments.example.test/v1",
+        "secretKey": ""
+      }
+    }
+  ]
+}

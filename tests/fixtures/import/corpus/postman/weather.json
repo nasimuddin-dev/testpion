@@ -1,0 +1,224 @@
+{
+  "info": {
+    "_postman_id": "pm-weather",
+    "name": "Weather API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "apikey",
+    "apikey": [
+      {
+        "key": "key",
+        "value": "appid"
+      },
+      {
+        "key": "value",
+        "value": "{{appid}}"
+      },
+      {
+        "key": "in",
+        "value": "query"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "Current",
+      "item": [
+        {
+          "name": "Current weather by city",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/weather?q=London,uk&units=metric",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "weather"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "London,uk"
+                },
+                {
+                  "key": "units",
+                  "value": "metric"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Current weather by coordinates",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/weather?lat=51.5&lon=-0.12",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "weather"
+              ],
+              "query": [
+                {
+                  "key": "lat",
+                  "value": "51.5"
+                },
+                {
+                  "key": "lon",
+                  "value": "-0.12"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Current weather by zip",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/weather?zip=94040,us",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "weather"
+              ],
+              "query": [
+                {
+                  "key": "zip",
+                  "value": "94040,us"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Forecast",
+      "item": [
+        {
+          "name": "5 day forecast",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/forecast?q=Paris&cnt=40",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "forecast"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "Paris"
+                },
+                {
+                  "key": "cnt",
+                  "value": "40"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Air pollution",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/air_pollution?lat=50&lon=50",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "air_pollution"
+              ],
+              "query": [
+                {
+                  "key": "lat",
+                  "value": "50"
+                },
+                {
+                  "key": "lon",
+                  "value": "50"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Weather alerts",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/onecall?lat=33.44&lon=-94.04&exclude=minutely,hourly",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "onecall"
+              ],
+              "query": [
+                {
+                  "key": "lat",
+                  "value": "33.44"
+                },
+                {
+                  "key": "lon",
+                  "value": "-94.04"
+                },
+                {
+                  "key": "exclude",
+                  "value": "minutely,hourly"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://api.weather.example.test/data/2.5"
+    }
+  ]
+}

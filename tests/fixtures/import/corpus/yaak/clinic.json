@@ -1,0 +1,324 @@
+{
+  "yaakVersion": "2025.2.0",
+  "yaakSchema": 3,
+  "resources": {
+    "workspaces": [
+      {
+        "model": "workspace",
+        "id": "wk_clinic",
+        "name": "Vet Clinic"
+      }
+    ],
+    "environments": [
+      {
+        "model": "environment",
+        "id": "ev_clinic_base",
+        "workspaceId": "wk_clinic",
+        "name": "Global",
+        "base": true,
+        "variables": [
+          {
+            "enabled": true,
+            "name": "baseUrl",
+            "value": "https://clinic.example.test/api"
+          }
+        ]
+      },
+      {
+        "model": "environment",
+        "id": "ev_clinic_local",
+        "workspaceId": "wk_clinic",
+        "name": "local",
+        "variables": [
+          {
+            "enabled": true,
+            "name": "baseUrl",
+            "value": "http://localhost:4010/api"
+          },
+          {
+            "enabled": true,
+            "name": "user",
+            "value": "vet"
+          },
+          {
+            "enabled": true,
+            "name": "password",
+            "value": "secret"
+          }
+        ]
+      },
+      {
+        "model": "environment",
+        "id": "ev_clinic_staging",
+        "workspaceId": "wk_clinic",
+        "name": "staging",
+        "variables": [
+          {
+            "enabled": true,
+            "name": "baseUrl",
+            "value": "https://staging.clinic.example.test/api"
+          },
+          {
+            "enabled": true,
+            "name": "user",
+            "value": "vet"
+          },
+          {
+            "enabled": true,
+            "name": "password",
+            "value": ""
+          }
+        ]
+      }
+    ],
+    "folders": [
+      {
+        "model": "folder",
+        "id": "fl_clinic_0",
+        "workspaceId": "wk_clinic",
+        "folderId": null,
+        "name": "Patients",
+        "sortPriority": 1,
+        "authenticationType": "basic",
+        "authentication": {
+          "username": "{{user}}",
+          "password": "{{password}}"
+        }
+      },
+      {
+        "model": "folder",
+        "id": "fl_clinic_1",
+        "workspaceId": "wk_clinic",
+        "folderId": null,
+        "name": "Visits",
+        "sortPriority": 2
+      },
+      {
+        "model": "folder",
+        "id": "fl_clinic_2",
+        "workspaceId": "wk_clinic",
+        "folderId": null,
+        "name": "Owners",
+        "sortPriority": 3
+      }
+    ],
+    "httpRequests": [
+      {
+        "model": "http_request",
+        "id": "rq_clinic_1",
+        "workspaceId": "wk_clinic",
+        "folderId": "fl_clinic_0",
+        "name": "List patients",
+        "method": "GET",
+        "url": "${[ baseUrl ]}/patients",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": "species",
+            "value": "dog"
+          },
+          {
+            "enabled": true,
+            "name": "limit",
+            "value": "25"
+          }
+        ],
+        "headers": [],
+        "bodyType": null,
+        "body": {},
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 1
+      },
+      {
+        "model": "http_request",
+        "id": "rq_clinic_2",
+        "workspaceId": "wk_clinic",
+        "folderId": "fl_clinic_0",
+        "name": "Create a patient",
+        "method": "POST",
+        "url": "${[ baseUrl ]}/patients",
+        "urlParameters": [],
+        "headers": [],
+        "bodyType": "application/json",
+        "body": {
+          "text": "{\n  \"name\": \"Rex\",\n  \"species\": \"dog\",\n  \"born\": \"2021-03-04\",\n  \"owner\": \"o-7\"\n}"
+        },
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 2
+      },
+      {
+        "model": "http_request",
+        "id": "rq_clinic_3",
+        "workspaceId": "wk_clinic",
+        "folderId": "fl_clinic_0",
+        "name": "Get a patient",
+        "method": "GET",
+        "url": "${[ baseUrl ]}/patients/:id",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": ":id",
+            "value": "p-1"
+          }
+        ],
+        "headers": [],
+        "bodyType": null,
+        "body": {},
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 3
+      },
+      {
+        "model": "http_request",
+        "id": "rq_clinic_4",
+        "workspaceId": "wk_clinic",
+        "folderId": "fl_clinic_0",
+        "name": "Update a patient",
+        "method": "PATCH",
+        "url": "${[ baseUrl ]}/patients/:id",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": ":id",
+            "value": "p-1"
+          }
+        ],
+        "headers": [],
+        "bodyType": "application/json",
+        "body": {
+          "text": "{\n  \"weightKg\": 31.5\n}"
+        },
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 4
+      },
+      {
+        "model": "http_request",
+        "id": "rq_clinic_5",
+        "workspaceId": "wk_clinic",
+        "folderId": "fl_clinic_0",
+        "name": "Upload a photo",
+        "method": "PUT",
+        "url": "${[ baseUrl ]}/patients/:id/photo",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": ":id",
+            "value": "p-1"
+          }
+        ],
+        "headers": [],
+        "bodyType": "multipart/form-data",
+        "body": {
+          "form": [
+            {
+              "enabled": true,
+              "name": "caption",
+              "value": "At the beach"
+            },
+            {
+              "enabled": true,
+              "name": "photo",
+              "file": "rex.png"
+            }
+          ]
+        },
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 5
+      },
+      {
+        "model": "http_request",
+        "id": "rq_clinic_6",
+        "workspaceId": "wk_clinic",
+        "folderId": "fl_clinic_1",
+        "name": "List visits",
+        "method": "GET",
+        "url": "${[ baseUrl ]}/visits",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": "patient",
+            "value": "p-1"
+          }
+        ],
+        "headers": [],
+        "bodyType": null,
+        "body": {},
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 6
+      },
+      {
+        "model": "http_request",
+        "id": "rq_clinic_7",
+        "workspaceId": "wk_clinic",
+        "folderId": "fl_clinic_1",
+        "name": "Book a visit",
+        "method": "POST",
+        "url": "${[ baseUrl ]}/visits",
+        "urlParameters": [],
+        "headers": [],
+        "bodyType": "application/json",
+        "body": {
+          "text": "{\n  \"patient\": \"p-1\",\n  \"at\": \"2026-05-04T09:30:00Z\",\n  \"reason\": \"vaccination\"\n}"
+        },
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 7
+      },
+      {
+        "model": "http_request",
+        "id": "rq_clinic_8",
+        "workspaceId": "wk_clinic",
+        "folderId": "fl_clinic_1",
+        "name": "Cancel a visit",
+        "method": "DELETE",
+        "url": "${[ baseUrl ]}/visits/v-3",
+        "urlParameters": [],
+        "headers": [],
+        "bodyType": null,
+        "body": {},
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 8
+      },
+      {
+        "model": "http_request",
+        "id": "rq_clinic_9",
+        "workspaceId": "wk_clinic",
+        "folderId": "fl_clinic_2",
+        "name": "List owners",
+        "method": "GET",
+        "url": "${[ baseUrl ]}/owners",
+        "urlParameters": [],
+        "headers": [],
+        "bodyType": null,
+        "body": {},
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 9
+      },
+      {
+        "model": "http_request",
+        "id": "rq_clinic_10",
+        "workspaceId": "wk_clinic",
+        "folderId": "fl_clinic_2",
+        "name": "Create an owner",
+        "method": "POST",
+        "url": "${[ baseUrl ]}/owners",
+        "urlParameters": [],
+        "headers": [],
+        "bodyType": "application/json",
+        "body": {
+          "text": "{\n  \"name\": \"Ada\",\n  \"email\": \"ada@example.test\"\n}"
+        },
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 10
+      }
+    ]
+  }
+}

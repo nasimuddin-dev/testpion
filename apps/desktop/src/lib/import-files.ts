@@ -7,7 +7,8 @@ import type { ImportSource } from '../types';
 
 const MAX_TOTAL = 200 * 1024 * 1024;
 const MAX_FILES = 20_000;
-const SKIP_DIR = /(^|\/)(node_modules|\.git|\.[^/]+)\//;
+// (.resources and .postman hold the definition files of a Postman Git collection)
+const SKIP_DIR = /(^|\/)(node_modules|\.git|\.(?!resources\/|postman\/)[^/]+)\//;
 
 type PickedFile = NonNullable<ImportSource['files']>[number];
 

@@ -1,0 +1,328 @@
+{
+  "v": 2,
+  "name": "Code Host API",
+  "folders": [
+    {
+      "v": 2,
+      "name": "Repos",
+      "folders": [],
+      "auth": {
+        "authType": "inherit",
+        "authActive": true
+      },
+      "headers": [],
+      "variables": [],
+      "requests": [
+        {
+          "v": "11",
+          "name": "Get a repository",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/repos/<<owner>>/<<repo>>",
+          "params": [],
+          "headers": [
+            {
+              "key": "Accept",
+              "value": "application/vnd.codehost+json",
+              "active": true
+            }
+          ],
+          "preRequestScript": "",
+          "testScript": "pw.test(\"Status code is 200\", () => {\n  pw.expect(pw.response.status).toBe(200);\n});",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": null,
+            "body": null
+          },
+          "requestVariables": []
+        },
+        {
+          "v": "11",
+          "name": "List repository contributors",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/repos/<<owner>>/<<repo>>/contributors",
+          "params": [
+            {
+              "key": "per_page",
+              "value": "30",
+              "active": true
+            },
+            {
+              "key": "page",
+              "value": "1",
+              "active": true
+            }
+          ],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": null,
+            "body": null
+          },
+          "requestVariables": []
+        },
+        {
+          "v": "11",
+          "name": "List branches",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/repos/<<owner>>/<<repo>>/branches",
+          "params": [],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": null,
+            "body": null
+          },
+          "requestVariables": []
+        },
+        {
+          "v": "11",
+          "name": "Create a fork",
+          "method": "POST",
+          "endpoint": "<<baseUrl>>/repos/<<owner>>/<<repo>>/forks",
+          "params": [],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": null,
+            "body": null
+          },
+          "requestVariables": []
+        },
+        {
+          "v": "11",
+          "name": "Delete a repository",
+          "method": "DELETE",
+          "endpoint": "<<baseUrl>>/repos/<<owner>>/<<repo>>",
+          "params": [],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": null,
+            "body": null
+          },
+          "requestVariables": []
+        }
+      ]
+    },
+    {
+      "v": 2,
+      "name": "Issues",
+      "folders": [],
+      "auth": {
+        "authType": "inherit",
+        "authActive": true
+      },
+      "headers": [],
+      "variables": [],
+      "requests": [
+        {
+          "v": "11",
+          "name": "List issues",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/repos/<<owner>>/<<repo>>/issues",
+          "params": [
+            {
+              "key": "state",
+              "value": "open",
+              "active": true
+            },
+            {
+              "key": "labels",
+              "value": "bug",
+              "active": true
+            }
+          ],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": null,
+            "body": null
+          },
+          "requestVariables": []
+        },
+        {
+          "v": "11",
+          "name": "Create an issue",
+          "method": "POST",
+          "endpoint": "<<baseUrl>>/repos/<<owner>>/<<repo>>/issues",
+          "params": [],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "pw.test(\"Status code is 201\", () => {\n  pw.expect(pw.response.status).toBe(201);\n});",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": "application/json",
+            "body": "{\n  \"title\": \"Found a bug\",\n  \"body\": \"I'm having a problem with this.\",\n  \"labels\": [\n    \"bug\"\n  ]\n}"
+          },
+          "requestVariables": []
+        },
+        {
+          "v": "11",
+          "name": "Get an issue",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/repos/<<owner>>/<<repo>>/issues/1347",
+          "params": [],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": null,
+            "body": null
+          },
+          "requestVariables": []
+        },
+        {
+          "v": "11",
+          "name": "Update an issue",
+          "method": "PATCH",
+          "endpoint": "<<baseUrl>>/repos/<<owner>>/<<repo>>/issues/1347",
+          "params": [],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": "application/json",
+            "body": "{\n  \"state\": \"closed\"\n}"
+          },
+          "requestVariables": []
+        },
+        {
+          "v": "11",
+          "name": "Lock an issue",
+          "method": "PUT",
+          "endpoint": "<<baseUrl>>/repos/<<owner>>/<<repo>>/issues/1347/lock",
+          "params": [],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": "application/json",
+            "body": "{\n  \"lock_reason\": \"resolved\"\n}"
+          },
+          "requestVariables": []
+        }
+      ]
+    },
+    {
+      "v": 2,
+      "name": "Users",
+      "folders": [],
+      "auth": {
+        "authType": "inherit",
+        "authActive": true
+      },
+      "headers": [],
+      "variables": [],
+      "requests": [
+        {
+          "v": "11",
+          "name": "Get the authenticated user",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/user",
+          "params": [],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "pw.test(\"Status code is 200\", () => {\n  pw.expect(pw.response.status).toBe(200);\n});",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": null,
+            "body": null
+          },
+          "requestVariables": []
+        },
+        {
+          "v": "11",
+          "name": "Get a user",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/users/<<owner>>",
+          "params": [],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": null,
+            "body": null
+          },
+          "requestVariables": []
+        },
+        {
+          "v": "11",
+          "name": "List followers of a user",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/users/<<owner>>/followers",
+          "params": [],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": null,
+            "body": null
+          },
+          "requestVariables": []
+        }
+      ]
+    }
+  ],
+  "requests": [],
+  "auth": {
+    "authType": "bearer",
+    "authActive": true,
+    "token": "{{token}}"
+  },
+  "headers": [],
+  "variables": []
+}

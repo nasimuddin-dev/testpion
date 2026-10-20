@@ -1,0 +1,217 @@
+{
+  "meta": {
+    "format": "httpie",
+    "version": "1.0.0",
+    "contentType": "collection",
+    "docs": "https://httpie.io/r/export-docs",
+    "source": "HTTPie for Desktop 2025.2.0"
+  },
+  "entry": {
+    "name": "Maps API",
+    "auth": {
+      "type": "api-key",
+      "credentials": {
+        "name": "key",
+        "value": "{{mapsKey}}",
+        "in": "query"
+      }
+    },
+    "requests": [],
+    "collections": [
+      {
+        "name": "Geocoding",
+        "requests": [
+          {
+            "name": "Geocode an address",
+            "method": "GET",
+            "url": "{{baseUrl}}/geocode/json",
+            "queryParams": [
+              {
+                "name": "address",
+                "value": "1600 Amphitheatre Parkway, Mountain View, CA",
+                "enabled": true
+              }
+            ],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {}
+          },
+          {
+            "name": "Reverse geocode",
+            "method": "GET",
+            "url": "{{baseUrl}}/geocode/json",
+            "queryParams": [
+              {
+                "name": "latlng",
+                "value": "40.714224,-73.961452",
+                "enabled": true
+              }
+            ],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {}
+          },
+          {
+            "name": "Geocode by place id",
+            "method": "GET",
+            "url": "{{baseUrl}}/geocode/json",
+            "queryParams": [
+              {
+                "name": "place_id",
+                "value": "ChIJd8BlQ2BZwokRAFUEcm_qrcA",
+                "enabled": true
+              }
+            ],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {}
+          }
+        ]
+      },
+      {
+        "name": "Directions",
+        "requests": [
+          {
+            "name": "Driving directions",
+            "method": "GET",
+            "url": "{{baseUrl}}/directions/json",
+            "queryParams": [
+              {
+                "name": "origin",
+                "value": "Toronto",
+                "enabled": true
+              },
+              {
+                "name": "destination",
+                "value": "Montreal",
+                "enabled": true
+              },
+              {
+                "name": "mode",
+                "value": "driving",
+                "enabled": true
+              }
+            ],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {}
+          },
+          {
+            "name": "Transit directions",
+            "method": "GET",
+            "url": "{{baseUrl}}/directions/json",
+            "queryParams": [
+              {
+                "name": "origin",
+                "value": "Boston",
+                "enabled": true
+              },
+              {
+                "name": "destination",
+                "value": "Concord",
+                "enabled": true
+              },
+              {
+                "name": "mode",
+                "value": "transit",
+                "enabled": true
+              }
+            ],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {}
+          }
+        ]
+      },
+      {
+        "name": "Places",
+        "requests": [
+          {
+            "name": "Find place",
+            "method": "GET",
+            "url": "{{baseUrl}}/place/findplacefromtext/json",
+            "queryParams": [
+              {
+                "name": "input",
+                "value": "Museum of Contemporary Art Australia",
+                "enabled": true
+              },
+              {
+                "name": "inputtype",
+                "value": "textquery",
+                "enabled": true
+              }
+            ],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {}
+          },
+          {
+            "name": "Place details",
+            "method": "GET",
+            "url": "{{baseUrl}}/place/details/json",
+            "queryParams": [
+              {
+                "name": "place_id",
+                "value": "ChIJN1t_tDeuEmsRUsoyG83frY4",
+                "enabled": true
+              }
+            ],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {}
+          },
+          {
+            "name": "Nearby search",
+            "method": "GET",
+            "url": "{{baseUrl}}/place/nearbysearch/json",
+            "queryParams": [
+              {
+                "name": "location",
+                "value": "-33.8670522,151.1957362",
+                "enabled": true
+              },
+              {
+                "name": "radius",
+                "value": "1500",
+                "enabled": true
+              },
+              {
+                "name": "type",
+                "value": "restaurant",
+                "enabled": true
+              }
+            ],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {}
+          }
+        ]
+      }
+    ]
+  }
+}

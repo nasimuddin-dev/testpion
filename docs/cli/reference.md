@@ -72,7 +72,7 @@ testpion flow from-har <file.har> -w   Recorded traffic as a flow file: values t
 testpion flow report <file> -w   A run of a flow as a timeline with its critical path (--run <id>, --html out.html, --json)
 testpion flows -w             The flows exposed as MCP tools (test files and suites with an expose: block): tool, file, inputs (--json)
 testpion serve flows -w       Run flows behind their webhooks (webhook: blocks): POST JSON to the path, get the flow's output (--port 4020, --host, -e env, --jsonl)
-testpion scripts convert --to tp|pm -w   Rewrite collection scripts between Postman's pm.* and TestPion's tp.* (--dry-run)
+testpion scripts convert --to tp|pm -w   Rewrite collection scripts between Postman's pm.* and TestPion's tp.*, or --from bruno|insomnia|thunder|hoppscotch to tp.* (--file for one script, --lift-tests, --dry-run)
 testpion wait-for <url>       Wait until a URL answers (the health check before integration tests); exit 3 when it never does
 testpion trash list|restore|empty -w  Recently deleted collections, environments, datasets, API definitions and MCP servers (30 days)
 testpion history list|stats|diff|test|export-har -w  Response history of saved requests; response times; compare two responses; a test across runs; HAR export
@@ -81,7 +81,13 @@ testpion git setup|check|hook install -w   Make a workspace git-ready; find secr
 testpion git status|changes|diff|commit|log|branch|switch|pull|push|sync|resolve -w   Git for the workspace (sync: pull & push in one step; status --by-item [--kind <kind…>] lists the changed items by name) (see Keep your workspace in git)
 testpion git history|blame <item> -w   One item in git: its versions with what each changed (history -n <count>), or who last changed each field (blame). `<item>` is a link from the app, `kind:id` (`mcp-server:weather`, `environment:staging`) or `file#itemId` (`mcp-servers.json#weather`); --json
 testpion git restore <item> --rev <commit> [--dry-run] -w   Write an older version of just that item back; prints the title and each part that changes (old → new) and an `undoId`; --dry-run writes nothing
-testpion git discard-item|stage-item|unstage-item <item> [--dry-run] -w   Discard the uncommitted change of one item (the rest of its file keeps its changes), or stage / unstage its file (a file with several items goes as one file: the message names the other changed items that come along)
+testpion git discard-item|stage-item|unstage-item <item> [--dry-run] -w   Discard the uncommitted change of one item (the rest of its file keeps its changes), or stage / unstage just that item (in a file with several items only its change goes into the index, the others stay unstaged; a file that is one item stages whole; a file with several items goes as one file: the message names the other changed items that come along)
+testpion git fix [--dry-run] [--hook] [--untrack] -w   Fix git setup in one previewed, undoable step: .gitignore and .gitattributes (line endings, merge and diff drivers on every JSON kind), the drivers in the repository config, existing files rewritten once into the stable format, optionally the pre-commit secret check and `git rm --cached` of tracked files the ignore rules ignore. Idempotent; works without git or outside a repository (the file steps still run); `--dry-run --json` is the plan (`steps`, `rewritten`, `files`, `largeFiles`); a real run prints an `undoId` for `git undo`
+testpion git large [--check] [--track <file> --lfs|--reference [--source <where>]] [--dry-run] -w   Files over the size policy (5 MB note, 50 MB offer, 100 MB refused in a commit); `--check` compares every `<file>.ref` with the data on this computer (exit 1 when one is missing or different); `--track` moves one out of plain git: `--lfs` (a Git LFS rule in .gitattributes) or `--reference` (a `.ref` file with the sha256, the data git-ignored); --json
+testpion git share-session <name> | unshare-session <name> | shared-sessions [--dry-run] -w   Share a saved Debugger session: a copy masked once more with the export redaction goes to `debugger/shared/<name>.har` (tracked); the session stays git-ignored; --json
+testpion git codeowners [--owner <owner>] [--write] -w   A starter CODEOWNERS with a line per kind folder (printed; `--write` puts it in .github/CODEOWNERS when the workspace is the repository; never overwrites a CODEOWNERS that exists); --json
+testpion git allow-secret <hash> --reason <text> | disallow-secret <hash> | allowed-secrets -w   The staged secret scan's allowlist (`.testpion/secrets-allow.json`, committed, read in review): let one value through by the `hash` of a finding in `git check --staged --json`; an entry names file, item, field and a fingerprint, never the value
+testpion git fix-secrets -e <environment> -w   What the one-click fix would do for secrets typed into staged MCP servers, providers, saved items, tests and other files: the `{{variable}}` each value becomes (the values move to secret variables in the app, whose secret store the command line does not have)
 testpion git undo [id] [--list] -w   Undo the last restore or discard (or the one with this id); --list shows the undoable operations (the newest 30)
 testpion git stash push -m <name> [--dry-run] | list | show [n|hash] | apply [n|hash] | pop [n|hash] | drop [n|hash] -w   Set the uncommitted changes aside under a name and put them back (n: the number in `stash list`, 0 = newest); --json
 testpion git conflicts [file] [--resolve ours|theirs] -w   After a pull that stopped on conflicts: each file by what it holds (`items` with their clashing fields, `text` hunks with where they are, `binary` with the sizes of both sides) and the key of each; --resolve settles every conflicted file (or the one given) with one side
@@ -118,7 +124,7 @@ Every command that takes `--json` prints **one envelope** on stdout, whatever ha
 
 **`--jsonl`** on the commands that stream (`test`, `run`, `run-collection`, `eval run`, `load`, `serve flows`, `debug`, `monitor start`, `record`): a line per event as it happens (`{ schema_version, command, type: "result" | "row" | "call" | "exchange" | "listening", data }`), then the envelope as the last line with `type: "result"`. `serve flows --json` and `debug --json` printed lines before and now mean `--jsonl`. `test <file> --data <rows> --json` streams its rows inside the envelope's `data` (`{ rows, summary }`), so a run of 100,000 rows needs no memory.
 
-**`--dry-run`** on the commands that write files or change state (`import`, `export`, `export-environment`, `docs`, `ci`, `report`, `workspace-report`, `env set / unset / order`, `vars rename`, `replace`, `workspace create / rename / delete / export`, `trash restore / empty`, `monitor add / remove`, `datasets`, `generate-data`, `tests-from-spec`, `integration-suite`, `test from-request`, `flow export`, `history export-har`, `git setup`): the command runs against a copy of the workspace and of the app folder, every write outside them is diverted and every delete skipped, and the result lists each file it would add, change or delete (`dry_run: { applied: false, changes: [{ path, change, bytes }] }` in the envelope). Commands with a dry run of their own (`tidy`, `agents init`, `vars move`, `flow edit`, `flow from-har`, `scripts convert`, `git restore`, `git discard-item`, `git stage-item`, `git unstage-item`, `git stash push`) keep it.
+**`--dry-run`** on the commands that write files or change state (`import`, `export`, `export-environment`, `docs`, `ci`, `report`, `workspace-report`, `env set / unset / order`, `vars rename`, `replace`, `workspace create / rename / delete / export`, `trash restore / empty`, `monitor add / remove`, `datasets`, `generate-data`, `tests-from-spec`, `integration-suite`, `test from-request`, `flow export`, `history export-har`, `git setup`, `git fix`): the command runs against a copy of the workspace and of the app folder, every write outside them is diverted and every delete skipped, and the result lists each file it would add, change or delete (`dry_run: { applied: false, changes: [{ path, change, bytes }] }` in the envelope). Commands with a dry run of their own (`tidy`, `agents init`, `vars move`, `flow edit`, `flow from-har`, `scripts convert`, `git restore`, `git discard-item`, `git stage-item`, `git unstage-item`, `git stash push`) keep it.
 
 **`--non-interactive`** (the default with `CI` or `TESTPION_NON_INTERACTIVE=1`): a command never waits for input; where it would (a token read from the terminal by `jwt -`) it fails at once with a hint. When a command fails and stdout is not a terminal, stderr suggests the `--json` form.
 
@@ -641,7 +647,7 @@ testpion export-environment Staging -o staging.postman_environment.json
 | Option | Description |
 |---|---|
 | `-w, --workspace` | Workspace name or directory (default: nearest `workspace.json`). |
-| `-f, --format` | `postman` (default) or `testpion` (`export` only). |
+| `-f, --format` | `postman` (default), `testpion`, `openapi`, `bruno`, `http`, `asyncapi`, `insomnia` (v5 YAML), `insomnia-v4` (JSON), `opencollection` (Bruno's YAML folder; `--out <folder>`) or `opencollection-file` (`export` only). The workspace's environments go with Insomnia and OpenCollection (secret values never). |
 | `-o, --out <file>` | Write to a file instead of standard output. |
 
 Parts that Postman can't represent are listed on standard error as `not exported: …`. Secret environment values are never written.
@@ -748,6 +754,9 @@ testpion import adopt-pet.arazzo.yaml -w my-workspace --json   # Arazzo: one flo
 | `--list` | The bundle imports that can be undone. |
 | `--max-size <mb>` | A bundle: refuse a larger file. |
 | `--keep-pm` | For a Postman or Insomnia file: keep `pm.*` in scripts. By default they are converted to TestPion's `tp.*` and the output says `Converted N scripts to tp.* (--keep-pm keeps pm.*)`; for other tools (Bruno's `bru.*` …) it says only `Converted N scripts to tp.*`, since `--keep-pm` changes nothing there (`pm.*` runs either way; `testpion export -f postman` turns `tp.*` back into `pm.*`). |
+| `--lift-tests` | Turn simple tests (a status, a response time, a header, a JSON field, a body text) of the scripts into assertions. The preview says how many can be. |
+| `--new-copy` | A source imported before updates the collection it made (item by item: replace what changed in the source, add what is new, leave what you edited), and so does this command by default; `--new-copy` adds a second collection instead. |
+| `--update-decisions <file>` | An update: a JSON file of `"<item key>": "replace" \| "new" \| "skip"` (the keys `--preview` prints) overriding what the update would do for single items. |
 | `--fetch-sources` | For an Arazzo document: download the OpenAPI source descriptions given as http(s) links. By default they are looked up next to the Arazzo file and in the workspace (`specs/`); an `operationId` whose document is not found becomes a skipped step to fill in. |
 | `--preview` | Say what importing would create and what would not come over (the compatibility report), and write nothing. For a bundle: what importing would do per item. With `--json`: `{ preview: true, inputs: [{ input, plan }], skipped, totals }`. |
 | `--apply` | Import several files, a folder or a ZIP (they are previewed by default); one plain file is imported at once. |
@@ -939,6 +948,16 @@ testpion scripts convert --to tp -w my-workspace --collection "Checkout API"
 ```
 
 Rewrites collection, folder and request scripts written for Postman to TestPion's `tp.*` (or back to Postman's name with `--to pm`). Both names always run in TestPion; only code changes, not strings or comments, and scripts that declare their own `tp` are skipped and listed.
+
+From another tool's script API:
+
+```bash
+testpion scripts convert --from bruno -w my-workspace --collection "Checkout" --lift-tests    # bru.*, req, res → tp.*; simple tests → assertions
+testpion scripts convert --from thunder --file legacy.js --json                               # one script: the converted code, the findings
+testpion scripts convert --from hoppscotch --file pre.js --report findings.json
+```
+
+`--from postman|insomnia|bruno|thunder|hoppscotch` converts to `tp.*` by the script's syntax tree (strings, comments and formatting are kept, a variable of your own named like the tool's object is left alone). A call with no equivalent gets a `// TODO(import)` line and a finding (`--report file` writes them); `--file` converts one script file (`-` reads standard input) and prints the result. `req.setTimeout(ms)` with a number moves to the request's settings when it is a collection that is converted by an import. [The tables](/migrate/) list every mapping.
 
 ## `kinds`
 

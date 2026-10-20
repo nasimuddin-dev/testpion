@@ -1,0 +1,255 @@
+{
+  "clientName": "Thunder Client",
+  "collectionName": "Weather API",
+  "collectionId": "c-weather",
+  "dateExported": "2026-03-01T00:00:00.000Z",
+  "version": "1.2",
+  "folders": [
+    {
+      "_id": "f0",
+      "name": "Current",
+      "containerId": "",
+      "created": "2026-01-01",
+      "sortNum": 10000
+    },
+    {
+      "_id": "f1",
+      "name": "Forecast",
+      "containerId": "",
+      "created": "2026-01-01",
+      "sortNum": 20000
+    }
+  ],
+  "requests": [
+    {
+      "_id": "r1",
+      "colId": "c-weather",
+      "containerId": "f0",
+      "name": "Current weather by city",
+      "url": "{{baseUrl}}/weather",
+      "method": "GET",
+      "sortNum": 10000,
+      "headers": [],
+      "params": [
+        {
+          "name": "q",
+          "value": "London,uk",
+          "isPath": false
+        },
+        {
+          "name": "units",
+          "value": "metric",
+          "isPath": false
+        }
+      ],
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
+      "auth": {
+        "type": "apikey",
+        "apikey": {
+          "key": "appid",
+          "value": "{{appid}}",
+          "addTo": "query"
+        }
+      },
+      "tests": [
+        {
+          "type": "res-code",
+          "custom": "",
+          "action": "equal",
+          "value": "200"
+        }
+      ]
+    },
+    {
+      "_id": "r2",
+      "colId": "c-weather",
+      "containerId": "f0",
+      "name": "Current weather by coordinates",
+      "url": "{{baseUrl}}/weather",
+      "method": "GET",
+      "sortNum": 20000,
+      "headers": [],
+      "params": [
+        {
+          "name": "lat",
+          "value": "51.5",
+          "isPath": false
+        },
+        {
+          "name": "lon",
+          "value": "-0.12",
+          "isPath": false
+        }
+      ],
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
+      "auth": {
+        "type": "apikey",
+        "apikey": {
+          "key": "appid",
+          "value": "{{appid}}",
+          "addTo": "query"
+        }
+      },
+      "tests": []
+    },
+    {
+      "_id": "r3",
+      "colId": "c-weather",
+      "containerId": "f0",
+      "name": "Current weather by zip",
+      "url": "{{baseUrl}}/weather",
+      "method": "GET",
+      "sortNum": 30000,
+      "headers": [],
+      "params": [
+        {
+          "name": "zip",
+          "value": "94040,us",
+          "isPath": false
+        }
+      ],
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
+      "auth": {
+        "type": "apikey",
+        "apikey": {
+          "key": "appid",
+          "value": "{{appid}}",
+          "addTo": "query"
+        }
+      },
+      "tests": []
+    },
+    {
+      "_id": "r4",
+      "colId": "c-weather",
+      "containerId": "f1",
+      "name": "5 day forecast",
+      "url": "{{baseUrl}}/forecast",
+      "method": "GET",
+      "sortNum": 40000,
+      "headers": [],
+      "params": [
+        {
+          "name": "q",
+          "value": "Paris",
+          "isPath": false
+        },
+        {
+          "name": "cnt",
+          "value": "40",
+          "isPath": false
+        }
+      ],
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
+      "auth": {
+        "type": "apikey",
+        "apikey": {
+          "key": "appid",
+          "value": "{{appid}}",
+          "addTo": "query"
+        }
+      },
+      "tests": [
+        {
+          "type": "res-code",
+          "custom": "",
+          "action": "equal",
+          "value": "200"
+        }
+      ]
+    },
+    {
+      "_id": "r5",
+      "colId": "c-weather",
+      "containerId": "f1",
+      "name": "Air pollution",
+      "url": "{{baseUrl}}/air_pollution",
+      "method": "GET",
+      "sortNum": 50000,
+      "headers": [],
+      "params": [
+        {
+          "name": "lat",
+          "value": "50",
+          "isPath": false
+        },
+        {
+          "name": "lon",
+          "value": "50",
+          "isPath": false
+        }
+      ],
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
+      "auth": {
+        "type": "apikey",
+        "apikey": {
+          "key": "appid",
+          "value": "{{appid}}",
+          "addTo": "query"
+        }
+      },
+      "tests": []
+    },
+    {
+      "_id": "r6",
+      "colId": "c-weather",
+      "containerId": "f1",
+      "name": "Weather alerts",
+      "url": "{{baseUrl}}/onecall",
+      "method": "GET",
+      "sortNum": 60000,
+      "headers": [],
+      "params": [
+        {
+          "name": "lat",
+          "value": "33.44",
+          "isPath": false
+        },
+        {
+          "name": "lon",
+          "value": "-94.04",
+          "isPath": false
+        },
+        {
+          "name": "exclude",
+          "value": "minutely,hourly",
+          "isPath": false
+        }
+      ],
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
+      "auth": {
+        "type": "apikey",
+        "apikey": {
+          "key": "appid",
+          "value": "{{appid}}",
+          "addTo": "query"
+        }
+      },
+      "tests": []
+    }
+  ]
+}

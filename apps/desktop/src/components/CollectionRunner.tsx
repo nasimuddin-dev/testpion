@@ -200,7 +200,7 @@ export function CollectionRunner({ collection, folderId, onFolderChange, dataPat
   useEffect(() => {
     const load = () => void call<Array<{ path: string; name: string }>>('datasets.list').then(setDatasets, () => setDatasets([]));
     load();
-    return on<{ kind?: string; method?: string }>('data.changed', (p) => (p?.kind === 'datasets' || p?.method === 'ws.open') && load());
+    return on<{ kind?: string; kinds?: string[]; method?: string }>('data.changed', (p) => (p?.kind === 'datasets' || !!p?.kinds?.includes('datasets') || p?.method === 'ws.open') && load());
   }, []);
 
   const pickData = async () => {

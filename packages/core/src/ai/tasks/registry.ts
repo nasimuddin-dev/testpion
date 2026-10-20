@@ -18,6 +18,7 @@ import type { FormatKind } from '../flow-format.js';
 import { describeTriage, prepareTriage, proposeTriage, TRIAGE_SCHEMA } from '../triage.js';
 import { describeFlaky, FLAKY_SCHEMA, prepareFlaky, proposeFlaky } from '../flaky.js';
 import { describeTidy, prepareTidyContext, proposeTidy, TIDY_PLAN_SCHEMA, TIDY_VERIFIERS } from '../tidy-import.js';
+import { describeLeftovers, LEFTOVERS_PLAN_SCHEMA, LEFTOVERS_VERIFIERS, prepareLeftoversContext, proposeLeftovers } from '../import-leftovers.js';
 import { describeSpecTests, prepareSpecContext, proposeSpecTests, SPEC_PLAN_SCHEMA, SPEC_TEST_VERIFIERS } from '../spec-tests.js';
 import { prepareChecksItem, proposeChecksItems } from '../result-checks.js';
 import { describeScript, prepareScriptContext, proposeScript, SCRIPT_PLAN_SCHEMA, SCRIPT_VERIFIERS } from '../write-script.js';
@@ -518,6 +519,25 @@ export const AI_TASKS: readonly AiTaskDef[] = [
     prepare: (store, item, o) => prepareTidyContext(store, item, o),
     propose: proposeTidy,
     describe: describeTidy,
+  }),
+  T('import-leftovers', {
+    version: 1,
+    format: 'script',
+    aliases: ['import-cleanup'],
+    title: 'Fix what the import left',
+    description:
+      "The scripts of an imported collection that still carry a // TODO(import) line (a call the converter found no tp.* equivalent for: pm.datasets, bru.getAuthMode, insomnia.parentFolders …), rewritten with TestPion's script API as a reviewable proposal: one item per script with a diff. TestPion finds the marked scripts itself; the model only rewrites them. Every script is checked statically (no pm.* / bru.* / members that do not exist), run once in the sandbox against the request's saved example response (else a stand-in), and refused when it throws; nothing is sent to the real API, nothing is applied until the person accepts, and applying is one undo step.",
+    tier: 'large',
+    output: { kind: 'json', schema: LEFTOVERS_PLAN_SCHEMA },
+    context: 'item: collection:<id> or folder:<collectionId>:<folderId> (its scripts with a TODO(import) marker, each with the request, the marked lines and the saved response; at most 12 scripts)',
+    contextTokens: 12_000,
+    sectionBudgets: { leftovers: 9000 },
+    maxTokens: 6000,
+    variableNames: true,
+    verifiers: LEFTOVERS_VERIFIERS,
+    prepare: (store, item) => prepareLeftoversContext(store, item),
+    propose: proposeLeftovers,
+    describe: describeLeftovers,
   }),
   T('triage-run', {
     version: 2,

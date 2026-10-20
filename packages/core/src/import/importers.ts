@@ -14,6 +14,11 @@ import { parseOpenApi } from './openapi-import.js';
 import { parsePostman, parsePostmanEnvironment } from './postman-import.js';
 import { parseHar } from './har-import.js';
 import { parseOpenCollection } from './opencollection-import.js';
+import { parseThunder } from './thunder-import.js';
+import { parseYaak } from './yaak-import.js';
+import { parseHttpie } from './httpie-import.js';
+import { parseApidog } from './apidog-import.js';
+import { parsePostmanV1, parsePostmanV3 } from './postman-versions.js';
 import { Findings, newDocument, type ImportDocument } from './model.js';
 import { finishDocument, legacyResult, type ImportAnyResult } from './pipeline.js';
 import { buildReport, type ImportReport } from './report.js';
@@ -30,8 +35,12 @@ export { importPostman, importPostmanEnvironment } from './postman-import.js';
 export { importHar } from './har-import.js';
 export type { ImportAnyResult } from './pipeline.js';
 
+const withFormat = (doc: ImportDocument, format: string): ImportDocument => ({ ...doc, format });
+
 /** Read any supported text into an import document (scripts not yet converted, ids not yet made unique). */
-export function parseImport(text: string, opts: { name?: string } = {}): ImportDocument {
+export function parseImport(textIn: string, opts: { name?: string } = {}): ImportDocument {
+  // (a file saved with a byte order mark)
+  const text = textIn.charCodeAt(0) === 0xfeff ? textIn.slice(1) : textIn;
   const format = detectFormat(text);
   switch (format) {
     case 'openapi':
@@ -39,8 +48,20 @@ export function parseImport(text: string, opts: { name?: string } = {}): ImportD
       return parseOpenApi(text, format);
     case 'postman':
       return parsePostman(text);
+    case 'postman-v1':
+      return withFormat(parsePostmanV1(text), 'postman-v1');
+    case 'postman-v3':
+      return withFormat(parsePostmanV3(text), 'postman-v3');
     case 'postman-env':
       return parsePostmanEnvironment(text);
+    case 'thunder':
+      return parseThunder(text);
+    case 'yaak':
+      return parseYaak(text);
+    case 'httpie':
+      return parseHttpie(text);
+    case 'apidog':
+      return parseApidog(text);
     case 'har':
       return parseHar(text);
     case 'insomnia':
@@ -102,16 +123,26 @@ export function parseImport(text: string, opts: { name?: string } = {}): ImportD
         }
       }
       throw new ApsError('ValidationError', `Unrecognised import format (${format})`, {
-        suggestions: ['Supported: OpenAPI 3 / Swagger 2 (JSON or YAML), Postman v2.1 collections & environments, Insomnia (v4 export, v5 YAML), Bruno collections (folder, .bru file or export, OpenCollection YAML), Hoppscotch collections, WSDL 1.1 and 2.0 (SOAP), AsyncAPI 2 and 3 (Kafka, MQTT, WebSocket), .http / .rest files (REST Client, JetBrains), .env files, HAR, GraphQL schemas (SDL), TestPion collections and workspace exports, Arazzo 1.0 workflows (as flow files).'],
+        suggestions: ['Supported: OpenAPI 3 / Swagger 2 (JSON or YAML), Postman v2.1 collections & environments, Insomnia (v4 export, v5 YAML), Bruno collections (folder, .bru file or export, OpenCollection YAML), Hoppscotch collections, Thunder Client, Yaak, HTTPie and Apidog exports, Postman collections v1 and v3, WSDL 1.1 and 2.0 (SOAP), AsyncAPI 2 and 3 (Kafka, MQTT, WebSocket), .http / .rest files (REST Client, JetBrains), .env files, HAR, GraphQL schemas (SDL), TestPion collections and workspace exports, Arazzo 1.0 workflows (as flow files).'],
       });
     }
   }
 }
 
 /** A text read, converted and checked: the document with its report (nothing is written anywhere). */
-export function importDocument(text: string, opts: { name?: string; scripts?: ImportScriptsMode; takenIds?: Iterable<string> } = {}): { document: ImportDocument; report: ImportReport } {
-  const document = finishDocument(parseImport(text, opts), opts);
+export function importDocument(text: string, opts: { name?: string; scripts?: ImportScriptsMode; takenIds?: Iterable<string>; liftTests?: boolean } = {}): { document: ImportDocument; report: ImportReport } {
+  const document = nested(() => finishDocument(parseImport(text, opts), opts));
   return { document, report: buildReport(document) };
+}
+
+/** A file nested thousands of levels deep overflows the stack of any recursive reader: that is a message, not a crash. */
+function nested<T>(f: () => T): T {
+  try {
+    return f();
+  } catch (e) {
+    if (e instanceof RangeError && /call stack/i.test(e.message)) throw new ApsError('ValidationError', 'The file is nested too deeply to import (folders or objects thousands of levels deep)', { suggestions: ['Check the file: a real collection is a few levels deep. Export it again, or split it.'] });
+    throw e;
+  }
 }
 
 /**
@@ -119,6 +150,6 @@ export function importDocument(text: string, opts: { name?: string; scripts?: Im
  * made unique: against `takenIds` (the workspace's other collections, `workspaceNodeIds`) and within the file, so an
  * imported collection never shares ids with another one (a TestPion file imported twice, say); a note says how many changed.
  */
-export function importAny(text: string, opts: { name?: string; scripts?: ImportScriptsMode; takenIds?: Iterable<string> } = {}): ImportAnyResult {
-  return legacyResult(finishDocument(parseImport(text, opts), opts));
+export function importAny(text: string, opts: { name?: string; scripts?: ImportScriptsMode; takenIds?: Iterable<string>; liftTests?: boolean } = {}): ImportAnyResult {
+  return legacyResult(nested(() => finishDocument(parseImport(text, opts), opts)));
 }

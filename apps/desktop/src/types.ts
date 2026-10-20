@@ -1,6 +1,6 @@
 // The engine's types, from core (type-only: the window never loads core at run time); what the window adds is here.
 export type { AuthConfig, BodyConfig, HttpSettings, HttpRequestSpec, CheckConfig, CheckResult, HttpResponseData, SavedExample, SavedHttpRequest, SavedGraphQLRequest, CollectionFolder, CollectionNode, Environment, Span, Trace, TestResult, LatencyStats, RunSummary, PriceEntry, AppSettings, LibraryItem } from '@testpion/core';
-export type { ImportReport, ImportManyPlan, ImportPlan, PlanNode, ImportFinding, UndoResult } from '@testpion/core';
+export type { ImportReport, ImportManyPlan, ImportPlan, PlanNode, ImportFinding, UndoResult, ReimportAction, ReimportPlan, ReimportItem } from '@testpion/core';
 import type { Collection as CoreCollection, Environment, Library as CoreLibrary, McpServerConfig as CoreMcpServerConfig, ProviderConfig as CoreProviderConfig } from '@testpion/core';
 
 /** A collection as listed: a file that failed to parse comes with `problem` instead of its contents. */

@@ -25,7 +25,8 @@
     "bench": "node scripts/bench.mjs",
     "pack:cli": "node scripts/pack-cli.mjs --tarball",
     "docs:dev": "npm run dev -w docs",
-    "docs:build": "npm run build -w docs"
+    "docs:build": "npm run build -w docs",
+    "docs:migrate": "node scripts/gen-migrate-docs.mjs"
   },
   "devDependencies": {
     "@grpc/reflection": "^1.0.4",

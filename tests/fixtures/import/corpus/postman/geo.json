@@ -1,0 +1,288 @@
+{
+  "info": {
+    "_postman_id": "pm-geo",
+    "name": "Maps API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "apikey",
+    "apikey": [
+      {
+        "key": "key",
+        "value": "key"
+      },
+      {
+        "key": "value",
+        "value": "{{mapsKey}}"
+      },
+      {
+        "key": "in",
+        "value": "query"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "Geocoding",
+      "item": [
+        {
+          "name": "Geocode an address",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/geocode/json?address=1600 Amphitheatre Parkway, Mountain View, CA",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "geocode",
+                "json"
+              ],
+              "query": [
+                {
+                  "key": "address",
+                  "value": "1600 Amphitheatre Parkway, Mountain View, CA"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reverse geocode",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/geocode/json?latlng=40.714224,-73.961452",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "geocode",
+                "json"
+              ],
+              "query": [
+                {
+                  "key": "latlng",
+                  "value": "40.714224,-73.961452"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Geocode by place id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/geocode/json?place_id=ChIJd8BlQ2BZwokRAFUEcm_qrcA",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "geocode",
+                "json"
+              ],
+              "query": [
+                {
+                  "key": "place_id",
+                  "value": "ChIJd8BlQ2BZwokRAFUEcm_qrcA"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Directions",
+      "item": [
+        {
+          "name": "Driving directions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/directions/json?origin=Toronto&destination=Montreal&mode=driving",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "directions",
+                "json"
+              ],
+              "query": [
+                {
+                  "key": "origin",
+                  "value": "Toronto"
+                },
+                {
+                  "key": "destination",
+                  "value": "Montreal"
+                },
+                {
+                  "key": "mode",
+                  "value": "driving"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Transit directions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/directions/json?origin=Boston&destination=Concord&mode=transit",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "directions",
+                "json"
+              ],
+              "query": [
+                {
+                  "key": "origin",
+                  "value": "Boston"
+                },
+                {
+                  "key": "destination",
+                  "value": "Concord"
+                },
+                {
+                  "key": "mode",
+                  "value": "transit"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Places",
+      "item": [
+        {
+          "name": "Find place",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/place/findplacefromtext/json?input=Museum of Contemporary Art Australia&inputtype=textquery",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "place",
+                "findplacefromtext",
+                "json"
+              ],
+              "query": [
+                {
+                  "key": "input",
+                  "value": "Museum of Contemporary Art Australia"
+                },
+                {
+                  "key": "inputtype",
+                  "value": "textquery"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Place details",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/place/details/json?place_id=ChIJN1t_tDeuEmsRUsoyG83frY4",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "place",
+                "details",
+                "json"
+              ],
+              "query": [
+                {
+                  "key": "place_id",
+                  "value": "ChIJN1t_tDeuEmsRUsoyG83frY4"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Nearby search",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/place/nearbysearch/json?location=-33.8670522,151.1957362&radius=1500&type=restaurant",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "place",
+                "nearbysearch",
+                "json"
+              ],
+              "query": [
+                {
+                  "key": "location",
+                  "value": "-33.8670522,151.1957362"
+                },
+                {
+                  "key": "radius",
+                  "value": "1500"
+                },
+                {
+                  "key": "type",
+                  "value": "restaurant"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://maps.example.test/maps/api"
+    }
+  ]
+}

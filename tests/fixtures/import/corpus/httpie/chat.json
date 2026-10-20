@@ -1,0 +1,215 @@
+{
+  "meta": {
+    "format": "httpie",
+    "version": "1.0.0",
+    "contentType": "collection",
+    "docs": "https://httpie.io/r/export-docs",
+    "source": "HTTPie for Desktop 2025.2.0"
+  },
+  "entry": {
+    "name": "Chat API",
+    "auth": {
+      "type": "bearer",
+      "credentials": {
+        "token": "{{botToken}}"
+      }
+    },
+    "requests": [],
+    "collections": [
+      {
+        "name": "conversations",
+        "requests": [
+          {
+            "name": "conversations.list",
+            "method": "GET",
+            "url": "{{baseUrl}}/conversations.list",
+            "queryParams": [
+              {
+                "name": "limit",
+                "value": "100",
+                "enabled": true
+              },
+              {
+                "name": "types",
+                "value": "public_channel",
+                "enabled": true
+              }
+            ],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {}
+          },
+          {
+            "name": "conversations.history",
+            "method": "GET",
+            "url": "{{baseUrl}}/conversations.history",
+            "queryParams": [
+              {
+                "name": "channel",
+                "value": "{{channel}}",
+                "enabled": true
+              },
+              {
+                "name": "limit",
+                "value": "20",
+                "enabled": true
+              }
+            ],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {}
+          },
+          {
+            "name": "conversations.join",
+            "method": "POST",
+            "url": "{{baseUrl}}/conversations.join",
+            "queryParams": [],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {
+              "text": {
+                "format": "json",
+                "value": "{\n  \"channel\": \"{{channel}}\"\n}"
+              }
+            }
+          },
+          {
+            "name": "conversations.create",
+            "method": "POST",
+            "url": "{{baseUrl}}/conversations.create",
+            "queryParams": [],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {
+              "text": {
+                "format": "json",
+                "value": "{\n  \"name\": \"new-channel\",\n  \"is_private\": false\n}"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "chat",
+        "requests": [
+          {
+            "name": "chat.postMessage",
+            "method": "POST",
+            "url": "{{baseUrl}}/chat.postMessage",
+            "queryParams": [],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {
+              "text": {
+                "format": "json",
+                "value": "{\n  \"channel\": \"{{channel}}\",\n  \"text\": \"Hello, world\",\n  \"unfurl_links\": false\n}"
+              }
+            }
+          },
+          {
+            "name": "chat.update",
+            "method": "POST",
+            "url": "{{baseUrl}}/chat.update",
+            "queryParams": [],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {
+              "text": {
+                "format": "json",
+                "value": "{\n  \"channel\": \"{{channel}}\",\n  \"ts\": \"1405894322.002768\",\n  \"text\": \"edited\"\n}"
+              }
+            }
+          },
+          {
+            "name": "chat.delete",
+            "method": "POST",
+            "url": "{{baseUrl}}/chat.delete",
+            "queryParams": [],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {
+              "text": {
+                "format": "json",
+                "value": "{\n  \"channel\": \"{{channel}}\",\n  \"ts\": \"1405894322.002768\"\n}"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "users",
+        "requests": [
+          {
+            "name": "users.list",
+            "method": "GET",
+            "url": "{{baseUrl}}/users.list",
+            "queryParams": [
+              {
+                "name": "limit",
+                "value": "200",
+                "enabled": true
+              }
+            ],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {}
+          },
+          {
+            "name": "users.info",
+            "method": "GET",
+            "url": "{{baseUrl}}/users.info",
+            "queryParams": [
+              {
+                "name": "user",
+                "value": "U0123",
+                "enabled": true
+              }
+            ],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {}
+          },
+          {
+            "name": "auth.test",
+            "method": "POST",
+            "url": "{{baseUrl}}/auth.test",
+            "queryParams": [],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {}
+          }
+        ]
+      }
+    ]
+  }
+}

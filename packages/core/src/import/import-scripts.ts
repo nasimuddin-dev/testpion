@@ -13,7 +13,7 @@ export type ImportScriptsMode = 'tp' | 'keep';
  * Insomnia's (its `insomnia.*` becomes `pm.*` instead of `tp.*`). Other tools' scripts (Bruno's `bru.*` …) are
  * converted to `tp.*` either way, so a hint about `--keep-pm` is only for these.
  */
-const KEEP_PM_FORMATS: ReadonlySet<string> = new Set(['postman', 'insomnia']);
+const KEEP_PM_FORMATS: ReadonlySet<string> = new Set(['postman', 'postman-v1', 'postman-v3', 'insomnia']);
 
 /** Does `--keep-pm` change how scripts of this import format (`detectFormat`) come in? */
 export function keepPmApplies(format: string | undefined): boolean {

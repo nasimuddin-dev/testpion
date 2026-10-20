@@ -1,0 +1,227 @@
+opencollection: 1.0.0
+bundled: true
+info:
+  name: Pet Store
+request:
+  auth:
+    type: apikey
+    key: api_key
+    value: "{{apiKey}}"
+    placement: header
+  variables:
+    - name: baseUrl
+      value: https://petstore.example.test/v2
+items:
+  - info:
+      name: pet
+      type: folder
+      seq: 1
+    items:
+      - info:
+          name: Add a new pet
+          type: http
+          seq: 1
+        http:
+          method: POST
+          url: "{{baseUrl}}/pet"
+          body:
+            type: json
+            data: |-
+              {
+                "id": 0,
+                "name": "doggie",
+                "status": "available",
+                "tags": [
+                  {
+                    "name": "good"
+                  }
+                ]
+              }
+      - info:
+          name: Update an existing pet
+          type: http
+          seq: 2
+        http:
+          method: PUT
+          url: "{{baseUrl}}/pet"
+          body:
+            type: json
+            data: |-
+              {
+                "id": 1,
+                "name": "doggie",
+                "status": "sold"
+              }
+      - info:
+          name: Find pets by status
+          type: http
+          seq: 3
+        http:
+          method: GET
+          url: "{{baseUrl}}/pet/findByStatus"
+          params:
+            - name: status
+              value: available
+              type: query
+        runtime:
+          assertions:
+            - expression: res.status
+              operator: eq
+              value: "200"
+      - info:
+          name: Find pet by ID
+          type: http
+          seq: 4
+        http:
+          method: GET
+          url: "{{baseUrl}}/pet/1"
+        runtime:
+          assertions:
+            - expression: res.status
+              operator: eq
+              value: "200"
+      - info:
+          name: Delete a pet
+          type: http
+          seq: 5
+        http:
+          method: DELETE
+          url: "{{baseUrl}}/pet/1"
+          headers:
+            - name: api_key
+              value: "{{apiKey}}"
+      - info:
+          name: Upload an image
+          type: http
+          seq: 6
+        http:
+          method: POST
+          url: "{{baseUrl}}/pet/1/uploadImage"
+          body:
+            type: multipart-form
+            data:
+              - name: additionalMetadata
+                value: cute
+                type: text
+              - name: file
+                type: file
+                value:
+                  - dog.png
+  - info:
+      name: store
+      type: folder
+      seq: 2
+    items:
+      - info:
+          name: Returns pet inventories by status
+          type: http
+          seq: 1
+        http:
+          method: GET
+          url: "{{baseUrl}}/store/inventory"
+        runtime:
+          assertions:
+            - expression: res.status
+              operator: eq
+              value: "200"
+      - info:
+          name: Place an order for a pet
+          type: http
+          seq: 2
+        http:
+          method: POST
+          url: "{{baseUrl}}/store/order"
+          body:
+            type: json
+            data: |-
+              {
+                "petId": 1,
+                "quantity": 1,
+                "status": "placed"
+              }
+      - info:
+          name: Find purchase order by ID
+          type: http
+          seq: 3
+        http:
+          method: GET
+          url: "{{baseUrl}}/store/order/1"
+      - info:
+          name: Delete purchase order by ID
+          type: http
+          seq: 4
+        http:
+          method: DELETE
+          url: "{{baseUrl}}/store/order/1"
+  - info:
+      name: user
+      type: folder
+      seq: 3
+    items:
+      - info:
+          name: Create user
+          type: http
+          seq: 1
+        http:
+          method: POST
+          url: "{{baseUrl}}/user"
+          body:
+            type: json
+            data: |-
+              {
+                "username": "theUser",
+                "email": "john@example.test"
+              }
+      - info:
+          name: Logs user into the system
+          type: http
+          seq: 2
+        http:
+          method: GET
+          url: "{{baseUrl}}/user/login"
+          params:
+            - name: username
+              value: theUser
+              type: query
+            - name: password
+              value: "{{password}}"
+              type: query
+        runtime:
+          assertions:
+            - expression: res.status
+              operator: eq
+              value: "200"
+      - info:
+          name: Get user by user name
+          type: http
+          seq: 3
+        http:
+          method: GET
+          url: "{{baseUrl}}/user/theUser"
+      - info:
+          name: Logs out current logged in user session
+          type: http
+          seq: 4
+        http:
+          method: GET
+          url: "{{baseUrl}}/user/logout"
+config:
+  environments:
+    - name: dev
+      variables:
+        - name: baseUrl
+          value: http://localhost:8080/v2
+        - name: apiKey
+          value: dev-key
+    - name: staging
+      variables:
+        - name: baseUrl
+          value: https://staging.petstore.example.test/v2
+        - name: apiKey
+          value: stg-key
+    - name: prod
+      variables:
+        - name: baseUrl
+          value: https://petstore.example.test/v2
+        - name: apiKey
+          value: ""

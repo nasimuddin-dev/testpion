@@ -1,0 +1,487 @@
+{
+  "apidogProject": "1.0.0",
+  "info": {
+    "name": "Code Host API"
+  },
+  "apiCollection": [
+    {
+      "name": "Root",
+      "id": 1,
+      "items": [
+        {
+          "name": "Repos",
+          "id": 10,
+          "items": [
+            {
+              "name": "Get a repository",
+              "api": {
+                "id": "101",
+                "method": "get",
+                "path": "/repos/{{owner}}/{{repo}}",
+                "parameters": {
+                  "query": [],
+                  "path": [],
+                  "header": [
+                    {
+                      "name": "Accept",
+                      "required": true,
+                      "type": "string",
+                      "example": "application/vnd.codehost+json"
+                    }
+                  ],
+                  "cookie": []
+                },
+                "responses": [
+                  {
+                    "id": "1010",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "List repository contributors",
+              "api": {
+                "id": "102",
+                "method": "get",
+                "path": "/repos/{{owner}}/{{repo}}/contributors",
+                "parameters": {
+                  "query": [
+                    {
+                      "name": "per_page",
+                      "required": true,
+                      "type": "string",
+                      "example": "30"
+                    },
+                    {
+                      "name": "page",
+                      "required": true,
+                      "type": "string",
+                      "example": "1"
+                    }
+                  ],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "responses": [
+                  {
+                    "id": "1020",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "List branches",
+              "api": {
+                "id": "103",
+                "method": "get",
+                "path": "/repos/{{owner}}/{{repo}}/branches",
+                "parameters": {
+                  "query": [],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "responses": [
+                  {
+                    "id": "1030",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "Create a fork",
+              "api": {
+                "id": "104",
+                "method": "post",
+                "path": "/repos/{{owner}}/{{repo}}/forks",
+                "parameters": {
+                  "query": [],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "responses": [
+                  {
+                    "id": "1040",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "Delete a repository",
+              "api": {
+                "id": "105",
+                "method": "delete",
+                "path": "/repos/{{owner}}/{{repo}}",
+                "parameters": {
+                  "query": [],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "responses": [
+                  {
+                    "id": "1050",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Issues",
+          "id": 11,
+          "items": [
+            {
+              "name": "List issues",
+              "api": {
+                "id": "106",
+                "method": "get",
+                "path": "/repos/{{owner}}/{{repo}}/issues",
+                "parameters": {
+                  "query": [
+                    {
+                      "name": "state",
+                      "required": true,
+                      "type": "string",
+                      "example": "open"
+                    },
+                    {
+                      "name": "labels",
+                      "required": true,
+                      "type": "string",
+                      "example": "bug"
+                    }
+                  ],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "responses": [
+                  {
+                    "id": "1060",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "Create an issue",
+              "api": {
+                "id": "107",
+                "method": "post",
+                "path": "/repos/{{owner}}/{{repo}}/issues",
+                "parameters": {
+                  "query": [],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "requestBody": {
+                  "type": "application/json",
+                  "example": "{\n  \"title\": \"Found a bug\",\n  \"body\": \"I'm having a problem with this.\",\n  \"labels\": [\n    \"bug\"\n  ]\n}"
+                },
+                "responses": [
+                  {
+                    "id": "1070",
+                    "name": "OK",
+                    "code": 201,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "Get an issue",
+              "api": {
+                "id": "108",
+                "method": "get",
+                "path": "/repos/{{owner}}/{{repo}}/issues/1347",
+                "parameters": {
+                  "query": [],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "responses": [
+                  {
+                    "id": "1080",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "Update an issue",
+              "api": {
+                "id": "109",
+                "method": "patch",
+                "path": "/repos/{{owner}}/{{repo}}/issues/1347",
+                "parameters": {
+                  "query": [],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "requestBody": {
+                  "type": "application/json",
+                  "example": "{\n  \"state\": \"closed\"\n}"
+                },
+                "responses": [
+                  {
+                    "id": "1090",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "Lock an issue",
+              "api": {
+                "id": "110",
+                "method": "put",
+                "path": "/repos/{{owner}}/{{repo}}/issues/1347/lock",
+                "parameters": {
+                  "query": [],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "requestBody": {
+                  "type": "application/json",
+                  "example": "{\n  \"lock_reason\": \"resolved\"\n}"
+                },
+                "responses": [
+                  {
+                    "id": "1100",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Users",
+          "id": 12,
+          "items": [
+            {
+              "name": "Get the authenticated user",
+              "api": {
+                "id": "111",
+                "method": "get",
+                "path": "/user",
+                "parameters": {
+                  "query": [],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "responses": [
+                  {
+                    "id": "1110",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "Get a user",
+              "api": {
+                "id": "112",
+                "method": "get",
+                "path": "/users/{{owner}}",
+                "parameters": {
+                  "query": [],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "responses": [
+                  {
+                    "id": "1120",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "List followers of a user",
+              "api": {
+                "id": "113",
+                "method": "get",
+                "path": "/users/{{owner}}/followers",
+                "parameters": {
+                  "query": [],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "responses": [
+                  {
+                    "id": "1130",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "environments": [
+    {
+      "name": "default",
+      "baseUrl": "https://api.codehost.example.test",
+      "variables": [
+        {
+          "name": "token",
+          "value": ""
+        },
+        {
+          "name": "owner",
+          "value": "octocat"
+        },
+        {
+          "name": "repo",
+          "value": "hello-world"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,277 @@
+{
+  "v": 2,
+  "name": "Chat API",
+  "folders": [
+    {
+      "v": 2,
+      "name": "conversations",
+      "folders": [],
+      "auth": {
+        "authType": "inherit",
+        "authActive": true
+      },
+      "headers": [],
+      "variables": [],
+      "requests": [
+        {
+          "v": "11",
+          "name": "conversations.list",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/conversations.list",
+          "params": [
+            {
+              "key": "limit",
+              "value": "100",
+              "active": true
+            },
+            {
+              "key": "types",
+              "value": "public_channel",
+              "active": true
+            }
+          ],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "pw.test(\"Status code is 200\", () => {\n  pw.expect(pw.response.status).toBe(200);\n});",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": null,
+            "body": null
+          },
+          "requestVariables": []
+        },
+        {
+          "v": "11",
+          "name": "conversations.history",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/conversations.history",
+          "params": [
+            {
+              "key": "channel",
+              "value": "<<channel>>",
+              "active": true
+            },
+            {
+              "key": "limit",
+              "value": "20",
+              "active": true
+            }
+          ],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": null,
+            "body": null
+          },
+          "requestVariables": []
+        },
+        {
+          "v": "11",
+          "name": "conversations.join",
+          "method": "POST",
+          "endpoint": "<<baseUrl>>/conversations.join",
+          "params": [],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": "application/json",
+            "body": "{\n  \"channel\": \"{{channel}}\"\n}"
+          },
+          "requestVariables": []
+        },
+        {
+          "v": "11",
+          "name": "conversations.create",
+          "method": "POST",
+          "endpoint": "<<baseUrl>>/conversations.create",
+          "params": [],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": "application/json",
+            "body": "{\n  \"name\": \"new-channel\",\n  \"is_private\": false\n}"
+          },
+          "requestVariables": []
+        }
+      ]
+    },
+    {
+      "v": 2,
+      "name": "chat",
+      "folders": [],
+      "auth": {
+        "authType": "inherit",
+        "authActive": true
+      },
+      "headers": [],
+      "variables": [],
+      "requests": [
+        {
+          "v": "11",
+          "name": "chat.postMessage",
+          "method": "POST",
+          "endpoint": "<<baseUrl>>/chat.postMessage",
+          "params": [],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "pw.test(\"Status code is 200\", () => {\n  pw.expect(pw.response.status).toBe(200);\n});",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": "application/json",
+            "body": "{\n  \"channel\": \"{{channel}}\",\n  \"text\": \"Hello, world\",\n  \"unfurl_links\": false\n}"
+          },
+          "requestVariables": []
+        },
+        {
+          "v": "11",
+          "name": "chat.update",
+          "method": "POST",
+          "endpoint": "<<baseUrl>>/chat.update",
+          "params": [],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": "application/json",
+            "body": "{\n  \"channel\": \"{{channel}}\",\n  \"ts\": \"1405894322.002768\",\n  \"text\": \"edited\"\n}"
+          },
+          "requestVariables": []
+        },
+        {
+          "v": "11",
+          "name": "chat.delete",
+          "method": "POST",
+          "endpoint": "<<baseUrl>>/chat.delete",
+          "params": [],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": "application/json",
+            "body": "{\n  \"channel\": \"{{channel}}\",\n  \"ts\": \"1405894322.002768\"\n}"
+          },
+          "requestVariables": []
+        }
+      ]
+    },
+    {
+      "v": 2,
+      "name": "users",
+      "folders": [],
+      "auth": {
+        "authType": "inherit",
+        "authActive": true
+      },
+      "headers": [],
+      "variables": [],
+      "requests": [
+        {
+          "v": "11",
+          "name": "users.list",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/users.list",
+          "params": [
+            {
+              "key": "limit",
+              "value": "200",
+              "active": true
+            }
+          ],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": null,
+            "body": null
+          },
+          "requestVariables": []
+        },
+        {
+          "v": "11",
+          "name": "users.info",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/users.info",
+          "params": [
+            {
+              "key": "user",
+              "value": "U0123",
+              "active": true
+            }
+          ],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": null,
+            "body": null
+          },
+          "requestVariables": []
+        },
+        {
+          "v": "11",
+          "name": "auth.test",
+          "method": "POST",
+          "endpoint": "<<baseUrl>>/auth.test",
+          "params": [],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "pw.test(\"Status code is 200\", () => {\n  pw.expect(pw.response.status).toBe(200);\n});",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": null,
+            "body": null
+          },
+          "requestVariables": []
+        }
+      ]
+    }
+  ],
+  "requests": [],
+  "auth": {
+    "authType": "bearer",
+    "authActive": true,
+    "token": "{{botToken}}"
+  },
+  "headers": [],
+  "variables": []
+}

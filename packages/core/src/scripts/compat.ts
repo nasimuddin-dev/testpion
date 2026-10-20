@@ -4,6 +4,9 @@ import type { Collection, CollectionNode } from '../model/types.js';
 export const SCRIPT_MODULES = ['ajv', 'atob', 'btoa', 'chai', 'cheerio', 'crypto-js', 'csv-parse/lib/sync', 'csv-parse/sync', 'lodash', 'moment', 'tv4', 'uuid', 'xml2js'];
 
 const UNSUPPORTED: Array<{ re: RegExp; api: string; hint: string }> = [
+  // Postman's newer sandbox members with no equivalent: they would throw when the script runs
+  { re: /\b(?:pm|tp)\.datasets\b/, api: 'pm.datasets', hint: 'TestPion datasets feed the runner (data file, tp.iterationData); there is no SQL over them in a script' },
+  { re: /\b(?:pm|tp)\.mock\b/, api: 'pm.mock', hint: "use TestPion's mock server (Collection > Mock), which serves the saved examples" },
 ];
 
 export interface ScriptWarning {

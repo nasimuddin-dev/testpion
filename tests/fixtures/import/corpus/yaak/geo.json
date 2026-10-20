@@ -1,0 +1,292 @@
+{
+  "yaakVersion": "2025.2.0",
+  "yaakSchema": 3,
+  "resources": {
+    "workspaces": [
+      {
+        "model": "workspace",
+        "id": "wk_geo",
+        "name": "Maps API"
+      }
+    ],
+    "environments": [
+      {
+        "model": "environment",
+        "id": "ev_geo_base",
+        "workspaceId": "wk_geo",
+        "name": "Global",
+        "base": true,
+        "variables": [
+          {
+            "enabled": true,
+            "name": "baseUrl",
+            "value": "https://maps.example.test/maps/api"
+          }
+        ]
+      },
+      {
+        "model": "environment",
+        "id": "ev_geo_default",
+        "workspaceId": "wk_geo",
+        "name": "default",
+        "variables": [
+          {
+            "enabled": true,
+            "name": "baseUrl",
+            "value": "https://maps.example.test/maps/api"
+          },
+          {
+            "enabled": true,
+            "name": "mapsKey",
+            "value": "AIza-test"
+          }
+        ]
+      }
+    ],
+    "folders": [
+      {
+        "model": "folder",
+        "id": "fl_geo_0",
+        "workspaceId": "wk_geo",
+        "folderId": null,
+        "name": "Geocoding",
+        "sortPriority": 1,
+        "authenticationType": "apikey",
+        "authentication": {
+          "key": "key",
+          "value": "{{mapsKey}}",
+          "location": "query"
+        }
+      },
+      {
+        "model": "folder",
+        "id": "fl_geo_1",
+        "workspaceId": "wk_geo",
+        "folderId": null,
+        "name": "Directions",
+        "sortPriority": 2
+      },
+      {
+        "model": "folder",
+        "id": "fl_geo_2",
+        "workspaceId": "wk_geo",
+        "folderId": null,
+        "name": "Places",
+        "sortPriority": 3
+      }
+    ],
+    "httpRequests": [
+      {
+        "model": "http_request",
+        "id": "rq_geo_1",
+        "workspaceId": "wk_geo",
+        "folderId": "fl_geo_0",
+        "name": "Geocode an address",
+        "method": "GET",
+        "url": "${[ baseUrl ]}/geocode/json",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": "address",
+            "value": "1600 Amphitheatre Parkway, Mountain View, CA"
+          }
+        ],
+        "headers": [],
+        "bodyType": null,
+        "body": {},
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 1
+      },
+      {
+        "model": "http_request",
+        "id": "rq_geo_2",
+        "workspaceId": "wk_geo",
+        "folderId": "fl_geo_0",
+        "name": "Reverse geocode",
+        "method": "GET",
+        "url": "${[ baseUrl ]}/geocode/json",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": "latlng",
+            "value": "40.714224,-73.961452"
+          }
+        ],
+        "headers": [],
+        "bodyType": null,
+        "body": {},
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 2
+      },
+      {
+        "model": "http_request",
+        "id": "rq_geo_3",
+        "workspaceId": "wk_geo",
+        "folderId": "fl_geo_0",
+        "name": "Geocode by place id",
+        "method": "GET",
+        "url": "${[ baseUrl ]}/geocode/json",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": "place_id",
+            "value": "ChIJd8BlQ2BZwokRAFUEcm_qrcA"
+          }
+        ],
+        "headers": [],
+        "bodyType": null,
+        "body": {},
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 3
+      },
+      {
+        "model": "http_request",
+        "id": "rq_geo_4",
+        "workspaceId": "wk_geo",
+        "folderId": "fl_geo_1",
+        "name": "Driving directions",
+        "method": "GET",
+        "url": "${[ baseUrl ]}/directions/json",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": "origin",
+            "value": "Toronto"
+          },
+          {
+            "enabled": true,
+            "name": "destination",
+            "value": "Montreal"
+          },
+          {
+            "enabled": true,
+            "name": "mode",
+            "value": "driving"
+          }
+        ],
+        "headers": [],
+        "bodyType": null,
+        "body": {},
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 4
+      },
+      {
+        "model": "http_request",
+        "id": "rq_geo_5",
+        "workspaceId": "wk_geo",
+        "folderId": "fl_geo_1",
+        "name": "Transit directions",
+        "method": "GET",
+        "url": "${[ baseUrl ]}/directions/json",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": "origin",
+            "value": "Boston"
+          },
+          {
+            "enabled": true,
+            "name": "destination",
+            "value": "Concord"
+          },
+          {
+            "enabled": true,
+            "name": "mode",
+            "value": "transit"
+          }
+        ],
+        "headers": [],
+        "bodyType": null,
+        "body": {},
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 5
+      },
+      {
+        "model": "http_request",
+        "id": "rq_geo_6",
+        "workspaceId": "wk_geo",
+        "folderId": "fl_geo_2",
+        "name": "Find place",
+        "method": "GET",
+        "url": "${[ baseUrl ]}/place/findplacefromtext/json",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": "input",
+            "value": "Museum of Contemporary Art Australia"
+          },
+          {
+            "enabled": true,
+            "name": "inputtype",
+            "value": "textquery"
+          }
+        ],
+        "headers": [],
+        "bodyType": null,
+        "body": {},
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 6
+      },
+      {
+        "model": "http_request",
+        "id": "rq_geo_7",
+        "workspaceId": "wk_geo",
+        "folderId": "fl_geo_2",
+        "name": "Place details",
+        "method": "GET",
+        "url": "${[ baseUrl ]}/place/details/json",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": "place_id",
+            "value": "ChIJN1t_tDeuEmsRUsoyG83frY4"
+          }
+        ],
+        "headers": [],
+        "bodyType": null,
+        "body": {},
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 7
+      },
+      {
+        "model": "http_request",
+        "id": "rq_geo_8",
+        "workspaceId": "wk_geo",
+        "folderId": "fl_geo_2",
+        "name": "Nearby search",
+        "method": "GET",
+        "url": "${[ baseUrl ]}/place/nearbysearch/json",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": "location",
+            "value": "-33.8670522,151.1957362"
+          },
+          {
+            "enabled": true,
+            "name": "radius",
+            "value": "1500"
+          },
+          {
+            "enabled": true,
+            "name": "type",
+            "value": "restaurant"
+          }
+        ],
+        "headers": [],
+        "bodyType": null,
+        "body": {},
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 8
+      }
+    ]
+  }
+}

@@ -65,17 +65,18 @@ describe('history and blame of one item', () => {
 });
 
 describe('stage-item names what comes along', () => {
-  it('a file with two changed items stages as one file: the message names the other', async () => {
+  it('a file with two changed items stages just that item: the message names the other, which stays out', async () => {
     const dry = cli('git', 'stage-item', 'mcp-server:weather', '--dry-run', '--json');
     expect(dry.status, dry.err).toBe(0);
-    const d = cliData<{ applied: boolean; alsoStages: string[]; message: string }>(dry.out);
+    const d = cliData<{ applied: boolean; partial?: boolean; alsoStages: string[]; leftUnstaged: string[]; message: string }>(dry.out);
     expect(d.applied).toBe(false);
-    expect(d.alsoStages.join(' ')).toMatch(/Search/);
-    expect(d.message).toMatch(/also holds 1 other changed item/);
+    expect(d.partial).toBe(true);
+    expect(d.leftUnstaged.join(' ')).toMatch(/Search/);
+    expect(d.message).toMatch(/Would stage MCP server Weather live only/);
     expect(await r.git('diff', '--cached', '--name-only')).toBe('');
     const real = cli('git', 'stage-item', 'mcp-server:weather');
     expect(real.status, real.err).toBe(0);
-    expect(real.out).toMatch(/Staged mcp-servers\.json \(it also holds 1 other changed item/);
+    expect(real.out).toMatch(/Staged MCP server Weather live only; the file's 1 other changed item stays unstaged/);
     expect((await r.git('diff', '--cached', '--name-only')).trim()).toBe('mcp-servers.json');
     const back = cli('git', 'unstage-item', 'mcp-server:weather', '--json');
     expect(cliData<{ applied: boolean }>(back.out).applied).toBe(true);

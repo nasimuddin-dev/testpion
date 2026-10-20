@@ -1,0 +1,217 @@
+{
+  "_type": "export",
+  "__export_format": 4,
+  "__export_source": "insomnia.desktop.app:v10",
+  "resources": [
+    {
+      "_id": "wrk_geo",
+      "_type": "workspace",
+      "name": "Maps API",
+      "parentId": null
+    },
+    {
+      "_id": "fld_geo_0",
+      "_type": "request_group",
+      "parentId": "wrk_geo",
+      "name": "Geocoding",
+      "metaSortKey": 0,
+      "authentication": {
+        "type": "apikey",
+        "key": "key",
+        "value": "{{mapsKey}}",
+        "addTo": "queryParams"
+      }
+    },
+    {
+      "_id": "req_geo_0_0",
+      "_type": "request",
+      "parentId": "fld_geo_0",
+      "metaSortKey": 0,
+      "name": "Geocode an address",
+      "url": "{{ _.baseUrl }}/geocode/json",
+      "method": "GET",
+      "parameters": [
+        {
+          "name": "address",
+          "value": "1600 Amphitheatre Parkway, Mountain View, CA"
+        }
+      ],
+      "headers": [],
+      "afterResponseScript": "insomnia.test(\"Status code is 200\", () => {\n  insomnia.expect(insomnia.response.code).to.eql(200);\n});"
+    },
+    {
+      "_id": "req_geo_0_1",
+      "_type": "request",
+      "parentId": "fld_geo_0",
+      "metaSortKey": 1,
+      "name": "Reverse geocode",
+      "url": "{{ _.baseUrl }}/geocode/json",
+      "method": "GET",
+      "parameters": [
+        {
+          "name": "latlng",
+          "value": "40.714224,-73.961452"
+        }
+      ],
+      "headers": []
+    },
+    {
+      "_id": "req_geo_0_2",
+      "_type": "request",
+      "parentId": "fld_geo_0",
+      "metaSortKey": 2,
+      "name": "Geocode by place id",
+      "url": "{{ _.baseUrl }}/geocode/json",
+      "method": "GET",
+      "parameters": [
+        {
+          "name": "place_id",
+          "value": "ChIJd8BlQ2BZwokRAFUEcm_qrcA"
+        }
+      ],
+      "headers": []
+    },
+    {
+      "_id": "fld_geo_1",
+      "_type": "request_group",
+      "parentId": "wrk_geo",
+      "name": "Directions",
+      "metaSortKey": 1
+    },
+    {
+      "_id": "req_geo_1_0",
+      "_type": "request",
+      "parentId": "fld_geo_1",
+      "metaSortKey": 0,
+      "name": "Driving directions",
+      "url": "{{ _.baseUrl }}/directions/json",
+      "method": "GET",
+      "parameters": [
+        {
+          "name": "origin",
+          "value": "Toronto"
+        },
+        {
+          "name": "destination",
+          "value": "Montreal"
+        },
+        {
+          "name": "mode",
+          "value": "driving"
+        }
+      ],
+      "headers": [],
+      "afterResponseScript": "insomnia.test(\"Status code is 200\", () => {\n  insomnia.expect(insomnia.response.code).to.eql(200);\n});"
+    },
+    {
+      "_id": "req_geo_1_1",
+      "_type": "request",
+      "parentId": "fld_geo_1",
+      "metaSortKey": 1,
+      "name": "Transit directions",
+      "url": "{{ _.baseUrl }}/directions/json",
+      "method": "GET",
+      "parameters": [
+        {
+          "name": "origin",
+          "value": "Boston"
+        },
+        {
+          "name": "destination",
+          "value": "Concord"
+        },
+        {
+          "name": "mode",
+          "value": "transit"
+        }
+      ],
+      "headers": []
+    },
+    {
+      "_id": "fld_geo_2",
+      "_type": "request_group",
+      "parentId": "wrk_geo",
+      "name": "Places",
+      "metaSortKey": 2
+    },
+    {
+      "_id": "req_geo_2_0",
+      "_type": "request",
+      "parentId": "fld_geo_2",
+      "metaSortKey": 0,
+      "name": "Find place",
+      "url": "{{ _.baseUrl }}/place/findplacefromtext/json",
+      "method": "GET",
+      "parameters": [
+        {
+          "name": "input",
+          "value": "Museum of Contemporary Art Australia"
+        },
+        {
+          "name": "inputtype",
+          "value": "textquery"
+        }
+      ],
+      "headers": []
+    },
+    {
+      "_id": "req_geo_2_1",
+      "_type": "request",
+      "parentId": "fld_geo_2",
+      "metaSortKey": 1,
+      "name": "Place details",
+      "url": "{{ _.baseUrl }}/place/details/json",
+      "method": "GET",
+      "parameters": [
+        {
+          "name": "place_id",
+          "value": "ChIJN1t_tDeuEmsRUsoyG83frY4"
+        }
+      ],
+      "headers": []
+    },
+    {
+      "_id": "req_geo_2_2",
+      "_type": "request",
+      "parentId": "fld_geo_2",
+      "metaSortKey": 2,
+      "name": "Nearby search",
+      "url": "{{ _.baseUrl }}/place/nearbysearch/json",
+      "method": "GET",
+      "parameters": [
+        {
+          "name": "location",
+          "value": "-33.8670522,151.1957362"
+        },
+        {
+          "name": "radius",
+          "value": "1500"
+        },
+        {
+          "name": "type",
+          "value": "restaurant"
+        }
+      ],
+      "headers": []
+    },
+    {
+      "_id": "env_geo",
+      "_type": "environment",
+      "parentId": "wrk_geo",
+      "name": "Base Environment",
+      "data": {
+        "baseUrl": "https://maps.example.test/maps/api"
+      }
+    },
+    {
+      "_id": "env_geo_default",
+      "_type": "environment",
+      "parentId": "env_geo",
+      "name": "default",
+      "data": {
+        "baseUrl": "https://maps.example.test/maps/api",
+        "mapsKey": "AIza-test"
+      }
+    }
+  ]
+}

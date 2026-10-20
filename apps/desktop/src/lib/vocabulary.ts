@@ -89,6 +89,7 @@ export const LABEL = {
   generateFlows: 'Generate integration flows…',
   generateSpecTests: 'Generate tests from this spec…',
   tidyImport: 'Tidy with AI…',
+  fixImportLeftovers: 'Fix what the import left…',
   preview: 'Preview',
   runWithDataset: 'Run a collection with it',
   useInTest: 'Use in a test',

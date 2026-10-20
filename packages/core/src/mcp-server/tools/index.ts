@@ -10,6 +10,7 @@ import { commandLine, isCommandTrusted } from '../../storage/trust.js';
 import { aiTools } from '../ai-tools.js';
 import { arazzoTools } from '../arazzo-tools.js';
 import { importTools } from '../import-tools.js';
+import { exportConvertTools } from '../export-convert-tools.js';
 import { datasetTools } from '../dataset-tools.js';
 import { debuggerTools } from '../debugger-tools.js';
 import { deployTools } from '../deploy-tools.js';
@@ -33,6 +34,7 @@ import { itemTools } from './item-tools.js';
 import { outputTools } from './output-tools.js';
 import { gitItemTools } from './git-item-tools.js';
 import { gitOpsTools } from './git-ops-tools.js';
+import { gitSetupTools } from './git-setup-tools.js';
 import { searchAskTools } from './search-ask-tools.js';
 
 /** What the tool modules need from the server: the workspace, its secrets and settings, and the lookups the server shares. */
@@ -71,9 +73,11 @@ export function moduleTools(d: ModuleToolDeps): Tool[] {
     ...datasetTools({ store }),
     ...arazzoTools({ store }),
     ...importTools({ store }),
+    ...exportConvertTools({ store }),
     ...gitTools({ store, findCollection, redactor }),
     ...gitItemTools({ store }),
     ...gitOpsTools({ store, redactor }),
+    ...gitSetupTools({ store, redactor }),
     ...openApiTools({ store, readSpecRef: d.readSpec, context: (environment) => createEngineContext({ store, secrets, settings, environment }) }),
     ...debuggerTools({ redactor, store, session: d.captured }),
     ...recordingTools({ store, redactor, secrets, session: d.captured }),

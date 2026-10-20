@@ -1,0 +1,370 @@
+{
+  "yaakVersion": "2025.2.0",
+  "yaakSchema": 3,
+  "resources": {
+    "workspaces": [
+      {
+        "model": "workspace",
+        "id": "wk_payments",
+        "name": "Payments API"
+      }
+    ],
+    "environments": [
+      {
+        "model": "environment",
+        "id": "ev_payments_base",
+        "workspaceId": "wk_payments",
+        "name": "Global",
+        "base": true,
+        "variables": [
+          {
+            "enabled": true,
+            "name": "baseUrl",
+            "value": "https://api.payments.example.test/v1"
+          }
+        ]
+      },
+      {
+        "model": "environment",
+        "id": "ev_payments_test",
+        "workspaceId": "wk_payments",
+        "name": "test",
+        "variables": [
+          {
+            "enabled": true,
+            "name": "baseUrl",
+            "value": "https://api.payments.example.test/v1"
+          },
+          {
+            "enabled": true,
+            "name": "secretKey",
+            "value": "sk_test_0000"
+          }
+        ]
+      },
+      {
+        "model": "environment",
+        "id": "ev_payments_live",
+        "workspaceId": "wk_payments",
+        "name": "live",
+        "variables": [
+          {
+            "enabled": true,
+            "name": "baseUrl",
+            "value": "https://api.payments.example.test/v1"
+          },
+          {
+            "enabled": true,
+            "name": "secretKey",
+            "value": ""
+          }
+        ]
+      }
+    ],
+    "folders": [
+      {
+        "model": "folder",
+        "id": "fl_payments_0",
+        "workspaceId": "wk_payments",
+        "folderId": null,
+        "name": "Customers",
+        "sortPriority": 1,
+        "authenticationType": "bearer",
+        "authentication": {
+          "token": "{{secretKey}}"
+        }
+      },
+      {
+        "model": "folder",
+        "id": "fl_payments_1",
+        "workspaceId": "wk_payments",
+        "folderId": null,
+        "name": "Charges",
+        "sortPriority": 2
+      },
+      {
+        "model": "folder",
+        "id": "fl_payments_2",
+        "workspaceId": "wk_payments",
+        "folderId": null,
+        "name": "Refunds",
+        "sortPriority": 3
+      }
+    ],
+    "httpRequests": [
+      {
+        "model": "http_request",
+        "id": "rq_payments_1",
+        "workspaceId": "wk_payments",
+        "folderId": "fl_payments_0",
+        "name": "Create a customer",
+        "method": "POST",
+        "url": "${[ baseUrl ]}/customers",
+        "urlParameters": [],
+        "headers": [],
+        "bodyType": "application/x-www-form-urlencoded",
+        "body": {
+          "form": [
+            {
+              "enabled": true,
+              "name": "email",
+              "value": "jenny@example.test"
+            },
+            {
+              "enabled": true,
+              "name": "name",
+              "value": "Jenny Rosen"
+            }
+          ]
+        },
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 1
+      },
+      {
+        "model": "http_request",
+        "id": "rq_payments_2",
+        "workspaceId": "wk_payments",
+        "folderId": "fl_payments_0",
+        "name": "Retrieve a customer",
+        "method": "GET",
+        "url": "${[ baseUrl ]}/customers/cus_123",
+        "urlParameters": [],
+        "headers": [],
+        "bodyType": null,
+        "body": {},
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 2
+      },
+      {
+        "model": "http_request",
+        "id": "rq_payments_3",
+        "workspaceId": "wk_payments",
+        "folderId": "fl_payments_0",
+        "name": "Update a customer",
+        "method": "POST",
+        "url": "${[ baseUrl ]}/customers/cus_123",
+        "urlParameters": [],
+        "headers": [],
+        "bodyType": "application/x-www-form-urlencoded",
+        "body": {
+          "form": [
+            {
+              "enabled": true,
+              "name": "description",
+              "value": "VIP"
+            }
+          ]
+        },
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 3
+      },
+      {
+        "model": "http_request",
+        "id": "rq_payments_4",
+        "workspaceId": "wk_payments",
+        "folderId": "fl_payments_0",
+        "name": "Delete a customer",
+        "method": "DELETE",
+        "url": "${[ baseUrl ]}/customers/cus_123",
+        "urlParameters": [],
+        "headers": [],
+        "bodyType": null,
+        "body": {},
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 4
+      },
+      {
+        "model": "http_request",
+        "id": "rq_payments_5",
+        "workspaceId": "wk_payments",
+        "folderId": "fl_payments_0",
+        "name": "List all customers",
+        "method": "GET",
+        "url": "${[ baseUrl ]}/customers",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": "limit",
+            "value": "10"
+          },
+          {
+            "enabled": true,
+            "name": "starting_after",
+            "value": "cus_100"
+          }
+        ],
+        "headers": [],
+        "bodyType": null,
+        "body": {},
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 5
+      },
+      {
+        "model": "http_request",
+        "id": "rq_payments_6",
+        "workspaceId": "wk_payments",
+        "folderId": "fl_payments_1",
+        "name": "Create a charge",
+        "method": "POST",
+        "url": "${[ baseUrl ]}/charges",
+        "urlParameters": [],
+        "headers": [
+          {
+            "enabled": true,
+            "name": "Idempotency-Key",
+            "value": "{{$guid}}"
+          }
+        ],
+        "bodyType": "application/x-www-form-urlencoded",
+        "body": {
+          "form": [
+            {
+              "enabled": true,
+              "name": "amount",
+              "value": "2000"
+            },
+            {
+              "enabled": true,
+              "name": "currency",
+              "value": "usd"
+            },
+            {
+              "enabled": true,
+              "name": "source",
+              "value": "tok_visa"
+            }
+          ]
+        },
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 6
+      },
+      {
+        "model": "http_request",
+        "id": "rq_payments_7",
+        "workspaceId": "wk_payments",
+        "folderId": "fl_payments_1",
+        "name": "Retrieve a charge",
+        "method": "GET",
+        "url": "${[ baseUrl ]}/charges/ch_123",
+        "urlParameters": [],
+        "headers": [],
+        "bodyType": null,
+        "body": {},
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 7
+      },
+      {
+        "model": "http_request",
+        "id": "rq_payments_8",
+        "workspaceId": "wk_payments",
+        "folderId": "fl_payments_1",
+        "name": "Capture a charge",
+        "method": "POST",
+        "url": "${[ baseUrl ]}/charges/ch_123/capture",
+        "urlParameters": [],
+        "headers": [],
+        "bodyType": null,
+        "body": {},
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 8
+      },
+      {
+        "model": "http_request",
+        "id": "rq_payments_9",
+        "workspaceId": "wk_payments",
+        "folderId": "fl_payments_1",
+        "name": "List all charges",
+        "method": "GET",
+        "url": "${[ baseUrl ]}/charges",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": "customer",
+            "value": "cus_123"
+          }
+        ],
+        "headers": [],
+        "bodyType": null,
+        "body": {},
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 9
+      },
+      {
+        "model": "http_request",
+        "id": "rq_payments_10",
+        "workspaceId": "wk_payments",
+        "folderId": "fl_payments_2",
+        "name": "Create a refund",
+        "method": "POST",
+        "url": "${[ baseUrl ]}/refunds",
+        "urlParameters": [],
+        "headers": [],
+        "bodyType": "application/x-www-form-urlencoded",
+        "body": {
+          "form": [
+            {
+              "enabled": true,
+              "name": "charge",
+              "value": "ch_123"
+            },
+            {
+              "enabled": true,
+              "name": "amount",
+              "value": "500"
+            }
+          ]
+        },
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 10
+      },
+      {
+        "model": "http_request",
+        "id": "rq_payments_11",
+        "workspaceId": "wk_payments",
+        "folderId": "fl_payments_2",
+        "name": "Retrieve a refund",
+        "method": "GET",
+        "url": "${[ baseUrl ]}/refunds/re_123",
+        "urlParameters": [],
+        "headers": [],
+        "bodyType": null,
+        "body": {},
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 11
+      },
+      {
+        "model": "http_request",
+        "id": "rq_payments_12",
+        "workspaceId": "wk_payments",
+        "folderId": "fl_payments_2",
+        "name": "List all refunds",
+        "method": "GET",
+        "url": "${[ baseUrl ]}/refunds",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": "charge",
+            "value": "ch_123"
+          }
+        ],
+        "headers": [],
+        "bodyType": null,
+        "body": {},
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 12
+      }
+    ]
+  }
+}

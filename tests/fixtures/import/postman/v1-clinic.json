@@ -1,0 +1,72 @@
+{
+  "id": "6b7e2c50-0000-4000-8000-000000000001",
+  "name": "Clinic (v1)",
+  "description": "Exported with Postman 1.x",
+  "order": [
+    "r-root"
+  ],
+  "folders": [
+    {
+      "id": "f-1",
+      "name": "Patients",
+      "description": "All about patients",
+      "order": [
+        "r-list",
+        "r-create"
+      ]
+    }
+  ],
+  "folders_order": [
+    "f-1"
+  ],
+  "requests": [
+    {
+      "id": "r-list",
+      "name": "List patients",
+      "method": "GET",
+      "url": "{{host}}/patients?limit=10",
+      "headers": "Accept: application/json\nX-Trace: 1",
+      "dataMode": "params",
+      "data": [],
+      "currentHelper": "basicAuth",
+      "helperAttributes": {
+        "id": "basic",
+        "username": "vet",
+        "password": "{{password}}"
+      },
+      "tests": "tests[\"Status code is 200\"] = responseCode.code === 200;",
+      "preRequestScript": "postman.setEnvironmentVariable('stamp', Date.now());",
+      "collectionId": "x"
+    },
+    {
+      "id": "r-create",
+      "name": "Create patient",
+      "method": "POST",
+      "url": "{{host}}/patients",
+      "headers": "Content-Type: application/json",
+      "dataMode": "raw",
+      "rawModeData": "{\"name\":\"Rex\"}",
+      "currentHelper": "normal",
+      "helperAttributes": {}
+    },
+    {
+      "id": "r-root",
+      "name": "Health",
+      "method": "GET",
+      "url": "{{host}}/health",
+      "headers": "",
+      "dataMode": "urlencoded",
+      "data": [
+        {
+          "key": "a",
+          "value": "1",
+          "type": "text"
+        }
+      ],
+      "currentHelper": "kerberosAuth",
+      "helperAttributes": {
+        "service": "x"
+      }
+    }
+  ]
+}

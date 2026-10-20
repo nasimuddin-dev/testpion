@@ -1,0 +1,290 @@
+{
+  "v": 2,
+  "name": "Maps API",
+  "folders": [
+    {
+      "v": 2,
+      "name": "Geocoding",
+      "folders": [],
+      "auth": {
+        "authType": "inherit",
+        "authActive": true
+      },
+      "headers": [],
+      "variables": [],
+      "requests": [
+        {
+          "v": "11",
+          "name": "Geocode an address",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/geocode/json",
+          "params": [
+            {
+              "key": "address",
+              "value": "1600 Amphitheatre Parkway, Mountain View, CA",
+              "active": true
+            }
+          ],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "pw.test(\"Status code is 200\", () => {\n  pw.expect(pw.response.status).toBe(200);\n});",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": null,
+            "body": null
+          },
+          "requestVariables": []
+        },
+        {
+          "v": "11",
+          "name": "Reverse geocode",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/geocode/json",
+          "params": [
+            {
+              "key": "latlng",
+              "value": "40.714224,-73.961452",
+              "active": true
+            }
+          ],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": null,
+            "body": null
+          },
+          "requestVariables": []
+        },
+        {
+          "v": "11",
+          "name": "Geocode by place id",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/geocode/json",
+          "params": [
+            {
+              "key": "place_id",
+              "value": "ChIJd8BlQ2BZwokRAFUEcm_qrcA",
+              "active": true
+            }
+          ],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": null,
+            "body": null
+          },
+          "requestVariables": []
+        }
+      ]
+    },
+    {
+      "v": 2,
+      "name": "Directions",
+      "folders": [],
+      "auth": {
+        "authType": "inherit",
+        "authActive": true
+      },
+      "headers": [],
+      "variables": [],
+      "requests": [
+        {
+          "v": "11",
+          "name": "Driving directions",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/directions/json",
+          "params": [
+            {
+              "key": "origin",
+              "value": "Toronto",
+              "active": true
+            },
+            {
+              "key": "destination",
+              "value": "Montreal",
+              "active": true
+            },
+            {
+              "key": "mode",
+              "value": "driving",
+              "active": true
+            }
+          ],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "pw.test(\"Status code is 200\", () => {\n  pw.expect(pw.response.status).toBe(200);\n});",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": null,
+            "body": null
+          },
+          "requestVariables": []
+        },
+        {
+          "v": "11",
+          "name": "Transit directions",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/directions/json",
+          "params": [
+            {
+              "key": "origin",
+              "value": "Boston",
+              "active": true
+            },
+            {
+              "key": "destination",
+              "value": "Concord",
+              "active": true
+            },
+            {
+              "key": "mode",
+              "value": "transit",
+              "active": true
+            }
+          ],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": null,
+            "body": null
+          },
+          "requestVariables": []
+        }
+      ]
+    },
+    {
+      "v": 2,
+      "name": "Places",
+      "folders": [],
+      "auth": {
+        "authType": "inherit",
+        "authActive": true
+      },
+      "headers": [],
+      "variables": [],
+      "requests": [
+        {
+          "v": "11",
+          "name": "Find place",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/place/findplacefromtext/json",
+          "params": [
+            {
+              "key": "input",
+              "value": "Museum of Contemporary Art Australia",
+              "active": true
+            },
+            {
+              "key": "inputtype",
+              "value": "textquery",
+              "active": true
+            }
+          ],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": null,
+            "body": null
+          },
+          "requestVariables": []
+        },
+        {
+          "v": "11",
+          "name": "Place details",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/place/details/json",
+          "params": [
+            {
+              "key": "place_id",
+              "value": "ChIJN1t_tDeuEmsRUsoyG83frY4",
+              "active": true
+            }
+          ],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": null,
+            "body": null
+          },
+          "requestVariables": []
+        },
+        {
+          "v": "11",
+          "name": "Nearby search",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/place/nearbysearch/json",
+          "params": [
+            {
+              "key": "location",
+              "value": "-33.8670522,151.1957362",
+              "active": true
+            },
+            {
+              "key": "radius",
+              "value": "1500",
+              "active": true
+            },
+            {
+              "key": "type",
+              "value": "restaurant",
+              "active": true
+            }
+          ],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": null,
+            "body": null
+          },
+          "requestVariables": []
+        }
+      ]
+    }
+  ],
+  "requests": [],
+  "auth": {
+    "authType": "api-key",
+    "authActive": true,
+    "key": "key",
+    "value": "{{mapsKey}}",
+    "addTo": "QUERY_PARAMS"
+  },
+  "headers": [],
+  "variables": []
+}

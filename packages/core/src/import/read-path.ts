@@ -21,7 +21,8 @@ export function readImportPath(path: string): { files: RawImportFile[]; folderNa
       if (e.isSymbolicLink()) continue;
       const p = join(dir, e.name);
       if (e.isDirectory()) {
-        if (e.name === 'node_modules' || e.name === '.git' || (e.name.startsWith('.') && e.name !== '.')) continue;
+        // (.resources and .postman hold the definition files of a Postman Git collection)
+        if (e.name === 'node_modules' || e.name === '.git' || (e.name.startsWith('.') && e.name !== '.' && e.name !== '.resources' && e.name !== '.postman')) continue;
         walk(p, depth + 1);
       } else if (e.isFile()) {
         // (only the collection's own .env at the top is read; a hidden file elsewhere is not a collection file)

@@ -1,0 +1,357 @@
+{
+  "v": 2,
+  "name": "Pet Store",
+  "folders": [
+    {
+      "v": 2,
+      "name": "pet",
+      "folders": [],
+      "auth": {
+        "authType": "inherit",
+        "authActive": true
+      },
+      "headers": [],
+      "variables": [],
+      "requests": [
+        {
+          "v": "11",
+          "name": "Add a new pet",
+          "method": "POST",
+          "endpoint": "<<baseUrl>>/pet",
+          "params": [],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": "application/json",
+            "body": "{\n  \"id\": 0,\n  \"name\": \"doggie\",\n  \"status\": \"available\",\n  \"tags\": [\n    {\n      \"name\": \"good\"\n    }\n  ]\n}"
+          },
+          "requestVariables": []
+        },
+        {
+          "v": "11",
+          "name": "Update an existing pet",
+          "method": "PUT",
+          "endpoint": "<<baseUrl>>/pet",
+          "params": [],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": "application/json",
+            "body": "{\n  \"id\": 1,\n  \"name\": \"doggie\",\n  \"status\": \"sold\"\n}"
+          },
+          "requestVariables": []
+        },
+        {
+          "v": "11",
+          "name": "Find pets by status",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/pet/findByStatus",
+          "params": [
+            {
+              "key": "status",
+              "value": "available",
+              "active": true
+            }
+          ],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "pw.test(\"Status code is 200\", () => {\n  pw.expect(pw.response.status).toBe(200);\n});",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": null,
+            "body": null
+          },
+          "requestVariables": []
+        },
+        {
+          "v": "11",
+          "name": "Find pet by ID",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/pet/1",
+          "params": [],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "pw.test(\"Status code is 200\", () => {\n  pw.expect(pw.response.status).toBe(200);\n});",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": null,
+            "body": null
+          },
+          "requestVariables": []
+        },
+        {
+          "v": "11",
+          "name": "Delete a pet",
+          "method": "DELETE",
+          "endpoint": "<<baseUrl>>/pet/1",
+          "params": [],
+          "headers": [
+            {
+              "key": "api_key",
+              "value": "<<apiKey>>",
+              "active": true
+            }
+          ],
+          "preRequestScript": "",
+          "testScript": "",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": null,
+            "body": null
+          },
+          "requestVariables": []
+        },
+        {
+          "v": "11",
+          "name": "Upload an image",
+          "method": "POST",
+          "endpoint": "<<baseUrl>>/pet/1/uploadImage",
+          "params": [],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": "multipart/form-data",
+            "body": [
+              {
+                "key": "additionalMetadata",
+                "value": "cute",
+                "active": true,
+                "isFile": false
+              },
+              {
+                "key": "file",
+                "value": "dog.png",
+                "active": true,
+                "isFile": true
+              }
+            ]
+          },
+          "requestVariables": []
+        }
+      ]
+    },
+    {
+      "v": 2,
+      "name": "store",
+      "folders": [],
+      "auth": {
+        "authType": "inherit",
+        "authActive": true
+      },
+      "headers": [],
+      "variables": [],
+      "requests": [
+        {
+          "v": "11",
+          "name": "Returns pet inventories by status",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/store/inventory",
+          "params": [],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "pw.test(\"Status code is 200\", () => {\n  pw.expect(pw.response.status).toBe(200);\n});",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": null,
+            "body": null
+          },
+          "requestVariables": []
+        },
+        {
+          "v": "11",
+          "name": "Place an order for a pet",
+          "method": "POST",
+          "endpoint": "<<baseUrl>>/store/order",
+          "params": [],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": "application/json",
+            "body": "{\n  \"petId\": 1,\n  \"quantity\": 1,\n  \"status\": \"placed\"\n}"
+          },
+          "requestVariables": []
+        },
+        {
+          "v": "11",
+          "name": "Find purchase order by ID",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/store/order/1",
+          "params": [],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": null,
+            "body": null
+          },
+          "requestVariables": []
+        },
+        {
+          "v": "11",
+          "name": "Delete purchase order by ID",
+          "method": "DELETE",
+          "endpoint": "<<baseUrl>>/store/order/1",
+          "params": [],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": null,
+            "body": null
+          },
+          "requestVariables": []
+        }
+      ]
+    },
+    {
+      "v": 2,
+      "name": "user",
+      "folders": [],
+      "auth": {
+        "authType": "inherit",
+        "authActive": true
+      },
+      "headers": [],
+      "variables": [],
+      "requests": [
+        {
+          "v": "11",
+          "name": "Create user",
+          "method": "POST",
+          "endpoint": "<<baseUrl>>/user",
+          "params": [],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": "application/json",
+            "body": "{\n  \"username\": \"theUser\",\n  \"email\": \"john@example.test\"\n}"
+          },
+          "requestVariables": []
+        },
+        {
+          "v": "11",
+          "name": "Logs user into the system",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/user/login",
+          "params": [
+            {
+              "key": "username",
+              "value": "theUser",
+              "active": true
+            },
+            {
+              "key": "password",
+              "value": "<<password>>",
+              "active": true
+            }
+          ],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "pw.test(\"Status code is 200\", () => {\n  pw.expect(pw.response.status).toBe(200);\n});",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": null,
+            "body": null
+          },
+          "requestVariables": []
+        },
+        {
+          "v": "11",
+          "name": "Get user by user name",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/user/theUser",
+          "params": [],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": null,
+            "body": null
+          },
+          "requestVariables": []
+        },
+        {
+          "v": "11",
+          "name": "Logs out current logged in user session",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/user/logout",
+          "params": [],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": null,
+            "body": null
+          },
+          "requestVariables": []
+        }
+      ]
+    }
+  ],
+  "requests": [],
+  "auth": {
+    "authType": "api-key",
+    "authActive": true,
+    "key": "api_key",
+    "value": "{{apiKey}}",
+    "addTo": "HEADERS"
+  },
+  "headers": [],
+  "variables": []
+}

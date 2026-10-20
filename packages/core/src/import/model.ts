@@ -91,6 +91,17 @@ export interface ImportDocument {
   /** gRPC calls and connections (library items), by kind. */
   savedItems?: unknown;
   flows?: ArazzoFlowFile[];
+  /** Workspace globals (Postman's globals file): the values go to the workspace's globals on this computer, secrets to the secret store. */
+  globals?: Array<{ key: string; value: string; secret?: boolean }>;
+  /** Cookies of the source's cookie jar (Insomnia): they go to the workspace's cookie jar on this computer. */
+  cookies?: Array<{ name: string; value: string; domain: string; path: string; expires?: string; secure?: boolean; httpOnly?: boolean; hostOnly?: boolean }>;
+  /**
+   * The id each node has in the source tool (a Postman item id, an Insomnia `_id` …), by the node's id here: what a
+   * re-import of the same source matches on, to update the collection instead of adding a second one (reimport.ts).
+   * `sourceKey` names the collection itself in the source (a Postman collection id, a file path).
+   */
+  sourceIds?: Record<string, string>;
+  sourceKey?: string;
   /** A schema or definition to keep in the workspace (a GraphQL SDL: specs/graphql/<name>.graphql). */
   specFile?: { path: string; text: string };
   findings: ImportFinding[];

@@ -204,18 +204,26 @@ describe('discard one item', () => {
 });
 
 describe('stage one item', () => {
-  it('stages its file and says which other changed items come along', async () => {
+  it('stages just that item (release C: by its index blob) and says which other changed items stay out', async () => {
     r.write('mcp-servers.json', servers([weather, search('https://s.example.com/e1'), files('https://f.example.com/e1')]));
     const dry = await stageItem(r.ws, a('search'), { dryRun: true });
-    expect(dry.applied).toBe(false);
-    expect(dry.alsoStages).toEqual(['MCP server Files']);
+    expect(dry).toMatchObject({ applied: false, partial: true, alsoStages: [], leftUnstaged: ['MCP server Files'] });
     const res = await stageItem(r.ws, a('search'));
-    expect(res.message).toMatch(/Staged mcp-servers.json \(it also holds 1 other changed item: MCP server Files\)/);
+    expect(res.message).toMatch(/Staged MCP server Search only; the file's 1 other changed item stays unstaged/);
     expect((await gitStatus(r.ws)).files.find((f) => f.path === 'mcp-servers.json')!.staged).toBe(true);
     const un = await stageItem(r.ws, a('search'), { unstage: true });
     expect(un.message).toMatch(/^Unstaged/);
     expect((await gitStatus(r.ws)).files.find((f) => f.path === 'mcp-servers.json')!.staged).toBe(false);
     await runGit(r.ws, ['checkout', 'HEAD', '--', 'mcp-servers.json']);
+  });
+
+  it('a file that is one item stages as one file and says so', async () => {
+    r.edit('environments/staging.json', (t) => t.replace('"variables": [', '"variables": [{ "key": "zz", "value": "1", "enabled": true },'));
+    const res = await stageItem(r.ws, addressOf('environments/staging.json'));
+    expect(res.partial).toBeUndefined();
+    expect(res.message).toMatch(/^Staged environments\/staging\.json/);
+    await runGit(r.ws, ['reset', '-q', 'HEAD', '--', 'environments/staging.json']);
+    await runGit(r.ws, ['checkout', 'HEAD', '--', 'environments/staging.json']);
   });
 });
 

@@ -1,0 +1,430 @@
+{
+  "apidogProject": "1.0.0",
+  "info": {
+    "name": "Bank API"
+  },
+  "apiCollection": [
+    {
+      "name": "Root",
+      "id": 1,
+      "items": [
+        {
+          "name": "Accounts",
+          "id": 10,
+          "items": [
+            {
+              "name": "List accounts",
+              "api": {
+                "id": "101",
+                "method": "get",
+                "path": "/accounts",
+                "parameters": {
+                  "query": [],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "responses": [
+                  {
+                    "id": "1010",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "Get account",
+              "api": {
+                "id": "102",
+                "method": "get",
+                "path": "/accounts/{{accountId}}",
+                "parameters": {
+                  "query": [],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "responses": [
+                  {
+                    "id": "1020",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "Get balances",
+              "api": {
+                "id": "103",
+                "method": "get",
+                "path": "/accounts/{{accountId}}/balances",
+                "parameters": {
+                  "query": [],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "responses": [
+                  {
+                    "id": "1030",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "Get transactions",
+              "api": {
+                "id": "104",
+                "method": "get",
+                "path": "/accounts/{{accountId}}/transactions",
+                "parameters": {
+                  "query": [
+                    {
+                      "name": "fromBookingDateTime",
+                      "required": true,
+                      "type": "string",
+                      "example": "2026-01-01T00:00:00Z"
+                    },
+                    {
+                      "name": "limit",
+                      "required": true,
+                      "type": "string",
+                      "example": "50"
+                    }
+                  ],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "responses": [
+                  {
+                    "id": "1040",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "List standing orders",
+              "api": {
+                "id": "105",
+                "method": "get",
+                "path": "/accounts/{{accountId}}/standing-orders",
+                "parameters": {
+                  "query": [],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "responses": [
+                  {
+                    "id": "1050",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Payments",
+          "id": 11,
+          "items": [
+            {
+              "name": "Create a payment consent",
+              "api": {
+                "id": "106",
+                "method": "post",
+                "path": "/domestic-payment-consents",
+                "parameters": {
+                  "query": [],
+                  "path": [],
+                  "header": [
+                    {
+                      "name": "x-idempotency-key",
+                      "required": true,
+                      "type": "string",
+                      "example": "{{$guid}}"
+                    },
+                    {
+                      "name": "x-fapi-financial-id",
+                      "required": true,
+                      "type": "string",
+                      "example": "{{orgId}}"
+                    }
+                  ],
+                  "cookie": []
+                },
+                "requestBody": {
+                  "type": "application/json",
+                  "example": "{\n  \"Data\": {\n    \"Initiation\": {\n      \"InstructionIdentification\": \"ACME412\",\n      \"InstructedAmount\": {\n        \"Amount\": \"165.88\",\n        \"Currency\": \"GBP\"\n      }\n    }\n  },\n  \"Risk\": {}\n}"
+                },
+                "responses": [
+                  {
+                    "id": "1060",
+                    "name": "OK",
+                    "code": 201,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "Get a payment consent",
+              "api": {
+                "id": "107",
+                "method": "get",
+                "path": "/domestic-payment-consents/{{consentId}}",
+                "parameters": {
+                  "query": [],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "responses": [
+                  {
+                    "id": "1070",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "Submit a payment",
+              "api": {
+                "id": "108",
+                "method": "post",
+                "path": "/domestic-payments",
+                "parameters": {
+                  "query": [],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "requestBody": {
+                  "type": "application/json",
+                  "example": "{\n  \"Data\": {\n    \"ConsentId\": \"{{consentId}}\"\n  },\n  \"Risk\": {}\n}"
+                },
+                "responses": [
+                  {
+                    "id": "1080",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "Get a payment",
+              "api": {
+                "id": "109",
+                "method": "get",
+                "path": "/domestic-payments/{{paymentId}}",
+                "parameters": {
+                  "query": [],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "responses": [
+                  {
+                    "id": "1090",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Funds",
+          "id": 12,
+          "items": [
+            {
+              "name": "Confirm funds",
+              "api": {
+                "id": "110",
+                "method": "post",
+                "path": "/funds-confirmations",
+                "parameters": {
+                  "query": [],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "requestBody": {
+                  "type": "application/json",
+                  "example": "{\n  \"Data\": {\n    \"ConsentId\": \"{{consentId}}\",\n    \"Reference\": \"Purchase01\",\n    \"InstructedAmount\": {\n      \"Amount\": \"20.00\",\n      \"Currency\": \"GBP\"\n    }\n  }\n}"
+                },
+                "responses": [
+                  {
+                    "id": "1100",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "Get funds consent",
+              "api": {
+                "id": "111",
+                "method": "get",
+                "path": "/funds-confirmation-consents/{{consentId}}",
+                "parameters": {
+                  "query": [],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "responses": [
+                  {
+                    "id": "1110",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "environments": [
+    {
+      "name": "sandbox",
+      "baseUrl": "https://sandbox.bank.example.test/open-banking/v3",
+      "variables": [
+        {
+          "name": "clientId",
+          "value": "sandbox-client"
+        },
+        {
+          "name": "clientSecret",
+          "value": ""
+        }
+      ]
+    },
+    {
+      "name": "production",
+      "baseUrl": "https://api.bank.example.test/open-banking/v3",
+      "variables": [
+        {
+          "name": "clientId",
+          "value": ""
+        },
+        {
+          "name": "clientSecret",
+          "value": ""
+        }
+      ]
+    }
+  ]
+}

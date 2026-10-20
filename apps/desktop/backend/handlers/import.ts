@@ -4,6 +4,8 @@ import {
   expandImportFiles,
   fetchImportText,
   fetchPostmanInputs,
+  fetchRepoFiles,
+  parseRepoLink,
   importInputs,
   isRequestSnippet,
   listImportReceipts,
@@ -12,6 +14,8 @@ import {
   readImportReport,
   reportMarkdown,
   type ImportReport,
+  type ImportSinks,
+  type ReimportAction,
   shortId,
   undoMany,
   type ImportInput,
@@ -41,6 +45,32 @@ export interface ImportSource {
   folderName?: string;
 }
 
+/** Where an import puts the workspace's globals and cookies: the values and the jar this computer keeps for it. */
+function sinks(be: Backend): ImportSinks {
+  return {
+    ...(be.currentValues
+      ? {
+          globals: {
+            set: async (vars) => {
+              for (const v of vars) await be.currentValues!.set('globals', '', v.key, v.value, !!v.secret || be.logger.redactor.isSensitiveKey(v.key));
+            },
+            remove: (keys) => {
+              for (const k of keys) void be.currentValues!.set('globals', '', k, undefined, false);
+            },
+          },
+        }
+      : {}),
+    ...(be.cookieStore
+      ? {
+          cookies: {
+            add: (cookies) => cookies.forEach((c) => be.cookieStore!.jar.set(c)),
+            remove: (list) => list.forEach((c) => be.cookieStore!.jar.remove(c.domain, c.name, c.path)),
+          },
+        }
+      : {}),
+  };
+}
+
 export function importHandlers(be: Backend): Handlers {
   const sweep = () => {
     const now = Date.now();
@@ -51,7 +81,7 @@ export function importHandlers(be: Backend): Handlers {
      * Read what the user gave (files, a dropped folder, a ZIP, pasted text, a link, a Postman id) and say what importing
      * it would create and what would not come over: nothing is written. `sessionId` is what `import.apply` takes.
      */
-    'import.preview': async (p: ImportSource & { keepPm?: boolean }) => {
+    'import.preview': async (p: ImportSource & { keepPm?: boolean; liftTests?: boolean }) => {
       sweep();
       const inputs: ImportInput[] = [];
       const skipped: SkippedFile[] = [];
@@ -64,8 +94,15 @@ export function importHandlers(be: Backend): Handlers {
       if (p.text?.trim()) inputs.push({ name: 'pasted', text: p.text, source: 'pasted text', fileCount: 1 });
       if (p.url?.trim()) {
         const ref = parsePostmanRef(p.url);
+        const repo = ref ? undefined : parseRepoLink(p.url.trim());
         if (ref) inputs.push(...(await fetchPostmanInputs(ref, be.secrets.get(KEY))));
-        else {
+        else if (repo) {
+          // a public GitHub / GitLab repository or folder: its files are read without any credential
+          const fetched = await fetchRepoFiles(repo);
+          const r = expandImportFiles(fetched.files, { folderName: fetched.folderName });
+          inputs.push(...r.inputs);
+          skipped.push(...fetched.skipped, ...r.skipped);
+        } else {
           const f = await fetchImportText(p.url.trim());
           inputs.push({ name: f.fileName ?? p.url, text: f.text, source: f.url, fileCount: 1 });
         }
@@ -75,10 +112,10 @@ export function importHandlers(be: Backend): Handlers {
       SESSIONS.set(sessionId, { inputs, skipped, at: Date.now() });
       // a copied request (cURL, fetch …) is saved by import.apply into the "Imported" collection: there is no tree to preview
       const snippets = inputs.filter((i) => isRequestSnippet(i.text)).length;
-      return { sessionId, snippets, ...planInputs(be.ws, inputs.filter((i) => !isRequestSnippet(i.text)), skipped, { scripts: p.keepPm ? 'keep' : 'tp' }) };
+      return { sessionId, snippets, ...planInputs(be.ws, inputs.filter((i) => !isRequestSnippet(i.text)), skipped, { scripts: p.keepPm ? 'keep' : 'tp', liftTests: p.liftTests }) };
     },
     /** Import what a preview read. Several inputs: one that fails does not stop the others. Returns the ids `import.undo` takes. */
-    'import.apply': ({ sessionId, keepPm, replaceSpec }: { sessionId: string; keepPm?: boolean; replaceSpec?: boolean }) => {
+    'import.apply': ({ sessionId, keepPm, replaceSpec, liftTests, newCopy, decisions }: { sessionId: string; keepPm?: boolean; replaceSpec?: boolean; liftTests?: boolean; newCopy?: boolean; decisions?: Record<string, ReimportAction> }) => {
       const s = SESSIONS.get(sessionId);
       if (!s) throw new ApsError('ValidationError', 'That preview has expired: choose the files again', { suggestions: [] });
       SESSIONS.delete(sessionId);
@@ -88,6 +125,10 @@ export function importHandlers(be: Backend): Handlers {
       const { imported, receipts } = importInputs(be.ws, rest, {
         secrets: be.secrets,
         scripts: keepPm ? 'keep' : 'tp',
+        liftTests,
+        // a source imported before updates the collection it made, item by item (replace / new / skip), unless a copy is asked for
+        update: newCopy ? false : decisions && Object.keys(decisions).length ? { decisions } : true,
+        sinks: sinks(be),
         specs: replaceSpec ? 'replace' : 'keep-both',
         envName: (i) => {
           const base = i.source.split(/[\\/]/).pop() ?? i.name;
@@ -96,12 +137,13 @@ export function importHandlers(be: Backend): Handlers {
       });
       be.host.emit('data.changed', { kind: 'collections' });
       be.host.emit('data.changed', { kind: 'environments' });
+      if (imported.some((x) => x.result?.globals)) be.host.emit('data.changed', { kind: 'globals' });
       return { imported, receipts, snippets, skipped: s.skipped };
     },
     'import.cancel': ({ sessionId }: { sessionId: string }) => ({ ok: SESSIONS.delete(sessionId) }),
     /** Take back imports (the receipts `import.apply` returned): to Recently deleted, so it can be restored. */
     'import.undo': ({ receipts, force }: { receipts: string[]; force?: boolean }) => {
-      const r = undoMany(be.ws, receipts, { force });
+      const r = undoMany(be.ws, receipts, { force, sinks: sinks(be) });
       be.host.emit('data.changed', { kind: 'collections' });
       be.host.emit('data.changed', { kind: 'environments' });
       return r;

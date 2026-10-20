@@ -1,0 +1,7 @@
+values:
+  - key: locale
+    value: en
+    enabled: true
+  - key: debug
+    value: "1"
+    enabled: true

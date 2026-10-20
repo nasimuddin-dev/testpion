@@ -1,0 +1,288 @@
+{
+  "yaakVersion": "2025.2.0",
+  "yaakSchema": 3,
+  "resources": {
+    "workspaces": [
+      {
+        "model": "workspace",
+        "id": "wk_chat",
+        "name": "Chat API"
+      }
+    ],
+    "environments": [
+      {
+        "model": "environment",
+        "id": "ev_chat_base",
+        "workspaceId": "wk_chat",
+        "name": "Global",
+        "base": true,
+        "variables": [
+          {
+            "enabled": true,
+            "name": "baseUrl",
+            "value": "https://chat.example.test/api"
+          }
+        ]
+      },
+      {
+        "model": "environment",
+        "id": "ev_chat_workspace",
+        "workspaceId": "wk_chat",
+        "name": "workspace",
+        "variables": [
+          {
+            "enabled": true,
+            "name": "baseUrl",
+            "value": "https://chat.example.test/api"
+          },
+          {
+            "enabled": true,
+            "name": "botToken",
+            "value": "xoxb-test"
+          },
+          {
+            "enabled": true,
+            "name": "channel",
+            "value": "C0123"
+          }
+        ]
+      }
+    ],
+    "folders": [
+      {
+        "model": "folder",
+        "id": "fl_chat_0",
+        "workspaceId": "wk_chat",
+        "folderId": null,
+        "name": "conversations",
+        "sortPriority": 1,
+        "authenticationType": "bearer",
+        "authentication": {
+          "token": "{{botToken}}"
+        }
+      },
+      {
+        "model": "folder",
+        "id": "fl_chat_1",
+        "workspaceId": "wk_chat",
+        "folderId": null,
+        "name": "chat",
+        "sortPriority": 2
+      },
+      {
+        "model": "folder",
+        "id": "fl_chat_2",
+        "workspaceId": "wk_chat",
+        "folderId": null,
+        "name": "users",
+        "sortPriority": 3
+      }
+    ],
+    "httpRequests": [
+      {
+        "model": "http_request",
+        "id": "rq_chat_1",
+        "workspaceId": "wk_chat",
+        "folderId": "fl_chat_0",
+        "name": "conversations.list",
+        "method": "GET",
+        "url": "${[ baseUrl ]}/conversations.list",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": "limit",
+            "value": "100"
+          },
+          {
+            "enabled": true,
+            "name": "types",
+            "value": "public_channel"
+          }
+        ],
+        "headers": [],
+        "bodyType": null,
+        "body": {},
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 1
+      },
+      {
+        "model": "http_request",
+        "id": "rq_chat_2",
+        "workspaceId": "wk_chat",
+        "folderId": "fl_chat_0",
+        "name": "conversations.history",
+        "method": "GET",
+        "url": "${[ baseUrl ]}/conversations.history",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": "channel",
+            "value": "${[ channel ]}"
+          },
+          {
+            "enabled": true,
+            "name": "limit",
+            "value": "20"
+          }
+        ],
+        "headers": [],
+        "bodyType": null,
+        "body": {},
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 2
+      },
+      {
+        "model": "http_request",
+        "id": "rq_chat_3",
+        "workspaceId": "wk_chat",
+        "folderId": "fl_chat_0",
+        "name": "conversations.join",
+        "method": "POST",
+        "url": "${[ baseUrl ]}/conversations.join",
+        "urlParameters": [],
+        "headers": [],
+        "bodyType": "application/json",
+        "body": {
+          "text": "{\n  \"channel\": \"${[ channel ]}\"\n}"
+        },
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 3
+      },
+      {
+        "model": "http_request",
+        "id": "rq_chat_4",
+        "workspaceId": "wk_chat",
+        "folderId": "fl_chat_0",
+        "name": "conversations.create",
+        "method": "POST",
+        "url": "${[ baseUrl ]}/conversations.create",
+        "urlParameters": [],
+        "headers": [],
+        "bodyType": "application/json",
+        "body": {
+          "text": "{\n  \"name\": \"new-channel\",\n  \"is_private\": false\n}"
+        },
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 4
+      },
+      {
+        "model": "http_request",
+        "id": "rq_chat_5",
+        "workspaceId": "wk_chat",
+        "folderId": "fl_chat_1",
+        "name": "chat.postMessage",
+        "method": "POST",
+        "url": "${[ baseUrl ]}/chat.postMessage",
+        "urlParameters": [],
+        "headers": [],
+        "bodyType": "application/json",
+        "body": {
+          "text": "{\n  \"channel\": \"${[ channel ]}\",\n  \"text\": \"Hello, world\",\n  \"unfurl_links\": false\n}"
+        },
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 5
+      },
+      {
+        "model": "http_request",
+        "id": "rq_chat_6",
+        "workspaceId": "wk_chat",
+        "folderId": "fl_chat_1",
+        "name": "chat.update",
+        "method": "POST",
+        "url": "${[ baseUrl ]}/chat.update",
+        "urlParameters": [],
+        "headers": [],
+        "bodyType": "application/json",
+        "body": {
+          "text": "{\n  \"channel\": \"${[ channel ]}\",\n  \"ts\": \"1405894322.002768\",\n  \"text\": \"edited\"\n}"
+        },
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 6
+      },
+      {
+        "model": "http_request",
+        "id": "rq_chat_7",
+        "workspaceId": "wk_chat",
+        "folderId": "fl_chat_1",
+        "name": "chat.delete",
+        "method": "POST",
+        "url": "${[ baseUrl ]}/chat.delete",
+        "urlParameters": [],
+        "headers": [],
+        "bodyType": "application/json",
+        "body": {
+          "text": "{\n  \"channel\": \"${[ channel ]}\",\n  \"ts\": \"1405894322.002768\"\n}"
+        },
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 7
+      },
+      {
+        "model": "http_request",
+        "id": "rq_chat_8",
+        "workspaceId": "wk_chat",
+        "folderId": "fl_chat_2",
+        "name": "users.list",
+        "method": "GET",
+        "url": "${[ baseUrl ]}/users.list",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": "limit",
+            "value": "200"
+          }
+        ],
+        "headers": [],
+        "bodyType": null,
+        "body": {},
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 8
+      },
+      {
+        "model": "http_request",
+        "id": "rq_chat_9",
+        "workspaceId": "wk_chat",
+        "folderId": "fl_chat_2",
+        "name": "users.info",
+        "method": "GET",
+        "url": "${[ baseUrl ]}/users.info",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": "user",
+            "value": "U0123"
+          }
+        ],
+        "headers": [],
+        "bodyType": null,
+        "body": {},
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 9
+      },
+      {
+        "model": "http_request",
+        "id": "rq_chat_10",
+        "workspaceId": "wk_chat",
+        "folderId": "fl_chat_2",
+        "name": "auth.test",
+        "method": "POST",
+        "url": "${[ baseUrl ]}/auth.test",
+        "urlParameters": [],
+        "headers": [],
+        "bodyType": null,
+        "body": {},
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 10
+      }
+    ]
+  }
+}

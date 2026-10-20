@@ -1,0 +1,180 @@
+opencollection: 1.0.0
+bundled: true
+info:
+  name: Chat API
+request:
+  auth:
+    type: bearer
+    token: "{{botToken}}"
+  variables:
+    - name: baseUrl
+      value: https://chat.example.test/api
+items:
+  - info:
+      name: conversations
+      type: folder
+      seq: 1
+    items:
+      - info:
+          name: conversations.list
+          type: http
+          seq: 1
+        http:
+          method: GET
+          url: "{{baseUrl}}/conversations.list"
+          params:
+            - name: limit
+              value: "100"
+              type: query
+            - name: types
+              value: public_channel
+              type: query
+        runtime:
+          assertions:
+            - expression: res.status
+              operator: eq
+              value: "200"
+      - info:
+          name: conversations.history
+          type: http
+          seq: 2
+        http:
+          method: GET
+          url: "{{baseUrl}}/conversations.history"
+          params:
+            - name: channel
+              value: "{{channel}}"
+              type: query
+            - name: limit
+              value: "20"
+              type: query
+      - info:
+          name: conversations.join
+          type: http
+          seq: 3
+        http:
+          method: POST
+          url: "{{baseUrl}}/conversations.join"
+          body:
+            type: json
+            data: |-
+              {
+                "channel": "{{channel}}"
+              }
+      - info:
+          name: conversations.create
+          type: http
+          seq: 4
+        http:
+          method: POST
+          url: "{{baseUrl}}/conversations.create"
+          body:
+            type: json
+            data: |-
+              {
+                "name": "new-channel",
+                "is_private": false
+              }
+  - info:
+      name: chat
+      type: folder
+      seq: 2
+    items:
+      - info:
+          name: chat.postMessage
+          type: http
+          seq: 1
+        http:
+          method: POST
+          url: "{{baseUrl}}/chat.postMessage"
+          body:
+            type: json
+            data: |-
+              {
+                "channel": "{{channel}}",
+                "text": "Hello, world",
+                "unfurl_links": false
+              }
+        runtime:
+          assertions:
+            - expression: res.status
+              operator: eq
+              value: "200"
+      - info:
+          name: chat.update
+          type: http
+          seq: 2
+        http:
+          method: POST
+          url: "{{baseUrl}}/chat.update"
+          body:
+            type: json
+            data: |-
+              {
+                "channel": "{{channel}}",
+                "ts": "1405894322.002768",
+                "text": "edited"
+              }
+      - info:
+          name: chat.delete
+          type: http
+          seq: 3
+        http:
+          method: POST
+          url: "{{baseUrl}}/chat.delete"
+          body:
+            type: json
+            data: |-
+              {
+                "channel": "{{channel}}",
+                "ts": "1405894322.002768"
+              }
+  - info:
+      name: users
+      type: folder
+      seq: 3
+    items:
+      - info:
+          name: users.list
+          type: http
+          seq: 1
+        http:
+          method: GET
+          url: "{{baseUrl}}/users.list"
+          params:
+            - name: limit
+              value: "200"
+              type: query
+      - info:
+          name: users.info
+          type: http
+          seq: 2
+        http:
+          method: GET
+          url: "{{baseUrl}}/users.info"
+          params:
+            - name: user
+              value: U0123
+              type: query
+      - info:
+          name: auth.test
+          type: http
+          seq: 3
+        http:
+          method: POST
+          url: "{{baseUrl}}/auth.test"
+        runtime:
+          assertions:
+            - expression: res.status
+              operator: eq
+              value: "200"
+config:
+  environments:
+    - name: workspace
+      variables:
+        - name: baseUrl
+          value: https://chat.example.test/api
+        - name: botToken
+          value: xoxb-test
+        - name: channel
+          value: C0123

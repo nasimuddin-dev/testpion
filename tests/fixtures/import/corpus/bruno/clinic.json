@@ -1,0 +1,395 @@
+{
+  "name": "Vet Clinic",
+  "version": "1",
+  "items": [
+    {
+      "type": "folder",
+      "name": "Patients",
+      "seq": 1,
+      "items": [
+        {
+          "type": "http-request",
+          "name": "List patients",
+          "seq": 1,
+          "request": {
+            "url": "{{baseUrl}}/patients?species=dog&limit=25",
+            "method": "GET",
+            "headers": [],
+            "params": [
+              {
+                "name": "species",
+                "value": "dog",
+                "type": "query",
+                "enabled": true
+              },
+              {
+                "name": "limit",
+                "value": "25",
+                "type": "query",
+                "enabled": true
+              }
+            ],
+            "body": {
+              "mode": "none"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [
+              {
+                "name": "res.status",
+                "value": "eq 200",
+                "enabled": true
+              }
+            ],
+            "tests": "test(\"Status code is 200\", function () {\n  expect(res.status).to.equal(200);\n});"
+          }
+        },
+        {
+          "type": "http-request",
+          "name": "Create a patient",
+          "seq": 2,
+          "request": {
+            "url": "{{baseUrl}}/patients",
+            "method": "POST",
+            "headers": [],
+            "params": [],
+            "body": {
+              "mode": "json",
+              "json": "{\n  \"name\": \"Rex\",\n  \"species\": \"dog\",\n  \"born\": \"2021-03-04\",\n  \"owner\": \"o-7\"\n}"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [
+              {
+                "name": "res.status",
+                "value": "eq 201",
+                "enabled": true
+              }
+            ],
+            "tests": "test(\"Status code is 201\", function () {\n  expect(res.status).to.equal(201);\n});"
+          }
+        },
+        {
+          "type": "http-request",
+          "name": "Get a patient",
+          "seq": 3,
+          "request": {
+            "url": "{{baseUrl}}/patients/:id",
+            "method": "GET",
+            "headers": [],
+            "params": [
+              {
+                "name": "id",
+                "value": "p-1",
+                "type": "path",
+                "enabled": true
+              }
+            ],
+            "body": {
+              "mode": "none"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [
+              {
+                "name": "res.status",
+                "value": "eq 200",
+                "enabled": true
+              }
+            ],
+            "tests": "test(\"Status code is 200\", function () {\n  expect(res.status).to.equal(200);\n});"
+          }
+        },
+        {
+          "type": "http-request",
+          "name": "Update a patient",
+          "seq": 4,
+          "request": {
+            "url": "{{baseUrl}}/patients/:id",
+            "method": "PATCH",
+            "headers": [],
+            "params": [
+              {
+                "name": "id",
+                "value": "p-1",
+                "type": "path",
+                "enabled": true
+              }
+            ],
+            "body": {
+              "mode": "json",
+              "json": "{\n  \"weightKg\": 31.5\n}"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [],
+            "tests": ""
+          }
+        },
+        {
+          "type": "http-request",
+          "name": "Upload a photo",
+          "seq": 5,
+          "request": {
+            "url": "{{baseUrl}}/patients/:id/photo",
+            "method": "PUT",
+            "headers": [],
+            "params": [
+              {
+                "name": "id",
+                "value": "p-1",
+                "type": "path",
+                "enabled": true
+              }
+            ],
+            "body": {
+              "mode": "multipartForm",
+              "multipartForm": [
+                {
+                  "name": "caption",
+                  "value": "At the beach",
+                  "type": "text",
+                  "enabled": true
+                },
+                {
+                  "name": "photo",
+                  "type": "file",
+                  "value": [
+                    "rex.png"
+                  ],
+                  "enabled": true
+                }
+              ]
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [],
+            "tests": ""
+          }
+        }
+      ]
+    },
+    {
+      "type": "folder",
+      "name": "Visits",
+      "seq": 2,
+      "items": [
+        {
+          "type": "http-request",
+          "name": "List visits",
+          "seq": 1,
+          "request": {
+            "url": "{{baseUrl}}/visits?patient=p-1",
+            "method": "GET",
+            "headers": [],
+            "params": [
+              {
+                "name": "patient",
+                "value": "p-1",
+                "type": "query",
+                "enabled": true
+              }
+            ],
+            "body": {
+              "mode": "none"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [],
+            "tests": ""
+          }
+        },
+        {
+          "type": "http-request",
+          "name": "Book a visit",
+          "seq": 2,
+          "request": {
+            "url": "{{baseUrl}}/visits",
+            "method": "POST",
+            "headers": [],
+            "params": [],
+            "body": {
+              "mode": "json",
+              "json": "{\n  \"patient\": \"p-1\",\n  \"at\": \"2026-05-04T09:30:00Z\",\n  \"reason\": \"vaccination\"\n}"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [
+              {
+                "name": "res.status",
+                "value": "eq 201",
+                "enabled": true
+              }
+            ],
+            "tests": "test(\"Status code is 201\", function () {\n  expect(res.status).to.equal(201);\n});"
+          }
+        },
+        {
+          "type": "http-request",
+          "name": "Cancel a visit",
+          "seq": 3,
+          "request": {
+            "url": "{{baseUrl}}/visits/v-3",
+            "method": "DELETE",
+            "headers": [],
+            "params": [],
+            "body": {
+              "mode": "none"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [],
+            "tests": ""
+          }
+        }
+      ]
+    },
+    {
+      "type": "folder",
+      "name": "Owners",
+      "seq": 3,
+      "items": [
+        {
+          "type": "http-request",
+          "name": "List owners",
+          "seq": 1,
+          "request": {
+            "url": "{{baseUrl}}/owners",
+            "method": "GET",
+            "headers": [],
+            "params": [],
+            "body": {
+              "mode": "none"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [],
+            "tests": ""
+          }
+        },
+        {
+          "type": "http-request",
+          "name": "Create an owner",
+          "seq": 2,
+          "request": {
+            "url": "{{baseUrl}}/owners",
+            "method": "POST",
+            "headers": [],
+            "params": [],
+            "body": {
+              "mode": "json",
+              "json": "{\n  \"name\": \"Ada\",\n  \"email\": \"ada@example.test\"\n}"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [],
+            "tests": ""
+          }
+        }
+      ]
+    }
+  ],
+  "environments": [
+    {
+      "name": "local",
+      "variables": [
+        {
+          "name": "baseUrl",
+          "value": "http://localhost:4010/api",
+          "enabled": true,
+          "secret": false
+        },
+        {
+          "name": "user",
+          "value": "vet",
+          "enabled": true,
+          "secret": false
+        },
+        {
+          "name": "password",
+          "value": "secret",
+          "enabled": true,
+          "secret": false
+        }
+      ]
+    },
+    {
+      "name": "staging",
+      "variables": [
+        {
+          "name": "baseUrl",
+          "value": "https://staging.clinic.example.test/api",
+          "enabled": true,
+          "secret": false
+        },
+        {
+          "name": "user",
+          "value": "vet",
+          "enabled": true,
+          "secret": false
+        },
+        {
+          "name": "password",
+          "value": "",
+          "enabled": true,
+          "secret": false
+        }
+      ]
+    }
+  ],
+  "root": {
+    "request": {
+      "auth": {
+        "mode": "basic",
+        "basic": {
+          "username": "{{user}}",
+          "password": "{{password}}"
+        }
+      },
+      "vars": {
+        "req": [
+          {
+            "name": "baseUrl",
+            "value": "https://clinic.example.test/api",
+            "enabled": true
+          }
+        ]
+      }
+    }
+  },
+  "brunoConfig": {
+    "version": "1",
+    "name": "Vet Clinic",
+    "type": "collection"
+  }
+}

@@ -144,7 +144,11 @@ describe('every row of a versioned kind says what it is for git', () => {
         drawn.add(base);
         if (base === 'test') drawn.add('flow');
       }
-    const missing = [...versioned].filter((id: KindId) => !drawn.has(id));
+    // kinds the window lists as no row of their own: a proto is opened from its gRPC call, a mock from its MCP server, the Debugger rules
+    // are a panel, the workspace file is Environments ▸ Workspace variables, a package is edited in Settings. Their change is a row of
+    // the Git view (kind icon, name, Compare, History, Restore, Discard, Stage), which the gap-matrix test (git-kind-matrix) checks.
+    const GIT_VIEW_ONLY = new Set<string>(['workspace', 'proto', 'script-package', 'mcp-mock', 'debugger-rules']);
+    const missing = [...versioned].filter((id: KindId) => !drawn.has(id) && !GIT_VIEW_ONLY.has(id));
     expect(missing, 'a versioned kind with no row that shows its change mark: give its rows `git={…}`, or plan the capability').toEqual([]);
   });
 

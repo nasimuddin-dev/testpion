@@ -1,0 +1,191 @@
+opencollection: 1.0.0
+bundled: true
+info:
+  name: Bank API
+request:
+  auth:
+    type: oauth2
+    flow: client_credentials
+    accessTokenUrl: https://auth.bank.example.test/oauth/token
+    credentials:
+      clientId: "{{clientId}}"
+      clientSecret: "{{clientSecret}}"
+    scope: accounts payments
+  variables:
+    - name: baseUrl
+      value: https://api.bank.example.test/open-banking/v3
+items:
+  - info:
+      name: Accounts
+      type: folder
+      seq: 1
+    items:
+      - info:
+          name: List accounts
+          type: http
+          seq: 1
+        http:
+          method: GET
+          url: "{{baseUrl}}/accounts"
+        runtime:
+          assertions:
+            - expression: res.status
+              operator: eq
+              value: "200"
+      - info:
+          name: Get account
+          type: http
+          seq: 2
+        http:
+          method: GET
+          url: "{{baseUrl}}/accounts/{{accountId}}"
+      - info:
+          name: Get balances
+          type: http
+          seq: 3
+        http:
+          method: GET
+          url: "{{baseUrl}}/accounts/{{accountId}}/balances"
+        runtime:
+          assertions:
+            - expression: res.status
+              operator: eq
+              value: "200"
+      - info:
+          name: Get transactions
+          type: http
+          seq: 4
+        http:
+          method: GET
+          url: "{{baseUrl}}/accounts/{{accountId}}/transactions"
+          params:
+            - name: fromBookingDateTime
+              value: 2026-01-01T00:00:00Z
+              type: query
+            - name: limit
+              value: "50"
+              type: query
+      - info:
+          name: List standing orders
+          type: http
+          seq: 5
+        http:
+          method: GET
+          url: "{{baseUrl}}/accounts/{{accountId}}/standing-orders"
+  - info:
+      name: Payments
+      type: folder
+      seq: 2
+    items:
+      - info:
+          name: Create a payment consent
+          type: http
+          seq: 1
+        http:
+          method: POST
+          url: "{{baseUrl}}/domestic-payment-consents"
+          headers:
+            - name: x-idempotency-key
+              value: "{{$guid}}"
+            - name: x-fapi-financial-id
+              value: "{{orgId}}"
+          body:
+            type: json
+            data: |-
+              {
+                "Data": {
+                  "Initiation": {
+                    "InstructionIdentification": "ACME412",
+                    "InstructedAmount": {
+                      "Amount": "165.88",
+                      "Currency": "GBP"
+                    }
+                  }
+                },
+                "Risk": {}
+              }
+        runtime:
+          assertions:
+            - expression: res.status
+              operator: eq
+              value: "201"
+      - info:
+          name: Get a payment consent
+          type: http
+          seq: 2
+        http:
+          method: GET
+          url: "{{baseUrl}}/domestic-payment-consents/{{consentId}}"
+      - info:
+          name: Submit a payment
+          type: http
+          seq: 3
+        http:
+          method: POST
+          url: "{{baseUrl}}/domestic-payments"
+          body:
+            type: json
+            data: |-
+              {
+                "Data": {
+                  "ConsentId": "{{consentId}}"
+                },
+                "Risk": {}
+              }
+      - info:
+          name: Get a payment
+          type: http
+          seq: 4
+        http:
+          method: GET
+          url: "{{baseUrl}}/domestic-payments/{{paymentId}}"
+  - info:
+      name: Funds
+      type: folder
+      seq: 3
+    items:
+      - info:
+          name: Confirm funds
+          type: http
+          seq: 1
+        http:
+          method: POST
+          url: "{{baseUrl}}/funds-confirmations"
+          body:
+            type: json
+            data: |-
+              {
+                "Data": {
+                  "ConsentId": "{{consentId}}",
+                  "Reference": "Purchase01",
+                  "InstructedAmount": {
+                    "Amount": "20.00",
+                    "Currency": "GBP"
+                  }
+                }
+              }
+      - info:
+          name: Get funds consent
+          type: http
+          seq: 2
+        http:
+          method: GET
+          url: "{{baseUrl}}/funds-confirmation-consents/{{consentId}}"
+config:
+  environments:
+    - name: sandbox
+      variables:
+        - name: baseUrl
+          value: https://sandbox.bank.example.test/open-banking/v3
+        - name: clientId
+          value: sandbox-client
+        - name: clientSecret
+          value: ""
+    - name: production
+      variables:
+        - name: baseUrl
+          value: https://api.bank.example.test/open-banking/v3
+        - name: clientId
+          value: ""
+        - name: clientSecret
+          value: ""

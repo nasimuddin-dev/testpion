@@ -193,7 +193,7 @@ describe('OwnWrites: every write the app makes to the workspace is told, attribu
         },
         (b) => (got = b),
       );
-      expect(got).toEqual({ kinds: ['tests'], paths: ['datasets/d.csv'] });
+      expect(got).toEqual({ kinds: ['datasets'], paths: ['datasets/d.csv'] });
     } finally {
       ow.dispose();
     }

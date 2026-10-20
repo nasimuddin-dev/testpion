@@ -1,0 +1,194 @@
+type: collection.insomnia.rest/5.0
+schema_version: "5.1"
+name: Vet Clinic
+meta:
+  id: wrk_clinic
+  created: 1
+  modified: 1
+collection:
+  - name: Patients
+    meta:
+      id: fld_clinic_0
+      sortKey: 0
+    authentication:
+      type: basic
+      username: "{{user}}"
+      password: "{{password}}"
+    children:
+      - name: List patients
+        url: "{{ _.baseUrl }}/patients"
+        method: GET
+        parameters:
+          - name: species
+            value: dog
+          - name: limit
+            value: "25"
+        headers: []
+        scripts:
+          afterResponse: |-
+            insomnia.test("Status code is 200", () => {
+              insomnia.expect(insomnia.response.code).to.eql(200);
+            });
+        meta:
+          id: req_clinic_0_0
+          sortKey: 0
+      - name: Create a patient
+        url: "{{ _.baseUrl }}/patients"
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "name": "Rex",
+              "species": "dog",
+              "born": "2021-03-04",
+              "owner": "o-7"
+            }
+        headers: []
+        scripts:
+          afterResponse: |-
+            insomnia.test("Status code is 201", () => {
+              insomnia.expect(insomnia.response.code).to.eql(201);
+            });
+        meta:
+          id: req_clinic_0_1
+          sortKey: 1
+      - name: Get a patient
+        url: "{{ _.baseUrl }}/patients/:id"
+        method: GET
+        pathParameters:
+          - name: id
+            value: p-1
+        headers: []
+        scripts:
+          afterResponse: |-
+            insomnia.test("Status code is 200", () => {
+              insomnia.expect(insomnia.response.code).to.eql(200);
+            });
+        meta:
+          id: req_clinic_0_2
+          sortKey: 2
+      - name: Update a patient
+        url: "{{ _.baseUrl }}/patients/:id"
+        method: PATCH
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "weightKg": 31.5
+            }
+        pathParameters:
+          - name: id
+            value: p-1
+        headers: []
+        meta:
+          id: req_clinic_0_3
+          sortKey: 3
+      - name: Upload a photo
+        url: "{{ _.baseUrl }}/patients/:id/photo"
+        method: PUT
+        body:
+          mimeType: multipart/form-data
+          params:
+            - name: caption
+              value: At the beach
+              type: text
+            - name: photo
+              type: file
+              fileName: rex.png
+        pathParameters:
+          - name: id
+            value: p-1
+        headers: []
+        meta:
+          id: req_clinic_0_4
+          sortKey: 4
+  - name: Visits
+    meta:
+      id: fld_clinic_1
+      sortKey: 1
+    children:
+      - name: List visits
+        url: "{{ _.baseUrl }}/visits"
+        method: GET
+        parameters:
+          - name: patient
+            value: p-1
+        headers: []
+        meta:
+          id: req_clinic_1_0
+          sortKey: 0
+      - name: Book a visit
+        url: "{{ _.baseUrl }}/visits"
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "patient": "p-1",
+              "at": "2026-05-04T09:30:00Z",
+              "reason": "vaccination"
+            }
+        headers: []
+        scripts:
+          afterResponse: |-
+            insomnia.test("Status code is 201", () => {
+              insomnia.expect(insomnia.response.code).to.eql(201);
+            });
+        meta:
+          id: req_clinic_1_1
+          sortKey: 1
+      - name: Cancel a visit
+        url: "{{ _.baseUrl }}/visits/v-3"
+        method: DELETE
+        headers: []
+        meta:
+          id: req_clinic_1_2
+          sortKey: 2
+  - name: Owners
+    meta:
+      id: fld_clinic_2
+      sortKey: 2
+    children:
+      - name: List owners
+        url: "{{ _.baseUrl }}/owners"
+        method: GET
+        headers: []
+        meta:
+          id: req_clinic_2_0
+          sortKey: 0
+      - name: Create an owner
+        url: "{{ _.baseUrl }}/owners"
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "name": "Ada",
+              "email": "ada@example.test"
+            }
+        headers: []
+        meta:
+          id: req_clinic_2_1
+          sortKey: 1
+environments:
+  name: Base Environment
+  meta:
+    id: env_clinic
+  data:
+    baseUrl: https://clinic.example.test/api
+  subEnvironments:
+    - name: local
+      meta:
+        id: env_clinic_local
+      data:
+        baseUrl: http://localhost:4010/api
+        user: vet
+        password: secret
+    - name: staging
+      meta:
+        id: env_clinic_staging
+      data:
+        baseUrl: https://staging.clinic.example.test/api
+        user: vet
+        password: ""

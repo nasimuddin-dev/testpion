@@ -1,0 +1,16 @@
+{
+  "apidogProject": "1.0.0",
+  "info": { "name": "Vet Clinic", "description": "Designed in Apidog" },
+  "apiCollection": [
+    { "name": "Root", "id": 1, "items": [
+      { "name": "Patients", "id": 2, "description": "Patient endpoints", "items": [
+        { "name": "List patients", "api": { "id": "10", "method": "get", "path": "/patients", "description": "All patients", "parameters": { "query": [{ "name": "limit", "required": true, "type": "integer", "example": "10" }, { "name": "page", "required": false, "type": "integer", "example": "1" }], "path": [], "header": [{ "name": "Accept", "required": true, "example": "application/json" }], "cookie": [] }, "responses": [{ "id": "100", "name": "OK", "code": 200, "contentType": "json", "jsonSchema": { "type": "array", "items": { "$ref": "#/definitions/500" } } }], "responseExamples": [{ "responseId": "100", "name": "Two patients", "data": "[{\"id\":1,\"name\":\"Rex\"}]" }] } },
+        { "name": "Create patient", "api": { "id": "11", "method": "post", "path": "/patients/{kind}", "parameters": { "query": [], "path": [{ "name": "kind", "required": true, "example": "dog" }], "header": [], "cookie": [] }, "requestBody": { "type": "application/json", "jsonSchema": { "$ref": "#/definitions/500" } }, "responses": [{ "id": "101", "name": "Created", "code": 201, "contentType": "json", "jsonSchema": { "type": "object", "properties": { "id": { "type": "integer" } } } }], "preProcessors": [{ "type": "customScript", "enable": true, "data": "pm.environment.set('stamp', Date.now());" }, { "type": "database", "enable": true }], "postProcessors": [{ "type": "customScript", "enable": true, "data": "pm.test('created', () => pm.response.to.have.status(201));" }] } },
+        { "name": "Upload", "api": { "id": "12", "method": "put", "path": "https://files.example.test/up", "parameters": { "query": [], "path": [], "header": [], "cookie": [] }, "requestBody": { "type": "multipart/form-data", "parameters": [{ "name": "caption", "type": "string", "example": "Rex" }, { "name": "photo", "type": "file" }] }, "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] } } }
+      ] }
+    ] }
+  ],
+  "schemaCollection": [{ "name": "Root", "id": 400, "items": [{ "name": "Patient", "id": 500, "jsonSchema": { "type": "object", "properties": { "id": { "type": "integer", "example": 1 }, "name": { "type": "string", "example": "Rex" } } } }] }],
+  "environments": [{ "name": "Staging", "baseUrl": "https://staging.example.test", "variables": [{ "name": "token", "value": "abc" }] }],
+  "globalVariables": [{ "name": "locale", "value": "en" }]
+}

@@ -1,0 +1,642 @@
+{
+  "postman/petstore.json": {
+    "tool": "postman",
+    "domain": "petstore",
+    "requests": 14,
+    "folders": 3,
+    "environments": 0,
+    "tests": 4
+  },
+  "postman/payments.json": {
+    "tool": "postman",
+    "domain": "payments",
+    "requests": 12,
+    "folders": 3,
+    "environments": 0,
+    "tests": 4
+  },
+  "postman/codehost.json": {
+    "tool": "postman",
+    "domain": "codehost",
+    "requests": 13,
+    "folders": 3,
+    "environments": 0,
+    "tests": 3
+  },
+  "postman/chat.json": {
+    "tool": "postman",
+    "domain": "chat",
+    "requests": 10,
+    "folders": 3,
+    "environments": 0,
+    "tests": 3
+  },
+  "postman/geo.json": {
+    "tool": "postman",
+    "domain": "geo",
+    "requests": 8,
+    "folders": 3,
+    "environments": 0,
+    "tests": 2
+  },
+  "postman/weather.json": {
+    "tool": "postman",
+    "domain": "weather",
+    "requests": 6,
+    "folders": 2,
+    "environments": 0,
+    "tests": 2
+  },
+  "postman/bank.json": {
+    "tool": "postman",
+    "domain": "bank",
+    "requests": 11,
+    "folders": 3,
+    "environments": 0,
+    "tests": 3
+  },
+  "postman/clinic.json": {
+    "tool": "postman",
+    "domain": "clinic",
+    "requests": 10,
+    "folders": 3,
+    "environments": 0,
+    "tests": 4
+  },
+  "insomnia-v5/petstore.yaml": {
+    "tool": "insomnia-v5",
+    "domain": "petstore",
+    "requests": 14,
+    "folders": 3,
+    "environments": 3,
+    "tests": 4
+  },
+  "insomnia-v5/payments.yaml": {
+    "tool": "insomnia-v5",
+    "domain": "payments",
+    "requests": 12,
+    "folders": 3,
+    "environments": 2,
+    "tests": 4
+  },
+  "insomnia-v5/codehost.yaml": {
+    "tool": "insomnia-v5",
+    "domain": "codehost",
+    "requests": 13,
+    "folders": 3,
+    "environments": 1,
+    "tests": 3
+  },
+  "insomnia-v5/chat.yaml": {
+    "tool": "insomnia-v5",
+    "domain": "chat",
+    "requests": 10,
+    "folders": 3,
+    "environments": 1,
+    "tests": 3
+  },
+  "insomnia-v5/geo.yaml": {
+    "tool": "insomnia-v5",
+    "domain": "geo",
+    "requests": 8,
+    "folders": 3,
+    "environments": 1,
+    "tests": 2
+  },
+  "insomnia-v5/weather.yaml": {
+    "tool": "insomnia-v5",
+    "domain": "weather",
+    "requests": 6,
+    "folders": 2,
+    "environments": 1,
+    "tests": 2
+  },
+  "insomnia-v5/bank.yaml": {
+    "tool": "insomnia-v5",
+    "domain": "bank",
+    "requests": 11,
+    "folders": 3,
+    "environments": 2,
+    "tests": 3
+  },
+  "insomnia-v5/clinic.yaml": {
+    "tool": "insomnia-v5",
+    "domain": "clinic",
+    "requests": 10,
+    "folders": 3,
+    "environments": 2,
+    "tests": 4
+  },
+  "insomnia-v4/petstore.json": {
+    "tool": "insomnia-v4",
+    "domain": "petstore",
+    "requests": 14,
+    "folders": 3,
+    "environments": 3,
+    "tests": 4
+  },
+  "insomnia-v4/payments.json": {
+    "tool": "insomnia-v4",
+    "domain": "payments",
+    "requests": 12,
+    "folders": 3,
+    "environments": 2,
+    "tests": 4
+  },
+  "insomnia-v4/codehost.json": {
+    "tool": "insomnia-v4",
+    "domain": "codehost",
+    "requests": 13,
+    "folders": 3,
+    "environments": 1,
+    "tests": 3
+  },
+  "insomnia-v4/chat.json": {
+    "tool": "insomnia-v4",
+    "domain": "chat",
+    "requests": 10,
+    "folders": 3,
+    "environments": 1,
+    "tests": 3
+  },
+  "insomnia-v4/geo.json": {
+    "tool": "insomnia-v4",
+    "domain": "geo",
+    "requests": 8,
+    "folders": 3,
+    "environments": 1,
+    "tests": 2
+  },
+  "insomnia-v4/weather.json": {
+    "tool": "insomnia-v4",
+    "domain": "weather",
+    "requests": 6,
+    "folders": 2,
+    "environments": 1,
+    "tests": 2
+  },
+  "insomnia-v4/bank.json": {
+    "tool": "insomnia-v4",
+    "domain": "bank",
+    "requests": 11,
+    "folders": 3,
+    "environments": 2,
+    "tests": 3
+  },
+  "insomnia-v4/clinic.json": {
+    "tool": "insomnia-v4",
+    "domain": "clinic",
+    "requests": 10,
+    "folders": 3,
+    "environments": 2,
+    "tests": 4
+  },
+  "opencollection/petstore.yaml": {
+    "tool": "opencollection",
+    "domain": "petstore",
+    "requests": 14,
+    "folders": 3,
+    "environments": 3,
+    "tests": 4
+  },
+  "opencollection/payments.yaml": {
+    "tool": "opencollection",
+    "domain": "payments",
+    "requests": 12,
+    "folders": 3,
+    "environments": 2,
+    "tests": 4
+  },
+  "opencollection/codehost.yaml": {
+    "tool": "opencollection",
+    "domain": "codehost",
+    "requests": 13,
+    "folders": 3,
+    "environments": 1,
+    "tests": 3
+  },
+  "opencollection/chat.yaml": {
+    "tool": "opencollection",
+    "domain": "chat",
+    "requests": 10,
+    "folders": 3,
+    "environments": 1,
+    "tests": 3
+  },
+  "opencollection/geo.yaml": {
+    "tool": "opencollection",
+    "domain": "geo",
+    "requests": 8,
+    "folders": 3,
+    "environments": 1,
+    "tests": 2
+  },
+  "opencollection/weather.yaml": {
+    "tool": "opencollection",
+    "domain": "weather",
+    "requests": 6,
+    "folders": 2,
+    "environments": 1,
+    "tests": 2
+  },
+  "opencollection/bank.yaml": {
+    "tool": "opencollection",
+    "domain": "bank",
+    "requests": 11,
+    "folders": 3,
+    "environments": 2,
+    "tests": 3
+  },
+  "opencollection/clinic.yaml": {
+    "tool": "opencollection",
+    "domain": "clinic",
+    "requests": 10,
+    "folders": 3,
+    "environments": 2,
+    "tests": 4
+  },
+  "bruno/petstore.json": {
+    "tool": "bruno",
+    "domain": "petstore",
+    "requests": 14,
+    "folders": 3,
+    "environments": 3,
+    "tests": 4
+  },
+  "bruno/payments.json": {
+    "tool": "bruno",
+    "domain": "payments",
+    "requests": 12,
+    "folders": 3,
+    "environments": 2,
+    "tests": 4
+  },
+  "bruno/codehost.json": {
+    "tool": "bruno",
+    "domain": "codehost",
+    "requests": 13,
+    "folders": 3,
+    "environments": 1,
+    "tests": 3
+  },
+  "bruno/chat.json": {
+    "tool": "bruno",
+    "domain": "chat",
+    "requests": 10,
+    "folders": 3,
+    "environments": 1,
+    "tests": 3
+  },
+  "bruno/geo.json": {
+    "tool": "bruno",
+    "domain": "geo",
+    "requests": 8,
+    "folders": 3,
+    "environments": 1,
+    "tests": 2
+  },
+  "bruno/weather.json": {
+    "tool": "bruno",
+    "domain": "weather",
+    "requests": 6,
+    "folders": 2,
+    "environments": 1,
+    "tests": 2
+  },
+  "bruno/bank.json": {
+    "tool": "bruno",
+    "domain": "bank",
+    "requests": 11,
+    "folders": 3,
+    "environments": 2,
+    "tests": 3
+  },
+  "bruno/clinic.json": {
+    "tool": "bruno",
+    "domain": "clinic",
+    "requests": 10,
+    "folders": 3,
+    "environments": 2,
+    "tests": 4
+  },
+  "hoppscotch/petstore.json": {
+    "tool": "hoppscotch",
+    "domain": "petstore",
+    "requests": 14,
+    "folders": 3,
+    "environments": 0,
+    "tests": 4
+  },
+  "hoppscotch/payments.json": {
+    "tool": "hoppscotch",
+    "domain": "payments",
+    "requests": 12,
+    "folders": 3,
+    "environments": 0,
+    "tests": 4
+  },
+  "hoppscotch/codehost.json": {
+    "tool": "hoppscotch",
+    "domain": "codehost",
+    "requests": 13,
+    "folders": 3,
+    "environments": 0,
+    "tests": 3
+  },
+  "hoppscotch/chat.json": {
+    "tool": "hoppscotch",
+    "domain": "chat",
+    "requests": 10,
+    "folders": 3,
+    "environments": 0,
+    "tests": 3
+  },
+  "hoppscotch/geo.json": {
+    "tool": "hoppscotch",
+    "domain": "geo",
+    "requests": 8,
+    "folders": 3,
+    "environments": 0,
+    "tests": 2
+  },
+  "hoppscotch/weather.json": {
+    "tool": "hoppscotch",
+    "domain": "weather",
+    "requests": 6,
+    "folders": 2,
+    "environments": 0,
+    "tests": 2
+  },
+  "hoppscotch/bank.json": {
+    "tool": "hoppscotch",
+    "domain": "bank",
+    "requests": 11,
+    "folders": 3,
+    "environments": 0,
+    "tests": 3
+  },
+  "hoppscotch/clinic.json": {
+    "tool": "hoppscotch",
+    "domain": "clinic",
+    "requests": 10,
+    "folders": 3,
+    "environments": 0,
+    "tests": 4
+  },
+  "thunder/petstore.json": {
+    "tool": "thunder",
+    "domain": "petstore",
+    "requests": 14,
+    "folders": 3,
+    "environments": 0,
+    "tests": 4
+  },
+  "thunder/payments.json": {
+    "tool": "thunder",
+    "domain": "payments",
+    "requests": 12,
+    "folders": 3,
+    "environments": 0,
+    "tests": 4
+  },
+  "thunder/codehost.json": {
+    "tool": "thunder",
+    "domain": "codehost",
+    "requests": 13,
+    "folders": 3,
+    "environments": 0,
+    "tests": 3
+  },
+  "thunder/chat.json": {
+    "tool": "thunder",
+    "domain": "chat",
+    "requests": 10,
+    "folders": 3,
+    "environments": 0,
+    "tests": 3
+  },
+  "thunder/geo.json": {
+    "tool": "thunder",
+    "domain": "geo",
+    "requests": 8,
+    "folders": 3,
+    "environments": 0,
+    "tests": 2
+  },
+  "thunder/weather.json": {
+    "tool": "thunder",
+    "domain": "weather",
+    "requests": 6,
+    "folders": 2,
+    "environments": 0,
+    "tests": 2
+  },
+  "thunder/bank.json": {
+    "tool": "thunder",
+    "domain": "bank",
+    "requests": 11,
+    "folders": 3,
+    "environments": 0,
+    "tests": 3
+  },
+  "thunder/clinic.json": {
+    "tool": "thunder",
+    "domain": "clinic",
+    "requests": 10,
+    "folders": 3,
+    "environments": 0,
+    "tests": 4
+  },
+  "yaak/petstore.json": {
+    "tool": "yaak",
+    "domain": "petstore",
+    "requests": 14,
+    "folders": 3,
+    "environments": 3,
+    "tests": 0
+  },
+  "yaak/payments.json": {
+    "tool": "yaak",
+    "domain": "payments",
+    "requests": 12,
+    "folders": 3,
+    "environments": 2,
+    "tests": 0
+  },
+  "yaak/codehost.json": {
+    "tool": "yaak",
+    "domain": "codehost",
+    "requests": 13,
+    "folders": 3,
+    "environments": 1,
+    "tests": 0
+  },
+  "yaak/chat.json": {
+    "tool": "yaak",
+    "domain": "chat",
+    "requests": 10,
+    "folders": 3,
+    "environments": 1,
+    "tests": 0
+  },
+  "yaak/geo.json": {
+    "tool": "yaak",
+    "domain": "geo",
+    "requests": 8,
+    "folders": 3,
+    "environments": 1,
+    "tests": 0
+  },
+  "yaak/weather.json": {
+    "tool": "yaak",
+    "domain": "weather",
+    "requests": 6,
+    "folders": 2,
+    "environments": 1,
+    "tests": 0
+  },
+  "yaak/bank.json": {
+    "tool": "yaak",
+    "domain": "bank",
+    "requests": 11,
+    "folders": 3,
+    "environments": 2,
+    "tests": 0
+  },
+  "yaak/clinic.json": {
+    "tool": "yaak",
+    "domain": "clinic",
+    "requests": 10,
+    "folders": 3,
+    "environments": 2,
+    "tests": 0
+  },
+  "httpie/petstore.json": {
+    "tool": "httpie",
+    "domain": "petstore",
+    "requests": 14,
+    "folders": 3,
+    "environments": 0,
+    "tests": 0
+  },
+  "httpie/payments.json": {
+    "tool": "httpie",
+    "domain": "payments",
+    "requests": 12,
+    "folders": 3,
+    "environments": 0,
+    "tests": 0
+  },
+  "httpie/codehost.json": {
+    "tool": "httpie",
+    "domain": "codehost",
+    "requests": 13,
+    "folders": 3,
+    "environments": 0,
+    "tests": 0
+  },
+  "httpie/chat.json": {
+    "tool": "httpie",
+    "domain": "chat",
+    "requests": 10,
+    "folders": 3,
+    "environments": 0,
+    "tests": 0
+  },
+  "httpie/geo.json": {
+    "tool": "httpie",
+    "domain": "geo",
+    "requests": 8,
+    "folders": 3,
+    "environments": 0,
+    "tests": 0
+  },
+  "httpie/weather.json": {
+    "tool": "httpie",
+    "domain": "weather",
+    "requests": 6,
+    "folders": 2,
+    "environments": 0,
+    "tests": 0
+  },
+  "httpie/bank.json": {
+    "tool": "httpie",
+    "domain": "bank",
+    "requests": 11,
+    "folders": 3,
+    "environments": 0,
+    "tests": 0
+  },
+  "httpie/clinic.json": {
+    "tool": "httpie",
+    "domain": "clinic",
+    "requests": 10,
+    "folders": 3,
+    "environments": 0,
+    "tests": 0
+  },
+  "apidog/petstore.json": {
+    "tool": "apidog",
+    "domain": "petstore",
+    "requests": 14,
+    "folders": 3,
+    "environments": 3,
+    "tests": 0
+  },
+  "apidog/payments.json": {
+    "tool": "apidog",
+    "domain": "payments",
+    "requests": 12,
+    "folders": 3,
+    "environments": 2,
+    "tests": 0
+  },
+  "apidog/codehost.json": {
+    "tool": "apidog",
+    "domain": "codehost",
+    "requests": 13,
+    "folders": 3,
+    "environments": 1,
+    "tests": 0
+  },
+  "apidog/chat.json": {
+    "tool": "apidog",
+    "domain": "chat",
+    "requests": 10,
+    "folders": 3,
+    "environments": 1,
+    "tests": 0
+  },
+  "apidog/geo.json": {
+    "tool": "apidog",
+    "domain": "geo",
+    "requests": 8,
+    "folders": 3,
+    "environments": 1,
+    "tests": 0
+  },
+  "apidog/weather.json": {
+    "tool": "apidog",
+    "domain": "weather",
+    "requests": 6,
+    "folders": 2,
+    "environments": 1,
+    "tests": 0
+  },
+  "apidog/bank.json": {
+    "tool": "apidog",
+    "domain": "bank",
+    "requests": 11,
+    "folders": 3,
+    "environments": 2,
+    "tests": 0
+  },
+  "apidog/clinic.json": {
+    "tool": "apidog",
+    "domain": "clinic",
+    "requests": 10,
+    "folders": 3,
+    "environments": 2,
+    "tests": 0
+  }
+}

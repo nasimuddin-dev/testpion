@@ -1,0 +1,848 @@
+{
+  "postman": [
+    {
+      "name": "status 201 expected",
+      "source": "pm.test(\"Status code is 201\", function () {\n    pm.response.to.have.status(201);\n});"
+    },
+    {
+      "name": "status 202 expected",
+      "source": "pm.test(\"Status code is 202\", function () {\n    pm.response.to.have.status(202);\n});"
+    },
+    {
+      "name": "status 204 expected",
+      "source": "pm.test(\"Status code is 204\", function () {\n    pm.response.to.have.status(204);\n});"
+    },
+    {
+      "name": "status 301 expected",
+      "source": "pm.test(\"Status code is 301\", function () {\n    pm.response.to.have.status(301);\n});"
+    },
+    {
+      "name": "status 400 expected",
+      "source": "pm.test(\"Status code is 400\", function () {\n    pm.response.to.have.status(400);\n});"
+    },
+    {
+      "name": "status 401 expected",
+      "source": "pm.test(\"Status code is 401\", function () {\n    pm.response.to.have.status(401);\n});"
+    },
+    {
+      "name": "status 403 expected",
+      "source": "pm.test(\"Status code is 403\", function () {\n    pm.response.to.have.status(403);\n});"
+    },
+    {
+      "name": "status 404 expected",
+      "source": "pm.test(\"Status code is 404\", function () {\n    pm.response.to.have.status(404);\n});"
+    },
+    {
+      "name": "status 409 expected",
+      "source": "pm.test(\"Status code is 409\", function () {\n    pm.response.to.have.status(409);\n});"
+    },
+    {
+      "name": "status 422 expected",
+      "source": "pm.test(\"Status code is 422\", function () {\n    pm.response.to.have.status(422);\n});"
+    },
+    {
+      "name": "status 429 expected",
+      "source": "pm.test(\"Status code is 429\", function () {\n    pm.response.to.have.status(429);\n});"
+    },
+    {
+      "name": "status 500 expected",
+      "source": "pm.test(\"Status code is 500\", function () {\n    pm.response.to.have.status(500);\n});"
+    },
+    {
+      "name": "response under 100 ms",
+      "source": "pm.test(\"Response time is under 100ms\", () => {\n    pm.expect(pm.response.responseTime).to.be.below(100);\n});"
+    },
+    {
+      "name": "response under 300 ms",
+      "source": "pm.test(\"Response time is under 300ms\", () => {\n    pm.expect(pm.response.responseTime).to.be.below(300);\n});"
+    },
+    {
+      "name": "response under 500 ms",
+      "source": "pm.test(\"Response time is under 500ms\", () => {\n    pm.expect(pm.response.responseTime).to.be.below(500);\n});"
+    },
+    {
+      "name": "response under 1000 ms",
+      "source": "pm.test(\"Response time is under 1000ms\", () => {\n    pm.expect(pm.response.responseTime).to.be.below(1000);\n});"
+    },
+    {
+      "name": "response under 2000 ms",
+      "source": "pm.test(\"Response time is under 2000ms\", () => {\n    pm.expect(pm.response.responseTime).to.be.below(2000);\n});"
+    },
+    {
+      "name": "has header Content-Type",
+      "source": "pm.test(\"Content-Type header is present\", function () {\n    pm.response.to.have.header(\"Content-Type\");\n});"
+    },
+    {
+      "name": "has header Cache-Control",
+      "source": "pm.test(\"Cache-Control header is present\", function () {\n    pm.response.to.have.header(\"Cache-Control\");\n});"
+    },
+    {
+      "name": "has header X-Request-Id",
+      "source": "pm.test(\"X-Request-Id header is present\", function () {\n    pm.response.to.have.header(\"X-Request-Id\");\n});"
+    },
+    {
+      "name": "has header ETag",
+      "source": "pm.test(\"ETag header is present\", function () {\n    pm.response.to.have.header(\"ETag\");\n});"
+    },
+    {
+      "name": "content type includes json",
+      "source": "pm.test(\"JSON content type\", () => {\n    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"json\");\n});"
+    },
+    {
+      "name": "json id is a number",
+      "source": "const body = pm.response.json();\npm.test(\"id is a number\", () => pm.expect(body.id).to.be.a(\"number\"));"
+    },
+    {
+      "name": "json name equals",
+      "source": "pm.test(\"name\", function () {\n    const j = pm.response.json();\n    pm.expect(j.name).to.eql(\"n\");\n});"
+    },
+    {
+      "name": "json value above",
+      "source": "pm.test(\"value is positive\", () => {\n    pm.expect(pm.response.json().value).to.be.above(0);\n});"
+    },
+    {
+      "name": "json has property",
+      "source": "pm.test(\"has token\", () => {\n    pm.expect(pm.response.json()).to.have.property(\"token\");\n});"
+    },
+    {
+      "name": "body contains text",
+      "source": "pm.test(\"body mentions n\", () => {\n    pm.expect(pm.response.text()).to.include(\"n\");\n});"
+    },
+    {
+      "name": "body matches regex",
+      "source": "pm.test(\"token is word chars\", () => {\n    pm.expect(pm.response.json().token).to.match(/^\\w+$/);\n});"
+    },
+    {
+      "name": "response is ok shortcut",
+      "source": "pm.test(\"ok\", () => {\n    pm.response.to.be.ok;\n});"
+    },
+    {
+      "name": "response is json shortcut",
+      "source": "pm.test(\"json\", () => {\n    pm.response.to.be.json;\n});"
+    },
+    {
+      "name": "one of statuses",
+      "source": "pm.test(\"Status is 2xx\", () => {\n    pm.expect(pm.response.code).to.be.oneOf([200, 201, 202]);\n});"
+    },
+    {
+      "name": "skipped test",
+      "source": "pm.test.skip(\"not yet\", () => {\n    pm.expect(1).to.equal(2);\n});\npm.test(\"runs\", () => pm.expect(1).to.equal(1));"
+    },
+    {
+      "name": "environment set from body",
+      "source": "pm.environment.set(\"userId\", pm.response.json().id);"
+    },
+    {
+      "name": "environment get and log",
+      "source": "const t = pm.environment.get(\"token\");\nconsole.log(\"token is\", t);"
+    },
+    {
+      "name": "environment unset",
+      "source": "pm.environment.unset(\"token\");\npm.test(\"gone\", () => pm.expect(pm.environment.has(\"token\")).to.be.false);"
+    },
+    {
+      "name": "environment has check",
+      "source": "pm.test(\"has host\", () => pm.expect(pm.environment.has(\"host\")).to.be.true);"
+    },
+    {
+      "name": "globals set number",
+      "source": "pm.globals.set(\"counter\", 5);\npm.globals.set(\"counter\", pm.globals.get(\"counter\") + 1);"
+    },
+    {
+      "name": "globals unset",
+      "source": "pm.globals.set(\"tmp\", \"x\");\npm.globals.unset(\"tmp\");"
+    },
+    {
+      "name": "collection variables set",
+      "source": "pm.collectionVariables.set(\"lastId\", pm.response.json().id);"
+    },
+    {
+      "name": "collection variables get",
+      "source": "console.log(pm.collectionVariables.get(\"lastId\"));"
+    },
+    {
+      "name": "variables set and get",
+      "source": "pm.variables.set(\"scratch\", 1);\nconsole.log(pm.variables.get(\"scratch\"));"
+    },
+    {
+      "name": "variables replaceIn",
+      "source": "const url = pm.variables.replaceIn(\"{{host}}/items/{{a}}\");\nconsole.log(url);"
+    },
+    {
+      "name": "next request chain",
+      "source": "if (pm.response.json().id) {\n    pm.execution.setNextRequest(\"Fetch details\");\n}"
+    },
+    {
+      "name": "stop the run",
+      "source": "if (pm.response.code !== 200) {\n    pm.execution.setNextRequest(null);\n}"
+    },
+    {
+      "name": "legacy next request",
+      "source": "postman.setNextRequest(\"Cleanup\");"
+    },
+    {
+      "name": "skip request",
+      "source": "if (pm.variables.get(\"skip\")) {\n    pm.execution.skipRequest();\n}"
+    },
+    {
+      "name": "pre-request uuid",
+      "source": "pm.variables.set(\"requestId\", pm.variables.replaceIn(\"{{$guid}}\"));"
+    },
+    {
+      "name": "pre-request timestamp iso",
+      "source": "pm.variables.set(\"now\", new Date().toISOString());"
+    },
+    {
+      "name": "pre-request unix time",
+      "source": "pm.variables.set(\"ts\", Math.floor(Date.now() / 1000));"
+    },
+    {
+      "name": "pre-request random",
+      "source": "pm.variables.set(\"rand\", Math.floor(Math.random() * 1000));"
+    },
+    {
+      "name": "add request header",
+      "source": "pm.request.headers.add({ key: \"X-Trace\", value: \"abc\" });"
+    },
+    {
+      "name": "upsert request header",
+      "source": "pm.request.headers.upsert({ key: \"X-Env\", value: pm.environment.get(\"host\") });"
+    },
+    {
+      "name": "remove request header",
+      "source": "pm.request.headers.remove(\"X-Req\");"
+    },
+    {
+      "name": "read request url",
+      "source": "console.log(pm.request.url.toString(), pm.request.method);"
+    },
+    {
+      "name": "query upsert",
+      "source": "pm.request.url.query.upsert({ key: \"page\", value: \"2\" });"
+    },
+    {
+      "name": "crypto hash",
+      "source": "const CryptoJS = require(\"crypto-js\");\npm.variables.set(\"sig\", CryptoJS.SHA256(pm.variables.get(\"v\")).toString());"
+    },
+    {
+      "name": "base64 helpers",
+      "source": "const enc = btoa(\"user:pass\");\npm.variables.set(\"basic\", \"Basic \" + enc);"
+    },
+    {
+      "name": "lodash use",
+      "source": "const _ = require(\"lodash\");\npm.test(\"sorted\", () => pm.expect(_.sortBy([3, 1, 2])).to.eql([1, 2, 3]));"
+    },
+    {
+      "name": "moment use",
+      "source": "const moment = require(\"moment\");\npm.variables.set(\"day\", moment(\"2026-03-01\").format(\"YYYY-MM-DD\"));"
+    },
+    {
+      "name": "xml2js use",
+      "source": "const xml2js = require(\"xml2js\");\nxml2js.parseString(\"<a><b>1</b></a>\", (err, r) => pm.variables.set(\"b\", r.a.b[0]));"
+    },
+    {
+      "name": "tv4 schema",
+      "source": "const tv4 = require(\"tv4\");\npm.test(\"valid\", () => pm.expect(tv4.validate(pm.response.json(), { type: \"object\", required: [\"id\"] })).to.be.true);"
+    },
+    {
+      "name": "cheerio html",
+      "source": "const cheerio = require(\"cheerio\");\nconst $ = cheerio.load(\"<p class='x'>hi</p>\");\npm.variables.set(\"html\", $(\".x\").text());"
+    },
+    {
+      "name": "cookies read",
+      "source": "pm.test(\"session cookie\", () => pm.expect(pm.cookies.get(\"session\")).to.equal(\"s1\"));"
+    },
+    {
+      "name": "info names",
+      "source": "console.log(pm.info.requestName, pm.info.eventName);"
+    },
+    {
+      "name": "iteration data read",
+      "source": "const row = pm.iterationData.get(\"user\");\npm.variables.set(\"who\", row);"
+    },
+    {
+      "name": "visualizer table",
+      "source": "pm.visualizer.set(\"<ul>{{#each items}}<li>{{this}}</li>{{/each}}</ul>\", { items: [1, 2, 3] });"
+    },
+    {
+      "name": "legacy environment api",
+      "source": "postman.setEnvironmentVariable(\"token\", \"abc\");\nvar t = postman.getEnvironmentVariable(\"token\");"
+    },
+    {
+      "name": "legacy global api",
+      "source": "postman.setGlobalVariable(\"g\", \"1\");\npostman.clearGlobalVariable(\"g\");"
+    },
+    {
+      "name": "legacy tests object",
+      "source": "tests[\"Status is 201\"] = responseCode.code === 201;\ntests[\"Has name\"] = JSON.parse(responseBody).name === \"n\";"
+    },
+    {
+      "name": "legacy response time",
+      "source": "tests[\"Fast\"] = responseTime < 1000;"
+    },
+    {
+      "name": "legacy header",
+      "source": "var ct = postman.getResponseHeader(\"Content-Type\");\nconsole.log(ct);"
+    },
+    {
+      "name": "shadowed pm in callback",
+      "source": "[1, 2].forEach(function (pm) {\n    console.log(pm);\n});\npm.variables.set(\"done\", true);"
+    },
+    {
+      "name": "pm in object key",
+      "source": "const o = { pm: 1, \"pm.test\": 2 };\nconsole.log(o.pm);\npm.variables.set(\"k\", o.pm);"
+    },
+    {
+      "name": "pm inside template literal expression",
+      "source": "console.log(`status ${pm.response.code}`);"
+    },
+    {
+      "name": "arrow function tests",
+      "source": "pm.test(\"json is object\", () => {\n    const j = pm.response.json();\n    pm.expect(j).to.be.an(\"object\");\n});"
+    },
+    {
+      "name": "try catch around json",
+      "source": "try {\n    const j = pm.response.json();\n    pm.variables.set(\"ok\", j.id);\n} catch (e) {\n    console.log(\"not json\");\n}"
+    },
+    {
+      "name": "dataset sql (no equivalent)",
+      "source": "const rows = pm.datasets.query(\"select id from users\");\nconsole.log(rows.length);"
+    },
+    {
+      "name": "mock matching (no equivalent)",
+      "source": "const m = pm.mock.match(\"GET\", \"/x\");\nconsole.log(m);"
+    },
+    {
+      "name": "state across runs",
+      "source": "const n = (pm.state.get(\"runs\") || 0) + 1;\npm.state.set(\"runs\", n);"
+    },
+    {
+      "name": "vault read",
+      "source": "pm.vault.get(\"secret\").then((s) => console.log(s));"
+    },
+    {
+      "name": "syntax error kept",
+      "source": "pm.test(\"broken\", function () {\n    pm.expect(1).to.equal(1)\n"
+    }
+  ],
+  "insomnia": [
+    {
+      "name": "status test",
+      "source": "insomnia.test(\"status is 200\", () => {\n    insomnia.expect(insomnia.response.code).to.eql(200);\n});"
+    },
+    {
+      "name": "json body test",
+      "source": "insomnia.test(\"name\", () => {\n    insomnia.expect(insomnia.response.json().name).to.eql(\"n\");\n});"
+    },
+    {
+      "name": "header test",
+      "source": "insomnia.test(\"json\", () => {\n    insomnia.expect(insomnia.response.headers.get(\"content-type\")).to.include(\"json\");\n});"
+    },
+    {
+      "name": "environment get",
+      "source": "const host = insomnia.environment.get(\"host\");\nconsole.log(host);"
+    },
+    {
+      "name": "environment unset",
+      "source": "insomnia.environment.unset(\"token\");"
+    },
+    {
+      "name": "environment set number",
+      "source": "insomnia.environment.set(\"count\", 3);"
+    },
+    {
+      "name": "variables scratch",
+      "source": "insomnia.variables.set(\"tmp\", \"1\");\nconsole.log(insomnia.variables.get(\"tmp\"));"
+    },
+    {
+      "name": "collection variables",
+      "source": "insomnia.collectionVariables.set(\"shared\", 2);"
+    },
+    {
+      "name": "base environment set",
+      "source": "insomnia.baseEnvironment.set(\"base\", \"x\");"
+    },
+    {
+      "name": "request header add",
+      "source": "insomnia.request.headers.add({ key: \"X-A\", value: \"1\" });"
+    },
+    {
+      "name": "request header upsert",
+      "source": "insomnia.request.headers.upsert({ key: \"X-B\", value: \"2\" });"
+    },
+    {
+      "name": "request url read",
+      "source": "console.log(insomnia.request.url.toString());"
+    },
+    {
+      "name": "response time test",
+      "source": "insomnia.test(\"fast\", () => insomnia.expect(insomnia.response.responseTime).to.be.below(1000));"
+    },
+    {
+      "name": "info request name",
+      "source": "console.log(insomnia.info.requestName);"
+    },
+    {
+      "name": "uuid header",
+      "source": "insomnia.request.headers.upsert({ key: \"X-Id\", value: insomnia.variables.replaceIn(\"{{$guid}}\") });"
+    },
+    {
+      "name": "json loop",
+      "source": "const items = insomnia.response.json().items || [];\nitems.forEach((i) => console.log(i));"
+    },
+    {
+      "name": "own insomnia parameter",
+      "source": "function f(insomnia) { return insomnia.x; }\nconsole.log(f({ x: 1 }));\ninsomnia.environment.set(\"y\", 1);"
+    },
+    {
+      "name": "parent folders (no equivalent)",
+      "source": "const f = insomnia.parentFolders.get(\"Admin\");\nconsole.log(f);"
+    },
+    {
+      "name": "request auth update (no equivalent)",
+      "source": "insomnia.request.auth.update({ type: \"bearer\", token: \"t\" }, \"bearer\");"
+    },
+    {
+      "name": "plain javascript only",
+      "source": "const total = [1, 2, 3].reduce((a, b) => a + b, 0);\nconsole.log(total);"
+    },
+    {
+      "name": "string mentions insomnia",
+      "source": "console.log(\"insomnia.environment.set is the API\");\ninsomnia.environment.set(\"z\", 1);"
+    },
+    {
+      "name": "async await",
+      "source": "(async () => {\n    insomnia.environment.set(\"late\", 1);\n})();"
+    },
+    {
+      "name": "chained tests",
+      "source": "insomnia.test(\"a\", () => insomnia.expect(1).to.equal(1));\ninsomnia.test(\"b\", () => insomnia.expect(\"x\").to.be.a(\"string\"));"
+    }
+  ],
+  "bruno": [
+    {
+      "name": "status via res.status",
+      "source": "test(\"status 200\", function () {\n  expect(res.status).to.equal(200);\n});"
+    },
+    {
+      "name": "status via getStatus",
+      "source": "test(\"status\", () => {\n  expect(res.getStatus()).to.equal(200);\n});"
+    },
+    {
+      "name": "body field",
+      "source": "test(\"name\", () => {\n  expect(res.body.name).to.equal(\"n\");\n});"
+    },
+    {
+      "name": "body via getBody",
+      "source": "test(\"id\", () => {\n  expect(res.getBody().id).to.equal(7);\n});"
+    },
+    {
+      "name": "body via path function",
+      "source": "test(\"value\", () => {\n  expect(res(\"value\")).to.equal(100);\n});"
+    },
+    {
+      "name": "header read",
+      "source": "test(\"ct\", () => {\n  expect(res.getHeader(\"content-type\")).to.include(\"json\");\n});"
+    },
+    {
+      "name": "headers object",
+      "source": "const h = res.getHeaders();\nconsole.log(Object.keys(h).length);"
+    },
+    {
+      "name": "response time",
+      "source": "test(\"fast\", () => {\n  expect(res.getResponseTime()).to.be.below(2000);\n});"
+    },
+    {
+      "name": "env var set from body",
+      "source": "bru.setEnvVar(\"token\", res.body.token);"
+    },
+    {
+      "name": "env var get",
+      "source": "const t = bru.getEnvVar(\"token\");\nconsole.log(t);"
+    },
+    {
+      "name": "env var has and delete",
+      "source": "if (bru.hasEnvVar(\"token\")) {\n  bru.deleteEnvVar(\"token\");\n}"
+    },
+    {
+      "name": "runtime var set",
+      "source": "bru.setVar(\"last\", res.body.id);"
+    },
+    {
+      "name": "runtime var get",
+      "source": "console.log(bru.getVar(\"last\"));"
+    },
+    {
+      "name": "runtime var delete",
+      "source": "bru.setVar(\"x\", 1);\nbru.deleteVar(\"x\");"
+    },
+    {
+      "name": "global env var",
+      "source": "bru.setGlobalEnvVar(\"g\", \"1\");\nconsole.log(bru.getGlobalEnvVar(\"g\"));"
+    },
+    {
+      "name": "collection var read",
+      "source": "console.log(bru.getCollectionVar(\"host\"));"
+    },
+    {
+      "name": "folder and request var read",
+      "source": "console.log(bru.getFolderVar(\"f\"), bru.getRequestVar(\"r\"));"
+    },
+    {
+      "name": "interpolate",
+      "source": "const url = bru.interpolate(\"{{host}}/items\");\nconsole.log(url);"
+    },
+    {
+      "name": "env name",
+      "source": "console.log(bru.getEnvName());"
+    },
+    {
+      "name": "request name",
+      "source": "console.log(bru.getRequestName());"
+    },
+    {
+      "name": "process env",
+      "source": "const key = bru.getProcessEnv(\"API_KEY\");\nconsole.log(key);"
+    },
+    {
+      "name": "secret var",
+      "source": "const s = bru.getSecretVar(\"secret\");\nconsole.log(s);"
+    },
+    {
+      "name": "request url and method",
+      "source": "console.log(req.getUrl(), req.getMethod());"
+    },
+    {
+      "name": "set header",
+      "source": "req.setHeader(\"X-Trace\", \"1\");"
+    },
+    {
+      "name": "set headers object",
+      "source": "req.setHeaders({ \"X-A\": \"1\", \"X-B\": \"2\" });"
+    },
+    {
+      "name": "delete header",
+      "source": "req.deleteHeader(\"X-Req\");"
+    },
+    {
+      "name": "get header",
+      "source": "console.log(req.getHeader(\"X-Req\"));"
+    },
+    {
+      "name": "set url",
+      "source": "req.setUrl(\"https://h.test/other\");"
+    },
+    {
+      "name": "set method",
+      "source": "req.setMethod(\"POST\");"
+    },
+    {
+      "name": "request name via req",
+      "source": "console.log(req.getName());"
+    },
+    {
+      "name": "next request",
+      "source": "bru.setNextRequest(\"Fetch details\");"
+    },
+    {
+      "name": "runner next request",
+      "source": "bru.runner.setNextRequest(\"Cleanup\");"
+    },
+    {
+      "name": "runner skip",
+      "source": "bru.runner.skipRequest();"
+    },
+    {
+      "name": "runner stop",
+      "source": "bru.runner.stopExecution();"
+    },
+    {
+      "name": "set timeout (lifted)",
+      "source": "req.setTimeout(8000);"
+    },
+    {
+      "name": "set max redirects (lifted)",
+      "source": "req.setMaxRedirects(2);"
+    },
+    {
+      "name": "auth mode (no equivalent)",
+      "source": "console.log(req.getAuthMode());"
+    },
+    {
+      "name": "set body (no equivalent response)",
+      "source": "res.setBody({ patched: true });"
+    },
+    {
+      "name": "sleep stays",
+      "source": "await bru.sleep(10);"
+    },
+    {
+      "name": "cookies jar",
+      "source": "const jar = bru.cookies.jar();\njar.setCookie(\"https://h.test\", \"k\", \"v\");"
+    },
+    {
+      "name": "send request promise",
+      "source": "const r = await bru.sendRequest({ method: \"GET\", url: \"https://h.test/ping\" });\nconsole.log(r.status);"
+    },
+    {
+      "name": "send request callback",
+      "source": "bru.sendRequest({ method: \"GET\", url: \"https://h.test/ping\" }, (err, r) => console.log(err, r && r.status));"
+    },
+    {
+      "name": "tests with chai chain",
+      "source": "test(\"body\", () => {\n  expect(res.body).to.have.property(\"token\");\n  expect(res.body.token).to.be.a(\"string\");\n});"
+    },
+    {
+      "name": "bru in string",
+      "source": "console.log(\"bru.setVar in a string\");\nbru.setVar(\"a\", 1);"
+    },
+    {
+      "name": "own bru object",
+      "source": "const bru = { setVar() {} };\nbru.setVar(\"x\", 1);"
+    },
+    {
+      "name": "req in object key",
+      "source": "const o = { req: 1 };\nconsole.log(o.req);\nreq.setHeader(\"X\", \"1\");"
+    },
+    {
+      "name": "res as variable name",
+      "source": "function f(res) { return res.status; }\nconsole.log(f({ status: 3 }));\nconsole.log(res.status);"
+    },
+    {
+      "name": "nested expect",
+      "source": "test(\"many\", () => {\n  const b = res.body;\n  expect(b.id).to.equal(7);\n  expect(b.name).to.equal(\"n\");\n  expect(res.status).to.equal(200);\n});"
+    },
+    {
+      "name": "conditional flow",
+      "source": "if (res.status === 200 && res.body.id) {\n  bru.setVar(\"id\", res.body.id);\n  bru.setNextRequest(\"Next\");\n} else {\n  bru.runner.stopExecution();\n}"
+    }
+  ],
+  "thunder": [
+    {
+      "name": "set var",
+      "source": "tc.setVar(\"token\", tc.response.json.token);"
+    },
+    {
+      "name": "set var with scope",
+      "source": "tc.setVar(\"g\", \"1\", \"global\");"
+    },
+    {
+      "name": "get var",
+      "source": "const t = tc.getVar(\"token\");\nconsole.log(t);"
+    },
+    {
+      "name": "get global var",
+      "source": "console.log(tc.getVar(\"g\", \"global\"));"
+    },
+    {
+      "name": "status test",
+      "source": "tc.test(\"status 200\", function () {\n  expect(tc.response.status).to.equal(200);\n});"
+    },
+    {
+      "name": "json field test",
+      "source": "tc.test(\"name\", function () {\n  expect(tc.response.json.name).to.equal(\"n\");\n});"
+    },
+    {
+      "name": "text test",
+      "source": "tc.test(\"text\", function () {\n  expect(tc.response.text).to.include(\"n\");\n});"
+    },
+    {
+      "name": "headers test",
+      "source": "tc.test(\"headers\", function () {\n  expect(tc.response.headers[\"content-type\"]).to.include(\"json\");\n});"
+    },
+    {
+      "name": "time test",
+      "source": "tc.test(\"fast\", function () {\n  expect(tc.response.time).to.be.below(1000);\n});"
+    },
+    {
+      "name": "size test",
+      "source": "tc.test(\"small\", function () {\n  expect(tc.response.size).to.be.below(100000);\n});"
+    },
+    {
+      "name": "request url",
+      "source": "console.log(tc.request.url, tc.request.method);"
+    },
+    {
+      "name": "load module lodash",
+      "source": "const _ = tc.loadModule(\"lodash\");\nconsole.log(_.sortBy([2, 1]));"
+    },
+    {
+      "name": "run request",
+      "source": "tc.runRequest(\"Login\");"
+    },
+    {
+      "name": "test with array index",
+      "source": "tc.test(\"first\", function () {\n  expect(tc.response.json.items[0]).to.exist;\n});"
+    },
+    {
+      "name": "nested json field",
+      "source": "tc.setVar(\"nested\", tc.response.json.a.b.c);"
+    },
+    {
+      "name": "multiple tests",
+      "source": "tc.test(\"a\", function () { expect(1).to.equal(1); });\ntc.test(\"b\", function () { expect(tc.response.status).to.equal(200); });"
+    },
+    {
+      "name": "plain javascript",
+      "source": "const a = [1, 2, 3];\nconsole.log(a.length);"
+    },
+    {
+      "name": "tc in string",
+      "source": "console.log(\"tc.setVar in a string\");\ntc.setVar(\"a\", 1);"
+    },
+    {
+      "name": "own tc",
+      "source": "const tc = { setVar() {} };\ntc.setVar(\"x\", 1);"
+    },
+    {
+      "name": "conditional set",
+      "source": "if (tc.response.status === 200) {\n  tc.setVar(\"ok\", \"yes\");\n}"
+    },
+    {
+      "name": "expect eql",
+      "source": "tc.test(\"deep\", function () {\n  expect(tc.response.json).to.have.property(\"id\");\n});"
+    },
+    {
+      "name": "expect a type",
+      "source": "tc.test(\"type\", function () {\n  expect(tc.response.json.id).to.be.a(\"number\");\n});"
+    },
+    {
+      "name": "loop over items",
+      "source": "(tc.response.json.items || []).forEach(function (i) { console.log(i); });"
+    },
+    {
+      "name": "string concat",
+      "source": "tc.setVar(\"auth\", \"Bearer \" + tc.getVar(\"token\"));"
+    },
+    {
+      "name": "json stringify",
+      "source": "console.log(JSON.stringify(tc.response.json));"
+    },
+    {
+      "name": "try catch",
+      "source": "try {\n  tc.setVar(\"v\", tc.response.json.id);\n} catch (e) {\n  console.log(e.message);\n}"
+    }
+  ],
+  "hoppscotch": [
+    {
+      "name": "status toBe",
+      "source": "pw.test(\"status 200\", () => {\n  pw.expect(pw.response.status).toBe(200);\n});"
+    },
+    {
+      "name": "status level2xx",
+      "source": "pw.test(\"2xx\", () => {\n  pw.expect(pw.response.status).toBeLevel2xx();\n});"
+    },
+    {
+      "name": "status level4xx negated",
+      "source": "pw.test(\"not 4xx\", () => {\n  pw.expect(pw.response.status).not.toBeLevel4xx();\n});"
+    },
+    {
+      "name": "body field toBe",
+      "source": "pw.test(\"name\", () => {\n  pw.expect(pw.response.body.name).toBe(\"n\");\n});"
+    },
+    {
+      "name": "body toHaveLength",
+      "source": "pw.test(\"tags\", () => {\n  pw.expect([1, 2, 3]).toHaveLength(3);\n});"
+    },
+    {
+      "name": "body toBeType",
+      "source": "pw.test(\"id type\", () => {\n  pw.expect(pw.response.body.id).toBeType(\"number\");\n});"
+    },
+    {
+      "name": "toInclude",
+      "source": "pw.test(\"includes\", () => {\n  pw.expect([1, 2, 3]).toInclude(2);\n});"
+    },
+    {
+      "name": "env get set",
+      "source": "pw.env.set(\"seen\", \"1\");\nconsole.log(pw.env.get(\"seen\"));"
+    },
+    {
+      "name": "env unset",
+      "source": "pw.env.set(\"t\", \"1\");\npw.env.unset(\"t\");"
+    },
+    {
+      "name": "env resolve",
+      "source": "const u = pw.env.resolve(\"{{host}}/x\");\nconsole.log(u);"
+    },
+    {
+      "name": "env getResolve",
+      "source": "console.log(pw.env.getResolve(\"host\"));"
+    },
+    {
+      "name": "set from response",
+      "source": "pw.env.set(\"token\", pw.response.body.token);"
+    },
+    {
+      "name": "response time",
+      "source": "pw.test(\"fast\", () => {\n  pw.expect(pw.response.responseTime).toBeLessThan(1000);\n});"
+    },
+    {
+      "name": "header value",
+      "source": "console.log(pw.response.headers.length);"
+    },
+    {
+      "name": "multiple tests",
+      "source": "pw.test(\"a\", () => { pw.expect(1).toBe(1); });\npw.test(\"b\", () => { pw.expect(pw.response.status).toBe(200); });"
+    },
+    {
+      "name": "toEqual deep",
+      "source": "pw.test(\"eq\", () => {\n  pw.expect({ a: 1 }).toEqual({ a: 1 });\n});"
+    },
+    {
+      "name": "truthy",
+      "source": "pw.test(\"truthy\", () => {\n  pw.expect(pw.response.body.id).toBeTruthy();\n});"
+    },
+    {
+      "name": "greater than",
+      "source": "pw.test(\"positive\", () => {\n  pw.expect(pw.response.body.value).toBeGreaterThan(0);\n});"
+    },
+    {
+      "name": "hopp env active",
+      "source": "hopp.env.active.set(\"a\", \"1\");\nconsole.log(hopp.env.active.get(\"a\"));"
+    },
+    {
+      "name": "hopp env global",
+      "source": "hopp.env.global.set(\"g\", \"1\");\nconsole.log(hopp.env.global.get(\"g\"));"
+    },
+    {
+      "name": "hopp status",
+      "source": "hopp.test(\"status\", () => {\n  hopp.expect(hopp.response.statusCode).toBe(200);\n});"
+    },
+    {
+      "name": "hopp json",
+      "source": "hopp.test(\"json\", () => {\n  hopp.expect(hopp.response.asJSON().name).toBe(\"n\");\n});"
+    },
+    {
+      "name": "hopp text",
+      "source": "console.log(hopp.response.asText().length);"
+    },
+    {
+      "name": "hopp fetch (no equivalent)",
+      "source": "const r = await hopp.fetch(\"https://h.test/x\");\nconsole.log(r.status);"
+    },
+    {
+      "name": "pm layer",
+      "source": "pm.test(\"layer\", () => pm.expect(pm.response.code).to.eql(200));\npm.environment.set(\"x\", 1);"
+    },
+    {
+      "name": "plain javascript",
+      "source": "const s = [\"a\", \"b\"].join(\"-\");\nconsole.log(s);"
+    },
+    {
+      "name": "pw in string",
+      "source": "console.log(\"pw.env.set in a string\");\npw.env.set(\"a\", \"1\");"
+    },
+    {
+      "name": "own pw",
+      "source": "const pw = { env: { set() {} } };\npw.env.set(\"x\", 1);"
+    },
+    {
+      "name": "conditional",
+      "source": "if (pw.response.status === 200) {\n  pw.env.set(\"ok\", \"yes\");\n}"
+    },
+    {
+      "name": "not toBe",
+      "source": "pw.test(\"not\", () => {\n  pw.expect(pw.response.status).not.toBe(500);\n});"
+    }
+  ]
+}

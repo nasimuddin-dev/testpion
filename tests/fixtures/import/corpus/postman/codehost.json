@@ -1,0 +1,374 @@
+{
+  "info": {
+    "_postman_id": "pm-codehost",
+    "name": "Code Host API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "Repos",
+      "item": [
+        {
+          "name": "Get a repository",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/vnd.codehost+json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/repos/{{owner}}/{{repo}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "repos",
+                "{{owner}}",
+                "{{repo}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List repository contributors",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/repos/{{owner}}/{{repo}}/contributors?per_page=30&page=1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "repos",
+                "{{owner}}",
+                "{{repo}}",
+                "contributors"
+              ],
+              "query": [
+                {
+                  "key": "per_page",
+                  "value": "30"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "List branches",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/repos/{{owner}}/{{repo}}/branches",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "repos",
+                "{{owner}}",
+                "{{repo}}",
+                "branches"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create a fork",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/repos/{{owner}}/{{repo}}/forks",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "repos",
+                "{{owner}}",
+                "{{repo}}",
+                "forks"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete a repository",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/repos/{{owner}}/{{repo}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "repos",
+                "{{owner}}",
+                "{{repo}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Issues",
+      "item": [
+        {
+          "name": "List issues",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/repos/{{owner}}/{{repo}}/issues?state=open&labels=bug",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "repos",
+                "{{owner}}",
+                "{{repo}}",
+                "issues"
+              ],
+              "query": [
+                {
+                  "key": "state",
+                  "value": "open"
+                },
+                {
+                  "key": "labels",
+                  "value": "bug"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create an issue",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Found a bug\",\n  \"body\": \"I'm having a problem with this.\",\n  \"labels\": [\n    \"bug\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/repos/{{owner}}/{{repo}}/issues",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "repos",
+                "{{owner}}",
+                "{{repo}}",
+                "issues"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get an issue",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/repos/{{owner}}/{{repo}}/issues/1347",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "repos",
+                "{{owner}}",
+                "{{repo}}",
+                "issues",
+                "1347"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update an issue",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"state\": \"closed\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/repos/{{owner}}/{{repo}}/issues/1347",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "repos",
+                "{{owner}}",
+                "{{repo}}",
+                "issues",
+                "1347"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Lock an issue",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"lock_reason\": \"resolved\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/repos/{{owner}}/{{repo}}/issues/1347/lock",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "repos",
+                "{{owner}}",
+                "{{repo}}",
+                "issues",
+                "1347",
+                "lock"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "Get the authenticated user",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/user",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "user"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get a user",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/users/{{owner}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "{{owner}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "List followers of a user",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/users/{{owner}}/followers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "{{owner}}",
+                "followers"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://api.codehost.example.test"
+    }
+  ]
+}

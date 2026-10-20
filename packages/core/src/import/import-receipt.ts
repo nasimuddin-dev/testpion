@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
+import type { Collection, Environment } from '../model/types.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { atomicWrite } from '../storage/fsutil.js';
 import { shortId } from '../util/ids.js';
@@ -8,7 +9,7 @@ import { ApsError } from '../errors.js';
 import { removeItem } from '../kinds/ops.js';
 import { findingFromNote, newDocument } from './model.js';
 import { buildReport, type ImportReport } from './report.js';
-import type { WorkspaceImportResult } from './workspace-import.js';
+import type { ImportSinks, WorkspaceImportResult } from './workspace-import.js';
 
 /**
  * What an import created, so it can be taken back (the app's Undo after an import, `testpion import-undo`) and its report
@@ -26,6 +27,14 @@ export interface Created {
   library: Array<{ kind: string; ids: string[] }>;
   /** Secret values written to the secret store (kept there on undo: a restored environment still has them). */
   secrets: Array<{ environment: string; key: string }>;
+  /** Collections an import updated in place (re-import): the collection as it was, and the version the update saved. Undo puts it back. */
+  updated?: Array<{ id: string; name: string; version: number; before: Collection }>;
+  /** Environments an import added variables to (re-import): the environment as it was. */
+  envUpdated?: Array<{ id: string; name: string; before: Environment }>;
+  /** Names of the workspace globals the import set (a Postman globals file). */
+  globals?: string[];
+  /** Cookies the import added to the cookie jar (Insomnia's jar). */
+  cookies?: Array<{ name: string; domain: string; path: string }>;
 }
 
 export interface ImportReceipt extends Created {
@@ -108,10 +117,14 @@ export interface UndoResult {
 }
 
 /** Take an import back. Nothing is changed when something was edited since, unless `force`. */
-export function undoImportReceipt(store: WorkspaceStore, id: string, opts: { force?: boolean } = {}): UndoResult {
+export function undoImportReceipt(store: WorkspaceStore, id: string, opts: { force?: boolean; sinks?: ImportSinks } = {}): UndoResult {
   const { receipt } = readImportReport(store, id);
   const refused: string[] = [];
   if (!opts.force) {
+    for (const u of receipt.updated ?? []) {
+      const now = store.listCollections().find((x) => x.id === u.id);
+      if (now && now.version !== u.version) refused.push(`Collection "${u.name}" was edited after the import`);
+    }
     for (const c of receipt.collections) {
       const now = store.listCollections().find((x) => x.id === c.id);
       if (now && now.version !== c.version) refused.push(`Collection "${c.name}" was edited after the import`);
@@ -128,6 +141,33 @@ export function undoImportReceipt(store: WorkspaceStore, id: string, opts: { for
       /* already gone (deleted by hand since) */
     }
   };
+  // an update of a collection (re-import) is taken back by saving the collection as it was
+  for (const u of receipt.updated ?? []) {
+    try {
+      store.saveCollection(u.before);
+      removed.push(`the update of collection "${u.name}"`);
+    } catch {
+      /* gone since */
+    }
+  }
+  for (const e of receipt.envUpdated ?? []) {
+    try {
+      store.saveEnvironment(e.before);
+      removed.push(`the added variables of environment "${e.name}"`);
+    } catch {
+      /* gone since */
+    }
+  }
+  if (receipt.globals?.length) {
+    if (opts.sinks?.globals?.remove) {
+      opts.sinks.globals.remove(receipt.globals);
+      removed.push(`${receipt.globals.length} global${receipt.globals.length === 1 ? '' : 's'}`);
+    } else removed.push(`(the globals ${receipt.globals.join(', ')} stay: remove them in Globals)`);
+  }
+  if (receipt.cookies?.length && opts.sinks?.cookies?.remove) {
+    opts.sinks.cookies.remove(receipt.cookies);
+    removed.push(`${receipt.cookies.length} cookie${receipt.cookies.length === 1 ? '' : 's'}`);
+  }
   for (const c of receipt.collections) trash({ kind: 'collection', collectionId: c.id }, 'collection', c.name);
   for (const e of receipt.environments) trash({ kind: 'environment', environmentId: e.id }, 'environment', e.name);
   for (const p of receipt.specs) if (existsSync(store.safePath(p))) trash({ kind: 'spec', path: p }, 'spec', p);

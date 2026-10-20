@@ -1,0 +1,4 @@
+$kind: folder
+name: Patients
+description: Patient endpoints
+order: 2000

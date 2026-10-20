@@ -1,0 +1,222 @@
+{
+  "v": 2,
+  "name": "Weather API",
+  "folders": [
+    {
+      "v": 2,
+      "name": "Current",
+      "folders": [],
+      "auth": {
+        "authType": "inherit",
+        "authActive": true
+      },
+      "headers": [],
+      "variables": [],
+      "requests": [
+        {
+          "v": "11",
+          "name": "Current weather by city",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/weather",
+          "params": [
+            {
+              "key": "q",
+              "value": "London,uk",
+              "active": true
+            },
+            {
+              "key": "units",
+              "value": "metric",
+              "active": true
+            }
+          ],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "pw.test(\"Status code is 200\", () => {\n  pw.expect(pw.response.status).toBe(200);\n});",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": null,
+            "body": null
+          },
+          "requestVariables": []
+        },
+        {
+          "v": "11",
+          "name": "Current weather by coordinates",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/weather",
+          "params": [
+            {
+              "key": "lat",
+              "value": "51.5",
+              "active": true
+            },
+            {
+              "key": "lon",
+              "value": "-0.12",
+              "active": true
+            }
+          ],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": null,
+            "body": null
+          },
+          "requestVariables": []
+        },
+        {
+          "v": "11",
+          "name": "Current weather by zip",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/weather",
+          "params": [
+            {
+              "key": "zip",
+              "value": "94040,us",
+              "active": true
+            }
+          ],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": null,
+            "body": null
+          },
+          "requestVariables": []
+        }
+      ]
+    },
+    {
+      "v": 2,
+      "name": "Forecast",
+      "folders": [],
+      "auth": {
+        "authType": "inherit",
+        "authActive": true
+      },
+      "headers": [],
+      "variables": [],
+      "requests": [
+        {
+          "v": "11",
+          "name": "5 day forecast",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/forecast",
+          "params": [
+            {
+              "key": "q",
+              "value": "Paris",
+              "active": true
+            },
+            {
+              "key": "cnt",
+              "value": "40",
+              "active": true
+            }
+          ],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "pw.test(\"Status code is 200\", () => {\n  pw.expect(pw.response.status).toBe(200);\n});",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": null,
+            "body": null
+          },
+          "requestVariables": []
+        },
+        {
+          "v": "11",
+          "name": "Air pollution",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/air_pollution",
+          "params": [
+            {
+              "key": "lat",
+              "value": "50",
+              "active": true
+            },
+            {
+              "key": "lon",
+              "value": "50",
+              "active": true
+            }
+          ],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": null,
+            "body": null
+          },
+          "requestVariables": []
+        },
+        {
+          "v": "11",
+          "name": "Weather alerts",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/onecall",
+          "params": [
+            {
+              "key": "lat",
+              "value": "33.44",
+              "active": true
+            },
+            {
+              "key": "lon",
+              "value": "-94.04",
+              "active": true
+            },
+            {
+              "key": "exclude",
+              "value": "minutely,hourly",
+              "active": true
+            }
+          ],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": null,
+            "body": null
+          },
+          "requestVariables": []
+        }
+      ]
+    }
+  ],
+  "requests": [],
+  "auth": {
+    "authType": "api-key",
+    "authActive": true,
+    "key": "appid",
+    "value": "{{appid}}",
+    "addTo": "QUERY_PARAMS"
+  },
+  "headers": [],
+  "variables": []
+}

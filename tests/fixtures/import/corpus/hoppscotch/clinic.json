@@ -1,0 +1,274 @@
+{
+  "v": 2,
+  "name": "Vet Clinic",
+  "folders": [
+    {
+      "v": 2,
+      "name": "Patients",
+      "folders": [],
+      "auth": {
+        "authType": "inherit",
+        "authActive": true
+      },
+      "headers": [],
+      "variables": [],
+      "requests": [
+        {
+          "v": "11",
+          "name": "List patients",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/patients",
+          "params": [
+            {
+              "key": "species",
+              "value": "dog",
+              "active": true
+            },
+            {
+              "key": "limit",
+              "value": "25",
+              "active": true
+            }
+          ],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "pw.test(\"Status code is 200\", () => {\n  pw.expect(pw.response.status).toBe(200);\n});",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": null,
+            "body": null
+          },
+          "requestVariables": []
+        },
+        {
+          "v": "11",
+          "name": "Create a patient",
+          "method": "POST",
+          "endpoint": "<<baseUrl>>/patients",
+          "params": [],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "pw.test(\"Status code is 201\", () => {\n  pw.expect(pw.response.status).toBe(201);\n});",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": "application/json",
+            "body": "{\n  \"name\": \"Rex\",\n  \"species\": \"dog\",\n  \"born\": \"2021-03-04\",\n  \"owner\": \"o-7\"\n}"
+          },
+          "requestVariables": []
+        },
+        {
+          "v": "11",
+          "name": "Get a patient",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/patients/:id",
+          "params": [],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "pw.test(\"Status code is 200\", () => {\n  pw.expect(pw.response.status).toBe(200);\n});",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": null,
+            "body": null
+          },
+          "requestVariables": []
+        },
+        {
+          "v": "11",
+          "name": "Update a patient",
+          "method": "PATCH",
+          "endpoint": "<<baseUrl>>/patients/:id",
+          "params": [],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": "application/json",
+            "body": "{\n  \"weightKg\": 31.5\n}"
+          },
+          "requestVariables": []
+        },
+        {
+          "v": "11",
+          "name": "Upload a photo",
+          "method": "PUT",
+          "endpoint": "<<baseUrl>>/patients/:id/photo",
+          "params": [],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": "multipart/form-data",
+            "body": [
+              {
+                "key": "caption",
+                "value": "At the beach",
+                "active": true,
+                "isFile": false
+              },
+              {
+                "key": "photo",
+                "value": "rex.png",
+                "active": true,
+                "isFile": true
+              }
+            ]
+          },
+          "requestVariables": []
+        }
+      ]
+    },
+    {
+      "v": 2,
+      "name": "Visits",
+      "folders": [],
+      "auth": {
+        "authType": "inherit",
+        "authActive": true
+      },
+      "headers": [],
+      "variables": [],
+      "requests": [
+        {
+          "v": "11",
+          "name": "List visits",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/visits",
+          "params": [
+            {
+              "key": "patient",
+              "value": "p-1",
+              "active": true
+            }
+          ],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": null,
+            "body": null
+          },
+          "requestVariables": []
+        },
+        {
+          "v": "11",
+          "name": "Book a visit",
+          "method": "POST",
+          "endpoint": "<<baseUrl>>/visits",
+          "params": [],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "pw.test(\"Status code is 201\", () => {\n  pw.expect(pw.response.status).toBe(201);\n});",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": "application/json",
+            "body": "{\n  \"patient\": \"p-1\",\n  \"at\": \"2026-05-04T09:30:00Z\",\n  \"reason\": \"vaccination\"\n}"
+          },
+          "requestVariables": []
+        },
+        {
+          "v": "11",
+          "name": "Cancel a visit",
+          "method": "DELETE",
+          "endpoint": "<<baseUrl>>/visits/v-3",
+          "params": [],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": null,
+            "body": null
+          },
+          "requestVariables": []
+        }
+      ]
+    },
+    {
+      "v": 2,
+      "name": "Owners",
+      "folders": [],
+      "auth": {
+        "authType": "inherit",
+        "authActive": true
+      },
+      "headers": [],
+      "variables": [],
+      "requests": [
+        {
+          "v": "11",
+          "name": "List owners",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/owners",
+          "params": [],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": null,
+            "body": null
+          },
+          "requestVariables": []
+        },
+        {
+          "v": "11",
+          "name": "Create an owner",
+          "method": "POST",
+          "endpoint": "<<baseUrl>>/owners",
+          "params": [],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": "application/json",
+            "body": "{\n  \"name\": \"Ada\",\n  \"email\": \"ada@example.test\"\n}"
+          },
+          "requestVariables": []
+        }
+      ]
+    }
+  ],
+  "requests": [],
+  "auth": {
+    "authType": "basic",
+    "authActive": true,
+    "username": "{{user}}",
+    "password": "{{password}}"
+  },
+  "headers": [],
+  "variables": []
+}

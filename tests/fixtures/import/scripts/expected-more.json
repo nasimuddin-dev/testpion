@@ -1,0 +1,1254 @@
+{
+  "postman/status 201 expected": {
+    "code": "tp.test(\"Status code is 201\", function () {\n    tp.response.to.have.status(201);\n});",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "postman/status 202 expected": {
+    "code": "tp.test(\"Status code is 202\", function () {\n    tp.response.to.have.status(202);\n});",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "postman/status 204 expected": {
+    "code": "tp.test(\"Status code is 204\", function () {\n    tp.response.to.have.status(204);\n});",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "postman/status 301 expected": {
+    "code": "tp.test(\"Status code is 301\", function () {\n    tp.response.to.have.status(301);\n});",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "postman/status 400 expected": {
+    "code": "tp.test(\"Status code is 400\", function () {\n    tp.response.to.have.status(400);\n});",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "postman/status 401 expected": {
+    "code": "tp.test(\"Status code is 401\", function () {\n    tp.response.to.have.status(401);\n});",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "postman/status 403 expected": {
+    "code": "tp.test(\"Status code is 403\", function () {\n    tp.response.to.have.status(403);\n});",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "postman/status 404 expected": {
+    "code": "tp.test(\"Status code is 404\", function () {\n    tp.response.to.have.status(404);\n});",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "postman/status 409 expected": {
+    "code": "tp.test(\"Status code is 409\", function () {\n    tp.response.to.have.status(409);\n});",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "postman/status 422 expected": {
+    "code": "tp.test(\"Status code is 422\", function () {\n    tp.response.to.have.status(422);\n});",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "postman/status 429 expected": {
+    "code": "tp.test(\"Status code is 429\", function () {\n    tp.response.to.have.status(429);\n});",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "postman/status 500 expected": {
+    "code": "tp.test(\"Status code is 500\", function () {\n    tp.response.to.have.status(500);\n});",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "postman/response under 100 ms": {
+    "code": "tp.test(\"Response time is under 100ms\", () => {\n    tp.expect(tp.response.responseTime).to.be.below(100);\n});",
+    "status": "converted",
+    "changes": 3,
+    "apis": []
+  },
+  "postman/response under 300 ms": {
+    "code": "tp.test(\"Response time is under 300ms\", () => {\n    tp.expect(tp.response.responseTime).to.be.below(300);\n});",
+    "status": "converted",
+    "changes": 3,
+    "apis": []
+  },
+  "postman/response under 500 ms": {
+    "code": "tp.test(\"Response time is under 500ms\", () => {\n    tp.expect(tp.response.responseTime).to.be.below(500);\n});",
+    "status": "converted",
+    "changes": 3,
+    "apis": []
+  },
+  "postman/response under 1000 ms": {
+    "code": "tp.test(\"Response time is under 1000ms\", () => {\n    tp.expect(tp.response.responseTime).to.be.below(1000);\n});",
+    "status": "converted",
+    "changes": 3,
+    "apis": []
+  },
+  "postman/response under 2000 ms": {
+    "code": "tp.test(\"Response time is under 2000ms\", () => {\n    tp.expect(tp.response.responseTime).to.be.below(2000);\n});",
+    "status": "converted",
+    "changes": 3,
+    "apis": []
+  },
+  "postman/has header Content-Type": {
+    "code": "tp.test(\"Content-Type header is present\", function () {\n    tp.response.to.have.header(\"Content-Type\");\n});",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "postman/has header Cache-Control": {
+    "code": "tp.test(\"Cache-Control header is present\", function () {\n    tp.response.to.have.header(\"Cache-Control\");\n});",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "postman/has header X-Request-Id": {
+    "code": "tp.test(\"X-Request-Id header is present\", function () {\n    tp.response.to.have.header(\"X-Request-Id\");\n});",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "postman/has header ETag": {
+    "code": "tp.test(\"ETag header is present\", function () {\n    tp.response.to.have.header(\"ETag\");\n});",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "postman/content type includes json": {
+    "code": "tp.test(\"JSON content type\", () => {\n    tp.expect(tp.response.headers.get(\"Content-Type\")).to.include(\"json\");\n});",
+    "status": "converted",
+    "changes": 3,
+    "apis": []
+  },
+  "postman/json id is a number": {
+    "code": "const body = tp.response.json();\ntp.test(\"id is a number\", () => tp.expect(body.id).to.be.a(\"number\"));",
+    "status": "converted",
+    "changes": 3,
+    "apis": []
+  },
+  "postman/json name equals": {
+    "code": "tp.test(\"name\", function () {\n    const j = tp.response.json();\n    tp.expect(j.name).to.eql(\"n\");\n});",
+    "status": "converted",
+    "changes": 3,
+    "apis": []
+  },
+  "postman/json value above": {
+    "code": "tp.test(\"value is positive\", () => {\n    tp.expect(tp.response.json().value).to.be.above(0);\n});",
+    "status": "converted",
+    "changes": 3,
+    "apis": []
+  },
+  "postman/json has property": {
+    "code": "tp.test(\"has token\", () => {\n    tp.expect(tp.response.json()).to.have.property(\"token\");\n});",
+    "status": "converted",
+    "changes": 3,
+    "apis": []
+  },
+  "postman/body contains text": {
+    "code": "tp.test(\"body mentions n\", () => {\n    tp.expect(tp.response.text()).to.include(\"n\");\n});",
+    "status": "converted",
+    "changes": 3,
+    "apis": []
+  },
+  "postman/body matches regex": {
+    "code": "tp.test(\"token is word chars\", () => {\n    tp.expect(tp.response.json().token).to.match(/^\\w+$/);\n});",
+    "status": "converted",
+    "changes": 3,
+    "apis": []
+  },
+  "postman/response is ok shortcut": {
+    "code": "tp.test(\"ok\", () => {\n    tp.response.to.be.ok;\n});",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "postman/response is json shortcut": {
+    "code": "tp.test(\"json\", () => {\n    tp.response.to.be.json;\n});",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "postman/one of statuses": {
+    "code": "tp.test(\"Status is 2xx\", () => {\n    tp.expect(tp.response.code).to.be.oneOf([200, 201, 202]);\n});",
+    "status": "converted",
+    "changes": 3,
+    "apis": []
+  },
+  "postman/skipped test": {
+    "code": "tp.test.skip(\"not yet\", () => {\n    tp.expect(1).to.equal(2);\n});\ntp.test(\"runs\", () => tp.expect(1).to.equal(1));",
+    "status": "converted",
+    "changes": 4,
+    "apis": []
+  },
+  "postman/environment set from body": {
+    "code": "tp.environment.set(\"userId\", tp.response.json().id);",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "postman/environment get and log": {
+    "code": "const t = tp.environment.get(\"token\");\nconsole.log(\"token is\", t);",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "postman/environment unset": {
+    "code": "tp.environment.unset(\"token\");\ntp.test(\"gone\", () => tp.expect(tp.environment.has(\"token\")).to.be.false);",
+    "status": "converted",
+    "changes": 4,
+    "apis": []
+  },
+  "postman/environment has check": {
+    "code": "tp.test(\"has host\", () => tp.expect(tp.environment.has(\"host\")).to.be.true);",
+    "status": "converted",
+    "changes": 3,
+    "apis": []
+  },
+  "postman/globals set number": {
+    "code": "tp.globals.set(\"counter\", 5);\ntp.globals.set(\"counter\", tp.globals.get(\"counter\") + 1);",
+    "status": "converted",
+    "changes": 3,
+    "apis": []
+  },
+  "postman/globals unset": {
+    "code": "tp.globals.set(\"tmp\", \"x\");\ntp.globals.unset(\"tmp\");",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "postman/collection variables set": {
+    "code": "tp.collectionVariables.set(\"lastId\", tp.response.json().id);",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "postman/collection variables get": {
+    "code": "console.log(tp.collectionVariables.get(\"lastId\"));",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "postman/variables set and get": {
+    "code": "tp.variables.set(\"scratch\", 1);\nconsole.log(tp.variables.get(\"scratch\"));",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "postman/variables replaceIn": {
+    "code": "const url = tp.variables.replaceIn(\"{{host}}/items/{{a}}\");\nconsole.log(url);",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "postman/next request chain": {
+    "code": "if (tp.response.json().id) {\n    tp.execution.setNextRequest(\"Fetch details\");\n}",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "postman/stop the run": {
+    "code": "if (tp.response.code !== 200) {\n    tp.execution.setNextRequest(null);\n}",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "postman/legacy next request": {
+    "code": "tp.execution.setNextRequest(\"Cleanup\");",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "postman/skip request": {
+    "code": "if (tp.variables.get(\"skip\")) {\n    tp.execution.skipRequest();\n}",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "postman/pre-request uuid": {
+    "code": "tp.variables.set(\"requestId\", tp.variables.replaceIn(\"{{$guid}}\"));",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "postman/pre-request timestamp iso": {
+    "code": "tp.variables.set(\"now\", new Date().toISOString());",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "postman/pre-request unix time": {
+    "code": "tp.variables.set(\"ts\", Math.floor(Date.now() / 1000));",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "postman/pre-request random": {
+    "code": "tp.variables.set(\"rand\", Math.floor(Math.random() * 1000));",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "postman/add request header": {
+    "code": "tp.request.headers.add({ key: \"X-Trace\", value: \"abc\" });",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "postman/upsert request header": {
+    "code": "tp.request.headers.upsert({ key: \"X-Env\", value: tp.environment.get(\"host\") });",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "postman/remove request header": {
+    "code": "tp.request.headers.remove(\"X-Req\");",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "postman/read request url": {
+    "code": "console.log(tp.request.url.toString(), tp.request.method);",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "postman/query upsert": {
+    "code": "tp.request.url.query.upsert({ key: \"page\", value: \"2\" });",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "postman/crypto hash": {
+    "code": "const CryptoJS = require(\"crypto-js\");\ntp.variables.set(\"sig\", CryptoJS.SHA256(tp.variables.get(\"v\")).toString());",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "postman/base64 helpers": {
+    "code": "const enc = btoa(\"user:pass\");\ntp.variables.set(\"basic\", \"Basic \" + enc);",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "postman/lodash use": {
+    "code": "const _ = require(\"lodash\");\ntp.test(\"sorted\", () => tp.expect(_.sortBy([3, 1, 2])).to.eql([1, 2, 3]));",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "postman/moment use": {
+    "code": "const moment = require(\"moment\");\ntp.variables.set(\"day\", moment(\"2026-03-01\").format(\"YYYY-MM-DD\"));",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "postman/xml2js use": {
+    "code": "const xml2js = require(\"xml2js\");\nxml2js.parseString(\"<a><b>1</b></a>\", (err, r) => tp.variables.set(\"b\", r.a.b[0]));",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "postman/tv4 schema": {
+    "code": "const tv4 = require(\"tv4\");\ntp.test(\"valid\", () => tp.expect(tv4.validate(tp.response.json(), { type: \"object\", required: [\"id\"] })).to.be.true);",
+    "status": "converted",
+    "changes": 3,
+    "apis": []
+  },
+  "postman/cheerio html": {
+    "code": "const cheerio = require(\"cheerio\");\nconst $ = cheerio.load(\"<p class='x'>hi</p>\");\ntp.variables.set(\"html\", $(\".x\").text());",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "postman/cookies read": {
+    "code": "tp.test(\"session cookie\", () => tp.expect(tp.cookies.get(\"session\")).to.equal(\"s1\"));",
+    "status": "converted",
+    "changes": 3,
+    "apis": []
+  },
+  "postman/info names": {
+    "code": "console.log(tp.info.requestName, tp.info.eventName);",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "postman/iteration data read": {
+    "code": "const row = tp.iterationData.get(\"user\");\ntp.variables.set(\"who\", row);",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "postman/visualizer table": {
+    "code": "tp.visualizer.set(\"<ul>{{#each items}}<li>{{this}}</li>{{/each}}</ul>\", { items: [1, 2, 3] });",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "postman/legacy environment api": {
+    "code": "tp.environment.set(\"token\", \"abc\");\nvar t = tp.environment.get(\"token\");",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "postman/legacy global api": {
+    "code": "tp.globals.set(\"g\", \"1\");\ntp.globals.unset(\"g\");",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "postman/legacy response time": {
+    "code": "tp.test(\"Fast\", function () { tp.expect(tp.response.responseTime < 1000).to.be.ok; });",
+    "status": "converted",
+    "changes": 3,
+    "apis": []
+  },
+  "postman/legacy header": {
+    "code": "var ct = tp.response.headers.get(\"Content-Type\");\nconsole.log(ct);",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "postman/shadowed pm in callback": {
+    "code": "[1, 2].forEach(function (pm) {\n    console.log(pm);\n});\ntp.variables.set(\"done\", true);",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "postman/pm in object key": {
+    "code": "const o = { pm: 1, \"pm.test\": 2 };\nconsole.log(o.pm);\ntp.variables.set(\"k\", o.pm);",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "postman/pm inside template literal expression": {
+    "code": "console.log(`status ${tp.response.code}`);",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "postman/arrow function tests": {
+    "code": "tp.test(\"json is object\", () => {\n    const j = tp.response.json();\n    tp.expect(j).to.be.an(\"object\");\n});",
+    "status": "converted",
+    "changes": 3,
+    "apis": []
+  },
+  "postman/try catch around json": {
+    "code": "try {\n    const j = tp.response.json();\n    tp.variables.set(\"ok\", j.id);\n} catch (e) {\n    console.log(\"not json\");\n}",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "postman/dataset sql (no equivalent)": {
+    "code": "// TODO(import): pm.datasets has no TestPion equivalent yet: rewrite this line\nconst rows = tp.datasets.query(\"select id from users\");\nconsole.log(rows.length);",
+    "status": "converted",
+    "changes": 1,
+    "apis": [
+      "pm.datasets"
+    ]
+  },
+  "postman/mock matching (no equivalent)": {
+    "code": "// TODO(import): pm.mock has no TestPion equivalent yet: rewrite this line\nconst m = tp.mock.match(\"GET\", \"/x\");\nconsole.log(m);",
+    "status": "converted",
+    "changes": 1,
+    "apis": [
+      "pm.mock"
+    ]
+  },
+  "postman/state across runs": {
+    "code": "const n = (tp.state.get(\"runs\") || 0) + 1;\ntp.state.set(\"runs\", n);",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "postman/vault read": {
+    "code": "tp.vault.get(\"secret\").then((s) => console.log(s));",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "postman/syntax error kept": {
+    "code": "pm.test(\"broken\", function () {\n    pm.expect(1).to.equal(1)\n",
+    "status": "kept",
+    "changes": 0,
+    "apis": []
+  },
+  "insomnia/status test": {
+    "code": "tp.test(\"status is 200\", () => {\n    tp.expect(tp.response.code).to.eql(200);\n});",
+    "status": "converted",
+    "changes": 3,
+    "apis": []
+  },
+  "insomnia/json body test": {
+    "code": "tp.test(\"name\", () => {\n    tp.expect(tp.response.json().name).to.eql(\"n\");\n});",
+    "status": "converted",
+    "changes": 3,
+    "apis": []
+  },
+  "insomnia/header test": {
+    "code": "tp.test(\"json\", () => {\n    tp.expect(tp.response.headers.get(\"content-type\")).to.include(\"json\");\n});",
+    "status": "converted",
+    "changes": 3,
+    "apis": []
+  },
+  "insomnia/environment get": {
+    "code": "const host = tp.environment.get(\"host\");\nconsole.log(host);",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "insomnia/environment unset": {
+    "code": "tp.environment.unset(\"token\");",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "insomnia/environment set number": {
+    "code": "tp.environment.set(\"count\", 3);",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "insomnia/variables scratch": {
+    "code": "tp.variables.set(\"tmp\", \"1\");\nconsole.log(tp.variables.get(\"tmp\"));",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "insomnia/collection variables": {
+    "code": "tp.environment.set(\"shared\", 2);",
+    "status": "converted",
+    "changes": 1,
+    "apis": [
+      "insomnia.collectionVariables"
+    ]
+  },
+  "insomnia/base environment set": {
+    "code": "tp.environment.set(\"base\", \"x\");",
+    "status": "converted",
+    "changes": 1,
+    "apis": [
+      "insomnia.baseEnvironment"
+    ]
+  },
+  "insomnia/request header add": {
+    "code": "tp.request.headers.add({ key: \"X-A\", value: \"1\" });",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "insomnia/request header upsert": {
+    "code": "tp.request.headers.upsert({ key: \"X-B\", value: \"2\" });",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "insomnia/request url read": {
+    "code": "console.log(tp.request.url.toString());",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "insomnia/response time test": {
+    "code": "tp.test(\"fast\", () => tp.expect(tp.response.responseTime).to.be.below(1000));",
+    "status": "converted",
+    "changes": 3,
+    "apis": []
+  },
+  "insomnia/info request name": {
+    "code": "console.log(tp.info.requestName);",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "insomnia/uuid header": {
+    "code": "tp.request.headers.upsert({ key: \"X-Id\", value: tp.variables.replaceIn(\"{{$guid}}\") });",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "insomnia/json loop": {
+    "code": "const items = tp.response.json().items || [];\nitems.forEach((i) => console.log(i));",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "insomnia/own insomnia parameter": {
+    "code": "function f(insomnia) { return insomnia.x; }\nconsole.log(f({ x: 1 }));\ntp.environment.set(\"y\", 1);",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "insomnia/parent folders (no equivalent)": {
+    "code": "// TODO(import): Insomnia's parentFolders has no TestPion equivalent: rewrite this line\nconst f = tp.parentFolders.get(\"Admin\");\nconsole.log(f);",
+    "status": "converted",
+    "changes": 1,
+    "apis": [
+      "insomnia.parentFolders"
+    ]
+  },
+  "insomnia/request auth update (no equivalent)": {
+    "code": "// TODO(import): Insomnia's request.auth.update has no TestPion equivalent: rewrite this line\ntp.request.auth.update({ type: \"bearer\", token: \"t\" }, \"bearer\");",
+    "status": "converted",
+    "changes": 1,
+    "apis": [
+      "insomnia.request.auth.update"
+    ]
+  },
+  "insomnia/plain javascript only": {
+    "code": "const total = [1, 2, 3].reduce((a, b) => a + b, 0);\nconsole.log(total);",
+    "status": "unchanged",
+    "changes": 0,
+    "apis": []
+  },
+  "insomnia/string mentions insomnia": {
+    "code": "console.log(\"insomnia.environment.set is the API\");\ntp.environment.set(\"z\", 1);",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "insomnia/async await": {
+    "code": "(async () => {\n    tp.environment.set(\"late\", 1);\n})();",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "insomnia/chained tests": {
+    "code": "tp.test(\"a\", () => tp.expect(1).to.equal(1));\ntp.test(\"b\", () => tp.expect(\"x\").to.be.a(\"string\"));",
+    "status": "converted",
+    "changes": 4,
+    "apis": []
+  },
+  "bruno/status via res.status": {
+    "code": "tp.test(\"status 200\", function () {\n  tp.expect(tp.response.code).to.equal(200);\n});",
+    "status": "converted",
+    "changes": 3,
+    "apis": []
+  },
+  "bruno/status via getStatus": {
+    "code": "tp.test(\"status\", () => {\n  tp.expect(tp.response.code).to.equal(200);\n});",
+    "status": "converted",
+    "changes": 3,
+    "apis": []
+  },
+  "bruno/body field": {
+    "code": "tp.test(\"name\", () => {\n  tp.expect(tp.response.json().name).to.equal(\"n\");\n});",
+    "status": "converted",
+    "changes": 3,
+    "apis": []
+  },
+  "bruno/body via getBody": {
+    "code": "tp.test(\"id\", () => {\n  tp.expect(tp.response.json().id).to.equal(7);\n});",
+    "status": "converted",
+    "changes": 3,
+    "apis": []
+  },
+  "bruno/body via path function": {
+    "code": "tp.test(\"value\", () => {\n  tp.expect(require('lodash').get(tp.response.json(), \"value\")).to.equal(100);\n});",
+    "status": "converted",
+    "changes": 3,
+    "apis": []
+  },
+  "bruno/header read": {
+    "code": "tp.test(\"ct\", () => {\n  tp.expect(tp.response.headers.get(\"content-type\")).to.include(\"json\");\n});",
+    "status": "converted",
+    "changes": 3,
+    "apis": []
+  },
+  "bruno/headers object": {
+    "code": "const h = tp.response.headers.toObject();\nconsole.log(Object.keys(h).length);",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "bruno/response time": {
+    "code": "tp.test(\"fast\", () => {\n  tp.expect(tp.response.responseTime).to.be.below(2000);\n});",
+    "status": "converted",
+    "changes": 3,
+    "apis": []
+  },
+  "bruno/env var set from body": {
+    "code": "tp.environment.set(\"token\", tp.response.json().token);",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "bruno/env var get": {
+    "code": "const t = tp.environment.get(\"token\");\nconsole.log(t);",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "bruno/env var has and delete": {
+    "code": "if (tp.environment.has(\"token\")) {\n  tp.environment.unset(\"token\");\n}",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "bruno/runtime var set": {
+    "code": "tp.collectionVariables.set(\"last\", tp.response.json().id);",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "bruno/runtime var get": {
+    "code": "console.log(tp.variables.get(\"last\"));",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "bruno/runtime var delete": {
+    "code": "tp.collectionVariables.set(\"x\", 1);\ntp.collectionVariables.unset(\"x\");",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "bruno/collection var read": {
+    "code": "console.log(tp.collectionVariables.get(\"host\"));",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "bruno/folder and request var read": {
+    "code": "console.log(tp.variables.get(\"f\"), tp.variables.get(\"r\"));",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "bruno/env name": {
+    "code": "console.log(tp.environment.name);",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "bruno/request name": {
+    "code": "console.log(tp.info.requestName);",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "bruno/process env": {
+    "code": "const key = tp.variables.get(\"API_KEY\");\nconsole.log(key);",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "bruno/secret var": {
+    "code": "const s = tp.variables.get(\"secret\");\nconsole.log(s);",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "bruno/request url and method": {
+    "code": "console.log(tp.request.url.toString(), tp.request.method);",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "bruno/set header": {
+    "code": "tp.request.headers.upsert({ key: \"X-Trace\", value: \"1\" });",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "bruno/set headers object": {
+    "code": "Object.entries({ \"X-A\": \"1\", \"X-B\": \"2\" } || {}).forEach(([key, value]) => tp.request.headers.upsert({ key, value }));",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "bruno/delete header": {
+    "code": "tp.request.headers.remove(\"X-Req\");",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "bruno/get header": {
+    "code": "console.log(tp.request.headers.get(\"X-Req\"));",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "bruno/set url": {
+    "code": "(tp.request.url = \"https://h.test/other\");",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "bruno/set method": {
+    "code": "(tp.request.method = \"POST\");",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "bruno/request name via req": {
+    "code": "console.log(tp.info.requestName);",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "bruno/runner next request": {
+    "code": "tp.execution.setNextRequest(\"Cleanup\");",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "bruno/runner skip": {
+    "code": "tp.execution.skipRequest();",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "bruno/runner stop": {
+    "code": "tp.execution.setNextRequest(null);",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "bruno/set timeout (lifted)": {
+    "code": "// req.setTimeout(8000): now the request's timeout setting",
+    "status": "converted",
+    "changes": 1,
+    "apis": [
+      "timeoutMs"
+    ]
+  },
+  "bruno/set max redirects (lifted)": {
+    "code": "// req.setMaxRedirects(2): now the request's maximum redirects setting",
+    "status": "converted",
+    "changes": 1,
+    "apis": [
+      "maxRedirects"
+    ]
+  },
+  "bruno/auth mode (no equivalent)": {
+    "code": "// TODO(import): req.getAuthMode has no TestPion equivalent yet: rewrite this line with TestPion's script API (sendRequest, cookies …)\nconsole.log(req.getAuthMode());",
+    "status": "unchanged",
+    "changes": 0,
+    "apis": [
+      "req.getAuthMode"
+    ]
+  },
+  "bruno/set body (no equivalent response)": {
+    "code": "// TODO(import): res.setBody has no TestPion equivalent yet: rewrite this line with TestPion's script API (sendRequest, cookies …)\nres.setBody({ patched: true });",
+    "status": "unchanged",
+    "changes": 0,
+    "apis": [
+      "res.setBody"
+    ]
+  },
+  "bruno/cookies jar": {
+    "code": "const jar = tp.cookies.jar();\njar.setCookie(\"https://h.test\", \"k\", \"v\");",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "bruno/send request promise": {
+    "code": "const r = await ((cfg, cb) => { const p = new Promise((resolve) => tp.sendRequest({ url: cfg.url, method: cfg.method || 'GET', header: Object.entries(cfg.headers || {}).map(([key, value]) => ({ key, value })), body: cfg.data === undefined ? undefined : { mode: 'raw', raw: typeof cfg.data === 'string' ? cfg.data : JSON.stringify(cfg.data) } }, (err, res) => resolve([err, res && { status: res.code, statusText: res.status, headers: res.headers.toObject(), data: (() => { try { return res.json(); } catch (e) { return res.text(); } })() }]))); return cb ? p.then(([err, res]) => cb(err, res)) : p.then(([err, res]) => { if (err) throw err; return res; }); })({ method: \"GET\", url: \"https://h.test/ping\" }, undefined);\nconsole.log(r.status);",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "bruno/send request callback": {
+    "code": "((cfg, cb) => { const p = new Promise((resolve) => tp.sendRequest({ url: cfg.url, method: cfg.method || 'GET', header: Object.entries(cfg.headers || {}).map(([key, value]) => ({ key, value })), body: cfg.data === undefined ? undefined : { mode: 'raw', raw: typeof cfg.data === 'string' ? cfg.data : JSON.stringify(cfg.data) } }, (err, res) => resolve([err, res && { status: res.code, statusText: res.status, headers: res.headers.toObject(), data: (() => { try { return res.json(); } catch (e) { return res.text(); } })() }]))); return cb ? p.then(([err, res]) => cb(err, res)) : p.then(([err, res]) => { if (err) throw err; return res; }); })({ method: \"GET\", url: \"https://h.test/ping\" }, (err, r) => console.log(err, r && r.status));",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "bruno/tests with chai chain": {
+    "code": "tp.test(\"body\", () => {\n  tp.expect(tp.response.json()).to.have.property(\"token\");\n  tp.expect(tp.response.json().token).to.be.a(\"string\");\n});",
+    "status": "converted",
+    "changes": 5,
+    "apis": []
+  },
+  "bruno/bru in string": {
+    "code": "console.log(\"bru.setVar in a string\");\ntp.collectionVariables.set(\"a\", 1);",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "bruno/own bru object": {
+    "code": "const bru = { setVar() {} };\nbru.setVar(\"x\", 1);",
+    "status": "kept",
+    "changes": 0,
+    "apis": [
+      "bru"
+    ]
+  },
+  "bruno/req in object key": {
+    "code": "const o = { req: 1 };\nconsole.log(o.req);\ntp.request.headers.upsert({ key: \"X\", value: \"1\" });",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "bruno/res as variable name": {
+    "code": "function f(res) { return res.status; }\nconsole.log(f({ status: 3 }));\nconsole.log(tp.response.code);",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "bruno/nested expect": {
+    "code": "tp.test(\"many\", () => {\n  const b = tp.response.json();\n  tp.expect(b.id).to.equal(7);\n  tp.expect(b.name).to.equal(\"n\");\n  tp.expect(tp.response.code).to.equal(200);\n});",
+    "status": "converted",
+    "changes": 6,
+    "apis": []
+  },
+  "bruno/conditional flow": {
+    "code": "if (tp.response.code === 200 && tp.response.json().id) {\n  tp.collectionVariables.set(\"id\", tp.response.json().id);\n  tp.execution.setNextRequest(\"Next\");\n} else {\n  tp.execution.setNextRequest(null);\n}",
+    "status": "converted",
+    "changes": 6,
+    "apis": []
+  },
+  "thunder/set var": {
+    "code": "tp.environment.set(\"token\", tp.response.json().token);",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "thunder/set var with scope": {
+    "code": "tp.globals.set(\"g\", \"1\");",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "thunder/get var": {
+    "code": "const t = tp.environment.get(\"token\");\nconsole.log(t);",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "thunder/get global var": {
+    "code": "console.log(tp.globals.get(\"g\"));",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "thunder/status test": {
+    "code": "tp.test(\"status 200\", function () {\n  tp.expect(tp.response.code).to.equal(200);\n});",
+    "status": "converted",
+    "changes": 3,
+    "apis": []
+  },
+  "thunder/json field test": {
+    "code": "tp.test(\"name\", function () {\n  tp.expect(tp.response.json().name).to.equal(\"n\");\n});",
+    "status": "converted",
+    "changes": 3,
+    "apis": []
+  },
+  "thunder/text test": {
+    "code": "tp.test(\"text\", function () {\n  tp.expect(tp.response.text()).to.include(\"n\");\n});",
+    "status": "converted",
+    "changes": 3,
+    "apis": []
+  },
+  "thunder/headers test": {
+    "code": "tp.test(\"headers\", function () {\n  tp.expect(tp.response.headers.toObject()[\"content-type\"]).to.include(\"json\");\n});",
+    "status": "converted",
+    "changes": 3,
+    "apis": []
+  },
+  "thunder/time test": {
+    "code": "tp.test(\"fast\", function () {\n  tp.expect(tp.response.responseTime).to.be.below(1000);\n});",
+    "status": "converted",
+    "changes": 3,
+    "apis": []
+  },
+  "thunder/size test": {
+    "code": "tp.test(\"small\", function () {\n  tp.expect(tp.response.size().total).to.be.below(100000);\n});",
+    "status": "converted",
+    "changes": 3,
+    "apis": []
+  },
+  "thunder/request url": {
+    "code": "console.log(tp.request.url.toString(), tp.request.method);",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "thunder/load module lodash": {
+    "code": "const _ = require(\"lodash\");\nconsole.log(_.sortBy([2, 1]));",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "thunder/run request": {
+    "code": "tp.execution.runRequest(\"Login\");",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "thunder/test with array index": {
+    "code": "tp.test(\"first\", function () {\n  tp.expect(tp.response.json().items[0]).to.exist;\n});",
+    "status": "converted",
+    "changes": 3,
+    "apis": []
+  },
+  "thunder/nested json field": {
+    "code": "tp.environment.set(\"nested\", tp.response.json().a.b.c);",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "thunder/multiple tests": {
+    "code": "tp.test(\"a\", function () { tp.expect(1).to.equal(1); });\ntp.test(\"b\", function () { tp.expect(tp.response.code).to.equal(200); });",
+    "status": "converted",
+    "changes": 5,
+    "apis": []
+  },
+  "thunder/plain javascript": {
+    "code": "const a = [1, 2, 3];\nconsole.log(a.length);",
+    "status": "unchanged",
+    "changes": 0,
+    "apis": []
+  },
+  "thunder/tc in string": {
+    "code": "console.log(\"tc.setVar in a string\");\ntp.environment.set(\"a\", 1);",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "thunder/own tc": {
+    "code": "const tc = { setVar() {} };\ntc.setVar(\"x\", 1);",
+    "status": "kept",
+    "changes": 0,
+    "apis": [
+      "tc"
+    ]
+  },
+  "thunder/conditional set": {
+    "code": "if (tp.response.code === 200) {\n  tp.environment.set(\"ok\", \"yes\");\n}",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "thunder/expect eql": {
+    "code": "tp.test(\"deep\", function () {\n  tp.expect(tp.response.json()).to.have.property(\"id\");\n});",
+    "status": "converted",
+    "changes": 3,
+    "apis": []
+  },
+  "thunder/expect a type": {
+    "code": "tp.test(\"type\", function () {\n  tp.expect(tp.response.json().id).to.be.a(\"number\");\n});",
+    "status": "converted",
+    "changes": 3,
+    "apis": []
+  },
+  "thunder/loop over items": {
+    "code": "(tp.response.json().items || []).forEach(function (i) { console.log(i); });",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "thunder/string concat": {
+    "code": "tp.environment.set(\"auth\", \"Bearer \" + tp.environment.get(\"token\"));",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "thunder/json stringify": {
+    "code": "console.log(JSON.stringify(tp.response.json()));",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "thunder/try catch": {
+    "code": "try {\n  tp.environment.set(\"v\", tp.response.json().id);\n} catch (e) {\n  console.log(e.message);\n}",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "hoppscotch/status toBe": {
+    "code": "tp.test(\"status 200\", () => {\n  tp.expect(tp.response.code).to.equal(200);\n});",
+    "status": "converted",
+    "changes": 4,
+    "apis": []
+  },
+  "hoppscotch/status level2xx": {
+    "code": "tp.test(\"2xx\", () => {\n  tp.expect(tp.response.code).to.be.within(200, 299);\n});",
+    "status": "converted",
+    "changes": 4,
+    "apis": []
+  },
+  "hoppscotch/status level4xx negated": {
+    "code": "tp.test(\"not 4xx\", () => {\n  tp.expect(tp.response.code).not.to.be.within(400, 499);\n});",
+    "status": "converted",
+    "changes": 4,
+    "apis": []
+  },
+  "hoppscotch/body field toBe": {
+    "code": "tp.test(\"name\", () => {\n  tp.expect(tp.response.json().name).to.equal(\"n\");\n});",
+    "status": "converted",
+    "changes": 4,
+    "apis": []
+  },
+  "hoppscotch/body toHaveLength": {
+    "code": "tp.test(\"tags\", () => {\n  tp.expect([1, 2, 3]).to.have.lengthOf(3);\n});",
+    "status": "converted",
+    "changes": 3,
+    "apis": []
+  },
+  "hoppscotch/body toBeType": {
+    "code": "tp.test(\"id type\", () => {\n  tp.expect(tp.response.json().id).to.be.a(\"number\");\n});",
+    "status": "converted",
+    "changes": 4,
+    "apis": []
+  },
+  "hoppscotch/toInclude": {
+    "code": "tp.test(\"includes\", () => {\n  tp.expect([1, 2, 3]).to.include(2);\n});",
+    "status": "converted",
+    "changes": 3,
+    "apis": []
+  },
+  "hoppscotch/env get set": {
+    "code": "tp.environment.set(\"seen\", \"1\");\nconsole.log(tp.environment.get(\"seen\"));",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "hoppscotch/env unset": {
+    "code": "tp.environment.set(\"t\", \"1\");\ntp.environment.unset(\"t\");",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "hoppscotch/env resolve": {
+    "code": "const u = tp.variables.replaceIn(\"{{host}}/x\");\nconsole.log(u);",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "hoppscotch/env getResolve": {
+    "code": "console.log(tp.variables.replaceIn('{{' + \"host\" + '}}'));",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "hoppscotch/set from response": {
+    "code": "tp.environment.set(\"token\", tp.response.json().token);",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "hoppscotch/response time": {
+    "code": "tp.test(\"fast\", () => {\n  tp.expect(tp.response.responseTime).to.be.below(1000);\n});",
+    "status": "converted",
+    "changes": 4,
+    "apis": []
+  },
+  "hoppscotch/header value": {
+    "code": "console.log(tp.response.headers.all().length);",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "hoppscotch/multiple tests": {
+    "code": "tp.test(\"a\", () => { tp.expect(1).to.equal(1); });\ntp.test(\"b\", () => { tp.expect(tp.response.code).to.equal(200); });",
+    "status": "converted",
+    "changes": 7,
+    "apis": []
+  },
+  "hoppscotch/toEqual deep": {
+    "code": "tp.test(\"eq\", () => {\n  tp.expect({ a: 1 }).to.eql({ a: 1 });\n});",
+    "status": "converted",
+    "changes": 3,
+    "apis": []
+  },
+  "hoppscotch/truthy": {
+    "code": "tp.test(\"truthy\", () => {\n  tp.expect(tp.response.json().id).to.be.ok;\n});",
+    "status": "converted",
+    "changes": 4,
+    "apis": []
+  },
+  "hoppscotch/greater than": {
+    "code": "tp.test(\"positive\", () => {\n  tp.expect(tp.response.json().value).to.be.above(0);\n});",
+    "status": "converted",
+    "changes": 4,
+    "apis": []
+  },
+  "hoppscotch/hopp env active": {
+    "code": "tp.environment.set(\"a\", \"1\");\nconsole.log(tp.environment.get(\"a\"));",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "hoppscotch/hopp env global": {
+    "code": "tp.globals.set(\"g\", \"1\");\nconsole.log(tp.globals.get(\"g\"));",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "hoppscotch/hopp status": {
+    "code": "tp.test(\"status\", () => {\n  tp.expect(tp.response.code).to.equal(200);\n});",
+    "status": "converted",
+    "changes": 4,
+    "apis": []
+  },
+  "hoppscotch/hopp json": {
+    "code": "tp.test(\"json\", () => {\n  tp.expect(tp.response.json().name).to.equal(\"n\");\n});",
+    "status": "converted",
+    "changes": 4,
+    "apis": []
+  },
+  "hoppscotch/hopp text": {
+    "code": "console.log(tp.response.text().length);",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "hoppscotch/hopp fetch (no equivalent)": {
+    "code": "// TODO(import): hopp.fetch has no TestPion equivalent yet: rewrite this line\nconst r = await hopp.fetch(\"https://h.test/x\");\nconsole.log(r.status);",
+    "status": "unchanged",
+    "changes": 0,
+    "apis": [
+      "hopp.fetch"
+    ]
+  },
+  "hoppscotch/pm layer": {
+    "code": "tp.test(\"layer\", () => tp.expect(tp.response.code).to.eql(200));\ntp.environment.set(\"x\", 1);",
+    "status": "converted",
+    "changes": 4,
+    "apis": []
+  },
+  "hoppscotch/plain javascript": {
+    "code": "const s = [\"a\", \"b\"].join(\"-\");\nconsole.log(s);",
+    "status": "unchanged",
+    "changes": 0,
+    "apis": []
+  },
+  "hoppscotch/pw in string": {
+    "code": "console.log(\"pw.env.set in a string\");\ntp.environment.set(\"a\", \"1\");",
+    "status": "converted",
+    "changes": 1,
+    "apis": []
+  },
+  "hoppscotch/own pw": {
+    "code": "const pw = { env: { set() {} } };\npw.env.set(\"x\", 1);",
+    "status": "kept",
+    "changes": 0,
+    "apis": [
+      "pw"
+    ]
+  },
+  "hoppscotch/conditional": {
+    "code": "if (tp.response.code === 200) {\n  tp.environment.set(\"ok\", \"yes\");\n}",
+    "status": "converted",
+    "changes": 2,
+    "apis": []
+  },
+  "hoppscotch/not toBe": {
+    "code": "tp.test(\"not\", () => {\n  tp.expect(tp.response.code).not.to.equal(500);\n});",
+    "status": "converted",
+    "changes": 4,
+    "apis": []
+  }
+}

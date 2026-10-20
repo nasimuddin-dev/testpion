@@ -1,0 +1,190 @@
+type: collection.insomnia.rest/5.0
+schema_version: "5.1"
+name: Payments API
+meta:
+  id: wrk_payments
+  created: 1
+  modified: 1
+collection:
+  - name: Customers
+    meta:
+      id: fld_payments_0
+      sortKey: 0
+    authentication:
+      type: bearer
+      token: "{{secretKey}}"
+    children:
+      - name: Create a customer
+        url: "{{ _.baseUrl }}/customers"
+        method: POST
+        body:
+          mimeType: application/x-www-form-urlencoded
+          params:
+            - name: email
+              value: jenny@example.test
+            - name: name
+              value: Jenny Rosen
+        headers: []
+        scripts:
+          afterResponse: |-
+            insomnia.test("Status code is 200", () => {
+              insomnia.expect(insomnia.response.code).to.eql(200);
+            });
+        meta:
+          id: req_payments_0_0
+          sortKey: 0
+      - name: Retrieve a customer
+        url: "{{ _.baseUrl }}/customers/cus_123"
+        method: GET
+        headers: []
+        scripts:
+          afterResponse: |-
+            insomnia.test("Status code is 200", () => {
+              insomnia.expect(insomnia.response.code).to.eql(200);
+            });
+        meta:
+          id: req_payments_0_1
+          sortKey: 1
+      - name: Update a customer
+        url: "{{ _.baseUrl }}/customers/cus_123"
+        method: POST
+        body:
+          mimeType: application/x-www-form-urlencoded
+          params:
+            - name: description
+              value: VIP
+        headers: []
+        meta:
+          id: req_payments_0_2
+          sortKey: 2
+      - name: Delete a customer
+        url: "{{ _.baseUrl }}/customers/cus_123"
+        method: DELETE
+        headers: []
+        meta:
+          id: req_payments_0_3
+          sortKey: 3
+      - name: List all customers
+        url: "{{ _.baseUrl }}/customers"
+        method: GET
+        parameters:
+          - name: limit
+            value: "10"
+          - name: starting_after
+            value: cus_100
+        headers: []
+        scripts:
+          afterResponse: |-
+            insomnia.test("Status code is 200", () => {
+              insomnia.expect(insomnia.response.code).to.eql(200);
+            });
+        meta:
+          id: req_payments_0_4
+          sortKey: 4
+  - name: Charges
+    meta:
+      id: fld_payments_1
+      sortKey: 1
+    children:
+      - name: Create a charge
+        url: "{{ _.baseUrl }}/charges"
+        method: POST
+        body:
+          mimeType: application/x-www-form-urlencoded
+          params:
+            - name: amount
+              value: "2000"
+            - name: currency
+              value: usd
+            - name: source
+              value: tok_visa
+        headers:
+          - name: Idempotency-Key
+            value: "{{$guid}}"
+        scripts:
+          afterResponse: |-
+            insomnia.test("Status code is 200", () => {
+              insomnia.expect(insomnia.response.code).to.eql(200);
+            });
+        meta:
+          id: req_payments_1_0
+          sortKey: 0
+      - name: Retrieve a charge
+        url: "{{ _.baseUrl }}/charges/ch_123"
+        method: GET
+        headers: []
+        meta:
+          id: req_payments_1_1
+          sortKey: 1
+      - name: Capture a charge
+        url: "{{ _.baseUrl }}/charges/ch_123/capture"
+        method: POST
+        headers: []
+        meta:
+          id: req_payments_1_2
+          sortKey: 2
+      - name: List all charges
+        url: "{{ _.baseUrl }}/charges"
+        method: GET
+        parameters:
+          - name: customer
+            value: cus_123
+        headers: []
+        meta:
+          id: req_payments_1_3
+          sortKey: 3
+  - name: Refunds
+    meta:
+      id: fld_payments_2
+      sortKey: 2
+    children:
+      - name: Create a refund
+        url: "{{ _.baseUrl }}/refunds"
+        method: POST
+        body:
+          mimeType: application/x-www-form-urlencoded
+          params:
+            - name: charge
+              value: ch_123
+            - name: amount
+              value: "500"
+        headers: []
+        meta:
+          id: req_payments_2_0
+          sortKey: 0
+      - name: Retrieve a refund
+        url: "{{ _.baseUrl }}/refunds/re_123"
+        method: GET
+        headers: []
+        meta:
+          id: req_payments_2_1
+          sortKey: 1
+      - name: List all refunds
+        url: "{{ _.baseUrl }}/refunds"
+        method: GET
+        parameters:
+          - name: charge
+            value: ch_123
+        headers: []
+        meta:
+          id: req_payments_2_2
+          sortKey: 2
+environments:
+  name: Base Environment
+  meta:
+    id: env_payments
+  data:
+    baseUrl: https://api.payments.example.test/v1
+  subEnvironments:
+    - name: test
+      meta:
+        id: env_payments_test
+      data:
+        baseUrl: https://api.payments.example.test/v1
+        secretKey: sk_test_0000
+    - name: live
+      meta:
+        id: env_payments_live
+      data:
+        baseUrl: https://api.payments.example.test/v1
+        secretKey: ""

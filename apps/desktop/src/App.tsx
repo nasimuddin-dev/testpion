@@ -407,6 +407,7 @@ export default function App() {
       { id: 'shortcuts', label: 'Keyboard Shortcuts', hint: keyLabel('shortcuts', bindings), run: () => s.set({ shortcutsOpen: true }) },
       { id: 'keyboard-settings', label: 'Keyboard Shortcuts: Change the Keys…', hint: 'Settings', run: () => s.openIntent('settings', { tab: 'keyboard' }) },
       { id: 'git-ready', label: 'Make Workspace Ready for Git', hint: 'Workspace', run: () => void runMenuCommand('git-ready') },
+      { id: 'git-fix', label: 'Fix Git Setup', hint: 'Workspace', run: () => void runMenuCommand('git-fix') },
       { id: 'git-clone', label: 'Clone Workspace from Git…', hint: 'Workspace', run: () => void runMenuCommand('git-clone') },
       { id: 'git-view', label: 'Git: Changes, Commit, Pull and Push', hint: 'Workspace', run: () => useApp.getState().setView('git') },
       { id: 'layout-side', label: 'Response Layout: Side by Side', hint: 'View', run: () => setResponseLayout('side') },
