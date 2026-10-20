@@ -52,7 +52,7 @@ describe('judgeCall', () => {
       const a = await judgeCall(host, FAITHFULNESS, input());
       expect(a.verdict.items.map((i) => i.verdict)).toEqual([true, false]);
       expect(a.cached).toBe(false);
-      expect(a.judge).toMatchObject({ provider: 'Mock AI', model: 'mock-model', metric: 'rag-faithfulness', promptVersion: 'faithfulness-v1' });
+      expect(a.judge).toMatchObject({ provider: 'Mock AI', model: 'mock-model', metric: 'faithfulness', promptVersion: 'faithfulness-v1' });
       const u = aiUsageSummary(h.store, {});
       expect(u.byTask.find((t) => t.task === 'rag-judge')).toMatchObject({ calls: 1 });
       expect(host.budget.calls).toBe(1);

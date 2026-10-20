@@ -1,0 +1,15 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`the prompts are pinned: a change to a wording must bump its version > claims-v1, the claim verdicts, context relevance in four modes, reverse questions 1`] = `
+{
+  "answer-relevance-claims-v1": "00a75efa424f",
+  "answer-relevance-questions-v1": "d654c3571e40",
+  "claims-v1": "9f526dc1ada7",
+  "context-relevance-chunks-v1": "86c03c0116c8",
+  "context-relevance-nvidia-a-v1": "d7bbfa028023",
+  "context-relevance-nvidia-b-v1": "fc2a3d088158",
+  "context-relevance-sentences-v1": "d597f24a058d",
+  "context-relevance-statements-v1": "6ff94915bf13",
+  "faithfulness-claims-v1": "3dcc89d504b0",
+}
+`;

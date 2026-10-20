@@ -66,6 +66,9 @@ export async function runRagTargetTest(test: RagTest, scope: VariableScope, span
       metadata: {
         rag: {
           query: question,
+          ...(reference !== undefined ? { reference } : {}),
+          ...(test.referenceIds?.length ? { referenceIds: test.referenceIds } : {}),
+          ...(test.referenceContexts?.length ? { referenceContexts: test.referenceContexts } : {}),
           protocol: test.target!.protocol,
           documentIds: sample.contexts.map((d) => d.id),
           scores: sample.contexts.map((d) => d.score ?? null),

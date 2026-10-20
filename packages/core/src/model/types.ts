@@ -8,7 +8,7 @@
 export const SCHEMA_VERSION = '1.0';
 
 export type { KeyValue } from '@testpion/shared';
-import type { KeyValue, RagTarget } from '@testpion/shared';
+import type { KeyValue, RagJudgeSetup, RagTarget } from '@testpion/shared';
 import type { AssertTest, ConditionTest, DelayTest, FlowTest, ForEachSpec, LogTest, ScriptTest, SetTest, UntilSpec } from './flow-types.js';
 // the flow blocks' types (a flow's own steps: delay, condition, script, sub-flow, log, set, assert) live in flow-types.ts
 export type * from './flow-types.js';
@@ -434,7 +434,7 @@ export interface RagTest extends TestBase {
   referenceContexts?: string[];
   referenceIds?: string[];
   /** The judge of the judged metrics (else the AI settings' large model; never a silent mock) and its limits for the run. */
-  judge?: { provider?: string; model?: string; maxCostUsd?: number; maxCalls?: number };
+  judge?: RagJudgeSetup;
 }
 
 export interface MockTool {
@@ -552,6 +552,8 @@ export interface RunSummary {
   latency: LatencyStats;
   tokens: TokenUsage;
   costUsd: number;
+  /** RAG evaluations: what the judge models cost (USD, from the price table; cached verdicts cost nothing), apart from `costUsd` of the systems under test. */
+  judgeCostUsd?: number;
   cancelled: boolean;
   environment?: string;
   /** Averages of scored checks by type, e.g. `{ "llm-judge": 0.87 }`. */

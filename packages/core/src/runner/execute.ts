@@ -40,6 +40,7 @@ import { runChecks, type CheckContext } from '../eval/checks.js';
 import '../eval/rag/metrics.js';
 import type { RagJudgeHost } from '../eval/rag/judge.js';
 import { runRagTargetTest } from './rag-run.js';
+import { scoreRagSample } from '../eval/rag/score.js';
 import { runScript } from '../scripts/sandbox.js';
 import { renderVisualizer } from '../scripts/visualizer.js';
 import { applyScriptOutput, scriptRequestSender, scriptScopes, type PersistVariable } from '../scripts/bridge.js';
@@ -267,7 +268,11 @@ export async function executeTest(testIn: TestCase, svc: ExecServices, opts: { t
   const checkConfigs: CheckConfig[] = scope.resolveDeep([...(test.assertions ?? []), ...(test.evaluators ?? []), ...implicitChecks(test, ctx)]);
   const evalSpan = checkConfigs.length ? root.child('evaluate', 'evaluation', { attributes: { checks: checkConfigs.length } }) : undefined;
   ctx.services.span = evalSpan ?? root;
-  const checks = [...scriptChecks, ...(await runChecks(checkConfigs, ctx))];
+  // a RAG target's metrics are scored together (the shared claim pass, shortCircuit) and the sample's failure is classified
+  let ragScored: Awaited<ReturnType<typeof scoreRagSample>> | undefined;
+  if (test.type === 'rag' && test.target) ragScored = await scoreRagSample(checkConfigs, ctx, { warnings: (metadata.rag as { warnings?: string[] } | undefined)?.warnings });
+  const checks = [...scriptChecks, ...(ragScored ? ragScored.checks : await runChecks(checkConfigs, ctx))];
+  if (ragScored?.failure) metadata.rag = { ...(metadata.rag as Record<string, unknown> | undefined), failure: ragScored.failure };
   evalSpan?.end({ status: checks.every((c) => c.passed) ? 'ok' : 'error', output: checks.map((c) => ({ name: c.name, passed: c.passed, score: c.score, source: c.source })) });
 
   // extraction into runtime variables (visible to later/dependent tests)

@@ -78,6 +78,8 @@ export class RunAggregator {
   latency = new LatencyRecorder();
   tokens = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
   cost = 0;
+  /** What the judge models of the RAG metrics cost (never counted in `cost`, which is the systems under test's own). */
+  judgeCost = 0;
   scores = new Map<string, { sum: number; count: number }>();
   files = new Set<string>();
 
@@ -96,6 +98,8 @@ export class RunAggregator {
     }
     if (r.costUsd) this.cost += r.costUsd;
     for (const c of r.checks) {
+      const spent = (c.metadata?.judgeUsage as { costUsd?: number } | undefined)?.costUsd;
+      if (typeof spent === 'number') this.judgeCost += spent;
       if (typeof c.score !== 'number') continue;
       const s = this.scores.get(c.type) ?? { sum: 0, count: 0 };
       s.sum += c.score;
@@ -118,6 +122,7 @@ export class RunAggregator {
       latency: this.latency.stats(),
       tokens: { ...this.tokens },
       costUsd: round(this.cost, 6),
+      ...(this.judgeCost ? { judgeCostUsd: round(this.judgeCost, 6) } : {}),
       scores: Object.fromEntries([...this.scores].map(([k, v]) => [k, { mean: round(v.sum / v.count, 4), count: v.count }])),
       ...(this.files.size ? { files: [...this.files] } : {}),
     };

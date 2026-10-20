@@ -6,7 +6,7 @@ import { ApsError } from '../../errors.js';
 import type { SavedEvaluation } from '../../runner/saved-evaluations.js';
 import type { WorkspaceStore } from '../../storage/workspace.js';
 import { assertJudgeUsable, type RagJudgeHost } from './judge.js';
-import { JUDGED_CHECK_TYPES } from './metrics.js';
+import { evaluatorsNeedJudge } from './score.js';
 import { targetProblems } from './run-target.js';
 import { findRagTarget } from './targets.js';
 
@@ -20,7 +20,7 @@ export interface EvaluationPlan {
 
 /** Throws the setup error (a missing target or judge) before a run is started; otherwise says what the run will use. */
 export function assertEvaluationRunnable(store: WorkspaceStore, host: RagJudgeHost, d: SavedEvaluation): EvaluationPlan {
-  const plan: EvaluationPlan = { judged: [...new Set((d.evaluators ?? []).map((e) => e.type).filter((t) => JUDGED_CHECK_TYPES.has(t)))] };
+  const plan: EvaluationPlan = { judged: evaluatorsNeedJudge(d.evaluators ?? [], d.type === 'rag' && !!d.target) };
   if (d.type === 'rag' && d.target) {
     const t = findRagTarget(store, d.target);
     const problems = targetProblems(t);
@@ -29,6 +29,10 @@ export function assertEvaluationRunnable(store: WorkspaceStore, host: RagJudgeHo
   } else if (plan.judged.length) {
     throw new ApsError('ConfigurationError', `${plan.judged.join(', ')} judge the answer against the retrieved contexts of a RAG target, and this evaluation has no target`, { suggestions: ['Choose a RAG target for the evaluation (Evaluations ▸ RAG target), or remove the judged metrics.'] });
   }
-  if (plan.judged.length) plan.judge = assertJudgeUsable(host, { provider: d.judge?.provider, model: d.judge?.model });
+  if (plan.judged.length) {
+    plan.judge = assertJudgeUsable(host, { provider: d.judge?.provider, model: d.judge?.model });
+    // a jury is checked judge by judge, now, rather than at the first sample
+    for (const j of d.judge?.judges ?? []) assertJudgeUsable(host, j);
+  }
   return plan;
 }
