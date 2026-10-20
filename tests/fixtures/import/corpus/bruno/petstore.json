@@ -1,0 +1,470 @@
+{
+  "name": "Pet Store",
+  "version": "1",
+  "items": [
+    {
+      "type": "folder",
+      "name": "pet",
+      "seq": 1,
+      "items": [
+        {
+          "type": "http-request",
+          "name": "Add a new pet",
+          "seq": 1,
+          "request": {
+            "url": "{{baseUrl}}/pet",
+            "method": "POST",
+            "headers": [],
+            "params": [],
+            "body": {
+              "mode": "json",
+              "json": "{\n  \"id\": 0,\n  \"name\": \"doggie\",\n  \"status\": \"available\",\n  \"tags\": [\n    {\n      \"name\": \"good\"\n    }\n  ]\n}"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [],
+            "tests": ""
+          }
+        },
+        {
+          "type": "http-request",
+          "name": "Update an existing pet",
+          "seq": 2,
+          "request": {
+            "url": "{{baseUrl}}/pet",
+            "method": "PUT",
+            "headers": [],
+            "params": [],
+            "body": {
+              "mode": "json",
+              "json": "{\n  \"id\": 1,\n  \"name\": \"doggie\",\n  \"status\": \"sold\"\n}"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [],
+            "tests": ""
+          }
+        },
+        {
+          "type": "http-request",
+          "name": "Find pets by status",
+          "seq": 3,
+          "request": {
+            "url": "{{baseUrl}}/pet/findByStatus?status=available",
+            "method": "GET",
+            "headers": [],
+            "params": [
+              {
+                "name": "status",
+                "value": "available",
+                "type": "query",
+                "enabled": true
+              }
+            ],
+            "body": {
+              "mode": "none"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [
+              {
+                "name": "res.status",
+                "value": "eq 200",
+                "enabled": true
+              }
+            ],
+            "tests": "test(\"Status code is 200\", function () {\n  expect(res.status).to.equal(200);\n});"
+          }
+        },
+        {
+          "type": "http-request",
+          "name": "Find pet by ID",
+          "seq": 4,
+          "request": {
+            "url": "{{baseUrl}}/pet/1",
+            "method": "GET",
+            "headers": [],
+            "params": [],
+            "body": {
+              "mode": "none"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [
+              {
+                "name": "res.status",
+                "value": "eq 200",
+                "enabled": true
+              }
+            ],
+            "tests": "test(\"Status code is 200\", function () {\n  expect(res.status).to.equal(200);\n});"
+          }
+        },
+        {
+          "type": "http-request",
+          "name": "Delete a pet",
+          "seq": 5,
+          "request": {
+            "url": "{{baseUrl}}/pet/1",
+            "method": "DELETE",
+            "headers": [
+              {
+                "name": "api_key",
+                "value": "{{apiKey}}",
+                "enabled": true
+              }
+            ],
+            "params": [],
+            "body": {
+              "mode": "none"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [],
+            "tests": ""
+          }
+        },
+        {
+          "type": "http-request",
+          "name": "Upload an image",
+          "seq": 6,
+          "request": {
+            "url": "{{baseUrl}}/pet/1/uploadImage",
+            "method": "POST",
+            "headers": [],
+            "params": [],
+            "body": {
+              "mode": "multipartForm",
+              "multipartForm": [
+                {
+                  "name": "additionalMetadata",
+                  "value": "cute",
+                  "type": "text",
+                  "enabled": true
+                },
+                {
+                  "name": "file",
+                  "type": "file",
+                  "value": [
+                    "dog.png"
+                  ],
+                  "enabled": true
+                }
+              ]
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [],
+            "tests": ""
+          }
+        }
+      ]
+    },
+    {
+      "type": "folder",
+      "name": "store",
+      "seq": 2,
+      "items": [
+        {
+          "type": "http-request",
+          "name": "Returns pet inventories by status",
+          "seq": 1,
+          "request": {
+            "url": "{{baseUrl}}/store/inventory",
+            "method": "GET",
+            "headers": [],
+            "params": [],
+            "body": {
+              "mode": "none"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [
+              {
+                "name": "res.status",
+                "value": "eq 200",
+                "enabled": true
+              }
+            ],
+            "tests": "test(\"Status code is 200\", function () {\n  expect(res.status).to.equal(200);\n});"
+          }
+        },
+        {
+          "type": "http-request",
+          "name": "Place an order for a pet",
+          "seq": 2,
+          "request": {
+            "url": "{{baseUrl}}/store/order",
+            "method": "POST",
+            "headers": [],
+            "params": [],
+            "body": {
+              "mode": "json",
+              "json": "{\n  \"petId\": 1,\n  \"quantity\": 1,\n  \"status\": \"placed\"\n}"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [],
+            "tests": ""
+          }
+        },
+        {
+          "type": "http-request",
+          "name": "Find purchase order by ID",
+          "seq": 3,
+          "request": {
+            "url": "{{baseUrl}}/store/order/1",
+            "method": "GET",
+            "headers": [],
+            "params": [],
+            "body": {
+              "mode": "none"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [],
+            "tests": ""
+          }
+        },
+        {
+          "type": "http-request",
+          "name": "Delete purchase order by ID",
+          "seq": 4,
+          "request": {
+            "url": "{{baseUrl}}/store/order/1",
+            "method": "DELETE",
+            "headers": [],
+            "params": [],
+            "body": {
+              "mode": "none"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [],
+            "tests": ""
+          }
+        }
+      ]
+    },
+    {
+      "type": "folder",
+      "name": "user",
+      "seq": 3,
+      "items": [
+        {
+          "type": "http-request",
+          "name": "Create user",
+          "seq": 1,
+          "request": {
+            "url": "{{baseUrl}}/user",
+            "method": "POST",
+            "headers": [],
+            "params": [],
+            "body": {
+              "mode": "json",
+              "json": "{\n  \"username\": \"theUser\",\n  \"email\": \"john@example.test\"\n}"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [],
+            "tests": ""
+          }
+        },
+        {
+          "type": "http-request",
+          "name": "Logs user into the system",
+          "seq": 2,
+          "request": {
+            "url": "{{baseUrl}}/user/login?username=theUser&password={{password}}",
+            "method": "GET",
+            "headers": [],
+            "params": [
+              {
+                "name": "username",
+                "value": "theUser",
+                "type": "query",
+                "enabled": true
+              },
+              {
+                "name": "password",
+                "value": "{{password}}",
+                "type": "query",
+                "enabled": true
+              }
+            ],
+            "body": {
+              "mode": "none"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [
+              {
+                "name": "res.status",
+                "value": "eq 200",
+                "enabled": true
+              }
+            ],
+            "tests": "test(\"Status code is 200\", function () {\n  expect(res.status).to.equal(200);\n});"
+          }
+        },
+        {
+          "type": "http-request",
+          "name": "Get user by user name",
+          "seq": 3,
+          "request": {
+            "url": "{{baseUrl}}/user/theUser",
+            "method": "GET",
+            "headers": [],
+            "params": [],
+            "body": {
+              "mode": "none"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [],
+            "tests": ""
+          }
+        },
+        {
+          "type": "http-request",
+          "name": "Logs out current logged in user session",
+          "seq": 4,
+          "request": {
+            "url": "{{baseUrl}}/user/logout",
+            "method": "GET",
+            "headers": [],
+            "params": [],
+            "body": {
+              "mode": "none"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [],
+            "tests": ""
+          }
+        }
+      ]
+    }
+  ],
+  "environments": [
+    {
+      "name": "dev",
+      "variables": [
+        {
+          "name": "baseUrl",
+          "value": "http://localhost:8080/v2",
+          "enabled": true,
+          "secret": false
+        },
+        {
+          "name": "apiKey",
+          "value": "dev-key",
+          "enabled": true,
+          "secret": false
+        }
+      ]
+    },
+    {
+      "name": "staging",
+      "variables": [
+        {
+          "name": "baseUrl",
+          "value": "https://staging.petstore.example.test/v2",
+          "enabled": true,
+          "secret": false
+        },
+        {
+          "name": "apiKey",
+          "value": "stg-key",
+          "enabled": true,
+          "secret": false
+        }
+      ]
+    },
+    {
+      "name": "prod",
+      "variables": [
+        {
+          "name": "baseUrl",
+          "value": "https://petstore.example.test/v2",
+          "enabled": true,
+          "secret": false
+        },
+        {
+          "name": "apiKey",
+          "value": "",
+          "enabled": true,
+          "secret": false
+        }
+      ]
+    }
+  ],
+  "root": {
+    "request": {
+      "auth": {
+        "mode": "apikey",
+        "apikey": {
+          "key": "api_key",
+          "value": "{{apiKey}}",
+          "placement": "header"
+        }
+      },
+      "vars": {
+        "req": [
+          {
+            "name": "baseUrl",
+            "value": "https://petstore.example.test/v2",
+            "enabled": true
+          }
+        ]
+      }
+    }
+  },
+  "brunoConfig": {
+    "version": "1",
+    "name": "Pet Store",
+    "type": "collection"
+  }
+}

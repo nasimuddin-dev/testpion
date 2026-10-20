@@ -1,0 +1,145 @@
+type: collection.insomnia.rest/5.0
+schema_version: "5.1"
+name: Maps API
+meta:
+  id: wrk_geo
+  created: 1
+  modified: 1
+collection:
+  - name: Geocoding
+    meta:
+      id: fld_geo_0
+      sortKey: 0
+    authentication:
+      type: apikey
+      key: key
+      value: "{{mapsKey}}"
+      addTo: queryParams
+    children:
+      - name: Geocode an address
+        url: "{{ _.baseUrl }}/geocode/json"
+        method: GET
+        parameters:
+          - name: address
+            value: 1600 Amphitheatre Parkway, Mountain View, CA
+        headers: []
+        scripts:
+          afterResponse: |-
+            insomnia.test("Status code is 200", () => {
+              insomnia.expect(insomnia.response.code).to.eql(200);
+            });
+        meta:
+          id: req_geo_0_0
+          sortKey: 0
+      - name: Reverse geocode
+        url: "{{ _.baseUrl }}/geocode/json"
+        method: GET
+        parameters:
+          - name: latlng
+            value: 40.714224,-73.961452
+        headers: []
+        meta:
+          id: req_geo_0_1
+          sortKey: 1
+      - name: Geocode by place id
+        url: "{{ _.baseUrl }}/geocode/json"
+        method: GET
+        parameters:
+          - name: place_id
+            value: ChIJd8BlQ2BZwokRAFUEcm_qrcA
+        headers: []
+        meta:
+          id: req_geo_0_2
+          sortKey: 2
+  - name: Directions
+    meta:
+      id: fld_geo_1
+      sortKey: 1
+    children:
+      - name: Driving directions
+        url: "{{ _.baseUrl }}/directions/json"
+        method: GET
+        parameters:
+          - name: origin
+            value: Toronto
+          - name: destination
+            value: Montreal
+          - name: mode
+            value: driving
+        headers: []
+        scripts:
+          afterResponse: |-
+            insomnia.test("Status code is 200", () => {
+              insomnia.expect(insomnia.response.code).to.eql(200);
+            });
+        meta:
+          id: req_geo_1_0
+          sortKey: 0
+      - name: Transit directions
+        url: "{{ _.baseUrl }}/directions/json"
+        method: GET
+        parameters:
+          - name: origin
+            value: Boston
+          - name: destination
+            value: Concord
+          - name: mode
+            value: transit
+        headers: []
+        meta:
+          id: req_geo_1_1
+          sortKey: 1
+  - name: Places
+    meta:
+      id: fld_geo_2
+      sortKey: 2
+    children:
+      - name: Find place
+        url: "{{ _.baseUrl }}/place/findplacefromtext/json"
+        method: GET
+        parameters:
+          - name: input
+            value: Museum of Contemporary Art Australia
+          - name: inputtype
+            value: textquery
+        headers: []
+        meta:
+          id: req_geo_2_0
+          sortKey: 0
+      - name: Place details
+        url: "{{ _.baseUrl }}/place/details/json"
+        method: GET
+        parameters:
+          - name: place_id
+            value: ChIJN1t_tDeuEmsRUsoyG83frY4
+        headers: []
+        meta:
+          id: req_geo_2_1
+          sortKey: 1
+      - name: Nearby search
+        url: "{{ _.baseUrl }}/place/nearbysearch/json"
+        method: GET
+        parameters:
+          - name: location
+            value: -33.8670522,151.1957362
+          - name: radius
+            value: "1500"
+          - name: type
+            value: restaurant
+        headers: []
+        meta:
+          id: req_geo_2_2
+          sortKey: 2
+environments:
+  name: Base Environment
+  meta:
+    id: env_geo
+  data:
+    baseUrl: https://maps.example.test/maps/api
+  subEnvironments:
+    - name: default
+      meta:
+        id: env_geo_default
+      data:
+        baseUrl: https://maps.example.test/maps/api
+        mapsKey: AIza-test

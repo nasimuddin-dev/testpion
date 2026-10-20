@@ -1,0 +1,500 @@
+{
+  "apidogProject": "1.0.0",
+  "info": {
+    "name": "Payments API"
+  },
+  "apiCollection": [
+    {
+      "name": "Root",
+      "id": 1,
+      "items": [
+        {
+          "name": "Customers",
+          "id": 10,
+          "items": [
+            {
+              "name": "Create a customer",
+              "api": {
+                "id": "101",
+                "method": "post",
+                "path": "/customers",
+                "parameters": {
+                  "query": [],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "requestBody": {
+                  "type": "application/x-www-form-urlencoded",
+                  "parameters": [
+                    {
+                      "name": "email",
+                      "example": "jenny@example.test"
+                    },
+                    {
+                      "name": "name",
+                      "example": "Jenny Rosen"
+                    }
+                  ]
+                },
+                "responses": [
+                  {
+                    "id": "1010",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "Retrieve a customer",
+              "api": {
+                "id": "102",
+                "method": "get",
+                "path": "/customers/cus_123",
+                "parameters": {
+                  "query": [],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "responses": [
+                  {
+                    "id": "1020",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "Update a customer",
+              "api": {
+                "id": "103",
+                "method": "post",
+                "path": "/customers/cus_123",
+                "parameters": {
+                  "query": [],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "requestBody": {
+                  "type": "application/x-www-form-urlencoded",
+                  "parameters": [
+                    {
+                      "name": "description",
+                      "example": "VIP"
+                    }
+                  ]
+                },
+                "responses": [
+                  {
+                    "id": "1030",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "Delete a customer",
+              "api": {
+                "id": "104",
+                "method": "delete",
+                "path": "/customers/cus_123",
+                "parameters": {
+                  "query": [],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "responses": [
+                  {
+                    "id": "1040",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "List all customers",
+              "api": {
+                "id": "105",
+                "method": "get",
+                "path": "/customers",
+                "parameters": {
+                  "query": [
+                    {
+                      "name": "limit",
+                      "required": true,
+                      "type": "string",
+                      "example": "10"
+                    },
+                    {
+                      "name": "starting_after",
+                      "required": true,
+                      "type": "string",
+                      "example": "cus_100"
+                    }
+                  ],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "responses": [
+                  {
+                    "id": "1050",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Charges",
+          "id": 11,
+          "items": [
+            {
+              "name": "Create a charge",
+              "api": {
+                "id": "106",
+                "method": "post",
+                "path": "/charges",
+                "parameters": {
+                  "query": [],
+                  "path": [],
+                  "header": [
+                    {
+                      "name": "Idempotency-Key",
+                      "required": true,
+                      "type": "string",
+                      "example": "{{$guid}}"
+                    }
+                  ],
+                  "cookie": []
+                },
+                "requestBody": {
+                  "type": "application/x-www-form-urlencoded",
+                  "parameters": [
+                    {
+                      "name": "amount",
+                      "example": "2000"
+                    },
+                    {
+                      "name": "currency",
+                      "example": "usd"
+                    },
+                    {
+                      "name": "source",
+                      "example": "tok_visa"
+                    }
+                  ]
+                },
+                "responses": [
+                  {
+                    "id": "1060",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "Retrieve a charge",
+              "api": {
+                "id": "107",
+                "method": "get",
+                "path": "/charges/ch_123",
+                "parameters": {
+                  "query": [],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "responses": [
+                  {
+                    "id": "1070",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "Capture a charge",
+              "api": {
+                "id": "108",
+                "method": "post",
+                "path": "/charges/ch_123/capture",
+                "parameters": {
+                  "query": [],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "responses": [
+                  {
+                    "id": "1080",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "List all charges",
+              "api": {
+                "id": "109",
+                "method": "get",
+                "path": "/charges",
+                "parameters": {
+                  "query": [
+                    {
+                      "name": "customer",
+                      "required": true,
+                      "type": "string",
+                      "example": "cus_123"
+                    }
+                  ],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "responses": [
+                  {
+                    "id": "1090",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Refunds",
+          "id": 12,
+          "items": [
+            {
+              "name": "Create a refund",
+              "api": {
+                "id": "110",
+                "method": "post",
+                "path": "/refunds",
+                "parameters": {
+                  "query": [],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "requestBody": {
+                  "type": "application/x-www-form-urlencoded",
+                  "parameters": [
+                    {
+                      "name": "charge",
+                      "example": "ch_123"
+                    },
+                    {
+                      "name": "amount",
+                      "example": "500"
+                    }
+                  ]
+                },
+                "responses": [
+                  {
+                    "id": "1100",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "Retrieve a refund",
+              "api": {
+                "id": "111",
+                "method": "get",
+                "path": "/refunds/re_123",
+                "parameters": {
+                  "query": [],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "responses": [
+                  {
+                    "id": "1110",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "List all refunds",
+              "api": {
+                "id": "112",
+                "method": "get",
+                "path": "/refunds",
+                "parameters": {
+                  "query": [
+                    {
+                      "name": "charge",
+                      "required": true,
+                      "type": "string",
+                      "example": "ch_123"
+                    }
+                  ],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "responses": [
+                  {
+                    "id": "1120",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "environments": [
+    {
+      "name": "test",
+      "baseUrl": "https://api.payments.example.test/v1",
+      "variables": [
+        {
+          "name": "secretKey",
+          "value": "sk_test_0000"
+        }
+      ]
+    },
+    {
+      "name": "live",
+      "baseUrl": "https://api.payments.example.test/v1",
+      "variables": [
+        {
+          "name": "secretKey",
+          "value": ""
+        }
+      ]
+    }
+  ]
+}

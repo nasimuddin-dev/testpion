@@ -1,0 +1,273 @@
+{
+  "meta": {
+    "format": "httpie",
+    "version": "1.0.0",
+    "contentType": "collection",
+    "docs": "https://httpie.io/r/export-docs",
+    "source": "HTTPie for Desktop 2025.2.0"
+  },
+  "entry": {
+    "name": "Payments API",
+    "auth": {
+      "type": "bearer",
+      "credentials": {
+        "token": "{{secretKey}}"
+      }
+    },
+    "requests": [],
+    "collections": [
+      {
+        "name": "Customers",
+        "requests": [
+          {
+            "name": "Create a customer",
+            "method": "POST",
+            "url": "{{baseUrl}}/customers",
+            "queryParams": [],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {
+              "form": {
+                "isMultipart": false,
+                "fields": [
+                  {
+                    "name": "email",
+                    "value": "jenny@example.test",
+                    "enabled": true
+                  },
+                  {
+                    "name": "name",
+                    "value": "Jenny Rosen",
+                    "enabled": true
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "name": "Retrieve a customer",
+            "method": "GET",
+            "url": "{{baseUrl}}/customers/cus_123",
+            "queryParams": [],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {}
+          },
+          {
+            "name": "Update a customer",
+            "method": "POST",
+            "url": "{{baseUrl}}/customers/cus_123",
+            "queryParams": [],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {
+              "form": {
+                "isMultipart": false,
+                "fields": [
+                  {
+                    "name": "description",
+                    "value": "VIP",
+                    "enabled": true
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "name": "Delete a customer",
+            "method": "DELETE",
+            "url": "{{baseUrl}}/customers/cus_123",
+            "queryParams": [],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {}
+          },
+          {
+            "name": "List all customers",
+            "method": "GET",
+            "url": "{{baseUrl}}/customers",
+            "queryParams": [
+              {
+                "name": "limit",
+                "value": "10",
+                "enabled": true
+              },
+              {
+                "name": "starting_after",
+                "value": "cus_100",
+                "enabled": true
+              }
+            ],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {}
+          }
+        ]
+      },
+      {
+        "name": "Charges",
+        "requests": [
+          {
+            "name": "Create a charge",
+            "method": "POST",
+            "url": "{{baseUrl}}/charges",
+            "queryParams": [],
+            "pathParams": [],
+            "headers": [
+              {
+                "name": "Idempotency-Key",
+                "value": "{{$guid}}",
+                "enabled": true
+              }
+            ],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {
+              "form": {
+                "isMultipart": false,
+                "fields": [
+                  {
+                    "name": "amount",
+                    "value": "2000",
+                    "enabled": true
+                  },
+                  {
+                    "name": "currency",
+                    "value": "usd",
+                    "enabled": true
+                  },
+                  {
+                    "name": "source",
+                    "value": "tok_visa",
+                    "enabled": true
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "name": "Retrieve a charge",
+            "method": "GET",
+            "url": "{{baseUrl}}/charges/ch_123",
+            "queryParams": [],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {}
+          },
+          {
+            "name": "Capture a charge",
+            "method": "POST",
+            "url": "{{baseUrl}}/charges/ch_123/capture",
+            "queryParams": [],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {}
+          },
+          {
+            "name": "List all charges",
+            "method": "GET",
+            "url": "{{baseUrl}}/charges",
+            "queryParams": [
+              {
+                "name": "customer",
+                "value": "cus_123",
+                "enabled": true
+              }
+            ],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {}
+          }
+        ]
+      },
+      {
+        "name": "Refunds",
+        "requests": [
+          {
+            "name": "Create a refund",
+            "method": "POST",
+            "url": "{{baseUrl}}/refunds",
+            "queryParams": [],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {
+              "form": {
+                "isMultipart": false,
+                "fields": [
+                  {
+                    "name": "charge",
+                    "value": "ch_123",
+                    "enabled": true
+                  },
+                  {
+                    "name": "amount",
+                    "value": "500",
+                    "enabled": true
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "name": "Retrieve a refund",
+            "method": "GET",
+            "url": "{{baseUrl}}/refunds/re_123",
+            "queryParams": [],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {}
+          },
+          {
+            "name": "List all refunds",
+            "method": "GET",
+            "url": "{{baseUrl}}/refunds",
+            "queryParams": [
+              {
+                "name": "charge",
+                "value": "ch_123",
+                "enabled": true
+              }
+            ],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {}
+          }
+        ]
+      }
+    ]
+  }
+}

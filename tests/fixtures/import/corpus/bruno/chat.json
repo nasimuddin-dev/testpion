@@ -1,0 +1,349 @@
+{
+  "name": "Chat API",
+  "version": "1",
+  "items": [
+    {
+      "type": "folder",
+      "name": "conversations",
+      "seq": 1,
+      "items": [
+        {
+          "type": "http-request",
+          "name": "conversations.list",
+          "seq": 1,
+          "request": {
+            "url": "{{baseUrl}}/conversations.list?limit=100&types=public_channel",
+            "method": "GET",
+            "headers": [],
+            "params": [
+              {
+                "name": "limit",
+                "value": "100",
+                "type": "query",
+                "enabled": true
+              },
+              {
+                "name": "types",
+                "value": "public_channel",
+                "type": "query",
+                "enabled": true
+              }
+            ],
+            "body": {
+              "mode": "none"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [
+              {
+                "name": "res.status",
+                "value": "eq 200",
+                "enabled": true
+              }
+            ],
+            "tests": "test(\"Status code is 200\", function () {\n  expect(res.status).to.equal(200);\n});"
+          }
+        },
+        {
+          "type": "http-request",
+          "name": "conversations.history",
+          "seq": 2,
+          "request": {
+            "url": "{{baseUrl}}/conversations.history?channel={{channel}}&limit=20",
+            "method": "GET",
+            "headers": [],
+            "params": [
+              {
+                "name": "channel",
+                "value": "{{channel}}",
+                "type": "query",
+                "enabled": true
+              },
+              {
+                "name": "limit",
+                "value": "20",
+                "type": "query",
+                "enabled": true
+              }
+            ],
+            "body": {
+              "mode": "none"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [],
+            "tests": ""
+          }
+        },
+        {
+          "type": "http-request",
+          "name": "conversations.join",
+          "seq": 3,
+          "request": {
+            "url": "{{baseUrl}}/conversations.join",
+            "method": "POST",
+            "headers": [],
+            "params": [],
+            "body": {
+              "mode": "json",
+              "json": "{\n  \"channel\": \"{{channel}}\"\n}"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [],
+            "tests": ""
+          }
+        },
+        {
+          "type": "http-request",
+          "name": "conversations.create",
+          "seq": 4,
+          "request": {
+            "url": "{{baseUrl}}/conversations.create",
+            "method": "POST",
+            "headers": [],
+            "params": [],
+            "body": {
+              "mode": "json",
+              "json": "{\n  \"name\": \"new-channel\",\n  \"is_private\": false\n}"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [],
+            "tests": ""
+          }
+        }
+      ]
+    },
+    {
+      "type": "folder",
+      "name": "chat",
+      "seq": 2,
+      "items": [
+        {
+          "type": "http-request",
+          "name": "chat.postMessage",
+          "seq": 1,
+          "request": {
+            "url": "{{baseUrl}}/chat.postMessage",
+            "method": "POST",
+            "headers": [],
+            "params": [],
+            "body": {
+              "mode": "json",
+              "json": "{\n  \"channel\": \"{{channel}}\",\n  \"text\": \"Hello, world\",\n  \"unfurl_links\": false\n}"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [
+              {
+                "name": "res.status",
+                "value": "eq 200",
+                "enabled": true
+              }
+            ],
+            "tests": "test(\"Status code is 200\", function () {\n  expect(res.status).to.equal(200);\n});"
+          }
+        },
+        {
+          "type": "http-request",
+          "name": "chat.update",
+          "seq": 2,
+          "request": {
+            "url": "{{baseUrl}}/chat.update",
+            "method": "POST",
+            "headers": [],
+            "params": [],
+            "body": {
+              "mode": "json",
+              "json": "{\n  \"channel\": \"{{channel}}\",\n  \"ts\": \"1405894322.002768\",\n  \"text\": \"edited\"\n}"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [],
+            "tests": ""
+          }
+        },
+        {
+          "type": "http-request",
+          "name": "chat.delete",
+          "seq": 3,
+          "request": {
+            "url": "{{baseUrl}}/chat.delete",
+            "method": "POST",
+            "headers": [],
+            "params": [],
+            "body": {
+              "mode": "json",
+              "json": "{\n  \"channel\": \"{{channel}}\",\n  \"ts\": \"1405894322.002768\"\n}"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [],
+            "tests": ""
+          }
+        }
+      ]
+    },
+    {
+      "type": "folder",
+      "name": "users",
+      "seq": 3,
+      "items": [
+        {
+          "type": "http-request",
+          "name": "users.list",
+          "seq": 1,
+          "request": {
+            "url": "{{baseUrl}}/users.list?limit=200",
+            "method": "GET",
+            "headers": [],
+            "params": [
+              {
+                "name": "limit",
+                "value": "200",
+                "type": "query",
+                "enabled": true
+              }
+            ],
+            "body": {
+              "mode": "none"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [],
+            "tests": ""
+          }
+        },
+        {
+          "type": "http-request",
+          "name": "users.info",
+          "seq": 2,
+          "request": {
+            "url": "{{baseUrl}}/users.info?user=U0123",
+            "method": "GET",
+            "headers": [],
+            "params": [
+              {
+                "name": "user",
+                "value": "U0123",
+                "type": "query",
+                "enabled": true
+              }
+            ],
+            "body": {
+              "mode": "none"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [],
+            "tests": ""
+          }
+        },
+        {
+          "type": "http-request",
+          "name": "auth.test",
+          "seq": 3,
+          "request": {
+            "url": "{{baseUrl}}/auth.test",
+            "method": "POST",
+            "headers": [],
+            "params": [],
+            "body": {
+              "mode": "none"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [
+              {
+                "name": "res.status",
+                "value": "eq 200",
+                "enabled": true
+              }
+            ],
+            "tests": "test(\"Status code is 200\", function () {\n  expect(res.status).to.equal(200);\n});"
+          }
+        }
+      ]
+    }
+  ],
+  "environments": [
+    {
+      "name": "workspace",
+      "variables": [
+        {
+          "name": "baseUrl",
+          "value": "https://chat.example.test/api",
+          "enabled": true,
+          "secret": false
+        },
+        {
+          "name": "botToken",
+          "value": "xoxb-test",
+          "enabled": true,
+          "secret": false
+        },
+        {
+          "name": "channel",
+          "value": "C0123",
+          "enabled": true,
+          "secret": false
+        }
+      ]
+    }
+  ],
+  "root": {
+    "request": {
+      "auth": {
+        "mode": "bearer",
+        "bearer": {
+          "token": "{{botToken}}"
+        }
+      },
+      "vars": {
+        "req": [
+          {
+            "name": "baseUrl",
+            "value": "https://chat.example.test/api",
+            "enabled": true
+          }
+        ]
+      }
+    }
+  },
+  "brunoConfig": {
+    "version": "1",
+    "name": "Chat API",
+    "type": "collection"
+  }
+}

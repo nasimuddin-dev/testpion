@@ -1,0 +1,297 @@
+{
+  "clientName": "Thunder Client",
+  "collectionName": "Chat API",
+  "collectionId": "c-chat",
+  "dateExported": "2026-03-01T00:00:00.000Z",
+  "version": "1.2",
+  "folders": [
+    {
+      "_id": "f0",
+      "name": "conversations",
+      "containerId": "",
+      "created": "2026-01-01",
+      "sortNum": 10000
+    },
+    {
+      "_id": "f1",
+      "name": "chat",
+      "containerId": "",
+      "created": "2026-01-01",
+      "sortNum": 20000
+    },
+    {
+      "_id": "f2",
+      "name": "users",
+      "containerId": "",
+      "created": "2026-01-01",
+      "sortNum": 30000
+    }
+  ],
+  "requests": [
+    {
+      "_id": "r1",
+      "colId": "c-chat",
+      "containerId": "f0",
+      "name": "conversations.list",
+      "url": "{{baseUrl}}/conversations.list",
+      "method": "GET",
+      "sortNum": 10000,
+      "headers": [],
+      "params": [
+        {
+          "name": "limit",
+          "value": "100",
+          "isPath": false
+        },
+        {
+          "name": "types",
+          "value": "public_channel",
+          "isPath": false
+        }
+      ],
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
+      "auth": {
+        "type": "bearer",
+        "bearer": "{{botToken}}"
+      },
+      "tests": [
+        {
+          "type": "res-code",
+          "custom": "",
+          "action": "equal",
+          "value": "200"
+        }
+      ]
+    },
+    {
+      "_id": "r2",
+      "colId": "c-chat",
+      "containerId": "f0",
+      "name": "conversations.history",
+      "url": "{{baseUrl}}/conversations.history",
+      "method": "GET",
+      "sortNum": 20000,
+      "headers": [],
+      "params": [
+        {
+          "name": "channel",
+          "value": "{{channel}}",
+          "isPath": false
+        },
+        {
+          "name": "limit",
+          "value": "20",
+          "isPath": false
+        }
+      ],
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
+      "auth": {
+        "type": "bearer",
+        "bearer": "{{botToken}}"
+      },
+      "tests": []
+    },
+    {
+      "_id": "r3",
+      "colId": "c-chat",
+      "containerId": "f0",
+      "name": "conversations.join",
+      "url": "{{baseUrl}}/conversations.join",
+      "method": "POST",
+      "sortNum": 30000,
+      "headers": [],
+      "params": [],
+      "body": {
+        "type": "json",
+        "raw": "{\n  \"channel\": \"{{channel}}\"\n}",
+        "form": []
+      },
+      "auth": {
+        "type": "bearer",
+        "bearer": "{{botToken}}"
+      },
+      "tests": []
+    },
+    {
+      "_id": "r4",
+      "colId": "c-chat",
+      "containerId": "f0",
+      "name": "conversations.create",
+      "url": "{{baseUrl}}/conversations.create",
+      "method": "POST",
+      "sortNum": 40000,
+      "headers": [],
+      "params": [],
+      "body": {
+        "type": "json",
+        "raw": "{\n  \"name\": \"new-channel\",\n  \"is_private\": false\n}",
+        "form": []
+      },
+      "auth": {
+        "type": "bearer",
+        "bearer": "{{botToken}}"
+      },
+      "tests": []
+    },
+    {
+      "_id": "r5",
+      "colId": "c-chat",
+      "containerId": "f1",
+      "name": "chat.postMessage",
+      "url": "{{baseUrl}}/chat.postMessage",
+      "method": "POST",
+      "sortNum": 50000,
+      "headers": [],
+      "params": [],
+      "body": {
+        "type": "json",
+        "raw": "{\n  \"channel\": \"{{channel}}\",\n  \"text\": \"Hello, world\",\n  \"unfurl_links\": false\n}",
+        "form": []
+      },
+      "auth": {
+        "type": "bearer",
+        "bearer": "{{botToken}}"
+      },
+      "tests": [
+        {
+          "type": "res-code",
+          "custom": "",
+          "action": "equal",
+          "value": "200"
+        }
+      ]
+    },
+    {
+      "_id": "r6",
+      "colId": "c-chat",
+      "containerId": "f1",
+      "name": "chat.update",
+      "url": "{{baseUrl}}/chat.update",
+      "method": "POST",
+      "sortNum": 60000,
+      "headers": [],
+      "params": [],
+      "body": {
+        "type": "json",
+        "raw": "{\n  \"channel\": \"{{channel}}\",\n  \"ts\": \"1405894322.002768\",\n  \"text\": \"edited\"\n}",
+        "form": []
+      },
+      "auth": {
+        "type": "bearer",
+        "bearer": "{{botToken}}"
+      },
+      "tests": []
+    },
+    {
+      "_id": "r7",
+      "colId": "c-chat",
+      "containerId": "f1",
+      "name": "chat.delete",
+      "url": "{{baseUrl}}/chat.delete",
+      "method": "POST",
+      "sortNum": 70000,
+      "headers": [],
+      "params": [],
+      "body": {
+        "type": "json",
+        "raw": "{\n  \"channel\": \"{{channel}}\",\n  \"ts\": \"1405894322.002768\"\n}",
+        "form": []
+      },
+      "auth": {
+        "type": "bearer",
+        "bearer": "{{botToken}}"
+      },
+      "tests": []
+    },
+    {
+      "_id": "r8",
+      "colId": "c-chat",
+      "containerId": "f2",
+      "name": "users.list",
+      "url": "{{baseUrl}}/users.list",
+      "method": "GET",
+      "sortNum": 80000,
+      "headers": [],
+      "params": [
+        {
+          "name": "limit",
+          "value": "200",
+          "isPath": false
+        }
+      ],
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
+      "auth": {
+        "type": "bearer",
+        "bearer": "{{botToken}}"
+      },
+      "tests": []
+    },
+    {
+      "_id": "r9",
+      "colId": "c-chat",
+      "containerId": "f2",
+      "name": "users.info",
+      "url": "{{baseUrl}}/users.info",
+      "method": "GET",
+      "sortNum": 90000,
+      "headers": [],
+      "params": [
+        {
+          "name": "user",
+          "value": "U0123",
+          "isPath": false
+        }
+      ],
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
+      "auth": {
+        "type": "bearer",
+        "bearer": "{{botToken}}"
+      },
+      "tests": []
+    },
+    {
+      "_id": "r10",
+      "colId": "c-chat",
+      "containerId": "f2",
+      "name": "auth.test",
+      "url": "{{baseUrl}}/auth.test",
+      "method": "POST",
+      "sortNum": 100000,
+      "headers": [],
+      "params": [],
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
+      "auth": {
+        "type": "bearer",
+        "bearer": "{{botToken}}"
+      },
+      "tests": [
+        {
+          "type": "res-code",
+          "custom": "",
+          "action": "equal",
+          "value": "200"
+        }
+      ]
+    }
+  ]
+}

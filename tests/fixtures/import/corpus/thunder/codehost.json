@@ -1,0 +1,353 @@
+{
+  "clientName": "Thunder Client",
+  "collectionName": "Code Host API",
+  "collectionId": "c-codehost",
+  "dateExported": "2026-03-01T00:00:00.000Z",
+  "version": "1.2",
+  "folders": [
+    {
+      "_id": "f0",
+      "name": "Repos",
+      "containerId": "",
+      "created": "2026-01-01",
+      "sortNum": 10000
+    },
+    {
+      "_id": "f1",
+      "name": "Issues",
+      "containerId": "",
+      "created": "2026-01-01",
+      "sortNum": 20000
+    },
+    {
+      "_id": "f2",
+      "name": "Users",
+      "containerId": "",
+      "created": "2026-01-01",
+      "sortNum": 30000
+    }
+  ],
+  "requests": [
+    {
+      "_id": "r1",
+      "colId": "c-codehost",
+      "containerId": "f0",
+      "name": "Get a repository",
+      "url": "{{baseUrl}}/repos/{{owner}}/{{repo}}",
+      "method": "GET",
+      "sortNum": 10000,
+      "headers": [
+        {
+          "name": "Accept",
+          "value": "application/vnd.codehost+json"
+        }
+      ],
+      "params": [],
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
+      "auth": {
+        "type": "bearer",
+        "bearer": "{{token}}"
+      },
+      "tests": [
+        {
+          "type": "res-code",
+          "custom": "",
+          "action": "equal",
+          "value": "200"
+        }
+      ]
+    },
+    {
+      "_id": "r2",
+      "colId": "c-codehost",
+      "containerId": "f0",
+      "name": "List repository contributors",
+      "url": "{{baseUrl}}/repos/{{owner}}/{{repo}}/contributors",
+      "method": "GET",
+      "sortNum": 20000,
+      "headers": [],
+      "params": [
+        {
+          "name": "per_page",
+          "value": "30",
+          "isPath": false
+        },
+        {
+          "name": "page",
+          "value": "1",
+          "isPath": false
+        }
+      ],
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
+      "auth": {
+        "type": "bearer",
+        "bearer": "{{token}}"
+      },
+      "tests": []
+    },
+    {
+      "_id": "r3",
+      "colId": "c-codehost",
+      "containerId": "f0",
+      "name": "List branches",
+      "url": "{{baseUrl}}/repos/{{owner}}/{{repo}}/branches",
+      "method": "GET",
+      "sortNum": 30000,
+      "headers": [],
+      "params": [],
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
+      "auth": {
+        "type": "bearer",
+        "bearer": "{{token}}"
+      },
+      "tests": []
+    },
+    {
+      "_id": "r4",
+      "colId": "c-codehost",
+      "containerId": "f0",
+      "name": "Create a fork",
+      "url": "{{baseUrl}}/repos/{{owner}}/{{repo}}/forks",
+      "method": "POST",
+      "sortNum": 40000,
+      "headers": [],
+      "params": [],
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
+      "auth": {
+        "type": "bearer",
+        "bearer": "{{token}}"
+      },
+      "tests": []
+    },
+    {
+      "_id": "r5",
+      "colId": "c-codehost",
+      "containerId": "f0",
+      "name": "Delete a repository",
+      "url": "{{baseUrl}}/repos/{{owner}}/{{repo}}",
+      "method": "DELETE",
+      "sortNum": 50000,
+      "headers": [],
+      "params": [],
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
+      "auth": {
+        "type": "bearer",
+        "bearer": "{{token}}"
+      },
+      "tests": []
+    },
+    {
+      "_id": "r6",
+      "colId": "c-codehost",
+      "containerId": "f1",
+      "name": "List issues",
+      "url": "{{baseUrl}}/repos/{{owner}}/{{repo}}/issues",
+      "method": "GET",
+      "sortNum": 60000,
+      "headers": [],
+      "params": [
+        {
+          "name": "state",
+          "value": "open",
+          "isPath": false
+        },
+        {
+          "name": "labels",
+          "value": "bug",
+          "isPath": false
+        }
+      ],
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
+      "auth": {
+        "type": "bearer",
+        "bearer": "{{token}}"
+      },
+      "tests": []
+    },
+    {
+      "_id": "r7",
+      "colId": "c-codehost",
+      "containerId": "f1",
+      "name": "Create an issue",
+      "url": "{{baseUrl}}/repos/{{owner}}/{{repo}}/issues",
+      "method": "POST",
+      "sortNum": 70000,
+      "headers": [],
+      "params": [],
+      "body": {
+        "type": "json",
+        "raw": "{\n  \"title\": \"Found a bug\",\n  \"body\": \"I'm having a problem with this.\",\n  \"labels\": [\n    \"bug\"\n  ]\n}",
+        "form": []
+      },
+      "auth": {
+        "type": "bearer",
+        "bearer": "{{token}}"
+      },
+      "tests": [
+        {
+          "type": "res-code",
+          "custom": "",
+          "action": "equal",
+          "value": "201"
+        }
+      ]
+    },
+    {
+      "_id": "r8",
+      "colId": "c-codehost",
+      "containerId": "f1",
+      "name": "Get an issue",
+      "url": "{{baseUrl}}/repos/{{owner}}/{{repo}}/issues/1347",
+      "method": "GET",
+      "sortNum": 80000,
+      "headers": [],
+      "params": [],
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
+      "auth": {
+        "type": "bearer",
+        "bearer": "{{token}}"
+      },
+      "tests": []
+    },
+    {
+      "_id": "r9",
+      "colId": "c-codehost",
+      "containerId": "f1",
+      "name": "Update an issue",
+      "url": "{{baseUrl}}/repos/{{owner}}/{{repo}}/issues/1347",
+      "method": "PATCH",
+      "sortNum": 90000,
+      "headers": [],
+      "params": [],
+      "body": {
+        "type": "json",
+        "raw": "{\n  \"state\": \"closed\"\n}",
+        "form": []
+      },
+      "auth": {
+        "type": "bearer",
+        "bearer": "{{token}}"
+      },
+      "tests": []
+    },
+    {
+      "_id": "r10",
+      "colId": "c-codehost",
+      "containerId": "f1",
+      "name": "Lock an issue",
+      "url": "{{baseUrl}}/repos/{{owner}}/{{repo}}/issues/1347/lock",
+      "method": "PUT",
+      "sortNum": 100000,
+      "headers": [],
+      "params": [],
+      "body": {
+        "type": "json",
+        "raw": "{\n  \"lock_reason\": \"resolved\"\n}",
+        "form": []
+      },
+      "auth": {
+        "type": "bearer",
+        "bearer": "{{token}}"
+      },
+      "tests": []
+    },
+    {
+      "_id": "r11",
+      "colId": "c-codehost",
+      "containerId": "f2",
+      "name": "Get the authenticated user",
+      "url": "{{baseUrl}}/user",
+      "method": "GET",
+      "sortNum": 110000,
+      "headers": [],
+      "params": [],
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
+      "auth": {
+        "type": "bearer",
+        "bearer": "{{token}}"
+      },
+      "tests": [
+        {
+          "type": "res-code",
+          "custom": "",
+          "action": "equal",
+          "value": "200"
+        }
+      ]
+    },
+    {
+      "_id": "r12",
+      "colId": "c-codehost",
+      "containerId": "f2",
+      "name": "Get a user",
+      "url": "{{baseUrl}}/users/{{owner}}",
+      "method": "GET",
+      "sortNum": 120000,
+      "headers": [],
+      "params": [],
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
+      "auth": {
+        "type": "bearer",
+        "bearer": "{{token}}"
+      },
+      "tests": []
+    },
+    {
+      "_id": "r13",
+      "colId": "c-codehost",
+      "containerId": "f2",
+      "name": "List followers of a user",
+      "url": "{{baseUrl}}/users/{{owner}}/followers",
+      "method": "GET",
+      "sortNum": 130000,
+      "headers": [],
+      "params": [],
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
+      "auth": {
+        "type": "bearer",
+        "bearer": "{{token}}"
+      },
+      "tests": []
+    }
+  ]
+}

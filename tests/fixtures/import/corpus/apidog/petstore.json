@@ -1,0 +1,541 @@
+{
+  "apidogProject": "1.0.0",
+  "info": {
+    "name": "Pet Store"
+  },
+  "apiCollection": [
+    {
+      "name": "Root",
+      "id": 1,
+      "items": [
+        {
+          "name": "pet",
+          "id": 10,
+          "items": [
+            {
+              "name": "Add a new pet",
+              "api": {
+                "id": "101",
+                "method": "post",
+                "path": "/pet",
+                "parameters": {
+                  "query": [],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "requestBody": {
+                  "type": "application/json",
+                  "example": "{\n  \"id\": 0,\n  \"name\": \"doggie\",\n  \"status\": \"available\",\n  \"tags\": [\n    {\n      \"name\": \"good\"\n    }\n  ]\n}"
+                },
+                "responses": [
+                  {
+                    "id": "1010",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "Update an existing pet",
+              "api": {
+                "id": "102",
+                "method": "put",
+                "path": "/pet",
+                "parameters": {
+                  "query": [],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "requestBody": {
+                  "type": "application/json",
+                  "example": "{\n  \"id\": 1,\n  \"name\": \"doggie\",\n  \"status\": \"sold\"\n}"
+                },
+                "responses": [
+                  {
+                    "id": "1020",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "Find pets by status",
+              "api": {
+                "id": "103",
+                "method": "get",
+                "path": "/pet/findByStatus",
+                "parameters": {
+                  "query": [
+                    {
+                      "name": "status",
+                      "required": true,
+                      "type": "string",
+                      "example": "available"
+                    }
+                  ],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "responses": [
+                  {
+                    "id": "1030",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "Find pet by ID",
+              "api": {
+                "id": "104",
+                "method": "get",
+                "path": "/pet/1",
+                "parameters": {
+                  "query": [],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "responses": [
+                  {
+                    "id": "1040",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "Delete a pet",
+              "api": {
+                "id": "105",
+                "method": "delete",
+                "path": "/pet/1",
+                "parameters": {
+                  "query": [],
+                  "path": [],
+                  "header": [
+                    {
+                      "name": "api_key",
+                      "required": true,
+                      "type": "string",
+                      "example": "{{apiKey}}"
+                    }
+                  ],
+                  "cookie": []
+                },
+                "responses": [
+                  {
+                    "id": "1050",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "Upload an image",
+              "api": {
+                "id": "106",
+                "method": "post",
+                "path": "/pet/1/uploadImage",
+                "parameters": {
+                  "query": [],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "requestBody": {
+                  "type": "multipart/form-data",
+                  "parameters": [
+                    {
+                      "name": "additionalMetadata",
+                      "type": "string",
+                      "example": "cute"
+                    },
+                    {
+                      "name": "file",
+                      "type": "file"
+                    }
+                  ]
+                },
+                "responses": [
+                  {
+                    "id": "1060",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "store",
+          "id": 11,
+          "items": [
+            {
+              "name": "Returns pet inventories by status",
+              "api": {
+                "id": "107",
+                "method": "get",
+                "path": "/store/inventory",
+                "parameters": {
+                  "query": [],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "responses": [
+                  {
+                    "id": "1070",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "Place an order for a pet",
+              "api": {
+                "id": "108",
+                "method": "post",
+                "path": "/store/order",
+                "parameters": {
+                  "query": [],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "requestBody": {
+                  "type": "application/json",
+                  "example": "{\n  \"petId\": 1,\n  \"quantity\": 1,\n  \"status\": \"placed\"\n}"
+                },
+                "responses": [
+                  {
+                    "id": "1080",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "Find purchase order by ID",
+              "api": {
+                "id": "109",
+                "method": "get",
+                "path": "/store/order/1",
+                "parameters": {
+                  "query": [],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "responses": [
+                  {
+                    "id": "1090",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "Delete purchase order by ID",
+              "api": {
+                "id": "110",
+                "method": "delete",
+                "path": "/store/order/1",
+                "parameters": {
+                  "query": [],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "responses": [
+                  {
+                    "id": "1100",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "user",
+          "id": 12,
+          "items": [
+            {
+              "name": "Create user",
+              "api": {
+                "id": "111",
+                "method": "post",
+                "path": "/user",
+                "parameters": {
+                  "query": [],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "requestBody": {
+                  "type": "application/json",
+                  "example": "{\n  \"username\": \"theUser\",\n  \"email\": \"john@example.test\"\n}"
+                },
+                "responses": [
+                  {
+                    "id": "1110",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "Logs user into the system",
+              "api": {
+                "id": "112",
+                "method": "get",
+                "path": "/user/login",
+                "parameters": {
+                  "query": [
+                    {
+                      "name": "username",
+                      "required": true,
+                      "type": "string",
+                      "example": "theUser"
+                    },
+                    {
+                      "name": "password",
+                      "required": true,
+                      "type": "string",
+                      "example": "{{password}}"
+                    }
+                  ],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "responses": [
+                  {
+                    "id": "1120",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "Get user by user name",
+              "api": {
+                "id": "113",
+                "method": "get",
+                "path": "/user/theUser",
+                "parameters": {
+                  "query": [],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "responses": [
+                  {
+                    "id": "1130",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "Logs out current logged in user session",
+              "api": {
+                "id": "114",
+                "method": "get",
+                "path": "/user/logout",
+                "parameters": {
+                  "query": [],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "responses": [
+                  {
+                    "id": "1140",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "environments": [
+    {
+      "name": "dev",
+      "baseUrl": "http://localhost:8080/v2",
+      "variables": [
+        {
+          "name": "apiKey",
+          "value": "dev-key"
+        }
+      ]
+    },
+    {
+      "name": "staging",
+      "baseUrl": "https://staging.petstore.example.test/v2",
+      "variables": [
+        {
+          "name": "apiKey",
+          "value": "stg-key"
+        }
+      ]
+    },
+    {
+      "name": "prod",
+      "baseUrl": "https://petstore.example.test/v2",
+      "variables": [
+        {
+          "name": "apiKey",
+          "value": ""
+        }
+      ]
+    }
+  ]
+}

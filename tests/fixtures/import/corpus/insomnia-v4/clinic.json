@@ -1,0 +1,239 @@
+{
+  "_type": "export",
+  "__export_format": 4,
+  "__export_source": "insomnia.desktop.app:v10",
+  "resources": [
+    {
+      "_id": "wrk_clinic",
+      "_type": "workspace",
+      "name": "Vet Clinic",
+      "parentId": null
+    },
+    {
+      "_id": "fld_clinic_0",
+      "_type": "request_group",
+      "parentId": "wrk_clinic",
+      "name": "Patients",
+      "metaSortKey": 0,
+      "authentication": {
+        "type": "basic",
+        "username": "{{user}}",
+        "password": "{{password}}"
+      }
+    },
+    {
+      "_id": "req_clinic_0_0",
+      "_type": "request",
+      "parentId": "fld_clinic_0",
+      "metaSortKey": 0,
+      "name": "List patients",
+      "url": "{{ _.baseUrl }}/patients",
+      "method": "GET",
+      "parameters": [
+        {
+          "name": "species",
+          "value": "dog"
+        },
+        {
+          "name": "limit",
+          "value": "25"
+        }
+      ],
+      "headers": [],
+      "afterResponseScript": "insomnia.test(\"Status code is 200\", () => {\n  insomnia.expect(insomnia.response.code).to.eql(200);\n});"
+    },
+    {
+      "_id": "req_clinic_0_1",
+      "_type": "request",
+      "parentId": "fld_clinic_0",
+      "metaSortKey": 1,
+      "name": "Create a patient",
+      "url": "{{ _.baseUrl }}/patients",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"name\": \"Rex\",\n  \"species\": \"dog\",\n  \"born\": \"2021-03-04\",\n  \"owner\": \"o-7\"\n}"
+      },
+      "headers": [],
+      "afterResponseScript": "insomnia.test(\"Status code is 201\", () => {\n  insomnia.expect(insomnia.response.code).to.eql(201);\n});"
+    },
+    {
+      "_id": "req_clinic_0_2",
+      "_type": "request",
+      "parentId": "fld_clinic_0",
+      "metaSortKey": 2,
+      "name": "Get a patient",
+      "url": "{{ _.baseUrl }}/patients/:id",
+      "method": "GET",
+      "pathParameters": [
+        {
+          "name": "id",
+          "value": "p-1"
+        }
+      ],
+      "headers": [],
+      "afterResponseScript": "insomnia.test(\"Status code is 200\", () => {\n  insomnia.expect(insomnia.response.code).to.eql(200);\n});"
+    },
+    {
+      "_id": "req_clinic_0_3",
+      "_type": "request",
+      "parentId": "fld_clinic_0",
+      "metaSortKey": 3,
+      "name": "Update a patient",
+      "url": "{{ _.baseUrl }}/patients/:id",
+      "method": "PATCH",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"weightKg\": 31.5\n}"
+      },
+      "pathParameters": [
+        {
+          "name": "id",
+          "value": "p-1"
+        }
+      ],
+      "headers": []
+    },
+    {
+      "_id": "req_clinic_0_4",
+      "_type": "request",
+      "parentId": "fld_clinic_0",
+      "metaSortKey": 4,
+      "name": "Upload a photo",
+      "url": "{{ _.baseUrl }}/patients/:id/photo",
+      "method": "PUT",
+      "body": {
+        "mimeType": "multipart/form-data",
+        "params": [
+          {
+            "name": "caption",
+            "value": "At the beach",
+            "type": "text"
+          },
+          {
+            "name": "photo",
+            "type": "file",
+            "fileName": "rex.png"
+          }
+        ]
+      },
+      "pathParameters": [
+        {
+          "name": "id",
+          "value": "p-1"
+        }
+      ],
+      "headers": []
+    },
+    {
+      "_id": "fld_clinic_1",
+      "_type": "request_group",
+      "parentId": "wrk_clinic",
+      "name": "Visits",
+      "metaSortKey": 1
+    },
+    {
+      "_id": "req_clinic_1_0",
+      "_type": "request",
+      "parentId": "fld_clinic_1",
+      "metaSortKey": 0,
+      "name": "List visits",
+      "url": "{{ _.baseUrl }}/visits",
+      "method": "GET",
+      "parameters": [
+        {
+          "name": "patient",
+          "value": "p-1"
+        }
+      ],
+      "headers": []
+    },
+    {
+      "_id": "req_clinic_1_1",
+      "_type": "request",
+      "parentId": "fld_clinic_1",
+      "metaSortKey": 1,
+      "name": "Book a visit",
+      "url": "{{ _.baseUrl }}/visits",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"patient\": \"p-1\",\n  \"at\": \"2026-05-04T09:30:00Z\",\n  \"reason\": \"vaccination\"\n}"
+      },
+      "headers": [],
+      "afterResponseScript": "insomnia.test(\"Status code is 201\", () => {\n  insomnia.expect(insomnia.response.code).to.eql(201);\n});"
+    },
+    {
+      "_id": "req_clinic_1_2",
+      "_type": "request",
+      "parentId": "fld_clinic_1",
+      "metaSortKey": 2,
+      "name": "Cancel a visit",
+      "url": "{{ _.baseUrl }}/visits/v-3",
+      "method": "DELETE",
+      "headers": []
+    },
+    {
+      "_id": "fld_clinic_2",
+      "_type": "request_group",
+      "parentId": "wrk_clinic",
+      "name": "Owners",
+      "metaSortKey": 2
+    },
+    {
+      "_id": "req_clinic_2_0",
+      "_type": "request",
+      "parentId": "fld_clinic_2",
+      "metaSortKey": 0,
+      "name": "List owners",
+      "url": "{{ _.baseUrl }}/owners",
+      "method": "GET",
+      "headers": []
+    },
+    {
+      "_id": "req_clinic_2_1",
+      "_type": "request",
+      "parentId": "fld_clinic_2",
+      "metaSortKey": 1,
+      "name": "Create an owner",
+      "url": "{{ _.baseUrl }}/owners",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"name\": \"Ada\",\n  \"email\": \"ada@example.test\"\n}"
+      },
+      "headers": []
+    },
+    {
+      "_id": "env_clinic",
+      "_type": "environment",
+      "parentId": "wrk_clinic",
+      "name": "Base Environment",
+      "data": {
+        "baseUrl": "https://clinic.example.test/api"
+      }
+    },
+    {
+      "_id": "env_clinic_local",
+      "_type": "environment",
+      "parentId": "env_clinic",
+      "name": "local",
+      "data": {
+        "baseUrl": "http://localhost:4010/api",
+        "user": "vet",
+        "password": "secret"
+      }
+    },
+    {
+      "_id": "env_clinic_staging",
+      "_type": "environment",
+      "parentId": "env_clinic",
+      "name": "staging",
+      "data": {
+        "baseUrl": "https://staging.clinic.example.test/api",
+        "user": "vet",
+        "password": ""
+      }
+    }
+  ]
+}

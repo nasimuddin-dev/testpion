@@ -1,0 +1,226 @@
+type: collection.insomnia.rest/5.0
+schema_version: "5.1"
+name: Pet Store
+meta:
+  id: wrk_petstore
+  created: 1
+  modified: 1
+collection:
+  - name: pet
+    meta:
+      id: fld_petstore_0
+      sortKey: 0
+    authentication:
+      type: apikey
+      key: api_key
+      value: "{{apiKey}}"
+      addTo: header
+    children:
+      - name: Add a new pet
+        url: "{{ _.baseUrl }}/pet"
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "id": 0,
+              "name": "doggie",
+              "status": "available",
+              "tags": [
+                {
+                  "name": "good"
+                }
+              ]
+            }
+        headers: []
+        meta:
+          id: req_petstore_0_0
+          sortKey: 0
+      - name: Update an existing pet
+        url: "{{ _.baseUrl }}/pet"
+        method: PUT
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "id": 1,
+              "name": "doggie",
+              "status": "sold"
+            }
+        headers: []
+        meta:
+          id: req_petstore_0_1
+          sortKey: 1
+      - name: Find pets by status
+        url: "{{ _.baseUrl }}/pet/findByStatus"
+        method: GET
+        parameters:
+          - name: status
+            value: available
+        headers: []
+        scripts:
+          afterResponse: |-
+            insomnia.test("Status code is 200", () => {
+              insomnia.expect(insomnia.response.code).to.eql(200);
+            });
+        meta:
+          id: req_petstore_0_2
+          sortKey: 2
+      - name: Find pet by ID
+        url: "{{ _.baseUrl }}/pet/1"
+        method: GET
+        headers: []
+        scripts:
+          afterResponse: |-
+            insomnia.test("Status code is 200", () => {
+              insomnia.expect(insomnia.response.code).to.eql(200);
+            });
+        meta:
+          id: req_petstore_0_3
+          sortKey: 3
+      - name: Delete a pet
+        url: "{{ _.baseUrl }}/pet/1"
+        method: DELETE
+        headers:
+          - name: api_key
+            value: "{{ _.apiKey }}"
+        meta:
+          id: req_petstore_0_4
+          sortKey: 4
+      - name: Upload an image
+        url: "{{ _.baseUrl }}/pet/1/uploadImage"
+        method: POST
+        body:
+          mimeType: multipart/form-data
+          params:
+            - name: additionalMetadata
+              value: cute
+              type: text
+            - name: file
+              type: file
+              fileName: dog.png
+        headers: []
+        meta:
+          id: req_petstore_0_5
+          sortKey: 5
+  - name: store
+    meta:
+      id: fld_petstore_1
+      sortKey: 1
+    children:
+      - name: Returns pet inventories by status
+        url: "{{ _.baseUrl }}/store/inventory"
+        method: GET
+        headers: []
+        scripts:
+          afterResponse: |-
+            insomnia.test("Status code is 200", () => {
+              insomnia.expect(insomnia.response.code).to.eql(200);
+            });
+        meta:
+          id: req_petstore_1_0
+          sortKey: 0
+      - name: Place an order for a pet
+        url: "{{ _.baseUrl }}/store/order"
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "petId": 1,
+              "quantity": 1,
+              "status": "placed"
+            }
+        headers: []
+        meta:
+          id: req_petstore_1_1
+          sortKey: 1
+      - name: Find purchase order by ID
+        url: "{{ _.baseUrl }}/store/order/1"
+        method: GET
+        headers: []
+        meta:
+          id: req_petstore_1_2
+          sortKey: 2
+      - name: Delete purchase order by ID
+        url: "{{ _.baseUrl }}/store/order/1"
+        method: DELETE
+        headers: []
+        meta:
+          id: req_petstore_1_3
+          sortKey: 3
+  - name: user
+    meta:
+      id: fld_petstore_2
+      sortKey: 2
+    children:
+      - name: Create user
+        url: "{{ _.baseUrl }}/user"
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "username": "theUser",
+              "email": "john@example.test"
+            }
+        headers: []
+        meta:
+          id: req_petstore_2_0
+          sortKey: 0
+      - name: Logs user into the system
+        url: "{{ _.baseUrl }}/user/login"
+        method: GET
+        parameters:
+          - name: username
+            value: theUser
+          - name: password
+            value: "{{ _.password }}"
+        headers: []
+        scripts:
+          afterResponse: |-
+            insomnia.test("Status code is 200", () => {
+              insomnia.expect(insomnia.response.code).to.eql(200);
+            });
+        meta:
+          id: req_petstore_2_1
+          sortKey: 1
+      - name: Get user by user name
+        url: "{{ _.baseUrl }}/user/theUser"
+        method: GET
+        headers: []
+        meta:
+          id: req_petstore_2_2
+          sortKey: 2
+      - name: Logs out current logged in user session
+        url: "{{ _.baseUrl }}/user/logout"
+        method: GET
+        headers: []
+        meta:
+          id: req_petstore_2_3
+          sortKey: 3
+environments:
+  name: Base Environment
+  meta:
+    id: env_petstore
+  data:
+    baseUrl: https://petstore.example.test/v2
+  subEnvironments:
+    - name: dev
+      meta:
+        id: env_petstore_dev
+      data:
+        baseUrl: http://localhost:8080/v2
+        apiKey: dev-key
+    - name: staging
+      meta:
+        id: env_petstore_staging
+      data:
+        baseUrl: https://staging.petstore.example.test/v2
+        apiKey: stg-key
+    - name: prod
+      meta:
+        id: env_petstore_prod
+      data:
+        baseUrl: https://petstore.example.test/v2
+        apiKey: ""

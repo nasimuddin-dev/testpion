@@ -1,0 +1,235 @@
+{
+  "yaakVersion": "2025.2.0",
+  "yaakSchema": 3,
+  "resources": {
+    "workspaces": [
+      {
+        "model": "workspace",
+        "id": "wk_weather",
+        "name": "Weather API"
+      }
+    ],
+    "environments": [
+      {
+        "model": "environment",
+        "id": "ev_weather_base",
+        "workspaceId": "wk_weather",
+        "name": "Global",
+        "base": true,
+        "variables": [
+          {
+            "enabled": true,
+            "name": "baseUrl",
+            "value": "https://api.weather.example.test/data/2.5"
+          }
+        ]
+      },
+      {
+        "model": "environment",
+        "id": "ev_weather_default",
+        "workspaceId": "wk_weather",
+        "name": "default",
+        "variables": [
+          {
+            "enabled": true,
+            "name": "baseUrl",
+            "value": "https://api.weather.example.test/data/2.5"
+          },
+          {
+            "enabled": true,
+            "name": "appid",
+            "value": "demo"
+          }
+        ]
+      }
+    ],
+    "folders": [
+      {
+        "model": "folder",
+        "id": "fl_weather_0",
+        "workspaceId": "wk_weather",
+        "folderId": null,
+        "name": "Current",
+        "sortPriority": 1,
+        "authenticationType": "apikey",
+        "authentication": {
+          "key": "appid",
+          "value": "{{appid}}",
+          "location": "query"
+        }
+      },
+      {
+        "model": "folder",
+        "id": "fl_weather_1",
+        "workspaceId": "wk_weather",
+        "folderId": null,
+        "name": "Forecast",
+        "sortPriority": 2
+      }
+    ],
+    "httpRequests": [
+      {
+        "model": "http_request",
+        "id": "rq_weather_1",
+        "workspaceId": "wk_weather",
+        "folderId": "fl_weather_0",
+        "name": "Current weather by city",
+        "method": "GET",
+        "url": "${[ baseUrl ]}/weather",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": "q",
+            "value": "London,uk"
+          },
+          {
+            "enabled": true,
+            "name": "units",
+            "value": "metric"
+          }
+        ],
+        "headers": [],
+        "bodyType": null,
+        "body": {},
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 1
+      },
+      {
+        "model": "http_request",
+        "id": "rq_weather_2",
+        "workspaceId": "wk_weather",
+        "folderId": "fl_weather_0",
+        "name": "Current weather by coordinates",
+        "method": "GET",
+        "url": "${[ baseUrl ]}/weather",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": "lat",
+            "value": "51.5"
+          },
+          {
+            "enabled": true,
+            "name": "lon",
+            "value": "-0.12"
+          }
+        ],
+        "headers": [],
+        "bodyType": null,
+        "body": {},
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 2
+      },
+      {
+        "model": "http_request",
+        "id": "rq_weather_3",
+        "workspaceId": "wk_weather",
+        "folderId": "fl_weather_0",
+        "name": "Current weather by zip",
+        "method": "GET",
+        "url": "${[ baseUrl ]}/weather",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": "zip",
+            "value": "94040,us"
+          }
+        ],
+        "headers": [],
+        "bodyType": null,
+        "body": {},
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 3
+      },
+      {
+        "model": "http_request",
+        "id": "rq_weather_4",
+        "workspaceId": "wk_weather",
+        "folderId": "fl_weather_1",
+        "name": "5 day forecast",
+        "method": "GET",
+        "url": "${[ baseUrl ]}/forecast",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": "q",
+            "value": "Paris"
+          },
+          {
+            "enabled": true,
+            "name": "cnt",
+            "value": "40"
+          }
+        ],
+        "headers": [],
+        "bodyType": null,
+        "body": {},
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 4
+      },
+      {
+        "model": "http_request",
+        "id": "rq_weather_5",
+        "workspaceId": "wk_weather",
+        "folderId": "fl_weather_1",
+        "name": "Air pollution",
+        "method": "GET",
+        "url": "${[ baseUrl ]}/air_pollution",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": "lat",
+            "value": "50"
+          },
+          {
+            "enabled": true,
+            "name": "lon",
+            "value": "50"
+          }
+        ],
+        "headers": [],
+        "bodyType": null,
+        "body": {},
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 5
+      },
+      {
+        "model": "http_request",
+        "id": "rq_weather_6",
+        "workspaceId": "wk_weather",
+        "folderId": "fl_weather_1",
+        "name": "Weather alerts",
+        "method": "GET",
+        "url": "${[ baseUrl ]}/onecall",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": "lat",
+            "value": "33.44"
+          },
+          {
+            "enabled": true,
+            "name": "lon",
+            "value": "-94.04"
+          },
+          {
+            "enabled": true,
+            "name": "exclude",
+            "value": "minutely,hourly"
+          }
+        ],
+        "headers": [],
+        "bodyType": null,
+        "body": {},
+        "authenticationType": null,
+        "authentication": {},
+        "sortPriority": 6
+      }
+    ]
+  }
+}

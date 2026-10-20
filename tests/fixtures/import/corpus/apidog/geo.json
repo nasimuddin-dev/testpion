@@ -1,0 +1,382 @@
+{
+  "apidogProject": "1.0.0",
+  "info": {
+    "name": "Maps API"
+  },
+  "apiCollection": [
+    {
+      "name": "Root",
+      "id": 1,
+      "items": [
+        {
+          "name": "Geocoding",
+          "id": 10,
+          "items": [
+            {
+              "name": "Geocode an address",
+              "api": {
+                "id": "101",
+                "method": "get",
+                "path": "/geocode/json",
+                "parameters": {
+                  "query": [
+                    {
+                      "name": "address",
+                      "required": true,
+                      "type": "string",
+                      "example": "1600 Amphitheatre Parkway, Mountain View, CA"
+                    }
+                  ],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "responses": [
+                  {
+                    "id": "1010",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "Reverse geocode",
+              "api": {
+                "id": "102",
+                "method": "get",
+                "path": "/geocode/json",
+                "parameters": {
+                  "query": [
+                    {
+                      "name": "latlng",
+                      "required": true,
+                      "type": "string",
+                      "example": "40.714224,-73.961452"
+                    }
+                  ],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "responses": [
+                  {
+                    "id": "1020",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "Geocode by place id",
+              "api": {
+                "id": "103",
+                "method": "get",
+                "path": "/geocode/json",
+                "parameters": {
+                  "query": [
+                    {
+                      "name": "place_id",
+                      "required": true,
+                      "type": "string",
+                      "example": "ChIJd8BlQ2BZwokRAFUEcm_qrcA"
+                    }
+                  ],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "responses": [
+                  {
+                    "id": "1030",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Directions",
+          "id": 11,
+          "items": [
+            {
+              "name": "Driving directions",
+              "api": {
+                "id": "104",
+                "method": "get",
+                "path": "/directions/json",
+                "parameters": {
+                  "query": [
+                    {
+                      "name": "origin",
+                      "required": true,
+                      "type": "string",
+                      "example": "Toronto"
+                    },
+                    {
+                      "name": "destination",
+                      "required": true,
+                      "type": "string",
+                      "example": "Montreal"
+                    },
+                    {
+                      "name": "mode",
+                      "required": true,
+                      "type": "string",
+                      "example": "driving"
+                    }
+                  ],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "responses": [
+                  {
+                    "id": "1040",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "Transit directions",
+              "api": {
+                "id": "105",
+                "method": "get",
+                "path": "/directions/json",
+                "parameters": {
+                  "query": [
+                    {
+                      "name": "origin",
+                      "required": true,
+                      "type": "string",
+                      "example": "Boston"
+                    },
+                    {
+                      "name": "destination",
+                      "required": true,
+                      "type": "string",
+                      "example": "Concord"
+                    },
+                    {
+                      "name": "mode",
+                      "required": true,
+                      "type": "string",
+                      "example": "transit"
+                    }
+                  ],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "responses": [
+                  {
+                    "id": "1050",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Places",
+          "id": 12,
+          "items": [
+            {
+              "name": "Find place",
+              "api": {
+                "id": "106",
+                "method": "get",
+                "path": "/place/findplacefromtext/json",
+                "parameters": {
+                  "query": [
+                    {
+                      "name": "input",
+                      "required": true,
+                      "type": "string",
+                      "example": "Museum of Contemporary Art Australia"
+                    },
+                    {
+                      "name": "inputtype",
+                      "required": true,
+                      "type": "string",
+                      "example": "textquery"
+                    }
+                  ],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "responses": [
+                  {
+                    "id": "1060",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "Place details",
+              "api": {
+                "id": "107",
+                "method": "get",
+                "path": "/place/details/json",
+                "parameters": {
+                  "query": [
+                    {
+                      "name": "place_id",
+                      "required": true,
+                      "type": "string",
+                      "example": "ChIJN1t_tDeuEmsRUsoyG83frY4"
+                    }
+                  ],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "responses": [
+                  {
+                    "id": "1070",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "Nearby search",
+              "api": {
+                "id": "108",
+                "method": "get",
+                "path": "/place/nearbysearch/json",
+                "parameters": {
+                  "query": [
+                    {
+                      "name": "location",
+                      "required": true,
+                      "type": "string",
+                      "example": "-33.8670522,151.1957362"
+                    },
+                    {
+                      "name": "radius",
+                      "required": true,
+                      "type": "string",
+                      "example": "1500"
+                    },
+                    {
+                      "name": "type",
+                      "required": true,
+                      "type": "string",
+                      "example": "restaurant"
+                    }
+                  ],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "responses": [
+                  {
+                    "id": "1080",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "environments": [
+    {
+      "name": "default",
+      "baseUrl": "https://maps.example.test/maps/api",
+      "variables": [
+        {
+          "name": "mapsKey",
+          "value": "AIza-test"
+        }
+      ]
+    }
+  ]
+}

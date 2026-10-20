@@ -1,0 +1,9 @@
+name: Staging
+values:
+  - key: host
+    value: https://staging.example.test
+    enabled: true
+  - key: apiKey
+    value: ""
+    type: secret
+    enabled: true

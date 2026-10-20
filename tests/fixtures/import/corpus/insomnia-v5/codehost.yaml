@@ -1,0 +1,181 @@
+type: collection.insomnia.rest/5.0
+schema_version: "5.1"
+name: Code Host API
+meta:
+  id: wrk_codehost
+  created: 1
+  modified: 1
+collection:
+  - name: Repos
+    meta:
+      id: fld_codehost_0
+      sortKey: 0
+    authentication:
+      type: bearer
+      token: "{{token}}"
+    children:
+      - name: Get a repository
+        url: "{{ _.baseUrl }}/repos/{{ _.owner }}/{{ _.repo }}"
+        method: GET
+        headers:
+          - name: Accept
+            value: application/vnd.codehost+json
+        scripts:
+          afterResponse: |-
+            insomnia.test("Status code is 200", () => {
+              insomnia.expect(insomnia.response.code).to.eql(200);
+            });
+        meta:
+          id: req_codehost_0_0
+          sortKey: 0
+      - name: List repository contributors
+        url: "{{ _.baseUrl }}/repos/{{ _.owner }}/{{ _.repo }}/contributors"
+        method: GET
+        parameters:
+          - name: per_page
+            value: "30"
+          - name: page
+            value: "1"
+        headers: []
+        meta:
+          id: req_codehost_0_1
+          sortKey: 1
+      - name: List branches
+        url: "{{ _.baseUrl }}/repos/{{ _.owner }}/{{ _.repo }}/branches"
+        method: GET
+        headers: []
+        meta:
+          id: req_codehost_0_2
+          sortKey: 2
+      - name: Create a fork
+        url: "{{ _.baseUrl }}/repos/{{ _.owner }}/{{ _.repo }}/forks"
+        method: POST
+        headers: []
+        meta:
+          id: req_codehost_0_3
+          sortKey: 3
+      - name: Delete a repository
+        url: "{{ _.baseUrl }}/repos/{{ _.owner }}/{{ _.repo }}"
+        method: DELETE
+        headers: []
+        meta:
+          id: req_codehost_0_4
+          sortKey: 4
+  - name: Issues
+    meta:
+      id: fld_codehost_1
+      sortKey: 1
+    children:
+      - name: List issues
+        url: "{{ _.baseUrl }}/repos/{{ _.owner }}/{{ _.repo }}/issues"
+        method: GET
+        parameters:
+          - name: state
+            value: open
+          - name: labels
+            value: bug
+        headers: []
+        meta:
+          id: req_codehost_1_0
+          sortKey: 0
+      - name: Create an issue
+        url: "{{ _.baseUrl }}/repos/{{ _.owner }}/{{ _.repo }}/issues"
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "title": "Found a bug",
+              "body": "I'm having a problem with this.",
+              "labels": [
+                "bug"
+              ]
+            }
+        headers: []
+        scripts:
+          afterResponse: |-
+            insomnia.test("Status code is 201", () => {
+              insomnia.expect(insomnia.response.code).to.eql(201);
+            });
+        meta:
+          id: req_codehost_1_1
+          sortKey: 1
+      - name: Get an issue
+        url: "{{ _.baseUrl }}/repos/{{ _.owner }}/{{ _.repo }}/issues/1347"
+        method: GET
+        headers: []
+        meta:
+          id: req_codehost_1_2
+          sortKey: 2
+      - name: Update an issue
+        url: "{{ _.baseUrl }}/repos/{{ _.owner }}/{{ _.repo }}/issues/1347"
+        method: PATCH
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "state": "closed"
+            }
+        headers: []
+        meta:
+          id: req_codehost_1_3
+          sortKey: 3
+      - name: Lock an issue
+        url: "{{ _.baseUrl }}/repos/{{ _.owner }}/{{ _.repo }}/issues/1347/lock"
+        method: PUT
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "lock_reason": "resolved"
+            }
+        headers: []
+        meta:
+          id: req_codehost_1_4
+          sortKey: 4
+  - name: Users
+    meta:
+      id: fld_codehost_2
+      sortKey: 2
+    children:
+      - name: Get the authenticated user
+        url: "{{ _.baseUrl }}/user"
+        method: GET
+        headers: []
+        scripts:
+          afterResponse: |-
+            insomnia.test("Status code is 200", () => {
+              insomnia.expect(insomnia.response.code).to.eql(200);
+            });
+        meta:
+          id: req_codehost_2_0
+          sortKey: 0
+      - name: Get a user
+        url: "{{ _.baseUrl }}/users/{{ _.owner }}"
+        method: GET
+        headers: []
+        meta:
+          id: req_codehost_2_1
+          sortKey: 1
+      - name: List followers of a user
+        url: "{{ _.baseUrl }}/users/{{ _.owner }}/followers"
+        method: GET
+        headers: []
+        meta:
+          id: req_codehost_2_2
+          sortKey: 2
+environments:
+  name: Base Environment
+  meta:
+    id: env_codehost
+  data:
+    baseUrl: https://api.codehost.example.test
+  subEnvironments:
+    - name: default
+      meta:
+        id: env_codehost_default
+      data:
+        baseUrl: https://api.codehost.example.test
+        token: ""
+        owner: octocat
+        repo: hello-world

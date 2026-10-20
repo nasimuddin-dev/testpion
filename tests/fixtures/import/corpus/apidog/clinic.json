@@ -1,0 +1,433 @@
+{
+  "apidogProject": "1.0.0",
+  "info": {
+    "name": "Vet Clinic"
+  },
+  "apiCollection": [
+    {
+      "name": "Root",
+      "id": 1,
+      "items": [
+        {
+          "name": "Patients",
+          "id": 10,
+          "items": [
+            {
+              "name": "List patients",
+              "api": {
+                "id": "101",
+                "method": "get",
+                "path": "/patients",
+                "parameters": {
+                  "query": [
+                    {
+                      "name": "species",
+                      "required": true,
+                      "type": "string",
+                      "example": "dog"
+                    },
+                    {
+                      "name": "limit",
+                      "required": true,
+                      "type": "string",
+                      "example": "25"
+                    }
+                  ],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "responses": [
+                  {
+                    "id": "1010",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "Create a patient",
+              "api": {
+                "id": "102",
+                "method": "post",
+                "path": "/patients",
+                "parameters": {
+                  "query": [],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "requestBody": {
+                  "type": "application/json",
+                  "example": "{\n  \"name\": \"Rex\",\n  \"species\": \"dog\",\n  \"born\": \"2021-03-04\",\n  \"owner\": \"o-7\"\n}"
+                },
+                "responses": [
+                  {
+                    "id": "1020",
+                    "name": "OK",
+                    "code": 201,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "Get a patient",
+              "api": {
+                "id": "103",
+                "method": "get",
+                "path": "/patients/{id}",
+                "parameters": {
+                  "query": [],
+                  "path": [
+                    {
+                      "name": "id",
+                      "required": true,
+                      "type": "string",
+                      "example": "p-1"
+                    }
+                  ],
+                  "header": [],
+                  "cookie": []
+                },
+                "responses": [
+                  {
+                    "id": "1030",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "Update a patient",
+              "api": {
+                "id": "104",
+                "method": "patch",
+                "path": "/patients/{id}",
+                "parameters": {
+                  "query": [],
+                  "path": [
+                    {
+                      "name": "id",
+                      "required": true,
+                      "type": "string",
+                      "example": "p-1"
+                    }
+                  ],
+                  "header": [],
+                  "cookie": []
+                },
+                "requestBody": {
+                  "type": "application/json",
+                  "example": "{\n  \"weightKg\": 31.5\n}"
+                },
+                "responses": [
+                  {
+                    "id": "1040",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "Upload a photo",
+              "api": {
+                "id": "105",
+                "method": "put",
+                "path": "/patients/{id}/photo",
+                "parameters": {
+                  "query": [],
+                  "path": [
+                    {
+                      "name": "id",
+                      "required": true,
+                      "type": "string",
+                      "example": "p-1"
+                    }
+                  ],
+                  "header": [],
+                  "cookie": []
+                },
+                "requestBody": {
+                  "type": "multipart/form-data",
+                  "parameters": [
+                    {
+                      "name": "caption",
+                      "type": "string",
+                      "example": "At the beach"
+                    },
+                    {
+                      "name": "photo",
+                      "type": "file"
+                    }
+                  ]
+                },
+                "responses": [
+                  {
+                    "id": "1050",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Visits",
+          "id": 11,
+          "items": [
+            {
+              "name": "List visits",
+              "api": {
+                "id": "106",
+                "method": "get",
+                "path": "/visits",
+                "parameters": {
+                  "query": [
+                    {
+                      "name": "patient",
+                      "required": true,
+                      "type": "string",
+                      "example": "p-1"
+                    }
+                  ],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "responses": [
+                  {
+                    "id": "1060",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "Book a visit",
+              "api": {
+                "id": "107",
+                "method": "post",
+                "path": "/visits",
+                "parameters": {
+                  "query": [],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "requestBody": {
+                  "type": "application/json",
+                  "example": "{\n  \"patient\": \"p-1\",\n  \"at\": \"2026-05-04T09:30:00Z\",\n  \"reason\": \"vaccination\"\n}"
+                },
+                "responses": [
+                  {
+                    "id": "1070",
+                    "name": "OK",
+                    "code": 201,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "Cancel a visit",
+              "api": {
+                "id": "108",
+                "method": "delete",
+                "path": "/visits/v-3",
+                "parameters": {
+                  "query": [],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "responses": [
+                  {
+                    "id": "1080",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Owners",
+          "id": 12,
+          "items": [
+            {
+              "name": "List owners",
+              "api": {
+                "id": "109",
+                "method": "get",
+                "path": "/owners",
+                "parameters": {
+                  "query": [],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "responses": [
+                  {
+                    "id": "1090",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "Create an owner",
+              "api": {
+                "id": "110",
+                "method": "post",
+                "path": "/owners",
+                "parameters": {
+                  "query": [],
+                  "path": [],
+                  "header": [],
+                  "cookie": []
+                },
+                "requestBody": {
+                  "type": "application/json",
+                  "example": "{\n  \"name\": \"Ada\",\n  \"email\": \"ada@example.test\"\n}"
+                },
+                "responses": [
+                  {
+                    "id": "1100",
+                    "name": "OK",
+                    "code": 200,
+                    "contentType": "json",
+                    "jsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "environments": [
+    {
+      "name": "local",
+      "baseUrl": "http://localhost:4010/api",
+      "variables": [
+        {
+          "name": "user",
+          "value": "vet"
+        },
+        {
+          "name": "password",
+          "value": "secret"
+        }
+      ]
+    },
+    {
+      "name": "staging",
+      "baseUrl": "https://staging.clinic.example.test/api",
+      "variables": [
+        {
+          "name": "user",
+          "value": "vet"
+        },
+        {
+          "name": "password",
+          "value": ""
+        }
+      ]
+    }
+  ]
+}

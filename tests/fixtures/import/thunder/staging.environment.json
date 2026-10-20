@@ -1,0 +1,13 @@
+{
+  "clientName": "Thunder Client",
+  "environmentName": "Staging",
+  "dateExported": "2026-03-01T10:00:00.000Z",
+  "version": "1.2",
+  "global": false,
+  "data": [
+    { "name": "host", "value": "https://staging.example.test" },
+    { "name": "user", "value": "vet" },
+    { "name": "stamp", "value": "{{#timestamp}}" },
+    { "name": "off", "value": "x", "isDisabled": true }
+  ]
+}

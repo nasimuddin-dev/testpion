@@ -1,0 +1,290 @@
+{
+  "v": 2,
+  "name": "Bank API",
+  "folders": [
+    {
+      "v": 2,
+      "name": "Accounts",
+      "folders": [],
+      "auth": {
+        "authType": "inherit",
+        "authActive": true
+      },
+      "headers": [],
+      "variables": [],
+      "requests": [
+        {
+          "v": "11",
+          "name": "List accounts",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/accounts",
+          "params": [],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "pw.test(\"Status code is 200\", () => {\n  pw.expect(pw.response.status).toBe(200);\n});",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": null,
+            "body": null
+          },
+          "requestVariables": []
+        },
+        {
+          "v": "11",
+          "name": "Get account",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/accounts/<<accountId>>",
+          "params": [],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": null,
+            "body": null
+          },
+          "requestVariables": []
+        },
+        {
+          "v": "11",
+          "name": "Get balances",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/accounts/<<accountId>>/balances",
+          "params": [],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "pw.test(\"Status code is 200\", () => {\n  pw.expect(pw.response.status).toBe(200);\n});",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": null,
+            "body": null
+          },
+          "requestVariables": []
+        },
+        {
+          "v": "11",
+          "name": "Get transactions",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/accounts/<<accountId>>/transactions",
+          "params": [
+            {
+              "key": "fromBookingDateTime",
+              "value": "2026-01-01T00:00:00Z",
+              "active": true
+            },
+            {
+              "key": "limit",
+              "value": "50",
+              "active": true
+            }
+          ],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": null,
+            "body": null
+          },
+          "requestVariables": []
+        },
+        {
+          "v": "11",
+          "name": "List standing orders",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/accounts/<<accountId>>/standing-orders",
+          "params": [],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": null,
+            "body": null
+          },
+          "requestVariables": []
+        }
+      ]
+    },
+    {
+      "v": 2,
+      "name": "Payments",
+      "folders": [],
+      "auth": {
+        "authType": "inherit",
+        "authActive": true
+      },
+      "headers": [],
+      "variables": [],
+      "requests": [
+        {
+          "v": "11",
+          "name": "Create a payment consent",
+          "method": "POST",
+          "endpoint": "<<baseUrl>>/domestic-payment-consents",
+          "params": [],
+          "headers": [
+            {
+              "key": "x-idempotency-key",
+              "value": "<<$guid>>",
+              "active": true
+            },
+            {
+              "key": "x-fapi-financial-id",
+              "value": "<<orgId>>",
+              "active": true
+            }
+          ],
+          "preRequestScript": "",
+          "testScript": "pw.test(\"Status code is 201\", () => {\n  pw.expect(pw.response.status).toBe(201);\n});",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": "application/json",
+            "body": "{\n  \"Data\": {\n    \"Initiation\": {\n      \"InstructionIdentification\": \"ACME412\",\n      \"InstructedAmount\": {\n        \"Amount\": \"165.88\",\n        \"Currency\": \"GBP\"\n      }\n    }\n  },\n  \"Risk\": {}\n}"
+          },
+          "requestVariables": []
+        },
+        {
+          "v": "11",
+          "name": "Get a payment consent",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/domestic-payment-consents/<<consentId>>",
+          "params": [],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": null,
+            "body": null
+          },
+          "requestVariables": []
+        },
+        {
+          "v": "11",
+          "name": "Submit a payment",
+          "method": "POST",
+          "endpoint": "<<baseUrl>>/domestic-payments",
+          "params": [],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": "application/json",
+            "body": "{\n  \"Data\": {\n    \"ConsentId\": \"{{consentId}}\"\n  },\n  \"Risk\": {}\n}"
+          },
+          "requestVariables": []
+        },
+        {
+          "v": "11",
+          "name": "Get a payment",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/domestic-payments/<<paymentId>>",
+          "params": [],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": null,
+            "body": null
+          },
+          "requestVariables": []
+        }
+      ]
+    },
+    {
+      "v": 2,
+      "name": "Funds",
+      "folders": [],
+      "auth": {
+        "authType": "inherit",
+        "authActive": true
+      },
+      "headers": [],
+      "variables": [],
+      "requests": [
+        {
+          "v": "11",
+          "name": "Confirm funds",
+          "method": "POST",
+          "endpoint": "<<baseUrl>>/funds-confirmations",
+          "params": [],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": "application/json",
+            "body": "{\n  \"Data\": {\n    \"ConsentId\": \"{{consentId}}\",\n    \"Reference\": \"Purchase01\",\n    \"InstructedAmount\": {\n      \"Amount\": \"20.00\",\n      \"Currency\": \"GBP\"\n    }\n  }\n}"
+          },
+          "requestVariables": []
+        },
+        {
+          "v": "11",
+          "name": "Get funds consent",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/funds-confirmation-consents/<<consentId>>",
+          "params": [],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": null,
+            "body": null
+          },
+          "requestVariables": []
+        }
+      ]
+    }
+  ],
+  "requests": [],
+  "auth": {
+    "authType": "oauth-2",
+    "authActive": true,
+    "grantTypeInfo": {
+      "grantType": "CLIENT_CREDENTIALS",
+      "authEndpoint": "https://auth.bank.example.test/oauth/token",
+      "clientID": "{{clientId}}",
+      "clientSecret": "{{clientSecret}}",
+      "scopes": "accounts payments"
+    }
+  },
+  "headers": [],
+  "variables": []
+}

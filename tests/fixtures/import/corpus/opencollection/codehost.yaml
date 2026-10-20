@@ -1,0 +1,184 @@
+opencollection: 1.0.0
+bundled: true
+info:
+  name: Code Host API
+request:
+  auth:
+    type: bearer
+    token: "{{token}}"
+  variables:
+    - name: baseUrl
+      value: https://api.codehost.example.test
+items:
+  - info:
+      name: Repos
+      type: folder
+      seq: 1
+    items:
+      - info:
+          name: Get a repository
+          type: http
+          seq: 1
+        http:
+          method: GET
+          url: "{{baseUrl}}/repos/{{owner}}/{{repo}}"
+          headers:
+            - name: Accept
+              value: application/vnd.codehost+json
+        runtime:
+          assertions:
+            - expression: res.status
+              operator: eq
+              value: "200"
+      - info:
+          name: List repository contributors
+          type: http
+          seq: 2
+        http:
+          method: GET
+          url: "{{baseUrl}}/repos/{{owner}}/{{repo}}/contributors"
+          params:
+            - name: per_page
+              value: "30"
+              type: query
+            - name: page
+              value: "1"
+              type: query
+      - info:
+          name: List branches
+          type: http
+          seq: 3
+        http:
+          method: GET
+          url: "{{baseUrl}}/repos/{{owner}}/{{repo}}/branches"
+      - info:
+          name: Create a fork
+          type: http
+          seq: 4
+        http:
+          method: POST
+          url: "{{baseUrl}}/repos/{{owner}}/{{repo}}/forks"
+      - info:
+          name: Delete a repository
+          type: http
+          seq: 5
+        http:
+          method: DELETE
+          url: "{{baseUrl}}/repos/{{owner}}/{{repo}}"
+  - info:
+      name: Issues
+      type: folder
+      seq: 2
+    items:
+      - info:
+          name: List issues
+          type: http
+          seq: 1
+        http:
+          method: GET
+          url: "{{baseUrl}}/repos/{{owner}}/{{repo}}/issues"
+          params:
+            - name: state
+              value: open
+              type: query
+            - name: labels
+              value: bug
+              type: query
+      - info:
+          name: Create an issue
+          type: http
+          seq: 2
+        http:
+          method: POST
+          url: "{{baseUrl}}/repos/{{owner}}/{{repo}}/issues"
+          body:
+            type: json
+            data: |-
+              {
+                "title": "Found a bug",
+                "body": "I'm having a problem with this.",
+                "labels": [
+                  "bug"
+                ]
+              }
+        runtime:
+          assertions:
+            - expression: res.status
+              operator: eq
+              value: "201"
+      - info:
+          name: Get an issue
+          type: http
+          seq: 3
+        http:
+          method: GET
+          url: "{{baseUrl}}/repos/{{owner}}/{{repo}}/issues/1347"
+      - info:
+          name: Update an issue
+          type: http
+          seq: 4
+        http:
+          method: PATCH
+          url: "{{baseUrl}}/repos/{{owner}}/{{repo}}/issues/1347"
+          body:
+            type: json
+            data: |-
+              {
+                "state": "closed"
+              }
+      - info:
+          name: Lock an issue
+          type: http
+          seq: 5
+        http:
+          method: PUT
+          url: "{{baseUrl}}/repos/{{owner}}/{{repo}}/issues/1347/lock"
+          body:
+            type: json
+            data: |-
+              {
+                "lock_reason": "resolved"
+              }
+  - info:
+      name: Users
+      type: folder
+      seq: 3
+    items:
+      - info:
+          name: Get the authenticated user
+          type: http
+          seq: 1
+        http:
+          method: GET
+          url: "{{baseUrl}}/user"
+        runtime:
+          assertions:
+            - expression: res.status
+              operator: eq
+              value: "200"
+      - info:
+          name: Get a user
+          type: http
+          seq: 2
+        http:
+          method: GET
+          url: "{{baseUrl}}/users/{{owner}}"
+      - info:
+          name: List followers of a user
+          type: http
+          seq: 3
+        http:
+          method: GET
+          url: "{{baseUrl}}/users/{{owner}}/followers"
+config:
+  environments:
+    - name: default
+      variables:
+        - name: baseUrl
+          value: https://api.codehost.example.test
+        - name: token
+          value: ""
+        - name: owner
+          value: octocat
+        - name: repo
+          value: hello-world

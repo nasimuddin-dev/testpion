@@ -414,6 +414,13 @@ function __cookieJar() {
       __out.jarOps.push({ op: 'clear', url: String(url) });
       return __cb(cb, null);
     },
+    // Bruno's names for the same jar (bru.cookies.jar() imports as tp.cookies.jar()); they answer promises, like Bruno's
+    getCookie(url, name) { const h = __hostOf(url); const c = __jar.find((x) => x.name === name && __jarMatch(h, x)); return Promise.resolve(c ? __cookieView(c) : null); },
+    getCookies(url) { const h = __hostOf(url); return Promise.resolve(__jar.filter((x) => __jarMatch(h, x)).map(__cookieView)); },
+    setCookie(url, name, value) { this.set(url, name, value); return Promise.resolve(); },
+    setCookies(url, cookies) { (cookies || []).forEach((c) => this.set(url, c)); return Promise.resolve(); },
+    deleteCookie(url, name) { this.unset(url, name); return Promise.resolve(); },
+    deleteCookies(url) { this.clear(url); return Promise.resolve(); },
   };
 }
 
@@ -643,6 +650,15 @@ const pm = {
   // tp.environment.name is the active environment's name, as in Postman
   environment: Object.assign(__scope('environment'), { name: (__in.info && __in.info.environmentName) || undefined }),
   globals: __scope('globals'),
+  // tp.state (Postman's pm.state): values that last across runs on this computer, kept as globals named state.<key>
+  state: {
+    get: (k) => __scopes.globals['state.' + String(k)],
+    set: (k, v) => pm.globals.set('state.' + String(k), v),
+    has: (k) => Object.prototype.hasOwnProperty.call(__scopes.globals, 'state.' + String(k)),
+    unset: (k) => pm.globals.unset('state.' + String(k)),
+    clear: () => { for (const k of Object.keys(__scopes.globals)) if (k.indexOf('state.') === 0) pm.globals.unset(k); },
+    toObject: () => { const o = {}; for (const k of Object.keys(__scopes.globals)) if (k.indexOf('state.') === 0) o[k.slice(6)] = __scopes.globals[k]; return o; },
+  },
   collectionVariables: __scope('collectionVariables'),
   iterationData: { get: (k) => __scopes.iterationData[k], has: (k) => Object.prototype.hasOwnProperty.call(__scopes.iterationData, k), toObject: () => Object.assign({}, __scopes.iterationData), toJSON: () => Object.assign({}, __scopes.iterationData) },
   request: __request,

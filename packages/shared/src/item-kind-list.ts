@@ -30,7 +30,8 @@ const FILE_ITEM: Capabilities = {
   flow: { na: 'integration flows are generated from collections and folders' },
   ai: { planned: '0.59' },
   export: { planned: '0.55' },
-  import: { planned: '0.55' },
+  // (a request is imported as a copied command or a request file; the others of this base have no import of their own yet)
+  import: { planned: '0.58' },
   uses: { planned: '0.54' },
   versioned: { planned: '0.57' },
   'git-history': { planned: '0.58' },
@@ -205,6 +206,8 @@ const KINDS: readonly ItemKindInfo[] = [
       flow: { planned: '0.54' },
       ai: true,
       export: { planned: '0.55' },
+      // cURL, fetch, PowerShell and HTTPie commands and request files import into a collection (the Import dialog, `testpion import`)
+      import: true,
       versioned: { na: 'versioned with its collection file' },
       'git-history': true,
       watch: { na: 'watched as its collection file' },

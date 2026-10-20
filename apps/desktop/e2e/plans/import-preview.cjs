@@ -83,6 +83,22 @@ const steps = [
      return 'plan names the collection: ' + /Dropped sample/.test(text) + ' | overlay gone: ' + !overlay + ' | added: ' + added.join(',');`,
   ),
   step(
+    'import-again-updates',
+    `const before = await names();
+     const r = await __t.real.dropFiles('main', [${JSON.stringify(join(DROP, 'dropped.postman_collection.json'))}]);
+     if (r !== 'ok') return r;
+     const plan = await __t.waitFor(() => document.querySelector('[data-import-plan]'), 8000);
+     if (!plan) return 'NO DIALOG after the drop';
+     const upd = document.querySelector('[data-import-update]');
+     const said = !!upd && /imported before/.test(upd.textContent);
+     btn(/^Import$/).click();
+     await __t.waitFor(() => document.querySelector('[data-import-done]'), 8000);
+     const updated = document.querySelector('[data-import-updated]')?.textContent.replace(/\\s+/g, ' ').trim();
+     await __t.esc();
+     const after = await names();
+     return 'update offered: ' + said + ' | result: ' + /^Updated Dropped sample: \\d+ replaced, \\d+ added, \\d+ left as they are\\.$/.test(updated ?? '') + ' | no second collection: ' + (after.length === before.length);`,
+  ),
+  step(
     'drop-a-folder-from-the-os',
     `const before = await names();
      const r = await __t.real.dropFiles('main', [${JSON.stringify(join(DROP, 'bruno-drop'))}]);
@@ -127,9 +143,10 @@ module.exports = withExpect(
     'preview-writes-nothing': /^title: Import: preview \| nodes: [3-9] \| changed marks: [1-9] \| groups: [A-Z_,]*AUTH_UNSUPPORTED[A-Z_,]* \| written: false \| button: Import$/,
     'import-then-undo': /^added: Dropped sample \| report: .*2 requests in 1 folder.* \| after undo still there: 0 \| undone text: true$/,
     'drop-a-file-from-the-os': /^plan names the collection: true \| overlay gone: true \| added: Dropped sample$/,
+    'import-again-updates': /^update offered: true \| result: true \| no second collection: true$/,
     'drop-a-folder-from-the-os': /^plan: true \| added: Dropped Bruno$/,
     'drag-of-something-else-is-left-alone': /^dialog opened: false$/,
-    'migrate-from-on-home': /^tools: Postman,Insomnia,Bruno,Another tool \| bruno guide: true \| title: true$/,
+    'migrate-from-on-home': /^tools: Postman,Insomnia,Bruno,Hoppscotch,Thunder Client,Yaak,HTTPie,Apidog,Another tool \| bruno guide: true \| title: true$/,
   },
   { prepare },
 );

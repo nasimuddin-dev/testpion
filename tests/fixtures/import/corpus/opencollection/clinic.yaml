@@ -1,0 +1,199 @@
+opencollection: 1.0.0
+bundled: true
+info:
+  name: Vet Clinic
+request:
+  auth:
+    type: basic
+    username: "{{user}}"
+    password: "{{password}}"
+  variables:
+    - name: baseUrl
+      value: https://clinic.example.test/api
+items:
+  - info:
+      name: Patients
+      type: folder
+      seq: 1
+    items:
+      - info:
+          name: List patients
+          type: http
+          seq: 1
+        http:
+          method: GET
+          url: "{{baseUrl}}/patients"
+          params:
+            - name: species
+              value: dog
+              type: query
+            - name: limit
+              value: "25"
+              type: query
+        runtime:
+          assertions:
+            - expression: res.status
+              operator: eq
+              value: "200"
+      - info:
+          name: Create a patient
+          type: http
+          seq: 2
+        http:
+          method: POST
+          url: "{{baseUrl}}/patients"
+          body:
+            type: json
+            data: |-
+              {
+                "name": "Rex",
+                "species": "dog",
+                "born": "2021-03-04",
+                "owner": "o-7"
+              }
+        runtime:
+          assertions:
+            - expression: res.status
+              operator: eq
+              value: "201"
+      - info:
+          name: Get a patient
+          type: http
+          seq: 3
+        http:
+          method: GET
+          url: "{{baseUrl}}/patients/:id"
+          params:
+            - name: id
+              value: p-1
+              type: path
+        runtime:
+          assertions:
+            - expression: res.status
+              operator: eq
+              value: "200"
+      - info:
+          name: Update a patient
+          type: http
+          seq: 4
+        http:
+          method: PATCH
+          url: "{{baseUrl}}/patients/:id"
+          params:
+            - name: id
+              value: p-1
+              type: path
+          body:
+            type: json
+            data: |-
+              {
+                "weightKg": 31.5
+              }
+      - info:
+          name: Upload a photo
+          type: http
+          seq: 5
+        http:
+          method: PUT
+          url: "{{baseUrl}}/patients/:id/photo"
+          params:
+            - name: id
+              value: p-1
+              type: path
+          body:
+            type: multipart-form
+            data:
+              - name: caption
+                value: At the beach
+                type: text
+              - name: photo
+                type: file
+                value:
+                  - rex.png
+  - info:
+      name: Visits
+      type: folder
+      seq: 2
+    items:
+      - info:
+          name: List visits
+          type: http
+          seq: 1
+        http:
+          method: GET
+          url: "{{baseUrl}}/visits"
+          params:
+            - name: patient
+              value: p-1
+              type: query
+      - info:
+          name: Book a visit
+          type: http
+          seq: 2
+        http:
+          method: POST
+          url: "{{baseUrl}}/visits"
+          body:
+            type: json
+            data: |-
+              {
+                "patient": "p-1",
+                "at": "2026-05-04T09:30:00Z",
+                "reason": "vaccination"
+              }
+        runtime:
+          assertions:
+            - expression: res.status
+              operator: eq
+              value: "201"
+      - info:
+          name: Cancel a visit
+          type: http
+          seq: 3
+        http:
+          method: DELETE
+          url: "{{baseUrl}}/visits/v-3"
+  - info:
+      name: Owners
+      type: folder
+      seq: 3
+    items:
+      - info:
+          name: List owners
+          type: http
+          seq: 1
+        http:
+          method: GET
+          url: "{{baseUrl}}/owners"
+      - info:
+          name: Create an owner
+          type: http
+          seq: 2
+        http:
+          method: POST
+          url: "{{baseUrl}}/owners"
+          body:
+            type: json
+            data: |-
+              {
+                "name": "Ada",
+                "email": "ada@example.test"
+              }
+config:
+  environments:
+    - name: local
+      variables:
+        - name: baseUrl
+          value: http://localhost:4010/api
+        - name: user
+          value: vet
+        - name: password
+          value: secret
+    - name: staging
+      variables:
+        - name: baseUrl
+          value: https://staging.clinic.example.test/api
+        - name: user
+          value: vet
+        - name: password
+          value: ""

@@ -8,7 +8,7 @@ import { normalizeTemplate } from './templates.js';
  * `none`, a disabled placeholder header that names the lost scheme, and a note the import shows.
  */
 
-export type ForeignTool = 'postman' | 'insomnia' | 'bruno' | 'hoppscotch' | 'opencollection';
+export type ForeignTool = 'postman' | 'insomnia' | 'bruno' | 'hoppscotch' | 'opencollection' | 'thunder' | 'yaak' | 'httpie' | 'apidog';
 
 export interface ForeignAuth {
   /** undefined: the source says nothing, so the item inherits (the caller decides: `inherit` for a request). */
@@ -21,7 +21,7 @@ export interface ForeignAuth {
 
 type Any = Record<string, any>;
 
-const TOOL: Record<ForeignTool, string> = { postman: 'Postman', insomnia: 'Insomnia', bruno: 'Bruno', hoppscotch: 'Hoppscotch', opencollection: 'OpenCollection' };
+const TOOL: Record<ForeignTool, string> = { postman: 'Postman', insomnia: 'Insomnia', bruno: 'Bruno', hoppscotch: 'Hoppscotch', opencollection: 'OpenCollection', thunder: 'Thunder Client', yaak: 'Yaak', httpie: 'HTTPie', apidog: 'Apidog' };
 const LABEL: Record<string, string> = {
   hawk: 'Hawk',
   ntlm: 'NTLM',
@@ -36,11 +36,11 @@ const LABEL: Record<string, string> = {
 };
 const HMAC = new Set(['HS256', 'HS384', 'HS512']);
 
-const t = (x: unknown) => normalizeTemplate(x ?? '');
+export const t = (x: unknown) => normalizeTemplate(x ?? '');
 /** Postman v2.1 auth attributes are `[{ key, value }]`, v2.0 a plain object. */
 const attr = (list: unknown, k: string): string => String((Array.isArray(list) ? list.find((x: Any) => x?.key === k)?.value : (list as Any | undefined)?.[k]) ?? '');
 
-function unsupported(tool: ForeignTool, type: string, where: string, detail = ''): ForeignAuth {
+export function unsupported(tool: ForeignTool, type: string, where: string, detail = ''): ForeignAuth {
   const label =
     LABEL[type] ??
     (type
@@ -57,10 +57,10 @@ function unsupported(tool: ForeignTool, type: string, where: string, detail = ''
   };
 }
 
-const ok = (auth: AuthConfig, notes: string[] = []): ForeignAuth => ({ auth, notes, headers: [] });
+export const ok = (auth: AuthConfig, notes: string[] = []): ForeignAuth => ({ auth, notes, headers: [] });
 
 /** A JWT auth (TestPion signs HS256/384/512); another algorithm (RS256, ES256 …) is unsupported. */
-function jwt(tool: ForeignTool, where: string, f: { algorithm?: string; secret?: string; payload?: string; prefix?: string; addTo?: string; base64Secret?: boolean }): ForeignAuth {
+export function jwt(tool: ForeignTool, where: string, f: { algorithm?: string; secret?: string; payload?: string; prefix?: string; addTo?: string; base64Secret?: boolean }): ForeignAuth {
   const algorithm = (f.algorithm || 'HS256').toUpperCase();
   if (!HMAC.has(algorithm)) return unsupported(tool, 'jwt', where, ` (${algorithm}: TestPion signs HS256, HS384 and HS512)`);
   const notes: string[] = [];
@@ -71,7 +71,7 @@ function jwt(tool: ForeignTool, where: string, f: { algorithm?: string; secret?:
 }
 
 /** OAuth 2 grants TestPion runs; another (implicit, device …) is imported as authorization code, with a note. */
-function grant(
+export function grant(
   tool: ForeignTool,
   where: string,
   g: string,
@@ -84,9 +84,9 @@ function grant(
 }
 
 /** NTLM, Hawk and EdgeGrid, which TestPion signs itself: the same mapping for every tool, from the tool's own field names. */
-const ntlm = (f: { username?: unknown; password?: unknown; domain?: unknown; workstation?: unknown }): ForeignAuth =>
+export const ntlm = (f: { username?: unknown; password?: unknown; domain?: unknown; workstation?: unknown }): ForeignAuth =>
   ok({ type: 'ntlm', username: t(f.username), password: t(f.password), ...(f.domain ? { domain: t(f.domain) } : {}), ...(f.workstation ? { workstation: t(f.workstation) } : {}) });
-const hawk = (f: { id?: unknown; key?: unknown; algorithm?: unknown; ext?: unknown; app?: unknown; dlg?: unknown; payload?: boolean }): ForeignAuth =>
+export const hawk = (f: { id?: unknown; key?: unknown; algorithm?: unknown; ext?: unknown; app?: unknown; dlg?: unknown; payload?: boolean }): ForeignAuth =>
   ok({
     type: 'hawk',
     id: t(f.id),
@@ -97,7 +97,7 @@ const hawk = (f: { id?: unknown; key?: unknown; algorithm?: unknown; ext?: unkno
     ...(f.dlg ? { dlg: t(f.dlg) } : {}),
     ...(f.payload ? { includePayloadHash: true } : {}),
   });
-const edgegrid = (f: { clientToken?: unknown; clientSecret?: unknown; accessToken?: unknown; headersToSign?: unknown }): ForeignAuth =>
+export const edgegrid = (f: { clientToken?: unknown; clientSecret?: unknown; accessToken?: unknown; headersToSign?: unknown }): ForeignAuth =>
   ok({ type: 'edgegrid', clientToken: t(f.clientToken), clientSecret: t(f.clientSecret), accessToken: t(f.accessToken), ...(f.headersToSign ? { headersToSign: t(f.headersToSign) } : {}) });
 
 function postman(a: Any, where: string): ForeignAuth {
@@ -369,15 +369,21 @@ function hoppscotch(a: Any, where: string): ForeignAuth {
       return ok({ type: 'apiKey', key: t(a.key), value: t(a.value), in: a.addTo === 'QUERY_PARAMS' ? 'query' : 'header' });
     case 'oauth-2': {
       const g = a.grantTypeInfo ?? {};
-      const notes = g.grantType && g.grantType !== 'CLIENT_CREDENTIALS' ? [`"${where}": Hoppscotch OAuth 2 grant "${g.grantType}" is not supported: imported as client credentials, check it`] : [];
+      const notes: string[] = [];
+      const gt = String(g.grantType ?? 'CLIENT_CREDENTIALS');
+      const grantType = grant('hoppscotch', where, gt, { CLIENT_CREDENTIALS: 'client_credentials', PASSWORD: 'password', AUTHORIZATION_CODE: 'authorization_code' }, notes);
       return ok(
         {
           type: 'oauth2',
-          grantType: 'client_credentials',
-          tokenUrl: t(g.authEndpoint ?? a.accessTokenURL),
+          grantType,
+          tokenUrl: t(g.tokenEndpoint ?? g.authEndpoint ?? a.accessTokenURL),
+          ...(g.authEndpoint && g.tokenEndpoint && grantType === 'authorization_code' ? { authUrl: t(g.authEndpoint) } : {}),
           clientId: t(g.clientID ?? a.clientID),
           clientSecret: t(g.clientSecret),
           scope: g.scopes ?? a.scope,
+          ...(g.username ? { username: t(g.username) } : {}),
+          ...(g.password ? { password: t(g.password) } : {}),
+          ...(g.isPKCE ? { usePkce: true } : {}),
         },
         notes,
       );
@@ -410,5 +416,11 @@ export function mapForeignAuth(tool: ForeignTool, raw: unknown, where: string): 
       return a.authType ? hoppscotch(a, where) : { notes: [], headers: [] };
     case 'opencollection':
       return a.type ? opencollection(a, where) : { notes: [], headers: [] };
+    case 'apidog':
+      // Apidog writes its auth the way Postman does
+      return a.type ? postman(a, where) : { notes: [], headers: [] };
+    default:
+      // Thunder Client, Yaak and HTTPie: foreign-auth-more.ts
+      return { notes: [], headers: [] };
   }
 }

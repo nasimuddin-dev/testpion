@@ -1,0 +1,379 @@
+{
+  "name": "Bank API",
+  "version": "1",
+  "items": [
+    {
+      "type": "folder",
+      "name": "Accounts",
+      "seq": 1,
+      "items": [
+        {
+          "type": "http-request",
+          "name": "List accounts",
+          "seq": 1,
+          "request": {
+            "url": "{{baseUrl}}/accounts",
+            "method": "GET",
+            "headers": [],
+            "params": [],
+            "body": {
+              "mode": "none"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [
+              {
+                "name": "res.status",
+                "value": "eq 200",
+                "enabled": true
+              }
+            ],
+            "tests": "test(\"Status code is 200\", function () {\n  expect(res.status).to.equal(200);\n});"
+          }
+        },
+        {
+          "type": "http-request",
+          "name": "Get account",
+          "seq": 2,
+          "request": {
+            "url": "{{baseUrl}}/accounts/{{accountId}}",
+            "method": "GET",
+            "headers": [],
+            "params": [],
+            "body": {
+              "mode": "none"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [],
+            "tests": ""
+          }
+        },
+        {
+          "type": "http-request",
+          "name": "Get balances",
+          "seq": 3,
+          "request": {
+            "url": "{{baseUrl}}/accounts/{{accountId}}/balances",
+            "method": "GET",
+            "headers": [],
+            "params": [],
+            "body": {
+              "mode": "none"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [
+              {
+                "name": "res.status",
+                "value": "eq 200",
+                "enabled": true
+              }
+            ],
+            "tests": "test(\"Status code is 200\", function () {\n  expect(res.status).to.equal(200);\n});"
+          }
+        },
+        {
+          "type": "http-request",
+          "name": "Get transactions",
+          "seq": 4,
+          "request": {
+            "url": "{{baseUrl}}/accounts/{{accountId}}/transactions?fromBookingDateTime=2026-01-01T00:00:00Z&limit=50",
+            "method": "GET",
+            "headers": [],
+            "params": [
+              {
+                "name": "fromBookingDateTime",
+                "value": "2026-01-01T00:00:00Z",
+                "type": "query",
+                "enabled": true
+              },
+              {
+                "name": "limit",
+                "value": "50",
+                "type": "query",
+                "enabled": true
+              }
+            ],
+            "body": {
+              "mode": "none"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [],
+            "tests": ""
+          }
+        },
+        {
+          "type": "http-request",
+          "name": "List standing orders",
+          "seq": 5,
+          "request": {
+            "url": "{{baseUrl}}/accounts/{{accountId}}/standing-orders",
+            "method": "GET",
+            "headers": [],
+            "params": [],
+            "body": {
+              "mode": "none"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [],
+            "tests": ""
+          }
+        }
+      ]
+    },
+    {
+      "type": "folder",
+      "name": "Payments",
+      "seq": 2,
+      "items": [
+        {
+          "type": "http-request",
+          "name": "Create a payment consent",
+          "seq": 1,
+          "request": {
+            "url": "{{baseUrl}}/domestic-payment-consents",
+            "method": "POST",
+            "headers": [
+              {
+                "name": "x-idempotency-key",
+                "value": "{{$guid}}",
+                "enabled": true
+              },
+              {
+                "name": "x-fapi-financial-id",
+                "value": "{{orgId}}",
+                "enabled": true
+              }
+            ],
+            "params": [],
+            "body": {
+              "mode": "json",
+              "json": "{\n  \"Data\": {\n    \"Initiation\": {\n      \"InstructionIdentification\": \"ACME412\",\n      \"InstructedAmount\": {\n        \"Amount\": \"165.88\",\n        \"Currency\": \"GBP\"\n      }\n    }\n  },\n  \"Risk\": {}\n}"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [
+              {
+                "name": "res.status",
+                "value": "eq 201",
+                "enabled": true
+              }
+            ],
+            "tests": "test(\"Status code is 201\", function () {\n  expect(res.status).to.equal(201);\n});"
+          }
+        },
+        {
+          "type": "http-request",
+          "name": "Get a payment consent",
+          "seq": 2,
+          "request": {
+            "url": "{{baseUrl}}/domestic-payment-consents/{{consentId}}",
+            "method": "GET",
+            "headers": [],
+            "params": [],
+            "body": {
+              "mode": "none"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [],
+            "tests": ""
+          }
+        },
+        {
+          "type": "http-request",
+          "name": "Submit a payment",
+          "seq": 3,
+          "request": {
+            "url": "{{baseUrl}}/domestic-payments",
+            "method": "POST",
+            "headers": [],
+            "params": [],
+            "body": {
+              "mode": "json",
+              "json": "{\n  \"Data\": {\n    \"ConsentId\": \"{{consentId}}\"\n  },\n  \"Risk\": {}\n}"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [],
+            "tests": ""
+          }
+        },
+        {
+          "type": "http-request",
+          "name": "Get a payment",
+          "seq": 4,
+          "request": {
+            "url": "{{baseUrl}}/domestic-payments/{{paymentId}}",
+            "method": "GET",
+            "headers": [],
+            "params": [],
+            "body": {
+              "mode": "none"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [],
+            "tests": ""
+          }
+        }
+      ]
+    },
+    {
+      "type": "folder",
+      "name": "Funds",
+      "seq": 3,
+      "items": [
+        {
+          "type": "http-request",
+          "name": "Confirm funds",
+          "seq": 1,
+          "request": {
+            "url": "{{baseUrl}}/funds-confirmations",
+            "method": "POST",
+            "headers": [],
+            "params": [],
+            "body": {
+              "mode": "json",
+              "json": "{\n  \"Data\": {\n    \"ConsentId\": \"{{consentId}}\",\n    \"Reference\": \"Purchase01\",\n    \"InstructedAmount\": {\n      \"Amount\": \"20.00\",\n      \"Currency\": \"GBP\"\n    }\n  }\n}"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [],
+            "tests": ""
+          }
+        },
+        {
+          "type": "http-request",
+          "name": "Get funds consent",
+          "seq": 2,
+          "request": {
+            "url": "{{baseUrl}}/funds-confirmation-consents/{{consentId}}",
+            "method": "GET",
+            "headers": [],
+            "params": [],
+            "body": {
+              "mode": "none"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [],
+            "tests": ""
+          }
+        }
+      ]
+    }
+  ],
+  "environments": [
+    {
+      "name": "sandbox",
+      "variables": [
+        {
+          "name": "baseUrl",
+          "value": "https://sandbox.bank.example.test/open-banking/v3",
+          "enabled": true,
+          "secret": false
+        },
+        {
+          "name": "clientId",
+          "value": "sandbox-client",
+          "enabled": true,
+          "secret": false
+        },
+        {
+          "name": "clientSecret",
+          "value": "",
+          "enabled": true,
+          "secret": false
+        }
+      ]
+    },
+    {
+      "name": "production",
+      "variables": [
+        {
+          "name": "baseUrl",
+          "value": "https://api.bank.example.test/open-banking/v3",
+          "enabled": true,
+          "secret": false
+        },
+        {
+          "name": "clientId",
+          "value": "",
+          "enabled": true,
+          "secret": false
+        },
+        {
+          "name": "clientSecret",
+          "value": "",
+          "enabled": true,
+          "secret": false
+        }
+      ]
+    }
+  ],
+  "root": {
+    "request": {
+      "auth": {
+        "mode": "oauth2",
+        "oauth2": {
+          "grantType": "client_credentials",
+          "accessTokenUrl": "https://auth.bank.example.test/oauth/token",
+          "clientId": "{{clientId}}",
+          "clientSecret": "{{clientSecret}}",
+          "scope": "accounts payments"
+        }
+      },
+      "vars": {
+        "req": [
+          {
+            "name": "baseUrl",
+            "value": "https://api.bank.example.test/open-banking/v3",
+            "enabled": true
+          }
+        ]
+      }
+    }
+  },
+  "brunoConfig": {
+    "version": "1",
+    "name": "Bank API",
+    "type": "collection"
+  }
+}

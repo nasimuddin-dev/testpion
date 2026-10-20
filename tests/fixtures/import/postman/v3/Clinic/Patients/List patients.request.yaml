@@ -1,0 +1,15 @@
+$kind: http-request
+name: List patients
+method: GET
+url: "{{host}}/patients"
+order: 1000
+queryParams:
+  - key: limit
+    value: "10"
+auth:
+  type: basic
+  credentials:
+    - key: username
+      value: vet
+    - key: password
+      value: "{{password}}"

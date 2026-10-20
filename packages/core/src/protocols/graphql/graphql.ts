@@ -91,6 +91,11 @@ export function schemaFromText(text: string): GraphQLSchema {
   return schemaFromSdl(text);
 }
 
+/** A schema as SDL text. */
+export function printSchemaText(schema: GraphQLSchema): string {
+  return gql().printSchema(schema);
+}
+
 export function schemaFromSdl(sdl: string): GraphQLSchema {
   try {
     return gql().buildSchema(sdl);

@@ -7,28 +7,18 @@ import { aiHidden } from '../lib/ai-visible';
 import { startTidyImport } from './ai/flow-generate';
 import { toastSpecKeptBoth } from '../lib/spec-import';
 import { toastImportNotes, toastUnchangedScripts } from '../lib/import-scripts';
-import { IMPORT_FILE_ACCEPT } from '@testpion/shared';
-import type { ImportManyPlan, ImportPlan, ImportReport, ImportSource } from '../types';
+import { IMPORT_FILE_ACCEPT, MIGRATE_TOOLS, type MigrateTool } from '@testpion/shared';
+import type { ImportManyPlan, ImportPlan, ImportReport, ImportSource, ReimportAction } from '../types';
 import { pickImportFiles, pickImportFolder } from '../lib/import-files';
-import { Button, Field, Input, Modal, Spinner, Textarea } from './ui';
+import { Button, Field, Input, Modal, Segmented, Spinner, Textarea } from './ui';
 import { ImportReportView, ImportTree } from './ImportReport';
 
-/** The tools a user switches from, with how to get their collection out (the "Migrate from…" entry opens the dialog with one of them). */
-export const MIGRATE_TOOLS = {
-  postman: {
-    label: 'Postman',
-    how: 'In Postman, open the collection ▸ ⋯ ▸ Export ▸ Collection v2.1, and each environment ▸ ⋯ ▸ Export. A whole account: Settings ▸ Data export gives one ZIP of everything. Or paste a Postman API key below and a link or id (postman:collection/<id>).',
-  },
-  insomnia: { label: 'Insomnia', how: 'In Insomnia, open the collection menu ▸ Export ▸ choose Insomnia v5 (YAML) or v4 (JSON). Design documents (OpenAPI) in the export are kept in specs/.' },
-  bruno: { label: 'Bruno', how: 'Choose the collection folder itself (the one with bruno.json or opencollection.yml); its .env comes along. A ZIP of the folder works too.' },
-  other: { label: 'Another tool', how: 'OpenAPI / Swagger, HAR, Hoppscotch, cURL, .http files, WSDL and GraphQL schemas import as they are. Paste a cURL command, drop a file, or choose a folder.' },
-} as const;
-export type MigrateTool = keyof typeof MIGRATE_TOOLS;
+export { MIGRATE_TOOLS, type MigrateTool } from '@testpion/shared';
 
 type Step = 'source' | 'preview' | 'done';
 
 interface Applied {
-  imported: Array<{ input: { name: string; source: string }; result?: { format: string; report?: ImportReport; collection?: { id: string; name: string }; environments?: Array<{ name: string }>; flows?: Array<{ path: string }>; notes?: string[]; specKeptBoth?: { existing: string }; specPath?: string; scriptWarnings?: Array<{ where: string; script: string; api: string; hint: string }>; scripts?: Parameters<typeof toastUnchangedScripts>[0] }; error?: { message: string } }>;
+  imported: Array<{ input: { name: string; source: string }; result?: { format: string; report?: ImportReport; updated?: Array<{ collectionId: string; name: string; applied: { replaced: number; added: number; skipped: number } }>; collection?: { id: string; name: string }; environments?: Array<{ name: string }>; flows?: Array<{ path: string }>; notes?: string[]; specKeptBoth?: { existing: string }; specPath?: string; scriptWarnings?: Array<{ where: string; script: string; api: string; hint: string }>; scripts?: Parameters<typeof toastUnchangedScripts>[0] }; error?: { message: string } }>;
   receipts: string[];
   snippets: Array<{ request?: string; collection?: string }>;
 }
@@ -48,6 +38,10 @@ export function ImportDialog({ onClose, onDone, initial, tool: toolIn, migrate }
   const [text, setText] = useState('');
   const [link, setLink] = useState('');
   const [keepPm, setKeepPm] = useState(false);
+  const [liftTests, setLiftTests] = useState(false);
+  // a source imported before updates the collection it made: per item replace / new / skip, or a copy beside it
+  const [newCopy, setNewCopy] = useState(false);
+  const [decisions, setDecisions] = useState<Record<string, ReimportAction>>({});
   const [keySet, setKeySet] = useState(false);
   const [key, setKey] = useState('');
   const [undone, setUndone] = useState(false);
@@ -56,7 +50,7 @@ export function ImportDialog({ onClose, onDone, initial, tool: toolIn, migrate }
   const run = async (src: ImportSource) => {
     setBusy(true);
     try {
-      const p = await call<ImportManyPlan & { sessionId: string; snippets: number }>('import.preview', { ...src, keepPm });
+      const p = await call<ImportManyPlan & { sessionId: string; snippets: number }>('import.preview', { ...src, keepPm, liftTests });
       sessionRef.current = p.sessionId;
       setPreview(p);
       setStep('preview');
@@ -88,7 +82,7 @@ export function ImportDialog({ onClose, onDone, initial, tool: toolIn, migrate }
     if (!preview) return;
     setBusy(true);
     try {
-      const r = await call<Applied>('import.apply', { sessionId: preview.sessionId, keepPm });
+      const r = await call<Applied>('import.apply', { sessionId: preview.sessionId, keepPm, liftTests, newCopy, decisions });
       sessionRef.current = undefined;
       setApplied(r);
       setStep('done');
@@ -144,6 +138,8 @@ export function ImportDialog({ onClose, onDone, initial, tool: toolIn, migrate }
   const plans = preview?.inputs.flatMap((p) => ('plan' in p ? [{ input: p.input, plan: p.plan }] : [])) ?? [];
   const failed = preview?.inputs.flatMap((p) => ('error' in p ? [p] : [])) ?? [];
   const guide = tool ? MIGRATE_TOOLS[tool] : undefined;
+  const liftable = plans.reduce((n, p) => n + (p.plan.report.findings.find((f) => f.code === 'TESTS_LIFTABLE') ? Number(/^(\d+)/.exec(p.plan.report.findings.find((f) => f.code === 'TESTS_LIFTABLE')!.message)?.[1] ?? 0) : 0), 0);
+  const updates = plans.flatMap((p) => p.plan.reimport ?? []);
 
   return (
     <Modal
@@ -168,10 +164,15 @@ export function ImportDialog({ onClose, onDone, initial, tool: toolIn, migrate }
             <Button variant="ghost" onClick={() => setStep('source')}>
               Back
             </Button>
-            <label className="flex items-center gap-2 text-xs mr-auto" title="Postman and Insomnia scripts are converted to TestPion's tp.* (pm.* still runs). Exporting to Postman turns tp.* back into pm.*.">
+            <label className="flex items-center gap-2 text-xs" title="Postman and Insomnia scripts are converted to TestPion's tp.* (pm.* still runs). Exporting to Postman turns tp.* back into pm.*.">
               <input type="checkbox" checked={keepPm} onChange={(e) => setKeepPm(e.target.checked)} />{' '}
               Keep pm.* in scripts
             </label>
+            {liftable > 0 && (
+              <label className="flex items-center gap-2 text-xs mr-auto" title="A test that only checks a status, a response time, a header or a JSON field becomes an assertion in the request's Tests tab (readable without running the script). The rest of the script is kept." data-import-lift>
+                <input type="checkbox" checked={liftTests} onChange={(e) => setLiftTests(e.target.checked)} /> Lift {liftable} simple test{liftable === 1 ? '' : 's'} into assertions
+              </label>
+            )}
             <Button variant="primary" loading={busy} disabled={!plans.length && !preview?.snippets} onClick={() => void apply()}>
               Import{plans.length > 1 ? ` ${plans.length} files` : ''}
             </Button>
@@ -201,7 +202,7 @@ export function ImportDialog({ onClose, onDone, initial, tool: toolIn, migrate }
               ))}
             </div>
           )}
-          {guide ? <p className="text-sm text-muted">{guide.how}</p> : <p className="text-sm text-muted">Drop files, a folder or a link anywhere on the window, or choose them below. Postman, Insomnia, Bruno (folders and OpenCollection YAML), Hoppscotch, OpenAPI / Swagger, AsyncAPI, HAR, WSDL, GraphQL schemas, .env, .http, cURL and TestPion files. A ZIP (a Postman data export, a zipped collection) is opened. You see what will be created, and what will not come over, before anything is written.</p>}
+          {guide ? <p className="text-sm text-muted">{guide.how}</p> : <p className="text-sm text-muted">Drop files, a folder or a link anywhere on the window, or choose them below. Postman (v1, v2, Git folders), Insomnia, Bruno (folders and OpenCollection YAML), Hoppscotch, Thunder Client, Yaak, HTTPie, Apidog, OpenAPI / Swagger, AsyncAPI, HAR, WSDL, GraphQL schemas, .env, .http, cURL and TestPion files. A ZIP (a Postman data export, a zipped collection) is opened. You see what will be created, and what will not come over, before anything is written.</p>}
           <form
             className="flex gap-2"
             onSubmit={(e) => {
@@ -209,7 +210,7 @@ export function ImportDialog({ onClose, onDone, initial, tool: toolIn, migrate }
               if (link.trim() && !busy) void run({ url: link.trim() });
             }}
           >
-            <Input className="flex-1" aria-label="Link to import" placeholder="Or a link: https://…/openapi.json, a GitHub file, postman:collection/<id>" value={link} onChange={(e) => setLink(e.target.value)} />
+            <Input className="flex-1" aria-label="Link to import" placeholder="Or a link: https://…/openapi.json, a GitHub or GitLab file or folder, postman:collection/<id>" value={link} onChange={(e) => setLink(e.target.value)} />
             <Button type="submit" icon={<Link2 size={13} />} disabled={!/^(https?:\/\/\S+|postman:\S+)$/i.test(link.trim())} loading={busy && !!link.trim()}>
               Preview link
             </Button>
@@ -245,6 +246,7 @@ export function ImportDialog({ onClose, onDone, initial, tool: toolIn, migrate }
           {plans.map((p, i) => (
             <PlanCard key={i} source={p.input.source} plan={p.plan} single={plans.length === 1} />
           ))}
+          {updates.length > 0 && <UpdateSection updates={updates} newCopy={newCopy} setNewCopy={setNewCopy} decisions={decisions} setDecisions={setDecisions} />}
           {preview.snippets > 0 && <p className="text-sm">{preview.snippets} copied request{preview.snippets === 1 ? '' : 's'} (cURL, fetch …) will be saved to the <b>Imported</b> collection, with secrets replaced by variables.</p>}
           {failed.map((p, i) => (
             <p key={i} className="text-sm text-bad">
@@ -275,7 +277,18 @@ export function ImportDialog({ onClose, onDone, initial, tool: toolIn, migrate }
                 <div className="font-medium text-sm">
                   {i.input.source} <span className="text-muted font-normal">→ {[i.result.collection?.name, ...(i.result.environments ?? []).map((e) => e.name)].filter(Boolean).join(', ') || i.result.format}</span>
                 </div>
-                {i.result.report && <ImportReportView report={i.result.report} markdown={() => call<string>('import.reportMarkdown', { report: i.result!.report })} />}
+                {i.result.updated?.map((u) => (
+                  <p key={u.collectionId} className="text-sm" data-import-updated>
+                    Updated <b>{u.name}</b>: {u.applied.replaced} replaced, {u.applied.added} added, {u.applied.skipped} left as they are.
+                  </p>
+                ))}
+                {i.result.report && (
+                  <ImportReportView
+                    report={i.result.report}
+                    markdown={() => call<string>('import.reportMarkdown', { report: i.result!.report })}
+                    onFixWithAi={!aiHidden() && i.result.collection ? () => startTidyImport({ collectionId: i.result!.collection!.id, source: i.result!.format, task: 'import-leftovers' }) : undefined}
+                  />
+                )}
               </div>
             ) : (
               <p key={n} className="text-sm text-bad">
@@ -316,6 +329,58 @@ function PlanCard({ source, plan, single }: { source: string; plan: ImportPlan; 
           <ImportReportView report={plan.report} />
         </div>
       </details>
+    </div>
+  );
+}
+
+/**
+ * A source imported before: the import updates the collection it made instead of adding another. Each item that changed in the
+ * source (replace), is new (new) or was edited here too (a conflict: skipped unless you choose Replace) is listed with its
+ * choice; the unchanged ones are only counted. "Add a copy instead" turns the update off.
+ */
+function UpdateSection({ updates, newCopy, setNewCopy, decisions, setDecisions }: { updates: NonNullable<ImportPlan['reimport']>; newCopy: boolean; setNewCopy(v: boolean): void; decisions: Record<string, ReimportAction>; setDecisions(d: Record<string, ReimportAction>): void }) {
+  return (
+    <div className="border border-border rounded-md p-2 flex flex-col gap-2" data-import-update>
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-sm font-medium">This source was imported before</span>
+        <Segmented
+          label="What to do"
+          value={newCopy ? 'copy' : 'update'}
+          onChange={(v) => setNewCopy(v === 'copy')}
+          options={[
+            { value: 'update', label: 'Update the collection', title: 'Replace what changed in the source, add what is new, leave what you edited' },
+            { value: 'copy', label: 'Add a copy', title: 'Import it again as a second collection' },
+          ]}
+        />
+      </div>
+      {!newCopy &&
+        updates.map((u) => {
+          const shown = [u.root, ...u.items].filter((i) => i.action !== 'skip' || i.conflict);
+          return (
+            <div key={u.collectionId} className="flex flex-col gap-1">
+              <p className="text-sm">
+                <b>{u.collectionName}</b>: {u.counts.replace} to replace, {u.counts.new} new, {u.counts.skip} unchanged or left alone{u.counts.conflicts ? `, ${u.counts.conflicts} edited here too` : ''}
+                {u.gone.length ? `; ${u.gone.length} no longer in the source (kept)` : ''}.
+              </p>
+              {shown.length > 0 && (
+                <ul className="flex flex-col gap-1 max-h-48 overflow-auto" data-import-update-items>
+                  {shown.slice(0, 300).map((i) => (
+                    <li key={i.key} className="flex items-center gap-2 text-xs" data-import-update-item={i.action}>
+                      <span className="mono truncate flex-1" title={i.reason}>
+                        {i.path.length ? i.path.join(' / ') : 'Collection settings'} <span className="text-muted">{i.reason}</span>
+                      </span>
+                      <select aria-label={`Action for ${i.path.join(' / ') || 'the collection settings'}`} className="field text-xs" value={decisions[i.key] ?? i.action} onChange={(e) => setDecisions({ ...decisions, [i.key]: e.target.value as ReimportAction })}>
+                        <option value="replace">Replace</option>
+                        <option value="new">New</option>
+                        <option value="skip">Skip</option>
+                      </select>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          );
+        })}
     </div>
   );
 }

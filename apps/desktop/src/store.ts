@@ -136,6 +136,8 @@ export interface FlowGenerateRequest {
 export interface TidyImportRequest {
   collectionId: string;
   source?: string;
+  /** `import-leftovers`: rewrite the scripts an import marked TODO(import) (the same dialog, another task). */
+  task?: 'tidy-import' | 'import-leftovers';
 }
 
 export type AiAnalysisRequest = { kind: 'triage'; runId: string; title?: string } | { kind: 'flaky'; testId: string; title?: string } | { kind: 'drift'; spec?: string; title?: string };

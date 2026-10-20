@@ -1,0 +1,177 @@
+type: collection.insomnia.rest/5.0
+schema_version: "5.1"
+name: Chat API
+meta:
+  id: wrk_chat
+  created: 1
+  modified: 1
+collection:
+  - name: conversations
+    meta:
+      id: fld_chat_0
+      sortKey: 0
+    authentication:
+      type: bearer
+      token: "{{botToken}}"
+    children:
+      - name: conversations.list
+        url: "{{ _.baseUrl }}/conversations.list"
+        method: GET
+        parameters:
+          - name: limit
+            value: "100"
+          - name: types
+            value: public_channel
+        headers: []
+        scripts:
+          afterResponse: |-
+            insomnia.test("Status code is 200", () => {
+              insomnia.expect(insomnia.response.code).to.eql(200);
+            });
+        meta:
+          id: req_chat_0_0
+          sortKey: 0
+      - name: conversations.history
+        url: "{{ _.baseUrl }}/conversations.history"
+        method: GET
+        parameters:
+          - name: channel
+            value: "{{ _.channel }}"
+          - name: limit
+            value: "20"
+        headers: []
+        meta:
+          id: req_chat_0_1
+          sortKey: 1
+      - name: conversations.join
+        url: "{{ _.baseUrl }}/conversations.join"
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "channel": "{{ _.channel }}"
+            }
+        headers: []
+        meta:
+          id: req_chat_0_2
+          sortKey: 2
+      - name: conversations.create
+        url: "{{ _.baseUrl }}/conversations.create"
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "name": "new-channel",
+              "is_private": false
+            }
+        headers: []
+        meta:
+          id: req_chat_0_3
+          sortKey: 3
+  - name: chat
+    meta:
+      id: fld_chat_1
+      sortKey: 1
+    children:
+      - name: chat.postMessage
+        url: "{{ _.baseUrl }}/chat.postMessage"
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "channel": "{{ _.channel }}",
+              "text": "Hello, world",
+              "unfurl_links": false
+            }
+        headers: []
+        scripts:
+          afterResponse: |-
+            insomnia.test("Status code is 200", () => {
+              insomnia.expect(insomnia.response.code).to.eql(200);
+            });
+        meta:
+          id: req_chat_1_0
+          sortKey: 0
+      - name: chat.update
+        url: "{{ _.baseUrl }}/chat.update"
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "channel": "{{ _.channel }}",
+              "ts": "1405894322.002768",
+              "text": "edited"
+            }
+        headers: []
+        meta:
+          id: req_chat_1_1
+          sortKey: 1
+      - name: chat.delete
+        url: "{{ _.baseUrl }}/chat.delete"
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "channel": "{{ _.channel }}",
+              "ts": "1405894322.002768"
+            }
+        headers: []
+        meta:
+          id: req_chat_1_2
+          sortKey: 2
+  - name: users
+    meta:
+      id: fld_chat_2
+      sortKey: 2
+    children:
+      - name: users.list
+        url: "{{ _.baseUrl }}/users.list"
+        method: GET
+        parameters:
+          - name: limit
+            value: "200"
+        headers: []
+        meta:
+          id: req_chat_2_0
+          sortKey: 0
+      - name: users.info
+        url: "{{ _.baseUrl }}/users.info"
+        method: GET
+        parameters:
+          - name: user
+            value: U0123
+        headers: []
+        meta:
+          id: req_chat_2_1
+          sortKey: 1
+      - name: auth.test
+        url: "{{ _.baseUrl }}/auth.test"
+        method: POST
+        headers: []
+        scripts:
+          afterResponse: |-
+            insomnia.test("Status code is 200", () => {
+              insomnia.expect(insomnia.response.code).to.eql(200);
+            });
+        meta:
+          id: req_chat_2_2
+          sortKey: 2
+environments:
+  name: Base Environment
+  meta:
+    id: env_chat
+  data:
+    baseUrl: https://chat.example.test/api
+  subEnvironments:
+    - name: workspace
+      meta:
+        id: env_chat_workspace
+      data:
+        baseUrl: https://chat.example.test/api
+        botToken: xoxb-test
+        channel: C0123

@@ -3,14 +3,17 @@ import { collectNodeIds, ensureUniqueIds } from '../storage/node-ids.js';
 import type { ArazzoFlowFile } from './arazzo.js';
 import type { ImportScriptsMode, ImportScriptsSummary } from './import-scripts.js';
 import { convertDocumentScripts } from './script-pass.js';
+import { liftDocumentTests } from './lift-pass.js';
 import type { ImportDocument } from './model.js';
 
 /**
  * The part of an import every format shares, after its parser: scripts in `tp.*`, node ids unique (against the
  * workspace's other collections and within the file), findings on their items. Pure: nothing is written.
  */
-export function finishDocument(doc: ImportDocument, opts: { scripts?: ImportScriptsMode; takenIds?: Iterable<string> } = {}): ImportDocument {
+export function finishDocument(doc: ImportDocument, opts: { scripts?: ImportScriptsMode; takenIds?: Iterable<string>; liftTests?: boolean } = {}): ImportDocument {
   convertDocumentScripts(doc, opts.scripts);
+  // simple tests as assertions (counted for the report unless asked for)
+  liftDocumentTests(doc, !!opts.liftTests);
   // a finding that names an item by its name alone gets the item's path when exactly one item has that name
   const paths = new Map<string, string[] | null>();
   const index = (nodes: CollectionNode[], path: string[]) => {
@@ -55,8 +58,13 @@ export interface ImportAnyResult {
   collections?: Collection[];
 }
 
-/** The document as the result `importAny` has always returned. */
-export function legacyResult(doc: ImportDocument): ImportAnyResult {
+/**
+ * The document as the result `importAny` has always returned. Postman's globals file has no environment of its own in the
+ * document (they are workspace globals); the old result, which the runner's `--globals` reads, shows them as one.
+ */
+export function legacyResult(doc: ImportDocument, opts: { globalsAsEnvironment?: boolean } = {}): ImportAnyResult {
+  if (opts.globalsAsEnvironment !== false && doc.globals?.length && !doc.environments.length)
+    doc = { ...doc, environments: [{ id: 'globals', name: 'Globals', variables: doc.globals.map((g) => ({ key: g.key, value: g.value, ...(g.secret ? { secret: true } : {}), enabled: true })) }] };
   const notes = doc.findings.filter((f) => !f.reportOnly).map((f) => f.message);
   return {
     format: doc.format,

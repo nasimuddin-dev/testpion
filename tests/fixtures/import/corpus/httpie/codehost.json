@@ -1,0 +1,235 @@
+{
+  "meta": {
+    "format": "httpie",
+    "version": "1.0.0",
+    "contentType": "collection",
+    "docs": "https://httpie.io/r/export-docs",
+    "source": "HTTPie for Desktop 2025.2.0"
+  },
+  "entry": {
+    "name": "Code Host API",
+    "auth": {
+      "type": "bearer",
+      "credentials": {
+        "token": "{{token}}"
+      }
+    },
+    "requests": [],
+    "collections": [
+      {
+        "name": "Repos",
+        "requests": [
+          {
+            "name": "Get a repository",
+            "method": "GET",
+            "url": "{{baseUrl}}/repos/{{owner}}/{{repo}}",
+            "queryParams": [],
+            "pathParams": [],
+            "headers": [
+              {
+                "name": "Accept",
+                "value": "application/vnd.codehost+json",
+                "enabled": true
+              }
+            ],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {}
+          },
+          {
+            "name": "List repository contributors",
+            "method": "GET",
+            "url": "{{baseUrl}}/repos/{{owner}}/{{repo}}/contributors",
+            "queryParams": [
+              {
+                "name": "per_page",
+                "value": "30",
+                "enabled": true
+              },
+              {
+                "name": "page",
+                "value": "1",
+                "enabled": true
+              }
+            ],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {}
+          },
+          {
+            "name": "List branches",
+            "method": "GET",
+            "url": "{{baseUrl}}/repos/{{owner}}/{{repo}}/branches",
+            "queryParams": [],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {}
+          },
+          {
+            "name": "Create a fork",
+            "method": "POST",
+            "url": "{{baseUrl}}/repos/{{owner}}/{{repo}}/forks",
+            "queryParams": [],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {}
+          },
+          {
+            "name": "Delete a repository",
+            "method": "DELETE",
+            "url": "{{baseUrl}}/repos/{{owner}}/{{repo}}",
+            "queryParams": [],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {}
+          }
+        ]
+      },
+      {
+        "name": "Issues",
+        "requests": [
+          {
+            "name": "List issues",
+            "method": "GET",
+            "url": "{{baseUrl}}/repos/{{owner}}/{{repo}}/issues",
+            "queryParams": [
+              {
+                "name": "state",
+                "value": "open",
+                "enabled": true
+              },
+              {
+                "name": "labels",
+                "value": "bug",
+                "enabled": true
+              }
+            ],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {}
+          },
+          {
+            "name": "Create an issue",
+            "method": "POST",
+            "url": "{{baseUrl}}/repos/{{owner}}/{{repo}}/issues",
+            "queryParams": [],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {
+              "text": {
+                "format": "json",
+                "value": "{\n  \"title\": \"Found a bug\",\n  \"body\": \"I'm having a problem with this.\",\n  \"labels\": [\n    \"bug\"\n  ]\n}"
+              }
+            }
+          },
+          {
+            "name": "Get an issue",
+            "method": "GET",
+            "url": "{{baseUrl}}/repos/{{owner}}/{{repo}}/issues/1347",
+            "queryParams": [],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {}
+          },
+          {
+            "name": "Update an issue",
+            "method": "PATCH",
+            "url": "{{baseUrl}}/repos/{{owner}}/{{repo}}/issues/1347",
+            "queryParams": [],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {
+              "text": {
+                "format": "json",
+                "value": "{\n  \"state\": \"closed\"\n}"
+              }
+            }
+          },
+          {
+            "name": "Lock an issue",
+            "method": "PUT",
+            "url": "{{baseUrl}}/repos/{{owner}}/{{repo}}/issues/1347/lock",
+            "queryParams": [],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {
+              "text": {
+                "format": "json",
+                "value": "{\n  \"lock_reason\": \"resolved\"\n}"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "Users",
+        "requests": [
+          {
+            "name": "Get the authenticated user",
+            "method": "GET",
+            "url": "{{baseUrl}}/user",
+            "queryParams": [],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {}
+          },
+          {
+            "name": "Get a user",
+            "method": "GET",
+            "url": "{{baseUrl}}/users/{{owner}}",
+            "queryParams": [],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {}
+          },
+          {
+            "name": "List followers of a user",
+            "method": "GET",
+            "url": "{{baseUrl}}/users/{{owner}}/followers",
+            "queryParams": [],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {}
+          }
+        ]
+      }
+    ]
+  }
+}

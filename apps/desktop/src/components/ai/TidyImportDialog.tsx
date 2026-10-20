@@ -20,6 +20,7 @@ import { ProposalReview } from './ProposalReview';
 export function TidyImportDialog({ request, onClose }: { request: TidyImportRequest; onClose(): void }) {
   const cols = useCollectionTree();
   const col = cols.find((c) => c.id === request.collectionId);
+  const leftovers = request.task === 'import-leftovers';
   const [flow, setFlow] = useState(false);
   const [hint, setHint] = useState('');
   const [privacy, setPrivacy] = useState<AiPrivacy>(useApp.getState().settings?.ai?.privacy ?? 'full');
@@ -29,9 +30,9 @@ export function TidyImportDialog({ request, onClose }: { request: TidyImportRequ
   const [previewing, setPreviewing] = useState<AssistantRequest>();
   const [estimate, setEstimate] = useState<{ text: string; ok: boolean }>();
   const params = (extra: { hint?: string; privacy?: AiPrivacy } = {}) => ({
-    task: 'tidy-import',
+    task: leftovers ? 'import-leftovers' : 'tidy-import',
     item: { kind: 'collection', collectionId: request.collectionId },
-    context: { options: { flow, ...(request.source ? { source: request.source } : {}) } },
+    context: leftovers ? {} : { options: { flow, ...(request.source ? { source: request.source } : {}) } },
     hint: extra.hint ?? (hint.trim() || undefined),
     privacy: extra.privacy ?? privacy,
   });
@@ -58,7 +59,7 @@ export function TidyImportDialog({ request, onClose }: { request: TidyImportRequ
     setBusy(id);
     setError(undefined);
     try {
-      const r = extra.noAi
+      const r = extra.noAi && !leftovers
         ? await call<{ proposal: Proposal }>('ai.tidyImport', { collectionId: request.collectionId, source: request.source, noAi: true })
         : await call<AiTaskResult>('ai.runTask', { ...params(extra), requestId: id });
       if (runId.current !== id) return;
@@ -113,14 +114,14 @@ export function TidyImportDialog({ request, onClose }: { request: TidyImportRequ
     <Modal
       title={
         <span className="flex items-center gap-2">
-          <Sparkles size={16} /> Tidy this import with AI
+          <Sparkles size={16} /> {leftovers ? 'Fix what the import left with AI' : 'Tidy this import with AI'}
         </span>
       }
       onClose={() => (stop(), onClose())}
       width={640}
       footer={
         <>
-          <Button variant="ghost" icon={<Eye size={13} />} className="mr-auto" disabled={!!busy} onClick={() => setPreviewing({ task: 'tidy-import', title: 'Tidy this import', context: params().context, item: params().item as AssistantRequest['item'], privacy })} data-ai-preview-open>
+          <Button variant="ghost" icon={<Eye size={13} />} className="mr-auto" disabled={!!busy} onClick={() => setPreviewing({ task: leftovers ? 'import-leftovers' : 'tidy-import', title: leftovers ? 'Fix what the import left' : 'Tidy this import', context: params().context, item: params().item as AssistantRequest['item'], privacy })} data-ai-preview-open>
             What will be sent…
           </Button>
           <Button onClick={() => (stop(), onClose())}>Cancel</Button>
@@ -130,7 +131,7 @@ export function TidyImportDialog({ request, onClose }: { request: TidyImportRequ
             </Button>
           ) : (
             <Button variant="primary" icon={<Sparkles size={13} />} onClick={() => void generate()} data-tidy-generate>
-              Tidy
+              {leftovers ? 'Rewrite the scripts' : 'Tidy'}
             </Button>
           )}
         </>
@@ -144,7 +145,7 @@ export function TidyImportDialog({ request, onClose }: { request: TidyImportRequ
         <Field label="Hint (optional)">
           <Input value={hint} onChange={(e) => setHint(e.target.value)} placeholder="e.g. group by resource, keep the login first" aria-label="Hint for the tidy" />
         </Field>
-        <Toggle checked={flow} onChange={setFlow} label="Also write a flow that wires the requests" />
+        {!leftovers && <Toggle checked={flow} onChange={setFlow} label="Also write a flow that wires the requests" />}
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-muted">Sent</span>
           <Segmented label="Privacy level" value={privacy} onChange={(v) => setPrivacy(v as AiPrivacy)} options={PRIVACY_OPTIONS.map((o) => ({ value: o.value, label: o.label, title: o.title }))} />
@@ -152,13 +153,20 @@ export function TidyImportDialog({ request, onClose }: { request: TidyImportRequ
         <div className="text-xs text-muted min-h-5" data-tidy-estimate>
           {estimate ? <span className={estimate.ok ? '' : 'text-warn'}>{estimate.text}</span> : <Spinner size={11} />}
         </div>
+        {leftovers ? (
+          <p className="text-xs text-muted">
+            TestPion finds the scripts the import marked with a // TODO(import) line (a call with no equivalent in TestPion's script API); the model rewrites each one with tp.*. The marked script, the request and its saved response are sent, never header values or tokens. Each rewritten script is checked: it must not use another tool's API, and it
+            is run in the sandbox against the saved response (never against the real API). Nothing changes before you accept, and Undo puts it back.
+          </p>
+        ) : (
         <p className="text-xs text-muted">
           TestPion finds the hosts and tokens typed into requests, tracking, static and duplicate requests, and the ids an earlier saved response returns; the model names the requests, groups them in folders and picks the chains. Request URLs, names and a short
           saved response are sent, never header values or tokens. Every change is checked: the collection stays valid and every request sends exactly what it sent. Nothing changes before you accept, and Undo puts it back.
         </p>
+        )}
         {busy && (
           <div className="flex items-center gap-2 text-muted" role="status">
-            <Spinner /> Tidying and checking the changes…
+            <Spinner /> {leftovers ? 'Rewriting and checking the scripts…' : 'Tidying and checking the changes…'}
           </div>
         )}
         {error && (
@@ -170,9 +178,11 @@ export function TidyImportDialog({ request, onClose }: { request: TidyImportRequ
                   {setup.label}
                 </Button>
               )}
-              <Button size="sm" onClick={() => void generate({ noAi: true })} data-tidy-draft>
-                Use what TestPion finds without AI
-              </Button>
+              {!leftovers && (
+                <Button size="sm" onClick={() => void generate({ noAi: true })} data-tidy-draft>
+                  Use what TestPion finds without AI
+                </Button>
+              )}
             </div>
           </div>
         )}

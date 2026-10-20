@@ -1,0 +1,202 @@
+{
+  "meta": {
+    "format": "httpie",
+    "version": "1.0.0",
+    "contentType": "collection",
+    "docs": "https://httpie.io/r/export-docs",
+    "source": "HTTPie for Desktop 2025.2.0"
+  },
+  "entry": {
+    "name": "Bank API",
+    "auth": {
+      "type": "none"
+    },
+    "requests": [],
+    "collections": [
+      {
+        "name": "Accounts",
+        "requests": [
+          {
+            "name": "List accounts",
+            "method": "GET",
+            "url": "{{baseUrl}}/accounts",
+            "queryParams": [],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {}
+          },
+          {
+            "name": "Get account",
+            "method": "GET",
+            "url": "{{baseUrl}}/accounts/{{accountId}}",
+            "queryParams": [],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {}
+          },
+          {
+            "name": "Get balances",
+            "method": "GET",
+            "url": "{{baseUrl}}/accounts/{{accountId}}/balances",
+            "queryParams": [],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {}
+          },
+          {
+            "name": "Get transactions",
+            "method": "GET",
+            "url": "{{baseUrl}}/accounts/{{accountId}}/transactions",
+            "queryParams": [
+              {
+                "name": "fromBookingDateTime",
+                "value": "2026-01-01T00:00:00Z",
+                "enabled": true
+              },
+              {
+                "name": "limit",
+                "value": "50",
+                "enabled": true
+              }
+            ],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {}
+          },
+          {
+            "name": "List standing orders",
+            "method": "GET",
+            "url": "{{baseUrl}}/accounts/{{accountId}}/standing-orders",
+            "queryParams": [],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {}
+          }
+        ]
+      },
+      {
+        "name": "Payments",
+        "requests": [
+          {
+            "name": "Create a payment consent",
+            "method": "POST",
+            "url": "{{baseUrl}}/domestic-payment-consents",
+            "queryParams": [],
+            "pathParams": [],
+            "headers": [
+              {
+                "name": "x-idempotency-key",
+                "value": "{{$guid}}",
+                "enabled": true
+              },
+              {
+                "name": "x-fapi-financial-id",
+                "value": "{{orgId}}",
+                "enabled": true
+              }
+            ],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {
+              "text": {
+                "format": "json",
+                "value": "{\n  \"Data\": {\n    \"Initiation\": {\n      \"InstructionIdentification\": \"ACME412\",\n      \"InstructedAmount\": {\n        \"Amount\": \"165.88\",\n        \"Currency\": \"GBP\"\n      }\n    }\n  },\n  \"Risk\": {}\n}"
+              }
+            }
+          },
+          {
+            "name": "Get a payment consent",
+            "method": "GET",
+            "url": "{{baseUrl}}/domestic-payment-consents/{{consentId}}",
+            "queryParams": [],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {}
+          },
+          {
+            "name": "Submit a payment",
+            "method": "POST",
+            "url": "{{baseUrl}}/domestic-payments",
+            "queryParams": [],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {
+              "text": {
+                "format": "json",
+                "value": "{\n  \"Data\": {\n    \"ConsentId\": \"{{consentId}}\"\n  },\n  \"Risk\": {}\n}"
+              }
+            }
+          },
+          {
+            "name": "Get a payment",
+            "method": "GET",
+            "url": "{{baseUrl}}/domestic-payments/{{paymentId}}",
+            "queryParams": [],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {}
+          }
+        ]
+      },
+      {
+        "name": "Funds",
+        "requests": [
+          {
+            "name": "Confirm funds",
+            "method": "POST",
+            "url": "{{baseUrl}}/funds-confirmations",
+            "queryParams": [],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {
+              "text": {
+                "format": "json",
+                "value": "{\n  \"Data\": {\n    \"ConsentId\": \"{{consentId}}\",\n    \"Reference\": \"Purchase01\",\n    \"InstructedAmount\": {\n      \"Amount\": \"20.00\",\n      \"Currency\": \"GBP\"\n    }\n  }\n}"
+              }
+            }
+          },
+          {
+            "name": "Get funds consent",
+            "method": "GET",
+            "url": "{{baseUrl}}/funds-confirmation-consents/{{consentId}}",
+            "queryParams": [],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {}
+          }
+        ]
+      }
+    ]
+  }
+}

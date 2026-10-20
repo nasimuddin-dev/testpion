@@ -26,5 +26,6 @@ export * from './response-diff.js';
 export * from './text-diff.js';
 export * from './node-ids.js';
 export * from './import-formats.js';
+export * from './migrate-tools.js';
 export * from './output/index.js';
 export * from './rag-presets.js';

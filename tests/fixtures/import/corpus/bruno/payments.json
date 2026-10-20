@@ -1,0 +1,444 @@
+{
+  "name": "Payments API",
+  "version": "1",
+  "items": [
+    {
+      "type": "folder",
+      "name": "Customers",
+      "seq": 1,
+      "items": [
+        {
+          "type": "http-request",
+          "name": "Create a customer",
+          "seq": 1,
+          "request": {
+            "url": "{{baseUrl}}/customers",
+            "method": "POST",
+            "headers": [],
+            "params": [],
+            "body": {
+              "mode": "formUrlEncoded",
+              "formUrlEncoded": [
+                {
+                  "name": "email",
+                  "value": "jenny@example.test",
+                  "enabled": true
+                },
+                {
+                  "name": "name",
+                  "value": "Jenny Rosen",
+                  "enabled": true
+                }
+              ]
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [
+              {
+                "name": "res.status",
+                "value": "eq 200",
+                "enabled": true
+              }
+            ],
+            "tests": "test(\"Status code is 200\", function () {\n  expect(res.status).to.equal(200);\n});"
+          }
+        },
+        {
+          "type": "http-request",
+          "name": "Retrieve a customer",
+          "seq": 2,
+          "request": {
+            "url": "{{baseUrl}}/customers/cus_123",
+            "method": "GET",
+            "headers": [],
+            "params": [],
+            "body": {
+              "mode": "none"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [
+              {
+                "name": "res.status",
+                "value": "eq 200",
+                "enabled": true
+              }
+            ],
+            "tests": "test(\"Status code is 200\", function () {\n  expect(res.status).to.equal(200);\n});"
+          }
+        },
+        {
+          "type": "http-request",
+          "name": "Update a customer",
+          "seq": 3,
+          "request": {
+            "url": "{{baseUrl}}/customers/cus_123",
+            "method": "POST",
+            "headers": [],
+            "params": [],
+            "body": {
+              "mode": "formUrlEncoded",
+              "formUrlEncoded": [
+                {
+                  "name": "description",
+                  "value": "VIP",
+                  "enabled": true
+                }
+              ]
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [],
+            "tests": ""
+          }
+        },
+        {
+          "type": "http-request",
+          "name": "Delete a customer",
+          "seq": 4,
+          "request": {
+            "url": "{{baseUrl}}/customers/cus_123",
+            "method": "DELETE",
+            "headers": [],
+            "params": [],
+            "body": {
+              "mode": "none"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [],
+            "tests": ""
+          }
+        },
+        {
+          "type": "http-request",
+          "name": "List all customers",
+          "seq": 5,
+          "request": {
+            "url": "{{baseUrl}}/customers?limit=10&starting_after=cus_100",
+            "method": "GET",
+            "headers": [],
+            "params": [
+              {
+                "name": "limit",
+                "value": "10",
+                "type": "query",
+                "enabled": true
+              },
+              {
+                "name": "starting_after",
+                "value": "cus_100",
+                "type": "query",
+                "enabled": true
+              }
+            ],
+            "body": {
+              "mode": "none"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [
+              {
+                "name": "res.status",
+                "value": "eq 200",
+                "enabled": true
+              }
+            ],
+            "tests": "test(\"Status code is 200\", function () {\n  expect(res.status).to.equal(200);\n});"
+          }
+        }
+      ]
+    },
+    {
+      "type": "folder",
+      "name": "Charges",
+      "seq": 2,
+      "items": [
+        {
+          "type": "http-request",
+          "name": "Create a charge",
+          "seq": 1,
+          "request": {
+            "url": "{{baseUrl}}/charges",
+            "method": "POST",
+            "headers": [
+              {
+                "name": "Idempotency-Key",
+                "value": "{{$guid}}",
+                "enabled": true
+              }
+            ],
+            "params": [],
+            "body": {
+              "mode": "formUrlEncoded",
+              "formUrlEncoded": [
+                {
+                  "name": "amount",
+                  "value": "2000",
+                  "enabled": true
+                },
+                {
+                  "name": "currency",
+                  "value": "usd",
+                  "enabled": true
+                },
+                {
+                  "name": "source",
+                  "value": "tok_visa",
+                  "enabled": true
+                }
+              ]
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [
+              {
+                "name": "res.status",
+                "value": "eq 200",
+                "enabled": true
+              }
+            ],
+            "tests": "test(\"Status code is 200\", function () {\n  expect(res.status).to.equal(200);\n});"
+          }
+        },
+        {
+          "type": "http-request",
+          "name": "Retrieve a charge",
+          "seq": 2,
+          "request": {
+            "url": "{{baseUrl}}/charges/ch_123",
+            "method": "GET",
+            "headers": [],
+            "params": [],
+            "body": {
+              "mode": "none"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [],
+            "tests": ""
+          }
+        },
+        {
+          "type": "http-request",
+          "name": "Capture a charge",
+          "seq": 3,
+          "request": {
+            "url": "{{baseUrl}}/charges/ch_123/capture",
+            "method": "POST",
+            "headers": [],
+            "params": [],
+            "body": {
+              "mode": "none"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [],
+            "tests": ""
+          }
+        },
+        {
+          "type": "http-request",
+          "name": "List all charges",
+          "seq": 4,
+          "request": {
+            "url": "{{baseUrl}}/charges?customer=cus_123",
+            "method": "GET",
+            "headers": [],
+            "params": [
+              {
+                "name": "customer",
+                "value": "cus_123",
+                "type": "query",
+                "enabled": true
+              }
+            ],
+            "body": {
+              "mode": "none"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [],
+            "tests": ""
+          }
+        }
+      ]
+    },
+    {
+      "type": "folder",
+      "name": "Refunds",
+      "seq": 3,
+      "items": [
+        {
+          "type": "http-request",
+          "name": "Create a refund",
+          "seq": 1,
+          "request": {
+            "url": "{{baseUrl}}/refunds",
+            "method": "POST",
+            "headers": [],
+            "params": [],
+            "body": {
+              "mode": "formUrlEncoded",
+              "formUrlEncoded": [
+                {
+                  "name": "charge",
+                  "value": "ch_123",
+                  "enabled": true
+                },
+                {
+                  "name": "amount",
+                  "value": "500",
+                  "enabled": true
+                }
+              ]
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [],
+            "tests": ""
+          }
+        },
+        {
+          "type": "http-request",
+          "name": "Retrieve a refund",
+          "seq": 2,
+          "request": {
+            "url": "{{baseUrl}}/refunds/re_123",
+            "method": "GET",
+            "headers": [],
+            "params": [],
+            "body": {
+              "mode": "none"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [],
+            "tests": ""
+          }
+        },
+        {
+          "type": "http-request",
+          "name": "List all refunds",
+          "seq": 3,
+          "request": {
+            "url": "{{baseUrl}}/refunds?charge=ch_123",
+            "method": "GET",
+            "headers": [],
+            "params": [
+              {
+                "name": "charge",
+                "value": "ch_123",
+                "type": "query",
+                "enabled": true
+              }
+            ],
+            "body": {
+              "mode": "none"
+            },
+            "auth": {
+              "mode": "inherit"
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [],
+            "tests": ""
+          }
+        }
+      ]
+    }
+  ],
+  "environments": [
+    {
+      "name": "test",
+      "variables": [
+        {
+          "name": "baseUrl",
+          "value": "https://api.payments.example.test/v1",
+          "enabled": true,
+          "secret": false
+        },
+        {
+          "name": "secretKey",
+          "value": "sk_test_0000",
+          "enabled": true,
+          "secret": false
+        }
+      ]
+    },
+    {
+      "name": "live",
+      "variables": [
+        {
+          "name": "baseUrl",
+          "value": "https://api.payments.example.test/v1",
+          "enabled": true,
+          "secret": false
+        },
+        {
+          "name": "secretKey",
+          "value": "",
+          "enabled": true,
+          "secret": false
+        }
+      ]
+    }
+  ],
+  "root": {
+    "request": {
+      "auth": {
+        "mode": "bearer",
+        "bearer": {
+          "token": "{{secretKey}}"
+        }
+      },
+      "vars": {
+        "req": [
+          {
+            "name": "baseUrl",
+            "value": "https://api.payments.example.test/v1",
+            "enabled": true
+          }
+        ]
+      }
+    }
+  },
+  "brunoConfig": {
+    "version": "1",
+    "name": "Payments API",
+    "type": "collection"
+  }
+}

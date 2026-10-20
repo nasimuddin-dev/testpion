@@ -1,0 +1,376 @@
+{
+  "clientName": "Thunder Client",
+  "collectionName": "Payments API",
+  "collectionId": "c-payments",
+  "dateExported": "2026-03-01T00:00:00.000Z",
+  "version": "1.2",
+  "folders": [
+    {
+      "_id": "f0",
+      "name": "Customers",
+      "containerId": "",
+      "created": "2026-01-01",
+      "sortNum": 10000
+    },
+    {
+      "_id": "f1",
+      "name": "Charges",
+      "containerId": "",
+      "created": "2026-01-01",
+      "sortNum": 20000
+    },
+    {
+      "_id": "f2",
+      "name": "Refunds",
+      "containerId": "",
+      "created": "2026-01-01",
+      "sortNum": 30000
+    }
+  ],
+  "requests": [
+    {
+      "_id": "r1",
+      "colId": "c-payments",
+      "containerId": "f0",
+      "name": "Create a customer",
+      "url": "{{baseUrl}}/customers",
+      "method": "POST",
+      "sortNum": 10000,
+      "headers": [],
+      "params": [],
+      "body": {
+        "type": "formencoded",
+        "raw": "",
+        "form": [
+          {
+            "name": "email",
+            "value": "jenny@example.test"
+          },
+          {
+            "name": "name",
+            "value": "Jenny Rosen"
+          }
+        ]
+      },
+      "auth": {
+        "type": "bearer",
+        "bearer": "{{secretKey}}"
+      },
+      "tests": [
+        {
+          "type": "res-code",
+          "custom": "",
+          "action": "equal",
+          "value": "200"
+        }
+      ]
+    },
+    {
+      "_id": "r2",
+      "colId": "c-payments",
+      "containerId": "f0",
+      "name": "Retrieve a customer",
+      "url": "{{baseUrl}}/customers/cus_123",
+      "method": "GET",
+      "sortNum": 20000,
+      "headers": [],
+      "params": [],
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
+      "auth": {
+        "type": "bearer",
+        "bearer": "{{secretKey}}"
+      },
+      "tests": [
+        {
+          "type": "res-code",
+          "custom": "",
+          "action": "equal",
+          "value": "200"
+        }
+      ]
+    },
+    {
+      "_id": "r3",
+      "colId": "c-payments",
+      "containerId": "f0",
+      "name": "Update a customer",
+      "url": "{{baseUrl}}/customers/cus_123",
+      "method": "POST",
+      "sortNum": 30000,
+      "headers": [],
+      "params": [],
+      "body": {
+        "type": "formencoded",
+        "raw": "",
+        "form": [
+          {
+            "name": "description",
+            "value": "VIP"
+          }
+        ]
+      },
+      "auth": {
+        "type": "bearer",
+        "bearer": "{{secretKey}}"
+      },
+      "tests": []
+    },
+    {
+      "_id": "r4",
+      "colId": "c-payments",
+      "containerId": "f0",
+      "name": "Delete a customer",
+      "url": "{{baseUrl}}/customers/cus_123",
+      "method": "DELETE",
+      "sortNum": 40000,
+      "headers": [],
+      "params": [],
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
+      "auth": {
+        "type": "bearer",
+        "bearer": "{{secretKey}}"
+      },
+      "tests": []
+    },
+    {
+      "_id": "r5",
+      "colId": "c-payments",
+      "containerId": "f0",
+      "name": "List all customers",
+      "url": "{{baseUrl}}/customers",
+      "method": "GET",
+      "sortNum": 50000,
+      "headers": [],
+      "params": [
+        {
+          "name": "limit",
+          "value": "10",
+          "isPath": false
+        },
+        {
+          "name": "starting_after",
+          "value": "cus_100",
+          "isPath": false
+        }
+      ],
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
+      "auth": {
+        "type": "bearer",
+        "bearer": "{{secretKey}}"
+      },
+      "tests": [
+        {
+          "type": "res-code",
+          "custom": "",
+          "action": "equal",
+          "value": "200"
+        }
+      ]
+    },
+    {
+      "_id": "r6",
+      "colId": "c-payments",
+      "containerId": "f1",
+      "name": "Create a charge",
+      "url": "{{baseUrl}}/charges",
+      "method": "POST",
+      "sortNum": 60000,
+      "headers": [
+        {
+          "name": "Idempotency-Key",
+          "value": "{{$guid}}"
+        }
+      ],
+      "params": [],
+      "body": {
+        "type": "formencoded",
+        "raw": "",
+        "form": [
+          {
+            "name": "amount",
+            "value": "2000"
+          },
+          {
+            "name": "currency",
+            "value": "usd"
+          },
+          {
+            "name": "source",
+            "value": "tok_visa"
+          }
+        ]
+      },
+      "auth": {
+        "type": "bearer",
+        "bearer": "{{secretKey}}"
+      },
+      "tests": [
+        {
+          "type": "res-code",
+          "custom": "",
+          "action": "equal",
+          "value": "200"
+        }
+      ]
+    },
+    {
+      "_id": "r7",
+      "colId": "c-payments",
+      "containerId": "f1",
+      "name": "Retrieve a charge",
+      "url": "{{baseUrl}}/charges/ch_123",
+      "method": "GET",
+      "sortNum": 70000,
+      "headers": [],
+      "params": [],
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
+      "auth": {
+        "type": "bearer",
+        "bearer": "{{secretKey}}"
+      },
+      "tests": []
+    },
+    {
+      "_id": "r8",
+      "colId": "c-payments",
+      "containerId": "f1",
+      "name": "Capture a charge",
+      "url": "{{baseUrl}}/charges/ch_123/capture",
+      "method": "POST",
+      "sortNum": 80000,
+      "headers": [],
+      "params": [],
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
+      "auth": {
+        "type": "bearer",
+        "bearer": "{{secretKey}}"
+      },
+      "tests": []
+    },
+    {
+      "_id": "r9",
+      "colId": "c-payments",
+      "containerId": "f1",
+      "name": "List all charges",
+      "url": "{{baseUrl}}/charges",
+      "method": "GET",
+      "sortNum": 90000,
+      "headers": [],
+      "params": [
+        {
+          "name": "customer",
+          "value": "cus_123",
+          "isPath": false
+        }
+      ],
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
+      "auth": {
+        "type": "bearer",
+        "bearer": "{{secretKey}}"
+      },
+      "tests": []
+    },
+    {
+      "_id": "r10",
+      "colId": "c-payments",
+      "containerId": "f2",
+      "name": "Create a refund",
+      "url": "{{baseUrl}}/refunds",
+      "method": "POST",
+      "sortNum": 100000,
+      "headers": [],
+      "params": [],
+      "body": {
+        "type": "formencoded",
+        "raw": "",
+        "form": [
+          {
+            "name": "charge",
+            "value": "ch_123"
+          },
+          {
+            "name": "amount",
+            "value": "500"
+          }
+        ]
+      },
+      "auth": {
+        "type": "bearer",
+        "bearer": "{{secretKey}}"
+      },
+      "tests": []
+    },
+    {
+      "_id": "r11",
+      "colId": "c-payments",
+      "containerId": "f2",
+      "name": "Retrieve a refund",
+      "url": "{{baseUrl}}/refunds/re_123",
+      "method": "GET",
+      "sortNum": 110000,
+      "headers": [],
+      "params": [],
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
+      "auth": {
+        "type": "bearer",
+        "bearer": "{{secretKey}}"
+      },
+      "tests": []
+    },
+    {
+      "_id": "r12",
+      "colId": "c-payments",
+      "containerId": "f2",
+      "name": "List all refunds",
+      "url": "{{baseUrl}}/refunds",
+      "method": "GET",
+      "sortNum": 120000,
+      "headers": [],
+      "params": [
+        {
+          "name": "charge",
+          "value": "ch_123",
+          "isPath": false
+        }
+      ],
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
+      "auth": {
+        "type": "bearer",
+        "bearer": "{{secretKey}}"
+      },
+      "tests": []
+    }
+  ]
+}

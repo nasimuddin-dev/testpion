@@ -1,0 +1,271 @@
+{
+  "meta": {
+    "format": "httpie",
+    "version": "1.0.0",
+    "contentType": "collection",
+    "docs": "https://httpie.io/r/export-docs",
+    "source": "HTTPie for Desktop 2025.2.0"
+  },
+  "entry": {
+    "name": "Pet Store",
+    "auth": {
+      "type": "api-key",
+      "credentials": {
+        "name": "api_key",
+        "value": "{{apiKey}}",
+        "in": "header"
+      }
+    },
+    "requests": [],
+    "collections": [
+      {
+        "name": "pet",
+        "requests": [
+          {
+            "name": "Add a new pet",
+            "method": "POST",
+            "url": "{{baseUrl}}/pet",
+            "queryParams": [],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {
+              "text": {
+                "format": "json",
+                "value": "{\n  \"id\": 0,\n  \"name\": \"doggie\",\n  \"status\": \"available\",\n  \"tags\": [\n    {\n      \"name\": \"good\"\n    }\n  ]\n}"
+              }
+            }
+          },
+          {
+            "name": "Update an existing pet",
+            "method": "PUT",
+            "url": "{{baseUrl}}/pet",
+            "queryParams": [],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {
+              "text": {
+                "format": "json",
+                "value": "{\n  \"id\": 1,\n  \"name\": \"doggie\",\n  \"status\": \"sold\"\n}"
+              }
+            }
+          },
+          {
+            "name": "Find pets by status",
+            "method": "GET",
+            "url": "{{baseUrl}}/pet/findByStatus",
+            "queryParams": [
+              {
+                "name": "status",
+                "value": "available",
+                "enabled": true
+              }
+            ],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {}
+          },
+          {
+            "name": "Find pet by ID",
+            "method": "GET",
+            "url": "{{baseUrl}}/pet/1",
+            "queryParams": [],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {}
+          },
+          {
+            "name": "Delete a pet",
+            "method": "DELETE",
+            "url": "{{baseUrl}}/pet/1",
+            "queryParams": [],
+            "pathParams": [],
+            "headers": [
+              {
+                "name": "api_key",
+                "value": "{{apiKey}}",
+                "enabled": true
+              }
+            ],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {}
+          },
+          {
+            "name": "Upload an image",
+            "method": "POST",
+            "url": "{{baseUrl}}/pet/1/uploadImage",
+            "queryParams": [],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {
+              "form": {
+                "isMultipart": true,
+                "fields": [
+                  {
+                    "name": "additionalMetadata",
+                    "value": "cute",
+                    "enabled": true
+                  },
+                  {
+                    "name": "file",
+                    "type": "file",
+                    "values": [
+                      {
+                        "name": "dog.png",
+                        "path": "dog.png"
+                      }
+                    ],
+                    "enabled": true
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "store",
+        "requests": [
+          {
+            "name": "Returns pet inventories by status",
+            "method": "GET",
+            "url": "{{baseUrl}}/store/inventory",
+            "queryParams": [],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {}
+          },
+          {
+            "name": "Place an order for a pet",
+            "method": "POST",
+            "url": "{{baseUrl}}/store/order",
+            "queryParams": [],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {
+              "text": {
+                "format": "json",
+                "value": "{\n  \"petId\": 1,\n  \"quantity\": 1,\n  \"status\": \"placed\"\n}"
+              }
+            }
+          },
+          {
+            "name": "Find purchase order by ID",
+            "method": "GET",
+            "url": "{{baseUrl}}/store/order/1",
+            "queryParams": [],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {}
+          },
+          {
+            "name": "Delete purchase order by ID",
+            "method": "DELETE",
+            "url": "{{baseUrl}}/store/order/1",
+            "queryParams": [],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {}
+          }
+        ]
+      },
+      {
+        "name": "user",
+        "requests": [
+          {
+            "name": "Create user",
+            "method": "POST",
+            "url": "{{baseUrl}}/user",
+            "queryParams": [],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {
+              "text": {
+                "format": "json",
+                "value": "{\n  \"username\": \"theUser\",\n  \"email\": \"john@example.test\"\n}"
+              }
+            }
+          },
+          {
+            "name": "Logs user into the system",
+            "method": "GET",
+            "url": "{{baseUrl}}/user/login",
+            "queryParams": [
+              {
+                "name": "username",
+                "value": "theUser",
+                "enabled": true
+              },
+              {
+                "name": "password",
+                "value": "{{password}}",
+                "enabled": true
+              }
+            ],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {}
+          },
+          {
+            "name": "Get user by user name",
+            "method": "GET",
+            "url": "{{baseUrl}}/user/theUser",
+            "queryParams": [],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {}
+          },
+          {
+            "name": "Logs out current logged in user session",
+            "method": "GET",
+            "url": "{{baseUrl}}/user/logout",
+            "queryParams": [],
+            "pathParams": [],
+            "headers": [],
+            "auth": {
+              "type": "inherit"
+            },
+            "body": {}
+          }
+        ]
+      }
+    ]
+  }
+}

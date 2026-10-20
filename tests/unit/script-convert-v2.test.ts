@@ -11,8 +11,15 @@ import { BRUNO_HEADER } from '../../packages/core/src/import/bruno-import.js';
 // read the diff), every conversion idempotent, and, for what can run offline, the same behaviour before and after.
 
 const DIR = join(__dirname, '..', 'fixtures', 'import', 'scripts');
-const sources = JSON.parse(readFileSync(join(DIR, 'sources.json'), 'utf8')) as Record<ScriptTool, Array<{ name: string; source: string }>>;
+type Sources = Record<ScriptTool, Array<{ name: string; source: string }>>;
+// two halves of the corpus: the first (sources.json / expected.json) and the one added with the other tools (sources-more.json /
+// expected-more.json: Thunder Client and Hoppscotch, and more of every tool's snippets)
+const first = JSON.parse(readFileSync(join(DIR, 'sources.json'), 'utf8')) as Partial<Sources>;
+const more = JSON.parse(readFileSync(join(DIR, 'sources-more.json'), 'utf8')) as Partial<Sources>;
+const sources = Object.fromEntries((['postman', 'insomnia', 'bruno', 'thunder', 'hoppscotch'] as ScriptTool[]).map((t) => [t, [...(first[t] ?? []), ...(more[t] ?? [])]])) as Sources;
+const firstNames = new Set(Object.entries(first).flatMap(([t, l]) => (l ?? []).map((c) => `${t}/${c.name}`)));
 const expectedFile = join(DIR, 'expected.json');
+const expectedMoreFile = join(DIR, 'expected-more.json');
 type Expected = Record<string, { code: string; status: string; changes: number; apis: string[] }>;
 const results: Expected = {};
 for (const [tool, list] of Object.entries(sources))
@@ -20,8 +27,11 @@ for (const [tool, list] of Object.entries(sources))
     const r = convertScript(c.source, tool as ScriptTool);
     results[`${tool}/${c.name}`] = { code: r.code, status: r.status, changes: r.changes, apis: r.findings.map((f) => f.api).filter(Boolean) };
   }
-if (process.env.UPDATE_GOLDEN) writeFileSync(expectedFile, JSON.stringify(results, null, 2) + '\n');
-const expected = JSON.parse(readFileSync(expectedFile, 'utf8')) as Expected;
+if (process.env.UPDATE_GOLDEN) {
+  writeFileSync(expectedFile, JSON.stringify(Object.fromEntries(Object.entries(results).filter(([k]) => firstNames.has(k))), null, 2) + '\n');
+  writeFileSync(expectedMoreFile, JSON.stringify(Object.fromEntries(Object.entries(results).filter(([k]) => !firstNames.has(k))), null, 2) + '\n');
+}
+const expected = { ...(JSON.parse(readFileSync(expectedFile, 'utf8')) as Expected), ...(JSON.parse(readFileSync(expectedMoreFile, 'utf8')) as Expected) };
 
 describe('the script corpus', () => {
   for (const [key, want] of Object.entries(expected)) {
@@ -31,7 +41,9 @@ describe('the script corpus', () => {
   }
   it('has an expectation for every snippet and the other way round', () => {
     expect(Object.keys(expected).sort()).toEqual(Object.keys(results).sort());
-    expect(Object.keys(results).length).toBeGreaterThanOrEqual(50);
+    // the corpus: snippets from the tools' documentation and real collections (>= 200, five script APIs)
+    expect(Object.keys(results).length).toBeGreaterThanOrEqual(200);
+    for (const t of Object.keys(sources)) expect(sources[t as ScriptTool].length, t).toBeGreaterThanOrEqual(15);
   });
 });
 
@@ -46,9 +58,47 @@ describe('every conversion is idempotent', () => {
       });
 });
 
+// What Thunder Client's `tc` and Hoppscotch's `pw` / `hopp` do, written over the sandbox's pm (the semantics the converter assumes), so
+// the original of a snippet can run here and be compared with its conversion.
+const TC_SHIM = `
+var __lc = function (l) { var o = {}; l.each(function (h) { o[String(h.key).toLowerCase()] = h.value; }); return o; };
+var tc = {
+  setVar: function (k, v, s) { return s === 'global' ? pm.globals.set(k, v) : pm.environment.set(k, v); },
+  getVar: function (k, s) { return s === 'global' ? pm.globals.get(k) : pm.environment.get(k); },
+  test: function (n, f) { return pm.test(n, f); },
+  loadModule: function (n) { return require(n); },
+  response: { get status() { return pm.response.code; }, get json() { return pm.response.json(); }, get text() { return pm.response.text(); }, get headers() { return __lc(pm.response.headers); }, get time() { return pm.response.responseTime; }, get size() { return pm.response.size().total; } },
+  request: { get url() { return pm.request.url.toString(); }, get method() { return pm.request.method; } },
+};
+var expect = pm.expect;
+`;
+const PW_SHIM = `
+var __m = function (x, neg) {
+  var c = function () { return neg ? pm.expect(x).not : pm.expect(x); };
+  return {
+    get not() { return __m(x, !neg); },
+    toBe: function (v) { return c().to.equal(v); }, toEqual: function (v) { return c().to.eql(v); },
+    toBeLevel2xx: function () { return c().to.be.within(200, 299); }, toBeLevel4xx: function () { return c().to.be.within(400, 499); },
+    toBeType: function (t) { return c().to.be.a(t); }, toHaveLength: function (n) { return c().to.have.lengthOf(n); }, toInclude: function (v) { return c().to.include(v); },
+    toBeTruthy: function () { return c().to.be.ok; }, toBeLessThan: function (v) { return c().to.be.below(v); }, toBeGreaterThan: function (v) { return c().to.be.above(v); },
+  };
+};
+var pw = {
+  test: function (n, f) { return pm.test(n, f); }, expect: function (x) { return __m(x, false); },
+  env: { get: function (k) { return pm.environment.get(k); }, set: function (k, v) { return pm.environment.set(k, v); }, unset: function (k) { return pm.environment.unset(k); }, resolve: function (s) { return pm.variables.replaceIn(s); }, getResolve: function (k) { return pm.variables.replaceIn('{{' + k + '}}'); } },
+  response: { get status() { return pm.response.code; }, get body() { return pm.response.json(); }, get headers() { return pm.response.headers.all(); }, get responseTime() { return pm.response.responseTime; } },
+};
+var hopp = {
+  test: pw.test, expect: pw.expect,
+  env: { active: { get: pw.env.get, set: pw.env.set, unset: pw.env.unset }, global: { get: function (k) { return pm.globals.get(k); }, set: function (k, v) { return pm.globals.set(k, v); } } },
+  response: { get statusCode() { return pm.response.code; }, asJSON: function () { return pm.response.json(); }, asText: function () { return pm.response.text(); } },
+};
+`;
+const SHIMS: Partial<Record<ScriptTool, string>> = { thunder: TC_SHIM, hoppscotch: PW_SHIM };
+
 describe('the converted script does what the original did', () => {
   // only what runs offline: no tp.sendRequest, no script that does not parse, no API TestPion lacks
-  const skip = new Set(['legacy response helpers', 'sendRequest with callback', 'async await', 'does not parse', 'Postman API without equivalent', 'sendRequest has no equivalent', 'cookies have no equivalent', 'parent folders', 'request auth update', 'sleep stays', 'local insomnia variable']);
+  const skip = new Set(['legacy response helpers', 'sendRequest with callback', 'async await', 'does not parse', 'Postman API without equivalent', 'sendRequest has no equivalent', 'cookies have no equivalent', 'parent folders', 'request auth update', 'sleep stays', 'local insomnia variable', 'cookies jar', 'send request promise', 'send request callback', 'vault read', 'state across runs', 'run request', 'hopp fetch (no equivalent)', 'dataset sql (no equivalent)', 'mock matching (no equivalent)', 'syntax error kept', 'parent folders (no equivalent)', 'request auth update (no equivalent)', 'auth mode (no equivalent)', 'set body (no equivalent response)', 'visualizer table', 'cheerio html', 'own tc', 'own pw', 'set max redirects (lifted)']);
   const input = {
     variables: { token: 't-1', v: '2', host: 'https://h.test', a: '1', b: '2', c: '3', s: 'sec', API_KEY: 'k' },
     request: { method: 'GET', url: 'https://h.test/x', headers: [{ key: 'X-Req', value: '1' }] as Array<{ key: string; value: string }> },
@@ -60,7 +110,7 @@ describe('the converted script does what the original did', () => {
     for (const c of list.filter((x) => !skip.has(x.name))) {
       it(`${tool}/${c.name}`, async () => {
         // (Insomnia's API is Postman's: its original is the same script on pm.*; the old status text of responseCode.name was empty)
-        const original = tool === 'insomnia' ? convertScript(c.source, 'insomnia', { alias: 'pm' }).code : c.source;
+        const original = (SHIMS[tool as ScriptTool] ?? '') + (tool === 'insomnia' ? convertScript(c.source, 'insomnia', { alias: 'pm' }).code : c.source);
         // (an imported Bruno script starts with the marker line that loads the req / res shim)
         const head = tool === 'bruno' ? BRUNO_HEADER + '\n' : '';
         const before = await runScript(head + original, input);
@@ -76,10 +126,10 @@ describe('the coverage tables', () => {
     for (const to of [...Object.values(BRU_TO_TP), ...Object.values(POSTMAN_LEGACY_CALLS)]) expect(to).toMatch(/^tp\./);
   });
   it('brunoToTp (the old entry) is the converter: its table, warnings and idempotence', () => {
-    const src = 'bru.getEnvName(); bru.hasVar("a"); bru.deleteVar("a"); bru.cookies.jar();';
+    const src = 'bru.getEnvName(); bru.hasVar("a"); bru.deleteVar("a"); bru.cookies.jar(); res.setBody(1);';
     const once = brunoToTp(src);
-    expect(once.code.split('\n').at(-1)).toBe('tp.environment.name; tp.variables.has("a"); tp.collectionVariables.unset("a"); bru.cookies.jar();');
-    expect(once.warnings).toEqual(['bru.cookies']);
+    expect(once.code.split('\n').at(-1)).toBe('tp.environment.name; tp.variables.has("a"); tp.collectionVariables.unset("a"); tp.cookies.jar(); res.setBody(1);');
+    expect(once.warnings).toEqual(['res.setBody']);
     expect(brunoToTp(once.code).code).toBe(once.code);
   });
   it('an Insomnia script can be converted to pm.* (kept for Postman) or tp.*', () => {
@@ -114,10 +164,12 @@ describe('scope and syntax edge cases', () => {
     expect(r.reason).toMatch(/does not parse \(line 1, column/);
   });
   it('leaves TODO markers once, above the line, with its indentation', () => {
-    const src = 'if (x) {\n  bru.cookies.jar(); bru.sendRequest({});\n}';
+    const src = 'if (x) {\n  res.setBody({}); req.getTimeout();\n}';
     const r = convertScript(src, 'bruno');
-    expect(r.code).toBe("if (x) {\n  // TODO(import): bru.cookies, bru.sendRequest has no TestPion equivalent yet: rewrite this line with TestPion's script API (sendRequest, cookies …)\n  bru.cookies.jar(); bru.sendRequest({});\n}");
-    expect(r.findings.map((f) => f.api)).toEqual(['bru.cookies', 'bru.sendRequest']);
+    expect(r.code).toBe("if (x) {\n  // TODO(import): res.setBody, req.getTimeout has no TestPion equivalent yet: rewrite this line with TestPion's script API (sendRequest, cookies …)\n  res.setBody({}); req.getTimeout();\n}");
+    expect(r.findings.map((f) => f.api)).toEqual(['res.setBody', 'req.getTimeout']);
+    // and a second conversion leaves the marker alone
+    expect(convertScript(r.code, 'bruno').code).toBe(r.code);
   });
   it('a long script converts quickly', () => {
     const big = Array.from({ length: 3000 }, (_, i) => `pm.test("t${i}", function () { pm.expect(pm.response.code).to.equal(200); });`).join('\n');

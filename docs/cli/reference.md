@@ -72,7 +72,7 @@ testpion flow from-har <file.har> -w   Recorded traffic as a flow file: values t
 testpion flow report <file> -w   A run of a flow as a timeline with its critical path (--run <id>, --html out.html, --json)
 testpion flows -w             The flows exposed as MCP tools (test files and suites with an expose: block): tool, file, inputs (--json)
 testpion serve flows -w       Run flows behind their webhooks (webhook: blocks): POST JSON to the path, get the flow's output (--port 4020, --host, -e env, --jsonl)
-testpion scripts convert --to tp|pm -w   Rewrite collection scripts between Postman's pm.* and TestPion's tp.* (--dry-run)
+testpion scripts convert --to tp|pm -w   Rewrite collection scripts between Postman's pm.* and TestPion's tp.*, or --from bruno|insomnia|thunder|hoppscotch to tp.* (--file for one script, --lift-tests, --dry-run)
 testpion wait-for <url>       Wait until a URL answers (the health check before integration tests); exit 3 when it never does
 testpion trash list|restore|empty -w  Recently deleted collections, environments, datasets, API definitions and MCP servers (30 days)
 testpion history list|stats|diff|test|export-har -w  Response history of saved requests; response times; compare two responses; a test across runs; HAR export
@@ -641,7 +641,7 @@ testpion export-environment Staging -o staging.postman_environment.json
 | Option | Description |
 |---|---|
 | `-w, --workspace` | Workspace name or directory (default: nearest `workspace.json`). |
-| `-f, --format` | `postman` (default) or `testpion` (`export` only). |
+| `-f, --format` | `postman` (default), `testpion`, `openapi`, `bruno`, `http`, `asyncapi`, `insomnia` (v5 YAML), `insomnia-v4` (JSON), `opencollection` (Bruno's YAML folder; `--out <folder>`) or `opencollection-file` (`export` only). The workspace's environments go with Insomnia and OpenCollection (secret values never). |
 | `-o, --out <file>` | Write to a file instead of standard output. |
 
 Parts that Postman can't represent are listed on standard error as `not exported: …`. Secret environment values are never written.
@@ -748,6 +748,9 @@ testpion import adopt-pet.arazzo.yaml -w my-workspace --json   # Arazzo: one flo
 | `--list` | The bundle imports that can be undone. |
 | `--max-size <mb>` | A bundle: refuse a larger file. |
 | `--keep-pm` | For a Postman or Insomnia file: keep `pm.*` in scripts. By default they are converted to TestPion's `tp.*` and the output says `Converted N scripts to tp.* (--keep-pm keeps pm.*)`; for other tools (Bruno's `bru.*` …) it says only `Converted N scripts to tp.*`, since `--keep-pm` changes nothing there (`pm.*` runs either way; `testpion export -f postman` turns `tp.*` back into `pm.*`). |
+| `--lift-tests` | Turn simple tests (a status, a response time, a header, a JSON field, a body text) of the scripts into assertions. The preview says how many can be. |
+| `--new-copy` | A source imported before updates the collection it made (item by item: replace what changed in the source, add what is new, leave what you edited), and so does this command by default; `--new-copy` adds a second collection instead. |
+| `--update-decisions <file>` | An update: a JSON file of `"<item key>": "replace" \| "new" \| "skip"` (the keys `--preview` prints) overriding what the update would do for single items. |
 | `--fetch-sources` | For an Arazzo document: download the OpenAPI source descriptions given as http(s) links. By default they are looked up next to the Arazzo file and in the workspace (`specs/`); an `operationId` whose document is not found becomes a skipped step to fill in. |
 | `--preview` | Say what importing would create and what would not come over (the compatibility report), and write nothing. For a bundle: what importing would do per item. With `--json`: `{ preview: true, inputs: [{ input, plan }], skipped, totals }`. |
 | `--apply` | Import several files, a folder or a ZIP (they are previewed by default); one plain file is imported at once. |
@@ -939,6 +942,16 @@ testpion scripts convert --to tp -w my-workspace --collection "Checkout API"
 ```
 
 Rewrites collection, folder and request scripts written for Postman to TestPion's `tp.*` (or back to Postman's name with `--to pm`). Both names always run in TestPion; only code changes, not strings or comments, and scripts that declare their own `tp` are skipped and listed.
+
+From another tool's script API:
+
+```bash
+testpion scripts convert --from bruno -w my-workspace --collection "Checkout" --lift-tests    # bru.*, req, res → tp.*; simple tests → assertions
+testpion scripts convert --from thunder --file legacy.js --json                               # one script: the converted code, the findings
+testpion scripts convert --from hoppscotch --file pre.js --report findings.json
+```
+
+`--from postman|insomnia|bruno|thunder|hoppscotch` converts to `tp.*` by the script's syntax tree (strings, comments and formatting are kept, a variable of your own named like the tool's object is left alone). A call with no equivalent gets a `// TODO(import)` line and a finding (`--report file` writes them); `--file` converts one script file (`-` reads standard input) and prints the result. `req.setTimeout(ms)` with a number moves to the request's settings when it is a collection that is converted by an import. [The tables](/migrate/) list every mapping.
 
 ## `kinds`
 

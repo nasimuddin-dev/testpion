@@ -10,6 +10,9 @@ import {
   fetchImportText,
   fetchPostmanInputs,
   parsePostmanRef,
+  parseRepoLink,
+  fetchRepoFiles,
+  type ReimportAction,
   readImportPath,
   readImportReport,
   listImportReceipts,
@@ -60,6 +63,15 @@ function printPlan(label: string, p: ImportPlan): void {
   ];
   console.log(bold(label) + dim(`  ${p.tool ?? p.format}`));
   for (const w of what) console.log(`  creates ${w}`);
+  if (p.globals) console.log(`  sets ${plural(p.globals, 'global variable')}`);
+  if (p.cookies) console.log(`  adds ${plural(p.cookies, 'cookie')} to the cookie jar`);
+  // a source imported before: the import updates that collection item by item
+  for (const rp of p.reimport ?? []) {
+    const c = rp.counts;
+    console.log(`  UPDATES collection "${rp.collectionName}" (imported from this source before): ${c.replace} to replace, ${c.new} new, ${c.skip} to skip${c.conflicts ? `, ${plural(c.conflicts, 'conflict')} (edited here too: skipped unless --update-decisions says replace)` : ''}`);
+    for (const i of [rp.root, ...rp.items].filter((x) => x.action !== 'skip' || x.conflict).slice(0, 12)) console.log(dim(`    ${i.action.padEnd(7)} ${i.path.length ? i.path.join(' / ') : '(collection settings)'}  ${i.reason}  [${i.key}]`));
+    if (rp.gone.length) console.log(dim(`    ${plural(rp.gone.length, 'item')} no longer in the source (kept)`));
+  }
   printReport(p.report);
 }
 
@@ -113,6 +125,9 @@ export function registerImportCommands(program: Command): void {
     .option('--no-contract-checks', 'for an OpenAPI document: do not add openapi contract checks to the requests')
     .option('--replace-spec', 'for an OpenAPI / AsyncAPI document: replace a different document of the same name in specs/ (it goes to the trash; default: keep both, the new one as name-2)')
     .option('--keep-pm', "for Postman / Insomnia: keep pm.* in scripts (default: they are converted to TestPion's tp.*; pm.* runs either way)")
+    .option('--lift-tests', 'turn simple tests (a status, a response time, a header, a JSON field) of the scripts into assertions')
+    .option('--new-copy', 'when the source was imported before, add another collection instead of updating the one it made')
+    .option('--update-decisions <file>', 'an update: a JSON file of "<item key>": "replace" | "new" | "skip" (the keys the preview prints) to override what the update would do')
     .option('--fetch-sources', 'for Arazzo: download OpenAPI source descriptions given as http(s) URLs (default: only files next to the Arazzo file or in the workspace, e.g. specs/)')
     .option('--postman-api-key <key>', 'a Postman API key for postman:… ids and links (or the POSTMAN_API_KEY variable); sent only to api.getpostman.com')
     .option('--json', 'print the result as JSON (for scripts and AI agents)')
@@ -129,6 +144,16 @@ export function registerImportCommands(program: Command): void {
         const fileOf = new Map<ImportInput, string>();
         const apiKey = o.postmanApiKey ?? process.env.POSTMAN_API_KEY;
         for (const arg of inputsArg) {
+          // a GitHub / GitLab repository or folder (public only: no credential is sent)
+          const repo = /^https:\/\//i.test(arg) ? parseRepoLink(arg) : undefined;
+          if (repo) {
+            const fetched = await fetchRepoFiles(repo);
+            const expanded = expandImportFiles(fetched.files, { folderName: fetched.folderName });
+            inputs.push(...expanded.inputs);
+            skipped.push(...fetched.skipped, ...expanded.skipped);
+            container = true;
+            continue;
+          }
           if (/^https?:\/\//i.test(arg) || /^postman:/i.test(arg)) {
             const ref = parsePostmanRef(arg);
             if (ref) {
@@ -183,7 +208,7 @@ export function registerImportCommands(program: Command): void {
         // ---- preview (asked for, or by default for several files, a folder or a ZIP)
         const many = inputs.length > 1 || container;
         if (o.preview || (many && !o.apply)) {
-          const plan: ImportManyPlan = planInputs(store, inputs, skipped, { scripts });
+          const plan: ImportManyPlan = planInputs(store, inputs, skipped, { scripts, liftTests: !!o.liftTests });
           if (o.report) reportFile(o.report, plan.inputs.flatMap((p) => ('plan' in p ? [{ source: p.input.source, report: p.plan.report }] : [])));
           if (o.json) printJson({ preview: true, ...plan, applyWith: many && !o.preview ? 'testpion import … --apply' : undefined });
           else {
@@ -211,9 +236,21 @@ export function registerImportCommands(program: Command): void {
         };
         const arazzo = new Map<ImportInput, Awaited<ReturnType<typeof arazzoFor>>>();
         for (const i of inputs) arazzo.set(i, await arazzoFor(i));
+        let decisions: Record<string, ReimportAction> | undefined;
+        if (o.updateDecisions) {
+          if (!existsSync(o.updateDecisions)) throw new CliError(`${o.updateDecisions} does not exist`, EXIT.CONFIG_ERROR);
+          try {
+            decisions = JSON.parse(readFileSync(o.updateDecisions, 'utf8'));
+          } catch {
+            throw new CliError(`${o.updateDecisions} is not valid JSON`, EXIT.CONFIG_ERROR);
+          }
+        }
         const { imported, receipts } = importInputs(store, inputs, {
           contractChecks: o.contractChecks !== false,
           scripts,
+          liftTests: !!o.liftTests,
+          // a source imported before updates the collection it made (item by item), unless --new-copy
+          update: o.newCopy ? false : decisions ? { decisions } : true,
           specs: o.replaceSpec ? 'replace' : 'keep-both',
           envName: (i) => dotenvName(i.source) ?? httpFileName(i.source) ?? i.name,
           arazzo: (i) => arazzo.get(i),
@@ -227,6 +264,9 @@ export function registerImportCommands(program: Command): void {
           environment: r.environment?.name,
           environments: r.environments?.map((e) => e.name),
           flows: r.flows,
+          updated: r.updated,
+          globals: r.globals,
+          cookies: r.cookies,
           secretsToSet: r.secretsToSet,
           specPath: r.specPath,
           specKeptBoth: r.specKeptBoth,
@@ -307,6 +347,7 @@ export function registerImportCommands(program: Command): void {
 
 /** What an import did, in the lines a person reads. */
 function printImported(r: WorkspaceImportResult, label?: string): void {
+  for (const u of r.updated ?? []) console.log(green(`${label ? `${label}: ` : ''}Updated collection "${u.name}": ${u.applied.replaced} replaced, ${u.applied.added} added, ${u.applied.skipped} left as they are`));
   console.log(green(`${label ? `${label}: ` : ''}Imported ${r.format}: ${r.collection ? `collection "${r.collection.name}"` : ''}${r.collections && r.collections.length > 1 ? ` and ${r.collections.length - 1} more` : ''}${r.environments?.length ? ` ${r.environments.length > 1 ? 'environments' : 'environment'} ${r.environments.map((e) => `"${e.name}"`).join(', ')}` : ''}${r.flows?.length ? `${r.flows.length} flow${r.flows.length > 1 ? 's' : ''}` : ''}`));
   for (const f of r.flows ?? []) console.log(dim(`  ${f.path}  (workflow ${f.workflowId}, ${f.steps} steps; testpion flow ${f.path.replace(/^tests\//, '')} shows it)`));
   if (r.specPath) console.log(dim(`Kept the document as ${r.specPath}${r.contractChecks ? `; ${r.contractChecks} requests check the OpenAPI contract` : ''}`));

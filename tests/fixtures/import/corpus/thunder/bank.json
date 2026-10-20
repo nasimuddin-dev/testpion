@@ -1,0 +1,370 @@
+{
+  "clientName": "Thunder Client",
+  "collectionName": "Bank API",
+  "collectionId": "c-bank",
+  "dateExported": "2026-03-01T00:00:00.000Z",
+  "version": "1.2",
+  "folders": [
+    {
+      "_id": "f0",
+      "name": "Accounts",
+      "containerId": "",
+      "created": "2026-01-01",
+      "sortNum": 10000
+    },
+    {
+      "_id": "f1",
+      "name": "Payments",
+      "containerId": "",
+      "created": "2026-01-01",
+      "sortNum": 20000
+    },
+    {
+      "_id": "f2",
+      "name": "Funds",
+      "containerId": "",
+      "created": "2026-01-01",
+      "sortNum": 30000
+    }
+  ],
+  "requests": [
+    {
+      "_id": "r1",
+      "colId": "c-bank",
+      "containerId": "f0",
+      "name": "List accounts",
+      "url": "{{baseUrl}}/accounts",
+      "method": "GET",
+      "sortNum": 10000,
+      "headers": [],
+      "params": [],
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
+      "auth": {
+        "type": "oauth2",
+        "oauth2": {
+          "grantType": "client_credentials",
+          "accessTokenUrl": "https://auth.bank.example.test/oauth/token",
+          "clientId": "{{clientId}}",
+          "clientSecret": "{{clientSecret}}",
+          "scope": "accounts payments"
+        }
+      },
+      "tests": [
+        {
+          "type": "res-code",
+          "custom": "",
+          "action": "equal",
+          "value": "200"
+        }
+      ]
+    },
+    {
+      "_id": "r2",
+      "colId": "c-bank",
+      "containerId": "f0",
+      "name": "Get account",
+      "url": "{{baseUrl}}/accounts/{{accountId}}",
+      "method": "GET",
+      "sortNum": 20000,
+      "headers": [],
+      "params": [],
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
+      "auth": {
+        "type": "oauth2",
+        "oauth2": {
+          "grantType": "client_credentials",
+          "accessTokenUrl": "https://auth.bank.example.test/oauth/token",
+          "clientId": "{{clientId}}",
+          "clientSecret": "{{clientSecret}}",
+          "scope": "accounts payments"
+        }
+      },
+      "tests": []
+    },
+    {
+      "_id": "r3",
+      "colId": "c-bank",
+      "containerId": "f0",
+      "name": "Get balances",
+      "url": "{{baseUrl}}/accounts/{{accountId}}/balances",
+      "method": "GET",
+      "sortNum": 30000,
+      "headers": [],
+      "params": [],
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
+      "auth": {
+        "type": "oauth2",
+        "oauth2": {
+          "grantType": "client_credentials",
+          "accessTokenUrl": "https://auth.bank.example.test/oauth/token",
+          "clientId": "{{clientId}}",
+          "clientSecret": "{{clientSecret}}",
+          "scope": "accounts payments"
+        }
+      },
+      "tests": [
+        {
+          "type": "res-code",
+          "custom": "",
+          "action": "equal",
+          "value": "200"
+        }
+      ]
+    },
+    {
+      "_id": "r4",
+      "colId": "c-bank",
+      "containerId": "f0",
+      "name": "Get transactions",
+      "url": "{{baseUrl}}/accounts/{{accountId}}/transactions",
+      "method": "GET",
+      "sortNum": 40000,
+      "headers": [],
+      "params": [
+        {
+          "name": "fromBookingDateTime",
+          "value": "2026-01-01T00:00:00Z",
+          "isPath": false
+        },
+        {
+          "name": "limit",
+          "value": "50",
+          "isPath": false
+        }
+      ],
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
+      "auth": {
+        "type": "oauth2",
+        "oauth2": {
+          "grantType": "client_credentials",
+          "accessTokenUrl": "https://auth.bank.example.test/oauth/token",
+          "clientId": "{{clientId}}",
+          "clientSecret": "{{clientSecret}}",
+          "scope": "accounts payments"
+        }
+      },
+      "tests": []
+    },
+    {
+      "_id": "r5",
+      "colId": "c-bank",
+      "containerId": "f0",
+      "name": "List standing orders",
+      "url": "{{baseUrl}}/accounts/{{accountId}}/standing-orders",
+      "method": "GET",
+      "sortNum": 50000,
+      "headers": [],
+      "params": [],
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
+      "auth": {
+        "type": "oauth2",
+        "oauth2": {
+          "grantType": "client_credentials",
+          "accessTokenUrl": "https://auth.bank.example.test/oauth/token",
+          "clientId": "{{clientId}}",
+          "clientSecret": "{{clientSecret}}",
+          "scope": "accounts payments"
+        }
+      },
+      "tests": []
+    },
+    {
+      "_id": "r6",
+      "colId": "c-bank",
+      "containerId": "f1",
+      "name": "Create a payment consent",
+      "url": "{{baseUrl}}/domestic-payment-consents",
+      "method": "POST",
+      "sortNum": 60000,
+      "headers": [
+        {
+          "name": "x-idempotency-key",
+          "value": "{{$guid}}"
+        },
+        {
+          "name": "x-fapi-financial-id",
+          "value": "{{orgId}}"
+        }
+      ],
+      "params": [],
+      "body": {
+        "type": "json",
+        "raw": "{\n  \"Data\": {\n    \"Initiation\": {\n      \"InstructionIdentification\": \"ACME412\",\n      \"InstructedAmount\": {\n        \"Amount\": \"165.88\",\n        \"Currency\": \"GBP\"\n      }\n    }\n  },\n  \"Risk\": {}\n}",
+        "form": []
+      },
+      "auth": {
+        "type": "oauth2",
+        "oauth2": {
+          "grantType": "client_credentials",
+          "accessTokenUrl": "https://auth.bank.example.test/oauth/token",
+          "clientId": "{{clientId}}",
+          "clientSecret": "{{clientSecret}}",
+          "scope": "accounts payments"
+        }
+      },
+      "tests": [
+        {
+          "type": "res-code",
+          "custom": "",
+          "action": "equal",
+          "value": "201"
+        }
+      ]
+    },
+    {
+      "_id": "r7",
+      "colId": "c-bank",
+      "containerId": "f1",
+      "name": "Get a payment consent",
+      "url": "{{baseUrl}}/domestic-payment-consents/{{consentId}}",
+      "method": "GET",
+      "sortNum": 70000,
+      "headers": [],
+      "params": [],
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
+      "auth": {
+        "type": "oauth2",
+        "oauth2": {
+          "grantType": "client_credentials",
+          "accessTokenUrl": "https://auth.bank.example.test/oauth/token",
+          "clientId": "{{clientId}}",
+          "clientSecret": "{{clientSecret}}",
+          "scope": "accounts payments"
+        }
+      },
+      "tests": []
+    },
+    {
+      "_id": "r8",
+      "colId": "c-bank",
+      "containerId": "f1",
+      "name": "Submit a payment",
+      "url": "{{baseUrl}}/domestic-payments",
+      "method": "POST",
+      "sortNum": 80000,
+      "headers": [],
+      "params": [],
+      "body": {
+        "type": "json",
+        "raw": "{\n  \"Data\": {\n    \"ConsentId\": \"{{consentId}}\"\n  },\n  \"Risk\": {}\n}",
+        "form": []
+      },
+      "auth": {
+        "type": "oauth2",
+        "oauth2": {
+          "grantType": "client_credentials",
+          "accessTokenUrl": "https://auth.bank.example.test/oauth/token",
+          "clientId": "{{clientId}}",
+          "clientSecret": "{{clientSecret}}",
+          "scope": "accounts payments"
+        }
+      },
+      "tests": []
+    },
+    {
+      "_id": "r9",
+      "colId": "c-bank",
+      "containerId": "f1",
+      "name": "Get a payment",
+      "url": "{{baseUrl}}/domestic-payments/{{paymentId}}",
+      "method": "GET",
+      "sortNum": 90000,
+      "headers": [],
+      "params": [],
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
+      "auth": {
+        "type": "oauth2",
+        "oauth2": {
+          "grantType": "client_credentials",
+          "accessTokenUrl": "https://auth.bank.example.test/oauth/token",
+          "clientId": "{{clientId}}",
+          "clientSecret": "{{clientSecret}}",
+          "scope": "accounts payments"
+        }
+      },
+      "tests": []
+    },
+    {
+      "_id": "r10",
+      "colId": "c-bank",
+      "containerId": "f2",
+      "name": "Confirm funds",
+      "url": "{{baseUrl}}/funds-confirmations",
+      "method": "POST",
+      "sortNum": 100000,
+      "headers": [],
+      "params": [],
+      "body": {
+        "type": "json",
+        "raw": "{\n  \"Data\": {\n    \"ConsentId\": \"{{consentId}}\",\n    \"Reference\": \"Purchase01\",\n    \"InstructedAmount\": {\n      \"Amount\": \"20.00\",\n      \"Currency\": \"GBP\"\n    }\n  }\n}",
+        "form": []
+      },
+      "auth": {
+        "type": "oauth2",
+        "oauth2": {
+          "grantType": "client_credentials",
+          "accessTokenUrl": "https://auth.bank.example.test/oauth/token",
+          "clientId": "{{clientId}}",
+          "clientSecret": "{{clientSecret}}",
+          "scope": "accounts payments"
+        }
+      },
+      "tests": []
+    },
+    {
+      "_id": "r11",
+      "colId": "c-bank",
+      "containerId": "f2",
+      "name": "Get funds consent",
+      "url": "{{baseUrl}}/funds-confirmation-consents/{{consentId}}",
+      "method": "GET",
+      "sortNum": 110000,
+      "headers": [],
+      "params": [],
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
+      "auth": {
+        "type": "oauth2",
+        "oauth2": {
+          "grantType": "client_credentials",
+          "accessTokenUrl": "https://auth.bank.example.test/oauth/token",
+          "clientId": "{{clientId}}",
+          "clientSecret": "{{clientSecret}}",
+          "scope": "accounts payments"
+        }
+      },
+      "tests": []
+    }
+  ]
+}

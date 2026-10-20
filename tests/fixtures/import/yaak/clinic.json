@@ -1,0 +1,22 @@
+{
+  "yaakVersion": "2025.2.0",
+  "yaakSchema": 3,
+  "timestamp": "2026-03-01T10:00:00",
+  "resources": {
+    "workspaces": [{ "model": "workspace", "id": "wk_1", "name": "Vet Clinic", "description": "The clinic API", "headers": [{ "enabled": true, "name": "X-Team", "value": "vets" }] }],
+    "environments": [
+      { "model": "environment", "id": "ev_base", "workspaceId": "wk_1", "name": "Global", "base": true, "variables": [{ "enabled": true, "name": "host", "value": "https://api.example.test" }, { "enabled": true, "name": "apiVersion", "value": "v1" }] },
+      { "model": "environment", "id": "ev_1", "workspaceId": "wk_1", "name": "Staging", "variables": [{ "enabled": true, "name": "host", "value": "https://staging.example.test" }] }
+    ],
+    "folders": [{ "model": "folder", "id": "fl_1", "workspaceId": "wk_1", "folderId": null, "name": "Patients", "sortPriority": 1, "authenticationType": "bearer", "authentication": { "token": "${[ token ]}" } }],
+    "httpRequests": [
+      { "model": "http_request", "id": "rq_1", "workspaceId": "wk_1", "folderId": "fl_1", "name": "List patients", "method": "GET", "url": "${[ host ]}/${[ apiVersion ]}/patients", "urlParameters": [{ "enabled": true, "name": "limit", "value": "10" }, { "enabled": false, "name": "page", "value": "2" }], "headers": [{ "enabled": true, "name": "Accept", "value": "application/json" }], "body": {}, "bodyType": null, "authenticationType": null, "authentication": {}, "sortPriority": 1, "description": "All patients" },
+      { "model": "http_request", "id": "rq_2", "workspaceId": "wk_1", "folderId": "fl_1", "name": "Create patient", "method": "POST", "url": "${[ host ]}/patients", "urlParameters": [], "headers": [], "body": { "text": "{\n  \"name\": \"Rex\",\n  \"id\": \"${[ uuid.v4() ]}\"\n}" }, "bodyType": "application/json", "authenticationType": "basic", "authentication": { "username": "vet", "password": "${[ password ]}" }, "sortPriority": 2 },
+      { "model": "http_request", "id": "rq_3", "workspaceId": "wk_1", "folderId": null, "name": "Use token", "method": "GET", "url": "${[ host ]}/me", "urlParameters": [], "headers": [{ "enabled": true, "name": "Authorization", "value": "Bearer ${[ response.body.path(request='rq_9', path='$.token') ]}" }], "body": {}, "bodyType": null, "authenticationType": "none", "authentication": {}, "sortPriority": 3 },
+      { "model": "http_request", "id": "rq_4", "workspaceId": "wk_1", "folderId": null, "name": "Form", "method": "POST", "url": "${[ host ]}/f", "urlParameters": [], "headers": [], "body": { "form": [{ "enabled": true, "name": "a", "value": "1" }, { "enabled": true, "name": "f", "file": "x.txt" }] }, "bodyType": "multipart/form-data", "authenticationType": "oauth2", "authentication": { "grantType": "client_credentials", "accessTokenUrl": "${[ host ]}/token", "clientId": "c", "clientSecret": "s" }, "sortPriority": 4 },
+      { "model": "http_request", "id": "rq_5", "workspaceId": "wk_1", "folderId": null, "name": "Gql", "method": "POST", "url": "${[ host ]}/graphql", "urlParameters": [], "headers": [], "body": { "query": "{ patients { id } }", "variables": "{}" }, "bodyType": "graphql", "authenticationType": "kerberos", "authentication": { "service": "HTTP" }, "sortPriority": 5 }
+    ],
+    "grpcRequests": [{ "model": "grpc_request", "id": "gr_1", "workspaceId": "wk_1", "name": "Say hello", "url": "grpc://localhost:50051", "service": "helloworld.Greeter", "method": "SayHello", "message": "{\"name\":\"Rex\"}", "metadata": [] }],
+    "websocketRequests": [{ "model": "websocket_request", "id": "ws_1", "workspaceId": "wk_1", "name": "Live feed", "url": "wss://example.test/feed", "headers": [] }]
+  }
+}

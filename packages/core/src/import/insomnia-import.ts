@@ -1,4 +1,4 @@
-import { parseYaml } from '../util/lazy-yaml.js';
+import { parseYamlShared } from '../util/lazy-yaml.js';
 import type { Collection, CollectionFolder, CollectionNode, Environment, HttpSettings, KeyValue, LibraryItem, SavedGraphQLRequest, SavedHttpRequest } from '../model/types.js';
 import { shortId, slugify } from '../util/ids.js';
 import { mapForeignAuth } from './foreign-auth.js';
@@ -25,6 +25,8 @@ interface Ctx {
   saved: Required<SavedItems>;
   /** Names of items by Insomnia id → for the folder path of library items (v5). */
   specs: Array<{ name: string; text: string }>;
+  /** Insomnia ids by node id (re-import matches on them). */
+  sourceIds: Record<string, string>;
 }
 
 /** v4 `preRequestScript` / `afterResponseScript`; v5 `scripts.preRequest` / `scripts.afterResponse`. */
@@ -55,6 +57,8 @@ function insomniaFolder(f: Any, items: CollectionNode[], ctx: Ctx): CollectionFo
     ...(s.post ? { testScript: s.post } : {}),
   };
   ctx.folders.push(folder);
+  const sid = f._id ?? f.meta?.id;
+  if (sid) (ctx.sourceIds[folder.id] = String(sid));
   return folder;
 }
 
@@ -114,6 +118,7 @@ function insomniaRequest(r: Any, ctx: Ctx): SavedHttpRequest | SavedGraphQLReque
   if (s.pre) node.preRequestScript = s.pre;
   if (s.post) node.testScript = s.post;
   ctx.requests.push({ id, node });
+  if (id) ctx.sourceIds[node.id] = String(id);
   return node;
 }
 
@@ -166,14 +171,69 @@ function v5Kind(it: Any): 'grpc' | 'websocket' | 'Socket.IO request' | 'MCP clie
   return undefined;
 }
 
+/** Insomnia's expiry (an ISO string, a millisecond number or empty) as an ISO string. */
+const cookieExpiry = (e: unknown): string | undefined => {
+  if (e === null || e === undefined || e === '') return undefined;
+  const d = new Date(typeof e === 'number' ? e : String(e));
+  return Number.isFinite(d.getTime()) ? d.toISOString() : undefined;
+};
+
+/** The cookies of an Insomnia cookie jar (v4 `cookie_jar.cookies`, v5 `cookieJar.cookies`) as jar entries. */
+function jarCookies(list: unknown): NonNullable<ImportDocument['cookies']> {
+  const out: NonNullable<ImportDocument['cookies']> = [];
+  for (const c of Array.isArray(list) ? list : []) {
+    const a = c as Any;
+    if (!a?.key || !a.domain) continue;
+    const expires = cookieExpiry(a.expires);
+    out.push({ name: String(a.key), value: String(a.value ?? ''), domain: String(a.domain), path: String(a.path ?? '/'), ...(expires ? { expires } : {}), ...(a.secure ? { secure: true } : {}), ...(a.httpOnly ? { httpOnly: true } : {}), ...(a.hostOnly ? { hostOnly: true } : {}) });
+  }
+  return out;
+}
+
+/**
+ * Insomnia's unit tests (v4 `unit_test_suite` + `unit_test`, v5 `testSuites[].tests`) as TestPion tests of the request each
+ * one sends: a `tp.test` appended to the request's test script. Insomnia's test code calls `insomnia.send()` and reads the
+ * answer (`response.status`, `JSON.parse(response.data)`); here `send` answers the response the request just got, so the same
+ * code runs after the request. A test with no request, or one the file does not have, is reported.
+ */
+function unitTests(tests: Array<{ suite: string; name: string; code: string; requestId?: string }>, requests: InsomniaImported[], findings: Findings): number {
+  let added = 0;
+  const byId = new Map(requests.filter((r) => r.id).map((r) => [r.id!, r.node]));
+  for (const t of tests) {
+    const node = t.requestId ? byId.get(t.requestId) : undefined;
+    const label = `${t.suite ? `${t.suite}: ` : ''}${t.name}`;
+    if (!node) {
+      findings.add({ code: 'NOT_IMPORTED', severity: 'not-imported', where: [], field: 'unit test', message: `The Insomnia unit test "${label}" was not imported: ${t.requestId ? 'its request is not in the file' : 'it sends no request of the collection'}` });
+      continue;
+    }
+    const body = t.code
+      .split('\n')
+      .map((l) => `    ${l}`)
+      .join('\n');
+    const code = [
+      `// Insomnia unit test "${label}": insomnia.send() answers the response of this request`,
+      `tp.test(${JSON.stringify(label)}, async function () {`,
+      `  const expect = tp.expect;`,
+      `  const insomnia = { send: async () => ({ status: tp.response.code, statusMessage: tp.response.status, data: tp.response.text(), headers: tp.response.headers.toObject() }) };`,
+      body,
+      `});`,
+    ].join('\n');
+    node.testScript = [node.testScript, code].filter(Boolean).join('\n\n');
+    added++;
+  }
+  return added;
+}
+
 /** Insomnia v4 / v5 → document. */
 export function parseInsomnia(text: string): ImportDocument {
   const t = text.trim();
-  const d: Any = t.startsWith('{') ? JSON.parse(t) : parseYaml(t);
+  const d: Any = t.startsWith('{') ? JSON.parse(t) : (parseYamlShared(t) as Any);
   const findings = new Findings();
   const v5 = String(d.type ?? '').startsWith('collection.insomnia.rest/5');
-  const ctx: Ctx = { findings, requests: [], folders: [], saved: { grpc: [], websocket: [] }, specs: [] };
+  const ctx: Ctx = { findings, requests: [], folders: [], saved: { grpc: [], websocket: [] }, specs: [], sourceIds: {} };
   const doc = newDocument('insomnia', text, { tool: 'Insomnia', version: v5 ? String(d.type).split('/')[1] : String(d.__export_format ?? 4), scriptTool: 'insomnia' });
+  const pendingTests: Array<{ suite: string; name: string; code: string; requestId?: string }> = [];
+  const cookies: NonNullable<ImportDocument['cookies']> = [];
   let collection: Collection;
   let environments: Environment[];
   if (v5) {
@@ -203,11 +263,8 @@ export function parseInsomnia(text: string): ImportDocument {
     collection = collectionOf(name, convert(d.collection ?? [], []), { description: d.meta?.description });
     environments = insomniaEnvironments(name, env, env.subEnvironments ?? []);
     if (typeof d.spec?.contents === 'string' && d.spec.contents.trim()) ctx.specs.push({ name: String(d.spec.meta?.name ?? name), text: d.spec.contents });
-    for (const [key, label] of [['testSuites', 'unit test suite'] as const]) {
-      const n = Array.isArray(d[key]) ? d[key].length : 0;
-      if (n) findings.add({ code: 'NOT_IMPORTED', severity: 'not-imported', where: [], message: `${n} Insomnia ${label}${n > 1 ? 's were' : ' was'} not imported` });
-    }
-    if (Array.isArray(d.cookieJar?.cookies) && d.cookieJar.cookies.length) findings.add({ code: 'NOT_IMPORTED', severity: 'not-imported', where: [], message: '1 Insomnia cookie jar was not imported' });
+    pendingTests.push(...(Array.isArray(d.testSuites) ? d.testSuites : []).flatMap((s: Any) => (Array.isArray(s?.tests) ? s.tests : []).map((t: Any) => ({ suite: String(s.name ?? ''), name: String(t.name ?? 'Test'), code: String(t.code ?? ''), requestId: t.requestId ? String(t.requestId) : undefined }))));
+    cookies.push(...jarCookies(d.cookieJar?.cookies));
   } else {
     // Insomnia 4 export: flat resources linked by parentId
     const res: Any[] = d.resources ?? [];
@@ -226,10 +283,13 @@ export function parseInsomnia(text: string): ImportDocument {
       });
     // design documents (OpenAPI the user wrote in Insomnia) are kept in specs/
     for (const s of res.filter((r) => r._type === 'api_spec' && String(r.contents ?? '').trim())) ctx.specs.push({ name: String(s.fileName ?? s.name ?? 'Design document'), text: String(s.contents) });
-    for (const kind of ['unit_test_suite', 'cookie_jar', 'mock_route'] as const) {
-      const n = res.filter((r) => r._type === kind && (kind !== 'cookie_jar' || (r.cookies ?? []).length)).length;
-      if (n) findings.add({ code: 'NOT_IMPORTED', severity: 'not-imported', where: [], message: `${n} Insomnia ${{ unit_test_suite: 'unit test suite', cookie_jar: 'cookie jar', mock_route: 'mock route' }[kind]}${n > 1 ? 's were' : ' was'} not imported` });
+    for (const kind of ['mock_route'] as const) {
+      const n = res.filter((r) => r._type === kind).length;
+      if (n) findings.add({ code: 'NOT_IMPORTED', severity: 'not-imported', where: [], message: `${n} Insomnia mock route${n > 1 ? 's were' : ' was'} not imported (TestPion's mock server serves the saved examples)` });
     }
+    for (const jar of res.filter((r) => r._type === 'cookie_jar')) cookies.push(...jarCookies(jar.cookies));
+    const suites = new Map(res.filter((r) => r._type === 'unit_test_suite').map((s) => [s._id, s]));
+    for (const t of res.filter((r) => r._type === 'unit_test')) pendingTests.push({ suite: String(suites.get(t.parentId)?.name ?? ''), name: String(t.name ?? 'Test'), code: String(t.code ?? ''), requestId: t.requestId ? String(t.requestId) : undefined });
     const workspaces = res.filter((r) => r._type === 'workspace');
     const name = workspaces.length === 1 ? workspaces[0].name : 'Insomnia import';
     const items = workspaces.length === 1 ? build(workspaces[0]._id) : workspaces.length ? workspaces.map((w) => ({ kind: 'folder', id: shortId('fld-'), name: w.name, items: build(w._id) }) as CollectionFolder) : build(res.find((r) => r._type === 'request' || r._type === 'request_group')?.parentId);
@@ -245,7 +305,13 @@ export function parseInsomnia(text: string): ImportDocument {
   }
   // template tags first (they add pre-request and post-response lines in tp.*), then the pipeline converts the scripts
   findings.notes(mapInsomniaTemplateTags(ctx.requests, ctx.folders, environments));
+  if (pendingTests.length) {
+    const n = unitTests(pendingTests, ctx.requests, findings);
+    if (n) findings.add({ code: 'NOTE', severity: 'info', where: [], message: `${n} Insomnia unit test${n > 1 ? 's' : ''} became test${n > 1 ? 's' : ''} of the request${n > 1 ? 's' : ''} they send (tp.test in the request's test script)`, reportOnly: true });
+  }
+  if (cookies.length) doc.cookies = cookies;
   doc.collections.push(collection);
+  if (Object.keys(ctx.sourceIds).length) doc.sourceIds = ctx.sourceIds;
   doc.environments = environments;
   if (ctx.saved.grpc.length || ctx.saved.websocket.length) doc.savedItems = { ...(ctx.saved.grpc.length ? { grpc: ctx.saved.grpc } : {}), ...(ctx.saved.websocket.length ? { websocket: ctx.saved.websocket } : {}) };
   if (ctx.specs.length) {
