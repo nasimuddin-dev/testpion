@@ -52,8 +52,9 @@ export function withReceipt(store: WorkspaceStore, out: WorkspaceImportResult, t
   try {
     mkdirSync(dir(store), { recursive: true });
     atomicWrite(join(dir(store), `${receipt.id}.json`), JSON.stringify({ receipt, report }));
-    const files = readdirSync(dir(store)).filter((f) => f.endsWith('.json')).sort();
-    for (const old of files.slice(0, Math.max(0, files.length - KEEP))) rmSync(join(dir(store), old), { force: true });
+    // (ids are random: the oldest are found by their time)
+    const files = stored(store);
+    for (const old of files.slice(KEEP)) rmSync(join(dir(store), `${old.receipt.id}.json`), { force: true });
   } catch {
     /* a workspace on a read-only disk still imports; it just cannot be undone */
   }
@@ -68,6 +69,21 @@ function safeHash(store: WorkspaceStore, rel: string): string {
   }
 }
 
+/** Every stored import, newest first. */
+function stored(store: WorkspaceStore): Array<{ receipt: ImportReceipt; report: ImportReport }> {
+  if (!existsSync(dir(store))) return [];
+  return readdirSync(dir(store))
+    .filter((f) => f.endsWith('.json'))
+    .flatMap((f) => {
+      try {
+        return [JSON.parse(readFileSync(join(dir(store), f), 'utf8')) as { receipt: ImportReceipt; report: ImportReport }];
+      } catch {
+        return [];
+      }
+    })
+    .sort((a, b) => b.receipt.at.localeCompare(a.receipt.at));
+}
+
 /** A stored import: its receipt and report. */
 export function readImportReport(store: WorkspaceStore, id: string): { receipt: ImportReceipt; report: ImportReport } {
   if (!/^imp-[\w-]+$/.test(id)) throw new ApsError('ValidationError', `Not an import id: ${id}`, { suggestions: ['`testpion import-report` lists the imports of the workspace.'] });
@@ -78,19 +94,7 @@ export function readImportReport(store: WorkspaceStore, id: string): { receipt: 
 
 /** The imports of the workspace, newest first. */
 export function listImportReceipts(store: WorkspaceStore): Array<{ id: string; at: string; format: string; collections: string[]; environments: string[]; summary: ImportReport['summary'] }> {
-  if (!existsSync(dir(store))) return [];
-  return readdirSync(dir(store))
-    .filter((f) => f.endsWith('.json'))
-    .sort()
-    .reverse()
-    .flatMap((f) => {
-      try {
-        const { receipt, report } = JSON.parse(readFileSync(join(dir(store), f), 'utf8')) as { receipt: ImportReceipt; report: ImportReport };
-        return [{ id: receipt.id, at: receipt.at, format: receipt.format, collections: receipt.collections.map((c) => c.name), environments: receipt.environments.map((e) => e.name), summary: report.summary }];
-      } catch {
-        return [];
-      }
-    });
+  return stored(store).map(({ receipt, report }) => ({ id: receipt.id, at: receipt.at, format: receipt.format, collections: receipt.collections.map((c) => c.name), environments: receipt.environments.map((e) => e.name), summary: report.summary }));
 }
 
 export interface UndoResult {

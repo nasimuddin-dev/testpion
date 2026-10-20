@@ -9,6 +9,7 @@ import { McpSession } from '../../protocols/mcp/client.js';
 import { commandLine, isCommandTrusted } from '../../storage/trust.js';
 import { aiTools } from '../ai-tools.js';
 import { arazzoTools } from '../arazzo-tools.js';
+import { importTools } from '../import-tools.js';
 import { datasetTools } from '../dataset-tools.js';
 import { debuggerTools } from '../debugger-tools.js';
 import { deployTools } from '../deploy-tools.js';
@@ -66,6 +67,7 @@ export function moduleTools(d: ModuleToolDeps): Tool[] {
     ...mockTools({ store }),
     ...datasetTools({ store }),
     ...arazzoTools({ store }),
+    ...importTools({ store }),
     ...gitTools({ store, findCollection, redactor }),
     ...gitItemTools({ store }),
     ...openApiTools({ store, readSpecRef: d.readSpec, context: (environment) => createEngineContext({ store, secrets, settings, environment }) }),

@@ -39,6 +39,7 @@ export const BRU_TO_TP: Record<string, string> = {
   getGlobalEnvVar: 'tp.globals.get',
   setGlobalEnvVar: 'tp.globals.set',
   getVar: 'tp.variables.get',
+  runRequest: 'tp.execution.runRequest',
   // runtime variables last for the rest of the run, like Bruno's (the shim does the same)
   setVar: 'tp.collectionVariables.set',
   hasVar: 'tp.variables.has',

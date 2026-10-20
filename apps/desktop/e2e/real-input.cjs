@@ -14,6 +14,8 @@
  *   await __t.real.dnd(from, to, { steps, over })   an HTML5 drag and drop: the press and moves start the page's own drag
  *     (its dragstart sets the data), Chromium hands the drag to the protocol (Input.setInterceptDrags), and it is moved
  *     (dragEnter / dragOver, through `over` points first) and dropped at `to` with that data.
+ *   await __t.real.dropFiles(to, ['C:/path/a.json', 'C:/path/folder'], { over })   files (or folders) dragged in from the OS:
+ *     dragEnter / dragOver / drop with the paths as the drag's files, as the file manager's drag would carry them.
  * Each resolves once Chromium has dispatched the events (with 'ok', or 'ERR …').
  */
 const BINDING = '__e2eReal';
@@ -66,6 +68,17 @@ function install(win) {
         else if (c.t === 'key') await dbg.sendCommand('Input.dispatchKeyEvent', c.p);
         else if (c.t === 'text') await dbg.sendCommand('Input.insertText', { text: c.text });
         else if (c.t === 'dnd') await dragAndDrop(c);
+        else if (c.t === 'dropFiles') {
+          const data = { items: [], files: c.files, dragOperationsMask: 1 };
+          const drag = (type, p) => dbg.sendCommand('Input.dispatchDragEvent', { type, x: p.x, y: p.y, data });
+          const path = [...c.over, c.to];
+          await drag('dragEnter', path[0]);
+          for (const p of path) {
+            await drag('dragOver', p);
+            await sleep(40);
+          }
+          await drag('drop', c.to);
+        }
       }
     } catch (e) {
       result = `ERR ${e.message}`;
@@ -141,6 +154,8 @@ const PAGE = `(() => {
     keys: (text, o = {}) => run(() => [...text].flatMap((ch) => [...keyEv(ch, o), wait(8)])),
     key: (key, o = {}) => run(() => [...keyEv(key, o), wait(30)]),
     /** An HTML5 drag and drop from \`from\` to \`to\` (through \`over\` targets first): see dragAndDrop. */
+    /** Files or folders from the OS dropped on a target (their absolute paths): the drag the file manager would start. */
+    dropFiles: (to, files, o = {}) => run(() => [{ t: 'dropFiles', to: pt(to, o.to ?? {}), files, over: (o.over ?? []).map((x) => pt(x)) }, wait(120)]),
     dnd: (from, to, o = {}) => run(() => [{ t: 'dnd', from: pt(from, o.from ?? {}), to: pt(to, o.to ?? {}), over: (o.over ?? []).map((x) => pt(x)), steps: o.steps }, wait(60)]),
   };
 })()`;

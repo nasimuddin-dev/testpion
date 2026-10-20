@@ -47,6 +47,7 @@ const ALLOWED: Record<string, string> = {
   'components/DebuggerTools.tsx': "definition: the Debugger's CA certificate",
   'views/TestsView.tsx': 'definition: an Arazzo workflow export',
   'views/EvaluationsView.tsx': 'definition: a RAG dataset exported as Ragas or DeepEval records',
+  'components/ImportReport.tsx': 'definition: the compatibility report of an import (JSON, Markdown)',
 };
 const PRIVATE_SAVE = /\bsaveText\b|URL\.createObjectURL\(|\.download\s*=|\bdownload=|\bdownloadContent\(|\bfinishSave\(/;
 

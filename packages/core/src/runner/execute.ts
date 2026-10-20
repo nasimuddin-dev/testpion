@@ -1,3 +1,4 @@
+import type { HttpRequestSpec } from '../model/types.js';
 import { pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
 import type {
@@ -66,6 +67,8 @@ export interface ExecServices {
   maxPreviewBytes?: number;
   /** Auth inherited from the collection/folder for requests with `auth: inherit`. */
   inheritedAuth?: AuthConfig;
+  /** A saved HTTP request of the collection by id, name or path, for `tp.execution.runRequest`. */
+  savedRequest?: (ref: string) => HttpRequestSpec | undefined;
   openExternal?: (url: string) => void | Promise<void>;
   /** Persist values set by scripts via tp.environment/globals/collectionVariables (desktop "current values"). */
   persistVariable?: PersistVariable;
@@ -145,7 +148,8 @@ export async function executeTest(testIn: TestCase, svc: ExecServices, opts: { t
   const scriptChecks: CheckResult[] = [];
   let ctx: CheckContext = { testType: test.type, body: undefined, text: '' };
   let partial: Partial<ExecutionOutcome> = {};
-  const sendRequest = scriptRequestSender({ redactor: svc.redactor, cookieJar: svc.cookieJar, signal: opts.signal, timeoutMs: svc.defaultTimeoutMs, production: svc.production });
+  const saved = svc.savedRequest ? { find: svc.savedRequest, resolve: (s: HttpRequestSpec) => scope.resolveDeep(s) } : undefined;
+  const sendRequest = scriptRequestSender({ redactor: svc.redactor, cookieJar: svc.cookieJar, signal: opts.signal, timeoutMs: svc.defaultTimeoutMs, production: svc.production, saved });
 
   try {
     // pre-request script (Postman-compatible: can read/modify the request and set variables)

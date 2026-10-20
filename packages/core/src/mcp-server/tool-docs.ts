@@ -587,6 +587,22 @@ export const TOOL_DOCS: Record<string, ToolDoc> = {
     example: { name: 'patients', rows: 20, spec: 'specs/veterinary-api.yaml', operation: 'POST /patients', format: 'csv' },
   },
 
+  import_preview: {
+    when: 'Use it before import_definition to see what an import would create and what would not come over (unsupported auth, template tags, script APIs, values to enter), for text, a link, a Postman id or the files of a folder.',
+    whenNot: 'To import, use `import_definition`; to read the report of an import already done, use `get_import_report`.',
+    example: { url: 'postman:collection/12345-abcd', postman_api_key: '<key>' },
+  },
+  get_import_report: {
+    when: 'Use it to read the compatibility report of an import (per item: imported fully, with changes, not imported and why) or to list the last imports.',
+    whenNot: 'To run the import, use `import_definition`.',
+    example: { id: 'imp-abc123' },
+  },
+  undo_definition_import: {
+    when: 'Use it to take back an import_definition (its collections, environments and API definitions go to Recently deleted).',
+    whenNot: 'For a bundle import, use `undo_import`.',
+    example: { id: 'imp-abc123' },
+  },
+
   // ── Arazzo ─────────────────────────────────────────────────────────────
   import_arazzo: {
     when: 'Use it to turn an Arazzo 1.0 workflow document into TestPion flow files under tests/arazzo/.',

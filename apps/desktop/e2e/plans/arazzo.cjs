@@ -46,10 +46,13 @@ const steps = [
      };
      await __t.requests();
      document.querySelector('[aria-label^="Import (OpenAPI"]').click();
-     const btn = await __t.waitFor(() => [...document.querySelectorAll('[role=dialog] button')].find((b) => b.textContent.trim() === 'Choose file…'), 3000);
+     const btn = await __t.waitFor(() => [...document.querySelectorAll('[role=dialog] button')].find((b) => b.textContent.trim() === 'Choose files…'), 3000);
      if (!btn) return 'NO BUTTON';
      btn.click();
-     const t = await __t.waitFor(() => toastText(/Imported arazzo/), 5000);
+     const go = await __t.waitFor(() => [...document.querySelectorAll('[role=dialog] button')].find((b) => /^Import( \\d+ files)?$/.test(b.textContent.trim())), 8000);
+     if (!go) return 'NO PREVIEW';
+     go.click();
+     const t = await __t.waitFor(() => toastText(/Imported flow/), 5000);
      await __t.esc();
      const text = await window.aps.invoke('tests.read', { path: 'arazzo/petcheck.yaml' });
      return (t ?? 'no toast') + ' || ' + text.split(/\\r?\\n/).filter((l) => /url:|method:|# Arazzo, not imported/.test(l)).map((l) => l.trim()).join(' ; ');`,
@@ -71,7 +74,7 @@ module.exports = withExpect(
   steps,
   {
     import:
-      /Imported arazzo: flow tests\/arazzo\/petcheck\.yaml.*\|\| method: GET ; url: "\{\{baseUrl\}\}\/pet\/\{\{petId\}\}" ; # Arazzo, not imported: on success goto getPet .* method: GET ; url: "\{\{baseUrl\}\}\/pet\/\{\{petId\}\}"/,
+      /Imported flow tests\/arazzo\/petcheck\.yaml.*\|\| method: GET ; url: "\{\{baseUrl\}\}\/pet\/\{\{petId\}\}" ; # Arazzo, not imported: on success goto getPet .* method: GET ; url: "\{\{baseUrl\}\}\/pet\/\{\{petId\}\}"/,
     'tree-menu': /Open \| Reveal file \| Run \| Run with data… \| Run in several environments… \| Copy link \| Copy path \| Copy CLI command \| Export as Arazzo… \| Export… \| Monitor on a schedule… \| Run in CI… \| Expose as MCP tool… \| Rename \| Duplicate \| Delete…/,
     export: /Arazzo workflow saved to .*petcheck\.arazzo\.yaml/,
     'export-maps-operations': /^petCheck \| getPet:getPetById:path petId=\$inputs\.petId:\$statusCode == 200 \| again:getPetById:path petId=\$inputs\.petId:\$response\.body#\/name == 'doggie'$/,

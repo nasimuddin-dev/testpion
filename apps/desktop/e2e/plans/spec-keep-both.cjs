@@ -29,9 +29,12 @@ const H = `
     };
     await __t.requests();
     await __t.real.click('[aria-label^="Import (OpenAPI"]');
-    const btn = await __t.waitFor(() => [...document.querySelectorAll('[role=dialog] button')].find((b) => b.textContent.trim() === 'Choose file…'), 3000);
+    const btn = await __t.waitFor(() => [...document.querySelectorAll('[role=dialog] button')].find((b) => b.textContent.trim() === 'Choose files…'), 3000);
     if (!btn) return false;
     await __t.real.click(btn);
+    const go = await __t.waitFor(() => [...document.querySelectorAll('[role=dialog] button')].find((b) => /^Import( \\d+ files)?$/.test(b.textContent.trim())), 8000);
+    if (!go) return false;
+    await __t.real.click(go);
     return true;
   };
 `;

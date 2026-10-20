@@ -1,4 +1,5 @@
 import { AlarmClock, BarChart3, Bot, Code2, Keyboard, Columns2, CopyX, Disc, GitCompare, ScanSearch, TerminalSquare, Variable, Download, FileDown, FlaskConical, FolderOpen, FolderPlus, FolderTree, Gauge, GitBranch, History, KeyRound, Layers, ListChecks, ListX, Network, Play, Plug, Radio, RefreshCw, RotateCcw, Rows3, ScrollText, Search, Settings, Sparkles, SquareTerminal, Upload, Waypoints, Workflow, X, type LucideIcon } from 'lucide-react';
+import { ImportHost } from './components/ImportHost';
 import { askAssistant } from './components/ai/AiAction';
 import { RightPanel } from './components/RightPanel';
 import { openReverseProxyCapture } from './lib/capture';
@@ -466,6 +467,7 @@ export default function App() {
   return (
     <TooltipProvider delayDuration={350} skipDelayDuration={150}>
     <div className="h-full flex flex-col">
+      <ImportHost />
       <ViewBoundary view="topbar" variant="bar" label="top bar" className="h-12 border-b">
         <TopBar />
       </ViewBoundary>

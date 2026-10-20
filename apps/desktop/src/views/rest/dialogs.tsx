@@ -1,18 +1,8 @@
 /** Save-to-collection and Import dialogs of the REST view. */
-import { toastSpecKeptBoth } from '../../lib/spec-import';
-import { FolderOpen, Link2, Upload } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { call } from '../../api';
-import { toastError, useApp } from '../../store';
-import { LABEL } from '../../lib/vocabulary';
-import { startTidyImport } from '../../components/ai/flow-generate';
 import type { Collection, CollectionNode } from '../../types';
 import { uid } from '../../lib/format';
-import { IMPORT_FILE_ACCEPT } from '@testpion/shared';
-
-import { pickTextFile, pickFolderFiles } from '../../lib/files';
-import { convertedScriptsText, toastImportNotes, toastUnchangedScripts, type ImportScriptsSummary } from '../../lib/import-scripts';
-import { Button, Field, Input, Modal, Select, Textarea } from '../../components/ui';
+import { Button, Field, Input, Modal, Select } from '../../components/ui';
 
 /**
  * The one "save into a collection" dialog: name, collection (or a new one) and folder. Every saved request
@@ -125,115 +115,5 @@ export function SaveModal({
   );
 }
 
-export function ImportModal({ onClose, onDone }: { onClose(): void; onDone(): void }) {
-  const [text, setText] = useState('');
-  const [link, setLink] = useState('');
-  const linkOk = /^https?:\/\/\S+$/i.test(link.trim());
-  const [busy, setBusy] = useState(false);
-  // Postman / Insomnia scripts come over as tp.* unless this is ticked (pm.* runs either way)
-  const [keepPm, setKeepPm] = useState(false);
-  const run = async (
-    fn: () => Promise<{
-      format: string;
-      collection?: string;
-      environment?: string;
-      request?: string;
-      placeholders?: Array<{ variable: string }>;
-      specPath?: string;
-      specKeptBoth?: { existing: string };
-      collectionId?: string;
-      contractChecks?: number;
-      savedItems?: Record<string, number>;
-      notes?: string[];
-      scriptWarnings?: Array<{ where: string; script: string; api: string; hint: string }>;
-      scripts?: ImportScriptsSummary;
-      flows?: string[];
-    } | null>,
-  ) => {
-    setBusy(true);
-    try {
-      const r = await fn();
-      if (r) {
-        if (r.request)
-          useApp.getState().toast(
-            `Imported ${r.format} request "${r.request}" into "${r.collection}"${r.placeholders?.length ? `. Secrets were replaced by variables: set ${r.placeholders.map((p) => p.variable).join(', ')} as secret environment variables` : ''}`,
-            'success',
-          );
-        else
-          useApp.getState().toast(
-            `Imported ${r.format}${r.collection ? `: ${r.collection}` : ''}${r.flows?.length ? `: ${r.flows.length === 1 ? 'flow' : `${r.flows.length} flows`} ${r.flows.join(', ')} (in the Tests view)` : ''}${r.environment ? ` (${r.environment.includes(', ') ? 'environments' : 'environment'} ${r.environment})` : ''}${r.contractChecks ? `. Each request checks the OpenAPI contract (${r.specPath})` : ''}${r.savedItems ? `, with ${[r.savedItems.grpc ? `${r.savedItems.grpc} gRPC call${r.savedItems.grpc > 1 ? 's' : ''}` : '', r.savedItems.websocket ? `${r.savedItems.websocket} connection${r.savedItems.websocket > 1 ? 's' : ''}` : ''].filter(Boolean).join(' and ')}` : ''}${convertedScriptsText(r.scripts) ? `. ${convertedScriptsText(r.scripts)}` : ''}`,
-            'success',
-          );
-        toastUnchangedScripts(r.scripts);
-        // a collection from another tool: offer the clean-up (names, folders, variables, chains)
-        if (r.collectionId && !r.request && /^(postman|har|insomnia|bruno|hoppscotch)/i.test(r.format))
-          useApp.getState().toast(`${r.collection ?? 'The collection'} can be tidied: names, folders, the host and token as variables, ids chained.`, 'info', { label: LABEL.tidyImport, onClick: () => startTidyImport({ collectionId: r.collectionId!, source: r.format }) });
-        toastImportNotes({ ...r, notes: toastSpecKeptBoth(r) });
-        onDone();
-        await useApp.getState().refreshWorkspace();
-        onClose();
-      }
-    } catch (e) {
-      toastError(e);
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <Modal
-      title="Import"
-      onClose={onClose}
-      width={640}
-      footer={
-        <>
-          <Button
-            icon={<Upload size={13} />}
-            onClick={() =>
-              run(async () => {
-                // the browser picker works in the desktop app and in the browser / cloud alike
-                const f = await pickTextFile(IMPORT_FILE_ACCEPT);
-                return f ? call('col.import', { text: f.text, fileName: f.name, keepPm }) : null;
-              })
-            }
-          >
-            Choose file…
-          </Button>
-          <Button
-            icon={<FolderOpen size={13} />}
-            title="Import a Bruno collection folder (bruno.json, .bru files and its .env, as kept in git)"
-            onClick={() =>
-              run(async () => {
-                // the root .env too ({{process.env.X}}): its values go to the secret store, never workspace files
-                const f = await pickFolderFiles((p) => p.endsWith('.bru') || p === 'bruno.json' || p === '.env');
-                return f ? call('col.importBrunoFolder', { name: f.name, files: f.files }) : null;
-              })
-            }
-          >
-            Bruno folder…
-          </Button>
-          <Button variant="primary" loading={busy} disabled={!text.trim()} onClick={() => run(() => call('col.import', { text, keepPm }))}>
-            Import pasted content
-          </Button>
-        </>
-      }
-    >
-      <p className="text-sm text-muted mb-2">OpenAPI 3 / Swagger 2 (JSON or YAML), Postman v2.1 collections and environments, Insomnia exports (v4 JSON, v5 YAML), Bruno collection folders (<b>Bruno folder…</b>), exports and .bru files, Hoppscotch collections, WSDL 1.1 and 2.0 (SOAP services), AsyncAPI 2 and 3 (Kafka, MQTT and WebSocket channels as connections), HAR files, .env files, .http / .rest files, GraphQL schemas (.graphql / .gql SDL: a request for its endpoint, the schema kept in specs/graphql/), TestPion collections (as a file, pasted, or a link), Arazzo 1.0 workflows (each becomes a flow file under tests/arazzo/; its OpenAPI sources are looked up in specs/), or a request copied as cURL, fetch, PowerShell or HTTPie (saved to the <b>Imported</b> collection, with secrets replaced by variables).</p>
-      <form
-        className="flex gap-2 mb-2"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (linkOk && !busy) void run(() => call('col.importUrl', { url: link.trim(), keepPm }));
-        }}
-      >
-        <Input className="flex-1" aria-label="Link to import" placeholder="Or a link: https://…/openapi.json, a GitHub file, a Postman API link" value={link} onChange={(e) => setLink(e.target.value)} />
-        <Button type="submit" icon={<Link2 size={13} />} disabled={!linkOk} loading={busy && linkOk}>
-          Import link
-        </Button>
-      </form>
-      <Textarea autoGrow={false} className="field mono w-full h-64 text-xs" placeholder="Paste a document here…" value={text} onChange={(e) => setText(e.target.value)} />
-      <label className="flex items-center gap-2 mt-2 text-sm" title="Postman and Insomnia scripts are converted to TestPion's tp.* (pm.* still runs). Exporting to Postman turns tp.* back into pm.*.">
-        <input type="checkbox" checked={keepPm} onChange={(e) => setKeepPm(e.target.checked)} /> Keep pm.* in scripts (for collections you also use in Postman)
-      </label>
-    </Modal>
-  );
-}
+/** The one Import dialog (components/ImportDialog.tsx): source, preview with the compatibility report, result with Undo. */
+export { ImportDialog as ImportModal } from '../../components/ImportDialog';

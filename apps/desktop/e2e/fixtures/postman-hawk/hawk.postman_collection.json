@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "e2e-hawk-sample",
     "name": "Hawk sample (Postman)",
-    "description": "A Postman request with Hawk auth, which TestPion does not have: it must import as No auth (never inherited) with a disabled placeholder header and a note.",
+    "description": "A Postman request with Hawk auth: it imports as TestPion Hawk auth (the engine signs it), not the collection's bearer.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{collectionToken}}", "type": "string" }] },

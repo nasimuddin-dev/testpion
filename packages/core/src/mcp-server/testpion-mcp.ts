@@ -741,7 +741,7 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
       name: 'import_definition',
       write: true,
       description:
-        'Import an API definition or collection into the workspace from a public http(s) link (`url`: OpenAPI/Swagger URL, a GitHub/GitLab/Bitbucket file page, a Postman collection API link) or from `text` (OpenAPI, AsyncAPI, Postman collection or environment, Insomnia, Bruno, Hoppscotch, WSDL, HAR, .env, GraphQL SDL). OpenAPI imports keep the document in specs/ and add contract checks to each request. Postman / Insomnia scripts are converted to TestPion\'s tp.* (pm.* still runs; `keep_pm: true` leaves pm.*); `scripts` reports how many were converted and which were left. Returns what was created; secret values from a .env are never written to files (listed in `secretsToSet`); `notes` lists everything that did not map one to one (unsupported auth set to none with a placeholder header, Insomnia template tags, values needed …), naming the item.',
+        'Import an API definition or collection into the workspace from a public http(s) link (`url`: OpenAPI/Swagger URL, a GitHub/GitLab/Bitbucket file page, a Postman collection API link) or from `text` (OpenAPI, AsyncAPI, Postman collection or environment, Insomnia, Bruno, Hoppscotch, WSDL, HAR, .env, GraphQL SDL). OpenAPI imports keep the document in specs/ and add contract checks to each request. Postman / Insomnia scripts are converted to TestPion\'s tp.* (pm.* still runs; `keep_pm: true` leaves pm.*); `scripts` reports how many were converted and which were left. Returns what was created; secret values from a .env are never written to files (listed in `secretsToSet`); `notes` lists everything that did not map one to one (unsupported auth set to none with a placeholder header, Insomnia template tags, values needed …), naming the item; `report` is the same as a compatibility report and `importId` takes it back (undo_definition_import) or reads it again (get_import_report). import_preview shows all of it before anything is written.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -769,6 +769,9 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
           scripts: r.scripts,
           // everything that did not map one to one (unsupported auth, template tags, values needed …), naming the item
           notes: r.notes?.length ? r.notes : undefined,
+          // the compatibility report (per item: fully / with changes / not imported, and why) and the id to read or undo it
+          report: r.report,
+          importId: r.receipt?.id,
         };
       },
     },

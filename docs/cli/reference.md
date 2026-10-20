@@ -59,7 +59,7 @@ testpion export-environment <name>   Export an environment in Postman's format
 testpion mcp-server           Serve a workspace to AI agents over MCP (stdio)
 testpion load <url>           Safeguarded load test (--threshold "p95<500" "errors<1%" to pass/fail; --grpc <method> for a gRPC server; --collection, or --test-file <flow> for a whole flow per virtual user)
 testpion import <bundle> -w [--preview] [--on-conflict keep-both|replace|skip]   Preview or import a TestPion bundle; --undo <importId> takes an import back
-testpion import <file|-> -w   Import OpenAPI/Swagger, Postman, Insomnia, Bruno (a collection folder too), Hoppscotch, WSDL (SOAP), a GraphQL schema, HAR, collections, Arazzo workflows (as flow files), or a copied cURL / fetch / PowerShell request
+testpion import <input...> -w [--preview|--apply] [--report file]   Import OpenAPI/Swagger, Postman, Insomnia, Bruno (a collection folder too), Hoppscotch, OpenCollection YAML, WSDL (SOAP), a GraphQL schema, HAR, collections, Arazzo workflows (as flow files), or a copied cURL / fetch / PowerShell request; several files, a folder or a ZIP are previewed first. `import-report [id]` and `import-undo <id…>` read and take back an import
 testpion env list|order|diff -w  List environments; set their order; compare two
 testpion monitor list|add|remove|run|results|uptime|start -w  Collections or test files (flows) on a schedule (monitors; add --test-file <path>)
 testpion ci <github|gitlab|azure|jenkins> -w  A CI pipeline file for a suite, collection or tests (--start, --wait-for: start the system under test first; --run last: what a run ran; one flow: --data, --env-matrix, --timeline-html)
@@ -685,6 +685,17 @@ Replaced 1 secret with variables: environment Development variables.clientSecret
 | `--json` | `{ path, collections, environments, tests, files, replaced: [{ kind, item, field, variable }], notes, lines }`: each secret replaced by a `{{variable}}` (never its value) and each file left out (over 10 MB, or past 50 MB in all). |
 | `--dry-run` | Write nothing; list the file it would write. |
 
+## `import-report` and `import-undo`
+
+```bash
+testpion import-report -w my-workspace                 # the imports that still have a report (the last 30)
+testpion import-report imp-1a2b3c -w my-workspace --markdown
+testpion import-undo imp-1a2b3c -w my-workspace         # collections, environments, API definitions to Recently deleted; flow files removed
+testpion import-undo imp-1a2b3c -w my-workspace --force # even if an imported collection was edited since
+```
+
+`import-undo` changes nothing and exits 2 while an imported collection or flow file was edited after the import (it names them). `testpion trash restore` brings back what it moved.
+
 ## `import`
 
 A TestPion bundle (`.testpion.zip`, `.testpion.json`, or a workspace export of earlier versions) is detected by its content and merged into the workspace with a preview and conflict choices; any other file or link is imported as below.
@@ -722,7 +733,11 @@ testpion import adopt-pet.arazzo.yaml -w my-workspace --json   # Arazzo: one flo
 | `--max-size <mb>` | A bundle: refuse a larger file. |
 | `--keep-pm` | For a Postman or Insomnia file: keep `pm.*` in scripts. By default they are converted to TestPion's `tp.*` and the output says `Converted N scripts to tp.* (--keep-pm keeps pm.*)`; for other tools (Bruno's `bru.*` …) it says only `Converted N scripts to tp.*`, since `--keep-pm` changes nothing there (`pm.*` runs either way; `testpion export -f postman` turns `tp.*` back into `pm.*`). |
 | `--fetch-sources` | For an Arazzo document: download the OpenAPI source descriptions given as http(s) links. By default they are looked up next to the Arazzo file and in the workspace (`specs/`); an `operationId` whose document is not found becomes a skipped step to fill in. |
-| `--json` | Print the result as JSON, for scripts and AI agents (includes `specPath` and `contractChecks` for OpenAPI imports, `flows` — `[{ path, workflowId, steps }]` — for Arazzo imports, `notes` (what did not map one to one, for every import: unsupported auth, template tags, values needed, a spec saved as `name-2` …), and `scripts` — `{ converted, unchanged: [{ where, reason }] }` — for Postman, Insomnia and Bruno imports). Without `--json`, the output lists the first 20 notes under *Check after import (N notes)*. |
+| `--preview` | Say what importing would create and what would not come over (the compatibility report), and write nothing. For a bundle: what importing would do per item. With `--json`: `{ preview: true, inputs: [{ input, plan }], skipped, totals }`. |
+| `--apply` | Import several files, a folder or a ZIP (they are previewed by default); one plain file is imported at once. |
+| `--report <file>` | Write the compatibility report: `.json`, or `.md` for Markdown. |
+| `--postman-api-key <key>` | A Postman API key for `postman:collection/<id>`, `postman:environment/<id>`, `postman:workspace/<id>` and api.getpostman.com links (or the `POSTMAN_API_KEY` variable). Sent only to api.getpostman.com. |
+| `--json` | Print the result as JSON, for scripts and AI agents (includes `specPath` and `contractChecks` for OpenAPI imports, `flows` — `[{ path, workflowId, steps }]` — for Arazzo imports, `notes` (what did not map one to one, for every import: unsupported auth, template tags, values needed, a spec saved as `name-2` …), `report` (the compatibility report: counts, `summary` fully / changed / not imported, `groups`, and every finding with its item path), `importId` (what `import-undo` and `import-report` take) and `scripts` — `{ converted, unchanged: [{ where, reason }], warnings }` — for Postman, Insomnia and Bruno imports). Without `--json`, the output lists the first 20 notes under *Check after import (N notes)*. |
 
 What did not map one to one is listed after the result, naming the request (all of them under `notes` with `--json`; [Import fidelity](/getting-started/import-fidelity) lists what each importer maps):
 

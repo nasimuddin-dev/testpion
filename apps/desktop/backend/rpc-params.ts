@@ -27,6 +27,13 @@ const COMMON: ParamSpec = {
 
 /** The parameters each method needs (and the types of the optional ones a wrong value would break). */
 export const RPC_PARAMS: Record<string, ParamSpec> = {
+  'import.preview': { files: 'a?', text: 's?', url: 's?', folderName: 's?', keepPm: 'b?' },
+  'import.apply': { sessionId: 's', keepPm: 'b?', replaceSpec: 'b?' },
+  'import.cancel': { sessionId: 's' },
+  'import.undo': { receipts: 'sa', force: 'b?' },
+  'import.report': { id: 's' },
+  'import.reportMarkdown': { report: 'o' },
+  'import.setPostmanKey': { key: 's' },
   'agents.init': { targets: 'sa?', force: 'b?', dryRun: 'b?' },
   'ai.chat': { provider: 's', model: 's', prompt: 's?', system: 's?' },
   'ai.compare': { models: 'a', prompt: 's?' },

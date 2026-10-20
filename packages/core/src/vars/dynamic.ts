@@ -1,4 +1,5 @@
 import { randomInt, randomUUID } from 'node:crypto';
+import { MORE_GENERATORS } from './dynamic-more.js';
 
 /**
  * Dynamic variables: `{{$guid}}`, `{{$timestamp}}`, `{{$randomFirstName}}` … a new value every time they
@@ -120,11 +121,11 @@ const GENERATORS: Record<string, [string, () => string | number | boolean]> = {
 };
 
 /** Dynamic variable names with a description (for completion and docs). */
-export const DYNAMIC_VARIABLES: Array<{ name: string; description: string }> = Object.entries(GENERATORS).map(([name, [description]]) => ({ name, description }));
+export const DYNAMIC_VARIABLES: Array<{ name: string; description: string }> = Object.entries({ ...GENERATORS, ...MORE_GENERATORS }).map(([name, [description]]) => ({ name, description }));
 
 /** A fresh value of a dynamic variable, or undefined when the name isn't one. */
 export function dynamicValue(name: string): string | number | boolean | undefined {
-  const g = GENERATORS[name];
+  const g = GENERATORS[name] ?? MORE_GENERATORS[name];
   if (g) return g[1]();
   const range = /^\$randomInt\((-?\d+)\s*,\s*(-?\d+)\)$/.exec(name);
   if (range) return int(Number(range[1]), Number(range[2]));

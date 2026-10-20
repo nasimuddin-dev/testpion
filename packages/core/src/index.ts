@@ -109,6 +109,7 @@ export * from './storage/collection-tree.js';
 export * from './runner/db-datasets.js';
 export * from './runner/collection-run.js';
 export * from './runner/folder-defaults.js';
+export * from './runner/saved-request.js';
 export * from './runner/breakdown.js';
 export * from './runner/run-results.js';
 export * from './runner/test-history.js';

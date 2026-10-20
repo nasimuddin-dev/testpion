@@ -4,6 +4,14 @@ import type { Redactor } from '../util/redact.js';
 import type { ScriptInput, ScriptOutput, ScriptRequestSender, ScriptScope } from './sandbox.js';
 import type { CookieJar } from '../cookies/cookie-jar.js';
 import { executeHttp } from '../protocols/http/client.js';
+import type { HttpRequestSpec } from '../model/types.js';
+
+/** Saved requests a script can run (`tp.execution.runRequest`): find one in the collection, and resolve its variables. */
+export interface SavedRequestRunner {
+  find(ref: string): HttpRequestSpec | undefined;
+  resolve(spec: HttpRequestSpec): HttpRequestSpec;
+}
+const SAVED = 'tp-saved:';
 
 /** Where `tp.environment` / `tp.globals` / `tp.collectionVariables` map to in the engine's scopes. */
 const SCOPE_MAP: Record<ScriptScope, ScopeName> = { environment: 'environment', globals: 'global', collectionVariables: 'collection' };
@@ -51,8 +59,19 @@ export function applyScriptOutput(out: Pick<ScriptOutput, 'vars' | 'unset' | 'sc
  * `production` is required (it may be undefined): the production guard of the context the script runs in, so a
  * data-changing tp.sendRequest to a production environment needs the same consent as the request itself (WF-06).
  */
-export function scriptRequestSender(o: { redactor?: Redactor; cookieJar?: CookieJar; signal?: AbortSignal; timeoutMs?: number; production: ProductionGate | undefined }): ScriptRequestSender {
+export function scriptRequestSender(o: { redactor?: Redactor; cookieJar?: CookieJar; signal?: AbortSignal; timeoutMs?: number; production: ProductionGate | undefined; saved?: SavedRequestRunner }): ScriptRequestSender {
   return async (req) => {
+    if (req.url.startsWith(SAVED)) {
+      const ref = req.url.slice(SAVED.length);
+      const spec = o.saved?.find(ref);
+      if (!spec) throw new Error(`tp.execution.runRequest: no HTTP request "${ref}" in this collection${o.saved ? '' : ' (run it from a collection)'}`);
+      const r = o.saved!.resolve(spec);
+      assertProductionStep(o.production, { action: `tp.execution.runRequest ${r.method} ${o.redactor ? o.redactor.redactUrl(r.url) : r.url}`, changesData: isDataChangingMethod(r.method) });
+      const timeoutMs = o.timeoutMs ?? 30_000;
+      const sig = o.signal ? AbortSignal.any([o.signal, AbortSignal.timeout(timeoutMs)]) : AbortSignal.timeout(timeoutMs);
+      const { response } = await executeHttp({ ...r, settings: { timeoutMs, ...r.settings } }, { signal: sig, redactor: o.redactor, cookieJar: o.cookieJar, maxPreviewBytes: 2 * 1024 * 1024 });
+      return { status: response.status, statusText: response.statusText, headers: response.headers, body: response.bodyPreview, time: response.durationMs };
+    }
     if (!/^https?:\/\//i.test(req.url)) throw new Error(`tp.sendRequest: "${req.url}" is not an http(s) URL`);
     assertProductionStep(o.production, { action: `tp.sendRequest ${String(req.method ?? 'GET').toUpperCase()} ${o.redactor ? o.redactor.redactUrl(req.url) : req.url}`, changesData: isDataChangingMethod(req.method) });
     const timeoutMs = o.timeoutMs ?? 30_000;

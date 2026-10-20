@@ -1,4 +1,5 @@
 import { openDocs } from '../lib/docs-link';
+import { openImport } from '../components/ImportHost';
 import { askAssistant } from '../components/ai/AiAction';
 import { Activity as ActivityIcon, AlarmClock, BookOpen, Bug, Gauge, Bot, LockKeyhole, ShieldCheck, FolderPlus, FolderTree, GitBranch, History, KeyRound, Network, Play, Plug, Plus, Sparkles, Upload, ArrowRight } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -320,6 +321,7 @@ export function HomeView() {
           <Action icon={<Network size={16} />} hue="blue" title="New HTTP request" text="Send a request, paste cURL or fetch from the browser, write tp.* scripts (scripts written for Postman run unchanged)." onClick={() => open('rest', { newTab: true })} />
           <Action icon={<GitBranch size={16} />} hue="pink" title="New GraphQL query" text="Explore a schema with autocomplete and run queries." onClick={() => open('graphql', { reset: true })} />
           <Action icon={<Upload size={16} />} hue="teal" title="Import" text="Postman, Insomnia, Bruno or Hoppscotch collections, OpenAPI, HAR or cURL." onClick={() => open('collections', { import: true })} />
+          <Action icon={<Upload size={16} />} hue="violet" title="Migrate from…" text="Coming from Postman, Insomnia or Bruno? How to export, then a preview of what comes over and what does not." onClick={() => openImport({ migrate: true, tool: 'postman' })} />
           <Action icon={<FolderPlus size={16} />} hue="orange" title="New collection" text="Group requests, share auth and scripts, run and mock them." onClick={() => void newCollection()} />
           <Action icon={<Bug size={16} />} hue="red" title="Debug HTTP traffic" text="See what a browser or an app sends: capture through a proxy, inspect, change with rules, replay." onClick={() => setView('debugger')} />
           <Action icon={<Gauge size={16} />} hue="amber" title="Load test an API" text="Virtual users, ramp-up, latency percentiles and errors, live." onClick={() => setView('load')} />

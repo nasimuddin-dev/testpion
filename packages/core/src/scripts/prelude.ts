@@ -661,6 +661,8 @@ const pm = {
   execution: {
     setNextRequest: (n) => { __out.nextRequest = n === null ? null : String(n); },
     skipRequest: () => { __out.skipRequest = true; },
+    // runs another saved HTTP request of the collection (by name, path or id) and answers its response, like tp.sendRequest
+    runRequest: (ref, cb) => __sendRequest('tp-saved:' + String(ref), cb),
     // [collection, folders…, request]; .current is the request
     location: Object.assign(((__in.info && __in.info.location) || [(__in.info && __in.info.requestName) || '']).slice(), { current: (__in.info && __in.info.requestName) || '' }),
   },

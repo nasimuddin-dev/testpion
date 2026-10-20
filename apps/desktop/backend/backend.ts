@@ -158,6 +158,7 @@ import { evalMatrixHandlers } from './handlers/eval-matrix.js';
 import { ragHandlers } from './handlers/rag.js';
 import { outputHandlers } from './handlers/output.js';
 import { kindHandlers } from './handlers/kinds.js';
+import { importHandlers } from './handlers/import.js';
 import { bundleHandlers } from './handlers/bundle.js';
 import { checkRpcParams, guardHandler } from './rpc-params.js';
 import { forgetProductionSessions, guardProduction } from './production-guard.js';
@@ -663,7 +664,7 @@ export class Backend {
    */
   private buildHandlers(): Handlers {
     const all: Handlers = {};
-    for (const group of [appHandlers, workspaceHandlers, collectionsHandlers, requestsHandlers, grpcHandlers, mcpHandlers, aiHandlers, aiTaskHandlers, aiTriageHandlers, aiSpecHandlers, testingHandlers, monitorHandlers, agentHandlers, feedbackHandlers, gitHandlers, debuggerHandlers, debuggerRulesHandlers, externalSecretsHandlers, fuzzHandlers, flowDebugHandlers, debuggerFlowHandlers, debuggerReverseHandlers, flowDeployHandlers, terminalHandlers, flowScaleHandlers, evalMatrixHandlers, outputHandlers, kindHandlers, bundleHandlers, ragHandlers]) {
+    for (const group of [appHandlers, workspaceHandlers, collectionsHandlers, requestsHandlers, grpcHandlers, mcpHandlers, aiHandlers, aiTaskHandlers, aiTriageHandlers, aiSpecHandlers, testingHandlers, monitorHandlers, agentHandlers, feedbackHandlers, gitHandlers, debuggerHandlers, debuggerRulesHandlers, externalSecretsHandlers, fuzzHandlers, flowDebugHandlers, debuggerFlowHandlers, debuggerReverseHandlers, flowDeployHandlers, terminalHandlers, flowScaleHandlers, evalMatrixHandlers, outputHandlers, kindHandlers, importHandlers, bundleHandlers, ragHandlers]) {
       for (const [name, fn] of Object.entries(group(this))) {
         if (name in all) throw new Error(`RPC method ${name} is defined twice`);
         // the parameters are checked first; a TypeError from inside becomes an InternalError naming the method
@@ -700,7 +701,8 @@ export class Backend {
     const sseEvents = this.batched<unknown>('http.sse', 100);
     let scriptLogs: string[] = [];
     let preLogCount: number | undefined;
-    const scriptSender = scriptRequestSender({ redactor: ctx.redactor, cookieJar: ctx.services.cookieJar, signal: ctrl.signal, timeoutMs: this.settings.defaultTimeoutMs, production: ctx.services.production });
+    const saved = ctx.services.savedRequest ? { find: ctx.services.savedRequest, resolve: (s: HttpRequestSpec) => ctx.vars.resolveDeep(s) } : undefined;
+    const scriptSender = scriptRequestSender({ redactor: ctx.redactor, cookieJar: ctx.services.cookieJar, signal: ctrl.signal, timeoutMs: this.settings.defaultTimeoutMs, production: ctx.services.production, saved });
     const sentLogs = (o: { sentRequests?: Array<{ method: string; url: string; status?: number; error?: string; durationMs?: number }> }) =>
       (o.sentRequests ?? []).map((r) => `tp.sendRequest ${r.method} ${ctx.redactor.redactUrl(r.url)} → ${r.error ? `error: ${r.error}` : `${r.status} (${r.durationMs} ms)`}`);
     const logsOf = () => scriptLogs.map((message, i) => ({ phase: i < (preLogCount ?? scriptLogs.length) ? ('pre-request' as const) : ('test' as const), message: ctx.redactor.redactString(message) }));
@@ -934,7 +936,8 @@ export class Backend {
     const ctx = this.context({ environment: p.environment, collectionId: p.collectionId });
     const tracer = new Tracer(p.operationName ?? 'GraphQL', ctx.redactor);
     const span = tracer.start('graphql', 'graphql', { input: { query: p.request.query, variables: p.request.variables } });
-    const scriptSender = scriptRequestSender({ redactor: ctx.redactor, cookieJar: ctx.services.cookieJar, signal: ctrl.signal, timeoutMs: this.settings.defaultTimeoutMs, production: ctx.services.production });
+    const saved = ctx.services.savedRequest ? { find: ctx.services.savedRequest, resolve: (s: HttpRequestSpec) => ctx.vars.resolveDeep(s) } : undefined;
+    const scriptSender = scriptRequestSender({ redactor: ctx.redactor, cookieJar: ctx.services.cookieJar, signal: ctrl.signal, timeoutMs: this.settings.defaultTimeoutMs, production: ctx.services.production, saved });
     const scriptLogs: Array<{ phase: 'pre-request' | 'test'; message: string }> = [];
     const folders = ctx.collection && p.requestId ? folderChain(ctx.collection, p.requestId) : [];
     const info = { requestName: p.name ?? p.operationName, requestId: p.requestId, environmentName: ctx.environment?.name };

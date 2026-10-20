@@ -1,5 +1,6 @@
 // The engine's types, from core (type-only: the window never loads core at run time); what the window adds is here.
 export type { AuthConfig, BodyConfig, HttpSettings, HttpRequestSpec, CheckConfig, CheckResult, HttpResponseData, SavedExample, SavedHttpRequest, SavedGraphQLRequest, CollectionFolder, CollectionNode, Environment, Span, Trace, TestResult, LatencyStats, RunSummary, PriceEntry, AppSettings, LibraryItem } from '@testpion/core';
+export type { ImportReport, ImportManyPlan, ImportPlan, PlanNode, ImportFinding, UndoResult } from '@testpion/core';
 import type { Collection as CoreCollection, Environment, Library as CoreLibrary, McpServerConfig as CoreMcpServerConfig, ProviderConfig as CoreProviderConfig } from '@testpion/core';
 
 /** A collection as listed: a file that failed to parse comes with `problem` instead of its contents. */
@@ -37,3 +38,11 @@ export interface WorkspaceCurrent {
   migrations: string[];
 }
 
+
+/** What an Import reads: files as picked or dropped (text, or base64 for a ZIP), pasted text, a link or Postman id. */
+export interface ImportSource {
+  files?: Array<{ path: string; text?: string; base64?: string }>;
+  text?: string;
+  url?: string;
+  folderName?: string;
+}

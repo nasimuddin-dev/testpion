@@ -3,6 +3,7 @@ import { externalSecrets, isSecretRef } from './vars/external-secrets.js';
 import type { ProviderConfig, AppSettings, AuthConfig, Collection, CollectionNode, Environment, McpServerConfig } from './model/types.js';
 import { defaultSettings } from './model/types.js';
 import { VariableScope } from './vars/variables.js';
+import { savedRequestSpec } from './runner/saved-request.js';
 import { Redactor } from './util/redact.js';
 import { Logger } from './log/logger.js';
 import { ProviderRegistry } from './ai/index.js';
@@ -133,6 +134,7 @@ export function createEngineContext(opts: ContextOptions): EngineContext {
     defaultTimeoutMs: settings.defaultTimeoutMs,
     maxPreviewBytes: settings.maxPreviewBytes,
     inheritedAuth: collection?.auth,
+    savedRequest: collection ? (ref) => savedRequestSpec(collection, ref) : undefined,
     openExternal: opts.openExternal,
     cookieJar: opts.cookieJar === false ? undefined : (opts.cookieJar ?? new CookieJar()),
     environmentName: environment?.name,
