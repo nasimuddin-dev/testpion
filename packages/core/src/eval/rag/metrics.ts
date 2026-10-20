@@ -18,6 +18,13 @@ import { goldIds, needsReference, num, referenceOf, result } from './metric-util
 import './metrics-ir.js';
 import './metrics-judged.js';
 import './metric-defs.js';
+import './metrics-more.js';
+import './metric-defs-more.js';
+import './metrics-retrieval-judged.js';
+import './metrics-generation-judged.js';
+import './metrics-claims.js';
+import './judge-templates.js';
+import './metric-defs-judged.js';
 
 /**
  * What each metric reads, for the docs and the editors. They are not registered as the check registry's documented

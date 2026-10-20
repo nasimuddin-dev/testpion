@@ -142,7 +142,7 @@ export async function runRagEvaluation(o: RagRunOptions): Promise<RagRunOutcome>
   try {
     // never a silent judge, and never a question sent to a target that cannot be called
     assertEvaluationRunnable(o.store, ctx.services.ragJudge!, d);
-    const free = (d.evaluators ?? []).filter((e) => !needsJudgeService(e.type, !!d.target));
+    const free = (d.evaluators ?? []).filter((e) => !needsJudgeService(e.type, !!d.target, e));
     const phased = !!o.twoPhase && free.length < (d.evaluators ?? []).length;
     const phaseOne: SavedEvaluation = phased ? { ...d, evaluators: free.length ? free : [{ type: 'latency', max: 3_600_000, name: 'collected' }] } : d;
     const runId = shortId('run-');

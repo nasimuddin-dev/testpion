@@ -14,6 +14,7 @@ import { recordCertificate } from './storage/certificates.js';
 import { secretKeys, type SecretStore } from './storage/secrets.js';
 import { CookieJar } from './cookies/cookie-jar.js';
 import { productionAllowed } from './net/production-guard.js';
+import { syncCustomMetrics } from './eval/rag/custom/compile.js';
 import { createRagJudgeHost } from './eval/rag/judge.js';
 import type { AiSurface } from './storage/ai-usage.js';
 import { APP_CLAUDE_ID, APP_CLAUDE_SECRET, appClaudeProvider } from './ai/app-provider.js';
@@ -86,6 +87,12 @@ export function createEngineContext(opts: ContextOptions): EngineContext {
   // the caller's choice, else the user's list from Settings when there is one (the MCP server, runs), else every variable (the CLI)
   const vars = new VariableScope(opts.secrets, redactor, { allowEnv: true, envAccess: opts.envAccess ?? settings.envVariables ?? 'all' });
   const { store } = opts;
+  // the workspace's own metrics (metrics/*.yaml) are registered before any run, try or estimate can name one
+  try {
+    syncCustomMetrics(store);
+  } catch {
+    /* a metric file that cannot be read never stops the engine; `testpion rag metric validate` says what is wrong */
+  }
 
   vars.setScope('global', settings.globalVariables ?? []);
   vars.setScope('workspace', [

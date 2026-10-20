@@ -37,6 +37,7 @@ let store: WorkspaceStore;
 const RULES: MockRule[] = [
   { match: 'faithfulness-v1[\\s\\S]*Parking is free', response: JSON.stringify({ reasoning: 'no document mentions parking', items: [{ text: 'The clinic opens at 8am.', verdict: true, reason: '[doc-1]' }, { text: 'Parking is free for two hours.', verdict: false, reason: 'no document' }] }) },
   { match: 'faithfulness-v1', response: JSON.stringify({ reasoning: 'ok', items: [{ text: 'The clinic opens at 8am.', verdict: true, reason: '[doc-1]' }] }) },
+  { match: 'context-recall-judge-v1', response: JSON.stringify({ reasoning: 'ok', items: [{ text: 'The clinic opens at 8am.', verdict: true, reason: '[doc-1]' }] }) },
   { match: 'answer-relevance-v1', response: JSON.stringify({ reasoning: 'ok', items: [{ text: 'It opens at 8am.', verdict: true, reason: 'answers' }] }) },
 ];
 

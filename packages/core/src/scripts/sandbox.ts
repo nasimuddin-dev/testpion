@@ -507,3 +507,60 @@ ${expr}
     }
   }
 }
+
+/**
+ * Run the body of a script metric (a function of `sample` that returns { score, reason?, items? }) in a fresh context of
+ * the same engine, with the same walls as an `if:` expression: no tp API of the request scripts, no host functions (no
+ * network, files, processes, require or import), only the sample passed in as JSON; a second of CPU, 32 MB of heap and
+ * 64 KB of result by default. `tp.log(...)` keeps a few lines. Answers the value it returned, or the error (a syntax error,
+ * a thrown error, a timeout, memory, a result that is too large).
+ */
+export async function runMetricScript(code: string, sample: unknown, opts: { timeoutMs?: number; memoryMb?: number; maxOutputBytes?: number; options?: unknown } = {}): Promise<{ value?: unknown; error?: string; logs: string[] }> {
+  if (!code?.trim()) return { error: 'The script is empty', logs: [] };
+  const mod = await getModule();
+  const rt = getRuntime(mod);
+  const timeoutMs = opts.timeoutMs ?? 1000;
+  const maxOut = opts.maxOutputBytes ?? 64 * 1024;
+  rt.setMemoryLimit((opts.memoryMb ?? 32) * 1024 * 1024);
+  const deadline = Date.now() + timeoutMs;
+  rt.setInterruptHandler(() => Date.now() > deadline);
+  const vm = rt.newContext();
+  try {
+    const source = `"use strict";
+const __d = JSON.parse(${JSON.stringify(JSON.stringify({ sample, options: opts.options ?? {} }))});
+const __logs = [];
+const __tp = { sample: __d.sample, options: __d.options, log: function () { if (__logs.length < 50) __logs.push(Array.prototype.map.call(arguments, String).join(' ').slice(0, 500)); } };
+const __r = (function (sample, tp) {
+${code}
+}).call(undefined, __d.sample, __tp);
+JSON.stringify({ v: __r === undefined ? null : __r, logs: __logs });`;
+    const r = vm.evalCode(source, 'metric.js');
+    if (r.error) {
+      const err = vm.dump(r.error);
+      r.error.dispose();
+      const msg = typeof err === 'object' && err ? `${(err as { name?: string }).name ?? 'Error'}: ${(err as { message?: string }).message ?? JSON.stringify(err)}` : String(err);
+      return { error: /interrupted/i.test(msg) ? `The script took longer than ${timeoutMs} ms` : /out of memory/i.test(msg) ? `The script used more than ${opts.memoryMb ?? 32} MB of memory` : msg, logs: [] };
+    }
+    const json = vm.typeof(r.value) === 'string' ? vm.getString(r.value) : undefined;
+    r.value.dispose();
+    if (json === undefined) return { error: 'The script returned nothing that can be read', logs: [] };
+    if (json.length > maxOut) return { error: `The script returned more than ${Math.round(maxOut / 1024)} KB`, logs: [] };
+    const parsed = JSON.parse(json) as { v?: unknown; logs?: string[] };
+    return { value: parsed.v, logs: parsed.logs ?? [] };
+  } catch (e) {
+    return { error: (e as Error).message, logs: [] };
+  } finally {
+    if (rt.hasPendingJob()) {
+      const j = rt.executePendingJobs();
+      if (j.error) j.error.dispose();
+    }
+    rt.removeInterruptHandler();
+    vm.dispose();
+    if (rt.hasPendingJob()) {
+      if (pooled) disposeSlot(pooled);
+      pooled = undefined;
+      rt.dispose();
+      runtime = undefined;
+    }
+  }
+}

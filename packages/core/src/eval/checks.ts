@@ -49,6 +49,8 @@ export interface CheckContext {
   /** RAG: the gold chunks (texts) and their ids from the dataset record, for the metrics that compare the retrieval with them. */
   referenceContexts?: string[];
   referenceIds?: string[];
+  /** RAG: the other fields of the dataset record the metrics read (answerable, relevance, injection …; see eval/rag/record.ts). */
+  record?: import('./rag/record.js').RagRecord;
   /** RAG: the judge the evaluation names (else the AI settings'), and its limits for the run. */
   judge?: RagJudgeSetup;
   /** RAG: set when the answer and contexts come from a RAG target (or a stored sample): the judged metrics then use the judge service strictly, and know which metrics run beside them (the shared claim pass). */
@@ -71,6 +73,12 @@ const docs = new Map<string, CheckDoc>();
 export function registerCheck(type: string, fn: CheckFn, doc?: CheckDoc): void {
   registry.set(type, fn);
   if (doc) docs.set(type, doc);
+}
+
+/** Removes a check type (a custom metric whose file was deleted). */
+export function unregisterCheck(type: string): void {
+  registry.delete(type);
+  docs.delete(type);
 }
 
 /** A registered check type's function (a metric that wraps a check of this file reads the original here). */
@@ -888,7 +896,6 @@ registerCheck('groundedness', async (cfg, ctx) => {
     metadata: { unsupported: unsupported.slice(0, 10), hallucinationIndicator: round3(1 - score), items: sents.map((s, i) => ({ text: s, ok: supported[i]! })), itemLabels: LABELS.claims },
   });
 });
-registry.set('hallucination', registry.get('groundedness')!);
 registry.set('faithfulness', registry.get('groundedness')!);
 
 registerCheck('answer-relevance', async (cfg, ctx) => {

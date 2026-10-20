@@ -141,8 +141,9 @@ const verdictProblems = (v: unknown, metric?: JudgedMetric): string[] => {
   if (!s.valid) return s.errors;
   // a rating metric needs a rating in range on every item, not only a verdict
   if (metric?.rating !== undefined) {
-    const bad = (v as Verdict).items.findIndex((i) => !Number.isInteger(i.rating) || i.rating! < 0 || i.rating! > metric.rating!);
-    if (bad >= 0) return [`items[${bad}].rating must be an integer from 0 to ${metric.rating}`];
+    const min = metric.ratingMin ?? 0;
+    const bad = (v as Verdict).items.findIndex((i) => !Number.isInteger(i.rating) || i.rating! < min || i.rating! > metric.rating! || (metric.ratingValues !== undefined && !metric.ratingValues.includes(i.rating!)));
+    if (bad >= 0) return [`items[${bad}].rating must be ${metric.ratingValues ? `one of ${metric.ratingValues.join(', ')}` : `an integer from ${min} to ${metric.rating}`}`];
   }
   return [];
 };

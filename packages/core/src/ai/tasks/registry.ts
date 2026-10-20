@@ -26,6 +26,7 @@ import { describeSecurity, prepareSecurityContext, proposeSecurity, SECURITY_PLA
 import { VERDICT_SCHEMA } from '../../eval/rag/judge-prompts.js';
 import { NL_SEARCH_SCHEMA, validateNlSearch } from '../nl-search.js';
 import { responseOfContext, SUGGEST_MAPPING_SCHEMA, suggestedMappingProblems } from '../../eval/rag/suggest-mapping.js';
+import { proposeMetricDraft } from '../rag-draft-metric.js';
 import { describeFlow, FLOW_PLAN_SCHEMA, FLOW_VERIFIERS, prepareFlowContext, proposeFlow } from '../flow-from-collection.js';
 
 export type AiTaskOutput = { kind: 'markdown' } | { kind: 'code'; language: 'yaml' | 'json' | 'javascript' | 'graphql' | 'text' } | { kind: 'json'; schema: Record<string, unknown> };
@@ -642,6 +643,18 @@ export const AI_TASKS: readonly AiTaskDef[] = [
     maxRepairs: 2,
     // the verifier: the mapping must extract an answer (and, when it maps contexts, documents with text) from the sample
     propose: (answer, input) => ({ items: [], problems: suggestedMappingProblems(answer.value, responseOfContext(input.context)) }),
+  }),
+  T('rag-draft-metric', {
+    title: 'Draft a custom RAG metric',
+    description: 'From a description of what good looks like, a custom RAG metric file (metrics/<id>.yaml) of the kind that fits (judge, checklist, rule, formula, embedding set or script) with 4 to 8 examples that must pass or fail. Offered as a proposal; the verifier runs the examples of a rule or script metric and checks the prompts of a judged one.',
+    tier: 'large',
+    output: { kind: 'code', language: 'yaml' },
+    context: 'question (what good looks like), kind (optional), samples [{question, answer, reference, contexts}] (optional), existing (ids of the metrics the workspace has)',
+    contextTokens: 6000,
+    maxTokens: 3000,
+    verifiers: ['metric-examples'],
+    maxRepairs: 2,
+    propose: proposeMetricDraft,
   }),
   T('nl-search', {
     title: 'Ask about history, runs and traces',

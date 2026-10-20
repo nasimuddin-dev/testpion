@@ -12,6 +12,7 @@ import type { CheckContext } from '../checks.js';
 import { ApsError } from '../../errors.js';
 import { dryHost, type DryJudgeCall, type RagJudgeHost } from './judge.js';
 import { INPUT_LABELS, metricToCheck, resolveMetric, type MetricDef, type MetricInput } from './metric-registry.js';
+import type { RagRecord, RagToolCall } from './record.js';
 import { scoreRagSample } from './score.js';
 
 /** A sample written by hand, taken from a stored result or probed from a target. */
@@ -22,12 +23,26 @@ export interface TrySample {
   reference?: string;
   referenceIds?: string[];
   referenceContexts?: string[];
+  /** The other fields of the dataset record (eval/rag/record.ts). */
+  record?: RagRecord;
+  toolCalls?: RagToolCall[];
   latencyMs?: number;
 }
 
 /** The inputs this sample has, by the registry's codes. */
 export function sampleInputs(s: TrySample): Partial<Record<MetricInput, boolean>> {
-  return { question: !!s.question?.trim(), answer: !!s.answer?.trim(), contexts: !!s.contexts?.length, reference: !!s.reference?.trim(), referenceIds: !!s.referenceIds?.length, referenceContexts: !!s.referenceContexts?.length };
+  return { question: !!s.question?.trim(), answer: !!s.answer?.trim(), contexts: !!s.contexts?.length, reference: !!s.reference?.trim(), referenceIds: !!s.referenceIds?.length, referenceContexts: !!s.referenceContexts?.length,
+    canaries: !!s.record?.canaries?.length,
+    toolCalls: !!(s.toolCalls ?? s.record?.toolCalls)?.length,
+    referenceToolCalls: !!s.record?.referenceToolCalls?.length,
+    answerable: s.record?.answerable !== undefined,
+    source: !!s.record?.source,
+    rubric: !!s.record?.rubric,
+    goodAnswers: !!s.record?.goodAnswers?.length,
+    latency: s.latencyMs !== undefined,
+    scores: !!s.contexts?.some((d) => typeof d.score === 'number'),
+    relevance: !!s.record?.relevance,
+  };
 }
 
 export function missingFor(def: MetricDef, s: TrySample): Array<{ input: MetricInput; message: string }> {
@@ -47,6 +62,8 @@ export function contextOfSample(s: TrySample, o: { judge?: RagJudgeSetup; provid
     contexts: (s.contexts ?? []).map((d, i) => ({ id: d.id ?? `doc-${i + 1}`, text: d.text, ...(d.score !== undefined ? { score: d.score } : {}) })),
     referenceIds: s.referenceIds,
     referenceContexts: s.referenceContexts,
+    record: s.record,
+    toolCalls: s.toolCalls ?? s.record?.toolCalls,
     latencyMs: s.latencyMs,
     judge: o.judge,
     services: { providers: o.providers, ragJudge: o.ragJudge, signal: o.signal },

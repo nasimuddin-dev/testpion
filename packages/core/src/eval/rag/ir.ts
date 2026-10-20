@@ -94,3 +94,29 @@ export function similarityRatio(a: string, b: string): number {
   const longer = Math.max(x.length, y.length);
   return longer ? 1 - levenshtein(x, y) / longer : 1;
 }
+
+/* ------------------------------------------------------------------ holes and graded relevance */
+
+/** BEIR's Hole@k: the share of the top k that carries no relevance label at all (a hole in the judgements, not an irrelevant chunk). */
+export const holeAt = (retrieved: string[], labelled: Iterable<string>, k: number): number => {
+  const known = new Set(labelled);
+  return k > 0 ? top(retrieved, k).filter((id) => !known.has(id)).length / k : 0;
+};
+
+/**
+ * nDCG@k with graded relevance (qrels): `gain: linear` weighs a chunk by its grade, `exponential` by 2^grade − 1. The ideal
+ * order puts the best grades first. A chunk without a grade is 0; a gold id without a grade counts as grade 1.
+ */
+export function ndcgGraded(retrieved: string[], grades: Record<string, number>, k: number | undefined, o: { gain?: 'linear' | 'exponential'; gold?: string[] } = {}): number {
+  const g: Record<string, number> = { ...grades };
+  for (const id of o.gold ?? []) if (g[id] === undefined) g[id] = 1;
+  const gain = (rel: number) => (o.gain === 'exponential' ? 2 ** Math.max(0, rel) - 1 : Math.max(0, rel));
+  const ranked = top(retrieved, k);
+  const dcg = ranked.reduce((a, id, i) => a + gain(g[id] ?? 0) / Math.log2(i + 2), 0);
+  const ideal = Object.values(g)
+    .map(gain)
+    .sort((a, b) => b - a)
+    .slice(0, k && k > 0 ? Math.floor(k) : undefined)
+    .reduce((a, x, i) => a + x / Math.log2(i + 2), 0);
+  return ideal > 0 ? dcg / ideal : 0;
+}

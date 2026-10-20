@@ -15,7 +15,7 @@ import { noteProposalOutcome, type AiSurface } from '../storage/ai-usage.js';
 import { shortId } from '../util/ids.js';
 import { checkedTestFilePath } from '../storage/test-path.js';
 
-export type ProposalItemKind = 'file' | 'flow' | 'assertion' | 'script' | 'request' | 'patch' | 'variable' | 'collection' | 'spec' | 'text';
+export type ProposalItemKind = 'file' | 'flow' | 'assertion' | 'script' | 'request' | 'patch' | 'variable' | 'collection' | 'spec' | 'metric' | 'text';
 
 /** What a verifier said about an item: `pass` (checked and fine), `fail`, `warn`, `skip` (could not check). */
 export interface VerificationBadge {
@@ -86,6 +86,8 @@ export interface ProposalUndo {
   variable?: { environment: string; key: string; before: string | null };
   /** spec: an API definition of the workspace (specs/…) before the change. */
   spec?: { path: string; before: string };
+  /** metric: a custom metric file (metrics/<id>.yaml) before the change (null: it did not exist). */
+  metric?: { id: string; before: string | null };
 }
 
 export interface Proposal {

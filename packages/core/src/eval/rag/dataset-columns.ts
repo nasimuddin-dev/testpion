@@ -77,6 +77,7 @@ export function mapColumns(records: Rec[], mapping: ColumnMapping): MappedColumn
 /** Which of a metric's dataset inputs the columns do not give (the answer and contexts come from the target, or from the answer / contexts columns). */
 export function missingDatasetInputs(requires: ReadonlyArray<string>, columns: string[], hasTarget: boolean): string[] {
   const m = suggestColumnMapping(columns);
+  const cols = new Set(columns.map(norm));
   const has: Record<string, boolean> = {
     question: !!m.question,
     reference: !!m.reference,
@@ -84,6 +85,14 @@ export function missingDatasetInputs(requires: ReadonlyArray<string>, columns: s
     referenceContexts: !!m.reference_contexts,
     answer: hasTarget || !!m.answer,
     contexts: hasTarget || !!m.contexts,
+    // the fields of a record that are not one of the main ones: present when a column of that name is
+    canaries: ['canaries', 'canary', 'injection'].some((n) => cols.has(n)),
+    referenceToolCalls: ['reference_tool_calls', 'expected_tools'].some((n) => cols.has(n)),
+    answerable: cols.has('answerable'),
+    source: cols.has('source'),
+    rubric: cols.has('rubric') || cols.has('rubrics'),
+    goodAnswers: cols.has('good_answers'),
+    relevance: cols.has('relevance') || cols.has('qrels'),
   };
   return requires.filter((r) => has[r] === false);
 }

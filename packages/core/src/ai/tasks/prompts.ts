@@ -1,4 +1,5 @@
 import { NL_SEARCH_INSTRUCTION } from '../nl-search.js';
+import { RAG_DRAFT_METRIC_INSTRUCTION } from '../rag-draft-metric.js';
 import { SUGGEST_MAPPING_INSTRUCTION } from '../../eval/rag/suggest-mapping.js';
 
 /**
@@ -75,5 +76,6 @@ export const TASK_INSTRUCTIONS: Readonly<Record<string, string>> = {
   'rag-judge': RAG_JUDGE_INSTRUCTION,
   'nl-search': NL_SEARCH_INSTRUCTION,
   'rag-suggest-mapping': SUGGEST_MAPPING_INSTRUCTION,
+  'rag-draft-metric': RAG_DRAFT_METRIC_INSTRUCTION,
   free: 'Answer the developer question about their API/protocol/AI testing work.',
 };

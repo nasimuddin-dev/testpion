@@ -43,6 +43,7 @@ import type { RagJudgeHost } from '../eval/rag/judge.js';
 import { runRagTargetTest } from './rag-run.js';
 import { scoreRagSample } from '../eval/rag/score.js';
 import { docsOf } from '../eval/rag/lists.js';
+import { pickRecord } from '../eval/rag/record.js';
 import { runScript } from '../scripts/sandbox.js';
 import { renderVisualizer } from '../scripts/visualizer.js';
 import { applyScriptOutput, scriptRequestSender, scriptScopes, type PersistVariable } from '../scripts/bridge.js';
@@ -790,7 +791,7 @@ async function runRag(test: RagTest, scope: VariableScope, svc: ExecServices, sp
     }
   }
   return {
-    ctx: { testType: 'rag', body: answer, text: answer ?? '', contexts, question, expected: test.expected, tokens, latencyMs, costUsd },
+    ctx: { testType: 'rag', body: answer, text: answer ?? '', contexts, question, expected: test.expected, tokens, latencyMs, costUsd, record: pickRecord(test.variables), toolCalls: pickRecord(test.variables)?.toolCalls },
     partial: { model: modelName, input: question, output: summarize(answer ?? '') },
     metadata: {
       rag: {

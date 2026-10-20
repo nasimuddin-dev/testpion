@@ -21,6 +21,8 @@ import { applyTidyOps, type TidyOp } from './tidy-import.js';
 import { applyFlowEdit } from '../runner/flow-edit.js';
 import { applyPatchOps, isJsonSpec, type PatchOp } from '../openapi/spec-patch.js';
 import { stepOfResult } from './run-evidence.js';
+import { readMetricFile, removeMetricFile, writeMetricFile } from '../storage/metric-files.js';
+import { parseCustomMetric } from '../eval/rag/custom/file.js';
 
 /** The text a fix was made from (`data.fix.base`): a file or script that changed since is not overwritten. */
 function assertUnchanged(item: ProposalItem, current: string | null | undefined): void {
@@ -185,6 +187,17 @@ function applyItem(store: WorkspaceStore, item: ProposalItem): ProposalUndo {
       atomicWrite(file, text.endsWith('\n') ? text : `${text}\n`);
       return { item: item.id, spec: { path: rel, before } };
     }
+    case 'metric': {
+      // a custom metric file under metrics/: the draft must still be a valid file (its text can be edited in the review), and it replaces one of the same id only if that is what was there
+      const id = /^metrics\/([a-z0-9][a-z0-9-]*)\.yaml$/.exec(String(item.path ?? '').replace(/\\/g, '/'))?.[1];
+      if (!id) throw new ApsError('ValidationError', `"${item.title}" names no metric file (metrics/<id>.yaml)`);
+      const parsed = parseCustomMetric(item.after, { fileId: id });
+      if (!parsed.metric) throw new ApsError('ValidationError', `"${item.title}" is not a valid metric: ${parsed.problems.filter((p) => p.level === 'error').map((p) => p.message).join('; ')}`);
+      const before = readMetricFile(store, id)?.text ?? null;
+      assertUnchanged(item, before);
+      writeMetricFile(store, id, item.after);
+      return { item: item.id, metric: { id, before } };
+    }
     case 'collection': {
       // a tidy: its operations on the collection as it is now (renames, moves, variables, chains, drops)
       const d = item.data as { collectionId?: string; ops?: TidyOp[] } | undefined;
@@ -247,6 +260,10 @@ export function undoProposal(store: WorkspaceStore, id: string): { id: string; r
     } else if (u.variable) {
       if (u.variable.before === null) unsetEnvironmentVariables(store, u.variable.environment, [u.variable.key]);
       else setEnvironmentVariables(store, u.variable.environment, { [u.variable.key]: u.variable.before });
+      restored++;
+    } else if (u.metric) {
+      if (u.metric.before === null) removeMetricFile(store, u.metric.id);
+      else writeMetricFile(store, u.metric.id, u.metric.before);
       restored++;
     } else if (u.spec) {
       if (!/^specs\/[^/].*\.(json|ya?ml)$/i.test(u.spec.path) || u.spec.path.split('/').includes('..')) continue;

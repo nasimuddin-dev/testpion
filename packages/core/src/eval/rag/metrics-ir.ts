@@ -5,7 +5,7 @@
  */
 import type { CheckConfig, CheckResult } from '../../model/types.js';
 import { registerCheck, type CheckContext } from '../checks.js';
-import { averagePrecisionAt, hitRateAt, mrrAt, ndcgAt, precisionAt, rankedAveragePrecision, recallAt, rPrecision, similarityRatio } from './ir.js';
+import { averagePrecisionAt, hitRateAt, mrrAt, ndcgAt, ndcgGraded, precisionAt, rankedAveragePrecision, recallAt, rPrecision, similarityRatio } from './ir.js';
 import { round3 } from './measures.js';
 import { goldIds, needsReference, num, referenceOf, result, short } from './metric-util.js';
 
@@ -21,13 +21,15 @@ const IR: Array<[string, IrFn, number, string]> = [
 
 for (const [type, fn, defaultThreshold] of IR) {
   registerCheck(type, (cfg: CheckConfig, ctx: CheckContext): CheckResult => {
-    const gold = goldIds(cfg, ctx);
+    // graded relevance (a `relevance` column of qrels) is enough for nDCG: the grades say which chunks are gold
+    const grades = type === 'ndcg@k' ? ctx.record?.relevance : undefined;
+    const gold = goldIds(cfg, ctx) ?? (grades ? [] : undefined);
     if (!gold) return result(cfg, false, `${type} needs the gold chunk ids: add a "reference_ids" column to the dataset (a list of ids).`, { explanation: 'No reference ids.' });
     const k = Math.max(1, Math.floor(num(cfg.k, 10)));
     const ids = (ctx.contexts ?? []).map((d) => d.id);
     const t = num(cfg.threshold, defaultThreshold);
     // nothing retrieved is a real failure of the retriever: 0, not n/a
-    const score = round3(fn(ids, gold, k));
+    const score = round3(grades ? ndcgGraded(ids, grades, k, { gain: cfg.gain === 'exponential' ? 'exponential' : 'linear', gold }) : fn(ids, gold, k));
     return result(cfg, score >= t, `${type.replace('@k', `@${k}`)} ${score}${ids.length ? '' : ' (nothing was retrieved)'} (threshold ${t})`, {
       source: 'deterministic',
       score,

@@ -15,74 +15,11 @@
 import type { CheckConfig, CheckResult } from '../../model/types.js';
 import { cosine } from '../text.js';
 import { checkFn, registerCheck, type CheckContext } from '../checks.js';
-import { assertJudgeUsable, type JudgeRef } from './judge.js';
 import { ANSWER_RELEVANCE, FAITHFULNESS, type JudgedMetric } from './judge-prompts.js';
 import { ANSWER_RELEVANCE_ON_CLAIMS, CLAIMS, CONTEXT_RELEVANCE_CHUNKS, CONTEXT_RELEVANCE_NVIDIA, CONTEXT_RELEVANCE_SENTENCES, CONTEXT_RELEVANCE_STATEMENTS, FAITHFULNESS_ON_CLAIMS, REVERSE_QUESTIONS } from './judge-prompts-more.js';
-import { judgePanel, type PanelOptions, type PanelResult } from './judge-panel.js';
-import { round3 } from './measures.js';
-import { canonicalMetricId } from './metric-registry.js';
-import { num, result, short } from './metric-util.js';
-
-const na = (cfg: CheckConfig, m: JudgedMetric, why: string, extra: Partial<CheckResult> = {}): CheckResult =>
-  result(cfg, true, `${m.id} is n/a: ${why}`, { source: 'ai-judge', explanation: why, ...extra, metadata: { na: why, metric: m.id, promptVersion: m.version, ...(extra.metadata ?? {}) } });
-
-/** The judge of a check: its own `judge: { provider, model }` over the evaluation's, with the evaluation's panel options. */
-function panelOf(cfg: CheckConfig, ctx: CheckContext, threshold: number): PanelOptions {
-  const own = cfg.judge as { provider?: string; model?: string; name?: string } | undefined;
-  const setup = ctx.judge ?? {};
-  const judge: JudgeRef = { provider: setup.provider, model: setup.model, maxCostUsd: setup.maxCostUsd, maxCalls: setup.maxCalls, ...(own?.provider ? { provider: own.provider, model: own.model ?? own.name } : {}) };
-  const judges = (Array.isArray(cfg.judges) ? cfg.judges : setup.judges) as JudgeRef[] | undefined;
-  return {
-    judge,
-    ...(judges?.length ? { judges: judges.map((j) => ({ ...j, maxCostUsd: judge.maxCostUsd, maxCalls: judge.maxCalls })) } : {}),
-    aggregate: (cfg.aggregate ?? setup.aggregate) as PanelOptions['aggregate'],
-    swap: cfg.swap === undefined ? setup.swap : cfg.swap === true,
-    repeat: num(cfg.repeat, setup.repeat ?? 1),
-    threshold,
-    signal: ctx.services?.signal,
-  };
-}
-
-/** What every judged check keeps of its judging: the identity, the usage (apart from the system under test's), the panel. */
-function judgeMeta(m: JudgedMetric, r: PanelResult, t: number, extra: Record<string, unknown> = {}) {
-  return {
-    metric: m.id,
-    judge: { ...r.judge, cached: r.usage.cached },
-    judgeUsage: { calls: r.usage.calls, inputTokens: r.usage.inputTokens, outputTokens: r.usage.outputTokens, costUsd: r.usage.costUsd, cached: r.usage.cached },
-    itemLabels: m.labels,
-    items: r.items,
-    threshold: t,
-    redactions: r.redactionCount,
-    ...(r.panel ? { panel: r.panel } : {}),
-    ...extra,
-  };
-}
-
-const bad = (items: PanelResult['items']) => items.filter((i) => !i.ok);
-
-function describe(m: JudgedMetric, score: number, r: PanelResult, t: number, label = m.id): string {
-  const ok = r.items.filter((i) => i.ok).length;
-  const worse = bad(r.items);
-  const body = m.rating ? `mean rating of ${r.items.length} ${m.noun}` : `${ok} of ${r.items.length} ${m.noun} ${m.labels[0]}${worse.length ? `; ${m.labels[1]}: ${worse.slice(0, 3).map((i) => `"${short(i.text)}"`).join(', ')}${worse.length > 3 ? ` and ${worse.length - 3} more` : ''}` : ''}`;
-  const tail = [r.panel?.swap?.tie ? 'the two orders disagree (a tie: not passed)' : '', r.panel?.repeat ? `repeated ${r.panel.repeat.n}×: flip rate ${r.panel.repeat.flipRate}` : '', r.panel?.judges ? `${r.panel.judges.length} judges (${r.panel.aggregate})` : ''].filter(Boolean);
-  return `${label} ${score}: ${body}${tail.length ? ` [${tail.join('; ')}]` : ''} (threshold ${t})`;
-}
-
-/** Runs the body of a judged check: the sample must be usable, and a judge failure or an exhausted budget is a result, not a throw. */
-async function guarded(cfg: CheckConfig, ctx: CheckContext, m: JudgedMetric, run: (host: NonNullable<NonNullable<CheckContext['services']>['ragJudge']>) => Promise<CheckResult>): Promise<CheckResult> {
-  const host = ctx.services?.ragJudge;
-  if (!host) return result(cfg, false, `${m.id} needs a judge model and none is available here.`, { source: 'ai-judge' });
-  try {
-    return await run(host);
-  } catch (e) {
-    const budget = (e as { details?: { budget?: boolean } }).details?.budget;
-    return result(cfg, false, budget ? `${m.id} n/a: ${(e as Error).message}` : `judge failed: ${(e as Error).message}`, { source: 'ai-judge', metadata: { ...(budget ? { na: 'budget' } : {}), metric: m.id, promptVersion: m.version } });
-  }
-}
-
-const contextsInput = (ctx: CheckContext) => (ctx.contexts ?? []).map((d) => ({ id: d.id, text: d.text }));
-const needContexts = (cfg: CheckConfig, m: JudgedMetric) =>
-  result(cfg, false, `${m.id} needs the retrieved contexts: in the RAG target, click the list of sources in the sample response and map it (or turn on the endpoint’s "return sources" option).`, { source: 'ai-judge', explanation: 'No retrieved contexts.' });
+import { assertJudgeUsable, contextsInput, describe, guarded, judgeMeta, judgePanel, na, needContexts, panelOf, round3, strictOver, type PanelOptions, type PanelResult } from './judged-kit.js';
+import { resolveMetric } from './metric-registry.js';
+import { num, result } from './metric-util.js';
 
 /** The metrics that read the answer's claims (more join in later releases: claim precision, noise sensitivity …). */
 const CLAIM_READERS = new Set(['faithfulness', 'answer-relevance']);
@@ -109,7 +46,7 @@ async function claimsOf(host: NonNullable<NonNullable<CheckContext['services']>[
 const faithfulness = (cfg: CheckConfig, ctx: CheckContext): Promise<CheckResult> =>
   guarded(cfg, ctx, FAITHFULNESS, async (host) => {
     const docs = contextsInput(ctx);
-    if (!docs.length) return needContexts(cfg, FAITHFULNESS);
+    if (!docs.length) return needContexts(cfg, FAITHFULNESS.id);
     if (!ctx.text.trim()) return na(cfg, FAITHFULNESS, 'the answer is empty');
     const t = num(cfg.threshold, 0.8);
     const panel = panelOf(cfg, ctx, t);
@@ -229,9 +166,6 @@ const contextRelevance = (cfg: CheckConfig, ctx: CheckContext): Promise<CheckRes
 
 /* ------------------------------------------------------------------ registration */
 
-/** The names the older heuristic-or-`judge:` checks answer to; in a RAG target run they are these strict metrics. */
-const strictOver = (strict: (cfg: CheckConfig, ctx: CheckContext) => Promise<CheckResult>, legacy: ReturnType<typeof checkFn>) => (cfg: CheckConfig, ctx: CheckContext) => (ctx.ragRun?.strict || !legacy ? strict(cfg, ctx) : legacy(cfg, ctx));
-
 const faithfulnessFn = strictOver(faithfulness, checkFn('groundedness'));
 registerCheck('faithfulness', faithfulnessFn);
 registerCheck('groundedness', faithfulnessFn);
@@ -245,8 +179,18 @@ registerCheck('rag-answer-relevance', answerRelevance);
 registerCheck('context-relevance', contextRelevance);
 
 /** Names of the check types that ask a judge through the judge service (a run with one needs a judge before it starts). */
-export function needsJudgeService(type: string, strictRun: boolean): boolean {
-  const id = canonicalMetricId(type);
-  if (type === 'rag-faithfulness' || type === 'rag-answer-relevance' || id === 'context-relevance') return true;
-  return strictRun && (id === 'faithfulness' || id === 'answer-relevance');
+export function needsJudgeService(type: string, strictRun: boolean, cfg?: object): boolean {
+  const resolved = resolveMetric(type);
+  const id = resolved?.def.id ?? type;
+  if (type === 'rag-faithfulness' || type === 'rag-answer-relevance') return true;
+  const def = resolved?.def;
+  if (!def) return false;
+  // the model mode of entity recall (Ragas) asks a judge; its regex mode does not
+  if (id === 'context-entity-recall') return ((cfg as { mode?: unknown } | undefined)?.mode ?? resolved.options.mode) === 'llm';
+  if (def.kind !== 'judged' && def.judge !== 'service') return false;
+  // these keep an older heuristic-or-`judge:` implementation outside a RAG run
+  return def.judge === 'service' && (!HAS_LEGACY.has(id) || strictRun);
 }
+
+/** Metrics whose older implementation (checks.ts) still answers outside a RAG target run. */
+const HAS_LEGACY = new Set(['faithfulness', 'answer-relevance', 'context-precision', 'context-recall', 'answer-correctness', 'factual-correctness']);

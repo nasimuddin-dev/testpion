@@ -46,13 +46,14 @@ export interface RagFailure {
   metrics: string[];
 }
 
-const REFUSAL = /\b(i can(?:'|no)t|i am (?:not able|unable)|i'm (?:not able|unable)|i don'?t know|i do not know|i won'?t|cannot (?:help|assist|comply)|not (?:able|allowed) to|i must decline|no information|sorry,? but)\b/i;
+export const REFUSAL = /\b(i can(?:'|no)t|i am (?:not able|unable)|i'm (?:not able|unable)|i don'?t know|i do not know|i won'?t|cannot (?:help|assist|comply)|not (?:able|allowed) to|i must decline|no information|sorry,? but)\b/i;
 
-const RECALL = new Set(['context-recall', 'context-recall-ids', 'context-recall-lexical', 'context-entity-recall', 'recall@k', 'hit-rate@k']);
-const RANKING = new Set(['ndcg@k', 'map@k', 'mrr@k', 'context-precision', 'context-precision-lexical']);
-const NOISE = new Set(['precision@k', 'r-precision', 'context-precision-ids', 'context-relevance']);
-const REFERENCE = new Set(['factual-correctness', 'token-f1', 'rouge', 'normalized-match', 'exact-match', 'string-similarity', 'semantic-similarity', 'contains']);
-const OPERATIONAL = new Set(['latency', 'ttft', 'tokens', 'cost']);
+const RECALL = new Set(['context-recall', 'context-recall-ids', 'context-recall-lexical', 'context-entity-recall', 'recall@k', 'hit-rate@k', 'retriever-claim-recall']);
+const RANKING = new Set(['ndcg@k', 'map@k', 'mrr@k', 'context-precision', 'context-precision-lexical', 'context-utilization']);
+const NOISE = new Set(['precision@k', 'r-precision', 'context-precision-ids', 'context-relevance', 'retriever-context-precision', 'retrieval-relevance', 'noise-sensitivity-relevant', 'noise-sensitivity-irrelevant']);
+const UNFAITHFUL = new Set(['faithfulness', 'response-groundedness', 'claim-faithfulness', 'claim-hallucination', 'hallucination']);
+const REFERENCE = new Set(['factual-correctness', 'answer-correctness', 'answer-accuracy', 'correctness', 'factuality', 'claim-f1', 'claim-precision', 'claim-recall', 'completeness', 'token-f1', 'rouge', 'bleu', 'chrf', 'numeric-diff', 'json-diff', 'label-f1', 'normalized-match', 'exact-match', 'string-similarity', 'semantic-similarity', 'contains']);
+const OPERATIONAL = new Set(['latency', 'ttft', 'tokens', 'cost', 'context-size', 'throughput', 'error-rate']);
 
 export interface FailureInput {
   checks: CheckResult[];
@@ -76,7 +77,7 @@ export function classifyFailure(i: FailureInput): RagFailure | undefined {
   if (judgeFailed.length) return out('judge-error', judgeFailed[0]!.message.slice(0, 200));
 
   const recall = has(RECALL);
-  const needsContexts = i.checks.some((c) => ['faithfulness', 'context-relevance', ...RECALL, ...RANKING, ...NOISE].includes(canonicalMetricId(c.type)));
+  const needsContexts = i.checks.some((c) => ['faithfulness', 'context-relevance', ...UNFAITHFUL, ...RECALL, ...RANKING, ...NOISE].includes(canonicalMetricId(c.type)));
   if (recall.length) return out('retrieval-miss', `${recall[0]} fell below its mark: the contexts miss what the question needs`);
   if (!i.contexts && needsContexts) return out('retrieval-miss', 'nothing was retrieved');
   if (REFUSAL.test(i.answer)) return out('false-refusal', 'the retrieval was fine but the answer says it cannot answer');
@@ -84,11 +85,12 @@ export function classifyFailure(i: FailureInput): RagFailure | undefined {
   if (rank.length) return out('ranking', `${rank[0]} fell below its mark: the useful chunks are ranked low`);
   const noise = has(NOISE);
   if (noise.length) return out('noise', `${noise[0]} fell below its mark: too many retrieved chunks are irrelevant`);
-  if (ids.includes('faithfulness')) return out('unfaithful', 'faithfulness fell below its mark: the answer has claims the documents do not support');
+  const unfaithful = has(UNFAITHFUL);
+  if (unfaithful.length) return out('unfaithful', `${unfaithful[0]} fell below its mark: the answer has claims the documents do not support`);
   if (ids.includes('answer-relevance')) return out('off-topic', 'answer-relevance fell below its mark: the answer does not address the question');
   const ref = has(REFERENCE);
   if (ref.length) return out('incomplete', `${ref[0]} fell below its mark: retrieval and grounding are fine but the answer differs from the reference`);
-  if (ids.includes('citation')) return out('citation', 'the answer cites documents that were not retrieved');
+  if (ids.includes('citation') || ids.includes('citation-accuracy') || ids.includes('quoted-spans')) return out('citation', 'the answer cites or quotes documents that do not support it');
   if (ids.every((id) => OPERATIONAL.has(id))) return out('operational', `${ids[0]} limit exceeded`);
   return out('other', `${failed[0]!.name} failed: ${failed[0]!.message.slice(0, 140)}`);
 }

@@ -17,7 +17,10 @@ export interface ScoredSample {
 }
 
 /** The judged metrics that read the answer (the ones `shortCircuit` skips after a failed retrieval gate). */
-const ANSWER_JUDGED = new Set(['faithfulness', 'answer-relevance']);
+const isAnswerJudged = (id: string) => {
+  const d = getMetric(id);
+  return !!d && d.kind === 'judged' && d.requires.includes('answer');
+};
 /** The free retrieval metrics that can fail the gate. */
 const isGate = (id: string) => getMetric(id)?.group === 'retrieval-ir' || id === 'context-entity-recall';
 
@@ -45,13 +48,13 @@ export async function scoreRagSample(configs: CheckConfig[], ctx: CheckContext, 
   // a monitor judges a share of its samples (the free metrics always run): which ones is decided by the sample, not by chance
   const share = ctx.judge?.sampleShare;
   if (share !== undefined && share < 1 && bucket(`${ctx.question ?? ''}\n${ctx.text ?? ''}`) >= Math.max(0, share)) {
-    for (const c of configs) if (needsJudgeService(c.type, true)) byConfig.set(c, skipped(c, 'sampled', `this sample is not in the judged share (${Math.round(share * 100)}%)`));
+    for (const c of configs) if (needsJudgeService(c.type, true, c)) byConfig.set(c, skipped(c, 'sampled', `this sample is not in the judged share (${Math.round(share * 100)}%)`));
     live = configs.filter((c) => !byConfig.has(c));
   }
   const liveIds = live.map((c) => canonicalMetricId(c.type));
   if (ctx.judge?.shortCircuit === true) {
-    const free = live.filter((c, i) => !ANSWER_JUDGED.has(liveIds[i]!));
-    const gated = live.filter((c, i) => ANSWER_JUDGED.has(liveIds[i]!));
+    const free = live.filter((c, i) => !isAnswerJudged(liveIds[i]!));
+    const gated = live.filter((c, i) => isAnswerJudged(liveIds[i]!));
     const freeResults = await runChecks(free, ctx);
     const gateFailed = freeResults.find((r, i) => !r.passed && isGate(canonicalMetricId(free[i]!.type)));
     const rest = gateFailed ? gated.map((c) => skipped(c, 'short-circuit', `skipped because ${gateFailed.name} already failed (shortCircuit)`, { shortCircuit: gateFailed.name })) : await runChecks(gated, ctx);
@@ -68,4 +71,4 @@ export async function scoreRagSample(configs: CheckConfig[], ctx: CheckContext, 
 }
 
 /** Whether any of these evaluators asks a judge through the judge service (a run needs a usable judge before it starts). */
-export const evaluatorsNeedJudge = (configs: Array<Pick<CheckConfig, 'type'>>, strictRun: boolean): string[] => [...new Set(configs.filter((c) => needsJudgeService(c.type, strictRun)).map((c) => canonicalMetricId(c.type)))];
+export const evaluatorsNeedJudge = (configs: CheckConfig[], strictRun: boolean): string[] => [...new Set(configs.filter((c) => needsJudgeService(c.type, strictRun, c)).map((c) => canonicalMetricId(c.type)))];

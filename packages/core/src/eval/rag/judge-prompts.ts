@@ -13,10 +13,21 @@ export interface JudgedMetric {
   /** What this metric judges, one line (docs and the picker). */
   what: string;
   instruction: string;
-  /** The sample fields the judge needs: only these are sent (`claims`: the answer's claims from the shared `claims-v1` pass). */
-  inputs: ReadonlyArray<'question' | 'answer' | 'contexts' | 'reference' | 'claims'>;
-  /** A metric whose items are rated 0..max instead of true/false (the score is the mean rating / max). */
+  /** The fields of the context the judge reads (`claims`: claims from a shared pass; `response` / `reference` for the two-order metrics …). */
+  inputs: ReadonlyArray<string>;
+  /** A metric whose items are rated ratingMin..rating instead of true/false (the score is the mean of (rating − min) / (max − min)). */
   rating?: number;
+  ratingMin?: number;
+  /** The only ratings the judge may give (NVIDIA answer accuracy rates 0, 2 or 4). */
+  ratingValues?: readonly number[];
+  /** A score per rating (index = rating): a category judge such as factuality A to E. Replaces the linear scale. */
+  ratingScores?: readonly number[];
+  /** How the items become the score when it is not the share of true verdicts (average precision over ranked chunks, contradicted share …). */
+  scorer?: (items: ReadonlyArray<{ verdict: boolean; rating?: number }>) => number | undefined;
+  /** The order of the items is the rank of the documents: the documents are never swapped for this metric. */
+  rankAware?: boolean;
+  /** One weight per item, in the order the items are asked (a weighted checklist): the score is the weighted share. */
+  weights?: readonly number[];
   /** What an item is called in the result, and its two verdicts. */
   noun: string;
   labels: readonly [string, string];

@@ -10,7 +10,7 @@ import type { CheckConfig } from '../../model/types.js';
 import { setCheckResolver } from '../checks.js';
 
 /** What a metric reads from a sample (planning §2.2). */
-export type MetricInput = 'question' | 'answer' | 'contexts' | 'reference' | 'referenceIds' | 'referenceContexts';
+export type MetricInput = 'question' | 'answer' | 'contexts' | 'reference' | 'referenceIds' | 'referenceContexts' | 'canaries' | 'toolCalls' | 'referenceToolCalls' | 'answerable' | 'source' | 'rubric' | 'goodAnswers' | 'latency' | 'scores' | 'relevance';
 
 export const INPUT_LABELS: Record<MetricInput, string> = {
   question: 'the question',
@@ -19,12 +19,22 @@ export const INPUT_LABELS: Record<MetricInput, string> = {
   reference: 'a reference answer (dataset column "reference")',
   referenceIds: 'the gold chunk ids (dataset column "reference_ids")',
   referenceContexts: 'the gold chunk texts (dataset column "reference_contexts")',
+  canaries: 'the canary words an obedient answer would contain (dataset column "canaries" or "injection")',
+  toolCalls: 'the tool calls the system made (dataset column "tool_calls", or the target’s tool-call mapping)',
+  referenceToolCalls: 'the expected tool calls (dataset column "reference_tool_calls")',
+  answerable: 'whether the question can be answered from the documents (dataset column "answerable": true or false)',
+  source: 'the text that was summarised (dataset column "source")',
+  rubric: 'a rubric for this sample (dataset column "rubric")',
+  goodAnswers: 'other acceptable answers (dataset column "good_answers")',
+  latency: 'the time the system took (the target call measures it)',
+  scores: 'the retrieval scores of the contexts (map the score of a context in the target)',
+  relevance: 'graded relevance of the gold chunks (dataset column "relevance": {id: grade})',
 };
 
 /** How a metric is computed: from numbers and text, by a judge model, by an embedding model, or by running SQL. */
 export type MetricKind = 'deterministic' | 'judged' | 'embedding' | 'sql';
 
-export type MetricGroup = 'retrieval-judged' | 'retrieval-ir' | 'generation' | 'reference' | 'embedding' | 'operational';
+export type MetricGroup = 'retrieval-judged' | 'retrieval-ir' | 'generation' | 'claims' | 'reference' | 'embedding' | 'judge-template' | 'safety' | 'agent' | 'sql' | 'operational' | 'custom';
 
 export const METRIC_GROUPS: ReadonlyArray<{ id: MetricGroup; label: string }> = [
   { id: 'retrieval-judged', label: 'Retrieval, judged' },
@@ -32,7 +42,13 @@ export const METRIC_GROUPS: ReadonlyArray<{ id: MetricGroup; label: string }> = 
   { id: 'generation', label: 'Generation' },
   { id: 'reference', label: 'Answer against the reference (no model)' },
   { id: 'embedding', label: 'Embedding' },
+  { id: 'claims', label: 'Claim-level analysis' },
+  { id: 'judge-template', label: 'Judge templates' },
+  { id: 'safety', label: 'Safety' },
+  { id: 'agent', label: 'Agent and tool use' },
+  { id: 'sql', label: 'Text-to-SQL' },
   { id: 'operational', label: 'Operational' },
+  { id: 'custom', label: 'Custom (this workspace)' },
 ];
 
 export interface MetricOption {
@@ -94,6 +110,8 @@ export interface MetricDef {
   calls: string;
   version: string;
   sources: string[];
+  /** A metric of this workspace (a `metrics/*.yaml` file): its kind, the file's version and the hash of what it computes. */
+  custom?: { kind: string; fileVersion: number; hash: string; file: string };
   estimate?(s: SampleShape, opts: Record<string, unknown>): MetricEstimate;
 }
 
@@ -115,6 +133,18 @@ export function registerMetric(def: MetricDef): void {
   for (const a of def.aliases) put(a);
   for (const n of def.ragas?.names ?? []) if (!names.has(normalizeMetricName(n))) put(n, def.ragas?.options, true);
 }
+
+/** Removes a metric and every name that stood for it (a custom metric whose file was deleted or renamed). */
+export function unregisterMetric(id: string): void {
+  registry.delete(id);
+  for (const [k, v] of names) if (v.def.id === id) names.delete(k);
+}
+
+/** Whether a name is taken by a metric other than `id` (a custom metric may take a bare name only if it is free). */
+export const nameTaken = (name: string, id: string): boolean => {
+  const hit = names.get(normalizeMetricName(name));
+  return !!hit && hit.def.id !== id;
+};
 
 export interface ResolvedMetric {
   def: MetricDef;

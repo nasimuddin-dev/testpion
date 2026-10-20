@@ -9,6 +9,7 @@ import type { VariableScope } from '../vars/variables.js';
 import type { SpanHandle } from '../trace/tracer.js';
 import type { CheckContext } from '../eval/checks.js';
 import { callTarget } from '../eval/rag/run-target.js';
+import { pickRecord } from '../eval/rag/record.js';
 import { normalizeTest } from './loader.js';
 
 export interface RagRunResult {
@@ -46,6 +47,7 @@ export async function runRagTargetTest(test: RagTest, scope: VariableScope, span
     s.setAttributes({ documents: sample.contexts.length, latencyMs: call.latencyMs });
     s.end({ output: { answer: sample.answer.slice(0, 500), documents: sample.contexts.map((d) => ({ id: d.id, score: d.score, text: d.text.slice(0, 200) })) } });
     const reference = test.expected !== undefined ? scope.resolve(String(test.expected)) : undefined;
+    const record = pickRecord(test.variables);
     return {
       ctx: {
         testType: 'rag',
@@ -57,6 +59,8 @@ export async function runRagTargetTest(test: RagTest, scope: VariableScope, span
         expected: reference,
         referenceContexts: test.referenceContexts,
         referenceIds: test.referenceIds,
+        record,
+        toolCalls: record?.toolCalls,
         judge: test.judge,
         tokens,
         latencyMs: call.latencyMs,
@@ -70,6 +74,7 @@ export async function runRagTargetTest(test: RagTest, scope: VariableScope, span
           ...(test.referenceIds?.length ? { referenceIds: test.referenceIds } : {}),
           ...(test.referenceContexts?.length ? { referenceContexts: test.referenceContexts } : {}),
           protocol: test.target!.protocol,
+          ...(record ? { record } : {}),
           documentIds: sample.contexts.map((d) => d.id),
           scores: sample.contexts.map((d) => d.score ?? null),
           sample: { answer: sample.answer.slice(0, KEEP_CHARS), contexts: sample.contexts.slice(0, KEEP_DOCS).map((d) => ({ ...d, text: d.text.slice(0, KEEP_CHARS) })), ...(sample.usage ? { usage: sample.usage } : {}) },

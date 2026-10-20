@@ -24,6 +24,8 @@ export interface PanelOptions {
   swap?: boolean;
   repeat?: number;
   threshold: number;
+  /** `lower`: a score at or under the threshold passes (hallucination, noise sensitivity). */
+  direction?: 'higher' | 'lower';
   signal?: AbortSignal;
 }
 
@@ -55,9 +57,21 @@ export interface PanelResult {
 /** A verdict's score: the share of true verdicts, or the mean rating over its maximum. */
 export function scoreOf(v: Verdict, metric: JudgedMetric): number | undefined {
   if (!v.items.length) return undefined;
-  if (metric.rating) return round3(v.items.reduce((a, i) => a + (i.rating ?? 0), 0) / (v.items.length * metric.rating));
-  return round3(v.items.filter((i) => i.verdict).length / v.items.length);
+  if (metric.scorer) return metric.scorer(v.items);
+  // a weighted checklist: the weights belong to the items in the order they were asked; a verdict with another count is not weighted
+  const w = metric.weights && metric.weights.length === v.items.length ? metric.weights : undefined;
+  const weight = (i: number) => w?.[i] ?? 1;
+  const total = v.items.reduce((a, _, i) => a + weight(i), 0);
+  if (!total) return undefined;
+  if (metric.ratingScores) return round3(v.items.reduce((a, it, i) => a + weight(i) * (metric.ratingScores![it.rating ?? 0] ?? 0), 0) / total);
+  if (metric.rating) {
+    const min = metric.ratingMin ?? 0;
+    return round3(v.items.reduce((a, it, i) => a + weight(i) * Math.max(0, Math.min(1, ((it.rating ?? min) - min) / (metric.rating! - min))), 0) / total);
+  }
+  return round3(v.items.reduce((a, it, i) => a + (it.verdict ? weight(i) : 0), 0) / total);
 }
+
+const meets = (score: number, t: number, lower?: boolean) => (lower ? score <= t : score >= t);
 
 const toItems = (v: Verdict): PanelItem[] => v.items.map((i) => ({ text: i.text.slice(0, 500), ok: i.verdict, evidence: i.reason.slice(0, 300), ...(i.rating !== undefined ? { rating: i.rating } : {}) }));
 
@@ -80,7 +94,7 @@ function flipRate(runs: Verdict[]): number {
 
 /** The input with the documents in the opposite order (position bias); undefined when the metric reads no documents. */
 function reversed(metric: JudgedMetric, input: Record<string, unknown>): Record<string, unknown> | undefined {
-  if (!metric.inputs.includes('contexts') || !Array.isArray(input.contexts) || input.contexts.length < 2) return undefined;
+  if (metric.rankAware || !metric.inputs.includes('contexts') || !Array.isArray(input.contexts) || input.contexts.length < 2) return undefined;
   return { ...input, contexts: [...(input.contexts as unknown[])].reverse() };
 }
 
@@ -89,6 +103,7 @@ export async function judgePanel(host: RagJudgeHost, metric: JudgedMetric, input
   // the run's limits belong to the run, whichever judge is asked
   const limits = { maxCostUsd: o.judge.maxCostUsd, maxCalls: o.judge.maxCalls };
   const repeat = Math.max(1, Math.min(10, Math.floor(o.repeat ?? 1)));
+  const lower = o.direction === 'lower';
   const swapped = o.swap ? reversed(metric, input) : undefined;
   const usage = { calls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0, cached: true };
   let redactionCount = 0;
@@ -125,7 +140,7 @@ export async function judgePanel(host: RagJudgeHost, metric: JudgedMetric, input
       const b = scores(other);
       const all = [...a, ...b];
       const score = all.length ? round3(mean(all)) : undefined;
-      const tie = !!swapped && a.length > 0 && b.length > 0 && (mean(a) >= o.threshold) !== (mean(b) >= o.threshold);
+      const tie = !!swapped && a.length > 0 && b.length > 0 && meets(mean(a), o.threshold, lower) !== meets(mean(b), o.threshold, lower);
       return { ref, normal, other, scores: a, score, tie, swapScores: swapped ? [a.length ? round3(mean(a)) : undefined, b.length ? round3(mean(b)) : undefined] : undefined };
     }),
   );
@@ -136,11 +151,11 @@ export async function judgePanel(host: RagJudgeHost, metric: JudgedMetric, input
   if (scored.length) {
     const xs = scored.map((p) => p.score!);
     if (scored.length === 1 || aggregate === 'mean') score = round3(mean(xs));
-    else if (aggregate === 'min') score = Math.min(...xs);
+    else if (aggregate === 'min') score = lower ? Math.max(...xs) : Math.min(...xs);
     else {
-      const pass = scored.filter((p) => p.score! >= o.threshold);
+      const pass = scored.filter((p) => meets(p.score!, o.threshold, lower));
       // a tie of the judges goes to the failing side: the jury is not convinced
-      const side = pass.length * 2 > scored.length ? pass : scored.filter((p) => p.score! < o.threshold);
+      const side = pass.length * 2 > scored.length ? pass : scored.filter((p) => !meets(p.score!, o.threshold, lower));
       score = round3(mean(side.map((p) => p.score!)));
     }
   }
@@ -153,7 +168,7 @@ export async function judgePanel(host: RagJudgeHost, metric: JudgedMetric, input
   return {
     ...(score !== undefined ? { score } : {}),
     // a tie (the two orders disagree) is not a pass
-    passed: score !== undefined && score >= o.threshold && !tie,
+    passed: score !== undefined && meets(score, o.threshold, lower) && !tie,
     items: toItems(shown),
     reasoning: shown.reasoning,
     judge: firstJudge,
@@ -162,7 +177,7 @@ export async function judgePanel(host: RagJudgeHost, metric: JudgedMetric, input
     ...(multi || swapped || repeat > 1
       ? {
           panel: {
-            ...(multi ? { judges: per.map((p) => ({ provider: p.ref.provider ?? '', model: p.ref.model ?? '', ...(p.score !== undefined ? { score: p.score } : {}), passed: p.score !== undefined && p.score >= o.threshold })), aggregate } : {}),
+            ...(multi ? { judges: per.map((p) => ({ provider: p.ref.provider ?? '', model: p.ref.model ?? '', ...(p.score !== undefined ? { score: p.score } : {}), passed: p.score !== undefined && meets(p.score, o.threshold, lower) })), aggregate } : {}),
             ...(swapped ? { swap: { scores: lead.swapScores!, tie } } : {}),
             ...(repeat > 1 ? { repeat: { n: repeat, scores: reps, mean: round3(mean(reps)), sd: round3(sd(reps)), flipRate: flipRate(lead.normal) } } : {}),
           },
