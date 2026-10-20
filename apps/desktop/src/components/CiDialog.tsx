@@ -7,6 +7,7 @@ import { finishSave, type SaveResult } from '../lib/files';
 import { Button, Field, Input, Modal, Select, Tabs } from './ui';
 import { useCollectionTree } from '../lib/collections-store';
 import { usePersisted } from '../lib/sticky';
+import { useLibrary } from '../lib/library';
 import { copyText, useCopied } from '../lib/clipboard';
 import { runInTerminal, useShellCapable } from '../lib/terminal';
 
@@ -58,6 +59,10 @@ export function CiDialog() {
   const [allowProduction, setAllowProduction] = useState(false);
   const [timeline, setTimeline] = useState(false);
   const [datasets, setDatasets] = useState<string[]>([]);
+  // a saved RAG evaluation: the pipeline runs `testpion rag run` (its metrics, gates and a report); the judge key is a CI secret
+  const evaluations = useLibrary<{ type?: string }>('evaluations');
+  const ragEvaluations = evaluations.lib.items.filter((i) => i.data.type === 'rag');
+  const [rag, setRag] = useState({ preset: '', min: '', baseline: '', maxCost: '', compat: '', repeatTarget: '', comment: true });
   useEffect(() => void call<Array<{ path: string }>>('datasets.list').then((d) => setDatasets(d.map((x) => x.path)), () => setDatasets([])), []);
   const shellCapable = useShellCapable();
   const production = !!environments.find((e) => e.name === environment)?.isProduction || (target.startsWith('file:') && flowRun === 'matrix' && environments.some((e) => matrix.includes(e.name) && e.isProduction));
@@ -82,7 +87,18 @@ export function CiDialog() {
       openapi: openapi.trim() || undefined,
       // any target: data-changing requests may go to a production environment only when asked
       ...(allowProduction && production ? { allowProduction: true } : {}),
-      ...(kind === 'suite'
+      ...(kind === 'rag'
+        ? {
+            ragEvaluation: value,
+            ragPreset: rag.preset.trim() || undefined,
+            ragMin: rag.min.split(/[,\s]+/).filter(Boolean),
+            ragBaseline: rag.baseline.trim() || undefined,
+            ragMaxCost: rag.maxCost ? Number(rag.maxCost) : undefined,
+            ragCompat: rag.compat || undefined,
+            ragRepeatTarget: rag.repeatTarget ? Number(rag.repeatTarget) : undefined,
+            ragComment: provider === 'github' && rag.comment ? true : undefined,
+          }
+        : kind === 'suite'
         ? { suite: value }
         : kind === 'collection'
           ? { collection: value, folders: value === req.collection ? req.folders : undefined }
@@ -105,7 +121,7 @@ export function CiDialog() {
       (e) => (setCfg(undefined), setError(asError(e).message)),
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [provider, target, environment, workspaceDir, openapi, flowRun, dataFile, matrix.join(','), allowProduction, timeline]);
+  }, [provider, target, environment, workspaceDir, openapi, flowRun, dataFile, matrix.join(','), allowProduction, timeline, JSON.stringify(rag)]);
 
   const copy = () => (cfg ? copyToClipboard(cfg.content) : undefined);
   const save = async () => {
@@ -149,6 +165,15 @@ export function CiDialog() {
                   ))}
                 </optgroup>
               )}
+              {ragEvaluations.length > 0 && (
+                <optgroup label="RAG evaluations">
+                  {ragEvaluations.map((i) => (
+                    <option key={i.id} value={`rag:${i.name}`}>
+                      RAG: {i.name}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
               {suites.length > 0 && (
                 <optgroup label="Suites">
                   {suites.map((s) => (
@@ -188,6 +213,37 @@ export function CiDialog() {
             <Input className="mono" value={openapi} onChange={(e) => setOpenapi(e.target.value)} placeholder="openapi.yaml" />
           </Field>
         </div>
+        {target.startsWith('rag:') && (
+          <div className="grid grid-cols-3 gap-3 rounded-lg border border-line p-3 text-sm" data-ci-rag-options>
+            <Field label="Gates" hint="The pipeline fails when the mean of a metric is under its minimum: faithfulness=0.8 context-recall=0.7">
+              <Input className="mono" value={rag.min} onChange={(e) => setRag({ ...rag, min: e.target.value })} placeholder="faithfulness=0.8" aria-label="Gates" />
+            </Field>
+            <Field label="Metric preset (optional)" hint="Replaces the evaluation's metrics (testpion rag presets).">
+              <Input className="mono" value={rag.preset} onChange={(e) => setRag({ ...rag, preset: e.target.value })} placeholder="rag-triad" aria-label="Metric preset" />
+            </Field>
+            <Field label="Baseline run (optional)" hint="Fails on a regression against this run.">
+              <Input className="mono" value={rag.baseline} onChange={(e) => setRag({ ...rag, baseline: e.target.value })} placeholder="run id" aria-label="Baseline run" />
+            </Field>
+            <Field label="Judge budget (USD)" hint="Judging stops at this much; the rest is n/a.">
+              <Input type="number" min={0} step={0.5} value={rag.maxCost} onChange={(e) => setRag({ ...rag, maxCost: e.target.value })} placeholder="no cap" aria-label="Judge budget" />
+            </Field>
+            <Field label="Metric names" hint="Ragas: Ragas metric names with Ragas options.">
+              <Select value={rag.compat} onChange={(e) => setRag({ ...rag, compat: e.target.value })} aria-label="Metric names">
+                <option value="">TestPion</option>
+                <option value="ragas">Ragas</option>
+              </Select>
+            </Field>
+            <Field label="Calls per question" hint="2 to 10 measures the system's own noise.">
+              <Input type="number" min={1} max={10} value={rag.repeatTarget} onChange={(e) => setRag({ ...rag, repeatTarget: e.target.value })} placeholder="1" aria-label="Calls per question" />
+            </Field>
+            {provider === 'github' && (
+              <label className="flex items-center gap-1.5 text-xs col-span-3">
+                <input type="checkbox" checked={rag.comment} onChange={(e) => setRag({ ...rag, comment: e.target.checked })} data-ci-rag-comment />
+                Post the metrics table as a comment on the pull request
+              </label>
+            )}
+          </div>
+        )}
         {target.startsWith('file:') && (
           <div className="grid gap-2 rounded-lg border border-line p-3 text-sm" data-ci-flow-options>
             <div className="flex flex-wrap items-center gap-3">

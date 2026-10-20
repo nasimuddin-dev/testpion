@@ -109,7 +109,7 @@ same answers. TestPion does not call or depend on any of these tools.
 
 ## Metrics {#metrics}
 
-The **Metrics** tab of the evaluation lists all 30 metrics, grouped by what they measure, with a search that finds a metric by
+The **Metrics** tab of the evaluation lists all 84 metrics, grouped by what they measure (retrieval by ids and rank, retrieval and answer judged by a model, claim by claim, text similarity, agents and tools, safety, SQL, and your own), with a search that finds a metric by
 its id, an older name or a Ragas name (`LLMContextRecall`, `nv_context_relevance`, `response_relevancy`):
 
 * **Presets** put a set in one click: *RAG triad*, *Ragas core*, *DeepEval RAG*, *NVIDIA RAG*, *Retrieval only*, *Free (no model at
@@ -202,6 +202,43 @@ in the contexts, or nothing was retrieved), *false refusal*, *ranking*, *noise*,
 *citation*, *format* (the mapping found no answer), *system error*, *judge error*, *operational*. Fix the retriever or the generator,
 not both at once.
 
+### More views of a run {#views}
+
+Above the matrix, **View** switches between the samples and four other views of the same stored scores:
+
+* **By tag** is the mean of each metric for each tag of the dataset records (`tags`), so a weak topic stands out.
+* **Charts** shows the distribution of every metric.
+* **Compare** puts this run against another one metric by metric, with the paired bootstrap of `rag compare`.
+* **Runs × metrics** puts several runs of the evaluation side by side (the variants of a prompt, a model, a retriever setting), the mean of every metric.
+
+The down arrow (and `testpion rag matrix <run> --format csv|json|html`) exports the samples × metrics matrix: every sample, every metric,
+the aggregates, with the pass marks as edited on screen. **Score again…** re-scores the stored answers with other metrics or another
+judge; the RAG system is not called. In the estimate before a run, **Free metrics first** runs the metrics that need no model now and
+leaves the judged ones for **Score again…** once you have looked.
+
+A sample opens with **The call to your RAG system**, the raw exchange (the request, the response, the streamed events and timings), and
+**Explain this sample**, an AI task that reads only that sample and its metric results and says which part failed (retriever,
+generator or the metric) and what to change first. It proposes nothing.
+
+### Your own metrics, SQL and Ragas compatibility {#r2}
+
+* **Custom metrics** are files in `metrics/*.yaml` (a criterion for a judge, a checklist, rules, a formula, an embedding set, a
+  sandboxed script): see [Custom RAG metrics](./custom-metrics.md).
+* **Claim-level metrics** (`claim-faithfulness`, `claim-recall`, `noise-sensitivity-relevant` …) split the answer and the reference
+  into claims once and share that work between them, so five of them cost about as much as two.
+* **SQL metrics** (`datacompy-score`, `sql-equivalence`) compare what the generated query returns with the reference query's result.
+  The query runs only through a read-only executor: one `SELECT`, no `PRAGMA`, `ATTACH`, writes or extensions, a row limit, a time limit,
+  a read-only connection (a PostgreSQL or MySQL source must be marked `readOnly: true`). The `database:` of the evaluation names the
+  source.
+* **Repeating the target** (`--repeat-target 3`, "Calls per question" in the CI dialog) calls your system several times per question and
+  scores the mean, with the spread: the system's own noise. A failed call counts as the worst score.
+* **Ragas compatibility.** `--compat ragas` reads the metric names as Ragas spells them, with Ragas' options. `testpion rag export --to ragas --names ragas`
+  (with the dataset) writes the dataset and the result columns with the names Ragas uses, and a result file of Ragas
+  is imported next to a run (as a column of **external** scores) to compare the two tools sample by sample.
+* **Monitors and CI.** A monitor can run a saved RAG evaluation (gates, a number of questions, a share of the samples that get the
+  judged metrics, a daily judge budget); the CI dialog has the gates, the preset, a baseline, the judge budget, the metric names,
+  calls per question, and on GitHub a pull-request comment with the metrics table.
+
 ### From the terminal and CI {#cli}
 
 ```bash
@@ -212,6 +249,9 @@ testpion rag run "Clinic RAG" --metrics faithfulness,recall@5,token-f1 --judge o
 testpion rag run "Clinic RAG" --preset ragas-core --two-phase --max-cost 2     # free metrics first, then judge the answers
 testpion rag rescore run-abc --judge anthropic/claude-sonnet --swap              # no call to the RAG system
 testpion rag compare run-new -b run-old                                          # metric by metric, with a paired bootstrap
+testpion rag run "Clinic RAG" --compat ragas --repeat-target 3 --markdown rag.md   # Ragas names; the system's own noise; a PR comment table
+testpion rag matrix run-abc --format csv > matrix.csv                              # every sample, every metric
+testpion rag metric new clinic-tone --kind judge                                   # a custom metric (metrics/clinic-tone.yaml)
 ```
 
 `rag run` exits **1** when a `--min` gate fails (the mean of the metric must reach the value; a metric that has no score in the run
@@ -221,7 +261,7 @@ is real with a seeded paired bootstrap over the samples both runs scored, direct
 regression). A two-phase run collects the answers first (the run is recorded), then judges them as a second, re-scored run: change
 the judge or add a metric later with `rag rescore` and nothing is asked of your system again.
 
-An agent has the same: `rag_metrics`, `rag_try_metric`, `rag_estimate`, `rag_run`, `rag_rescore`, `rag_compare` and the prompt
+An agent has the same: `rag_metrics`, `rag_try_metric`, `rag_estimate`, `rag_run`, `rag_rescore`, `rag_compare`, the custom-metric tools `rag_list_custom_metrics`, `rag_validate_metric`, `rag_save_custom_metric`, and the prompt
 `evaluate_rag_system` (probe → metrics → estimate → run → compare). `rag_run` stops before the first question when the target cannot
 be called or a judged metric has no judge.
 
@@ -275,7 +315,7 @@ contexts written in the file they keep this behaviour:
 | `context-recall` | Does the retrieved context hold what the expected answer needs? | expected-answer sentences covered | a verdict per statement of the expected answer |
 | `context-entity-recall` | The expected answer's names, numbers and dates found in the context (or list them in `entities:`). Default threshold 0.8. | deterministic | — |
 | `groundedness` (aliases `faithfulness`) | Is every claim of the answer supported by the context? Reports `hallucinationIndicator`. | answer sentences covered | the answer split into claims, a verdict and the evidence per claim |
-| `hallucination` | The same function as groundedness, with the same direction (higher is better). It is not DeepEval's hallucination metric; it becomes a lower-is-better metric with the safety metrics. Use `faithfulness`. | | |
+| `hallucination` | DeepEval's metric since RAG R2: the share of the answer's claims the context contradicts, **lower is better** (the pass mark is a maximum). Before R2 it was another name of `faithfulness`; a test file that still uses it gets an info line at the check, and `faithfulness` is the higher-is-better metric. | | |
 | `answer-correctness` (`factual-correctness`) | The answer's facts against the expected answer: F1 of precision and recall; `mode: precision \| recall \| f1`. Default threshold 0.7. | sentence overlap | claim by claim, both ways (two judge calls; one with `mode: precision`) |
 | `answer-relevance` | Does the answer address the question? | word overlap | a 0–1 score with reasoning |
 | `citation` | `[id]` citations must refer to retrieved documents. | deterministic | — |

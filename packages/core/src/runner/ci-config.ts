@@ -41,6 +41,11 @@ export interface CiTarget {
   ragMin?: string[];
   ragBaseline?: string;
   ragMaxCost?: number;
+  /** With a RAG evaluation: `ragas` reads the Ragas metric names with Ragas's options; the system is called this many times per question (2 to 10). */
+  ragCompat?: string;
+  ragRepeatTarget?: number;
+  /** GitHub: post the run's metrics table as a comment on the pull request (the table is the run's markdown report). */
+  ragComment?: boolean;
   /** One flow file: keep its run as an HTML timeline (test-results/timeline.html), also when the run fails. */
   timelineHtml?: boolean;
 }
@@ -102,7 +107,7 @@ export function ciCommand(o: CiConfigOptions, cli = 'testpion'): string {
   const out = ' -r console junit html -o test-results';
   if ([o.suite, o.collection, o.tests?.length, o.ragEvaluation].filter(Boolean).length > 1) throw new ApsError('ValidationError', 'Choose one of a suite, a collection, test paths or a RAG evaluation', { suggestions: [] });
   if (o.ragEvaluation)
-    return `${cli} rag run ${q(o.ragEvaluation)} -w ${q(ws)}${env}${o.ragPreset ? ` --preset ${q(o.ragPreset)}` : ''}${o.ragJudge ? ` --judge ${q(o.ragJudge)}` : ''}${(o.ragMin ?? []).map((m) => ` --min ${q(m)}`).join('')}${o.ragBaseline ? ` --baseline ${q(o.ragBaseline)}` : ''}${o.ragMaxCost !== undefined ? ` --max-cost ${o.ragMaxCost}` : ''} -o test-results --junit test-results/junit.xml --html test-results/report.html`;
+    return `${cli} rag run ${q(o.ragEvaluation)} -w ${q(ws)}${env}${o.ragPreset ? ` --preset ${q(o.ragPreset)}` : ''}${o.ragJudge ? ` --judge ${q(o.ragJudge)}` : ''}${(o.ragMin ?? []).map((m) => ` --min ${q(m)}`).join('')}${o.ragBaseline ? ` --baseline ${q(o.ragBaseline)}` : ''}${o.ragMaxCost !== undefined ? ` --max-cost ${o.ragMaxCost}` : ''}${o.ragCompat ? ` --compat ${q(o.ragCompat)}` : ''}${o.ragRepeatTarget ? ` --repeat-target ${Math.round(o.ragRepeatTarget)}` : ''} -o test-results --junit test-results/junit.xml --html test-results/report.html${o.ragComment ? ' --markdown test-results/rag-metrics.md' : ''}`;
   const prod = o.allowProduction ? ' --allow-production' : '';
   const flowOptions = o.data !== undefined || !!o.envMatrix?.length || !!o.timelineHtml;
   if (flowOptions && (o.suite || o.collection || o.tests?.length !== 1)) throw new ApsError('ValidationError', 'Data, an environment matrix and a timeline run one flow file: give exactly one test file', { suggestions: [] });
@@ -176,7 +181,7 @@ on:
   pull_request:
   workflow_dispatch:
 
-jobs:
+${o.ragEvaluation && o.ragComment ? 'permissions:\n  contents: read\n  pull-requests: write\n\n' : ''}jobs:
   testpion:
     runs-on: ubuntu-latest
     env:
@@ -205,7 +210,16 @@ ${startLines.map((l) => `          ${l}`).join('\n')}
     : ''
 }      - name: Run ${name}
         run: ${command}
-      - name: Upload reports
+${
+  o.ragEvaluation && o.ragComment
+    ? `      - name: Comment the metrics on the pull request
+        if: always() && github.event_name == 'pull_request' && hashFiles('test-results/rag-metrics.md') != ''
+        env:
+          GH_TOKEN: \${{ github.token }}
+        run: gh pr comment \${{ github.event.pull_request.number }} --body-file test-results/rag-metrics.md
+`
+    : ''
+}      - name: Upload reports
         if: always()
         uses: actions/upload-artifact@v4
         with:

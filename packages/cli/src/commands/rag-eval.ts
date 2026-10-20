@@ -256,6 +256,7 @@ export function registerRagEvalCommands(rag: Command): void {
     .option('--junit <file>', 'write the JUnit report here')
     .option('--html <file>', 'write the HTML report here')
     .option('--report-json <file>', 'write the JSON report here')
+    .option('--markdown <file>', 'write the metrics table as Markdown here (a pull-request comment)')
     .option('-o, --out <dir>', 'output directory of the run')
     .option('-q, --quiet', 'only the summary')
     .option('--json', 'print { runId, summary, metrics, gates, comparison } as JSON')
@@ -445,6 +446,7 @@ interface RunFlags {
   junit?: string;
   html?: string;
   reportJson?: string;
+  markdown?: string;
   out?: string;
   quiet?: boolean;
   json?: boolean;
@@ -513,7 +515,7 @@ async function runCommand(ref: string, o: RunFlags): Promise<number> {
         },
       }),
     );
-    for (const [file, report] of [[o.junit, out.reports.junit], [o.html, out.reports.html], [o.reportJson, out.reports.json]] as const) if (file && report && resolve(file) !== resolve(report)) copyFileSync(report, resolve(file));
+    for (const [file, report] of [[o.junit, out.reports.junit], [o.html, out.reports.html], [o.reportJson, out.reports.json], [o.markdown, out.reports.markdown]] as const) if (file && report && resolve(file) !== resolve(report)) copyFileSync(report, resolve(file));
     const matrix = await buildMetricMatrix(runResults(store, out.runId), { runId: out.runId, limit: 1 });
     const gateResults = checkGates(matrix, gates);
     const comparison = o.baseline ? await compareMetricRuns(runResults(store, out.runId), runResults(store, o.baseline), { minDelta: Number(o.maxRegression) }) : undefined;

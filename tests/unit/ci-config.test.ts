@@ -173,4 +173,21 @@ describe('a run for CI: "last" and --allow-production', () => {
     expect((parseYaml(action) as { inputs: Record<string, unknown> }).inputs['allow-production']).toBeTruthy();
     expect(action.match(/\$PROD/g)?.length).toBe(3);
   });
+  it('a RAG evaluation: compat, calls per question, and the pull-request comment on GitHub', () => {
+    store.saveLibrary('evaluations', { folders: [], items: [{ id: 'ev-rag', name: 'Clinic RAG', data: { type: 'rag', name: 'Clinic RAG', dataset: '', evaluators: [] } as never }] } as never);
+    const o = { ragEvaluation: 'Clinic RAG', ragMin: ['faithfulness=0.8'], ragCompat: 'ragas', ragRepeatTarget: 3, ragComment: true };
+    const cmd = ciCommand({ provider: 'github', ...o });
+    expect(cmd).toContain('--min "faithfulness=0.8" --compat ragas --repeat-target 3');
+    expect(cmd).toContain('--markdown test-results/rag-metrics.md');
+    const gh = ciConfig(store, { provider: 'github', ...o });
+    const wf = parseYaml(gh.content) as { permissions: Record<string, string>; jobs: { testpion: { steps: Array<{ name: string; run?: string; if?: string }> } } };
+    expect(wf.permissions['pull-requests']).toBe('write');
+    const step = wf.jobs.testpion.steps.find((x) => /Comment the metrics/.test(x.name));
+    expect(step?.run).toContain('gh pr comment');
+    expect(step?.if).toContain('pull_request');
+    // the other providers get the run, not the comment
+    expect(ciConfig(store, { provider: 'gitlab', ...o }).content).not.toContain('gh pr comment');
+    // without the option the workflow is as before
+    expect(ciConfig(store, { provider: 'github', ragEvaluation: 'Clinic RAG' }).content).not.toContain('gh pr comment');
+  });
 });

@@ -279,7 +279,7 @@ exports[`the item-kind registry is complete > every capability is declared; a na
   "metric": {
     "ci": "CI runs collections and test files",
     "container": "an item, not a folder: it holds nothing",
-    "duplicate": "Save as in the metric editor makes a copy under another id",
+    "duplicate": "copy the YAML into a New metric under another id",
     "export": "copied with \`testpion rag metric export\` and \`import\` (the workspace bundle does not carry metrics yet)",
     "favorite": "favorites are saved requests (one click away in the sidebar)",
     "flow": "integration flows are generated from collections and folders",
@@ -289,7 +289,7 @@ exports[`the item-kind registry is complete > every capability is declared; a na
     "move": "metrics have no folders",
     "open": "edited in AI Lab ▸ RAG ▸ Metrics, where the metrics are listed",
     "open-new-tab": "it opens in one place, not in editor tabs",
-    "rename": "the file name is the metric id that evaluations name: Save as in the metric editor makes it under another id",
+    "rename": "the file name is the metric id that evaluations name: make it again under another id (New) and delete the old file",
     "run": "nothing to run: it is used by what runs",
     "search": "found by name in the metric picker",
     "test-file": "test files are created from requests, collections and calls",
