@@ -1,6 +1,6 @@
 ---
 title: "Import fidelity"
-description: "What TestPion's Postman, Insomnia, Bruno, Hoppscotch and GraphQL schema importers map, what becomes a note after the import, and what to check by hand."
+description: "What TestPion's Postman, Insomnia, Bruno, Hoppscotch, Thunder Client, Yaak, HTTPie, Apidog and GraphQL schema importers map, what becomes a note after the import, how a second import updates, and what to check by hand."
 ---
 
 ::: v-pre
@@ -27,14 +27,20 @@ Items are collections, folders, requests and environments. **Fully** items came 
 
 ## What each importer maps
 
+One page per tool, generated from the importers' own support table so it cannot drift: [Migrate to TestPion](/migrate/) (Postman, Insomnia, Bruno, Hoppscotch, Thunder Client, Yaak, HTTPie, Apidog), with how to export, what comes over, what is changed and what does not.
+
 | From | Comes over | In the report |
 |---|---|---|
-| **Postman** v2.0 / v2.1, environments and globals, data export ZIP | Folders (with description), requests, params, headers, bodies (a switched-off body is reported), auth (including NTLM, Hawk and EdgeGrid), variables, scripts (`pm.*` → `tp.*`, the old `postman.*` and `tests[]` too), saved responses, descriptions, **request, folder and collection settings** (redirects, cookies, URL encoding, TLS versions, HTTP/1 only). Secret values of an environment go to the secret store | An auth scheme TestPion doesn't have (ASAP, WSSE), an OAuth 2 grant it doesn't run, settings with no equivalent (`insecureHTTPParser` …), `{{vault:name}}` secrets (values to enter), `pm.datasets` / `pm.mock` / `pm.state`, mock-server URLs |
-| **Insomnia** v4 JSON, v5 YAML | The same, plus environments (base merged into each), **folder headers, scripts, descriptions and auth** (kept on the folder), request settings (redirects, URL encoding, cookies), template tags, gRPC and WebSocket requests (v4 and v5), design documents (kept in `specs/`) | Template tags without an equivalent, `insomnia.parentFolders` and other APIs TestPion lacks, v5 Socket.IO / MCP items, unit tests, cookie jars, mock routes |
-| **Bruno** folder, ZIP, export or `.bru` file | Folders (docs, headers, auth, scripts, variables), requests, params, headers, bodies (SPARQL as text, file bodies), auth (NTLM and EdgeGrid too), `settings` blocks, custom `http` methods, environments, assertions, docs, scripts (`bru.*` → `tp.*`), the collection's `.env`. **Folder and collection headers stay folder and collection headers** | Secret values to enter again, `.env` names without a value, `bru.*` calls TestPion lacks, gRPC / WebSocket requests, response examples |
-| **OpenCollection YAML** (Bruno's new default format: a folder with `opencollection.yml`, or one bundled file) | Folders, requests, params, headers, bodies, auth (OAuth 2 flows too), runtime variables, scripts, assertions, actions that set a variable, settings, examples, environments | gRPC / WebSocket items, scripts of other lifecycles, `extends` of environments, proxy and certificates |
-| **Hoppscotch** | Folders, requests, params, headers, bodies, auth | Scripts (`pw.*`, kept as comments), unsupported auth |
-| **GraphQL schema** (`.graphql`, `.gql`) | A GraphQL request for `{{graphqlUrl}}` with an operation for the first Query field; the schema in `specs/graphql/` | Where to set the endpoint; a schema that does not build |
+| **Postman** v2.0 / v2.1, **v1**, **v3 and Native Git folders**, environments and globals, data export ZIP | Folders (with description), requests, params, headers, bodies (a switched-off body is reported), auth (including NTLM, Hawk and EdgeGrid), variables, scripts (`pm.*` → `tp.*`, the old `postman.*` and `tests[]` too, `pm.state` as `tp.state`), saved responses, descriptions, **request, folder and collection settings** (redirects, cookies, URL encoding, TLS versions, HTTP/1 only). Secret values of an environment go to the secret store; **globals become the workspace's globals** | An auth scheme TestPion doesn't have (ASAP, WSSE), an OAuth 2 grant it doesn't run, settings with no equivalent (`insecureHTTPParser` …), `{{vault:name}}` secrets (values to enter), `pm.datasets` / `pm.mock`, mock-server URLs, a v3 field TestPion does not read |
+| **Insomnia** v4 JSON, v5 YAML | The same, plus environments (base merged into each), **folder headers, scripts, descriptions and auth** (kept on the folder), request settings (redirects, URL encoding, cookies), template tags, gRPC and WebSocket requests (v4 and v5), design documents (kept in `specs/`), **unit tests (each becomes a `tp.test` of the request it sends) and the cookie jar (to the workspace's jar)** | Template tags without an equivalent, `insomnia.parentFolders` and other APIs TestPion lacks, v5 Socket.IO / MCP items, a unit test with no request, mock routes |
+| **Bruno** folder, ZIP, export, `.bru` file or a GitHub / GitLab link | Folders (docs, headers, auth, scripts, variables), requests, params, headers, bodies (SPARQL as text, file bodies), auth (NTLM and EdgeGrid too), `settings` blocks, custom `http` methods, environments, assertions, docs, scripts (`bru.*`, `req`, `res` → `tp.*`), the collection's `.env`, **response examples, gRPC and WebSocket requests**. **Folder and collection headers stay folder and collection headers** | Secret values to enter again, `.env` names without a value, `bru.*` calls TestPion lacks, the `.proto` file of a gRPC request |
+| **OpenCollection YAML** (Bruno's new default format: a folder with `opencollection.yml`, or one bundled file) | Folders, requests, params, headers, bodies, auth (OAuth 2 flows too), runtime variables, scripts, assertions, actions that set a variable, settings, examples, environments, gRPC and WebSocket items | Scripts of other lifecycles, `extends` of environments, proxy and certificates |
+| **Hoppscotch** | Folders, requests, params, headers, bodies, auth, request variables, **`pw.*` / `hopp.*` scripts (to `tp.*`)**, collection and folder headers, variables and scripts, GraphQL requests, saved responses, **environments** | Unsupported auth (AWS signature, Hawk), `hopp.fetch` |
+| **Thunder Client** | Folders, requests, params, bodies, auth, **GUI tests (assertions where there is one, test code otherwise), `tc.*` scripts, post-request "set variable" actions**, `{{#guid}}`-style generators, environments | An auth scheme TestPion doesn't have, a generator with a format TestPion lacks |
+| **Yaak** | Folders, requests, params, bodies, auth plugins, `${[ var ]}` templates, environments (base merged), gRPC and WebSocket requests; a git-sync folder too | `${[ response.body.path(…) ]}` (reading another request's response), auth plugins TestPion lacks |
+| **HTTPie** (Desktop exports) | Nested collections as folders, requests, params, bodies, auth with inheritance, docs, environments | An auth scheme TestPion doesn't have |
+| **Apidog** | Folders and endpoints as requests under `{{baseUrl}}`, parameters with their examples, bodies from examples or schemas, responses as examples, custom scripts, environments, global variables | Pre/post operations other than custom scripts |
+| **GraphQL schema** (SDL, or an introspection result) | A folder per operation type (Queries, Mutations, Subscriptions) with a request for every root field, built from the schema; the schema in `specs/graphql/` | Where to set the endpoint; a schema that does not build; more than 60 fields of a type |
 
 Folder and collection **headers** and **settings** are real fields now: the *Headers* tab of a folder and of a collection sends them with every request inside (the request's own header of the same name wins, an inner folder's wins over an outer one's), and the folder's and collection's settings are the defaults of their requests.
 
@@ -53,7 +59,16 @@ Scripts are always converted to TestPion's `tp.*` (a runtime alias keeps `pm.*` 
 | `tests["name"] = expr`, `responseBody`, `responseCode.code`, `responseTime`, `JSON.parse(responseBody)` | `tp.test("name", …)`, `tp.response.text()`, `tp.response.code`, `tp.response.responseTime`, `tp.response.json()` |
 | `insomnia.*` | `tp.*` (`insomnia.baseEnvironment` / `collectionVariables` → `tp.environment`) |
 | `bru.getEnvVar` / `setEnvVar` / `getVar` / `setVar` / `runner.*` / `interpolate` / `runRequest` … | `tp.environment.*`, `tp.variables.*`, `tp.collectionVariables.*`, `tp.execution.*`, `tp.variables.replaceIn`, `tp.execution.runRequest` |
-| No equivalent: `pm.datasets`, `pm.mock`, `pm.state`, `insomnia.parentFolders`, `insomnia.request.auth.update` / `proxy` / `certificate`, `bru.sendRequest`, `bru.cookies` … | A `// TODO(import)` line above, a finding |
+| Bruno's `req.*`, `res.*`, `res('path')`, `test`, `expect` | `tp.request.*`, `tp.response.*` (`res.body` is `tp.response.json()`), `tp.test`, `tp.expect` |
+| `bru.sendRequest(config, callback)`, `bru.cookies.jar()` | An adapter over `tp.sendRequest` (callback or `await`), `tp.cookies.jar()` (which also answers Bruno's `getCookie` / `setCookie` / `deleteCookie` names) |
+| `req.setTimeout(ms)`, `req.setMaxRedirects(n)` with a number | The request's *Timeout* / *Maximum redirects* setting; the line becomes a comment |
+| `bru.getProcessEnv('NAME')` | `tp.variables.get('NAME')`; a name the import has no value for is listed as a value to enter |
+| `pw.test`, `pw.expect(x).toBe(y)` and the other matchers, `pw.env.*`, `pw.response.*`; `hopp.*` | `tp.test`, `tp.expect(x).to.equal(y)` (chai), `tp.environment.*`, `tp.response.*` |
+| `tc.setVar` / `getVar` / `test` / `loadModule` / `runRequest`, `tc.response.*`, `tc.request.*`, `expect` | `tp.environment.*`, `tp.test`, `require`, `tp.execution.runRequest`, `tp.response.*`, `tp.request.*`, `tp.expect` |
+| `pm.state` | `tp.state` (values that last across runs on this computer, kept as globals named `state.<key>`) |
+| No equivalent: `pm.datasets`, `pm.mock`, `insomnia.parentFolders`, `insomnia.request.auth.update` / `proxy` / `certificate`, `bru.getAuthMode`, `res.setBody`, `hopp.fetch` … | A `// TODO(import)` line above, a finding; **Fix what the import left with AI** (below) |
+
+Every mapping is a row of the converter's tables (`packages/core/src/scripts/convert`); [the migration pages](/migrate/) list them per tool, generated from the same tables. A corpus of 265 snippets from the tools' documentation and real collections is converted in the tests, every conversion is idempotent, and where the original runs offline the converted script is checked to set the same variables and pass the same tests.
 
 `tp.execution.runRequest("Get patient")` runs another saved HTTP request of the collection (by name, `Folder / Name` or id) with the auth, headers and variables it would have, and answers its response (`await` it, or pass a callback). Its own scripts and checks do not run: it is a call, not a step.
 
@@ -76,7 +91,7 @@ Scripts are always converted to TestPion's `tp.*` (a runtime alias keeps `pm.*` 
 
 ## Bruno scripts and .env
 
-Bruno's `bru.*` calls are written with TestPion's API: `bru.getEnvVar` / `setEnvVar` → `tp.environment.get` / `set`, `bru.getVar` → `tp.variables.get`, `bru.setVar` → `tp.collectionVariables.set` (it lasts for the run, like Bruno's), `bru.runner.setNextRequest` → `tp.execution.setNextRequest`, `bru.getProcessEnv` → `tp.variables.get`. `req`, `res`, `test` and `expect` run as in Bruno. A call TestPion lacks (`bru.sendRequest`, `bru.cookies` …) would fail when run: it gets a `// TODO(import)` line above it and a note. **Export ▸ Bruno collection folder** writes the scripts back with `bru.*`.
+Bruno's `bru.*` calls are written with TestPion's API: `bru.getEnvVar` / `setEnvVar` → `tp.environment.get` / `set`, `bru.getVar` → `tp.variables.get`, `bru.setVar` → `tp.collectionVariables.set` (it lasts for the run, like Bruno's), `bru.runner.setNextRequest` → `tp.execution.setNextRequest`, `bru.getProcessEnv` → `tp.variables.get`. `req`, `res`, `test` and `expect` are written with `tp.*` as well (the sandbox still runs a leftover Bruno call through a small shim). A call TestPion lacks would fail when run: it gets a `// TODO(import)` line above it and a note. **Export ▸ Bruno collection folder** writes the scripts back with `bru.*`.
 
 The collection's `.env` file (only `.env`; `.env.example` and the like are not read) becomes secret variables of a *Bruno .env* environment and of each imported environment: `{{process.env.API_KEY}}` is `{{API_KEY}}`, and the values go to the secret store, never into workspace files. A name used but not set is listed as *values needed*. `testpion import` has no secret store, so it lists the names under *Secret values were not saved*: set them in the app, or as `TESTPION_SECRET_*` variables for the CLI ([Secrets](/security/secrets)).
 
@@ -91,8 +106,34 @@ The collection's `.env` file (only `.env`; `.env.example` and the like are not r
 
 For a collection you cannot export as a file, give the Import dialog (or `--postman-api-key` / `POSTMAN_API_KEY`) a Postman API key (Postman ▸ Settings ▸ API keys) and a reference: `postman:collection/<id>`, `postman:environment/<id>`, `postman:workspace/<id>` (every collection and environment of a workspace), an `api.getpostman.com` URL or a link copied from the Postman app. The key is kept in the secret store (the dialog) and sent only to api.getpostman.com; it never appears in a report or an error.
 
+## Importing again updates
+
+Import the same source again (a Postman collection after a colleague changed it, a Bruno folder after a `git pull`) and TestPion **updates the collection it made** instead of adding a copy. It remembers, per computer, what each item was in the source (the tool's own id of the request or folder where there is one: a Postman item id, an Insomnia `_id`, a Thunder or Yaak id; else its path of names) and a fingerprint of the item as imported and as saved. The preview then shows each item as:
+
+- **Replace**: the source changed it and nobody edited it here (the item keeps its id, so favourites, history and links stay; a folder keeps its other items),
+- **New**: the source has it and the collection does not,
+- **Skip**: nothing changed in the source, or it changed there *and* you edited it here (a conflict: it stays yours unless you choose Replace), or you deleted it here (choose New to bring it back).
+
+Items that left the source are kept and listed. Pick another action per item in the dialog, or *Add a copy* to import it again as a second collection. An environment of the same name only gets the variables it lacks, its values are kept. The update is one undo step (the collection goes back as it was). From the command line it is the default: the preview prints the update (`testpion import <source> --preview`), `--update-decisions file.json` overrides single items by the keys the preview prints, `--new-copy` adds a copy.
+
+## Simple tests as assertions
+
+A test that only checks a status, a response time, a header, a body text or a field of the JSON (`pm.test("ok", () => pm.response.to.have.status(200))`, `tp.expect(json.items).to.have.lengthOf(3)`, `to.be.a("number")`, `to.be.above(0)`, `to.have.property("id")`, `to.be.json`, `jsonSchema`, about fifteen shapes) can be an **assertion**, shown in the request's *Tests* tab and readable without running the script. The report says how many can be (*N simple tests can be lifted into assertions*); tick **Lift N simple tests into assertions** in the preview (`--lift-tests`, MCP `lift_tests`) and they move, one assertion each, keeping the test's name; the rest of the script stays. Only tests that are exactly one of these shapes move, nothing is guessed.
+
+## Links to repositories
+
+A link to a **public** GitHub or GitLab repository or folder (`https://github.com/owner/repo/tree/main/api/clinic`, `https://gitlab.com/group/project`) imports as the folder's files: a Bruno or OpenCollection collection, a Postman Git collection, a Yaak sync folder, a folder of exports. Only the two services are asked (github.com's API and raw files, gitlab.com's API), over https, with no token, no cookie and no credential, and a redirect to any other host is refused. At most 500 files that look like import files, 5 MB each and 25 MB together are read; over a limit the message says so and to link a narrower folder. Nothing in the repository is executed, symbolic links and submodules are skipped, and a path that leaves the folder is refused. A private repository answers "not found": clone it and import the folder.
+
+## Fix what the import left with AI
+
+The scripts that still carry a `// TODO(import)` line (a call with no `tp.*` equivalent) can be rewritten as a reviewed proposal: **Fix what the import left…** in the import report, `testpion ai run import-leftovers --item collection:<id>`, MCP `ai_run_task`. TestPion finds the marked scripts itself; the model rewrites each with `tp.*` only, one item per script with a diff. Every rewrite is checked statically (no `pm.*`, `bru.*` …, no member that does not exist), run in the sandbox against the request's saved example response (never against the real API) and refused when it throws; a script that keeps its TODO is a warning, not a pass. Nothing changes until you accept, and Undo puts the script back. Without a model set up the marked lines stay and the report lists them.
+
+## Going back out
+
+`testpion export <collection> --format insomnia` (v5 YAML), `insomnia-v4` (JSON), `opencollection` (Bruno's YAML folder, `--out <folder>`) or `opencollection-file`; the workspace's environments go along (secret values never), scripts are written in the target tool's API (`tp.*` becomes `insomnia.*` / `bru.*`) and TestPion's assertions become tests where the format has none. What the format cannot hold (saved examples for Insomnia, JWT and EdgeGrid auth, a check with no test form) is listed on standard error as `not exported: …` and in the MCP tool `export_collection`'s `notes`. Insomnia has no collection-level headers, auth or scripts, so they are copied onto the top-level items. An export read back by the importers gives the same requests (a property test runs it over generated collections).
+
 ## Not yet
 
-Thunder Client, Yaak, HTTPie and Apidog files, Postman v1 collections and the v3 (file-based) format, Hoppscotch scripts and environments, GitHub / GitLab repository links, re-import that updates instead of adding, lifting simple `pm.test` calls into assertions, and AI help for what the converter could not do are planned (backlog B-23b, B-24).
+Socket.IO and MCP items of an Insomnia v5 file, Insomnia's mock routes, a `.proto` file next to an imported gRPC request, `pm.datasets` and `pm.mock` (no equivalent), Postman's flows and monitors (not exportable), Paw, SoapUI and Kreya files, and exports to Hoppscotch, Thunder Client, Yaak and HTTPie are not covered; they are tracked in the backlog (B-24b).
 
 :::
