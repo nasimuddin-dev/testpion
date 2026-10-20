@@ -632,6 +632,7 @@ const KINDS: readonly ItemKindInfo[] = [
   },
   {
     id: 'metric',
+    ref: 'git-file',
     aliases: ['metrics', 'custom-metric'],
     label: 'Metric',
     plural: 'Metrics',
@@ -641,19 +642,21 @@ const KINDS: readonly ItemKindInfo[] = [
     opens: { view: 'ai' },
     watch: { legacy: 'other', canonical: 'metric' },
     git: { merge: 'text' },
-    since: '0.61',
     pathId: 'stem',
     sample: 'metrics/politeness.yaml',
+    // a custom RAG metric (AI Lab ▸ RAG ▸ Metrics, `testpion rag metric`, the rag_*_custom_metric tools): a file the metric editor, the CLI and the
+    // MCP tools write; what is not built says when it will be
     capabilities: {
       ...FILE_ITEM,
-      open: { planned: '0.61' },
-      link: { planned: '0.61' },
-      rename: { planned: '0.61' },
-      duplicate: { planned: '0.61' },
+      export: true,
+      import: true,
+      open: { na: 'edited in AI Lab ▸ RAG ▸ Metrics, where the metrics are listed' },
+      link: { na: 'used by name (custom/<id>) in evaluations, presets and formulas' },
+      rename: { na: 'the file name is the metric id that evaluations name: Save as in the metric editor makes it under another id' },
+      duplicate: { na: 'Save as in the metric editor makes a copy under another id' },
       move: { na: 'metrics have no folders' },
-      delete: { planned: '0.61' },
-      trash: { planned: '0.61' },
-      search: { planned: '0.61' },
+      trash: { na: 'deleted in the metric editor, after it says which evaluations use the metric' },
+      search: { na: 'found by name in the metric picker' },
     },
   },
   {
