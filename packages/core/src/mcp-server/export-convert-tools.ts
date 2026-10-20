@@ -30,7 +30,7 @@ export function exportConvertTools({ store }: { store: WorkspaceStore }): Tool[]
     {
       name: 'export_collection',
       description:
-        'A collection of the workspace as a file other tools import, returned as text (nothing is written): `postman` (collection v2.1 JSON), `insomnia` (v5 YAML), `insomnia-v4` (JSON), `opencollection-file` (Bruno\'s YAML, one file), `opencollection` / `bruno` (the files of a folder: [{ path, text }]), `http` (.http file), `openapi` (OpenAPI 3.1 YAML). The workspace\'s environments go with Insomnia and OpenCollection (secret values never). `notes` lists what the format cannot hold (examples, JWT auth, assertions it could not write as tests …): nothing is dropped silently. Scripts are written in the target tool\'s API.',
+        'A collection of the workspace as a file other tools import, returned as text (nothing is written): `postman` (collection v2.1 JSON), `insomnia` (v5 YAML), `insomnia-v4` (JSON), `opencollection-file` (Bruno\'s YAML, one file), `opencollection` / `bruno` (the files of a folder: [{ path, text }]), `http` (.http file), `openapi` (OpenAPI 3.1 YAML). The workspace\'s environments go with Insomnia and OpenCollection (secret values never). `notes` lists what the format cannot hold (examples, JWT auth, assertions it could not write as tests …): nothing is dropped silently. Scripts are written in the target tool\'s API.\nWhen to use: to hand a collection to someone using Insomnia, Bruno, Postman or an OpenAPI tool.\nWhen not: to back up or share with TestPion users (use export_bundle / the bundle export), or to save a file (this returns text).\nExample: {"collection":"Orders API","format":"insomnia"}',
       inputSchema: { type: 'object', properties: { collection: str('Collection name or id'), format: { type: 'string', enum: [...EXPORT_FORMATS], description: 'The target format' } }, required: ['collection', 'format'] },
       run: (a) => {
         const c = collectionOf(a.collection);
@@ -63,7 +63,7 @@ export function exportConvertTools({ store }: { store: WorkspaceStore }): Tool[]
     },
     {
       name: 'convert_script_code',
-      description: `Convert one script from another tool's API to TestPion's tp.* and return it with the findings (calls with no equivalent are marked // TODO(import); a script that does not parse is returned as written with the line). \`from\`: ${SCRIPT_TOOLS.join(', ')}. Nothing is run or saved. Use convert_scripts for the scripts of a collection.`,
+      description: `Convert one script from another tool's API to TestPion's tp.* and return it with the findings (calls with no equivalent are marked // TODO(import); a script that does not parse is returned as written with the line). \`from\`: ${SCRIPT_TOOLS.join(', ')}. Nothing is run or saved. Use convert_scripts for the scripts of a collection.\nWhen to use: to check how one snippet from Postman, Bruno, Insomnia, Thunder or Hoppscotch would look in tp.*.\nWhen not: to convert a whole collection (use convert_scripts).\nExample: {"code":"pm.test('ok', () => pm.response.to.have.status(200));","from":"postman"}`,
       inputSchema: { type: 'object', properties: { code: str('The script'), from: { type: 'string', enum: [...SCRIPT_TOOLS], description: 'The script API it is written for' } }, required: ['code', 'from'] },
       run: (a) => {
         const r = convertScriptText(String(a.code ?? ''), requireScriptTool(a.from));
@@ -73,7 +73,7 @@ export function exportConvertTools({ store }: { store: WorkspaceStore }): Tool[]
     {
       name: 'convert_scripts',
       write: true,
-      description: `Convert the scripts of a collection of the workspace from another tool's script API (${SCRIPT_TOOLS.join(', ')}) to tp.* (an import with keep_pm, a collection pasted from a colleague), optionally lifting simple tests into assertions. Saves the collection unless \`dry_run\`. Returns what was converted, what was kept and why, and the findings by item.`,
+      description: `Convert the scripts of a collection of the workspace from another tool's script API (${SCRIPT_TOOLS.join(', ')}) to tp.* (an import with keep_pm, a collection pasted from a colleague), optionally lifting simple tests into assertions. Saves the collection unless \`dry_run\`. Returns what was converted, what was kept and why, and the findings by item.\nWhen to use: after an import that kept pm.* or foreign scripts, or for a collection pasted from a colleague.\nWhen not: to preview only (pass dry_run) or to convert a single snippet (use convert_script_code).\nExample: {"collection":"Orders API","from":"bruno","dry_run":true}`,
       inputSchema: { type: 'object', properties: { collection: str('Collection name or id'), from: { type: 'string', enum: [...SCRIPT_TOOLS] }, lift_tests: { type: 'boolean', description: 'Turn simple tests (status, response time, headers, JSON fields) into assertions' }, dry_run: { type: 'boolean', description: 'Only report' } }, required: ['collection', 'from'] },
       run: (a) => {
         const c = collectionOf(a.collection);
@@ -84,7 +84,7 @@ export function exportConvertTools({ store }: { store: WorkspaceStore }): Tool[]
     },
     {
       name: 'lift_tests',
-      description: 'Find the simple tests of a tp.* (or pm.*) script (a status, a response time, a header, a JSON field, a body text) and return them as TestPion assertions plus the script without them. Nothing is saved; add the assertions to a request with edit tools, or use convert_scripts with lift_tests.',
+      description: 'Find the simple tests of a tp.* (or pm.*) script (a status, a response time, a header, a JSON field, a body text) and return them as TestPion assertions plus the script without them. Nothing is saved; add the assertions to a request with edit tools, or use convert_scripts with lift_tests.\nWhen to use: to see which tests of a script can be assertions.\nWhen not: to change a collection (use convert_scripts).\nExample: {"code":"tp.response.to.have.status(200);"}',
       inputSchema: { type: 'object', properties: { code: str('The test script') }, required: ['code'] },
       run: (a) => {
         const r = liftTests(String(a.code ?? ''));

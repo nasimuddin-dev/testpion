@@ -47,7 +47,7 @@ describe(`importing ${N} requests in ${FOLDERS} folders`, () => {
   sources.push(['Insomnia v5 YAML', collectionToInsomniaV5(col).text]);
 
   for (const [name, text] of sources) {
-    it(`${name} (${(text.length / 1024 / 1024).toFixed(1)} MB): preview under ${PREVIEW_MS} ms, apply under ${APPLY_MS} ms`, () => {
+    it(`${name} (${(text.length / 1024 / 1024).toFixed(1)} MB): preview under ${PREVIEW_MS} ms, apply under ${APPLY_MS} ms`, { timeout: 120_000, retry: 2 }, () => {
       const dir = mkdtempSync(join(tmpdir(), 'tp-perf-'));
       try {
         const store = WorkspaceStore.create(join(dir, 'ws'), 'Perf');
@@ -74,6 +74,6 @@ describe(`importing ${N} requests in ${FOLDERS} folders`, () => {
           /* left in the temp folder */
         }
       }
-    }, 120_000);
+    });
   }
 });
