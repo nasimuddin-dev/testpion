@@ -15,6 +15,7 @@ import { scoreRagSample } from '../eval/rag/score.js';
 import type { RagJudgeHost } from '../eval/rag/judge.js';
 import { shortId } from '../util/ids.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
+import type { ReportFormat } from '../report/reports.js';
 import { recordRun, readRunSummary } from './run-records.js';
 import { RunAggregator } from './runner.js';
 import { runResults } from './run-results.js';
@@ -44,9 +45,13 @@ export interface RescoreOptions {
   /** Parallel samples (the judge's own limits apply on top). */
   concurrency?: number;
   onProgress?: (done: number, total: number) => void;
+  /** Report files to write beside the new run (junit, html …). */
+  reports?: ReportFormat[];
+  /** The new run's name (default: the old one's, re-scored). */
+  name?: string;
 }
 
-export async function rescoreRun(store: WorkspaceStore, o: RescoreOptions): Promise<{ runId: string; summary: RunSummary; rescored: number; skipped: number }> {
+export async function rescoreRun(store: WorkspaceStore, o: RescoreOptions): Promise<{ runId: string; summary: RunSummary; rescored: number; skipped: number; reports: Partial<Record<ReportFormat, string>> }> {
   const before = readRunSummary(store, o.runId);
   if (!before) throw new ApsError('ValidationError', `No finished run ${o.runId}`, { suggestions: ['List runs with `testpion history list`.'] });
   const evaluators = o.evaluators ?? (await metricsOfRun(store, o.runId)).map((type) => ({ type }));
@@ -100,7 +105,7 @@ export async function rescoreRun(store: WorkspaceStore, o: RescoreOptions): Prom
     lines.push(JSON.stringify(r));
   }
   writeFileSync(join(dir, 'results.jsonl'), lines.map((l) => l + '\n').join(''));
-  const summary = agg.summary({ runId, name: `${before.name} (re-scored)`, startedAt, cancelled: !!o.signal?.aborted, environment: before.environment, reproducibility: { ...before.reproducibility, rescoredFrom: o.runId } });
-  await recordRun(store, summary, dir);
-  return { runId, summary, rescored, skipped };
+  const summary = agg.summary({ runId, name: o.name ?? `${before.name} (re-scored)`, startedAt, cancelled: !!o.signal?.aborted, environment: before.environment, reproducibility: { ...before.reproducibility, rescoredFrom: o.runId } });
+  const reports = await recordRun(store, summary, dir, { reports: o.reports });
+  return { runId, summary, rescored, skipped, reports };
 }

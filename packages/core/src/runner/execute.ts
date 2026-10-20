@@ -41,6 +41,7 @@ import '../eval/rag/metrics.js';
 import type { RagJudgeHost } from '../eval/rag/judge.js';
 import { runRagTargetTest } from './rag-run.js';
 import { scoreRagSample } from '../eval/rag/score.js';
+import { docsOf } from '../eval/rag/lists.js';
 import { runScript } from '../scripts/sandbox.js';
 import { renderVisualizer } from '../scripts/visualizer.js';
 import { applyScriptOutput, scriptRequestSender, scriptScopes, type PersistVariable } from '../scripts/bridge.js';
@@ -752,7 +753,7 @@ async function protocolStep(step: TestCase, scope: VariableScope, svc: ExecServi
 
 async function runRag(test: RagTest, scope: VariableScope, svc: ExecServices, span: SpanHandle, signal: AbortSignal): Runner {
   const question = scope.resolve(test.question);
-  const contexts = scope.resolveDeep(test.contexts ?? []);
+  const contexts = test.contextsFrom !== undefined ? docsOf(scope.resolve(test.contextsFrom)) : scope.resolveDeep(test.contexts ?? []);
   const retrieval = span.child('retrieval', 'internal', { attributes: { documents: contexts.length }, input: question });
   retrieval.end({ output: contexts.map((d) => ({ id: d.id, score: d.score, source: d.source, text: d.text.slice(0, 300) })) });
   let answer = test.answer !== undefined ? scope.resolve(test.answer) : undefined;

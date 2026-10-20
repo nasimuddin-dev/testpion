@@ -423,6 +423,8 @@ export interface RagTest extends TestBase {
   type: 'rag';
   question: string;
   contexts: RetrievedDoc[];
+  /** `contexts: "{{var}}"`: the contexts come from a variable when the test runs. */
+  contextsFrom?: string;
   expected?: string;
   /** Pre-computed answer from the system under test. When omitted, `model` generates one. */
   answer?: string;

@@ -12,7 +12,9 @@ import {
   exportRagRecords,
   findRagTarget,
   findSavedEvaluation,
+  importBeir,
   importRagRecords,
+  parseRagImportText,
   listRagTargets,
   parseRagDatasetText,
   parseYaml,
@@ -23,6 +25,7 @@ import {
   type RagTarget,
 } from '@testpion/core';
 import { datasetFormatOfName } from '@testpion/shared';
+import { registerRagEvalCommands } from './rag-eval.js';
 import { EXIT, CliError, bold, cliContext, dim, green, printJson, readResults, red, yellow, withWorkspace } from '../shared.js';
 
 const FORMATS = RAG_DATASET_FORMATS.join(', ');
@@ -37,7 +40,8 @@ function targetFromFile(file: string): RagTarget {
 const shortText = (s: string, n = 90) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 
 export function registerRagCommands(program: Command): void {
-  const rag = program.command('rag').description('RAG systems under test: list the targets, probe one with a question, convert datasets from and to Ragas and DeepEval (run an evaluation with `testpion eval run`)');
+  const rag = program.command('rag').description('RAG systems under test: connect and probe a target, the metric catalogue, run an evaluation with metrics and gates, re-score and compare runs, convert datasets from and to Ragas, DeepEval, BEIR, NVIDIA and promptfoo');
+  registerRagEvalCommands(rag);
 
   rag
     .command('targets')
@@ -99,15 +103,26 @@ export function registerRagCommands(program: Command): void {
 
   rag
     .command('import')
-    .description('convert a Ragas or DeepEval dataset file (JSON, JSONL or CSV; only data is read, nothing is executed) into a TestPion RAG dataset: question, reference, reference_contexts, reference_ids')
+    .description('convert a dataset of another tool (Ragas, DeepEval, BEIR queries + qrels, NVIDIA retriever data, promptfoo tests; JSON, JSONL, CSV or YAML; only data is read, nothing is executed) into a TestPion RAG dataset: question, reference, reference_contexts, reference_ids')
     .argument('<file>', 'the dataset file')
     .addOption(new Option('--from <format>', `the format of the file (default: found by its columns): ${FORMATS}`).choices([...RAG_DATASET_FORMATS]))
+    .option('--qrels <file>', 'BEIR: the qrels file (query-id, corpus-id, score)')
+    .option('--corpus <file>', 'BEIR: the corpus (corpus.jsonl), to fill reference_contexts')
+    .option('--limit <n>', 'BEIR: only the first n queries')
     .option('-o, --out <file>', 'write the dataset here (JSON Lines; default: print it)')
     .option('--format <format>', 'jsonl or json output', 'jsonl')
     .option('--json', 'print { from, records, notes } as JSON')
-    .action((file: string, o: { from?: RagDatasetFormat; out?: string; format: string; json?: boolean }) => {
-      const records = parseRagDatasetText(readFileSync(resolve(file), 'utf8'), datasetFormatOfName(file) ?? 'jsonl');
-      const r = importRagRecords(records, o.from);
+    .action((file: string, o: { from?: RagDatasetFormat; qrels?: string; corpus?: string; limit?: string; out?: string; format: string; json?: boolean }) => {
+      const text0 = readFileSync(resolve(file), 'utf8');
+      let r: ReturnType<typeof importRagRecords>;
+      try {
+        if (o.from === 'beir') {
+          if (!o.qrels) throw new CliError('A BEIR import needs --qrels <file> (and --corpus <file> for the texts)', EXIT.CONFIG_ERROR);
+          r = { ...importBeir({ queries: text0, qrels: readFileSync(resolve(o.qrels), 'utf8'), corpus: o.corpus ? readFileSync(resolve(o.corpus), 'utf8') : undefined }, { limit: o.limit ? Number(o.limit) : undefined }), from: 'beir' };
+        } else r = importRagRecords(parseRagImportText(text0, file, o.from), o.from);
+      } catch (e) {
+        throw e instanceof ApsError ? new CliError(e.message, EXIT.CONFIG_ERROR) : e;
+      }
       const text = stringifyRagRecords(r.records, o.format === 'json' ? 'json' : 'jsonl');
       if (o.out) writeFileSync(resolve(o.out), text);
       if (o.json) return printJson({ from: r.from, count: r.records.length, notes: r.notes, ...(o.out ? { out: resolve(o.out) } : { records: r.records }) });

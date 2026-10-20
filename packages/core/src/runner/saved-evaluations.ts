@@ -40,11 +40,16 @@ export interface SavedEvaluation {
 
 export const EVALUATIONS_LIBRARY = 'evaluations';
 
+/** The judge of a RAG evaluation as the metrics read it: the evaluation's own choices and the run's limits. */
+export function judgeSetupOf(d: Pick<SavedEvaluation, 'judge' | 'maxJudgeCostUsd' | 'maxJudgeCalls'>): RagJudgeSetup {
+  return { ...(d.judge ?? {}), ...(d.maxJudgeCostUsd ? { maxCostUsd: d.maxJudgeCostUsd } : {}), ...(d.maxJudgeCalls ? { maxCalls: d.maxJudgeCalls } : {}) };
+}
+
 /** The test template each dataset record is expanded into. */
 export function evaluationTemplate(d: SavedEvaluation, target?: RagTarget): Record<string, unknown> {
   const model = { provider: d.provider, name: d.model || undefined, temperature: d.temperature };
   if (d.type === 'rag' && target) {
-    const judge = { ...(d.judge ?? {}), ...(d.maxJudgeCostUsd ? { maxCostUsd: d.maxJudgeCostUsd } : {}), ...(d.maxJudgeCalls ? { maxCalls: d.maxJudgeCalls } : {}) };
+    const judge = judgeSetupOf(d);
     return { name: d.name, type: 'rag', target, ...(Object.keys(judge).length ? { judge } : {}), evaluators: d.evaluators };
   }
   if (d.type === 'rag') return { name: d.name, type: 'rag', model, ...(d.prompt.includes('{{context}}') ? { prompt: d.prompt } : {}), evaluators: d.evaluators };

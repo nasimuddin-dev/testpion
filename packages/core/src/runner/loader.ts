@@ -3,7 +3,7 @@ import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } 
 import { parseYaml } from '../util/lazy-yaml.js';
 import type { AuthConfig, BodyConfig, ForEachSpec, HttpRequestSpec, KeyValue, McpTest, ModelRef, RagTest, SuiteConfig, TestCase, UntilSpec } from '../model/types.js';
 import type { RagTarget } from '@testpion/shared';
-import { listOf } from '../eval/rag/lists.js';
+import { docsOf, listOf } from '../eval/rag/lists.js';
 import { ApsError } from '../errors.js';
 import { slugify } from '../util/ids.js';
 import { globToRegex } from '../util/glob.js';
@@ -283,9 +283,9 @@ export function normalizeTest(raw: Record<string, unknown>, file?: string, index
         ...base,
         type: 'rag',
         question: String(raw.question ?? raw.query ?? ''),
-        contexts: ((raw.contexts ?? raw.retrieved ?? raw.documents ?? []) as Array<Record<string, unknown> | string>).map((d, i) =>
-          typeof d === 'string' ? { id: `doc-${i + 1}`, text: d } : { id: String(d.id ?? `doc-${i + 1}`), text: String(d.text ?? d.content ?? ''), score: d.score as number | undefined, source: d.source as string | undefined },
-        ),
+        // `contexts: "{{docs}}"` is filled by a variable when the test runs (a dataset column, an extracted value)
+        contexts: typeof (raw.contexts ?? raw.retrieved ?? raw.documents) === 'string' && /\{\{/.test(String(raw.contexts ?? raw.retrieved ?? raw.documents)) ? [] : docsOf(raw.contexts ?? raw.retrieved ?? raw.documents ?? []),
+        ...(typeof (raw.contexts ?? raw.retrieved ?? raw.documents) === 'string' && /\{\{/.test(String(raw.contexts ?? raw.retrieved ?? raw.documents)) ? { contextsFrom: String(raw.contexts ?? raw.retrieved ?? raw.documents) } : {}),
         expected: raw.expected as string | undefined,
         answer: raw.answer as string | undefined,
         model: raw.model ? modelOf(raw.model) : undefined,

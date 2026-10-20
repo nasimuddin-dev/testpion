@@ -146,7 +146,7 @@ const BY_TYPE: Record<string, TestKeyDoc[]> = {
   ],
   rag: [
     { key: 'question', description: 'The question (query works too).', shape: 'text' },
-    { key: 'contexts', description: 'The retrieved documents: a list of texts or { id, text, score } (documents, retrieved work too).', shape: 'list' },
+    { key: 'contexts', description: 'The retrieved documents: a list of texts or { id, text, score } (documents, retrieved work too), or "{{var}}" filled by a variable (a dataset column) when the test runs.', shape: 'list' },
     { key: 'answer', description: 'The answer to judge, when it was produced elsewhere; else the model answers.', shape: 'text' },
     { key: 'expected', description: 'The reference answer.', shape: 'text' },
     { key: 'model', description: 'The model that answers from the documents (when answer is not given).', shape: 'text' },
