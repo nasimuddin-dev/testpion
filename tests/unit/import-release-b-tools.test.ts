@@ -162,7 +162,8 @@ describe('Apidog', () => {
     expect(create.request.pathVariables).toEqual([{ key: 'kind', value: 'dog' }]);
     expect(JSON.parse((create.request.body as { content: string }).content)).toEqual({ id: 1, name: 'Rex' });
     expect(create.examples![0]).toMatchObject({ status: 201 });
-    expect(create.preRequestScript).toContain("pm.environment.set('stamp'");
+    expect(create.preRequestScript).toContain("tp.environment.set('stamp'");
+    expect(create.testScript).toContain('tp.test(');
     expect(http(c.items, 'Upload').request.url).toBe('https://files.example.test/up');
   });
   it('merges environments and global variables, and reports the operations it skipped', () => {

@@ -37,7 +37,7 @@ function schemaSpec(d: Any): Any {
 export function parseApidog(text: string): ImportDocument {
   const d: Any = JSON.parse(text);
   const findings = new Findings();
-  const doc = newDocument('apidog', text, { tool: String(d.apifoxProject ? 'Apifox' : 'Apidog'), version: String(d.apidogProject ?? d.apifoxProject ?? '') });
+  const doc = newDocument('apidog', text, { tool: String(d.apifoxProject ? 'Apifox' : 'Apidog'), version: String(d.apidogProject ?? d.apifoxProject ?? ''), scriptTool: 'postman' });
   const spec = schemaSpec(d);
   const name = String(d.info?.name ?? d.projectName ?? 'Apidog import');
   let usesBaseUrl = false;
@@ -112,7 +112,7 @@ export function parseApidog(text: string): ImportDocument {
     const pre = (Array.isArray(api.preProcessors) ? api.preProcessors : []).filter((x: Any) => x?.enable !== false && x?.type === 'customScript');
     const post = (Array.isArray(api.postProcessors) ? api.postProcessors : []).filter((x: Any) => x?.enable !== false && x?.type === 'customScript');
     if (pre.length || post.length) {
-      // Apidog's custom scripts speak Postman's pm.* (pm.environment …): kept, they run (pm is an alias of tp)
+      // Apidog's custom scripts speak Postman's pm.* (pm.environment …): the pipeline converts them to tp.*
       if (pre.length) req.preRequestScript = pre.map((x: Any) => String(x.data ?? '')).join('\n');
       if (post.length) req.testScript = post.map((x: Any) => String(x.data ?? '')).join('\n');
     }

@@ -247,6 +247,8 @@ export { collectionToOpenCollection, collectionToOpenCollectionBundle, type OcFi
 export { retargetScript } from './scripts/convert/retarget.js';
 export { assertionsToTests } from './import/export-common.js';
 export { parseRepoLink, fetchRepoFiles, REPO_LIMITS, type RepoRef, type RepoFetch } from './import/repo-import.js';
+export { IMPORTER_SUPPORT, TOOL_FORMATS, MATRIX_FEATURES, type ImporterSupport, type MatrixFeature } from './import/support.js';
+export { migrationPages, scriptTable, type MigratePage } from './import/migrate-docs.js';
 export { isOpenCollection, parseOpenCollection, ocFilesToBundle } from './import/opencollection-import.js';
 export * from './import/other-tools.js';
 export * from './import/import-scripts.js';

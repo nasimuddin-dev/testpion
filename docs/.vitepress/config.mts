@@ -66,6 +66,21 @@ const docsSidebar = [
       { text: 'Workspaces', link: '/getting-started/workspaces' },
       { text: 'Export and import', link: '/getting-started/export-import' },
       { text: 'Import fidelity', link: '/getting-started/import-fidelity' },
+      {
+        text: 'Migrate from another tool',
+        link: '/migrate/',
+        collapsed: true,
+        items: [
+          { text: 'Postman', link: '/migrate/postman' },
+          { text: 'Insomnia', link: '/migrate/insomnia' },
+          { text: 'Bruno', link: '/migrate/bruno' },
+          { text: 'Hoppscotch', link: '/migrate/hoppscotch' },
+          { text: 'Thunder Client', link: '/migrate/thunder' },
+          { text: 'Yaak', link: '/migrate/yaak' },
+          { text: 'HTTPie', link: '/migrate/httpie' },
+          { text: 'Apidog', link: '/migrate/apidog' },
+        ],
+      },
       { text: 'Terminal', link: '/getting-started/terminal' },
       { text: 'Keep your workspace in git', link: '/getting-started/git' },
       { text: 'Your first AI test', link: '/getting-started/first-ai-test' },
@@ -175,7 +190,7 @@ const docsSidebar = [
   },
 ];
 
-const DOC_SECTIONS = ['getting-started', 'installation', 'api-testing', 'graphql', 'mcp', 'ai-testing', 'test-runner', 'performance', 'security', 'cli', 'architecture', 'contributing'];
+const DOC_SECTIONS = ['getting-started', 'migrate', 'installation', 'api-testing', 'graphql', 'mcp', 'ai-testing', 'test-runner', 'performance', 'security', 'cli', 'architecture', 'contributing'];
 
 export default defineConfig({
   lang: 'en-US',
