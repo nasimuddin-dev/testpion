@@ -24,7 +24,7 @@ export function setAiHiddenSource(f: () => boolean): void {
 export const aiHidden = (): boolean => source();
 
 /** The store keys that open an AI surface of the window: while AI is hidden none of them can be set. */
-export const AI_LAUNCH_KEYS = ['assistant', 'flowGenerate', 'aiAnalysis', 'tidyImport'] as const;
+export const AI_LAUNCH_KEYS = ['assistant', 'flowGenerate', 'aiAnalysis', 'tidyImport', 'askSearch'] as const;
 
 /** `p` without a request to open an AI surface (closing one, `undefined`, stays). Returns `p` itself when there is nothing to drop. */
 export function withoutAiLaunch<T extends object>(p: T): T {

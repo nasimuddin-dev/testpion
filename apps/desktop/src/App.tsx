@@ -564,7 +564,7 @@ export default function App() {
           </Suspense>,
           close({ tidyImport: undefined }),
         )}
-      {askSearch &&
+      {aiOn && askSearch &&
         guard(
           'ask search',
           <Suspense fallback={null}>
@@ -572,7 +572,7 @@ export default function App() {
           </Suspense>,
           close({ askSearch: undefined }),
         )}
-      {aiAnalysis &&
+      {aiOn && aiAnalysis &&
         guard(
           'AI analysis',
           <Suspense fallback={null}>

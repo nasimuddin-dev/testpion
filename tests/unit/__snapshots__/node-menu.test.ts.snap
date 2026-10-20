@@ -319,6 +319,21 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
       "Delete folder…",
     ],
   ],
+  "folder:rag-target": [
+    [
+      "New …",
+    ],
+    [
+      "Expand all",
+      "Collapse all",
+    ],
+    [
+      "Rename folder",
+    ],
+    [
+      "Delete folder…",
+    ],
+  ],
   "folder:spec": [
     [
       "New …",
@@ -539,6 +554,22 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
       "Delete…",
     ],
   ],
+  "rag-target": [
+    [
+      "Open",
+    ],
+    [
+      "Copy link",
+    ],
+    [
+      "Rename",
+      "Duplicate",
+      "Move to folder ▸",
+    ],
+    [
+      "Delete…",
+    ],
+  ],
   "request": [
     [
       "Open",
@@ -724,6 +755,16 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
     ],
     [
       "Export…",
+    ],
+  ],
+  "section:rag-target": [
+    [
+      "New …",
+      "New folder…",
+    ],
+    [
+      "Expand all",
+      "Collapse all",
     ],
   ],
   "section:spec": [

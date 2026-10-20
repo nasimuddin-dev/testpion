@@ -383,6 +383,65 @@ testpion tidy "HAR import" --ai --apply                     # apply the ticked c
 
 MCP: `tidy_import`. Without a model set up both features return TestPion's own proposal with a note.
 
+## Security tests
+
+*Generate security tests with AI…* (the **AI ▸** menu of a collection or folder, or **Security tests** in the *Generate with AI* dialog) writes OWASP API probes as an ordinary test file. The design is "AI to understand, deterministic to decide": **the model only proposes what to probe**; TestPion writes every step from the saved requests and a fixed catalogue, and **the verdict of each step is a check the runner computes from the responses** — never the model's opinion.
+
+| Probe | What it sends | What must hold |
+|---|---|---|
+| **BOLA** (API1) | the owner reads their object (a value of the response is kept), then the *other* user repeats the request | status 401, 403 or 404, and the other user's body does not contain the owner's value |
+| **Broken authentication** (API2) | the request without credentials, and with an invalid token | 401 or 403 |
+| **Mass assignment** (API3) | a create or update body with privileged fields added (`role: admin`, `isAdmin: true`, `balance` …) | none of them comes back in the response |
+| **Admin functions** (API5) | an admin path or delete called by the lower-privilege user | 401 or 403 |
+
+You name the variables that hold the two users' credentials (`owner=tokenA,other=tokenB`; names only, never the credentials). Safe by design: only GET, HEAD and OPTIONS requests are probed unless you include write (`--include-write`) or delete probes; the privileged field *names* come from a catalogue (the model picks names, never values); every step is paced (`pace: 250ms`, `--rate`) and at most 40 probes are written; a production environment is refused unless `--allow-production`. A hand-edited file that adds a request, a destructive verb or a literal token fails its verification.
+
+Running it (`testpion security run`, **Run now** after accepting, MCP `security_tests_run`) goes one step at a time and gives each step a verdict: **finding** (the API accepted what it must refuse), **pass**, or **inconclusive** (the owner's setup request failed, so nothing was proven). Findings come first, with the checks that failed. **Authorised testing only**: run it against an environment you own, never production.
+
+```bash
+testpion security generate --collection "Veterinary API" --identities owner=tokenA,other=tokenB -e staging
+testpion security generate --collection "Veterinary API" --identities tokenA,tokenB --include-write --apply
+testpion security run security/veterinary-api.yaml -e staging       # exit code 1 on a finding
+```
+
+## Contract drift explained
+
+*Check traffic against this spec with AI…* (an API definition's **AI ▸** menu and header) compares **real traffic** — History, a HAR file (a saved Debugger session) or the responses a run stored — with the OpenAPI document. What differs is found **without a model**: an endpoint, a status or a content type the document lacks; a field the schema does not have; a type that differs; a required field that is missing; a null the schema forbids; a value outside an enum. The same drift on many responses is one finding with a count (*seen in 5 of 6 responses*).
+
+With a model, each finding is explained — who is right (the document is outdated, the API has a bug, a test is stale, it is intended), the impact, and the action — and the fix is a proposal:
+
+- **A spec patch** TestPion makes from what was observed (add the property with its observed type, allow null, drop a required entry, add an enum value, document a status). The model does not write it. YAML keeps its comments and order; JSON is re-written.
+- **A contract check** (`type: openapi`) pinned to the saved request, shown to fail on the response that drifted.
+
+Every patch is **verified against the same traffic**: the drift must be gone, no other drift may appear, and the document must lint no worse. A field the API answers with two types is never "blessed" (it is a bug to fix). Applying runs the patch on the file as it is now, so patches compose and **Undo** restores the file. Without a model the additions (a field, a status, an enum value) are offered ticked and the rest is listed.
+
+```bash
+testpion openapi-drift --spec specs/veterinary-api.yaml --limit 200            # the report, no AI
+testpion openapi-drift --spec specs/veterinary-api.yaml --har captures/day.har --ai
+testpion openapi-drift --spec specs/veterinary-api.yaml --propose --apply      # TestPion's own patches
+```
+
+## Script helper
+
+**Script with AI** in every script editor (Pre-request and Post-response) opens **Write a script with AI…** ("send a fresh nonce in an X-Nonce header and keep it in a variable"), **Fix this script with AI…** (paste the error; the script on screen is the context) and **Explain this script with AI**. The script is written for the `tp.*` API **as the sandbox really has it** (read from the sandbox; never `pm.*`), and before you see it it is parsed and **run once in the sandbox** — a pre-request script against the request, a post-response script against the response on screen and the one before it. The review's badge says what it did (*sets nonce; adds the X-Nonce header*, *sets petId; runs 1 test*); a script that throws, misuses the API or fails its own test is repaired, not offered as ready. Accepting puts it in the editor (its own undo); nothing is saved until the request is.
+
+```bash
+testpion ai script --request request:veterinary-api:req-list --describe "save the first paid order id" --apply
+testpion ai script --script login.js --error "TypeError: cannot read property 'token' of undefined" --phase post
+```
+
+MCP: `write_script`.
+
+## Checks from a response, and prefer stable
+
+*Generate checks from this response* on a result of a run asks the verified-assertions task for checks written for **the response the run stored**; each is run against it, and accepted ones join the step of the test file (or the saved request) that produced the result. Checks the step already has are not proposed again. *Suggest checks with AI…* does the same for a saved request's latest response. CLI: `testpion ai run generate-assertions --item run:<runId>:<resultId>`.
+
+**Prefer stable checks** (Settings ▸ AI assistant; `--prefer-stable` / `preferStable`) asks for types, formats and presence instead of literal ids, times and tokens, and offers a check that pins a value the server makes up in its stable form.
+
+## Hiding the AI
+
+**Settings ▸ AI assistant ▸ Hide all AI actions** removes every AI button, menu item, palette command, the assistant panel and the Ask search from the window — whether or not a model is set up. AI Lab (testing models), the CLI and the MCP tools are not affected, and nothing is deleted. Every right-click "… with AI" item comes from one table (`testpion kinds` lists them); a node with several keeps them in an **AI ▸** submenu.
+
 ## Ask: search in your own words
 
 **Ask…** finds things in **History, runs, test results and traces** from a question: *failed payment calls last week over 2 s*, *which tests failed in production*, *flaky tests*, *traces where a tool timed out*. The task is `nl-search` (small model, JSON out, nothing to apply), and the design is the opposite of "let the model look at your data":

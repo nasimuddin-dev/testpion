@@ -110,7 +110,7 @@ describe('Hide all AI actions', () => {
   });
 
   it('the store drops every request to open an AI surface while hidden, and still lets one close', () => {
-    expect(AI_LAUNCH_KEYS).toEqual(['assistant', 'flowGenerate', 'aiAnalysis', 'tidyImport']);
+    expect(AI_LAUNCH_KEYS).toEqual(['assistant', 'flowGenerate', 'aiAnalysis', 'tidyImport', 'askSearch']);
     for (const k of AI_LAUNCH_KEYS) {
       const p = { [k]: { task: 'free' }, view: 'rest' };
       expect(withoutAiLaunch(p), k).toEqual({ view: 'rest' });
@@ -155,7 +155,7 @@ type Gate =
   /** it offers the action from an event handler, after checking aiHidden() */
   | 'snapshot';
 
-const LAUNCHERS = ['startAi(', 'askAssistant(', 'startFlowGenerate(', 'startTidyImport(', 'startAiAnalysis(', '<AiAction', 'aiMenuItems('];
+const LAUNCHERS = ['startAi(', 'askAssistant(', 'startFlowGenerate(', 'startTidyImport(', 'startAiAnalysis(', '<AiAction', 'aiMenuItems(', 'startAskSearch(', '<AskSearchButton'];
 
 /** Every file of the window that opens an AI surface, and how it honours the setting. */
 const ENTRY_POINTS: Record<string, Gate> = {
@@ -177,7 +177,10 @@ const ENTRY_POINTS: Record<string, Gate> = {
   'components/Shell.tsx': 'hook',
   'components/TestHistory.tsx': 'component',
   'components/ProblemList.tsx': 'items',
+  'components/QuickOpen.tsx': 'store',
   'components/ai/AiAction.tsx': 'store',
+  'components/ai/AskSearchButton.tsx': 'hook',
+  'components/ai/ask-search.ts': 'store',
   'components/ai/ai-analysis.ts': 'items',
   'components/ai/flow-generate.ts': 'items',
   'components/ai/script-ai.ts': 'items',
@@ -187,11 +190,13 @@ const ENTRY_POINTS: Record<string, Gate> = {
   'views/ApiDefinitionView.tsx': 'hook',
   'views/DebuggerView.tsx': 'hook',
   'views/GraphQLView.tsx': 'component',
+  'views/HistoryView.tsx': 'component',
   'views/HomeView.tsx': 'hook',
   'views/LoadView.tsx': 'component',
   'views/MonitorsView.tsx': 'component',
   'views/RestView.tsx': 'hook',
   'views/TestsRunsList.tsx': 'menu',
+  'views/TracesView.tsx': 'component',
   'views/rest/dialogs.tsx': 'snapshot',
 };
 
@@ -218,7 +223,7 @@ describe('every entry point of the window honours Hide all AI actions', () => {
     for (const [file, gate] of Object.entries(ENTRY_POINTS)) {
       const src = text.get(file)!;
       if (gate === 'hook') expect(src, `${file} renders its AI control only when useAiEnabled()`).toContain('useAiEnabled()');
-      if (gate === 'component') for (const l of LAUNCHERS.filter((x) => x !== '<AiAction' && !(x === 'startAiAnalysis(' && src.includes('open=')))) expect(src.includes(l), `${file} calls ${l} itself: use the AiAction button`).toBe(false);
+      if (gate === 'component') for (const l of LAUNCHERS.filter((x) => x !== '<AiAction' && x !== '<AskSearchButton' && !(x === 'startAiAnalysis(' && src.includes('open=')))) expect(src.includes(l), `${file} calls ${l} itself: use the AiAction button`).toBe(false);
       if (gate === 'menu') {
         // the action is handed to a node menu (`on:`) and only there
         expect(src, file).toMatch(/on: \{|on: Object|\bon,|on:/);

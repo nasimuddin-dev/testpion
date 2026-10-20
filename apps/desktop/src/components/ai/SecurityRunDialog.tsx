@@ -1,8 +1,9 @@
-import { Download, Play, ShieldAlert } from 'lucide-react';
+import { Play, ShieldAlert } from 'lucide-react';
 import { useState } from 'react';
 import type { SecurityRunReport, SecurityStepVerdict } from '@testpion/core';
 import { asError, call } from '../../api';
-import { downloadContent } from '../../lib/files';
+import { OutputActions } from '../output/OutputFrame';
+import { securityOutputSpec } from '../output/ai-specs';
 import { useApp } from '../../store';
 import { Badge, Button, Callout, Modal, Spinner } from '../ui';
 
@@ -67,9 +68,9 @@ export function SecurityRunDialog({ path, environment, onClose }: { path: string
       footer={
         <>
           {report && (
-            <Button variant="ghost" icon={<Download size={13} />} className="mr-auto" onClick={() => downloadContent('security-tests.md', report.markdown, { type: 'text/markdown' })}>
-              Markdown
-            </Button>
+            <span className="mr-auto">
+              <OutputActions spec={securityOutputSpec(report)} />
+            </span>
           )}
           <Button onClick={onClose}>Close</Button>
           <Button variant="primary" icon={<Play size={13} />} loading={busy} disabled={!environment || prod} onClick={() => void run()} data-security-run>

@@ -29,6 +29,7 @@ import type { NodeMenuCtx } from '../lib/node-menu';
 import { LABEL } from '../lib/vocabulary';
 import { requestCopyItems } from '../lib/request-copy';
 import { generateFlows } from '../lib/files';
+import { startAi } from './ai/AiAction';
 import { startAiAnalysis } from './ai/ai-analysis';
 import { startFlowGenerate } from './ai/flow-generate';
 import { generateSpecTests } from './ApiPreviewPanel';
@@ -583,6 +584,7 @@ export function Explorer() {
         ...(n.kind === 'http' ? { copyAs: requestCopyItems(c, n) } : {}),
         monitor: () => intent('monitors', { create: { collectionId: c.id, selection: [n.id] } }),
         testFile: () => void saveAsTest({ ref, name: n.name }),
+        suggestChecks: () => startAi({ task: 'generate-assertions', title: `Suggested checks for ${n.name}`, context: {}, item: ref, autoReview: true }),
         rename: async () => {
           const name = (await promptText(LABEL.rename, { message: 'Request name', value: n.name, okLabel: 'Rename' }))?.trim();
           if (name && name !== n.name) await editCollection(c, (w) => ({ ...w, items: mapNodes(w.items, (x) => (x.id === n.id ? { ...x, name } : x)) }));
