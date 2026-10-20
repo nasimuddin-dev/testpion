@@ -14,6 +14,7 @@ import {
   findSavedEvaluation,
   importBeir,
   importRagRecords,
+  metricScoreColumns,
   parseRagImportText,
   listRagTargets,
   parseRagDatasetText,
@@ -26,6 +27,7 @@ import {
 } from '@testpion/core';
 import { datasetFormatOfName } from '@testpion/shared';
 import { registerRagEvalCommands } from './rag-eval.js';
+import { registerRagMetricFileCommands } from './rag-metric-files.js';
 import { EXIT, CliError, bold, cliContext, dim, green, printJson, readResults, red, yellow, withWorkspace } from '../shared.js';
 
 const FORMATS = RAG_DATASET_FORMATS.join(', ');
@@ -42,6 +44,7 @@ const shortText = (s: string, n = 90) => (s.length > n ? `${s.slice(0, n - 1)}â€
 export function registerRagCommands(program: Command): void {
   const rag = program.command('rag').description('RAG systems under test: connect and probe a target, the metric catalogue, run an evaluation with metrics and gates, re-score and compare runs, convert datasets from and to Ragas, DeepEval, BEIR, NVIDIA and promptfoo');
   registerRagEvalCommands(rag);
+  registerRagMetricFileCommands(rag);
 
   rag
     .command('targets')
@@ -136,12 +139,13 @@ export function registerRagCommands(program: Command): void {
     .description('convert a TestPion RAG dataset (a file, or a saved evaluation by name) into Ragas or DeepEval records; with --run the answers and retrieved contexts that run captured are included')
     .argument('<dataset>', 'a dataset file, or the name of a saved evaluation')
     .addOption(new Option('--to <format>', 'the format to write').choices(['ragas', 'deepeval']).makeOptionMandatory())
-    .option('--run <runId>', 'add the answer and the retrieved contexts each record got in this run (response / retrieved_contexts, actual_output / retrieval_context)')
+    .option('--run <runId>', 'add the answer and the retrieved contexts each record got in this run (response / retrieved_contexts, actual_output / retrieval_context), and one column per metric of the run')
+    .addOption(new Option('--names <names>', 'with --run: name the metric columns as Ragas does (faithfulness, answer_relevancy, nv_accuracy â€¦) so Ragas can be run on the same file and the scores compared').choices(['testpion', 'ragas']).default('testpion'))
     .option('-w, --workspace <nameOrPath>', 'workspace name or directory (needed for an evaluation name or --run)')
     .option('-o, --out <file>', 'write the file here (default: print it)')
     .option('--format <format>', 'jsonl or json output', 'jsonl')
     .option('--json', 'print { to, records } as JSON')
-    .action(async (dataset: string, o: { to: RagDatasetFormat; run?: string; workspace?: string; out?: string; format: string; json?: boolean }) => {
+    .action(async (dataset: string, o: { to: RagDatasetFormat; run?: string; names: 'testpion' | 'ragas'; workspace?: string; out?: string; format: string; json?: boolean }) => {
       await withWorkspace(o.workspace, async (store, ephemeral) => {
         let text: string;
         let format = datasetFormatOfName(dataset) ?? 'jsonl';
@@ -158,6 +162,7 @@ export function registerRagCommands(program: Command): void {
           }
         }
         let records = importRagRecords(parseRagDatasetText(text, format)).records;
+        let scores: ReturnType<typeof metricScoreColumns> | undefined;
         if (o.run) {
           if (ephemeral) throw new CliError('--run needs the workspace the run is in (-w <nameOrPath>)', EXIT.CONFIG_ERROR);
           const results: Array<{ id: string; metadata?: Record<string, unknown> }> = [];
@@ -167,8 +172,10 @@ export function registerRagCommands(program: Command): void {
             throw new CliError(`No finished run "${o.run}" in this workspace`, EXIT.CONFIG_ERROR);
           }
           records = withCapturedSamples(records, results);
+          scores = metricScoreColumns(records, results as never, { names: o.names });
         }
-        const out = exportRagRecords(records, o.to);
+        const exported = exportRagRecords(records, o.to);
+        const out = scores ? exported.map((r, i) => ({ ...r, ...scores![i] })) : exported;
         const body = stringifyRagRecords(out, o.format === 'json' ? 'json' : 'jsonl');
         if (o.out) writeFileSync(resolve(o.out), body);
         if (o.json) return printJson({ to: o.to, count: out.length, ...(o.out ? { out: resolve(o.out) } : { records: out }) });

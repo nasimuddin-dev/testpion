@@ -49,6 +49,8 @@ export interface CheckContext {
   /** RAG: the gold chunks (texts) and their ids from the dataset record, for the metrics that compare the retrieval with them. */
   referenceContexts?: string[];
   referenceIds?: string[];
+  /** The workspace folder (SQL metrics resolve a SQLite file against it). */
+  workspaceRoot?: string;
   /** RAG: the other fields of the dataset record the metrics read (answerable, relevance, injection …; see eval/rag/record.ts). */
   record?: import('./rag/record.js').RagRecord;
   /** RAG: the judge the evaluation names (else the AI settings'), and its limits for the run. */

@@ -69,7 +69,9 @@ export type OutputSource =
   /** The workspace's uncommitted changes: one file's diff (`path`), or all of them. */
   | { kind: 'git-diff'; path?: string; staged?: boolean }
   /** The workspace at a glance (activity, collections' health, monitors, latest runs) as one HTML page. */
-  | { kind: 'workspace-report'; days?: number; tzOffsetMin?: number };
+  | { kind: 'workspace-report'; days?: number; tzOffsetMin?: number }
+  /** A RAG run's samples × metrics matrix, every row: `names: ragas` names the score columns as Ragas does; `thresholds` are the edited pass marks. */
+  | { kind: 'rag-matrix'; runId: string; names?: 'testpion' | 'ragas'; thresholds?: Record<string, number> };
 
 const s =<I extends string>(id: I, label: string, formats: OutputFormatId[], redaction: OutputRedaction, extra: Partial<SurfaceFields> = {}): SurfaceFields & { id: I } => ({
   id,
@@ -128,6 +130,7 @@ const SURFACES = [
   s('api.reports', 'API lint, fuzz, coverage, security and OpenAPI diff reports', ['md', 'json'], 'redacted-default', { capturedRedacted: true }),
   s('chart', 'Charts', ['png', 'svg'], 'none'),
   s('env.matrix', 'Environment matrix and compare', ['csv', 'md', 'json'], 'redacted-default', { capturedRedacted: true }),
+  s('rag.matrix', 'RAG metrics matrix', ['csv', 'json', 'html'], 'redacted-default', { cli: 'rag matrix', capturedRedacted: true, sources: ['rag-matrix'] }),
   s('monitor.runs', 'Monitor runs', ['csv', 'json'], 'none', { cli: 'monitor results', sources: ['monitor-runs'] }),
   s('runs.overview', 'Runs overview and test history', ['csv', 'json'], 'none', { cli: 'output', sources: ['runs-overview'] }),
   s('workspace.report', 'Workspace report', ['html'], 'none', { cli: 'workspace-report', sources: ['workspace-report'] }),

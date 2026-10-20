@@ -294,6 +294,7 @@ export function normalizeTest(raw: Record<string, unknown>, file?: string, index
         prompt: raw.prompt as string | undefined,
         ...(raw.target ? { target: raw.target as RagTarget } : {}),
         ...(raw.judge && typeof raw.judge === 'object' ? { judge: raw.judge as RagTest['judge'] } : {}),
+        ...(Number(raw.targetRepeats ?? raw.target_repeats) > 1 ? { targetRepeats: Math.min(10, Math.floor(Number(raw.targetRepeats ?? raw.target_repeats))) } : {}),
         ...(listOf(raw.referenceContexts ?? raw.reference_contexts) ? { referenceContexts: listOf(raw.referenceContexts ?? raw.reference_contexts) } : {}),
         ...(listOf(raw.referenceIds ?? raw.reference_ids) ? { referenceIds: listOf(raw.referenceIds ?? raw.reference_ids) } : {}),
         variables: vars,

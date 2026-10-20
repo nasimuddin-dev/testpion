@@ -98,7 +98,7 @@ export interface MetricDef {
   /** Other names that resolve to this metric (old check names, DeepEval, NVIDIA …). */
   aliases: string[];
   /** The Ragas names (snake_case, class and legacy class) and the options that give Ragas' own semantics when one is used instead of the id. */
-  ragas?: { names: string[]; options?: Record<string, unknown>; differs?: string };
+  ragas?: { names: string[]; options?: Record<string, unknown>; differs?: string; /** The column Ragas gives it in its result table, when that is not its first snake_case name. */ key?: string };
   options?: Record<string, MetricOption>;
   /** `service`: the judge service (strict, cached, ledgered); `optional`: a judge when the check names one, else a heuristic. */
   judge?: 'service' | 'optional';

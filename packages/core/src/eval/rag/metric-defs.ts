@@ -66,7 +66,7 @@ const DEFS: MetricDef[] = [
     threshold: 0.7,
     check: 'answer-relevance',
     aliases: ['rag-answer-relevance'],
-    ragas: { names: ['response_relevancy', 'ResponseRelevancy', 'answer_relevancy', 'AnswerRelevancy'], options: { mode: 'reverse-questions' } },
+    ragas: { names: ['response_relevancy', 'ResponseRelevancy', 'answer_relevancy', 'AnswerRelevancy'], options: { mode: 'reverse-questions' }, key: 'answer_relevancy' },
     options: {
       mode: { type: 'string', default: 'statements', values: ['statements', 'reverse-questions'], description: 'statements: a judge rates each statement. reverse-questions: Ragas’ method (needs an embedding model).' },
       embedder: { type: 'string', description: 'reverse-questions: the provider/model that embeds (default: the judge’s provider).' },
@@ -92,7 +92,7 @@ const DEFS: MetricDef[] = [
     threshold: 0.5,
     check: 'context-relevance',
     aliases: ['contextual-relevancy'],
-    ragas: { names: ['context_relevance', 'ContextRelevance', 'nv_context_relevance'], options: { mode: 'nvidia' } },
+    ragas: { names: ['context_relevance', 'ContextRelevance', 'nv_context_relevance'], options: { mode: 'nvidia' }, key: 'nv_context_relevance' },
     options: { mode: { type: 'string', default: 'nvidia', values: ['nvidia', 'statements', 'chunks', 'sentences'], description: 'Which definition of context relevance to compute.' } },
     judge: 'service',
     prompts: ['context-relevance-nvidia-a-v1', 'context-relevance-nvidia-b-v1', 'context-relevance-statements-v1', 'context-relevance-chunks-v1', 'context-relevance-sentences-v1'],
@@ -162,7 +162,7 @@ const DEFS: MetricDef[] = [
     threshold: 0.8,
     check: 'context-entity-recall',
     aliases: [],
-    ragas: { names: ['context_entities_recall', 'context_entity_recall', 'ContextEntityRecall'], options: { mode: 'llm', caseSensitive: true }, differs: 'Ragas extracts the entities with a model and matches case-sensitively: a Ragas class name or the `ragas:` prefix selects mode llm.' },
+    ragas: { names: ['context_entities_recall', 'context_entity_recall', 'ContextEntityRecall'], key: 'context_entity_recall', options: { mode: 'llm', caseSensitive: true }, differs: 'Ragas extracts the entities with a model and matches case-sensitively: a Ragas class name or the `ragas:` prefix selects mode llm.' },
     options: {
       mode: { type: 'string', default: 'regex', values: ['regex', 'llm'], description: 'regex: patterns, no model. llm: a judge extracts the entities (Ragas).' },
       caseSensitive: { type: 'boolean', default: false, description: 'mode llm: match entities exactly, as Ragas.' },

@@ -7,6 +7,7 @@ import type { WorkspaceStore } from '../storage/workspace.js';
 import { expandDataset } from './loader.js';
 import type { RagJudgeSetup, RagTarget } from '@testpion/shared';
 import { findRagTarget } from '../eval/rag/targets.js';
+import { applyRagasCompat } from '../eval/rag/ragas-io.js';
 import { datasetFormatOf, countDatasetRecords } from '@testpion/shared';
 export { datasetFormatOf, countDatasetRecords };
 
@@ -36,6 +37,12 @@ export interface SavedEvaluation {
   judge?: Pick<RagJudgeSetup, 'provider' | 'model' | 'judges' | 'aggregate' | 'swap' | 'repeat' | 'shortCircuit' | 'shareClaims' | 'sampleShare'>;
   maxJudgeCostUsd?: number;
   maxJudgeCalls?: number;
+  /** `ragas`: every metric takes the options of its Ragas name (reverse-question answer relevance, per-chunk precision, entity recall by model …). */
+  compat?: 'ragas';
+  /** type `rag` with a target: call it this many times per question (2 to 10) and score the mean of the calls. */
+  targetRepeats?: number;
+  /** type `rag`: a SQLite file inside the workspace, or a read-only PostgreSQL / MySQL connection, for the SQL metrics (datacompy-score, sql-equivalence). */
+  database?: { path?: string; url?: string; connectionEnv?: string; readOnly?: boolean };
 }
 
 export const EVALUATIONS_LIBRARY = 'evaluations';
@@ -46,13 +53,19 @@ export function judgeSetupOf(d: Pick<SavedEvaluation, 'judge' | 'maxJudgeCostUsd
 }
 
 /** The test template each dataset record is expanded into. */
+/** The evaluators of an evaluation as they run: Ragas' own options when `compat: ragas`, the evaluation's database for the SQL metrics. */
+export function evaluatorsOf(d: Pick<SavedEvaluation, 'evaluators' | 'compat' | 'database'>): CheckConfig[] {
+  const list = d.compat === 'ragas' ? applyRagasCompat(d.evaluators ?? []) : (d.evaluators ?? []);
+  return d.database ? list.map((e) => (['datacompy-score', 'sql-equivalence', 'datacompy_score', 'DataCompyScore', 'sql_query_equivalence'].includes(e.type) && !e.database ? { ...e, database: d.database } : e)) : list;
+}
+
 export function evaluationTemplate(d: SavedEvaluation, target?: RagTarget): Record<string, unknown> {
   const model = { provider: d.provider, name: d.model || undefined, temperature: d.temperature };
   if (d.type === 'rag' && target) {
     const judge = judgeSetupOf(d);
-    return { name: d.name, type: 'rag', target, ...(Object.keys(judge).length ? { judge } : {}), evaluators: d.evaluators };
+    return { name: d.name, type: 'rag', target, ...(Object.keys(judge).length ? { judge } : {}), ...((d.targetRepeats ?? 1) > 1 ? { targetRepeats: d.targetRepeats } : {}), evaluators: evaluatorsOf(d) };
   }
-  if (d.type === 'rag') return { name: d.name, type: 'rag', model, ...(d.prompt.includes('{{context}}') ? { prompt: d.prompt } : {}), evaluators: d.evaluators };
+  if (d.type === 'rag') return { name: d.name, type: 'rag', model, ...(d.prompt.includes('{{context}}') ? { prompt: d.prompt } : {}), evaluators: evaluatorsOf(d) };
   return {
     name: d.name,
     type: 'llm',

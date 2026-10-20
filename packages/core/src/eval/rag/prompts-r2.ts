@@ -325,7 +325,24 @@ export const RETRIEVAL_RELEVANCE: JudgedMetric = metric({
   empty: 0,
 });
 
+export const SQL_EQUIVALENCE: JudgedMetric = metric({
+  id: 'sql-equivalence',
+  version: 'sql-equivalence-v1',
+  what: 'Whether two SQL queries are semantically equivalent given the schema (Ragas SQLSemanticEquivalence).',
+  instruction: [
+    'Evaluation task: SQL EQUIVALENCE (version sql-equivalence-v1). Do `response` and `reference` return the same data on any database that has the given `schema`?',
+    'Step 1. In `reasoning`, explain what each query does: the tables, the joins, the filters, the grouping and the columns it returns.',
+    'Step 2. Decide. Syntax that does not change the meaning is equivalent (INNER JOIN and JOIN, active = 1 and active = TRUE, an alias, the order of conditions, a different but equal way to write the same filter). A different aggregate (SUM against COUNT), a different filter, a different join, other columns or another grouping is not equivalent. The order of rows only counts if one query has an ORDER BY and the question depends on it.',
+    'Return exactly one item: `text` is "equivalent", `verdict` is true if the queries are equivalent, `reason` is one sentence saying why or what differs.',
+  ].join('\n'),
+  inputs: ['response', 'reference', 'schema'],
+  noun: 'verdicts',
+  labels: ['equivalent', 'different'],
+  empty: 0,
+});
+
 export const R2_PROMPTS: readonly JudgedMetric[] = [
+  SQL_EQUIVALENCE,
   CONTEXT_PRECISION,
   CONTEXT_PRECISION_ONE,
   CONTEXT_UTILIZATION,

@@ -240,6 +240,8 @@ export function registerRagEvalCommands(rag: Command): void {
     .option('--repeat <n>', 'judge n times (the cache is bypassed after the first) and report the flip rate')
     .option('--short-circuit', 'skip the judged answer metrics of a sample whose free retrieval metrics already failed')
     .option('--share-claims', 'split the answer into claims once and share them between faithfulness and answer-relevance')
+    .addOption(new Option('--compat <tool>', 'give every metric the options of its Ragas name (reverse-question answer relevance, per-chunk context precision, entity recall by model)').choices(['ragas']))
+    .option('--repeat-target <n>', 'call the RAG system n times per question (2 to 10) and score the mean of the calls, with the spread (the system’s own noise)')
     .option('--two-phase', 'collect the answers with the free metrics first, then judge them (a run followed by a rescore)')
     .option('--max-cost <usd>', 'stop judging once this much is spent; the rest is n/a')
     .option('--max-calls <n>', 'stop judging after this many model calls')
@@ -427,6 +429,8 @@ interface RunFlags {
   repeat?: string;
   shortCircuit?: boolean;
   shareClaims?: boolean;
+  compat?: 'ragas';
+  repeatTarget?: string;
   twoPhase?: boolean;
   maxCost?: string;
   maxCalls?: string;
@@ -464,6 +468,8 @@ async function runCommand(ref: string, o: RunFlags): Promise<number> {
         repeat: o.repeat ? Number(o.repeat) : undefined,
         shortCircuit: o.shortCircuit,
         shareClaims: o.shareClaims,
+        compat: o.compat,
+        targetRepeats: o.repeatTarget ? Number(o.repeatTarget) : undefined,
         maxJudgeCostUsd: o.maxCost ? Number(o.maxCost) : undefined,
         maxJudgeCalls: o.maxCalls ? Number(o.maxCalls) : undefined,
         limit: o.limit ? Number(o.limit) : undefined,

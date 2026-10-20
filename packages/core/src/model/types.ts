@@ -402,6 +402,8 @@ export interface RagTest extends TestBase {
   referenceIds?: string[];
   /** The judge of the judged metrics (else the AI settings' large model; never a silent mock) and its limits for the run. */
   judge?: RagJudgeSetup;
+  /** Call the target this many times per question (2 to 10) and score the mean of the calls (runner/rag-repeat.ts). */
+  targetRepeats?: number;
 }
 
 export interface MockTool {

@@ -439,6 +439,7 @@ describe('the surfaces registry', () => {
       'runs.overview': ['runs-overview'],
       'git.diff': ['git-diff'],
       'workspace.report': ['workspace-report'],
+      'rag.matrix': ['rag-matrix'],
     });
     // a redacted source (the console, the log, a run, History, traces) is never offered by a surface whose policy is none:
     // those hold only numbers, names and the workspace's own files

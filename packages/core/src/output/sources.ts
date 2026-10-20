@@ -327,6 +327,7 @@ export async function buildSource(
     case 'runs-overview':
     case 'git-diff':
     case 'workspace-report':
+    case 'rag-matrix':
       return text(await dataSource(deps, src, format));
     default:
       throw new ApsError('ValidationError', `output.save: unknown source ${String((src as { kind?: unknown }).kind)}`);

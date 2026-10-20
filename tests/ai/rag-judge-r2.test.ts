@@ -57,6 +57,7 @@ describe('the prompts of the second release are pinned', () => {
         "response-groundedness-a-v1": "ab78be7c9160",
         "response-groundedness-b-v1": "bad604f6308d",
         "retrieval-relevance-v1": "a2bc67b73506",
+        "sql-equivalence-v1": "26a8a187f7b9",
       }
     `);
   });
@@ -481,6 +482,27 @@ describe('the judge service rules hold for the new metrics', () => {
       const r = await run({ type: 'factual-correctness' }, { services: undefined });
       expect(r.passed).toBe(false);
       expect(r.message).toMatch(/needs a judge model/);
+    } finally {
+      h.cleanup();
+    }
+  });
+});
+
+describe('sql-equivalence (Ragas SQLSemanticEquivalence)', () => {
+  const SCHEMA = ['CREATE TABLE orders (id INT, customer TEXT, total REAL);'];
+  it('JOIN … SUM against INNER JOIN … SUM → 1; SUM against COUNT → 0; the schema comes from the gold chunk texts', async () => {
+    const { h, run } = setup([
+      { match: 'COUNT[(]', response: v([['equivalent', false]]) },
+      { match: 'sql-equivalence-v1', response: v([['equivalent', true]]) },
+    ]);
+    try {
+      const same = await run({ type: 'sql_query_equivalence' }, { text: 'SELECT customer, SUM(total) FROM orders JOIN x USING (id) GROUP BY customer', expected: 'SELECT customer, SUM(total) FROM orders INNER JOIN x USING (id) GROUP BY customer', referenceContexts: SCHEMA });
+      expect(same.score).toBe(1);
+      const diff = await run({ type: 'sql-equivalence' }, { text: 'SELECT customer, COUNT(total) FROM orders GROUP BY customer', expected: 'SELECT customer, SUM(total) FROM orders GROUP BY customer', referenceContexts: SCHEMA });
+      expect(diff.score).toBe(0);
+      expect(h.rec.sent()).toContain('CREATE TABLE orders');
+      const noSchema = await run({ type: 'sql-equivalence' }, { text: 'SELECT 1', expected: 'SELECT 1' });
+      expect(noSchema.message).toMatch(/needs the schema/);
     } finally {
       h.cleanup();
     }

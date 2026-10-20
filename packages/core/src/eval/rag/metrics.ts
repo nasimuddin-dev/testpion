@@ -25,6 +25,8 @@ import './metrics-generation-judged.js';
 import './metrics-claims.js';
 import './judge-templates.js';
 import './metric-defs-judged.js';
+import './metrics-sql.js';
+import './metric-defs-sql.js';
 
 /**
  * What each metric reads, for the docs and the editors. They are not registered as the check registry's documented

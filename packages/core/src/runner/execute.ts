@@ -44,6 +44,7 @@ import { runRagTargetTest } from './rag-run.js';
 import { scoreRagSample } from '../eval/rag/score.js';
 import { docsOf } from '../eval/rag/lists.js';
 import { pickRecord } from '../eval/rag/record.js';
+import { scoreTargetRepeats } from './rag-repeat.js';
 import { runScript } from '../scripts/sandbox.js';
 import { renderVisualizer } from '../scripts/visualizer.js';
 import { applyScriptOutput, scriptRequestSender, scriptScopes, type PersistVariable } from '../scripts/bridge.js';
@@ -85,6 +86,8 @@ export interface ExecServices {
   environmentName?: string;
   /** Reads a workspace file by relative path (OpenAPI documents for contract checks); never outside the workspace. */
   readFile?: (path: string) => string;
+  /** The workspace folder (a SQLite database named by a SQL metric must be inside it). */
+  workspaceRoot?: string;
   /** The flow files being run, outermost first (sub-flows: a cycle or more than five levels is refused). */
   flowStack?: string[];
   /** A step's pinned response (the flow designer's pins, set by runTests' `pins`): the step is answered with it, the API is not called. */
@@ -239,6 +242,7 @@ export async function executeTest(testIn: TestCase, svc: ExecServices, opts: { t
     root.event('error', { kind: err.kind, message: err.message });
   }
   ctx.services = { providers: svc.providers, signal: opts.signal, span: root, ragJudge: svc.ragJudge };
+  ctx.workspaceRoot ??= svc.workspaceRoot;
 
   // test script (sandboxed)
   if (test.testScript) {
@@ -276,7 +280,21 @@ export async function executeTest(testIn: TestCase, svc: ExecServices, opts: { t
   ctx.services.span = evalSpan ?? root;
   // a RAG target's metrics are scored together (the shared claim pass, shortCircuit) and the sample's failure is classified
   let ragScored: Awaited<ReturnType<typeof scoreRagSample>> | undefined;
-  if (test.type === 'rag' && test.target) ragScored = await scoreRagSample(checkConfigs, ctx, { warnings: (metadata.rag as { warnings?: string[] } | undefined)?.warnings });
+  if (test.type === 'rag' && test.target) {
+    ragScored = await scoreRagSample(checkConfigs, ctx, { warnings: (metadata.rag as { warnings?: string[] } | undefined)?.warnings });
+    // the same question asked again: the metrics become the mean of the calls (system noise), with their spread
+    if ((test.targetRepeats ?? 1) > 1 && !ctx.error) {
+      const again = await scoreTargetRepeats({
+        n: test.targetRepeats!,
+        configs: checkConfigs,
+        first: { ctx, checks: ragScored.checks },
+        call: () => runRagTargetTest(test, scope, root, (step, sc) => protocolStep(step, sc, svc, root, opts.signal!), svc.production ? (step, sc) => assertProductionStep(svc.production!, productionStep(step, sc)) : undefined),
+        signal: opts.signal,
+      });
+      ragScored = { ...ragScored, checks: again.checks };
+      metadata.rag = { ...(metadata.rag as Record<string, unknown> | undefined), targetRepeats: test.targetRepeats, ...(again.repeats.length ? { repeats: again.repeats.slice(0, 9) } : {}), differing: again.differing };
+    }
+  }
   const checks = [...scriptChecks, ...(ragScored ? ragScored.checks : await runChecks(checkConfigs, ctx))];
   if (ragScored?.failure) metadata.rag = { ...(metadata.rag as Record<string, unknown> | undefined), failure: ragScored.failure };
   evalSpan?.end({ status: checks.every((c) => c.passed) ? 'ok' : 'error', output: checks.map((c) => ({ name: c.name, passed: c.passed, score: c.score, source: c.source })) });

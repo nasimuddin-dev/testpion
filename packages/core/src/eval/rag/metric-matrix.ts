@@ -9,6 +9,7 @@ import type { TestResult } from '../../model/types.js';
 import { round } from '../../util/stats.js';
 import { FAILURE_CLASSES, type FailureClass } from './failure.js';
 import { METRIC_GROUPS, resolveMetric, type MetricGroup } from './metric-registry.js';
+import { matchExternal, type ExternalScores } from './ragas-io.js';
 
 export interface MetricColumn {
   /** The column's key: the check’s name (`recall@5`, `faithfulness`). */
@@ -16,11 +17,13 @@ export interface MetricColumn {
   /** The canonical metric id (`recall@k`, `faithfulness`), or the check type for a metric that is not in the catalogue. */
   metric: string;
   label: string;
-  group: MetricGroup | 'other';
+  group: MetricGroup | 'other' | 'external';
   direction: 'higher' | 'lower';
   /** The pass mark the checks used (from the first result that carries one). */
   threshold?: number;
   kind?: string;
+  /** The scores came from another tool's result table (Ragas), not from this run. */
+  external?: { source: string; column: string };
 }
 
 export interface MatrixCell {
@@ -70,6 +73,8 @@ export interface MetricMatrix {
   groups: Array<{ id: string; label: string; columns: number }>;
   /** How many samples fall in each failure class (failing samples only). */
   failures: Array<{ class: FailureClass; label: string; count: number }>;
+  /** The mean of every column per tag of the dataset records (at most 50 tags, the biggest first): `means` is in the order of `columns`. */
+  byTag: Array<{ tag: string; n: number; means: Array<number | null> }>;
 }
 
 interface Col extends MetricColumn {
@@ -107,6 +112,10 @@ export interface MatrixQuery {
   /** Sort by a column key (lowest score first) or `failure`. */
   sort?: string;
   runId?: string;
+  /** Every row, not a page (an export). */
+  all?: boolean;
+  /** Scores of another tool for the same samples (a Ragas result table), shown as columns beside this run's. */
+  external?: ExternalScores;
 }
 
 export async function buildMetricMatrix(results: AsyncIterable<TestResult>, q: MatrixQuery = {}): Promise<MetricMatrix> {
@@ -165,6 +174,40 @@ export async function buildMetricMatrix(results: AsyncIterable<TestResult>, q: M
     }
   });
   raw.length = 0;
+
+  // another tool's scores for the same samples: each metric column of the table, matched to the samples by the question
+  if (q.external) {
+    const at = matchExternal(meta.map((m) => m.question), q.external);
+    for (const name of q.external.metrics) {
+      const hit = resolveMetric(name);
+      const key = `${name} (${q.external.source})`;
+      if (cols.has(key)) continue;
+      const c: Col = {
+        key,
+        metric: hit?.def.id ?? name,
+        label: key,
+        group: 'external',
+        direction: hit?.def.direction ?? 'higher',
+        ...(hit?.def.threshold !== undefined ? { threshold: hit.def.threshold } : {}),
+        external: { source: q.external.source, column: name },
+        scores: new Float32Array(n),
+        state: new Uint8Array(n),
+        reasons: new Map(),
+      };
+      at.forEach((row, i) => {
+        const v = row === undefined ? undefined : q.external!.rows[row]!.scores[name];
+        if (v === undefined) return;
+        if (v === null) {
+          c.state[i] = 2;
+          c.reasons.set(i, `${q.external!.source} gave no score (NaN)`);
+        } else {
+          c.scores[i] = v;
+          c.state[i] = 1;
+        }
+      });
+      cols.set(key, c);
+    }
+  }
 
   const thresholds = q.thresholds ?? {};
   const order = [...cols.values()].sort((a, b) => groupRank(a.group) - groupRank(b.group));
@@ -241,16 +284,37 @@ export async function buildMetricMatrix(results: AsyncIterable<TestResult>, q: M
     if (c) idx.sort((a, b) => (c.state[a] === 1 ? c.scores[a]! : 2) - (c.state[b] === 1 ? c.scores[b]! : 2));
   }
   const offset = Math.max(0, q.offset ?? 0);
-  const limit = Math.min(Math.max(1, q.limit ?? 100), 500);
+  const limit = q.all ? Math.max(1, idx.length) : Math.min(Math.max(1, q.limit ?? 100), 500);
   const rows: MatrixRow[] = idx.slice(offset, offset + limit).map((i) => ({ ...meta[i]!, cells: order.map((c) => cell(c, i)) }));
   const groups: MetricMatrix['groups'] = [];
   for (const c of columns) {
-    const label = c.group === 'other' ? 'Other' : METRIC_GROUPS.find((g) => g.id === c.group)!.label;
+    const label = c.group === 'other' ? 'Other' : c.group === 'external' ? `Scores of ${c.external?.source ?? 'another tool'}` : METRIC_GROUPS.find((g) => g.id === c.group)!.label;
     const last = groups[groups.length - 1];
     if (last && last.id === c.group) last.columns++;
     else groups.push({ id: c.group, label, columns: 1 });
   }
-  return { ...(q.runId ? { runId: q.runId } : {}), columns, rows, total: idx.length, aggregates, groups, failures };
+  const tagRows = new Map<string, number[]>();
+  meta.forEach((m, i) => {
+    for (const t of m.tags ?? []) {
+      const list = tagRows.get(t);
+      if (list) list.push(i);
+      else tagRows.set(t, [i]);
+    }
+  });
+  const byTag = [...tagRows.entries()]
+    .sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]))
+    .slice(0, 50)
+    .map(([tag, rowsOfTag]) => ({
+      tag,
+      n: rowsOfTag.length,
+      means: order.map((c) => {
+        let sum = 0;
+        let count = 0;
+        for (const i of rowsOfTag) if (c.state[i] === 1) (sum += c.scores[i]!), count++;
+        return count ? round(sum / count, 4) : null;
+      }),
+    }));
+  return { ...(q.runId ? { runId: q.runId } : {}), columns, rows, total: idx.length, aggregates, groups, failures, byTag };
 }
 
 const groupRank = (g: string) => {

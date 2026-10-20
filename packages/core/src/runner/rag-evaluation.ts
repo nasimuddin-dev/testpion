@@ -23,7 +23,7 @@ import type { WorkspaceStore } from '../storage/workspace.js';
 import { recordRun } from './run-records.js';
 import { runResults } from './run-results.js';
 import { rescoreRun, storedSample } from './rag-rescore.js';
-import { evaluationTests, judgeSetupOf, type SavedEvaluation } from './saved-evaluations.js';
+import { evaluationTests, evaluatorsOf, judgeSetupOf, type SavedEvaluation } from './saved-evaluations.js';
 import { runTests } from './runner.js';
 import { join } from 'node:path';
 
@@ -41,6 +41,10 @@ export interface RagRunChoices {
   repeat?: number;
   shortCircuit?: boolean;
   shareClaims?: boolean;
+  /** `ragas`: every metric takes the options of its Ragas name. */
+  compat?: 'ragas';
+  /** Call the target this many times per question and score the mean (system noise). */
+  targetRepeats?: number;
   maxJudgeCostUsd?: number;
   maxJudgeCalls?: number;
   limit?: number;
@@ -64,6 +68,10 @@ export function chooseRagRun(d: SavedEvaluation, c: RagRunChoices): SavedEvaluat
   }
   out.evaluators = evaluators;
   if (c.target) out.target = c.target;
+  if (c.compat) out.compat = c.compat;
+  // `compat: ragas` and the evaluation's database are applied once, here, so the estimate, the run and a rescore all see the same metrics
+  out.evaluators = evaluatorsOf(out);
+  if (c.targetRepeats !== undefined) out.targetRepeats = Math.max(1, Math.min(10, Math.floor(c.targetRepeats)));
   if (c.limit) out.limit = c.limit;
   if (c.judge) out.judge = { ...out.judge, ...(typeof c.judge === 'string' ? refOf(c.judge) : c.judge) };
   if (c.judges?.length) out.judge = { ...out.judge, judges: c.judges.map(refOf) };

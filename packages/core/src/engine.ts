@@ -147,6 +147,7 @@ export function createEngineContext(opts: ContextOptions): EngineContext {
     environmentName: environment?.name,
     production: environment?.isProduction ? { environment: environment.name, allowed: opts.allowProduction ?? productionAllowed() } : undefined,
     readFile: (path: string) => readFileSync(store.safePath(path, opts.fileRoot ?? store.root), 'utf8'),
+    workspaceRoot: opts.fileRoot ?? store.root,
     scriptPackage: (name: string) => store.readScriptPackage(name),
     onCertificate: (url, c) => recordCertificate(store, url, c),
     ragJudge: createRagJudgeHost({ store, providers, redactor, settings, surface: opts.aiSurface ?? 'cli', env: opts.aiEnv }),

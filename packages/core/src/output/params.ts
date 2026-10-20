@@ -37,6 +37,8 @@ export interface OutputParams {
   days?: number;
   /** A History entry whose saved response body is the output. */
   historyId?: string;
+  /** rag.matrix: name the score columns as Ragas does. */
+  names?: string;
 }
 
 /** Per surface the CLI / MCP can build: its parameters (the first is required unless it says otherwise) and what they mean. */
@@ -45,6 +47,7 @@ export const OUTPUT_PARAMS: Record<string, { params: Array<keyof OutputParams>; 
   'flow.timeline': { params: ['run', 'file'], hint: 'a run id, or a flow file (its latest run)' },
   'flow.grid': { params: ['dataRun', 'status'], required: ['dataRun'], hint: 'the data run or matrix id (`testpion flow runs`)' },
   'eval.matrix': { params: ['runs', 'baseline'], required: ['runs'], hint: 'the evaluation run ids (the matrix columns), and a baseline run to compare with' },
+  'rag.matrix': { params: ['run', 'names'], required: ['run'], hint: 'the RAG run id (`testpion history`, the app); names: ragas names the score columns as Ragas does' },
   history: { params: ['query', 'kind', 'failed', 'limit'], hint: 'filters as `testpion history list`' },
   traces: { params: ['traces', 'query', 'kind', 'failed', 'limit'], hint: 'trace ids, or filters for the newest' },
   'monitor.runs': { params: ['monitor', 'limit'], required: ['monitor'], hint: 'the monitor’s name or id' },
@@ -98,6 +101,8 @@ export function outputSourceFor(store: WorkspaceStore, surface: string, format: 
       return { kind: 'flow-timeline', runId: p.run, file: p.file };
     case 'flow.grid':
       return { kind: 'grid', grid: 'scale-rows', params: { id: p.dataRun, ...(p.status ? { status: p.status } : {}) } };
+    case 'rag.matrix':
+      return { kind: 'rag-matrix', runId: p.run!, ...(p.names === 'ragas' ? { names: 'ragas' as const } : {}) };
     case 'eval.matrix':
       return { kind: 'grid', grid: 'eval-matrix', params: { runs: p.runs, ...(p.baseline ? { baseline: p.baseline } : {}) } };
     case 'history':

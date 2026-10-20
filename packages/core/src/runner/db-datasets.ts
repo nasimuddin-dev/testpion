@@ -16,7 +16,18 @@ export interface DbRow {
 
 /** A database client as the dataset reader needs it: connect, run one read-only query, close. */
 export interface DbDriver {
-  query(url: string, sql: string, params: unknown[] | Record<string, unknown> | undefined): Promise<DbRow[]>;
+  /** `opts.timeoutMs`: a statement time limit on the server (the SQL metrics set it; datasets keep the driver's default). */
+  query(url: string, sql: string, params: unknown[] | Record<string, unknown> | undefined, opts?: { timeoutMs?: number }): Promise<DbRow[]>;
+}
+
+/**
+ * The statements that make a connection read-only with a time limit before the query runs. PostgreSQL: a read-only
+ * transaction and `statement_timeout`. MySQL: the statement time limit, then a read-only transaction. A server that does not
+ * take them is not queried: the SQL metrics never run on a connection they could not make read-only.
+ */
+export function readOnlyPreamble(kind: DbKind, timeoutMs: number): string[] {
+  const ms = Math.max(1, Math.floor(timeoutMs));
+  return kind === 'postgres' ? ['BEGIN READ ONLY', `SET LOCAL statement_timeout = ${ms}`] : [`SET SESSION MAX_EXECUTION_TIME = ${ms}`, 'START TRANSACTION READ ONLY'];
 }
 
 const DB_URL = /^(postgres|postgresql|mysql|mariadb):\/\//i;
@@ -64,12 +75,12 @@ function cell(v: unknown): unknown {
 
 /** PostgreSQL ($1, $2 … placeholders; an object becomes the values in key order). */
 const postgresDriver: DbDriver = {
-  async query(url, sql, params) {
+  async query(url, sql, params, opts) {
     const pg = (await import('pg')).default;
-    const client = new pg.Client({ connectionString: url, connectionTimeoutMillis: 15_000, statement_timeout: 120_000 } as never);
+    const client = new pg.Client({ connectionString: url, connectionTimeoutMillis: 15_000, statement_timeout: opts?.timeoutMs ?? 120_000 } as never);
     await client.connect();
     try {
-      await client.query('BEGIN READ ONLY');
+      for (const s of opts?.timeoutMs ? readOnlyPreamble('postgres', opts.timeoutMs) : ['BEGIN READ ONLY']) await client.query(s);
       const values = params === undefined ? [] : Array.isArray(params) ? params : Object.values(params);
       const r = await client.query(sql, values);
       await client.query('ROLLBACK');
@@ -82,11 +93,20 @@ const postgresDriver: DbDriver = {
 
 /** MySQL / MariaDB (? placeholders, or :name with an object). */
 const mysqlDriver: DbDriver = {
-  async query(url, sql, params) {
+  async query(url, sql, params, opts) {
     const mysql = await import('mysql2/promise');
     const conn = await mysql.createConnection({ uri: url.replace(/^mariadb:/i, 'mysql:'), connectTimeout: 15_000, namedPlaceholders: !!params && !Array.isArray(params), dateStrings: false });
     try {
-      await conn.query('START TRANSACTION READ ONLY');
+      if (opts?.timeoutMs) {
+        const [limit, tx] = readOnlyPreamble('mysql', opts.timeoutMs);
+        try {
+          await conn.query(limit!);
+        } catch {
+          // MariaDB counts the limit in seconds, under another name
+          await conn.query(`SET SESSION max_statement_time = ${Math.max(0.001, opts.timeoutMs / 1000)}`);
+        }
+        await conn.query(tx!);
+      } else await conn.query('START TRANSACTION READ ONLY');
       const [rows] = await conn.query(sql, params as never);
       await conn.query('ROLLBACK');
       return (Array.isArray(rows) ? rows : []) as DbRow[];
@@ -105,6 +125,21 @@ export function setDbDriver(kind: DbKind, driver: DbDriver): () => void {
   return () => {
     drivers[kind] = before;
   };
+}
+
+/** One query through the driver of a kind, with a statement time limit (the SQL metrics call this after their own checks). */
+export async function runDriverQuery(kind: DbKind, url: string, sql: string, opts: { timeoutMs: number }): Promise<DbRow[]> {
+  try {
+    const rows = await drivers[kind].query(url, sql, undefined, opts);
+    return rows.map((r) => Object.fromEntries(Object.entries(r).map(([k, v]) => [k, cell(v)])));
+  } catch (e) {
+    const msg = (e as Error).message;
+    const connect = /ECONNREFUSED|ENOTFOUND|ETIMEDOUT|connect|password authentication|Access denied|getaddrinfo/i.test(msg);
+    const timeout = /statement timeout|max_execution_time|maximum statement execution time|canceling statement/i.test(msg);
+    throw new ApsError(connect ? 'NetworkError' : timeout ? 'TimeoutError' : 'ValidationError', `The ${kind === 'postgres' ? 'PostgreSQL' : 'MySQL'} query ${connect ? 'could not connect' : timeout ? 'ran too long and was stopped' : 'failed'}: ${msg}`, {
+      suggestions: connect ? [`Check the host, port, user and password of ${redactDbUrl(url)}.`] : undefined,
+    });
+  }
 }
 
 /** The rows of a read-only query on a PostgreSQL or MySQL database, as dataset records. */
