@@ -29,6 +29,7 @@ import { openExportBundle } from '../lib/transfer';
 import { deferDrop, useDragSession } from '../lib/drag-ref';
 import { buildTreeRows, categoryOpenKey, examplesOpenKey, findTreeRow, folderOpenKey, isOpenKey, scopedNodeId, treeRowKey, type ExtraGroup, type TreeRow } from '../lib/tree-rows';
 import { CATEGORY_META, CategoryRow, CollectionRow, EmptyRow, ExampleRow, ExtraFolderRow, ExtraItemRow, FolderRow, RequestRow, SAVED_ITEM_MIME, type DropMode, type RowContext } from './CollectionTreeRows';
+import { useOpenRequestId } from './open-request-id';
 
 // THE badge lives in TreeParts; the panels that drew a method badge through this module keep their import
 export { TreeBadge } from './TreeParts';
@@ -77,7 +78,6 @@ const folderKeysOf = (collectionId: string, nodes: CollectionNode[], keys: strin
  */
 export const CollectionTree = memo(function CollectionTree({
   collections,
-  activeRequestId,
   onOpen,
   onChange,
   onNewRequest,
@@ -99,7 +99,6 @@ export const CollectionTree = memo(function CollectionTree({
   revealId,
 }: {
   collections: Collection[];
-  activeRequestId?: string;
   /** Open a request; `preview`: a single click (a preview tab, WF-19), double-click opens it for good. */
   onOpen(c: Collection, node: CollectionNode, o?: { preview?: boolean }): void;
   onChange(c: Collection): void;
@@ -136,6 +135,7 @@ export const CollectionTree = memo(function CollectionTree({
   /** With revealKey: reveal this collection, folder, request or saved item instead of the open request. */
   revealId?: string;
 }) {
+  const activeRequestId = useOpenRequestId();
   /**
    * Change a collection: the list may be outlines (col.tree, no bodies or scripts), so the change is applied to the
    * whole collection, read first; `onChange` always gets a whole collection.

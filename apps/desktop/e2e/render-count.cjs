@@ -21,9 +21,19 @@ const HOOK = `(() => {
   };
   // function components (0), class components (1), forwardRef (11) and simple memo components (15) that rendered
   const renderable = (f) => f.tag === 0 || f.tag === 1 || f.tag === 11 || f.tag === 15;
+  const watched = new Set();
+  const why = new Map();
   const count = (f) => {
     const n = nameOf(f.type);
-    if (n) counts.set(n, (counts.get(n) ?? 0) + 1);
+    if (!n) return;
+    counts.set(n, (counts.get(n) ?? 0) + 1);
+    // watch(name): which props were new (by identity) when it rendered again
+    if (watched.has(n) && f.alternate) {
+      const a = f.alternate.memoizedProps ?? {}, b = f.memoizedProps ?? {};
+      let any = false;
+      for (const k of new Set([...Object.keys(a), ...Object.keys(b)])) if (!Object.is(a[k], b[k])) (any = true), why.set(n + '.' + k, (why.get(n + '.' + k) ?? 0) + 1);
+      if (!any) why.set(n + ' (props same: state, context or parent)', (why.get(n + ' (props same: state, context or parent)') ?? 0) + 1);
+    }
   };
   const mount = (f) => {
     for (let c = f; c; c = c.sibling) {
@@ -60,7 +70,9 @@ const HOOK = `(() => {
     },
   };
   window.__renders = {
-    reset() { counts.clear(); commits = 0; },
+    reset() { counts.clear(); why.clear(); commits = 0; },
+    watch(...names) { names.forEach((n) => watched.add(n)); },
+    why: () => [...why].sort((a, b) => b[1] - a[1]).map(([k, v]) => k + ' ' + v).join(', '),
     commits: () => commits,
     total: () => [...counts.values()].reduce((a, b) => a + b, 0),
     counts: () => Object.fromEntries(counts),

@@ -10,12 +10,11 @@ import { addToFolder, CollectionTree, duplicateNode, mapNodes, type ExtraGroup }
 import { openRef, revealInSidebar } from '../lib/open-ref';
 import { scopedNodeId } from '../lib/tree-rows';
 import type { RequestCategory } from '../lib/collection-filter';
-import { closeTabsFor, newRequestItems, useEditorTabsStore } from './EditorTabs';
+import { closeTabsFor, newRequestItems } from './EditorTabs';
 import { ExportDialog } from './ExportDialog';
 import { SIDEBAR_TRASH_KINDS, TrashDialog } from './TrashDialog';
 import { fullCollection, refreshCollections, useCollectionTree } from '../lib/collections-store';
 import { ImportModal } from '../views/rest/dialogs';
-import { isDocView, useDocs } from '../lib/docs';
 import { IconButton, Input, Menu } from './ui';
 import { ExpandCollapseToggle } from './ExpandCollapseToggle';
 import { focusRow, KIND_COLOR, TreeBadge, treeKeys } from './TreeParts';
@@ -193,17 +192,6 @@ export function Explorer() {
   const [mcpFolders, setMcpFolders] = useState<string[]>([]);
   const [specFolders, setSpecFolders] = useState<Library<unknown>>({ folders: [], items: [] });
   const [datasetFolders, setDatasetFolders] = useState<Library<unknown>>({ folders: [], items: [] });
-  // the request that's open (as recorded for Back / Forward) is highlighted in the tree
-  // (or, for a tab restored at start-up, the item its active tab shows)
-  const navItem = useApp((s) => (s.nav.current.payload?.requestId ?? s.nav.current.payload?.savedId) as string | undefined);
-  const view = useApp((s) => s.view);
-  const activeDoc = useDocs((s) => s.active[view]);
-  const tabItem = useEditorTabsStore((s) => {
-    const group = isDocView(view) ? `${view}:${activeDoc ?? 'main'}` : view;
-    const tabs = s.byView[group] ?? [];
-    return (tabs.find((t) => t.key === s.activeByView[group]) ?? (tabs.length === 1 ? tabs[0] : undefined))?.item;
-  });
-  const openRequestId = tabItem ?? navItem;
 
   /**
    * The explorer's own lists, or the part of them that changed (`what`: the saved gRPC calls and connections and
@@ -739,7 +727,7 @@ export function Explorer() {
                 icon={<TreeBadge label={n.kind === 'http' ? n.request.method : 'GQL'} className={n.kind === 'http' ? `method-${n.request.method}` : KIND_COLOR.graphql} />}
                 label={n.name}
                 sub={c.name}
-                active={openRequestId === n.id}
+                activeId={n.id}
                 onClick={() => void openRef({ kind: 'request', collectionId: c.id, requestId: n.id }, { noReveal: true })}
                 git={{ kind: 'request', collectionId: c.id, requestId: n.id }}
                 ctx={() => favoriteMenu(c, n)}
@@ -760,7 +748,6 @@ export function Explorer() {
               expandAll={expandAll}
               revealKey={revealKey}
               revealId={revealId}
-              activeRequestId={openRequestId}
               {...treeCallbacks}
             />
           </div>
@@ -803,7 +790,7 @@ export function Explorer() {
                   icon={<TreeBadge label="MCP" className={s.connected ? 'text-ok' : KIND_COLOR.mcp} />}
                   label={s.name}
                   sub={s.connected ? 'connected' : s.transport === 'streamable-http' ? 'http' : s.transport}
-                  active={openRequestId === s.id}
+                  activeId={s.id}
                   onClick={() => void openRef({ kind: 'mcp-server', serverId: s.id })}
                   ctx={() => serverMenu(s)}
                   rename={renamer(s.id, `mcp:${s.id}`, (name) => editServers((list) => list.map((x) => (x.id === s.id ? { ...x, name } : x))))}
@@ -848,7 +835,7 @@ export function Explorer() {
                   indent={inFolder}
                   icon={<TreeBadge label="API" className={KIND_COLOR.api} />}
                   label={s.replace(/^specs\//, '')}
-                  active={openRequestId === s}
+                  activeId={s}
                   onClick={() => void openRef({ kind: 'spec', path: s })}
                   ctx={() => specMenu(s, folder)}
                   rename={renamer(s, `specs:${s}`, (to) =>
@@ -902,7 +889,7 @@ export function Explorer() {
                   icon={<TreeBadge label={datasetBadge(d.format).text} className={datasetBadge(d.format).cls} />}
                   label={d.name}
                   sub={d.rows !== undefined ? plural(d.rows, 'row') : d.tables ? plural(d.tables.length, 'table') : undefined}
-                  active={openRequestId === d.name}
+                  activeId={d.name}
                   onClick={() => void openRef({ kind: 'dataset', name: d.name })}
                   ctx={() => datasetMenu(d, d.folder)}
                   rename={renamer(d.name, `datasets:${d.name}`, (to) => datasetAction(() => call('datasets.rename', { name: d.name, to })))}

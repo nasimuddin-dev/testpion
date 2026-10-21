@@ -11,6 +11,8 @@ import { TreeRowShell } from './TreeRowShell';
 import type { GitTarget } from './GitMark';
 import { CLOSED_ICON, CountPill, FOLDER_ICON, OPEN_ICON, focusRow, moveToFolderItem } from './TreeParts';
 import { Button } from './ui';
+import { sameProps } from '../lib/same-node';
+import { useIsOpenItem } from './open-request-id';
 
 /*
  * The explorer's sections (Favorites, MCP servers, API definitions, Datasets): each header is the section's node, each
@@ -82,27 +84,64 @@ export interface RowRename {
   done(name?: string): void;
 }
 
-/** A row of a section (an MCP server, an API definition, a dataset, a favorite): its kind's node. */
-export function ItemRow({
-  kind,
-  nodeId,
-  icon,
-  label,
-  sub,
-  active,
-  indent,
-  onClick,
-  ctx,
-  rename,
-  drag,
-  git,
-}: {
+/** What an ItemRow draws, with its handlers made stable (see ItemRow). */
+interface ItemRowViewProps {
+  kind: NodeKind;
+  nodeId: string;
+  icon?: ReactNode;
+  label: string;
+  sub?: ReactNode;
+  active: boolean;
+  indent?: boolean;
+  onClick(): void;
+  ctx: () => NodeMenuCtx;
+  renaming: boolean;
+  done(name?: string): void;
+  drag?: ItemRef[];
+  git?: GitTarget;
+}
+
+const ItemRowView = memo(
+  function ItemRowView({ kind, nodeId, icon, label, sub, active, indent, onClick, ctx, renaming, done, drag, git }: ItemRowViewProps) {
+    return (
+      <TreeRowShell
+        kind={kind}
+        nodeId={nodeId}
+        label={label}
+        depth={indent ? 2 : 1}
+        active={active}
+        onClick={onClick}
+        onOpen={onClick}
+        ctx={ctx}
+        drag={drag}
+        git={git}
+        rename={renaming ? { value: label, done } : undefined}
+        className={indent ? 'pl-10' : 'pl-6'}
+      >
+        {icon && <span className="text-muted shrink-0">{icon}</span>}
+        <span className="truncate flex-1">{label}</span>
+        {sub && <span className="text-xs text-muted truncate max-w-[45%]">{sub}</span>}
+      </TreeRowShell>
+    );
+  },
+  sameProps,
+);
+
+/**
+ * A row of a section (an MCP server, an API definition, a dataset, a favorite): its kind's node. The section builds its rows
+ * with fresh handlers on every render; the row hands the node stable ones that call the latest (through a ref), and the node is
+ * memoized on what it draws, so a section that re-renders (a filter keystroke, a reveal on a tab switch) re-draws only the
+ * rows whose label, icon, highlight or such changed.
+ */
+export function ItemRow(props: {
   kind: NodeKind;
   nodeId: string;
   icon?: ReactNode;
   label: string;
   sub?: ReactNode;
   active?: boolean;
+  /** Highlighted while this is the item the window shows: the row asks for itself, so a switch of tab does not re-render every row of the explorer. */
+  activeId?: string;
   indent?: boolean;
   onClick(): void;
   ctx: () => NodeMenuCtx;
@@ -111,26 +150,12 @@ export function ItemRow({
   /** What the row is, for its change mark. */
   git?: GitTarget;
 }) {
-  return (
-    <TreeRowShell
-      kind={kind}
-      nodeId={nodeId}
-      label={label}
-      depth={indent ? 2 : 1}
-      active={active}
-      onClick={onClick}
-      onOpen={onClick}
-      ctx={ctx}
-      drag={drag}
-      git={git}
-      rename={rename?.editing ? { value: label, done: rename.done } : undefined}
-      className={indent ? 'pl-10' : 'pl-6'}
-    >
-      {icon && <span className="text-muted shrink-0">{icon}</span>}
-      <span className="truncate flex-1">{label}</span>
-      {sub && <span className="text-xs text-muted truncate max-w-[45%]">{sub}</span>}
-    </TreeRowShell>
-  );
+  const open = useIsOpenItem(props.activeId);
+  const latest = useRef(props);
+  latest.current = props;
+  const handlers = useMemo(() => ({ onClick: () => latest.current.onClick(), ctx: () => latest.current.ctx(), done: (name?: string) => latest.current.rename?.done(name) }), []);
+  const { kind, nodeId, icon, label, sub, indent, drag, git } = props;
+  return <ItemRowView kind={kind} nodeId={nodeId} icon={icon} label={label} sub={sub} active={props.active ?? open} indent={indent} renaming={!!props.rename?.editing} drag={drag} git={git} {...handlers} />;
 }
 
 /** Folders of a section's items: the folder names (kept even when empty), and which folder each item is in. */

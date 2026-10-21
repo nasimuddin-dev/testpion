@@ -12,10 +12,10 @@ const counted = (name, body) => [
   name,
   `(async () => {
     if (!window.__renders) return 'NO RENDER COUNTER (E2E_RENDER_COUNT)';
-    await ${painted}(); window.__renders.reset();
+    await ${painted}(); window.__renders.watch('RequestRow', 'FolderRow', 'CollectionRow', 'TreeRowShell', 'CollectionTree', 'Explorer', 'RowMenu', 'NodeMenu', 'GitMark'); window.__renders.reset();
     const what = await (async () => { ${body} })();
     await ${painted}();
-    return what + ' | ' + window.__renders.report(12);
+    return what + ' | ' + window.__renders.report(24) + ' || why: ' + window.__renders.why();
   })()`,
   false,
 ];
