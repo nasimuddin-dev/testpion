@@ -2,9 +2,11 @@ import { ChevronDown, ChevronRight, FlaskConical, Plus, Search, X } from 'lucide
 import { useMemo, useState, type ReactNode } from 'react';
 import { normalizeMetricName } from '@testpion/shared';
 import { useRpc } from '../../lib/use-rpc';
+import { plural } from '../../lib/format';
+import { useApp } from '../../store';
 import type { CheckConfig } from '../../types';
 import { AssertionEditor } from '../AssertionEditor';
-import { Badge, Button, Callout, Input, IconButton, Segmented, Select, Spinner, cx } from '../ui';
+import { Badge, Button, Callout, Input, IconButton, Segmented, Select, Spinner, Toggle, cx } from '../ui';
 import { MetricEditor } from './CustomMetrics';
 import { metricResolver, type MetricCatalogue, type MetricRow } from './metric-resolver';
 
@@ -145,20 +147,26 @@ export function MetricPicker({
   const patch = (i: number, p: Record<string, unknown>) => onChange(evaluators.map((e, k) => (k === i ? { ...e, ...p } : e)));
   const remove = (idx: number[]) => onChange(evaluators.filter((_, k) => !idx.includes(k)));
   const add = (r: Row, extra: Record<string, unknown> = {}) => onChange([...evaluators, { type: r.id, ...extra }]);
-  const applyPreset = (checks: CheckConfig[]) => onChange([...evaluators.filter((e) => !resolve(e.type)), ...checks]);
   const total = [...byRow.values()].reduce((a, b) => a + b.length, 0);
+  // a preset or Clear replaces the metrics picked, with the pass marks and options edited on them: the message has Undo
+  const replaceWith = (next: CheckConfig[], message: string) => {
+    const before = evaluators;
+    onChange(next);
+    if (total > 0) useApp.getState().toast(message, 'info', undefined, { undo: () => onChange(before), restored: 'Your metrics are back, with their options' });
+  };
+  const applyPreset = (checks: CheckConfig[], name: string) => replaceWith([...evaluators.filter((e) => !resolve(e.type)), ...checks], `Preset ${name} replaced the ${plural(total, 'metric')} you picked`);
 
   return (
     <div className="flex flex-col gap-2 p-3" data-rag-picker>
       <div className="flex items-center gap-1.5 flex-wrap" data-rag-presets>
         <span className="text-xs text-muted">Presets</span>
         {cat.presets.map((p) => (
-          <Button key={p.id} size="sm" title={p.description} onClick={() => applyPreset(p.checks)} data-rag-preset={p.id}>
+          <Button key={p.id} size="sm" title={p.description} onClick={() => applyPreset(p.checks, p.name)} data-rag-preset={p.id}>
             {p.name}
           </Button>
         ))}
         {total > 0 && (
-          <Button size="sm" variant="ghost" onClick={() => onChange(evaluators.filter((e) => !resolve(e.type)))} title="Take every metric off the list">
+          <Button size="sm" variant="ghost" onClick={() => replaceWith(evaluators.filter((e) => !resolve(e.type)), `Took ${plural(total, 'metric')} off the list`)} title="Take every metric off the list">
             Clear
           </Button>
         )}
@@ -261,9 +269,7 @@ export function MetricPicker({
                                   <Input type="number" className="h-6 min-h-6 w-14 text-xs" value={String(optionValue(e, key, o.default))} onChange={(ev) => patch(i, { [key]: Number(ev.target.value), name: r.id.replace('@k', `@${ev.target.value}`) })} aria-label={`${r.name} ${key}`} />
                                 </label>
                               ) : o.type === 'boolean' ? (
-                                <label key={key} className="flex items-center gap-1" title={o.description}>
-                                  <input type="checkbox" checked={optionValue(e, key, o.default) === true} onChange={(ev) => patch(i, { [key]: ev.target.checked })} /> {key}
-                                </label>
+                                <Toggle key={key} checked={optionValue(e, key, o.default) === true} onChange={(v) => patch(i, { [key]: v })} title={o.description} label={key} />
                               ) : (
                                 <label key={key} className="flex items-center gap-1" title={o.description} data-rag-option={key}>
                                   {key}

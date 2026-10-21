@@ -8,7 +8,7 @@ import { toastAiError } from '../../lib/ai-errors';
 import { AiAction } from '../ai/AiAction';
 import { useLibrary } from '../../lib/library';
 import { parseYaml, stringifyYaml } from '../../lib/yaml';
-import { Badge, Button, Callout, Field, Input, Modal, Select, Spinner, type MenuItem } from '../ui';
+import { Badge, Button, Callout, Field, FooterHint, Input, Modal, Select, Spinner, Toggle, type MenuItem } from '../ui';
 import { CodeEditor } from '../CodeEditor';
 import { JsonTree } from '../JsonView';
 import { AiPreviewDialog } from '../ai/AiPreviewDialog';
@@ -223,8 +223,9 @@ export function RagConnectDialog({ id, onClose, onSaved }: { id?: string; onClos
             <Button icon={<Eye size={13} />} disabled={!sample?.answer} onClick={() => setJudgePreview(true)} title="The exact prompt a judged metric (faithfulness) would send for this sample, before anything is sent" className="mr-auto">
               What the judge receives
             </Button>
+            <FooterHint>{problems[0]}</FooterHint>
             <Button onClick={onClose}>Cancel</Button>
-            <Button variant="primary" icon={<Save size={13} />} disabled={problems.length > 0} title={problems[0]} onClick={() => void save()} data-rag-save>
+            <Button variant="primary" icon={<Save size={13} />} disabled={problems.length > 0} onClick={() => void save()} data-rag-save>
               Save target
             </Button>
           </>
@@ -271,9 +272,7 @@ export function RagConnectDialog({ id, onClose, onSaved }: { id?: string; onClos
                   <CodeEditor language="yaml" value={stepText} onChange={setStepText} />
                 </div>
               </Field>
-              <label className="flex items-center gap-1.5 text-xs">
-                <input type="checkbox" checked={readOnly} onChange={(e) => setReadOnly(e.target.checked)} /> This endpoint only answers questions: a production environment may call it
-              </label>
+              <Toggle checked={readOnly} onChange={setReadOnly} label="This endpoint only answers questions: a production environment may call it" />
               <label className="flex items-center gap-1.5 text-xs" title="A dataset record with `turns` is replayed turn by turn. History in each request: the request uses {{messages}} (or {{history}}, {{historyText}}). Server session: click the conversation id in the sample response; the request uses {{conversationId}}." data-rag-conversation>
                 Conversations
                 <Select className="h-7 min-h-7 py-0 text-xs flex-1" value={conversation} onChange={(e) => setConversation(e.target.value as typeof conversation)} aria-label="How the system keeps a conversation">

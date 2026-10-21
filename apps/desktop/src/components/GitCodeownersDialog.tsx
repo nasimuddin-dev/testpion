@@ -4,7 +4,7 @@ import type { CodeownersPlan, CodeownersResult } from '@testpion/core';
 import { call } from '../api';
 import { toastError, useApp } from '../store';
 import { copyText } from '../lib/clipboard';
-import { Button, Empty, Input, Modal } from './ui';
+import { Button, Empty, FooterHint, Input, Modal } from './ui';
 
 /**
  * A starter CODEOWNERS (release C of planning/git-everything.md §3): one line per kind folder of the workspace, so a team can
@@ -51,10 +51,14 @@ export function GitCodeownersDialog({ onClose, onDone }: { onClose(): void; onDo
       width={720}
       footer={
         <>
+          {blocked && <FooterHint>{blocked}</FooterHint>}
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
           <Button icon={<Copy size={13} />} disabled={!plan} onClick={() => plan && void copyText(plan.text, 'CODEOWNERS')}>
             Copy
           </Button>
-          <Button variant="primary" loading={busy} disabled={!plan || !!blocked || !plan.lines.length} onClick={() => void write()} title={blocked} data-codeowners-write="">
+          <Button variant="primary" loading={busy} disabled={!plan || !!blocked || !plan.lines.length} onClick={() => void write()} data-codeowners-write="">
             Create .github/CODEOWNERS
           </Button>
         </>

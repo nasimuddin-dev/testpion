@@ -158,10 +158,16 @@ describe('save_output (MCP)', () => {
     expect(r.saved).toBe('exports/h.csv');
     expect(readFileSync(join(store.root, 'exports', 'h.csv'), 'utf8')).toContain('time,kind,name');
     await expect(call({ surface: 'history', format: 'csv', save_to: 'exports/h.csv' })).rejects.toThrow(/already exists/);
-    await expect(call({ surface: 'history', format: 'csv', save_to: 'collections/x.csv' })).rejects.toThrow(/cannot write into collections/);
-    await expect(call({ surface: 'history', format: 'csv', save_to: 'Collections/x.csv' })).rejects.toThrow(/cannot write into/);
+    // an allow-list: exports/ and .local/exports/ only (a definition folder, a hidden tooling folder, a top-level file are all refused)
+    await expect(call({ surface: 'history', format: 'csv', save_to: 'collections/x.csv' })).rejects.toThrow(/only go under exports/);
+    await expect(call({ surface: 'history', format: 'csv', save_to: 'Collections/x.csv' })).rejects.toThrow(/not allowed/);
+    for (const bad of ['.husky/pre-commit', '.vscode/tasks.json', 'Makefile', 'package.json', 'metrics/evil.yaml', '.gitattributes', 'exports/.hidden/x.csv', 'exports/x.', '.local/trust.json', '.local/x.csv', 'exports'])
+      await expect(call({ surface: 'history', format: 'csv', save_to: bad }), bad).rejects.toThrow(/not allowed/);
     await expect(call({ surface: 'history', format: 'csv', save_to: '../out.csv' })).rejects.toThrow(/escapes the workspace/);
-    await expect(call({ surface: 'history', format: 'csv', save_to: 'exports/run.bat' })).rejects.toThrow(/cannot write a bat/);
+    await expect(call({ surface: 'history', format: 'csv', save_to: 'exports/run.bat' })).rejects.toThrow(/a bat file is a program/);
+    expect((await call({ surface: 'history', format: 'csv', save_to: '.local/exports/h.csv' })).saved).toBe('.local/exports/h.csv');
+    expect(existsSync(join(store.root, '.husky'))).toBe(false);
+    expect(existsSync(join(store.root, 'Makefile'))).toBe(false);
     expect(existsSync(join(store.root, 'exports', 'run.bat'))).toBe(false);
   });
 

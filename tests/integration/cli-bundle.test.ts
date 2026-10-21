@@ -145,6 +145,15 @@ describe('MCP bundle tools', () => {
     const exp = await call(tools, 'export_bundle', { items: ['collection:api'], uses: true });
     expect(exp.path).toMatch(/^\.local\/exports\/.*\.testpion\.(zip|json)$/);
     expect(existsSync(exp.absolutePath)).toBe(true);
+    // a second export under the same default name gets a number instead of replacing the first
+    const second = await call(tools, 'export_bundle', { items: ['collection:api'], uses: true });
+    expect(second.path).not.toBe(exp.path);
+    expect(existsSync(exp.absolutePath)).toBe(true);
+    // an explicit `out` is a new file under exports/ or .local/exports/ and nothing else: never a definition, a hook, a config or an existing file
+    const ours = await call(tools, 'export_bundle', { items: ['collection:api'], out: 'exports/mine.testpion.zip' });
+    expect(ours.path).toBe('exports/mine.testpion.zip');
+    for (const out of ['exports/mine.testpion.zip', 'collections/api.json', 'workspace.json', '.git/hooks/pre-commit', '.husky/pre-commit', 'package.json', 'mcp-servers.json', 'exports/.x/y.zip', 'exports/run.bat'])
+      await expect(call(tools, 'export_bundle', { items: ['collection:api'], out }), out).rejects.toThrow(/already exists|not allowed/);
     // the export cannot write outside the workspace
     await expect(call(tools, 'export_bundle', { items: ['collection:api'], out: '../outside.zip' })).rejects.toThrow(/escapes the workspace/);
     await expect(call(tools, 'export_bundle', {})).rejects.toThrow(/Name what to export/);

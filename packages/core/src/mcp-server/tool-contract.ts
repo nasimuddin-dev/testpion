@@ -103,6 +103,12 @@ const q = (v: unknown) => JSON.stringify(String(v ?? ''));
  */
 export const CONFIRM_TOOLS: Record<string, { when?(a: Args): boolean; describe(a: Args): string; preview?(a: Args): Args }> = {
   rag_save_custom_metric: { when: (a) => a.overwrite === true, describe: (a) => `replace the custom metric file metrics/${String(a.id ?? '')}.yaml with the new text (git brings the old one back)` },
+  save_output: { when: (a) => typeof a.save_to === 'string' && !!a.save_to, describe: (a) => `write the ${String(a.surface ?? 'output')} output to the new file ${q(a.save_to)} (only under exports/ or .local/exports/, never over a file)` },
+  export_bundle: { describe: (a) => `write a bundle file${typeof a.out === 'string' && a.out ? ` to ${q(a.out)}` : ' under .local/exports/'} (only under exports/ or .local/exports/, never over a file)` },
+  export_traces: { describe: (a) => `send the ${typeof a.limit === 'number' ? a.limit : 50} newest traces (redacted) to ${q(a.endpoint)}, with the headers you named (variables in them are resolved)` },
+  import_definition: { when: (a) => a.update !== false, describe: () => 'import the definition into the workspace, updating a collection that is already there when it matches (undo_definition_import takes it back)' },
+  undo_definition_import: { describe: (a) => `undo the definition import ${q(a.id)}: its collections, environments and API definitions go to Recently deleted and its flow files are removed` },
+  security_tests_run: { describe: (a) => `send the probes of tests/${String(a.path ?? '')} to the target of the environment ${q(a.environment)} (they are attacks: malformed and hostile requests)` },
   delete_request: { describe: (a) => `delete the request ${q(a.request)} of the collection ${q(a.collection)} (it goes to no trash: git or a backup brings it back)` },
   import_bundle_apply: { describe: (a) => `import the previewed bundle ${q(a.plan_id)} into the workspace (${a.on_conflict === 'replace' ? 'items that are already here are replaced' : a.on_conflict === 'skip' ? 'items that are already here are kept' : 'items that are already here are kept and the incoming ones renamed'}; undo_import takes it back)` },
   undo_import: { when: (a) => typeof a.import_id === 'string' && !!a.import_id, describe: (a) => `undo the import ${q(a.import_id)}: items it made are removed, items it replaced come back` },

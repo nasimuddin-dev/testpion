@@ -368,7 +368,7 @@ module.exports = withExpect(
     'commit-takes-just-the-staged-item': /^committed$/,
     'the-other-change-is-still-waiting': /^HEAD deepwiki: https:\/\/mcp\.deepwiki\.com\/v2 \| HEAD petstore: Petstore MCP \| still changed: true$/,
     'a-big-dataset': /^5\d MB$/,
-    'git-view-offers-lfs-or-a-reference': /^offer: 1 big file is over the limit for plain git \| buttons: Git LFS…\+By reference…$/,
+    'git-view-offers-lfs-or-a-reference': /^offer: 1 big file is over the limit for plain git \| buttons: Move to large-file storage \(Git LFS\)…\+Keep out of git, share by link…$/,
     'track-by-reference-with-a-preview': /^preview names the files: true \| toast: true \| offer gone: true$/,
     'the-reference-is-written': /^ref: big-data\.csv \d+ bytes sha256 64 source s3:\/\/team-data\/big-data\.csv \| ignored: true \| data still on disk: true$/,
     'a-saved-debugger-session': /^saved$/,

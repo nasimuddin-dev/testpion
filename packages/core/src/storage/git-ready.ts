@@ -2,7 +2,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { readJson } from './fsutil.js';
 import { isInGitRepository, writeGitFiles, type GitReadyResult } from './git-files.js';
-export { GITATTRIBUTES_LINES, GITIGNORE_LINES, attributesText, ignoreText, installPreCommitHook, isInGitRepository, writeGitFiles, type GitReadyResult } from './git-files.js';
+export { GITATTRIBUTES_LINES, GITIGNORE_LINES, attributesText, ignoreText, installPreCommitHook, isInGitRepository, preCommitScript, shellQuote, writeGitFiles, type GitReadyResult } from './git-files.js';
 import { collectionFileContent, type WorkspaceStore } from './workspace.js';
 import type { Collection } from '../model/types.js';
 

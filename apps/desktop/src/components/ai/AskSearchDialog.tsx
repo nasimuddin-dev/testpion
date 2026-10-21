@@ -6,7 +6,8 @@ import { aiSetupAction } from '../../lib/ai-errors';
 import { formatMs, formatCost, timeAgo } from '../../lib/format';
 import { openRef } from '../../lib/open-ref';
 import type { AskSearchRequest } from '../../store';
-import { Badge, Button, Callout, IconButton, Input, Modal, Select, Spinner } from '../ui';
+import { Badge, Button, Callout, IconButton, Input, Modal, Select, Spinner, useDebounced } from '../ui';
+import { AiEstimateLine, estimateOf, type EstimateState } from './AiEstimateLine';
 
 /** What `search.fields` tells the editor: the fields, the sources and the operator labels. */
 interface Catalog {
@@ -225,6 +226,21 @@ export function AskSearchDialog({ request, onClose }: { request: AskSearchReques
   const [error, setError] = useState<string>();
   const [problem, setProblem] = useState<string>();
   const live = useRef<string>(undefined);
+  // what asking would cost, shown before the first send and under the box every time (a dry run: nothing leaves the computer)
+  const [estimate, setEstimate] = useState<EstimateState>();
+  const asked = useDebounced(question.trim(), 400);
+  useEffect(() => {
+    if (!asked) return setEstimate(undefined);
+    let on = true;
+    call<SearchAnswer>('search.ask', { question: asked, scope: request.scope, dryRun: true }).then(
+      (a) => on && setEstimate(a.preview ? estimateOf(a.preview) : undefined),
+      (e) => on && setEstimate({ ok: false, text: `${asError(e).message} Asking will search for the words as typed.` }),
+    );
+    return () => {
+      on = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [asked]);
   useEffect(() => {
     void call<Catalog>('search.fields').then(setCatalog, (e) => setError(asError(e).message));
   }, []);
@@ -281,14 +297,7 @@ export function AskSearchDialog({ request, onClose }: { request: AskSearchReques
       setBusy(undefined);
     }
   };
-  // opened with a question (from the search box or the palette): it asks at once
-  const started = useRef(false);
-  useEffect(() => {
-    if (started.current || !request.question?.trim()) return;
-    started.current = true;
-    void ask();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // opened with a question (from the search box or the palette) it waits for Ask, with the estimate in view: asking spends tokens
 
   const labels = useMemo(() => Object.fromEntries((catalog?.sources ?? []).map((s) => [s.id, s.label])), [catalog]);
   const setup = answer?.fallback ? aiSetupAction(new Error(answer.fallback)) : undefined;
@@ -335,6 +344,7 @@ export function AskSearchDialog({ request, onClose }: { request: AskSearchReques
             </Button>
           )}
         </form>
+        <AiEstimateLine estimate={question.trim() ? estimate : undefined} waiting={!!question.trim() && asked === question.trim()} className="text-xs text-muted min-h-4 -mt-1" data-ask-estimate="" />
         <p className="text-xs text-muted -mt-1">
           The model turns your question into a search; it sees the question and the field names, never your data. TestPion runs the search itself.
           {request.scope?.length ? ` Asking within ${request.scope.map((s) => labels[s] ?? s).join(' and ')}.` : ''}

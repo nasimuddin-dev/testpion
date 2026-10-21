@@ -7,7 +7,7 @@ import type { WorkspaceStore } from '../storage/workspace.js';
 import type { Environment } from '../model/types.js';
 import { workspaceFile } from './item-address.js';
 import { beginJournal } from './journal.js';
-import { isAllowed, readSecretsAllow, secretFingerprint } from './secrets-allow.js';
+import { allowSalt, isAllowed, readSecretsAllow, secretFingerprint } from './secrets-allow.js';
 import { stripFileText, type StagedSecret } from './staged-secrets.js';
 
 /**
@@ -44,6 +44,7 @@ export async function fixStagedFiles(store: WorkspaceStore, secrets: SecretStore
     });
   const result: StagedFixResult = { fixed: [], variables: [], files: [], skipped: [], applied: false };
   const allow = readSecretsAllow(store.root).entries;
+  const salt = allowSalt(store.root);
   // names the environment uses are never taken by a replacement, and neither are the ones an earlier file just took
   const reserved = new Set(env.variables.map((v) => v.key));
   const texts = new Map<string, string>();
@@ -63,7 +64,7 @@ export async function fixStagedFiles(store: WorkspaceStore, secrets: SecretStore
       result.skipped.push({ file, reason: 'the file is not in the working folder any more' });
       continue;
     }
-    const r = stripFileText(file, text, { reserve: reserved, allow: (item, field, value) => isAllowed(allow, { file, item, field, hash: secretFingerprint(file, item, field, value) }) });
+    const r = stripFileText(file, text, { reserve: reserved, allow: (item, field, value) => isAllowed(allow, { file, item, field, hash: secretFingerprint(file, item, field, value, salt) }), salt });
     if (!r.replaced.length) continue;
     r.replaced.forEach((x, i) => {
       const value = r.values[i]!;

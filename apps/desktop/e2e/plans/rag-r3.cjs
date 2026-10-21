@@ -111,9 +111,9 @@ const steps = [
     `const sum = document.querySelector('[data-rag-judge-options] summary'); if (!sum) return 'NO JUDGE OPTIONS';
      await __t.real.click(sum); await __t.sleep(300);
      const box = document.querySelector('[data-rag-allow-images]'); if (!box) return 'NO CHECKBOX';
-     const off = box.checked;
+     const off = box.getAttribute("aria-checked") === "true";
      await __t.real.click(box); await __t.sleep(300);
-     return 'off by default: ' + !off + ' | on after a click: ' + document.querySelector('[data-rag-allow-images]').checked + ' | summary says set: ' + /set/.test(document.querySelector('[data-rag-judge-options] summary').textContent);`,
+     return 'off by default: ' + !off + ' | on after a click: ' + (document.querySelector('[data-rag-allow-images]').getAttribute('aria-checked') === 'true') + ' | summary says set: ' + /set/.test(document.querySelector('[data-rag-judge-options] summary').textContent);`,
   ),
   step(
     'try-a-multimodal-sample-with-a-picture',
@@ -129,7 +129,7 @@ const steps = [
      const setNative = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set; setNative.call(pic, ${JSON.stringify(PNG)}); pic.dispatchEvent(new Event('input', { bubbles: true }));
      const will = await __t.waitFor(() => document.querySelector('[data-rag-try-willsend]'), 10000); if (!will) return 'NO WILL SEND: ' + short(document.querySelector('[data-rag-try-dialog]')?.textContent, 220);
      const allow = document.querySelector('[data-rag-try-allow-images]');
-     const was = allow ? allow.checked : 'none';
+     const was = allow ? allow.getAttribute('aria-checked') === 'true' : 'none';
      return 'send pictures was on (from the evaluation): ' + was + ' | will send: ' + short(will.textContent, 80) + ' | fields: ' + !!document.querySelector('[data-rag-try-fields]');`,
   ),
   step(

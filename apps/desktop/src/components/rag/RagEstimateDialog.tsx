@@ -5,7 +5,7 @@ import { call } from '../../api';
 import { toastError, useApp } from '../../store';
 import type { CheckConfig } from '../../types';
 import { AiPreviewDialog } from '../ai/AiPreviewDialog';
-import { Button, Callout, Modal, Spinner } from '../ui';
+import { Button, Callout, Modal, Spinner, Toggle } from '../ui';
 import { EstimateLoading, RagEstimateView, useRagEstimate } from './RagEstimate';
 
 /**
@@ -64,17 +64,13 @@ export function RagEstimateDialog({ draft, firstQuestion, hasTarget, onRun, onCl
           </>
         }
       >
-        <div className="grid gap-3" data-rag-estimate-dialog>
+        <div className="grid gap-3" data-rag-estimate-dialog aria-live="polite">
           {error && <Callout tone="bad">{error}</Callout>}
           {!estimate && !error && <EstimateLoading />}
           {estimate && <RagEstimateView estimate={estimate} />}
-          <label className="flex items-center gap-1.5 text-xs" title="Calls your RAG system and scores only with the metrics that need no model. Look at the results, then press Score again… in the results to add the judged metrics on the stored answers: the RAG system is not called twice.">
-            <input type="checkbox" checked={freeFirst} onChange={(e) => setFreeFirst(e.target.checked)} data-rag-estimate-two-phase /> Free metrics first: run the metrics that need no model now, add the judged ones after looking
-          </label>
+          <Toggle checked={freeFirst} onChange={setFreeFirst} data-rag-estimate-two-phase="" title="Calls your RAG system and scores only with the metrics that need no model. Look at the results, then press Score again… in the results to add the judged metrics on the stored answers: the RAG system is not called twice." label="Free metrics first: run the metrics that need no model now, add the judged ones after looking" />
           {hasTarget && (
-            <label className="flex items-center gap-1.5 text-xs">
-              <input type="checkbox" checked={probe} onChange={(e) => setProbe(e.target.checked)} data-rag-estimate-probe /> Size a typical answer with one real call to your RAG system{loading && probe ? ' …' : ''}
-            </label>
+            <Toggle checked={probe} onChange={setProbe} data-rag-estimate-probe="" label={`Size a typical answer with one real call to your RAG system${loading && probe ? ' …' : ''}`} />
           )}
         </div>
       </Modal>

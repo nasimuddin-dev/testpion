@@ -5,9 +5,10 @@ import { asError, call } from '../../api';
 import { toastError, useApp } from '../../store';
 import { formatCost } from '../../lib/format';
 import type { CheckConfig, ProviderConfig } from '../../types';
+import { AiEstimateLine, estimateText } from '../ai/AiEstimateLine';
 import { AiPreviewDialog } from '../ai/AiPreviewDialog';
 import { EvidenceList } from '../Results';
-import { Badge, Button, Callout, Field, Input, Modal, Segmented, Select, Spinner, Textarea } from '../ui';
+import { Badge, Button, Callout, Field, Input, Modal, Segmented, Select, Spinner, Textarea, Toggle } from '../ui';
 
 type Source = 'probe' | 'type';
 
@@ -160,9 +161,9 @@ export function RagTryDialog({
             />
             {judged && (
               <>
-                <label className="flex items-center gap-1 text-xs ml-auto" title="Pictures of the sample go to the judge as data. A picture cannot be masked; the judge must be able to see.">
-                  <input type="checkbox" checked={allowImages} onChange={(e) => setAllowImages(e.target.checked)} data-rag-try-allow-images /> Send pictures
-                </label>
+                <span className="ml-auto">
+                  <Toggle checked={allowImages} onChange={setAllowImages} data-rag-try-allow-images="" title="Pictures of the sample go to the judge as data. A picture cannot be masked; the judge must be able to see." label="Send pictures" />
+                </span>
                 <span className="text-xs text-muted">Judge</span>
                 <Select className="h-7 min-h-7 py-0 text-xs max-w-44" aria-label="Judge for this try" value={j.provider ?? ''} onChange={(e) => setJ({ provider: e.target.value || undefined, model: providers.find((p) => p.id === e.target.value)?.defaultModel || undefined })}>
                   <option value="">{judge?.provider ? 'The evaluation’s judge' : 'The AI settings’ large model'}</option>
@@ -233,9 +234,7 @@ export function RagTryDialog({
               {dry.willSend.map((c, i) => (
                 <div key={i} className="flex items-center gap-2 text-xs">
                   <span className="mono">{c.version}</span>
-                  <span className="text-muted">
-                    ≈ {c.preview.estimate.inputTokens.toLocaleString()} tokens in{c.preview.estimate.priceKnown ? `, up to ${formatCost(c.preview.estimate.maxCostUsd ?? 0)}` : ''}
-                  </span>
+                  <AiEstimateLine className="text-muted" estimate={{ ok: true, text: estimateText(c.preview, { noModel: true }) }} />
                   {c.cached && <Badge tone="ok">verdict cached: no call</Badge>}
                   <Button size="sm" className="ml-auto" icon={<Eye size={12} />} onClick={() => setShown(i)} data-rag-try-show>
                     Show the prompt

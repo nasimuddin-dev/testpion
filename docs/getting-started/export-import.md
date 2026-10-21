@@ -48,13 +48,15 @@ For a conflict you choose per item, with a default for all:
 - **Replace**: yours is overwritten. **Undo import** brings it back byte for byte.
 - **Skip**: yours stays.
 
-Import also lists **Review before you run**: scripts, and programs an MCP server would start. **Nothing in a bundle runs on import**: scripts are text, an MCP server that starts a program stays untrusted until you allow it (Connect ▸ Always for this workspace), mocks are not started and no link is fetched. The dialog also lists the `{{variables}}` to fill in (set them as secret variables of an environment).
+Import also lists **Review before you run**: scripts, and programs an MCP server would start. **Nothing in a bundle runs on import**: scripts are text, an MCP server that starts a program stays untrusted until you allow it (Connect ▸ Always for this workspace), mocks are not started and no link is fetched. The dialog also lists the `{{variables}}` to fill in (set them as secret variables of an environment). **An AI provider or a remote MCP server never brings a key reference with it**: a bundle that names `{{$secret…}}` or `{{$env…}}` as a key, a header or a program's variable is imported without it (you enter the key yourself), and Review says where the provider or server sends things (its address) and which references were left out; replacing one of yours with another address says so and drops the key (it stays only when the address is the same). An address that itself holds a secret or environment reference is refused.
 
 After the import a message offers **Undo** (and **Open**). Undo takes the whole import back as one step: what it made is removed, what it replaced is restored; a file you edited after the import is left as it is and named. `testpion import --list` shows the imports that can still be undone.
 
-Workspace exports of earlier versions (`.testpion.json` from Export Workspace, and the older `.apsworkspace.json`) are read as bundles too: they get the same preview and can be merged into the open workspace. Export Workspace (one file, imported as a new workspace) still works and will be removed in a later release; use Export ▸ Bundle… instead.
+Workspace exports of earlier versions (`.testpion.json` from the older export, and the older `.apsworkspace.json`) are read as bundles too: they get the same preview and can be merged into the open workspace. The older whole-workspace export (one file, imported as a new workspace) is still in **File ▸ Export ▸ Workspace (older format)…** and will be removed in a later release; use **File ▸ Export ▸ Workspace as a Bundle…** instead.
 
-Postman, Insomnia, Bruno, OpenAPI, HAR and the other foreign formats are imported from **File ▸ Import…** as before.
+A **bundle** is one file that holds several items (requests, environments, tests …) so you can move them to another workspace. Drop a `.testpion.zip` or `.testpion.json` on the window, or choose it in **File ▸ Import…**: the one Import hands a bundle over to its own preview, so exactly one dialog opens. A file that is not a bundle says so and offers **Choose another file** or **Import another format…**.
+
+Postman, Insomnia, Bruno, OpenAPI, HAR and the other foreign formats are imported from **File ▸ Import…** as before. That dialog can be cancelled at every step, its main button is **Choose files…**, and *Coming from another tool?* shows how to export from each tool (the command palette has *Migrate from Another Tool…* too).
 
 ## From the command line
 
@@ -80,7 +82,7 @@ See [`export`](/cli/reference#export-and-export-environment), [`import`](/cli/re
 
 ## For AI agents
 
-Agents get the same safe flow over MCP ([tools](/ai-testing/mcp-server)): `export_bundle`, `describe_bundle`, `import_bundle_preview` (read-only; returns a `plan_id`), `import_bundle_apply` (the one write; needs the `plan_id` and the user's yes) and `undo_import`. An agent cannot apply a bundle it has not previewed. `testpion import --preview --json` gives a script the same preview.
+Agents get the same safe flow over MCP ([tools](/ai-testing/mcp-server)): `export_bundle`, `describe_bundle`, `import_bundle_preview` (read-only; returns a `plan_id`), `import_bundle_apply` (the one write; needs the `plan_id` and the user's yes) and `undo_import`. `export_bundle` writes a new file under `exports/` or `.local/exports/` only, never over an existing file, and asks first. An agent cannot apply a bundle it has not previewed. `testpion import --preview --json` gives a script the same preview.
 
 ## The format
 
@@ -113,7 +115,7 @@ A bundle is untrusted input. The reader refuses: a path that leaves its folder (
 | Proto file, MCP mock, Script package | yes | yes | With the gRPC call, MCP server or collection that uses them |
 | MCP server | yes | yes | Secrets replaced; never trusted to start a program |
 | Saved gRPC call, connection, prompt, load test, evaluation, monitor | yes | yes | |
-| AI provider | yes | yes | Only when asked for (keys are references already) |
+| AI provider | yes | yes | Only when asked for; keys are never imported (you enter them), only the known fields are kept |
 | Folder, request | later | later | Export the collection, or a section, for now |
 
 :::

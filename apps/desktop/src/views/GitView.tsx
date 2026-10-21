@@ -18,6 +18,7 @@ import { GitStash } from '../components/GitStash';
 import { GitFixDialog } from '../components/GitFixDialog';
 import { GitLargeFiles } from '../components/GitLargeFiles';
 import { GitCodeownersDialog } from '../components/GitCodeownersDialog';
+import { toastWithUndo } from '../lib/git-items';
 
 export interface GitFile {
   path: string;
@@ -195,9 +196,10 @@ export function GitView() {
       }
     });
   // "Pull & push" from a rejected push's toast (anywhere in the app)
-  useIntent('git', (p?: { sync?: boolean; fix?: boolean; file?: string; line?: number }) => {
+  useIntent('git', (p?: { sync?: boolean; fix?: boolean; codeowners?: boolean; file?: string; line?: number }) => {
     if (p?.sync) void sync();
     if (p?.fix) setFixOpen(true);
+    if (p?.codeowners) setCodeowners(true);
     // a changed file named elsewhere (an agent's git_status ref, a link): its line diff, open (at `line` when given)
     if (p?.file) {
       const path = p.file;
@@ -406,7 +408,7 @@ export function GitView() {
               </Button>
             }
           >
-            Git setup is not complete: {plural(toFix, 'thing')} to fix (ignore and attribute files, merge and diff drivers, files not yet in the stable format). Nothing changes until you confirm.
+            Git setup is not complete: {plural(toFix, 'thing')} to fix. The fix keeps secrets and machine-only files out of git, lets two people edit the same collection and merge cleanly, and shows changes by request instead of by line. You see what changes before anything is written.
           </Callout>
         )}
 
@@ -530,9 +532,19 @@ function ConflictPanel({ files, note, onDone }: { files: GitFile[]; /** What a P
   const [busy, setBusy] = useState<string>();
   const [comparing, setComparing] = useState<string>();
   const pick = async (path: string, side: 'ours' | 'theirs') => {
+    // a whole file in one click replaces every clash in it: say so first, and the toast has Undo
+    const mine = side === 'ours';
+    const ok = await confirmAction({
+      title: mine ? 'Keep mine' : 'Keep theirs',
+      message: `${mine ? 'Keep your version' : "Take your teammate's version"} of every clash in ${path}?`,
+      detail: `${mine ? 'What they changed in those places is dropped.' : 'What you changed in those places is dropped.'} Changes that did not clash stay, from both sides. Use Resolve… to choose one by one. You can undo this right after.`,
+      confirmLabel: mine ? 'Keep mine' : 'Keep theirs',
+    });
+    if (!ok) return;
     setBusy(path);
     try {
-      await call('git.resolve', { path, side });
+      const r = await call<{ undoId?: string }>('git.resolve', { path, side });
+      toastWithUndo(`${path} resolved: ${mine ? 'kept as mine' : 'taken from theirs'}`, r.undoId);
       onDone();
     } catch (e) {
       toastError(e);
@@ -561,7 +573,7 @@ function ConflictPanel({ files, note, onDone }: { files: GitFile[]; /** What a P
                 Keep mine
               </Button>
               <Button size="sm" loading={busy === f.path} onClick={() => void pick(f.path, 'theirs')}>
-                Take theirs
+                Keep theirs
               </Button>
             </span>
           </li>

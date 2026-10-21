@@ -1,7 +1,7 @@
 import { Plus, X } from 'lucide-react';
 import type { RagJudgeSetup } from '@testpion/shared';
 import type { ProviderConfig } from '../../types';
-import { Field, IconButton, Input, Select } from '../ui';
+import { Field, IconButton, Input, Select, Toggle } from '../ui';
 
 /** The judge panel of an evaluation: a jury, both document orders, repeats, short-circuit, shared claims, and the limits of the run. */
 export function RagJudgeOptions({
@@ -61,22 +61,20 @@ export function RagJudgeOptions({
           </div>
         </div>
         <div className="grid grid-cols-2 gap-x-3 gap-y-1">
-          <label className="flex items-center gap-1" title="Judge the documents in their order and in the opposite order; a disagreement is a tie, which does not pass">
-            <input type="checkbox" checked={judge.swap === true} onChange={(e) => set({ swap: e.target.checked || undefined })} /> Judge both document orders
-          </label>
+          <Toggle checked={judge.swap === true} onChange={(v) => set({ swap: v || undefined })} title="Judge the documents in their order and in the opposite order; a disagreement is a tie, which does not pass" label="Judge both document orders" />
           <label className="flex items-center gap-1" title="Ask n times (after the first, the cache is skipped) and report how often the verdicts flipped">
             Repeat
             <Input type="number" min={1} max={10} className="h-6 min-h-6 w-14 text-xs" value={judge.repeat ?? 1} onChange={(e) => set({ repeat: Math.max(1, Number(e.target.value)) || undefined })} aria-label="Judge repeats" />
           </label>
-          <label className="flex items-center gap-1" title="Skip the judged answer metrics of a sample whose free retrieval metrics already failed">
-            <input type="checkbox" checked={judge.shortCircuit === true} onChange={(e) => set({ shortCircuit: e.target.checked || undefined })} /> Skip judging when retrieval failed
-          </label>
-          <label className="flex items-center gap-1" title="Split the answer into claims once and let faithfulness and answer relevance judge them (on by default from three metrics that read claims)">
-            <input type="checkbox" checked={judge.shareClaims === true} onChange={(e) => set({ shareClaims: e.target.checked || undefined })} /> Share the answer’s claims
-          </label>
-          <label className="flex items-center gap-1 col-span-2" title="Pictures in the question or in the retrieved chunks go to the judge as data. A picture cannot be masked, so this is off unless you turn it on; the judge must be a model that can see (a local vision model works). The estimate and Try say how many pictures are sent.">
-            <input type="checkbox" checked={judge.allowImages === true} onChange={(e) => set({ allowImages: e.target.checked || undefined })} data-rag-allow-images /> Send pictures to the judge (multimodal metrics; they cannot be masked)
-          </label>
+          <Toggle checked={judge.shortCircuit === true} onChange={(v) => set({ shortCircuit: v || undefined })} title="Skip the judged answer metrics of a sample whose free retrieval metrics already failed" label="Skip judging when retrieval failed" />
+          <Toggle checked={judge.shareClaims === true} onChange={(v) => set({ shareClaims: v || undefined })} title="Split the answer into claims once and let faithfulness and answer relevance judge them (on by default from three metrics that read claims)" label="Share the answer’s claims" />
+          <Toggle
+            checked={judge.allowImages === true}
+            onChange={(v) => set({ allowImages: v || undefined })}
+            data-rag-allow-images=""
+            title="Pictures in the question or in the retrieved chunks go to the judge as data. A picture cannot be masked, so this is off unless you turn it on; the judge must be a model that can see (a local vision model works). The estimate and Try say how many pictures are sent."
+            label="Send pictures to the judge (multimodal metrics; they cannot be masked)"
+          />
         </div>
         <div className="grid grid-cols-2 gap-2">
           <Field label="Stop judging at (USD)">
