@@ -65,6 +65,10 @@ describe('architecture', () => {
     expect(offenders('packages/core/src/eval/rag', (i) => /(^|\/)runner\//.test(i.spec) && !i.typeOnly)).toEqual([]);
   });
 
+  it('the RAG metric engine takes only types from the AI task service: the engine lends it prepare/run (no 60-file import cycle)', () => {
+    expect(offenders('packages/core/src/eval/rag', (i) => /(^|\/)ai\/tasks\//.test(i.spec) && !i.typeOnly)).toEqual([]);
+  });
+
   it('the CLI is core plus commands', () => {
     expect(offenders('packages/cli/src', (i) => /^(electron|react|react-dom)(\/|$)/.test(i.spec) || i.spec.includes('apps/desktop'))).toEqual([]);
   });
