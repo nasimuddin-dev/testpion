@@ -8,6 +8,7 @@ import { createHash } from 'node:crypto';
 import { parseYaml } from '../../../util/lazy-yaml.js';
 import { CUSTOM_METRIC_ID, CUSTOM_METRIC_KINDS, isRecord, type CustomMetricFile, type CustomMetricKind } from '@testpion/shared';
 import { checkTypes } from '../../checks.js';
+import { dagProblems } from '../dag.js';
 import { resolveMetric } from '../metric-registry.js';
 import { parseFormula } from './formula.js';
 
@@ -19,7 +20,7 @@ export interface MetricProblem {
 }
 
 export const MAX_FILE_BYTES = 128 * 1024;
-const KNOWN_KEYS = new Set(['id', 'version', 'name', 'description', 'kind', 'inputs', 'scale', 'criteria', 'anchors', 'reference', 'votes', 'items', 'rules', 'combine', 'expression', 'good', 'negatives', 'aggregate', 'negativeMax', 'embedder', 'script', 'threshold', 'direction', 'judge', 'examples', 'calibration', 'extends']);
+const KNOWN_KEYS = new Set(['id', 'version', 'name', 'description', 'kind', 'inputs', 'scale', 'criteria', 'anchors', 'reference', 'votes', 'items', 'rules', 'combine', 'expression', 'good', 'negatives', 'aggregate', 'negativeMax', 'embedder', 'script', 'tree', 'threshold', 'direction', 'judge', 'examples', 'calibration', 'extends']);
 const INPUTS = ['question', 'answer', 'reference', 'contexts', 'conversation'];
 
 const str = (v: unknown): v is string => typeof v === 'string' && v.trim().length > 0;
@@ -115,6 +116,16 @@ export function validateCustomMetric(raw: unknown, o: { fileId?: string; known?:
     if (!(Array.isArray(raw.good) && raw.good.length)) warn('No good answers: the dataset must have a "good_answers" column (or a reference answer) for this metric to score.', 'good');
     if (raw.aggregate !== undefined && raw.aggregate !== 'max' && raw.aggregate !== 'mean') err('aggregate is max or mean.', 'aggregate');
     if (raw.negativeMax !== undefined && !(typeof raw.negativeMax === 'number' && raw.negativeMax >= 0 && raw.negativeMax <= 1)) err('negativeMax is a number from 0 to 1.', 'negativeMax');
+  } else if (kind === 'dag') {
+    // the tree is the built-in dag metric's own: every reference exists, no cycles, not deeper than 12, a leaf from 0 to 10
+    for (const p of dagProblems(raw.tree)) err(`The tree: ${p}.`, 'tree');
+    if (isRecord(raw.tree) && isRecord(raw.tree.nodes))
+      for (const [nodeId, node] of Object.entries(raw.tree.nodes)) {
+        const check = isRecord(node) && node.type === 'rule' && isRecord(node.check) ? node.check : undefined;
+        const bad = check && typeof check.type === 'string' ? ruleTypeProblem(check.type) : undefined;
+        if (bad) err(`The tree: node "${nodeId}" (rule): ${bad}.`, 'tree');
+      }
+    if (isRecord(raw.tree) && isRecord(raw.tree.nodes) && Object.values(raw.tree.nodes).every((n) => isRecord(n) && n.type === 'rule')) warn('Every node is a rule: this tree needs no model; a rule metric would say the same.', 'tree');
   } else if (kind === 'script') {
     needs('script', str(raw.script), 'A script metric needs a script: the body of a function of `sample` that returns { score }.');
     if (str(raw.script) && raw.script.length > 20_000) err('The script is longer than 20,000 characters.', 'script');
@@ -134,7 +145,7 @@ export function validateCustomMetric(raw: unknown, o: { fileId?: string; known?:
 
 /** What the metric computes, in a stable form: the same hash means the same scores for the same samples. */
 export function scoringHash(f: CustomMetricFile): string {
-  const keys = ['kind', 'inputs', 'scale', 'criteria', 'anchors', 'reference', 'votes', 'items', 'rules', 'combine', 'expression', 'good', 'negatives', 'aggregate', 'negativeMax', 'embedder', 'script', 'threshold', 'direction', 'judge'] as const;
+  const keys = ['kind', 'inputs', 'scale', 'criteria', 'anchors', 'reference', 'votes', 'items', 'rules', 'combine', 'expression', 'good', 'negatives', 'aggregate', 'negativeMax', 'embedder', 'script', 'tree', 'threshold', 'direction', 'judge'] as const;
   const picked: Record<string, unknown> = {};
   for (const k of keys) if ((f as unknown as Record<string, unknown>)[k] !== undefined) picked[k] = (f as unknown as Record<string, unknown>)[k];
   const canon = JSON.stringify(picked, (_k, v) => (isRecord(v) ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => (a < b ? -1 : 1))) : v));

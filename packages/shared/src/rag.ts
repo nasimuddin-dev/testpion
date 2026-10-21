@@ -109,7 +109,7 @@ export interface RagTarget {
    * sends the earlier messages with every request (`{{history}}`, `{{messages}}`, `{{historyText}}`), `server-session`
    * carries the id the system returns (map `conversationId`; the request uses `{{conversationId}}`). Default: stateless-history.
    */
-  conversation?: { mode: 'stateless-history' | 'server-session' };
+  conversation?: { mode: 'stateless-history' | 'server-session'; /** server-session: the cookies each answer sets are sent back with the next turn of the same conversation (for a system that keeps the session in a cookie). */ cookies?: boolean };
 }
 
 /** One retrieved context as the metrics read it. */

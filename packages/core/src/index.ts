@@ -103,7 +103,7 @@ export { runConversation, userMessages, historyVars, turnPairs, MAX_USER_TURNS, 
 export { conversationInput } from './eval/rag/conversation-input.js';
 export { traceOf, type TraceStep } from './eval/rag/agent-trace.js';
 export { parseCondition, routeOf, routeProblems, hasRoute, type RouteCondition } from './eval/rag/route.js';
-export { dagProblems, dagOf, runDag, DAG_LIMITS, type DagSpec, type DagNode } from './eval/rag/dag.js';
+export { dagProblems, dagOf, runDag, dagMaxJudgeCalls, dagJudgedKinds, DAG_LIMITS, type DagSpec, type DagNode } from './eval/rag/dag.js';
 export { MULTIMODAL_PROMPTS } from './eval/rag/prompts-multimodal.js';
 export { CONVERSATION_PROMPTS, topicScore } from './eval/rag/prompts-conversation.js';
 export { AGENT_METRIC_PROMPTS } from './eval/rag/prompts-agent.js';
@@ -114,6 +114,7 @@ export * from './eval/rag/judge-panel.js';
 export * from './eval/rag/judge-prompts-more.js';
 export * from './eval/rag/failure.js';
 export * from './eval/rag/score.js';
+export { ConversationCookies, parseSetCookie, withCookieHeader } from './eval/rag/conversation-cookies.js';
 export * from './eval/rag/r4.js';
 export { generateTestset, estimateGeneration, resolveOptions, type GenerateOptions, type GenerateResult } from './runner/rag-testset-generate.js';
 export { prepareAuthorContext, authorInputs, choicesOf as authorChoicesOf, targetShape, docsOutline, type AuthorChoices } from './runner/rag-author-context.js';

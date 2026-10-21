@@ -49,7 +49,7 @@ production:
 | Judged share | The share of samples that get the judged metrics; the free metrics always run | `--judge-sample 0.2` |
 | Cost limit / run | One run stops judging at this much; the rest is n/a, **not** a failed gate | `--max-cost 0.5` |
 | Judge budget / day | The day's judging (from the AI usage ledger) stops at this much | `--judge-budget 2` |
-| Gates | The lowest mean a metric may have: `faithfulness=0.8` | `--gate faithfulness=0.8` |
+| Gates | The lowest mean a metric may have: `faithfulness=0.8` | `--gate faithfulness=0.8` (the evaluation's own Gates apply when the monitor has none for a metric) |
 | Regression gate | Fail when a metric dropped against the previous run, the best of the last 30, or a named run | `--baseline previous` |
 | Largest drop allowed | The smallest drop that fails (default 0.05) | `--max-drop 0.05` |
 

@@ -33,10 +33,36 @@ const idsOf = (text: string): Set<string> => {
   return ids;
 }
 
+/** A slice of a dataset (several records at once, one item): the records of the item's text are appended, those whose id is in the file already are not. */
+function applyRecords(store: WorkspaceStore, item: ProposalItem, rel: string): ProposalUndo {
+  const file = fileOf(store, rel);
+  const rows: Array<Record<string, unknown>> = [];
+  for (const line of item.after.split('\n')) {
+    if (!line.trim()) continue;
+    try {
+      const r = JSON.parse(line) as unknown;
+      if (r && typeof r === 'object' && !Array.isArray(r) && typeof (r as { question?: unknown }).question === 'string') rows.push(r as Record<string, unknown>);
+    } catch {
+      /* a line that is not a record is left out */
+    }
+  }
+  if (!rows.length) throw new ApsError('ValidationError', `"${item.title}" holds no record`);
+  const before = existsSync(file) ? readFileSync(file, 'utf8') : null;
+  const have = before === null ? new Set<string>() : idsOf(before);
+  const add = rows.filter((r) => typeof r.id !== 'string' || !have.has(r.id));
+  const undo: ProposalUndo = { item: item.id, dataset: { path: rel, before } };
+  if (!add.length) return undo;
+  mkdirSync(store.path('datasets'), { recursive: true });
+  const head = before === null || before === '' ? '' : before.endsWith('\n') ? before : `${before}\n`;
+  atomicWrite(file, `${head}${add.map((r) => JSON.stringify(r)).join('\n')}\n`);
+  return undo;
+}
+
 export function applyDatasetRowItem(store: WorkspaceStore, item: ProposalItem): ProposalUndo {
-  const d = item.data as { dataset?: string; record?: Record<string, unknown> } | undefined;
+  const d = item.data as { dataset?: string; record?: Record<string, unknown>; records?: unknown[] } | undefined;
   if (!d?.dataset) throw new ApsError('ValidationError', `"${item.title}" names no dataset file`);
   const rel = d.dataset.replace(/\\/g, '/');
+  if (Array.isArray(d.records)) return applyRecords(store, item, rel);
   const file = fileOf(store, rel);
   let row: Record<string, unknown> = d.record ?? {};
   try {

@@ -4,6 +4,7 @@
  * use; the person confirms it in the window. Pure functions over records; the result is a dataset text.
  */
 import { listOf } from './lists.js';
+import { turnsOf } from './record.js';
 
 type Rec = Record<string, unknown>;
 
@@ -17,9 +18,11 @@ export const RAG_FIELDS: ReadonlyArray<{ field: RagField; label: string; require
   { field: 'tags', label: 'Tags', list: true, names: ['tags', 'category', 'topic', 'type', 'persona_name'] },
   { field: 'answer', label: 'Answer already given (score without calling a system)', names: ['answer', 'response', 'actual_output', 'output'] },
   { field: 'contexts', label: 'Contexts already retrieved', list: true, names: ['contexts', 'retrieved_contexts', 'retrieval_context', 'documents'] },
+  // a conversation: a JSON list of messages (strings are the user's, or { role, content }) or a transcript with User: / Assistant: lines; the question is then its last user message
+  { field: 'turns', label: 'Conversation (the turns to send, or a transcript)', names: ['turns', 'conversation', 'messages', 'dialogue', 'transcript'] },
 ];
 
-export type RagField = 'question' | 'reference' | 'reference_ids' | 'reference_contexts' | 'id' | 'tags' | 'answer' | 'contexts';
+export type RagField = 'question' | 'reference' | 'reference_ids' | 'reference_contexts' | 'id' | 'tags' | 'answer' | 'contexts' | 'turns';
 export type ColumnMapping = Partial<Record<RagField, string>>;
 
 const norm = (s: string) => s.toLowerCase().replace(/[\s-]+/g, '_');
@@ -60,7 +63,17 @@ export function mapColumns(records: Rec[], mapping: ColumnMapping): MappedColumn
       const v = r[col];
       if (v === undefined || v === null || v === '') continue;
       const spec = RAG_FIELDS.find((f) => f.field === field)!;
+      // a conversation keeps its shape (a list of messages, or a transcript text): the record reader parses it
+      if (field === 'turns') {
+        rec.turns = v;
+        continue;
+      }
       rec[field] = spec.list ? (field === 'contexts' && Array.isArray(v) ? v : listOf(v)) : typeof v === 'string' ? v : Array.isArray(v) ? String(v[0]) : typeof v === 'object' ? JSON.stringify(v) : String(v);
+    }
+    // a conversation is asked turn by turn: the "question" of the record is its last user message (what the single-turn metrics read)
+    if (!rec.question && rec.turns !== undefined) {
+      const last = [...(turnsOf(rec.turns) ?? [])].reverse().find((t) => t.role === 'user');
+      if (last) rec.question = last.content;
     }
     if (!rec.question) {
       skipped++;
@@ -95,7 +108,7 @@ export function missingDatasetInputs(requires: ReadonlyArray<string>, columns: s
     relevance: cols.has('relevance') || cols.has('qrels'),
     // pictures may also come from the target (a context's image); turns from a conversation column
     images: hasTarget || ['images', 'image', 'question_images', 'question_image'].some((n) => cols.has(n)),
-    turns: ['turns', 'conversation', 'messages', 'user_input'].some((n) => cols.has(n)),
+    turns: !!m.turns || ['turns', 'conversation', 'messages', 'user_input'].some((n) => cols.has(n)),
     referenceTopics: ['reference_topics', 'topics'].some((n) => cols.has(n)),
     expectedOutcome: ['expected_outcome', 'goal'].some((n) => cols.has(n)),
     shouldRefuse: ['should_refuse', 'expect_refusal'].some((n) => cols.has(n)),

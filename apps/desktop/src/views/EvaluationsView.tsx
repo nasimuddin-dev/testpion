@@ -24,6 +24,7 @@ import { RagTryDialog } from '../components/rag/RagTryDialog';
 import { RagMetricMatrix } from '../components/rag/RagMetricMatrix';
 import { RagColumnMapper } from '../components/rag/RagColumnMapper';
 import { RagImportDialog } from '../components/rag/RagImportDialog';
+import { RagGatesField } from '../components/rag/RagGatesField';
 import { RagJudgeOptions } from '../components/rag/RagJudgeOptions';
 import { RagAuthorAction } from '../components/rag/RagAuthorAction';
 import { useRpc } from '../lib/use-rpc';
@@ -60,6 +61,8 @@ interface Draft {
   judge?: RagJudgeSetup;
   maxJudgeCostUsd?: number;
   maxJudgeCalls?: number;
+  /** type rag: the lowest mean each metric may have in a run (saved with the evaluation). */
+  gates?: Record<string, number>;
 }
 
 const drafts = persisted<Draft>('eval', {
@@ -394,6 +397,7 @@ export function EvaluationsView() {
           </div>
           )}
           {ragTarget && <RagJudgeOptions judge={d.judge ?? {}} maxCostUsd={d.maxJudgeCostUsd} maxCalls={d.maxJudgeCalls} providers={providers} onChange={set} />}
+          {ragTarget && <RagGatesField gates={d.gates} onChange={(gates) => set({ gates })} />}
           <div className="grid grid-cols-4 gap-2 [&>*]:min-w-0">
             <Field label="Temp.">
               <Input type="number" step="0.1" value={d.temperature ?? ''} onChange={(e) => set({ temperature: e.target.value === '' ? undefined : Number(e.target.value) })} />

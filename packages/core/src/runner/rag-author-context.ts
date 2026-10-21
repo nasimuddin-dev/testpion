@@ -8,6 +8,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { extname, join, relative, sep } from 'node:path';
 import type { RagTarget } from '@testpion/shared';
+import { datasetPathOf } from '../eval/rag/testset/task.js';
 import { ApsError } from '../errors.js';
 import type { PreparedItem } from '../ai/tasks/registry.js';
 import { catalogueContext, catalogueFor, suppliedInputs } from '../eval/rag/author/catalogue.js';
@@ -82,9 +83,18 @@ export interface AuthorChoices {
   /** The judge the person named (provider/model): it wins over the plan's. */
   judge?: string;
   name?: string;
+  /** The dataset file to also write the slice to (a name; `datasets/` and `.jsonl` are added). */
+  sliceFile?: string;
 }
 
 const strOf = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : undefined);
+
+/** `datasets/<name>.jsonl` for the slice file; never the dataset the slice is cut from. */
+function sliceFilePath(name: string, source?: string): string {
+  const path = datasetPathOf(name, 'slice');
+  if (source && path === `datasets/${source.replace(/^datasets\//, '')}`) throw new ApsError('ValidationError', `The slice file would replace the dataset it is cut from (${path}): give it another name`, { suggestions: ['--slice-file <name> writes datasets/<name>.jsonl'] });
+  return path;
+}
 
 export function choicesOf(c: Record<string, unknown>): AuthorChoices {
   const target = strOf(c.target);
@@ -97,6 +107,7 @@ export function choicesOf(c: Record<string, unknown>): AuthorChoices {
     goal: strOf(c.goal),
     judge: strOf(c.judge),
     name: strOf(c.name),
+    sliceFile: strOf(c.sliceFile),
   };
 }
 
@@ -117,6 +128,7 @@ export async function prepareAuthorContext(store: WorkspaceStore, context: Recor
     ...(dataset ? { dataset } : {}),
     ...(c.judge ? { judge: { provider: c.judge.split('/')[0]!, ...(c.judge.includes('/') ? { model: c.judge.split('/').slice(1).join('/') } : {}) } } : {}),
     ...(c.name ? { name: c.name } : {}),
+    ...(c.sliceFile ? { sliceFile: sliceFilePath(c.sliceFile, dataset?.name) } : {}),
     existing: store.getLibrary<{ name?: string }>(EVALUATIONS_LIBRARY).items.map((i) => i.name),
     inputs,
   };

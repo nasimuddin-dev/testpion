@@ -91,6 +91,8 @@ export interface AuthorLocal {
   judge?: { provider: string; model?: string };
   /** The name asked for (--name): it wins over the plan's. */
   name?: string;
+  /** `datasets/<name>.jsonl` the slice of the dataset the evaluation runs is also written to (--slice-file): a file a person can open, diff and reuse. */
+  sliceFile?: string;
   /** Names of the saved evaluations (a new one gets a name none of them has). */
   existing: string[];
   /** The inputs the metrics may count on, by their registry code, and where each comes from. */

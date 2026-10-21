@@ -83,7 +83,9 @@ describe('a plan becomes an evaluation', () => {
     expect(b.gates).toEqual({ 'token-f1': 0.4 });
     expect(b.gateFlags).toEqual(['--min token-f1=0.4']);
     expect(b.baseline).toBe('previous');
-    expect(b.yaml).toContain('--min token-f1=0.4');
+    // the gates are a field of the saved evaluation now
+    expect(b.evaluation.gates).toEqual({ 'token-f1': 0.4 });
+    expect(b.yaml).toContain('gates:\n  token-f1: 0.4');
     expect(b.notes.filter((n) => /gate/.test(n))).toHaveLength(4);
   });
 

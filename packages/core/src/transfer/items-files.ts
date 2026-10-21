@@ -1,6 +1,6 @@
 /**
  * The adapters of the kinds the workspace keeps as files in its folders: test and flow files (tests/), API definitions
- * (specs/), datasets (datasets/), proto files (protos/), MCP mocks (mocks/) and script packages (packages/). The id of
+ * (specs/), datasets (datasets/), proto files (protos/), MCP mocks (mocks/), script packages (packages/) and custom RAG metrics (metrics/). The id of
  * each is its path from the workspace root with `/`; every path, on the way out and the way in, goes through
  * `bundleFilePath` (the same rules as the workspace export: no `..`, no absolute path, no device names, one root folder).
  */
@@ -12,11 +12,13 @@ import { bundleFilePath } from '../storage/workspace-bundle.js';
 import { SCRIPT_PACKAGE_NAME, type WorkspaceStore } from '../storage/workspace.js';
 import { RAW_ROOT, type BundleKindId } from './format.js';
 import { listIndex, numberedPath, replacePaths, seedOnce, type ItemAdapter, type Listed, type Snapshot } from './items.js';
+import { customMetricFileProblem, customMetricReview } from './metric-file.js';
 
 const ACCEPT: Partial<Record<BundleKindId, RegExp>> = {
   test: /\.(ya?ml|json)$/i,
   'mcp-mock': /\.mcp-mock\.ya?ml$/i,
   'script-package': /\.js$/,
+  metric: /\.ya?ml$/i,
 };
 
 /** Every plain file under a workspace folder that the kind accepts (no dot files, no links, the same listing on every OS). */
@@ -38,7 +40,8 @@ function walk(store: WorkspaceStore, kind: BundleKindId): Listed[] {
       const st = lstatSync(abs);
       if (st.isSymbolicLink()) continue;
       if (st.isDirectory()) visit(r);
-      else if (st.isFile() && (!accept || accept.test(e.name))) out.push({ id: r, name: r, size: st.size });
+      // presets.yaml of the metrics folder is the metric presets, not a metric
+      else if (st.isFile() && (!accept || accept.test(e.name)) && !(kind === 'metric' && /^presets\.ya?ml$/i.test(e.name))) out.push({ id: r, name: r, size: st.size });
     }
   };
   if (existsSync(store.path(root))) visit(root);
@@ -99,11 +102,12 @@ function fileAdapter(kind: BundleKindId, label: string): ItemAdapter {
         const pkg = item.id.slice('packages/'.length, -'.js'.length);
         if (!SCRIPT_PACKAGE_NAME.test(pkg)) return `"${pkg.slice(0, 60)}" is not a package name`;
       }
-      void data;
+      if (kind === 'metric') return customMetricFileProblem(item.id, data);
       return undefined;
     },
     review(item, data) {
       if (kind === 'script-package') return [`Script package "${item.id.slice('packages/'.length, -3)}" is code: scripts that require it run it (nothing runs on import)`];
+      if (kind === 'metric') return customMetricReview(item.id, data);
       if (kind === 'test' && /^\s*(?:-\s*)?(?:type:\s*script|script:)/m.test(data.toString('utf8', 0, Math.min(data.length, 2_000_000))))
         return [`Test file ${item.id} contains scripts that run when you run it (nothing runs on import)`];
       return [];
@@ -145,4 +149,5 @@ export const FILE_ADAPTERS: ItemAdapter[] = [
   fileAdapter('proto', 'Proto file'),
   fileAdapter('mcp-mock', 'MCP mock'),
   fileAdapter('script-package', 'Script package'),
+  fileAdapter('metric', 'Custom metric'),
 ];

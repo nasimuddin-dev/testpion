@@ -14,6 +14,7 @@
  */
 import type { RagTarget, RagToolCallRef } from '@testpion/shared';
 import type { VariableScope } from '../../vars/variables.js';
+import { ConversationCookies } from './conversation-cookies.js';
 import { callTarget, type TargetCall, type TargetRunner } from './run-target.js';
 import type { ConversationTurn } from './record.js';
 
@@ -53,11 +54,13 @@ export async function runConversation(target: RagTarget, messages: string[], sco
   const toolCalls: RagToolCallRef[] = [];
   let conversationId = '';
   let latencyMs = 0;
+  // a system that keeps its session in a cookie: what each answer sets goes back with the next turn (this conversation only)
+  const jar = target.conversation?.mode === 'server-session' && target.conversation.cookies ? new ConversationCookies() : undefined;
   for (let i = 0; i < messages.length; i++) {
     const msg = messages[i]!;
     let call: TargetCall;
     try {
-      call = await callTarget(target, msg, scope, run, { ...extraVars, ...historyVars(turns, msg, conversationId, i + 1) });
+      call = await callTarget(target, msg, scope, run, { ...extraVars, ...historyVars(turns, msg, conversationId, i + 1) }, jar ? { cookie: jar.header() } : {});
     } catch (e) {
       const err = e as Error & { message: string };
       err.message = `turn ${i + 1} of ${messages.length} ("${msg.slice(0, 60)}"): ${err.message}`;
@@ -65,6 +68,11 @@ export async function runConversation(target: RagTarget, messages: string[], sco
     }
     calls.push(call);
     latencyMs += call.latencyMs;
+    if (jar) {
+      jar.take(call.ctx.headers);
+      // the values are session secrets: masked wherever the redactor runs
+      if (jar.size) scope.clone().setScope('runtime', jar.values().map((value, n) => ({ key: `cookie${n}`, value, secret: true })));
+    }
     if (call.sample.conversationId) conversationId = call.sample.conversationId;
     turns.push({ role: 'user', content: msg });
     for (const tc of call.sample.toolCalls ?? []) toolCalls.push(tc);

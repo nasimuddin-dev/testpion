@@ -20,6 +20,16 @@ A record is the TestPion dataset record: `id`, `question`, `reference`, `referen
 text), `answerable`, `tags` (`generated`, the kind, `doc:<name>`) and `metadata.generator` (task, version, model, seed, batch). A row
 that was accepted also keeps what the verifiers said in `metadata.verification`.
 
+## Who asks, and how {#voices}
+
+Real users do not all write alike. **Who asks** (`--persona "a nurse on night shift"`, repeatable, at most 8) and **how they word it**
+(`--style terse`, repeatable: `formal`, `casual`, `terse`, `verbose`, `typos`, `non-native`, or any short description) give each question a
+voice: the slots of a run take the personas and the styles in turn, and the AI writes that question as that person would ask it. A
+persona or a style changes the wording and what the person already knows, never the facts, the reference answer or the passages used,
+and the references are checked against the passages as always. Each record keeps `persona:<name>` and `style:<name>` in its tags and the
+persona and style in `metadata.generator`, so the matrix's *Mean by tag* shows whether the system is worse for the terse questions.
+The estimate counts the few extra words. In the window they are in the dialog, under the kinds of question.
+
 ## Documents {#documents}
 
 * **Files and folders of the workspace**: markdown, text and HTML (scripts, styles, navigation and forms are dropped; headings become
@@ -46,7 +56,7 @@ passages. Questions are written eight at a time, and a run is at most 60 questio
 |---|---|
 | `testset-support` | The reference must be **supported by its passages**. First the share of the reference's content words found in them (under 40% fails, under 60% warns); a question that copies a run of its passage warns. Then the **judge** splits the reference into claims and each must be stated by the passages (a failing claim unticks the row). Without a judge only the lexical result is shown, and the badge says so. |
 | `testset-answerable` | An **unanswerable** question must not be answerable from the corpus: a keyword retrieval (BM25) over every passage must not hold 70% of its content words in one of the top 3 (55% warns). An answerable question should have its source among the top 5, else a warning that a keyword retriever may miss it. |
-| `testset-duplicate` | No question repeats another of the run, an earlier batch or the dataset file (80% the same words). |
+| `testset-duplicate` | No question repeats another of the run, an earlier batch or the dataset file (80% the same words). With **find repeats by meaning** (`--dedupe embedding`, `--embedder provider/model`; the dialog's *Repeated questions*) an embedding model also compares the questions, so a paraphrase that shares few words is caught: 0.92 or closer in meaning fails, 0.85 warns, with the question it repeats and the model named. The model is the one you name, else the judge's provider, else the AI settings'; the questions are redacted before they are embedded, *Local only* is enforced, and the estimate counts one short embedding call for each question. Without a model that embeds, or when it fails, the words are compared and the badge says *not compared by meaning* with the reason: it never invents a score. |
 
 A row with a failing check starts unticked, with the reason; nothing disappears silently. These checks are signals, not proof:
 read the questions before you rely on them. The verifiers need the documents in memory, so a proposal re-checked in a later session

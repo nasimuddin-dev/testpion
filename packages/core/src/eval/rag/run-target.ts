@@ -9,6 +9,7 @@ import { ApsError } from '../../errors.js';
 import type { TestCase } from '../../model/types.js';
 import type { VariableScope } from '../../vars/variables.js';
 import type { CheckContext } from '../checks.js';
+import { withCookieHeader } from './conversation-cookies.js';
 import { limiterOf, limitsProblems } from './limiter.js';
 import { applyMapping, mappingProblems, responseOf, type RagResponse } from './mapping.js';
 
@@ -36,7 +37,7 @@ export function targetProblems(t: RagTarget | undefined): string[] {
   }
   out.push(...mappingProblems(t.mapping), ...limitsProblems(t.limits));
   if (t.conversation && !['stateless-history', 'server-session'].includes(t.conversation.mode)) out.push(`conversation.mode must be stateless-history or server-session (got ${JSON.stringify(t.conversation.mode)}).`);
-  if (t.conversation?.mode === 'server-session' && !t.mapping?.conversationId) out.push('A server-session conversation needs the conversation id of the response: click it in the sample response and choose "Conversation id".');
+  if (t.conversation?.mode === 'server-session' && !t.conversation.cookies && !t.mapping?.conversationId) out.push('A server-session conversation needs the conversation id of the response: click it in the sample response and choose "Conversation id".');
   return out;
 }
 
@@ -55,7 +56,7 @@ export interface TargetCall {
 }
 
 /** Call the target with a question; throws a clear error when the endpoint refuses or the mapping finds no answer. */
-export async function callTarget(target: RagTarget, question: string, scope: VariableScope, run: TargetRunner, extraVars: Record<string, unknown> = {}, o: { probe?: boolean } = {}): Promise<TargetCall> {
+export async function callTarget(target: RagTarget, question: string, scope: VariableScope, run: TargetRunner, extraVars: Record<string, unknown> = {}, o: { probe?: boolean; /** The `Cookie` header value of the conversation so far (conversation-cookies.ts); '' on its first turn. Given: the conversation keeps its own cookies and the run's shared jar is not used. */ cookie?: string } = {}): Promise<TargetCall> {
   // a probe is how the mapping is made: it needs the request to be right, not the mapping
   const problems = o.probe ? targetProblems({ ...target, mapping: { answer: '$text' } }) : targetProblems(target);
   if (problems.length) throw new ApsError('ConfigurationError', `The RAG target cannot be called: ${problems[0]}`, { suggestions: problems.slice(1).concat(['Open the target in AI Lab ▸ RAG and fix it, or `testpion rag targets` lists the problems.']) });
@@ -63,6 +64,11 @@ export async function callTarget(target: RagTarget, question: string, scope: Var
   s.setScope('request', { ...extraVars, ...questionVars(question) });
   // placeholders are replaced in the object, before the step is read: a `json:` body keeps the question a string however it is quoted
   const raw = s.resolveDeep(target.step);
+  // a conversation with its own cookies: the run's shared cookie jar is left out (it would hand one conversation's session to another), and the conversation's cookies are sent instead
+  if (o.cookie !== undefined && (raw.type === undefined || raw.type === 'http')) {
+    raw.settings = { ...(raw.settings as object | undefined), disableCookieJar: true } as typeof raw.settings;
+    if (o.cookie) raw.headers = withCookieHeader(raw.headers, o.cookie) as typeof raw.headers;
+  }
   const step = run.normalize({ name: 'RAG target', ...raw });
   if (!target.readOnly) run.guard?.(step, s);
   if (step.timeoutMs === undefined && (target.limits?.timeoutMs ?? target.timeoutMs)) step.timeoutMs = target.limits?.timeoutMs ?? target.timeoutMs;

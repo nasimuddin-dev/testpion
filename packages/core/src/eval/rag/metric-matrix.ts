@@ -432,6 +432,18 @@ export function parseGates(specs: string[] | string | undefined): Record<string,
   return out;
 }
 
+/** The gates of a run: the evaluation's own, with a metric given again by the caller (a `--min` flag, a monitor) taking the caller's mark. */
+export function mergeGates(base: Record<string, number> | undefined, over: Record<string, number> | undefined): Record<string, number> {
+  const canon = (k: string) => resolveMetric(k)?.def.id ?? k;
+  const out: Record<string, number> = {};
+  for (const [k, v] of Object.entries(base ?? {})) if (typeof v === 'number' && Number.isFinite(v)) out[k] = v;
+  for (const [k, v] of Object.entries(over ?? {})) {
+    for (const own of Object.keys(out)) if (own !== k && canon(own) === canon(k)) delete out[own];
+    out[k] = v;
+  }
+  return out;
+}
+
 export interface GateResult {
   metric: string;
   column?: string;

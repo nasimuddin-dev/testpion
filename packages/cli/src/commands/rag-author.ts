@@ -18,6 +18,7 @@ export function registerRagAuthorCommands(rag: Command): void {
     .option('--spec <file>', 'an API definition under specs/ (its operations are shown to the model)')
     .option('--goal <text>', 'what you want to find out ("does it answer from the handbook, and never invent a dose")')
     .option('--name <name>', 'the name of the evaluation')
+    .option('--slice-file <name>', 'also write the records the evaluation runs to datasets/<name>.jsonl, a file you can open, diff and reuse (a saved evaluation holds its dataset inside)')
     .option('--judge <provider/model>', 'the judge of the judged metrics (default: the AI settings’ large model)')
     .option('--apply', 'save the evaluation when its checks pass')
     .option('--estimate', 'show what would be sent and what it costs; send nothing')
@@ -27,7 +28,7 @@ export function registerRagAuthorCommands(rag: Command): void {
     .option('--provider <name>', 'the model that drafts (default: the AI settings’ large model)')
     .option('--model <name>')
     .option('--json', 'print as JSON')
-    .action(async (o: { target: string; dataset?: string; docs?: string[]; spec?: string; goal?: string; name?: string; judge?: string; apply?: boolean; estimate?: boolean; dryRun?: boolean; workspace?: string; environment?: string; provider?: string; model?: string; json?: boolean }) =>
+    .action(async (o: { target: string; dataset?: string; docs?: string[]; spec?: string; goal?: string; name?: string; sliceFile?: string; judge?: string; apply?: boolean; estimate?: boolean; dryRun?: boolean; workspace?: string; environment?: string; provider?: string; model?: string; json?: boolean }) =>
       withWorkspace(o.workspace, async (store, ephemeral) => {
         if (ephemeral) throw new CliError('No workspace found: run inside a workspace or pass -w <nameOrPath>', EXIT.CONFIG_ERROR);
         const ctx = cliContext(store, o.environment);
@@ -38,7 +39,7 @@ export function registerRagAuthorCommands(rag: Command): void {
             json: !!o.json || machine(),
             task: 'rag-author-evaluation',
             item: undefined,
-            context: { target: o.target, dataset: o.dataset, docs: o.docs, spec: o.spec, goal: o.goal, name: o.name, judge: o.judge },
+            context: { target: o.target, dataset: o.dataset, docs: o.docs, spec: o.spec, goal: o.goal, name: o.name, sliceFile: o.sliceFile, judge: o.judge },
             question: o.goal,
             provider: o.provider,
             model: o.model,

@@ -22,7 +22,7 @@ export function ragAuthorTask(): AiTaskDef {
     tier: 'large',
     instruction: AUTHOR_INSTRUCTION,
     output: { kind: 'json', schema: { ...AUTHOR_PLAN_SCHEMA } },
-    context: 'target (a RAG target name), dataset (a file under datasets/), docs (workspace files or folders), spec (a file under specs/), goal (what to find out), judge (provider/model), name',
+    context: 'target (a RAG target name), dataset (a file under datasets/), docs (workspace files or folders), spec (a file under specs/), goal (what to find out), judge (provider/model), name, sliceFile (also write the slice to datasets/<name>.jsonl)',
     contextTokens: 14_000,
     maxTokens: 2500,
     temperature: 0.2,

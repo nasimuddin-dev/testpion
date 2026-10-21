@@ -14,6 +14,7 @@ import {
   METRIC_PRESETS,
   buildMetricMatrix,
   checkGates,
+  mergeGates,
   chooseRagRun,
   compareMetricRuns,
   readResultsFile,
@@ -512,7 +513,8 @@ async function runCommand(ref: string, o: RunFlags): Promise<number> {
     );
     if (o.rotate && !o.limit) throw new CliError('--rotate needs --limit <n>: the number of records to score each day', EXIT.CONFIG_ERROR);
     const d = o.rotate ? rotateEvaluation(chosen, Number(o.limit), utcDay(new Date())).evaluation : chosen;
-    const gates = parseGates(o.min);
+    // the evaluation's own gates, with a --min for the same metric taking its mark
+    const gates = mergeGates(d.gates, parseGates(o.min));
     if (o.estimate) {
       const ctx = cliContext(store, o.environment);
       try {

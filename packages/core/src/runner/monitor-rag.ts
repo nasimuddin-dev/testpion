@@ -18,7 +18,7 @@ import type { ExecServices } from './execute.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { aiUsageSummary } from '../storage/ai-usage.js';
 import { parseRagDatasetText, stringifyRagRecords } from '../eval/rag/dataset-formats.js';
-import { buildMetricMatrix, checkGates } from '../eval/rag/metric-matrix.js';
+import { buildMetricMatrix, checkGates, mergeGates } from '../eval/rag/metric-matrix.js';
 import { compareMetricRuns } from '../eval/rag/metric-compare.js';
 import { regressionLines, regressionMarkdown } from '../eval/rag/trend/markdown.js';
 import { rotatingIndexes, utcDay } from '../eval/rag/trend/rotate.js';
@@ -51,6 +51,8 @@ export interface RagMonitorOutcome {
   summary: RunSummary;
   runId: string;
   gateReasons: string[];
+  /** The monitor or its evaluation has gates (a run is then judged by them, not by its failed samples). */
+  gated: boolean;
   rag: MonitorRagInfo;
 }
 
@@ -92,7 +94,9 @@ export async function runMonitorEvaluation(o: { store: WorkspaceStore; monitor: 
   if (monitor.judgeSample !== undefined) d.judge = { ...(d.judge ?? {}), sampleShare: monitor.judgeSample };
   const out = await runRagEvaluation({ store, makeContext: () => o.context({ environment: monitor.environment }), evaluation: d, environment: monitor.environment, signal: o.signal, reports: ['json', 'html'], onResult: (r) => o.onEvent?.({ type: 'test-end', result: r } as RunEvent) });
   const matrix = await buildMetricMatrix(runResults(store, out.runId), { runId: out.runId, limit: 1 });
-  const gateReasons = checkGates(matrix, monitor.gates ?? {}).filter((g) => !g.passed).map((g) => g.why);
+  // the monitor's own gates, else the evaluation's
+  const gates = mergeGates(saved.gates, monitor.gates);
+  const gateReasons = checkGates(matrix, gates).filter((g) => !g.passed).map((g) => g.why);
 
   let budgetNa = 0;
   for await (const r of runResults(store, out.runId)) for (const c of r.checks ?? []) if ((c.metadata as { na?: string } | undefined)?.na === 'budget') budgetNa++;
@@ -119,5 +123,5 @@ export async function runMonitorEvaluation(o: { store: WorkspaceStore; monitor: 
   }
   // the trend is cached from the run on, so Needs attention can say "faithfulness dropped over 3 nights" without scanning results
   await ragTrend(store, { evaluation: monitor.evaluation, runs: 5 }).catch(() => undefined);
-  return { summary: out.summary, runId: out.runId, gateReasons, rag };
+  return { summary: out.summary, runId: out.runId, gateReasons, gated: Object.keys(gates).length > 0, rag };
 }

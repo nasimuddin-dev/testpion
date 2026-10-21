@@ -23,7 +23,7 @@ const inputsOf = (f: CustomMetricFile): TemplateInput[] => {
   return given;
 };
 
-export const defaultThreshold = (f: CustomMetricFile): number => f.threshold ?? (f.kind === 'judge' ? (f.scale === undefined || f.scale === 'binary' ? 1 : 0.6) : f.kind === 'checklist' ? 0.8 : 1);
+export const defaultThreshold = (f: CustomMetricFile): number => f.threshold ?? (f.kind === 'judge' ? (f.scale === undefined || f.scale === 'binary' ? 1 : 0.6) : f.kind === 'checklist' ? 0.8 : f.kind === 'dag' ? 0.5 : 1);
 
 /** The judge a file names, in the form the judged checks read. */
 const withJudge = (cfg: CheckConfig, f: CustomMetricFile): CheckConfig => (f.judge?.provider && !cfg.judge ? { ...cfg, judge: { provider: f.judge.provider, model: f.judge.model } } : cfg);
@@ -40,6 +40,15 @@ function judgeKind(f: CustomMetricFile): CustomCheck {
   return (cfg, ctx) => {
     const t = templateOf(f);
     return runTemplate(withJudge({ ...cfg, votes: cfg.votes ?? f.votes }, f), ctx, t, { threshold: num(cfg.threshold, defaultThreshold(f)), direction: f.direction });
+  };
+}
+
+/** The tree is the built-in dag metric's: the same walk, the same judge calls, the same path in the result. */
+function dagKind(f: CustomMetricFile): CustomCheck {
+  return async (cfg, ctx) => {
+    const fn = checkFn('dag')!;
+    const r = await fn(withJudge({ ...cfg, type: 'dag', tree: f.tree, inputs: f.inputs ?? ['question', 'answer'], threshold: num(cfg.threshold, defaultThreshold(f)) }, f), ctx);
+    return { ...r, type: cfg.type, name: cfg.name ?? r.name };
   };
 }
 
@@ -164,5 +173,7 @@ export function checkOf(f: CustomMetricFile): CustomCheck {
       return embeddingKind(f);
     case 'script':
       return scriptKind(f);
+    case 'dag':
+      return dagKind(f);
   }
 }
