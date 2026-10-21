@@ -6,7 +6,7 @@ import { assertGitRev, gitBlobSize, gitIndexText, gitShow, realFolder, repoRoot,
 import { gitBlobInfos, gitBlobTexts, isBatchable, type GitBlobInfo } from './blob-batch.js';
 import { requestParts } from './merge.js';
 import { flowChanges, flowItemParts, isFlowFile } from './flow-diff.js';
-import { KIND_INFO, LIBRARY_LABEL, gitFolderKey, gitKindOfRef, gitRefKey, gitSectionKey, kindOfPath, kindOfRef, libraryOfPath, savedItemRef, watchKindOfPath, type ItemRef, type KindId } from '@testpion/shared';
+import { DEFAULT_FOLDER, KIND_INFO, LIBRARY_LABEL, gitFolderKey, gitKindOfRef, gitRefKey, gitSectionKey, kindOfPath, kindOfRef, libraryOfPath, savedItemRef, watchKindOfPath, type ItemRef, type KindId } from '@testpion/shared';
 import { sameValue } from '../storage/stable-files.js';
 import { describeOtherFile, isBinaryPath } from './item-changes.js';
 import { mcpServerParts, providerParts, workspaceParts } from './item-parts.js';
@@ -106,7 +106,7 @@ function libraryChanges(file: string, beforeText: string | undefined, afterText:
   const title = (i: { name?: string; id: string }) => `${what} ${i.name ?? i.id}`;
   // a folder of the list and, for a call or a connection, the collection it is shown in, show the change too
   const inside = (i: { folder?: string; collectionId?: string }): Pick<SemanticChange, 'containers'> =>
-    kindId ? { containers: [...(i.folder ? [gitFolderKey(kindId, i.folder)] : []), ...(i.collectionId ? [gitRefKey({ kind: 'collection', collectionId: i.collectionId })] : [])] } : {};
+    kindId ? { containers: [...(i.folder || !i.collectionId ? [gitFolderKey(kindId, i.folder || DEFAULT_FOLDER)] : []), ...(i.collectionId ? [gitRefKey({ kind: 'collection', collectionId: i.collectionId })] : [])] } : {};
   const known = kindId ? { kindId } : {};
   for (const [id, i] of b) {
     const was = a.get(id);

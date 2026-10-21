@@ -102,7 +102,15 @@ function newNode(cat: RequestCategory): CollectionNode | undefined {
       kind: 'http',
       id: uid('req-'),
       name: 'New SOAP request',
-      request: { method: 'POST', url: '{{baseUrl}}/', headers: [{ key: 'Content-Type', value: 'text/xml; charset=utf-8', enabled: true }, { key: 'SOAPAction', value: '', enabled: true }], body: { type: 'xml', content: SOAP_ENVELOPE } },
+      request: {
+        method: 'POST',
+        url: '{{baseUrl}}/',
+        headers: [
+          { key: 'Content-Type', value: 'text/xml; charset=utf-8', enabled: true },
+          { key: 'SOAPAction', value: '', enabled: true },
+        ],
+        body: { type: 'xml', content: SOAP_ENVELOPE },
+      },
       assertions: [],
     };
   if (cat === 'graphql') return { kind: 'graphql', id: uid('gql-'), name: 'New GraphQL request', request: { endpoint: '{{baseUrl}}/graphql', query: 'query {\n  \n}', variables: '', headers: [] }, assertions: [] };
@@ -112,7 +120,12 @@ function newNode(cat: RequestCategory): CollectionNode | undefined {
 /** An MCP server as an agent's config file holds it (.mcp.json, claude_desktop_config.json): values as saved, {{variables}} unresolved. */
 function mcpConfigOf(s: McpServerConfig): Record<string, unknown> | undefined {
   if (s.transport === 'stdio') return { command: s.command, ...(s.args?.length ? { args: s.args } : {}), ...(s.env && Object.keys(s.env).length ? { env: s.env } : {}) };
-  if ('url' in s && s.url) return { type: s.transport === 'sse' ? 'sse' : 'http', url: s.url, ...('headers' in s && s.headers?.length ? { headers: Object.fromEntries(s.headers.filter((h) => h.enabled !== false).map((h) => [h.key, h.value])) } : {}) };
+  if ('url' in s && s.url)
+    return {
+      type: s.transport === 'sse' ? 'sse' : 'http',
+      url: s.url,
+      ...('headers' in s && s.headers?.length ? { headers: Object.fromEntries(s.headers.filter((h) => h.enabled !== false).map((h) => [h.key, h.value])) } : {}),
+    };
   return undefined;
 }
 
@@ -362,7 +375,16 @@ export function Explorer() {
       const d = it.data;
       const text =
         kind === 'grpc'
-          ? await call<string>('grpc.grpcurl', { target: d.target, method: d.method, message: d.message, metadata: d.metadata, tls: d.tls, protoFiles: d.descriptorSet ? [] : (d.protoFiles ?? []).map((f: { name: string }) => f.name), timeoutMs: d.timeoutMs, environment: env })
+          ? await call<string>('grpc.grpcurl', {
+              target: d.target,
+              method: d.method,
+              message: d.message,
+              metadata: d.metadata,
+              tls: d.tls,
+              protoFiles: d.descriptorSet ? [] : (d.protoFiles ?? []).map((f: { name: string }) => f.name),
+              timeoutMs: d.timeoutMs,
+              environment: env,
+            })
           : String(d.url ?? '');
       await copyText(text, kind === 'grpc' ? 'as grpcurl' : 'the URL');
     } catch (e) {
@@ -458,7 +480,11 @@ export function Explorer() {
       }),
   });
   const specOps = pathFolderOps('spec-folders', specFolders, specs);
-  const datasetOps = pathFolderOps('dataset-folders', datasetFolders, datasets.map((d) => d.name));
+  const datasetOps = pathFolderOps(
+    'dataset-folders',
+    datasetFolders,
+    datasets.map((d) => d.name),
+  );
   /** The keys of a section and its folders (its Expand all and Collapse all). */
   const sectionKeys = (section: string, ops: FolderOps, items: Array<{ folder?: string }>) => [section, ...folderNames(ops, items).map((n) => folderKey(section, n))];
   const sectionTree = (section: string, ops: FolderOps, items: Array<{ folder?: string }>) => ({
@@ -527,7 +553,15 @@ export function Explorer() {
           });
         },
       },
-      disabled: isAsync ? { generateSpecTests: 'Tests from a spec read OpenAPI documents', driftReport: 'Contract drift reads OpenAPI documents', lint: 'Lint reads OpenAPI documents', apiCoverage: 'API coverage reads OpenAPI documents', compareVersions: 'Compare versions reads OpenAPI documents' } : {},
+      disabled: isAsync
+        ? {
+            generateSpecTests: 'Tests from a spec read OpenAPI documents',
+            driftReport: 'Contract drift reads OpenAPI documents',
+            lint: 'Lint reads OpenAPI documents',
+            apiCoverage: 'API coverage reads OpenAPI documents',
+            compareVersions: 'Compare versions reads OpenAPI documents',
+          }
+        : {},
     };
   };
   /** The menu of a dataset: open, preview, run a collection with it, copy, use in a test, rename, duplicate, move, delete (Undo). */
@@ -597,7 +631,11 @@ export function Explorer() {
         kind: collectionCallKind('grpc'),
         items: grpcByCollection.get(c.id) ?? NONE,
         onOpen: (id) => void openRef({ kind: 'saved', library: 'grpc', itemId: id }),
-        menu: (id) => savedLatest.current.savedMenu('grpc', grpc.find((i) => i.id === id)!),
+        menu: (id) =>
+          savedLatest.current.savedMenu(
+            'grpc',
+            grpc.find((i) => i.id === id)!,
+          ),
         rename: (id) => savedLatest.current.renameSaved('grpc', id),
         folderMenu: (folder) => savedLatest.current.savedFolderMenu('grpc', folder),
       },
@@ -606,7 +644,11 @@ export function Explorer() {
         kind: collectionCallKind('websocket'),
         items: socketsByCollection.get(c.id) ?? NONE,
         onOpen: (id) => void openRef({ kind: 'saved', library: 'websocket', itemId: id }),
-        menu: (id) => savedLatest.current.savedMenu('websocket', sockets.find((i) => i.id === id)!),
+        menu: (id) =>
+          savedLatest.current.savedMenu(
+            'websocket',
+            sockets.find((i) => i.id === id)!,
+          ),
         rename: (id) => savedLatest.current.renameSaved('websocket', id),
         folderMenu: (folder) => savedLatest.current.savedFolderMenu('websocket', folder),
       },
@@ -759,7 +801,7 @@ export function Explorer() {
             on: { newFolder: () => void newFolderIn(mcpOps), openMcpInspector: () => intent('mcp', {}), ...sectionTree('mcp', mcpOps, servers) },
           })}
         >
-          {servers.length || mcpFolders.length ? (
+          <>
             <FolderedRows
               section="mcp"
               kind="folder:mcp-server"
@@ -769,12 +811,12 @@ export function Explorer() {
               filtering={!!f}
               itemNoun="server"
               create={() => [{ label: 'Add an MCP server here', icon: <Plus size={14} />, onSelect: () => intent('mcp', { addServer: true }) }]}
-              row={(s, inFolder) => (
+              row={(s) => (
                 <ItemRow
                   key={s.id}
                   kind="mcp-server"
                   nodeId={`mcp:${s.id}`}
-                  indent={inFolder}
+                  indent
                   icon={<TreeBadge label="MCP" className={s.connected ? 'text-ok' : KIND_COLOR.mcp} />}
                   label={s.name}
                   sub={s.connected ? 'connected' : s.transport === 'streamable-http' ? 'http' : s.transport}
@@ -787,9 +829,8 @@ export function Explorer() {
                 />
               )}
             />
-          ) : (
-            <EmptyHint text="MCP servers to inspect and test: a local command, Streamable HTTP, SSE or a mock." action="Add server" onAction={() => intent('mcp', { addServer: true })} />
-          )}
+            {!servers.length && !mcpFolders.length && <EmptyHint text="MCP servers to inspect and test: a local command, Streamable HTTP, SSE or a mock." action="Add server" onAction={() => intent('mcp', { addServer: true })} />}
+          </>
         </Section>
 
         <Section
@@ -806,7 +847,7 @@ export function Explorer() {
             on: { newFolder: () => void newFolderIn(specOps), openApiDefinitions: () => intent('apidef', {}), ...sectionTree('specs', specOps, specFolders.items) },
           })}
         >
-          {specs.length || specFolders.folders.length ? (
+          <>
             <FolderedRows
               section="specs"
               kind="folder:spec"
@@ -815,31 +856,25 @@ export function Explorer() {
               sections={sections}
               filtering={!!f}
               itemNoun="API definition"
-              row={({ id: s, folder }, inFolder) => (
+              row={({ id: s, folder }) => (
                 <ItemRow
                   key={s}
                   kind="spec"
                   nodeId={`specs:${s}`}
-                  indent={inFolder}
+                  indent
                   icon={<TreeBadge label="API" className={KIND_COLOR.api} />}
                   label={s.replace(/^specs\//, '')}
                   activeId={s}
                   onClick={() => void openRef({ kind: 'spec', path: s })}
                   ctx={() => specMenu(s, folder)}
-                  rename={renamer(s, `specs:${s}`, (to) =>
-                    call<{ path: string }>('openapi.spec.rename', { path: s, to: to.replace(/^.*\//, '') }).then(
-                      () => load(false, SPECS),
-                      toastError,
-                    ),
-                  )}
+                  rename={renamer(s, `specs:${s}`, (to) => call<{ path: string }>('openapi.spec.rename', { path: s, to: to.replace(/^.*\//, '') }).then(() => load(false, SPECS), toastError))}
                   drag={[{ kind: 'spec', path: s }]}
                   git={{ kind: 'spec', path: s }}
                 />
               )}
             />
-          ) : (
-            <EmptyHint text="OpenAPI documents: importing one keeps it here for contract checks, API coverage and comparing versions." action="Import OpenAPI" onAction={importDefinition} />
-          )}
+            {!specs.length && !specFolders.folders.length && <EmptyHint text="OpenAPI documents: importing one keeps it here for contract checks, API coverage and comparing versions." action="Import OpenAPI" onAction={importDefinition} />}
+          </>
         </Section>
 
         <Section
@@ -859,7 +894,7 @@ export function Explorer() {
             on: { newFolder: () => void newFolderIn(datasetOps), generateData: () => setGeneratingData(true), ...sectionTree('datasets', datasetOps, datasetFolders.items) },
           })}
         >
-          {datasets.length || datasetFolders.folders.length ? (
+          <>
             <FolderedRows
               section="datasets"
               kind="folder:dataset"
@@ -868,12 +903,12 @@ export function Explorer() {
               sections={sections}
               filtering={!!f}
               itemNoun="dataset"
-              row={(d, inFolder) => (
+              row={(d) => (
                 <ItemRow
                   key={d.name}
                   kind="dataset"
                   nodeId={`datasets:${d.name}`}
-                  indent={inFolder}
+                  indent
                   icon={<TreeBadge label={datasetBadge(d.format).text} className={datasetBadge(d.format).cls} />}
                   label={d.name}
                   sub={d.rows !== undefined ? plural(d.rows, 'row') : d.tables ? plural(d.tables.length, 'table') : undefined}
@@ -886,9 +921,10 @@ export function Explorer() {
                 />
               )}
             />
-          ) : (
-            <EmptyHint text="Data files (CSV, JSONL, JSON, Markdown tables, SQLite) that drive collection runs and tests, in the workspace's datasets folder." action="New CSV" onAction={() => void newDataset('csv')} />
-          )}
+            {!datasets.length && !datasetFolders.folders.length && (
+              <EmptyHint text="Data files (CSV, JSONL, JSON, Markdown tables, SQLite) that drive collection runs and tests, in the workspace's datasets folder." action="New CSV" onAction={() => void newDataset('csv')} />
+            )}
+          </>
         </Section>
         {/* the blank rest of the sidebar takes the workspace's menu too */}
         <div className="min-h-16" aria-hidden />

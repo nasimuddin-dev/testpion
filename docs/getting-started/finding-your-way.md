@@ -132,6 +132,8 @@ Every response and result keeps its **down arrow** in the same place: the right 
 
 Every row of every tree and list — a collection, a folder, a request, a gRPC call, an MCP server, an API definition, a dataset, a saved prompt, a load test, an evaluation, a monitor, a test file, a run, a History entry, a trace, an environment — has one menu, built the same way everywhere. Its right-click menu is its ⋯ menu, and the keyboard opens it too: <kbd>Shift</kbd>+<kbd>F10</kbd> or the menu key on the focused row. Section headers (MCP servers, API definitions, Datasets, Tests, the lists of the other views) and folders have one as well, and a right-click on the blank part of a list opens the menu of the section it belongs to.
 
+Every list keeps its items in folders: items that have none are in **General** (a folder every list has; it cannot be renamed or deleted, and an item in it has no folder in its file).
+
 The items come in groups, always in this order, with a line between groups:
 
 1. **create** — New … (what the container holds), New folder, Import…
