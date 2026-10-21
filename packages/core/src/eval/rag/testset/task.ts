@@ -119,7 +119,11 @@ export function proposeTestset(a: { value?: unknown }, input: AiTaskInput): { it
   const seen = new Set<number>();
   for (const s of samples) {
     const slot = local.slots.find((x) => x.n === (s as { slot?: number }).slot) ?? local.slots[items.length];
-    if (!slot || typeof s.question !== 'string' || !s.question.trim()) {
+    if (!slot) {
+      notes.push('The model wrote more samples than there were slots; the extra ones are left out.');
+      continue;
+    }
+    if (typeof s.question !== 'string' || !s.question.trim()) {
       problems.push(`A sample has no question (slot ${String((s as { slot?: unknown }).slot ?? '?')}); write one per slot.`);
       continue;
     }
