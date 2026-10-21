@@ -87,6 +87,10 @@ export function registerMonitorCommands(program: Command): void {
     .option('--gate <metric=value>', 'with --rag-evaluation: the lowest mean a metric may have (repeatable; the same names as `rag run --min`)', collect)
     .option('--judge-sample <share>', 'with --rag-evaluation: the share of samples (0 to 1) that get the judged metrics; the free metrics always run')
     .option('--judge-budget <usd>', 'with --rag-evaluation: stop judging for the day at this much (from the AI usage ledger); the rest is n/a')
+    .option('--rotate', 'with --rag-evaluation and --limit: score a different --limit records each night (chosen by the UTC date), so a month covers the dataset')
+    .option('--max-cost <usd>', 'with --rag-evaluation: stop judging in one run at this much; the rest is n/a, not a failed gate')
+    .option('--baseline <run>', 'with --rag-evaluation: fail when a metric dropped against previous (the last run of this monitor), best (of the last 30) or a run id')
+    .option('--max-drop <n>', 'with --baseline: the smallest drop that fails (default 0.05)')
     .requiredOption('--every <interval>', 'how often: minutes, or e.g. 15m, 1h, 1d (1 minute to 7 days)')
     .option('--folder <nameOrId>', 'run only this folder or request (repeatable)', collect)
     .option('-e, --environment <name>', 'environment to run with')
@@ -106,7 +110,7 @@ export function registerMonitorCommands(program: Command): void {
         const m = saveMonitor(store, {
           id: existing?.id ?? shortId('mon-'),
           name,
-          ...(collection ? { collectionId: collection.id, selection: resolveSelection(collection, o.folder) } : o.ragEvaluation ? { evaluation: String(o.ragEvaluation), ...(o.limit ? { limit: Number(o.limit) } : {}), ...(o.gate?.length ? { gates: parseGates(o.gate) } : {}), ...(o.judgeSample ? { judgeSample: Number(o.judgeSample) } : {}), ...(o.judgeBudget ? { judgeBudgetUsdPerDay: Number(o.judgeBudget) } : {}) } : { testFile: String(o.testFile) }),
+          ...(collection ? { collectionId: collection.id, selection: resolveSelection(collection, o.folder) } : o.ragEvaluation ? { evaluation: String(o.ragEvaluation), ...(o.limit ? { limit: Number(o.limit) } : {}), ...(o.gate?.length ? { gates: parseGates(o.gate) } : {}), ...(o.judgeSample ? { judgeSample: Number(o.judgeSample) } : {}), ...(o.judgeBudget ? { judgeBudgetUsdPerDay: Number(o.judgeBudget) } : {}), ...(o.rotate ? { rotate: true } : {}), ...(o.maxCost ? { maxCostUsd: Number(o.maxCost) } : {}), ...(o.baseline ? { baseline: String(o.baseline) } : {}), ...(o.maxDrop ? { maxDrop: Number(o.maxDrop) } : {}) } : { testFile: String(o.testFile) }),
           environment: o.environment,
           everyMinutes: parseEvery(o.every),
           enabled: !o.paused,

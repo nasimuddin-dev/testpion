@@ -5,7 +5,7 @@
  * metric by metric, connecting a target from a preset, and emptying the judge cache. Exit 1 when a gate fails or a metric
  * regresses, 2 for a configuration error (a missing judge, an unknown metric, a target that cannot be called).
  */
-import { copyFileSync, readFileSync } from 'node:fs';
+import { appendFileSync, copyFileSync, existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { Command, Option } from 'commander';
 import {
@@ -16,6 +16,10 @@ import {
   checkGates,
   chooseRagRun,
   compareMetricRuns,
+  readResultsFile,
+  regressionMarkdown,
+  rotateEvaluation,
+  utcDay,
   estimateRagEvaluation,
   estimateRescore,
   findRagTarget,
@@ -62,7 +66,7 @@ function needWorkspace(ephemeral: string | undefined): void {
   if (ephemeral) throw new CliError('No workspace found: run inside a workspace or pass -w <nameOrPath>', EXIT.CONFIG_ERROR);
 }
 
-function printEstimate(e: RunEstimate): void {
+export function printEstimate(e: RunEstimate): void {
   console.log(`${bold('Estimate')} ${dim(`${e.samples} samples · sizes from ${e.basis === 'stored' ? 'the stored answers' : e.basis === 'probe' ? 'one real call' : e.basis === 'dataset' ? 'the dataset' : 'typical values'}`)}`);
   for (const m of e.metrics) console.log(`  ${m.id.padEnd(24)} ${m.llmCalls ? `${m.llmCalls} judge call(s)` : m.embedCalls ? `${m.embedCalls} embedding call(s)` : 'no model'}${m.note ? dim(`  (${m.note})`) : ''}`);
   console.log(`${bold('Judge calls')} ${e.total.llmCalls}${e.cache.exact ? ` (${e.cache.hits} already cached)` : ''} · ${e.total.inputTokens.toLocaleString()} tokens in, about ${e.total.outputTokens.toLocaleString()} out${e.total.embedCalls ? ` · ${e.total.embedCalls} embedding calls` : ''}`);
@@ -246,12 +250,14 @@ export function registerRagEvalCommands(rag: Command): void {
     .option('--max-cost <usd>', 'stop judging once this much is spent; the rest is n/a')
     .option('--max-calls <n>', 'stop judging after this many model calls')
     .option('--limit <n>', 'only the first n dataset records')
+    .option('--rotate', 'with --limit: score a different --limit records each UTC day (a nightly job covers the dataset in a month; the same day picks the same records)')
     .option('-c, --concurrency <n>', 'parallel samples')
     .option('--retries <n>', 'retries per failing sample')
     .option('--estimate', 'print the judge calls, tokens and cost range and exit; no call is made')
     .option('--probe', 'with --estimate: ask the target one real question to size an answer')
     .option('--min <metric=value>', 'a gate: the mean of a metric must be at least this (repeat or comma-separate)', collect, [])
     .option('--baseline <run>', 'compare with an earlier run, metric by metric (a paired bootstrap decides what is real)')
+    .option('--baseline-results <file>', 'compare with the results.jsonl of an earlier run kept as a CI artifact (a missing file is no baseline yet, not an error)')
     .option('--max-regression <n>', 'a drop in a metric’s mean that counts as a regression (default 0.05)', '0.05')
     .option('--junit <file>', 'write the JUnit report here')
     .option('--html <file>', 'write the HTML report here')
@@ -436,12 +442,14 @@ interface RunFlags {
   maxCost?: string;
   maxCalls?: string;
   limit?: string;
+  rotate?: boolean;
   concurrency?: string;
   retries?: string;
   estimate?: boolean;
   probe?: boolean;
   min: string[];
   baseline?: string;
+  baselineResults?: string;
   maxRegression: string;
   junit?: string;
   html?: string;
@@ -458,7 +466,7 @@ async function runCommand(ref: string, o: RunFlags): Promise<number> {
     needWorkspace(ephemeral);
     const saved = await config(() => findSavedEvaluation(store, ref));
     if (saved.type !== 'rag') throw new CliError(`"${saved.name}" is not a RAG evaluation (use \`testpion eval run\`)`, EXIT.CONFIG_ERROR);
-    const d = await config(() =>
+    const chosen = await config(() =>
       chooseRagRun(saved, {
         metrics: o.metrics,
         preset: o.preset,
@@ -477,6 +485,8 @@ async function runCommand(ref: string, o: RunFlags): Promise<number> {
         limit: o.limit ? Number(o.limit) : undefined,
       }),
     );
+    if (o.rotate && !o.limit) throw new CliError('--rotate needs --limit <n>: the number of records to score each day', EXIT.CONFIG_ERROR);
+    const d = o.rotate ? rotateEvaluation(chosen, Number(o.limit), utcDay(new Date())).evaluation : chosen;
     const gates = parseGates(o.min);
     if (o.estimate) {
       const ctx = cliContext(store, o.environment);
@@ -518,7 +528,14 @@ async function runCommand(ref: string, o: RunFlags): Promise<number> {
     for (const [file, report] of [[o.junit, out.reports.junit], [o.html, out.reports.html], [o.reportJson, out.reports.json], [o.markdown, out.reports.markdown]] as const) if (file && report && resolve(file) !== resolve(report)) copyFileSync(report, resolve(file));
     const matrix = await buildMetricMatrix(runResults(store, out.runId), { runId: out.runId, limit: 1 });
     const gateResults = checkGates(matrix, gates);
-    const comparison = o.baseline ? await compareMetricRuns(runResults(store, out.runId), runResults(store, o.baseline), { minDelta: Number(o.maxRegression) }) : undefined;
+    const baselineFile = o.baselineResults && existsSync(resolve(o.baselineResults)) ? resolve(o.baselineResults) : undefined;
+    if (o.baselineResults && !baselineFile && !o.json) console.log(dim(`No ${o.baselineResults} yet: this run is the baseline of the next one.`));
+    const earlier = async function* () {
+      yield* await readResultsFile(baselineFile!);
+    };
+    const comparison = o.baseline ? await compareMetricRuns(runResults(store, out.runId), runResults(store, o.baseline), { minDelta: Number(o.maxRegression) }) : baselineFile ? await compareMetricRuns(runResults(store, out.runId), earlier(), { minDelta: Number(o.maxRegression) }) : undefined;
+    // the pull-request comment gets the regression table under the metrics table (one function: the monitor's alert says the same)
+    if (comparison && o.markdown) appendFileSync(resolve(o.markdown), `\n${regressionMarkdown(comparison, { baseline: o.baseline ?? o.baselineResults!, costUsd: out.summary.judgeCostUsd, maxDrop: Number(o.maxRegression) })}`);
     const s = out.summary;
     if (o.json) printJson({ runId: out.runId, collectRunId: out.collectRunId, summary: s, metrics: matrix.aggregates, columns: matrix.columns, failures: matrix.failures, gates: gateResults, ...(comparison ? { comparison } : {}), reports: out.reports });
     else {

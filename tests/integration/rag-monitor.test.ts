@@ -114,3 +114,40 @@ describe('a monitor that runs a RAG evaluation', () => {
     expect(results.flatMap((x) => x.checks.filter((c) => c.type === 'faithfulness')).every((c) => (c.metadata as { na?: string }).na === 'budget')).toBe(true);
   }, 60_000);
 });
+
+describe('nightly RAG monitor options', () => {
+  const allTrue: MockRule[] = [{ match: 'faithfulness-v1', response: JSON.stringify({ reasoning: 'ok', items: [{ text: 'The clinic opens at 8am.', verdict: true, reason: '[doc-1]' }] }) }];
+  const setRules = (rules: MockRule[]) => store.saveProviders([{ id: 'judge', name: 'Mock judge', kind: 'mock', baseUrl: 'mock://local', defaultModel: 'mock-model', headers: [{ key: 'x-mock-rules', value: JSON.stringify(rules) }] }]);
+
+  it('a rotating sample scores only `limit` records and the result says which day it was', async () => {
+    const r = await run(base({ rotate: true, limit: 1, gates: { 'recall@3': 1 } }));
+    expect(r.total).toBe(1);
+    expect(r.rag?.sample).toMatch(/^day \d+: 1 of 2 records$/);
+  }, 60_000);
+
+  it('a budget stop is n/a with a note in the result, not a failed gate', async () => {
+    store.meta.clearJudgeCache();
+    const r = await run(base({ maxCostUsd: 0, gates: { 'recall@3': 1 } }));
+    expect(r.status).toBe('passed');
+    expect(r.rag?.budget).toMatch(/stopped at its budget: 2 scores are n\/a/);
+    expect(r.reason).toMatch(/^note: the judge stopped/);
+  }, 60_000);
+
+  it('a regression against the previous run fails with the metric, before and after; the alert text carries the means', async () => {
+    store.meta.clearJudgeCache();
+    setRules(allTrue);
+    const a = await run(base({ gates: { 'recall@3': 1 } }));
+    expect(a.rag?.means.join(' ')).toContain('faithfulness 1');
+    store.meta.clearJudgeCache();
+    setRules(RULES);
+    const b = await run(base({ gates: { 'recall@3': 1 }, baseline: a.runId, maxDrop: 0.05 }));
+    expect(b.status).toBe('failed');
+    expect(b.rag?.regressions?.[0]).toMatch(/^faithfulness 1 to 0\.75 \(-0\.25/);
+    expect(b.reason).toContain(`regressed against ${a.runId}: faithfulness`);
+    expect(b.rag?.table).toContain('### Against');
+    // 'previous' finds the run before it; the first run of a monitor has none yet
+    const c = await run(base({ id: 'mon-rag-2', name: 'Another night', gates: { 'recall@3': 1 }, baseline: 'previous' }));
+    expect(c.rag?.baseline).toMatch(/none yet/);
+    expect(c.status).toBe('passed');
+  }, 120_000);
+});

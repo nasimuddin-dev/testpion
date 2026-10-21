@@ -46,6 +46,17 @@ export interface CiTarget {
   ragRepeatTarget?: number;
   /** GitHub: post the run's metrics table as a comment on the pull request (the table is the run's markdown report). */
   ragComment?: boolean;
+  /**
+   * A NIGHTLY RAG job instead of a per-push one: a cron expression (UTC, "0 3 * * *"). GitHub gets `schedule:`, Azure
+   * `schedules:`, Jenkins `triggers { cron }`; GitLab schedules are made in the project's CI/CD > Schedules (the file runs on them).
+   */
+  ragNightly?: string;
+  /** Nightly: score this many records per run, a different set each UTC day (`--limit n --rotate`), so a month covers the dataset. */
+  ragSample?: number;
+  /** Nightly: compare with the previous night's results kept as the pipeline's artifact (GitHub, GitLab, Azure; Jenkins needs the Copy Artifact plugin) and fail on a drop. */
+  ragRegression?: boolean;
+  /** With a regression gate: the smallest drop that fails (default 0.05). */
+  ragMaxDrop?: number;
   /** One flow file: keep its run as an HTML timeline (test-results/timeline.html), also when the run fails. */
   timelineHtml?: boolean;
 }
@@ -107,7 +118,7 @@ export function ciCommand(o: CiConfigOptions, cli = 'testpion'): string {
   const out = ' -r console junit html -o test-results';
   if ([o.suite, o.collection, o.tests?.length, o.ragEvaluation].filter(Boolean).length > 1) throw new ApsError('ValidationError', 'Choose one of a suite, a collection, test paths or a RAG evaluation', { suggestions: [] });
   if (o.ragEvaluation)
-    return `${cli} rag run ${q(o.ragEvaluation)} -w ${q(ws)}${env}${o.ragPreset ? ` --preset ${q(o.ragPreset)}` : ''}${o.ragJudge ? ` --judge ${q(o.ragJudge)}` : ''}${(o.ragMin ?? []).map((m) => ` --min ${q(m)}`).join('')}${o.ragBaseline ? ` --baseline ${q(o.ragBaseline)}` : ''}${o.ragMaxCost !== undefined ? ` --max-cost ${o.ragMaxCost}` : ''}${o.ragCompat ? ` --compat ${q(o.ragCompat)}` : ''}${o.ragRepeatTarget ? ` --repeat-target ${Math.round(o.ragRepeatTarget)}` : ''} -o test-results --junit test-results/junit.xml --html test-results/report.html${o.ragComment ? ' --markdown test-results/rag-metrics.md' : ''}`;
+    return `${cli} rag run ${q(o.ragEvaluation)} -w ${q(ws)}${env}${o.ragPreset ? ` --preset ${q(o.ragPreset)}` : ''}${o.ragJudge ? ` --judge ${q(o.ragJudge)}` : ''}${(o.ragMin ?? []).map((m) => ` --min ${q(m)}`).join('')}${o.ragBaseline ? ` --baseline ${q(o.ragBaseline)}` : ''}${o.ragMaxCost !== undefined ? ` --max-cost ${o.ragMaxCost}` : ''}${o.ragCompat ? ` --compat ${q(o.ragCompat)}` : ''}${o.ragRepeatTarget ? ` --repeat-target ${Math.round(o.ragRepeatTarget)}` : ''}${o.ragSample ? ` --limit ${Math.round(o.ragSample)} --rotate` : ''}${o.ragRegression ? ` --baseline-results previous/results.jsonl${o.ragMaxDrop !== undefined ? ` --max-regression ${o.ragMaxDrop}` : ''}` : ''} -o test-results --junit test-results/junit.xml --html test-results/report.html${o.ragComment ? ' --markdown test-results/rag-metrics.md' : ''}`;
   const prod = o.allowProduction ? ' --allow-production' : '';
   const flowOptions = o.data !== undefined || !!o.envMatrix?.length || !!o.timelineHtml;
   if (flowOptions && (o.suite || o.collection || o.tests?.length !== 1)) throw new ApsError('ValidationError', 'Data, an environment matrix and a timeline run one flow file: give exactly one test file', { suggestions: [] });
@@ -141,6 +152,9 @@ export function ciConfig(store: WorkspaceStore, o: CiConfigOptions): CiConfig {
     if (/^\/|^[A-Za-z]:|(^|\/)\.\.(\/|$)/.test(rel)) throw new ApsError('ValidationError', `"${t}" is not a path inside tests/`, { suggestions: [] });
     if (!existsSync(store.path('tests', rel))) throw new ApsError('ValidationError', `No test file or folder "tests/${rel}"`, { suggestions: [] });
   }
+  if ((o.ragNightly || o.ragSample || o.ragRegression) && !o.ragEvaluation) throw new ApsError('ValidationError', 'A nightly job, a sample and a regression gate belong to a RAG evaluation', { suggestions: [] });
+  if (o.ragNightly !== undefined && !/^\s*\S+(\s+\S+){4}\s*$/.test(o.ragNightly)) throw new ApsError('ValidationError', `"${o.ragNightly}" is not a cron expression of 5 fields (minute hour day month weekday, UTC), e.g. "0 3 * * *"`, { suggestions: [] });
+  if (o.ragSample !== undefined && !(o.ragSample >= 1)) throw new ApsError('ValidationError', 'The sample is a number of records (1 or more)', { suggestions: [] });
   if (o.ragEvaluation) {
     try {
       findSavedEvaluation(store, o.ragEvaluation);
@@ -165,6 +179,8 @@ export function ciConfig(store: WorkspaceStore, o: CiConfigOptions): CiConfig {
   const spec = o.openapi?.trim() ? q(o.openapi.trim().replace(/^\.\//, '')) : undefined;
   const diffAgainst = (ref: string, tmp: string) =>
     `git fetch --depth 1 origin ${ref} && if git show FETCH_HEAD:${spec} > ${tmp}; then node "$TESTPION_CLI" openapi-diff ${tmp} ${spec} --fail-on-breaking; else echo "No ${spec} on the target branch yet"; fi`;
+  const cron = o.ragNightly?.trim();
+  const regress = !!(o.ragEvaluation && o.ragRegression);
   switch (o.provider) {
     case 'github':
       return {
@@ -177,9 +193,15 @@ export function ciConfig(store: WorkspaceStore, o: CiConfigOptions): CiConfig {
 name: API tests
 
 on:
-  push:
+${
+  cron
+    ? `  schedule:
+    - cron: '${cron}'   # UTC
+  workflow_dispatch:`
+    : `  push:
   pull_request:
-  workflow_dispatch:
+  workflow_dispatch:`
+}
 
 ${o.ragEvaluation && o.ragComment ? 'permissions:\n  contents: read\n  pull-requests: write\n\n' : ''}jobs:
   testpion:
@@ -206,6 +228,17 @@ ${
     ? `      - name: Start the system under test
         run: |
 ${startLines.map((l) => `          ${l}`).join('\n')}
+`
+    : ''
+}${
+  regress
+    ? `      - name: Fetch the previous run's results (the baseline)
+        continue-on-error: true
+        env:
+          GH_TOKEN: \${{ github.token }}
+        run: |
+          id=$(gh run list --workflow "$GITHUB_WORKFLOW" --branch "$GITHUB_REF_NAME" --status success --limit 1 --json databaseId --jq '.[0].databaseId')
+          if [ -n "$id" ]; then gh run download "$id" --name testpion-results --dir previous || true; fi
 `
     : ''
 }      - name: Run ${name}
@@ -236,14 +269,14 @@ ${
         localCommand,
         content: `# Runs the TestPion ${name} (generated by TestPion ${ENGINE_VERSION}).
 # Secrets: add ${secrets.length ? secrets.map((s) => s.name).join(', ') : 'none needed'} under Settings > CI/CD > Variables (masked).
-api-tests:
-  image: node:24
+${cron ? `# Nightly: GitLab runs it on a pipeline schedule. Create one under Build > Pipeline schedules with the cron ${cron} (UTC).\n` : ''}api-tests:
+${cron ? '  rules:\n    - if: $CI_PIPELINE_SOURCE == "schedule"\n    - if: $CI_PIPELINE_SOURCE == "web"\n' : ''}  image: node:24
   variables:
     TESTPION_HOME_DIR: /tmp/testpion
     TESTPION_CLI: /tmp/testpion/packages/cli/bin/testpion.js
   script:
     - (${install})
-${spec ? `    - if [ -n "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME" ]; then ${diffAgainst('"$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"', '/tmp/openapi.base')}; fi\n` : ''}${startLines.map((l) => `    - ${l}\n`).join('')}    - ${command}
+${spec ? `    - if [ -n "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME" ]; then ${diffAgainst('"$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"', '/tmp/openapi.base')}; fi\n` : ''}${startLines.map((l) => `    - ${l}\n`).join('')}${regress ? `    - 'mkdir -p previous && (curl --fail --silent --location --header "JOB-TOKEN: $CI_JOB_TOKEN" -o previous.zip "$CI_API_V4_URL/projects/$CI_PROJECT_ID/jobs/artifacts/$CI_DEFAULT_BRANCH/download?job=api-tests" && unzip -q -o previous.zip -d previous-unzipped && cp previous-unzipped/test-results/results.jsonl previous/) || echo "No earlier results yet"'\n` : ''}    - ${command}
   artifacts:
     when: always
     paths: [test-results]
@@ -260,8 +293,19 @@ ${spec ? `    - if [ -n "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME" ]; then ${diffAga
         localCommand,
         content: `# Runs the TestPion ${name} (generated by TestPion ${ENGINE_VERSION}).
 # Secrets: add ${secrets.length ? secrets.map((s) => s.name).join(', ') : 'none needed'} as secret pipeline variables.
-trigger:
-  - main
+${
+  cron
+    ? `trigger: none
+
+schedules:
+  - cron: '${cron}'   # UTC
+    displayName: Nightly
+    branches:
+      include: [main]
+    always: true`
+    : `trigger:
+  - main`
+}
 
 pool:
   vmImage: ubuntu-latest
@@ -290,6 +334,21 @@ ${startLines.map((l) => `      ${l}`).join('\n')}
     displayName: Start the system under test
 `
     : ''
+}${
+  regress
+    ? `  - task: DownloadPipelineArtifact@2
+    displayName: Fetch the previous run's results (the baseline)
+    continueOnError: true
+    inputs:
+      buildType: specific
+      project: $(System.TeamProject)
+      definition: $(System.DefinitionId)
+      buildVersionToDownload: latestFromBranch
+      branchName: refs/heads/main
+      artifactName: testpion-results
+      targetPath: previous
+`
+    : ''
 }  - script: ${command}
     displayName: Run ${name}
 ${secrets.length ? `    env:\n${secrets.map((s) => `      ${s.name}: $(${s.name})`).join('\n')}\n` : ''}  - task: PublishTestResults@2
@@ -312,7 +371,7 @@ ${secrets.length ? `    env:\n${secrets.map((s) => `      ${s.name}: $(${s.name}
         content: `// Runs the TestPion ${name} (generated by TestPion ${ENGINE_VERSION}). Needs Node.js 24 on the agent.
 pipeline {
   agent any
-  environment {
+${cron ? `  triggers { cron('${cron.replace(/'/g, "\\'")}') }   // the Jenkins server's time zone\n` : ''}${regress ? "  // Regression gate: copy 'previous/results.jsonl' from the last successful build with the Copy Artifact plugin before the API tests stage; without it the run has no baseline.\n" : ''}  environment {
     TESTPION_HOME_DIR = "\${WORKSPACE}/.testpion"
     TESTPION_CLI = "\${WORKSPACE}/.testpion/packages/cli/bin/testpion.js"
 ${secrets.map((s) => `    ${s.name} = credentials('${s.name}')   // ${s.description}`).join('\n')}
