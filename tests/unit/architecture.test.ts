@@ -107,7 +107,7 @@ describe('architecture', () => {
     // the ceiling is a little above each file's size when this test was written; shrinking it is always welcome
     const ceilings: Record<string, number> = {
       'packages/core/src/mcp-server/testpion-mcp.ts': 250,
-      'apps/desktop/backend/backend.ts': 1450,
+      'apps/desktop/backend/backend.ts': 950,
       'packages/cli/src/commands/data.ts': 1300,
       'packages/core/src/storage/workspace.ts': 900,
       'packages/core/src/model/types.ts': 900,
