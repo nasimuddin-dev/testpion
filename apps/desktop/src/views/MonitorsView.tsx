@@ -21,6 +21,7 @@ import { restoreFolder } from '../components/FolderList';
 import { openRef } from '../lib/open-ref';
 import type { Collection, CollectionNode, Library } from '../types';
 import { formatMs, timeAgo } from '../lib/format';
+import { RagMonitorFields } from '../components/rag/RagMonitorFields';
 import { Badge, Button, cx, Empty, Field, Input, Metric, MetricGrid, ModalOrPanel, PageHeader, Select, Split, Toggle, Tooltip } from '../components/ui';
 import { useCollectionTree } from '../lib/collections-store';
 import { useLibrary } from '../lib/library';
@@ -48,6 +49,10 @@ interface MonitorDraft {
   gates?: Record<string, number>;
   judgeSample?: number;
   judgeBudgetUsdPerDay?: number;
+  rotate?: boolean;
+  maxCostUsd?: number;
+  baseline?: string;
+  maxDrop?: number;
   environment?: string;
   everyMinutes: number;
   enabled: boolean;
@@ -570,7 +575,7 @@ function useTestFiles(): string[] {
 /** What a monitor's definition is, to tell unsaved edits from a change on disk (its results and status left out). */
 function monitorSnapshot(m: Partial<MonitorDraft>): string {
   const x = m as Record<string, unknown>;
-  return JSON.stringify(['name', 'folder', 'collectionId', 'selection', 'testFile', 'evaluation', 'limit', 'gates', 'judgeSample', 'judgeBudgetUsdPerDay', 'environment', 'everyMinutes', 'enabled', 'iterations', 'bail', 'webhook', 'maxP95Ms', 'minCertDays'].map((k) => x[k] ?? null));
+  return JSON.stringify(['name', 'folder', 'collectionId', 'selection', 'testFile', 'evaluation', 'limit', 'gates', 'judgeSample', 'judgeBudgetUsdPerDay', 'rotate', 'maxCostUsd', 'baseline', 'maxDrop', 'environment', 'everyMinutes', 'enabled', 'iterations', 'bail', 'webhook', 'maxP95Ms', 'minCertDays'].map((k) => x[k] ?? null));
 }
 
 function MonitorEditor({ draft, collections, onCancel, onSave }: { draft: MonitorDraft; collections: Collection[]; onCancel(): void; onSave(d: MonitorDraft): Promise<void> }) {
@@ -658,6 +663,8 @@ function MonitorEditor({ draft, collections, onCancel, onSave }: { draft: Monito
     if (target === 'file' && !d.testFile) return setError('Pick the test file to run.');
     if (target === 'collection' && !d.collectionId) return setError('Pick the collection to run.');
     if (target === 'evaluation' && !d.evaluation) return setError('Pick the RAG evaluation to run.');
+    if (target === 'evaluation' && d.rotate && !d.limit) return setError('A rotating sample needs the number of questions to score each night.');
+    if (target === 'evaluation' && d.baseline === '') return setError('Name the run to compare with, or choose the previous run.');
     const gates: Record<string, number> = {};
     for (const part of gatesText.split(/[,\n]/).map((x) => x.trim()).filter(Boolean)) {
       const m = /^([\w.@:-]+)\s*[=:]\s*(\d*\.?\d+)$/.exec(part);
@@ -665,7 +672,7 @@ function MonitorEditor({ draft, collections, onCancel, onSave }: { draft: Monito
       gates[m[1]!] = Number(m[2]);
     }
     // one target: the others are cleared
-    const none = { evaluation: undefined, limit: undefined, gates: undefined, judgeSample: undefined, judgeBudgetUsdPerDay: undefined };
+    const none = { evaluation: undefined, limit: undefined, gates: undefined, judgeSample: undefined, judgeBudgetUsdPerDay: undefined, rotate: undefined, maxCostUsd: undefined, baseline: undefined, maxDrop: undefined };
     const what =
       target === 'evaluation'
         ? { collectionId: '', selection: undefined, testFile: undefined, ...(Object.keys(gates).length ? { gates } : { gates: undefined }) }
@@ -775,6 +782,7 @@ function MonitorEditor({ draft, collections, onCancel, onSave }: { draft: Monito
                 <Input type="number" min={0} step={0.5} placeholder="no cap" value={d.judgeBudgetUsdPerDay ?? ''} onChange={(e) => setD({ ...d, judgeBudgetUsdPerDay: e.target.value ? Math.max(0, Number(e.target.value)) : undefined })} aria-label="Daily judge budget in USD" />
               </Field>
             </div>
+            <RagMonitorFields value={d} onChange={(v) => setD({ ...d, ...v })} evaluation={ragEvaluations.find((i) => i.id === d.evaluation || i.name === d.evaluation)?.data} />
           </>
         )}
         {target === 'collection' && (

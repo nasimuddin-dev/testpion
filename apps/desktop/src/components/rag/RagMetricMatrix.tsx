@@ -11,6 +11,7 @@ import type { OutputSpec } from '../output/output-core';
 import { RagByTag, RagCharts, RagCompare, RagPivot, RagRescoreDialog, type RunChoice } from './RagResultViews';
 import { RagSampleDetail } from './RagSampleDetail';
 import { RagCalibration } from './RagCalibration';
+import { RagTrend } from './RagTrend';
 
 const PAGE = 100;
 
@@ -57,7 +58,7 @@ export function RagMetricMatrix({
   providers?: ProviderConfig[];
   onRescored?(runId: string): void;
 }) {
-  const [view, setView] = useState<'samples' | 'tags' | 'charts' | 'compare' | 'pivot'>('samples');
+  const [view, setView] = useState<'samples' | 'tags' | 'charts' | 'compare' | 'pivot' | 'trend'>('samples');
   const [rescoring, setRescoring] = useState(false);
   const [calibrating, setCalibrating] = useState(false);
   const [query, setQuery] = useState('');
@@ -122,6 +123,7 @@ export function RagMetricMatrix({
             { value: 'charts', label: 'Charts', title: 'The distribution of every metric' },
             { value: 'compare', label: 'Compare', title: 'This run against another, metric by metric, with a paired bootstrap' },
             { value: 'pivot', label: 'Runs × metrics', title: 'Several runs side by side: the mean of every metric' },
+            ...(evaluation ? [{ value: 'trend' as const, label: 'Trend', title: 'The mean of every metric run by run; a change of judge or wording is marked' }] : []),
           ]}
         />
         <Button size="sm" icon={<RefreshCw size={12} />} onClick={() => setRescoring(true)} title="Score the stored answers again with other metrics or another judge: the RAG system is not called" data-rag-rescore-open>
@@ -140,6 +142,7 @@ export function RagMetricMatrix({
       {view === 'charts' && <RagCharts m={m} />}
       {view === 'compare' && <RagCompare runId={runId} runs={runs} />}
       {view === 'pivot' && <RagPivot runs={runs} />}
+      {view === 'trend' && evaluation && <RagTrend evaluation={evaluation} />}
       {calibrating && (
         <RagCalibration
           runId={runId}
