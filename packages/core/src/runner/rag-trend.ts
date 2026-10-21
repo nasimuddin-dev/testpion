@@ -98,7 +98,14 @@ async function pointOf(store: WorkspaceStore, run: { id: string; name: string; s
 export async function ragTrend(store: WorkspaceStore, q: RagTrendQuery): Promise<RagTrend> {
   const limit = Math.min(Math.max(q.runs ?? 30, 1), 200);
   let name: string | undefined;
-  if (q.evaluation) name = findSavedEvaluation(store, q.evaluation).name;
+  if (q.evaluation) {
+    // an evaluation that is not saved (a draft run in the window, one deleted since) still has runs under its name
+    try {
+      name = findSavedEvaluation(store, q.evaluation).name;
+    } catch {
+      name = q.evaluation;
+    }
+  }
   else if (!q.runIds?.length) throw new ApsError('ValidationError', 'Name an evaluation, or the runs to follow');
   const wanted = q.runIds ? new Set(q.runIds) : undefined;
   const since = q.since ? Date.parse(q.since) : undefined;

@@ -113,8 +113,10 @@ const steps = [
   step(
     'the-monitor-editor-has-the-nightly-fields',
     `await __t.view('Monitors'); await __t.sleep(900);
-     const add = [...document.querySelectorAll('button[aria-label]')].find((x) => /new monitor|add monitor/i.test(x.getAttribute('aria-label'))); if (!add) return 'NO NEW MONITOR';
-     await __t.real.click(add); await __t.sleep(800);
+     const hb = [...document.querySelectorAll('[aria-label^="More actions for Monitors"]')].find((x) => x.offsetParent); if (!hb) return 'NO HEADER MENU';
+     hb.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, pointerType: 'mouse' })); await __t.sleep(600);
+     const add = await __t.waitFor(() => [...document.querySelectorAll('[role=menuitem]')].find((x) => /^New monitor/.test(x.textContent.trim())), 3000); if (!add) return 'NO NEW MONITOR ITEM';
+     add.click(); await __t.sleep(800);
      ${setSelect(`document.querySelector('select[aria-label="What the monitor runs"]')`, 'A RAG evaluation')}
      await __t.sleep(500);
      ${setSelect(`document.querySelector('select[aria-label="RAG evaluation"]')`, 'Clinic nightly')}
@@ -136,7 +138,7 @@ const steps = [
     `const b = vis('button').find((x) => x.textContent.trim() === 'Create monitor'); if (!b) return 'NO SAVE';
      await __t.real.click(b);
      let m;
-     for (let i = 0; i < 30 && !m; i++) { await __t.sleep(400); m = (await window.aps.invoke('monitors.list')).find?.((x) => x.name === 'Clinic nightly check') ?? (await window.aps.invoke('monitors.list')).monitors?.find((x) => x.name === 'Clinic nightly check'); }
+     for (let i = 0; i < 30 && !m; i++) { await __t.sleep(400); m = (await window.aps.invoke('monitor.list')).find((x) => x.name === 'Clinic nightly check'); }
      if (!m) return 'NOT SAVED';
      return 'rotate: ' + m.rotate + ' | limit: ' + m.limit + ' | maxCostUsd: ' + m.maxCostUsd + ' | baseline: ' + m.baseline + ' | maxDrop: ' + m.maxDrop;`,
   ),
