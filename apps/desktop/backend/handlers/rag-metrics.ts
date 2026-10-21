@@ -6,7 +6,7 @@
  */
 import {
   ApsError,
-  buildMetricMatrix,
+  ragMatrix,
   compileCustomMetric,
   listMetricFiles,
   parseCustomMetric,
@@ -14,7 +14,6 @@ import {
   readMetricFile,
   removeMetricFile,
   runMetricExamples,
-  runResults,
   stringifyYaml,
   syncCustomMetrics,
   writeMetricFile,
@@ -36,7 +35,9 @@ export function ragMetricHandlers(be: Backend): Handlers {
       return {
         kinds: CUSTOM_METRIC_KINDS,
         metrics: listMetricFiles(be.ws).map((f) => {
-          const p = parseCustomMetric(f.text, { fileId: f.id, known: k });
+          // the sync parsed every valid file already (and keeps it while the folder is unchanged): a file is read once, not twice
+          const parsed = sync.parsed?.get(f.id);
+          const p = parsed ? { metric: parsed, problems: [] } : parseCustomMetric(f.text, { fileId: f.id, known: k });
           return {
             id: f.id,
             metric: `custom/${f.id}`,
@@ -105,7 +106,7 @@ export function ragMetricHandlers(be: Backend): Handlers {
     'rag.pivot': async ({ runIds, labels }: { runIds: string[]; labels?: Record<string, string> }) => {
       const runs = [];
       for (const runId of (runIds ?? []).slice(0, 12)) {
-        const matrix = await buildMetricMatrix(runResults(be.ws, runId), { runId, limit: 1 });
+        const matrix = await ragMatrix(be.ws, runId, { limit: 1, ci: false });
         runs.push({ runId, label: labels?.[runId] ?? runId, matrix });
       }
       return pivotRuns(runs);

@@ -162,6 +162,9 @@ function finish(e: Omit<RunEstimate, 'costUsd' | 'target'>, expected: number | u
 
 const round6 = (n: number) => Math.round(n * 1e6) / 1e6;
 
+/** Stored samples are scored in chunks of this many, with a yield between (an estimate of 5,000 samples is seconds of work). */
+const EXACT_CHUNK = 200;
+
 function capsFix(caps: RunEstimate['caps'], high: number, j?: RagJudgeSetup): RunEstimate['caps'] {
   const exceeds = [...caps.exceeds];
   if (caps.dailyBudgetLeftUsd !== undefined && high > caps.dailyBudgetLeftUsd) exceeds.push(`the daily budget ($${caps.dailyBudgetLeftUsd} left today; the estimate may reach $${high})`);
@@ -170,24 +173,27 @@ function capsFix(caps: RunEstimate['caps'], high: number, j?: RagJudgeSetup): Ru
 }
 
 async function exactEstimateImpl(
-  dry: ReturnType<typeof dryHost>,
+  dry: ReturnType<typeof dryHost> & { tally: NonNullable<RagJudgeHost['tally']> },
   configs: CheckConfig[],
   stored: TrySample[],
   i: { samples: number; judge?: RagJudgeSetup; targetRepeats?: number; hasTarget?: boolean; evaluators: CheckConfig[] },
   base: { notes: string[]; unknown: string[]; shape: SampleShape; basis: RunEstimate['basis']; lines: MetricLine[]; judge: RunEstimate['judge']; judgeProblem?: string; pricing?: { cost: (u: { inputTokens: number; outputTokens: number }) => number | undefined }; store?: WorkspaceStore },
   host: RagJudgeHost,
 ): Promise<RunEstimate> {
-  for (const s of stored) await scoreRagSample(configs, contextOfSample(s, { judge: i.judge, providers: host.deps.providers, ragJudge: dry }));
-  const calls = dry.dry;
-  const inputTokens = sum(calls.map((c) => c.preview.estimate.inputTokens));
+  for (const [at, s] of stored.entries()) {
+    await scoreRagSample(configs, contextOfSample(s, { judge: i.judge, providers: host.deps.providers, ragJudge: dry, workspaceRoot: base.store?.root }));
+    // 5,000 samples are 5,000 prompt builds: let the rest of the process (the window's other calls) run between chunks
+    if ((at + 1) % EXACT_CHUNK === 0) await new Promise<void>((r) => setImmediate(r));
+  }
+  // the dry host only counted its calls: a prompt is several KB and 50,000 of them were once kept until the estimate ended
+  const { calls, cached, inputTokens, freshInputTokens: freshIn } = dry.tally;
   // a verdict is about 250 tokens: the dry run has no answer to count
-  const outputTokens = calls.length * 250;
-  const total = { llmCalls: calls.length, embedCalls: 0, inputTokens, outputTokens };
-  const fresh = calls.filter((c) => !c.cached);
-  const freshIn = sum(fresh.map((c) => c.preview.estimate.inputTokens));
-  const expected = base.pricing ? base.pricing.cost({ inputTokens: freshIn, outputTokens: fresh.length * 250 }) : undefined;
-  const caps = capsOf(base.store, host, i.judge, { ...total, llmCalls: fresh.length }, expected);
-  return finish({ samples: stored.length, basis: 'stored', shape: base.shape, metrics: base.lines, judge: base.judge, total, cache: { hits: calls.length - fresh.length, of: calls.length, exact: true }, caps, notes: base.notes, unknown: base.unknown }, expected, i);
+  const outputTokens = calls * 250;
+  const total = { llmCalls: calls, embedCalls: 0, inputTokens, outputTokens };
+  const freshCalls = calls - cached;
+  const expected = base.pricing ? base.pricing.cost({ inputTokens: freshIn, outputTokens: freshCalls * 250 }) : undefined;
+  const caps = capsOf(base.store, host, i.judge, { ...total, llmCalls: freshCalls }, expected);
+  return finish({ samples: stored.length, basis: 'stored', shape: base.shape, metrics: base.lines, judge: base.judge, total, cache: { hits: cached, of: calls, exact: true }, caps, notes: base.notes, unknown: base.unknown }, expected, i);
 }
 
 /** Same as `estimateRagRun`, but with stored samples it builds every prompt for real (async). */
@@ -195,7 +201,7 @@ export async function estimateRagRunExact(host: RagJudgeHost, store: WorkspaceSt
   if (!i.stored?.length) return estimateRagRun(host, store, i);
   const base = estimateRagRun(host, store, { ...i, stored: undefined, samples: i.stored.length, shape: sampleShapeOf(i.stored) });
   if (!base.judge) return { ...base, basis: 'stored' };
-  const dry = dryHost(host);
+  const dry = dryHost(host, { tally: true }) as ReturnType<typeof dryHost> & { tally: NonNullable<RagJudgeHost['tally']> };
   const pricing = host.deps.providers.resolveModel({ provider: base.judge.provider, name: base.judge.model });
   const price = (u: { inputTokens: number; outputTokens: number }) => estimateCost(host.deps.settings.pricing ?? [], pricing.provider.config, pricing.model, { ...u, totalTokens: u.inputTokens + u.outputTokens }).cost;
   return exactEstimateImpl(dry, i.evaluators, i.stored, i as never, { notes: base.notes, unknown: base.unknown, shape: base.shape, basis: 'stored', lines: base.metrics, judge: base.judge, pricing: { cost: price }, store }, host);

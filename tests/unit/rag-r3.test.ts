@@ -199,15 +199,17 @@ describe('a production database is asked about once', () => {
   const cfg = { type: 'datacompy-score', inputs: 'sql', database: { path: 'shop.db', production: true } };
 
   it('the SQL metric refuses without consent, with the production guard’s question; with consent it goes on to the database', async () => {
-    const refused = await run(cfg, { text: 'SELECT 1', expected: 'SELECT 1' });
+    // (a SQL metric runs inside a workspace only: without a folder it would refuse before the question)
+    const c = { text: 'SELECT 1', expected: 'SELECT 1', workspaceRoot: tmpdir() };
+    const refused = await run(cfg, c);
     expect(refused.passed).toBe(false);
     expect(refused.message).toMatch(/is a production environment/);
     expect(refused.message).toMatch(/--allow-production/);
     // consent given: the guard lets it through, and the missing file is what stops it now
-    const allowed = await allowProductionFor(true, () => run(cfg, { text: 'SELECT 1', expected: 'SELECT 1' }));
+    const allowed = await allowProductionFor(true, () => run(cfg, c));
     expect(allowed.message).not.toMatch(/is a production environment/);
     // a database that is not marked is never asked about
-    const plain = await run({ ...cfg, database: { path: 'shop.db' } }, { text: 'SELECT 1', expected: 'SELECT 1' });
+    const plain = await run({ ...cfg, database: { path: 'shop.db' } }, c);
     expect(plain.message).not.toMatch(/is a production environment/);
   });
 });

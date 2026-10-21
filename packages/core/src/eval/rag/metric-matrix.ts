@@ -77,7 +77,7 @@ export interface MetricMatrix {
   byTag: Array<{ tag: string; n: number; means: Array<number | null> }>;
 }
 
-interface Col extends MetricColumn {
+export interface MatrixColumnData extends MetricColumn {
   scores: Float32Array;
   /** 0 absent, 1 scored, 2 n/a, 3 failed without a score */
   state: Uint8Array;
@@ -114,14 +114,62 @@ export interface MatrixQuery {
   runId?: string;
   /** Every row, not a page (an export). */
   all?: boolean;
+  /** `false`: leave the 95% intervals out (a window asks for the visible columns' with `matrixIntervals`). Default: every column's. */
+  ci?: boolean;
   /** Scores of another tool for the same samples (a Ragas result table), shown as columns beside this run's. */
   external?: ExternalScores;
 }
 
-export async function buildMetricMatrix(results: AsyncIterable<TestResult>, q: MatrixQuery = {}): Promise<MetricMatrix> {
-  const cols = new Map<string, Col>();
+/**
+ * Everything about a run that does not depend on the page, the sort, the filter or the pass marks: the typed columns, the
+ * rows' metadata and (computed once, when first asked) each column's statistics, intervals and the per-tag means. A host that
+ * answers many cuts of one run (the window pages, sorts, filters and edits pass marks) builds this once and calls
+ * `cutMatrix` for each; `buildMetricMatrix` is both in one call.
+ */
+export interface MatrixBase {
+  readonly n: number;
+  readonly meta: Array<Omit<MatrixRow, 'cells'>>;
+  /** The columns in display order. */
+  readonly order: MatrixColumnData[];
+  readonly columns: MetricColumn[];
+  readonly groups: MetricMatrix['groups'];
+  readonly failures: MetricMatrix['failures'];
+  /** Work counters, for tests and profiling: metric lookups made while building, bootstrap draws made so far. */
+  readonly work: { resolves: number; bootstrapDraws: number };
+  /** @internal memoised per column */
+  readonly stats: Map<string, ColStats>;
+  /** @internal */
+  byTag?: MetricMatrix['byTag'];
+  /** @internal */
+  readonly cols: Map<string, MatrixColumnData>;
+}
+
+/** What a column's scores say, whatever the pass mark: sorted values are not kept, only what the cuts read. */
+interface ColStats {
+  /** The scored values, rounded as they are shown. */
+  xs: Float64Array;
+  na: number;
+  mean?: number;
+  median?: number;
+  p10?: number;
+  distribution: number[];
+  ci?: [number, number] | null;
+}
+
+export async function buildMatrixBase(results: AsyncIterable<TestResult>, q: { external?: ExternalScores } = {}): Promise<MatrixBase> {
+  const cols = new Map<string, MatrixColumnData>();
   const meta: Array<Omit<MatrixRow, 'cells'>> = [];
   const cap = 4096;
+  const work = { resolves: 0, bootstrapDraws: 0 };
+  // a check type is looked up in the catalogue once, not once per cell (84 metrics × 5,000 samples was 420,000 lookups)
+  const resolved = new Map<string, ReturnType<typeof resolveMetric>>();
+  const resolve = (type: string) => {
+    if (!resolved.has(type)) {
+      work.resolves++;
+      resolved.set(type, resolveMetric(type));
+    }
+    return resolved.get(type);
+  };
   // cells are collected per row first (a column can appear late) and then laid into the typed arrays
   const raw: Array<Map<string, { score?: number; na?: string; failed?: string; threshold?: number }>> = [];
   for await (const r of results) {
@@ -130,7 +178,7 @@ export async function buildMetricMatrix(results: AsyncIterable<TestResult>, q: M
     const row = new Map<string, { score?: number; na?: string; failed?: string; threshold?: number }>();
     for (const c of r.checks ?? []) {
       const key = c.name || c.type;
-      const res = resolveMetric(c.type);
+      const res = resolve(c.type);
       if (!cols.has(key) && cols.size < cap) {
         cols.set(key, {
           key,
@@ -179,10 +227,10 @@ export async function buildMetricMatrix(results: AsyncIterable<TestResult>, q: M
   if (q.external) {
     const at = matchExternal(meta.map((m) => m.question), q.external);
     for (const name of q.external.metrics) {
-      const hit = resolveMetric(name);
+      const hit = resolve(name);
       const key = `${name} (${q.external.source})`;
       if (cols.has(key)) continue;
-      const c: Col = {
+      const c: MatrixColumnData = {
         key,
         metric: hit?.def.id ?? name,
         label: key,
@@ -209,10 +257,84 @@ export async function buildMetricMatrix(results: AsyncIterable<TestResult>, q: M
     }
   }
 
-  const thresholds = q.thresholds ?? {};
   const order = [...cols.values()].sort((a, b) => groupRank(a.group) - groupRank(b.group));
   const columns: MetricColumn[] = order.map(({ scores: _s, state: _t, reasons: _r, ...c }) => c);
-  const cell = (c: Col, i: number): MatrixCell | null => {
+  const counts = new Map<FailureClass, number>();
+  for (const m of meta) if (m.failure) counts.set(m.failure.class, (counts.get(m.failure.class) ?? 0) + 1);
+  const failures = FAILURE_CLASSES.filter((f) => counts.has(f.id)).map((f) => ({ class: f.id, label: f.label, count: counts.get(f.id)! }));
+  const groups: MetricMatrix['groups'] = [];
+  for (const c of columns) {
+    const label = c.group === 'other' ? 'Other' : c.group === 'external' ? `Scores of ${c.external?.source ?? 'another tool'}` : METRIC_GROUPS.find((g) => g.id === c.group)!.label;
+    const last = groups[groups.length - 1];
+    if (last && last.id === c.group) last.columns++;
+    else groups.push({ id: c.group, label, columns: 1 });
+  }
+  return { n, meta, order, columns, groups, failures, work, stats: new Map(), cols };
+}
+
+/** The statistics of a column that do not depend on a pass mark (computed once per column of a base). */
+function statsOf(base: MatrixBase, c: MatrixColumnData): ColStats {
+  const hit = base.stats.get(c.key);
+  if (hit) return hit;
+  const scored: number[] = [];
+  let na = 0;
+  for (let i = 0; i < base.n; i++) {
+    if (c.state[i] === 1) scored.push(round(c.scores[i]!, 4));
+    else if (c.state[i] === 2) na++;
+  }
+  const distribution = new Array<number>(10).fill(0);
+  for (const x of scored) distribution[Math.min(9, Math.max(0, Math.floor(x * 10)))]!++;
+  const xs = Float64Array.from(scored);
+  const sorted = Float64Array.from(xs).sort();
+  const q = (p: number) => (sorted.length ? sorted[Math.min(sorted.length - 1, Math.max(0, Math.floor(p * (sorted.length - 1) + 1e-9)))]! : undefined);
+  const mean = xs.length ? scored.reduce((a, b) => a + b, 0) / xs.length : undefined;
+  const s: ColStats = { xs, na, distribution, ...(mean !== undefined ? { mean: round(mean, 4), median: round(q(0.5)!, 4), p10: round(q(0.1)!, 4) } : {}) };
+  base.stats.set(c.key, s);
+  return s;
+}
+
+/**
+ * The seeded bootstrap 95% interval of a column's mean, computed on the first ask and kept. The rounds shrink as the samples
+ * grow (1,000 up to 2,000 samples, then 200, never more than about 2 million draws a column), so asking for every column of a
+ * big run is never the cost of showing one page.
+ */
+function intervalOf(base: MatrixBase, c: MatrixColumnData): [number, number] | undefined {
+  const s = statsOf(base, c);
+  if (s.ci !== undefined) return s.ci ?? undefined;
+  const xs = s.xs;
+  if (xs.length < 3) return void (s.ci = null);
+  const rnd = mulberry32(0x5eed + xs.length);
+  const rounds = xs.length > 2000 ? 200 : 1000;
+  const means = new Float64Array(rounds);
+  for (let b = 0; b < rounds; b++) {
+    let sum = 0;
+    for (let k = 0; k < xs.length; k++) sum += xs[Math.floor(rnd() * xs.length)]!;
+    means[b] = sum / xs.length;
+  }
+  base.work.bootstrapDraws += rounds * xs.length;
+  means.sort();
+  const sorted = Array.from(means);
+  s.ci = [round(quantile(sorted, 0.025)!, 4), round(quantile(sorted, 0.975)!, 4)];
+  return s.ci;
+}
+
+/** The 95% intervals of some columns (by key), for a window that shows the first page without them and asks for the visible columns. */
+export function matrixIntervals(base: MatrixBase, keys: string[]): Record<string, [number, number]> {
+  const out: Record<string, [number, number]> = {};
+  for (const key of keys) {
+    const c = base.cols.get(key);
+    const ci = c ? intervalOf(base, c) : undefined;
+    if (ci) out[key] = ci;
+  }
+  return out;
+}
+
+/** One cut of a base: the pass marks, the filter, the sort and the page applied. Cheap: nothing is read from disk or recomputed but what a pass mark changes. */
+export function cutMatrix(base: MatrixBase, q: MatrixQuery = {}): MetricMatrix {
+  const { meta, order, columns, groups, failures } = base;
+  const n = base.n;
+  const thresholds = q.thresholds ?? {};
+  const cell = (c: MatrixColumnData, i: number): MatrixCell | null => {
     const s = c.state[i];
     if (!s) return null;
     if (s === 1) {
@@ -222,54 +344,30 @@ export async function buildMetricMatrix(results: AsyncIterable<TestResult>, q: M
     return s === 2 ? { na: c.reasons.get(i) ?? 'n/a' } : { failed: c.reasons.get(i) ?? 'failed' };
   };
 
-  // aggregates over every sample, whatever the page
+  // aggregates over every sample, whatever the page; only the pass rate depends on the (edited) pass marks
+  const withCi = q.ci !== false;
   const aggregates: ColumnAggregate[] = order.map((c) => {
-    const xs: number[] = [];
-    let na = 0;
+    const s = statsOf(base, c);
     let pass = 0;
     let judged = 0;
-    for (let i = 0; i < n; i++) {
-      if (c.state[i] === 1) {
-        const v = round(c.scores[i]!, 4);
-        xs.push(v);
-        const p = passes(c, v, thresholds);
-        if (p !== undefined) {
-          judged++;
-          if (p) pass++;
-        }
-      } else if (c.state[i] === 2) na++;
-    }
-    const dist = new Array<number>(10).fill(0);
-    for (const x of xs) dist[Math.min(9, Math.max(0, Math.floor(x * 10)))]!++;
-    const sorted = [...xs].sort((a, b) => a - b);
-    const mean = xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : undefined;
-    let ci: [number, number] | undefined;
-    if (xs.length >= 3) {
-      const rnd = mulberry32(0x5eed + xs.length);
-      const rounds = xs.length > 2000 ? 200 : 1000;
-      const means: number[] = [];
-      for (let b = 0; b < rounds; b++) {
-        let sum = 0;
-        for (let k = 0; k < xs.length; k++) sum += xs[Math.floor(rnd() * xs.length)]!;
-        means.push(sum / xs.length);
+    for (let k = 0; k < s.xs.length; k++) {
+      const p = passes(c, s.xs[k]!, thresholds);
+      if (p !== undefined) {
+        judged++;
+        if (p) pass++;
       }
-      means.sort((a, b) => a - b);
-      ci = [round(quantile(means, 0.025)!, 4), round(quantile(means, 0.975)!, 4)];
     }
+    const ci = withCi ? intervalOf(base, c) : undefined;
     return {
       key: c.key,
-      n: xs.length,
-      naCount: na,
-      ...(mean !== undefined ? { mean: round(mean, 4), median: round(quantile(sorted, 0.5)!, 4), p10: round(quantile(sorted, 0.1)!, 4) } : {}),
+      n: s.xs.length,
+      naCount: s.na,
+      ...(s.mean !== undefined ? { mean: s.mean, median: s.median, p10: s.p10 } : {}),
       ...(judged ? { passRate: round(pass / judged, 4) } : {}),
       ...(ci ? { ci } : {}),
-      distribution: dist,
+      distribution: s.distribution,
     };
   });
-
-  const counts = new Map<FailureClass, number>();
-  for (const m of meta) if (m.failure) counts.set(m.failure.class, (counts.get(m.failure.class) ?? 0) + 1);
-  const failures = FAILURE_CLASSES.filter((f) => counts.has(f.id)).map((f) => ({ class: f.id, label: f.label, count: counts.get(f.id)! }));
 
   // the page: filtered, sorted, cut
   let idx = meta.map((_, i) => i);
@@ -280,41 +378,44 @@ export async function buildMetricMatrix(results: AsyncIterable<TestResult>, q: M
   }
   if (q.sort === 'failure') idx.sort((a, b) => Number(!!meta[b]!.failure) - Number(!!meta[a]!.failure));
   else if (q.sort) {
-    const c = cols.get(q.sort);
+    const c = base.cols.get(q.sort);
     if (c) idx.sort((a, b) => (c.state[a] === 1 ? c.scores[a]! : 2) - (c.state[b] === 1 ? c.scores[b]! : 2));
   }
   const offset = Math.max(0, q.offset ?? 0);
   const limit = q.all ? Math.max(1, idx.length) : Math.min(Math.max(1, q.limit ?? 100), 500);
   const rows: MatrixRow[] = idx.slice(offset, offset + limit).map((i) => ({ ...meta[i]!, cells: order.map((c) => cell(c, i)) }));
-  const groups: MetricMatrix['groups'] = [];
-  for (const c of columns) {
-    const label = c.group === 'other' ? 'Other' : c.group === 'external' ? `Scores of ${c.external?.source ?? 'another tool'}` : METRIC_GROUPS.find((g) => g.id === c.group)!.label;
-    const last = groups[groups.length - 1];
-    if (last && last.id === c.group) last.columns++;
-    else groups.push({ id: c.group, label, columns: 1 });
-  }
+  return { ...(q.runId ? { runId: q.runId } : {}), columns, rows, total: idx.length, aggregates, groups, failures, byTag: byTagOf(base) };
+}
+
+/** The mean of every column per tag, the biggest tags first (independent of pass marks, so computed once). */
+function byTagOf(base: MatrixBase): MetricMatrix['byTag'] {
+  if (base.byTag) return base.byTag;
   const tagRows = new Map<string, number[]>();
-  meta.forEach((m, i) => {
+  base.meta.forEach((m, i) => {
     for (const t of m.tags ?? []) {
       const list = tagRows.get(t);
       if (list) list.push(i);
       else tagRows.set(t, [i]);
     }
   });
-  const byTag = [...tagRows.entries()]
+  base.byTag = [...tagRows.entries()]
     .sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]))
     .slice(0, 50)
     .map(([tag, rowsOfTag]) => ({
       tag,
       n: rowsOfTag.length,
-      means: order.map((c) => {
+      means: base.order.map((c) => {
         let sum = 0;
         let count = 0;
         for (const i of rowsOfTag) if (c.state[i] === 1) (sum += c.scores[i]!), count++;
         return count ? round(sum / count, 4) : null;
       }),
     }));
-  return { ...(q.runId ? { runId: q.runId } : {}), columns, rows, total: idx.length, aggregates, groups, failures, byTag };
+  return base.byTag;
+}
+
+export async function buildMetricMatrix(results: AsyncIterable<TestResult>, q: MatrixQuery = {}): Promise<MetricMatrix> {
+  return cutMatrix(await buildMatrixBase(results, { external: q.external }), q);
 }
 
 const groupRank = (g: string) => {

@@ -48,6 +48,28 @@ export function listMetricFiles(store: Dir): MetricFileInfo[] {
   return out;
 }
 
+/**
+ * A fingerprint of the folder: every metric file's name, size and modification time (to the nanosecond), without reading a
+ * file. It is the same string for the same folder, so a host that has registered these files already can skip reading them
+ * again (every request send, run and estimate asks the engine for a context, which syncs the metrics).
+ */
+export function metricFilesStamp(store: Dir): string {
+  const dir = store.path(METRICS_DIR);
+  if (!existsSync(dir)) return '';
+  const parts: string[] = [];
+  for (const name of readdirSync(dir).sort()) {
+    const m = /^(.+)\.ya?ml$/i.exec(name);
+    if (!m || m[1] === 'presets') continue;
+    try {
+      const st = statSync(join(dir, name), { bigint: true });
+      if (st.isFile()) parts.push(`${name}:${st.size}:${st.mtimeNs}`);
+    } catch {
+      /* a file that vanished while listing */
+    }
+  }
+  return parts.join('|');
+}
+
 export function readMetricFile(store: Dir, id: string): MetricFileInfo | undefined {
   checkId(id);
   const file = fileOf(store, id);

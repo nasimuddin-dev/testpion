@@ -1,4 +1,5 @@
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { homedir, tmpdir } from 'node:os';
 import type { AppSettings, Collection, Environment, Library, McpServerConfig, ProviderConfig, Trace, Workspace } from '../model/types.js';
@@ -467,6 +468,13 @@ export class WorkspaceStore {
     return readJson<Trace>(this.path(m.path));
   }
 
+  /** `loadTrace` without blocking the process (a search that reads up to 300 trace files). */
+  async loadTraceAsync(id: string): Promise<Trace | undefined> {
+    const m = this.meta.getTrace(id);
+    if (!m) return undefined;
+    return JSON.parse(await readFile(this.path(m.path), 'utf8')) as Trace;
+  }
+
   /* baselines */
   listBaselines(): Array<{ name: string; createdAt: string; runId: string; tests: number }> {
     const dir = this.path('baselines');
@@ -547,22 +555,8 @@ export interface WorkspaceInfo {
   updatedAt: string;
 }
 
-export function defaultAppDir(): string {
-  // earlier names of the variable: FLUXPION_HOME (0.5), PROTOPION_HOME (0.4), PROTOLENS_HOME (0.2–0.3), APS_HOME (0.1)
-  const explicit = process.env.TESTPION_HOME || process.env.FLUXPION_HOME || process.env.PROTOPION_HOME || process.env.PROTOLENS_HOME || process.env.APS_HOME;
-  if (explicit) return explicit;
-  const dir = join(homedir(), '.testpion');
-  // one-time move of the data folder of earlier versions: ".fluxpion" (0.5), ".protopion" (0.4), ".protolens" (0.2–0.3), ".aipstudio" (0.1)
-  for (const legacy of [join(homedir(), '.fluxpion'), join(homedir(), '.protopion'), join(homedir(), '.protolens'), join(homedir(), '.aipstudio')]) {
-    if (existsSync(dir) || !existsSync(legacy)) continue;
-    try {
-      renameSync(legacy, dir);
-    } catch {
-      return legacy; // in use or not permitted: keep using it rather than losing data
-    }
-  }
-  return dir;
-}
+export { defaultAppDir } from './app-dir.js';
+import { defaultAppDir } from './app-dir.js';
 
 /** Manages the list of workspaces and global settings under the app directory. */
 export class WorkspaceManager {

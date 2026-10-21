@@ -263,7 +263,7 @@ Report in Markdown: a one-line summary, then availability per monitor, the slowe
 1. rag_list_targets, then rag_probe the evaluation's target with one real question: check that the answer and the retrieved contexts are read (a mapping that finds no contexts makes every context metric fail).
 2. rag_metrics to see what can be measured. Free metrics (kind deterministic) need no model; judged ones need a judge, which is the evaluation's or the AI settings' large model, never a guess. Pick the metrics for the question being asked (the preset rag-triad is a good start).
 3. rag_try_metric with dry_run on one sample for each judged metric you chose, to see exactly what the judge would receive.
-4. rag_estimate: judge calls, tokens, cost range, caps. Tell the user the cost before running anything that spends money, and pass max_cost_usd to rag_run.
+4. rag_estimate: judge calls, tokens, cost range, caps. Tell the user the cost before running anything that spends money, and pass max_cost_usd to rag_run. rag_probe, rag_run, rag_rescore and a real rag_try_metric send requests or spend judge tokens, so each asks for confirm: true: ask the user, then repeat the call with it.
 5. rag_run with the metrics and gates (min: ["faithfulness=0.8"]${a.baseline ? `, baseline: "${a.baseline}"` : ''}). Read failures: it says why samples failed (retrieval miss, unfaithful, false refusal …), so fix the retriever or the generator accordingly, not both at once.
 6. To try another judge or a metric on the same answers use rag_rescore (no new calls to the RAG system); to see what a change did use rag_compare.
 

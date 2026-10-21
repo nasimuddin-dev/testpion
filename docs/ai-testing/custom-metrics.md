@@ -17,8 +17,11 @@ The file is plain YAML under git, so a metric is reviewed, branched and merged l
   its own examples before showing it, and says when the draft does not agree with them. Nothing is written until you accept.
 * **The terminal**: `testpion rag metric new <id> --kind rule`, `new <id> --from-description "…"` (the AI drafts it), `list`, `validate <id> --examples`,
   `rag metric test <id> --sample file.json`, `export` and `import` (copy a metric to another workspace).
-* **An agent**: the MCP tools `rag_list_custom_metrics`, `rag_validate_metric` (checks a file and runs its examples; this spends the
-  judge for a judged kind) and `rag_save_custom_metric` (replacing an existing file asks for confirmation).
+* **An agent**: the MCP tools `rag_list_custom_metrics`, `rag_validate_metric` (checks a file and runs its examples; with `run_examples`
+  this spends the judge for a judged kind, so it asks to confirm) and `rag_save_custom_metric` (replacing an existing file asks for confirmation).
+
+The files are read again only when the `metrics/` folder changed (a file added, removed or saved, here or outside the app): every request, run and
+estimate used to read and parse all of them. The metric lists in the window reload only for a change to a metric file.
 
 ## The kinds {#kinds}
 
