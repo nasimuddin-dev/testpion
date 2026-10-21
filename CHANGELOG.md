@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Refactor and cleanup (B-41)
+
+- **Cancelling a save dialog no longer downloads the file anyway.** Exporting a collection, a workspace or an environment goes through the one save path: written where you choose, downloaded in a browser, nothing at all when you cancel.
+- Under the hood, no behaviour change: the 60-file import cycle is cut, dead code deleted, a check type registered twice is an error, MCP tool modules live in one folder, the biggest files are split, and architecture tests keep it so. The old workspace export (`workspace.export`, `storage/workspace-bundle.ts`) is deprecated in favour of bundles and stays for two more releases.
+
 ### Security hardening
 
 - **MCP `save_output` only writes under `exports/`.** `save_to` is an allow-list now: a new file under `exports/` or `.local/exports/`, never over a file, never in a hidden folder (`.husky/`, `.vscode/`) or as a program file, and it asks for confirmation (`confirm: true`). `export_bundle` follows the same rule (a numbered name instead of overwriting the default file).
