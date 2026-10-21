@@ -19,16 +19,16 @@ const VERDICT_OUT = 250;
 const JUDGE_PROMPT = 330;
 const tok = (s: string) => Math.ceil(s.length / 4);
 
-export function estimateTestset(host: RagJudgeHost, store: WorkspaceStore | undefined, corpus: Corpus, o: { count: number; types: TestsetType[]; seed: string; judge?: JudgeRef; verify?: boolean }): RunEstimate {
+export function estimateTestset(host: RagJudgeHost, store: WorkspaceStore | undefined, corpus: Corpus, o: { count: number; types: TestsetType[]; seed: string; judge?: JudgeRef; verify?: boolean; personas?: string[]; styles?: string[]; dedupe?: string }): RunEstimate {
   const batches = batchesOf(o.count);
   const instruction = tok(TESTSET_INSTRUCTION) + 80;
   let genIn = 0;
   let answerable = 0;
   let judgeIn = 0;
   for (let b = 0; b < batches; b++) {
-    const plan = planBatch(corpus.chunks, { seed: o.seed, batch: b, count: o.count, types: o.types });
+    const plan = planBatch(corpus.chunks, { seed: o.seed, batch: b, count: o.count, types: o.types, personas: o.personas, styles: o.styles });
     const passages = plan.chunks.reduce((n, c) => n + tok(c.text) + 25, 0);
-    genIn += instruction + passages + plan.slots.length * 15;
+    genIn += instruction + passages + plan.slots.length * 15 + plan.slots.reduce((n, s) => n + tok(`${s.persona ?? ''} ${s.style ?? ''}`), 0);
     for (const s of plan.slots) {
       if (s.type === 'unanswerable') continue;
       answerable++;
@@ -44,8 +44,13 @@ export function estimateTestset(host: RagJudgeHost, store: WorkspaceStore | unde
     ...(judgeCalls
       ? [{ evaluator: 1, id: 'reference-support', name: 'Check each reference against its chunks', kind: 'judged', llmCalls: 1, embedCalls: 0, inputTokens: Math.round(judgeIn / judgeCalls), outputTokens: VERDICT_OUT, note: `${judgeCalls} judge calls (unanswerable questions are checked without a model)` }]
       : []),
+    // each new question is embedded once (its vector is kept for the comparisons that follow)
+    ...(o.dedupe === 'embedding'
+      ? [{ evaluator: 2, id: 'dedupe-embedding', name: 'Compare the questions by meaning', kind: 'embedding', llmCalls: 0, embedCalls: o.count, inputTokens: 20, outputTokens: 0, note: `${o.count} short embedding calls (about 20 tokens each); without a model that embeds the words are compared instead` }]
+      : []),
   ];
-  const total = { llmCalls: batches + judgeCalls, embedCalls: 0, inputTokens: genIn + judgeIn, outputTokens: genOut + judgeCalls * VERDICT_OUT };
+  const embeds = o.dedupe === 'embedding' ? o.count : 0;
+  const total = { llmCalls: batches + judgeCalls, embedCalls: embeds, inputTokens: genIn + judgeIn + embeds * 20, outputTokens: genOut + judgeCalls * VERDICT_OUT };
   let judge: RunEstimate['judge'];
   let judgeProblem: string | undefined;
   let expected: number | undefined;

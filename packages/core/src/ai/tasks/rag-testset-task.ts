@@ -18,7 +18,7 @@ export function ragTestsetTask(): AiTaskDef {
     tier: 'large',
     instruction: TESTSET_INSTRUCTION,
     output: { kind: 'json', schema: { ...TESTSET_SCHEMA } },
-    context: 'paths (workspace files or folders), urls (https pages), count (1 to 60), types, seed, name (datasets/<name>.jsonl), batch',
+    context: 'paths (workspace files or folders), urls (https pages), count (1 to 60), types, seed, name (datasets/<name>.jsonl), personas, styles, dedupe (lexical or embedding), embedder, batch',
     contextTokens: 16_000,
     sectionBudgets: { passages: 14_000 },
     maxTokens: 3500,

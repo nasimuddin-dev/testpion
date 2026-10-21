@@ -118,6 +118,7 @@ export * from './eval/rag/r4.js';
 export { generateTestset, estimateGeneration, resolveOptions, type GenerateOptions, type GenerateResult } from './runner/rag-testset-generate.js';
 export { prepareAuthorContext, authorInputs, choicesOf as authorChoicesOf, targetShape, docsOutline, type AuthorChoices } from './runner/rag-author-context.js';
 export * from './runner/rag-calibrate.js';
+export * from './runner/rag-calibrate-example.js';
 export * from './runner/rag-trend.js';
 export { needsJudgeService } from './eval/rag/metrics-judged.js';
 export { limiterOf, limitsProblems } from './eval/rag/limiter.js';

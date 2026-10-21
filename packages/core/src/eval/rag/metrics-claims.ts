@@ -8,7 +8,7 @@
  *   a claim of A is "right" when the reference states it; a chunk is "relevant" when it holds a claim of R.
  */
 import type { CheckConfig, CheckResult } from '../../model/types.js';
-import { registerCheck, type CheckContext } from '../checks.js';
+import { checkFn, registerCheck, type CheckContext } from '../checks.js';
 import { answerClaims, answerVsContexts, answerVsReference, chunkRelevance, envOf, referenceClaims, referenceVsAnswer, referenceVsContexts, type Pass, type PassEnv } from './claim-passes.js';
 import { addUsage, assertJudgeUsable, contextsInput, guarded, needContexts, needsField, noUsage, referenceText, round3, type Usage } from './judged-kit.js';
 import { na } from './judged-kit.js';
@@ -195,7 +195,8 @@ function claimCheck(spec: Spec) {
       const c = await spec.compute(env, { reference, docs, answer: ctx.text });
       const usage = c.passes.reduce<Usage>((a, p) => addUsage(a, p.usage), noUsage());
       const judge = c.passes.find((p) => p.judge.provider)?.judge ?? c.passes[0]?.judge;
-      const meta = { metric: spec.id, promptVersion: `${spec.id}-v1`, judgeUsage: usage, ...(judge ? { judge: { ...judge, cached: usage.cached } } : {}), threshold: t, shared: c.passes.length ? 'claim-passes' : undefined, ...(c.items ? { items: c.items.map((i) => ({ ...i, evidence: i.evidence.slice(0, 300) })), itemLabels: c.labels ?? ['yes', 'no'] } : {}), ...(c.extra ? { subScores: c.extra } : {}) };
+      const jury = c.passes.find((p) => p.jury)?.jury;
+      const meta = { metric: spec.id, promptVersion: `${spec.id}-v1`, judgeUsage: usage, ...(jury ? { panel: { judges: jury.judges, aggregate: jury.aggregate, agreement: jury.agreement } } : {}), ...(judge ? { judge: { ...judge, cached: usage.cached } } : {}), threshold: t, shared: c.passes.length ? 'claim-passes' : undefined, ...(c.items ? { items: c.items.map((i) => ({ ...i, evidence: i.evidence.slice(0, 300) })), itemLabels: c.labels ?? ['yes', 'no'] } : {}), ...(c.extra ? { subScores: c.extra } : {}) };
       if (c.value === undefined) return na(cfg, { id: spec.id, version: `${spec.id}-v1` }, c.why ?? 'nothing to compute', { metadata: meta });
       const score = round3(c.value);
       const passed = spec.threshold === undefined ? true : spec.direction === 'lower' ? score <= t : score >= t;
@@ -204,7 +205,19 @@ function claimCheck(spec: Spec) {
 }
 
 export const CLAIM_SPECS: readonly Spec[] = [...SPECS, noise('relevant'), noise('irrelevant')];
-for (const s of CLAIM_SPECS) registerCheck(s.id, claimCheck(s));
+for (const s of CLAIM_SPECS) {
+  const run = claimCheck(s);
+  // Ragas' one `noise_sensitivity` takes `mode: relevant | irrelevant`: either id answers to either mode
+  registerCheck(
+    s.id,
+    s.id.startsWith('noise-sensitivity-')
+      ? (cfg, ctx) => {
+          const to = cfg.mode === 'relevant' || cfg.mode === 'irrelevant' ? `noise-sensitivity-${cfg.mode}` : s.id;
+          return to === s.id ? run(cfg, ctx) : checkFn(to)!(cfg, ctx);
+        }
+      : run,
+  );
+}
 
 /** The metrics that read the claim passes (the judged-check list of a run needs a judge for each). */
 export const CLAIM_METRIC_IDS: ReadonlySet<string> = new Set(CLAIM_SPECS.map((s) => s.id));

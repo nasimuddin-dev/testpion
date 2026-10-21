@@ -4,7 +4,6 @@
  * request is read the way the target writes it. A path given by the person (`$.input.q`, `query:q`) overrides it.
  */
 import type { RagTarget } from '@testpion/shared';
-import { ApsError } from '../../../errors.js';
 import { queryAll } from '../../../util/jsonpath.js';
 import type { CapturedCall, QuestionLocator } from './types.js';
 
@@ -37,12 +36,40 @@ const nameOf = (text: string) => PLACEHOLDER.exec(text)![1]!;
 /** The request part of a target's step (`request:` nested or the step itself). */
 const requestOf = (step: Rec): Rec => (isRec(step.request) ? step.request : step);
 
+/**
+ * The message a gRPC, MCP or WebSocket target sends: gRPC `message`, MCP `arguments`, WebSocket the first item of `send` that
+ * holds the placeholder. The captured request is that one message, so a path into it starts at the message itself.
+ */
+function messageOf(target: Pick<RagTarget, 'step' | 'protocol'>): unknown {
+  const step = isRec(target.step) ? target.step : {};
+  if (target.protocol === 'grpc') return step.message;
+  if (target.protocol === 'mcp') return step.arguments ?? step.args;
+  const send = Array.isArray(step.send) ? step.send : step.send !== undefined ? [step.send] : [];
+  return send.find((m) => (typeof m === 'string' ? PLACEHOLDER.test(m) : findInJson(m) !== undefined)) ?? send[0];
+}
+
 /** Where the question is in the target's request; undefined when the request has no placeholder (the question is set elsewhere). */
 export function questionLocator(target: Pick<RagTarget, 'step' | 'protocol'>, override?: string): QuestionLocator | undefined {
   const o = override?.trim();
   if (o) {
     if (o.startsWith('query:')) return { where: 'query', path: [o.slice(6)], template: '{{question}}', encoding: 'plain' };
     return { where: 'body-json', path: [o], template: '{{question}}', encoding: 'plain' };
+  }
+  if (target.protocol === 'grpc' || target.protocol === 'mcp' || target.protocol === 'websocket') {
+    const m = messageOf(target);
+    if (m === undefined || m === null) return undefined;
+    if (typeof m !== 'string') {
+      const f = findInJson(m);
+      return f ? { where: 'body-json', path: f.path, template: f.text, encoding: encodingOf(nameOf(f.text)) } : undefined;
+    }
+    if (!PLACEHOLDER.test(m)) return undefined;
+    try {
+      const f = findInJson(JSON.parse(m));
+      if (f) return { where: 'body-json', path: f.path, template: f.text, encoding: encodingOf(nameOf(f.text)) };
+    } catch {
+      /* not JSON: the whole text is the template */
+    }
+    return { where: 'body-text', template: m, encoding: encodingOf(nameOf(m)) };
   }
   const r = requestOf(isRec(target.step) ? target.step : {});
   const json = r.json !== undefined ? r.json : isRec(r.body) && 'content' in r.body ? undefined : r.body;
@@ -144,9 +171,21 @@ export function readQuestion(loc: QuestionLocator, call: CapturedCall): string |
   return q ? q : undefined;
 }
 
+/** A template with {{variables}} (a host, a port) matches any text in their place. */
+const fitsTemplate = (template: string, actual: string): boolean => new RegExp(`^${template.split(ANY_PLACEHOLDER).map(escapeRe).join('.*?')}$`, 'i').test(actual);
+
 /** Whether a call went to the target's URL and method (variables in the target's URL stand for anything). */
-export function matchesTarget(target: Pick<RagTarget, 'step'>, call: CapturedCall): boolean {
-  const r = requestOf(isRec(target.step) ? target.step : {});
+export function matchesTarget(target: Pick<RagTarget, 'step'> & { protocol?: RagTarget['protocol'] }, call: CapturedCall): boolean {
+  const step = isRec(target.step) ? target.step : {};
+  // gRPC: the method (and the address when both are known); MCP: the tool; WebSocket: the address when the log knows it
+  if (target.protocol === 'grpc') {
+    const want = String(step.method ?? '').replace(/^\//, '');
+    if (!want || String(call.operation ?? '').replace(/^\//, '') !== want) return false;
+    return !(typeof step.target === 'string' && call.url && !fitsTemplate(step.target, call.url));
+  }
+  if (target.protocol === 'mcp') return !!step.tool && call.operation === String(step.tool);
+  if (target.protocol === 'websocket') return typeof step.url !== 'string' || !call.url || fitsTemplate(step.url.split(/[?#]/)[0]!.replace(/\/+$/, ''), call.url.split(/[?#]/)[0]!.replace(/\/+$/, ''));
+  const r = requestOf(step);
   const url = typeof r.url === 'string' ? r.url : '';
   if (!url || !call.url) return false;
   const method = String(r.method ?? 'GET').toUpperCase();
@@ -157,8 +196,12 @@ export function matchesTarget(target: Pick<RagTarget, 'step'>, call: CapturedCal
   return re.test(strip(call.url));
 }
 
-/** The target must be a protocol a call can be read for: HTTP (also streamed). */
-export function assertCapturable(target: Pick<RagTarget, 'protocol'>): void {
-  if (target.protocol !== 'http' && target.protocol !== 'sse')
-    throw new ApsError('ValidationError', `Captured calls are HTTP exchanges; this target is ${target.protocol}`, { suggestions: ['A WebSocket, gRPC or MCP target cannot be built from History or a HAR file yet.'] });
+/** The protocol of a call as the target names it (a streamed HTTP target reads HTTP calls). */
+export const protocolOfTarget = (target: Pick<RagTarget, 'protocol'>): NonNullable<CapturedCall['protocol']> => (target.protocol === 'sse' ? 'http' : target.protocol);
+
+/** What the reader of a protocol can give: History has the request of a gRPC or an MCP call but no response, so its dataset holds the questions; a HAR file holds HTTP only. */
+export function captureNote(target: Pick<RagTarget, 'protocol'>): string | undefined {
+  if (target.protocol === 'grpc' || target.protocol === 'mcp') return `History keeps the request of a ${target.protocol === 'grpc' ? 'gRPC' : 'MCP'} call but not its response: the dataset holds the questions, and the target answers them when an evaluation runs.`;
+  if (target.protocol === 'websocket') return 'A WebSocket call is read from a saved message log (the down arrow of the message log): a sent message and the messages received after it.';
+  return undefined;
 }

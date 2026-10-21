@@ -6,6 +6,7 @@
  */
 import { ApsError } from '../../errors.js';
 import { calibrateRun, defaultLabelsName, labelResult } from '../../runner/rag-calibrate.js';
+import { makeExample } from '../../runner/rag-calibrate-example.js';
 import type { AppSettings } from '../../model/types.js';
 import type { SecretStore } from '../../storage/secrets.js';
 import type { WorkspaceStore } from '../../storage/workspace.js';
@@ -57,6 +58,34 @@ export function ragCalibrateTools({ store }: { store: WorkspaceStore; secrets: S
       run: async (a) => {
         const run = String(a.run_id ?? '');
         return calibrateRun(store, { run, labels: a.labels ? String(a.labels) : defaultLabelsName(store, run), metrics: Array.isArray(a.metrics) ? a.metrics.map(String) : undefined, tune: a.tune === true, reviews: a.reviews !== false });
+      },
+    },
+    {
+      name: 'rag_make_metric_example',
+      doc: {
+        when: 'A custom metric judged a sample differently from the person (see rag_calibrate’s disagreements) and the person wants that case kept as a test of the metric: the sample becomes an example of the metric’s file, with the person’s verdict as what it must say.',
+        whenNot: 'Built-in metrics (they have no file), or deciding the verdict yourself: the verdict is the person’s label or what they tell you.',
+        example: { metric: 'custom/polite-tone', run_id: 'run_2026-10-20_ab12', result: 'eval:q-17', expect: 'fail' },
+      },
+      write: true,
+      description:
+        'Add one example to the `examples:` list of a custom metric’s file (metrics/<id>.yaml) from a result of a finished run: the question, the answer, the reference and the retrieved chunks (a conversation: its last turns) with `expect` pass or fail, or the person’s label of that result when `expect` is left out. `rag_validate_metric` with examples then runs it, so a later edit of the metric cannot quietly break the case. The file is edited as text (comments stay); at most 50 examples; the same sample is not added twice.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          metric: str('The custom metric: custom/<id> or the file id'),
+          run_id: str('The finished run the sample is from'),
+          result: str('A result id of the run, or its dataset record id'),
+          expect: { type: 'string', enum: ['pass', 'fail'], description: 'What the metric must say about this sample (default: the person’s label of it)' },
+          name: str('A name for the example (default: the run and the record)'),
+          labels: str('The label set to read the verdict from (default: the run’s evaluation)'),
+        },
+        required: ['metric', 'run_id', 'result'],
+      },
+      run: async (a) => {
+        if (a.expect !== undefined && a.expect !== 'pass' && a.expect !== 'fail') throw new ApsError('ValidationError', '`expect` is pass or fail');
+        const r = await makeExample(store, { metric: String(a.metric ?? ''), run: String(a.run_id ?? ''), result: String(a.result ?? ''), expect: a.expect as 'pass' | 'fail' | undefined, name: a.name ? String(a.name) : undefined, labels: a.labels ? String(a.labels) : undefined });
+        return { saved: true, ...r };
       },
     },
   ];

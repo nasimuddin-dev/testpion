@@ -13,7 +13,7 @@ import { loadCorpus } from './documents.js';
 import { corpusOf, corpusToken, rememberCorpus } from './corpus-cache.js';
 import { hashOf, slugOf } from './chunk.js';
 import { planBatch, type Slot } from './sample.js';
-import { BATCH_SAMPLES, MAX_COUNT, TESTSET_TYPES, type Corpus, type RawSample, type TestsetRecord, type TestsetType } from './types.js';
+import { BATCH_SAMPLES, DEDUPE_MODES, MAX_COUNT, MAX_VOICES, MAX_VOICE_CHARS, TESTSET_TYPES, type Corpus, type DedupeMode, type RawSample, type TestsetRecord, type TestsetType } from './types.js';
 import { TESTSET_VERSION } from './prompts.js';
 import './verify.js';
 
@@ -26,6 +26,10 @@ export interface TestsetLocal {
   batch: number;
   dataset: string;
   judge?: JudgeRef;
+  personas?: string[];
+  styles?: string[];
+  dedupe?: DedupeMode;
+  embedder?: string;
 }
 
 /** The judge of the entailment pass: `provider/model` or { provider, model }; unset means the AI settings' large model. */
@@ -56,6 +60,21 @@ export function parseTypes(v: unknown): TestsetType[] {
   return TESTSET_TYPES.filter((t) => given.includes(t));
 }
 
+/** Personas or styles from a list or a comma-separated text: trimmed, unique, short, at most MAX_VOICES. */
+export function parseVoices(v: unknown, what: string): string[] {
+  const out = [...new Set(asStrings(v).flatMap((s) => s.split(/[,\n]/)).map((s) => s.trim().replace(/\s+/g, ' ')).filter(Boolean))];
+  if (out.length > MAX_VOICES) throw new ApsError('ValidationError', `At most ${MAX_VOICES} ${what} at a time (got ${out.length})`);
+  const long = out.find((s) => s.length > MAX_VOICE_CHARS);
+  if (long) throw new ApsError('ValidationError', `A ${what.replace(/s$/, '')} is a short description, at most ${MAX_VOICE_CHARS} characters`, { suggestions: [`“${long.slice(0, 40)}…” is ${long.length}`] });
+  return out;
+}
+
+export function parseDedupe(v: unknown): DedupeMode {
+  if (v === undefined || v === null || v === '') return 'lexical';
+  if (!(DEDUPE_MODES as readonly string[]).includes(String(v))) throw new ApsError('ValidationError', `Unknown dedupe mode ${String(v)}`, { suggestions: [`Modes: ${DEDUPE_MODES.join(', ')}`] });
+  return v as DedupeMode;
+}
+
 export function clampCount(v: unknown): number {
   const n = Math.floor(Number(v ?? 10));
   if (!Number.isFinite(n) || n < 1) throw new ApsError('ValidationError', 'The number of questions is at least 1');
@@ -74,24 +93,28 @@ export async function prepareTestset(store: WorkspaceStore, context: Record<stri
   if (!corpus) corpus = await loadCorpus(store, { paths: asStrings(context.paths), urls: asStrings(context.urls) });
   const token = corpusToken(corpus, seed);
   rememberCorpus(token, corpus);
-  const plan = planBatch(corpus.chunks, { seed, batch, count, types });
+  const personas = parseVoices(context.personas, 'personas');
+  const styles = parseVoices(context.styles, 'styles');
+  const plan = planBatch(corpus.chunks, { seed, batch, count, types, personas, styles });
   if (!plan.slots.length) throw new ApsError('ValidationError', `Batch ${batch} is past the ${count} questions asked for`);
   const dataset = datasetPathOf(typeof context.name === 'string' ? context.name : undefined, corpus.docs[0]?.name ?? 'testset');
   const judge = judgeOf(context.judge);
-  const local: TestsetLocal = { corpus, token, slots: plan.slots, seed, batch, dataset, ...(judge ? { judge } : {}) };
+  const dedupe = parseDedupe(context.dedupe);
+  const embedder = typeof context.embedder === 'string' && context.embedder.trim() ? context.embedder.trim() : undefined;
+  const local: TestsetLocal = { corpus, token, slots: plan.slots, seed, batch, dataset, ...(judge ? { judge } : {}), ...(personas.length ? { personas } : {}), ...(styles.length ? { styles } : {}), ...(dedupe === 'embedding' ? { dedupe, ...(embedder ? { embedder } : {}) } : {}) };
   return {
     label: `${corpus.docs.length} document${corpus.docs.length === 1 ? '' : 's'}`,
     local,
     context: {
       corpus: { documents: corpus.docs.length, passages: corpus.chunks.length, sent: plan.chunks.length },
       passages: plan.chunks.map((c) => ({ id: c.id, document: c.doc, ...(c.heading.length ? { heading: c.heading.join(' > ') } : {}), passage: c.text })),
-      slots: plan.slots.map((s) => ({ slot: s.n, type: s.type, passages: s.chunks })),
+      slots: plan.slots.map((s) => ({ slot: s.n, type: s.type, passages: s.chunks, ...(s.persona ? { persona: s.persona } : {}), ...(s.style ? { style: s.style } : {}) })),
     },
   };
 }
 
 /** The record a sample becomes (dataset-formats.ts canonical record). */
-export function recordOf(s: RawSample, local: TestsetLocal, chunkIds: string[], model: string | undefined): TestsetRecord {
+export function recordOf(s: RawSample, local: TestsetLocal, chunkIds: string[], model: string | undefined, voice: { persona?: string; style?: string } = {}): TestsetRecord {
   const byId = new Map(local.corpus.chunks.map((c) => [c.id, c]));
   const answerable = s.type !== 'unanswerable' && s.answerable !== false;
   const used = answerable ? chunkIds.map((id) => byId.get(id)!).filter(Boolean) : [];
@@ -103,8 +126,8 @@ export function recordOf(s: RawSample, local: TestsetLocal, chunkIds: string[], 
     reference_ids: used.map((c) => c.id),
     reference_contexts: used.map((c) => c.text),
     answerable,
-    tags: ['generated', s.type, ...docs.map((d) => `doc:${slugOf(d)}`)],
-    metadata: { generator: { task: 'rag-generate-testset', version: TESTSET_VERSION, ...(model ? { model } : {}), seed: local.seed, batch: local.batch, type: s.type } },
+    tags: ['generated', s.type, ...docs.map((d) => `doc:${slugOf(d)}`), ...(voice.persona ? [`persona:${slugOf(voice.persona)}`] : []), ...(voice.style ? [`style:${slugOf(voice.style)}`] : [])],
+    metadata: { generator: { task: 'rag-generate-testset', version: TESTSET_VERSION, ...(model ? { model } : {}), seed: local.seed, batch: local.batch, type: s.type, ...(voice.persona ? { persona: voice.persona } : {}), ...(voice.style ? { style: voice.style } : {}) } },
   };
 }
 
@@ -139,8 +162,8 @@ export function proposeTestset(a: { value?: unknown }, input: AiTaskInput): { it
       ids = slot.chunks;
       notes.push(`Slot ${slot.n}: the sample named no passage of the documents; the slot's passages are used.`);
     }
-    const rec = recordOf({ ...s, type }, local, ids, input.model);
-    items.push({ kind: 'dataset-row', title: rec.question, after: `${JSON.stringify(rec)}\n`, language: 'json', data: { dataset: local.dataset, record: rec, corpus: local.token, type, ...(local.judge ? { judge: local.judge } : {}) } });
+    const rec = recordOf({ ...s, type }, local, ids, input.model, { persona: slot.persona, style: slot.style });
+    items.push({ kind: 'dataset-row', title: rec.question, after: `${JSON.stringify(rec)}\n`, language: 'json', data: { dataset: local.dataset, record: rec, corpus: local.token, type, ...(local.judge ? { judge: local.judge } : {}), ...(local.dedupe ? { dedupe: local.dedupe, ...(local.embedder ? { embedder: local.embedder } : {}) } : {}) } });
   }
   const missing = local.slots.filter((s) => !seen.has(s.n)).length;
   if (missing && items.length) notes.push(`${missing} of ${local.slots.length} slots got no sample.`);

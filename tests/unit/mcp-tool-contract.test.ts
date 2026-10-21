@@ -129,6 +129,8 @@ describe('the shape of every tool', () => {
         'restore_item',
         // the person's own pass/fail label of a result, in labels/*.json (the editor of the matrix does the same)
         'rag_label',
+        // adds one example to a custom metric's own file, as text, the way the editor does (git brings the old file back)
+        'rag_make_metric_example',
         'rag_probe_sets',
       ].map((n) => [n, EDITS]),
     ),

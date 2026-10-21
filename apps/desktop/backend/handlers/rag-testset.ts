@@ -6,7 +6,7 @@
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, sep } from 'node:path';
-import { ApsError, estimateGeneration, generateTestset, listWorkspaceDatasets, TESTSET_TYPES, TESTSET_TYPE_HELP, type GenerateOptions } from '@testpion/core';
+import { ApsError, estimateGeneration, generateTestset, listWorkspaceDatasets, TESTSET_STYLES, TESTSET_STYLE_HELP, TESTSET_TYPES, TESTSET_TYPE_HELP, type GenerateOptions } from '@testpion/core';
 import type { Backend, Handlers } from '../backend.js';
 
 const DOC = /\.(md|markdown|txt|text|html?)$/i;
@@ -59,6 +59,7 @@ export function ragTestsetHandlers(be: Backend): Handlers {
         folders: [...folders].map(([path, docs]) => ({ path, docs })),
         datasets: listWorkspaceDatasets(be.ws).map((d) => ({ path: d.path, name: d.path.replace(/^datasets\//, ''), format: d.format, size: d.size, modified: d.modified, records: recordsOf(be.ws.safePath(d.path), d.format) })),
         types: TESTSET_TYPES.map((id) => ({ id, help: TESTSET_TYPE_HELP[id] })),
+        styles: TESTSET_STYLES.map((id) => ({ id, help: TESTSET_STYLE_HELP[id] })),
       };
     },
     /** Reads and chunks the documents and returns the shared estimate (calls, tokens, cost range, the caps it would break); nothing is sent. */

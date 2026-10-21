@@ -10,6 +10,7 @@ import { runChecks, type CheckContext } from '../checks.js';
 import { classifyFailure, type RagFailure } from './failure.js';
 import { canonicalMetricId, getMetric } from './metric-registry.js';
 import { needsJudgeService } from './metrics-judged.js';
+import { judgeCostResult } from './metrics-format.js';
 import { hasRoute, runRouted } from './route.js';
 
 export interface ScoredSample {
@@ -46,7 +47,9 @@ export async function scoreRagSample(configs: CheckConfig[], ctx: CheckContext, 
   ctx.ragRun = { strict: true, metrics: ids };
   const byConfig = new Map<CheckConfig, CheckResult>();
   // a metric with `when` / `unless` waits for the metric it depends on (route.ts): the plain ones run first
-  const plain = configs.filter((c) => !hasRoute(c));
+  // judge-cost reads what the others spent: it is added once they have a result
+  const costs = configs.filter((c) => canonicalMetricId(c.type) === 'judge-cost');
+  const plain = configs.filter((c) => !hasRoute(c) && !costs.includes(c));
   const routed = configs.filter(hasRoute);
   let live = plain;
   // a monitor judges a share of its samples (the free metrics always run): which ones is decided by the sample, not by chance
@@ -70,6 +73,7 @@ export async function scoreRagSample(configs: CheckConfig[], ctx: CheckContext, 
   }
   // the branches of the decision tree, once what they depend on has a result
   if (routed.length) await runRouted(routed.filter((c) => !byConfig.has(c)), configs, byConfig, (cs) => runChecks(cs, ctx));
+  for (const c of costs) byConfig.set(c, judgeCostResult(c, [...byConfig.values()]));
   // back in the order the evaluation lists them
   const checks = configs.map((c) => byConfig.get(c)!);
   const failure = classifyFailure({ checks, answer: ctx.text ?? '', contexts: ctx.contexts?.length ?? 0, warnings: o.warnings, error: ctx.error });

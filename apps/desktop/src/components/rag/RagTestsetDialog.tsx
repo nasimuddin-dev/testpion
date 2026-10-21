@@ -6,13 +6,14 @@ import { aiSetupAction } from '../../lib/ai-errors';
 import { toastError, useApp, type AssistantRequest } from '../../store';
 import { AiPreviewDialog } from '../ai/AiPreviewDialog';
 import { ProposalReview } from '../ai/ProposalReview';
-import { Badge, Button, Callout, Field, Input, Modal, Spinner, Textarea, cx, useDebounced } from '../ui';
+import { Badge, Button, Callout, Field, Input, Modal, Select, Spinner, Textarea, cx, useDebounced } from '../ui';
 import { EstimateLoading, RagEstimateView } from './RagEstimate';
 
 interface Sources {
   files: Array<{ path: string; size: number }>;
   folders: Array<{ path: string; docs: number }>;
   types: Array<{ id: TestsetType; help: string }>;
+  styles?: Array<{ id: string; help: string }>;
 }
 
 const MAX = 60;
@@ -34,6 +35,10 @@ export function RagTestsetDialog({ onClose, onDone }: { onClose(): void; onDone?
   const [types, setTypes] = useState<TestsetType[]>(['single-hop', 'multi-hop', 'abstract', 'unanswerable', 'adversarial']);
   const [name, setName] = useState('');
   const [seed, setSeed] = useState('');
+  const [personas, setPersonas] = useState('');
+  const [styles, setStyles] = useState<string[]>([]);
+  const [dedupe, setDedupe] = useState<'lexical' | 'embedding'>('lexical');
+  const [embedder, setEmbedder] = useState('');
   const [estimate, setEstimate] = useState<RunEstimate & { corpus?: { documents: number; passages: number; skipped: string[] } }>();
   const [estimateError, setEstimateError] = useState<string>();
   const [busy, setBusy] = useState<string>();
@@ -50,7 +55,21 @@ export function RagTestsetDialog({ onClose, onDone }: { onClose(): void; onDone?
 
   const urlList = useMemo(() => urls.split(/\s+/).filter(Boolean), [urls]);
   const n = Math.max(1, Math.min(MAX, Math.floor(Number(count) || 1)));
-  const params = useMemo(() => ({ paths: picked, urls: urlList, count: n, types, ...(name.trim() ? { name: name.trim() } : {}), ...(seed.trim() ? { seed: seed.trim() } : {}) }), [picked, urlList, n, types, name, seed]);
+  const personaList = useMemo(() => personas.split('\n').map((s) => s.trim()).filter(Boolean), [personas]);
+  const params = useMemo(
+    () => ({
+      paths: picked,
+      urls: urlList,
+      count: n,
+      types,
+      ...(name.trim() ? { name: name.trim() } : {}),
+      ...(seed.trim() ? { seed: seed.trim() } : {}),
+      ...(personaList.length ? { personas: personaList } : {}),
+      ...(styles.length ? { styles } : {}),
+      ...(dedupe === 'embedding' ? { dedupe, ...(embedder.trim() ? { embedder: embedder.trim() } : {}) } : {}),
+    }),
+    [picked, urlList, n, types, name, seed, personaList, styles, dedupe, embedder],
+  );
   const ready = (picked.length > 0 || urlList.length > 0) && types.length > 0;
   const debounced = useDebounced(params, 500);
   useEffect(() => {
@@ -69,6 +88,7 @@ export function RagTestsetDialog({ onClose, onDone }: { onClose(): void; onDone?
 
   const toggle = (path: string) => setPicked((p) => (p.includes(path) ? p.filter((x) => x !== path) : [...p, path]));
   const toggleType = (t: TestsetType) => setTypes((s) => (s.includes(t) ? s.filter((x) => x !== t) : [...s, t]));
+  const toggleStyle = (t: string) => setStyles((s) => (s.includes(t) ? s.filter((x) => x !== t) : [...s, t]));
 
   const generate = async () => {
     if (busy || !ready) return;
@@ -209,6 +229,36 @@ export function RagTestsetDialog({ onClose, onDone }: { onClose(): void; onDone?
               ))}
             </div>
           </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Who asks (optional)" hint="One person per line, at most 8: “a nurse on night shift”. Each question is written as one of them would ask it, in turn.">
+              <Textarea rows={3} value={personas} onChange={(e) => setPersonas(e.target.value)} placeholder={'a new patient\na vet nurse in a hurry'} aria-label="Personas" data-rag-testset-personas />
+            </Field>
+            <Field label="How they word it (optional)" hint="A style changes the wording, never the expected answer.">
+              <div className="grid gap-1" data-rag-testset-styles>
+                {(src?.styles ?? []).map((t) => (
+                  <label key={t.id} className="flex items-start gap-2">
+                    <input type="checkbox" checked={styles.includes(t.id)} onChange={() => toggleStyle(t.id)} aria-label={`Style ${t.id}`} className="mt-0.5" />
+                    <span>
+                      <b>{t.id}</b> <span className="text-muted">{t.help}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </Field>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Repeated questions" hint="By words is free. By meaning also embeds each question (a few cheap calls) to catch a paraphrase; without an embedding model the words are compared.">
+              <Select value={dedupe} onChange={(e) => setDedupe(e.target.value as 'lexical' | 'embedding')} aria-label="Find repeated questions" data-rag-testset-dedupe>
+                <option value="lexical">By their words</option>
+                <option value="embedding">By their words and meaning</option>
+              </Select>
+            </Field>
+            {dedupe === 'embedding' && (
+              <Field label="Embedding model" hint="provider/model; empty uses the judge’s provider">
+                <Input value={embedder} onChange={(e) => setEmbedder(e.target.value)} placeholder="ollama/nomic-embed-text" aria-label="Embedding model" data-rag-testset-embedder />
+              </Field>
+            )}
+          </div>
           {ready && !estimate && !estimateError && <EstimateLoading />}
           {estimateError && <Callout tone="bad">{estimateError}</Callout>}
           {estimate && (

@@ -2,6 +2,7 @@ import type { AiTaskId } from '@testpion/shared';
 import { NL_SEARCH_INSTRUCTION } from '../nl-search.js';
 import { RAG_DRAFT_METRIC_INSTRUCTION } from '../rag-draft-metric.js';
 import { TESTSET_INSTRUCTION } from '../../eval/rag/testset/prompts.js';
+import { REFERENCES_INSTRUCTION } from '../../eval/rag/capture/references-prompts.js';
 import { AUTHOR_INSTRUCTION } from '../../eval/rag/author/types.js';
 import { RAG_EXPLAIN_INSTRUCTION } from '../../eval/rag/explain.js';
 import { SUGGEST_MAPPING_INSTRUCTION } from '../../eval/rag/suggest-mapping.js';
@@ -84,6 +85,7 @@ export const TASK_INSTRUCTIONS: Readonly<Record<AiTaskId, string>> = {
   'rag-suggest-mapping': SUGGEST_MAPPING_INSTRUCTION,
   'rag-draft-metric': RAG_DRAFT_METRIC_INSTRUCTION,
   'rag-generate-testset': TESTSET_INSTRUCTION,
+  'rag-draft-references': REFERENCES_INSTRUCTION,
   'rag-author-evaluation': AUTHOR_INSTRUCTION,
   'rag-explain-sample': RAG_EXPLAIN_INSTRUCTION,
   free: 'Answer the developer question about their API/protocol/AI testing work.',

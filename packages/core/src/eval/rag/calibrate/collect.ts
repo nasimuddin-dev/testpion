@@ -7,7 +7,7 @@
  */
 import type { TestResult } from '../../../model/types.js';
 import { resolveMetric } from '../metric-registry.js';
-import { hash12, recordOfResult, type RagLabel } from './labels.js';
+import { hash12, recordOfResult, transcriptText, type RagLabel } from './labels.js';
 
 export const OVERALL = 'overall';
 
@@ -23,8 +23,14 @@ export interface CalibrationSample {
   direction: 'higher' | 'lower';
   judgePass: boolean;
   humanPass: boolean;
-  /** `provider/model` of the judge as the check recorded it. */
+  /** `provider/model` of the judge as the check recorded it (a jury: `jury of 3 (majority)`). */
   judge: string;
+  /** A jury: what each member said about this sample. */
+  jury?: Array<{ judge: string; pass: boolean; score?: number }>;
+  /** The catalogue group of the metric (safety, conversation, agent …). */
+  group?: string;
+  /** A conversation: its last turns (the metrics of a conversation judge the whole transcript). */
+  conversation?: Array<{ role: string; content: string }>;
   promptVersion?: string;
   question?: string;
   answer?: string;
@@ -64,13 +70,16 @@ export async function collectSamples(results: AsyncIterable<TestResult>, o: Coll
   const seenRecords = new Set<string>();
   for await (const r of results) {
     out.results++;
-    const rag = (r.metadata?.rag ?? {}) as { query?: string; sample?: { answer?: string } };
+    const rag = (r.metadata?.rag ?? {}) as { query?: string; sample?: { answer?: string }; record?: { turns?: Array<{ role: string; content: string }> } };
     const record = recordOfResult(r.id);
+    const turns = rag.record?.turns;
+    const transcript = hash12(transcriptText(turns));
     seenRecords.add(record);
     const labels = byRecord.get(record) ?? [];
     const answer = rag.sample?.answer;
-    const stale = (l: RagLabel) => l.answerHash !== undefined && answer !== undefined && l.answerHash !== hash12(answer);
-    const common = { record, resultId: r.id, question: rag.query, answer: answer?.slice(0, 1200) };
+    // a label about another answer, or about a conversation that went differently, says nothing about this one
+    const stale = (l: RagLabel) => (l.answerHash !== undefined && answer !== undefined && l.answerHash !== hash12(answer)) || (l.transcriptHash !== undefined && transcript !== undefined && l.transcriptHash !== transcript);
+    const common = { record, resultId: r.id, question: rag.query, answer: answer?.slice(0, 1200), ...(turns?.length ? { conversation: turns.slice(-12).map((t) => ({ role: t.role, content: String(t.content).slice(0, 300) })) } : {}) };
     let overall = false;
     for (const l of labels) {
       if (l.metric === OVERALL) {
@@ -87,7 +96,7 @@ export async function collectSamples(results: AsyncIterable<TestResult>, o: Coll
       const c = r.checks.find((x) => canon(x.name || x.type) === canon(l.metric) || x.name === l.metric || x.type === l.metric);
       if (!c) continue;
       if (want && !want.has(canon(c.name || c.type)) && !want.has(canon(c.type))) continue;
-      const md = (c.metadata ?? {}) as { na?: string; threshold?: number; judge?: unknown; promptVersion?: string };
+      const md = (c.metadata ?? {}) as { na?: string; threshold?: number; judge?: unknown; promptVersion?: string; panel?: { judges?: Array<{ provider?: string; model?: string; score?: number; passed?: boolean }>; aggregate?: string } };
       if (md.na) continue;
       if (stale(l)) {
         out.stale++;
@@ -98,6 +107,7 @@ export async function collectSamples(results: AsyncIterable<TestResult>, o: Coll
       const key = c.name || c.type;
       const threshold = o.thresholds?.[key] ?? o.thresholds?.[canon(c.type)] ?? (typeof md.threshold === 'number' ? md.threshold : def?.threshold);
       const score = typeof c.score === 'number' && Number.isFinite(c.score) ? c.score : undefined;
+      const members = md.panel?.judges;
       const judgePass = score !== undefined && threshold !== undefined ? (direction === 'lower' ? score <= threshold : score >= threshold) : c.passed;
       out.samples.push({
         ...common,
@@ -108,7 +118,9 @@ export async function collectSamples(results: AsyncIterable<TestResult>, o: Coll
         direction,
         judgePass,
         humanPass: l.label === 'pass',
-        judge: judgeName(md.judge),
+        judge: members && members.length > 1 ? `jury of ${members.length} (${md.panel?.aggregate ?? 'majority'})` : judgeName(md.judge),
+        ...(members && members.length > 1 ? { jury: members.map((j) => ({ judge: judgeName(j), pass: j.passed === true, ...(typeof j.score === 'number' ? { score: j.score } : {}) })) } : {}),
+        ...(def?.group ? { group: def.group } : {}),
         ...(md.promptVersion ? { promptVersion: md.promptVersion } : {}),
         reason: c.message?.slice(0, 400),
         note: l.note,

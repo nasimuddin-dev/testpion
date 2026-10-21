@@ -52,6 +52,24 @@ export function applyDatasetRowItem(store: WorkspaceStore, item: ProposalItem): 
   row = { ...row, metadata: { ...meta, ...(verification.length ? { verification } : {}) } };
   const before = existsSync(file) ? readFileSync(file, 'utf8') : null;
   const undo: ProposalUndo = { item: item.id, dataset: { path: rel, before } };
+  // a drafted reference answer replaces the record of the same id and keeps what the record already had (its answer, contexts, tags)
+  if ((item.data as { replace?: boolean } | undefined)?.replace === true) {
+    if (before === null || typeof row.id !== 'string') throw new ApsError('ValidationError', `"${item.title}" replaces a record, and ${rel} has no record of that id`);
+    const lines = before.split('\n');
+    const at = lines.findIndex((l) => {
+      try {
+        return (JSON.parse(l) as { id?: unknown }).id === row.id;
+      } catch {
+        return false;
+      }
+    });
+    if (at < 0) throw new ApsError('ValidationError', `The record ${row.id} is no longer in ${rel}`, { suggestions: ['The dataset changed since the draft was made: draft again.'] });
+    const old = JSON.parse(lines[at]!) as Record<string, unknown>;
+    const oldMeta = (old.metadata && typeof old.metadata === 'object' ? old.metadata : {}) as Record<string, unknown>;
+    lines[at] = JSON.stringify({ ...old, ...row, metadata: { ...oldMeta, ...(row.metadata as Record<string, unknown>) } });
+    atomicWrite(file, lines.join('\n'));
+    return undo;
+  }
   if (typeof row.id === 'string' && before !== null && idsOf(before).has(row.id)) return undo;
   mkdirSync(store.path('datasets'), { recursive: true });
   const head = before === null || before === '' ? '' : before.endsWith('\n') ? before : `${before}\n`;

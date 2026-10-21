@@ -328,6 +328,7 @@ export async function buildSource(
     case 'git-diff':
     case 'workspace-report':
     case 'rag-matrix':
+    case 'rag-calibration':
       return text(await dataSource(deps, src, format));
     default:
       throw new ApsError('ValidationError', `output.save: unknown source ${String((src as { kind?: unknown }).kind)}`);

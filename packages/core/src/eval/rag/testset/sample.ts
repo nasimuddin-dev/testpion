@@ -11,6 +11,9 @@ export interface Slot {
   n: number;
   type: TestsetType;
   chunks: string[];
+  /** Who asks and how they word it (from the run's personas and styles, in turn). */
+  persona?: string;
+  style?: string;
 }
 
 /** Chunks in the order they are asked about: shuffled by the seed, then interleaved so each document comes up in turn. */
@@ -66,7 +69,7 @@ export interface BatchPlan {
   chunks: Chunk[];
 }
 
-export function planBatch(chunks: Chunk[], o: { seed: string; batch: number; count: number; types: TestsetType[] }): BatchPlan {
+export function planBatch(chunks: Chunk[], o: { seed: string; batch: number; count: number; types: TestsetType[]; personas?: string[]; styles?: string[] }): BatchPlan {
   const order = askOrder(chunks, o.seed);
   const start = o.batch * BATCH_SAMPLES;
   const slots: Slot[] = [];
@@ -80,7 +83,10 @@ export function planBatch(chunks: Chunk[], o: { seed: string; batch: number; cou
       if (p) picked.push(p);
     }
     for (const c of picked) used.set(c.id, c);
-    slots.push({ n: g + 1, type, chunks: picked.map((c) => c.id) });
+    // the voices go round on their own cycles, so five personas and two styles meet in every combination over a long run
+    const persona = o.personas?.length ? o.personas[g % o.personas.length] : undefined;
+    const style = o.styles?.length ? o.styles[g % o.styles.length] : undefined;
+    slots.push({ n: g + 1, type, chunks: picked.map((c) => c.id), ...(persona ? { persona } : {}), ...(style ? { style } : {}) });
   }
   return { slots, chunks: [...used.values()] };
 }

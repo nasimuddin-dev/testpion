@@ -13,6 +13,8 @@ import { workspaceReportHtml } from '../report/workspace-report.js';
 import { workspaceAttention } from '../storage/attention.js';
 import { buildMetricMatrix } from '../eval/rag/metric-matrix.js';
 import { ragMatrixCsv, ragMatrixHtml, ragMatrixJson } from '../eval/rag/matrix-export.js';
+import { calibrationMarkdown } from '../eval/rag/calibrate/markdown.js';
+import { calibrateRun, defaultLabelsName } from '../runner/rag-calibrate.js';
 import { historyToHar } from '../storage/history-har.js';
 import { tracesToOtlp } from '../trace/otlp.js';
 import type { OutputDeps } from './types.js';
@@ -21,7 +23,7 @@ import type { OutputDeps } from './types.js';
 const MAX_ROWS = 2000;
 const cap = (n: number | undefined, dflt: number) => Math.max(1, Math.min(Math.floor(n ?? dflt) || dflt, MAX_ROWS));
 
-type DataSource = Extract<OutputSource, { kind: 'history' | 'traces' | 'monitor-runs' | 'runs-overview' | 'git-diff' | 'workspace-report' | 'rag-matrix' }>;
+type DataSource = Extract<OutputSource, { kind: 'history' | 'traces' | 'monitor-runs' | 'runs-overview' | 'git-diff' | 'workspace-report' | 'rag-matrix' | 'rag-calibration' }>;
 
 const json = (v: unknown) => JSON.stringify(v, null, 2) + '\n';
 
@@ -93,6 +95,10 @@ export async function dataSource(deps: OutputDeps, src: DataSource, format: Outp
       if (!m.total) throw new ApsError('ConfigurationError', `Run ${src.runId} has no RAG results`, { suggestions: ['`testpion rag run` records one; the id is in its output.'] });
       const o = { names: src.names };
       return format === 'csv' ? ragMatrixCsv(m, o) : format === 'html' ? ragMatrixHtml(m, o) : ragMatrixJson(m, o);
+    }
+    case 'rag-calibration': {
+      const report = await calibrateRun(store, { run: src.runId, labels: src.labels || defaultLabelsName(store, src.runId), metrics: src.metrics, tune: true });
+      return format === 'json' ? json(report) : calibrationMarkdown(report);
     }
     case 'workspace-report':
       return workspaceReportHtml(store, { days: Math.min(Math.max(Math.floor(src.days ?? 14) || 14, 1), 90), tzOffsetMin: src.tzOffsetMin, attention: await workspaceAttention(store) });

@@ -7,6 +7,8 @@ import { OVERALL, type CalibrationSample, type Collected } from './collect.js';
 
 export interface JudgeAgreement {
   judge: string;
+  /** `member` of a jury: its own verdicts; `jury`: the verdict the jury gave together; `single`: a lone judge. */
+  role?: 'member' | 'jury' | 'single';
   promptVersion?: string;
   agreement: Agreement;
   interval: Interval;
@@ -23,10 +25,16 @@ export interface Disagreement {
   answer?: string;
   reason?: string;
   note?: string;
+  /** A conversation: its last turns. */
+  conversation?: Array<{ role: string; content: string }>;
+  /** A jury: who said what. */
+  jury?: Array<{ judge: string; pass: boolean }>;
 }
 
 export interface MetricCalibration {
   metric: string;
+  /** The catalogue group of the metric (safety, conversation, agent …), when it has one. */
+  group?: string;
   source: 'label' | 'review' | 'mixed';
   direction: 'higher' | 'lower';
   threshold?: number;
@@ -57,12 +65,12 @@ export function kappaVerdict(a: Agreement): MetricCalibration['verdict'] {
   return a.kappa >= 0.6 ? 'good' : a.kappa >= 0.4 ? 'fair' : 'poor';
 }
 
-function adviceOf(m: Pick<MetricCalibration, 'metric' | 'agreement' | 'verdict' | 'tuning'>): string {
+function adviceOf(m: Pick<MetricCalibration, 'metric' | 'agreement' | 'verdict' | 'tuning' | 'group'>): string {
   const a = m.agreement;
   if (a.n < 10) return `Only ${a.n} labelled sample${a.n === 1 ? '' : 's'}: label at least 30 (both passes and fails) before relying on these numbers.`;
   if (m.verdict === 'unknown') return a.kappaNote ?? 'Kappa is not defined for these labels.';
   const lenient = a.confusion.fp > a.confusion.fn;
-  const base = m.verdict === 'good' ? 'The judge agrees with you well on this metric.' : `The judge disagrees with you ${m.verdict === 'poor' ? 'often' : 'sometimes'} on this metric, mostly by being too ${lenient ? 'lenient (passes what you failed)' : 'strict (fails what you passed)'}.`;
+  const base = m.verdict === 'good' ? 'The judge agrees with you well on this metric.' : `The judge disagrees with you ${m.verdict === 'poor' ? 'often' : 'sometimes'} on this metric, mostly by being too ${lenient ? 'lenient (passes what you failed' + (m.group === 'safety' ? ': an unsafe answer gets through' : '') + ')' : 'strict (fails what you passed)'}.`;
   const tune = m.tuning?.gain !== undefined && m.tuning.gain >= 0.05 ? ` Moving the pass mark to ${m.tuning.threshold} would raise kappa by ${m.tuning.gain}.` : m.verdict !== 'good' ? ' Try a clearer criterion or examples for this metric, or a stronger judge model.' : '';
   return base + tune;
 }
@@ -83,15 +91,25 @@ export function calibrationReport(c: Collected, o: { tune?: boolean; run?: strin
         const js = xs.filter((x) => x.judge === j);
         const p = js.map((x) => ({ judge: x.judgePass, human: x.humanPass }));
         const pv = [...new Set(js.map((x) => x.promptVersion).filter(Boolean))].join(', ');
-        return { judge: j, ...(pv ? { promptVersion: pv } : {}), agreement: agreementOf(p), interval: bootstrapAgreement(p, { seed: o.seed }) };
+        return { judge: j, role: js.some((x) => x.jury) ? ('jury' as const) : ('single' as const), ...(pv ? { promptVersion: pv } : {}), agreement: agreementOf(p), interval: bootstrapAgreement(p, { seed: o.seed }) };
       });
+      // a jury votes as one, but each member also has its own numbers against the same labels
+      const members = [...new Set(xs.flatMap((x) => x.jury?.map((m) => m.judge) ?? []))];
+      for (const name of members) {
+        const p = xs.flatMap((x) => {
+          const m = x.jury?.find((j) => j.judge === name);
+          return m ? [{ judge: m.pass, human: x.humanPass }] : [];
+        });
+        byJudge.push({ judge: name, role: 'member', agreement: agreementOf(p), interval: bootstrapAgreement(p, { seed: o.seed }) });
+      }
       const scored = xs.filter((x) => x.score !== undefined && metric !== OVERALL);
       const thr = xs.find((x) => x.threshold !== undefined)?.threshold;
       const direction = xs[0]!.direction;
       const tuning = o.tune && scored.length ? tuneThreshold(scored.map((x) => ({ score: x.score!, human: x.humanPass })), direction, thr) : undefined;
-      const part = { metric, agreement, tuning, verdict: kappaVerdict(agreement) };
+      const part = { metric, agreement, tuning, verdict: kappaVerdict(agreement), group: xs[0]!.group };
       return {
         metric,
+        ...(xs[0]!.group ? { group: xs[0]!.group } : {}),
         source: sourceOf(xs),
         direction,
         ...(thr !== undefined ? { threshold: thr } : {}),
@@ -101,7 +119,7 @@ export function calibrationReport(c: Collected, o: { tune?: boolean; run?: strin
         disagreements: xs
           .filter((x) => x.judgePass !== x.humanPass)
           .slice(0, o.maxDisagreements ?? 20)
-          .map((x) => ({ record: x.record, resultId: x.resultId, judge: x.judgePass ? 'pass' : 'fail', human: x.humanPass ? 'pass' : 'fail', ...(x.score !== undefined ? { score: x.score } : {}), question: x.question, answer: x.answer, reason: x.reason, note: x.note })),
+          .map((x) => ({ record: x.record, resultId: x.resultId, judge: x.judgePass ? 'pass' : 'fail', human: x.humanPass ? 'pass' : 'fail', ...(x.score !== undefined ? { score: x.score } : {}), question: x.question, answer: x.answer, reason: x.reason, note: x.note, ...(x.conversation ? { conversation: x.conversation } : {}), ...(x.jury ? { jury: x.jury.map((j) => ({ judge: j.judge, pass: j.pass })) } : {}) })),
         ...(tuning ? { tuning } : {}),
         verdict: part.verdict,
         advice: adviceOf(part),

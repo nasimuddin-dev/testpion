@@ -36,6 +36,14 @@ export function RagDatasetsList() {
               <Badge>{d.format}</Badge>
             </div>
             <div className="text-xs text-muted">{d.records !== undefined ? `${d.records} record${d.records === 1 ? '' : 's'}` : 'records not counted'}</div>
+            {d.format === 'jsonl' && (
+              <AiAction
+                variant="link"
+                label="Draft reference answers…"
+                hint="The AI writes a reference answer for each record that has none, from the passages that record retrieved (not from the system’s own answer); each draft is checked against its passages and offered for you to review before anything is written."
+                request={() => ({ task: 'rag-draft-references', title: `Draft reference answers for ${d.name}`, context: { dataset: d.name } })}
+              />
+            )}
           </div>
         ))}
         {!data.datasets.length && <Empty title="No datasets yet">Generate a test set from your documents, or build one from real calls. A dataset is a file in datasets/ that an evaluation runs.</Empty>}

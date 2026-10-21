@@ -7,7 +7,10 @@ import { ApsError, callOfExchange, captureDataset, listCaptureSources, listRagTa
 import type { Backend, Handlers } from '../backend.js';
 
 interface CaptureParams extends Omit<CaptureOptions, 'source' | 'dryRun'> {
-  from: 'history' | 'debugger' | 'run' | 'har' | 'exchanges';
+  from: 'history' | 'debugger' | 'run' | 'har' | 'exchanges' | 'messages';
+  /** messages: a WebSocket message log of the workspace, and the socket's address when the target's must match it. */
+  messages?: string;
+  messagesUrl?: string;
   /** history: entry ids (none: the recent HTTP entries). */
   history?: string[];
   /** debugger: a saved session, or the History id that saved it. */
@@ -30,16 +33,17 @@ export function ragCaptureHandlers(be: Backend): Handlers {
     if (p.from === 'debugger') return { kind: 'debugger', session: p.session ?? '' };
     if (p.from === 'run') return { kind: 'run', run: p.run ?? '' };
     if (p.from === 'har') return { kind: 'har', file: p.har ?? '' };
+    if (p.from === 'messages') return { kind: 'messages', file: p.messages ?? '', ...(p.messagesUrl ? { url: p.messagesUrl } : {}) };
     return { kind: 'history', ...(p.history?.length ? { ids: p.history } : {}) };
   };
   const run = async (p: CaptureParams, dryRun: boolean) => {
-    const { from: _f, history: _h, session: _s, run: _r, har: _har, exchanges: _x, ...options } = p;
+    const { from: _f, history: _h, session: _s, run: _r, har: _har, exchanges: _x, messages: _m, messagesUrl: _mu, ...options } = p;
     return captureDataset(be.ws, { ...options, source: sourceOf(p), dryRun }, { redactor: be.logger.redactor });
   };
   return {
     /** What can be a source: the targets that can be read from HTTP calls, the saved sessions, the HAR files, the recent runs, the live Debugger exchanges. */
     'rag.capture.sources': () => ({
-      targets: listRagTargets(be.ws).filter((t) => t.protocol === 'http' || t.protocol === 'sse').map((t) => ({ id: t.id, name: t.name, protocol: t.protocol, mapped: t.mapped, problems: t.problems })),
+      targets: listRagTargets(be.ws).map((t) => ({ id: t.id, name: t.name, protocol: t.protocol, mapped: t.mapped, problems: t.problems })),
       ...listCaptureSources(be.ws),
       runs: be.ws.meta.listRuns({ limit: 30 }).items.map((r) => ({ id: r.id, name: r.name, startedAt: r.startedAt, total: r.total })),
       debuggerExchanges: (be.debugger?.view?.() ?? be.debugger?.exchanges ?? []).filter((e) => e.kind === 'http').length,

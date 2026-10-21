@@ -236,16 +236,16 @@ describe('the verifiers', () => {
     expect(retrievable!.status).toBe('pass');
   });
 
-  it('duplicate: a near-identical question of the same pass fails, a new pass starts at the first item', () => {
+  it('duplicate: a near-identical question of the same pass fails, a new pass starts at the first item', async () => {
     const a = { ...row('When does the clinic open on weekdays?', 'x', [hours], { token }), id: 'i1' };
     const b = { ...row('When does the clinic open on weekdays', 'x', [hours], { token }), id: 'i2' };
     const c = { ...row('What does the booster cost for puppies?', 'x', [hours], { token }), id: 'i3' };
-    expect(verifyDuplicate(a, {})!.status).toBe('pass');
-    expect(verifyDuplicate(b, {})!.status).toBe('fail');
-    expect(verifyDuplicate(c, {})!.status).toBe('pass');
+    expect((await verifyDuplicate(a, {}))!.status).toBe('pass');
+    expect((await verifyDuplicate(b, {}))!.status).toBe('fail');
+    expect((await verifyDuplicate(c, {}))!.status).toBe('pass');
     // verifying again (a repair turn) does not make the item a duplicate of itself
-    expect(verifyDuplicate(a, {})!.status).toBe('pass');
-    expect(verifyDuplicate(b, {})!.status).toBe('fail');
+    expect((await verifyDuplicate(a, {}))!.status).toBe('pass');
+    expect((await verifyDuplicate(b, {}))!.status).toBe('fail');
   });
 });
 

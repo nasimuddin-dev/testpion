@@ -16,6 +16,7 @@ import type { ProposalItem, VerificationBadge } from '../../../ai/proposal.js';
 import { judgeCall, type JudgeRef } from '../judge.js';
 import { parseRagDatasetText } from '../dataset-formats.js';
 import { corpusOf } from './corpus-cache.js';
+import { closestQuestion, embedderFor, EMBED_DUPLICATE_AT, EMBED_WARN_AT } from './dedupe.js';
 import { bm25, copiedShare, coverage, jaccard, termSet } from './lexical.js';
 import { REFERENCE_SUPPORT } from './prompts.js';
 import type { TestsetRecord } from './types.js';
@@ -32,6 +33,9 @@ interface RowData {
   record?: TestsetRecord;
   corpus?: string;
   judge?: JudgeRef;
+  /** `embedding`: also compare the questions by meaning (dedupe.ts). */
+  dedupe?: string;
+  embedder?: string;
 }
 const dataOf = (item: ProposalItem): RowData | undefined => (item.kind === 'dataset-row' ? (item.data as RowData | undefined) : undefined);
 const pct = (n: number) => `${Math.round(n * 100)}%`;
@@ -104,7 +108,7 @@ function datasetQuestions(ctx: VerifyContext, rel: string): Array<{ terms: Set<s
   }
 }
 
-export function verifyDuplicate(item: ProposalItem, ctx: VerifyContext): VerificationBadge | undefined {
+export async function verifyDuplicate(item: ProposalItem, ctx: VerifyContext): Promise<VerificationBadge | undefined> {
   const d = dataOf(item);
   if (!d?.record) return undefined;
   const key = `${d.corpus ?? ''}:${d.record.metadata.generator.batch}`;
@@ -117,7 +121,22 @@ export function verifyDuplicate(item: ProposalItem, ctx: VerifyContext): Verific
   if (earlier) return { verifier: 'testset-duplicate', status: 'fail', label: 'asks the same as an earlier question', detail: `“${earlier.question}”` };
   const there = d.dataset ? datasetQuestions(ctx, d.dataset).find((x) => jaccard(terms, x.terms) >= DUPLICATE_AT) : undefined;
   if (there) return { verifier: 'testset-duplicate', status: 'fail', label: `already in ${d.dataset}`, detail: `“${there.question}”` };
+  if (d.dedupe === 'embedding') {
+    const run = ctx.runDeps;
+    const embedder = embedderFor({ providers: run?.providers, settings: run?.settings, env: run?.env, redactor: run?.redactor, signal: ctx.signal }, d.embedder, d.judge?.provider);
+    const pool = [...list.filter((x) => x.id !== item.id).map((x) => x.question), ...(d.dataset ? datasetQuestions(ctx, d.dataset).map((x) => x.question) : [])];
+    return meaningBadge(await closestQuestion(embedder, d.record.question, pool));
+  }
   return { verifier: 'testset-duplicate', status: 'pass', label: 'not a duplicate' };
+}
+
+/** The badge of the by-meaning comparison: a close question fails or warns; no model that embeds is a plain pass that says it compared words only. */
+export function meaningBadge(r: Awaited<ReturnType<typeof closestQuestion>>): VerificationBadge {
+  if (r.problem) return { verifier: 'testset-duplicate', status: 'pass', label: 'not a duplicate by its words (not compared by meaning)', detail: `Compared by words only: ${r.problem}` };
+  const c = r.closest;
+  if (c && c.similarity >= EMBED_DUPLICATE_AT) return { verifier: 'testset-duplicate', status: 'fail', label: `means the same as an earlier question (similarity ${c.similarity})`, detail: `“${c.question}” · ${r.embedder}` };
+  if (c && c.similarity >= EMBED_WARN_AT) return { verifier: 'testset-duplicate', status: 'warn', label: `close in meaning to an earlier question (similarity ${c.similarity})`, detail: `“${c.question}” · ${r.embedder}` };
+  return { verifier: 'testset-duplicate', status: 'pass', label: 'not a duplicate (words and meaning)', detail: r.embedder ? `Compared by meaning with ${r.embedder}.` : undefined };
 }
 
 registerVerifier('testset-support', verifySupport);

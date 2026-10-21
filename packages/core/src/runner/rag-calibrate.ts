@@ -7,7 +7,7 @@ import { ApsError } from '../errors.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { readMetricFile, writeMetricFile } from '../storage/metric-files.js';
 import { collectSamples, OVERALL } from '../eval/rag/calibrate/collect.js';
-import { checkLabelsName, clearLabel, hash12, readLabels, recordOfResult, setLabel, type RagLabel } from '../eval/rag/calibrate/labels.js';
+import { checkLabelsName, clearLabel, hash12, readLabels, recordOfResult, setLabel, transcriptText, type RagLabel } from '../eval/rag/calibrate/labels.js';
 import { calibrationReport, type CalibrationReport } from '../eval/rag/calibrate/report.js';
 import { resolveMetric } from '../eval/rag/metric-registry.js';
 import { readRunSummary } from './run-records.js';
@@ -38,7 +38,7 @@ export async function labelResult(store: WorkspaceStore, i: LabelInput): Promise
   const name = checkLabelsName(i.labels ?? defaultLabelsName(store, i.run));
   for await (const r of runResults(store, i.run)) {
     if (r.id !== i.result && recordOfResult(r.id) !== i.result) continue;
-    const rag = (r.metadata?.rag ?? {}) as { query?: string; sample?: { answer?: string } };
+    const rag = (r.metadata?.rag ?? {}) as { query?: string; sample?: { answer?: string }; record?: { turns?: Array<{ role: string; content: string }> } };
     const canon = (m: string) => resolveMetric(m)?.def.id ?? m;
     const c = i.metric === OVERALL ? undefined : r.checks.find((x) => x.name === i.metric || x.type === i.metric || canon(x.name || x.type) === canon(i.metric));
     if (i.metric !== OVERALL && !c) throw new ApsError('ValidationError', `The result ${r.id} has no metric "${i.metric}"`, { suggestions: [`Its metrics: ${r.checks.map((x) => x.name || x.type).join(', ') || 'none'}`, 'Use `overall` to label the whole answer.'] });
@@ -51,6 +51,7 @@ export async function labelResult(store: WorkspaceStore, i: LabelInput): Promise
       resultId: r.id,
       questionHash: hash12(rag.query),
       answerHash: hash12(rag.sample?.answer),
+      ...(rag.record?.turns?.length ? { transcriptHash: hash12(transcriptText(rag.record.turns)) } : {}),
       ...(i.by ? { by: i.by } : {}),
       ...(i.note ? { note: i.note } : {}),
       ...(c ? { judge: { provider: md.judge?.provider, model: md.judge?.model, promptVersion: md.promptVersion, ...(typeof c.score === 'number' ? { score: c.score } : {}) } } : {}),

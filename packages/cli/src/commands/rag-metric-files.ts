@@ -16,6 +16,7 @@ import {
   trustDatabase,
   trustedDatabases,
   listMetricFiles,
+  makeExample,
   parseCustomMetric,
   parseRagasResult,
   ragMatrixCsv,
@@ -202,6 +203,30 @@ export function registerRagMetricFileCommands(rag: Command): void {
         if (readMetricFile(store, guess) && !o.force) throw new CliError(`metrics/${guess}.yaml exists (--force replaces it)`, EXIT.CONFIG_ERROR);
         writeMetricFile(store, guess, text);
         console.log(`${green('Imported')} metrics/${guess}.yaml`);
+      }),
+    );
+
+  metric
+    .command('example')
+    .description('make an example of a labelled sample: it is added to the examples: of a custom metric’s file with your verdict as what the metric must say, so `rag metric validate --examples` keeps the case from breaking again')
+    .argument('<metric>', 'the custom metric: custom/<id> or the file id')
+    .requiredOption('--run <run>', 'the finished run the sample is from')
+    .requiredOption('--result <id>', 'a result id of the run, or its dataset record id')
+    .addOption(new Option('--expect <verdict>', 'what the metric must say about it (default: your label of that result)').choices(['pass', 'fail']))
+    .option('--name <text>', 'a name for the example')
+    .option('--labels <name>', 'the label set to read the verdict from (default: the run’s evaluation)')
+    .option('-w, --workspace <nameOrPath>', 'workspace name or directory')
+    .option('--json', 'print as JSON')
+    .action(async (id: string, o: { run: string; result: string; expect?: 'pass' | 'fail'; name?: string; labels?: string; workspace?: string; json?: boolean }) =>
+      withWorkspace(o.workspace, async (store, ephemeral) => {
+        needWorkspace(ephemeral);
+        try {
+          const r = await makeExample(store, { metric: id, run: o.run, result: o.result, expect: o.expect, name: o.name, labels: o.labels });
+          if (o.json) return printJson(r);
+          console.log(`${green('Added')} example ${r.index + 1} to ${r.file} ${dim(`(must ${r.expect}; ${r.examples} examples)`)}`);
+        } catch (e) {
+          throw e instanceof ApsError ? new CliError(e.message, EXIT.CONFIG_ERROR) : e;
+        }
       }),
     );
 

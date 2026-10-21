@@ -6,7 +6,7 @@
  */
 import { createHash } from 'node:crypto';
 import { parseYaml } from '../../../util/lazy-yaml.js';
-import { CUSTOM_METRIC_ID, CUSTOM_METRIC_KINDS, type CustomMetricFile, type CustomMetricKind } from '@testpion/shared';
+import { CUSTOM_METRIC_ID, CUSTOM_METRIC_KINDS, isRecord, type CustomMetricFile, type CustomMetricKind } from '@testpion/shared';
 import { checkTypes } from '../../checks.js';
 import { resolveMetric } from '../metric-registry.js';
 import { parseFormula } from './formula.js';
@@ -22,7 +22,6 @@ export const MAX_FILE_BYTES = 128 * 1024;
 const KNOWN_KEYS = new Set(['id', 'version', 'name', 'description', 'kind', 'inputs', 'scale', 'criteria', 'anchors', 'reference', 'votes', 'items', 'rules', 'combine', 'expression', 'good', 'negatives', 'aggregate', 'negativeMax', 'embedder', 'script', 'threshold', 'direction', 'judge', 'examples', 'calibration', 'extends']);
 const INPUTS = ['question', 'answer', 'reference', 'contexts', 'conversation'];
 
-const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 const str = (v: unknown): v is string => typeof v === 'string' && v.trim().length > 0;
 
 /** Rule types that need a model or a database: a `rule` metric is deterministic. */
@@ -42,7 +41,7 @@ export function validateCustomMetric(raw: unknown, o: { fileId?: string; known?:
   const out: MetricProblem[] = [];
   const err = (message: string, field?: string) => out.push({ level: 'error', message, field });
   const warn = (message: string, field?: string) => out.push({ level: 'warning', message, field });
-  if (!isObj(raw)) return [{ level: 'error', message: 'A metric file is a map: id, kind, … keys.' }];
+  if (!isRecord(raw)) return [{ level: 'error', message: 'A metric file is a map: id, kind, … keys.' }];
   for (const k of Object.keys(raw)) if (!KNOWN_KEYS.has(k)) warn(`"${k}" is not read by any kind of metric (a typo?)`, k);
   const id = raw.id;
   if (!str(id) || !CUSTOM_METRIC_ID.test(id)) err('id must be lower-case letters, digits and hyphens (up to 63 characters), starting with a letter or digit.', 'id');
@@ -62,7 +61,7 @@ export function validateCustomMetric(raw: unknown, o: { fileId?: string; known?:
   if (raw.inputs !== undefined) {
     if (!Array.isArray(raw.inputs) || raw.inputs.some((i) => !INPUTS.includes(String(i)))) err(`inputs is a list of ${INPUTS.join(', ')}.`, 'inputs');
   }
-  if (raw.judge !== undefined && !(isObj(raw.judge) && (raw.judge.provider === undefined || str(raw.judge.provider)))) err('judge is { provider, model }.', 'judge');
+  if (raw.judge !== undefined && !(isRecord(raw.judge) && (raw.judge.provider === undefined || str(raw.judge.provider)))) err('judge is { provider, model }.', 'judge');
 
   const needs = (field: string, ok: boolean, message: string) => !ok && err(message, field);
   if (kind === 'judge') {
@@ -70,7 +69,7 @@ export function validateCustomMetric(raw: unknown, o: { fileId?: string; known?:
     if (str(raw.criteria) && raw.criteria.length > 4000) err('criteria is longer than 4,000 characters.', 'criteria');
     const sc = raw.scale;
     if (sc !== undefined && sc !== 'binary' && !(Array.isArray(sc) && sc.length === 2 && sc.every((n) => Number.isInteger(n)) && (sc[1] as number) > (sc[0] as number) && (sc[1] as number) - (sc[0] as number) <= 20)) err('scale is "binary" or two whole numbers [min, max] at most 20 apart.', 'scale');
-    if (raw.anchors !== undefined && !(isObj(raw.anchors) && Object.values(raw.anchors).every((v) => typeof v === 'string'))) err('anchors is a map of text (pass / fail, or a description per score).', 'anchors');
+    if (raw.anchors !== undefined && !(isRecord(raw.anchors) && Object.values(raw.anchors).every((v) => typeof v === 'string'))) err('anchors is a map of text (pass / fail, or a description per score).', 'anchors');
     if (raw.reference !== undefined && raw.reference !== 'free' && raw.reference !== 'guided') err('reference is free or guided.', 'reference');
     if (raw.votes !== undefined && !(Number.isInteger(raw.votes) && (raw.votes as number) >= 1 && (raw.votes as number) <= 9 && (raw.votes as number) % 2 === 1)) err('votes is an odd number from 1 to 9.', 'votes');
     if (raw.votes !== undefined && (raw.votes as number) > 1 && raw.scale !== undefined && raw.scale !== 'binary') warn('votes only applies to a binary (pass/fail) metric.', 'votes');
@@ -81,9 +80,9 @@ export function validateCustomMetric(raw: unknown, o: { fileId?: string; known?:
       if (items.length > 30) err('A checklist has at most 30 items.', 'items');
       let total = 0;
       items.forEach((it, i) => {
-        const text = typeof it === 'string' ? it : isObj(it) ? it.text : undefined;
+        const text = typeof it === 'string' ? it : isRecord(it) ? it.text : undefined;
         if (!str(text)) err('Each item is text, or { text, weight }.', `items[${i}]`);
-        const w = isObj(it) ? it.weight : undefined;
+        const w = isRecord(it) ? it.weight : undefined;
         if (w !== undefined && !(typeof w === 'number' && Number.isFinite(w) && w >= 0)) err('weight is a number from 0.', `items[${i}]`);
         total += typeof w === 'number' ? w : 1;
       });
@@ -95,7 +94,7 @@ export function validateCustomMetric(raw: unknown, o: { fileId?: string; known?:
     else {
       if (rules.length > 30) err('A rule metric has at most 30 rules.', 'rules');
       rules.forEach((r, i) => {
-        if (!isObj(r) || !str(r.type)) return err('Each rule is a check: { type, … }.', `rules[${i}]`);
+        if (!isRecord(r) || !str(r.type)) return err('Each rule is a check: { type, … }.', `rules[${i}]`);
         const p = ruleTypeProblem(r.type);
         if (p) err(p, `rules[${i}]`);
       });
@@ -126,7 +125,7 @@ export function validateCustomMetric(raw: unknown, o: { fileId?: string; known?:
     else {
       if (raw.examples.length > 50) err('A metric has at most 50 examples.', 'examples');
       raw.examples.forEach((e, i) => {
-        if (!isObj(e) || !isObj(e.sample) || (e.expect !== 'pass' && e.expect !== 'fail')) err('Each example is { sample: {…}, expect: pass | fail }.', `examples[${i}]`);
+        if (!isRecord(e) || !isRecord(e.sample) || (e.expect !== 'pass' && e.expect !== 'fail')) err('Each example is { sample: {…}, expect: pass | fail }.', `examples[${i}]`);
       });
     }
   }
@@ -138,7 +137,7 @@ export function scoringHash(f: CustomMetricFile): string {
   const keys = ['kind', 'inputs', 'scale', 'criteria', 'anchors', 'reference', 'votes', 'items', 'rules', 'combine', 'expression', 'good', 'negatives', 'aggregate', 'negativeMax', 'embedder', 'script', 'threshold', 'direction', 'judge'] as const;
   const picked: Record<string, unknown> = {};
   for (const k of keys) if ((f as unknown as Record<string, unknown>)[k] !== undefined) picked[k] = (f as unknown as Record<string, unknown>)[k];
-  const canon = JSON.stringify(picked, (_k, v) => (isObj(v) ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => (a < b ? -1 : 1))) : v));
+  const canon = JSON.stringify(picked, (_k, v) => (isRecord(v) ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => (a < b ? -1 : 1))) : v));
   return createHash('sha256').update(canon).digest('hex').slice(0, 12);
 }
 
