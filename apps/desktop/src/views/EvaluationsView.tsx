@@ -295,7 +295,7 @@ export function EvaluationsView() {
         onRun={(freeFirst) => (setEstimating(false), void runDraft(freeFirst ? { ...d, evaluators: d.evaluators.filter((e) => !spendsOnJudge(resolveMetric(e.type), e)) } : d))}
       />
     )}
-    {tryCheck && <RagTryDialog check={tryCheck} target={d.target} question={String(preview[0]?.question ?? preview[0]?.query ?? preview[0]?.input ?? preview[0]?.user_input ?? '') || undefined} judge={d.judge} onClose={() => setTryCheck(undefined)} />}
+    {tryCheck && <RagTryDialog check={tryCheck} target={d.target} question={String(preview[0]?.question ?? preview[0]?.query ?? preview[0]?.input ?? preview[0]?.user_input ?? '') || undefined} judge={d.judge} evaluation={savedId} onClose={() => setTryCheck(undefined)} />}
     {mapper && <RagColumnMapper dataset={d.dataset} format={readAs} onApply={(dataset) => set({ dataset, datasetFormat: 'jsonl' })} onClose={() => setMapper(false)} />}
     {importing && <RagImportDialog onImport={(dataset) => set({ dataset, datasetFormat: 'jsonl' })} onClose={() => setImporting(false)} />}
     <LibraryTabStrip
@@ -591,7 +591,7 @@ export function EvaluationsView() {
         {pane === 'metrics' && d.type === 'rag' && evalRuns.length > 0 ? (
           <div className="flex-1 min-h-0">
             {runId ? (
-              <RagMetricMatrix runId={runId} target={d.target} judge={d.judge} runs={evalRuns} evaluators={d.evaluators} providers={providers} onRescored={(id) => (setRunId(id), void call('runs.list', { limit: 30 }).then((r) => setRuns(r.items), toastError))} />
+              <RagMetricMatrix runId={runId} target={d.target} judge={d.judge} runs={evalRuns} evaluators={d.evaluators} evaluation={savedId} providers={providers} onRescored={(id) => (setRunId(id), void call('runs.list', { limit: 30 }).then((r) => setRuns(r.items), toastError))} />
             ) : (
               <Empty icon={<BarChart3 size={26} />} title="Choose a run">
                 Pick a run in the Runs list to see its samples against every metric.

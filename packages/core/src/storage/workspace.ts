@@ -1,4 +1,5 @@
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { homedir, tmpdir } from 'node:os';
 import type { AppSettings, Collection, Environment, Library, McpServerConfig, ProviderConfig, Trace, Workspace } from '../model/types.js';
@@ -518,6 +519,13 @@ export class WorkspaceStore {
     const m = this.meta.getTrace(id);
     if (!m) return undefined;
     return readJson<Trace>(this.path(m.path));
+  }
+
+  /** `loadTrace` without blocking the process (a search that reads up to 300 trace files). */
+  async loadTraceAsync(id: string): Promise<Trace | undefined> {
+    const m = this.meta.getTrace(id);
+    if (!m) return undefined;
+    return JSON.parse(await readFile(this.path(m.path), 'utf8')) as Trace;
   }
 
   /* baselines */

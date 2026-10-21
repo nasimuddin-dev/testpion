@@ -74,15 +74,15 @@ describe('RAG metric tools over MCP', () => {
     const dry = (await call<{ willSend: Array<{ version: string; preview: { messages: Array<{ content: string }> } }> }>('rag_try_metric', { metric: 'faithfulness', answer: 'The clinic opens at 8am. Parking is free.', contexts: ['The clinic opens at 8am on weekdays.'], dry_run: true, judge: 'judge/mock-model' })).data;
     expect(dry.willSend[0]!.version).toBe('faithfulness-v1');
     expect(dry.willSend[0]!.preview.messages[1]!.content).toContain('Parking is free');
-    const real = (await call<{ result: { score: number; passed: boolean }; usage: { calls: number } }>('rag_try_metric', { metric: 'faithfulness', answer: 'The clinic opens at 8am. Parking is free.', contexts: ['The clinic opens at 8am on weekdays.'], judge: 'judge/mock-model' })).data;
+    const real = (await call<{ result: { score: number; passed: boolean }; usage: { calls: number } }>('rag_try_metric', { metric: 'faithfulness', answer: 'The clinic opens at 8am. Parking is free.', contexts: ['The clinic opens at 8am on weekdays.'], judge: 'judge/mock-model', confirm: true })).data;
     expect(real.result).toMatchObject({ score: 0.5, passed: false });
-    const free = (await call<{ result: { score: number } }>('rag_try_metric', { metric: 'recall@1', answer: 'a', contexts: ['text'], reference_ids: ['doc-1'] })).data;
+    const free = (await call<{ result: { score: number } }>('rag_try_metric', { metric: 'recall@1', answer: 'a', contexts: ['text'], reference_ids: ['doc-1'], confirm: true })).data;
     expect(free.result.score).toBe(1);
     // probing the target scores what it really answers
-    const probed = (await call<{ result: { score: number }; sample: { contexts: number } }>('rag_try_metric', { metric: 'context-recall-ids', target: 'Clinic HTTP', question: 'What time does the clinic open?', reference_ids: ['doc-1'] })).data;
+    const probed = (await call<{ result: { score: number }; sample: { contexts: number } }>('rag_try_metric', { metric: 'context-recall-ids', target: 'Clinic HTTP', question: 'What time does the clinic open?', reference_ids: ['doc-1'], confirm: true })).data;
     expect(probed.result.score).toBe(1);
     expect(probed.sample.contexts).toBeGreaterThan(0);
-    expect((await call('rag_try_metric', { metric: 'nonsense', answer: 'a' })).isError).toBe(true);
+    expect((await call('rag_try_metric', { metric: 'nonsense', answer: 'a', confirm: true })).isError).toBe(true);
   });
 
   let runId = '';
@@ -94,7 +94,7 @@ describe('RAG metric tools over MCP', () => {
   });
 
   it('rag_run runs with the metrics and gates, returns why samples failed, and stops without a judge before any question', async () => {
-    const r = (await call<{ runId: string; metrics: Array<{ key: string; mean?: number }>; failures: Array<{ class: string }>; gates: Array<{ passed: boolean }>; gatesPassed: boolean; worstSamples: Array<{ failure: { class: string } }>; judgeCostUsd: number }>('rag_run', { evaluation: 'Clinic RAG', metrics: ['faithfulness', 'recall@3', 'token-f1'], min: ['faithfulness=0.7', 'recall@3=1'] })).data;
+    const r = (await call<{ runId: string; metrics: Array<{ key: string; mean?: number }>; failures: Array<{ class: string }>; gates: Array<{ passed: boolean }>; gatesPassed: boolean; worstSamples: Array<{ failure: { class: string } }>; judgeCostUsd: number }>('rag_run', { evaluation: 'Clinic RAG', metrics: ['faithfulness', 'recall@3', 'token-f1'], min: ['faithfulness=0.7', 'recall@3=1'], confirm: true })).data;
     runId = r.runId;
     expect(r.metrics.find((m) => m.key === 'faithfulness')!.mean).toBe(0.75);
     expect(r.failures.map((f) => f.class)).toEqual(['unfaithful']);
@@ -102,12 +102,32 @@ describe('RAG metric tools over MCP', () => {
     expect(r.gatesPassed).toBe(true);
     expect(r.worstSamples[0]!.failure.class).toBe('unfaithful');
     expect(r.judgeCostUsd).toBeGreaterThan(0);
-    const failing = (await call<{ gatesPassed: boolean }>('rag_run', { evaluation: 'Clinic RAG', metrics: ['faithfulness'], min: ['faithfulness=0.9'] })).data;
+    const failing = (await call<{ gatesPassed: boolean }>('rag_run', { evaluation: 'Clinic RAG', metrics: ['faithfulness'], min: ['faithfulness=0.9'], confirm: true })).data;
     expect(failing.gatesPassed).toBe(false);
   });
 
+  it('the tools that send requests or spend judge tokens ask first: without confirm: true nothing is sent (review 2, finding 11)', async () => {
+    const asked: Array<[string, Record<string, unknown>]> = [
+      ['rag_run', { evaluation: 'Clinic RAG', metrics: ['faithfulness'] }],
+      ['rag_rescore', { run_id: runId }],
+      ['rag_probe', { target: 'Clinic HTTP', question: 'What time does the clinic open?' }],
+      ['rag_try_metric', { metric: 'faithfulness', answer: 'a', contexts: ['b'] }],
+      ['rag_try_metric', { metric: 'recall@1', target: 'Clinic HTTP', question: 'q', dry_run: true }],
+      ['rag_validate_metric', { content: 'id: x\nkind: judge\n', run_examples: true }],
+    ];
+    for (const [tool, args] of asked) {
+      const r = await call<{ confirmationRequired?: boolean }>(tool, args);
+      expect(r.data.confirmationRequired, tool).toBe(true);
+    }
+    // a dry run that asks no target, and a check that runs nothing, need no confirmation
+    const dry = await call<{ confirmationRequired?: boolean; willSend?: unknown[] }>('rag_try_metric', { metric: 'faithfulness', answer: 'a', contexts: ['b'], dry_run: true, judge: 'judge/mock-model' });
+    expect(dry.data.confirmationRequired).toBeUndefined();
+    expect(dry.data.willSend).toBeDefined();
+    expect((await call<{ confirmationRequired?: boolean }>('rag_validate_metric', { content: 'id: x\nkind: judge\n' })).data.confirmationRequired).toBeUndefined();
+  });
+
   it('rag_rescore re-scores the stored answers; rag_compare compares two runs and reads direction', async () => {
-    const r = (await call<{ runId: string; rescored: number; metrics: Array<{ key: string; mean?: number }> }>('rag_rescore', { run_id: runId, judge: 'judge/mock-model' })).data;
+    const r = (await call<{ runId: string; rescored: number; metrics: Array<{ key: string; mean?: number }> }>('rag_rescore', { run_id: runId, judge: 'judge/mock-model', confirm: true })).data;
     expect(r.rescored).toBe(2);
     expect(r.metrics.find((m) => m.key === 'faithfulness')!.mean).toBe(0.75);
     const cmp = (await call<{ metrics: Array<{ key: string; change: string }>; regressions: unknown[] }>('rag_compare', { run_id: r.runId, baseline_run_id: runId })).data;
@@ -132,17 +152,17 @@ describe('RAG metric tools over MCP', () => {
     const asked = await call<{ confirmationRequired?: boolean }>('rag_save_custom_metric', { id: 'no-promises', content: file, overwrite: true });
     expect(asked.data.confirmationRequired).toBe(true);
     expect((await call<{ written: boolean }>('rag_save_custom_metric', { id: 'no-promises', content: file, overwrite: true, confirm: true })).data.written).toBe(true);
-    const v = (await call<{ ok: boolean; examples: Array<{ ok: boolean }> }>('rag_validate_metric', { id: 'no-promises', run_examples: true })).data;
+    const v = (await call<{ ok: boolean; examples: Array<{ ok: boolean }> }>('rag_validate_metric', { id: 'no-promises', run_examples: true, confirm: true })).data;
     expect(v.ok).toBe(true);
     expect(v.examples.map((e) => e.ok)).toEqual([true, true]);
     const listed = (await call<{ count: number; metrics: Array<{ id: string; kind: string; registered: boolean; examples: number }> }>('rag_list_custom_metrics', {})).data;
     expect(listed.metrics[0]).toMatchObject({ id: 'no-promises', kind: 'rule', registered: true, examples: 2 });
     // the catalogue lists it in its own group, and it is scored like any metric
     expect((await call<{ metrics: Array<{ id: string; group: string }> }>('rag_metrics', { search: 'no-promises' })).data.metrics[0]).toMatchObject({ id: 'custom/no-promises', group: 'custom' });
-    const t = (await call<{ result: { score: number; passed: boolean } }>('rag_try_metric', { metric: 'custom/no-promises', answer: 'We guarantee a full recovery.' })).data;
+    const t = (await call<{ result: { score: number; passed: boolean } }>('rag_try_metric', { metric: 'custom/no-promises', answer: 'We guarantee a full recovery.', confirm: true })).data;
     expect(t.result).toMatchObject({ score: 0, passed: false });
     // a draft that disagrees with its own example is reported, not written
-    const draft = await call<{ ok: boolean; examples: Array<{ ok: boolean; message: string }> }>('rag_validate_metric', { content: file.replace('expect: fail', 'expect: pass'), run_examples: true });
+    const draft = await call<{ ok: boolean; examples: Array<{ ok: boolean; message: string }> }>('rag_validate_metric', { content: file.replace('expect: fail', 'expect: pass'), run_examples: true, confirm: true });
     expect(draft.data.ok).toBe(false);
     expect(draft.data.examples[1]).toMatchObject({ ok: false });
   });

@@ -10,6 +10,7 @@ import { registerCheck, type CheckContext } from '../checks.js';
 import { isInside } from '../../storage/fsutil.js';
 import { ApsError } from '../../errors.js';
 import { productionAllowed, productionRefusal } from '../../net/production-guard.js';
+import { databaseTarget, isDatabaseTrusted } from './db-trust.js';
 import type { SqlSource } from '../../runner/sql-exec.js';
 import { sqlHost } from './sql-host.js';
 import { judgedCheck, referenceText, round3 } from './judged-kit.js';
@@ -22,17 +23,43 @@ export function assertSqlProduction(db: SqlSource, what: string): void {
   if (db.production === true && !productionAllowed()) throw productionRefusal({ environment: db.path ?? (db.connectionEnv ? `$${db.connectionEnv}` : 'the database'), action: what, changesData: false, run: true });
 }
 
+/**
+ * The data source of a SQL metric, or an error that says why not. It fails CLOSED: a context without a workspace folder (a
+ * caller that forgot to set it) gets no database, because the folder is what confines a SQLite file and what a network
+ * database is allowed for. The database itself comes only from the saved definition (the evaluation's `database`, or the
+ * metric's own); callers that take options from outside strip `database` first (stripCallerDatabase in try-metric.ts).
+ */
 function sourceOf(cfg: CheckConfig, ctx: CheckContext) {
   const db = (cfg.database ?? {}) as SqlSource;
-  assertSqlProduction(db, 'Run the generated SQL');
-  const base = ctx.workspaceRoot ?? process.cwd();
-  const src = sqlHost().resolveSqlSource(db, { base });
-  // a SQLite file named in a pull request's evaluation must not be one elsewhere on the machine
-  if (src.dialect === 'sqlite' && ctx.workspaceRoot && !isInside(ctx.workspaceRoot, src.path!, { orSame: false })) {
-    const abs = isAbsolute(db.path ?? '') ? db.path! : resolve(base, db.path ?? '');
-    throw new ApsError('ConfigurationError', `The database ${abs} is outside the workspace`, { suggestions: ['Keep the SQLite file inside the workspace (for example data/shop.db) so an evaluation file cannot point at other files.'] });
+  const root = ctx.workspaceRoot;
+  if (!root) throw new ApsError('ConfigurationError', 'The SQL metrics run only inside a workspace, and this run has no workspace folder', { suggestions: ['Run it from the app, `testpion rag run` in the workspace folder, or an MCP server opened on one.'] });
+  const src = sqlHost().resolveSqlSource(db, { base: root });
+  if (src.dialect === 'sqlite') {
+    // a SQLite file named in a pull request's evaluation must not be one elsewhere on the machine
+    if (!isInside(root, src.path!, { orSame: false })) {
+      const abs = isAbsolute(db.path ?? '') ? db.path! : resolve(root, db.path ?? '');
+      throw new ApsError('ConfigurationError', `The database ${abs} is outside the workspace`, { suggestions: ['Keep the SQLite file inside the workspace (for example data/shop.db) so an evaluation file cannot point at other files.'] });
+    }
+  } else {
+    // a connection a workspace file names (any environment variable, any host) and declares read-only is the file's word, not the person's
+    const target = databaseTarget(db, src);
+    if (!isDatabaseTrusted(root, target))
+      throw new ApsError('ConfigurationError', `The database ${target} is named by this workspace and has not been allowed on this computer`, {
+        why: 'A workspace comes from git, an import or a teammate: a file in it could name any connection (DATABASE_URL, a host of its choosing) and call it read-only. You decide which connections the SQL metrics may use, once per computer.',
+        suggestions: [`Allow it on this computer with \`testpion rag trust-db "${target}"\`. The metric is n/a until then.`],
+        details: { databaseNotAllowed: target },
+      });
   }
+  assertSqlProduction(db, 'Run the generated SQL');
   return src;
+}
+
+/** The sample is not scored (n/a, not a fail) while the connection is not allowed on this computer; the hint says how to allow it. */
+function notAllowed(cfg: CheckConfig, e: unknown): CheckResult | undefined {
+  const target = (e as ApsError).details?.databaseNotAllowed;
+  if (typeof target !== 'string') return undefined;
+  const hint = (e as ApsError).suggestions.join(' ');
+  return result(cfg, true, `${cfg.type} is n/a: the database ${target} is not allowed on this computer. ${hint}`, { source: 'deterministic', explanation: `${(e as ApsError).why} ${hint}`, metadata: { na: 'database-not-allowed', database: target } });
 }
 
 const rowsOf = (r: ResultSet) => `${r.rows.length} row${r.rows.length === 1 ? '' : 's'}`;
@@ -56,7 +83,7 @@ const datacompy = async (cfg: CheckConfig, ctx: CheckContext): Promise<CheckResu
     try {
       src = sourceOf(cfg, ctx);
     } catch (e) {
-      return result(cfg, false, (e as Error).message, { source: 'deterministic', explanation: (e as ApsError).why });
+      return notAllowed(cfg, e) ?? result(cfg, false, (e as Error).message, { source: 'deterministic', explanation: (e as ApsError).why });
     }
     const limits = { maxRows: typeof cfg.maxRows === 'number' ? cfg.maxRows : undefined, timeoutMs: typeof cfg.timeoutMs === 'number' ? cfg.timeoutMs : undefined };
     const query = sqlOf(ctx.text);
@@ -110,7 +137,7 @@ const sqlEquivalence = async (cfg: CheckConfig, ctx: CheckContext): Promise<Chec
   try {
     schema = await schemaOf(cfg, ctx);
   } catch (e) {
-    return result(cfg, false, `sql-equivalence could not read the schema: ${(e as Error).message}`, { source: 'ai-judge' });
+    return notAllowed(cfg, e) ?? result(cfg, false, `sql-equivalence could not read the schema: ${(e as Error).message}`, { source: 'ai-judge' });
   }
   if (!schema) return result(cfg, false, 'sql-equivalence needs the schema: add the CREATE TABLE statements as "reference_contexts" in the dataset, or name a SQLite database (database: { path }).', { source: 'ai-judge', explanation: 'No schema.' });
   return equivalenceJudge({ ...cfg, __schema: schema } as CheckConfig, ctx);
