@@ -10,9 +10,9 @@
  * The importer never uses a name from the file as a place to write: a file's destination is computed from the item's
  * kind and id, after the same path rules as every other import (workspace-bundle.ts `bundleFilePath`).
  */
-import { createHash } from 'node:crypto';
 import { ApsError } from '../errors.js';
 import { safeKey } from '../util/safe-key.js';
+import { isRecord } from '@testpion/shared';
 
 export const BUNDLE_FORMAT = 'testpion-bundle';
 /** The format version this build writes and the highest it reads (a higher one is refused: "update TestPion"). */
@@ -120,7 +120,7 @@ export interface ParsedBundle {
   warnings: string[];
 }
 
-export const sha256 = (data: Buffer | string): string => createHash('sha256').update(data).digest('hex');
+export { sha256Hex as sha256 } from '../util/hash.js';
 
 /* ------------------------------------------------------------------ ids and names */
 
@@ -152,9 +152,6 @@ export const LIBRARY_OF: Partial<Record<BundleKindId, string>> = {
   monitor: 'monitors',
 };
 
-/** Kinds stored as a file of their own that the bundle holds as bytes. */
-export const isRawKind = (k: BundleKindId): boolean => k in RAW_ROOT;
-
 export const itemKey = (kind: string, id: string): string => `${kind}:${id}`;
 
 /* ------------------------------------------------------------------ parsing JSON from outside */
@@ -164,7 +161,6 @@ export function parseJsonSafe(text: string): unknown {
   return JSON.parse(text, (k, v) => (safeKey(k) ? v : undefined));
 }
 
-const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 const text = (v: unknown, max = 500): string => (typeof v === 'string' ? v.replace(/[\u0000-\u001f\u007f]+/g, ' ').slice(0, max) : '');
 
 const refuse = (why: string): never => {
@@ -177,7 +173,7 @@ const refuse = (why: string): never => {
  * format version refused. Nothing of `raw` is kept by reference.
  */
 export function checkManifest(raw: unknown, limits: TransferLimits = TRANSFER_LIMITS): { manifest: BundleManifest; warnings: string[] } {
-  if (!isObject(raw)) return refuse('the manifest is not an object');
+  if (!isRecord(raw)) return refuse('the manifest is not an object');
   if (raw.format !== BUNDLE_FORMAT) return refuse(`its format is "${text(raw.format, 60)}", not "${BUNDLE_FORMAT}"`);
   const v = raw.formatVersion;
   if (typeof v !== 'number' || !Number.isInteger(v) || v < 1) return refuse('it has no format version');
@@ -188,7 +184,7 @@ export function checkManifest(raw: unknown, limits: TransferLimits = TRANSFER_LI
   const items: BundleItem[] = [];
   const seen = new Set<string>();
   for (const it of raw.items) {
-    if (!isObject(it)) return refuse('an item is not an object');
+    if (!isRecord(it)) return refuse('an item is not an object');
     if (!isBundleKind(it.kind)) {
       warnings.push(`Skipped an item of kind "${text(it.kind, 60)}": this version of TestPion does not know it.`);
       continue;
@@ -202,7 +198,7 @@ export function checkManifest(raw: unknown, limits: TransferLimits = TRANSFER_LI
     if (mode === 'embed' && (typeof it.entry !== 'string' || !it.entry)) return refuse(`${key} has no entry`);
     if (mode === 'embed' && (typeof it.sha256 !== 'string' || !/^[0-9a-f]{64}$/i.test(it.sha256))) return refuse(`${key} has no checksum`);
     const summary: Record<string, string | number> = {};
-    if (isObject(it.summary))
+    if (isRecord(it.summary))
       for (const [k, s] of Object.entries(it.summary).slice(0, 20)) if (typeof s === 'number' || typeof s === 'string') summary[text(k, 40)] = typeof s === 'string' ? text(s, 200) : s;
     items.push({
       kind: it.kind,
@@ -217,11 +213,11 @@ export function checkManifest(raw: unknown, limits: TransferLimits = TRANSFER_LI
   const list = <T>(v: unknown, f: (x: Record<string, unknown>) => T | undefined, max = 2000): T[] =>
     (Array.isArray(v) ? v : [])
       .slice(0, max)
-      .filter(isObject)
+      .filter(isRecord)
       .map(f)
       .filter((x): x is T => x !== undefined);
-  const req = isObject(raw.requires) ? raw.requires : {};
-  const flags = isObject(raw.flags) ? raw.flags : {};
+  const req = isRecord(raw.requires) ? raw.requires : {};
+  const flags = isRecord(raw.flags) ? raw.flags : {};
   const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? Math.floor(v) : 0);
   const strings = (v: unknown, max = 500) =>
     Array.isArray(v)
@@ -230,7 +226,7 @@ export function checkManifest(raw: unknown, limits: TransferLimits = TRANSFER_LI
           .filter((s): s is string => typeof s === 'string')
           .map((s) => text(s, 200))
       : [];
-  const created = isObject(raw.createdBy) ? raw.createdBy : {};
+  const created = isRecord(raw.createdBy) ? raw.createdBy : {};
   return {
     manifest: {
       format: BUNDLE_FORMAT,

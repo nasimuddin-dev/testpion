@@ -15,7 +15,7 @@ export interface Diagnostics {
   proxy: string;
 }
 
-export function diagnosticsText(d: Diagnostics): string {
+function diagnosticsText(d: Diagnostics): string {
   const home = (d.workspacePath ?? '').match(/^([A-Za-z]:\\Users\\[^\\]+|\/(?:home|Users)\/[^/]+)/)?.[1];
   return [
     `TestPion ${d.appVersion ?? '?'} (engine ${d.version ?? '?'})`,

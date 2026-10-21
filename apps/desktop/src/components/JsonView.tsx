@@ -29,7 +29,7 @@ interface TreeRow {
 }
 
 /** JSON carried inside a string (a body kept as text, a stringified payload): its value, or undefined. */
-export function embeddedJson(v: unknown): unknown {
+function embeddedJson(v: unknown): unknown {
   if (typeof v !== 'string' || v.length < 2 || v.length > 2_000_000) return undefined;
   const c = v.charCodeAt(0);
   if (c !== 123 && c !== 91) return undefined; // { or [

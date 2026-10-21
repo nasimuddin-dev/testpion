@@ -22,7 +22,7 @@ import { CountPill, focusRow, treeKeys, withRefDefaults } from '../components/Tr
 import { buildNodeMenu } from '../lib/node-menu';
 import { TreeRowShell } from '../components/TreeRowShell';
 import { refreshEnvironments, useEnvironments } from '../lib/environments-store';
-import { downloadContent } from '../lib/files';
+import { deliverSave, type SaveResult } from '../lib/files';
 import { AlsoAddDialog } from '../components/AlsoAddTo';
 
 /**
@@ -45,10 +45,8 @@ export function EnvironmentsView() {
   const exportEnv = async (format: 'postman' | 'dotenv') => {
     if (!draft) return;
     try {
-      const r = await call<{ path?: string; environment?: unknown; text?: string; name: string }>('env.export', { id: draft.id, format });
-      if (r.environment) downloadContent(r.name, JSON.stringify(r.environment, null, 2), { type: 'application/json' });
-      else if (r.text !== undefined) downloadContent(r.name, r.text, { type: 'text/plain' });
-      else if (r.path) useApp.getState().toast(`Exported to ${r.path} (secret values are left out)`, 'success');
+      const r = await call<SaveResult & { name: string }>('env.export', { id: draft.id, format });
+      if (deliverSave(r) && r.path) useApp.getState().toast(`Exported to ${r.path} (secret values are left out)`, 'success');
     } catch (e) {
       toastError(e);
     }

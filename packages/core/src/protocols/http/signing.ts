@@ -1,5 +1,6 @@
 import { createHash, createHmac, randomBytes } from 'node:crypto';
 import { ApsError } from '../../errors.js';
+import { sha256Hex } from '../../util/hash.js';
 
 /**
  * Request signing auth that needs the final request: AWS Signature Version 4 (signs method, URL,
@@ -7,7 +8,7 @@ import { ApsError } from '../../errors.js';
  * "AWS Signature" and "Digest Auth".
  */
 
-const sha256 = (data: string | Buffer) => createHash('sha256').update(data).digest('hex');
+const sha256 = sha256Hex;
 const hmac = (key: string | Buffer, data: string) => createHmac('sha256', key).update(data).digest();
 /** RFC 3986 encoding, as AWS requires (encodeURIComponent leaves !'()* alone). */
 const rfc3986 = (s: string) => encodeURIComponent(s).replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);

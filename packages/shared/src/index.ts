@@ -4,6 +4,7 @@
  * the backend keep importing from @testpion/core; the window imports from here (it may not load core at run time).
  */
 export * from './types.js';
+export * from './guards.js';
 export * from './jwt.js';
 export * from './format.js';
 export * from './url.js';

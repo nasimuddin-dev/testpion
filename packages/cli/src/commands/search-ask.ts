@@ -9,7 +9,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { formatUsd, itemRefUrl } from '@testpion/shared';
 import { ApsError, aiRunDeps, askSearch, runQuerySpec, SEARCH_SOURCES, SOURCE_LABEL, WorkspaceManager, type SearchAnswer, type SearchSource } from '@testpion/core';
 import { cliContext, CliError, dim, EXIT, printJson, withWorkspace, yellow } from '../shared.js';
-import { printPreview } from './ai.js';
+import { printPreview } from './ai-print.js';
 
 export interface SearchAskOptions {
   workspace?: string;

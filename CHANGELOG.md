@@ -14,6 +14,9 @@
 - **SQL production guard.** A database marked `production: true` is asked about once before the generated SQL touches it: the same question and consent as a request to a production environment (the app asks, the CLI takes `--allow-production`).
 - **The picker** edits text options (a role, topics, rules, a criterion, a tree as JSON), marks the required ones, and has the decision-tree control. The Try dialog takes pictures and the other fields of a record (a conversation, tool calls, `should_refuse`).
 - **Tests.** Golden mock-judge cases for every worked example (Ragas' topic adherence 0.8, the Tesla multimodal pair, goal accuracy in two calls, G-Eval 0.75 / 0.625, DAG paths, pairwise orders, summarization 0.8, HHEM 0.75, reward 0.8), a conversation run against local servers (stateless history, server session, tool calls, per-turn scores, routes, probe sets, a picture kept by hash only), image/EXIF/limit/consent/redaction tests, and the 5,000 × 40 matrix perf budget (`rag-matrix-perf`).
+### Refactor and cleanup (B-41)
+- **Cancelling a save dialog no longer downloads the file anyway.** Exporting a collection, a workspace or an environment goes through the one save path: written where you choose, downloaded in a browser, nothing at all when you cancel.
+- Under the hood, no behaviour change: the 60-file import cycle is cut, dead code deleted, a check type registered twice is an error, MCP tool modules live in one folder, the biggest files are split, and architecture tests keep it so. The old workspace export (`workspace.export`, `storage/workspace-bundle.ts`) is deprecated in favour of bundles and stays for two more releases.
 
 ### Security hardening
 

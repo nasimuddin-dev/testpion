@@ -1,5 +1,6 @@
 /** The requests of a monitor across its latest runs: which are slow or failing. */
 import { join } from 'node:path';
+import { percentile } from '../util/stats.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { listMonitors, monitorResults } from './monitors.js';
 import { resultSourceRefs } from './result-source.js';
@@ -40,7 +41,10 @@ export async function monitorRequestStats(store: WorkspaceStore, monitorId: stri
       }
     }
   }
-  const pct = (sorted: number[], p: number) => (sorted.length ? Math.round(sorted[Math.min(sorted.length - 1, Math.ceil(p * sorted.length) - 1)]!) : undefined);
+  const pct = (sorted: number[], p: number) => {
+    const v = percentile(sorted, p);
+    return v === undefined ? undefined : Math.round(v);
+  };
   return [...by.entries()]
     .map(([name, s]) => {
       const sorted = s.ms.sort((a, b) => a - b);

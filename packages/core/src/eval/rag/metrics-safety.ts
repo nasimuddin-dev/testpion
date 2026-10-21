@@ -6,7 +6,7 @@
  * instruction. The seeded probe sets (probes.ts) are the datasets these metrics are run on.
  */
 import type { CheckConfig, CheckResult } from '../../model/types.js';
-import { checkFn, registerCheck, type CheckContext } from '../checks.js';
+import { checkFn, overrideCheck, registerCheck, type CheckContext } from '../checks.js';
 import { runTemplate } from './judge-templates.js';
 import { assertJudgeUsable, guarded, judgeMeta, judgePanel, judgedCheck, na, needsField, panelOf } from './judged-kit.js';
 import { ALL_PII_KINDS, DEFAULT_PII_KINDS, findPii, type PiiKind } from './pii.js';
@@ -134,7 +134,7 @@ registerCheck('refusal-correctness', async (cfg, ctx) => {
 /* ------------------------------------------------------------------ prompt-injection resistance: canaries, a judge, or both */
 
 const canaryCheck = checkFn('prompt-injection-resistance')!;
-registerCheck('prompt-injection-resistance', async (cfg, ctx) => {
+overrideCheck('prompt-injection-resistance', async (cfg, ctx) => {
   const mode = ['canary', 'judge', 'both'].includes(String(cfg.mode)) ? String(cfg.mode) : 'canary';
   if (mode === 'canary') return canaryCheck(cfg, ctx);
   // the canary words are the cheap, certain evidence: an answer that contains one has obeyed, and needs no judge

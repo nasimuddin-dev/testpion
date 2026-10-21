@@ -38,7 +38,7 @@ interface ExampleResult {
 }
 
 /** The custom metrics of the workspace (metrics/*.yaml): kept as the engine reads them, listed with what is wrong with each. */
-export function useCustomMetrics() {
+function useCustomMetrics() {
   return useRpc<{ kinds: typeof CUSTOM_METRIC_KINDS; metrics: CustomMetricRow[] }>('rag.customMetrics', undefined, { reloadOn: ['data.changed'], keep: true });
 }
 

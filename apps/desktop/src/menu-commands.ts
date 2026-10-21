@@ -3,7 +3,7 @@ import { promptText, toastError, useApp } from './store';
 import { openRef } from './lib/open-ref';
 import { reopenClosedTab } from './lib/closed-tabs';
 import { downloadFocusedOutput } from './components/output/output-core';
-import { downloadContent, hasNativeDialogs } from './lib/files';
+import { deliverSave, hasNativeDialogs, type SaveResult } from './lib/files';
 import { exportWorkspace } from './lib/workspace-export';
 import { openExportBundle, openImportBundle } from './lib/transfer';
 import { plural, uid } from './lib/format';
@@ -147,8 +147,8 @@ export async function runMenuCommand(cmd: MenuCommand): Promise<void> {
       case 'export-environment': {
         const env = s.workspace?.environments.find((e) => e.name === s.environment);
         if (!env) return s.toast('Select an environment first (top bar), then export it.', 'error');
-        const r = await call<{ path?: string; environment?: unknown; name: string }>('env.export', { id: env.id });
-        if (r.environment) downloadContent(r.name, JSON.stringify(r.environment, null, 2), { type: 'application/json' });
+        const r = await call<SaveResult & { name: string }>('env.export', { id: env.id });
+        if (!deliverSave(r)) return; // the save dialog was cancelled
         return s.toast(r.path ? `Exported "${env.name}" to ${r.path} (secret values are never exported)` : `Exported "${env.name}" (secret values are never exported)`, 'success');
       }
       case 'export-workspace': {

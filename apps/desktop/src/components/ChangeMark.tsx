@@ -1,7 +1,7 @@
 import { cx } from './ui';
 
 /** The one-letter mark used for a change everywhere (Git view, explorer rows, status bar). */
-export const CHANGE_MARK: Record<string, { letter: string; tone: 'ok' | 'bad' | 'warn' | 'accent'; label: string }> = {
+const CHANGE_MARK: Record<string, { letter: string; tone: 'ok' | 'bad' | 'warn' | 'accent'; label: string }> = {
   added: { letter: 'A', tone: 'ok', label: 'Added' },
   untracked: { letter: 'A', tone: 'ok', label: 'Added' },
   removed: { letter: 'D', tone: 'bad', label: 'Deleted' },

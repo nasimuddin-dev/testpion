@@ -3,20 +3,14 @@ import { isIP } from 'node:net';
 import { checkServerIdentity } from 'node:tls';
 import type * as protoLoader from '@grpc/proto-loader';
 import type * as protobuf from 'protobufjs';
-import { nodeRequire } from '../../util/lazy-require.js';
 
-// the gRPC libraries load at first use, not at startup (see util/lazy-require.ts)
-let grpcMod: typeof import('@grpc/grpc-js') | undefined;
-let loaderMod: typeof import('@grpc/proto-loader') | undefined;
-let protobufMod: typeof import('protobufjs') | undefined;
-export const grpcJs = (): typeof import('@grpc/grpc-js') => (grpcMod ??= typeof require === 'function' ? require('@grpc/grpc-js') : nodeRequire('@grpc/grpc-js'));
-export const protoLoaderLib = (): typeof import('@grpc/proto-loader') => (loaderMod ??= typeof require === 'function' ? require('@grpc/proto-loader') : nodeRequire('@grpc/proto-loader'));
-export const protobufLib = (): typeof import('protobufjs') => (protobufMod ??= typeof require === 'function' ? require('protobufjs') : nodeRequire('protobufjs'));
 import { ApsError } from '../../errors.js';
 import type { KeyValue } from '../../model/types.js';
 import { assertUrlAllowed } from '../../net/policy.js';
 import type { Redactor } from '../../util/redact.js';
-import { rootFromDescriptorSet } from './reflection.js';
+import { grpcJs, protobufLib, protoLoaderLib, rootFromDescriptorSet } from './grpc-libs.js';
+
+export { grpcJs, protobufLib, protoLoaderLib };
 
 /**
  * gRPC: calls described by .proto files (given as text, so nothing depends on local paths), with

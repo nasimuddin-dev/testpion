@@ -55,7 +55,7 @@ describe('items: collections, environments, library, MCP servers, providers, wor
       (t) => t.replace('https://s/v1', 'https://theirs').replace('"Search"', '"Search v2"'),
     );
     const d = await gitConflictDetail(r.ws, 'mcp-servers.json');
-    expect(d).toMatchObject({ mode: 'items', collection: true, kind: 'mcp-server' });
+    expect(d).toMatchObject({ mode: 'items', kind: 'mcp-server' });
     expect(d.items).toHaveLength(1);
     expect(d.items[0]!.key).toBe('item:search');
     expect(d.items[0]!.fields!.map((f) => f.path)).toEqual(['url']);
@@ -171,7 +171,7 @@ describe('text: test files, API definitions, datasets', () => {
       );
     await make();
     const d = await gitConflictDetail(r.ws, 'tests/smoke/login.yaml');
-    expect(d).toMatchObject({ mode: 'text', collection: false, kind: 'test' });
+    expect(d).toMatchObject({ mode: 'text', kind: 'test' });
     expect(d.hunks).toHaveLength(1);
     expect(d.hunks[0]).toMatchObject({ key: 'hunk:0' });
     expect(d.hunks[0]!.where).toMatch(/near (step|item) Login/);

@@ -72,7 +72,7 @@ export async function discardGitItem(ref: ItemRef, name: string): Promise<void> 
 }
 
 /** Stage (or unstage) the file an item is in; the message says when other changed items come along. */
-export async function stageGitItem(ref: ItemRef, unstage = false): Promise<void> {
+async function stageGitItem(ref: ItemRef, unstage = false): Promise<void> {
   try {
     const r = await call<{ message: string; applied: boolean }>('git.itemStage', { ref, unstage });
     useApp.getState().toast(r.message, r.applied ? 'success' : 'info');

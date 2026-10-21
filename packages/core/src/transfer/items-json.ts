@@ -9,14 +9,14 @@ import { commandLine } from '../storage/trust.js';
 import { slugify, uniqueId } from '../util/ids.js';
 import { LIBRARY_OF, SAFE_ID, isPlainId, parseJsonSafe, type BundleKindId } from './format.js';
 import { canonicalJson, importedName, mapStrings, replacePaths, type CommitWrite, type ItemAdapter, type JournalSink, type Listed } from './items.js';
+import { isRecord } from '@testpion/shared';
 
-const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 
 /** The incoming item's JSON object, or why it is not one. */
 function parseObject(data: Buffer): Record<string, unknown> | string {
   try {
     const v = parseJsonSafe(data.toString('utf8'));
-    return isObject(v) ? v : 'its content is not a JSON object';
+    return isRecord(v) ? v : 'its content is not a JSON object';
   } catch {
     return 'its content is not valid JSON';
   }
@@ -37,13 +37,13 @@ function freshTarget(existing: readonly Listed[], x: { id: string; name: string 
 /** The text of every `*Script` field of a JSON value that is not empty: scripts that will run when requests are sent. */
 function countScripts(v: unknown): number {
   if (Array.isArray(v)) return v.reduce<number>((n, x) => n + countScripts(x), 0);
-  if (!isObject(v)) return 0;
+  if (!isRecord(v)) return 0;
   return Object.entries(v).reduce((n, [k, x]) => n + (/script$/i.test(k) && typeof x === 'string' && x.trim() ? 1 : countScripts(x)), 0);
 }
 
 function countRequests(items: unknown): number {
   if (!Array.isArray(items)) return 0;
-  return items.reduce<number>((n, x) => n + (isObject(x) && Array.isArray(x.items) ? countRequests(x.items) : 1), 0);
+  return items.reduce<number>((n, x) => n + (isRecord(x) && Array.isArray(x.items) ? countRequests(x.items) : 1), 0);
 }
 
 /**
@@ -65,7 +65,7 @@ function hostOf(address: unknown): string | undefined {
 }
 
 type Header = { key: string; value: string; enabled?: boolean };
-const headersOf = (v: unknown): Header[] => (Array.isArray(v) ? v.filter((h): h is Header => isObject(h) && typeof h.key === 'string' && typeof h.value === 'string') : []);
+const headersOf = (v: unknown): Header[] => (Array.isArray(v) ? v.filter((h): h is Header => isRecord(h) && typeof h.key === 'string' && typeof h.value === 'string') : []);
 
 /** Headers as imported: a value that is a reference is replaced by the person's own value for that header (or emptied); nothing but key, value and enabled is kept. */
 const importedHeaders = (v: unknown, keep: readonly Header[] = []): Header[] =>
@@ -76,7 +76,7 @@ function referencesOf(o: Record<string, unknown>): string[] {
   const out: string[] = [];
   if (typeof o.apiKey === 'string' && REFERENCE.test(o.apiKey)) out.push(`the key ${o.apiKey.slice(0, 80)}`);
   for (const h of headersOf(o.headers)) if (REFERENCE.test(h.value)) out.push(`the header ${h.key.slice(0, 40)}: ${h.value.slice(0, 80)}`);
-  if (isObject(o.env)) for (const [k, v] of Object.entries(o.env)) if (typeof v === 'string' && REFERENCE.test(v)) out.push(`the variable ${k.slice(0, 40)}: ${v.slice(0, 80)}`);
+  if (isRecord(o.env)) for (const [k, v] of Object.entries(o.env)) if (typeof v === 'string' && REFERENCE.test(v)) out.push(`the variable ${k.slice(0, 40)}: ${v.slice(0, 80)}`);
   return out;
 }
 
@@ -157,7 +157,7 @@ const environment: ItemAdapter = {
     if (typeof o === 'string') return o;
     if (!SAFE_ID.test(item.id)) return `the id "${item.id.slice(0, 40)}" cannot be used as a file name`;
     if (o.id !== item.id) return 'its id does not match the manifest';
-    if (!Array.isArray(o.variables) || !o.variables.every(isObject)) return 'its variables are not a list of objects';
+    if (!Array.isArray(o.variables) || !o.variables.every(isRecord)) return 'its variables are not a list of objects';
     return undefined;
   },
   review(item, data) {
@@ -215,7 +215,7 @@ function commitList<T extends { id: string; name: string }>(
 function importedServer(o: Record<string, unknown>, was?: McpServerConfig): McpServerConfig {
   const base = { id: String(o.id), name: String(o.name), ...(typeof o.folder === 'string' ? { folder: o.folder } : {}) };
   if (o.transport === 'stdio') {
-    const env = isObject(o.env) ? Object.fromEntries(Object.entries(o.env).filter(([, v]) => typeof v === 'string' && !REFERENCE.test(v))) : undefined;
+    const env = isRecord(o.env) ? Object.fromEntries(Object.entries(o.env).filter(([, v]) => typeof v === 'string' && !REFERENCE.test(v))) : undefined;
     return {
       ...base,
       transport: 'stdio',
@@ -238,7 +238,7 @@ function importedServer(o: Record<string, unknown>, was?: McpServerConfig): McpS
 function importedProvider(o: Record<string, unknown>, was?: ProviderConfig): ProviderConfig {
   const str = (k: string) => (typeof o[k] === 'string' ? (o[k] as string) : undefined);
   const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
-  const rl = isObject(o.rateLimit) ? o.rateLimit : undefined;
+  const rl = isRecord(o.rateLimit) ? o.rateLimit : undefined;
   const rate = rl ? Object.fromEntries((['requestsPerSecond', 'requestsPerMinute', 'tokensPerMinute', 'concurrency'] as const).flatMap((k) => (num(rl[k]) !== undefined ? [[k, num(rl[k])]] : []))) : undefined;
   // a key the person already has stays only when the provider it replaces is at the same address
   const sameHost = !!was && hostOf(was.baseUrl) === hostOf(o.baseUrl);

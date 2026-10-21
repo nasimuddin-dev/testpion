@@ -35,6 +35,8 @@ import { startFlowGenerate } from './ai/flow-generate';
 import { generateSpecTests } from './ApiPreviewPanel';
 import { useAreaMenu } from './AreaMenu';
 import { EmptyHint, FolderedRows, folderKey, folderNames, ItemRow, moveToFolderSubmenu, newFolderIn, Section, useOpenSections, type FolderOps, type RowRename } from './ExplorerParts';
+import { collectionCallKind, isCollectionCallLibrary } from '@testpion/shared';
+import { treeKey } from '../lib/tree-state';
 
 /**
  * The Collections explorer: the one sidebar of the request editors. The workspace lists its collections;
@@ -426,9 +428,9 @@ export function Explorer() {
           // the whole saved item (its request and settings) and its place, to put it back as it was
           let removed: { item: LibraryItem<unknown>; at: number } | undefined;
           void deleteWithUndo({
-            kind: kind === 'grpc' ? 'grpc-call' : 'ws-connection',
+            kind: collectionCallKind(kind),
             name: item.name,
-            focus: `${item.collectionId ?? ''}:${kind}:${item.id}`,
+            focus: treeKey(item.collectionId ?? '', kind, item.id),
             run: async () => {
               closeTabsFor([item.id]);
               await editLibrary(kind, (items) => {
@@ -616,6 +618,7 @@ export function Explorer() {
     (c: Collection): ExtraGroup[] => [
       {
         cat: 'grpc',
+        kind: collectionCallKind('grpc'),
         items: grpcByCollection.get(c.id) ?? NONE,
         onOpen: (id) => void openRef({ kind: 'saved', library: 'grpc', itemId: id }),
         menu: (id) => savedLatest.current.savedMenu('grpc', grpc.find((i) => i.id === id)!),
@@ -624,6 +627,7 @@ export function Explorer() {
       },
       {
         cat: 'websocket',
+        kind: collectionCallKind('websocket'),
         items: socketsByCollection.get(c.id) ?? NONE,
         onOpen: (id) => void openRef({ kind: 'saved', library: 'websocket', itemId: id }),
         menu: (id) => savedLatest.current.savedMenu('websocket', sockets.find((i) => i.id === id)!),
@@ -636,7 +640,7 @@ export function Explorer() {
     [grpcByCollection, socketsByCollection, grpc, sockets],
   );
   const newOfCategory = (c: Collection, cat: RequestCategory) => {
-    if (cat === 'grpc' || cat === 'websocket') return intent(cat, { newDoc: true, collectionId: c.id });
+    if (isCollectionCallLibrary(cat)) return intent(cat, { newDoc: true, collectionId: c.id });
     const node = newNode(cat)!;
     void editCollection(c, (c) => ({ ...c, items: addToFolder(c.items, undefined, node) })).then(() => openRef({ kind: 'request', collectionId: c.id, requestId: node.id, protocol: cat === 'graphql' ? 'graphql' : 'http' }));
   };

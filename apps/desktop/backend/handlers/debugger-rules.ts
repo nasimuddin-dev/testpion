@@ -22,7 +22,7 @@ import {
 } from '@testpion/core';
 import type { Backend, Handlers } from '../backend.js';
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
-import { newDebuggerState, type DebuggerState } from './debugger.js';
+import { newDebuggerState, type DebuggerState } from './debugger-state.js';
 
 export interface PendingBreakpoint {
   id: string;

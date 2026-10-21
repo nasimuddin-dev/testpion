@@ -2,6 +2,7 @@ import type { Collection, CollectionFolder, CollectionNode, SavedHttpRequest } f
 import type { NodeMenuCtx } from './node-menu-actions';
 import { hasCategory, isEmptyFolder, matchIndex, requestCategory, countCategory, type RequestCategory } from './collection-filter';
 import { treeKey } from './tree-state';
+import { type CollectionCallLibrary, type KindId } from '@testpion/shared';
 
 /**
  * The rows of the Collections tree (CollectionTree), as a pure function of the collections and what is open: the
@@ -15,7 +16,9 @@ import { treeKey } from './tree-state';
 
 /** Saved items of a collection that aren't collection requests (gRPC calls, WebSocket connections). */
 export interface ExtraGroup {
-  cat: 'grpc' | 'websocket';
+  cat: CollectionCallLibrary;
+  /** The item kind of its items (grpc-call, ws-connection): `collectionCallKind(cat)`. */
+  kind: KindId;
   items: Array<{ id: string; name: string; folder?: string; badge?: string }>;
   onOpen(id: string): void;
   /** What its menu can do (lib/node-menu.ts builds the menu from it, only while open). */
@@ -46,7 +49,7 @@ export const examplesOpenKey = (collectionId: string, requestId: string) => tree
 /** The open/closed key of a collection's protocol category (REST, SOAP, GraphQL, gRPC, WebSocket). */
 export const categoryOpenKey = (collectionId: string, cat: RequestCategory) => treeKey(collectionId, 'cat', cat);
 /** The open/closed key of a folder of saved gRPC calls or connections shown under a collection. */
-export const extraFolderOpenKey = (collectionId: string | undefined, cat: 'grpc' | 'websocket', folder: string) => treeKey(collectionId ?? '', cat, 'folder', folder);
+export const extraFolderOpenKey = (collectionId: string | undefined, cat: CollectionCallLibrary, folder: string) => treeKey(collectionId ?? '', cat, 'folder', folder);
 /** Whether a scoped key is open: the scoped key wins; the unscoped key an older version saved is the fallback. */
 export const isOpenKey = (open: Record<string, boolean>, scoped: string, legacy: string): boolean | undefined => open[scoped] ?? open[legacy];
 
@@ -83,8 +86,8 @@ export function buildTreeRows({ collections, open, filter, favoritesOnly = false
         continue;
       }
       out.push({ t: 'req', key, c, n, depth });
-      if (n.kind === 'http' && n.examples?.length && isOpenKey(open, examplesOpenKey(c.id, n.id), `${n.id}:examples`))
-        for (const ex of n.examples) out.push({ t: 'example', key: `${key}:ex:${ex.id}`, c, n, ex, depth });
+      if (n.kind === 'http' && n.examples?.length && isOpenKey(open, examplesOpenKey(c.id, n.id), treeKey(n.id, 'examples')))
+        for (const ex of n.examples) out.push({ t: 'example', key: treeKey(key, 'ex', ex.id), c, n, ex, depth });
     }
   };
   const addExtra = (g: ExtraGroup, depth: number, from?: string) => {

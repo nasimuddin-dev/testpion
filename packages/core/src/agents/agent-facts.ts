@@ -13,7 +13,7 @@ import type { WorkspaceStore, TestFileNode } from '../storage/workspace.js';
 import { exposedFlows } from '../runner/exposed-flows.js';
 import { listSavedEvaluations } from '../runner/saved-evaluations.js';
 import { listWorkspaceDatasets } from '../runner/datasets.js';
-import { MINIMAL_TOOLS } from '../mcp-server/search-tools.js';
+import { MINIMAL_TOOLS } from '../mcp-server/tools/search-tools.js';
 
 /** The process exit codes of every `testpion` command. */
 export const EXIT_CODES: Record<'0' | '1' | '2' | '3', string> = {

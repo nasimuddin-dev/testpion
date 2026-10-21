@@ -5,6 +5,7 @@ import { importFileFilters, copyFolderEntry, moveFolderEntry, atomicWrite, write
 import type { Backend, Handlers, CollectionRunParams } from '../backend.js';
 import { countDatasetRecords, datasetFormatOfName } from '@testpion/shared';
 import { recordIncoming } from './debugger.js';
+import { saveText } from './save-text.js';
 
 /** An API definition's workspace path: a JSON or YAML file directly in specs/. */
 // an OpenAPI definition in specs/, or an AsyncAPI one its import keeps in specs/asyncapi/
@@ -446,25 +447,19 @@ export function collectionsHandlers(be: Backend): Handlers {
         // the collection's connections as channels (AsyncAPI 3.0)
         const { text, notes } = collectionToAsyncApi(c, collectionSavedItems(be.ws, c.id)?.websocket ?? []);
         const name = `${c.name}.asyncapi.yaml`;
-        const dest = await be.host.saveDialog?.({ defaultPath: name, filters: [{ name: 'AsyncAPI', extensions: ['yaml', 'yml'] }] });
-        if (dest) writeFileSync(dest, text);
-        return { path: dest, text: dest ? undefined : text, name, notes };
+        return { ...(await saveText(be, name, [{ name: 'AsyncAPI', extensions: ['yaml', 'yml'] }], text, 'application/yaml')), name, notes };
       }
       if (format === 'http') {
         // one .http file for VS Code REST Client and the JetBrains HTTP Client
         const { text, notes } = collectionToHttpFile(c);
         const name = `${c.name}.http`;
-        const dest = await be.host.saveDialog?.({ defaultPath: name, filters: [{ name: 'HTTP requests', extensions: ['http', 'rest'] }] });
-        if (dest) writeFileSync(dest, text);
-        return { path: dest, text: dest ? undefined : text, name, notes };
+        return { ...(await saveText(be, name, [{ name: 'HTTP requests', extensions: ['http', 'rest'] }], text, 'text/plain')), name, notes };
       }
       if (format === 'openapi') {
         // an OpenAPI 3.1 description of the collection's HTTP requests (YAML)
         const text = collectionToOpenApiText(c);
         const name = `${c.name}.openapi.yaml`;
-        const dest = await be.host.saveDialog?.({ defaultPath: name, filters: [{ name: 'OpenAPI', extensions: ['yaml', 'yml'] }] });
-        if (dest) writeFileSync(dest, text);
-        return { path: dest, text: dest ? undefined : text, name, notes: [] as string[] };
+        return { ...(await saveText(be, name, [{ name: 'OpenAPI', extensions: ['yaml', 'yml'] }], text, 'application/yaml')), name, notes: [] as string[] };
       }
       // a TestPion collection file carries its gRPC calls and connections too (Postman's format can't)
       const savedItems = collectionSavedItems(be.ws, c.id);
@@ -474,9 +469,7 @@ export function collectionsHandlers(be: Backend): Handlers {
           : { collection: { ...c, ...(savedItems ? { savedItems } : {}) } as unknown as Record<string, unknown>, notes: [] as string[] };
       if (format === 'postman' && savedItems) notes.push(`${Object.values(savedItems).reduce((n, l) => n + (l?.length ?? 0), 0)} gRPC call(s) or connection(s) aren't in the Postman file (its format has no place for them); export in TestPion's format to keep them`);
       const name = format === 'postman' ? `${c.name}.postman_collection.json` : `${c.name}.collection.json`;
-      const dest = await be.host.saveDialog?.({ defaultPath: name, filters: [{ name: 'Collection', extensions: ['json'] }] });
-      if (dest) writeFileSync(dest, JSON.stringify(collection, null, 2));
-      return { path: dest, collection: dest ? undefined : collection, name, notes };
+      return { ...(await saveText(be, name, [{ name: 'Collection', extensions: ['json'] }], JSON.stringify(collection, null, 2), 'application/json')), name, notes };
     },
   };
 }

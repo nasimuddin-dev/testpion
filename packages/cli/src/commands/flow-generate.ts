@@ -9,7 +9,7 @@ import { formatUsd, plural } from '@testpion/shared';
 import { aiRunDeps, applyProposal, draftFlowProposal, flowSourceRef, isAiSetupError, normalizeError, runAiTask, WorkspaceManager, type Proposal } from '@testpion/core';
 import { cliContext, dim, green, printJson, withWorkspace, yellow } from '../shared.js';
 import { machine } from '../output.js';
-import { printPreview, printProposal } from './ai.js';
+import { printPreview, printProposal } from './ai-print.js';
 
 export function registerFlowGenerateCommand(program: Command): void {
   const flow = program.commands.find((c) => c.name() === 'flow');

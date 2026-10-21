@@ -1,4 +1,4 @@
-import { ITEM_KIND_LABEL, LIBRARY_LABEL, itemRefUrl, parseItemRefUrl, toItemRef, type ItemRef, type RefResolution, type RequestProtocol } from '@testpion/shared';
+import { ITEM_KIND_LABEL, LIBRARY_LABEL, itemRefUrl, parseItemRefUrl, toItemRef, type ItemRef, type RefResolution, type RequestProtocol, isCollectionCallLibrary } from '@testpion/shared';
 import type { Collection, CollectionNode } from '../types';
 import { asError, call, on } from '../api';
 import { isRequestView, setPlaceNamer, useApp, type ViewId } from '../store';
@@ -341,7 +341,7 @@ export function refOfPlace(view: ViewId, p: Record<string, unknown> | undefined)
   if (s('runId')) return { kind: 'run', runId: s('runId')! };
   if (s('historyId')) return { kind: 'history', historyId: s('historyId')! };
   if (s('serverId') && view === 'mcp') return { kind: 'mcp-server', serverId: s('serverId')! };
-  if (s('savedId') && (view === 'grpc' || view === 'websocket')) return { kind: 'saved', library: view, itemId: s('savedId')! };
+  if (s('savedId') && isCollectionCallLibrary(view)) return { kind: 'saved', library: view, itemId: s('savedId')! };
   if (s('path') && view === 'tests') return { kind: 'test', path: s('path')! };
   if (s('path') && view === 'apidef') return { kind: 'spec', path: s('path')! };
   if (collectionId) return { kind: 'collection', collectionId };

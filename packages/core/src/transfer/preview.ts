@@ -6,7 +6,7 @@
  */
 import { SecretStripper } from '../storage/bundle-secrets.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
-import { itemKey, type BundleItem, type BundleKindId, type BundleManifest, type ParsedBundle } from './format.js';
+import { type BundleItem, type BundleKindId, type BundleManifest, type ParsedBundle } from './format.js';
 import { fingerprint, type Listed, type Target } from './items.js';
 import { adapter } from './registry.js';
 
@@ -119,6 +119,3 @@ export function previewImport(store: WorkspaceStore, bundle: ParsedBundle): Impo
     missing: m.missing,
   };
 }
-
-/** The key a decision is given under: `kind:id`. */
-export const previewKey = (i: Pick<PreviewItem, 'kind' | 'id'>): string => itemKey(i.kind, i.id);

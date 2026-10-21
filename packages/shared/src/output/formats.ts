@@ -68,12 +68,6 @@ export function markdownTable(columns: string[], rows: ReadonlyArray<ReadonlyArr
   return markdownTableHead(columns) + markdownTableRows(columns, rows);
 }
 
-/** Objects as a Markdown table. */
-export const objectsToMarkdown = (objects: ReadonlyArray<unknown>, columns?: string[]): string => {
-  const t = rowsFromObjects(objects, columns);
-  return markdownTable(t.columns, t.rows);
-};
-
 /** Objects as TSV. */
 export const objectsToTsv = (objects: ReadonlyArray<unknown>, columns?: string[]): string => {
   const t = rowsFromObjects(objects, columns);
@@ -134,12 +128,6 @@ export const htmlTableHead = (columns: string[]): string => `<table><thead><tr>$
 export const htmlTableRows = (columns: string[], rows: ReadonlyArray<ReadonlyArray<unknown>>): string =>
   rows.map((r) => `<tr>${columns.map((_, i) => `<td>${htmlCell(r[i])}</td>`).join('')}</tr>\n`).join('');
 export const HTML_TABLE_TAIL = '</tbody></table>';
-
-/** Objects as a one-table HTML page. */
-export const objectsToHtml = (title: string, objects: ReadonlyArray<unknown>, columns?: string[]): string => {
-  const t = rowsFromObjects(objects, columns);
-  return htmlDocument(title, [{ table: { columns: t.columns, rows: t.rows } }], { generatedAt: new Date().toISOString() });
-};
 
 const escXml = (s: string) => escHtml(s).replace(/'/g, '&apos;');
 
@@ -478,6 +466,3 @@ export function base64ToBytes(b64: string): Uint8Array {
   for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
   return out;
 }
-
-/** How many bytes a text takes in UTF-8. */
-export const utf8Bytes = (s: string): number => new TextEncoder().encode(s).length;

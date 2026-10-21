@@ -1,4 +1,4 @@
-import { kindOfPath, libraryOfPath, type KindId } from '@testpion/shared';
+import { isRecord, kindOfPath, libraryOfPath, type KindId } from '@testpion/shared';
 
 /**
  * Stable files (planning/git-everything.md §4b): what a workspace file holds when the app writes it, so a file changes
@@ -24,7 +24,6 @@ type Obj = Record<string, Json>;
 /** Keys that lead any object that has them (identity first, then the usual pairs), before the sorted rest. */
 const LEADING = ['schemaVersion', 'kind', 'id', 'key', 'name', 'type', 'value', 'enabled', 'secret'];
 
-const isObj = (v: unknown): v is Obj => !!v && typeof v === 'object' && !Array.isArray(v);
 
 /** Code-unit order: the same on every computer and locale (localeCompare is not). */
 const byCode = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
@@ -39,7 +38,7 @@ function orderedKeys(o: Obj, first: readonly string[] = []): string[] {
 /** A value with every object's keys in the stable order, all the way down (arrays keep their order). */
 export function stableValue(v: Json, first?: readonly string[]): Json {
   if (Array.isArray(v)) return v.map((x) => stableValue(x));
-  if (!isObj(v)) return v;
+  if (!isRecord(v)) return v;
   return Object.fromEntries(orderedKeys(v, first).map((k) => [k, stableValue(v[k])]));
 }
 
@@ -68,14 +67,14 @@ const RULES_KEY_ORDER = ['active', 'profiles', 'filterPresets'];
 
 /** An object's keys in the kind's order; its list under `listKey` has each item's keys in `itemOrder` (less the `drop` keys). */
 function withList(v: Json, top: readonly string[], listKey: string, itemOrder: readonly string[], drop: readonly string[] = []): Json {
-  if (!isObj(v)) return stableValue(v);
-  const item = (i: Json): Json => (isObj(i) ? stableValue(Object.fromEntries(Object.entries(i).filter(([k]) => !drop.includes(k))), itemOrder) : stableValue(i));
+  if (!isRecord(v)) return stableValue(v);
+  const item = (i: Json): Json => (isRecord(i) ? stableValue(Object.fromEntries(Object.entries(i).filter(([k]) => !drop.includes(k))), itemOrder) : stableValue(i));
   return Object.fromEntries(orderedKeys(v, top).map((k) => [k, k === listKey && Array.isArray(v[k]) ? (v[k] as Json[]).map(item) : stableValue(v[k])]));
 }
 
 /** A collection as its file holds it: no `version` / `updatedAt` (they are this computer's, see `.local/meta.json`). */
 export function collectionFileValue(c: Json): Json {
-  if (!isObj(c)) return c;
+  if (!isRecord(c)) return c;
   const { version: _v, updatedAt: _u, problem: _p, ...rest } = c;
   void _v;
   void _u;
@@ -83,12 +82,12 @@ export function collectionFileValue(c: Json): Json {
   return stableValue(rest, COLLECTION_KEY_ORDER);
 }
 
-export const environmentFileValue = (e: Json): Json => (isObj(e) ? stableValue(Object.fromEntries(Object.entries(e).filter(([k]) => k !== 'problem')), ENVIRONMENT_KEY_ORDER) : e);
+export const environmentFileValue = (e: Json): Json => (isRecord(e) ? stableValue(Object.fromEntries(Object.entries(e).filter(([k]) => k !== 'problem')), ENVIRONMENT_KEY_ORDER) : e);
 export const workspaceFileValue = (w: Json): Json => stableValue(w, WORKSPACE_KEY_ORDER);
 /** A library file: folders sorted, items by their order, no `updatedAt` on an item. */
 export function libraryFileValue(lib: Json): Json {
   const out = withList(lib, LIBRARY_KEY_ORDER, 'items', LIBRARY_ITEM_KEY_ORDER, ['updatedAt']);
-  if (isObj(out) && Array.isArray(out.folders)) out.folders = [...(out.folders as string[])].sort(byCode);
+  if (isRecord(out) && Array.isArray(out.folders)) out.folders = [...(out.folders as string[])].sort(byCode);
   return out;
 }
 export const mcpServersFileValue = (f: Json): Json => withList(f, ['schemaVersion', 'servers'], 'servers', MCP_SERVER_KEY_ORDER);

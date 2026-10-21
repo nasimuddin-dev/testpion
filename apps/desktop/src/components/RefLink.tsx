@@ -30,7 +30,7 @@ import {
   Workflow,
 } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
-import { ITEM_KIND_LABEL, toItemRef, type ItemRef } from '@testpion/shared';
+import { ITEM_KIND_LABEL, toItemRef, type ItemRef, isCollectionCallLibrary } from '@testpion/shared';
 import { copyRefLink, openRef, refLabel, revealInSidebar } from '../lib/open-ref';
 import { LABEL } from '../lib/vocabulary';
 import { Menu, cx, type MenuItem } from './ui';
@@ -102,7 +102,7 @@ export function refMenu(ref: ItemRef): MenuItem[] {
   if (ref.kind !== 'doc') items.push({ label: 'Open in new tab', icon: <SquareArrowOutUpRight size={14} />, onSelect: () => void openRef(ref, { newTab: true }) });
   // a request is shown in the explorer as it opens (the explorer follows the editor)
   // the item's row in the Collections explorer, without opening it (WF-11: the same as a tab's and a breadcrumb's)
-  if (ref.kind === 'request' || ref.kind === 'folder' || ref.kind === 'collection' || (ref.kind === 'saved' && (ref.library === 'grpc' || ref.library === 'websocket')))
+  if (ref.kind === 'request' || ref.kind === 'folder' || ref.kind === 'collection' || (ref.kind === 'saved' && isCollectionCallLibrary(ref.library)))
     items.push({ label: LABEL.revealInSidebar, icon: <PanelLeft size={14} />, onSelect: () => revealInSidebar(ref) });
   if (ref.kind === 'history') items.push({ label: 'Open in its editor', icon: <ExternalLink size={14} />, onSelect: () => void openRef(ref, { edit: true }) });
   items.push({ label: 'Copy link', icon: <Copy size={14} />, separator: true, onSelect: () => void copyRefLink(ref) });

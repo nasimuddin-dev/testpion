@@ -83,7 +83,7 @@ const statusClass = (e: Exchange) => (e.error || (e.status ?? 0) >= 400 ? 'text-
 
 /** What a quick rule from a row matches on: the row's program, URL start, host, method or server address. */
 export type QuickMatch = { label: string; match: Rule['match'] };
-export function quickMatches(e: Exchange): QuickMatch[] {
+function quickMatches(e: Exchange): QuickMatch[] {
   const urlStart = (() => {
     try {
       const u = new URL(e.url);

@@ -1,3 +1,4 @@
+import { successCode } from './success-code.js';
 import { parseYaml } from '../util/lazy-yaml.js';
 import { ApsError } from '../errors.js';
 import { importOpenApi } from '../import/importers.js';
@@ -54,10 +55,7 @@ const METHODS = ['get', 'post', 'put', 'patch', 'delete', 'head', 'options', 'tr
 
 export { deref };
 
-/** The success response of an operation: its first exact 2xx code, else a `2XX`-style range. */
-export function successCode(codes: string[]): string | undefined {
-  return codes.find((c) => /^2\d\d$/.test(c)) ?? codes.find((c) => /^2/i.test(c));
-}
+export { successCode };
 
 const refName = (node: any) => (node && typeof node.$ref === 'string' ? String(node.$ref).split('/').pop() : undefined);
 

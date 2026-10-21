@@ -5,8 +5,7 @@
  * script metric must agree with every example it was drafted with (they run for real: they cost nothing), and a judged
  * metric must build its prompt for each example (the real judge call is a deliberate step, "Run examples").
  */
-import { stringifyYaml } from '../util/lazy-yaml.js';
-import { CUSTOM_METRIC_KINDS, customMetricTemplate } from '@testpion/shared';
+import { CUSTOM_METRIC_KINDS } from '@testpion/shared';
 import { compileCustomMetric, runMetricExamples } from '../eval/rag/custom/compile.js';
 import { parseCustomMetric } from '../eval/rag/custom/file.js';
 import { dryHost } from '../eval/rag/judge.js';
@@ -67,6 +66,4 @@ registerVerifier('metric-examples', async (item, ctx) => {
   return { verifier: 'metric-examples', status: 'pass', label: `valid, ${examples.length} examples`, detail: 'The examples run when you press Run examples.' };
 });
 
-/** The text a task shows as "what it started from" for a kind (Draft with AI in the editor passes it as context). */
-export const metricStarter = (kind: Parameters<typeof customMetricTemplate>[0], id: string): string => stringifyYaml(customMetricTemplate(kind, id));
 

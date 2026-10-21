@@ -2,7 +2,7 @@ import { describe, it, expect, afterAll } from 'vitest';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { loadMcpMock, mockServeCommands, mockToolResult, mockToolsList, runMockScript } from '../../packages/core/src/index.js';
-import { mockTools } from '../../packages/core/src/mcp-server/mock-tools.js';
+import { mockTools } from '../../packages/core/src/mcp-server/tools/mock-tools.js';
 import { runCliSync, tempDir, cliData } from '../helpers.js';
 
 // A toolset: the tools of an MCP mock as an agent will see them, with script responses computed from the arguments.

@@ -1,175 +1,17 @@
-import { checkSubject } from '@testpion/shared';
 import { compareSnapshot, describeDifference } from './snapshot.js';
 import { decodeJwt, describeExpiry, findJwts, type DecodedJwt } from '../util/jwt.js';
-import { createHash } from 'node:crypto';
-import type { CheckConfig, CheckResult, CheckSource, ModelRef, NormalizedError, RetrievedDoc, TestType, TokenUsage } from '../model/types.js';
-import { deepEqual, exists, inferSchema, query, queryAll, tryParseJson } from '../util/jsonpath.js';
-import { coverage, coverageIn, cosine, lexicalCosine, sentences, tokenF1, wordSet } from './text.js';
-import type { ProviderRegistry } from '../ai/index.js';
-import type { SpanHandle } from '../trace/tracer.js';
+import type { CheckConfig, CheckResult } from '../model/types.js';
+import { deepEqual, exists, inferSchema, query, tryParseJson } from '../util/jsonpath.js';
+import { cosine, lexicalCosine, tokenF1 } from './text.js';
 import { normalizeError } from '../errors.js';
-import { compileSchema } from '../util/json-schema.js';
-import type { RagJudgeHost } from './rag/judge.js';
-import type { RagJudgeSetup } from '@testpion/shared';
+import { aliasCheck, documentCheck, registerCheck, resolveCheck, checkTypes, res, target, asText, short, threshold, validateSchema, type CheckContext, type CheckFn } from './check-registry.js';
+import { runJudge, judgeFailed } from './check-judge.js';
+import './legacy-rag-checks.js';
 
-/** Everything a check may inspect about an execution. */
-export interface CheckContext {
-  testType: TestType;
-  status?: number;
-  headers?: Array<[string, string]>;
-  /** Parsed body (JSON) or text when not JSON. JSONPath expressions run against this. */
-  body: unknown;
-  /** Raw text output (response body, LLM text, tool text). */
-  text: string;
-  latencyMs?: number;
-  /** LLM: until the first token arrived (streamed answers). */
-  firstTokenMs?: number;
-  tokens?: TokenUsage;
-  costUsd?: number;
-  error?: NormalizedError;
-  /** MCP tool result `isError`. */
-  isError?: boolean;
-  /** HTTP: cookies for `tp.cookies` (name → value). */
-  cookies?: Record<string, string>;
-  /** HTTPS: the server's certificate (for the `certificate` check). */
-  certificate?: { subject?: string; issuer?: string; validTo?: string; daysLeft?: number; altNames?: string[] };
-  /** HTTP: the request that was sent (for contract checks such as `openapi`). */
-  request?: { method: string; url: string };
-  /** Reads a workspace file (relative to the workspace root), e.g. an OpenAPI document. */
-  readFile?: (path: string) => string;
-  graphqlErrors?: unknown[];
-  /** gRPC: the call's status. */
-  grpc?: { code: number; codeName: string; details: string; trailers?: Array<[string, string]> };
-  toolCalls?: Array<{ name: string; arguments: Record<string, unknown> }>;
-  toolSchemas?: Record<string, Record<string, unknown>>;
-  contexts?: RetrievedDoc[];
-  question?: string;
-  input?: unknown;
-  expected?: unknown;
-  /** RAG: the gold chunks (texts) and their ids from the dataset record, for the metrics that compare the retrieval with them. */
-  referenceContexts?: string[];
-  referenceIds?: string[];
-  /** The workspace folder (SQL metrics resolve a SQLite file against it). */
-  workspaceRoot?: string;
-  /** RAG: the other fields of the dataset record the metrics read (answerable, relevance, injection …; see eval/rag/record.ts). */
-  record?: import('./rag/record.js').RagRecord;
-  /** RAG: the judge the evaluation names (else the AI settings'), and its limits for the run. */
-  judge?: RagJudgeSetup;
-  /** RAG: set when the answer and contexts come from a RAG target (or a stored sample): the judged metrics then use the judge service strictly, and know which metrics run beside them (the shared claim pass). */
-  ragRun?: { strict: boolean; metrics: string[] };
-  services?: { providers?: ProviderRegistry; signal?: AbortSignal; span?: SpanHandle; ragJudge?: RagJudgeHost; /** Reads the pictures of a RAG sample (a test host lends fixtures; the default fetches under the network policy). */ imageSource?: import('./rag/images.js').ImageSource };
-}
-
-type CheckFn = (cfg: CheckConfig, ctx: CheckContext) => Promise<CheckResult> | CheckResult;
-
-const registry = new Map<string, CheckFn>();
-
-/** What a check of a response reads, in one line, and one example of it: the AI format reference and lint hints read these. */
-export interface CheckDoc {
-  fields: string;
-  example: CheckConfig;
-}
-const docs = new Map<string, CheckDoc>();
-
-/** Register a custom check type (plugin extension point); `doc` says what it reads (shown to AI models writing checks). */
-export function registerCheck(type: string, fn: CheckFn, doc?: CheckDoc): void {
-  registry.set(type, fn);
-  if (doc) docs.set(type, doc);
-}
-
-/** Removes a check type (a custom metric whose file was deleted). */
-export function unregisterCheck(type: string): void {
-  registry.delete(type);
-  docs.delete(type);
-}
-
-/** A registered check type's function (a metric that wraps a check of this file reads the original here). */
-export const checkFn = (type: string): CheckFn | undefined => registry.get(type);
-
-/**
- * Other spellings of a check type (the metric registry's: Ragas and DeepEval names, `recall@5`): called when a type is not
- * registered; gives the registered type that computes it and the options the spelling implies.
- */
-export type CheckResolver = (cfg: CheckConfig) => { check: string; options?: Record<string, unknown> } | undefined;
-let resolver: CheckResolver | undefined;
-export function setCheckResolver(fn: CheckResolver): void {
-  resolver = fn;
-}
-
-/** Describe a registered check type (its fields and an example). */
-export function documentCheck(type: string, doc: CheckDoc): void {
-  docs.set(type, doc);
-}
-
-/** Other names of a check type (http-status → status, response-time → latency …): name → the type it stands for. */
-export function checkAliases(): Record<string, string> {
-  const first = new Map<CheckFn, string>();
-  const out: Record<string, string> = {};
-  for (const [t, fn] of registry) {
-    const canonical = first.get(fn);
-    if (canonical) out[t] = canonical;
-    else first.set(fn, t);
-  }
-  return out;
-}
-
-/** The documented check types (those that read a response's status, headers or body), in registry order. */
-export function checkDocs(): Array<CheckDoc & { type: string }> {
-  return [...docs].filter(([t]) => registry.has(t)).map(([type, d]) => ({ type, ...d }));
-}
-
-export function checkTypes(): string[] {
-  return [...registry.keys()].sort();
-}
-
-export function validateSchema(schema: unknown, data: unknown): { valid: boolean; errors: string[] } {
-  const v = compileSchema(schema);
-  const valid = v(data) as boolean;
-  return { valid, errors: valid ? [] : (v.errors ?? []).map((e) => `${e.instancePath || '$'} ${e.message}`) };
-}
-
-function res(
-  cfg: CheckConfig,
-  passed: boolean,
-  message: string,
-  extra: Partial<CheckResult> & { source?: CheckSource } = {},
-): CheckResult {
-  return {
-    type: cfg.type,
-    name: cfg.name ?? defaultName(cfg),
-    passed,
-    source: extra.source ?? 'deterministic',
-    message,
-    ...extra,
-  };
-}
-
-function defaultName(cfg: CheckConfig): string {
-  // the shared words for what it reads: `header content-type`, `equals $.id`, `tool_called search`
-  return [cfg.type, checkSubject(cfg)].filter(Boolean).join(' ');
-}
-
-/** Value addressed by `path`, or the whole body/text when no path is given. */
-function target(cfg: CheckConfig, ctx: CheckContext): { found: boolean; value: unknown } {
-  if (cfg.path) return { found: exists(ctx.body, String(cfg.path)), value: query(ctx.body, String(cfg.path)) };
-  return { found: true, value: ctx.body ?? ctx.text };
-}
-
-function asText(v: unknown): string {
-  if (typeof v === 'string') return v;
-  if (v === undefined) return '';
-  return JSON.stringify(v);
-}
-
-function short(v: unknown, n = 200): string {
-  const s = asText(v);
-  return s.length > n ? s.slice(0, n) + '…' : s;
-}
-
-function threshold(cfg: CheckConfig, fallback: number): number {
-  const t = cfg.threshold ?? cfg.min ?? fallback;
-  return typeof t === 'number' ? t : Number(t);
-}
+// the registry is in check-registry.ts; this file is its public face
+export { registerCheck, overrideCheck, unregisterCheck, checkFn, setCheckResolver, documentCheck, checkAliases, checkDocs, checkTypes, validateSchema } from './check-registry.js';
+export type { CheckContext, CheckDoc, CheckResolver } from './check-registry.js';
+export type { EvidenceItem } from './legacy-rag-checks.js';
 
 /* ------------------------------------------------------------------ deterministic */
 
@@ -185,7 +27,7 @@ registerCheck('status', (cfg, ctx) => {
   const ok = list.some((e) => (typeof e === 'string' && /^\dxx$/i.test(e) ? String(ctx.status).startsWith(e[0]!) : Number(e) === ctx.status));
   return res(cfg, ok, `expected status ${list.join(' or ')}, got ${ctx.status ?? 'none'}`, { expected: exp, actual: ctx.status });
 });
-registry.set('http-status', registry.get('status')!);
+aliasCheck('http-status', 'status');
 
 registerCheck('exists', (cfg, ctx) => {
   const ok = exists(ctx.body, String(cfg.path ?? '$'));
@@ -402,10 +244,10 @@ registerCheck('less-than', (cfg, ctx) => {
   return res(cfg, ok, `${v} ${ok ? '<' : '≥'} ${cfg.expected}`, { actual: v, expected: cfg.expected });
 });
 registerCheck('latency', (cfg, ctx) => numericCheck({ ...cfg, max: cfg.max ?? cfg.expected }, ctx.latencyMs, 'latency (ms)'));
-registry.set('response-time', registry.get('latency')!);
+aliasCheck('response-time', 'latency');
 // how long until the model started answering (a streamed answer; without streaming it is the whole latency)
 registerCheck('first-token', (cfg, ctx) => numericCheck({ ...cfg, max: cfg.max ?? cfg.expected }, ctx.firstTokenMs ?? ctx.latencyMs, 'time to first token (ms)'));
-registry.set('ttft', registry.get('first-token')!);
+aliasCheck('ttft', 'first-token');
 registerCheck('tokens', (cfg, ctx) => {
   const field = String(cfg.field ?? 'total');
   const v = field === 'output' ? ctx.tokens?.outputTokens : field === 'input' ? ctx.tokens?.inputTokens : ctx.tokens?.totalTokens;
@@ -577,187 +419,9 @@ registerCheck('similarity', async (cfg, ctx) => {
     return res(cfg, false, `similarity failed: ${(e as Error).message}`, { source: 'semantic' });
   }
 });
-registry.set('semantic-similarity', registry.get('similarity')!);
+aliasCheck('semantic-similarity', 'similarity');
 
 /* ------------------------------------------------------------------ LLM as judge */
-
-const JUDGE_PROMPT_VERSION = 'judge-v1';
-
-function judgePrompt(criteria: string, ctx: CheckContext, extra: { reference?: string; contexts?: string }): string {
-  return [
-    'You are a strict, impartial evaluator. Score the RESPONSE against the CRITERIA.',
-    'Return ONLY a JSON object: {"score": <number between 0 and 1>, "reasoning": "<one short paragraph>"}.',
-    '',
-    `CRITERIA:\n${criteria}`,
-    ctx.question || ctx.input ? `\nINPUT:\n${asText(ctx.question ?? ctx.input)}` : '',
-    extra.contexts ? `\nRETRIEVED CONTEXT:\n${extra.contexts}` : '',
-    extra.reference ? `\nREFERENCE ANSWER:\n${extra.reference}` : '',
-    `\nRESPONSE:\n${ctx.text || asText(ctx.body)}`,
-  ].join('\n');
-}
-
-/** Asks the judge model one prompt for a JSON answer; the judge's identity goes with the result (reproducibility). */
-async function askJudge(cfg: CheckConfig, ctx: CheckContext, prompt: string, key: string, maxTokens = 400): Promise<{ text: string; value: unknown; judge: Record<string, unknown> }> {
-  const providers = ctx.services?.providers;
-  if (!providers) throw new Error('no provider registry available for the judge');
-  const jref = (cfg.judge ?? { provider: cfg.provider ?? 'mock', name: cfg.model }) as ModelRef;
-  const { provider, model } = providers.resolveModel(jref);
-  const judge = {
-    provider: provider.config.name,
-    model,
-    temperature: jref.temperature ?? 0,
-    promptVersion: JUDGE_PROMPT_VERSION,
-    configHash: createHash('sha256').update(JSON.stringify({ jref, criteria: key, v: JUDGE_PROMPT_VERSION })).digest('hex').slice(0, 12),
-  };
-  const span = ctx.services?.span?.child(`judge ${model}`, 'llm', { attributes: judge, input: prompt });
-  try {
-    const r = await provider.chat({
-      model,
-      temperature: jref.temperature ?? 0,
-      maxTokens: jref.maxTokens ?? maxTokens,
-      seed: jref.seed,
-      messages: [{ role: 'user', content: prompt }],
-      responseFormat: { type: 'json' },
-      signal: ctx.services?.signal,
-    });
-    span?.end({ output: r.text });
-    const p = tryParseJson(r.text);
-    return { text: r.text, value: p.ok ? p.value : undefined, judge };
-  } catch (e) {
-    span?.fail(e);
-    throw e;
-  }
-}
-
-async function runJudge(
-  cfg: CheckConfig,
-  ctx: CheckContext,
-  criteria: string,
-  extra: { reference?: string; contexts?: string } = {},
-): Promise<{ score: number; reasoning: string; judge: Record<string, unknown> }> {
-  const { text, value, judge } = await askJudge(cfg, ctx, judgePrompt(criteria, ctx, extra), criteria);
-  const obj = (value ?? {}) as { score?: unknown; reasoning?: unknown };
-  let score = Number(obj.score);
-  if (!Number.isFinite(score)) {
-    const m = /score"?\s*[:=]\s*([0-9.]+)/i.exec(text);
-    score = m ? Number(m[1]) : NaN;
-  }
-  if (!Number.isFinite(score)) throw new Error(`judge returned no parseable score: ${short(text, 200)}`);
-  if (score > 1 && score <= 10) score /= 10;
-  return { score: Math.max(0, Math.min(1, score)), reasoning: String(obj.reasoning ?? text).slice(0, 2000), judge };
-}
-
-/**
- * One judged item of a claim-by-claim check: a claim of the answer, a retrieved document, a statement of the reference.
- * `ok` is the verdict (supported, relevant, found); `evidence` is what the judge pointed at, so a person can check it.
- */
-export interface EvidenceItem {
-  text: string;
-  ok: boolean;
-  evidence?: string;
-}
-
-/**
- * Claim-by-claim judging (the way Ragas measures faithfulness, context precision and recall): the judge returns a
- * verdict per item, with the evidence, instead of one number. The score is computed here from the verdicts, so it
- * can be followed item by item, and the items are kept in the result (what was demonstrated, what is still to verify).
- */
-async function judgeItems(cfg: CheckConfig, ctx: CheckContext, task: string, sections: Array<[string, string | undefined]>, key: string): Promise<{ items: EvidenceItem[]; judge: Record<string, unknown> }> {
-  const prompt = [
-    'You are a strict, impartial evaluator. Judge only from the text given here, not from your own knowledge.',
-    task,
-    'Return ONLY a JSON object: {"items": [{"text": "<the item>", "ok": true|false, "evidence": "<a short quote or document id that decides it, or why nothing does>"}]}.',
-    ...sections.filter(([, v]) => v).map(([k, v]) => `\n${k}:\n${v}`),
-  ].join('\n');
-  const { text, value, judge } = await askJudge(cfg, ctx, prompt, key, 1500);
-  const raw = (value as { items?: unknown } | undefined)?.items;
-  if (!Array.isArray(raw)) throw new Error(`judge returned no items: ${short(text, 200)}`);
-  const items = raw
-    .map((x) => x as { text?: unknown; ok?: unknown; evidence?: unknown })
-    .filter((x) => x && typeof x.text === 'string')
-    .map((x) => ({ text: String(x.text).slice(0, 500), ok: x.ok === true || x.ok === 'true', ...(x.evidence ? { evidence: String(x.evidence).slice(0, 300) } : {}) }));
-  return { items, judge };
-}
-
-/**
- * What a check calls its verdicts ([ok, not ok]), shown with the items: claims are "supported" or "not supported",
- * documents "useful" or "not useful", facts "found" or "missing".
- */
-const LABELS = {
-  claims: ['supported', 'not supported'],
-  documents: ['useful', 'not useful'],
-  statements: ['found', 'missing'],
-  entities: ['retrieved', 'missing'],
-  answer: ['matching', 'not matching'],
-} as const;
-
-/** "3 of 4 claims supported by the context; not supported: …" — the items a person should look at first. */
-function itemsSummary(items: EvidenceItem[], noun: string, verdict: string, badLabel: string): string {
-  const bad = items.filter((i) => !i.ok);
-  const head = `${items.length - bad.length} of ${items.length} ${noun} ${verdict}`;
-  return bad.length ? `${head}; ${badLabel}: ${bad.slice(0, 3).map((i) => `"${short(i.text, 80)}"`).join(', ')}${bad.length > 3 ? ` and ${bad.length - 3} more` : ''}` : head;
-}
-
-const round3 = (n: number) => Math.round(n * 1000) / 1000;
-
-/** Rank-aware average precision: relevant documents ranked first score higher. */
-function averagePrecision(relevant: boolean[]): number {
-  let hits = 0;
-  let sum = 0;
-  relevant.forEach((r, i) => {
-    if (r) {
-      hits++;
-      sum += hits / (i + 1);
-    }
-  });
-  return hits ? round3(sum / hits) : 0;
-}
-
-const judgeFailed = (cfg: CheckConfig, e: unknown) => res(cfg, false, `judge failed: ${(e as Error).message}`, { source: 'ai-judge' });
-
-/** The share of items judged ok (0 when there are none; unrounded, for scores computed from several shares). */
-const rawShare = (items: EvidenceItem[]) => (items.length ? items.filter((i) => i.ok).length / items.length : 0);
-/** The share of items judged ok, rounded (`empty` when there is nothing to judge). */
-const okShare = (items: EvidenceItem[], empty: number) => (items.length ? round3(rawShare(items)) : empty);
-
-/** The question, for a judge prompt (undefined when the test has none). */
-const questionOf = (ctx: CheckContext) => asText(ctx.question ?? ctx.input ?? '') || undefined;
-
-/**
- * A check judged item by item: asks the judge, scores the share of ok items against the threshold and keeps the items
- * with their verdict names in the result. `items` may rework what the judge returned (ordering, defaults).
- */
-async function judgedItemsCheck(
-  cfg: CheckConfig,
-  ctx: CheckContext,
-  o: {
-    key: string;
-    task: string;
-    sections: Array<[string, string | undefined]>;
-    label: string;
-    noun: keyof typeof LABELS;
-    verdict: string;
-    threshold: number;
-    /** The score when the judge found nothing to judge. */
-    empty: number;
-    items?(items: EvidenceItem[]): EvidenceItem[];
-    score?(items: EvidenceItem[]): number;
-    extra?(score: number): Record<string, unknown>;
-  },
-): Promise<CheckResult> {
-  try {
-    const judged = await judgeItems(cfg, ctx, o.task, o.sections, o.key);
-    const items = o.items ? o.items(judged.items) : judged.items;
-    const score = o.score ? o.score(items) : okShare(items, o.empty);
-    return res(cfg, score >= o.threshold, `${o.label} (judge) ${score}: ${itemsSummary(items, o.noun, o.verdict, LABELS[o.noun][1])}`, {
-      source: 'ai-judge',
-      score,
-      metadata: { items, itemLabels: LABELS[o.noun], judge: judged.judge, threshold: o.threshold, ...o.extra?.(score) },
-    });
-  } catch (e) {
-    return judgeFailed(cfg, e);
-  }
-}
 
 registerCheck('llm-judge', async (cfg, ctx) => {
   const criteria = String(cfg.criteria ?? cfg.rubric ?? 'The response is correct, relevant, complete and follows the instructions.');
@@ -770,244 +434,8 @@ registerCheck('llm-judge', async (cfg, ctx) => {
   }
 });
 
-/* ------------------------------------------------------------------ RAG */
-
-function ragContexts(ctx: CheckContext): RetrievedDoc[] {
-  return ctx.contexts ?? [];
-}
-
-registerCheck('context-precision', async (cfg, ctx) => {
-  const docs = ragContexts(ctx);
-  const t = threshold(cfg, 0.5);
-  const reference = cfg.expected ?? ctx.expected;
-  if (cfg.judge)
-    return judgedItemsCheck(cfg, ctx, {
-      key: 'context-precision',
-      task: 'For each RETRIEVED DOCUMENT, in the order given, decide whether it is useful for answering the QUESTION (to reach the REFERENCE ANSWER when one is given). One item per document; "text" is the document id.',
-      sections: [
-        ['QUESTION', asText(ctx.question ?? ctx.input ?? '')],
-        ['REFERENCE ANSWER', reference !== undefined ? asText(reference) : undefined],
-        ['RETRIEVED DOCUMENTS', docs.map((d) => `[${d.id}] ${d.text}`).join('\n')],
-      ],
-      label: 'context precision',
-      noun: 'documents',
-      verdict: 'useful',
-      threshold: t,
-      empty: 0,
-      // the judge's verdicts in the documents' order (rank matters), a document it skipped counts as not judged
-      items: (items) => {
-        const byId = new Map(items.map((i) => [i.text.replace(/^\[|\]$/g, ''), i]));
-        return docs.map((d, i) => byId.get(d.id) ?? items[i] ?? { text: d.id, ok: false, evidence: 'not judged' });
-      },
-      score: (items) => averagePrecision(items.map((i) => i.ok)),
-    });
-  const ref = `${ctx.question ?? ''} ${asText(reference ?? '')}`;
-  const refWords = wordSet(ref);
-  const relevance = docs.map((d) => coverageIn(d.text, refWords) >= Number(cfg.docThreshold ?? 0.1) || coverage(ref, d.text) >= 0.3);
-  const score = averagePrecision(relevance);
-  const hits = relevance.filter(Boolean).length;
-  return res(cfg, score >= t, `context precision ${score} (${hits}/${docs.length} relevant)`, {
-    source: 'heuristic',
-    score,
-    metadata: { relevant: docs.filter((_, i) => relevance[i]).map((d) => d.id), items: docs.map((d, i) => ({ text: d.id, ok: relevance[i]!, evidence: short(d.text, 120) })), itemLabels: LABELS.documents },
-  });
-});
-
-registerCheck('context-recall', async (cfg, ctx) => {
-  const exp = asText(cfg.expected ?? ctx.expected ?? '');
-  const all = ragContexts(ctx).map((d) => d.text).join('\n');
-  const t = threshold(cfg, 0.6);
-  if (cfg.judge)
-    return judgedItemsCheck(cfg, ctx, {
-      key: 'context-recall',
-      task: 'Split the REFERENCE ANSWER into its statements. For each, decide whether the RETRIEVED CONTEXT contains the information it needs (ok: true) or not.',
-      sections: [
-        ['QUESTION', questionOf(ctx)],
-        ['REFERENCE ANSWER', exp],
-        ['RETRIEVED CONTEXT', ragContexts(ctx).map((d) => `[${d.id}] ${d.text}`).join('\n')],
-      ],
-      label: 'context recall',
-      noun: 'statements',
-      verdict: 'found in the context',
-      threshold: t,
-      empty: 0,
-    });
-  const sents = sentences(exp);
-  const allWords = wordSet(all);
-  const found = sents.map((s) => coverageIn(s, allWords) >= 0.6);
-  const score = sents.length ? round3(found.filter(Boolean).length / sents.length) : round3(coverageIn(exp, allWords));
-  return res(cfg, score >= t, `context recall ${score}`, { source: 'heuristic', score, metadata: { items: sents.map((s, i) => ({ text: s, ok: found[i]! })), itemLabels: LABELS.statements } });
-});
-
-/** The names, numbers and dates of a text (what a retrieval must not lose). */
-function entities(text: string): string[] {
-  const found = new Set<string>();
-  for (const m of text.matchAll(/\b(?:[A-Z][\w'-]*(?:\s+(?:of|de|the|and|&)?\s*[A-Z][\w'-]*)*)\b/g)) {
-    const e = m[0].trim();
-    // a capitalized word that starts a sentence is not a name
-    const at = m.index ?? 0;
-    const startsSentence = at === 0 || /[.!?]\s*$/.test(text.slice(Math.max(0, at - 3), at));
-    if (!startsSentence || e.includes(' ')) found.add(e);
-  }
-  // numbers with their unit (8am, 25%, 3.5kg, 2024-07-18)
-  for (const m of text.matchAll(/\b\d(?:[\d,./:-]*\d)?[a-z%]*/gi)) found.add(m[0]);
-  return [...found];
-}
-
-// the reference's entities that the retrieved context holds (Ragas' context entity recall), with no model
-registerCheck('context-entity-recall', (cfg, ctx) => {
-  const exp = asText(cfg.expected ?? ctx.expected ?? '');
-  const all = ragContexts(ctx)
-    .map((d) => d.text)
-    .join('\n')
-    .toLowerCase();
-  const list = Array.isArray(cfg.entities) ? (cfg.entities as unknown[]).map(String) : entities(exp);
-  const items = list.map((e) => ({ text: e, ok: all.includes(e.toLowerCase()) }));
-  const score = okShare(items, 1);
-  const t = threshold(cfg, 0.8);
-  return res(cfg, score >= t, `context entity recall ${score}: ${itemsSummary(items, 'entities', 'retrieved', 'missing')}`, { source: 'deterministic', score, metadata: { items, itemLabels: LABELS.entities } });
-});
-
-registerCheck('groundedness', async (cfg, ctx) => {
-  const all = ragContexts(ctx).map((d) => `[${d.id}] ${d.text}`).join('\n');
-  const t = threshold(cfg, 0.7);
-  if (cfg.judge)
-    return judgedItemsCheck(cfg, ctx, {
-      key: 'groundedness',
-      task: 'Break the RESPONSE into its atomic factual claims. For each claim, decide whether the RETRIEVED CONTEXT supports it (ok: true) or not (unsupported or contradicted); the evidence is the supporting quote or document id.',
-      sections: [
-        ['QUESTION', questionOf(ctx)],
-        ['RETRIEVED CONTEXT', all],
-        ['RESPONSE', ctx.text || asText(ctx.body)],
-      ],
-      label: 'groundedness',
-      noun: 'claims',
-      verdict: 'supported by the context',
-      threshold: t,
-      // an answer without a claim (a refusal, "I don't know") makes up nothing
-      empty: 1,
-      extra: (score) => ({ hallucinationIndicator: round3(1 - score) }),
-    });
-  const sents = sentences(ctx.text);
-  const allWords = wordSet(all);
-  const supported = sents.map((s) => coverageIn(s, allWords) >= Number(cfg.sentenceThreshold ?? 0.5));
-  const unsupported = sents.filter((_, i) => !supported[i]);
-  const score = sents.length ? round3((sents.length - unsupported.length) / sents.length) : 1;
-  return res(cfg, score >= t, `groundedness ${score} — ${unsupported.length} unsupported sentence(s)`, {
-    source: 'heuristic',
-    score,
-    metadata: { unsupported: unsupported.slice(0, 10), hallucinationIndicator: round3(1 - score), items: sents.map((s, i) => ({ text: s, ok: supported[i]! })), itemLabels: LABELS.claims },
-  });
-});
-registry.set('faithfulness', registry.get('groundedness')!);
-
-registerCheck('answer-relevance', async (cfg, ctx) => {
-  const t = threshold(cfg, cfg.judge ? 0.7 : 0.2);
-  if (cfg.judge) {
-    try {
-      const j = await runJudge(cfg, ctx, 'The RESPONSE directly and completely answers the INPUT question.');
-      return res(cfg, j.score >= t, `answer relevance (judge) ${j.score}`, { source: 'ai-judge', score: j.score, explanation: j.reasoning, metadata: { judge: j.judge } });
-    } catch (e) {
-      return judgeFailed(cfg, e);
-    }
-  }
-  const q = asText(ctx.question ?? ctx.input ?? '');
-  const exp = asText(cfg.expected ?? ctx.expected ?? '');
-  const qCovered = coverage(q, ctx.text);
-  const score = round3(Math.max(qCovered * 0.5 + (exp ? tokenF1(ctx.text, exp) * 0.5 : qCovered * 0.5), 0));
-  return res(cfg, score >= t, `answer relevance ${score}`, { source: 'heuristic', score });
-});
-
-/**
- * The answer's facts against the reference's (Ragas' factual correctness): precision is the share of the answer's
- * claims the reference supports, recall the share of the reference's claims the answer makes; `mode` picks f1
- * (default), precision or recall.
- */
-registerCheck('answer-correctness', async (cfg, ctx) => {
-  const reference = asText(cfg.expected ?? ctx.expected ?? '');
-  const answer = cfg.path ? asText(query(ctx.body, String(cfg.path))) : ctx.text;
-  const mode = String(cfg.mode ?? 'f1');
-  const t = threshold(cfg, 0.7);
-  if (!reference) return res(cfg, false, 'answer-correctness needs a reference answer (expected)', { source: cfg.judge ? 'ai-judge' : 'heuristic' });
-  let answerItems: EvidenceItem[];
-  let referenceItems: EvidenceItem[];
-  let judge: Record<string, unknown> | undefined;
-  if (cfg.judge) {
-    try {
-      const a = await judgeItems(
-        cfg,
-        ctx,
-        'Break the RESPONSE into its atomic factual claims. For each, decide whether the REFERENCE ANSWER supports it (ok: true) or not.',
-        [
-          ['QUESTION', questionOf(ctx)],
-          ['REFERENCE ANSWER', reference],
-          ['RESPONSE', answer],
-        ],
-        'answer-correctness:precision',
-      );
-      const b =
-        mode === 'precision'
-          ? { items: [] }
-          : await judgeItems(
-              cfg,
-              ctx,
-              'Break the REFERENCE ANSWER into its atomic factual claims. For each, decide whether the RESPONSE states it too (ok: true) or misses or contradicts it.',
-              [
-                ['QUESTION', questionOf(ctx)],
-                ['REFERENCE ANSWER', reference],
-                ['RESPONSE', answer],
-              ],
-              'answer-correctness:recall',
-            );
-      answerItems = a.items;
-      referenceItems = b.items;
-      judge = a.judge;
-    } catch (e) {
-      return judgeFailed(cfg, e);
-    }
-  } else {
-    const referenceWords = wordSet(reference);
-    const answerWords = wordSet(answer);
-    answerItems = sentences(answer).map((s) => ({ text: s, ok: coverageIn(s, referenceWords) >= 0.5 }));
-    referenceItems = sentences(reference).map((s) => ({ text: s, ok: coverageIn(s, answerWords) >= 0.5 }));
-  }
-  const precision = rawShare(answerItems);
-  const recall = rawShare(referenceItems);
-  const f1 = precision + recall ? (2 * precision * recall) / (precision + recall) : 0;
-  const score = round3(mode === 'precision' ? precision : mode === 'recall' ? recall : f1);
-  const missing = referenceItems.filter((i) => !i.ok);
-  const wrong = answerItems.filter((i) => !i.ok);
-  const detail = [wrong.length ? `${wrong.length} claim(s) not in the reference` : '', mode !== 'precision' && missing.length ? `${missing.length} reference fact(s) missing` : ''].filter(Boolean).join(', ');
-  return res(cfg, score >= t, `answer correctness ${mode} ${score}${detail ? ` — ${detail}` : ''}`, {
-    source: cfg.judge ? 'ai-judge' : 'heuristic',
-    score,
-    metadata: {
-      mode,
-      precision: round3(precision),
-      ...(mode !== 'precision' ? { recall: round3(recall) } : {}),
-      items: [...answerItems.map((i) => ({ ...i, text: `answer: ${i.text}` })), ...referenceItems.map((i) => ({ ...i, text: `reference: ${i.text}` }))],
-      itemLabels: LABELS.answer,
-      ...(judge ? { judge } : {}),
-      threshold: t,
-    },
-  });
-});
-
-registerCheck('citation', (cfg, ctx) => {
-  const idList = ragContexts(ctx).map((d) => d.id);
-  const ids = new Set(idList);
-  const cited = [...ctx.text.matchAll(/\[([^\]\s]{1,64})\]/g)].map((m) => m[1]!);
-  if (!cited.length) return res(cfg, cfg.required === false, cfg.required === false ? 'no citations (optional)' : 'no citations found', { source: 'deterministic', score: 0 });
-  // [1] cites the first document
-  const valid = cited.filter((c) => ids.has(c) || ids.has(`doc-${c}`) || idList[Number(c) - 1] !== undefined);
-  const score = Math.round((valid.length / cited.length) * 1000) / 1000;
-  return res(cfg, score >= threshold(cfg, 1), `${valid.length}/${cited.length} citations refer to retrieved documents`, {
-    source: 'deterministic',
-    score,
-    actual: cited,
-    expected: [...ids],
-  });
-});
+// the older name of the claim-by-claim groundedness check (registered in legacy-rag-checks.ts)
+aliasCheck('faithfulness', 'groundedness');
 
 /* ------------------------------------------------------------------ runner */
 
@@ -1015,21 +443,14 @@ registerCheck('citation', (cfg, ctx) => {
 export async function runChecks(checks: CheckConfig[] | undefined, ctx: CheckContext): Promise<CheckResult[]> {
   const out: CheckResult[] = [];
   for (const cfg0 of checks ?? []) {
-    let cfg = cfg0;
-    let fn = registry.get(cfg.type);
-    if (!fn && resolver) {
-      const r = resolver(cfg);
-      if (r && registry.has(r.check)) {
-        fn = registry.get(r.check);
-        cfg = { ...r.options, ...cfg, type: r.check, name: cfg.name ?? cfg.type };
-      }
-    }
-    if (!fn) {
-      out.push({ type: cfg.type, name: cfg.name ?? cfg.type, passed: false, source: 'deterministic', message: `unknown check type "${cfg.type}". Known: ${checkTypes().join(', ')}` });
+    const found = resolveCheck(cfg0);
+    if (!found) {
+      out.push({ type: cfg0.type, name: cfg0.name ?? cfg0.type, passed: false, source: 'deterministic', message: `unknown check type "${cfg0.type}". Known: ${checkTypes().join(', ')}` });
       continue;
     }
+    const cfg = found.cfg;
     try {
-      out.push(await fn(cfg, ctx));
+      out.push(await found.fn(cfg, ctx));
     } catch (e) {
       out.push({ type: cfg.type, name: cfg.name ?? cfg.type, passed: false, source: 'deterministic', message: `check error: ${normalizeError(e).message}` });
     }

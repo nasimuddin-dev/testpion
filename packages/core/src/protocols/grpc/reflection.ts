@@ -1,14 +1,11 @@
 import type * as grpc from '@grpc/grpc-js';
-import type descriptorTypes from 'protobufjs/ext/descriptor/index.js';
-import { nodeRequire } from '../../util/lazy-require.js';
 import { ApsError } from '../../errors.js';
 import type { KeyValue } from '../../model/types.js';
 import { assertUrlAllowed } from '../../net/policy.js';
-import { grpcChannel, grpcJs, protobufLib, protoLoaderLib, type GrpcTlsOptions } from './grpc.js';
+import { grpcChannel, type GrpcTlsOptions } from './grpc.js';
+import { descriptorLib, grpcJs, protobufLib, protoLoaderLib } from './grpc-libs.js';
 
-// protobuf's descriptor extension loads at first use (see util/lazy-require.ts)
-let descriptorMod: typeof descriptorTypes | undefined;
-const descriptorLib = (): typeof descriptorTypes => (descriptorMod ??= typeof require === 'function' ? require('protobufjs/ext/descriptor/index.js') : nodeRequire('protobufjs/ext/descriptor/index.js'));
+export { rootFromDescriptorSet } from './grpc-libs.js';
 
 /**
  * gRPC server reflection (grpc.reflection.v1, falling back to v1alpha): lists a server's services and
@@ -144,16 +141,4 @@ export async function reflectServer(target: { address: string; tls: boolean }, o
   if (code === grpcJs().status.UNIMPLEMENTED) throw new ApsError('ProtocolError', 'This server does not offer gRPC server reflection', { suggestions: ['Add the .proto files instead.'] });
   if (code === grpcJs().status.UNAVAILABLE) throw new ApsError('NetworkError', `Can't reach ${target.address}: ${(lastError as { details?: string }).details ?? lastError!.message}`, { suggestions: ['Check the address and whether the server uses TLS (grpcs://) or plaintext.'] });
   throw lastError instanceof ApsError ? lastError : new ApsError('ProtocolError', `Reflection failed: ${lastError?.message}`);
-}
-
-/** A protobufjs Root from a FileDescriptorSet (base64). */
-export function rootFromDescriptorSet(b64: string): protobuf.Root {
-  try {
-    const set = descriptorLib().FileDescriptorSet.decode(Buffer.from(b64, 'base64'));
-    const root = (protobufLib().Root as unknown as { fromDescriptor(s: unknown): protobuf.Root }).fromDescriptor(set);
-    root.resolveAll();
-    return root;
-  } catch (e) {
-    throw new ApsError('ValidationError', `The reflected descriptors can't be used: ${(e as Error).message}`);
-  }
 }

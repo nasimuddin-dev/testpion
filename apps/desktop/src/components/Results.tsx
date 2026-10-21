@@ -37,13 +37,13 @@ export function AddKeyButton({ provider, link, className }: { provider: string; 
  * panes show them elsewhere); a missing AI key still offers "Add the key", which the details name.
  */
 /** The variable an error names as missing (a `{{name}}` left in a URL's host), and the defined name it likely meant. */
-export function missingVariableOf(error: NormalizedError | undefined): { variable: string; meant?: string } | undefined {
+function missingVariableOf(error: NormalizedError | undefined): { variable: string; meant?: string } | undefined {
   const s = (error?.details as { setup?: { variable?: string; meant?: string } } | undefined)?.setup;
   return s?.variable ? { variable: s.variable, meant: s.meant } : undefined;
 }
 
 /** Opens the current environment with a new row for the variable, its value ready to type (the globals without one). */
-export function AddVariableButton({ variable, className }: { variable: string; className?: string }) {
+function AddVariableButton({ variable, className }: { variable: string; className?: string }) {
   const env = useApp((s) => s.environment);
   const go = async () => {
     const e = env ? (await refreshEnvironments()).find((x) => x.name === env) : undefined;
@@ -146,7 +146,7 @@ export function ErrorPanel({ error, context, raw = true }: { error: NormalizedEr
   );
 }
 
-export function SourceBadge({ source }: { source: CheckResult['source'] }) {
+function SourceBadge({ source }: { source: CheckResult['source'] }) {
   if (source === 'deterministic') return null;
   if (source === 'ai-judge')
     return (

@@ -13,6 +13,7 @@ import { RefLink } from './RefLink';
 import { KIND_COLOR, TreeBadge } from './TreeParts';
 import { EnvBadge, EnvSelect } from './EnvSelect';
 import { runCiMenuItems } from '../lib/run-ci';
+import { isCollectionCallLibrary } from '@testpion/shared';
 
 interface RunnableRequest {
   id: string;
@@ -433,7 +434,7 @@ export function CollectionRunner({ collection, folderId, onFolderChange, dataPat
                     />
                     <TreeBadge label={r.method} className={r.kind === 'http' ? `method-${r.method}` : r.kind === 'grpc' ? KIND_COLOR.grpc : r.kind === 'websocket' ? KIND_COLOR.websocket : KIND_COLOR.graphql} />
                     {/* the request itself, one click away (WF-08); a click on the name opens it, the row's box picks it */}
-                    <RefLink to={r.kind === 'grpc' || r.kind === 'websocket' ? { kind: 'saved', library: r.kind, itemId: r.id } : { kind: 'request', collectionId: collection.id, requestId: r.id }} icon={false} className="text-fg" title={`Open ${r.name}`}>
+                    <RefLink to={isCollectionCallLibrary(r.kind) ? { kind: 'saved', library: r.kind, itemId: r.id } : { kind: 'request', collectionId: collection.id, requestId: r.id }} icon={false} className="text-fg" title={`Open ${r.name}`}>
                       {r.name}
                     </RefLink>
                     {r.path.length > 0 && <span className="ml-auto text-xs text-muted truncate max-w-[45%]">{r.path.join(' / ')}</span>}

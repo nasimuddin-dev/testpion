@@ -1,5 +1,5 @@
 import { toast as sonner } from 'sonner';
-import { aiSetupAction } from './lib/ai-errors';
+import { aiSetupActionFor } from './lib/ai-setup';
 import type { ReactNode } from 'react';
 import { docKey, isDocView, routeDoc, useDocs } from './lib/docs';
 import { create } from 'zustand';
@@ -283,7 +283,7 @@ const NO_ENVIRONMENTS: WorkspaceCurrent['environments'] = [];
 export const selectEnvironments = (s: { workspace?: WorkspaceCurrent }): WorkspaceCurrent['environments'] => s.workspace?.environments ?? NO_ENVIRONMENTS;
 
 /** The request editors: they use the Collections explorer as their (only) sidebar and aren't on the rail. */
-export const REQUEST_VIEWS: ViewId[] = ['rest', 'graphql', 'grpc', 'websocket', 'mcp', 'apidef', 'dataset', 'collections'];
+const REQUEST_VIEWS: ViewId[] = ['rest', 'graphql', 'grpc', 'websocket', 'mcp', 'apidef', 'dataset', 'collections'];
 export const isRequestView = (v: ViewId) => REQUEST_VIEWS.includes(v);
 
 /** A place in the app: a view, and the item opened in it when there is one. */
@@ -497,7 +497,7 @@ export function notifySystem(title: string, body: string, opts: { ref?: ItemRef;
 export function toastError(e: unknown): void {
   const err = asError(e);
   // an AI setup problem (a key, no model, Local only) offers its fix (lib/ai-errors.ts, the one place that decides)
-  const setup = aiSetupAction(err);
+  const setup = aiSetupActionFor(err, () => useApp.getState());
   const behind = isPushRejected(err);
   useApp.getState().toast(err.message, 'error', setup ?? (behind ? { label: 'Pull & push', onClick: () => useApp.getState().openIntent('git', { sync: true }) } : undefined));
 }

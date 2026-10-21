@@ -19,14 +19,16 @@ describe('sharing a collection with its gRPC calls and connections', () => {
     await be.invoke('lib.save', { kind: 'grpc', library: { folders: [], items: [{ id: 'g1', name: 'Say hi', folder: 'greeter', collectionId: 'shop', data: { target: 'x:1', method: 'a.B/C' } }, { id: 'g2', name: 'Other', collectionId: 'elsewhere', data: { target: 'x:1', method: 'a.B/D' } }] } });
     await be.invoke('lib.save', { kind: 'websocket', library: { folders: [], items: [{ id: 'w1', name: 'Echo', collectionId: 'shop', data: { url: 'ws://x' } }] } });
 
-    const native = (await be.invoke('col.export', { id: 'shop', format: 'testpion' })) as { collection: Record<string, any> };
-    expect(native.collection.savedItems.grpc.map((i: any) => i.id)).toEqual(['g1']);
-    expect(native.collection.savedItems.websocket.map((i: any) => i.id)).toEqual(['w1']);
+    // no save dialog in this host: the file comes back to be downloaded (base64), as every other save does
+    const native = (await be.invoke('col.export', { id: 'shop', format: 'testpion' })) as { download: { content: string; encoding: string } };
+    const exported = JSON.parse(Buffer.from(native.download.content, 'base64').toString('utf8')) as Record<string, any>;
+    expect(exported.savedItems.grpc.map((i: any) => i.id)).toEqual(['g1']);
+    expect(exported.savedItems.websocket.map((i: any) => i.id)).toEqual(['w1']);
     const postman = (await be.invoke('col.export', { id: 'shop', format: 'postman' })) as { notes: string[] };
     expect(postman.notes.join(' ')).toMatch(/2 gRPC call\(s\) or connection\(s\) aren't in the Postman file/);
 
     // import the file into the same workspace: the ids clash, so the copies get new ones (nothing replaced)
-    const file = { ...native.collection, id: 'shop-copy', name: 'Shop copy' };
+    const file = { ...exported, id: 'shop-copy', name: 'Shop copy' };
     const r = (await be.invoke('col.import', { text: JSON.stringify(file) })) as { collection: string; savedItems: Record<string, number> };
     expect(r).toMatchObject({ collection: 'Shop copy', savedItems: { grpc: 1, websocket: 1 } });
     const copy = (be.ws.listCollections() as Array<Record<string, unknown>>).find((c) => c.name === 'Shop copy')!;

@@ -6,11 +6,11 @@
  */
 import { LIBRARY_OF, RAW_ROOT, isPlainId, plainName, type BundleKindId, type ParsedBundle } from './format.js';
 import { canonicalJson } from './items.js';
-import { assemble, type BundlePart } from './container.js';
+import { assemble, type BundlePart } from './assemble.js';
 import { ENGINE_VERSION } from '../version.js';
+import { isRecord } from '@testpion/shared';
 
-const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
-const objects = (v: unknown): Record<string, unknown>[] => (Array.isArray(v) ? v.filter(isObject) : []);
+const objects = (v: unknown): Record<string, unknown>[] => (Array.isArray(v) ? v.filter(isRecord) : []);
 
 const KIND_OF_LIBRARY = new Map<string, BundleKindId>(Object.entries(LIBRARY_OF).map(([k, lib]) => [lib!, k as BundleKindId]));
 const KIND_OF_ROOT = new Map<string, BundleKindId>(Object.entries(RAW_ROOT).map(([k, root]) => [root!, k as BundleKindId]));
@@ -43,17 +43,17 @@ export function legacyToBundle(raw: Record<string, unknown>): ParsedBundle {
   for (const e of objects(raw.environments)) add('environment', e.id, e.name, canonicalJson(noMeta(e)));
   for (const s of objects(raw.mcpServers)) add('mcp-server', s.id, s.name, canonicalJson(s));
   for (const p of objects(raw.providers)) add('provider', p.id, p.name, canonicalJson(p));
-  if (isObject(raw.tests)) for (const [rel, text] of Object.entries(raw.tests)) if (typeof text === 'string') add('test', `tests/${rel}`, `tests/${rel}`, Buffer.from(text, 'utf8'));
-  if (isObject(raw.library))
+  if (isRecord(raw.tests)) for (const [rel, text] of Object.entries(raw.tests)) if (typeof text === 'string') add('test', `tests/${rel}`, `tests/${rel}`, Buffer.from(text, 'utf8'));
+  if (isRecord(raw.library))
     for (const [lib, v] of Object.entries(raw.library)) {
       const kind = KIND_OF_LIBRARY.get(lib);
       if (!kind) {
         warnings.push(`Skipped the saved items of "${lib}": this version does not import them.`);
         continue;
       }
-      if (isObject(v)) for (const i of objects(v.items)) add(kind, i.id, i.name, canonicalJson(noMeta(i)));
+      if (isRecord(v)) for (const i of objects(v.items)) add(kind, i.id, i.name, canonicalJson(noMeta(i)));
     }
-  if (isObject(raw.packages)) for (const [name, code] of Object.entries(raw.packages)) if (typeof code === 'string') add('script-package', `packages/${name}.js`, name, Buffer.from(code, 'utf8'));
+  if (isRecord(raw.packages)) for (const [name, code] of Object.entries(raw.packages)) if (typeof code === 'string') add('script-package', `packages/${name}.js`, name, Buffer.from(code, 'utf8'));
   for (const f of objects(raw.files)) {
     const path = typeof f.path === 'string' ? f.path : '';
     const kind = KIND_OF_ROOT.get(path.split('/')[0] ?? '');
@@ -63,7 +63,7 @@ export function legacyToBundle(raw: Record<string, unknown>): ParsedBundle {
     }
     add(kind, path, path, f.encoding === 'base64' ? Buffer.from(f.content, 'base64') : Buffer.from(f.content, 'utf8'));
   }
-  const ws = isObject(raw.workspace) ? raw.workspace : {};
+  const ws = isRecord(raw.workspace) ? raw.workspace : {};
   const b = assemble(
     {
       title: plainName(ws.name, 'Workspace export'),

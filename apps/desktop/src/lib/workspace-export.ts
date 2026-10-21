@@ -1,11 +1,9 @@
 import { call } from '../api';
 import { useApp } from '../store';
-import { downloadContent } from './files';
+import { deliverSave, type SaveResult } from './files';
 
-/** What `ws.export` answers: where it went (or the bundle to download), and what is in it, replaced and left out. */
-export interface WorkspaceExportResult {
-  path?: string;
-  bundle?: unknown;
+/** What `ws.export` answers: where it went (or the file to download), and what is in it, replaced and left out. */
+export interface WorkspaceExportResult extends SaveResult {
   cancelled?: boolean;
   name?: string;
   /** `<workspace name>.testpion.json`. */
@@ -24,8 +22,7 @@ export interface WorkspaceExportResult {
  */
 export async function exportWorkspace(ref?: string): Promise<boolean> {
   const r = await call<WorkspaceExportResult>('ws.export', ref ? { ref } : {});
-  if (r.cancelled || (!r.bundle && !r.path)) return false;
-  if (r.bundle) downloadContent(r.fileName ?? 'workspace.testpion.json', JSON.stringify(r.bundle, null, 2), { type: 'application/json' });
+  if (r.cancelled || !deliverSave(r)) return false;
   const where = r.path ? ` to ${r.path}` : '';
   const lines = r.lines ?? [];
   const warn = !!(r.replaced?.length || r.notes?.length);

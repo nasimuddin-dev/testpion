@@ -6,7 +6,7 @@
 import { formatUsd, plural } from '@testpion/shared';
 import { aiRunDeps, applyProposal, isAiSetupError, normalizeError, runAiTask, WorkspaceManager, type AiTaskResult, type EngineContext, type Proposal, type WorkspaceStore } from '@testpion/core';
 import { dim, green, printJson, yellow } from '../shared.js';
-import { printPreview, printProposal } from './ai.js';
+import { printPreview, printProposal } from './ai-print.js';
 
 export interface ProposeOptions {
   store: WorkspaceStore;

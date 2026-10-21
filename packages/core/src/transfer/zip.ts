@@ -118,16 +118,66 @@ export function badEntryName(name: string): string | undefined {
   return undefined;
 }
 
+/**
+ * The offset of the end-of-central-directory record: the last 22 bytes, or before a comment of up to 65,535 bytes (-1 when
+ * there is none). The one place that finds it: the import reader (import/zip.ts) shares it.
+ */
+export function findEndOfDirectory(buf: Buffer): number {
+  for (let i = buf.length - 22; i >= Math.max(0, buf.length - 22 - 0xffff); i--) if (buf.readUInt32LE(i) === 0x06054b50) return i;
+  return -1;
+}
+
+/** One record of the central directory, as the archive declares it (nothing here is trusted yet). */
+export interface ZipRecord {
+  madeBy: number;
+  flags: number;
+  method: number;
+  crc: number;
+  /** Compressed and uncompressed sizes. */
+  csize: number;
+  usize: number;
+  /** The bytes of the name (the reader decodes them: utf8, or the flag-dependent encoding of the import reader). */
+  nameBytes: Buffer;
+  external: number;
+  /** Offset of the entry's local header. */
+  local: number;
+  /** Where the next record starts. */
+  next: number;
+}
+
+/** The central-directory record at `pos`, or undefined when the bytes there are not one (the directory is damaged or cut off). */
+export function readRecord(buf: Buffer, pos: number): ZipRecord | undefined {
+  if (pos + 46 > buf.length || buf.readUInt32LE(pos) !== 0x02014b50) return undefined;
+  const nameLen = buf.readUInt16LE(pos + 28);
+  const extraLen = buf.readUInt16LE(pos + 30);
+  const commentLen = buf.readUInt16LE(pos + 32);
+  const nameEnd = pos + 46 + nameLen;
+  if (nameEnd > buf.length) return undefined;
+  return {
+    madeBy: buf.readUInt16LE(pos + 4),
+    flags: buf.readUInt16LE(pos + 8),
+    method: buf.readUInt16LE(pos + 10),
+    crc: buf.readUInt32LE(pos + 16),
+    csize: buf.readUInt32LE(pos + 20),
+    usize: buf.readUInt32LE(pos + 24),
+    nameBytes: buf.subarray(pos + 46, nameEnd),
+    external: buf.readUInt32LE(pos + 38),
+    local: buf.readUInt32LE(pos + 42),
+    next: nameEnd + extraLen + commentLen,
+  };
+}
+
+/** Where a record's data starts (after its local header), or -1 when the local header is not there. */
+export function dataStart(buf: Buffer, rec: Pick<ZipRecord, 'local'>): number {
+  const { local } = rec;
+  if (local + 30 > buf.length || buf.readUInt32LE(local) !== 0x04034b50) return -1;
+  return local + 30 + buf.readUInt16LE(local + 26) + buf.readUInt16LE(local + 28);
+}
+
 /** Read every file of the archive, or throw with what is wrong (see the module comment for what is refused). */
 export function readZip(buf: Buffer, limits: ZipLimits = ZIP_LIMITS): ZipEntry[] {
   if (!looksLikeZip(buf)) bad('it is not a zip archive');
-  // the end-of-central-directory record: the last 22 bytes, or before a comment of up to 65,535 bytes
-  let eocd = -1;
-  for (let i = buf.length - 22; i >= Math.max(0, buf.length - 22 - 0xffff); i--)
-    if (buf.readUInt32LE(i) === 0x06054b50) {
-      eocd = i;
-      break;
-    }
+  const eocd = findEndOfDirectory(buf);
   if (eocd < 0) bad('the zip directory is missing (a damaged or cut-off file)');
   const count = buf.readUInt16LE(eocd + 10);
   const cdSize = buf.readUInt32LE(eocd + 12);
@@ -142,22 +192,11 @@ export function readZip(buf: Buffer, limits: ZipLimits = ZIP_LIMITS): ZipEntry[]
   let packed = 0;
   let pos = cdOffset;
   for (let n = 0; n < count; n++) {
-    if (pos + 46 > buf.length || buf.readUInt32LE(pos) !== 0x02014b50) bad('the zip directory is damaged');
-    const madeBy = buf.readUInt16LE(pos + 4);
-    const flags = buf.readUInt16LE(pos + 8);
-    const method = buf.readUInt16LE(pos + 10);
-    const crc = buf.readUInt32LE(pos + 16);
-    const csize = buf.readUInt32LE(pos + 20);
-    const usize = buf.readUInt32LE(pos + 24);
-    const nameLen = buf.readUInt16LE(pos + 28);
-    const extraLen = buf.readUInt16LE(pos + 30);
-    const commentLen = buf.readUInt16LE(pos + 32);
-    const external = buf.readUInt32LE(pos + 38);
-    const local = buf.readUInt32LE(pos + 42);
-    const nameEnd = pos + 46 + nameLen;
-    if (nameEnd > buf.length) bad('the zip directory is damaged');
-    const name = buf.toString('utf8', pos + 46, nameEnd);
-    pos = nameEnd + extraLen + commentLen;
+    const rec = readRecord(buf, pos);
+    if (!rec) return bad('the zip directory is damaged');
+    const { madeBy, flags, method, crc, csize, usize, external } = rec;
+    const name = rec.nameBytes.toString('utf8');
+    pos = rec.next;
 
     const isDir = name.endsWith('/');
     const why = badEntryName(isDir ? name.slice(0, -1) : name);
@@ -180,8 +219,8 @@ export function readZip(buf: Buffer, limits: ZipLimits = ZIP_LIMITS): ZipEntry[]
     packed += csize;
     if (total > limits.totalBytes) bad(`the files inflate to more than ${limits.totalBytes} bytes`);
 
-    if (local + 30 > buf.length || buf.readUInt32LE(local) !== 0x04034b50) bad(`"${name}" has a damaged header`);
-    const start = local + 30 + buf.readUInt16LE(local + 26) + buf.readUInt16LE(local + 28);
+    const start = dataStart(buf, rec);
+    if (start < 0) bad(`"${name}" has a damaged header`);
     if (start + csize > buf.length) bad(`"${name}" is cut off`);
     const raw = buf.subarray(start, start + csize);
     let data: Buffer;

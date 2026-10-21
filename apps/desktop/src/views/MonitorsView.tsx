@@ -29,7 +29,7 @@ import { useExternalChange } from '../lib/external-change';
 import { EnvBadge, EnvSelect } from '../components/EnvSelect';
 import { OutputActions } from '../components/output/OutputFrame';
 import type { OutputSpec } from '../components/output/output-core';
-import { outputFileName } from '@testpion/shared';
+import { outputFileName, COLLECTION_CALL_LIBRARIES } from '@testpion/shared';
 
 /** The tab of a monitor being created (not saved yet, so no id). */
 const NEW_TAB = 'new';
@@ -627,7 +627,7 @@ function MonitorEditor({ draft, collections, onCancel, onSave }: { draft: Monito
   useEffect(() => {
     let live = true;
     void Promise.all(
-      (['grpc', 'websocket'] as const).map((kind) =>
+      COLLECTION_CALL_LIBRARIES.map((kind) =>
         call<Library<unknown>>('lib.get', { kind }).then(
           (lib) => lib.items.filter((i) => i.collectionId === d.collectionId).map((i) => ({ id: i.id, label: `${kind === 'grpc' ? 'gRPC' : 'WebSocket'} · ${i.name}`, depth: 0, folder: false })),
           () => [],

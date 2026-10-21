@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { call } from '../api';
 import { toastError, useApp } from '../store';
 import { Button, Field, Modal, Select } from './ui';
-import { downloadContent } from '../lib/files';
+import { deliverSave, type SaveResult } from '../lib/files';
 import { exportWorkspace } from '../lib/workspace-export';
 
 type Format = 'testpion' | 'postman' | 'openapi' | 'bruno' | 'http' | 'asyncapi';
@@ -36,10 +36,8 @@ export function ExportDialogBody({ collections, initial, onClose }: { collection
         if (await exportWorkspace(workspace.path)) onClose();
         return;
       }
-      const r = await call<{ path?: string; collection?: unknown; text?: string; name: string; notes: string[] }>('col.export', { id: what, format });
-      if (r.collection) downloadContent(r.name, JSON.stringify(r.collection, null, 2), { type: 'application/json' });
-      else if (r.text !== undefined) downloadContent(r.name, r.text, { type: format === 'openapi' || format === 'asyncapi' ? 'application/yaml' : 'text/plain' });
-      else if (!r.path) return; // the save dialog was cancelled
+      const r = await call<SaveResult & { name: string; notes: string[] }>('col.export', { id: what, format });
+      if (!deliverSave(r)) return; // the save dialog was cancelled
       const extra = r.notes.length ? ` Not exported: ${r.notes.join('; ')}.` : '';
       toast(`${r.path ? `Exported to ${r.path}.` : 'Exported.'}${extra}`, r.notes.length ? 'info' : 'success');
       onClose();

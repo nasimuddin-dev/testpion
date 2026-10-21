@@ -8,7 +8,8 @@ import { scriptAiItems, type ScriptAiContext } from './ai/script-ai';
 import { useAiEnabled } from '../lib/use-ai-enabled';
 import { useWidth } from './charts';
 import { CommandPalette } from './Shell';
-import { LinkButton, Menu, PinnablePanel, Tabs, Tooltip, cx } from './ui';
+import { LinkButton, Menu, Tabs, Tooltip, cx } from './ui';
+import { PinnablePanel } from './PinnablePanel';
 
 const ScriptPackagesDialog = lazy(() => import('./ScriptPackagesDialog').then((m) => ({ default: m.ScriptPackagesDialog })));
 

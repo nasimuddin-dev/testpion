@@ -24,7 +24,7 @@ import { GuidedTour } from '../components/GuidedTour';
 import { openRef } from '../lib/open-ref';
 import { refIcon } from '../components/RefLink';
 import { TreeBadge } from '../components/TreeParts';
-import { ITEM_KIND_LABEL, itemRefKey, outputFileName } from '@testpion/shared';
+import { ITEM_KIND_LABEL, itemRefKey, outputFileName, COLLECTION_CALL_LIBRARIES } from '@testpion/shared';
 
 /** The newest history entry and the count: whether requests were sent since Home last loaded. */
 const historyMark = (r: { items: Array<{ id: string }>; total: number }) => `${r.total}|${r.items[0]?.id ?? ''}`;
@@ -235,7 +235,7 @@ export function HomeView() {
   const load = () => {
     stale.current = false;
     void refreshCollections();
-    void Promise.all(['grpc', 'websocket'].map((kind) => call<{ items: Array<{ collectionId?: string }> }>('lib.get', { kind }).catch(() => ({ items: [] }))))
+    void Promise.all(COLLECTION_CALL_LIBRARIES.map((kind) => call<{ items: Array<{ collectionId?: string }> }>('lib.get', { kind }).catch(() => ({ items: [] }))))
       .then((libs) => {
         const n: Record<string, number> = {};
         for (const i of libs.flatMap((l) => l.items)) if (i.collectionId) n[i.collectionId] = (n[i.collectionId] ?? 0) + 1;

@@ -4,7 +4,7 @@ import { parseYaml } from '../util/lazy-yaml.js';
 import { ApsError } from '../errors.js';
 import { shortId, slugify } from '../util/ids.js';
 import { deref } from '../util/json-ref.js';
-import { successCode } from '../openapi/outline.js';
+import { successCode } from '../openapi/success-code.js';
 import { newDocument, type ImportDocument } from './model.js';
 
 function newCollection(name: string, items: CollectionNode[], extra: Partial<Collection> = {}): Collection {

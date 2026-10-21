@@ -14,7 +14,7 @@
  */
 import type { CheckConfig, CheckResult } from '../../model/types.js';
 import { cosine } from '../text.js';
-import { checkFn, registerCheck, type CheckContext } from '../checks.js';
+import { checkFn, overrideCheck, registerCheck, type CheckContext } from '../checks.js';
 import { ANSWER_RELEVANCE, FAITHFULNESS, type JudgedMetric } from './judge-prompts.js';
 import { ANSWER_RELEVANCE_ON_CLAIMS, CLAIMS, CONTEXT_RELEVANCE_CHUNKS, CONTEXT_RELEVANCE_NVIDIA, CONTEXT_RELEVANCE_SENTENCES, CONTEXT_RELEVANCE_STATEMENTS, FAITHFULNESS_ON_CLAIMS, REVERSE_QUESTIONS } from './judge-prompts-more.js';
 import { assertJudgeUsable, contextsInput, describe, guarded, judgeMeta, judgePanel, na, needContexts, panelOf, round3, strictOver, type PanelOptions, type PanelResult } from './judged-kit.js';
@@ -167,13 +167,14 @@ const contextRelevance = (cfg: CheckConfig, ctx: CheckContext): Promise<CheckRes
 /* ------------------------------------------------------------------ registration */
 
 const faithfulnessFn = strictOver(faithfulness, checkFn('groundedness'));
-registerCheck('faithfulness', faithfulnessFn);
-registerCheck('groundedness', faithfulnessFn);
+// the strict judged metrics take over the names of the older checks (eval/legacy-rag-checks.ts) on purpose
+overrideCheck('faithfulness', faithfulnessFn);
+overrideCheck('groundedness', faithfulnessFn);
 // the R1a names always mean the strict metric, anywhere
 registerCheck('rag-faithfulness', faithfulness);
 
 const relevanceFn = strictOver(answerRelevance, checkFn('answer-relevance'));
-registerCheck('answer-relevance', relevanceFn);
+overrideCheck('answer-relevance', relevanceFn);
 registerCheck('rag-answer-relevance', answerRelevance);
 
 registerCheck('context-relevance', contextRelevance);

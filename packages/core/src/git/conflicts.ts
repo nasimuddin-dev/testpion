@@ -51,8 +51,6 @@ type Part = { part: string; base?: string; ours?: string; theirs?: string; diffe
 
 export interface ConflictDetail {
   path: string;
-  /** Resolved by meaning (item by item): kept for callers written before `mode`. */
-  collection: boolean;
   mode: ConflictMode;
   kind?: KindId;
   items: Array<Omit<MergeConflict, 'base' | 'ours' | 'theirs' | 'fields'> & { parts: Part[]; fields?: ConflictField[]; /** The item as JSON, to start an edit from (ours). */ editable?: string }>;
@@ -156,13 +154,12 @@ export async function gitConflictDetail(ws: string, path: string): Promise<Confl
   const [base, ours, theirs] = await conflictStages(ws, path);
   if (isBinaryPath(path)) {
     const size = async (n: 2 | 3) => Number((await runGit(ws, ['cat-file', '-s', `:${n}:${toRepoPath((await repoRoot(ws)) ?? ws, ws, path)}`]).catch(() => '')).trim()) || undefined;
-    return { path, collection: false, mode: 'binary', ...(kind ? { kind } : {}), items: [], hunks: [], sizes: { ours: await size(2), theirs: await size(3) } };
+    return { path, mode: 'binary', ...(kind ? { kind } : {}), items: [], hunks: [], sizes: { ours: await size(2), theirs: await size(3) } };
   }
   const merged = mergeModeOfPath(path) ? mergeWorkspaceTexts(base, ours, theirs, {}, path) : undefined;
-  if (!merged) return { path, collection: false, mode: 'text', ...(kind ? { kind } : {}), items: [], hunks: textHunks(base, ours, theirs) };
+  if (!merged) return { path, mode: 'text', ...(kind ? { kind } : {}), items: [], hunks: textHunks(base, ours, theirs) };
   return {
     path,
-    collection: true,
     mode: 'items',
     ...(kind ? { kind } : {}),
     hunks: [],
