@@ -26,7 +26,7 @@ import {
   Users,
 } from 'lucide-react';
 import { openReverseProxyCapture } from '../lib/capture';
-import { Disc, FolderPlus, Plus, Settings2 } from 'lucide-react';
+import { Database, Disc, FolderPlus, Plus, Settings2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { call } from '../api';
 import { confirmAction, persisted, promptText, toastError, useApp } from '../store';
@@ -50,6 +50,7 @@ import { reportUnopenable } from '../lib/open-ref';
 import { shareDebuggerSession } from '../lib/git-share';
 import { CreateFlowDialog } from '../components/debugger/CreateFlowDialog';
 import { SaveToCollectionDialog } from '../components/debugger/SaveToCollectionDialog';
+import { RagCaptureDialog } from '../components/rag/RagCaptureDialog';
 import { Dock } from '../components/debugger/Dock';
 import { ToolRail, type DockPanel } from '../components/debugger/ToolRail';
 import { useLibraryTabs } from '../lib/library-tabs';
@@ -115,6 +116,8 @@ export function DebuggerView() {
   const [flowFrom, setFlowFrom] = useState<{ ids?: string[]; since?: string }>();
   /** Save to collection (WF-12): these exchanges as saved requests. */
   const [saveFrom, setSaveFrom] = useState<{ ids?: string[]; since?: string }>();
+  /** Create dataset from captured calls: the exchanges chosen. */
+  const [datasetFrom, setDatasetFrom] = useState<{ ids: string[] }>();
   /** "Record a flow…" is on: since when, and how many exchanges so far. */
   const [recording, setRecording] = useState<{ since: string; count: number }>();
   const filterBox = useRef<HTMLInputElement>(null);
@@ -224,6 +227,7 @@ export function DebuggerView() {
   });
   const createFlowFrom = (ids: string[]) => (ids.length ? setFlowFrom({ ids }) : useApp.getState().toast('Select the exchanges to make a flow of (Ctrl+click, Shift+click)', 'error'));
   const saveToCollection = (ids: string[]) => (ids.length ? setSaveFrom({ ids }) : useApp.getState().toast('Select the exchanges to save (Ctrl+click, Shift+click)', 'error'));
+  const createDataset = (ids: string[]) => (ids.length ? setDatasetFrom({ ids }) : useApp.getState().toast('Select the exchanges to make a dataset of (Ctrl+click, Shift+click)', 'error'));
   const selection = () => (selectedIds.length > 1 ? selectedIds : selected ? [selected] : []);
   const openInTab = (e: Exchange) => useApp.getState().openIntent('rest', { request: toRequest(e), name: `${e.method} ${new URL(e.url).pathname}` });
   const resend = async (e: Exchange) => {
@@ -372,6 +376,7 @@ export function DebuggerView() {
     onDelete: (ids) => void remove(ids),
     onCreateFlow: createFlowFrom,
     onSaveToCollection: saveToCollection,
+    onCreateDataset: createDataset,
     onClear: () => void clear(),
     onQuickRule: quickRule,
     onNewRule: setRuleDraft,
@@ -490,6 +495,7 @@ export function DebuggerView() {
                 items={[
                   { label: 'Create flow from selection…', icon: <Workflow size={14} />, disabled: !selection().length, onSelect: () => createFlowFrom(selection()) },
                   { label: 'Save selection to collection…', icon: <FolderPlus size={14} />, disabled: !selection().length, onSelect: () => saveToCollection(selection()) },
+                  { label: 'Create RAG dataset from selection…', icon: <Database size={14} />, disabled: !selection().length, onSelect: () => createDataset(selection()) },
                   { label: 'Record a flow…', icon: <Circle size={14} />, onSelect: () => void startRecording() },
                 ]}
                 trigger={
@@ -884,6 +890,7 @@ export function DebuggerView() {
         />
       )}
       {flowFrom && <CreateFlowDialog ids={flowFrom.ids} since={flowFrom.since} onClose={() => setFlowFrom(undefined)} />}
+      {datasetFrom && <RagCaptureDialog initial={{ from: 'exchanges', exchanges: datasetFrom.ids, label: `${datasetFrom.ids.length} exchange${datasetFrom.ids.length === 1 ? '' : 's'} of the Debugger` }} onClose={() => setDatasetFrom(undefined)} />}
       {saveFrom && <SaveToCollectionDialog ids={saveFrom.ids} since={saveFrom.since} onClose={() => setSaveFrom(undefined)} />}
       {comparePair && <CompareExchangesDialog a={comparePair.a} b={comparePair.b} onClose={() => setComparePair(undefined)} />}
     </div>

@@ -142,6 +142,7 @@ const docsSidebar = [
       { text: 'RAG', link: '/ai-testing/rag' },
       { text: 'RAG metrics', link: '/ai-testing/rag-metrics' },
       { text: 'Custom RAG metrics', link: '/ai-testing/custom-metrics' },
+      { text: 'RAG: dataset from real calls', link: '/ai-testing/rag-capture' },
       { text: 'Agents', link: '/ai-testing/agents' },
       { text: 'Safety', link: '/ai-testing/safety' },
       { text: 'Use from AI agents (MCP)', link: '/ai-testing/mcp-server' },

@@ -1,5 +1,5 @@
 import { CompareView, type Compared } from '../components/ResponseHistory';
-import { History, RotateCcw, Trash2 } from 'lucide-react';
+import { Database, History, RotateCcw, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { asError, call } from '../api';
 import { confirmAction, useApp } from '../store';
@@ -18,6 +18,7 @@ import { saveAsTest } from '../lib/save-test';
 import { outputFileName, type ItemRef } from '@testpion/shared';
 import { AskSearchButton } from '../components/ai/AskSearchButton';
 import { ASK_SCOPE } from '../components/ai/ask-search';
+import { RagCaptureDialog } from '../components/rag/RagCaptureDialog';
 
 interface Entry {
   id: string;
@@ -145,6 +146,8 @@ export function HistoryView() {
   const [kind, setKind] = useState('');
   const [failedOnly, setFailedOnly] = useState(false);
   const [sel, setSel] = useState<Entry>();
+  /** Create dataset from captured calls: the HTTP entries listed. */
+  const [dataset, setDataset] = useState<string[]>();
   // Ctrl/⌘+click a second entry: compare the two responses (older first)
   const [pair, setPair] = useState<{ before: Entry; after: Entry; result?: Compared; error?: string }>();
   const pick = (e: Entry, ev: React.MouseEvent) => {
@@ -216,6 +219,7 @@ export function HistoryView() {
     },
   });
   return (
+    <>
     <Split id="history" initial={45}>
       <div className="h-full flex flex-col" onKeyDown={treeKeys} data-output="history">
         <div className="flex gap-2 p-2 border-b border-line">
@@ -247,6 +251,17 @@ export function HistoryView() {
         {/* the count and the download share a row: the filter bar above has no room for the control in a narrow list */}
         <div className="flex items-center gap-2 px-3 min-h-8 min-w-0">
           <span className="text-xs text-muted truncate min-w-0">{total.toLocaleString()} {total === 1 ? 'entry' : 'entries'} · grouped by day · double-click to open · Ctrl+click another to compare</span>
+          <Button
+            size="sm"
+            variant="ghost"
+            icon={<Database size={12} />}
+            disabled={!items.some((e) => e.kind === 'http')}
+            title="Make a RAG dataset of the HTTP calls listed: question, answer and retrieved contexts, with personal data masked"
+            onClick={() => setDataset(items.filter((e) => e.kind === 'http').map((e) => e.id))}
+            data-history-rag-dataset
+          >
+            RAG dataset…
+          </Button>
           <OutputActions spec={spec} />
         </div>
         <StatusMix items={items} />
@@ -364,5 +379,7 @@ export function HistoryView() {
         )}
       </div>
     </Split>
+      {dataset && <RagCaptureDialog initial={{ from: 'history', history: dataset, label: `${dataset.length} HTTP ${dataset.length === 1 ? 'entry' : 'entries'} of History` }} onClose={() => setDataset(undefined)} />}
+    </>
   );
 }

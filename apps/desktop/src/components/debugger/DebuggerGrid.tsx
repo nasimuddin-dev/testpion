@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, Columns3, Copy, Download, ExternalLink, Filter, FolderPlus, Highlighter, Lock, Network, Play, Reply, Shuffle, Star, Trash2, Workflow, Wrench } from 'lucide-react';
+import { ArrowDown, ArrowUp, Columns3, Copy, Database, Download, ExternalLink, Filter, FolderPlus, Highlighter, Lock, Network, Play, Reply, Shuffle, Star, Trash2, Workflow, Wrench } from 'lucide-react';
 import { memo, useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { formatBytes } from '@testpion/shared';
 import { call } from '../../api';
@@ -111,6 +111,8 @@ export interface GridActions {
   onCreateFlow(ids: string[]): void;
   /** These exchanges as saved requests (the Save to collection dialog, WF-12). */
   onSaveToCollection(ids: string[]): void;
+  /** These exchanges as a RAG dataset (the Create dataset from captured calls dialog). */
+  onCreateDataset(ids: string[]): void;
   onClear(): void;
   /** Add a rule straight away (a quick rule from the row's values). */
   onQuickRule(kind: RuleKind, name: string, match: Rule['match'], extra?: Partial<Rule>): void;
@@ -290,6 +292,7 @@ export const DebuggerGrid = memo(function DebuggerGrid({
       { label: 'Compare with…', onSelect: () => actions.onCompare(e) },
       { label: ids.length > 1 ? `Create flow from ${ids.length} selected…` : 'Create flow from selection…', icon: <Workflow size={14} />, onSelect: () => actions.onCreateFlow(ids) },
       { label: ids.length > 1 ? `Save ${ids.length} selected to collection…` : 'Save to collection…', icon: <FolderPlus size={14} />, onSelect: () => actions.onSaveToCollection(ids) },
+      { label: ids.length > 1 ? `Create RAG dataset from ${ids.length} selected…` : 'Create RAG dataset from selection…', icon: <Database size={14} />, onSelect: () => actions.onCreateDataset(ids) },
       // the whole exchange (rows are lean), as the request it was: the one Save as test
       saveAsTestMenuItem(() => void whole(e).then((x) => saveAsTest({ source: { kind: 'http', request: toRequest(x), status: x.status }, name: `${x.method} ${pathOf(x.url)}` }), toastError)),
       { label: 'Capture only', icon: <Filter size={14} />, separator: true, onSelect: () => undefined, items: rulesOf('only', 'Capture only') },
