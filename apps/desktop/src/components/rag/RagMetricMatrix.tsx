@@ -134,21 +134,18 @@ export function RagMetricMatrix({
   judge,
   runs = [],
   evaluators = [],
-  evaluation,
   providers = [],
   onRescored,
   evaluation,
 }: {
   runId: string;
-  /** The saved evaluation (name or id) a tuned pass mark can be saved in (Calibrate judge). */
-  evaluation?: string;
   target?: string;
   judge?: RagJudgeSetup;
   /** The evaluation's runs (compare, the variant pivot). */
   runs?: RunChoice[];
   /** The evaluation's metrics now (score the run again with them). */
   evaluators?: CheckConfig[];
-  /** The saved evaluation: the database of its SQL metrics is used when the run is scored again. */
+  /** The saved evaluation: the database of its SQL metrics is used when the run is scored again; a tuned pass mark (Calibrate judge) and the Trend are saved in or read from it. */
   evaluation?: string;
   providers?: ProviderConfig[];
   onRescored?(runId: string): void;
