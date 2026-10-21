@@ -1,11 +1,12 @@
 import { Check, Info, Wrench } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { GitFixResult, GitFixStep } from '@testpion/core';
 import { call } from '../api';
 import { toastError, useApp } from '../store';
 import { plural } from '../lib/format';
 import { toastWithUndo } from '../lib/git-items';
-import { Badge, Button, Empty, Modal } from './ui';
+import { asError } from '../api';
+import { Badge, Button, Callout, Empty, Modal, Toggle } from './ui';
 
 const STATE: Record<GitFixStep['state'], { label: string; tone: 'accent' | 'warn' | undefined }> = {
   todo: { label: 'Will fix', tone: 'accent' },
@@ -15,7 +16,7 @@ const STATE: Record<GitFixStep['state'], { label: string; tone: 'accent' | 'warn
 
 /**
  * Fix git setup (release C of planning/git-everything.md §4d): one previewed, undoable action. It shows every step it will take
- * (the ignore and attribute files, the merge and diff drivers, existing files rewritten once into the stable format) before
+ * (the ignore and attribute files, the merge and diff drivers, existing files rewritten once into the fixed layout) before
  * anything is written, applies them together, says what it changed and offers Undo. Idempotent: on a workspace that is in order
  * it says so. The same plan is `testpion git fix --dry-run` and the MCP tool git_fix_setup.
  */
@@ -25,12 +26,14 @@ export function GitFixDialog({ onClose, onDone }: { onClose(): void; onDone(): v
   const [plan, setPlan] = useState<GitFixResult>();
   const [done, setDone] = useState<GitFixResult>();
   const [busy, setBusy] = useState(false);
-  const close = useRef(onClose);
-  close.current = onClose;
+  // a plan that cannot be made says why and offers Retry; the dialog stays open (closing after a toast leaves no hint what to try)
+  const [problem, setProblem] = useState<string>();
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     setPlan(undefined);
-    void call<GitFixResult>('git.fixPlan', { hook, untrack }).then(setPlan, (e) => (toastError(e), close.current()));
-  }, [hook, untrack]);
+    setProblem(undefined);
+    void call<GitFixResult>('git.fixPlan', { hook, untrack }).then(setPlan, (e) => setProblem(asError(e).message));
+  }, [hook, untrack, attempt]);
 
   const apply = async () => {
     setBusy(true);
@@ -89,7 +92,11 @@ export function GitFixDialog({ onClose, onDone }: { onClose(): void; onDone(): v
         )
       }
     >
-      {!shown ? (
+      {problem ? (
+        <Callout tone="bad" role="alert" action={<Button size="sm" onClick={() => setAttempt((n) => n + 1)}>Retry</Button>}>
+          Could not look at the workspace: {problem}. Check that git is installed and the workspace folder is readable, then retry.
+        </Callout>
+      ) : !shown ? (
         <Empty title="Looking at the workspace…" />
       ) : (
         <div className="grid gap-3" data-fix-dialog="">
@@ -120,7 +127,7 @@ export function GitFixDialog({ onClose, onDone }: { onClose(): void; onDone(): v
           {shown.rewritten.length > 0 && (
             <details className="text-xs" data-fix-rewritten="">
               <summary className="cursor-pointer text-muted">
-                {plural(shown.rewritten.length, 'file')} {done ? 'rewritten' : 'will be rewritten'} in the stable format
+                {plural(shown.rewritten.length, 'file')} {done ? 'rewritten' : 'will be rewritten'} in the layout that merges cleanly (one request per block, in a fixed order)
               </summary>
               <ul className="mt-1 grid gap-0.5 font-mono max-h-40 overflow-auto">
                 {shown.rewritten.map((r) => (
@@ -141,14 +148,10 @@ export function GitFixDialog({ onClose, onDone }: { onClose(): void; onDone(): v
           {!done && (
             <div className="grid gap-1 text-sm">
               {shown.inRepository && (
-                <label className="flex items-center gap-2">
-                  <input type="checkbox" checked={hook} onChange={(e) => setHook(e.target.checked)} /> Also refuse a commit that would publish a secret (pre-commit hook)
-                </label>
+                <Toggle checked={hook} onChange={setHook} label="Also refuse a commit that would publish a secret" title="Adds a check that runs before every commit made in a terminal and stops it when a password, token or key is in the files" />
               )}
               {(plan?.steps.some((s) => s.id === 'untrack') || untrack) && (
-                <label className="flex items-center gap-2">
-                  <input type="checkbox" checked={untrack} onChange={(e) => setUntrack(e.target.checked)} /> Remove from git the tracked files that should stay out (they stay on disk)
-                </label>
+                <Toggle checked={untrack} onChange={setUntrack} label="Stop sharing files that should stay on this computer (they stay on disk)" title="Files such as local history and caches were committed once; this takes them out of git so they are not shared again" />
               )}
             </div>
           )}

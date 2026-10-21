@@ -7,6 +7,7 @@ import { BarRow, ChartCard, RecentRuns, StatTile } from './charts';
 import { TimeByPhase } from './RunCharts';
 import { openRef } from '../lib/open-ref';
 import { LinkButton, Badge, cx, statusTone } from './ui';
+import { FilterChips } from './FilterChips';
 import { useRpc } from '../lib/use-rpc';
 
 /** From `stats.requests` (summarizeRequestStats in core). */
@@ -217,25 +218,22 @@ export function CollectionOverview({ collection, onOpen, onRun }: { collection: 
             const mode = show === 'sent' && !sent.length ? 'none' : show;
             const list = mode === 'sent' ? health.filter((r) => r.stat) : mode === 'unsent' ? unsent : mode === 'unchecked' ? unchecked : [];
             const shown = all ? list : list.slice(0, 100);
-            const chip = (id: typeof show, label: string, n: number) => (
-              <button
-                key={id}
-                className={cx('px-2 py-0.5 rounded-full border text-xs', show === id ? 'border-accent bg-accent-soft text-fg' : 'border-line text-muted hover:text-fg', !n && 'opacity-50')}
-                disabled={!n}
-                aria-pressed={show === id}
-                onClick={() => (setShow(id), setAll(false))}
-              >
-                {label} {n}
-              </button>
-            );
             if (!rows.length) return <p className="text-xs text-muted">Add requests to see how they are doing.</p>;
             return (
               <div className="flex flex-col gap-2" data-request-health={mode}>
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  {chip('sent', 'Sent', sent.length)}
-                  {chip('unsent', 'Not sent yet', unsent.length)}
-                  {chip('unchecked', 'Without checks', unchecked.length)}
-                </div>
+                <FilterChips
+                  label="Which requests to list"
+                  single
+                  allChip={false}
+                  className=""
+                  value={[mode === 'none' ? 'sent' : mode]}
+                  onChange={([id]) => id && (setShow(id), setAll(false))}
+                  options={[
+                    { value: 'sent' as const, label: 'Sent', count: sent.length, disabled: !sent.length },
+                    { value: 'unsent' as const, label: 'Not sent yet', count: unsent.length, disabled: !unsent.length },
+                    { value: 'unchecked' as const, label: 'Without checks', count: unchecked.length, disabled: !unchecked.length },
+                  ]}
+                />
                 {mode === 'none' && (
                   <div className="text-xs text-muted flex items-center gap-2 flex-wrap py-2">
                     <span>None of the {rows.length} requests has been sent from the app yet: their health (status, time, failures) shows here once they are.</span>

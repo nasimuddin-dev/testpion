@@ -32,6 +32,20 @@ const dialog = () => `const dlg = () => document.querySelector('[role=dialog]');
 const step = (name, body) => [name, `(async () => { ${dialog()} ${body} })()`];
 
 const steps = [
+  // every step of the dialog can be left; the common path (choose files) is the primary button; the busy line is announced
+  step(
+    'the-source-step-has-cancel-and-a-primary',
+    `await __t.requests();
+     document.querySelector('[aria-label^="Import (OpenAPI"]').click();
+     const choose = await __t.waitFor(() => btn(/^Choose files/), 3000); if (!choose) return 'NO DIALOG';
+     const cancel = btn(/^Cancel$/);
+     const primary = choose.className.includes('brand-gradient') && !btn(/^Preview pasted/)?.className.includes('brand-gradient');
+     const migrate = !!dlg().querySelector('[data-import-migrate]');
+     if (!cancel) return 'NO BUTTON Cancel';
+     await __t.real.click(cancel);
+     const closed = await __t.waitFor(() => !dlg(), 3000);
+     return 'cancel: true | choose files is the primary: ' + primary + ' | coming-from-another-tool link: ' + migrate + ' | closed by cancel: ' + !!closed;`,
+  ),
   step(
     'preview-writes-nothing',
     `await __t.requests();
@@ -140,6 +154,7 @@ const steps = [
 module.exports = withExpect(
   steps,
   {
+    'the-source-step-has-cancel-and-a-primary': /^cancel: true \| choose files is the primary: true \| coming-from-another-tool link: true \| closed by cancel: true$/,
     'preview-writes-nothing': /^title: Import: preview \| nodes: [3-9] \| changed marks: [1-9] \| groups: [A-Z_,]*AUTH_UNSUPPORTED[A-Z_,]* \| written: false \| button: Import$/,
     'import-then-undo': /^added: Dropped sample \| report: .*2 requests in 1 folder.* \| after undo still there: 0 \| undone text: true$/,
     'drop-a-file-from-the-os': /^plan names the collection: true \| overlay gone: true \| added: Dropped sample$/,

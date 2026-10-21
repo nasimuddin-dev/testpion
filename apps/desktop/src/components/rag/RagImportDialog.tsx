@@ -23,10 +23,16 @@ export function RagImportDialog({ onImport, onClose }: { onImport(text: string):
   const [format, setFormat] = useState<Format>('auto');
   const [files, setFiles] = useState<{ file?: { name: string; text: string }; qrels?: { name: string; text: string }; corpus?: { name: string; text: string } }>({});
   const [notes, setNotes] = useState<string[]>([]);
+  // how many records came in: the dialog stays open to show the notes, and a second Import would add the same records again
+  const [imported, setImported] = useState<number>();
   const f = FORMATS.find((x) => x.id === format)!;
   const pick = async (key: 'file' | 'qrels' | 'corpus', accept = '.jsonl,.json,.csv,.tsv,.ndjson,.yaml,.yml') => {
     const picked = await pickTextFile(accept);
-    if (picked) setFiles((s) => ({ ...s, [key]: picked }));
+    if (picked) {
+      setFiles((s) => ({ ...s, [key]: picked }));
+      setImported(undefined);
+      setNotes([]);
+    }
   };
   const run = async () => {
     try {
@@ -35,6 +41,7 @@ export function RagImportDialog({ onImport, onClose }: { onImport(text: string):
           ? await call<{ count: number; notes: string[]; text: string }>('rag.importBeir', { queries: files.file!.text, qrels: files.qrels!.text, corpus: files.corpus?.text })
           : await call<{ from: string; count: number; notes: string[]; text: string }>('rag.convert', { text: files.file!.text, name: files.file!.name, from: format === 'auto' ? undefined : format });
       setNotes(r.notes);
+      setImported(r.count);
       onImport(r.text);
       useApp.getState().toast(`Imported ${r.count} records${r.notes.length ? `. ${r.notes[0]}` : ''}`, r.notes.length ? 'info' : 'success');
       if (!r.notes.length) onClose();
@@ -42,7 +49,7 @@ export function RagImportDialog({ onImport, onClose }: { onImport(text: string):
       toastError(e);
     }
   };
-  const ready = !!files.file && (format !== 'beir' || !!files.qrels);
+  const ready = !!files.file && (format !== 'beir' || !!files.qrels) && imported === undefined;
   return (
     <Modal
       title="Import a dataset"
@@ -50,7 +57,7 @@ export function RagImportDialog({ onImport, onClose }: { onImport(text: string):
       width={600}
       footer={
         <>
-          <Button onClick={onClose}>{notes.length ? 'Close' : 'Cancel'}</Button>
+          <Button onClick={onClose}>{imported !== undefined ? 'Close' : 'Cancel'}</Button>
           <Button variant="primary" disabled={!ready} onClick={() => void run()} data-rag-import-run>
             Import
           </Button>
@@ -88,6 +95,11 @@ export function RagImportDialog({ onImport, onClose }: { onImport(text: string):
               <span className="text-xs text-muted">{files.corpus?.name ?? 'optional: fills the gold texts'}</span>
             </div>
           </>
+        )}
+        {imported !== undefined && (
+          <p className="text-ok" role="status" data-rag-import-done>
+            Imported {imported} {imported === 1 ? 'record' : 'records'}. Choose another file to import more.
+          </p>
         )}
         {notes.map((n) => (
           <Callout key={n} tone="warn">

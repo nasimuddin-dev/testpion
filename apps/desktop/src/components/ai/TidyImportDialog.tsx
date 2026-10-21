@@ -4,7 +4,7 @@ import type { AiTaskResult, Proposal, ProposalItem } from '@testpion/core';
 import { asError, call } from '../../api';
 import { useCollectionTree } from '../../lib/collections-store';
 import { aiSetupAction } from '../../lib/ai-errors';
-import { formatCost } from '../../lib/format';
+import { AiEstimateLine, estimateOf, type EstimateState } from './AiEstimateLine';
 import { toastError, useApp, type AssistantRequest, type TidyImportRequest } from '../../store';
 import { Badge, Button, Field, Input, Modal, Segmented, Spinner, Toggle, useDebounced } from '../ui';
 import { AiPreviewDialog, PRIVACY_OPTIONS, type AiPrivacy } from './AiPreviewDialog';
@@ -28,7 +28,7 @@ export function TidyImportDialog({ request, onClose }: { request: TidyImportRequ
   const [error, setError] = useState<ReturnType<typeof asError>>();
   const [proposal, setProposal] = useState<Proposal>();
   const [previewing, setPreviewing] = useState<AssistantRequest>();
-  const [estimate, setEstimate] = useState<{ text: string; ok: boolean }>();
+  const [estimate, setEstimate] = useState<EstimateState>();
   const params = (extra: { hint?: string; privacy?: AiPrivacy } = {}) => ({
     task: leftovers ? 'import-leftovers' : 'tidy-import',
     item: { kind: 'collection', collectionId: request.collectionId },
@@ -43,7 +43,7 @@ export function TidyImportDialog({ request, onClose }: { request: TidyImportRequ
     call<AiTaskResult>('ai.preview', JSON.parse(key) as Record<string, unknown>).then(
       ({ preview: p }) =>
         live &&
-        setEstimate({ ok: true, text: `${p.providerName} · ${p.model}${p.local ? ' (on this computer)' : ''} · ≈ ${p.estimate.inputTokens.toLocaleString()} tokens in${p.estimate.priceKnown ? ` · up to ${formatCost(p.estimate.maxCostUsd ?? 0)}` : ''}` }),
+        setEstimate(estimateOf(p)),
       (e) => live && setEstimate({ ok: false, text: asError(e).message }),
     );
     return () => {
@@ -150,12 +150,10 @@ export function TidyImportDialog({ request, onClose }: { request: TidyImportRequ
           <span className="text-muted">Sent</span>
           <Segmented label="Privacy level" value={privacy} onChange={(v) => setPrivacy(v as AiPrivacy)} options={PRIVACY_OPTIONS.map((o) => ({ value: o.value, label: o.label, title: o.title }))} />
         </div>
-        <div className="text-xs text-muted min-h-5" data-tidy-estimate>
-          {estimate ? <span className={estimate.ok ? '' : 'text-warn'}>{estimate.text}</span> : <Spinner size={11} />}
-        </div>
+        <AiEstimateLine estimate={estimate} data-tidy-estimate="" />
         {leftovers ? (
           <p className="text-xs text-muted">
-            TestPion finds the scripts the import marked with a // TODO(import) line (a call with no equivalent in TestPion's script API); the model rewrites each one with tp.*. The marked script, the request and its saved response are sent, never header values or tokens. Each rewritten script is checked: it must not use another tool's API, and it
+            TestPion finds the scripts the import marked as needing a rewrite (they call something with no equivalent in TestPion's script API); the model rewrites each one with tp.*. The marked script, the request and its saved response are sent, never header values or tokens. Each rewritten script is checked: it must not use another tool's API, and it
             is run in the sandbox against the saved response (never against the real API). Nothing changes before you accept, and Undo puts it back.
           </p>
         ) : (

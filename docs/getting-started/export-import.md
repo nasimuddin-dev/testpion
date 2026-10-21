@@ -52,9 +52,11 @@ Import also lists **Review before you run**: scripts, and programs an MCP server
 
 After the import a message offers **Undo** (and **Open**). Undo takes the whole import back as one step: what it made is removed, what it replaced is restored; a file you edited after the import is left as it is and named. `testpion import --list` shows the imports that can still be undone.
 
-Workspace exports of earlier versions (`.testpion.json` from Export Workspace, and the older `.apsworkspace.json`) are read as bundles too: they get the same preview and can be merged into the open workspace. Export Workspace (one file, imported as a new workspace) still works and will be removed in a later release; use Export ▸ Bundle… instead.
+Workspace exports of earlier versions (`.testpion.json` from the older export, and the older `.apsworkspace.json`) are read as bundles too: they get the same preview and can be merged into the open workspace. The older whole-workspace export (one file, imported as a new workspace) is still in **File ▸ Export ▸ Workspace (older format)…** and will be removed in a later release; use **File ▸ Export ▸ Workspace as a Bundle…** instead.
 
-Postman, Insomnia, Bruno, OpenAPI, HAR and the other foreign formats are imported from **File ▸ Import…** as before.
+A **bundle** is one file that holds several items (requests, environments, tests …) so you can move them to another workspace. Drop a `.testpion.zip` or `.testpion.json` on the window, or choose it in **File ▸ Import…**: the one Import hands a bundle over to its own preview, so exactly one dialog opens. A file that is not a bundle says so and offers **Choose another file** or **Import another format…**.
+
+Postman, Insomnia, Bruno, OpenAPI, HAR and the other foreign formats are imported from **File ▸ Import…** as before. That dialog can be cancelled at every step, its main button is **Choose files…**, and *Coming from another tool?* shows how to export from each tool (the command palette has *Migrate from Another Tool…* too).
 
 ## From the command line
 
