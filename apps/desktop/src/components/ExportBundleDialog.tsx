@@ -20,6 +20,10 @@ interface ExportSummary extends SaveResult {
   missing: Array<{ from: string; to: string; reason: string }>;
   notes: string[];
   review: string[];
+  /** Who uses whom (`kind:id` pairs) and what was picked: the tree below shows why each item is in. */
+  edges: Array<{ from: string; to: string; via: string }>;
+  root: Array<{ kind: string; id: string }>;
+  workspaceVariables: number;
   saved?: boolean;
 }
 
@@ -41,7 +45,14 @@ export default function ExportBundleDialog({ request, onClose }: { request: Expo
   const [summary, setSummary] = useState<ExportSummary>();
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
-  const params = useMemo(() => ({ selection: request.selection, section: request.section, all: request.all, title: request.title, uses, datasets }), [request, uses, datasets]);
+  // the Globals travel by default in a whole-workspace export; a selection can add them
+  const [globals, setGlobals] = useState(!!request.all);
+  // items (`kind:id`) that something picked uses and the person unticked; their names are kept so they can be added back
+  const [excluded, setExcluded] = useState<Record<string, string>>({});
+  const params = useMemo(
+    () => ({ selection: request.selection, section: request.section, folder: request.folder, all: request.all, title: request.title, uses, datasets, workspaceVariables: globals, exclude: Object.keys(excluded) }),
+    [request, uses, datasets, globals, excluded],
+  );
 
   useEffect(() => {
     let live = true;
@@ -86,6 +97,20 @@ export default function ExportBundleDialog({ request, onClose }: { request: Expo
   };
 
   const groups = summary ? Object.entries(summary.counts) : [];
+  // why each item is in: the item that uses it (the first edge that points at it); a picked item is in because it was picked
+  const picked = new Set(summary?.root.map((r) => `${r.kind}:${r.id}`));
+  const nameOf = new Map(summary?.items.map((i) => [`${i.kind}:${i.id}`, i.name]));
+  const becauseOf = (key: string): string | undefined => {
+    const e = summary?.edges.find((x) => x.to === key);
+    return e ? `${nameOf.get(e.from) ?? e.from}: ${e.via}` : undefined;
+  };
+  const leaveOut = (key: string, name: string) => setExcluded((x) => ({ ...x, [key]: name }));
+  const addBack = (key: string) =>
+    setExcluded((x) => {
+      const { [key]: _gone, ...rest } = x;
+      void _gone;
+      return rest;
+    });
   return (
     <Modal
       title={
@@ -93,7 +118,9 @@ export default function ExportBundleDialog({ request, onClose }: { request: Expo
           ? 'Export the workspace as a bundle'
           : request.section
             ? `Export ${KIND_INFO[request.section as KindId]?.plural.toLowerCase() ?? request.section}`
-            : `Export${request.title ? ` “${request.title}”` : ''}`
+            : request.folder
+              ? `Export the folder “${request.folder.name}”`
+              : `Export${request.title ? ` “${request.title}”` : ''}`
       }
       onClose={onClose}
       width={560}
@@ -118,6 +145,13 @@ export default function ExportBundleDialog({ request, onClose }: { request: Expo
             title="Environments, API definitions, datasets, MCP servers and mocks, protos, packages, test files and saved items that the picked items refer to"
           />
         )}
+        <Toggle
+          checked={globals}
+          onChange={setGlobals}
+          label="Include the workspace variables (Globals)"
+          title="The variables set for the whole workspace travel in the bundle; secret values are left blank"
+        />
+        {summary && globals && summary.workspaceVariables === 0 && <p className="text-xs text-muted">This workspace has no variables of its own to include.</p>}
         <Field label="Datasets" hint="A bigger dataset goes by reference: the bundle names it and the importer is told to copy the file.">
           <Select value={datasets} onChange={(e) => setDatasets(e.target.value as typeof datasets)} aria-label="Datasets">
             <option value="auto">Include up to 10 MB, bigger ones by reference</option>
@@ -136,23 +170,42 @@ export default function ExportBundleDialog({ request, onClose }: { request: Expo
             <div className="font-medium">
               {summary.items.length} item{summary.items.length === 1 ? '' : 's'} · {kb(summary.size)} · {summary.format === 'zip' ? '.zip' : '.json'}
             </div>
-            <ul className="flex flex-col gap-1 max-h-56 overflow-auto rounded-lg border border-line p-2">
-              {groups.map(([kind, n]) => (
-                <li key={kind} className="flex flex-col">
-                  <span className="text-xs text-muted">
-                    {n} {labelOf(kind, n)}
-                  </span>
-                  <span className="truncate">
-                    {summary.items
-                      .filter((i) => i.kind === kind)
-                      .slice(0, 6)
-                      .map((i) => i.name)
-                      .join(', ')}
-                    {n > 6 ? ` … and ${n - 6} more` : ''}
-                  </span>
-                </li>
-              ))}
+            <ul className="flex flex-col gap-1 max-h-56 overflow-auto rounded-lg border border-line p-2" data-testid="export-bundle-tree">
+              {groups.map(([kind, n]) => {
+                const rows = summary.items.filter((i) => i.kind === kind);
+                return (
+                  <li key={kind} className="flex flex-col">
+                    <span className="text-xs text-muted">
+                      {n} {labelOf(kind, n)}
+                    </span>
+                    {/* what was picked is always in; what is only in because something uses it can be unticked */}
+                    {rows.slice(0, 40).map((i) => {
+                      const key = `${i.kind}:${i.id}`;
+                      const why = picked.has(key) ? undefined : becauseOf(key);
+                      return (
+                        <label key={key} className="flex items-center gap-2 min-w-0" title={why ? `Included because ${why}` : 'Picked'}>
+                          <input type="checkbox" checked disabled={picked.has(key) || !uses} aria-label={`Include ${i.name}`} onChange={() => leaveOut(key, i.name)} />
+                          <span className="truncate">{i.name}</span>
+                          {why && <span className="truncate text-xs text-muted">used by {why}</span>}
+                        </label>
+                      );
+                    })}
+                    {rows.length > 40 && <span className="text-xs text-muted">… and {rows.length - 40} more</span>}
+                  </li>
+                );
+              })}
             </ul>
+            {Object.keys(excluded).length > 0 && (
+              <div className="flex flex-wrap items-center gap-2" data-testid="export-bundle-left-out">
+                <span className="text-muted">Left out:</span>
+                {Object.entries(excluded).map(([key, name]) => (
+                  <label key={key} className="flex items-center gap-1">
+                    <input type="checkbox" checked={false} aria-label={`Include ${name}`} onChange={() => addBack(key)} />
+                    <span>{name}</span>
+                  </label>
+                ))}
+              </div>
+            )}
             {summary.items.some((i) => i.mode === 'reference') && (
               <div className="flex items-center gap-2">
                 <Badge tone="warn">by reference</Badge>

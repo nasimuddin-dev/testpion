@@ -73,14 +73,15 @@ describe('workspace export is a bundle', () => {
     }
   });
 
-  it('says the workspace-level variables (Globals) are not part of a bundle, instead of dropping them silently', async () => {
+  it('carries the workspace-level variables (Globals) in the manifest and says so', async () => {
     const g = WorkspaceStore.create(join(tmp.dir, 'globals'), 'Globals');
     try {
       g.writeTestFile('a.yaml', 'name: a\ntests: []\n');
       expect((await exportWholeWorkspace(g)).notes.join(' ')).not.toMatch(/Globals/);
       g.updateWorkspace({ variables: [{ key: 'region', value: 'eu', enabled: true }] });
       const built = await exportWholeWorkspace(g);
-      expect(built.notes.join(' ')).toMatch(/workspace's own variable \(the Globals\) is not part of a bundle/);
+      expect(built.notes.join(' ')).toMatch(/workspace variable \(the Globals\) travels in the bundle/);
+      expect(built.manifest.workspace?.variables).toEqual([{ key: 'region', value: 'eu', enabled: true }]);
       expect(built.summary.lines.join(' ')).toMatch(/Globals/);
     } finally {
       g.close();

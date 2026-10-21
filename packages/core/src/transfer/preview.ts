@@ -10,6 +10,7 @@ import { type BundleItem, type BundleKindId, type BundleManifest, type ParsedBun
 import { fingerprint, type Listed, type Target } from './items.js';
 import { cachedReads } from './read-cache.js';
 import { adapter } from './registry.js';
+import { previewWorkspaceVariables, type WorkspaceVariablesPreview } from './workspace-section.js';
 
 export type ImportChoice = 'keep-both' | 'replace' | 'skip';
 
@@ -26,6 +27,8 @@ export interface PreviewItem {
   why?: string;
   size?: number;
   summary?: BundleItem['summary'];
+  /** The virtual folder it sits in (an API definition, a dataset). */
+  folder?: string;
   /** What to look at before running it. */
   review: string[];
 }
@@ -45,6 +48,8 @@ export interface ImportPreview {
   warnings: string[];
   notes: string[];
   missing: BundleManifest['missing'];
+  /** The workspace's own variables (the Globals) the bundle carries, by key: new here, the same, or with another value. */
+  workspace?: WorkspaceVariablesPreview;
 }
 
 /** The id and name of the counterpart, for display. */
@@ -70,7 +75,7 @@ export function previewImport(realStore: WorkspaceStore, bundle: ParsedBundle): 
   const totals = { create: 0, identical: 0, conflict: 0, invalid: 0, reference: 0, bytes: 0 };
   for (const it of bundle.manifest.items) {
     const a = adapter(it.kind);
-    const base = { kind: it.kind, id: it.id, name: it.name, ...(it.size !== undefined ? { size: it.size } : {}), ...(it.summary ? { summary: it.summary } : {}) };
+    const base = { kind: it.kind, id: it.id, name: it.name, ...(it.size !== undefined ? { size: it.size } : {}), ...(it.summary ? { summary: it.summary } : {}), ...(it.folder ? { folder: it.folder } : {}) };
     if (it.mode === 'reference') {
       items.push({ ...base, action: 'reference', review: [], why: 'The file is not in the bundle: copy it to the other workspace by hand.' });
       totals.reference++;
@@ -106,6 +111,7 @@ export function previewImport(realStore: WorkspaceStore, bundle: ParsedBundle): 
   }
   const defined = new Set<string>([...(store.workspace.variables ?? []).map((v) => v.key), ...store.listEnvironments().flatMap((e) => e.variables.map((v) => v.key))]);
   const m = bundle.manifest;
+  const workspace = previewWorkspaceVariables(store, m.workspace);
   for (const p of m.flags.production) review.add(`Environment "${p}" is marked production: data-changing requests to it ask first`);
   return {
     title: m.title,
@@ -120,5 +126,6 @@ export function previewImport(realStore: WorkspaceStore, bundle: ParsedBundle): 
     warnings: bundle.warnings,
     notes: m.notes,
     missing: m.missing,
+    ...(workspace ? { workspace } : {}),
   };
 }

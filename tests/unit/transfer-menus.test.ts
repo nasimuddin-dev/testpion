@@ -55,7 +55,11 @@ describe('Export… and Import… on every node', () => {
   });
 
   it('a kind that does not export shows none, and a view’s own Export (a collection’s submenu of formats) wins', () => {
-    expect(labels('request', { ref: { kind: 'request', collectionId: 'c', requestId: 'r' }, on: {} })).not.toContain('Export…');
+    // a request and a folder export as a part of their collection (one way: not a submenu)
+    expect(labels('request', { ref: { kind: 'request', collectionId: 'c', requestId: 'r' }, on: {} })).toContain('Export…');
+    expect(labels('folder', { ref: { kind: 'folder', collectionId: 'c', folderId: 'f' }, name: 'F', on: {} })).toEqual(expect.arrayContaining(['Export…', 'Import here…']));
+    expect(labels('collection', { ref: { kind: 'collection', collectionId: 'c' }, name: 'C', on: {} })).toContain('Import here…');
+    expect(labels('spec', { ref: { kind: 'spec', path: 'specs/a.yaml' }, name: 'a', on: {} })).not.toContain('Import here…');
     expect(labels('run', { ref: { kind: 'run', runId: 'r' }, on: {} })).not.toContain('Export…');
     const own = buildNodeMenu('collection', { ref: { kind: 'collection', collectionId: 'c' }, on: { export: [{ label: 'Mine', onSelect: () => undefined }] } });
     expect(own.find((i) => i.items)?.label).toBe('Export');
@@ -71,6 +75,14 @@ describe('Export… and Import… on every node', () => {
     expect(Object.keys(item)).toEqual(['export']);
     (item.export as () => void)();
     expect(opened).toEqual([{ exportBundle: { section: 'dataset' } }, { importBundle: { section: 'dataset' } }, { exportBundle: { selection: [{ kind: 'spec', path: 'specs/a.yaml' }], title: 'a' } }]);
-    expect(transferActions('folder:spec', { name: 'f', on: {} })).toEqual({});
+    // a folder of a list exports the items in it (a test folder by its path under tests/), a collection or a folder takes a bundle’s requests
+    opened.length = 0;
+    (transferActions('folder:spec', { name: 'f', on: {} }).export as () => void)();
+    (transferActions('folder:test', { name: 'api', folder: 'smoke/api', on: {} }).export as () => void)();
+    expect(opened).toEqual([{ exportBundle: { folder: { kind: 'spec', name: 'f' }, title: 'f' } }, { exportBundle: { folder: { kind: 'test', name: 'smoke/api' }, title: 'smoke/api' } }]);
+    expect(transferActions('folder:spec', { on: {} })).toEqual({});
+    opened.length = 0;
+    (transferActions('folder', { ref: { kind: 'folder', collectionId: 'c', folderId: 'f' }, name: 'F', on: {} }).importHere as () => void)();
+    expect(opened).toEqual([{ importBundle: { into: { collectionId: 'c', folderId: 'f', name: 'F' } } }]);
   });
 });

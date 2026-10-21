@@ -4,11 +4,12 @@
  * choices and Undo of every import, and merges into the open workspace (importing it as a new workspace stays
  * `importWorkspaceBundle`). Every section is shape-checked here; what does not fit is skipped with a warning.
  */
-import { LIBRARY_OF, RAW_ROOT, isPlainId, plainName, type BundleKindId, type ParsedBundle } from './format.js';
+import { LIBRARY_OF, MAX_BUNDLE_VARIABLES, RAW_ROOT, isPlainId, plainName, type BundleKindId, type BundleVariable, type ParsedBundle } from './format.js';
 import { canonicalJson } from './items.js';
 import { assemble, type BundlePart } from './assemble.js';
 import { ENGINE_VERSION } from '../version.js';
 import { isRecord } from '@testpion/shared';
+import { safeKey } from '../util/safe-key.js';
 
 const objects = (v: unknown): Record<string, unknown>[] => (Array.isArray(v) ? v.filter(isRecord) : []);
 
@@ -64,6 +65,16 @@ export function legacyToBundle(raw: Record<string, unknown>): ParsedBundle {
     add(kind, path, path, f.encoding === 'base64' ? Buffer.from(f.content, 'base64') : Buffer.from(f.content, 'utf8'));
   }
   const ws = isRecord(raw.workspace) ? raw.workspace : {};
+  // the workspace's own variables of the older export (secret values were already blank in it)
+  const legacyVariables: BundleVariable[] = objects(ws.variables)
+    .filter((v) => typeof v.key === 'string' && v.key.trim() && safeKey(v.key) && typeof v.value === 'string')
+    .slice(0, MAX_BUNDLE_VARIABLES)
+    .map((v) => ({
+      key: String(v.key).slice(0, 200),
+      value: String(v.value).slice(0, 100_000),
+      ...(typeof v.enabled === 'boolean' ? { enabled: v.enabled } : {}),
+      ...(v.secret === true ? { secret: true } : {}),
+    }));
   const b = assemble(
     {
       title: plainName(ws.name, 'Workspace export'),
@@ -80,6 +91,7 @@ export function legacyToBundle(raw: Record<string, unknown>): ParsedBundle {
       },
       flags: { scripts: 0, production: [], strippedSecrets: 0, stdioServers: [] },
       notes: ['Read from a workspace export made by an earlier version of TestPion.'],
+      ...(legacyVariables.length ? { workspace: { variables: legacyVariables } } : {}),
     },
     parts,
     'legacy-workspace',

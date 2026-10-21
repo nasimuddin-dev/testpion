@@ -33,7 +33,7 @@ export interface BundlePart {
 }
 
 /** The manifest fields the exporter fills (everything but the item list, which `assemble` makes from the parts). */
-export type ManifestMeta = Pick<BundleManifest, 'title' | 'root' | 'edges' | 'missing' | 'requires' | 'flags' | 'notes'> & { createdBy: BundleManifest['createdBy']; createdAt?: string };
+export type ManifestMeta = Pick<BundleManifest, 'title' | 'root' | 'edges' | 'missing' | 'requires' | 'flags' | 'notes' | 'workspace'> & { createdBy: BundleManifest['createdBy']; createdAt?: string };
 
 /** Parts → a bundle: entry names, checksums and sizes are made here, so no caller can write them wrong. */
 export function assemble(meta: ManifestMeta, parts: BundlePart[], source: ParsedBundle['source'] = 'zip', warnings: string[] = []): ParsedBundle {

@@ -675,6 +675,7 @@ export function TestsView() {
   /** A folder's menu: new test file here, expand or collapse it, run it, run it in CI, rename it, delete it (Undo). */
   const folderMenu = (n: Node): NodeMenuCtx => ({
     name: n.name,
+    folder: n.path,
     create: [{ label: 'New test file here', icon: <FilePlus2 size={14} />, onSelect: () => void newFile('http', n.path) }],
     on: {
       expandAll: () => setDirs(dirsUnder(n), true),

@@ -152,31 +152,31 @@ The menus of every kind, as the app builds them ("New …" stands for the kind's
 
 | Node | create | open | tree | run | share | tools | git | edit | danger |
 |---|---|---|---|---|---|---|---|---|---|
-| Collection | New …, New folder… |  | Expand all <kbd>*</kbd>, Collapse all | Run collection | Copy link, Export ▸ | Monitor on a schedule…, Run in CI…, Create test file from collection…, AI ▸, Settings, runner & docs, Convert scripts to tp.* | Git | Rename <kbd>F2</kbd>, Duplicate | Delete… <kbd>Del</kbd> |
+| Collection | New …, New folder…, Import here… |  | Expand all <kbd>*</kbd>, Collapse all | Run collection | Copy link, Export ▸ | Monitor on a schedule…, Run in CI…, Create test file from collection…, AI ▸, Settings, runner & docs, Convert scripts to tp.* | Git | Rename <kbd>F2</kbd>, Duplicate | Delete… <kbd>Del</kbd> |
 | Protocol group (REST, SOAP …) of a collection | New … |  | Expand all <kbd>*</kbd>, Collapse all | Run collection |  |  |  |  |  |
-| Folder of a collection | New …, New folder… |  | Expand all <kbd>*</kbd>, Collapse all | Run folder | Copy link | Monitor on a schedule…, Run in CI…, Create test file from folder…, AI ▸, Edit folder (scripts, variables, auth) | Git | Rename <kbd>F2</kbd>, Duplicate, Move to… | Delete… <kbd>Del</kbd> |
-| Request (HTTP, SOAP, GraphQL) |  | Open <kbd>Enter</kbd>, Open in new tab |  |  | Copy link, Copy as ▸ | Monitor on a schedule…, Save as test…, Suggest checks with AI… | Git | Rename <kbd>F2</kbd>, Duplicate, Move to…, Add to favorites | Delete… <kbd>Del</kbd> |
-| Folder of gRPC calls or connections |  |  | Expand all <kbd>*</kbd>, Collapse all |  |  |  |  | Rename folder <kbd>F2</kbd> | Delete folder… <kbd>Del</kbd> |
+| Folder of a collection | New …, New folder…, Import here… |  | Expand all <kbd>*</kbd>, Collapse all | Run folder | Copy link, Export… | Monitor on a schedule…, Run in CI…, Create test file from folder…, AI ▸, Edit folder (scripts, variables, auth) | Git | Rename <kbd>F2</kbd>, Duplicate, Move to… | Delete… <kbd>Del</kbd> |
+| Request (HTTP, SOAP, GraphQL) |  | Open <kbd>Enter</kbd>, Open in new tab |  |  | Copy link, Copy as ▸, Export… | Monitor on a schedule…, Save as test…, Suggest checks with AI… | Git | Rename <kbd>F2</kbd>, Duplicate, Move to…, Add to favorites | Delete… <kbd>Del</kbd> |
+| Folder of gRPC calls or connections |  |  | Expand all <kbd>*</kbd>, Collapse all |  | Export… |  |  | Rename folder <kbd>F2</kbd> | Delete folder… <kbd>Del</kbd> |
 | Saved gRPC call |  | Open <kbd>Enter</kbd>, Open in new tab |  |  | Copy link, Copy as grpcurl, Export… | Save as test… | Git | Rename <kbd>F2</kbd>, Duplicate, Move to collection ▸ | Delete… <kbd>Del</kbd> |
 | Saved WebSocket / MQTT / Kafka connection |  | Open <kbd>Enter</kbd>, Open in new tab |  |  | Copy link, Copy URL, Export… | Save as test… | Git | Rename <kbd>F2</kbd>, Duplicate, Move to collection ▸ | Delete… <kbd>Del</kbd> |
 | Favorites section |  |  | Expand all <kbd>*</kbd>, Collapse all |  |  |  |  |  |  |
 | MCP servers section | New …, New folder…, Import… | Open MCP inspector | Expand all <kbd>*</kbd>, Collapse all |  | Export… |  |  |  |  |
-| Folder of MCP servers | New … |  | Expand all <kbd>*</kbd>, Collapse all |  |  |  |  | Rename folder <kbd>F2</kbd> | Delete folder… <kbd>Del</kbd> |
+| Folder of MCP servers | New … |  | Expand all <kbd>*</kbd>, Collapse all |  | Export… |  |  | Rename folder <kbd>F2</kbd> | Delete folder… <kbd>Del</kbd> |
 | MCP server |  | Open <kbd>Enter</kbd>, Open in new tab |  | Connect, Disconnect | Copy link, Copy MCP config, Export… | Settings… | Git | Rename <kbd>F2</kbd>, Duplicate, Move to folder ▸ | Delete… <kbd>Del</kbd> |
 | API definitions section | New …, New folder…, Import… | Open API definitions | Expand all <kbd>*</kbd>, Collapse all |  | Export… |  |  |  |  |
-| Folder of API definitions | New … |  | Expand all <kbd>*</kbd>, Collapse all |  |  |  |  | Rename folder <kbd>F2</kbd> | Delete folder… <kbd>Del</kbd> |
+| Folder of API definitions | New … |  | Expand all <kbd>*</kbd>, Collapse all |  | Export… |  |  | Rename folder <kbd>F2</kbd> | Delete folder… <kbd>Del</kbd> |
 | API definition |  | Open <kbd>Enter</kbd>, Reveal file |  | Lint, API coverage, Compare versions | Copy link, Copy path, Export… | Generate tests…, Generate integration flows…, AI ▸ | Git | Rename <kbd>F2</kbd>, Move to folder ▸ | Delete… <kbd>Del</kbd> |
 | Datasets section | New …, New folder…, Import…, Generate test data… |  | Expand all <kbd>*</kbd>, Collapse all |  | Export… |  |  |  |  |
-| Folder of datasets | New … |  | Expand all <kbd>*</kbd>, Collapse all |  |  |  |  | Rename folder <kbd>F2</kbd> | Delete folder… <kbd>Del</kbd> |
+| Folder of datasets | New … |  | Expand all <kbd>*</kbd>, Collapse all |  | Export… |  |  | Rename folder <kbd>F2</kbd> | Delete folder… <kbd>Del</kbd> |
 | Dataset |  | Open <kbd>Enter</kbd>, Reveal file, Preview |  | Run a collection with it | Copy link, Copy path, Export… | Use in a test | Git | Rename <kbd>F2</kbd>, Duplicate, Move to folder ▸ | Delete… <kbd>Del</kbd> |
 | The sidebar’s blank area | New …, Import… | Recently deleted… | Expand all <kbd>*</kbd>, Collapse all |  | Export… | Run in CI… |  |  |  |
 | Saved prompt (AI Lab) |  | Open <kbd>Enter</kbd>, Open in new tab |  |  | Copy link, Export… |  | Git | Rename <kbd>F2</kbd>, Duplicate, Move to folder ▸ | Delete… <kbd>Del</kbd> |
 | Saved load test |  | Open <kbd>Enter</kbd>, Open in new tab |  | Run | Copy link, Export… |  | Git | Rename <kbd>F2</kbd>, Duplicate, Move to folder ▸ | Delete… <kbd>Del</kbd> |
 | Saved evaluation |  | Open <kbd>Enter</kbd>, Open in new tab |  | Run | Copy link, Export… |  | Git | Rename <kbd>F2</kbd>, Duplicate, Move to folder ▸ | Delete… <kbd>Del</kbd> |
 | Monitor |  | Open <kbd>Enter</kbd>, Open in new tab, Edit |  | Run now, Pause, Resume | Copy link, Export… |  | Git | Rename <kbd>F2</kbd>, Duplicate, Move to folder ▸ | Delete… <kbd>Del</kbd> |
-| Folder of a list (monitors, prompts, load tests, evaluations) | New … |  | Expand all <kbd>*</kbd>, Collapse all |  |  |  |  | Rename folder <kbd>F2</kbd> | Delete folder… <kbd>Del</kbd> |
+| Folder of a list (monitors, prompts, load tests, evaluations) | New … |  | Expand all <kbd>*</kbd>, Collapse all |  | Export… |  |  | Rename folder <kbd>F2</kbd> | Delete folder… <kbd>Del</kbd> |
 | Tests section (and its blank area) | New …, Import… |  | Expand all <kbd>*</kbd>, Collapse all |  | Export… | Run in CI… |  |  |  |
-| Folder of test files | New … |  | Expand all <kbd>*</kbd>, Collapse all | Run folder |  | Run in CI… |  | Rename folder <kbd>F2</kbd> | Delete folder… <kbd>Del</kbd> |
+| Folder of test files | New … |  | Expand all <kbd>*</kbd>, Collapse all | Run folder | Export… | Run in CI… |  | Rename folder <kbd>F2</kbd> | Delete folder… <kbd>Del</kbd> |
 | Test file |  | Open <kbd>Enter</kbd>, Reveal file |  | Run, Run with data…, Run in several environments… | Copy link, Copy path, Copy CLI command, Export as Arazzo…, Export… | Monitor on a schedule…, Run in CI…, Expose as MCP tool… | Git | Rename <kbd>F2</kbd>, Duplicate | Delete… <kbd>Del</kbd> |
 | Run |  | Open <kbd>Enter</kbd> |  | Rerun failed | Copy link, Copy CLI command, Copy run id, Export report… | Run in CI…, Explain and fix failures with AI… |  |  | Delete… <kbd>Del</kbd> |
 | History entry |  | Open <kbd>Enter</kbd>, Open request, Open trace |  |  | Copy link | Save as test… |  |  | Delete… <kbd>Del</kbd> |

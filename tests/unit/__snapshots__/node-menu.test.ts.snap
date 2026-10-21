@@ -38,6 +38,7 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
     [
       "New …",
       "New folder…",
+      "Import here…",
     ],
     [
       "Expand all",
@@ -203,6 +204,7 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
     [
       "New …",
       "New folder…",
+      "Import here…",
     ],
     [
       "Expand all",
@@ -213,6 +215,7 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
     ],
     [
       "Copy link",
+      "Export…",
     ],
     [
       "Monitor on a schedule…",
@@ -242,6 +245,9 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
       "Collapse all",
     ],
     [
+      "Export…",
+    ],
+    [
       "Rename folder",
     ],
     [
@@ -257,6 +263,9 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
       "Collapse all",
     ],
     [
+      "Export…",
+    ],
+    [
       "Rename folder",
     ],
     [
@@ -267,6 +276,9 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
     [
       "Expand all",
       "Collapse all",
+    ],
+    [
+      "Export…",
     ],
     [
       "Rename folder",
@@ -284,6 +296,9 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
       "Collapse all",
     ],
     [
+      "Export…",
+    ],
+    [
       "Rename folder",
     ],
     [
@@ -297,6 +312,9 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
     [
       "Expand all",
       "Collapse all",
+    ],
+    [
+      "Export…",
     ],
     [
       "Rename folder",
@@ -314,6 +332,9 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
       "Collapse all",
     ],
     [
+      "Export…",
+    ],
+    [
       "Rename folder",
     ],
     [
@@ -327,6 +348,9 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
     [
       "Expand all",
       "Collapse all",
+    ],
+    [
+      "Export…",
     ],
     [
       "Rename folder",
@@ -359,6 +383,9 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
       "Collapse all",
     ],
     [
+      "Export…",
+    ],
+    [
       "Rename folder",
     ],
     [
@@ -377,6 +404,9 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
       "Run folder",
     ],
     [
+      "Export…",
+    ],
+    [
       "Run in CI…",
     ],
     [
@@ -390,6 +420,9 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
     [
       "Expand all",
       "Collapse all",
+    ],
+    [
+      "Export…",
     ],
     [
       "Rename folder",
@@ -626,6 +659,7 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
     [
       "Copy link",
       "Copy as ▸",
+      "Export…",
     ],
     [
       "Monitor on a schedule…",

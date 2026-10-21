@@ -15,10 +15,14 @@ import { adapter, ALL_BUNDLE_KINDS } from './registry.js';
 import { everythingRefs, uniqueRefs } from './selection.js';
 import type { BundleRef } from './types.js';
 import { collectUses } from './uses.js';
+import { virtualFolderOf } from './folders.js';
+import { workspaceSectionOf } from './workspace-section.js';
 
 export interface BuildOptions {
   /** Add what the picked items use (a collection's environments, API definitions, datasets, mocks, protos, tests, flows …). */
   uses?: boolean;
+  /** With `uses`: items (`kind:id`) that something picked uses but that stay out (the Export dialog's unticked rows). They are listed as left out, not as missing from the workspace. */
+  exclude?: string[];
   /** AI providers are left out of a whole-workspace export unless asked for (a provider picked by hand is always in). */
   providers?: boolean;
   /** Datasets: `auto` embeds up to 10 MB and sends bigger ones by reference; `embed` always; `reference` never. */
@@ -26,6 +30,8 @@ export interface BuildOptions {
   /** The file form; `auto`: a zip when there is a binary file, more than 5 MB or more than 200 entries, else JSON. */
   format?: 'zip' | 'json' | 'auto';
   title?: string;
+  /** Carry the workspace's own variables (the Globals) in the bundle's `workspace` section; default: a whole-workspace export does, a selection does not. */
+  workspaceVariables?: boolean;
   /** The dataset size that still travels inside the bundle (default 10 MB). */
   embedBytes?: number;
 }
@@ -108,7 +114,7 @@ function prepareBundle(realStore: WorkspaceStore, selection: readonly BundleRef[
   let edges: BundleManifest['edges'] = [];
   let missing: BundleManifest['missing'] = [];
   if (opts.uses) {
-    const u = collectUses(store, roots, readText);
+    const u = collectUses(store, roots, readText, opts.exclude?.length ? new Set(opts.exclude) : undefined);
     refs = u.refs;
     edges = u.edges;
     missing = u.missing;
@@ -126,14 +132,18 @@ function prepareBundle(realStore: WorkspaceStore, selection: readonly BundleRef[
   const stdio: string[] = [];
   const osEnv = new Set<string>();
   let scripts = 0;
+  // a part of a collection (a folder, a request) is a collection of its own in the bundle: its item id is not the ref's id
+  const keyOfRef = new Map<string, string>();
   for (const r of refs) {
     const snap = adapter(r.kind).snapshot(store, r.id, strip);
     if (!snap) {
       notes.push(`${adapter(r.kind).label} ${r.id} is gone from the workspace and was left out.`);
       continue;
     }
+    keyOfRef.set(itemKey(r.kind, r.id), itemKey(r.kind, snap.id));
     if (snap.unscanned) unscanned.push(r.id);
-    const item: BundleItem = { kind: r.kind, id: snap.id, name: snap.name, ...(snap.summary ? { summary: snap.summary } : {}) };
+    const folder = virtualFolderOf(store, r.kind, r.id);
+    const item: BundleItem = { kind: r.kind, id: snap.id, name: snap.name, ...(snap.summary ? { summary: snap.summary } : {}), ...(folder ? { folder } : {}) };
     if (r.kind === 'collection') scripts += Number(snap.summary?.scripts ?? 0);
     if (r.kind === 'environment' && snap.summary?.production) production.push(snap.name);
     if (r.kind === 'mcp-server' && snap.summary?.transport === 'stdio') stdio.push(snap.name);
@@ -150,21 +160,31 @@ function prepareBundle(realStore: WorkspaceStore, selection: readonly BundleRef[
   if (!parts.length) throw new ApsError('ValidationError', 'Nothing to export: the selected items are not in the workspace');
   if (unscanned.length) notes.push(`Exported as is (not scanned for secrets): ${unscanned.slice(0, 20).join(', ')}${unscanned.length > 20 ? ` and ${unscanned.length - 20} more` : ''}.`);
 
+  // the workspace's own variables (the Globals): carried when asked, and by default in a whole-workspace export
+  const workspace = (opts.workspaceVariables ?? selection === 'all') ? workspaceSectionOf(store, strip) : undefined;
+  if (workspace) notes.push(workspace.variables.length === 1 ? 'The workspace variable (the Globals) travels in the bundle.' : `The ${workspace.variables.length} workspace variables (the Globals) travel in the bundle.`);
+
   const replaced = strip.replaced;
   const secrets = [...new Map(replaced.map((x) => [x.variable, { name: x.variable, where: `${x.item}, ${x.field}` }])).values()];
-  const first = roots.length === 1 ? parts.find((p) => p.item.kind === roots[0]!.kind && p.item.id === roots[0]!.id)?.item.name : undefined;
+  const bundleKey = (k: string) => keyOfRef.get(k) ?? k;
+  const rootItems = roots.map((r) => {
+    const [, ...id] = bundleKey(itemKey(r.kind, r.id)).split(':');
+    return { kind: r.kind, id: id.join(':') };
+  });
+  const first = roots.length === 1 ? parts.find((p) => p.item.kind === rootItems[0]!.kind && p.item.id === rootItems[0]!.id)?.item.name : undefined;
   const title =
     opts.title ?? (first ? (opts.uses ? `${first} (with everything it uses)` : first) : selection === 'all' ? `${store.workspace.name}` : `${parts.length} items from ${store.workspace.name}`);
   const bundle: ParsedBundle = assemble(
     {
       title,
       createdBy: { app: 'testpion', version: ENGINE_VERSION },
-      root: roots.map((r) => ({ kind: r.kind, id: r.id })),
-      edges,
-      missing,
+      root: rootItems,
+      edges: edges.map((e) => ({ ...e, from: bundleKey(e.from), to: bundleKey(e.to) })),
+      missing: missing.map((m) => ({ ...m, from: bundleKey(m.from) })),
       requires: { secrets: secrets.slice(0, 500), osEnv: [...osEnv].slice(0, 100) },
       flags: { scripts, production, strippedSecrets: replaced.length, stdioServers: stdio },
       notes,
+      ...(workspace ? { workspace } : {}),
     },
     parts,
   );

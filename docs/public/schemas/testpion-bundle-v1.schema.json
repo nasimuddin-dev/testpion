@@ -43,7 +43,23 @@
         "stdioServers": { "description": "Names of MCP servers that start a program.", "type": "array", "items": { "type": "string" } }
       }
     },
-    "notes": { "type": "array", "items": { "type": "string" } }
+    "notes": { "type": "array", "items": { "type": "string" } },
+    "workspace": {
+      "description": "The workspace's own variables (the Globals), when the export carried them. Secret values are blank and the variable is marked secret.",
+      "type": "object",
+      "required": ["variables"],
+      "properties": {
+        "variables": {
+          "type": "array",
+          "maxItems": 5000,
+          "items": {
+            "type": "object",
+            "required": ["key", "value"],
+            "properties": { "key": { "type": "string" }, "value": { "type": "string" }, "enabled": { "type": "boolean" }, "description": { "type": "string" }, "secret": { "type": "boolean" } }
+          }
+        }
+      }
+    }
   },
   "$defs": {
     "kind": {
@@ -61,7 +77,8 @@
         "entry": { "type": "string", "description": "The entry holding the content (absent with mode reference)." },
         "sha256": { "type": "string", "pattern": "^[0-9a-fA-F]{64}$" },
         "size": { "type": "integer", "minimum": 0 },
-        "summary": { "type": "object", "additionalProperties": { "type": ["string", "number"] } }
+        "summary": { "type": "object", "additionalProperties": { "type": ["string", "number"] } },
+        "folder": { "type": "string", "description": "The virtual folder an API definition or a dataset sits in; the importer puts the file in a folder of that name." }
       },
       "if": { "properties": { "mode": { "const": "reference" } }, "required": ["mode"] },
       "else": { "required": ["entry", "sha256"] }

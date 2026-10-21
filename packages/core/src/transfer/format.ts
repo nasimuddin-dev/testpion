@@ -77,7 +77,26 @@ export interface BundleItem {
   /** `reference`: only the description travels (a dataset over the embed limit): the importer says where to copy the file from. */
   mode?: 'embed' | 'reference';
   summary?: Record<string, string | number>;
+  /** The virtual folder the item sits in (API definitions, datasets and MCP servers keep theirs outside the item); the importer puts it in a folder of that name. */
+  folder?: string;
 }
+
+/** One workspace variable (a Global) as a bundle carries it: secret values are blank and `secret` is set. */
+export interface BundleVariable {
+  key: string;
+  value: string;
+  enabled?: boolean;
+  description?: string;
+  secret?: boolean;
+}
+
+/** The workspace's own settings a bundle may carry: not an item of any kind, so it has its own section of the manifest. */
+export interface BundleWorkspaceSection {
+  variables: BundleVariable[];
+}
+
+/** Variables a bundle may carry (a hostile file is bounded here, whatever the reader does next). */
+export const MAX_BUNDLE_VARIABLES = 5000;
 
 export interface BundleEdge {
   from: string;
@@ -107,6 +126,8 @@ export interface BundleManifest {
   flags: { scripts: number; production: string[]; strippedSecrets: number; stdioServers: string[] };
   /** What was left out and why, in words. */
   notes: string[];
+  /** The workspace's own variables (the Globals), when the export was asked to carry them. */
+  workspace?: BundleWorkspaceSection;
 }
 
 /** A bundle read and checked: the manifest and the bytes of each entry (never trusted names: see `entryOf`). */
@@ -208,6 +229,7 @@ export function checkManifest(raw: unknown, limits: TransferLimits = TRANSFER_LI
       ...(size !== undefined ? { size } : {}),
       mode,
       ...(Object.keys(summary).length ? { summary } : {}),
+      ...(typeof it.folder === 'string' && text(it.folder, 120).trim() ? { folder: text(it.folder, 120).trim() } : {}),
     });
   }
   const list = <T>(v: unknown, f: (x: Record<string, unknown>) => T | undefined, max = 2000): T[] =>
@@ -227,6 +249,24 @@ export function checkManifest(raw: unknown, limits: TransferLimits = TRANSFER_LI
           .map((s) => text(s, 200))
       : [];
   const created = isRecord(raw.createdBy) ? raw.createdBy : {};
+  let workspace: BundleWorkspaceSection | undefined;
+  if (isRecord(raw.workspace) && Array.isArray(raw.workspace.variables)) {
+    const seenKeys = new Set<string>();
+    const variables: BundleVariable[] = [];
+    for (const v of raw.workspace.variables.slice(0, MAX_BUNDLE_VARIABLES)) {
+      if (!isRecord(v) || typeof v.key !== 'string' || !v.key.trim() || !safeKey(v.key) || typeof v.value !== 'string' || seenKeys.has(v.key)) continue;
+      seenKeys.add(v.key);
+      variables.push({
+        key: text(v.key, 200),
+        value: v.value.length > 100_000 ? v.value.slice(0, 100_000) : v.value,
+        ...(typeof v.enabled === 'boolean' ? { enabled: v.enabled } : {}),
+        ...(typeof v.description === 'string' ? { description: text(v.description, 500) } : {}),
+        ...(v.secret === true ? { secret: true } : {}),
+      });
+    }
+    if (variables.length) workspace = { variables };
+    if (raw.workspace.variables.length > MAX_BUNDLE_VARIABLES) warnings.push(`Kept the first ${MAX_BUNDLE_VARIABLES} workspace variables of ${raw.workspace.variables.length}.`);
+  }
   return {
     manifest: {
       format: BUNDLE_FORMAT,
@@ -244,6 +284,7 @@ export function checkManifest(raw: unknown, limits: TransferLimits = TRANSFER_LI
       },
       flags: { scripts: num(flags.scripts), production: strings(flags.production, 100), strippedSecrets: num(flags.strippedSecrets), stdioServers: strings(flags.stdioServers, 100) },
       notes: strings(raw.notes, 100),
+      ...(workspace ? { workspace } : {}),
     },
     warnings,
   };

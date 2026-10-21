@@ -8,6 +8,7 @@ import {
   applyImport,
   buildBundle,
   describeBundle,
+  folderRefs,
   listImports,
   looksLikeBundle,
   parseSelector,
@@ -15,8 +16,11 @@ import {
   readBundle,
   sectionRefs,
   undoImport,
+  type BundleRef,
   type ImportChoice,
+  type ImportInto,
   type ImportPreview,
+  type VariableChoice,
 } from '@testpion/core';
 import { EXIT, CliError, bold, dim, green, printJson, withWorkspace, yellow } from '../shared.js';
 
@@ -39,23 +43,47 @@ export interface BundleExportOptions {
   uses?: boolean;
   datasets?: 'auto' | 'embed' | 'reference';
   providers?: boolean;
+  /** `--folder <kind>:<name>`: the items in one folder of a list. */
+  folder?: string;
+  /** `--globals` / `--no-globals`: carry the workspace's own variables (default: with --all). */
+  globals?: boolean;
+  /** `--exclude kind:id,…`: with --uses, items that stay out. */
+  exclude?: string;
   title?: string;
   json?: boolean;
 }
 
 /** Whether an `export` call asks for a bundle: a section, everything, "uses", or a ref in the kind:id form. */
-export function wantsBundleExport(refs: string[], o: { format?: string } & Pick<BundleExportOptions, 'section' | 'all' | 'uses'>): boolean {
-  return o.format === 'bundle' || !!o.section || !!o.all || !!o.uses || refs.some((r) => !!kindByName(r.slice(0, Math.max(0, r.indexOf(':')))) && !/^[a-z]+:\/\//i.test(r));
+export function wantsBundleExport(refs: string[], o: { format?: string } & Pick<BundleExportOptions, 'section' | 'all' | 'uses' | 'folder'>): boolean {
+  return o.format === 'bundle' || !!o.section || !!o.folder || !!o.all || !!o.uses || refs.some((r) => !!kindByName(r.slice(0, Math.max(0, r.indexOf(':')))) && !/^[a-z]+:\/\//i.test(r));
 }
 
 export async function runBundleExport(refs: string[], o: BundleExportOptions): Promise<void> {
   if (o.datasets && !['auto', 'embed', 'reference'].includes(o.datasets)) throw new CliError('--datasets is embed, reference or auto', EXIT.CONFIG_ERROR);
-  if (!o.all && !o.section && !refs.length)
-    throw new CliError('Name what to export: kind:id (collection:<id>, spec:specs/<path>, dataset:<name>, mcp-server:<id> …), --section <kind>, or --all', EXIT.CONFIG_ERROR);
+  if (!o.all && !o.section && !o.folder && !refs.length)
+    throw new CliError('Name what to export: kind:id (collection:<id>, folder:<collection>/<folder>, request:<collection>/<request>, spec:specs/<path>, dataset:<name>, mcp-server:<id> …), --section <kind>, --folder <kind>:<name>, or --all', EXIT.CONFIG_ERROR);
   await withWorkspace(o.workspace, (store) => {
-    const selection = o.all ? ('all' as const) : o.section ? sectionRefs(store, o.section) : refs.map((r) => parseSelector(store, r));
+    let folder: BundleRef[] | undefined;
+    if (o.folder) {
+      const colon = o.folder.indexOf(':');
+      if (colon <= 0) throw new CliError('--folder is <kind>:<folder name>, e.g. spec:pets (a test folder: test:smoke/api)', EXIT.CONFIG_ERROR);
+      folder = folderRefs(store, o.folder.slice(0, colon), o.folder.slice(colon + 1));
+    }
+    const selection = o.all ? ('all' as const) : o.section ? sectionRefs(store, o.section) : folder ?? refs.map((r) => parseSelector(store, r));
     const ext = o.out ? /\.(zip|json)$/i.exec(o.out)?.[1]?.toLowerCase() : undefined;
-    const b = buildBundle(store, selection, { uses: o.uses, datasets: o.datasets, providers: o.providers, title: o.title, format: ext === 'zip' || ext === 'json' ? ext : 'auto' });
+    const exclude = o.exclude
+      ?.split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const b = buildBundle(store, selection, {
+      uses: o.uses,
+      datasets: o.datasets,
+      providers: o.providers,
+      title: o.title,
+      format: ext === 'zip' || ext === 'json' ? ext : 'auto',
+      ...(typeof o.globals === 'boolean' ? { workspaceVariables: o.globals } : {}),
+      ...(exclude?.length ? { exclude } : {}),
+    });
     const out = resolve(o.out ?? b.fileName);
     writeFileSync(out, b.bytes);
     if (o.json)
@@ -103,6 +131,10 @@ export interface BundleImportOptions {
   undo?: string;
   list?: boolean;
   maxSize?: string;
+  /** The workspace's own variables a bundle carries: merge (default), replace or skip. */
+  globals?: string;
+  /** Import here: `<collection id>` or `<collection id>/<folder id>`. */
+  into?: string;
   json?: boolean;
 }
 
@@ -117,6 +149,7 @@ function printPreview(p: ImportPreview): void {
     const tag = { create: green('new      '), identical: dim('identical'), conflict: yellow('conflict '), invalid: yellow('refused  '), reference: dim('reference') }[i.action];
     console.log(`  ${tag} ${i.kind.padEnd(14)} ${i.name}${i.action === 'conflict' && i.proposed ? dim(`  (keep both: ${i.proposed.name})`) : ''}${i.why ? dim(`  ${i.why}`) : ''}`);
   }
+  if (p.workspace) console.log(`  Workspace variables (Globals): ${p.workspace.counts.new} new, ${p.workspace.counts.same} the same, ${p.workspace.counts.differs} different`);
   for (const r of p.review) console.log(yellow(`review: ${r}`));
   if (p.requires.secrets.length) console.log(yellow(`to fill in after the import: ${p.requires.secrets.map((s) => `{{${s.name}}}`).join(', ')}`));
 }
@@ -157,17 +190,30 @@ export async function runBundleImport(file: string | undefined, o: BundleImportO
         throw new CliError(`--decisions is a JSON file of "kind:id": "keep-both" | "replace" | "skip"`, EXIT.CONFIG_ERROR);
       }
     }
+    if (o.globals && !['merge', 'replace', 'skip'].includes(o.globals)) throw new CliError('--globals is merge, replace or skip', EXIT.CONFIG_ERROR);
+    let into: ImportInto | undefined;
+    if (o.into) {
+      const [collectionId, folderId] = o.into.split('/').map((s) => s.trim());
+      if (!collectionId) throw new CliError('--into is <collection id> or <collection id>/<folder id>', EXIT.CONFIG_ERROR);
+      into = { collectionId, ...(folderId ? { folderId } : {}) };
+    }
     const out = applyImport(store, bundle, {
       onConflict: o.onConflict as ImportChoice | undefined,
       decisions,
-      only: o.only
-        ?.split(',')
-        .map((s) => s.trim())
-        .filter(Boolean),
+      // Import here takes the bundle's collection only
+      only:
+        o.only
+          ?.split(',')
+          .map((s) => s.trim())
+          .filter(Boolean) ?? (into ? ['collection'] : undefined),
+      ...(o.globals ? { workspaceVariables: o.globals as VariableChoice } : {}),
+      ...(into ? { into } : {}),
     });
     if (o.json) return printJson(out);
     const n = out.created.length + out.replaced.length;
     console.log(green(`Imported ${n} item${n === 1 ? '' : 's'} from “${out.title}”${out.replaced.length ? ` (${out.replaced.length} replaced)` : ''}`));
+    if (out.addedUnder) console.log(dim(`Added ${out.addedUnder.nodes} folder${out.addedUnder.nodes === 1 ? '' : 's'} and requests under ${out.addedUnder.where}${out.addedUnder.variables ? `, with ${out.addedUnder.variables} collection variable${out.addedUnder.variables === 1 ? '' : 's'}` : ''}`));
+    if (out.workspaceVariables) console.log(dim(`Workspace variables (Globals): ${out.workspaceVariables.added} added, ${out.workspaceVariables.replaced} replaced, ${out.workspaceVariables.kept} kept as they were`));
     for (const s of out.skipped.filter((x) => x.why?.startsWith('refused'))) console.log(yellow(`skipped ${s.kind} ${s.name}: ${s.why}`));
     for (const r of out.review) console.log(yellow(`review: ${r}`));
     const need = out.requires.secrets.filter((s) => !s.defined);

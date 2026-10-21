@@ -20,6 +20,7 @@ export type NodeKind = KindId | `section:${KindId}` | `folder:${KindId}` | 'cate
 export type MenuLabelKey =
   | 'newFolder'
   | 'import'
+  | 'importHere'
   | 'open'
   | 'openNewTab'
   | 'revealInSidebar'
@@ -200,7 +201,8 @@ const isDocument = (kind: NodeKind): boolean => {
 /** A container that exports in several ways (a collection: Export ▸ its formats). */
 export const exportsAsSubmenu = (kind: NodeKind): boolean => {
   const i = kindInfoOf(kind);
-  return !!i && i.capabilities.export === true && i.capabilities.container === true;
+  // (a folder or a request of a collection exports as a part of it, in one way: not a submenu)
+  return !!i && !i.parent && i.capabilities.export === true && i.capabilities.container === true;
 };
 
 /* ------------------------------------------------------------------ capabilities of a node */
@@ -244,7 +246,8 @@ function computeCapabilities(kind: NodeKind): Capabilities {
       // a folder of test files runs (and runs in CI) as one; a library's folder is a way to sort its items
       run: base.run === true && info.folders === 'dirs' ? true : NA('its items run one by one'),
       ci: base.ci === true && info.folders === 'dirs' ? true : NA('its items run in CI one by one'),
-      export: { planned: '0.55' },
+      // a folder of a list exports the items in it (Export… opens the bundle dialog on them)
+      export: base.export === true ? true : NA('its items do not export'),
     };
   if (kind === 'category') return { ...all(NA('a group of one protocol’s requests in a collection')), container: true, run: true };
   return { ...all(NA('favorites gather requests from every collection')), container: true };
@@ -322,6 +325,8 @@ const COLLECTION_ACTIONS = [
   { id: 'copyGrpcurl', group: 'share', label: 'copyGrpcurl', icon: 'terminal', kinds: ['grpc-call'] },
   { id: 'copyUrl', group: 'share', label: 'copyUrl', icon: 'link-2', kinds: ['ws-connection'] },
   { id: 'editFolder', group: 'tools', label: 'editFolder', icon: 'folder-cog', kinds: ['folder'] },
+  // Import… of an item: a bundle's collection is added under this collection or folder
+  { id: 'importHere', group: 'create', label: 'importHere', icon: 'upload', cap: 'import', kinds: ['collection', 'folder'] },
 ] as const satisfies readonly ActionDef[];
 
 /** The actions of the explorer's workspace kinds: MCP servers, API definitions, datasets, and their sections. */

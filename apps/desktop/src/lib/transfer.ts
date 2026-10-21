@@ -13,6 +13,8 @@ import { useApp } from '../store';
 export interface ExportRequest {
   selection?: unknown[];
   section?: string;
+  /** The items in one folder of a list (an API definition folder, a test folder …). */
+  folder?: { kind: string; name: string };
   all?: boolean;
   /** Start with "Include everything it uses" on. */
   uses?: boolean;
@@ -24,6 +26,8 @@ export interface ImportRequest {
   section?: string;
   base64?: string;
   fileName?: string;
+  /** Import here…: the bundle's collection is added under this collection (or one of its folders). */
+  into?: { collectionId: string; folderId?: string; name: string };
 }
 
 export const openExportBundle = (r: ExportRequest): void => useApp.getState().set({ exportBundle: r });
@@ -58,16 +62,26 @@ export function bundleRequestOf(src: { files?: Array<{ path: string; text?: stri
 export const isBundleFile = (name: string): boolean => /\.testpion\.(zip|json)$/i.test(name);
 
 /** Export… and Import… for a node, unless the view gave its own (a collection's Export is a submenu of formats). */
-export function transferActions(kind: NodeKind, c: NodeMenuCtx): Partial<Record<'export' | 'import', Act>> {
+export function transferActions(kind: NodeKind, c: NodeMenuCtx): Partial<Record<'export' | 'import' | 'importHere', Act>> {
   const base = baseKind(kind) as KindId;
   if (kind.startsWith('section:'))
     return {
       ...(can(base, 'export') ? { export: () => openExportBundle({ section: base }) } : {}),
       ...(can(base, 'import') ? { import: () => openImportBundle({ section: base }) } : {}),
     };
+  // a folder of a list exports the items in it
+  if (kind.startsWith('folder:')) {
+    const name = c.folder ?? c.name;
+    return can(base, 'export') && name ? { export: () => openExportBundle({ folder: { kind: base, name }, title: name }) } : {};
+  }
   if (c.ref && can(base, 'export')) {
     const ref = c.ref;
-    return { export: () => openExportBundle({ selection: [ref], ...(c.name ? { title: c.name } : {}) }) };
+    // a collection or a folder of one also takes a bundle's requests: Import here…
+    const here = c.ref.kind === 'collection' ? { collectionId: c.ref.collectionId } : c.ref.kind === 'folder' ? { collectionId: c.ref.collectionId, folderId: c.ref.folderId } : undefined;
+    return {
+      export: () => openExportBundle({ selection: [ref], ...(c.name ? { title: c.name } : {}) }),
+      ...(here && can(base, 'import') ? { importHere: () => openImportBundle({ into: { ...here, name: c.name ?? 'this collection' } }) } : {}),
+    };
   }
   return {};
 }

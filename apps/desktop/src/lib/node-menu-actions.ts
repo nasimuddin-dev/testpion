@@ -59,6 +59,8 @@ export type Act = (() => unknown) | MenuItem[];
 export interface NodeMenuCtx extends Omit<NodeMenuContext, 'on' | 'disabled'> {
   /** The node's name (only for messages). */
   name?: string;
+  /** A folder of a list: its name in that list (a test folder: its path under tests/), when `name` is only what the row shows. */
+  folder?: string;
   /** The node's ItemRef (an item); the test file action names what it saves by it. */
   ref?: ItemRef;
   /** What this view can do with the node, by action id (a typo is a compile error); an action without a handler is left out. */

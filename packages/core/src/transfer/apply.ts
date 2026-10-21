@@ -16,14 +16,21 @@ import { JournalWriter, undoImport } from './journal.js';
 import type { CommitWrite, Remap, Target } from './items.js';
 import { previewImport, type ImportChoice, type ImportPreview, type PreviewItem } from './preview.js';
 import { adapter } from './registry.js';
+import { hasVirtualFolders, placeInFolders } from './folders.js';
+import { checkInto, commitInto, type ImportInto } from './into.js';
+import { applyWorkspaceVariables, type VariableChoice, type WorkspaceVariablesOutcome } from './workspace-section.js';
 
 export interface ApplyOptions {
   /** What to do with an item that clashes with the workspace's own (default Keep both). */
   onConflict?: ImportChoice;
   /** A choice per item (`kind:id`): `skip` leaves an item out whatever it is; `keep-both` / `replace` apply to conflicts. */
   decisions?: Record<string, ImportChoice | 'import'>;
-  /** Only these: kinds (`spec`) or `kind:id` keys. Everything else is left out. */
+  /** Only these: kinds (`spec`) or `kind:id` keys (`workspace` is the workspace's own variables). Everything else is left out. */
   only?: string[];
+  /** Import here…: add the bundle's collection under this collection (or folder of it) instead of making a collection. */
+  into?: ImportInto;
+  /** The workspace's own variables (Globals) a bundle carries: `merge` adds the new keys (default), `replace` also takes the bundle's values, `skip` leaves them. */
+  workspaceVariables?: VariableChoice;
 }
 
 export interface ItemOutcome {
@@ -46,6 +53,12 @@ export interface ImportOutcome {
   warnings: string[];
   /** The ref to open first: the bundle's first root that was written. */
   open?: ItemRef;
+  /** What happened to the workspace's own variables (Globals), when the bundle carried some. */
+  workspaceVariables?: WorkspaceVariablesOutcome;
+  /** Files placed in a virtual folder (API definitions, datasets). */
+  placedInFolders?: number;
+  /** Import here…: the folders and requests added under the target, and the collection variables added with them. */
+  addedUnder?: { where: string; nodes: number; variables: number };
 }
 
 /** Order the kinds are written in. */
@@ -81,6 +94,8 @@ export function applyImport(store: WorkspaceStore, bundle: ParsedBundle, opts: A
   const skipped: ItemOutcome[] = [];
   const remap: Remap = { collection: new Map(), path: new Map(), serverName: new Map(), serverId: new Map() };
   const plan: Array<{ p: PreviewItem; target: Target; op: 'created' | 'replaced' }> = [];
+  // the target of Import here… must be there before anything is written
+  const intoLabel = opts.into ? checkInto(store, opts.into).label : '';
 
   const note = (p: PreviewItem, target: Target) => {
     // references from the items imported with it follow it to where it is now
@@ -107,6 +122,11 @@ export function applyImport(store: WorkspaceStore, bundle: ParsedBundle, opts: A
       continue;
     }
     const decided = opts.decisions?.[key];
+    // Import here…: the bundle's collection is added under the target, whatever else is in the workspace
+    if (opts.into && p.kind === 'collection' && decided !== 'skip') {
+      plan.push({ p, target: { id: opts.into.collectionId, name: intoLabel }, op: 'created' });
+      continue;
+    }
     if (p.action === 'identical') {
       skipped.push(outcome(p, p.existing, 'already here, identical'));
       continue;
@@ -132,6 +152,9 @@ export function applyImport(store: WorkspaceStore, bundle: ParsedBundle, opts: A
   }
 
   const journal = new JournalWriter(store, bundle.manifest.title);
+  let variables: WorkspaceVariablesOutcome | undefined;
+  let placedInFolders = 0;
+  let into: { nodes: number; variables: number } | undefined;
   try {
     for (const kind of ORDER) {
       const rows = plan.filter((x) => x.p.kind === kind);
@@ -141,8 +164,12 @@ export function applyImport(store: WorkspaceStore, bundle: ParsedBundle, opts: A
         const item = entryOf.get(itemKey(p.kind, p.id))!;
         return { incoming: item, data: a.rewrite(item, bundle.entries.get(item.entry!)!, remap), target, op };
       });
-      a.commit(store, writes, journal);
+      if (kind === 'collection' && opts.into) into = commitInto(store, opts.into, writes, journal);
+      else a.commit(store, writes, journal);
+      // API definitions and datasets keep their folder outside the file: put them where the bundle had them
+      if (hasVirtualFolders(kind)) placedInFolders += placeInFolders(store, writes.map((w) => ({ kind, id: w.target.id, folder: w.incoming.folder })), journal);
     }
+    if (!only || only.has('workspace')) variables = applyWorkspaceVariables(store, bundle.manifest.workspace, opts.workspaceVariables ?? 'merge', (before) => journal.workspaceVariables(before));
     journal.save();
   } catch (e) {
     // a failure part-way leaves the workspace as it was
@@ -168,5 +195,8 @@ export function applyImport(store: WorkspaceStore, bundle: ParsedBundle, opts: A
     review: preview.review,
     warnings: preview.warnings,
     ...(open ? { open } : {}),
+    ...(variables ? { workspaceVariables: variables } : {}),
+    ...(placedInFolders ? { placedInFolders } : {}),
+    ...(into ? { addedUnder: { where: intoLabel, ...into } } : {}),
   };
 }

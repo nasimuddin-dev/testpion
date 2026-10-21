@@ -50,7 +50,10 @@ const write = (store: WorkspaceStore, rel: string, data: string | Buffer) => {
 };
 describe('every kind with the export capability has an adapter, and the other way round', () => {
   it('registry and bundle agree', () => {
-    const exporting = (Object.values(KIND_INFO) as Array<(typeof KIND_INFO)[KindId]>).filter((k) => !k.since && k.capabilities.export === true && k.id !== 'capture');
+    // a folder and a request export as a part of their collection: a collection of its own (transfer/parts.ts), not a kind of their own
+    const asPartOfCollection = new Set<KindId>(['folder', 'request']);
+    const exporting = (Object.values(KIND_INFO) as Array<(typeof KIND_INFO)[KindId]>).filter((k) => !k.since && k.capabilities.export === true && k.id !== 'capture' && !asPartOfCollection.has(k.id));
+    for (const id of asPartOfCollection) expect(can(id, 'export'), `${id} exports as a part of a collection`).toBe(true);
     const viaRegistry = new Set(exporting.map((k) => bundleKindOf(k.id)).filter((k): k is BundleKindId => !!k));
     expect([...viaRegistry].sort()).toEqual([...BUNDLE_KIND_IDS].sort());
     // every kind that exports also imports, and no kind outside the bundle claims either

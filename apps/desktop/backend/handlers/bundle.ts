@@ -13,6 +13,7 @@ import {
   applyImport,
   buildBundleAsync,
   describeBundle,
+  folderRefs,
   forgetPlan,
   listImports,
   parseSelector,
@@ -25,16 +26,20 @@ import {
   type BuildOptions,
   type BundleRef,
   type ImportChoice,
+  type ImportInto,
+  type VariableChoice,
 } from '@testpion/core';
 import type { Backend, Handlers } from '../backend.js';
 
 const FILTERS = [{ name: 'TestPion bundle', extensions: ['zip', 'json'] }];
 
-interface ExportParams extends Pick<BuildOptions, 'uses' | 'datasets' | 'providers' | 'format'> {
+interface ExportParams extends Pick<BuildOptions, 'uses' | 'datasets' | 'providers' | 'format' | 'workspaceVariables' | 'exclude'> {
   /** Items: ItemRefs, kind:id strings, or a collection's name. */
   selection?: unknown[];
   /** A whole section by kind (`dataset`, `mcp-server` …). */
   section?: string;
+  /** The items in one folder of a list (`{ kind: 'spec', name: 'pets' }`; a test folder: its path under tests/). */
+  folder?: { kind: string; name: string };
   /** The whole workspace. */
   all?: boolean;
   title?: string;
@@ -46,6 +51,7 @@ export function bundleHandlers(be: Backend): Handlers {
   const refsOf = (p: ExportParams): BundleRef[] | 'all' => {
     if (p.all) return 'all';
     if (p.section) return sectionRefs(be.ws, p.section);
+    if (p.folder) return folderRefs(be.ws, String(p.folder.kind ?? ''), String(p.folder.name ?? ''));
     const sel = p.selection ?? [];
     if (!sel.length) throw new ApsError('ValidationError', 'Nothing is selected to export');
     return sel.map((s) => parseSelector(be.ws, s));
@@ -56,7 +62,7 @@ export function bundleHandlers(be: Backend): Handlers {
      * are used but not in the workspace) without saving, so the dialog shows it before anything is written.
      */
     'bundle.export': async (p: ExportParams) => {
-      const b = await buildBundleAsync(be.ws, refsOf(p), { uses: p.uses, datasets: p.datasets, providers: p.providers, format: p.format, title: p.title });
+      const b = await buildBundleAsync(be.ws, refsOf(p), { uses: p.uses, datasets: p.datasets, providers: p.providers, format: p.format, title: p.title, workspaceVariables: p.workspaceVariables, exclude: p.exclude });
       const summary = {
         title: b.manifest.title,
         fileName: b.fileName,
@@ -64,6 +70,10 @@ export function bundleHandlers(be: Backend): Handlers {
         size: b.bytes.length,
         counts: b.counts,
         items: b.manifest.items.map((i) => ({ kind: i.kind, id: i.id, name: i.name, mode: i.mode })),
+        // who uses whom, and what was picked (the dialog's tree: an item that is only there because another uses it can be unticked)
+        edges: b.manifest.edges,
+        root: b.manifest.root,
+        workspaceVariables: b.manifest.workspace?.variables.length ?? 0,
         replaced: b.replaced,
         missing: b.manifest.missing,
         notes: b.notes,
@@ -110,8 +120,21 @@ export function bundleHandlers(be: Backend): Handlers {
     },
 
     /** Apply a previewed bundle with the person's choices; the answer's importId is what `bundle.undo` takes. */
-    'bundle.apply': ({ planId, onConflict, decisions, only }: { planId: string; onConflict?: ImportChoice; decisions?: Record<string, ImportChoice | 'import'>; only?: string[] }) =>
-      applyImport(be.ws, recallBundle(be.ws, planId), { onConflict, decisions, only }),
+    'bundle.apply': ({
+      planId,
+      onConflict,
+      decisions,
+      only,
+      workspaceVariables,
+      into,
+    }: {
+      planId: string;
+      onConflict?: ImportChoice;
+      decisions?: Record<string, ImportChoice | 'import'>;
+      only?: string[];
+      workspaceVariables?: VariableChoice;
+      into?: ImportInto;
+    }) => applyImport(be.ws, recallBundle(be.ws, planId), { onConflict, decisions, only, workspaceVariables, into }),
 
     /** Take an import back as one step (the Undo of the toast). */
     'bundle.undo': ({ importId, planId }: { importId: string; planId?: string }) => {

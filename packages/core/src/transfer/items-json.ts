@@ -10,7 +10,7 @@ import { slugify, uniqueId } from '../util/ids.js';
 import { LIBRARY_OF, SAFE_ID, isPlainId, parseJsonSafe, type BundleKindId } from './format.js';
 import { canonicalJson, importedName, listIndex, mapStrings, replacePaths, seedOnce, type CommitWrite, type ItemAdapter, type JournalSink, type Listed } from './items.js';
 import { isRecord } from '@testpion/shared';
-
+import { partialCollection, splitPartId } from './parts.js';
 
 /** The incoming item's JSON object, or why it is not one. */
 function parseObject(data: Buffer): Record<string, unknown> | string {
@@ -112,16 +112,19 @@ const collection: ItemAdapter = {
       .filter((c) => !c.problem)
       .map((c) => ({ id: c.id, name: c.name })),
   snapshot(store, id, strip) {
-    let c: Collection;
+    // `<collection>#<ids>` names a part of a collection (folders and requests): it travels as a collection of its own
+    const part = splitPartId(id);
+    let whole: Collection;
     try {
-      c = store.getCollection(id);
+      whole = store.getCollection(part?.collectionId ?? id);
     } catch {
       return undefined;
     }
+    const c = part ? partialCollection(whole, part.nodeIds).collection : whole;
     const { version: _v, updatedAt: _u, ...rest } = strip.collection(c) as Collection & Record<string, unknown>;
     void _v;
     void _u;
-    return { id: c.id, name: c.name, data: canonicalJson(rest), summary: { requests: countRequests(c.items), scripts: countScripts(c) } };
+    return { id: c.id, name: c.name, data: canonicalJson(rest), summary: { requests: countRequests(c.items), scripts: countScripts(c), ...(part ? { partOf: whole.name.slice(0, 120) } : {}) } };
   },
   check(item, data) {
     const o = parseObject(data);

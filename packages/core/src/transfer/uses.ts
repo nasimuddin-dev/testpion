@@ -11,6 +11,7 @@ import type { WorkspaceStore } from '../storage/workspace.js';
 import { LIBRARY_OF, RAW_ROOT, itemKey, type BundleEdge, type BundleKindId, type BundleManifest } from './format.js';
 import { adapter, ALL_BUNDLE_KINDS } from './registry.js';
 import type { Listed } from './items.js';
+import { collectionIdOfRef } from './parts.js';
 import type { BundleRef } from './types.js';
 
 export interface UsesResult {
@@ -35,7 +36,7 @@ function serverNames(v: unknown, out: Set<string> = new Set()): Set<string> {
   return out;
 }
 
-export function collectUses(store: WorkspaceStore, roots: readonly BundleRef[], read: (r: BundleRef) => string | undefined): UsesResult {
+export function collectUses(store: WorkspaceStore, roots: readonly BundleRef[], read: (r: BundleRef) => string | undefined, exclude?: ReadonlySet<string>): UsesResult {
   const lists = new Map<BundleKindId, Listed[]>(ALL_BUNDLE_KINDS.map((k) => [k, adapter(k).list(store)]));
   const listOf = (k: BundleKindId) => lists.get(k) ?? [];
   const byPath = new Map<string, BundleRef>();
@@ -54,7 +55,12 @@ export function collectUses(store: WorkspaceStore, roots: readonly BundleRef[], 
   const edgeKeys = new Set<string>();
   const use = (from: BundleRef, to: BundleRef, via: string) => {
     const key = itemKey(to.kind, to.id);
-    const edge = `${itemKey(from.kind, from.id)}\0${key}`;
+    // an item the person unticked stays out, and so does what only it would have brought; the bundle says it is not there
+    if (exclude?.has(key) && !seen.has(key)) {
+      if (!missing.some((x) => x.to === to.id)) missing.push({ from: itemKey(from.kind, from.id), to: to.id, reason: 'left out: you unticked it' });
+      return;
+    }
+    const edge =`${itemKey(from.kind, from.id)}\0${key}`;
     if (!edgeKeys.has(edge)) (edgeKeys.add(edge), edges.push({ from: itemKey(from.kind, from.id), to: key, via }));
     if (!seen.has(key)) {
       seen.set(key, to);
@@ -114,13 +120,18 @@ export function collectUses(store: WorkspaceStore, roots: readonly BundleRef[], 
     }
 
     if (from.kind === 'collection') {
-      const c = listOf('collection').find((x) => x.id === from.id);
+      // a part of a collection (a folder, a request) brings what its own text uses; the saved calls, monitors and tests
+      // that belong to the whole collection stay with the whole collection
+      const whole = collectionIdOfRef(from.id);
+      const isPart = whole !== from.id;
+      const c = listOf('collection').find((x) => x.id === whole);
       // saved calls, connections, monitors and load tests that belong to the collection
-      for (const { kind, items } of libs)
-        for (const i of items) {
-          const d = isRecord(i.data) ? i.data : {};
-          if (i.collectionId === from.id || d.collectionId === from.id) use(from, { kind, id: i.id }, `belongs to the collection`);
-        }
+      if (!isPart)
+        for (const { kind, items } of libs)
+          for (const i of items) {
+            const d = isRecord(i.data) ? i.data : {};
+            if (i.collectionId === from.id || d.collectionId === from.id) use(from, { kind, id: i.id }, `belongs to the collection`);
+          }
       // test and flow files that refer to the collection by id or name
       tests ??= listOf('test').flatMap((t) => {
         const ref: BundleRef = { kind: 'test', id: t.id };
@@ -128,7 +139,7 @@ export function collectUses(store: WorkspaceStore, roots: readonly BundleRef[], 
         return body === undefined ? [] : [{ ref, text: body }];
       });
       const needles = [from.id, c?.name].filter((x): x is string => !!x);
-      for (const t of tests) if (needles.some((n) => new RegExp(`collection(?:Id)?\\s*:\\s*["']?${escapeRegex(n)}["']?\\s*$`, 'mi').test(t.text))) use(from, t.ref, 'refers to the collection');
+      for (const t of isPart ? [] : tests) if (needles.some((n) => new RegExp(`collection(?:Id)?\\s*:\\s*["']?${escapeRegex(n)}["']?\\s*$`, 'mi').test(t.text))) use(from, t.ref, 'refers to the collection');
       // the environments that define the variables the collection needs and nothing else here defines
       const own = new Set<string>();
       try {

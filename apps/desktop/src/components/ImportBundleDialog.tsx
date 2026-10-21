@@ -32,6 +32,8 @@ interface Preview {
     warnings: string[];
     notes: string[];
     missing: Array<{ to: string; reason: string }>;
+    /** The workspace's own variables (Globals) the bundle carries, by key. */
+    workspace?: { total: number; variables: Array<{ key: string; action: 'new' | 'same' | 'differs' }>; counts: { new: number; same: number; differs: number } };
   };
 }
 interface Outcome {
@@ -73,6 +75,8 @@ export default function ImportBundleDialog({ request, onClose }: { request: Impo
   const [onConflict, setOnConflict] = useState<Choice>('keep-both');
   const [rowChoice, setRowChoice] = useState<Record<string, Choice | 'import'>>({});
   const [busy, setBusy] = useState(false);
+  // the workspace's own variables (Globals) a bundle carries: add the new keys (default), also take its values, or leave them
+  const [globals, setGlobals] = useState<'merge' | 'replace' | 'skip'>('merge');
   const file = useRef<HTMLInputElement>(null);
   const started = useRef(false);
 
@@ -102,19 +106,27 @@ export default function ImportBundleDialog({ request, onClose }: { request: Impo
     setLoaded(undefined);
     setUpload(true);
   };
-  const only = request.section ? [request.section === 'flow' ? 'test' : request.section] : undefined;
+  // Import here…: only the bundle's collection, added under the collection or folder the menu was opened on
+  const only = request.into ? ['collection'] : request.section ? [request.section === 'flow' ? 'test' : request.section] : undefined;
   const rows = loaded?.preview.items ?? [];
   const inScope = (r: Row) => !only || only.includes(r.kind);
   const decisions = rowChoice;
   const willWrite = rows.filter(
-    (r) => inScope(r) && (r.action === 'create' || r.action === 'conflict') && decisions[key(r)] !== 'skip' && !(r.action === 'conflict' && !decisions[key(r)] && onConflict === 'skip'),
+    (r) =>
+      inScope(r) &&
+      (r.action === 'create' || r.action === 'conflict' || (!!request.into && r.action === 'identical')) &&
+      decisions[key(r)] !== 'skip' &&
+      !(r.action === 'conflict' && !request.into && !decisions[key(r)] && onConflict === 'skip'),
   );
+
+  const ws = only ? undefined : loaded?.preview.workspace;
+  const globalsWrite = !!ws && globals !== 'skip' && (ws.counts.new > 0 || (globals === 'replace' && ws.counts.differs > 0));
 
   const apply = async () => {
     if (!loaded) return;
     setBusy(true);
     try {
-      const r = await call<Outcome>('bundle.apply', { planId: loaded.planId, onConflict, decisions, ...(only ? { only } : {}) });
+      const r = await call<Outcome>('bundle.apply', { planId: loaded.planId, onConflict, decisions, workspaceVariables: globals, ...(only ? { only } : {}), ...(request.into ? { into: { collectionId: request.into.collectionId, folderId: request.into.folderId } } : {}) });
       const n = r.created.length + r.replaced.length;
       const need = r.requires.secrets.filter((s) => !s.defined);
       // one message, so its Undo is never under another: what was imported, and the values to fill in (secrets are never in a bundle)
@@ -146,14 +158,14 @@ export default function ImportBundleDialog({ request, onClose }: { request: Impo
   const p = loaded?.preview;
   return (
     <Modal
-      title={request.section ? `Import ${KIND_INFO[request.section as KindId]?.plural.toLowerCase() ?? request.section} from a bundle` : 'Import a bundle'}
+      title={request.into ? `Import a bundle into “${request.into.name}”` : request.section ? `Import ${KIND_INFO[request.section as KindId]?.plural.toLowerCase() ?? request.section} from a bundle` : 'Import a bundle'}
       onClose={onClose}
       width={680}
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" icon={<Upload size={13} />} loading={busy} disabled={!loaded || !willWrite.length} onClick={() => void apply()}>
-            {willWrite.length ? `Import ${willWrite.length} item${willWrite.length === 1 ? '' : 's'}` : 'Nothing to import'}
+          <Button variant="primary" icon={<Upload size={13} />} loading={busy} disabled={!loaded || !(willWrite.length || globalsWrite)} onClick={() => void apply()}>
+            {willWrite.length ? `Import ${willWrite.length} item${willWrite.length === 1 ? '' : 's'}` : globalsWrite ? 'Import the variables' : 'Nothing to import'}
           </Button>
         </>
       }
@@ -275,6 +287,18 @@ export default function ImportBundleDialog({ request, onClose }: { request: Impo
                 );
               })}
             </ul>
+            {ws && (
+              <div className="flex items-center gap-2 text-sm" data-testid="import-bundle-globals">
+                <span>
+                  Workspace variables (Globals): {ws.counts.new} new, {ws.counts.same} the same, {ws.counts.differs} different.
+                </span>
+                <Select value={globals} onChange={(e) => setGlobals(e.target.value as typeof globals)} aria-label="Workspace variables">
+                  <option value="merge">Add the new ones</option>
+                  <option value="replace">Add the new ones and take the bundle’s values</option>
+                  <option value="skip">Leave them</option>
+                </Select>
+              </div>
+            )}
             {p.requires.secrets.length > 0 && (
               <p className="text-xs text-muted">
                 To fill in after the import:{' '}

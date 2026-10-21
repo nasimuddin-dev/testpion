@@ -10,7 +10,8 @@ import { itemRefOf } from '../kinds/ops.js';
 import { bundleRefOfItemRef } from '../kinds/transfer-refs.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { ALL_BUNDLE_KINDS, adapter, bundleKindOf, normalizeId } from './registry.js';
-import { itemKey } from './format.js';
+import { LIBRARY_OF, itemKey } from './format.js';
+import { partId, resolveNodeIds } from './parts.js';
 import type { BundleRef } from './types.js';
 
 export type { BundleRef };
@@ -27,6 +28,7 @@ export function parseSelector(store: WorkspaceStore, selector: unknown): BundleR
   if (!text) throw new ApsError('ValidationError', 'Name what to export: kind:id (collection:<id>, spec:specs/<path>, dataset:<name>, mcp-server:<id> …)');
   const colon = text.indexOf(':');
   const info = colon > 0 && !/^[a-z]+:\/\//i.test(text) ? kindByName(text.slice(0, colon)) : undefined;
+  if (info && (info.id === 'folder' || info.id === 'request')) return partSelector(store, info.id, text.slice(colon + 1));
   if (info) {
     const k = bundleKindOf(info.id);
     if (!k) throw new ApsError('ValidationError', `${info.plural} are not exported in bundles (use \`testpion kinds ${info.id}\` to see what each kind can do)`);
@@ -43,6 +45,23 @@ export function parseSelector(store: WorkspaceStore, selector: unknown): BundleR
   });
 }
 
+/**
+ * `folder:<collection>/<folder>[,<folder>…]` and `request:<collection>/<request>[,…]`: the collection by id or name, the
+ * folders and requests by id or name. Several may be named (comma); they travel together as one part of the collection.
+ */
+function partSelector(store: WorkspaceStore, what: 'folder' | 'request', rest: string): BundleRef {
+  const slash = rest.indexOf('/');
+  const where = slash > 0 ? rest.slice(0, slash).trim() : '';
+  const names = (slash > 0 ? rest.slice(slash + 1) : '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (!where || !names.length) throw new ApsError('ValidationError', `Name the ${what} as ${what}:<collection>/<${what} id or name>`);
+  const c = store.listCollections().find((x) => !x.problem && (x.id === where || x.name.toLowerCase() === where.toLowerCase()));
+  if (!c) throw new ApsError('ValidationError', `No collection "${where.slice(0, 80)}" in this workspace`);
+  return { kind: 'collection', id: partId(c.id, resolveNodeIds(store.getCollection(c.id), names)) };
+}
+
 /** Every item of one section (a kind, by id or alias: `datasets`, `mcp`, `specs`, `collection` …). */
 export function sectionRefs(store: WorkspaceStore, section: string): BundleRef[] {
   const k = bundleKindOf(section);
@@ -52,6 +71,35 @@ export function sectionRefs(store: WorkspaceStore, section: string): BundleRef[]
   return adapter(k)
     .list(store)
     .map((i) => ({ kind: k, id: i.id }));
+}
+
+/**
+ * The items in one folder of a list: `kind` is the list (an API definition, a dataset, an MCP server, a test file, a saved
+ * item of a library) and `folder` the folder's name (a test folder: its path under tests/). Folders of a list are one level
+ * deep, except test folders; the files in a virtual folder never moved, so the refs are the files' own.
+ */
+export function folderRefs(store: WorkspaceStore, kind: string, folder: string): BundleRef[] {
+  const k = bundleKindOf(kind);
+  const name = String(folder ?? '').trim();
+  if (!k) throw new ApsError('ValidationError', `"${kind}" has no folders a bundle can hold`);
+  if (!name) throw new ApsError('ValidationError', 'Name the folder to export');
+  const all = adapter(k).list(store);
+  let ids: string[];
+  if (k === 'test') {
+    const dir = `tests/${name.replace(/^\/+|\/+$/g, '')}/`;
+    ids = all.filter((i) => i.id.startsWith(dir)).map((i) => i.id);
+  } else if (k === 'spec' || k === 'dataset') {
+    const lib = store.getLibrary(k === 'spec' ? 'spec-folders' : 'dataset-folders');
+    const inside = new Set(lib.items.filter((i) => i.folder === name).map((i) => (k === 'dataset' ? `datasets/${i.id}` : i.id)));
+    ids = all.filter((i) => inside.has(i.id)).map((i) => i.id);
+  } else if (k === 'mcp-server') {
+    ids = store.getMcpServers().filter((s) => s.folder === name).map((s) => s.id);
+  } else {
+    const lib = LIBRARY_OF[k];
+    ids = lib ? store.getLibrary(lib).items.filter((i) => i.folder === name).map((i) => i.id) : [];
+  }
+  if (!ids.length) throw new ApsError('ValidationError', `The ${adapter(k).label.toLowerCase()} folder "${name.slice(0, 80)}" holds nothing to export`, { suggestions: ['A folder is exported with the items in it; an empty folder has none'] });
+  return ids.map((id) => ({ kind: k, id }));
 }
 
 /** The whole workspace: every item of every kind (AI providers only when asked: they are a person's setup, not a project's). */

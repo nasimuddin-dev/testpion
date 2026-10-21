@@ -33,15 +33,9 @@ const FILE_KINDS: readonly BundleKindId[] = ['spec', 'dataset', 'proto', 'mcp-mo
 /** The whole workspace as a bundle (every kind, AI providers included as the earlier export had them; no secret value is written). */
 export async function exportWholeWorkspace(store: WorkspaceStore, opts: Pick<BuildOptions, 'format' | 'datasets' | 'title'> = {}): Promise<WorkspaceExport> {
   const built = await buildBundleAsync(store, 'all', { providers: true, title: opts.title ?? store.workspace.name, format: opts.format, datasets: opts.datasets });
-  const notes = [...built.notes];
-  const lines = [...built.lines];
-  // a bundle holds items; the workspace's own variables are not an item of any kind: say so rather than drop them silently
-  const vars = store.workspace.variables?.length ?? 0;
-  if (vars) {
-    const note = `The workspace's own ${vars === 1 ? 'variable' : `${vars} variables`} (the Globals) ${vars === 1 ? 'is' : 'are'} not part of a bundle: add ${vars === 1 ? 'it' : 'them'} to an environment, or copy ${vars === 1 ? 'it' : 'them'} by hand.`;
-    notes.push(note);
-    lines.push(note);
-  }
+  // the workspace's own variables (the Globals) travel in the manifest's workspace section; the notes say so
+  const notes = built.notes;
+  const lines = built.lines;
   const n = (k: BundleKindId) => built.counts[k] ?? 0;
   return {
     ...built,
@@ -81,7 +75,7 @@ export function importBundleAsWorkspace(manager: WorkspaceManager, bundle: Parse
     // the new workspace starts with a default environment: the bundle's own environments replace it
     const envs = bundle.manifest.items.filter((i) => i.kind === 'environment');
     if (envs.length && !envs.some((e) => e.id === 'development')) store.deleteEnvironment('development');
-    const outcome = applyImport(store, bundle, { onConflict: 'replace' });
+    const outcome = applyImport(store, bundle, { onConflict: 'replace', workspaceVariables: 'replace' });
     const written = [...outcome.created, ...outcome.replaced];
     return {
       store,

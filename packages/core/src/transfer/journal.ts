@@ -14,8 +14,9 @@ import { ApsError } from '../errors.js';
 import { atomicWrite, removeOwned } from '../storage/fsutil.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { shortId } from '../util/ids.js';
-import { sha256, type BundleKindId } from './format.js';
+import { sha256, type BundleKindId, type BundleVariable } from './format.js';
 import type { JournalSink } from './items.js';
+import { restoreWorkspaceVariables, variablesSha } from './workspace-section.js';
 
 export interface JournalFile {
   path: string;
@@ -40,6 +41,8 @@ export interface ImportJournal {
   title: string;
   files: JournalFile[];
   items: JournalListItem[];
+  /** The workspace's own variables as they were before the import wrote them, and a checksum of what it wrote. */
+  workspaceVariables?: { before: BundleVariable[]; afterSha: string };
   undone?: string;
 }
 
@@ -119,7 +122,13 @@ export class JournalWriter implements JournalSink {
   listItem(e: JournalListItem): void {
     this.journal.items.push(e);
   }
+  /** The workspace's variables are about to be changed (`before`) and now hold what the import wrote. */
+  workspaceVariables(before: BundleVariable[]): void {
+    this.journal.workspaceVariables = { before, afterSha: '' };
+  }
   save(): void {
+    const w = this.journal.workspaceVariables;
+    if (w) w.afterSha = variablesSha(this.store);
     mkdirSync(this.dir, { recursive: true });
     atomicWrite(`${this.dir}/journal.json`, JSON.stringify(this.journal, null, 2));
     writeSummary(this.dir, this.journal);
@@ -199,6 +208,12 @@ export function undoImport(store: WorkspaceStore, importId: string, journal?: Im
     else l.items.push(it.before as { id: string });
   }
   for (const l of lists.values()) l.save(l.items);
+  if (j.workspaceVariables) {
+    // on a failed import the checksum is not written yet: the variables are put back when they are what the import left
+    const saved = { before: j.workspaceVariables.before, afterSha: j.workspaceVariables.afterSha || variablesSha(store) };
+    if (restoreWorkspaceVariables(store, saved)) out.restored++;
+    else out.keptChanged.push('the workspace variables');
+  }
   const undone = { ...j, undone: new Date().toISOString() };
   atomicWrite(`${dir}/journal.json`, JSON.stringify(undone, null, 2));
   writeSummary(dir, undone);

@@ -484,7 +484,7 @@ export const CollectionTree = memo(function CollectionTree({
   /** The menu of a folder of saved gRPC calls / connections: the view's (rename, delete), with fold and unfold. */
   const extraFolderMenu = (r: Extract<TreeRow, { t: 'xfolder' }>): NodeMenuCtx => {
     const own = r.g.folderMenu?.(r.folder);
-    return { ...own, on: { ...own?.on, expandAll: () => setOpen((o) => ({ ...o, [r.key]: true })), collapseAll: () => setOpen((o) => ({ ...o, [r.key]: false })) } };
+    return { name: r.folder, ...own, on: { ...own?.on, expandAll: () => setOpen((o) => ({ ...o, [r.key]: true })), collapseAll: () => setOpen((o) => ({ ...o, [r.key]: false })) } };
   };
   const [editing, setEditing] = useState<{ c: Collection; folder: CollectionFolder }>();
   const f = filter?.trim().toLowerCase();

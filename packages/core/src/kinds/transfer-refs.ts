@@ -1,5 +1,6 @@
 import { kindOfLibrary, type ItemRef } from '@testpion/shared';
 import { bundleKindOf, normalizeId as normalizeBundleId } from '../transfer/registry.js';
+import { partId } from '../transfer/parts.js';
 import type { BundleRef } from '../transfer/types.js';
 
 /**
@@ -12,6 +13,11 @@ export function bundleRefOfItemRef(ref: ItemRef): BundleRef | undefined {
   switch (ref.kind) {
     case 'collection':
       return { kind: 'collection', id: ref.collectionId };
+    // a folder or a request travels as a collection of its own, with the folders above it (transfer/parts.ts)
+    case 'folder':
+      return { kind: 'collection', id: partId(ref.collectionId, [ref.folderId]) };
+    case 'request':
+      return { kind: 'collection', id: partId(ref.collectionId, [ref.requestId]) };
     case 'environment':
       return ref.environmentId ? { kind: 'environment', id: ref.environmentId } : undefined;
     case 'test':

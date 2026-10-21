@@ -55,6 +55,8 @@ export const LABEL = {
   copyGrpcurl: 'Copy as grpcurl',
   copyUrl: 'Copy URL',
   export: 'Export…',
+  /** Import… on a collection or a folder: a bundle's requests are added under it. */
+  importHere: 'Import here…',
   /** The Export submenu (its items open the export dialog or say what they export). */
   exportSubmenu: 'Export',
   /** Export ▸ the scripts rewritten to Postman's pm.* (TestPion writes tp.*; pm.* only for Postman). */

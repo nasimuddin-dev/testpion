@@ -8,6 +8,7 @@ import {
   applyImport,
   buildBundle,
   describeBundle,
+  folderRefs,
   listImports,
   parseSelector,
   previewImport,
@@ -48,12 +49,15 @@ export function bundleTools({ store }: { store: WorkspaceStore }): Tool[] {
       name: 'export_bundle',
       write: true,
       description:
-        'Export items of the workspace into one TestPion bundle file (.testpion.zip, or .testpion.json when small and text only). Pick `items` (kind:id such as collection:<id>, spec:specs/<path>, dataset:<name>, mcp-server:<id>, environment:<id>, test:<path>, or an ItemRef from search_workspace), or a whole `section` (collection, environment, spec, dataset, test, mcp-server, mcp-mock, proto, script-package, prompt, load-test, evaluation, monitor, grpc-call, ws-connection, provider), or `all`. `uses: true` adds what the items use (a collection: its environments, API definitions, datasets, MCP servers and mocks, protos, packages, test and flow files, saved calls, monitors); what is named but not in the workspace comes back in `missing`. Secret values are never written: each is replaced by a {{variable}} (listed in `replaced` and `requires.secrets`, with the variable to set after an import). Datasets over 10 MB go by reference (`datasets: "embed"` forces them in). The file is written as a new file under exports/ or .local/exports/ (default .local/exports/<title>.testpion.zip; never over an existing file, asks the user first); returns its path, the items, what was replaced and what was left out.',
+        'Export items of the workspace into one TestPion bundle file (.testpion.zip, or .testpion.json when small and text only). Pick `items` (kind:id such as collection:<id>, spec:specs/<path>, dataset:<name>, mcp-server:<id>, environment:<id>, test:<path>, folder:<collection>/<folder id or name> or request:<collection>/<request id or name> (a part of a collection: it travels as a collection of its own, with the folders above it), or an ItemRef from search_workspace), or a whole `section` (collection, environment, spec, dataset, test, mcp-server, mcp-mock, proto, script-package, prompt, load-test, evaluation, monitor, grpc-call, ws-connection, provider), or `all`. `uses: true` adds what the items use (a collection: its environments, API definitions, datasets, MCP servers and mocks, protos, packages, test and flow files, saved calls, monitors); what is named but not in the workspace comes back in `missing`. Secret values are never written: each is replaced by a {{variable}} (listed in `replaced` and `requires.secrets`, with the variable to set after an import). Datasets over 10 MB go by reference (`datasets: "embed"` forces them in). The file is written as a new file under exports/ or .local/exports/ (default .local/exports/<title>.testpion.zip; never over an existing file, asks the user first); returns its path, the items, what was replaced and what was left out.',
       inputSchema: {
         type: 'object',
         properties: {
           items: { type: 'array', items: { anyOf: [{ type: 'string' }, { type: 'object' }] }, description: 'What to export: kind:id strings or ItemRef objects; a bare word is a collection name' },
           section: str('Or every item of one kind, e.g. mcp-server or dataset'),
+          folder: { type: 'object', description: 'Or the items in one folder of a list: { kind: "spec", name: "pets" } (a test folder: its path under tests/)', properties: { kind: { type: 'string' }, name: { type: 'string' } } },
+          globals: { type: 'boolean', description: 'Carry the workspace’s own variables (the Globals; secret values blank). Default: yes for `all`, no for a selection' },
+          exclude: { type: 'array', items: { type: 'string' }, description: 'With `uses`: kind:id items that something uses but that stay out (they are listed as left out)' },
           all: { type: 'boolean', description: 'Or the whole workspace (AI providers only with `providers: true`)' },
           uses: { type: 'boolean', description: 'Add everything the items use' },
           datasets: { type: 'string', enum: ['auto', 'embed', 'reference'], description: 'auto (default): embed up to 10 MB, bigger by reference' },
@@ -66,6 +70,7 @@ export function bundleTools({ store }: { store: WorkspaceStore }): Tool[] {
         let refs: BundleRef[] | 'all';
         if (a.all === true) refs = 'all';
         else if (typeof a.section === 'string' && a.section) refs = sectionRefs(store, a.section);
+        else if (a.folder && typeof a.folder === 'object') refs = folderRefs(store, String((a.folder as Record<string, unknown>).kind ?? ''), String((a.folder as Record<string, unknown>).name ?? ''));
         else if (Array.isArray(a.items) && a.items.length) refs = a.items.map((x) => parseSelector(store, x));
         else throw new ApsError('ValidationError', 'Name what to export: `items`, a `section`, or `all`');
         const out = typeof a.out === 'string' && a.out ? a.out : undefined;
@@ -74,6 +79,8 @@ export function bundleTools({ store }: { store: WorkspaceStore }): Tool[] {
           uses: a.uses === true,
           datasets: a.datasets === 'embed' || a.datasets === 'reference' ? a.datasets : 'auto',
           providers: a.providers === true,
+          ...(typeof a.globals === 'boolean' ? { workspaceVariables: a.globals } : {}),
+          ...(Array.isArray(a.exclude) ? { exclude: a.exclude.map(String) } : {}),
           title: typeof a.title === 'string' && a.title ? a.title : undefined,
           format: ext === 'zip' || ext === 'json' ? ext : 'auto',
         });
@@ -126,7 +133,9 @@ export function bundleTools({ store }: { store: WorkspaceStore }): Tool[] {
           plan_id: str('The plan_id from import_bundle_preview'),
           on_conflict: { type: 'string', enum: choices, description: 'keep-both (default), replace or skip' },
           decisions: { type: 'object', description: 'Per item: { "spec:specs/pets.yaml": "replace" }' },
-          only: { type: 'array', items: { type: 'string' }, description: 'Kinds (spec) or kind:id items to import; everything else is left out' },
+          only: { type: 'array', items: { type: 'string' }, description: 'Kinds (spec) or kind:id items to import; everything else is left out. `workspace` is the workspace’s own variables (Globals)' },
+          globals: { type: 'string', enum: ['merge', 'replace', 'skip'], description: 'The Globals a bundle carries: merge (default: add the new keys), replace (also take its values) or skip' },
+          into: { type: 'object', description: 'Import here: add the bundle’s collection under this collection (and folder) instead of making a collection: { collection_id, folder_id? }', properties: { collection_id: { type: 'string' }, folder_id: { type: 'string' } } },
         },
         required: ['plan_id'],
       },
@@ -136,6 +145,10 @@ export function bundleTools({ store }: { store: WorkspaceStore }): Tool[] {
           onConflict: a.on_conflict as ImportChoice | undefined,
           decisions: a.decisions && typeof a.decisions === 'object' ? (a.decisions as Record<string, ImportChoice | 'import'>) : undefined,
           only: Array.isArray(a.only) ? a.only.map(String) : undefined,
+          ...(a.globals === 'merge' || a.globals === 'replace' || a.globals === 'skip' ? { workspaceVariables: a.globals } : {}),
+          ...(a.into && typeof a.into === 'object' && typeof (a.into as Record<string, unknown>).collection_id === 'string'
+            ? { into: { collectionId: String((a.into as Record<string, unknown>).collection_id), ...(typeof (a.into as Record<string, unknown>).folder_id === 'string' ? { folderId: String((a.into as Record<string, unknown>).folder_id) } : {}) } }
+            : {}),
         });
       },
     },

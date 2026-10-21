@@ -29,7 +29,7 @@ const FILE_ITEM: Capabilities = {
   'test-file': { na: 'test files are created from requests, collections and calls' },
   flow: { na: 'integration flows are generated from collections and folders' },
   ai: { planned: '0.59' },
-  export: { planned: '0.55' },
+  export: { planned: '0.58' },
   // (a request is imported as a copied command or a request file; the others of this base have no import of their own yet)
   import: { planned: '0.58' },
   uses: { planned: '0.58' },
@@ -171,7 +171,10 @@ const KINDS: readonly ItemKindInfo[] = [
       'test-file': true,
       flow: true,
       ai: true,
-      export: { planned: '0.55' },
+      // a folder or a request is exported as a part of its collection: a collection of its own in the bundle (transfer/parts.ts)
+      export: true,
+      // Import here… adds what a bundle's collection holds under this folder (transfer/into.ts)
+      import: true,
       versioned: { na: 'versioned with its collection file' },
       'git-history': { planned: '0.58' },
       watch: { na: 'watched as its collection file' },
@@ -204,7 +207,7 @@ const KINDS: readonly ItemKindInfo[] = [
       'test-file': true,
       flow: { planned: '0.58' },
       ai: true,
-      export: { planned: '0.55' },
+      export: true,
       // cURL, fetch, PowerShell and HTTPie commands and request files import into a collection (the Import dialog, `testpion import`)
       import: true,
       versioned: { na: 'versioned with its collection file' },
