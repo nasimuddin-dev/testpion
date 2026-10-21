@@ -10,7 +10,7 @@ import {
   ApsError,
   TRANSFER_LIMITS,
   applyImport,
-  buildBundle,
+  buildBundleAsync,
   describeBundle,
   forgetPlan,
   listImports,
@@ -55,7 +55,7 @@ export function bundleHandlers(be: Backend): Handlers {
      * are used but not in the workspace) without saving, so the dialog shows it before anything is written.
      */
     'bundle.export': async (p: ExportParams) => {
-      const b = buildBundle(be.ws, refsOf(p), { uses: p.uses, datasets: p.datasets, providers: p.providers, format: p.format, title: p.title });
+      const b = await buildBundleAsync(be.ws, refsOf(p), { uses: p.uses, datasets: p.datasets, providers: p.providers, format: p.format, title: p.title });
       const summary = {
         title: b.manifest.title,
         fileName: b.fileName,

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Faster: Git changes, bundles, imports and the command line
+
+- **Git changes by item** read the 'before' of every changed file through two `git` processes, not one or more per file (300 modified files: 311 processes and 28 s before, 2 and about 1 s now), remember the rows of files that did not change since the last refresh, and give the app a turn while thousands of new files are read. The status bar, the explorer and the environments list no longer render again when a refresh finds nothing new.
+- **Bundles and imports of big libraries.** Exporting or previewing a bundle of 2,500 saved items took 20 to 26 s (the library file was read and parsed once per item); it takes under half a second. "Keep both" for 2,500 conflicts applies in 1.5 s (it was 35 s) and Undo of it in 0.4 s (it was over two minutes). Import journals of bundles keep the newest 30.
+- **Importing a folder of files** into a workspace that already holds 10,000 requests reads the workspace's collections once, not three times per file (100 files: 32 s to 5 s; the preview 15 s to 1 s). The list of earlier imports no longer reads their receipts, identical scripts of a collection are converted once, and saving a collection with thousands of requests orders its keys in one pass.
+- **`testpion --version` and `testpion --help`** answer from an index written at build time, without loading the command line.
+
 ### RAG R2: every judged metric, your own metrics, SQL, Ragas parity
 
 - **84 metrics** (was 30). New judged metrics on the judge service (cache, ledger, budget, jury and swap as before): `context-precision` and `context-recall` with the judged variants, `context-entity-recall`, `factual-correctness`, `answer-correctness`, `response-groundedness`, `hallucination`, `correctness`, `completeness`, `factuality`, `citation-accuracy`, `negative-rejection`, the claim-level family (`claim-faithfulness`, `claim-recall`, `claim-hallucination`, `noise-sensitivity-relevant` / `-irrelevant` …; one claim pass is shared between them), and the judge templates (pass/fail, simple criteria, rubric, instance rubric, checklist, prompt alignment, coherence, conciseness, helpfulness, comprehensiveness, harmfulness, maliciousness). Without a judge in a RAG target run they are n/a, never a guessed score.

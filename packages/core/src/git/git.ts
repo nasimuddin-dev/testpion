@@ -55,19 +55,34 @@ export interface GitBranches {
 
 const MAX_BUFFER = 64 * 1024 * 1024;
 
+/** How many git processes this process has started (tests count them: a refresh must not cost one per changed file). */
+export const gitSpawns = { count: 0 };
+
 /** Run git in `cwd`; resolves stdout, rejects with git's own message (stderr) as an ApsError. */
 export function runGit(cwd: string, args: string[], opts: { input?: string; timeoutMs?: number; env?: Record<string, string> } = {}): Promise<string> {
-  return new Promise((done, fail) => {
+  return execGit(cwd, args, opts, 'utf8');
+}
+
+/** Like runGit, but stdout as bytes (a blob is not always text, and a batch holds many of them). */
+export function runGitBytes(cwd: string, args: string[], opts: { input?: string; timeoutMs?: number; env?: Record<string, string> } = {}): Promise<Buffer> {
+  return execGit(cwd, args, opts, 'buffer');
+}
+
+function execGit<E extends 'utf8' | 'buffer'>(cwd: string, args: string[], opts: { input?: string; timeoutMs?: number; env?: Record<string, string> }, encoding: E): Promise<E extends 'buffer' ? Buffer : string> {
+  type Out = E extends 'buffer' ? Buffer : string;
+  gitSpawns.count++;
+  return new Promise<Out>((done, fail) => {
     const child = execFile(
       'git',
       args,
-      { cwd, maxBuffer: MAX_BUFFER, timeout: opts.timeoutMs ?? 120_000, windowsHide: true, env: { ...process.env, GIT_TERMINAL_PROMPT: '0', LC_ALL: 'C', ...opts.env } },
+      { cwd, maxBuffer: MAX_BUFFER, encoding, timeout: opts.timeoutMs ?? 120_000, windowsHide: true, env: { ...process.env, GIT_TERMINAL_PROMPT: '0', LC_ALL: 'C', ...opts.env } },
       (err, stdout, stderr) => {
-        if (!err) return done(stdout);
+        if (!err) return done(stdout as Out);
+        const text = String(stderr);
         const missing = (err as NodeJS.ErrnoException).code === 'ENOENT';
         fail(
-          new ApsError('ConfigurationError', missing ? 'Git is not installed' : (stderr || err.message).trim().split('\n').slice(-3).join(' '), {
-            suggestions: missing ? ['Install Git from https://git-scm.com and restart TestPion.'] : gitHints(stderr),
+          new ApsError('ConfigurationError', missing ? 'Git is not installed' : (text || err.message).trim().split('\n').slice(-3).join(' '), {
+            suggestions: missing ? ['Install Git from https://git-scm.com and restart TestPion.'] : gitHints(text),
           }),
         );
       },
@@ -156,7 +171,7 @@ function gitDirNear(dir: string): boolean {
 }
 
 /** Forget the remembered repository roots (after `git init`, a clone into the folder …). */
-const forgetRepoRoots = () => roots.clear();
+const forgetRepoRoots = () => (roots.clear(), remotes.clear());
 
 /**
  * The workspace folder as git sees it: git reports the real path of the repository (links resolved, Windows 8.3
@@ -182,6 +197,9 @@ export async function gitStatus(ws: string): Promise<GitStatus> {
   if (!repo) return { repository: false, ahead: 0, behind: 0, files: [], conflicted: false };
   const out = await runGit(ws, ['status', '--porcelain=v2', '--branch', '-z', '--untracked-files=all', '--', '.']);
   const st: GitStatus = { repository: true, root: repo, ahead: 0, behind: 0, files: [], conflicted: false };
+  // the real folder is asked once, not for each of thousands of files (realpath is a system call)
+  const real = realFolder(ws);
+  const toWs = (p: string) => relative(real, resolve(repo, p)).split(sep).join('/');
   const folder = toRepoPath(repo, ws, '.');
   if (folder && folder !== '.') st.folder = folder;
   const parts = out.split('\0');
@@ -201,12 +219,12 @@ export async function gitStatus(ws: string): Promise<GitStatus> {
       const code = xy[0] !== '.' ? xy[0]! : xy[1]!;
       const state: GitFileState = line.startsWith('2 ') ? 'renamed' : code === 'A' ? 'added' : code === 'D' ? 'deleted' : 'modified';
       // staged when the index column has a change; a file changed in both shows once, as staged
-      st.files.push({ path: toWorkspacePath(repo, ws, path), state, staged: xy[0] !== '.', ...(xy[0] !== '.' && xy[1] !== '.' ? { alsoUnstaged: true } : {}), ...(from ? { from: toWorkspacePath(repo, ws, from) } : {}) });
+      st.files.push({ path: toWs(path), state, staged: xy[0] !== '.', ...(xy[0] !== '.' && xy[1] !== '.' ? { alsoUnstaged: true } : {}), ...(from ? { from: toWs(from) } : {}) });
     } else if (line.startsWith('u ')) {
       const f = line.split(' ');
-      st.files.push({ path: toWorkspacePath(repo, ws, f.slice(10).join(' ')), state: 'conflicted', staged: false });
+      st.files.push({ path: toWs(f.slice(10).join(' ')), state: 'conflicted', staged: false });
       st.conflicted = true;
-    } else if (line.startsWith('? ')) st.files.push({ path: toWorkspacePath(repo, ws, line.slice(2)), state: 'untracked', staged: false });
+    } else if (line.startsWith('? ')) st.files.push({ path: toWs(line.slice(2)), state: 'untracked', staged: false });
   }
   st.files = st.files.filter((f) => !f.path.startsWith('..'));
   return st;
@@ -574,13 +592,19 @@ export async function gitClone(url: string, dest: string, opts: { branch?: strin
   await runGit(process.cwd(), ['clone', ...(opts.branch ? ['--branch', assertGitRef(opts.branch)] : []), '--', assertRemoteUrl(url), dest], { timeoutMs: 600_000 });
 }
 
-/** The remote's URL (origin), if any: a link to open pull requests with. */
+/** The remote's URL (origin), if any: a link to open pull requests with. Remembered for a few seconds (the status asks after every save). */
+const remotes = new Map<string, { url: string | undefined; at: number }>();
 export async function gitRemoteUrl(ws: string): Promise<string | undefined> {
+  const known = remotes.get(ws);
+  if (known && Date.now() - known.at < 5000) return known.url;
+  let url: string | undefined;
   try {
-    return (await runGit(ws, ['remote', 'get-url', 'origin'])).trim() || undefined;
+    url = (await runGit(ws, ['remote', 'get-url', 'origin'])).trim() || undefined;
   } catch {
-    return undefined;
+    url = undefined;
   }
+  remotes.set(ws, { url, at: Date.now() });
+  return url;
 }
 
 /**

@@ -7,7 +7,8 @@
  * collide on Windows and macOS), more entries than the limit, and any entry or total that inflates past the limits. The
  * declared sizes are never trusted: the inflater is capped, and the result must match the declared size and CRC.
  */
-import { crc32, deflateRawSync, inflateRawSync } from 'node:zlib';
+import { crc32, deflateRaw, deflateRawSync, inflateRawSync } from 'node:zlib';
+import { promisify } from 'node:util';
 import { ApsError } from '../errors.js';
 
 export interface ZipLimits {
@@ -48,15 +49,42 @@ const DOS_TIME = 0;
 /** Names already compressed (or random) are stored: deflating them costs time and gains nothing. */
 const STORED = /\.(zip|gz|png|jpe?g|gif|webp|db|db3|sqlite3?|pdf)$/i;
 
+/** Whether an entry is worth deflating (a name already compressed, or a few bytes, is stored as it is). */
+const worthDeflating = (e: ZipEntry): boolean => !STORED.test(e.name) && e.data.length >= 64;
+
 /** The archive of `entries` (names with `/`, utf8). Text is deflated; already-compressed files are stored. */
 export function writeZip(entries: readonly ZipEntry[]): Buffer {
+  return packZip(entries, entries.map((e) => (worthDeflating(e) ? deflateRawSync(e.data, { level: 6 }) : undefined)));
+}
+
+const deflateAsync = promisify(deflateRaw);
+/**
+ * The same archive as `writeZip` (byte for byte), deflated on the thread pool, a few entries at a time: a bundle of tens of
+ * megabytes no longer holds the caller's thread for the whole compression.
+ */
+export async function writeZipAsync(entries: readonly ZipEntry[], width = 4): Promise<Buffer> {
+  const deflated: Array<Buffer | undefined> = new Array(entries.length);
+  let next = 0;
+  const lane = async () => {
+    while (next < entries.length) {
+      const i = next++;
+      const e = entries[i]!;
+      deflated[i] = worthDeflating(e) ? await deflateAsync(e.data, { level: 6 }) : undefined;
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(width, entries.length) }, lane));
+  return packZip(entries, deflated);
+}
+
+/** Lays out the archive from the entries and their deflated bodies (undefined: not deflated). */
+function packZip(entries: readonly ZipEntry[], bodies: ReadonlyArray<Buffer | undefined>): Buffer {
   const parts: Buffer[] = [];
   const central: Buffer[] = [];
   let offset = 0;
-  for (const e of entries) {
+  for (const [at, e] of entries.entries()) {
     const name = Buffer.from(e.name, 'utf8');
     const crc = crc32(e.data);
-    const deflated = STORED.test(e.name) || e.data.length < 64 ? undefined : deflateRawSync(e.data, { level: 6 });
+    const deflated = bodies[at];
     const useDeflate = !!deflated && deflated.length < e.data.length;
     const body = useDeflate ? deflated! : e.data;
     const method = useDeflate ? 8 : 0;

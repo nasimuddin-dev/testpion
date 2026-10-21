@@ -4,13 +4,14 @@
  * each is its path from the workspace root with `/`; every path, on the way out and the way in, goes through
  * `bundleFilePath` (the same rules as the workspace export: no `..`, no absolute path, no device names, one root folder).
  */
+import { isUtf8 } from 'node:buffer';
 import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { atomicWrite } from '../storage/fsutil.js';
 import { bundleFilePath } from '../storage/workspace-bundle.js';
 import { SCRIPT_PACKAGE_NAME, type WorkspaceStore } from '../storage/workspace.js';
 import { RAW_ROOT, type BundleKindId } from './format.js';
-import { numberedPath, replacePaths, type ItemAdapter, type Listed, type Snapshot } from './items.js';
+import { listIndex, numberedPath, replacePaths, seedOnce, type ItemAdapter, type Listed, type Snapshot } from './items.js';
 
 const ACCEPT: Partial<Record<BundleKindId, RegExp>> = {
   test: /\.(ya?ml|json)$/i,
@@ -44,7 +45,8 @@ function walk(store: WorkspaceStore, kind: BundleKindId): Listed[] {
   return out;
 }
 
-const isText = (b: Buffer): boolean => !b.includes(0) && Buffer.from(b.toString('utf8'), 'utf8').equals(b);
+/** Text: no NUL and valid UTF-8 (the check is made on the bytes, not by decoding and encoding a copy). */
+const isText = (b: Buffer): boolean => !b.includes(0) && isUtf8(b);
 
 /** The `server:` of a test file, renamed where the server it names got a new name or id on the way in. */
 function renameServers(text: string, remap: Map<string, string>): string {
@@ -106,9 +108,9 @@ function fileAdapter(kind: BundleKindId, label: string): ItemAdapter {
         return [`Test file ${item.id} contains scripts that run when you run it (nothing runs on import)`];
       return [];
     },
-    match: (existing, x) => existing.find((e) => e.id.toLowerCase() === x.id.toLowerCase()),
+    match: (existing, x) => listIndex(existing).byLowerId.get(x.id.toLowerCase()),
     fresh(existing, x, taken) {
-      for (const e of existing) taken.ids.add(e.id.toLowerCase());
+      seedOnce(taken.ids, () => existing.forEach((e) => taken.ids.add(e.id.toLowerCase())));
       let id = x.id;
       for (let n = 2; taken.ids.has(id.toLowerCase()); n++) id = numberedPath(x.id, n);
       taken.ids.add(id.toLowerCase());

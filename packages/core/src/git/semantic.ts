@@ -1,7 +1,9 @@
 import { readFileSync, statSync } from 'node:fs';
+import { readFile, stat } from 'node:fs/promises';
 import { join, relative, resolve, sep } from 'node:path';
 import type { Collection, CollectionNode, Environment } from '../model/types.js';
-import { assertGitRev, gitBlobSize, gitIndexText, gitShow, realFolder, runGit, type GitFile } from './git.js';
+import { assertGitRev, gitBlobSize, gitIndexText, gitShow, realFolder, repoRoot, runGit, type GitFile } from './git.js';
+import { gitBlobInfos, gitBlobTexts, isBatchable, type GitBlobInfo } from './blob-batch.js';
 import { requestParts } from './merge.js';
 import { flowChanges, flowItemParts, isFlowFile } from './flow-diff.js';
 import { KIND_INFO, LIBRARY_LABEL, gitFolderKey, gitKindOfRef, gitRefKey, gitSectionKey, kindOfPath, kindOfRef, libraryOfPath, savedItemRef, watchKindOfPath, type ItemRef, type KindId } from '@testpion/shared';
@@ -259,30 +261,178 @@ async function readRev(ws: string, path: string, rev?: string): Promise<{ text?:
   return { text: await gitShow(ws, path, rev), size };
 }
 
-/** The meaning of each changed file (working folder against the last commit). */
+/** Lets the event loop run once a stretch of synchronous work has gone on a while (a fresh repository has thousands of files to read). */
+function yielder(sliceMs = 15): () => Promise<void> {
+  let from = performance.now();
+  return async () => {
+    if (performance.now() - from < sliceMs) return;
+    await new Promise<void>((done) => setImmediate(done));
+    from = performance.now();
+  };
+}
+
+/**
+ * The rows of files already described, by workspace and path, valid while the file is the same: same state, same blob in the
+ * last commit and in the index, same size and modified time in the working folder. A save then describes one file again, not all.
+ */
+const described = new Map<string, { sig: string; rows: SemanticChange[] }>();
+const DESCRIBED_MAX = 4000;
+/** A file modified more recently than this is not remembered: a second write in the same clock tick would look the same. */
+const SETTLE_MS = 2000;
+
+/** Rows a caller may change (the marks add containers to them) without touching the remembered ones. */
+const copyRows = (rows: SemanticChange[]): SemanticChange[] =>
+  rows.map((c) => ({ ...c, details: [...c.details], ...(c.containers ? { containers: [...c.containers] } : {}), ...(c.ref ? { ref: { ...c.ref } as ItemRef } : {}) }));
+
+/**
+ * Runs `fn` over the items a few at a time. File reads and stats of thousands of files go through the thread pool this way:
+ * the main process is not held for each one (a synchronous read is a block of its own, and antivirus makes it longer).
+ */
+async function pooled<T>(items: readonly T[], fn: (item: T) => Promise<void>, width = 24): Promise<void> {
+  let next = 0;
+  const lane = async () => {
+    while (next < items.length) await fn(items[next++]!);
+  };
+  await Promise.all(Array.from({ length: Math.min(width, items.length) }, lane));
+}
+
+interface ChangeWork {
+  f: GitFile;
+  state: FileState;
+  /** Size and modified time in the working folder; undefined: not there. */
+  stat?: { size: number; mtimeMs: number };
+  /** The path whose last-commit version is the "before", and the specs that name it and the index version. */
+  wasPath?: string;
+  wasSpec?: string;
+  idxSpec?: string;
+  /** A path git's one-line batch input cannot say (a newline in it): read the slow way. */
+  slow?: boolean;
+  sig?: string;
+  /** The text of the working file, read when the row has to be made again. */
+  text?: string;
+  rows?: SemanticChange[];
+}
+
+/**
+ * The meaning of each changed file (working folder against the last commit). However many files changed, git is asked
+ * twice (what each "before" blob is, then the texts that are wanted); rows of files that did not change since last time
+ * are remembered; and the loops give the event loop a turn now and then, so thousands of new files never freeze the app.
+ */
 export async function describeGitChanges(ws: string, files: GitFile[]): Promise<SemanticChange[]> {
-  const out: SemanticChange[] = [];
+  const repo = await repoRoot(ws);
+  const base = realFolder(ws);
+  const inRepo = (p: string) => relative(repo!, resolve(base, p)).split(sep).join('/');
+  const tick = yielder();
+  const work: ChangeWork[] = [];
+  const specs: string[] = [];
   for (const f of files) {
+    const state: FileState = f.state === 'untracked' || f.state === 'added' ? 'added' : f.state === 'deleted' ? 'removed' : f.state === 'renamed' ? 'renamed' : f.state === 'conflicted' ? 'conflicted' : 'changed';
+    const w: ChangeWork = { f, state };
+    work.push(w);
     if (f.state === 'conflicted') {
-      out.push({ file: f.path, kind: kindAt(f.path)?.kind === 'collection' ? 'collection' : kindAt(f.path)?.kind === 'environment' ? 'environment' : 'other', change: 'conflicted', title: f.path, details: ['changed on both sides'] });
+      w.rows = [{ file: f.path, kind: kindAt(f.path)?.kind === 'collection' ? 'collection' : kindAt(f.path)?.kind === 'environment' ? 'environment' : 'other', change: 'conflicted', title: f.path, details: ['changed on both sides'] }];
       continue;
     }
-        const now = f.state === 'deleted' ? {} : readWorking(ws, f.path);
-    const was = f.state === 'untracked' || f.state === 'added' ? {} : await readRev(ws, f.from ?? f.path);
-    const state: FileState = f.state === 'untracked' || f.state === 'added' ? 'added' : f.state === 'deleted' ? 'removed' : f.state === 'renamed' ? 'renamed' : 'changed';
-    const rows = describeFile(f.path, was.text, now.text, state, f.from, { before: was.size, after: now.size });
-    if (f.staged && f.alsoUnstaged && was.text !== undefined && now.text !== undefined) {
-      // staged and changed again: the changes the index already has are the staged ones (an item staged alone)
-      const idx = await gitIndexText(ws, f.path);
-      const ids = (cs: SemanticChange[]) => new Set(cs.map((c) => c.itemId ?? ''));
-      const inIndex = idx === undefined ? new Set<string>() : ids(describeFile(f.path, was.text, idx, state, f.from));
-      // an item is staged when the index has its change and the working folder has not moved on from it
-      const movedOn = idx === undefined ? new Set<string>() : ids(describeFile(f.path, idx, now.text, state, f.from));
-      for (const c of rows) c.staged = inIndex.has(c.itemId ?? '') && !movedOn.has(c.itemId ?? '');
-    } else if (f.staged) for (const c of rows) c.staged = true;
-    out.push(...rows);
+    if (f.state !== 'untracked' && f.state !== 'added') {
+      w.wasPath = f.from ?? f.path;
+      if (repo) {
+        w.wasSpec = `HEAD:${inRepo(w.wasPath)}`;
+        if (f.staged && f.alsoUnstaged) w.idxSpec = `:${inRepo(f.path)}`;
+        if (!isBatchable(w.wasSpec) || (w.idxSpec && !isBatchable(w.idxSpec))) w.slow = true;
+        else specs.push(w.wasSpec, ...(w.idxSpec ? [w.idxSpec] : []));
+      }
+    }
+    await tick();
   }
-  return withRefs(out);
+  // size and modified time of every file in the working folder, a few at a time
+  await pooled(
+    work.filter((w) => !w.rows && w.f.state !== 'deleted'),
+    async (w) => {
+      try {
+        const s = await stat(join(ws, w.f.path));
+        w.stat = { size: s.size, mtimeMs: s.mtimeMs };
+      } catch {
+        /* not in the working folder */
+      }
+    },
+  );
+  const infos = repo ? await gitBlobInfos(ws, specs) : new Map<string, GitBlobInfo | undefined>();
+
+  // the texts that the files to describe (again) need
+  const wantedText = (path: string, info: GitBlobInfo | undefined) => !!info && info.type === 'blob' && !isBinaryPath(path) && !(mayBeBig(path) && info.size > READ_LIMIT);
+  const oids: string[] = [];
+  const sizes = new Map<string, number>();
+  const toRead: ChangeWork[] = [];
+  for (const w of work) {
+    if (w.rows) continue;
+    const was = w.wasSpec ? infos.get(w.wasSpec) : undefined;
+    const idx = w.idxSpec ? infos.get(w.idxSpec) : undefined;
+    if (!w.slow) {
+      w.sig = [w.state, w.f.from ?? '', w.f.staged ? 1 : 0, w.f.alsoUnstaged ? 1 : 0, was?.oid ?? '-', idx?.oid ?? '-', w.stat ? `${w.stat.mtimeMs}:${w.stat.size}` : 'gone'].join('|');
+      const known = described.get(`${base}\0${w.f.path}`);
+      if (known?.sig === w.sig) {
+        w.rows = copyRows(known.rows);
+        continue;
+      }
+    }
+    if (wantedText(w.wasPath ?? '', was)) (oids.push(was!.oid), sizes.set(was!.oid, was!.size));
+    const nowReadable = !!w.stat && !isBinaryPath(w.f.path) && w.stat.size <= READ_LIMIT;
+    if (nowReadable) toRead.push(w);
+    if (nowReadable && wantedText(w.f.path, idx)) (oids.push(idx!.oid), sizes.set(idx!.oid, idx!.size));
+  }
+  // the blobs through git and the working files through the thread pool, at the same time
+  const [texts] = await Promise.all([
+    oids.length ? gitBlobTexts(ws, oids, sizes) : new Map<string, string>(),
+    pooled(toRead, async (w) => {
+      try {
+        w.text = await readFile(join(ws, w.f.path), 'utf8');
+      } catch {
+        /* unreadable: no text, as when the file is not there */
+      }
+    }),
+  ]);
+
+  const out: SemanticChange[] = [];
+  for (const w of work) {
+    const f = w.f;
+    if (!w.rows) {
+      const now: { text?: string; size?: number } = f.state === 'deleted' || !w.stat ? {} : isBinaryPath(f.path) || w.stat.size > READ_LIMIT ? { size: w.stat.size } : w.text === undefined ? {} : { text: w.text, size: w.stat.size };
+      let was: { text?: string; size?: number } = {};
+      let idxText: string | undefined;
+      if (w.slow) {
+        was = await readRev(ws, w.wasPath!);
+        if (f.staged && f.alsoUnstaged && was.text !== undefined && now.text !== undefined) idxText = await gitIndexText(ws, f.path);
+      } else if (w.wasSpec) {
+        const info = infos.get(w.wasSpec);
+        was = { text: info && wantedText(w.wasPath!, info) ? texts.get(info.oid) : undefined, size: mayBeBig(w.wasPath!) ? info?.size : undefined };
+        const idx = w.idxSpec ? infos.get(w.idxSpec) : undefined;
+        if (idx) idxText = texts.get(idx.oid);
+      }
+      const rows = describeFile(f.path, was.text, now.text, w.state, f.from, { before: was.size, after: now.size });
+      if (f.staged && f.alsoUnstaged && was.text !== undefined && now.text !== undefined) {
+        // staged and changed again: the changes the index already has are the staged ones (an item staged alone)
+        const ids = (cs: SemanticChange[]) => new Set(cs.map((c) => c.itemId ?? ''));
+        const inIndex = idxText === undefined ? new Set<string>() : ids(describeFile(f.path, was.text, idxText, w.state, f.from));
+        // an item is staged when the index has its change and the working folder has not moved on from it
+        const movedOn = idxText === undefined ? new Set<string>() : ids(describeFile(f.path, idxText, now.text, w.state, f.from));
+        for (const c of rows) c.staged = inIndex.has(c.itemId ?? '') && !movedOn.has(c.itemId ?? '');
+      } else if (f.staged) for (const c of rows) c.staged = true;
+      w.rows = rows;
+      if (w.sig && (!w.stat || Date.now() - w.stat.mtimeMs > SETTLE_MS)) {
+        if (described.size >= DESCRIBED_MAX) described.delete(described.keys().next().value!);
+        described.set(`${base}\0${f.path}`, { sig: w.sig, rows: copyRows(rows) });
+      }
+      await tick();
+    }
+    out.push(...w.rows);
+  }
+  // refs and marks row by row, in pieces (thousands of rows are a block of their own)
+  const done: SemanticChange[] = [];
+  for (let i = 0; i < out.length; i += 200) {
+    done.push(...withRefs(out.slice(i, i + 200)));
+    await tick();
+  }
+  return done;
 }
 
 /** Whether a file in a commit or in the working folder is too big to show as text. */
