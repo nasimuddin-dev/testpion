@@ -4,6 +4,7 @@ import { asError, call } from '../api';
 import { toastError, useApp } from '../store';
 import type { Collection } from '../types';
 import { Badge, Button, Empty, Field, Input, Modal, Toggle, useDebounced } from './ui';
+import { FilterChips } from './FilterChips';
 import { plural } from '../lib/format';
 
 type Field = 'url' | 'params' | 'headers' | 'body' | 'auth' | 'scripts' | 'name';
@@ -92,21 +93,14 @@ export function ReplaceDialog({ collection, onClose, onDone, initialFind, initia
           <Toggle checked={caseSensitive} onChange={setCaseSensitive} label="Match case" />
           <Toggle checked={regex} onChange={setRegex} label="Regular expression" />
           <span className="text-xs text-muted ml-2">Look in</span>
-          {FIELDS.map(([f, label]) => (
-            <button
-              key={f}
-              className={`px-2 py-0.5 rounded-full border text-xs ${fields.has(f) ? 'border-accent bg-accent-soft text-fg' : 'border-line text-muted'}`}
-              aria-pressed={fields.has(f)}
-              onClick={() => {
-                const next = new Set(fields);
-                if (next.has(f)) next.delete(f);
-                else next.add(f);
-                setFields(next);
-              }}
-            >
-              {label}
-            </button>
-          ))}
+          <FilterChips
+            label="Look in"
+            allChip={false}
+            className=""
+            value={[...fields]}
+            onChange={(next) => setFields(new Set(next))}
+            options={FIELDS.map(([f, label]) => ({ value: f, label }))}
+          />
         </div>
         <div className="border border-line rounded-md max-h-[45vh] overflow-auto" data-replace-preview>
           {!find ? (

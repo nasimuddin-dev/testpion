@@ -46,6 +46,40 @@ function countRequests(items: unknown): number {
   return items.reduce<number>((n, x) => n + (isRecord(x) && Array.isArray(x.items) ? countRequests(x.items) : 1), 0);
 }
 
+/**
+ * References an imported provider or remote MCP server must not carry: `{{$secret…}}` / `{{$env…}}` (and a variable
+ * that may hold a key) would be resolved on this computer and sent to the address the bundle names. They become
+ * "values to enter": the person types the key after the import.
+ */
+const REFERENCE = /\{\{/;
+const SECRET_REFERENCE = /\{\{\s*\$(secret|env)\b/i;
+
+/** The host an address points to (lower case), or undefined when it is not a URL. */
+function hostOf(address: unknown): string | undefined {
+  if (typeof address !== 'string') return undefined;
+  try {
+    return new URL(address).host.toLowerCase() || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+type Header = { key: string; value: string; enabled?: boolean };
+const headersOf = (v: unknown): Header[] => (Array.isArray(v) ? v.filter((h): h is Header => isRecord(h) && typeof h.key === 'string' && typeof h.value === 'string') : []);
+
+/** Headers as imported: a value that is a reference is replaced by the person's own value for that header (or emptied); nothing but key, value and enabled is kept. */
+const importedHeaders = (v: unknown, keep: readonly Header[] = []): Header[] =>
+  headersOf(v).map((h) => ({ key: h.key, value: REFERENCE.test(h.value) ? (keep.find((k) => k.key.toLowerCase() === h.key.toLowerCase() && !REFERENCE.test(k.value))?.value ?? '') : h.value, ...(typeof h.enabled === 'boolean' ? { enabled: h.enabled } : {}) }));
+
+/** The references an incoming provider or server holds in its key, headers and variables, for the review lines. */
+function referencesOf(o: Record<string, unknown>): string[] {
+  const out: string[] = [];
+  if (typeof o.apiKey === 'string' && REFERENCE.test(o.apiKey)) out.push(`the key ${o.apiKey.slice(0, 80)}`);
+  for (const h of headersOf(o.headers)) if (REFERENCE.test(h.value)) out.push(`the header ${h.key.slice(0, 40)}: ${h.value.slice(0, 80)}`);
+  if (isRecord(o.env)) for (const [k, v] of Object.entries(o.env)) if (typeof v === 'string' && REFERENCE.test(v)) out.push(`the variable ${k.slice(0, 40)}: ${v.slice(0, 80)}`);
+  return out;
+}
+
 /* ------------------------------------------------------------------ collections */
 
 const collection: ItemAdapter = {
@@ -157,12 +191,15 @@ function commitList<T extends { id: string; name: string }>(
   kind: BundleKindId,
   file: 'mcp-servers' | 'providers',
   existingId: (w: CommitWrite) => string | undefined,
+  /** Copies the known fields of an incoming item and drops what an import must not bring; `was` is the item it replaces. */
+  shape?: (v: T, was?: T) => T,
 ) {
   const list = read();
   for (const w of writes) {
     const v = parseObject(w.data) as unknown as T;
-    const next = { ...v, id: w.target.id, name: w.target.name };
     const at = list.findIndex((x) => x.id === (existingId(w) ?? w.target.id));
+    const named = { ...v, id: w.target.id, name: w.target.name };
+    const next = shape ? { ...shape(named, w.op === 'replaced' && at >= 0 ? list[at] : undefined), id: w.target.id, name: w.target.name } : named;
     if (w.op === 'replaced' && at >= 0) {
       journal.listItem({ kind, id: w.target.id, file, before: list[at] });
       list[at] = next;
@@ -172,6 +209,54 @@ function commitList<T extends { id: string; name: string }>(
     }
   }
   write(list);
+}
+
+/** An incoming MCP server reduced to the fields this version knows, with no reference to a secret or environment variable (an allow-list copy). */
+function importedServer(o: Record<string, unknown>, was?: McpServerConfig): McpServerConfig {
+  const base = { id: String(o.id), name: String(o.name), ...(typeof o.folder === 'string' ? { folder: o.folder } : {}) };
+  if (o.transport === 'stdio') {
+    const env = isRecord(o.env) ? Object.fromEntries(Object.entries(o.env).filter(([, v]) => typeof v === 'string' && !REFERENCE.test(v))) : undefined;
+    return {
+      ...base,
+      transport: 'stdio',
+      command: String(o.command),
+      ...(Array.isArray(o.args) ? { args: o.args.filter((a): a is string => typeof a === 'string') } : {}),
+      ...(env && Object.keys(env).length ? { env: env as Record<string, string> } : {}),
+      ...(typeof o.cwd === 'string' ? { cwd: o.cwd } : {}),
+    };
+  }
+  if (o.transport === 'sse' || o.transport === 'streamable-http') {
+    // the person's own header values stay when the server they replace is at the same address
+    const keep = was && 'url' in was && hostOf(was.url) === hostOf(o.url) ? (was.headers ?? []) : [];
+    const headers = importedHeaders(o.headers, keep);
+    return { ...base, transport: o.transport, url: String(o.url), ...(headers.length ? { headers } : {}) };
+  }
+  return { ...base, transport: 'mock', mockFile: String(o.mockFile) };
+}
+
+/** An incoming provider reduced to the fields this version knows, with no key and no reference in a header: the person enters them. */
+function importedProvider(o: Record<string, unknown>, was?: ProviderConfig): ProviderConfig {
+  const str = (k: string) => (typeof o[k] === 'string' ? (o[k] as string) : undefined);
+  const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
+  const rl = isRecord(o.rateLimit) ? o.rateLimit : undefined;
+  const rate = rl ? Object.fromEntries((['requestsPerSecond', 'requestsPerMinute', 'tokensPerMinute', 'concurrency'] as const).flatMap((k) => (num(rl[k]) !== undefined ? [[k, num(rl[k])]] : []))) : undefined;
+  // a key the person already has stays only when the provider it replaces is at the same address
+  const sameHost = !!was && hostOf(was.baseUrl) === hostOf(o.baseUrl);
+  const headers = importedHeaders(o.headers, sameHost ? (was!.headers ?? []) : []);
+  return {
+    id: String(o.id),
+    name: String(o.name),
+    kind: o.kind as ProviderConfig['kind'],
+    baseUrl: String(o.baseUrl),
+    ...(sameHost && was!.apiKey ? { apiKey: was!.apiKey } : {}),
+    ...(str('defaultModel') ? { defaultModel: str('defaultModel') } : {}),
+    ...(str('embeddingModel') ? { embeddingModel: str('embeddingModel') } : {}),
+    ...(str('apiVersion') ? { apiVersion: str('apiVersion') } : {}),
+    ...(str('region') ? { region: str('region') } : {}),
+    ...(headers.length ? { headers } : {}),
+    ...(rate && Object.keys(rate).length ? { rateLimit: rate } : {}),
+    ...(num(o.timeoutMs) !== undefined ? { timeoutMs: num(o.timeoutMs) } : {}),
+  };
 }
 
 const mcpServer: ItemAdapter = {
@@ -191,13 +276,27 @@ const mcpServer: ItemAdapter = {
     if (o.transport === 'stdio' && typeof o.command !== 'string') return 'a stdio server needs a command';
     if (o.transport === 'mock' && typeof o.mockFile !== 'string') return 'a mock server needs a mock file';
     if ((o.transport === 'sse' || o.transport === 'streamable-http') && typeof o.url !== 'string') return 'a remote server needs a url';
+    if (typeof o.url === 'string' && SECRET_REFERENCE.test(o.url)) return 'its address holds a secret or environment reference (that would send the secret to the address)';
     return undefined;
   },
   review(item, data) {
     const o = parseObject(data);
-    if (typeof o === 'string' || o.transport !== 'stdio') return [];
-    const args = Array.isArray(o.args) ? o.args.filter((a): a is string => typeof a === 'string') : [];
-    return [`MCP server "${item.name}" starts a program (${commandLine(String(o.command), args).slice(0, 200)}) when you connect: it is not trusted until you allow it`];
+    if (typeof o === 'string') return [];
+    const out: string[] = [];
+    if (o.transport === 'stdio') {
+      const args = Array.isArray(o.args) ? o.args.filter((a): a is string => typeof a === 'string') : [];
+      out.push(`MCP server "${item.name}" starts a program (${commandLine(String(o.command), args).slice(0, 200)}) when you connect: it is not trusted until you allow it`);
+    } else if (o.transport === 'sse' || o.transport === 'streamable-http') out.push(`MCP server "${item.name}" connects to ${hostOf(o.url) ?? String(o.url).slice(0, 100)}: everything you call on it goes there`);
+    const refs = referencesOf(o);
+    if (refs.length) out.push(`MCP server "${item.name}" names ${refs.join(', ')}: references are not imported, you enter these values yourself after the import`);
+    return out;
+  },
+  reviewAgainst(store, existingId, item, data) {
+    const o = parseObject(data);
+    const mine = store.getMcpServers().find((x) => x.id === existingId);
+    const was = mine && 'url' in mine ? hostOf(mine.url) : undefined;
+    const now = typeof o === 'string' ? undefined : hostOf(o.url);
+    return mine && was && now && was !== now ? [`MCP server "${item.name}" would move your server "${mine.name}" from ${was} to ${now}`] : [];
   },
   match: byIdOrName,
   fresh: (existing, x, taken) => freshTarget(existing, x, taken),
@@ -216,6 +315,7 @@ const mcpServer: ItemAdapter = {
       'mcp-server',
       'mcp-servers',
       (w) => (w.op === 'replaced' ? w.target.id : undefined),
+      (v, was) => importedServer(v as unknown as Record<string, unknown>, was),
     );
   },
 };
@@ -234,13 +334,31 @@ const provider: ItemAdapter = {
     if (!isPlainId(item.id) || o.id !== item.id) return 'its id does not match the manifest';
     if (typeof o.kind !== 'string' || typeof o.baseUrl !== 'string') return 'it has no kind or base URL';
     if (typeof o.apiKey === 'string' && o.apiKey && !/\{\{.+\}\}/.test(o.apiKey)) return 'it holds a literal API key (providers keep a {{$secret…}} or {{$env…}} reference)';
+    if (SECRET_REFERENCE.test(o.baseUrl)) return 'its address holds a secret or environment reference (that would send the secret to the address)';
     return undefined;
   },
-  review: () => [],
+  review(item, data) {
+    const o = parseObject(data);
+    if (typeof o === 'string') return [];
+    const out = [`AI provider "${item.name}" sends your prompts to ${hostOf(o.baseUrl) ?? String(o.baseUrl).slice(0, 100)}`];
+    const refs = referencesOf(o);
+    if (refs.length) out.push(`AI provider "${item.name}" names ${refs.join(', ')}: references are not imported, you enter the key yourself after the import`);
+    if (typeof o.baseUrl === 'string' && REFERENCE.test(o.baseUrl)) out.push(`AI provider "${item.name}" builds its address from variables (${o.baseUrl.slice(0, 100)}): check what they hold before using it`);
+    return out;
+  },
+  reviewAgainst(store, existingId, item, data) {
+    const o = parseObject(data);
+    const mine = store.getProviders().find((x) => x.id === existingId);
+    if (!mine || typeof o === 'string') return [];
+    const was = hostOf(mine.baseUrl);
+    const now = hostOf(o.baseUrl);
+    return was !== now ? [`AI provider "${item.name}" would move your provider "${mine.name}" from ${was ?? mine.baseUrl} to ${now ?? String(o.baseUrl)}: its key is dropped`] : [];
+  },
   match: byIdOrName,
   fresh: (existing, x, taken) => freshTarget(existing, x, taken),
   rewrite: (_item, data) => data,
   commit(store, writes, journal) {
+    // the key of an imported provider is never the bundle's reference: the person enters it (a replaced provider at the same address keeps its own)
     commitList<ProviderConfig>(
       writes,
       () => store.getProviders(),
@@ -249,6 +367,7 @@ const provider: ItemAdapter = {
       'provider',
       'providers',
       (w) => (w.op === 'replaced' ? w.target.id : undefined),
+      (v, was) => importedProvider(v as unknown as Record<string, unknown>, was),
     );
   },
 };

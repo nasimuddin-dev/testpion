@@ -175,12 +175,13 @@ export function Field({ label, hint, children, className }: { label: string; hin
   );
 }
 
-export function Toggle({ checked, onChange, label, title }: { checked: boolean; onChange(v: boolean): void; label?: string; title?: string }) {
+export function Toggle({ checked, onChange, label, title, ...data }: { checked: boolean; onChange(v: boolean): void; label?: ReactNode; title?: string } & Record<`data-${string}`, string | undefined>) {
   return (
     <label className="inline-flex items-center gap-2.5 cursor-pointer select-none text-sm" title={title}>
       <SwitchPrimitive.Root
         checked={checked}
         onCheckedChange={onChange}
+        {...data}
         className="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full shadow-sm transition-colors duration-200 data-[state=checked]:bg-accent data-[state=unchecked]:bg-line-strong"
       >
         <SwitchPrimitive.Thumb className="pointer-events-none block h-4 w-4 rounded-full bg-white shadow-md transition-transform duration-200 data-[state=checked]:translate-x-[18px] data-[state=unchecked]:translate-x-0.5" />
@@ -436,14 +437,27 @@ export function Modal({ title, onClose, children, footer, width = 560 }: { title
             </DialogPrimitive.Close>
           </div>
           <div className="px-5 pb-5 pt-1 overflow-auto">{children}</div>
-          {footer && <div className="px-5 py-3.5 border-t border-line bg-panel/60 rounded-b-2xl flex justify-end gap-2 shrink-0">{footer}</div>}
+          {footer && <div className="px-5 py-3.5 border-t border-line bg-panel/60 rounded-b-2xl flex flex-wrap justify-end gap-2 shrink-0">{footer}</div>}
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>
   );
 }
 
+/**
+ * Why the main button of a dialog is disabled, as text in the footer next to it. A tooltip on a disabled button reaches
+ * no keyboard and no screen reader, and a mouse waits for it: the reason is on screen instead (announced when it changes).
+ */
+export function FooterHint({ children }: { children?: ReactNode }) {
+  return (
+    <span role="status" aria-live="polite" className="min-w-0 self-center text-xs text-muted text-right" data-footer-hint="">
+      {children}
+    </span>
+  );
+}
+
 export { Menu, menuKeys, type MenuItem } from './Menu';
+
 
 /** Resizable two-pane split. Size is persisted per `id`. `sidebar` gives the first pane the sidebar surface. */
 export function Split({ id, direction = 'horizontal', initial = 50, min = 15, sidebar, collapsed, collapsedSecond, children }: { id: string; direction?: 'horizontal' | 'vertical'; initial?: number; min?: number; sidebar?: boolean; /** Leave the first pane out (the request editors' old sidebars, replaced by the Collections sidebar): it isn't rendered at all. */ collapsed?: boolean; /** Hide the second pane (the first takes the room). */ collapsedSecond?: boolean; children: [ReactNode, ReactNode] }) {

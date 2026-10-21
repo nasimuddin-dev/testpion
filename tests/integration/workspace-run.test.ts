@@ -355,9 +355,9 @@ describe('example workspace (end-to-end)', () => {
       expect((await text('save_request', { collection: 'Nope', url: 'https://x.test' })).isError).toBe(true);
       // import from text (the url form is covered by the import-url unit test)
       const spec = ['openapi: 3.0.0', 'info: { title: Agent Pets, version: "1" }', 'paths:', '  /pets:', '    get: { responses: { "200": { description: ok } } }', ''].join('\n');
-      const imp = JSON.parse((await text('import_definition', { text: spec })).text);
+      const imp = JSON.parse((await text('import_definition', { text: spec, confirm: true })).text);
       expect(imp).toMatchObject({ format: 'openapi', collection: { name: 'Agent Pets' } });
-      expect((await text('import_definition', {})).isError).toBe(true);
+      expect((await text('import_definition', { confirm: true })).isError).toBe(true);
       // compare the imported spec (kept in specs/) with a changed copy given as text
       const diff = JSON.parse((await text('openapi_diff', { old: imp.specPath, new: spec.replace('/pets:', '/animals:') })).text);
       expect(diff.breaking.map((c: { kind: string }) => c.kind)).toEqual(['operation-removed']);

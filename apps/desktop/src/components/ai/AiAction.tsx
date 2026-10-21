@@ -3,9 +3,9 @@ import { useRef, useState } from 'react';
 import type { AiTaskResult } from '@testpion/core';
 import { call } from '../../api';
 import { useApp, type AssistantRequest } from '../../store';
-import { formatCost } from '../../lib/format';
 import { useAiEnabled } from '../../lib/use-ai-enabled';
 import { Button, cx, IconButton, LinkButton } from '../ui';
+import { AiEstimateLine, estimateText } from './AiEstimateLine';
 import { AiPreviewDialog, taskParams } from './AiPreviewDialog';
 
 /**
@@ -57,6 +57,8 @@ export function AiAction({
   const configured = useApp((s) => aiConfigured(s.settings));
   const [previewing, setPreviewing] = useState<AssistantRequest>();
   const [estimate, setEstimate] = useState<string>();
+  // the estimate shows beside the button while the pointer or the keyboard focus is on it (a tooltip alone never reaches a keyboard or a screen reader)
+  const [near, setNear] = useState(false);
   const asked = useRef(false);
   const build = (): Promise<AssistantRequest | undefined> => Promise.resolve(typeof request === 'function' ? request() : request).catch(() => undefined);
   const go = () => {
@@ -67,17 +69,16 @@ export function AiAction({
       onStart?.();
     });
   };
-  // the estimate is built once, on the first hover (nothing is sent)
+  // the estimate is built once, on the first hover or focus (nothing is sent)
   const onHover = () => {
+    setNear(true);
     if (asked.current || !configured) return;
     asked.current = true;
     void build().then((r) => {
       if (!r) return;
       call<AiTaskResult>('ai.preview', taskParams(r, useApp.getState().environment)).then(
         ({ preview: p }) =>
-          setEstimate(
-            `${p.providerName} · ${p.model}${p.local ? ' (on this computer)' : ''} · ≈ ${p.estimate.inputTokens.toLocaleString()} tokens in${p.estimate.priceKnown ? ` · up to ${formatCost(p.estimate.maxCostUsd ?? 0)}` : ''}`,
-          ),
+          setEstimate(estimateText(p)),
         () => setEstimate(undefined),
       );
     });
@@ -88,17 +89,23 @@ export function AiAction({
   if (!enabled) return null;
   const main =
     variant === 'link' ? (
-      <LinkButton icon={icon} onClick={go} onPointerEnter={onHover} title={title} data-ai-action>
+      <LinkButton icon={icon} onClick={go} onPointerEnter={onHover} onFocus={onHover} onPointerLeave={() => setNear(false)} onBlur={() => setNear(false)} title={title} data-ai-action>
         {label}
       </LinkButton>
     ) : (
-      <Button size="sm" variant={variant === 'primary' ? 'primary' : variant === 'ghost' ? 'ghost' : undefined} icon={icon} onClick={go} onPointerEnter={onHover} title={title} data-ai-action>
+      <Button size="sm" variant={variant === 'primary' ? 'primary' : variant === 'ghost' ? 'ghost' : undefined} icon={icon} onClick={go} onPointerEnter={onHover} onFocus={onHover} onPointerLeave={() => setNear(false)} onBlur={() => setNear(false)} title={title} data-ai-action>
         {label}
       </Button>
     );
   return (
-    <span className={cx('inline-flex items-center gap-0.5', className)}>
+    <span className={cx('relative inline-flex items-center gap-0.5', className)}>
       {main}
+      <AiEstimateLine
+        waiting={false}
+        className={near && estimate ? 'absolute left-0 top-full z-30 mt-1 whitespace-nowrap rounded-md border border-line bg-popover px-2 py-1 text-xs text-muted shadow-md pointer-events-none' : 'sr-only'}
+        estimate={near && estimate ? { ok: true, text: estimate } : undefined}
+        data-ai-action-estimate=""
+      />
       {preview && configured && (
         <IconButton label="What will be sent…" className="h-6 w-6" onClick={() => void build().then((r) => r && setPreviewing(r))} data-ai-preview-open>
           <Eye size={12} />

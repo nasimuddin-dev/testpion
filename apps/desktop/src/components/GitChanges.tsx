@@ -4,10 +4,10 @@ import { KIND_INFO, outputFileName, refOfWorkspacePath, type KindId } from '@tes
 import { call } from '../api';
 import { confirmAction, toastError, useApp } from '../store';
 import { openRef } from '../lib/open-ref';
-import { discardGitItem, openGitItem } from '../lib/git-items';
+import { discardGitItem, openGitItem, toastWithUndo } from '../lib/git-items';
 import { changesByItemMarkdown, groupChanges, type ChangeGroup } from '../lib/git-rows';
 import { plural } from '../lib/format';
-import { LABEL } from '../lib/vocabulary';
+import { LABEL, STAGE_HINT } from '../lib/vocabulary';
 import type { GitFile, SemanticChange } from '../views/GitView';
 import { ChangeMark } from './ChangeMark';
 import { FilterChips } from './FilterChips';
@@ -63,12 +63,15 @@ export function GitChanges({
         : allGroups,
     [allGroups, active],
   );
-  // a changed file's menu (right-click or ⋯): open · show the line diff · stage · discard
+  // a changed file's menu (right-click or ⋯): open · show the line diff (Stage and Discard are the buttons on the row, not repeated here)
   const [menu, setMenu] = useState<string>();
   const showDiff = (f: GitFile) => void call<string>('git.diff', { path: f.path, staged: f.staged }).then((text) => setDiff(diff?.path === f.path ? undefined : { path: f.path, text }), toastError);
   const discard = async (f: GitFile) => {
-    if (await confirmAction({ title: 'Discard changes', message: `Throw away the changes to ${f.path}?`, confirmLabel: 'Discard', danger: true }))
-      await run('discard', () => call('git.discard', { files: [f] }));
+    if (await confirmAction({ title: 'Discard changes', message: `Throw away the changes to ${f.path}?`, detail: `${f.state === 'untracked' || f.state === 'added' ? 'The file is new: it is deleted.' : 'The file goes back to the last commit.'} Undo puts it back right after.`, confirmLabel: 'Discard', danger: true }))
+      await run('discard', async () => {
+        const r = await call<{ undoId?: string }>('git.discard', { files: [f] });
+        toastWithUndo(`Discarded the changes to ${f.path}`, r.undoId);
+      });
   };
   const output: OutputSpec = {
     id: 'git.diff',
@@ -103,12 +106,16 @@ export function GitChanges({
                       await confirmAction({
                         title: 'Discard all changes',
                         message: `Throw away ${plural(files.length, 'changed file')}?`,
-                        detail: 'Files go back to the last commit; new files are deleted.',
+                        // the names, so nobody discards what they did not look at
+                        detail: `${files.slice(0, 8).map((f) => `${f.state === 'untracked' || f.state === 'added' ? 'new' : f.state}  ${f.path}`).join('\n')}${files.length > 8 ? `\n… and ${files.length - 8} more` : ''}\n\nFiles go back to the last commit; new files are deleted. Undo puts everything back right after.`,
                         confirmLabel: 'Discard',
                         danger: true,
                       })
                     )
-                      await run('discard', () => call('git.discard', { files }), 'Changes discarded');
+                      await run('discard', async () => {
+                        const r = await call<{ undoId?: string }>('git.discard', { files });
+                        toastWithUndo(`Discarded the changes to ${plural(files.length, 'file')}`, r.undoId);
+                      });
                   }}
                 >
                   Discard all
@@ -121,6 +128,11 @@ export function GitChanges({
       >
         Changes {files.length ? <Badge>{files.length}</Badge> : null}
       </SectionTitle>
+      {files.length > 0 && (
+        <p className="text-xs text-muted px-3 pb-2" data-stage-hint>
+          {STAGE_HINT}
+        </p>
+      )}
       {counts.length > 1 && (
         <FilterChips
           label="Filter the changes by kind"
@@ -139,7 +151,7 @@ export function GitChanges({
               {!g.single && g.items.length > 0 && (
                 <ul className="border-t border-line px-3 py-1.5 grid gap-0.5">
                   {g.items.map((c, i) => (
-                    <li key={i} className="flex items-center gap-2 text-xs" data-change-item={c.title} data-item-staged={c.staged ? '' : undefined}>
+                    <li key={i} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs" data-change-item={c.title} data-item-staged={c.staged ? '' : undefined}>
                       <ItemName c={c} onCompare={onCompare} run={run} stageable={g.file.state !== 'conflicted'} />
                     </li>
                   ))}
@@ -162,19 +174,21 @@ export function GitChanges({
 function ItemName({ c, onCompare, run, stageable }: { c: SemanticChange; onCompare(file: string, itemId?: string): void; run?(label: string, op: () => Promise<unknown>, done?: string): Promise<void>; stageable?: boolean }) {
   return (
     <>
-      <ChangeMark change={c.change} />
-      {c.kindId && <KindIcon kind={c.kindId} size={13} className="text-muted shrink-0" />}
-      {c.ref && c.change !== 'removed' && c.change !== 'conflicted' ? (
-        <RefLink to={c.ref} icon={false} className="text-fg">
-          {c.title}
-        </RefLink>
-      ) : (
-        <span className="truncate">{c.title}</span>
-      )}
-      {c.details.length > 0 && <span className="text-muted truncate">{c.details.join(', ')}</span>}
-      {stageable && c.staged && <Badge tone="accent">staged</Badge>}
+      <span className="flex items-center gap-2 min-w-0 flex-1 basis-44">
+        <ChangeMark change={c.change} />
+        {c.kindId && <KindIcon kind={c.kindId} size={13} className="text-muted shrink-0" />}
+        {c.ref && c.change !== 'removed' && c.change !== 'conflicted' ? (
+          <RefLink to={c.ref} icon={false} className="text-fg">
+            {c.title}
+          </RefLink>
+        ) : (
+          <span className="truncate">{c.title}</span>
+        )}
+        {c.details.length > 0 && <span className="text-muted truncate">{c.details.join(', ')}</span>}
+        {stageable && c.staged && <Badge tone="accent">staged</Badge>}
+      </span>
       {c.change !== 'conflicted' && (
-        <span className="ml-auto shrink-0 flex items-center gap-2">
+        <span className="ml-auto flex flex-wrap items-center gap-x-2 gap-y-0.5">
           {stageable && c.ref && run && (
             // just this item: the staged copy of its file gets this item's change and no other (release C: staging by index blob)
             <LinkButton
@@ -231,18 +245,18 @@ function FileRow({
   const toggle = () => void run('stage', () => call(f.staged ? 'git.unstage' : 'git.stage', { paths: [f.path] }));
   return (
     <div
-      className="flex items-center gap-2 px-2 py-1.5 text-sm"
+      className="flex flex-wrap items-center gap-x-2 gap-y-1 px-2 py-1.5 text-sm"
       onContextMenu={(e) => {
         e.preventDefault();
         setMenu(f.path);
       }}
     >
       {g.single ? (
-        <span className="flex items-center gap-2 min-w-0 text-xs flex-1" data-change-item={g.single.title}>
+        <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 min-w-0 text-xs flex-1 basis-56" data-change-item={g.single.title}>
           <ItemName c={g.single} onCompare={onCompare} />
         </span>
       ) : (
-        <span className="flex items-center gap-2 min-w-0 flex-1">
+        <span className="flex items-center gap-2 min-w-0 flex-1 basis-44">
           <ChangeMark change={f.state} />
           {g.kindId && <KindIcon kind={g.kindId} size={13} className="text-muted shrink-0" />}
           <span className="truncate font-medium text-xs">{g.label}</span>
@@ -252,7 +266,7 @@ function FileRow({
       <button className="font-mono text-[0.7rem] text-muted truncate max-w-[30%] text-left hover:underline" title={`${f.path}: show the line diff`} onClick={() => showDiff(f)}>
         {f.path}
       </button>
-      {f.staged && <Badge tone="accent">{f.alsoUnstaged ? 'partly staged' : 'staged'}</Badge>}
+      {f.staged && <Badge tone="accent" title="Staged: chosen for the next commit">{f.alsoUnstaged ? 'partly staged' : 'staged'}</Badge>}
       <span className="ml-auto flex gap-1 shrink-0">
         <Button
           size="sm"
@@ -278,8 +292,6 @@ function FileRow({
                     return ref && f.state !== 'deleted' ? [{ label: LABEL.open, icon: <ExternalLink size={14} />, onSelect: () => void openRef(ref) }] : [];
                   })(),
                   { label: 'Show the line diff', icon: <Columns2 size={14} />, onSelect: () => showDiff(f) },
-                  { label: f.staged ? `Unstage ${f.path}` : `Stage ${f.path}`, icon: f.staged ? <Minus size={14} /> : <Plus size={14} />, separator: true, onSelect: toggle },
-                  { label: 'Discard…', icon: <RotateCcw size={14} />, danger: true, separator: true, onSelect: () => void discard(f) },
                 ]
               : []
           }

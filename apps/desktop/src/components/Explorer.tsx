@@ -585,7 +585,7 @@ export function Explorer() {
         ...(n.kind === 'http' ? { copyAs: requestCopyItems(c, n) } : {}),
         monitor: () => intent('monitors', { create: { collectionId: c.id, selection: [n.id] } }),
         testFile: () => void saveAsTest({ ref, name: n.name }),
-        suggestChecks: () => startAi({ task: 'generate-assertions', title: `Suggested checks for ${n.name}`, context: {}, item: ref, autoReview: true }),
+        suggestChecks: () => startAi({ task: 'generate-assertions', title: `Suggested checks for ${n.name}`, context: {}, item: ref, autoReview: true, preflight: true }),
         rename: async () => {
           const name = (await promptText(LABEL.rename, { message: 'Request name', value: n.name, okLabel: 'Rename' }))?.trim();
           if (name && name !== n.name) await editCollection(c, (w) => ({ ...w, items: mapNodes(w.items, (x) => (x.id === n.id ? { ...x, name } : x)) }));

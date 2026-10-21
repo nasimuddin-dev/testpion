@@ -1,9 +1,11 @@
 import { bundleWsdl, isWsdl } from './wsdl.js';
-import { assertUrlAllowed } from '../net/policy.js';
+import { assertUrlAllowed, isPlainHttpAllowed } from '../net/policy.js';
 import { ApsError } from '../errors.js';
 
 /** Largest document fetched for an import. */
 export const MAX_IMPORT_BYTES = 20 * 1024 * 1024;
+/** Redirects followed for one link. */
+const MAX_REDIRECTS = 5;
 
 /**
  * The URL to download for an import link: GitHub / GitLab / Bitbucket "view file" pages become their raw
@@ -32,17 +34,34 @@ export async function fetchImportText(link: string, opts: { signal?: AbortSignal
   } catch {
     throw new ApsError('ValidationError', `"${link}" is not a URL`, { suggestions: ['Paste a link starting with https://'] });
   }
-  if (!/^https?:$/.test(new URL(url).protocol)) throw new ApsError('ValidationError', 'Only http and https links can be imported', { suggestions: [] });
   const timeout = AbortSignal.timeout(opts.timeoutMs ?? 30_000);
-  let res: Response;
-  try {
-    res = await fetch(url, {
-      headers: { accept: 'application/json, application/yaml, text/yaml, text/plain;q=0.9, */*;q=0.5' },
-      signal: opts.signal ? AbortSignal.any([opts.signal, timeout]) : timeout,
-      redirect: 'follow',
-    });
-  } catch (e) {
-    throw new ApsError('NetworkError', `Couldn't download ${url}: ${(e as Error).message}`, { suggestions: ['Check the link, the internet connection, and the proxy in Settings ▸ Proxy.'] });
+  let res!: Response;
+  // redirects are followed by hand: the network policy is asked about the link and about every hop (a public address can
+  // redirect to cloud metadata or localhost); the connection itself is checked again at connect time (policyLookup)
+  for (let hop = 0; ; hop++) {
+    const u = new URL(url);
+    if (!/^https?:$/.test(u.protocol)) throw new ApsError('ValidationError', 'Only http and https links can be imported', { suggestions: [] });
+    if (u.protocol === 'http:' && !isPlainHttpAllowed(u)) throw new ApsError('ConfigurationError', `Blocked by the network policy: ${u.hostname} is not allowed over plain http`, { suggestions: ['Use an https:// link.'] });
+    await assertUrlAllowed(u);
+    try {
+      res = await fetch(url, {
+        headers: { accept: 'application/json, application/yaml, text/yaml, text/plain;q=0.9, */*;q=0.5' },
+        signal: opts.signal ? AbortSignal.any([opts.signal, timeout]) : timeout,
+        redirect: 'manual',
+      });
+    } catch (e) {
+      throw new ApsError('NetworkError', `Couldn't download ${url}: ${(e as Error).message}`, { suggestions: ['Check the link, the internet connection, and the proxy in Settings ▸ Proxy.'] });
+    }
+    if (res.status < 300 || res.status >= 400) break;
+    const location = res.headers.get('location');
+    await res.body?.cancel().catch(() => undefined);
+    if (!location) throw new ApsError('NetworkError', `${url} answered a redirect with no address`, { suggestions: [] });
+    if (hop >= MAX_REDIRECTS) throw new ApsError('NetworkError', `${link} redirects too many times`, { suggestions: [] });
+    try {
+      url = new URL(location, url).toString();
+    } catch {
+      throw new ApsError('NetworkError', `${u.hostname} redirected to something that is not a link`, { suggestions: [] });
+    }
   }
   if (!res.ok) {
     throw new ApsError(res.status === 401 || res.status === 403 || res.status === 404 ? 'ValidationError' : 'NetworkError', `${url} answered HTTP ${res.status}`, {
@@ -68,8 +87,8 @@ export async function fetchImportText(link: string, opts: { signal?: AbortSignal
   const text = new TextDecoder().decode(Buffer.concat(chunks));
   if (/^\s*<(!doctype html|html)/i.test(text))
     throw new ApsError('ValidationError', 'The link opens a web page, not a file', { suggestions: ['Use the link of the raw file (for example the "Raw" button on GitHub).'] });
-  const last = decodeURIComponent(new URL(res.url || url).pathname.split('/').pop() ?? '');
-  const finalUrl = res.url || url;
+  const last = decodeURIComponent(new URL(url).pathname.split('/').pop() ?? '');
+  const finalUrl = url;
   // a WSDL's imported schemas (…?xsd=1) and WSDLs: fetched from the same site only, like the WSDL itself
   if (!opts.noWsdlImports && isWsdl(text)) {
     const origin = new URL(finalUrl).origin;

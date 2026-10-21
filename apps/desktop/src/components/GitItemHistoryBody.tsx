@@ -4,7 +4,8 @@ import type { ItemRef } from '@testpion/shared';
 import { call } from '../api';
 import { confirmAction, toastError } from '../store';
 import { partsLines, toastWithUndo, type ItemWritePlan } from '../lib/git-items';
-import { Button, cx, Empty, Modal, Segmented, Spinner } from './ui';
+import { Button, Callout, cx, Empty, Modal, Segmented, Spinner, Toggle, VirtualList } from './ui';
+import { asError } from '../api';
 import { PartsTable } from './PartsTable';
 
 interface Commit {
@@ -32,6 +33,15 @@ interface Target {
   itemId?: string;
 }
 
+/** A read of the history that failed: the reason and Retry (never an empty list, which would say there is no history). */
+function ReadFailed({ what, message, onRetry }: { what: string; message: string; onRetry(): void }) {
+  return (
+    <Callout tone="bad" role="alert" action={<Button size="sm" onClick={onRetry}>Retry</Button>}>
+      Could not read {what}: {message}
+    </Callout>
+  );
+}
+
 /**
  * One item in git, for any versioned kind (release B of planning/git-everything.md): its versions, each with what it
  * changed and compared with now part by part, Restore this version (a reviewed change to commit, with Undo), and who last
@@ -42,20 +52,23 @@ export function GitItemHistoryBody({ itemRef, name, tab: first = 'versions', onC
   const [target, setTarget] = useState<Target>();
   const [history, setHistory] = useState<{ title: string; versions: Version[] }>();
   const [blame, setBlame] = useState<Blame>();
+  // a read that failed says so, with Retry: an empty list or a spinner that never ends would read as "no history"
+  const [failed, setFailed] = useState<{ versions?: string; blame?: string }>();
+  const [attempt, setAttempt] = useState(0);
   const [sel, setSel] = useState(0);
   const [diff, setDiff] = useState<ItemDiff>();
   const [onlyDiffs, setOnlyDiffs] = useState(true);
   const key = JSON.stringify(itemRef);
   useEffect(() => {
+    setFailed((f) => ({ ...f, versions: undefined }));
     void call<Target>('git.target', { ref: itemRef }).then(setTarget, toastError);
-    void call<{ title: string; versions: Version[] }>('git.itemVersions', { ref: itemRef }).then(setHistory, (e) => {
-      toastError(e);
-      setHistory({ title: name, versions: [] });
-    });
-  }, [key]);
+    void call<{ title: string; versions: Version[] }>('git.itemVersions', { ref: itemRef }).then(setHistory, (e) => setFailed((f) => ({ ...f, versions: asError(e).message })));
+  }, [key, attempt]);
   useEffect(() => {
-    if (tab === 'blame' && !blame) void call<Blame>('git.itemBlame', { ref: itemRef }).then(setBlame, toastError);
-  }, [tab, key]);
+    if (tab !== 'blame' || blame) return;
+    setFailed((f) => ({ ...f, blame: undefined }));
+    void call<Blame>('git.itemBlame', { ref: itemRef }).then(setBlame, (e) => setFailed((f) => ({ ...f, blame: asError(e).message })));
+  }, [tab, key, attempt]);
   const v = history?.versions[sel];
   useEffect(() => {
     if (!target || !v) return setDiff(undefined);
@@ -92,9 +105,9 @@ export function GitItemHistoryBody({ itemRef, name, tab: first = 'versions', onC
       footer={
         <>
           {tab === 'versions' && (
-            <label className="mr-auto flex items-center gap-1 text-xs text-muted">
-              <input type="checkbox" checked={onlyDiffs} onChange={(e) => setOnlyDiffs(e.target.checked)} /> Only the parts that differ from now
-            </label>
+            <span className="mr-auto text-xs text-muted">
+              <Toggle checked={onlyDiffs} onChange={setOnlyDiffs} label="Only the parts that differ from now" />
+            </span>
           )}
           <Button onClick={onClose}>Close</Button>
           {tab === 'versions' && (
@@ -115,13 +128,17 @@ export function GitItemHistoryBody({ itemRef, name, tab: first = 'versions', onC
             { value: 'blame', label: 'Who changed what' },
           ]}
         />
-        {!history ? (
-          <div className="h-40 grid place-items-center">
+        {tab === 'versions' && failed?.versions ? (
+          <ReadFailed what="the versions" message={failed.versions} onRetry={() => setAttempt((n) => n + 1)} />
+        ) : tab === 'blame' && failed?.blame ? (
+          <ReadFailed what="who changed what" message={failed.blame} onRetry={() => setAttempt((n) => n + 1)} />
+        ) : !history && tab === 'versions' ? (
+          <div className="h-40 grid place-items-center" role="status">
             <Spinner />
           </div>
         ) : tab === 'blame' ? (
           !blame ? (
-            <div className="h-24 grid place-items-center">
+            <div className="h-24 grid place-items-center" role="status">
               <Spinner />
             </div>
           ) : (
@@ -146,23 +163,28 @@ export function GitItemHistoryBody({ itemRef, name, tab: first = 'versions', onC
               </tbody>
             </table>
           )
-        ) : !history.versions.length ? (
+        ) : !history!.versions.length ? (
           <Empty title="No commits changed this yet">Commit the workspace (Git view) to start its history.</Empty>
         ) : (
           <div className="grid grid-cols-[280px_1fr] gap-3 h-[55vh]">
-            <ul className="overflow-auto border border-line rounded-md" aria-label="Versions">
-              {history.versions.map((x, i) => (
-                <li key={x.commit.hash}>
-                  <button className={cx('w-full text-left px-2 py-1.5 text-sm border-b border-line', i === sel ? 'bg-accent-soft' : 'hover:bg-hover')} onClick={() => setSel(i)} data-version={x.commit.short}>
-                    <div className="truncate">{x.commit.subject}</div>
-                    <div className="text-xs text-muted truncate">{x.changed.join(', ')}</div>
-                    <div className="text-xs text-muted">
-                      <span className="font-mono">{x.commit.short}</span> · {x.commit.author} · {new Date(x.commit.date).toLocaleDateString()}
-                    </div>
-                  </button>
-                </li>
-              ))}
-            </ul>
+            <VirtualList
+              className="border border-line rounded-md"
+              role="list"
+              label="Versions"
+              name="GitItemVersions"
+              items={history!.versions}
+              rowHeight={66}
+              keyOf={(x) => x.commit.hash}
+              render={(x, i) => (
+                <button className={cx('w-full h-full text-left px-2 py-1 text-sm border-b border-line', i === sel ? 'bg-accent-soft' : 'hover:bg-hover')} onClick={() => setSel(i)} title={`${x.commit.subject}\n${x.changed.join(', ')}\n${new Date(x.commit.date).toLocaleString()}`} data-version={x.commit.short}>
+                  <div className="truncate">{x.commit.subject}</div>
+                  <div className="text-xs text-muted truncate">{x.changed.join(', ')}</div>
+                  <div className="text-xs text-muted truncate">
+                    <span className="font-mono">{x.commit.short}</span> · {x.commit.author} · {new Date(x.commit.date).toLocaleString()}
+                  </div>
+                </button>
+              )}
+            />
             <div className="overflow-auto border border-line rounded-md" data-history-diff>
               {!diff ? (
                 <div className="h-24 grid place-items-center">

@@ -169,7 +169,7 @@ describe('git and CI through a link that is outside the repository', () => {
     expect(ciPipelineFiles(at).map((f) => f.replace(/\\/g, '/'))).toEqual([join(repo, '.github', 'workflows', 'ci.yml').replace(/\\/g, '/')]);
     const hook = installPreCommitHook(at, 'testpion');
     expect(hook.installed).toBe(true);
-    expect(readFileSync(hook.path!, 'utf8')).toContain("git check -w 'ws'");
+    expect(readFileSync(hook.path!, 'utf8')).toMatch(/^W='ws'$/m);
   });
 
   it('git status of a workspace opened through the link names its files inside the workspace', async () => {

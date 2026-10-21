@@ -342,7 +342,11 @@ export function HomeView() {
                 <ActivityIcon size={15} />
               </span>
               Activity
-              <OutputActions spec={reportSpec} />
+              <OutputActions spec={reportSpec}>
+                <span className="text-xs font-normal text-muted" data-share-report-label>
+                  Share report
+                </span>
+              </OutputActions>
               <Segmented label="Period" value={days} onChange={pickDays} options={[7, 14, 30].map((n) => ({ value: n, label: `${n} days` }))} />
             </header>
             <ActivityCharts activity={activity} />

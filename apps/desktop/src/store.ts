@@ -89,6 +89,8 @@ export interface AssistantRequest {
   previous?: AiResponse;
   /** Open the review as soon as the proposal is there (generating tasks: checks, tests, a request). */
   autoReview?: boolean;
+  /** Ask before sending: the panel opens on the estimate and "What will be sent" and sends on Send (menu items have no button of their own to show them). */
+  preflight?: boolean;
   /** "Run now" in the review: send the request again (its own editor, under the production guard); the checks are verified against the new response. */
   rerun?(): Promise<AiResponse | undefined>;
   /** The workspace item it is about (a saved request: checks and scripts are proposed for it). */

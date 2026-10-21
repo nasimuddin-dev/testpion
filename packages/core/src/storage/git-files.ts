@@ -128,6 +128,35 @@ export function isInGitRepository(root: string): boolean {
 
 const HOOK_MARK = '# testpion-secret-guard';
 
+/** `text` as one word for a POSIX shell: in single quotes, each single quote inside closed, escaped and reopened. Nothing in it is expanded. */
+export const shellQuote = (text: string): string => `'${text.split("'").join("'\\''")}'`;
+
+/**
+ * The text of the pre-commit hook. The workspace's path inside the repository comes from the repository (a folder name
+ * is whatever whoever made the repository chose), so it is never written into a line the shell parses: it is the
+ * single-quoted variable W, and the check gets "$W", which the shell expands without reading `$(...)`, backticks,
+ * quotes or newlines in it. `cli` is the command that installed the hook (from the app, not from the workspace): a
+ * shell command line, run through `eval` so its own quoting (a path with spaces) holds.
+ */
+export function preCommitScript(rel: string, cli?: string): string {
+  return [
+    '#!/bin/sh',
+    HOOK_MARK,
+    '# Refuse a commit that would publish a secret typed into the TestPion workspace. Skip once with: git commit --no-verify',
+    `W=${shellQuote(rel)}`,
+    // testpion on the PATH, else the CLI that installed this hook, else npx
+    `if command -v testpion >/dev/null 2>&1; then T=testpion; ${cli ? `else T=${shellQuote(cli)}; ` : 'else T="npx --no-install testpion"; '}fi`,
+    // eval: the remembered command is quoted (e.g. a path with spaces), which a plain $T would split; the path stays a variable
+    'eval "$T git check -w \\"\\$W\\""',
+    'code=$?',
+    // 1: secrets found, the commit stops. Anything else: the check could not run; say so and let the commit through
+    'if [ $code -eq 1 ]; then echo "TestPion: secrets are typed into the workspace (above). Use secret variables, then commit again."; exit 1; fi',
+    'if [ $code -ne 0 ]; then echo "TestPion: the secret check could not run (exit $code); committing without it."; fi',
+    'exit 0',
+    '',
+  ].join('\n');
+}
+
 /**
  * Install a git pre-commit hook that runs `testpion git check` for this workspace (GIT-104). An existing hook that
  * is not TestPion's is never overwritten: the message says how to add the check to it.
@@ -152,23 +181,9 @@ export function installPreCommitHook(root: string, cli?: string): { installed: b
   if (!gitDir) return { installed: false, message: `Not a git repository: run  git init  in ${root} first.` };
   const hook = join(gitDir, 'hooks', 'pre-commit');
   const rel = relative(dir, real).split(sep).join('/') || '.';
-  const script = [
-    '#!/bin/sh',
-    HOOK_MARK,
-    '# Refuse a commit that would publish a secret typed into the TestPion workspace. Skip once with: git commit --no-verify',
-    // testpion on the PATH, else the CLI that installed this hook, else npx
-    `if command -v testpion >/dev/null 2>&1; then T=testpion; ${cli ? `else T='${cli.split("'").join(`'"'"'`)}'; ` :'else T="npx --no-install testpion"; '}fi`,
-    // eval: the remembered command is quoted (e.g. a path with spaces), which a plain $T would split
-    `eval "$T git check -w '${rel.split("'").join(`'"'"'`)}'"`,
-    'code=$?',
-    // 1: secrets found, the commit stops. Anything else: the check could not run; say so and let the commit through
-    'if [ $code -eq 1 ]; then echo "TestPion: secrets are typed into the workspace (above). Use secret variables, then commit again."; exit 1; fi',
-    'if [ $code -ne 0 ]; then echo "TestPion: the secret check could not run (exit $code); committing without it."; fi',
-    'exit 0',
-    '',
-  ].join('\n');
+  const script = preCommitScript(rel, cli);
   if (existsSync(hook) && !readFileSync(hook, 'utf8').includes(HOOK_MARK))
-    return { installed: false, path: hook, message: `A pre-commit hook already exists (${hook}). Add this line to it:  testpion git check -w "${rel}" || exit 1` };
+    return { installed: false, path: hook, message: `A pre-commit hook already exists (${hook}). Add this line to it:  testpion git check -w ${shellQuote(rel)} || exit 1` };
   atomicWrite(hook, script);
   try {
     chmodSync(hook, 0o755);

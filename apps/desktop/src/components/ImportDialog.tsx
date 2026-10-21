@@ -10,7 +10,9 @@ import { toastImportNotes, toastUnchangedScripts } from '../lib/import-scripts';
 import { IMPORT_FILE_ACCEPT, MIGRATE_TOOLS, type MigrateTool } from '@testpion/shared';
 import type { ImportManyPlan, ImportPlan, ImportReport, ImportSource, ReimportAction } from '../types';
 import { pickImportFiles, pickImportFolder } from '../lib/import-files';
-import { Button, Field, Input, Modal, Segmented, Spinner, Textarea } from './ui';
+import { bundleRequestOf, openImportBundle } from '../lib/transfer';
+import { plural } from '../lib/format';
+import { Button, Field, Input, LinkButton, Modal, Segmented, Select, Spinner, Textarea, Toggle } from './ui';
 import { ImportReportView, ImportTree } from './ImportReport';
 
 export { MIGRATE_TOOLS, type MigrateTool } from '@testpion/shared';
@@ -31,6 +33,11 @@ interface Applied {
  */
 export function ImportDialog({ onClose, onDone, initial, tool: toolIn, migrate }: { onClose(): void; onDone(): void; initial?: ImportSource; tool?: MigrateTool; migrate?: boolean }) {
   const [tool, setTool] = useState<MigrateTool | undefined>(toolIn);
+  // the tool choice: Home's "Migrate from…", the palette's, or "Coming from another tool?" in this dialog
+  const [choosing, setChoosing] = useState(!!migrate);
+  // a new step is announced and gets the focus (a screen reader hears the preview or the result arrive)
+  const stepBody = useRef<HTMLDivElement>(null);
+  const first = useRef(true);
   const [step, setStep] = useState<Step>('source');
   const [preview, setPreview] = useState<(ImportManyPlan & { sessionId: string; snippets: number }) | null>(null);
   const [applied, setApplied] = useState<Applied | null>(null);
@@ -48,6 +55,12 @@ export function ImportDialog({ onClose, onDone, initial, tool: toolIn, migrate }
   const sessionRef = useRef<string | undefined>(undefined);
 
   const run = async (src: ImportSource) => {
+    // one Import entry: a bundle chosen or dropped here goes to the bundle preview
+    const bundle = bundleRequestOf(src);
+    if (bundle) {
+      onClose();
+      return openImportBundle(bundle);
+    }
     setBusy(true);
     try {
       const p = await call<ImportManyPlan & { sessionId: string; snippets: number }>('import.preview', { ...src, keepPm, liftTests });
@@ -78,6 +91,10 @@ export function ImportDialog({ onClose, onDone, initial, tool: toolIn, migrate }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    if (first.current) return void (first.current = false);
+    stepBody.current?.focus();
+  }, [step]);
   const apply = async () => {
     if (!preview) return;
     setBusy(true);
@@ -149,29 +166,32 @@ export function ImportDialog({ onClose, onDone, initial, tool: toolIn, migrate }
       footer={
         step === 'source' ? (
           <>
-            <Button icon={<Upload size={13} />} loading={busy} onClick={pick(() => pickImportFiles(IMPORT_FILE_ACCEPT))}>
+            <Button variant="ghost" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button icon={<Upload size={13} />} variant={text.trim() ? 'default' : 'primary'} loading={busy} onClick={pick(() => pickImportFiles(IMPORT_FILE_ACCEPT))}>
               Choose files…
             </Button>
             <Button icon={<FolderOpen size={13} />} loading={busy} title="A collection folder (Bruno, OpenCollection) or a folder of files" onClick={pick(pickImportFolder)}>
               Choose folder…
             </Button>
-            <Button variant="primary" loading={busy} disabled={!text.trim()} onClick={() => void run({ text })}>
+            <Button variant={text.trim() ? 'primary' : 'default'} loading={busy} disabled={!text.trim()} onClick={() => void run({ text })}>
               Preview pasted content
             </Button>
           </>
         ) : step === 'preview' ? (
           <>
-            <Button variant="ghost" onClick={() => setStep('source')}>
+            <Button variant="ghost" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button variant="ghost" onClick={() => setStep('source')} className="mr-auto">
               Back
             </Button>
-            <label className="flex items-center gap-2 text-xs" title="Postman and Insomnia scripts are converted to TestPion's tp.* (pm.* still runs). Exporting to Postman turns tp.* back into pm.*.">
-              <input type="checkbox" checked={keepPm} onChange={(e) => setKeepPm(e.target.checked)} />{' '}
-              Keep pm.* in scripts
-            </label>
+            <Toggle checked={keepPm} onChange={setKeepPm} label="Keep Postman scripts as they are" title="Postman and Insomnia scripts are converted to TestPion's own script API (tp.*), and the Postman form (pm.*) still runs. Turn this on to keep the scripts exactly as exported. Exporting to Postman turns them back." />
             {liftable > 0 && (
-              <label className="flex items-center gap-2 text-xs mr-auto" title="A test that only checks a status, a response time, a header or a JSON field becomes an assertion in the request's Tests tab (readable without running the script). The rest of the script is kept." data-import-lift>
-                <input type="checkbox" checked={liftTests} onChange={(e) => setLiftTests(e.target.checked)} /> Lift {liftable} simple test{liftable === 1 ? '' : 's'} into assertions
-              </label>
+              <span data-import-lift>
+                <Toggle checked={liftTests} onChange={setLiftTests} label={`Turn ${plural(liftable, 'simple test')} into checks`} title="A test that only checks a status, a response time, a header or a JSON field becomes a check in the request's Tests tab (readable without running the script). The rest of the script is kept." />
+              </span>
             )}
             <Button variant="primary" loading={busy} disabled={!plans.length && !preview?.snippets} onClick={() => void apply()}>
               Import{plans.length > 1 ? ` ${plans.length} files` : ''}
@@ -191,9 +211,10 @@ export function ImportDialog({ onClose, onDone, initial, tool: toolIn, migrate }
         )
       }
     >
+      <div ref={stepBody} tabIndex={-1} className="outline-none">
       {step === 'source' && (
         <div className="flex flex-col gap-2">
-          {migrate && (
+          {choosing && (
             <div className="flex gap-1" role="group" aria-label="Migrate from">
               {(Object.keys(MIGRATE_TOOLS) as MigrateTool[]).map((k) => (
                 <Button key={k} size="sm" variant={tool === k ? 'primary' : 'default'} aria-pressed={tool === k} onClick={() => setTool(k)}>
@@ -202,7 +223,14 @@ export function ImportDialog({ onClose, onDone, initial, tool: toolIn, migrate }
               ))}
             </div>
           )}
-          {guide ? <p className="text-sm text-muted">{guide.how}</p> : <p className="text-sm text-muted">Drop files, a folder or a link anywhere on the window, or choose them below. Postman (v1, v2, Git folders), Insomnia, Bruno (folders and OpenCollection YAML), Hoppscotch, Thunder Client, Yaak, HTTPie, Apidog, OpenAPI / Swagger, AsyncAPI, HAR, WSDL, GraphQL schemas, .env, .http, cURL and TestPion files. A ZIP (a Postman data export, a zipped collection) is opened. You see what will be created, and what will not come over, before anything is written.</p>}
+          {guide ? <p className="text-sm text-muted">{guide.how}</p> : <p className="text-sm text-muted">Drop files, a folder or a link anywhere on the window, or choose them below. Postman (v1, v2, Git folders), Insomnia, Bruno (folders and OpenCollection YAML), Hoppscotch, Thunder Client, Yaak, HTTPie, Apidog, OpenAPI / Swagger, AsyncAPI, HAR, WSDL, GraphQL schemas, .env, .http, cURL, TestPion files and TestPion bundles (a bundle opens its own preview). A ZIP (a Postman data export, a zipped collection) is opened. You see what will be created, and what will not come over, before anything is written.</p>}
+          {!choosing && (
+            <p className="text-xs">
+              <LinkButton icon={null} onClick={() => setChoosing(true)} data-import-migrate>
+                Coming from another tool? See how to export from Postman, Insomnia, Bruno and others
+              </LinkButton>
+            </p>
+          )}
           <form
             className="flex gap-2"
             onSubmit={(e) => {
@@ -235,7 +263,7 @@ export function ImportDialog({ onClose, onDone, initial, tool: toolIn, migrate }
           )}
           <Textarea autoGrow={false} className="field mono w-full h-48 text-xs" placeholder="Or paste a document or a cURL command here…" value={text} onChange={(e) => setText(e.target.value)} />
           {busy && (
-            <p className="text-sm text-muted flex items-center gap-2">
+            <p className="text-sm text-muted flex items-center gap-2" role="status">
               <Spinner /> Reading…
             </p>
           )}
@@ -269,7 +297,7 @@ export function ImportDialog({ onClose, onDone, initial, tool: toolIn, migrate }
         </div>
       )}
       {step === 'done' && applied && (
-        <div className="flex flex-col gap-3" data-import-done>
+        <div className="flex flex-col gap-3" data-import-done role="status" aria-live="polite">
           {undone && <p className="text-sm text-ok">Undone. What was imported is in Recently deleted (Workspace ▸ Recently deleted), and can be restored.</p>}
           {applied.imported.map((i, n) =>
             i.result ? (
@@ -298,17 +326,18 @@ export function ImportDialog({ onClose, onDone, initial, tool: toolIn, migrate }
           )}
         </div>
       )}
+      </div>
     </Modal>
   );
 }
 
 function PlanCard({ source, plan, single }: { source: string; plan: ImportPlan; single: boolean }) {
   const made = [
-    ...plan.collections.map((c) => `collection "${c.name}": ${c.requests} request${c.requests === 1 ? '' : 's'}${c.folders ? `, ${c.folders} folder${c.folders === 1 ? '' : 's'}` : ''}${c.nameTaken ? ' (a collection of this name exists: this one is added beside it)' : ''}`),
-    ...plan.environments.map((e) => `environment "${e.renamedTo ?? e.name}": ${e.variables} variable${e.variables === 1 ? '' : 's'}${e.secrets ? `, ${e.secrets} secret` : ''}${e.renamedTo ? ' (renamed: the name is taken)' : ''}`),
+    ...plan.collections.map((c) => `collection "${c.name}": ${plural(c.requests, 'request')}${c.folders ? `, ${plural(c.folders, 'folder')}` : ''}${c.nameTaken ? ' (a collection of this name exists: this one is added beside it)' : ''}`),
+    ...plan.environments.map((e) => `environment "${e.renamedTo ?? e.name}": ${plural(e.variables, 'variable')}${e.secrets ? `, ${plural(e.secrets, 'secret')}` : ''}${e.renamedTo ? ' (renamed: the name is taken)' : ''}`),
     ...plan.specs.map((s) => `API definition ${s.path}${s.existing === 'different' ? ' (a different document is there: both are kept)' : s.existing === 'same' ? ' (already there)' : ''}`),
     ...plan.flows.map((f) => `flow ${f.path} (${f.steps} steps)`),
-    ...Object.entries(plan.library).map(([k, n]) => `${n} ${k === 'grpc' ? 'gRPC call' : 'connection'}${n === 1 ? '' : 's'}`),
+    ...Object.entries(plan.library).map(([k, n]) => plural(n, k === 'grpc' ? 'gRPC call' : 'connection')),
   ];
   return (
     <div className="border border-border rounded-md p-2 flex flex-col gap-2" data-import-plan>
@@ -319,7 +348,7 @@ function PlanCard({ source, plan, single }: { source: string; plan: ImportPlan; 
         {made.map((m) => (
           <li key={m}>Creates {m}</li>
         ))}
-        {plan.secretValues > 0 && <li>{plan.secretValues} secret value{plan.secretValues === 1 ? '' : 's'} go to the secret store, never into workspace files</li>}
+        {plan.secretValues > 0 && <li>{plural(plan.secretValues, 'secret value')} go to the secret store, never into workspace files</li>}
       </ul>
       {plan.collections.map((c, i) => c.tree.length > 0 && <ImportTree key={i} nodes={c.tree} />)}
       {plan.collections.some((c) => c.truncated) && <p className="text-xs text-muted">The tree shows the first 2000 items.</p>}
@@ -369,11 +398,11 @@ function UpdateSection({ updates, newCopy, setNewCopy, decisions, setDecisions }
                       <span className="mono truncate flex-1" title={i.reason}>
                         {i.path.length ? i.path.join(' / ') : 'Collection settings'} <span className="text-muted">{i.reason}</span>
                       </span>
-                      <select aria-label={`Action for ${i.path.join(' / ') || 'the collection settings'}`} className="field text-xs" value={decisions[i.key] ?? i.action} onChange={(e) => setDecisions({ ...decisions, [i.key]: e.target.value as ReimportAction })}>
-                        <option value="replace">Replace</option>
-                        <option value="new">New</option>
-                        <option value="skip">Skip</option>
-                      </select>
+                      <Select aria-label={`Action for ${i.path.join(' / ') || 'the collection settings'}`} className="text-xs" value={decisions[i.key] ?? i.action} onChange={(e) => setDecisions({ ...decisions, [i.key]: e.target.value as ReimportAction })}>
+                        <option value="replace">Replace it</option>
+                        <option value="new">Add as new</option>
+                        <option value="skip">Leave it</option>
+                      </Select>
                     </li>
                   ))}
                 </ul>

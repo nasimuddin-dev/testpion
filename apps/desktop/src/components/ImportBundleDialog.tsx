@@ -5,6 +5,8 @@ import { call } from '../api';
 import { toastError, useApp } from '../store';
 import { Badge, Button, Callout, Modal, Select, Spinner } from './ui';
 import type { ImportRequest } from '../lib/transfer';
+import { BUNDLE_HINT } from '../lib/vocabulary';
+import { openImport } from './ImportHost';
 
 type Choice = 'keep-both' | 'replace' | 'skip';
 interface Row {
@@ -76,6 +78,7 @@ export default function ImportBundleDialog({ request, onClose }: { request: Impo
 
   const read = (params: Record<string, unknown>) => {
     setError(undefined);
+    setLoaded(undefined);
     call<Preview | { upload: true } | null>('bundle.preview', params).then(
       (r) => {
         if (!r) return onClose(); // the picker was cancelled
@@ -93,6 +96,12 @@ export default function ImportBundleDialog({ request, onClose }: { request: Impo
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // a file that is not a bundle ends in a way out: choose another file (or the Import for other formats), never a dead end
+  const chooseAnother = () => {
+    setError(undefined);
+    setLoaded(undefined);
+    setUpload(true);
+  };
   const only = request.section ? [request.section === 'flow' ? 'test' : request.section] : undefined;
   const rows = loaded?.preview.items ?? [];
   const inScope = (r: Row) => !only || only.includes(r.kind);
@@ -137,7 +146,7 @@ export default function ImportBundleDialog({ request, onClose }: { request: Impo
   const p = loaded?.preview;
   return (
     <Modal
-      title={request.section ? `Import ${KIND_INFO[request.section as KindId]?.plural.toLowerCase() ?? request.section}` : 'Import'}
+      title={request.section ? `Import ${KIND_INFO[request.section as KindId]?.plural.toLowerCase() ?? request.section} from a bundle` : 'Import a bundle'}
       onClose={onClose}
       width={680}
       footer={
@@ -152,7 +161,7 @@ export default function ImportBundleDialog({ request, onClose }: { request: Impo
       <div className="flex flex-col gap-3" data-testid="import-bundle">
         {upload && (
           <div className="flex flex-col gap-2">
-            <p className="text-sm text-muted">Choose a TestPion bundle (.testpion.zip or .testpion.json).</p>
+            <p className="text-sm text-muted">Choose a TestPion bundle (.testpion.zip or .testpion.json). {BUNDLE_HINT}</p>
             <input
               ref={file}
               type="file"
@@ -167,13 +176,26 @@ export default function ImportBundleDialog({ request, onClose }: { request: Impo
           </div>
         )}
         {error && (
-          <Callout tone="bad">
+          <Callout
+            tone="bad"
+            role="alert"
+            action={
+              <span className="flex gap-1">
+                <Button size="sm" variant="primary" onClick={chooseAnother} data-bundle-choose-another>
+                  Choose another file
+                </Button>
+                <Button size="sm" onClick={() => (onClose(), openImport())}>
+                  Import another format…
+                </Button>
+              </span>
+            }
+          >
             {error}
-            <div className="text-xs text-muted mt-1">Postman, Insomnia, Bruno, OpenAPI, HAR and other formats are imported from File ▸ Import.</div>
+            <div className="text-xs text-muted mt-1">Postman, Insomnia, Bruno, OpenAPI, HAR and other formats are not bundles: use Import another format.</div>
           </Callout>
         )}
         {!loaded && !error && !upload && (
-          <div className="flex items-center gap-2 text-sm text-muted">
+          <div className="flex items-center gap-2 text-sm text-muted" role="status">
             <Spinner /> Reading the file…
           </div>
         )}
@@ -215,14 +237,14 @@ export default function ImportBundleDialog({ request, onClose }: { request: Impo
                 </Select>
               </div>
             )}
-            <div className="rounded-lg border border-line max-h-72 overflow-auto" role="table" aria-label="Items in the bundle">
+            <ul className="rounded-lg border border-line max-h-72 overflow-auto" aria-label="Items in the bundle">
               {rows.map((r) => {
                 const scoped = inScope(r);
                 const a = ACTION[r.action];
                 return (
-                  <div key={key(r)} role="row" className={`flex items-center gap-2 px-3 py-1.5 border-b border-line last:border-b-0 text-sm ${scoped ? '' : 'opacity-40'}`} data-action={r.action}>
+                  <li key={key(r)} className={`flex items-center gap-2 px-3 py-1.5 border-b border-line last:border-b-0 text-sm ${scoped ? '' : 'opacity-40'}`} data-action={r.action}>
                     <span className="text-xs text-muted w-24 shrink-0 truncate">{kindLabel(r.kind)}</span>
-                    <span className="flex-1 min-w-0 truncate" title={r.id}>
+                    <span className="flex-1 min-w-0 truncate" title={`${r.name} (${r.id})`}>
                       {r.name}
                       {r.action === 'conflict' && r.proposed && (decisions[key(r)] ?? onConflict) === 'keep-both' && <span className="text-xs text-muted"> → {r.proposed.name}</span>}
                       {r.why && <span className="text-xs text-muted"> · {r.why}</span>}
@@ -249,10 +271,10 @@ export default function ImportBundleDialog({ request, onClose }: { request: Impo
                         )}
                       </Select>
                     )}
-                  </div>
+                  </li>
                 );
               })}
-            </div>
+            </ul>
             {p.requires.secrets.length > 0 && (
               <p className="text-xs text-muted">
                 To fill in after the import:{' '}

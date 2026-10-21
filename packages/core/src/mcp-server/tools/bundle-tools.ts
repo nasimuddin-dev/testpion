@@ -4,6 +4,7 @@ import { ApsError } from '../../errors.js';
 import type { WorkspaceStore } from '../../storage/workspace.js';
 import {
   TRANSFER_LIMITS,
+  decodeBase64,
   applyImport,
   buildBundle,
   describeBundle,
@@ -20,6 +21,7 @@ import {
   type ParsedBundle,
 } from '../../transfer/index.js';
 import { str, type Tool } from '../tool.js';
+import { exportTarget } from './export-target.js';
 
 /**
  * MCP tools for TestPion bundles (.testpion.zip / .testpion.json): export items (a collection with everything it uses, a
@@ -32,7 +34,7 @@ export function bundleTools({ store }: { store: WorkspaceStore }): Tool[] {
   const choices = ['keep-both', 'replace', 'skip'];
   const readFrom = (a: Record<string, unknown>): ParsedBundle => {
     let bytes: Buffer;
-    if (typeof a.base64 === 'string' && a.base64) bytes = Buffer.from(a.base64, 'base64');
+    if (typeof a.base64 === 'string' && a.base64) bytes = decodeBase64(a.base64, TRANSFER_LIMITS.fileBytes, 'The bundle');
     else if (typeof a.file === 'string' && a.file) {
       const p = store.safePath(a.file);
       if (!existsSync(p)) throw new ApsError('ValidationError', `No file ${a.file} in the workspace`, { suggestions: ['Give a path relative to the workspace, or the bundle as base64'] });
@@ -46,7 +48,7 @@ export function bundleTools({ store }: { store: WorkspaceStore }): Tool[] {
       name: 'export_bundle',
       write: true,
       description:
-        'Export items of the workspace into one TestPion bundle file (.testpion.zip, or .testpion.json when small and text only). Pick `items` (kind:id such as collection:<id>, spec:specs/<path>, dataset:<name>, mcp-server:<id>, environment:<id>, test:<path>, or an ItemRef from search_workspace), or a whole `section` (collection, environment, spec, dataset, test, mcp-server, mcp-mock, proto, script-package, prompt, load-test, evaluation, monitor, grpc-call, ws-connection, provider), or `all`. `uses: true` adds what the items use (a collection: its environments, API definitions, datasets, MCP servers and mocks, protos, packages, test and flow files, saved calls, monitors); what is named but not in the workspace comes back in `missing`. Secret values are never written: each is replaced by a {{variable}} (listed in `replaced` and `requires.secrets`, with the variable to set after an import). Datasets over 10 MB go by reference (`datasets: "embed"` forces them in). The file is written inside the workspace (default .local/exports/<title>.testpion.zip); returns its path, the items, what was replaced and what was left out.',
+        'Export items of the workspace into one TestPion bundle file (.testpion.zip, or .testpion.json when small and text only). Pick `items` (kind:id such as collection:<id>, spec:specs/<path>, dataset:<name>, mcp-server:<id>, environment:<id>, test:<path>, or an ItemRef from search_workspace), or a whole `section` (collection, environment, spec, dataset, test, mcp-server, mcp-mock, proto, script-package, prompt, load-test, evaluation, monitor, grpc-call, ws-connection, provider), or `all`. `uses: true` adds what the items use (a collection: its environments, API definitions, datasets, MCP servers and mocks, protos, packages, test and flow files, saved calls, monitors); what is named but not in the workspace comes back in `missing`. Secret values are never written: each is replaced by a {{variable}} (listed in `replaced` and `requires.secrets`, with the variable to set after an import). Datasets over 10 MB go by reference (`datasets: "embed"` forces them in). The file is written as a new file under exports/ or .local/exports/ (default .local/exports/<title>.testpion.zip; never over an existing file, asks the user first); returns its path, the items, what was replaced and what was left out.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -57,7 +59,7 @@ export function bundleTools({ store }: { store: WorkspaceStore }): Tool[] {
           datasets: { type: 'string', enum: ['auto', 'embed', 'reference'], description: 'auto (default): embed up to 10 MB, bigger by reference' },
           providers: { type: 'boolean', description: 'Include AI providers in a whole-workspace or section export' },
           title: str('The bundle’s title (its file name)'),
-          out: str('Where to write it, relative to the workspace (.zip or .json; default .local/exports/<title>.testpion.zip)'),
+          out: str('Where to write it, relative to the workspace: a new file under exports/ or .local/exports/ (.zip or .json; default .local/exports/<title>.testpion.zip)'),
         },
       },
       run: (a) => {
@@ -75,9 +77,12 @@ export function bundleTools({ store }: { store: WorkspaceStore }): Tool[] {
           title: typeof a.title === 'string' && a.title ? a.title : undefined,
           format: ext === 'zip' || ext === 'json' ? ext : 'auto',
         });
-        const file = store.safePath(out ?? `.local/exports/${b.fileName}`);
+        // never over a file, and only under exports/ or .local/exports/ (the default name gets a number when it is taken)
+        let name = b.fileName;
+        for (let n = 2; !out && existsSync(store.path('.local', 'exports', name)); n++) name = b.fileName.replace(/(\.testpion\.(zip|json))$/i, `-${n}$1`);
+        const file = exportTarget(store, out ?? `.local/exports/${name}`, { what: 'bundle exports', arg: 'out' });
         mkdirSync(dirname(file), { recursive: true });
-        writeFileSync(file, b.bytes);
+        writeFileSync(file, b.bytes, { flag: 'wx' });
         return {
           path: relative(store.root, file).split('\\').join('/'),
           absolutePath: file,

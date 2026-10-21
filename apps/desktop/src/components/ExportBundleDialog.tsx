@@ -6,6 +6,7 @@ import { toastError, useApp } from '../store';
 import { Badge, Button, Callout, Field, Modal, Select, Spinner, Toggle } from './ui';
 import { finishSave, type SaveResult } from '../lib/files';
 import type { ExportRequest } from '../lib/transfer';
+import { BUNDLE_HINT } from '../lib/vocabulary';
 
 /** What `bundle.export` answers (and, with dryRun, what the dialog shows before anything is saved). */
 interface ExportSummary extends SaveResult {
@@ -89,7 +90,7 @@ export default function ExportBundleDialog({ request, onClose }: { request: Expo
     <Modal
       title={
         request.all
-          ? 'Export the workspace'
+          ? 'Export the workspace as a bundle'
           : request.section
             ? `Export ${KIND_INFO[request.section as KindId]?.plural.toLowerCase() ?? request.section}`
             : `Export${request.title ? ` “${request.title}”` : ''}`
@@ -107,7 +108,7 @@ export default function ExportBundleDialog({ request, onClose }: { request: Expo
     >
       <div className="flex flex-col gap-3" data-testid="export-bundle">
         <p className="text-sm text-muted">
-          One file (<code>{summary?.fileName ?? '….testpion.zip'}</code>) that Import… brings back, here or in another workspace. Secret values are never in it.
+          {BUNDLE_HINT} This one is <code>{summary?.fileName ?? '….testpion.zip'}</code>; Import a Bundle… brings it back, here or in another workspace. Secret values are never in it.
         </p>
         {!request.all && (
           <Toggle

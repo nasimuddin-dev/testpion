@@ -25,7 +25,7 @@ export function RagEstimateView({ estimate, compact }: { estimate: RunEstimate; 
         {judged ? (
           <>
             <span>
-              ≈ <b data-rag-estimate-calls>{estimate.total.llmCalls.toLocaleString()}</b> judge calls
+              ≈ <b data-rag-estimate-calls>{estimate.total.llmCalls.toLocaleString()}</b> <span title="A judge call asks your judge model (an AI model) to grade one answer on one metric. Each call is paid for.">judge calls</span>
               {estimate.total.embedCalls ? ` + ${estimate.total.embedCalls.toLocaleString()} embeddings` : ''} for {estimate.samples} samples
             </span>
             <span className="text-muted">{estimate.total.inputTokens.toLocaleString()} tokens in</span>
@@ -106,7 +106,7 @@ export function RagEstimateView({ estimate, compact }: { estimate: RunEstimate; 
           {n}
         </div>
       ))}
-      {estimate.unknown.length > 0 && <div className="text-xs text-warn">Not in the catalogue: {estimate.unknown.join(', ')}</div>}
+      {estimate.unknown.length > 0 && <div className="text-xs text-warn">Not in the price list: {estimate.unknown.join(', ')}</div>}
       {judged && <div className="text-xs text-muted">The judge receives the question, the answer and the retrieved documents of each sample, after masking secrets and personal data. Verdicts are cached: running again costs nothing.</div>}
     </div>
   );

@@ -2,7 +2,8 @@ import { describe, it, expect, afterAll } from 'vitest';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { MemorySecretStore, WorkspaceStore, findCommittableSecrets, fixCommittableSecrets, installPreCommitHook, type Collection } from '@testpion/core';
+import { MemorySecretStore, WorkspaceStore, findCommittableSecrets, fixCommittableSecrets, installPreCommitHook, preCommitScript, shellQuote, type Collection } from '@testpion/core';
+import { spawnSync } from 'node:child_process';
 
 // GIT-104: secrets typed into a workspace are found before a commit would publish them.
 const root = mkdtempSync(join(tmpdir(), 'tp-guard-'));
@@ -51,7 +52,8 @@ describe('secret guard', () => {
     expect(r.installed).toBe(true);
     const hook = readFileSync(join(repo, '.git', 'hooks', 'pre-commit'), 'utf8');
     expect(hook).toMatch(/testpion-secret-guard/);
-    expect(hook).toMatch(/git check -w 'api-tests'/);
+    expect(hook).toMatch(/^W='api-tests'$/m);
+    expect(hook).toContain(String.raw`git check -w \"\$W\"`);
     expect(hook).toMatch(/"node" "\/x\/testpion\.js"/);
     // again: TestPion's own hook is updated
     expect(installPreCommitHook(ws).installed).toBe(true);
@@ -62,6 +64,47 @@ describe('secret guard', () => {
     expect(other.message).toMatch(/already exists/);
     expect(readFileSync(join(repo, '.git', 'hooks', 'pre-commit'), 'utf8')).toBe('#!/bin/sh\nnpm test\n');
     expect(existsSync(join(repo, '.git', 'hooks', 'pre-commit'))).toBe(true);
+  });
+
+  // The hook must run the check with the workspace's path as ONE argument, whatever the folder is called: the name
+  // comes from the repository, so $(...), backticks, quotes and newlines in it must stay text (never run at commit time).
+  const hasSh = spawnSync('sh', ['-c', 'exit 0']).status === 0;
+  it.skipIf(!hasSh)('the hook hands any folder name to the check as plain text', () => {
+    const dir = mkdtempSync(join(root, 'hook-'));
+    const out = join(dir, 'args');
+    const marker = join(dir, 'pwned');
+    // a stand-in for the CLI: writes its arguments, NUL-separated
+    writeFileSync(join(dir, 'stub.sh'), ['#!/bin/sh', 'printf "%s\\0" "$@" > args', 'exit 0', ''].join('\n'));
+    const names = [
+      'api-tests',
+      "it's a folder",
+      'a$(touch pwned)b',
+      'a`touch pwned`b',
+      '"; touch pwned; "',
+      "'; touch pwned; '",
+      'back\\slash $HOME ${HOME} $((1+1))',
+      'line\nbreak\n$(touch pwned)',
+      '-w --evil',
+      'semi; touch pwned #',
+      'a|b&c>d<e*?[x]',
+    ];
+    const sep = process.platform === 'win32' ? ';' : ':';
+    // no `testpion` on the PATH of this process: the branch that runs the remembered CLI is the one tested
+    const PATH = process.env.PATH!.split(sep)
+      .filter((d) => !existsSync(join(d, 'testpion')) && !existsSync(join(d, 'testpion.cmd')))
+      .join(sep);
+    for (const rel of names) {
+      writeFileSync(join(dir, 'hook.sh'), preCommitScript(rel, 'sh ./stub.sh'));
+      const r = spawnSync('sh', ['./hook.sh'], { cwd: dir, env: { PATH }, encoding: 'utf8' });
+      expect(r.status, `${JSON.stringify(rel)}: ${r.stderr}`).toBe(0);
+      expect(readFileSync(out, 'utf8').split('\0').slice(0, -1), JSON.stringify(rel)).toEqual(['git', 'check', '-w', rel]);
+      expect(existsSync(marker), `${JSON.stringify(rel)} ran a command`).toBe(false);
+    }
+  });
+
+  it('shellQuote closes, escapes and reopens single quotes', () => {
+    expect(shellQuote("a'b")).toBe("'a'\\''b'");
+    expect(shellQuote('$(x)`y`')).toBe("'$(x)`y`'");
   });
 });
 
