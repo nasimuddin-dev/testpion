@@ -91,7 +91,9 @@ describe('bundle export and import of 2,500 saved items', () => {
     const perRun = reads.count() / RUNS;
     reads.stop();
     console.log(`preview of ${value.items.length} identical items: ${ms.toFixed(0)} ms, ${perRun} library reads per run`);
-    expect(sha(value.items)).toBe(GOLDEN.identical);
+    // the same answers as before, apart from the review line the security fixes added to every MCP server (see GOLDEN)
+    expect(sha(withoutServerReview(value.items))).toBe(GOLDEN.identical);
+    expect(sha(value.items)).toBe(GOLDEN.identicalNow);
     expect(value.totals.identical).toBe(value.items.length);
     expect(perRun).toBeLessThanOrEqual(12);
     expect(ms).toBeLessThan(1500);
@@ -101,7 +103,8 @@ describe('bundle export and import of 2,500 saved items', () => {
     const bundle = readBundle(buildBundle(src, 'all', { format: 'json' }).bytes);
     const { ms, value } = await best(() => previewImport(other, bundle));
     console.log(`preview of ${value.items.length} conflicting items: ${ms.toFixed(0)} ms`);
-    expect(sha(value.items)).toBe(GOLDEN.conflicts);
+    expect(sha(withoutServerReview(value.items))).toBe(GOLDEN.conflicts);
+    expect(sha(value.items)).toBe(GOLDEN.conflictsNow);
     // the 2,500 prompts differ; the collections, environments and servers are the same here as there
     expect(value.totals.conflict).toBe(ITEMS);
     expect(ms).toBeLessThan(1500);
@@ -206,5 +209,10 @@ describe('zip: the thread-pool writer gives the same archive', () => {
   });
 });
 
-/** Digests of the answers of the implementation this test was written against. */
-const GOLDEN = { export: '6844502069c5e836', identical: '9c38ebabbbebf2ba', conflicts: 'c972fd4289a4eaeb', applied: '52496fc82c119d08' };
+/**
+ * Digests of the answers of the implementation this test was written against. identical and conflicts are the previews as they
+ * were before the security fixes, which added a review line to each MCP server ("connects to <host>"): they are checked with that line
+ * left out, so the listing and index logic is held to the old answers; identicalNow and conflictsNow pin the answers with it.
+ */
+const withoutServerReview = <T extends { kind: string; review: string[] }>(items: T[]): T[] => items.map((i) => (i.kind === 'mcp-server' ? { ...i, review: [] } : i));
+const GOLDEN = { identicalNow: '3562c5f181ed971d', conflictsNow: '434129f9ec099c05', export: '6844502069c5e836', identical: '9c38ebabbbebf2ba', conflicts: 'c972fd4289a4eaeb', applied: '52496fc82c119d08' };
