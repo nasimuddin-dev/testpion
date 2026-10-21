@@ -6,19 +6,19 @@
  * list_flows lists them. Agents see new or changed flows after they reconnect (the tools are read at server start).
  */
 import { dirname, join } from 'node:path';
-import type { AppSettings, TestCase, TestResult } from '../model/types.js';
-import { ApsError } from '../errors.js';
-import { createEngineContext } from '../engine.js';
-import { exposedFlows, inputRequired, type ExposedFlow } from '../runner/exposed-flows.js';
-import { loadSuite, loadTestsFromFile, streamTests } from '../runner/loader.js';
-import { recordRun } from '../runner/run-records.js';
-import { readFlowOutput, resolveOutput } from '../runner/flow-blocks.js';
-import { runTests, type RunEvent } from '../runner/runner.js';
-import type { SecretStore } from '../storage/secrets.js';
-import type { WorkspaceStore } from '../storage/workspace.js';
-import type { Redactor } from '../util/redact.js';
-import { shortId } from '../util/ids.js';
-import { str, type Tool } from './tool.js';
+import type { AppSettings, TestCase, TestResult } from '../../model/types.js';
+import { ApsError } from '../../errors.js';
+import { createEngineContext } from '../../engine.js';
+import { exposedFlows, inputRequired, type ExposedFlow } from '../../runner/exposed-flows.js';
+import { loadSuite, loadTestsFromFile, streamTests } from '../../runner/loader.js';
+import { recordRun } from '../../runner/run-records.js';
+import { readFlowOutput, resolveOutput } from '../../runner/flow-blocks.js';
+import { runTests, type RunEvent } from '../../runner/runner.js';
+import type { SecretStore } from '../../storage/secrets.js';
+import type { WorkspaceStore } from '../../storage/workspace.js';
+import type { Redactor } from '../../util/redact.js';
+import { shortId } from '../../util/ids.js';
+import { str, type Tool } from '../tool.js';
 
 export interface FlowToolDeps {
   store: WorkspaceStore;

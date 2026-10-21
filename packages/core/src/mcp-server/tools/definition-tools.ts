@@ -7,7 +7,7 @@ import { diffOpenApi } from '../../openapi/diff.js';
 import { collectionToOpenApiText } from '../../openapi/from-collection.js';
 import { collectionSecurityFindings } from '../../runner/collection-findings.js';
 import { renameVariable, variableUsages } from '../../storage/variable-refactor.js';
-import { importsMany, runImportMany } from '../import-tools.js';
+import { importsMany, runImportMany } from './import-tools.js';
 import { str } from '../tool.js';
 import type { Tool } from '../tool.js';
 import type { ModuleToolDeps } from './deps.js';

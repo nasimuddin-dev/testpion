@@ -1,14 +1,14 @@
 import { existsSync, readFileSync } from 'node:fs';
-import type { DebuggerExchange } from '../debugger/proxy.js';
-import { ApsError } from '../errors.js';
-import { flowFromExchanges, flowFromHar, recordedFlowPath, type FlowFromExchangesOptions } from '../runner/flow-from-exchanges.js';
-import { collectionFromExchanges } from '../runner/collection-from-exchanges.js';
-import { exchangesFromHar } from '../debugger/har.js';
-import { secretKeys, type SecretStore } from '../storage/secrets.js';
-import type { WorkspaceStore } from '../storage/workspace.js';
-import type { Redactor } from '../util/redact.js';
-import { isSecretRef } from '../vars/external-secrets.js';
-import { str, type Tool } from './tool.js';
+import type { DebuggerExchange } from '../../debugger/proxy.js';
+import { ApsError } from '../../errors.js';
+import { flowFromExchanges, flowFromHar, recordedFlowPath, type FlowFromExchangesOptions } from '../../runner/flow-from-exchanges.js';
+import { collectionFromExchanges } from '../../runner/collection-from-exchanges.js';
+import { exchangesFromHar } from '../../debugger/har.js';
+import { secretKeys, type SecretStore } from '../../storage/secrets.js';
+import type { WorkspaceStore } from '../../storage/workspace.js';
+import type { Redactor } from '../../util/redact.js';
+import { isSecretRef } from '../../vars/external-secrets.js';
+import { str, type Tool } from '../tool.js';
 
 /**
  * Record a flow for agents: exchanges the HTTP Debugger captured in this server (debugger_capture) or a HAR file's

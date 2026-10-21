@@ -1,6 +1,6 @@
-import { appendDatasetRow, listWorkspaceDatasets, readWorkspaceDataset } from '../runner/datasets.js';
-import type { WorkspaceStore } from '../storage/workspace.js';
-import { str, type Tool } from './tool.js';
+import { appendDatasetRow, listWorkspaceDatasets, readWorkspaceDataset } from '../../runner/datasets.js';
+import type { WorkspaceStore } from '../../storage/workspace.js';
+import { str, type Tool } from '../tool.js';
 
 /**
  * MCP tools for the workspace's datasets (the files in datasets/: CSV, JSON, JSONL, Markdown tables and SQLite

@@ -9,7 +9,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { defaultSettings, MemorySecretStore, WorkspaceStore, type Collection } from '../../packages/core/src/index.js';
-import { aiTools } from '../../packages/core/src/mcp-server/ai-tools.js';
+import { aiTools } from '../../packages/core/src/mcp-server/tools/ai-tools.js';
 import { withToolContract } from '../../packages/core/src/mcp-server/tool-contract.js';
 import { TOOL_DOCS } from '../../packages/core/src/mcp-server/tool-docs.js';
 import { cliData, runCli, runCliSync, tempDir } from '../helpers.js';

@@ -5,14 +5,14 @@
  * verified against the same traffic. `propose: true` makes TestPion's own patches a proposal without a model. Nothing is
  * written: `ai_apply_proposal` applies, after the user agrees.
  */
-import { contractDrift, draftDriftProposal, sourceOf } from '../ai/contract-drift.js';
-import { driftMarkdown } from '../openapi/drift.js';
-import { ApsError } from '../errors.js';
-import type { AppSettings } from '../model/types.js';
-import type { SecretStore } from '../storage/secrets.js';
-import type { WorkspaceStore } from '../storage/workspace.js';
+import { contractDrift, draftDriftProposal, sourceOf } from '../../ai/contract-drift.js';
+import { driftMarkdown } from '../../openapi/drift.js';
+import { ApsError } from '../../errors.js';
+import type { AppSettings } from '../../model/types.js';
+import type { SecretStore } from '../../storage/secrets.js';
+import type { WorkspaceStore } from '../../storage/workspace.js';
 import { createProposer, forAgent, PRIVACY } from './ai-propose.js';
-import { str, type Tool } from './tool.js';
+import { str, type Tool } from '../tool.js';
 
 export function aiDriftTools({ store, secrets, settings }: { store: WorkspaceStore; secrets: SecretStore; settings: AppSettings }): Tool[] {
   const propose = createProposer({ store, secrets, settings });

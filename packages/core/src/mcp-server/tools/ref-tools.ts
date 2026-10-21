@@ -1,11 +1,11 @@
 import { itemRefUrl, parseItemRef, toItemRef, ITEM_KINDS } from '@testpion/shared';
-import { resolveItemRef } from '../storage/item-refs.js';
-import { itemInfo } from '../storage/item-info.js';
+import { resolveItemRef } from '../../storage/item-refs.js';
+import { itemInfo } from '../../storage/item-info.js';
 import { templateVariables } from '@testpion/shared';
-import { WorkspaceSearch } from '../storage/search.js';
-import type { WorkspaceStore } from '../storage/workspace.js';
-import { ApsError } from '../errors.js';
-import type { Tool } from './tool.js';
+import { WorkspaceSearch } from '../../storage/search.js';
+import type { WorkspaceStore } from '../../storage/workspace.js';
+import { ApsError } from '../../errors.js';
+import type { Tool } from '../tool.js';
 
 /**
  * ItemRefs for agents: the `ref` that results carry (run_tests, recent_failures, what_needs_attention, git_status,

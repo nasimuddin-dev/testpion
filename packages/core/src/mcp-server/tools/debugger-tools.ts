@@ -1,17 +1,17 @@
-import { startDebuggerProxy, type DebuggerExchange, type DebuggerProxy } from '../debugger/proxy.js';
-import { exchangesFromHar, exchangesToHar } from '../debugger/har.js';
-import { describeRule, rulePresets, statusMatches, type DebuggerRule } from '../debugger/rules.js';
-import { shortId } from '../util/ids.js';
-import { debuggerCertDir, ensureRootCertificate, leafSigner } from '../debugger/certificate.js';
-import { exchangesFromSaz } from '../debugger/saz.js';
-import { grpcDecoder, grpcMethodIndex, workspaceProtoRoots } from '../debugger/grpc.js';
-import type { WorkspaceStore } from '../storage/workspace.js';
+import { startDebuggerProxy, type DebuggerExchange, type DebuggerProxy } from '../../debugger/proxy.js';
+import { exchangesFromHar, exchangesToHar } from '../../debugger/har.js';
+import { describeRule, rulePresets, statusMatches, type DebuggerRule } from '../../debugger/rules.js';
+import { shortId } from '../../util/ids.js';
+import { debuggerCertDir, ensureRootCertificate, leafSigner } from '../../debugger/certificate.js';
+import { exchangesFromSaz } from '../../debugger/saz.js';
+import { grpcDecoder, grpcMethodIndex, workspaceProtoRoots } from '../../debugger/grpc.js';
+import type { WorkspaceStore } from '../../storage/workspace.js';
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { Redactor } from '../util/redact.js';
-import { ApsError } from '../errors.js';
-import { str, type Tool } from './tool.js';
+import { Redactor } from '../../util/redact.js';
+import { ApsError } from '../../errors.js';
+import { str, type Tool } from '../tool.js';
 
 /**
  * The HTTP Debugger for agents: start the proxy, point a program at it, read what it sent and got. The capture lives

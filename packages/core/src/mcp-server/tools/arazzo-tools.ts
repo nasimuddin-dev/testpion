@@ -1,12 +1,12 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { ApsError } from '../errors.js';
-import { importArazzo, resolveArazzoSources } from '../import/arazzo.js';
-import { exportArazzoFromWorkspace } from '../import/arazzo-export.js';
-import { fetchImportText } from '../import/fetch-url.js';
-import { importArazzoIntoWorkspace } from '../import/workspace-import.js';
-import type { WorkspaceStore } from '../storage/workspace.js';
-import { str, type Tool } from './tool.js';
+import { ApsError } from '../../errors.js';
+import { importArazzo, resolveArazzoSources } from '../../import/arazzo.js';
+import { exportArazzoFromWorkspace } from '../../import/arazzo-export.js';
+import { fetchImportText } from '../../import/fetch-url.js';
+import { importArazzoIntoWorkspace } from '../../import/workspace-import.js';
+import type { WorkspaceStore } from '../../storage/workspace.js';
+import { str, type Tool } from '../tool.js';
 
 /**
  * MCP tools for Arazzo 1.0 (the OpenAPI Initiative's workflow format): import a document's workflows as flow files

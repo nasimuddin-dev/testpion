@@ -97,10 +97,16 @@ describe('architecture', () => {
     expect(asks).toEqual([]);
   });
 
+  it('MCP tools live in mcp-server/tools (one home, composed by tools/index.ts); the server file holds none of its own', () => {
+    const root = join(__dirname, '..', '..', 'packages/core/src/mcp-server');
+    expect(readdirSync(root).filter((f) => /-tools\.ts$/.test(f))).toEqual([]);
+    expect(readFileSync(join(root, 'testpion-mcp.ts'), 'utf8')).not.toMatch(/^ {6}name: '/m);
+  });
+
   it('the big files do not grow: new tools, handlers and commands get their own module', () => {
     // the ceiling is a little above each file's size when this test was written; shrinking it is always welcome
     const ceilings: Record<string, number> = {
-      'packages/core/src/mcp-server/testpion-mcp.ts': 1500,
+      'packages/core/src/mcp-server/testpion-mcp.ts': 250,
       'apps/desktop/backend/backend.ts': 1450,
       'packages/cli/src/commands/data.ts': 1300,
       'packages/core/src/storage/workspace.ts': 900,

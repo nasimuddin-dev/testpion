@@ -5,17 +5,17 @@
  * refuse an environment marked as production unless the server was started with --allow-production and the call passes
  * allowProduction: true; nothing is written until `ai_apply_proposal`.
  */
-import { flowSourceRef } from '../ai/flow-from-collection.js';
-import { draftSecurityProposal, SECURITY_PROBES } from '../ai/security-tests.js';
-import { runSecurityTests, securityReportMarkdown } from '../ai/security-run.js';
-import { createEngineContext } from '../engine.js';
-import { ApsError } from '../errors.js';
-import type { AppSettings } from '../model/types.js';
-import { productionAllowed } from '../net/production-guard.js';
-import type { SecretStore } from '../storage/secrets.js';
-import type { WorkspaceStore } from '../storage/workspace.js';
+import { flowSourceRef } from '../../ai/flow-from-collection.js';
+import { draftSecurityProposal, SECURITY_PROBES } from '../../ai/security-tests.js';
+import { runSecurityTests, securityReportMarkdown } from '../../ai/security-run.js';
+import { createEngineContext } from '../../engine.js';
+import { ApsError } from '../../errors.js';
+import type { AppSettings } from '../../model/types.js';
+import { productionAllowed } from '../../net/production-guard.js';
+import type { SecretStore } from '../../storage/secrets.js';
+import type { WorkspaceStore } from '../../storage/workspace.js';
 import { createProposer, PRIVACY, strings } from './ai-propose.js';
-import { str, type Tool } from './tool.js';
+import { str, type Tool } from '../tool.js';
 
 export function aiSecurityTools({
   store,

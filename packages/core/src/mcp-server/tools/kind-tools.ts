@@ -1,7 +1,7 @@
 import { KIND_IDS } from '@testpion/shared';
-import { describeKinds } from '../kinds/describe.js';
-import type { WorkspaceStore } from '../storage/workspace.js';
-import type { Tool } from './tool.js';
+import { describeKinds } from '../../kinds/describe.js';
+import type { WorkspaceStore } from '../../storage/workspace.js';
+import type { Tool } from '../tool.js';
 
 /**
  * The item-kind registry for agents (REG-5): every kind of item a workspace holds and what each one offers (open, link,

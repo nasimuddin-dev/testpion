@@ -1,13 +1,13 @@
-import { ApsError } from '../errors.js';
-import { fetchImportText } from '../import/fetch-url.js';
-import { expandImportFiles, type ImportInput } from '../import/inputs.js';
-import { listImportReceipts, readImportReport, undoImportReceipt } from '../import/import-receipt.js';
-import { importInputs, planInputs } from '../import/plan.js';
-import { fetchRepoFiles, parseRepoLink } from '../import/repo-import.js';
-import type { ReimportAction } from '../import/reimport.js';
-import { fetchPostmanInputs, parsePostmanRef } from '../import/postman-api.js';
-import type { WorkspaceStore } from '../storage/workspace.js';
-import { str, type Tool } from './tool.js';
+import { ApsError } from '../../errors.js';
+import { fetchImportText } from '../../import/fetch-url.js';
+import { expandImportFiles, type ImportInput } from '../../import/inputs.js';
+import { listImportReceipts, readImportReport, undoImportReceipt } from '../../import/import-receipt.js';
+import { importInputs, planInputs } from '../../import/plan.js';
+import { fetchRepoFiles, parseRepoLink } from '../../import/repo-import.js';
+import type { ReimportAction } from '../../import/reimport.js';
+import { fetchPostmanInputs, parsePostmanRef } from '../../import/postman-api.js';
+import type { WorkspaceStore } from '../../storage/workspace.js';
+import { str, type Tool } from '../tool.js';
 
 /**
  * MCP tools around `import_definition`: what an import would do before it is done (`import_preview`), the compatibility

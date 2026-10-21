@@ -1,4 +1,4 @@
-import { str, type Tool } from './tool.js';
+import { str, type Tool } from '../tool.js';
 
 /**
  * The tools an agent reaches without the full list: the `minimal` profile (the common jobs) and search_tools, which

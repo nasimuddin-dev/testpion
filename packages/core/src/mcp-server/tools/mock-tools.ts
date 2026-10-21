@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
-import type { WorkspaceStore } from '../storage/workspace.js';
-import { loadMcpMock, mockServeCommands, mockToolsList } from './mcp-mock.js';
-import { str, type Tool } from './tool.js';
+import type { WorkspaceStore } from '../../storage/workspace.js';
+import { loadMcpMock, mockServeCommands, mockToolsList } from '../mcp-mock.js';
+import { str, type Tool } from '../tool.js';
 
 /**
  * MCP mocks as toolsets: an agent designs the tools of a server that does not exist yet in a `*.mcp-mock.yaml` file

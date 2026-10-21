@@ -5,7 +5,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parse } from 'yaml';
-import { recordingTools } from '../../packages/core/src/mcp-server/recording-tools.js';
+import { recordingTools } from '../../packages/core/src/mcp-server/tools/recording-tools.js';
 import { copyExample } from '../helpers.js';
 import {
   flowFromExchanges,

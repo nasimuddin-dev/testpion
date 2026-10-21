@@ -1,7 +1,7 @@
 import { describe, it, expect, afterAll } from 'vitest';
 import { join } from 'node:path';
 import { defaultSettings, MemorySecretStore, WorkspaceStore } from '../../packages/core/src/index.js';
-import { aiTools } from '../../packages/core/src/mcp-server/ai-tools.js';
+import { aiTools } from '../../packages/core/src/mcp-server/tools/ai-tools.js';
 import { withToolContract, isContractResult } from '../../packages/core/src/mcp-server/tool-contract.js';
 import { TOOL_DOCS } from '../../packages/core/src/mcp-server/tool-docs.js';
 import { cliData, runCliSync, tempDir } from '../helpers.js';

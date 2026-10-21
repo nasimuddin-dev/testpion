@@ -6,23 +6,23 @@
  * run without one stops before the first question with what to configure.
  */
 import type { RagTarget } from '@testpion/shared';
-import { ApsError } from '../errors.js';
-import { createEngineContext } from '../engine.js';
-import { chooseRagRun, estimateRagEvaluation, estimateRescore, runRagEvaluation, type RagRunChoices } from '../runner/rag-evaluation.js';
-import { metricsOfRun, rescoreRun, storedSample } from '../runner/rag-rescore.js';
-import { runResults } from '../runner/run-results.js';
-import { findSavedEvaluation, judgeSetupOf } from '../runner/saved-evaluations.js';
-import { probeRagTarget } from '../runner/rag-probe.js';
-import { METRIC_GROUPS, metricCatalogueRows, resolveMetric } from '../eval/rag/metric-registry.js';
-import { METRIC_PRESETS } from '../eval/rag/catalogue-presets.js';
-import { buildMetricMatrix, checkGates, parseGates } from '../eval/rag/metric-matrix.js';
-import { compareMetricRuns } from '../eval/rag/metric-compare.js';
-import { tryMetric, type TrySample } from '../eval/rag/try-metric.js';
-import { findRagTarget } from '../eval/rag/targets.js';
-import type { AppSettings, TestResult } from '../model/types.js';
-import type { SecretStore } from '../storage/secrets.js';
-import type { WorkspaceStore } from '../storage/workspace.js';
-import { str, type Tool } from './tool.js';
+import { ApsError } from '../../errors.js';
+import { createEngineContext } from '../../engine.js';
+import { chooseRagRun, estimateRagEvaluation, estimateRescore, runRagEvaluation, type RagRunChoices } from '../../runner/rag-evaluation.js';
+import { metricsOfRun, rescoreRun, storedSample } from '../../runner/rag-rescore.js';
+import { runResults } from '../../runner/run-results.js';
+import { findSavedEvaluation, judgeSetupOf } from '../../runner/saved-evaluations.js';
+import { probeRagTarget } from '../../runner/rag-probe.js';
+import { METRIC_GROUPS, metricCatalogueRows, resolveMetric } from '../../eval/rag/metric-registry.js';
+import { METRIC_PRESETS } from '../../eval/rag/catalogue-presets.js';
+import { buildMetricMatrix, checkGates, parseGates } from '../../eval/rag/metric-matrix.js';
+import { compareMetricRuns } from '../../eval/rag/metric-compare.js';
+import { tryMetric, type TrySample } from '../../eval/rag/try-metric.js';
+import { findRagTarget } from '../../eval/rag/targets.js';
+import type { AppSettings, TestResult } from '../../model/types.js';
+import type { SecretStore } from '../../storage/secrets.js';
+import type { WorkspaceStore } from '../../storage/workspace.js';
+import { str, type Tool } from '../tool.js';
 
 const strList = (description: string) => ({ type: 'array', items: { type: 'string' }, description });
 const judgeProps = {

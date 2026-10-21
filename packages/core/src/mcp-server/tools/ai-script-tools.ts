@@ -4,12 +4,12 @@
  * before offering it. It proposes: `ai_apply_proposal` puts it on the saved request, after the user agrees.
  */
 import { parseItemRef, toItemRef } from '@testpion/shared';
-import { ApsError } from '../errors.js';
-import type { AppSettings } from '../model/types.js';
-import type { SecretStore } from '../storage/secrets.js';
-import type { WorkspaceStore } from '../storage/workspace.js';
+import { ApsError } from '../../errors.js';
+import type { AppSettings } from '../../model/types.js';
+import type { SecretStore } from '../../storage/secrets.js';
+import type { WorkspaceStore } from '../../storage/workspace.js';
 import { createProposer, PRIVACY } from './ai-propose.js';
-import { str, type Tool } from './tool.js';
+import { str, type Tool } from '../tool.js';
 
 export function aiScriptTools({ store, secrets, settings }: { store: WorkspaceStore; secrets: SecretStore; settings: AppSettings }): Tool[] {
   const propose = createProposer({ store, secrets, settings });

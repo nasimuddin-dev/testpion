@@ -16,7 +16,7 @@ import type { RunEvent } from '../../runner/runner.js';
 import { evaluationTests, findSavedEvaluation, listSavedEvaluations } from '../../runner/saved-evaluations.js';
 import { lintTestFile } from '../../runner/test-schema.js';
 import { shortId } from '../../util/ids.js';
-import { planFlowRun } from '../flow-graph-tools.js';
+import { planFlowRun } from './flow-graph-tools.js';
 import { str } from '../tool.js';
 import type { Tool } from '../tool.js';
 import type { ModuleToolDeps } from './deps.js';

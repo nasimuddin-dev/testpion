@@ -1,15 +1,15 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { ApsError } from '../errors.js';
-import type { Collection } from '../model/types.js';
-import type { WorkspaceStore } from '../storage/workspace.js';
-import { gitLog, gitStage, gitStatus, gitSync, gitUnstage } from '../git/git.js';
-import { gitConflictDetail, gitResolve } from '../git/conflicts.js';
-import type { Redactor } from '../util/redact.js';
-import { changesMarkdown, describeGitChanges, describeItemDiff, describeRevChanges } from '../git/semantic.js';
-import { commitVerdict, scanStagedSecrets } from '../git/staged-secrets.js';
-import type { MergeResolutions } from '../git/merge.js';
-import { str, type Tool } from './tool.js';
+import { ApsError } from '../../errors.js';
+import type { Collection } from '../../model/types.js';
+import type { WorkspaceStore } from '../../storage/workspace.js';
+import { gitLog, gitStage, gitStatus, gitSync, gitUnstage } from '../../git/git.js';
+import { gitConflictDetail, gitResolve } from '../../git/conflicts.js';
+import type { Redactor } from '../../util/redact.js';
+import { changesMarkdown, describeGitChanges, describeItemDiff, describeRevChanges } from '../../git/semantic.js';
+import { commitVerdict, scanStagedSecrets } from '../../git/staged-secrets.js';
+import type { MergeResolutions } from '../../git/merge.js';
+import { str, type Tool } from '../tool.js';
 
 /** MCP tools for the workspace's git repository (GIT-402): status, the changes by meaning, history, a proposed commit. */
 export function gitTools(d: { store: WorkspaceStore; findCollection(ref: unknown): Collection; redactor?: Redactor }): Tool[] {

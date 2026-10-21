@@ -3,14 +3,14 @@
  * app), schedule it (save_monitor: a monitor of a collection or a test file) and say where a flow is deployed (a monitor,
  * its webhook, an MCP tool of its own, a CI pipeline).
  */
-import { editFlowFile } from '../runner/flow-edit.js';
-import { flowDeployStatus } from '../runner/flow-deploy.js';
-import { listMonitors, monitorStatus, parseEvery, saveMonitor } from '../runner/monitors.js';
-import { findCollection } from '../storage/env-edit.js';
-import type { WorkspaceStore } from '../storage/workspace.js';
-import { ApsError } from '../errors.js';
-import { shortId } from '../util/ids.js';
-import { str, type Tool } from './tool.js';
+import { editFlowFile } from '../../runner/flow-edit.js';
+import { flowDeployStatus } from '../../runner/flow-deploy.js';
+import { listMonitors, monitorStatus, parseEvery, saveMonitor } from '../../runner/monitors.js';
+import { findCollection } from '../../storage/env-edit.js';
+import type { WorkspaceStore } from '../../storage/workspace.js';
+import { ApsError } from '../../errors.js';
+import { shortId } from '../../util/ids.js';
+import { str, type Tool } from '../tool.js';
 
 export function deployTools({ store }: { store: WorkspaceStore }): Tool[] {
   const file = str('The test file inside tests/, e.g. orders/new-order.yaml');

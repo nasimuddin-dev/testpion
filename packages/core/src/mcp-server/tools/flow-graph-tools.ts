@@ -1,10 +1,10 @@
 import { flowGraph } from '@testpion/shared';
-import { editFlowFile, type FlowEditOp } from '../runner/flow-edit.js';
-import { flowOfFile, flowReport } from '../runner/flow-steps.js';
-import { flowRunPlan, flowRunResults, flowRuns, type FlowRunPlan } from '../runner/flow-history.js';
-import { ApsError } from '../errors.js';
-import type { WorkspaceStore } from '../storage/workspace.js';
-import { str, type Tool } from './tool.js';
+import { editFlowFile, type FlowEditOp } from '../../runner/flow-edit.js';
+import { flowOfFile, flowReport } from '../../runner/flow-steps.js';
+import { flowRunPlan, flowRunResults, flowRuns, type FlowRunPlan } from '../../runner/flow-history.js';
+import { ApsError } from '../../errors.js';
+import type { WorkspaceStore } from '../../storage/workspace.js';
+import { str, type Tool } from '../tool.js';
 
 /**
  * MCP tools that read a test file as a flow (its steps, what each extracts and waits for, the layout in columns and

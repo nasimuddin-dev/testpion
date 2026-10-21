@@ -1,7 +1,7 @@
 /**
  * A flow exposed as an MCP tool: a test file or suite whose top-level `expose:` block names the tool an agent calls
  * (`tool`), what it does (`description`) and the variables the flow reads as its arguments (`inputs`). The MCP server
- * registers one tool per exposed flow (mcp-server/flow-tools.ts); `testpion flows` and the app list them.
+ * registers one tool per exposed flow (mcp-server/tools/flow-tools.ts); `testpion flows` and the app list them.
  */
 import { readdirSync, readFileSync } from 'node:fs';
 import { extname, join, relative, sep } from 'node:path';

@@ -1,15 +1,15 @@
-import { applyTidy, tidyCollection } from '../storage/collection-tidy.js';
-import { moveCollectionVariablesToEnvironments } from '../storage/move-variables.js';
-import { replaceInCollection, REPLACE_FIELDS, type ReplaceField } from '../storage/collection-replace.js';
-import type { Collection, CollectionFolder, CollectionNode, HttpRequestSpec, KeyValue, SavedHttpRequest } from '../model/types.js';
-import { ApsError } from '../errors.js';
-import { externalizeSecrets, type SecretPlaceholder } from '../import/save-request.js';
-import { Redactor } from '../util/redact.js';
-import { shortId } from '../util/ids.js';
-import type { WorkspaceStore } from '../storage/workspace.js';
-import { commandLine, isCommandTrusted } from '../storage/trust.js';
-import { McpSession } from '../protocols/mcp/client.js';
-import { str, type Tool } from './tool.js';
+import { applyTidy, tidyCollection } from '../../storage/collection-tidy.js';
+import { moveCollectionVariablesToEnvironments } from '../../storage/move-variables.js';
+import { replaceInCollection, REPLACE_FIELDS, type ReplaceField } from '../../storage/collection-replace.js';
+import type { Collection, CollectionFolder, CollectionNode, HttpRequestSpec, KeyValue, SavedHttpRequest } from '../../model/types.js';
+import { ApsError } from '../../errors.js';
+import { externalizeSecrets, type SecretPlaceholder } from '../../import/save-request.js';
+import { Redactor } from '../../util/redact.js';
+import { shortId } from '../../util/ids.js';
+import type { WorkspaceStore } from '../../storage/workspace.js';
+import { commandLine, isCommandTrusted } from '../../storage/trust.js';
+import { McpSession } from '../../protocols/mcp/client.js';
+import { str, type Tool } from '../tool.js';
 
 /**
  * MCP tools that let an agent change a workspace the way a person does in the app: edit, move and delete requests,

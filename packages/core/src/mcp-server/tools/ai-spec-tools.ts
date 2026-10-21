@@ -5,16 +5,16 @@
  * fresh import: names, folders, hosts and tokens as variables, chained ids, tracking requests dropped). They only
  * propose: `ai_apply_proposal` applies, after the user agrees. Without a model the deterministic proposal is returned.
  */
-import { flowSourceRef } from '../ai/flow-from-collection.js';
-import { analyseSpec, draftSpecTestsProposal } from '../ai/spec-tests.js';
-import { draftTidyProposal } from '../ai/tidy-import.js';
-import { ApsError } from '../errors.js';
-import type { AppSettings } from '../model/types.js';
-import { SPEC_CATEGORIES, specGapMarkdown, workspaceSpecGaps } from '../openapi/spec-gaps.js';
-import type { SecretStore } from '../storage/secrets.js';
-import type { WorkspaceStore } from '../storage/workspace.js';
+import { flowSourceRef } from '../../ai/flow-from-collection.js';
+import { analyseSpec, draftSpecTestsProposal } from '../../ai/spec-tests.js';
+import { draftTidyProposal } from '../../ai/tidy-import.js';
+import { ApsError } from '../../errors.js';
+import type { AppSettings } from '../../model/types.js';
+import { SPEC_CATEGORIES, specGapMarkdown, workspaceSpecGaps } from '../../openapi/spec-gaps.js';
+import type { SecretStore } from '../../storage/secrets.js';
+import type { WorkspaceStore } from '../../storage/workspace.js';
 import { createProposer, PRIVACY, strings } from './ai-propose.js';
-import { str, type Tool } from './tool.js';
+import { str, type Tool } from '../tool.js';
 
 export function aiSpecTools({ store, secrets, settings }: { store: WorkspaceStore; secrets: SecretStore; settings: AppSettings }): Tool[] {
   const specArg = (a: Record<string, unknown>) => {

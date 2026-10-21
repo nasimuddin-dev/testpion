@@ -35,7 +35,7 @@ packages/core        the engine, host-agnostic (Node): the same code runs in the
   scripts/           the tp.* sandbox (QuickJS in WebAssembly): scripts never reach Node
   git/               git through the system git, changes by meaning, the merge driver
   net/               the production guard (one rule for every host), private-network guards
-  mcp-server/        the workspace as MCP tools for agents: tool.ts (a tool), tool-contract.ts (paging, response_format, confirm, output schemas) and tool-docs.ts (when / when not / example), one module per subject, testpion-mcp.ts composes them
+  mcp-server/        the workspace as MCP tools for agents: tool.ts (a tool), tool-contract.ts (paging, response_format, confirm, output schemas) and tool-docs.ts (when / when not / example), one module per subject in tools/ (composed by tools/index.ts, shared helpers in tools/server-kit.ts), testpion-mcp.ts builds the server and holds no tool
   index.ts           the public surface: everything the CLI and the app may use
 packages/shared      pure, browser-safe code for every host; output/ is the one registry of downloads: formats.ts (formats
                      and builders), filename.ts (safe names), csv-write.ts (the formula guard), surfaces.ts (every output that

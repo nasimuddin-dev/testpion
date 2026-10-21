@@ -4,17 +4,17 @@
  * `ai_attempt_fix` (a flaky fix applied, then the test run again N times for a verdict; confirmed). They propose:
  * `ai_apply_proposal` applies a triage's fixes. Without a model the first two return TestPion's own grouping / signals.
  */
-import { aiRunDeps } from '../ai/tasks/run.js';
-import { triageRun } from '../ai/triage-run.js';
-import { analyzeFlaky, attemptFix } from '../ai/flaky-run.js';
-import type { Proposal } from '../ai/proposal.js';
-import { createEngineContext } from '../engine.js';
-import { ApsError } from '../errors.js';
-import type { AppSettings } from '../model/types.js';
-import type { SecretStore } from '../storage/secrets.js';
-import type { WorkspaceStore } from '../storage/workspace.js';
+import { aiRunDeps } from '../../ai/tasks/run.js';
+import { triageRun } from '../../ai/triage-run.js';
+import { analyzeFlaky, attemptFix } from '../../ai/flaky-run.js';
+import type { Proposal } from '../../ai/proposal.js';
+import { createEngineContext } from '../../engine.js';
+import { ApsError } from '../../errors.js';
+import type { AppSettings } from '../../model/types.js';
+import type { SecretStore } from '../../storage/secrets.js';
+import type { WorkspaceStore } from '../../storage/workspace.js';
 import { parseItemRef, toItemRef } from '@testpion/shared';
-import { str, type Tool } from './tool.js';
+import { str, type Tool } from '../tool.js';
 
 const forAgent = (p: Proposal) => ({ ...p, items: p.items.map((i) => ({ ...i, before: i.before && i.before.length > 4000 ? `${i.before.slice(0, 4000)} …` : i.before })) });
 

@@ -3,11 +3,11 @@
  * baseline run, what CI gates on) and for the files coding agents read (agents_init: AGENTS.md and friends). The same
  * engine functions as `testpion eval matrix|compare` and `testpion agents init`.
  */
-import { initAgentFiles, parseAgentTargets } from '../agents/agent-files.js';
-import { compareEvalRuns, evalMatrixPage, evalMatrixResult } from '../runner/eval-matrix-runs.js';
-import type { WorkspaceStore } from '../storage/workspace.js';
-import { ApsError } from '../errors.js';
-import { str, type Tool } from './tool.js';
+import { initAgentFiles, parseAgentTargets } from '../../agents/agent-files.js';
+import { compareEvalRuns, evalMatrixPage, evalMatrixResult } from '../../runner/eval-matrix-runs.js';
+import type { WorkspaceStore } from '../../storage/workspace.js';
+import { ApsError } from '../../errors.js';
+import { str, type Tool } from '../tool.js';
 
 const num = (description: string) => ({ type: 'number', description });
 const strings = (a: unknown): string[] => (Array.isArray(a) ? a.map(String) : typeof a === 'string' && a ? a.split(',').map((x) => x.trim()) : []).filter(Boolean);

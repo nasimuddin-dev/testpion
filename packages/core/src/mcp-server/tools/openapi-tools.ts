@@ -1,16 +1,16 @@
 import { readdirSync } from 'node:fs';
-import { lintOpenApi, OPENAPI_LINT_RULES, type OpenApiLintSeverity } from '../openapi/lint.js';
-import { openApiOutline } from '../openapi/outline.js';
-import { fuzzCases, runFuzz } from '../openapi/fuzz.js';
-import type { EngineContext } from '../engine.js';
-import type { HttpRequestSpec } from '../model/types.js';
-import { ApsError } from '../errors.js';
-import { generateWorkspaceDataset } from '../storage/dataset-files.js';
-import { writeFuzzFindingTests, writeTestsFromSpec } from '../openapi/tests-from-spec.js';
-import { writeFlows } from '../openapi/flows-from-spec.js';
-import type { WorkspaceStore } from '../storage/workspace.js';
-import { findCollection } from '../storage/env-edit.js';
-import { str, type Tool } from './tool.js';
+import { lintOpenApi, OPENAPI_LINT_RULES, type OpenApiLintSeverity } from '../../openapi/lint.js';
+import { openApiOutline } from '../../openapi/outline.js';
+import { fuzzCases, runFuzz } from '../../openapi/fuzz.js';
+import type { EngineContext } from '../../engine.js';
+import type { HttpRequestSpec } from '../../model/types.js';
+import { ApsError } from '../../errors.js';
+import { generateWorkspaceDataset } from '../../storage/dataset-files.js';
+import { writeFuzzFindingTests, writeTestsFromSpec } from '../../openapi/tests-from-spec.js';
+import { writeFlows } from '../../openapi/flows-from-spec.js';
+import type { WorkspaceStore } from '../../storage/workspace.js';
+import { findCollection } from '../../storage/env-edit.js';
+import { str, type Tool } from '../tool.js';
 
 /** MCP tools for API definitions (OpenAPI / Swagger) beyond the diff and coverage: the linter. */
 export function openApiTools(d: { store: WorkspaceStore; readSpecRef(ref: string): Promise<string>; context?(environment?: string): EngineContext }): Tool[] {

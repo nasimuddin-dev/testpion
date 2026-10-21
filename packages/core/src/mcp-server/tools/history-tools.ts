@@ -1,13 +1,13 @@
-import { flakyTests, summarizeTestHistory, testHistory } from '../runner/test-history.js';
-import { scoreTrend } from '../runner/score-trend.js';
-import { workspaceAttention } from '../storage/attention.js';
-import { responseTimeStats } from '../report/response-stats.js';
-import type { Collection, CollectionNode } from '../model/types.js';
-import type { WorkspaceStore } from '../storage/workspace.js';
-import type { Redactor } from '../util/redact.js';
-import { ApsError } from '../errors.js';
-import { HISTORY_KINDS, historyKindOf } from '../model/history-kinds.js';
-import { str, type Tool } from './tool.js';
+import { flakyTests, summarizeTestHistory, testHistory } from '../../runner/test-history.js';
+import { scoreTrend } from '../../runner/score-trend.js';
+import { workspaceAttention } from '../../storage/attention.js';
+import { responseTimeStats } from '../../report/response-stats.js';
+import type { Collection, CollectionNode } from '../../model/types.js';
+import type { WorkspaceStore } from '../../storage/workspace.js';
+import type { Redactor } from '../../util/redact.js';
+import { ApsError } from '../../errors.js';
+import { HISTORY_KINDS, historyKindOf } from '../../model/history-kinds.js';
+import { str, type Tool } from '../tool.js';
 
 /**
  * MCP tools that read what happened in the workspace: a saved request's earlier responses and response times, the

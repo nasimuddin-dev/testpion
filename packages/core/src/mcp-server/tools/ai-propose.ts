@@ -4,14 +4,14 @@
  * proposal for the agent to show the user, and — when no model is set up, or `noAi` is passed — TestPion's own
  * deterministic proposal with the reason. Nothing is written: `ai_apply_proposal` does that, after the user agrees.
  */
-import { aiRunDeps, runAiTask, type AiTaskRequest } from '../ai/tasks/run.js';
-import { isAiSetupError } from '../ai/flow-from-collection.js';
-import type { Proposal } from '../ai/proposal.js';
-import { createEngineContext } from '../engine.js';
-import { normalizeError } from '../errors.js';
-import type { AppSettings } from '../model/types.js';
-import type { SecretStore } from '../storage/secrets.js';
-import type { WorkspaceStore } from '../storage/workspace.js';
+import { aiRunDeps, runAiTask, type AiTaskRequest } from '../../ai/tasks/run.js';
+import { isAiSetupError } from '../../ai/flow-from-collection.js';
+import type { Proposal } from '../../ai/proposal.js';
+import { createEngineContext } from '../../engine.js';
+import { normalizeError } from '../../errors.js';
+import type { AppSettings } from '../../model/types.js';
+import type { SecretStore } from '../../storage/secrets.js';
+import type { WorkspaceStore } from '../../storage/workspace.js';
 
 /** A proposal as an agent reads it: items with their verification, without the before text of big files. */
 export const forAgent = (p: Proposal) => ({ ...p, items: p.items.map((i) => ({ ...i, before: i.before && i.before.length > 4000 ? `${i.before.slice(0, 4000)} …` : i.before })) });

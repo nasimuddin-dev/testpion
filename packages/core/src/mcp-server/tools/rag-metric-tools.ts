@@ -5,17 +5,17 @@
  * (task `rag-draft-metric`), saves it here, and tries it on a sample with `rag_try_metric` (`custom/<id>`).
  * A judge or checklist metric's examples ask the judge, so running them is a deliberate step.
  */
-import { stringifyYaml } from '../util/lazy-yaml.js';
+import { stringifyYaml } from '../../util/lazy-yaml.js';
 import { CUSTOM_METRIC_KINDS, customMetricTemplate, type CustomMetricKind } from '@testpion/shared';
-import { ApsError } from '../errors.js';
-import { createEngineContext } from '../engine.js';
-import { compileCustomMetric, runMetricExamples, syncCustomMetrics } from '../eval/rag/custom/compile.js';
-import { parseCustomMetric, type MetricProblem } from '../eval/rag/custom/file.js';
-import { listMetricFiles, readMetricFile, writeMetricFile } from '../storage/metric-files.js';
-import type { AppSettings } from '../model/types.js';
-import type { SecretStore } from '../storage/secrets.js';
-import type { WorkspaceStore } from '../storage/workspace.js';
-import { str, type Tool } from './tool.js';
+import { ApsError } from '../../errors.js';
+import { createEngineContext } from '../../engine.js';
+import { compileCustomMetric, runMetricExamples, syncCustomMetrics } from '../../eval/rag/custom/compile.js';
+import { parseCustomMetric, type MetricProblem } from '../../eval/rag/custom/file.js';
+import { listMetricFiles, readMetricFile, writeMetricFile } from '../../storage/metric-files.js';
+import type { AppSettings } from '../../model/types.js';
+import type { SecretStore } from '../../storage/secrets.js';
+import type { WorkspaceStore } from '../../storage/workspace.js';
+import { str, type Tool } from '../tool.js';
 
 const show = (p: MetricProblem[]) => p.map((x) => ({ level: x.level, field: x.field, message: x.message }));
 
